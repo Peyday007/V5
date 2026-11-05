@@ -66,6 +66,40 @@ export const BREAKER_OPEN_MS = 2 * 60_000;
 const breaker = { failures: 0, openUntil: 0 };
 const counts = { served: 0, fellBack: 0, skipped: 0 };
 
+/*
+ * Paused: the pod is stopped or still loading (`runpodPod.ts` decides). Every
+ * GPU call goes straight to the free fallback, without a timeout and without
+ * counting against the GPU, so stopping an idle pod never interrupts research.
+ */
+let paused: string | null = null;
+export function setRunpodPaused(reason: string | null): void {
+  paused = reason;
+}
+export function runpodPaused(): string | null {
+  return paused;
+}
+
+/*
+ * The GPU's own recent calls. The lane's per-model window cannot see a GPU
+ * failure — the fallback answers it — so the capacity controller reads this to
+ * size the GPU's slots by what the GPU itself did.
+ */
+const calls: { at: number; ok: boolean }[] = [];
+function noteCall(ok: boolean, now: number): void {
+  calls.push({ at: now, ok });
+  if (calls.length > 2000) calls.splice(0, calls.length - 2000);
+}
+export function runpodCallWindow(ms: number, now = Date.now()): { ok: number; failed: number } {
+  let ok = 0;
+  let failed = 0;
+  for (const call of calls) {
+    if (call.at < now - ms) continue;
+    if (call.ok) ok += 1;
+    else failed += 1;
+  }
+  return { ok, failed };
+}
+
 export function runpodBreakerOpen(now = Date.now()): boolean {
   return breaker.openUntil > now;
 }
@@ -94,6 +128,8 @@ export function resetRunpod(): void {
   counts.served = 0;
   counts.fellBack = 0;
   counts.skipped = 0;
+  paused = null;
+  calls.length = 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -160,13 +196,20 @@ export async function routeRunpod(
   const runpod = config.runpod;
   const now = deps.now ?? Date.now;
   const backup = config.fallbackModel ?? null;
-  const fallBack = async (why: string): Promise<string> => {
+  const fallBack = async (why: string, quiet = false): Promise<string> => {
     if (!backup) throw new Error(`runpod unavailable and no free fallback: ${why}`);
-    counts.fellBack += 1;
-    console.warn(`[runpod] fallback to ${backup}: ${why.slice(0, 200)}`);
+    // A pod paused on purpose is not a GPU failure: no warning, no fallback count.
+    if (!quiet) {
+      counts.fellBack += 1;
+      console.warn(`[runpod] fallback to ${backup}: ${why.slice(0, 200)}`);
+    }
     return fallback(backup);
   };
   if (!runpod) return fallBack('runpod is not configured');
+  if (paused) {
+    counts.skipped += 1;
+    return fallBack(`pod paused: ${paused}`, true);
+  }
   if (runpodBreakerOpen(now())) {
     counts.skipped += 1;
     return fallBack('breaker open after repeated failures');
@@ -180,9 +223,11 @@ export async function routeRunpod(
     });
     recordSuccess();
     counts.served += 1;
+    noteCall(true, now());
     return text;
   } catch (error) {
     recordFailure(now());
+    noteCall(false, now());
     return fallBack(error instanceof Error ? error.message : String(error));
   }
 }

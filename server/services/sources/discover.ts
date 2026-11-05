@@ -23,6 +23,11 @@
 export interface SearchDeps {
   fetchImpl?: typeof fetch;
   nowMs?: () => number;
+  /**
+   * LOW is dead-link recovery (`searchSuccessor`): it waits only when the queue
+   * is short, so a fragment's own discovery keeps the budget the endpoint allows.
+   */
+  priority?: 'NORMAL' | 'LOW';
 }
 
 /**
@@ -34,8 +39,19 @@ const ENDPOINTS = [
   { name: 'html', url: 'https://html.duckduckgo.com/html/?q=' },
   { name: 'lite', url: 'https://lite.duckduckgo.com/lite/?q=' },
 ] as const;
-const SPACING_MS = 1500;
+/**
+ * Paced by what the endpoint tolerates, measured. Production, 2026-11-05
+ * 05:27–08:27Z: both endpoints refused together every ten minutes, each time
+ * right after the pause lifted, because queued searches resumed 1.5 s apart;
+ * search fed 3 of 42 fragments. A refusal now doubles the spacing (to 30 s);
+ * every ten answered searches take a fifth off it again (to 2 s).
+ */
+const MIN_SPACING_MS = 2_000;
+const MAX_SPACING_MS = 30_000;
+let spacingMs = 4_000;
+let answeredSinceRefusal = 0;
 const MAX_WAITERS = 12;
+const MAX_LOW_WAITERS = 3;
 const PAUSE_AFTER_ANOMALY_MS = 10 * 60_000;
 const MAX_RESULTS = 8;
 /** The same query within ten minutes is answered from memory: dead links on one site repeat. */
@@ -57,11 +73,18 @@ export function setSearchRefusalRecorder(fn: ((endpoint: string, status: number)
   onRefusal = fn;
 }
 
+/** The current spacing between searches, for tests and `sources search`. */
+export function searchSpacingMs(): number {
+  return spacingMs;
+}
+
 export function resetSearchState(): void {
   chain = Promise.resolve();
   waiting = 0;
   lastAt = 0;
   turn = 0;
+  spacingMs = 4_000;
+  answeredSinceRefusal = 0;
   pausedUntil.clear();
   remembered.clear();
   for (const key of Object.keys(searchStats) as (keyof typeof searchStats)[]) searchStats[key] = 0;
@@ -125,14 +148,14 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
     }
     return null;
   };
-  if (!open() || waiting >= MAX_WAITERS) {
+  if (!open() || waiting >= MAX_WAITERS || (deps.priority === 'LOW' && waiting >= MAX_LOW_WAITERS)) {
     searchStats.skipped += 1;
     return [];
   }
   waiting += 1;
   const run = chain.then(async () => {
-    const wait = lastAt + SPACING_MS - now();
-    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(wait, SPACING_MS)));
+    const wait = lastAt + spacingMs - now();
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(wait, spacingMs)));
     for (let tries = 0; tries < ENDPOINTS.length; tries += 1) {
       const endpoint = open();
       if (!endpoint) break;
@@ -148,9 +171,13 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
         if (isSearchAnomaly(response.status, html)) {
           searchStats.refused += 1;
           pausedUntil.set(endpoint.name, now() + PAUSE_AFTER_ANOMALY_MS);
+          spacingMs = Math.min(MAX_SPACING_MS, spacingMs * 2);
+          answeredSinceRefusal = 0;
           onRefusal?.(endpoint.name, response.status);
           continue;
         }
+        answeredSinceRefusal += 1;
+        if (answeredSinceRefusal % 10 === 0) spacingMs = Math.max(MIN_SPACING_MS, Math.round(spacingMs * 0.8));
         const urls = parseDuckDuckGo(html).slice(0, MAX_RESULTS);
         if (urls.length > 0) searchStats.withResults += 1;
         else searchStats.empty += 1;
@@ -205,7 +232,7 @@ export function sameSite(a: string, b: string): boolean {
 export async function searchSuccessor<T extends { readable: boolean }>(
   url: string,
   direct: (url: string) => Promise<T>,
-  search: (query: string) => Promise<string[]> = (q) => webSearch(q),
+  search: (query: string) => Promise<string[]> = (q) => webSearch(q, { priority: 'LOW' }),
 ): Promise<T | null> {
   const words = pathWords(url);
   if (words.length < 2) return null;
