@@ -28,6 +28,8 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { databasePoolReadings } from '../../db/database.ts';
 import { recentInfraFailures } from '../../db/infra.ts';
 import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
+import { isRunpodSlot, runpodCallWindow } from '../cheap/runpod.ts';
+import { superviseRunpodPod } from '../cheap/runpodPod.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
 import { readSource } from '../sources/access.ts';
 import { setSearchRefusalRecorder } from '../sources/discover.ts';
@@ -154,6 +156,23 @@ function readPressure(): Pressure {
   peakWaiting = 0;
   peakControlWaiting = 0;
   return { db, dbContended, lagMs: Number.isFinite(lagMs) ? lagMs : 0, cpu };
+}
+
+/*
+ * The GPU slot is sized by what the GPU itself did. Its items always succeed or
+ * fail on the fallback's answer too, so the item window would read an
+ * overloaded GPU as healthy and keep growing it onto the free model.
+ */
+function gpuWindow(items: Window): Window {
+  const calls = runpodCallWindow(WINDOW_MS);
+  if (calls.ok + calls.failed === 0) return items;
+  return { ok: calls.ok, content: items.content, transient: calls.failed };
+}
+
+/** A runaway guard for the GPU's slots, above what one vLLM pod serves at once; not the operating limit. */
+export function gpuCeiling(env: NodeJS.ProcessEnv = process.env): number {
+  const n = Number(env['BRAIN_RUNPOD_MAX_SLOTS']);
+  return Number.isFinite(n) && n >= 1 ? Math.min(SAFETY_CEILING, Math.floor(n)) : 32;
 }
 
 async function windowFor(model: string, now = Date.now()): Promise<Window> {
@@ -324,9 +343,10 @@ export async function controlStep(): Promise<ControlReading | null> {
   const pressure = poolOptions.pressure ? poolOptions.pressure() : readPressure();
   const reading: ControlReading = { waiting, pressure, models: [] };
   for (const pool of pools.values()) {
-    const window = await windowFor(pool.worker.model);
+    const gpu = config.runpod && isRunpodSlot(pool.worker.model);
+    const window = gpu ? gpuWindow(await windowFor(pool.worker.model)) : await windowFor(pool.worker.model);
     const peak = Math.max(pool.peakBusy, pool.busy);
-    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure });
+    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
     // Just after a restart the database is busiest (boot passes, a deploy's verification):
     // the lane stays at its starting size until it has been up BOOT_GRACE_MS.
     if (Date.now() - poolStartedAt < BOOT_GRACE_MS && decision.target > START_TARGET) {
@@ -356,6 +376,11 @@ export async function controlStep(): Promise<ControlReading | null> {
       window,
       reason: decision.reason,
     });
+  }
+  // The pod's power follows the same reading: stopped when nothing is left, started when work arrives.
+  if (config.runpod) {
+    const inFlight = [...pools.values()].reduce((sum, p) => sum + p.busy, 0);
+    void superviseRunpodPod({ waiting, inFlight }).catch(() => undefined);
   }
   // Work waits and no slot holds any: say why the lane declined what it was offered (rule 9).
   const anyBusy = [...pools.values()].some((p) => p.busy > 0 || p.peakBusy > 0);
