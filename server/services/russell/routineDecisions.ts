@@ -221,8 +221,13 @@ export interface UnaskedDecision {
   reason: string;
 }
 
-export async function answerUnaskedParks(input: { limit?: number; nowMs?: number } = {}): Promise<UnaskedDecision[]> {
+/** Advancing a packet is heavy; right after a restart the database is busiest (§88, Deploy 41963927835). */
+export const UNASKED_BOOT_GRACE_MS = 10 * 60_000;
+const processStartedAt = Date.now();
+
+export async function answerUnaskedParks(input: { limit?: number; nowMs?: number; ignoreBootGrace?: boolean } = {}): Promise<UnaskedDecision[]> {
   const nowMs = input.nowMs ?? Date.now();
+  if (!input.ignoreBootGrace && nowMs - processStartedAt < UNASKED_BOOT_GRACE_MS) return [];
   const now = new Date(nowMs).toISOString();
   const cutoff = new Date(nowMs - ROUTINE_DECISION_GRACE_MS).toISOString();
   const rows = await getDb().all<{ id: string; project_id: string }>(
@@ -236,7 +241,7 @@ export async function answerUnaskedParks(input: { limit?: number; nowMs?: number
                      WHERE g.project_id = o.project_id AND g.purpose = 'STANDING'
                        AND g.state = 'ACTIVE' AND (g.expires_at IS NULL OR g.expires_at > ?))
       ORDER BY o.updated_at ASC, o.id ASC LIMIT ?`,
-    [cutoff, now, input.limit ?? 50],
+    [cutoff, now, input.limit ?? 5],
   );
   const out: UnaskedDecision[] = [];
   for (const row of rows) {
@@ -274,4 +279,19 @@ export async function answerUnaskedParks(input: { limit?: number; nowMs?: number
     out.push({ orchestrationId: row.id, decided: true, reason: `filed with gaps named; the packet is now ${advanced.status}` });
   }
   return out;
+}
+
+/** Every NEEDS_HUMAN packet and what decides whether Brain may file it: for `admin packets parks`. */
+export async function parkReadings(): Promise<Array<Record<string, unknown>>> {
+  return getDb().all(
+    `SELECT o.id, o.verdict, p.slug AS project, o.updated_at,
+            (SELECT COUNT(*) FROM research_fragments f WHERE f.orchestration_id = o.id AND f.status = 'ACCEPTED') AS accepted,
+            o.unresolved_gap_policy AS gap_policy,
+            (SELECT COUNT(*) FROM russell_goals g WHERE g.project_id = o.project_id AND g.purpose = 'STANDING' AND g.state = 'ACTIVE') AS standing_grants,
+            (SELECT m.state FROM russell_missions m WHERE m.orchestration_id = o.id ORDER BY m.created_at DESC LIMIT 1) AS mission,
+            (SELECT r.state || ':' || COALESCE(r.answered_choice, '-') FROM russell_missions m JOIN russell_human_requests r ON r.mission_id = m.id
+              WHERE m.orchestration_id = o.id ORDER BY r.created_at DESC LIMIT 1) AS card
+       FROM research_orchestrations o JOIN projects p ON p.id = o.project_id
+      WHERE o.status = 'NEEDS_HUMAN' ORDER BY o.updated_at LIMIT 60`,
+  );
 }

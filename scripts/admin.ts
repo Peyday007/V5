@@ -2191,6 +2191,13 @@ async function main(): Promise<void> {
       }
       break;
     }
+    case 'packets parks': {
+      const { parkReadings } = await import('../server/services/russell/routineDecisions.ts');
+      const rows = await parkReadings();
+      console.log(`PARKED ${rows.length}`);
+      for (const r of rows) console.log(`  ${JSON.stringify(r)}`);
+      break;
+    }
     case 'packets list': {
       const project = await projectFrom(rest[0] ?? fail('Name a project.'));
       for (const orchestration of await listOrchestrationsByProject(project.id)) {
