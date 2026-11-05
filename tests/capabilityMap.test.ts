@@ -256,3 +256,21 @@ describe('the goal-plan map: the whole $10K chain, connections included', () => 
     expect(formatAssessment(a).join('\n')).toContain('MAP GOAL_PLAN');
   });
 });
+
+describe('the goal-plan map reaches the improvement loop', () => {
+  it('routes a broken link no detector covers, and leaves a covered one to its detector', async () => {
+    const { GOAL_PLAN_MAP } = await import('../server/domain/capabilityMap.ts');
+    const assessed = GOAL_PLAN_MAP.requirements.map((r) =>
+      r.id === 'EVIDENCE.PATH_ANSWERS' || r.id === 'EVIDENCE.PACKETS_COMPLETE'
+        ? classify(r, true, { ok: 1, total: 40, detail: '' })
+        : classify(r, true, { ok: 100, total: 100, detail: '' }),
+    );
+    const routed = gapsForImprovement(connectedGaps(GOAL_PLAN_MAP, assessed), GOAL_PLAN_MAP, [], 15).map((g) => g.gap.id);
+    // Path answers sit behind the packets, which the PACKETS: detector already owns.
+    expect(routed).toEqual([]);
+    const alone = GOAL_PLAN_MAP.requirements.map((r) =>
+      r.id === 'EVIDENCE.PATH_ANSWERS' ? classify(r, true, { ok: 1, total: 40, detail: '' }) : classify(r, true, { ok: 100, total: 100, detail: '' }),
+    );
+    expect(gapsForImprovement(connectedGaps(GOAL_PLAN_MAP, alone), GOAL_PLAN_MAP, [], 15).map((g) => g.gap.id)).toEqual(['EVIDENCE.PATH_ANSWERS']);
+  });
+});

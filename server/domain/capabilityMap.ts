@@ -28,6 +28,8 @@
  * measurement path as any detected weakness and is not a second mechanism.
  */
 
+import type { MetricKey } from './improvement.ts';
+
 export const CAPABILITY_STATUSES = ['WORKING', 'BROKEN', 'MISSING', 'UNPROVEN'] as const;
 export type CapabilityStatus = (typeof CAPABILITY_STATUSES)[number];
 
@@ -120,14 +122,7 @@ export interface Proof {
 /** When a gap may become an improvement candidate (§87): the loop's existing contract. */
 export interface ImprovementRoute {
   /** The scoreboard metric the fix moves (`domain/improvement.ts` METRICS). */
-  metric:
-    | 'FREE_LANE_PASS_RATE'
-    | 'FREE_LANE_FRAGMENT_PASS_RATE'
-    | 'ACCEPTED_CLAIM_RATE'
-    | 'RESEARCH_JOB_SUCCESS_RATE'
-    | 'OWNER_INTERVENTIONS_PER_DAY'
-    | 'AUTO_RECOVERY_RATE'
-    | 'CONSTRUCTED_ROUND_YIELD';
+  metric: MetricKey;
   /** Files a fix may touch. */
   mutationScope: string[];
   /**
@@ -512,6 +507,7 @@ export const GOAL_PLAN_MAP: CapabilityMap = {
       failureConditions: ['goal tick stopped', 'every pass busy'],
       owner: ['server/services/goals/tick.ts'],
       proof: { probe: 'GOAL_PLAN_FRESH', what: 'live targeted goals with a scenario run in the last two hours (now)', minSample: 1, workingAt: 1 },
+      improvement: { metric: 'OBJECTIVE_HOURS_MEDIAN', mutationScope: ['server/services/goals/tick.ts', 'server/services/goals/plan.ts', 'tests/goal*.test.ts'], coveredBy: [] },
     }),
     R({
       id: 'OPENINGS.SEARCH_WIDENS',
@@ -523,6 +519,7 @@ export const GOAL_PLAN_MAP: CapabilityMap = {
       failureConditions: ['live cap full of stalled rounds', 'cool-off', 'closed gate'],
       owner: ['server/services/goals/plan.ts', 'server/services/cash/discovery.ts'],
       proof: { probe: 'GOAL_SEARCH_WIDENS', what: 'live goals short of a recommendable plan that opened a round in the window', minSample: 1, workingAt: 1 },
+      improvement: { metric: 'READY_OPPORTUNITIES_PER_DAY', mutationScope: ['server/services/goals/plan.ts', 'server/services/cash/discovery.ts', 'tests/goal*.test.ts', 'tests/cash*.test.ts'], coveredBy: [] },
     }),
     R({
       id: 'OPENINGS.ROUNDS_FILE',
@@ -534,6 +531,7 @@ export const GOAL_PLAN_MAP: CapabilityMap = {
       failureConditions: ['round abandoned with nothing found', 'packet never finished'],
       owner: ['server/services/cash/discovery.ts'],
       proof: { probe: 'GOAL_ROUNDS_FILE', what: 'goal rounds settled in the window that filed at least one opening', minSample: 3, workingAt: 0.3 },
+      improvement: { metric: 'READY_OPPORTUNITIES_PER_DAY', mutationScope: ['server/services/cash/discovery.ts', 'tests/cash*.test.ts'], coveredBy: [] },
     }),
     R({
       id: 'CONSTRUCTION.ROUNDS_FILE',
@@ -557,6 +555,7 @@ export const GOAL_PLAN_MAP: CapabilityMap = {
       failureConditions: ['no fragment cleared its gate', 'audit work faulted', 'judge wanted more'],
       owner: ['server/services/research/packetRunner.ts'],
       proof: { probe: 'GOAL_PACKETS_COMPLETE', what: 'packets behind goal rounds settled in the window that completed', minSample: 3, workingAt: 0.4 },
+      improvement: { metric: 'RESEARCH_JOB_SUCCESS_RATE', mutationScope: ['server/services/research/**', 'tests/research*.test.ts'], coveredBy: ['PACKETS:'] },
     }),
     R({
       id: 'EVIDENCE.PATH_ANSWERS',
@@ -568,6 +567,7 @@ export const GOAL_PLAN_MAP: CapabilityMap = {
       failureConditions: ['research did not finish', 'sources do not settle it'],
       owner: ['server/services/goals/pathResearch.ts'],
       proof: { probe: 'PATH_QUESTIONS_ANSWERED', what: 'opening questions closed in the window that were resolved', minSample: 5, workingAt: 0.25 },
+      improvement: { metric: 'READY_OPPORTUNITIES_PER_DAY', mutationScope: ['server/services/goals/pathResearch.ts', 'server/services/cash/needs.ts', 'tests/goal*.test.ts'], coveredBy: [] },
     }),
     R({
       id: 'EVIDENCE.BUYER_PRICE',
@@ -579,6 +579,7 @@ export const GOAL_PLAN_MAP: CapabilityMap = {
       failureConditions: ['no payer', 'undated signal', 'price a guess'],
       owner: ['server/services/goals/pathResearch.ts', 'server/services/goals/plan.ts'],
       proof: { probe: 'OPENINGS_BUYER_PRICE', what: 'openings in each live goal’s latest reading with buyer, demand and price established', minSample: 3, workingAt: 0.2 },
+      improvement: { metric: 'READY_OPPORTUNITIES_PER_DAY', mutationScope: ['server/services/goals/pathResearch.ts', 'server/services/cash/goalScenario.ts', 'tests/goal*.test.ts'], coveredBy: [] },
     }),
     R({
       id: 'QUANT.MODELLED',
@@ -601,6 +602,7 @@ export const GOAL_PLAN_MAP: CapabilityMap = {
       failureConditions: ['plan not re-read', 'opening in another project'],
       owner: ['server/services/goals/plan.ts'],
       proof: { probe: 'OPENINGS_REACH_PLAN', what: 'openings filed in the window (over 30 min old) followed by a goal plan run in their project', minSample: 1, workingAt: 0.9 },
+      improvement: { metric: 'OBJECTIVE_HOURS_MEDIAN', mutationScope: ['server/services/goals/plan.ts', 'tests/goal*.test.ts'], coveredBy: [] },
     }),
     R({
       id: 'COMPUTE.GPU',
