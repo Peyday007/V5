@@ -71,6 +71,7 @@ import {
   updateFragment,
   updateOrchestration,
   parkOrchestration,
+  beat,
 } from '../../repos/research.ts';
 import { auditRoundFor, auditRoundStartedAt, earlierAuditRole } from './auditBrief.ts';
 import { assessPacket, MANDATORY_COVERAGE_CHECK } from './packet.ts';
@@ -2565,6 +2566,61 @@ export async function reconcileArguedAuditRoles(
 }
 
 /**
+ * How long a live packet may sit untouched before the tick advances it itself.
+ * Under the six hours `PACKETS_MOVING` measures, so the packet moves before it
+ * is counted as idle.
+ */
+export const PACKET_STALL_WINDOW_MS = 4 * 60 * 60 * 1000;
+
+/**
+ * Advance a live packet that has no outstanding work and has not changed for
+ * `PACKET_STALL_WINDOW_MS`.
+ *
+ * `advancePacket` runs when an item completes, and a packet with no QUEUED or
+ * LEASED item has nothing left to complete: whatever stopped its last advance
+ * (a crash between the completion and the re-derive, a restart) leaves it live,
+ * idle and holding its slot for ever — "packet idle holding a slot". Selected
+ * from rows, so it reaches packets stranded before this existed. A packet with
+ * outstanding work is never selected (a worker, or the queue, owns its
+ * movement), and nothing is cancelled or created here that `advancePacket`
+ * would not create itself, so no gate, approval or budget check is touched.
+ * When the advance changed nothing the packet is left as it was — an honest
+ * idle reading — and when it moved the packet is stamped, so it drops out of
+ * the selection and a second call advances zero.
+ */
+export async function advanceIdlePackets(
+  limit: number,
+): Promise<{ orchestrationId: string; from: string; to: string }[]> {
+  const live = ['PLANNING', 'RESEARCHING', 'VERIFYING', 'SYNTHESIZING', 'AUDITING', 'AWAITING_REPAIR'];
+  const cutoff = new Date(Date.parse(queueNow()) - PACKET_STALL_WINDOW_MS).toISOString();
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT o.id AS id
+       FROM research_orchestrations o
+      WHERE o.status IN (${live.map(() => '?').join(', ')})
+        AND o.updated_at < ?
+        AND NOT EXISTS (SELECT 1 FROM work_items w
+                         WHERE w.orchestration_id = o.id AND w.state IN ('QUEUED','LEASED'))
+      ORDER BY o.updated_at, o.id
+      LIMIT ?`,
+    [...live, cutoff, Math.max(1, limit)],
+  );
+  const out: { orchestrationId: string; from: string; to: string }[] = [];
+  for (const row of rows) {
+    const before = await getOrchestration(row.id);
+    if (!before) continue;
+    const result = await advancePacket(row.id);
+    const after = await getOrchestration(row.id);
+    const minted = (await listWorkItemsForOrchestration(row.id)).some((item) =>
+      LIVE_ITEM.has(item.state),
+    );
+    if (!after || (after.status === before.status && !minted && after.updatedAt === before.updatedAt)) continue;
+    if (after.updatedAt === before.updatedAt) await beat(row.id);
+    out.push({ orchestrationId: row.id, from: before.status, to: result.status });
+  }
+  return out;
+}
+
+/**
  * Conclude a live packet that no worker can do anything more with.
  *
  * ---------------------------------------------------------------------------
@@ -2701,6 +2757,9 @@ export async function concludeUnworkablePackets(
     await advancePacket(orchestration.id);
     out.push({ orchestrationId: orchestration.id, retired });
   }
+  // Same tick, same owner: a live packet with nothing outstanding and no recent
+  // movement is advanced too. Not reported as retirement — nothing was retired.
+  await advanceIdlePackets(limit);
   return out;
 }
 
