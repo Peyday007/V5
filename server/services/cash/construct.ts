@@ -131,6 +131,8 @@ export interface ConstructedArrangement {
 export const MAX_CONSTRUCTIONS = 400;
 /** Reverse arrangements composed per pass: one per design that best fits the goal. */
 export const MAX_REVERSE = 4;
+/** Longest stretch construction holds the event loop before handing it back (2026-11-05 11.6 s stalls). */
+export const YIELD_EVERY_MS = 25;
 
 function safeName(text: string): boolean {
   if (!text || text.length > 240) return false;
@@ -289,6 +291,21 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   const ctx = { priced, tiedUp, input, limits, targets, exclusions, now };
 
   const out: ConstructedArrangement[] = [];
+  /*
+   * Composing is synchronous quantitative work — several reconstructions per
+   * design, up to `MAX_CONSTRUCTIONS` designs. Run in one stretch it held
+   * Node's only event loop for 11.6 s in production (2026-11-05 23:29Z and
+   * 23:33Z, both processes, inside russell:goal-plans), and every pool
+   * checkout, lease heartbeat and health check waiting meanwhile timed out.
+   * Handing the loop back every `YIELD_EVERY_MS` keeps the same result and
+   * lets everything else in the process run beside it.
+   */
+  let lastYield = Date.now();
+  const breathe = async (): Promise<void> => {
+    if (Date.now() - lastYield < YIELD_EVERY_MS) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    lastYield = Date.now();
+  };
   // Designs outermost and defaults first, so a capped pass keeps the original
   // arrangements of every buyer before it adds any buyer's variants.
   outer: for (const design of designs) {
@@ -310,6 +327,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
           if (!def.needsSupply && need && breaksOperatingModel(operatingFit({ title: need.name }))) continue;
           for (const supply of supplies) {
             if (out.length >= MAX_CONSTRUCTIONS) break outer;
+            await breathe();
             out.push(compose({ ...ctx, design, origin: transfer ? 'TRANSFER' : 'FORWARD', precedent: transfer, sector: s.name, demand, need, supply, related }));
           }
         }
