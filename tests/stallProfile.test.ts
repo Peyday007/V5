@@ -8,7 +8,8 @@
  */
 import { Session } from 'node:inspector';
 import { describe, expect, it } from 'vitest';
-import { summarizeCpuProfile, type CpuProfile } from '../server/db/infra.ts';
+import { connect, createServer } from 'node:net';
+import { outboundReading, summarizeCpuProfile, type CpuProfile } from '../server/db/infra.ts';
 
 function post<T>(session: Session, method: string, params?: object): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -59,5 +60,37 @@ describe('stall profile', () => {
     expect(summary.brain[0]).toEqual({ frame: 'dispatchTick server/services/dispatch/loop.ts:100', ms: 30 });
     expect(summary.self.map((f) => f.frame)).toContain('parse node_modules/pg/lib/result.js:10');
     expect(summary.self.map((f) => f.frame).join()).not.toContain('(idle)');
+  });
+
+  it('charges a socket callback with no Brain caller to the library that ran it', () => {
+    const profile: CpuProfile = {
+      nodes: [
+        { id: 1, callFrame: { functionName: '(root)', url: '', lineNumber: -1 }, children: [2] },
+        { id: 2, callFrame: { functionName: 'onData', url: 'file:///app/node_modules/pg-protocol/dist/parser.js', lineNumber: 4 }, children: [3] },
+        { id: 3, callFrame: { functionName: 'parse', url: '', lineNumber: -1 } },
+      ],
+      samples: [3, 3],
+      timeDeltas: [0, 20_000, 20_000],
+    };
+    expect(summarizeCpuProfile(profile).brain[0]?.frame).toBe('(library pg-protocol)');
+  });
+
+  it('counts every client socket by the host it went to', async () => {
+    const server = createServer((socket) => socket.end());
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+    outboundReading();
+    const before = outboundReading().byHost.find((h) => h.host === '127.0.0.1')?.opened ?? 0;
+    for (let i = 0; i < 3; i++) {
+      await new Promise<void>((resolve) => {
+        const socket = connect(port, '127.0.0.1');
+        socket.on('close', () => resolve());
+        socket.on('error', () => resolve());
+      });
+    }
+    server.close();
+    await new Promise((resolve) => setImmediate(resolve));
+    const after = outboundReading().byHost.find((h) => h.host === '127.0.0.1')?.opened ?? 0;
+    expect(after - before).toBe(3);
   });
 });

@@ -31,6 +31,7 @@
  * `services/infra/incidents.ts` from the listener below.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import * as diagnosticsChannel from 'node:diagnostics_channel';
 import { Session as InspectorSession } from 'node:inspector';
 import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks';
 import { getHeapStatistics } from 'node:v8';
@@ -659,6 +660,7 @@ function ensureStallProbe(): void {
   }, STALL_PROBE_MS);
   stallTimer.unref?.();
   ensureStallProfiler();
+  ensureOutboundCounter();
 }
 
 /* ------------------------------------------------------------------------- */
@@ -752,15 +754,25 @@ export function summarizeCpuProfile(profile: CpuProfile, limit = PROFILE_FRAMES)
     if (known !== undefined) return known;
     let cursor: number | undefined = id;
     let found = '(outside Brain source)';
+    // With no Brain frame above it (a socket callback keeps no caller), the
+    // nearest library frame still says whose work it was: pg, undici, ws.
+    let library: string | null = null;
     while (cursor !== undefined) {
       const node = byId.get(cursor);
       if (!node) break;
       if (isBrainFrame(node)) {
         found = frameName(node);
+        library = null;
         break;
+      }
+      if (library === null && node.callFrame.url.includes('/node_modules/')) {
+        const url = node.callFrame.url;
+        const pkg = url.slice(url.lastIndexOf('/node_modules/') + 14).split('/');
+        library = `(library ${pkg[0]?.startsWith('@') ? `${pkg[0]}/${pkg[1] ?? ''}` : pkg[0]})`;
       }
       cursor = parent.get(cursor);
     }
+    if (library) found = library;
     brainOf.set(id, found);
     return found;
   };
@@ -846,6 +858,81 @@ function rotateStallProfile(): void {
 /** The profiles of the latest windows that held a stall, newest last. */
 export function stallProfileReading(): StallProfile[] {
   return stallProfiles.slice();
+}
+
+/* ------------------------------------------------------------------------- */
+/* Outbound connections                                                      */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Every client socket this process opens, counted by the host it went to.
+ *
+ * The first stall profiles (2026-11-06 02:50Z) put 15 of every 60 CPU seconds
+ * in opening TLS connections (`wrap`, `init`, `start`, `setSession`,
+ * `setCiphers`), and none of it under a Brain frame, because a handshake runs
+ * in socket callbacks that keep no caller. A connection that is not reused
+ * costs a handshake; which client fails to reuse its connections is answered
+ * by counting where they go. Node publishes every client socket on the
+ * `net.client.socket` channel, so this costs one map increment per socket.
+ */
+const outboundByHost = new Map<string, { opened: number; tls: number }>();
+let outboundSince = new Date().toISOString();
+let outboundSubscribed = false;
+
+function noteOutbound(host: string, secure: boolean): void {
+  const key = host.slice(0, 80) || '(unknown)';
+  const row = outboundByHost.get(key) ?? { opened: 0, tls: 0 };
+  row.opened += 1;
+  if (secure) row.tls += 1;
+  outboundByHost.set(key, row);
+  // Bounded: a crawler-shaped workload must not grow this without end.
+  if (outboundByHost.size > 500) {
+    const smallest = [...outboundByHost.entries()].sort((a, b) => a[1].opened - b[1].opened)[0];
+    if (smallest) outboundByHost.delete(smallest[0]);
+  }
+}
+
+export function ensureOutboundCounter(): void {
+  if (outboundSubscribed) return;
+  outboundSubscribed = true;
+  outboundSince = new Date().toISOString();
+  try {
+    diagnosticsChannel.subscribe('net.client.socket', (message) => {
+      const socket = (message as { socket?: NodeJS.EventEmitter & { servername?: string; remoteAddress?: string; _host?: string; encrypted?: boolean } }).socket;
+      if (!socket) return;
+      let counted = false;
+      const count = (): void => {
+        if (counted) return;
+        counted = true;
+        const host = socket.servername || socket._host || socket.remoteAddress || '(unknown)';
+        noteOutbound(String(host), socket.encrypted === true || typeof socket.servername === 'string');
+      };
+      socket.once('secureConnect', count);
+      socket.once('connect', () => setImmediate(count));
+      socket.once('close', count);
+    });
+  } catch {
+    outboundSubscribed = false;
+  }
+}
+
+export interface OutboundReading {
+  since: string;
+  minutes: number;
+  byHost: { host: string; opened: number; tls: number; perMinute: number }[];
+}
+
+export function outboundReading(limit = 12): OutboundReading {
+  ensureOutboundCounter();
+  const minutes = Math.max(1 / 60, (Date.now() - Date.parse(outboundSince)) / 60_000);
+  return {
+    since: outboundSince,
+    minutes: Math.round(minutes * 10) / 10,
+    byHost: [...outboundByHost.entries()]
+      .map(([host, r]) => ({ host, ...r, perMinute: Math.round((r.opened / minutes) * 10) / 10 }))
+      .sort((a, b) => b.opened - a.opened)
+      .slice(0, limit),
+  };
 }
 
 /** Run `fn` labelled, so a stall while it is in flight is charged to it. */
