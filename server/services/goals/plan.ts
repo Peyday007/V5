@@ -1073,11 +1073,24 @@ export function planDue(input: { now: number; since: number; inputs: string | nu
   return null;
 }
 
+/**
+ * Goals a repair has just unblocked: their next pass reads the plan and widens
+ * the search at once, instead of waiting out the half-hour refresh. Set by the
+ * improvement loop when a goal's capability check clears a gap (§88), so a
+ * released repair resumes the goal on the next tick with nobody asking.
+ */
+const repairedGoals = new Map<string, string>();
+
+export function requestGoalPlanPass(goalId: string, why: string): void {
+  repairedGoals.set(goalId, why);
+}
+
 /** Tests. */
 export function forgetGoalReadings(): void {
   lastReadings.clear();
   lastTopUp.clear();
   lastInputs.clear();
+  repairedGoals.clear();
 }
 
 /**
@@ -1276,7 +1289,7 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
   return opened;
 }
 
-export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean; onEvidence: number }> {
+export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean; onEvidence: number; resumed: number }> {
   const goals = await getDb().all<{ id: string; target_project_id: string | null }>(
     `SELECT id, target_project_id FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
   );
@@ -1287,6 +1300,7 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
   let researched = 0;
   let busy = false;
   let onEvidence = 0;
+  let resumed = 0;
   for (const { id, target_project_id: projectId } of goals) {
     if (await recordGoalOutcome(id, now)) outcomes += 1;
     const last = await getDb().get<{ at: string | null }>(
@@ -1300,7 +1314,8 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     const since = [last?.at, lastRun?.at].filter((one): one is string => !!one).reduce((max, at) => Math.max(max, Date.parse(at)), 0);
     const fingerprint = async (): Promise<string | null> => (projectId ? planInputsFingerprint(projectId, id) : null);
     const inputs = since && now.getTime() - since >= PLAN_EVIDENCE_FLOOR_MS && now.getTime() - since < PLAN_REFRESH_MS ? await fingerprint() : null;
-    const due = busy ? null : planDue({ now: now.getTime(), since, inputs, lastInputs: lastInputs.get(id) });
+    const repaired = repairedGoals.get(id);
+    const due = busy ? null : repaired !== undefined ? 'REPAIRED' : planDue({ now: now.getTime(), since, inputs, lastInputs: lastInputs.get(id) });
     if (!due) {
       // Not due for a re-read; top the search up if the fleet has room for it.
       const held = lastReadings.get(id);
@@ -1322,6 +1337,17 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
       reading = await readGoalPlan({ goalId: id, now, persist: true });
       read += 1;
       if (due === 'EVIDENCE') onEvidence += 1;
+      if (due === 'REPAIRED') {
+        repairedGoals.delete(id);
+        resumed += 1;
+        await recordWorkstreamEvent({
+          workstreamId: id,
+          kind: 'GOAL_RESUMED_AFTER_REPAIR',
+          summary: `The capability check cleared ${repaired}; the plan was read at once (${reading?.verdict ?? 'no reading'}).`.slice(0, 400),
+          detail: { cleared: repaired, verdict: reading?.verdict ?? null, needsMoreOpenings: reading?.needsMoreOpenings ?? null },
+          actorRef: 'BRAIN',
+        });
+      }
     } catch (error) {
       // The process's one scenario slot is taken: this goal waits for the next
       // pass, and every other goal still records outcomes and tops up its search.
@@ -1348,5 +1374,5 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     const after = await fingerprint();
     if (after !== null) lastInputs.set(id, after);
   }
-  return { read, outcomes, asked, constructed, researched, busy, onEvidence };
+  return { read, outcomes, asked, constructed, researched, busy, onEvidence, resumed };
 }

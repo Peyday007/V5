@@ -20,7 +20,7 @@ import { recordMoney } from '../server/repos/cashLedger.ts';
 import { createWorkstream, getWorkstream, listLinks } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { readTarget, setTarget } from '../server/services/goals/target.ts';
-import { advanceGoalPlans, listReadings, PLAN_EVIDENCE_FLOOR_MS, PLAN_REFRESH_MS, planDue, readGoalPlan, recordGoalOutcome } from '../server/services/goals/plan.ts';
+import { advanceGoalPlans, listReadings, PLAN_EVIDENCE_FLOOR_MS, PLAN_REFRESH_MS, planDue, readGoalPlan, recordGoalOutcome, requestGoalPlanPass } from '../server/services/goals/plan.ts';
 import { MAX_MODEL_OPPORTUNITIES } from '../server/services/cash/goalScenario.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { getCandidate } from '../server/repos/russellCandidates.ts';
@@ -265,6 +265,26 @@ describe('the gate', () => {
     expect(pass).toMatchObject({ read: 1, onEvidence: 1 });
     // Read once for that evidence, not again until something else moves.
     expect((await advanceGoalPlans(at(6))).read).toBe(0);
+  });
+
+  it('resumes the goal the moment a repair clears a gap: the plan is read at once and the resume is a row', async () => {
+    await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    const id = await goal(100_000);
+    expect((await advanceGoalPlans(now)).read).toBe(1);
+    // One minute later nothing is due: inside the evidence floor and the refresh window.
+    expect((await advanceGoalPlans(new Date(now.getTime() + 60_000))).read).toBe(0);
+    // The hourly capability check finds COMPUTE.DATABASE no longer blocking the goal.
+    requestGoalPlanPass(id, 'COMPUTE.DATABASE');
+    const pass = await advanceGoalPlans(new Date(now.getTime() + 90_000));
+    expect(pass).toMatchObject({ read: 1, resumed: 1 });
+    const events = await getDb().all<{ kind: string; detail: string }>(
+      "SELECT kind, detail FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_RESUMED_AFTER_REPAIR'",
+      [id],
+    );
+    expect(events).toHaveLength(1);
+    expect(JSON.parse(events[0]!.detail).cleared).toBe('COMPUTE.DATABASE');
+    // Once: the request is spent.
+    expect((await advanceGoalPlans(new Date(now.getTime() + 120_000))).resumed).toBe(0);
   });
 });
 

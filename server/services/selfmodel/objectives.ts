@@ -25,10 +25,12 @@ export interface ObjectiveCheck {
   goalId: string;
   recorded: boolean;
   assessment: ObjectiveAssessment;
+  /** Gaps that blocked the goal at its last recorded assessment and no longer do: a repair reached production. */
+  cleared: string[];
 }
 
 /** Assess every live goal whose blocking set is new. At most `limit` goals a pass. */
-export async function assessLiveObjectives(input: { now?: Date; limit?: number; assessments?: MapAssessment[] } = {}): Promise<ObjectiveCheck[]> {
+export async function assessLiveObjectives(input: { now?: Date; limit?: number; assessments?: MapAssessment[]; since?: Date | null } = {}): Promise<ObjectiveCheck[]> {
   const now = input.now ?? new Date();
   const goals = await getDb().all<{
     id: string;
@@ -57,7 +59,7 @@ export async function assessLiveObjectives(input: { now?: Date; limit?: number; 
     // Cheap gate first: a small objective never costs an assessment.
     const small = assessObjective(shape, {});
     if (!small.substantial) continue;
-    assessments ??= await assessAll({ now, hours: 24 });
+    assessments ??= await assessAll({ now, hours: 24, since: input.since ?? null });
     const assessment = assessObjective(shape, Object.fromEntries(assessments.map((a) => [a.map, a.assessed])));
     const blocking = assessment.blocking.map((g) => `${g.status}:${g.id}`).sort();
     const last = await getDb().get<{ payload: string }>(
@@ -72,6 +74,8 @@ export async function assessLiveObjectives(input: { now?: Date; limit?: number; 
       previous = null;
     }
     const changed = previous === null || previous.join('|') !== blocking.join('|');
+    const stillBlocking = new Set(assessment.blocking.map((g) => g.id));
+    const cleared = (previous ?? []).map((one) => one.slice(one.indexOf(':') + 1)).filter((id) => !stillBlocking.has(id));
     if (changed) {
       await recordEvent({
         projectId: goal.project_id!,
@@ -82,11 +86,12 @@ export async function assessLiveObjectives(input: { now?: Date; limit?: number; 
           maps: assessment.maps,
           ready: assessment.ready,
           blocking,
+          cleared,
           gaps: assessment.blocking.slice(0, 10).map((g) => ({ id: g.id, status: g.status, why: g.why, external: g.externalLimit })),
         },
       });
     }
-    out.push({ goalId: goal.id, recorded: changed, assessment });
+    out.push({ goalId: goal.id, recorded: changed, assessment, cleared });
   }
   return out;
 }

@@ -451,17 +451,32 @@ async function readGoalProbe(probe: Probe, from: string, to: string): Promise<Pr
   }
 }
 
-/** One map over the last `hours`. */
-export async function assessMap(map: CapabilityMap, input: { now?: Date; hours?: number; root?: string } = {}): Promise<MapAssessment> {
+/**
+ * One map over the last `hours`.
+ *
+ * With `since` inside the window (the running release), a requirement whose
+ * probe already has its minimum sample since then is judged on that reading
+ * alone. Production, 2026-11-06: the check 55 minutes after Deploy 761 read
+ * `COMPUTE.DATABASE` BROKEN at 69% over the day while the release itself had
+ * not failed once — the night's outage was the build before it, and a repair
+ * raised on that reading would have engineered a failure already fixed. Below
+ * the sample the day's reading stands, so nothing is judged on a handful.
+ */
+export async function assessMap(map: CapabilityMap, input: { now?: Date; hours?: number; root?: string; since?: Date | null } = {}): Promise<MapAssessment> {
   const now = input.now ?? new Date();
   const to = now.toISOString();
   const from = new Date(now.getTime() - (input.hours ?? 24) * HOUR).toISOString();
+  const since = input.since && input.since.toISOString() > from && input.since < now ? input.since.toISOString() : null;
   const assessed: Assessed[] = [];
   for (const requirement of map.requirements) {
     const exists = ownerExists(requirement.owner[0]!, input.root);
     let reading: ProbeReading | null = null;
     try {
       reading = await readProbe(requirement.proof.probe, from, to);
+      if (since) {
+        const current = await readProbe(requirement.proof.probe, since, to);
+        if (current.total >= requirement.proof.minSample) reading = { ...current, detail: `since the release ${since.slice(11, 16)}Z: ${current.detail}` };
+      }
     } catch {
       reading = null;
     }
@@ -472,7 +487,7 @@ export async function assessMap(map: CapabilityMap, input: { now?: Date; hours?:
   return { map: map.key, objective: map.objective, from, to, assessed, gaps: connectedGaps(map, assessed), counts };
 }
 
-export async function assessAll(input: { now?: Date; hours?: number } = {}): Promise<MapAssessment[]> {
+export async function assessAll(input: { now?: Date; hours?: number; since?: Date | null } = {}): Promise<MapAssessment[]> {
   const out: MapAssessment[] = [];
   for (const map of Object.values(CAPABILITY_MAPS)) out.push(await assessMap(map, input));
   return out;
@@ -485,10 +500,10 @@ export async function assessAll(input: { now?: Date; hours?: number } = {}): Pro
  * minimum count, not sitting behind another gap, and not already raised by one
  * of the loop's own detectors in this pass.
  */
-export async function capabilityWeaknesses(now: Date, alreadyDetected: readonly string[]): Promise<Weakness[]> {
+export async function capabilityWeaknesses(now: Date, alreadyDetected: readonly string[], since: Date | null = null): Promise<Weakness[]> {
   const out: Weakness[] = [];
   for (const map of Object.values(CAPABILITY_MAPS)) {
-    const assessment = await assessMap(map, { now, hours: 24 });
+    const assessment = await assessMap(map, { now, hours: 24, since });
     for (const { gap, requirement, route } of gapsForImprovement(assessment.gaps, map, alreadyDetected, WEAKNESS_MIN_COUNT)) {
       const reading = assessment.assessed.find((a) => a.requirement.id === gap.id)?.reading;
       out.push({
