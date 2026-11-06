@@ -59,7 +59,7 @@ import { discoveryYield, type YieldRow } from '../server/services/cash/discovery
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { askConstructedArrangements, CHAIN_LABEL, goalLimits, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
+import { askConstructedArrangements, CHAIN_LABEL, goalArrangements, goalLimits, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 import { constructArrangements } from '../server/services/cash/construct.ts';
 import { goalExclusions } from '../server/services/cash/exclusions.ts';
 import { targetProperties } from '../server/services/cash/properties.ts';
@@ -417,12 +417,9 @@ async function printSearching(reading: PlanReading): Promise<void> {
   console.log(`  code feeds  24h: ${feeds ? Number(feeds.n) : '?'} new items pulled; ${funnel ? `pool ${funnel.pool}, screened by free AI ${funnel.screened}, kept ${funnel.kept}, passed rules ${funnel.passedRules}, sent to Claude ${funnel.chosen.length}` : 'funnel unreadable'}`);
   const t = reading.target;
   const frame = await executionFrame(t.projectId, t.currency);
-  const built = t.daysLeft && t.daysLeft > 0
-    ? await constructArrangements({
-        projectId: t.projectId, currency: t.currency, delivers: frame?.delivers ?? [], capitalCeilingCents: t.capitalCeilingCents, daysLeft: t.daysLeft,
-        limits: goalLimits(reading), exclusions: await goalExclusions((await getWorkstream(reading.goalId))!),
-      })
-    : [];
+  void frame;
+  // The plan's own construction, held for ten minutes: composing 404 arrangements again over one connection took 7.5 min.
+  const built = await goalArrangements((await getWorkstream(reading.goalId))!, t, new Date(), goalLimits(reading).bestReachCents);
   console.log(`  targets     ${targetProperties(goalLimits(reading)).map((one) => `${one.property} (${one.because})`).join('; ') || 'none: the limits of this goal ask for no particular property'}`);
   console.log(`  excluded    ${(await goalExclusions((await getWorkstream(reading.goalId))!)).join(', ') || 'nothing the owner said to leave out'}`);
   const byOrigin = new Map<string, number>();

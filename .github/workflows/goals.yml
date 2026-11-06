@@ -79,7 +79,8 @@ jobs:
         # An SSH session a deploy restarts under hangs until GitHub's six-hour job
         # limit and holds every later read behind it (2026-11-02, twice). admin.yml
         # bounds the same step the same way.
-        timeout-minutes: 15
+        # `plan` composes the goal's 400 constructed arrangements and its portfolio over one connection (~11 min on 2026-11-06).
+        timeout-minutes: 30
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           G_COMMAND: ${{ inputs.command }}

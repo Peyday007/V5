@@ -257,8 +257,12 @@ export function pickEstimatedArrangements(
 ): ModelledOpportunity[] {
   const scored: { one: ModelledOpportunity; score: number }[] = [];
   for (const arrangement of arrangements) {
-    if (excludedBy(`${arrangement.label} ${arrangement.sector ?? ''} ${arrangement.question}`, input.exclusions)) continue;
-    if (breaksOperatingModel(operatingFit({ title: arrangement.label, offerScope: arrangement.question }))) continue;
+    // Judged on what the arrangement is — its label, sector and buyer — never on its research question,
+    // which carries Brain's own instructions ("leave out government contracts", "the owner does no
+    // physical work") and so matched every exclusion: production read 0 of 404 (2026-11-06).
+    const what = `${arrangement.label} ${arrangement.sector ?? ''} ${arrangement.demand.name}`;
+    if (excludedBy(what, input.exclusions)) continue;
+    if (breaksOperatingModel(operatingFit({ title: arrangement.label, offerScope: arrangement.demand.name }))) continue;
     const one = estimatedFromArrangement(arrangement, input);
     if (!one) continue;
     const p50 = arrangement.value.p50;

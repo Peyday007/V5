@@ -81,13 +81,27 @@ describe('a constructed arrangement as an estimate', () => {
   it('keeps the owner’s exclusions and the operating rule', () => {
     const picked = pickEstimatedArrangements(
       [
-        arrangement({ key: 'gov', p50: 5_000, label: 'Broker federal procurement bids for agencies', question: 'Which federal agencies buy?' }),
+        arrangement({ key: 'gov', p50: 5_000, label: 'Broker federal procurement bids for agencies', demand: { name: 'federal agencies', claimId: null, from: 'INDUSTRY_MAP', ref: 'g' } }),
         arrangement({ key: 'mow', p50: 5_000, label: 'Lawn mowing for homeowners', question: 'Who wants mowing?' }),
         arrangement({ key: 'moves', p50: 600, label: 'Book moves online and dispatch the jobs to independent movers for a commission', question: 'Who books moves?' }),
       ],
       { ...base, remaining: 10_000, exclusions: ['GOVERNMENT_CONTRACTING'] },
     );
     expect(picked.map((one) => one.estimated!.arrangementKey)).toEqual(['moves']);
+  });
+});
+
+describe('judged on what it is, not on the instructions in its question', () => {
+  it('is not excluded by the exclusion sentence and operating rule its own research question carries', () => {
+    const question =
+      'Who buys brokered tenant screening for landlords? Leave out government and public-sector contracts: the goal’s owner excluded them. ' +
+      'The owner does no physical work — no travel, no deliveries, no meeting customers in person.';
+    const picked = pickEstimatedArrangements([arrangement({ key: 'screening', p50: 120, repeat: 'SUBSCRIPTION', question })], {
+      ...base,
+      remaining: 10_000,
+      exclusions: ['GOVERNMENT_CONTRACTING'],
+    });
+    expect(picked.map((one) => one.estimated!.arrangementKey)).toEqual(['screening']);
   });
 });
 

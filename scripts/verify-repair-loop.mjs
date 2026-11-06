@@ -143,8 +143,18 @@ if (what === 'check-ran' || what === 'resumed') {
     ok = Object.values(read).every((one) => one.startsWith('WORKING@'));
     detail = `Admin runs ${logs.map((l) => l.run).join(',')}: ${JSON.stringify(read)}`;
   }
+} else if (what === 'selection') {
+  // Commercial selection (2026-11-06): constructed estimates are compared with found openings in the portfolio.
+  const found = latestLog('goals.yml', '    compared  ');
+  if (!found) detail = 'no Goals plan run prints the comparison';
+  else {
+    const m = /compared {2}(\d+) found opening\(s\) \+ (\d+) constructed estimate\(s\); refused (\d+); estimates in the best combination (\d+)/.exec(found.log);
+    const best = /best {6}reaches the target in ([\d.]+)% of worlds · settled p10 (\d+) p50 (\d+) p90 (\d+)/.exec(found.log);
+    ok = Boolean(m && Number(m[2]) > 0);
+    detail = `Goals run ${found.run} on ${serving(found.log)?.slice(0, 7)}: ${m ? `${m[1]} found + ${m[2]} estimates compared, ${m[3]} refused, ${m[4]} estimate(s) in the best combination` : 'no comparison line'}${best ? `; best reaches ${best[1]}% · p10 ${best[2]} p50 ${best[3]} p90 ${best[4]}` : ''}`;
+  }
 } else {
-  detail = 'name one of: check-ran, resumed, repair-work, goal-running, honest-plan, commercial, evidence-to-plan, recovery';
+  detail = 'name one of: selection, check-ran, resumed, repair-work, goal-running, honest-plan, commercial, evidence-to-plan, recovery';
 }
 console.log(`${ok ? 'PASS' : 'FAIL'} ${what}: ${detail}`);
 process.exit(ok ? 0 : 1);
