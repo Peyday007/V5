@@ -54,9 +54,13 @@ if (what === 'check-ran' || what === 'resumed') {
     // The check must have run on the release now serving: after the Deploy that released it started.
     const deploys = JSON.parse(gh(`repos/${REPO}/actions/workflows/deploy.yml/runs?per_page=10&status=success`)).workflow_runs;
     const released = deploys.find((d) => d.head_sha === serving(found.log));
-    detail += released ? ` (released by Deploy ${released.id}, started ${released.run_started_at})` : ' (no successful Deploy of the serving revision)';
-    if (what === 'check-ran') ok = Boolean(released) && checks.some((c) => c[1] > released.run_started_at);
-    else ok = resumes.length > 0 && checks.some((c) => c[4] !== 'none');
+    // The machine is replaced inside the "Deploy to Fly" job: a check before that job started ran on the old build.
+    const flyJob = released ? JSON.parse(gh(`repos/${REPO}/actions/runs/${released.id}/jobs`)).jobs.find((j) => j.name === 'Deploy to Fly') : null;
+    const bootAfter = flyJob?.started_at ?? null;
+    detail += released ? ` (released by Deploy ${released.id}; machine replaced after ${bootAfter})` : ' (no successful Deploy of the serving revision)';
+    const onRelease = checks.filter((c) => bootAfter && c[1] > bootAfter);
+    if (what === 'check-ran') ok = onRelease.length > 0;
+    else ok = resumes.some((r) => bootAfter && r[1] > bootAfter) && onRelease.some((c) => c[4] !== 'none');
     for (const c of checks) detail += `\n  check ${c[1]} blocking=${c[3]} cleared=${c[4]}`;
     for (const r of resumes) detail += `\n  resumed ${r[1]} ${r[2].slice(0, 160)}`;
   }
