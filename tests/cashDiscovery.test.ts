@@ -1282,5 +1282,62 @@ describe('the wider economy (2026-10-28)', () => {
     const filed = [...abandoned, { round: 4, state: 'HARVESTED', found: 2, openedAt: at(3), harvestedAt: at(3) }] as never[];
     expect(nextGoalRoundFor(filed, new Date(t0 + 1 * day + 1).toISOString())).toBe(5);
     expect(nextGoalRoundFor([...abandoned, { round: 4, state: 'OPEN', found: 0, openedAt: at(3) }] as never[], new Date(t0 + 90 * day).toISOString())).toBeNull();
+    // A parked round that already filed openings is not barren: it waits one cool-off, not two.
+    const parkedWithOpening = [{ round: 1, state: 'ABANDONED', found: 1, openedAt: at(3), harvestedAt: at(3) }] as never[];
+    expect(nextGoalRoundFor(parkedWithOpening, new Date(t0 + 1 * day + 1).toISOString())).toBe(2);
+  });
+
+  it('backs a real goal lens off after a round whose mission stopped before a packet finished, and not after a parked round that filed', async () => {
+    const { openGoalDiscovery, nextGoalRoundFor } = await import('../server/services/cash/discovery.ts');
+    const { createWorkstream, getWorkstream } = await import('../server/repos/register.ts');
+    const { setTerms } = await import('../server/services/goals/decide.ts');
+    const { setTarget } = await import('../server/services/goals/target.ts');
+    const { forgetGoalReadings, readGoalPlan } = await import('../server/services/goals/plan.ts');
+    const day = 24 * 60 * 60 * 1000;
+    forgetGoalReadings();
+    await activated();
+    const g = await createWorkstream({ projectId, title: 'Collect cash fast', intent: 'Collect settled cash.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: new Date(Date.now() + 25 * day).toISOString(), ownerUserId: userId }, `person:${userId}`);
+    expect(
+      (await setTarget({
+        goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId,
+        capitalCeilingCents: 300_000, capitalBeforeProofCents: 37_500, hoursCeiling: 200, now: new Date(Date.now() - 60_000),
+      } as Parameters<typeof setTarget>[0])).ok,
+    ).toBe(true);
+    const w = (await getWorkstream(g.id))!;
+    const target = (await readGoalPlan({ goalId: g.id, evaluations: 200 }))!.target;
+    const bucketRounds = async (bucketId: string) => (await listRounds(projectId)).filter((one) => one.bucketId === bucketId);
+
+    // Round 1 of one lens: its mission fails before any packet finishes.
+    const failedRound = await openGoalDiscovery({ goal: w, target, bestReach: null });
+    expect(failedRound).not.toBeNull();
+    await finishedMission({ candidateId: failedRound!.candidateId, missionEnds: 'FAILED', fragmentStatus: 'REJECTED', claims: [] });
+    await harvest({ projectId });
+    const failedHistory = await bucketRounds(failedRound!.bucketId);
+    expect(failedHistory.map((one) => [one.state, one.found])).toEqual([['ABANDONED', 0]]);
+    // Barren: asked again only after two cool-offs, not one.
+    expect(nextGoalRoundFor(failedHistory, new Date(Date.now() + 1.5 * day).toISOString())).toBeNull();
+    expect(nextGoalRoundFor(failedHistory, new Date(Date.now() + 2.5 * day).toISOString())).toBe(2);
+
+    // Another lens: its mission parks at a decision, but its claim was filed first.
+    const parkedRound = await openGoalDiscovery({ goal: w, target, bestReach: null });
+    expect(parkedRound).not.toBeNull();
+    expect(parkedRound!.bucketId).not.toBe(failedRound!.bucketId);
+    await finishedMission({
+      candidateId: parkedRound!.candidateId,
+      missionEnds: 'NEEDS_HUMAN',
+      fragmentStatus: 'BLOCKED',
+      claims: [{
+        claim: 'A city published an open request for records digitization.',
+        lane: SIGNAL_LANE,
+        signal: 'ACTIVE_BUYER_DEMAND',
+        sourceUrl: 'https://example.test/rfp/goal-parked',
+      }],
+    });
+    await harvest({ projectId });
+    const parkedHistory = await bucketRounds(parkedRound!.bucketId);
+    expect(parkedHistory.map((one) => [one.state, one.found])).toEqual([['ABANDONED', 1]]);
+    // Not barren: it is asked again after one cool-off.
+    expect(nextGoalRoundFor(parkedHistory, new Date(Date.now() + 1.5 * day).toISOString())).toBe(2);
   });
 });
