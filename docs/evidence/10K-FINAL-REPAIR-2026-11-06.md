@@ -139,3 +139,9 @@ the server idle. `setRunDependencies` looked up each name and checked the
 document store **inside one transaction** (the lookup from
 `dependencies.ts:296` averaged 7.8 s over 1 076 calls in 8 min). #563
 resolves the names before the transaction opens.
+
+Russell and deep dives on `93bb258` (DB session, closeout report 42170884262, ~05:52Z):
+- 4 deep dives started at 05:40Z: IHPA (researching), GBS, shared services and
+  GPOs (queued for launch). Dives started rose to 380, from 376 where it had
+  stood since 22:05Z. 4 are in flight, at the operator cap.
+- The Russell cycle completes: lastRan 05:47:53Z, lastError empty.
