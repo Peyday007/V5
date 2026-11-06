@@ -207,6 +207,18 @@ describe('completion is decided by evidence and the repository', () => {
     expect(res.out).not.toContain('DEPLOY');
     expect(res.out).toMatch(/^FINISH-JOB DONE/);
   });
+
+  it('a heading covered by an item that is itself covered is judged after that item, in any order', () => {
+    // 2026-11-06: R26 covered R33, R33 covered R27 — one pass in list order left R26 open for ever.
+    assign('Ship the runbook:\n- verify all of it\n- write docs/RUNBOOK.md\n- the summary item\n');
+    sh('git checkout -qb claude/doc2 && mkdir -p docs && echo "# Runbook" > docs/RUNBOOK.md && git add -A && git commit -qm doc && git push -q origin claude/doc2');
+    sh('git checkout -q production && git merge -q claude/doc2 && git push -q origin production && git checkout -q claude/doc2 && git fetch -q origin');
+    gh('ci', runs(sh('git rev-parse origin/production'), 'success'));
+    cli('evidence', 'R2', '--file', 'docs/RUNBOOK.md');
+    cli('evidence', 'R3', '--covered', 'R2');
+    cli('evidence', 'R1', '--covered', 'R3');
+    expect(cli('check').out).toMatch(/^FINISH-JOB DONE/);
+  });
 });
 
 describe('waiting on the outside world without looping', () => {
