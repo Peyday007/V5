@@ -21,16 +21,25 @@ import { execFileSync } from 'node:child_process';
 const REPO = process.env.BRAIN_REPO ?? 'peyday007/v5';
 const gh = (path) => execFileSync('gh', ['api', path], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
-function latestLog(workflow, mustContain) {
+function recentLogs(workflow, mustContain, limit = 1) {
   const runs = JSON.parse(gh(`repos/${REPO}/actions/workflows/${workflow}/runs?per_page=15&status=success`)).workflow_runs;
+  const out = [];
   for (const run of runs) {
     const jobs = JSON.parse(gh(`repos/${REPO}/actions/runs/${run.id}/jobs`)).jobs;
     for (const job of jobs) {
       const log = gh(`repos/${REPO}/actions/jobs/${job.id}/logs`);
-      if (log.includes(mustContain)) return { run: run.id, sha: run.head_sha, log };
+      if (log.includes(mustContain)) {
+        out.push({ run: run.id, sha: run.head_sha, at: run.created_at, log });
+        break;
+      }
     }
+    if (out.length >= limit) break;
   }
-  return null;
+  return out;
+}
+
+function latestLog(workflow, mustContain) {
+  return recentLogs(workflow, mustContain, 1)[0] ?? null;
 }
 
 function serving(log) {
@@ -115,17 +124,24 @@ if (what === 'check-ran' || what === 'resumed') {
     detail = `Goals run ${found.run} on ${serving(log)?.slice(0, 7)}: ${JSON.stringify(has)}`;
   }
 } else if (what === 'evidence-to-plan' || what === 'recovery') {
-  const found = latestLog('admin.yml', 'MAP GOAL_PLAN');
-  if (!found) detail = 'no Admin capabilities show run';
+  // UNPROVEN is "below the sample in that window" — no data, not a verdict. Each requirement is judged by
+  // the newest of the last few readings that had its sample; BROKEN or MISSING there fails, as does no proven reading.
+  const logs = recentLogs('admin.yml', 'MAP GOAL_PLAN', 4);
+  if (logs.length === 0) detail = 'no Admin capabilities show run';
   else {
-    const status = (id) => new RegExp(`(WORKING|BROKEN|UNPROVEN|MISSING) +${id.replace('.', '\\.')} `).exec(found.log)?.[1] ?? 'ABSENT';
+    const status = (log, id) => new RegExp(`(WORKING|BROKEN|UNPROVEN|MISSING) +${id.replace('.', '\\.')} `).exec(log)?.[1] ?? 'ABSENT';
     const ids =
       what === 'evidence-to-plan'
         ? ['EVIDENCE.PATH_ANSWERS', 'QUANT.MODELLED', 'PLAN.READS_NEW_EVIDENCE', 'GOAL.PLAN_EVALUATED']
         : ['RECOVERY.LEASES', 'COMPUTE.GPU', 'COMPUTE.FREE_MODELS', 'GOAL.PLAN_FRESH'];
-    const read = Object.fromEntries(ids.map((id) => [id, status(id)]));
-    ok = Object.values(read).every((one) => one === 'WORKING');
-    detail = `Admin run ${found.run} on ${found.sha.slice(0, 7)}: ${JSON.stringify(read)}`;
+    const read = Object.fromEntries(
+      ids.map((id) => {
+        const proven = logs.find((l) => !['UNPROVEN', 'ABSENT'].includes(status(l.log, id)));
+        return [id, proven ? `${status(proven.log, id)}@${proven.run}` : `UNPROVEN in ${logs.length} reading(s)`];
+      }),
+    );
+    ok = Object.values(read).every((one) => one.startsWith('WORKING@'));
+    detail = `Admin runs ${logs.map((l) => l.run).join(',')}: ${JSON.stringify(read)}`;
   }
 } else {
   detail = 'name one of: check-ran, resumed, repair-work, goal-running, honest-plan, commercial, evidence-to-plan, recovery';
