@@ -201,3 +201,42 @@ AUDIT 9/15; JOB_OUTCOME 0/5 (CANCELLED×3 judge MORE_RESEARCH, NEEDS_HUMAN×2
 "no fragment cleared its gate"); RECOVERY.PROVIDERS 9/66 — the free providers
 answered one call in seven (external). Too few fragments ran to read discovery
 or extraction.
+
+## 8. Audits, and what the decision stage does (2026-11-06 02:08Z → 04:08Z)
+
+`packets recent 8` (#551, 02:40Z) printed the rows behind the counts: six packets
+had parked "a primary/judge/adversarial audit work item finished without
+recording anything", each audit having spent both attempts with "free lane …
+produced no answer Brain accepted". #552 stopped a model taking a kind of work
+Brain keeps rejecting from it; its first reading (03:48Z) held brain-a and
+brain-b back from audits on rejections that were largely the database flood,
+while the RunPod slot — its pod refused START all night — answered through the
+same OmniRoute model. #558 counts only the model's own answers and treats a
+falling-back GPU slot as its fallback model.
+
+`capabilities show 2` (02:08Z → 04:08Z): `{"WORKING":6,"BROKEN":4,"MISSING":0,"UNPROVEN":14}`
+
+| requirement | 23:46Z → 01:46Z | 02:08Z → 04:08Z |
+|---|---|---|
+| ANALYSIS.AUDIT | BROKEN 9/15 | **WORKING 16/16** |
+| ANALYSIS.SYNTHESIS | WORKING 3/3 | WORKING 4/4 |
+| ACCESS.READ | WORKING 19/28 | WORKING 37/56 |
+| RECOVERY.LEASES | WORKING 67/67 | WORKING 21/21 |
+| RECOVERY.PROVIDERS | BROKEN 9/66 | BROKEN 4/53 — external |
+| DISCOVERY / EXTRACTION | 0 fragments researched | 0 fragments researched |
+| ANALYSIS.FILED / DECISION.JOB_OUTCOME | UNPROVEN / 0 of 5 | UNPROVEN (3 settled) |
+
+**The decision stage, read from its rows.** Every recent packet that reached
+the judge had a filed synthesis and three recorded audit passes. Those the judge
+sent back for MORE_RESEARCH with no fragment left to retry end one of two ways,
+both by design: a cash deep dive is CANCELLED as `CONTINUED_ELSEWHERE` (its
+opening's next dive round reads the accepted claims), and a packet whose judge
+named no bounded question, or that has used its corrected rounds, parks for a
+person unless a standing grant covers it (§80, `answerUnaskedParks`).
+
+**What limits the proof is research volume, and it is external tonight.** No
+fragment was researched in the window: the free providers answered 4 of 53
+calls — Groq refused for its 8 000-token window (#555 fits it, live 03:40Z),
+Cerebras's day spent (resets ~09:00Z), NVIDIA cooling down, Cloudflare
+Playground needing a browser runtime the OmniRoute image lacks, and the RunPod
+pod refused START by RunPod.
