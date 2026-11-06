@@ -18,6 +18,7 @@
 import { Readable } from 'node:stream';
 import crypto from 'node:crypto';
 import { assertSafeKey, contentTypeFor } from './keys.ts';
+import { keepAliveFetch } from './keepAliveFetch.ts';
 import {
   ObjectNotFoundError,
   StorageConfigurationError,
@@ -91,7 +92,7 @@ export class SupabaseStorageProvider implements StorageProvider {
     this.#base = options.url.replace(/\/+$/, '');
     this.#key = options.serviceRoleKey;
     this.#bucket = options.bucket;
-    this.#fetch = options.fetchImpl ?? fetch;
+    this.#fetch = options.fetchImpl ?? keepAliveFetch;
     this.#requestMs = options.timeouts?.requestMs ?? STORE_REQUEST_TIMEOUT_MS;
     this.#transferMs = options.timeouts?.transferMs ?? STORE_TRANSFER_TIMEOUT_MS;
   }
