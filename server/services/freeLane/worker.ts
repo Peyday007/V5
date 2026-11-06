@@ -41,6 +41,7 @@ import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
 import { webSearch } from '../sources/discover.ts';
 import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
+import { isRunpodSlot, runpodBreakerOpen, runpodCallWindow, runpodPaused } from '../cheap/runpod.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
 import { readSource } from '../sources/access.ts';
 
@@ -1164,11 +1165,21 @@ async function failingModels(now = Date.now()): Promise<Set<string>> {
  * Transient releases are not counted: an outage is not the model's answer.
  */
 export function unfitPairs(
-  rows: readonly { model: string; work_type: string; outcome: string; n: number | string }[],
+  rows: readonly { model: string; work_type: string; outcome: string; n: number | string; reason?: string | null }[],
   models: readonly string[],
+  /**
+   * Slots answering through another model right now: slot → the model it calls.
+   * Production, 2026-11-06 03:48Z: with the RunPod pod refused START all night,
+   * its slot fell back to the same OmniRoute model the other slots use, so
+   * holding the others back from audits sent audits to that model anyway.
+   */
+  alias: Readonly<Record<string, string>> = {},
 ): Set<string> {
   const tally = new Map<string, { ok: number; bad: number }>();
   for (const row of rows) {
+    // Only the model's own answer counts against it: an outage that ran out of
+    // strikes is recorded FAILED_RETRYABLE too (Brain's database flood, 11-05).
+    if (row.outcome === 'FAILED_RETRYABLE' && row.reason && notTheAnswer(row.reason)) continue;
     const key = `${row.model}|${row.work_type}`;
     const entry = tally.get(key) ?? { ok: 0, bad: 0 };
     if (row.outcome === 'SUBMITTED') entry.ok += Number(row.n);
@@ -1177,13 +1188,26 @@ export function unfitPairs(
   }
   const marked = new Set<string>();
   for (const [key, e] of tally) if (e.bad >= 4 && e.ok * 5 < e.ok + e.bad) marked.add(key);
-  // Never every model for one type: the work would wait for nobody.
+  const distinct = models.filter((m) => !(m in alias));
+  // Never every distinct model for one type: the work would wait for nobody.
   for (const type of new Set([...marked].map((k) => k.slice(k.indexOf('|') + 1)))) {
-    if (models.length > 0 && models.every((m) => marked.has(`${m}|${type}`))) {
+    if (distinct.length > 0 && distinct.every((m) => marked.has(`${m}|${type}`))) {
       for (const m of models) marked.delete(`${m}|${type}`);
     }
   }
+  // A slot answering through another model is held back exactly when that model is.
+  for (const [slot, actual] of Object.entries(alias)) {
+    for (const key of [...marked]) if (key.startsWith(`${slot}|`)) marked.delete(key);
+    for (const key of [...marked]) {
+      if (key.startsWith(`${actual}|`)) marked.add(`${slot}|${key.slice(actual.length + 1)}`);
+    }
+  }
   return marked;
+}
+
+/** A failure that says Brain or the provider was unavailable, not that the answer was wrong. */
+function notTheAnswer(reason: string): boolean {
+  return /threw:|refused: .*(?:connection|timeout|not queryable)/i.test(reason) || BRAIN_UNAVAILABLE.test(reason) || PROVIDER_BUSY.test(reason);
 }
 
 let fitness: { at: number; unfit: Set<string> } | null = null;
@@ -1191,7 +1215,7 @@ let fitness: { at: number; unfit: Set<string> } | null = null;
 export function resetFreeLaneFitness(): void {
   fitness = null;
 }
-export async function unfitNow(models: readonly string[], now = Date.now()): Promise<Set<string>> {
+export async function unfitNow(models: readonly string[], now = Date.now(), fallbackModel: string | null = null): Promise<Set<string>> {
   if (fitness && now - fitness.at < 5 * 60_000) return fitness.unfit;
   const rows = await getDb().all<{ reason: string | null; work_type: string; outcome: string; n: number | string }>(
     `SELECT e.reason, w.work_type, e.outcome, COUNT(*) AS n FROM bin_events e
@@ -1200,9 +1224,16 @@ export async function unfitNow(models: readonly string[], now = Date.now()): Pro
       GROUP BY e.reason, w.work_type, e.outcome`,
     [new Date(now - 86_400_000).toISOString()],
   );
+  // The RunPod slot is its own model only while the GPU is answering.
+  const alias: Record<string, string> = {};
+  if (fallbackModel) {
+    const gpuServing = !runpodPaused() && !runpodBreakerOpen(now) && runpodCallWindow(30 * 60_000, now).ok > 0;
+    for (const m of models) if (isRunpodSlot(m) && !gpuServing && m !== fallbackModel) alias[m] = fallbackModel;
+  }
   const unfit = unfitPairs(
     rows.map((r) => ({ ...r, model: String(r.reason ?? '').replace(/^model /, '').split(':')[0]! })),
     models,
+    alias,
   );
   fitness = { at: now, unfit };
   return unfit;
@@ -1276,7 +1307,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   if (projectIds.length === 0) return { claimed: null, ok: false, ms: 0 };
   let session = '';
   let one: ClaimedWork | undefined;
-  const unfit = await unfitNow(workers.map((w) => w.model));
+  const unfit = await unfitNow(workers.map((w) => w.model), Date.now(), config.fallbackModel ?? null);
   for (const types of CLAIM_ORDER) {
     const claimed = await claimWork({
       workerId: worker.workerId,
