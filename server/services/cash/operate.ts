@@ -1413,6 +1413,11 @@ export async function operate(
   continuations: Continuation[];
   dependentWork: DependentWork[];
   validations: ValidationProgress;
+  /**
+   * Steps that threw this pass, each in its own failure domain. Empty on a
+   * pass where every step ran.
+   */
+  failures: { step: string; error: string }[];
   /** Confirmed effects whose record this pass finished. Empty when there were none. */
   effects: ReconciledEffect[];
   authority: AuthorityAdvance;
@@ -1446,6 +1451,7 @@ export async function operate(
       continuations: [],
       dependentWork: [],
       validations: { started: [], settled: [] },
+      failures: [],
       effects: [],
       authority: { took: [], withheld: [] },
       invoicing: { issued: [], uncertain: [], failed: [], withheld: [], paid: [], settled: [], voided: [] },
@@ -1493,8 +1499,28 @@ export async function operate(
     projectId,
     reconsidered && 'readings' in reconsidered ? { readings: reconsidered.readings } : {},
   ));
-  const research = await withActivity('cash:applyResearchAnswers', () => applyResearchAnswers(projectId));
-  const proposed = await withActivity('cash:proposeCommercialTerms', () => proposeCommercialTerms(projectId));
+  /*
+   * The steps up to the deep dives, each in its own failure domain.
+   *
+   * They used to run as one chain inside the tick's silent `catch`, so one
+   * dropped connection in any of them skipped every step after it, the deep
+   * dives included, and nothing recorded why. Production, 2026-11-06
+   * 01:33-04:30Z: eight eligible openings, a free slot, ticks completing, and
+   * no dive started for six hours. Each step reads rows rather than the one
+   * before it, so a step that threw leaves the next one correct, one tick
+   * staler at worst; its failure is returned and the tick records it.
+   */
+  const failures: { step: string; error: string }[] = [];
+  const step = async <T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> => {
+    try {
+      return await withActivity(`cash:${label}`, fn);
+    } catch (error) {
+      failures.push({ step: label, error: (error instanceof Error ? error.message : String(error)).slice(0, 300) });
+      return fallback;
+    }
+  };
+  const research = await step('applyResearchAnswers', () => applyResearchAnswers(projectId), { applied: [], unanswered: [] });
+  const proposed = await step('proposeCommercialTerms', () => proposeCommercialTerms(projectId), []);
   /*
    * Decide every opening under every live goal before research is withdrawn or
    * launched, so the record a person reads is the one the gate acted on. Its
@@ -1511,10 +1537,13 @@ export async function operate(
       decisions = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
     }
   }
-  const withdrawnResearch = await withActivity('cash:withdrawResearchNotWorthIt', () => withdrawResearchNotWorthIt(projectId));
-  const gaps = [...(await withActivity('cash:reconcileDiscoverableGaps', () => reconcileDiscoverableGaps(projectId))), ...(await withActivity('cash:reconcileEngineGaps', () => reconcileEngineGaps(projectId)))];
-  const continuations = await withActivity('cash:runNeedContinuations', () => runNeedContinuations(projectId, now));
-  const dependentWork = await withActivity('cash:startDependentWork', () => startDependentWork(projectId));
+  const withdrawnResearch = await step('withdrawResearchNotWorthIt', () => withdrawResearchNotWorthIt(projectId), []);
+  const gaps = [
+    ...(await step('reconcileDiscoverableGaps', () => reconcileDiscoverableGaps(projectId), [])),
+    ...(await step('reconcileEngineGaps', () => reconcileEngineGaps(projectId), [])),
+  ];
+  const continuations = await step('runNeedContinuations', () => runNeedContinuations(projectId, now), []);
+  const dependentWork = await step('startDependentWork', () => startDependentWork(projectId), []);
   /*
    * And the bounded deep dive on each opening, which is where the commercial
    * questions actually get answered.
@@ -1525,7 +1554,7 @@ export async function operate(
    * and `mayReplace` decides which answer stands — by authority rather than by
    * whichever arrived last.
    */
-  const validations = await withActivity('cash:runValidations', () => runValidations(projectId));
+  const validations = await step('runValidations', () => runValidations(projectId), { started: [], settled: [] });
   /*
    * Last, and that order is the point: a piece only becomes ready because the
    * research landed on its card and the proposal filled what the research could
@@ -1644,6 +1673,7 @@ export async function operate(
     continuations,
     dependentWork,
     validations,
+    failures,
     effects,
     authority,
     invoicing,
