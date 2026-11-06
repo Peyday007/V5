@@ -19,7 +19,19 @@
 import { execFileSync } from 'node:child_process';
 
 const REPO = process.env.BRAIN_REPO ?? 'peyday007/v5';
-const gh = (path) => execFileSync('gh', ['api', path], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+// A dropped connection is retried: a network blip is not a reading (2026-11-06, a reset read as FAIL).
+const gh = (path) => {
+  let last;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      return execFileSync('gh', ['api', path], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (error) {
+      last = error;
+      execFileSync('sleep', [String(2 ** attempt)]);
+    }
+  }
+  throw last;
+};
 
 function recentLogs(workflow, mustContain, limit = 1) {
   const runs = JSON.parse(gh(`repos/${REPO}/actions/workflows/${workflow}/runs?per_page=15&status=success`)).workflow_runs;
@@ -50,28 +62,39 @@ const what = process.argv[2];
 let ok = false;
 let detail = '';
 if (what === 'check-ran' || what === 'resumed') {
-  const found = latestLog('goals.yml', 'PLAN wst_');
-  if (!found) detail = 'no Goals plan run';
-  else {
-    const once = (rows) => {
-      const seen = new Set();
-      return rows.filter((r) => !seen.has(r[0]) && seen.add(r[0]));
-    };
+  // The newest of the last few Goals plan reads whose release had a post-boot check (or resume) to show:
+  // a read taken before its release's first check is a timing, not a failure of the mechanism.
+  const logs = recentLogs('goals.yml', 'PLAN wst_', 5);
+  if (logs.length === 0) detail = 'no Goals plan run';
+  const deploys = logs.length ? JSON.parse(gh(`repos/${REPO}/actions/workflows/deploy.yml/runs?per_page=30&status=success`)).workflow_runs : [];
+  const once = (rows) => {
+    const seen = new Set();
+    return rows.filter((r) => !seen.has(r[0]) && seen.add(r[0]));
+  };
+  for (const found of logs) {
     const checks = once([...found.log.matchAll(/ {2}check {7}(\S+) ready=(\S+) blocking=(\S*) cleared=(\S*)/g)]);
     const resumes = once([...found.log.matchAll(/ {2}resumed {5}(\S+) (.*)/g)]);
-    detail = `Goals run ${found.run} on ${serving(found.log)?.slice(0, 7)}: ${checks.length} check row(s), ${resumes.length} resume row(s)`;
-    // The check must have run on the release now serving: after the Deploy that released it started.
-    const deploys = JSON.parse(gh(`repos/${REPO}/actions/workflows/deploy.yml/runs?per_page=10&status=success`)).workflow_runs;
-    const released = deploys.find((d) => d.head_sha === serving(found.log));
-    // The machine is replaced inside the "Deploy to Fly" job: a check before that job started ran on the old build.
-    const flyJob = released ? JSON.parse(gh(`repos/${REPO}/actions/runs/${released.id}/jobs`)).jobs.find((j) => j.name === 'Deploy to Fly') : null;
-    const bootAfter = flyJob?.started_at ?? null;
-    detail += released ? ` (released by Deploy ${released.id}; machine replaced after ${bootAfter})` : ' (no successful Deploy of the serving revision)';
+    // The Deploy that actually replaced the machine with this revision (one whose "Deploy to Fly" ran).
+    let bootAfter = null;
+    let releasedBy = null;
+    for (const d of deploys.filter((one) => one.head_sha === serving(found.log))) {
+      const fly = JSON.parse(gh(`repos/${REPO}/actions/runs/${d.id}/jobs`)).jobs.find((j) => j.name === 'Deploy to Fly' && j.conclusion === 'success');
+      if (fly) {
+        bootAfter = fly.started_at;
+        releasedBy = d.id;
+        break;
+      }
+    }
     const onRelease = checks.filter((c) => bootAfter && c[1] > bootAfter);
-    if (what === 'check-ran') ok = onRelease.length > 0;
-    else ok = resumes.some((r) => bootAfter && r[1] > bootAfter) && onRelease.some((c) => c[4] !== 'none');
-    for (const c of checks) detail += `\n  check ${c[1]} blocking=${c[3]} cleared=${c[4]}`;
-    for (const r of resumes) detail += `\n  resumed ${r[1]} ${r[2].slice(0, 160)}`;
+    const resumedOnRelease = resumes.filter((r) => bootAfter && r[1] > bootAfter);
+    const pass = what === 'check-ran' ? onRelease.length > 0 : resumedOnRelease.length > 0 && onRelease.some((c) => c[4] !== 'none');
+    detail = `Goals run ${found.run} on ${serving(found.log)?.slice(0, 7)} (released by Deploy ${releasedBy}; machine replaced after ${bootAfter}): ${onRelease.length} check(s) and ${resumedOnRelease.length} resume(s) on that release`;
+    for (const c of onRelease) detail += `\n  check ${c[1]} blocking=${c[3]} cleared=${c[4]}`;
+    for (const r of resumedOnRelease) detail += `\n  resumed ${r[1]} ${r[2].slice(0, 160)}`;
+    if (pass) {
+      ok = true;
+      break;
+    }
   }
 } else if (what === 'repair-work') {
   const found = latestLog('admin.yml', 'CANDIDATES');

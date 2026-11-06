@@ -55,3 +55,13 @@ What the reading also shows, honestly:
 - The verdict is unchanged: no strategy reaches $10 000 at prices buyers are
   shown to pay. The improvement is in what Brain compares and researches, not
   in evidence it does not have.
+
+## Second reading, and the repair loop on the same release (Goals `plan` 42272893745, `f0ce877`)
+
+The comparison reproduced: 18 found + 12 constructed estimates, 9 refused, one
+estimate in the best combination; best 1.6% of worlds, settled p10 0 / p50 232
+/ p90 6 477 (coverage). On the release that carries the fix (machine replaced
+17:16Z), the first capability check ran at 17:53Z, cleared
+`EXTRACTION.ACCEPTED`, `OPENINGS.SEARCH_WIDENS` and `VERIFICATION.GATE`, and
+the goal was resumed at 18:00Z — no session or message involved. Factory holds
+three capability repairs (Admin 42272897231).
