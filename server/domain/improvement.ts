@@ -288,6 +288,8 @@ export function classifyFreeLaneFailure(reason: string | null): FreeLaneFailureC
 export function classifyClaimRejection(reason: string | null): string {
   const text = reason ?? '';
   if (!text.trim()) return 'NO_REASON_RECORDED';
+  // First: its wording names "the source", which would otherwise read as a source problem.
+  if (/\blane asks\b/i.test(text)) return 'LANE_FIT';
   if (/scope does not match/i.test(text)) return 'SCOPE_MISMATCH';
   if (/assumption|no stated inputs/i.test(text)) return 'UNSTATED_INFERENCE';
   if (/not (found|present) in|does not (appear|contain)|quote|excerpt/i.test(text)) return 'QUOTE_NOT_IN_SOURCE';
