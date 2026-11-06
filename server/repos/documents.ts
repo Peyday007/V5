@@ -117,13 +117,28 @@ export async function getDocument(id: string): Promise<Document | null> {
   return row ? mapDocument(row) : null;
 }
 
+/**
+ * The file and line that called the lookup, as `services/importer.ts:229`.
+ *
+ * Production, 2026-11-05 23:30-23:51Z: after #538's memo and #542's batch the
+ * single-name lookup still ran ~44 000 times an hour and nothing said from
+ * where, because the process's statement tally is keyed by SQL text. The site
+ * goes into a trailing comment, so the tally (and the connection report) lists
+ * each caller as its own statement; pg_stat_statements ignores comments.
+ */
+function lookupSite(): string {
+  const frame = new Error().stack?.split('\n')[3] ?? '';
+  const match = /server[\\/]([\w./\\-]+\.ts):(\d+)/.exec(frame);
+  return match ? `${match[1]!.replace(/\\/g, '/')}:${match[2]}` : 'unknown';
+}
+
 export async function findDocumentByCanonicalName(projectId: string, canonicalName: string): Promise<Document | null> {
   const row = await getDb().get<DocumentRow>(
     // lower() on both sides, not COLLATE NOCASE: Postgres cannot use an index
     // for a nondeterministic collation, so the NOCASE form scanned every
     // document in the project — 50 000 times an hour on production, 2026-11-05,
     // at 13 s each. idx_documents_project_lower_name serves this one.
-    'SELECT * FROM documents WHERE project_id = ? AND lower(canonical_name) = lower(?)',
+    `SELECT * FROM documents WHERE project_id = ? AND lower(canonical_name) = lower(?) /* from ${lookupSite()} */`,
     [projectId, canonicalName],
   );
   return row ? mapDocument(row) : null;
