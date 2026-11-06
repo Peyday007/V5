@@ -281,6 +281,37 @@ export const httpCompleter: Completer = async (config, model, system, prompt, op
   return openAiCompleter(config, model, system, prompt, options);
 };
 
+/**
+ * The answer budget a request can carry and still fit the smallest free window.
+ *
+ * A provider on a token-per-minute free tier counts a request as its prompt
+ * *plus* `max_tokens`, and refuses one larger than the whole minute outright.
+ * Production, 2026-11-06 03:02Z: Groq's gpt-oss-120b (TPM 8 000) answered
+ * every free-lane research call 413 "Request too large … Requested 8027",
+ * because each asked for `max_tokens: 8000` on top of its prompt — so the one
+ * free provider still answering (Cerebras's day was spent, NVIDIA cooling down)
+ * could take none of Brain's research. When the prompt leaves room for a
+ * useful answer inside the window, the budget is shrunk to fit; a prompt too
+ * long for that keeps the budget it asked for, and the combo's larger windows
+ * take it as before. Tokens are estimated at three characters each, which
+ * overcounts English and so errs toward fitting.
+ */
+export const FREE_WINDOW_TOKENS = 8_000;
+export const MIN_ANSWER_TOKENS = 1_500;
+
+export function fitMaxTokens(system: string, prompt: string, requested: number, windowTokens = FREE_WINDOW_TOKENS): number {
+  const promptTokens = Math.ceil((system.length + prompt.length) / 3) + 64;
+  const room = windowTokens - promptTokens;
+  if (promptTokens + requested <= windowTokens) return requested;
+  if (room < MIN_ANSWER_TOKENS) return requested;
+  return room;
+}
+
+function windowTokens(): number {
+  const raw = Number(process.env['BRAIN_CHEAP_LLM_WINDOW_TOKENS'] ?? '');
+  return Number.isFinite(raw) && raw >= 2_000 ? raw : FREE_WINDOW_TOKENS;
+}
+
 /** The plain OpenAI-compatible call to OmniRoute (or anything like it). */
 const openAiCompleter: Completer = async (config, model, system, prompt, options) => {
   const response = await fetch(`${config.url}/chat/completions`, {
@@ -294,7 +325,7 @@ const openAiCompleter: Completer = async (config, model, system, prompt, options
       temperature: 0,
       // Reasoning models (gpt-oss) spend tokens thinking before they answer;
       // a small budget left them with no answer at all. Low effort, more room.
-      max_tokens: options?.maxTokens ?? 2000,
+      max_tokens: fitMaxTokens(system, prompt, options?.maxTokens ?? 2000, windowTokens()),
       reasoning_effort: 'low',
       messages: [
         { role: 'system', content: system },
