@@ -68,6 +68,11 @@ jobs:
   report:
     name: Read production
     runs-on: ubuntu-latest
+    # A Deploy that replaces the machine mid-command can leave `flyctl ssh`
+    # waiting on a dead session for the runner's six hours, holding this
+    # workflow's concurrency group the whole time (2026-11-06: a runpod-report
+    # and a connection report hung 66 and 25 minutes, queueing every later one).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
