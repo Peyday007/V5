@@ -469,6 +469,41 @@ export async function reserve(input: {
     return { ok: false, reservation: null, reason: 'the standing authority has expired', replayed: false };
   }
 
+  /*
+   * The insert, the ranked count and any stand-down are one transaction under a
+   * lock on this grant and kind. Ranking by `seq` alone is not enough on
+   * Postgres: the sequence is drawn before the insert commits, so the caller
+   * holding the later number can count before the earlier row is visible, and
+   * both take the last slot (Postgres suite 42189614746, goalBudgetLedger
+   * "two reservations race for one remaining slot"). SQLite has one writer and
+   * never interleaves, so its suite could not see it. Under the lock the second
+   * caller counts only after the first has committed.
+   */
+  return getDb().transaction(async () => {
+    await lockReservations(goal.id, input.kind);
+    return reserveLocked(goal, input, now);
+  });
+}
+
+/** One advisory lock per grant and kind, held to the end of the transaction. Postgres only. */
+async function lockReservations(goalId: string, kind: ReservationKind): Promise<void> {
+  const db = getDb();
+  if (db.dialect !== 'postgres') return;
+  const NAMESPACE = 0x52_52_56_4c; // 'RRVL', arbitrary and stable
+  const material = `${goalId}:${kind}`;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < material.length; i++) {
+    hash ^= material.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  await db.run('SELECT pg_advisory_xact_lock(?, ?)', [NAMESPACE, hash | 0]);
+}
+
+async function reserveLocked(
+  goal: RussellGoal,
+  input: { goalId: string; kind: ReservationKind; idempotencyKey: string; amount?: number; ttlMinutes?: number },
+  now: string,
+): Promise<ReservationOutcome> {
   const id = newId('rrv');
   const expires = new Date(
     Date.parse(now) + Math.max(1, input.ttlMinutes ?? 120) * 60_000,

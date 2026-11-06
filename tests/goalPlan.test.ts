@@ -255,8 +255,12 @@ describe('the gate', () => {
   it('re-reads the plan as soon as an opening arrives, not on the next half-hour, and only when something changed', async () => {
     await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
     await goal(100_000);
-    const at = (minutes: number) => new Date(now.getTime() + minutes * 60_000);
-    expect((await advanceGoalPlans(now)).read).toBe(1);
+    // A reading is stamped with the real clock, so the times here start from this test, not from the
+    // file's load: on a slow Postgres shard over a minute passed before this ran, and "three minutes
+    // later" landed inside the two-minute evidence floor (Postgres suite 42189614746, 42183325704).
+    const start = new Date();
+    const at = (minutes: number) => new Date(start.getTime() + minutes * 60_000);
+    expect((await advanceGoalPlans(start)).read).toBe(1);
     // Past the floor, nothing new: no scenario run spent re-reading the same rows.
     // Minutes well past the floor, because the first run is stamped with real time,
     // and a loaded Postgres shard can spend a minute getting here (2026-11-06 flake).
