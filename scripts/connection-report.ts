@@ -647,6 +647,13 @@ async function main(): Promise<void> {
         for (const f of p.self) console.log(`      self       ${String(f.ms).padStart(6)}ms  ${f.frame}`);
       }
     }
+    const outbound = r['outbound'] as { since: string; minutes: number; byHost: { host: string; opened: number; tls: number; perMinute: number }[] } | undefined;
+    if (outbound) {
+      console.log(`    outbound     ${outbound.byHost.reduce((a, h) => a + h.opened, 0)} client socket(s) in ${outbound.minutes} min since ${outbound.since}`);
+      for (const h of outbound.byHost) console.log(`      opened     ${String(h.opened).padStart(7)}  ${String(h.perMinute).padStart(7)}/min  tls=${h.tls}  ${h.host}`);
+    } else {
+      console.log('    outbound     (not counted by this revision)');
+    }
     const memory = r['memory'] as { rssMB: number; heapUsedMB: number; heapLimitMB: number; externalMB: number; peakRssMB: number; peakRssAt: string | null } | null | undefined;
     if (memory) {
       console.log(
