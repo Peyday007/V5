@@ -57,6 +57,7 @@ import { ScenarioRunError } from '../scenario/engine.ts';
 import type { ScenarioResult } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { decideResearch, type ResearchDecision } from '../quant/deadline.ts';
+import { goalExecutionPolicy, MAX_CONCURRENT_SALES, type GoalExecutionPolicy } from '../../domain/goalPolicy.ts';
 import type { GoalPortfolio } from './portfolio.ts';
 import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
@@ -182,6 +183,20 @@ export interface PlanReading {
    * potential first. Each says who runs it and what stops it.
    */
   marketTests: MarketTest[];
+  /**
+   * How this goal is executed (`domain/goalPolicy.ts`). A SQUEEZE goal — a
+   * cash target with a deadline — has no market-testing phase: `marketTests`
+   * is empty and `sales` holds the openings it sells now.
+   */
+  executionPolicy: GoalExecutionPolicy;
+  /**
+   * The openings a SQUEEZE goal sells now, several at once, best contribution
+   * first: each can be offered responsibly (a reachable buyer, an offer, a
+   * price, an outlay inside the limits), and the offer pursues an actual sale,
+   * contract or deposit. Linked to the goal as PURSUES, so the goal's money
+   * limits bind them and the operator reaches their buyers first.
+   */
+  sales: MarketTest[];
   /**
    * The quant engine's combined plan (§79): each opening's customer demand
    * estimated from verified evidence, and the combination most likely to reach
@@ -555,6 +570,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       pool: { conclusion: 'NO_POOL', sentence: `No opening held is far enough along to model (${model.considered.length} read). That is a statement about what Brain holds, not about what exists, so it keeps searching and constructing.` },
       ladder: emptyLadder(),
       marketTests: [],
+      executionPolicy: goalExecutionPolicy(target),
+      sales: [],
       portfolio: model.portfolio,
       researchDiagnosis: diagnoseGoalResearch({
         considered: [],
@@ -732,7 +749,10 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     }
     // Proof first: before any money comes in, the test is held to the owner's
     // test-stage limit, and the rest waits for it to pay.
-    if (nextTest?.link === 'CONVERSION' && target.capitalBeforeProofCents !== null && !target.proven) {
+    if (goalExecutionPolicy(target) === 'SQUEEZE' && nextTest?.link === 'CONVERSION') {
+      // A SQUEEZE goal's conversion is learned by selling: the step is the sale, not a test that gates selling.
+      nextTest = await saleFor(members.find(({ one, deals }) => !linkChecks(one, deals, target, capabilities, now).find((check) => check.link === 'CONVERSION')!.ok)?.one ?? members[0]!.one, target);
+    } else if (nextTest?.link === 'CONVERSION' && target.capitalBeforeProofCents !== null && !target.proven) {
       nextTest = { ...nextTest, test: `${nextTest.test} Tie up no more than ${target.capitalBeforeProofCents / 100} ${target.currency} until money comes in; the rest waits for that proof.` };
     }
     strategies.push({
@@ -769,8 +789,10 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
    * that only a buyer could validate.
    */
   const byId = new Map(model.considered.map((one) => [one.opportunity.id, one]));
+  const policy = goalExecutionPolicy(target);
   const marketTests: MarketTest[] = [];
-  for (const one of [...considered].filter((c) => c.stage === 'C_MARKET_TEST_READY').sort((a, b) => (b.potentialReach ?? 0) - (a.potentialReach ?? 0)).slice(0, MAX_MARKET_TESTS)) {
+  const sales = policy === 'SQUEEZE' ? await salesFor(considered, model.portfolio, byIdOf(model), target) : [];
+  for (const one of policy === 'SQUEEZE' ? [] : [...considered].filter((c) => c.stage === 'C_MARKET_TEST_READY').sort((a, b) => (b.potentialReach ?? 0) - (a.potentialReach ?? 0)).slice(0, MAX_MARKET_TESTS)) {
     let test = await nextTestFor('CONVERSION', byId.get(one.opportunityId)!, target.projectId);
     if (target.capitalBeforeProofCents !== null && !target.proven) {
       test = { ...test, test: `${test.test} Tie up no more than ${target.capitalBeforeProofCents / 100} ${target.currency} until money comes in.` };
@@ -790,7 +812,13 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     summary,
     chosen: chosen?.key ?? null,
     strategies,
-    nextTest: chosen?.nextTest ?? marketTests[0]?.test ?? null,
+    // A SQUEEZE goal's next step is a sale when one can be offered; evidence work runs beside it.
+    // An owner's open decision (how much may be committed) still comes first: it is theirs, and it binds the sale.
+    nextTest:
+      (policy === 'SQUEEZE' && !(chosen?.nextTest?.by === 'PERSON' && chosen.nextTest.link !== 'CONVERSION') ? sales[0]?.test : null) ??
+      chosen?.nextTest ??
+      marketTests[0]?.test ??
+      null,
     scenarioModelId,
     scenarioRunId,
     basisNote: result?.basisNote ?? null,
@@ -806,6 +834,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     pool: poolConclusion(bestReach, target, considered.filter((one) => !isArrangementId(one.opportunityId)).length),
     ladder: ladderOf(considered.filter((one) => !isArrangementId(one.opportunityId))),
     marketTests,
+    executionPolicy: policy,
+    sales,
     portfolio: model.portfolio,
     researchDiagnosis: diagnoseGoalResearch({
       considered: considered.filter((one) => !isArrangementId(one.opportunityId)),
@@ -814,7 +844,10 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       remaining: target.remainingCents / 100,
     }),
   };
-  if (input.persist) await persistReading(goal, reading, chosen);
+  if (input.persist) {
+    await persistReading(goal, reading, chosen);
+    await pursueSales(goal, reading);
+  }
   return reading;
 }
 
@@ -830,6 +863,107 @@ export function defaultEvaluations(openings: number): number {
 
 /** At most this many market tests are named at once: a test is a person's or a sender's time. */
 export const MAX_MARKET_TESTS = 5;
+
+function byIdOf(model: { considered: ModelledOpportunity[] }): Map<string, ModelledOpportunity> {
+  return new Map(model.considered.map((one) => [one.opportunity.id, one]));
+}
+
+/** Openings a responsible offer can be made on: the buyer is reachable, the offer and price are on the card, the outlay fits. */
+const SELLABLE: ReadonlySet<ValidationStage> = new Set(['C_MARKET_TEST_READY', 'D_BUYER_VALIDATED', 'E_COMMITTED']);
+
+/**
+ * What a SQUEEZE goal sells now (owner, 2026-11-06): every opening a
+ * responsible offer can be made on, ranked by what it adds to the whole goal —
+ * a member of the quant engine's best combination first, then the cash its
+ * own demand settles before the deadline (p50), then its reach at the card's
+ * price — and up to `MAX_CONCURRENT_SALES` at once, so the goal's calendar is
+ * not spent on one small offer while larger ones wait. The step is an actual
+ * offer for a sale, contract or deposit; what buyers answer is the demand and
+ * price evidence. Pure but for reading the permission and the message channel.
+ */
+async function salesFor(
+  considered: ConsideredOpening[],
+  portfolio: GoalPortfolio | null,
+  byId: Map<string, ModelledOpportunity>,
+  target: TargetReading,
+): Promise<MarketTest[]> {
+  const best = new Set(portfolio?.best?.members.map((one) => one.opportunityId) ?? []);
+  const settled = new Map((portfolio?.demand ?? []).map((one) => [one.opportunityId, one.refused ? -1 : one.revenue.p50]));
+  const ranked = considered
+    .filter((one) => SELLABLE.has(one.stage) && !isArrangementId(one.opportunityId) && byId.has(one.opportunityId))
+    .sort(
+      (a, b) =>
+        Number(best.has(b.opportunityId)) - Number(best.has(a.opportunityId)) ||
+        (settled.get(b.opportunityId) ?? 0) - (settled.get(a.opportunityId) ?? 0) ||
+        (b.potentialReach ?? 0) - (a.potentialReach ?? 0),
+    )
+    .slice(0, MAX_CONCURRENT_SALES);
+  const out: MarketTest[] = [];
+  for (const one of ranked) {
+    out.push({ opportunityId: one.opportunityId, title: one.title, potentialReach: one.potentialReach, test: await saleFor(byId.get(one.opportunityId)!, target) });
+  }
+  return out;
+}
+
+/**
+ * The sale itself, and what stands between it and the buyer: the standing
+ * permission to contact buyers and a connected message channel. A missing
+ * permission is a blocker on this sale, never a reason to run a test first.
+ * The goal's money limits bind the outlay through the PURSUES link.
+ */
+async function saleFor(one: ModelledOpportunity, target: TargetReading): Promise<NextTest> {
+  const title = one.opportunity.title.slice(0, 80);
+  const price = one.opportunity.priceCents !== null ? `${one.opportunity.priceCents / 100} ${one.opportunity.currency}` : 'the card’s price';
+  // The owner's spending rule, in its own words: a limit on money, not a stage before selling.
+  const limit =
+    target.capitalBeforeProofCents !== null && !target.proven
+      ? ` Tie up no more than ${target.capitalBeforeProofCents / 100} ${target.currency} until money comes in.`
+      : '';
+  const test = `Sell "${title}": offer it to its reachable buyers at ${price} for an actual sale, contract or deposit. Each answer is a sale or a refusal, and is recorded as the demand and price evidence.${limit}`;
+  const contact = await checkCommercialAuthority({ projectId: target.projectId, action: 'CONTACT_BUYER' });
+  if (!contact.ok) return { link: 'CONVERSION', test, by: 'PERSON', blocker: `Selling needs standing permission to contact buyers (${contact.reason}). Grant CONTACT_BUYER under the commercial authority and Brain sends the offers.` };
+  const message = (await readCapabilities(['SEND_A_MESSAGE']))[0];
+  if (message?.state !== 'PRESENT') return { link: 'CONVERSION', test, by: 'PERSON', blocker: 'No message provider is connected, so Brain cannot send the offer. Connect one.' };
+  return { link: 'CONVERSION', test, by: 'BRAIN', blocker: null };
+}
+
+/**
+ * Link what a SQUEEZE goal sells as work it pursues, on every persisted read
+ * and idempotently: the goal's money limits (`spending.ts`) bind work it
+ * pursues, and the operator reaches pursued openings' buyers first. Before,
+ * only a RECOMMENDABLE plan linked anything, and RECOMMENDABLE needed a
+ * conversion rate measured from earlier sales — selling had to have happened
+ * before the goal would pursue a sale.
+ */
+async function pursueSales(goal: Workstream, reading: PlanReading): Promise<void> {
+  if (reading.executionPolicy !== 'SQUEEZE' || reading.sales.length === 0) return;
+  const links = await listLinks(goal.id);
+  for (const sale of reading.sales) {
+    if (links.some((one) => one.kind === 'OPPORTUNITY' && one.ref === sale.opportunityId && one.relation === 'PURSUES')) continue;
+    await linkWorkstream({ workstreamId: goal.id, kind: 'OPPORTUNITY', ref: sale.opportunityId, relation: 'PURSUES', recordedBy: 'BRAIN', recordedByUserId: null });
+    await recordWorkstreamEvent({
+      workstreamId: goal.id,
+      kind: 'GOAL_SALE_PURSUED',
+      summary: `Selling "${sale.title.slice(0, 120)}" now: ${sale.test.blocker ? `waiting on ${sale.test.blocker.slice(0, 160)}` : 'Brain sends the offer'}.`.slice(0, 400),
+      detail: { opportunityId: sale.opportunityId, potentialReach: sale.potentialReach, by: sale.test.by, blocker: sale.test.blocker },
+      actorRef: 'BRAIN',
+    });
+  }
+}
+
+/**
+ * The order in which the operator reaches READY openings' buyers for a
+ * project: what its SQUEEZE goals sell, best contribution first, from the last
+ * reading each goal took in this process. Empty when nothing has been read yet.
+ */
+export function salesOrderForProject(projectId: string): string[] {
+  const out: string[] = [];
+  for (const reading of lastReadings.values()) {
+    if (reading.target.projectId !== projectId || reading.executionPolicy !== 'SQUEEZE') continue;
+    for (const sale of reading.sales) if (!out.includes(sale.opportunityId)) out.push(sale.opportunityId);
+  }
+  return out;
+}
 
 const STAGES: ValidationStage[] = ['A_THEORETICAL', 'B_EVIDENCED', 'C_MARKET_TEST_READY', 'D_BUYER_VALIDATED', 'E_COMMITTED', 'F_COLLECTED'];
 
@@ -949,6 +1083,7 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     // combined reach, median or pool moved is a new row, so the plan's history
     // shows whether research is improving it (owner, 2026-11-05).
     progress: planProgress(reading),
+    sales: reading.sales.map((one) => one.opportunityId),
   };
   const digest = sha256(canonicalJson(summary));
   const last = await latestReading(goal.id);

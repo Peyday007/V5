@@ -39,3 +39,24 @@ export const LEARNED_BY_SELLING = ['CONVERSION', 'MARKET_VOLUME'] as const;
 
 /** At most this many openings are sold at once for one goal (each still inside the money limits). */
 export const MAX_CONCURRENT_SALES = 6;
+
+/**
+ * What an opening must answer before a SQUEEZE goal sells it: what a
+ * commercially responsible offer needs and selling cannot tell us — who pays,
+ * what we offer, how we reach them, that it can be delivered and by whom,
+ * that nothing rules us out, and what it costs us and ties up (the money
+ * limits). Revenue range, time to cash, labour, phone dependence and the deep
+ * dive's confidence and recommendation are learned from the sale itself.
+ * Keys are the qualification keys of `cash/tier.ts`.
+ */
+export const SQUEEZE_QUALIFICATION = [
+  'payer',
+  'offer',
+  'access',
+  'delivery',
+  'fulfillment',
+  'directCosts',
+  'requiredCapital',
+  'eligibility',
+  'disqualifiers',
+] as const;

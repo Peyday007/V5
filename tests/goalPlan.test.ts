@@ -699,21 +699,48 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(reading.considered.every((one) => Array.isArray(one.missing))).toBe(true);
   });
 
-  it('names a bounded market test for an opening with a buyer, an offer and a price, without asking for conversion evidence first', async () => {
+  it('sells an opening a responsible offer can be made on, with no market-test phase first (SQUEEZE, owner 2026-11-06)', async () => {
     const o = await oneOff({ title: 'Arrange a load for a shipper', priceCents: 40_000, capitalCents: 0 });
-    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    const id = await goal(1_000_000);
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
+    // A cash target with a deadline is a SQUEEZE goal: no market tests, sales.
+    expect(reading.executionPolicy).toBe('SQUEEZE');
+    expect(reading.marketTests).toEqual([]);
     const one = reading.considered.find((c) => c.opportunityId === o.id)!;
-    // Conversion is unknown, and only asking buyers can establish it.
+    // Conversion is unknown, and it is learned by selling, not required first.
     expect(one.missing).toContain('CONVERSION');
-    expect(one.stage).toBe('C_MARKET_TEST_READY');
-    expect(reading.ladder.C_MARKET_TEST_READY).toBeGreaterThanOrEqual(1);
-    const test = reading.marketTests.find((m) => m.opportunityId === o.id)!;
-    expect(test.test.link).toBe('CONVERSION');
-    expect(test.test.test).toMatch(/bounded offer test/);
-    // Brain may not contact anyone it has no permission to: the test names that, not a guess.
-    expect(test.test.by).toBe('PERSON');
-    expect(test.test.blocker).toMatch(/CONTACT_BUYER|message provider/);
-    expect(reading.nextTest).not.toBeNull();
+    const sale = reading.sales.find((m) => m.opportunityId === o.id)!;
+    expect(sale.test.link).toBe('CONVERSION');
+    expect(sale.test.test).toMatch(/^Sell ".*": offer it to its reachable buyers at 400 USD for an actual sale, contract or deposit/);
+    expect(sale.test.test).not.toMatch(/test|downgrade/i);
+    // The permission is a blocker on the sale, not a reason to run a test first.
+    expect(sale.test.by).toBe('PERSON');
+    expect(sale.test.blocker).toMatch(/CONTACT_BUYER|message provider/);
+    expect(reading.nextTest?.test).toBe(sale.test.test);
+    // The goal pursues it now, without a RECOMMENDABLE verdict, so its money limits bind it.
+    expect(reading.verdict).not.toBe('RECOMMENDABLE');
+    const links = await listLinks(id);
+    expect(links.some((l) => l.kind === 'OPPORTUNITY' && l.ref === o.id && l.relation === 'PURSUES')).toBe(true);
+    const pursued = await getDb().all<{ kind: string }>("SELECT kind FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_SALE_PURSUED'", [id]);
+    expect(pursued).toHaveLength(1);
+    // Idempotent: a second read links and records nothing new.
+    await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true });
+    expect((await getDb().all("SELECT kind FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_SALE_PURSUED'", [id]))).toHaveLength(1);
+  });
+
+  it('sells several independent openings at once, largest contribution first', async () => {
+    const small = await oneOff({ title: 'A small arrangement', priceCents: 5_000, capitalCents: 0 });
+    const large = await oneOff({ title: 'A large arrangement', priceCents: 300_000, capitalCents: 0 });
+    const mid = await oneOff({ title: 'A middling arrangement', priceCents: 80_000, capitalCents: 0 });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    const order = reading.sales.map((one) => one.opportunityId);
+    expect(order).toEqual(expect.arrayContaining([small.id, large.id, mid.id]));
+    expect(order.indexOf(large.id)).toBeLessThan(order.indexOf(small.id));
+    // The operator reaches buyers in that order (operate.ts advanceWithinAuthority).
+    await advanceGoalPlans(now);
+    const { salesOrderForProject } = await import('../server/services/goals/plan.ts');
+    const operatorOrder = salesOrderForProject(projectId);
+    expect(operatorOrder.indexOf(large.id)).toBeLessThan(operatorOrder.indexOf(small.id));
   });
 
   it('reads collected money as the top of the ladder, and a step over the before-income limit as not test-ready', async () => {
@@ -781,7 +808,9 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
     const open = await listNeeds({ projectId, states: ['OPEN'] });
     expect(open.filter((one) => one.opportunityId === small.id && one.requestKey?.startsWith('question:'))).toHaveLength(0);
-    expect(open.filter((one) => one.opportunityId === guessed.id).map((one) => one.requestKey)).toEqual([`question:${guessed.id}:revenueRange`]);
+    // Being sold (SQUEEZE): what buyers pay is learned from the offers, so price is not researched first;
+    // when the money settles is still researched beside the sale.
+    expect(open.filter((one) => one.opportunityId === guessed.id).map((one) => one.requestKey)).toEqual([`question:${guessed.id}:timeToFirstCash`]);
   });
 
   it("does not count Brain's own estimate as an answer, so a question is researched rather than churned", async () => {
