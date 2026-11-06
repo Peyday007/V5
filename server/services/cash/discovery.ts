@@ -712,6 +712,17 @@ export const REMOTE_AI_FOCUS =
   'Prefer work this operation can run entirely online and fulfil mostly with AI-produced digital output (documents, data, research, content, code, automations) that businesses already pay providers for. ' +
   'For each such opening give: the kind of buyer and where they are found, a dated sign that buyers want it now, the price buyers are shown paying for it, how the work would be produced and delivered, the cost per sale, and how quickly the money is collected.';
 
+/**
+ * A closed round that filed nothing. `ABANDONED` is a stopped mission (failed,
+ * cancelled, expired unlaunched) and also one parked at a decision, and the
+ * count taken at close (`closeEndedRounds`) is what separates them: research
+ * that stopped before a packet finished and filed nothing is barren, and a
+ * parked round that already filed openings is not.
+ */
+function roundFoundNothing(one: Pick<CashDiscoveryRound, 'state' | 'found'>): boolean {
+  return (one.state === 'ABANDONED' || one.state === 'HARVESTED') && one.found === 0;
+}
+
 /** A barren goal lens waits longer each time, up to this, and is never retired. */
 export const GOAL_LENS_MAX_BACKOFF_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -729,8 +740,7 @@ export function nextGoalRoundFor(history: CashDiscoveryRound[], now: string): nu
   let barren = 0;
   for (let i = ordered.length - 1; i >= 0; i -= 1) {
     const one = ordered[i]!;
-    // An ABANDONED round found nothing too: research stopped before a packet finished.
-    if (one.state === 'ABANDONED' || (one.state === 'HARVESTED' && one.found === 0)) barren += 1;
+    if (roundFoundNothing(one)) barren += 1;
     else break;
   }
   const wait = Math.min(ROUND_COOL_OFF_MS * 2 ** barren, GOAL_LENS_MAX_BACKOFF_MS);
@@ -868,7 +878,7 @@ export async function openGoalDiscovery(input: {
    */
   const last = [...history].sort((a, b) => b.round - a.round)[0];
   const methodFirst =
-    last && (last.state === 'ABANDONED' || (last.state === 'HARVESTED' && last.found === 0))
+    last && roundFoundNothing(last)
       ? 'The last search from this angle found nothing usable, so start with how such openings are actually found: name the specific directories, public registers, feeds, trade associations and search terms where buyers of this kind publish what they need, open each, say which produced live openings and which did not, and report the openings found through the ones that worked. '
       : '';
   const learned = yieldGuidance(await discoveryYield(t.projectId));
