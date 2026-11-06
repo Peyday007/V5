@@ -3467,8 +3467,6 @@ export async function settleGoalPlans(): Promise<void> {
 
 let timer: ReturnType<typeof setInterval> | null = null;
 let running = false;
-let runningSince = 0;
-export const RUSSELL_TICK_STUCK_MS = 20 * 60_000;
 
 /**
  * Start ticking.
@@ -3490,14 +3488,10 @@ export function startRussell(owner: string, intervalMs = RUSSELL_TICK_MS): void 
      * connection(s) in use, 3 caller(s) waiting" on 2026-09-24, and the tick
      * that could not finish kept being joined by the next.
      */
-    if (running && Date.now() - runningSince < RUSSELL_TICK_STUCK_MS) return;
-    if (running) {
-      // A tick that has not returned in twenty minutes is not slow, it is
-      // stuck on something outside its passes; every pass is already bounded.
-      console.warn(`[russell] tick running since ${new Date(runningSince).toISOString()} never returned; starting the next one`);
-    }
+    // A hang inside a pass is bounded by runPass, so the tick returns; a
+    // second tick beside a running one is never started.
+    if (running) return;
     running = true;
-    runningSince = Date.now();
     void tick(owner)
       .catch(() => {
         // Swallowed here and recorded on the row by `tick` itself. A throwing
