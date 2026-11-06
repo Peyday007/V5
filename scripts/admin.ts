@@ -1397,6 +1397,12 @@ async function main(): Promise<void> {
         console.log(`  capacity          ${c.model}: target ${c.target}, highest stable ${c.stableHigh} — ${c.reason} (${c.updatedAt})`);
       }
       console.log(`  max target        ${t.maxTargetReached}`);
+      {
+        const { unfitNow, resetFreeLaneFitness } = await import('../server/services/freeLane/worker.ts');
+        resetFreeLaneFitness();
+        const unfit = await unfitNow(t.capacity.map((c) => c.model));
+        console.log(`  held back         ${unfit.size === 0 ? 'none' : [...unfit].join(', ')} (model|work type whose answers Brain rejects, 24h)`);
+      }
       const h = t.lastHour;
       console.log(`  last hour         completed=${h.completed} accepted=${h.accepted} failed=${h.failed} providerErrors=${h.providerErrors}`);
       console.log(`  last hour output  claimsAccepted=${h.claimsAccepted} documents=${h.documents} nextStageItems=${h.nextStage}`);

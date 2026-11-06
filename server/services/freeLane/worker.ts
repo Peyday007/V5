@@ -1151,6 +1151,64 @@ async function failingModels(now = Date.now()): Promise<Set<string>> {
 }
 
 /**
+ * Which (model, kind of work) pairs keep failing, from the lane's own rows.
+ *
+ * Production, 2026-11-05 22:00Z → 11-06 02:40Z (`packets recent`): six packets
+ * parked "a primary/judge/adversarial audit work item finished without
+ * recording anything" — each audit had spent both attempts on the RunPod
+ * Qwen3-4B slot ("produced no answer Brain accepted"), which took audits by
+ * spillover while the larger models' audits succeeded beside it. A model whose
+ * answers for one work type Brain has rejected at least four times in a day,
+ * with fewer than one in five accepted, stops taking that type — while another
+ * model in the lane is not so marked, so the work is never left with nobody.
+ * Transient releases are not counted: an outage is not the model's answer.
+ */
+export function unfitPairs(
+  rows: readonly { model: string; work_type: string; outcome: string; n: number | string }[],
+  models: readonly string[],
+): Set<string> {
+  const tally = new Map<string, { ok: number; bad: number }>();
+  for (const row of rows) {
+    const key = `${row.model}|${row.work_type}`;
+    const entry = tally.get(key) ?? { ok: 0, bad: 0 };
+    if (row.outcome === 'SUBMITTED') entry.ok += Number(row.n);
+    else if (row.outcome === 'FAILED_RETRYABLE') entry.bad += Number(row.n);
+    tally.set(key, entry);
+  }
+  const marked = new Set<string>();
+  for (const [key, e] of tally) if (e.bad >= 4 && e.ok * 5 < e.ok + e.bad) marked.add(key);
+  // Never every model for one type: the work would wait for nobody.
+  for (const type of new Set([...marked].map((k) => k.slice(k.indexOf('|') + 1)))) {
+    if (models.length > 0 && models.every((m) => marked.has(`${m}|${type}`))) {
+      for (const m of models) marked.delete(`${m}|${type}`);
+    }
+  }
+  return marked;
+}
+
+let fitness: { at: number; unfit: Set<string> } | null = null;
+/** Tests: forget the cached fitness reading. */
+export function resetFreeLaneFitness(): void {
+  fitness = null;
+}
+export async function unfitNow(models: readonly string[], now = Date.now()): Promise<Set<string>> {
+  if (fitness && now - fitness.at < 5 * 60_000) return fitness.unfit;
+  const rows = await getDb().all<{ reason: string | null; work_type: string; outcome: string; n: number | string }>(
+    `SELECT e.reason, w.work_type, e.outcome, COUNT(*) AS n FROM bin_events e
+       JOIN work_items w ON w.id = e.work_item_id
+      WHERE e.event_type = 'FREE_LANE_ITEM' AND e.at >= ?
+      GROUP BY e.reason, w.work_type, e.outcome`,
+    [new Date(now - 86_400_000).toISOString()],
+  );
+  const unfit = unfitPairs(
+    rows.map((r) => ({ ...r, model: String(r.reason ?? '').replace(/^model /, '').split(':')[0]! })),
+    models,
+  );
+  fitness = { at: now, unfit };
+  return unfit;
+}
+
+/**
  * Take and answer free-lane items, a few per worker, both workers at once.
  * Never concurrent with itself; a tick that finds the lane unconfigured does
  * nothing and says so, which is what `laneCoverage` reads.
@@ -1218,6 +1276,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   if (projectIds.length === 0) return { claimed: null, ok: false, ms: 0 };
   let session = '';
   let one: ClaimedWork | undefined;
+  const unfit = await unfitNow(workers.map((w) => w.model));
   for (const types of CLAIM_ORDER) {
     const claimed = await claimWork({
       workerId: worker.workerId,
@@ -1230,6 +1289,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
           return { ok: false, reason: 'the other free worker takes this role' };
         }
         if ((cooldown.get(cooldownKey(worker.model, item.id)) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
+        if (unfit.has(`${worker.model}|${item.work_type}`)) return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
         if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
         session = sessionFor(worker, item);
         return auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
