@@ -89,3 +89,20 @@ Cheap lane `runpod-report` 42158714846 and Admin `free-lane show` 42158711511:
   (1.3–1.9 s). #557 is the repair for that cause.
 - Goal: 7 rounds open, 0 opened, 0 harvested in the hour. Plan NOT_VIABLE,
   17 considered, 8 modelled. The plan is re-read about twice an hour.
+
+## 5. What the socket counter named (Connection report 42161589617, 04:17Z, `4564d96`)
+
+`outbound 43 485 client sockets in 38.7 min`:
+
+| host | sockets | per minute |
+|---|---|---|
+| Supabase storage (`somjwbtqwmnxndmpujgn.supabase.co`), all TLS | 43 092 | 1 113 |
+| Postgres pooler | 239 | 6.2 |
+| everything else (browser, OmniRoute, RunPod, sources) | 154 | 4 |
+
+The same process spent 41–49 s of every minute on the CPU: GC 5–6 s, and TLS
+setup (`start`, `init`, `setSession`, `getPeerCertificate`, `wrap`,
+`setCiphers`) about 15–20 s, under storage `#request`. Event-loop stalls
+reached 13–43 s. Every storage existence check paid a full handshake. #557
+caps the store at eight kept connections. #560 bounds every Russell pass, so
+a stall that slow can no longer hold the tick for good.
