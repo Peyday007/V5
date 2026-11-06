@@ -61,3 +61,12 @@ VERIFICATION.GATE, VERIFICATION.REASONS. Repair work in Factory (Admin
 - Prepared market test: `cop_665f0a84…` (Artisanal Sudoku, up to 50 USD),
   blocked on `CONTACT_BUYER` — an owner approval, kept; planning and research
   continue without it.
+
+## Research reaches the plan (Admin `capabilities show` 42237190810, `4a4d868`)
+
+GOAL_PLAN map, 24 h: `EVIDENCE.PATH_ANSWERS`, `QUANT.MODELLED`,
+`PLAN.READS_NEW_EVIDENCE` (a plan run after each new opening) and
+`GOAL.PLAN_EVALUATED` WORKING; `RECOVERY.LEASES`, `COMPUTE.GPU`,
+`COMPUTE.FREE_MODELS` and `GOAL.PLAN_FRESH` WORKING. An earlier reading the
+same day (42204583769, ~10:40Z) had `PLAN.READS_NEW_EVIDENCE` UNPROVEN —
+below its sample, not failing — while no new opening arrived in the window.
