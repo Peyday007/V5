@@ -46,6 +46,7 @@ export const GATE_CONDITIONS = {
   CLAIM_STANDARD: 'The claim meets the evidence standard for its own type',
   INDEPENDENCE: 'Corroborating sources are genuinely independent',
   DATED: 'A time-sensitive claim carries a date its source actually gives',
+  LANE_FIT: 'The claim answers the question its evidence lane asks',
 } as const;
 
 export type GateCondition = keyof typeof GATE_CONDITIONS;
@@ -255,6 +256,52 @@ export function hasObservationDate(claim: {
  * from what survived. Derived claims are judged last, because whether a
  * calculation stands depends on whether its inputs did.
  */
+/*
+ * Does a claim answer the question its lane asks?
+ *
+ * Production, 2026-11-06 (cash-report 42260462536, the $10K goal's constructed
+ * openings): the free models filled lanes with whatever their source said, and
+ * the gate accepted it because the source did say it. The payer lane held "The
+ * shared services market is expected to grow significantly from 2026 to 2033"
+ * and "HighRadius is a unified framework that integrates…"; the price and cost
+ * lanes held "valued at USD 12.25 billion in 2025 … CAGR 8.05%". The card read
+ * them as a buyer and a price, and every opening spent its epoch without either.
+ *
+ * Deliberately narrow — three lanes whose question has a shape a sentence can
+ * plainly fail: who pays, and what one sale costs or earns. A market's size is
+ * never the answer to either. Every other lane is untouched.
+ */
+const MARKET_SCALE =
+  /\b(?:CAGR|compound annual growth|market (?:size|share|value|valuation)|(?:market|industry|sector) (?:is|was) (?:expected|projected|forecast|estimated|valued|worth)|expected to (?:grow|reach|expand)|projected to (?:grow|reach)|forecast (?:period|to (?:grow|reach))|(?:valued|worth) (?:at )?(?:US\$|USD|\$|€|£)\s?[\d.,]+\s?(?:billion|bn|trillion))/i;
+const PAYING_ACT =
+  /\b(?:pay|pays|paid|paying|payer|buy|buys|bought|buyer|purchas\w*|procur\w*|contract(?:s|ed|ing)?|award(?:s|ed)?|hire[sd]?|hiring|commission(?:s|ed)?|outsourc\w*|retain(?:s|ed)?|spend(?:s|ing)?|budget\w*|fund(?:s|ed|ing)?|subscri\w*|client|customer|tender|RFP|RFQ|bid|solicit\w*|engag(?:es|ed) (?:a|an|the)?\s?(?:firm|vendor|provider|contractor|agency)|invoice\w*|fee)\b/i;
+const A_PRICE =
+  /(?:US\$|USD|\$|€|£)\s?\d|\d\s?(?:USD|dollars|euros|pounds)\b|\b(?:per (?:hour|hr|day|week|month|year|unit|item|seat|user|order|project|word|page|lead|call|transaction)|an? (?:hour|month|year)|hourly|monthly|annual(?:ly)? fee|flat fee|retainer|rate of|priced at|costs?|fees?|charges?|wages?|salar\w+)\b/i;
+
+export function laneFitFailure(lane: string | null, text: string): string | null {
+  if (!lane) return null;
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (lane === 'payer') {
+    if (MARKET_SCALE.test(t) && !PAYING_ACT.test(t.replace(MARKET_SCALE, ''))) {
+      return 'The payer lane asks who pays for this, and this claim states a market\u2019s size or growth. Name a buyer, or a kind of buyer, that pays, and the source that shows them paying.';
+    }
+    if (!PAYING_ACT.test(t)) {
+      return 'The payer lane asks who pays for this, and this claim describes an organisation without saying that anybody pays, buys, contracts or hires. Name the buyer and what the source shows them paying for.';
+    }
+    return null;
+  }
+  if (lane === 'price_evidence' || lane === 'cost_evidence') {
+    const what = lane === 'price_evidence' ? 'what one sale earns' : 'what delivering one costs';
+    if (MARKET_SCALE.test(t)) {
+      return `The ${lane} lane asks ${what}, and this claim states a market\u2019s size or growth. Give a price, fee, rate or cost per unit of work, with the source that states it.`;
+    }
+    if (!A_PRICE.test(t)) {
+      return `The ${lane} lane asks ${what}, and this claim states no price, fee, rate or cost. Give the amount and what it is for, with the source that states it.`;
+    }
+  }
+  return null;
+}
+
 export function applyGate(input: {
   fragment: ResearchFragment;
   claims: ResearchClaim[];
@@ -363,6 +410,13 @@ export function applyGate(input: {
           'Record the published, posted or closing date the source gives, or the date the page ' +
           'was read. Do not supply a publication date the source does not print.',
       );
+      continue;
+    }
+
+    // A claim can be true, sourced and in scope and still not answer its lane.
+    const unfit = laneFitFailure(claim.evidenceLane ?? null, claim.claim);
+    if (unfit) {
+      reject(claim, 'LANE_FIT', unfit);
       continue;
     }
 
