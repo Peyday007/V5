@@ -72,3 +72,20 @@ answer. OmniRoute's own log (Cheap lane status 42154057446, 03:02Z), combo
 | #553 | ten console workflows get a job timeout; two hung 25 and 66 min on an SSH session a deploy cut, holding their queues | cancelled 42146262020 and 42150580065 |
 | #554 | client sockets counted by host; profile samples with no Brain frame charged to their library | names which client opens the TLS connections |
 | #555 | free-lane requests fit Groq's 8 000-token window when the prompt leaves ≥1 500 for the answer | `tests/cheapLaneFit.test.ts` |
+| #557 | the document store keeps its connections: `node:https` keep-alive agent, ≤8 sockets kept 60 s; the socket counter read 847 new TLS sockets in 3.4 min (246/min) to the Supabase storage host | `tests/storageKeepAlive.test.ts` |
+
+## 4. Production on Deploy 752 (`4564d96`: #552, #554, #555), 03:48Z
+
+Cheap lane `runpod-report` 42158714846 and Admin `free-lane show` 42158711511:
+
+- Free-lane jobs failing on Brain's database: 1 in the last hour (01:00–01:35Z had 8).
+- Free-lane failures now: OmniRoute 502/503 "all models failed", because the
+  combo is out of providers (Cerebras day spent, NVIDIA cooling down,
+  Cloudflare Playground needs a browser). This is external, apart from Groq's
+  413, which #555 addresses.
+- 312 claims accepted of 417 submitted by free workers, 43 packets filed and
+  154 resumed in 24 h: the lane works when a provider answers.
+- The capacity controller still shrinks to one slot on event-loop lag
+  (1.3–1.9 s). #557 is the repair for that cause.
+- Goal: 7 rounds open, 0 opened, 0 harvested in the hour. Plan NOT_VIABLE,
+  17 considered, 8 modelled. The plan is re-read about twice an hour.
