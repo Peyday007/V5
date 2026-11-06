@@ -258,13 +258,15 @@ describe('the gate', () => {
     const at = (minutes: number) => new Date(now.getTime() + minutes * 60_000);
     expect((await advanceGoalPlans(now)).read).toBe(1);
     // Past the floor, nothing new: no scenario run spent re-reading the same rows.
-    expect((await advanceGoalPlans(at(3))).read).toBe(0);
+    // Minutes well past the floor, because the first run is stamped with real time,
+    // and a loaded Postgres shard can spend a minute getting here (2026-11-06 flake).
+    expect((await advanceGoalPlans(at(10))).read).toBe(0);
     // New evidence: a harvested opening. Read on this pass, well inside the half-hour.
     await play({ title: 'Quarterly tenant surveys', priceCents: 40_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
-    const pass = await advanceGoalPlans(at(3));
+    const pass = await advanceGoalPlans(at(12));
     expect(pass).toMatchObject({ read: 1, onEvidence: 1 });
     // Read once for that evidence, not again until something else moves.
-    expect((await advanceGoalPlans(at(6))).read).toBe(0);
+    expect((await advanceGoalPlans(at(15))).read).toBe(0);
   });
 
   it('resumes the goal the moment a repair clears a gap: the plan is read at once and the resume is a row', async () => {
