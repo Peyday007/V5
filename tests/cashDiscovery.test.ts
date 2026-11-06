@@ -1264,4 +1264,23 @@ describe('the wider economy (2026-10-28)', () => {
       ['EXPLICIT_PAID_REQUEST', 'RESALE_OR_ASSET', 'SUPPLY_DEMAND_MISMATCH'].sort(),
     );
   });
+
+  it('backs a goal lens off after abandoned rounds as it does after barren harvests', async () => {
+    const { nextGoalRoundFor, GOAL_LENS_MAX_BACKOFF_MS } = await import('../server/services/cash/discovery.ts');
+    const day = 24 * 60 * 60 * 1000;
+    const t0 = Date.parse('2026-11-01T00:00:00Z');
+    const at = (round: number) => new Date(t0 + (round - 3) * day).toISOString();
+    const abandoned = [1, 2, 3].map((round) => ({
+      round, state: 'ABANDONED', found: 0, openedAt: at(round), harvestedAt: at(round),
+    })) as never[];
+    expect(nextGoalRoundFor(abandoned, new Date(t0 + 6 * day).toISOString())).toBeNull();
+    expect(nextGoalRoundFor(abandoned, new Date(t0 + 7 * day + 1).toISOString())).toBe(4);
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      round: i + 1, state: 'ABANDONED', found: 0, openedAt: at(i + 1), harvestedAt: at(i + 1),
+    })) as never[];
+    expect(nextGoalRoundFor(many, new Date(t0 + 9 * day + GOAL_LENS_MAX_BACKOFF_MS).toISOString())).toBe(13);
+    const filed = [...abandoned, { round: 4, state: 'HARVESTED', found: 2, openedAt: at(3), harvestedAt: at(3) }] as never[];
+    expect(nextGoalRoundFor(filed, new Date(t0 + 1 * day + 1).toISOString())).toBe(5);
+    expect(nextGoalRoundFor([...abandoned, { round: 4, state: 'OPEN', found: 0, openedAt: at(3) }] as never[], new Date(t0 + 90 * day).toISOString())).toBeNull();
+  });
 });
