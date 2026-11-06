@@ -14498,6 +14498,15 @@ every fragment (it synthesizes all of them); audit roles run one after another
   several reconstructions, synchronously. It now hands the loop back every
   `YIELD_EVERY_MS` (25 ms); the result is unchanged.
 
+- **The cash passes held the loop for a minute at a time.** The next
+  process reading (01:32Z) showed stalls of up to 82 s, always inside
+  `russell:project-kernels`, beside `cash:runNeedContinuations` (every due need
+  in the project, each through `markReady`, unbounded — 147 065 claims against
+  2 212 needs), `cash:reconcileDiscoverableGaps` and `cash:decideOpenings`
+  (card readings for every opening in one stretch). Continuations now take the
+  25 oldest due needs a pass (`NEED_CONTINUATIONS_PER_PASS`), and all three hand
+  the loop back between items.
+
 **Measured, not estimated.** `goalPipelineSpeed` (in `goals/researchYield.ts`,
 printed by `scripts/runpod-report.ts` for the last window and the equal window
 before it) reads from rows: time from the goal's filing to its first and its

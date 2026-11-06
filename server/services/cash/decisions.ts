@@ -209,6 +209,8 @@ export async function decideOpenings(
     const limit = options.limit ?? 500;
     const openings = await listOpportunities({ projectId, states: [...DECIDABLE_STATES] });
     for (const opening of openings) {
+      // Each decision is synchronous work; the event loop is handed back between openings (§90, 2026-11-06 stalls).
+      await new Promise<void>((resolve) => setImmediate(resolve));
       if (out.considered >= limit) break;
       const facts = screenFactsFor(opening);
       const factsRef = factsChangeRef(facts);

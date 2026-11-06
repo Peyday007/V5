@@ -450,6 +450,8 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
     projectId,
     states: ['DISCOVERED', 'EVIDENCE_CARD'],
   })) {
+    // Card readings are synchronous work: hand the event loop back between openings (§90, 2026-11-06 58 s stalls).
+    await new Promise<void>((resolve) => setImmediate(resolve));
     // A second record of an opening is researched through its survivor, never
     // again on its own (`duplicates.ts`).
     if (opportunity.duplicateOfId) continue;
@@ -738,13 +740,25 @@ export interface Continuation {
   retry: boolean;
 }
 
+/** Needs one continuation pass takes, oldest due first (2026-11-06 82 s stalls). */
+export const NEED_CONTINUATIONS_PER_PASS = 25;
+
 export async function runNeedContinuations(
   projectId: string,
   now?: string,
 ): Promise<Continuation[]> {
   const out: Continuation[] = [];
   const at = now ?? new Date().toISOString();
-  for (const need of await needsAwaitingContinuation(projectId, at)) {
+  /*
+   * Bounded per pass, and the event loop handed back between needs.
+   * Production, 2026-11-06 00:36Z: this pass took every due need in the
+   * project, each through `markReady`, in one stretch — event-loop stalls of
+   * up to 82 s, with the dispatch tick, the factory and every pool checkout
+   * behind them. The oldest due needs go first; a deferred one waits for its
+   * own `continuation_not_before`, so the rest are reached on later passes.
+   */
+  for (const need of await needsAwaitingContinuation(projectId, at, NEED_CONTINUATIONS_PER_PASS)) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
     // Claim first. The effect belongs on the far side of the compare-and-swap,
     // because two ticks reading one resolved need must produce one resumption.
     if (!(await claimNeedContinuation(need.id, at))) continue;
