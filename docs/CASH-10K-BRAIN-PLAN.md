@@ -220,3 +220,24 @@ After #522, the first recurring screen (`cop_779c9f02`, a directory of 3,720 cor
   - 17 openings considered, 8 simulated.
   - Best combination: 0.0% of worlds reach $10,000; settled p10 $0 · p50 $50 · p90 $225.
   - No constructed opening is modelled yet.
+
+### 2026-11-06 17:20Z: the constructed openings' epochs are spent
+
+Fixes now live:
+- #574: ruled_out disqualifies only on stated closure or exclusion.
+- Production pressure is NORMAL again.
+
+Cash-report run 42260462536 shows the goal's constructed openings dived for three rounds each:
+- `cop_e28aa4e` (health policy): EPOCH_SPENT.
+- `cop_1e58c63d` (shared services / GBS): EPOCH_SPENT.
+- `cop_026693a2` (shared services): EPOCH_SPENT, 12/17 fields answered.
+- `cop_6632c4a` (HVAC distributor): DISQUALIFIED before #574.
+
+Every "answer" is a market-size or company-description sentence that the evidence gate accepted:
+- payer = "The shared services market is expected to grow significantly from 2026 to 2033";
+- directCosts and revenueRange = the same market-size figure;
+- payer = "IHPA is an independent authority on …".
+
+No constructed opening therefore carries a named buyer or a price, and the plan cannot model one.
+
+**The next blocker is in the research gate, not in cash.** It needs a lane-fit check: a payer claim must name who pays, and a price claim must be a price. It has been handed to the research-system session (session_01QF5Tk7SnzTKoVwito7goaH) with this evidence.
