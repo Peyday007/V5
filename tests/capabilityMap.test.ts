@@ -371,5 +371,12 @@ describe('the automatic repair loop: a failed check produces repair work, a rele
       "SELECT payload FROM project_events WHERE event_type = 'CAPABILITY_ASSESSED' AND entity_id = 'wst_rep' ORDER BY created_at DESC LIMIT 1",
     );
     expect(JSON.parse(payload!.payload).cleared).toContain('DISCOVERY.SEARCH');
+    // Unchanged on the same release: no row. The first check on a new release: one row, nothing cleared.
+    expect((await assessLiveObjectives({}))[0]!.recorded).toBe(false);
+    const release = new Date(Date.now() + 5);
+    await new Promise((r) => setTimeout(r, 10));
+    const onRelease = await assessLiveObjectives({ since: release });
+    expect(onRelease[0]).toMatchObject({ recorded: true, cleared: [] });
+    expect((await assessLiveObjectives({ since: release }))[0]!.recorded).toBe(false);
   });
 });
