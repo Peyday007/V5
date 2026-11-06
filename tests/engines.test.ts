@@ -28,6 +28,7 @@ import { createRun, getRun, updateRun } from '../server/repos/runs.ts';
 import { getDocument, listDocumentsByLayer } from '../server/repos/documents.ts';
 import { listEventsByLayer } from '../server/repos/events.ts';
 import { getLayer } from '../server/repos/layers.ts';
+import { getDb } from '../server/db/database.ts';
 import { getProject } from '../server/repos/projects.ts';
 
 let fixture: TestProject;
@@ -94,6 +95,25 @@ describe('dependency checker', () => {
     expect(first).toHaveLength(2);
     expect(second.map((d) => d.id).sort()).toEqual(first.map((d) => d.id).sort());
     expect((await checkRunDependencies(run.id)).requiredCount).toBe(2);
+  });
+
+  it('tags a single-name lookup with the file and line that asked for it', async () => {
+    const layer = await fixture.layerByName('Discovery Logic');
+    const run = await failedRun(layer.id);
+    const db = getDb() as unknown as Record<'get', (sql: string, ...rest: unknown[]) => unknown>;
+    const original = db.get;
+    const seen: string[] = [];
+    db.get = (sql: string, ...rest: unknown[]) => {
+      if (sql.includes('lower(canonical_name) = lower(?)')) seen.push(sql);
+      return original.call(db, sql, ...rest);
+    };
+    try {
+      await setRunDependencies(run.id, ['Discovery Logic v1']);
+    } finally {
+      db.get = original;
+    }
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen[0]).toMatch(/\/\* from services\/dependencies\.ts:\d+ \*\/$/);
   });
 });
 
