@@ -230,6 +230,7 @@ async function enqueue(projectId: string, type: string, orchestration: ResearchO
 
 beforeEach(async () => {
   play = await freshProject();
+  (await import('../server/services/freeLane/worker.ts')).resetFreeLaneFitness();
   layerId = (await play.layerByName('Monetization Logic')).id;
   await setBrainOnlyMode(true, 'test', 'free lane suite');
 });
@@ -727,5 +728,24 @@ describe('the whole packet on the free lane', () => {
     await freeLaneTick({ config: CONFIG, completer: model().completer, fetchSource, search: async () => [] });
     const bin = await getDb().get<{ state: string }>('SELECT state FROM bins WHERE orchestration_id = ?', [orchestration.id]);
     expect(bin?.state).toBe('COMPLETE');
+  });
+});
+
+describe('a model keeps only the kinds of work Brain accepts from it', () => {
+  it('marks a model whose answers for one work type are rejected, never every model for a type', async () => {
+    const { unfitPairs } = await import('../server/services/freeLane/worker.ts');
+    const rows = [
+      { model: 'small', work_type: 'RESEARCH_AUDIT', outcome: 'FAILED_RETRYABLE', n: 6 },
+      { model: 'small', work_type: 'RESEARCH_AUDIT', outcome: 'RELEASED_TRANSIENT', n: 40 },
+      { model: 'small', work_type: 'RESEARCH_FRAGMENT', outcome: 'SUBMITTED', n: 9 },
+      { model: 'small', work_type: 'RESEARCH_FRAGMENT', outcome: 'FAILED_RETRYABLE', n: 4 },
+      { model: 'large', work_type: 'RESEARCH_AUDIT', outcome: 'SUBMITTED', n: 7 },
+      { model: 'large', work_type: 'RESEARCH_VERIFY', outcome: 'FAILED_RETRYABLE', n: 5 },
+      { model: 'small', work_type: 'RESEARCH_VERIFY', outcome: 'FAILED_RETRYABLE', n: 5 },
+    ];
+    const unfit = unfitPairs(rows, ['small', 'large']);
+    expect([...unfit]).toEqual(['small|RESEARCH_AUDIT']);
+    // Too few rejections to judge: nothing is marked.
+    expect(unfitPairs([{ model: 'small', work_type: 'RESEARCH_AUDIT', outcome: 'FAILED_RETRYABLE', n: 3 }], ['small', 'large']).size).toBe(0);
   });
 });
