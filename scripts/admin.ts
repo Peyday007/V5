@@ -2209,6 +2209,39 @@ async function main(): Promise<void> {
       for (const r of rows) console.log(`  ${JSON.stringify(r)}`);
       break;
     }
+    /*
+     * Why recent packets ended, and what their audit and synthesis items
+     * recorded. Read-only: the capability map's JOB_OUTCOME and AUDIT probes
+     * count these; this prints the rows behind the counts (§88).
+     */
+    case 'packets recent': {
+      const hours = Number(rest[0] ?? '6') || 6;
+      const from = new Date(Date.now() - hours * 3_600_000).toISOString();
+      const db = getDb();
+      const ended = await db.all<Record<string, unknown>>(
+        `SELECT id, status, SUBSTR(COALESCE(failure_reason, cancel_reason, ''), 1, 400) AS reason,
+                COALESCE(completed_at, failed_at, cancelled_at, updated_at) AS at
+           FROM research_orchestrations
+          WHERE status IN ('COMPLETE', 'COMPLETE_WITH_GAPS', 'FAILED', 'NEEDS_HUMAN', 'CANCELLED')
+            AND COALESCE(completed_at, failed_at, cancelled_at, updated_at) >= ?
+          ORDER BY at DESC LIMIT 40`,
+        [from],
+      );
+      console.log(`PACKETS ENDED since ${from}: ${ended.length}`);
+      for (const r of ended) console.log(`  ${JSON.stringify(r)}`);
+      const items = await db.all<Record<string, unknown>>(
+        `SELECT id, work_type, state, attempt_count, failure_category,
+                SUBSTR(COALESCE(result_summary, cancelled_reason, ''), 1, 300) AS summary, updated_at
+           FROM work_items
+          WHERE work_type IN ('RESEARCH_AUDIT', 'RESEARCH_SYNTHESIZE') AND state IN ('SUCCEEDED', 'FAILED', 'CANCELLED')
+            AND updated_at >= ?
+          ORDER BY updated_at DESC LIMIT 40`,
+        [from],
+      );
+      console.log(`AUDIT/SYNTHESIS ITEMS settled: ${items.length}`);
+      for (const r of items) console.log(`  ${JSON.stringify(r)}`);
+      break;
+    }
     case 'packets list': {
       const project = await projectFrom(rest[0] ?? fail('Name a project.'));
       for (const orchestration of await listOrchestrationsByProject(project.id)) {
