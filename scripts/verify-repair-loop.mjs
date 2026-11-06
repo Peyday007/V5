@@ -51,7 +51,11 @@ if (what === 'check-ran' || what === 'resumed') {
     const checks = once([...found.log.matchAll(/ {2}check {7}(\S+) ready=(\S+) blocking=(\S*) cleared=(\S*)/g)]);
     const resumes = once([...found.log.matchAll(/ {2}resumed {5}(\S+) (.*)/g)]);
     detail = `Goals run ${found.run} on ${serving(found.log)?.slice(0, 7)}: ${checks.length} check row(s), ${resumes.length} resume row(s)`;
-    if (what === 'check-ran') ok = checks.length > 0;
+    // The check must have run on the release now serving: after the Deploy that released it started.
+    const deploys = JSON.parse(gh(`repos/${REPO}/actions/workflows/deploy.yml/runs?per_page=10&status=success`)).workflow_runs;
+    const released = deploys.find((d) => d.head_sha === serving(found.log));
+    detail += released ? ` (released by Deploy ${released.id}, started ${released.run_started_at})` : ' (no successful Deploy of the serving revision)';
+    if (what === 'check-ran') ok = Boolean(released) && checks.some((c) => c[1] > released.run_started_at);
     else ok = resumes.length > 0 && checks.some((c) => c[4] !== 'none');
     for (const c of checks) detail += `\n  check ${c[1]} blocking=${c[3]} cleared=${c[4]}`;
     for (const r of resumes) detail += `\n  resumed ${r[1]} ${r[2].slice(0, 160)}`;

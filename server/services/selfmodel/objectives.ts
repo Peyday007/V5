@@ -62,8 +62,8 @@ export async function assessLiveObjectives(input: { now?: Date; limit?: number; 
     assessments ??= await assessAll({ now, hours: 24, since: input.since ?? null });
     const assessment = assessObjective(shape, Object.fromEntries(assessments.map((a) => [a.map, a.assessed])));
     const blocking = assessment.blocking.map((g) => `${g.status}:${g.id}`).sort();
-    const last = await getDb().get<{ payload: string }>(
-      `SELECT payload FROM project_events WHERE entity_type = 'WORKSTREAM' AND entity_id = ? AND event_type = 'CAPABILITY_ASSESSED'
+    const last = await getDb().get<{ payload: string; created_at: string }>(
+      `SELECT payload, created_at FROM project_events WHERE entity_type = 'WORKSTREAM' AND entity_id = ? AND event_type = 'CAPABILITY_ASSESSED'
         ORDER BY created_at DESC LIMIT 1`,
       [goal.id],
     );
@@ -74,9 +74,12 @@ export async function assessLiveObjectives(input: { now?: Date; limit?: number; 
       previous = null;
     }
     const changed = previous === null || previous.join('|') !== blocking.join('|');
+    // The first check on a new release is recorded even when nothing changed, so
+    // "a released repair was checked" is a row (one per goal per release, not a heartbeat).
+    const firstOnRelease = Boolean(input.since && last && last.created_at < input.since.toISOString());
     const stillBlocking = new Set(assessment.blocking.map((g) => g.id));
     const cleared = (previous ?? []).map((one) => one.slice(one.indexOf(':') + 1)).filter((id) => !stillBlocking.has(id));
-    if (changed) {
+    if (changed || firstOnRelease) {
       await recordEvent({
         projectId: goal.project_id!,
         entityType: 'WORKSTREAM',
@@ -87,11 +90,12 @@ export async function assessLiveObjectives(input: { now?: Date; limit?: number; 
           ready: assessment.ready,
           blocking,
           cleared,
+          release: input.since ? input.since.toISOString() : null,
           gaps: assessment.blocking.slice(0, 10).map((g) => ({ id: g.id, status: g.status, why: g.why, external: g.externalLimit })),
         },
       });
     }
-    out.push({ goalId: goal.id, recorded: changed, assessment, cleared });
+    out.push({ goalId: goal.id, recorded: changed || firstOnRelease, assessment, cleared: changed ? cleared : [] });
   }
   return out;
 }
