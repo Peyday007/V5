@@ -152,7 +152,8 @@ export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
   lastCapabilityAt = now.getTime();
   const open = (await listCandidates({ open: true })).map((c) => c.weaknessKey);
   const { capabilityWeaknesses } = await import('../selfmodel/capabilities.ts');
-  lastCapabilityGaps = await capabilityWeaknesses(now, [...detected.map((w) => w.key), ...open]).catch((error: unknown) => {
+  // Judged on the running release where it has its own sample, so a failure the release already fixed raises no repair.
+  lastCapabilityGaps = await capabilityWeaknesses(now, [...detected.map((w) => w.key), ...open], new Date(processStartedAt)).catch((error: unknown) => {
     console.warn(`capability assessment failed: ${String((error as Error)?.message ?? error)}`);
     return [];
   });
@@ -573,6 +574,9 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
       if (factory.state === 'LIVE') {
         await patchCandidate(candidate.id, { deliveredAt: now.toISOString(), deliveredRef: factory.mergeSha ?? candidate.changeRequestId });
         await recordImprovementEvent({ candidateId: candidate.id, kind: 'DELIVERED', detail: { mergeSha: factory.mergeSha, detail: factory.detail } });
+        // A delivered repair is re-checked on the next pass rather than at the hour (still after the boot grace).
+        lastCapabilityAt = 0;
+        lastObjectiveCheck = 0;
         return `delivered ${factory.mergeSha ?? ''}`.trim();
       }
       if (factory.state === 'CANCELLED') {
@@ -678,8 +682,12 @@ export async function improvementTick(now = new Date()): Promise<ImprovementTick
     lastObjectiveCheck = now.getTime();
     try {
       const { assessLiveObjectives } = await import('../selfmodel/objectives.ts');
-      const checked = await assessLiveObjectives({ now });
+      const checked = await assessLiveObjectives({ now, since: new Date(processStartedAt) });
       report.objectives = checked.filter((c) => c.recorded).map((c) => `${c.goalId}: ${c.assessment.ready ? 'ready' : c.assessment.blocking.map((g) => g.id).join(',')}`);
+      // A gap that blocked a goal and no longer does is a repair that reached production:
+      // the goal's plan is read and its search widened on the next goal pass, not in half an hour.
+      const { requestGoalPlanPass } = await import('../goals/plan.ts');
+      for (const one of checked.filter((c) => c.recorded && c.cleared.length > 0)) requestGoalPlanPass(one.goalId, one.cleared.join(','));
     } catch (error) {
       report.errors.push(`objectives: ${String((error as Error).message ?? error).slice(0, 200)}`);
     }

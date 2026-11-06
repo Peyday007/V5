@@ -14335,6 +14335,40 @@ RunPod pod refused restarts by its host, every considered opening a one-off
 reaching 250 of 10 000, and the fix for the database held back by a duplicate
 migration number (#538).
 
+**The repair-to-goal loop (2026-11-06).** The owner asked for one permanent
+automatic process: when repairs are released, the whole-chain check runs; what
+it finds broken goes to Factory; a repair that reaches production resumes the
+$10K goal — with no session open and no prompt. Almost all of it already
+existed and nothing new was built: the check is this assessor on the durable
+improvement tick (15 minutes after every boot, which every release is, then
+hourly), a gap becomes a candidate that Factory engineers and the loop
+measures, and the goal's plan runs on the Russell tick. Production showed three
+places the chain did not connect:
+
+- **A failed goal-plan check raised no repair.** Every connected gap in the
+  map sat behind `COMPUTE.DATABASE`, which had no improvement route, and a gap
+  behind another is never routed — so the root waited on nobody and the links
+  behind it waited on the root. The database gap now has a route over the
+  callers Factory may release (`server/db/**` is reserved for a person), and a
+  gap waits behind an upstream one only while that one is *in hand*: external,
+  detected or open, owned by a detector, or routed in the same pass. Behind
+  anything else it is routed itself.
+- **The check judged the release before the one running.** The reading 55
+  minutes after Deploy 761 put `COMPUTE.DATABASE` at 69% over the day while
+  the release itself had not failed once. With `since` (the process start),
+  a requirement that has its minimum sample since the release is judged on
+  that alone; below the sample the day's reading stands. A repair is never
+  raised for a failure the running code already fixed, and a released fix is
+  seen working within the hour rather than after a day.
+- **A cleared gap did not reach the goal.** `assessLiveObjectives` now names
+  the gaps that blocked a goal last time and no longer do (`cleared`, in the
+  `CAPABILITY_ASSESSED` row), and the loop asks the goal tick for an immediate
+  plan pass (`requestGoalPlanPass`): the plan is read and the search widened on
+  the next tick, recorded as `GOAL_RESUMED_AFTER_REPAIR`. A delivered Factory
+  repair resets the check's hour, so it is re-read on the next pass. The goal
+  is never held while a repair is open — independent planning and research
+  continue throughout — so "resume" means "act on the repair now", not "start".
+
 ## 89. A goal's research is measured at its plan, and a search that does not reach the plan is asked differently.
 
 **Owner's order, 2026-11-05.** The RunPod GPU's research must advance the $10K

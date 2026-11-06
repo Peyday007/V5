@@ -638,6 +638,19 @@ export const GOAL_PLAN_MAP: CapabilityMap = {
       failureConditions: ['pool exhausted', 'connection terminated', 'query timeout'],
       owner: ['server/db/database.ts'],
       proof: { probe: 'DATABASE_AVAILABLE', what: 'free-lane attempts that did not fail on Brain’s own database', minSample: 20, workingAt: 0.95 },
+      /*
+       * The root of every connected gap in this map, and for a day it had no
+       * route: production 2026-11-06 read it BROKEN with ten links behind it,
+       * so a failed check raised no repair work at all. The night's causes were
+       * Brain's callers (storage handshakes, a lookup held inside a
+       * transaction), not the driver, and `server/db/**` is reserved for a
+       * person to release, so the scope is the callers Factory may change.
+       */
+      improvement: {
+        metric: 'RESEARCH_JOB_SUCCESS_RATE',
+        mutationScope: ['server/services/freeLane/**', 'server/services/storage/**', 'server/services/research/**', 'server/repos/**', 'tests/freeLane*.test.ts', 'tests/storage*.test.ts', 'tests/research*.test.ts'],
+        coveredBy: [],
+      },
     }),
   ],
 };
@@ -840,18 +853,46 @@ export function gapsForImprovement(
   minFailures: number,
 ): { gap: Gap; requirement: CapabilityRequirement; route: ImprovementRoute }[] {
   const byId = new Map(map.requirements.map((r) => [r.id, r]));
-  const out: { gap: Gap; requirement: CapabilityRequirement; route: ImprovementRoute }[] = [];
-  for (const gap of gaps) {
-    if (gap.status !== 'BROKEN' && gap.status !== 'MISSING') continue;
-    if (gap.behind.length > 0) continue; // fix what it sits behind first
-    if (gap.failures < minFailures) continue;
+  const byGap = new Map(gaps.map((g) => [g.id, g]));
+  const keyOf = (id: string): string => `CAPABILITY:${map.key}.${id}`;
+  const detected = (key: string): boolean => alreadyDetected.some((one) => one === key || one.startsWith(`${key}#`));
+  // A gap a detector covers is always the detector's (`ImprovementRoute.coveredBy`).
+  const covered = (route: ImprovementRoute): boolean => route.coveredBy.length > 0;
+  const routable = (gap: Gap): { requirement: CapabilityRequirement; route: ImprovementRoute } | null => {
+    if (gap.status !== 'BROKEN' && gap.status !== 'MISSING') return null;
+    if (gap.failures < minFailures) return null;
     const requirement = byId.get(gap.id);
     const route = requirement?.improvement;
-    if (!requirement || !route) continue;
-    if (requirement.externalLimit && gap.status === 'BROKEN') continue;
-    if (route.coveredBy.length > 0) continue;
-    if (alreadyDetected.some((key) => key === `CAPABILITY:${map.key}.${gap.id}` || key.startsWith(`CAPABILITY:${map.key}.${gap.id}#`))) continue;
-    out.push({ gap, requirement, route });
+    if (!requirement || !route) return null;
+    if (requirement.externalLimit && gap.status === 'BROKEN') return null;
+    if (covered(route)) return null;
+    if (detected(keyOf(gap.id))) return null;
+    return { requirement, route };
+  };
+  /*
+   * Fix what a gap sits behind first — but only when something is fixing it.
+   * Production, 2026-11-06: the goal-plan map's root gap had no route, so every
+   * link behind it waited on a repair nobody would ever make, and a failed
+   * check produced no repair work. An upstream gap is in hand when it is
+   * external (it waits on the world), already detected or open, owned by a
+   * detector, or routed in this same pass; behind anything else, the gap is
+   * routed itself.
+   */
+  const inHand = (id: string): boolean => {
+    const upstream = byGap.get(id);
+    const requirement = byId.get(id);
+    if (!upstream || !requirement) return false;
+    if (requirement.externalLimit) return true;
+    if (detected(keyOf(id))) return true;
+    if (requirement.improvement && covered(requirement.improvement)) return true;
+    return routable(upstream) !== null;
+  };
+  const out: { gap: Gap; requirement: CapabilityRequirement; route: ImprovementRoute }[] = [];
+  for (const gap of gaps) {
+    const own = routable(gap);
+    if (!own) continue;
+    if (gap.behind.some(inHand)) continue;
+    out.push({ gap, ...own });
   }
   return out;
 }

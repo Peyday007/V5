@@ -274,3 +274,102 @@ describe('the goal-plan map reaches the improvement loop', () => {
     expect(gapsForImprovement(connectedGaps(GOAL_PLAN_MAP, alone), GOAL_PLAN_MAP, [], 15).map((g) => g.gap.id)).toEqual(['EVIDENCE.PATH_ANSWERS']);
   });
 });
+
+describe('the automatic repair loop: a failed check produces repair work, a released repair is judged on itself', () => {
+  beforeEach(async () => {
+    await freshProject();
+  });
+
+  async function laneItem(outcome: string, reason: string | null) {
+    await recordBinEvent({ eventType: 'FREE_LANE_ITEM', workloadClass: 'RESEARCH_FRAGMENT', outcome, reason, evidenceClass: 'MEASURED' } as Parameters<typeof recordBinEvent>[0]);
+  }
+
+  it('routes the goal map’s root gap, the database, so a failed check is never silent', async () => {
+    const { GOAL_PLAN_MAP } = await import('../server/domain/capabilityMap.ts');
+    // Production 2026-11-06: COMPUTE.DATABASE BROKEN with ten links behind it, and no repair raised.
+    const assessed = GOAL_PLAN_MAP.requirements.map((r) =>
+      r.id === 'COMPUTE.DATABASE' ? classify(r, true, { ok: 1151, total: 1675, detail: '' }) : classify(r, true, { ok: 100, total: 100, detail: '' }),
+    );
+    const routed = gapsForImprovement(connectedGaps(GOAL_PLAN_MAP, assessed), GOAL_PLAN_MAP, [], 15);
+    expect(routed.map((g) => g.gap.id)).toEqual(['COMPUTE.DATABASE']);
+    // Factory may release what it changes: nothing in the scope is reserved for a person.
+    const { RELEASE_EXCLUDED_PATHS } = await import('../server/domain/factoryRelease.ts');
+    for (const path of routed[0]!.route.mutationScope) {
+      for (const reserved of RELEASE_EXCLUDED_PATHS) expect(path.startsWith(reserved.replace('/**', '/')) || path === reserved, `${path} is reserved`).toBe(false);
+    }
+  });
+
+  it('routes a gap that sits behind an upstream gap nothing is fixing, and waits behind one that is in hand', async () => {
+    const { GOAL_PLAN_MAP } = await import('../server/domain/capabilityMap.ts');
+    // GOAL.PLAN_EVALUATED has no route; GOAL.PLAN_FRESH depends on it and has one.
+    const assessed = GOAL_PLAN_MAP.requirements.map((r) =>
+      r.id === 'GOAL.PLAN_EVALUATED' || r.id === 'GOAL.PLAN_FRESH'
+        ? classify(r, true, { ok: 0, total: 40, detail: '' })
+        : classify(r, true, { ok: 100, total: 100, detail: '' }),
+    );
+    const gaps = connectedGaps(GOAL_PLAN_MAP, assessed);
+    expect(gaps.find((g) => g.id === 'GOAL.PLAN_FRESH')!.behind).toContain('GOAL.PLAN_EVALUATED');
+    expect(gapsForImprovement(gaps, GOAL_PLAN_MAP, [], 15).map((g) => g.gap.id)).toEqual(['GOAL.PLAN_FRESH']);
+    // Behind the database while the database's own repair is open, it waits for that repair.
+    const behindDb = GOAL_PLAN_MAP.requirements.map((r) =>
+      r.id === 'COMPUTE.DATABASE' || r.id === 'EVIDENCE.PATH_ANSWERS'
+        ? classify(r, true, { ok: 0, total: 40, detail: '' })
+        : classify(r, true, { ok: 100, total: 100, detail: '' }),
+    );
+    expect(gapsForImprovement(connectedGaps(GOAL_PLAN_MAP, behindDb), GOAL_PLAN_MAP, ['CAPABILITY:GOAL_PLAN.COMPUTE.DATABASE'], 15)).toEqual([]);
+  });
+
+  it('judges the running release on its own attempts once it has the sample, and the day before that', async () => {
+    const { GOAL_PLAN_MAP } = await import('../server/domain/capabilityMap.ts');
+    const db = getDb();
+    const lane = (outcome: string, reason: string) =>
+      recordBinEvent({ eventType: 'FREE_LANE_ITEM', workloadClass: 'RESEARCH_FRAGMENT', outcome, reason, evidenceClass: 'MEASURED' } as Parameters<typeof recordBinEvent>[0]);
+    // The previous build: thirty attempts lost to the pool, three hours ago.
+    for (let i = 0; i < 30; i += 1) await lane('RELEASED_TRANSIENT', 'model brain-a: threw: The database pool had no free connection within 10000ms');
+    const before = new Date(Date.now() - 3 * 3_600_000).toISOString();
+    await db.run(`UPDATE bin_events SET at = ? WHERE event_type = 'FREE_LANE_ITEM'`, [before]);
+    const release = new Date(Date.now() - 3_600_000);
+    const dbReq = (a: Awaited<ReturnType<typeof assessMap>>) => a.assessed.find((x) => x.requirement.id === 'COMPUTE.DATABASE')!;
+
+    // Only five attempts since the release: below the sample, so the day's reading stands.
+    for (let i = 0; i < 5; i += 1) await lane('SUBMITTED', 'model brain-a');
+    const early = await assessMap(GOAL_PLAN_MAP, { hours: 24, since: release, now: new Date(Date.now() + 1000) });
+    expect(dbReq(early).status).toBe('BROKEN');
+
+    // Twenty clean attempts since the release: the release is judged on itself, and raises no repair.
+    for (let i = 0; i < 15; i += 1) await lane('SUBMITTED', 'model brain-a');
+    const later = await assessMap(GOAL_PLAN_MAP, { hours: 24, since: release, now: new Date(Date.now() + 1000) });
+    expect(dbReq(later)).toMatchObject({ status: 'WORKING', reading: { ok: 20, total: 20 } });
+    expect(dbReq(later).reading!.detail).toContain('since the release');
+    const day = await assessMap(GOAL_PLAN_MAP, { hours: 24, now: new Date(Date.now() + 1000) });
+    expect(dbReq(day).status).toBe('BROKEN');
+    const raised = await capabilityWeaknesses(new Date(Date.now() + 1000), [], release);
+    expect(raised.map((w) => w.key)).not.toContain('CAPABILITY:GOAL_PLAN.COMPUTE.DATABASE');
+    const unscoped = await capabilityWeaknesses(new Date(Date.now() + 1000), []);
+    expect(unscoped.map((w) => w.key)).toContain('CAPABILITY:GOAL_PLAN.COMPUTE.DATABASE');
+  });
+
+  it('names the gaps a repair cleared from a goal, so its plan is read at once', async () => {
+    const db = getDb();
+    const project = await db.get<{ id: string }>('SELECT id FROM projects LIMIT 1');
+    const now = new Date().toISOString();
+    await db.run(
+      `INSERT INTO workstreams (id, project_id, title, intent, purpose, created_at, updated_at, capital_ceiling_cents)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['wst_rep', project!.id, '$10K', 'Research demand and validate buyers for a $10K plan', 'REVENUE_DIRECT', now, now, 300000],
+    );
+    for (let i = 0; i < 20; i += 1) await laneItem('FAILED_RETRYABLE', 'model m: no readable source among 3 candidate page(s): {}');
+    const first = await assessLiveObjectives({});
+    expect(first[0]!.assessment.blocking.map((g) => g.id)).toContain('DISCOVERY.SEARCH');
+    expect(first[0]!.cleared).toEqual([]);
+    // The repair is released: the failing rows are the previous build's.
+    await db.run(`UPDATE bin_events SET at = ? WHERE event_type = 'FREE_LANE_ITEM'`, [new Date(Date.now() - 48 * 3_600_000).toISOString()]);
+    const after = await assessLiveObjectives({});
+    expect(after[0]!.recorded).toBe(true);
+    expect(after[0]!.cleared).toContain('DISCOVERY.SEARCH');
+    const payload = await db.get<{ payload: string }>(
+      "SELECT payload FROM project_events WHERE event_type = 'CAPABILITY_ASSESSED' AND entity_id = 'wst_rep' ORDER BY created_at DESC LIMIT 1",
+    );
+    expect(JSON.parse(payload!.payload).cleared).toContain('DISCOVERY.SEARCH');
+  });
+});
