@@ -106,3 +106,36 @@ setup (`start`, `init`, `setSession`, `getPeerCertificate`, `wrap`,
 reached 13–43 s. Every storage existence check paid a full handshake. #557
 caps the store at eight kept connections. #560 bounds every Russell pass, so
 a stall that slow can no longer hold the tick for good.
+
+## 6. Deploy 759 (`93bb258`, live 05:33Z): #557, #558, #561, #562
+
+Deploys 750, 753, 754, 756 and 757 never reached production. 750 failed on
+a flaky cash test, 756 on `tickOverlap` (fixed by #561), and the others were
+superseded by a newer canonical tip while they ran. Production served
+`4564d96` from 03:37Z to 05:33Z. During that time healthz timed out (04:45Z)
+and stalls reached 57 s. Sessions held pushes so 759 could release.
+
+Connection report 42169847822 (05:41Z, `93bb258`):
+
+| reading | 4564d96 (04:17Z) | 93bb258 (05:41Z) |
+|---|---|---|
+| new TLS sockets to Supabase storage | 1 113/min | **3.9/min** |
+| event loop p99 / worst | 13.5 s / 42.7 s | **25 ms / 1.6 s** |
+| pool wait p95 | 77 ms – 2.2 s | **0 ms** |
+| CPU-profile windows with a stall | 3 of 3 | none yet |
+
+GOAL_PLAN map, Admin 42169850604 (04:41–05:41Z, mostly the old build):
+`{"WORKING":4,"BROKEN":3,"MISSING":0,"UNPROVEN":6}`.
+- `COMPUTE.DATABASE` 31/34 (91%), up from 40/66 (61%) at 01:46Z.
+- `COMPUTE.GPU` WORKING 9/16 (RunPod answered this hour).
+- `EVIDENCE.PATH_ANSWERS` 25/26; `QUANT.MODELLED` 8/17; `GOAL.PLAN_FRESH` 1/1.
+- `OPENINGS.SEARCH_WIDENS` 0/1 is the goal's live-round cap (3 + spare)
+  holding while its rounds are still researching. Opening more rounds while
+  the free providers are saturated adds load, not answers, so the cap is
+  kept.
+
+What remained on 93bb258: statement p90 15.5 s and pressure SHEDDING, with
+the server idle. `setRunDependencies` looked up each name and checked the
+document store **inside one transaction** (the lookup from
+`dependencies.ts:296` averaged 7.8 s over 1 076 calls in 8 min). #563
+resolves the names before the transaction opens.
