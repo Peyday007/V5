@@ -145,3 +145,35 @@ Russell and deep dives on `93bb258` (DB session, closeout report 42170884262, ~0
   GPOs (queued for launch). Dives started rose to 380, from 376 where it had
   stood since 22:05Z. 4 are in flight, at the operator cap.
 - The Russell cycle completes: lastRan 05:47:53Z, lastError empty.
+
+## 7. Deploy 760 (`357e33c`, live 06:25Z): #563
+
+Connection report 42175258232 (06:34Z):
+- Pressure **NORMAL**, statement p90 162 ms. It was SHEDDING at 15.5 s on
+  `93bb258`.
+- Pool wait p95 0 ms. No lock waits on the server.
+- Storage: 23.8 new TLS sockets a minute, against 1 113 on `4564d96`.
+- CPU profile: TLS setup no longer appears in the top frames. GC takes 8–12 s
+  a minute. Remaining stalls of 4–6 s sit in `russell:launch` as it catches
+  up after the restart.
+
+Research on `357e33c` (Cheap lane `runpod-report` 42175264906, last hour):
+- The RunPod pod started at 04:40Z, once RunPod had capacity again: 48
+  research jobs submitted, 56 claims, 100% sourced, $0.20 for 50 minutes.
+- Accepted claims 38.9 an hour, against 2 an hour in the hour before.
+- The goal opened 3 rounds and abandoned 4, and the plan was re-read 5.8
+  times an hour.
+- Plan: NOT_VIABLE, 17 considered, 8 modelled, no opening with a buyer and
+  price accepted. 6 of the last 6 settled rounds ended without a report.
+
+The self-improvement loop (Admin `improvement show` 42175261601) is ON and
+ACTIVE. 11 candidates are recorded, one measured IMPROVED
+(`FREE_LANE:CITATION_DROPPED`, z = 5.04). Owner interventions run at 59 in the
+last 24 h, 157 of them over 7 days "deciding whether this project accepts a
+report with unresolved gaps"; the loop holds that as candidate
+`OWNER:DECIDING…`, stage DECIDE.
+
+#565 (`91944e2`): #557's bounded store pool would keep the socket of any
+response its caller does not read (a successful upload, a delete, a 404).
+Responses up to 4 MB are now read whole, and an idle socket is ended after
+45 s.
