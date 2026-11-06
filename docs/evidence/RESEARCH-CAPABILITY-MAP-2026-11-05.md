@@ -240,3 +240,44 @@ calls — Groq refused for its 8 000-token window (#555 fits it, live 03:40Z),
 Cerebras's day spent (resets ~09:00Z), NVIDIA cooling down, Cloudflare
 Playground needing a browser runtime the OmniRoute image lacks, and the RunPod
 pod refused START by RunPod.
+
+## 9. The complete process, end to end (2026-11-06 08:42Z → 14:54Z)
+
+**With research volume back** (`capabilities show 2`, 08:42Z → 10:42Z, after the
+free providers' daily quotas reset): `{"WORKING":15,"BROKEN":5,"MISSING":0,"UNPROVEN":4}`
+— INTAKE.PLAN 6/6, DISCOVERY.SEARCH 51/54, DISCOVERY.READABLE 52/54, ACCESS.READ
+458/523, EXTRACTION.CITED_CLAIMS 36/52, EXTRACTION.ACCEPTED 70/93,
+VERIFICATION.REASONS 23/23, VERIFICATION.ITEMS 38/39, ANALYSIS.SYNTHESIS 8/8,
+ANALYSIS.AUDIT 48/48, RECOVERY.PROVIDERS 143/173, RECOVERY.RETRY 15/22,
+RECOVERY.LEASES 78/78. The one stage still failing was the decision:
+DECISION.JOB_OUTCOME 0/14.
+
+**Why** (`packets parks`, 10:42Z): twenty packets Brain had already decided to
+file (RECORD_GAPS, card RESUMED) sat at NEEDS_HUMAN for up to a day. Their audit
+items had spent every attempt during the night's outages; each resume found the
+same dead items and parked again, and an answered card is never asked again.
+#573: an audit whose items ran out of attempts opens a new audit round (a
+timestamp boundary, at most twice), and `refileDecidedParks` re-advances the
+decided packets already parked that way.
+
+**After #573** (released in b5a807f, deploy 42221172426, ~13:25Z; `capabilities
+show 2`, 12:54Z → 14:54Z):
+
+| requirement | 08:42Z → 10:42Z | 12:54Z → 14:54Z |
+|---|---|---|
+| ANALYSIS.AUDIT | WORKING 48/48 | WORKING 130/131 |
+| ANALYSIS.FILED | UNPROVEN (0) | **WORKING 25/25** |
+| DECISION.JOB_OUTCOME | BROKEN 0/14 | **WORKING 25/32 (78%)** |
+| ACCESS.READ | WORKING 458/523 | WORKING 118/128 |
+| RECOVERY.LEASES | WORKING 78/78 | WORKING 64/66 |
+| RECOVERY.PROVIDERS | WORKING 143/173 | BROKEN 139/245 — external |
+
+`packets recent 2` (14:56Z): 34 packets ended, the newest a run of
+COMPLETE_WITH_GAPS filings — among them `orc_8bcc7881…`, `orc_ce0adfb5…`,
+`orc_3a0e2ed2…` and `orc_b4b5f1b7…`, parked since 2026-11-05 and filed now
+without anybody being asked.
+
+**Still below the bar, and why:** RECOVERY.PROVIDERS (the free providers' own
+quotas and outages), RECOVERY.STALLS 35/46 and RECOVERY.IDLE_CAPACITY 20/36
+(items held in provider cooldown; event-loop stalls owned by the repair
+session), LEARNING.DELIVER 3/8 (Factory deliveries from earlier in the week).
