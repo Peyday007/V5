@@ -172,7 +172,7 @@ if (what === 'check-ran' || what === 'resumed') {
   if (!found) detail = 'no Goals plan run prints the execution policy';
   else {
     const log = found.log.split('##[notice]')[0];
-    const policy = /policy {6}(\S+)/.exec(log)?.[1] ?? null;
+    const policy = /policy {6}(\w+)/.exec(log)?.[1] ?? null;
     const sales = [...new Set([...log.matchAll(/ {2}sale {8}(\S+) up to (\S+) · \[(\w+)\] (.*)/g)].map((m) => `${m[1]} up to ${m[2]} [${m[3]}] ${m[4].slice(0, 60)}`))];
     const tests = [...log.matchAll(/ {2}market test /g)].length;
     const next = /next step {3}\[(\w+)\] (.*)/.exec(log);
