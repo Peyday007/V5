@@ -685,7 +685,10 @@ function printPortfolio(portfolio: import('../server/services/goals/portfolio.ts
     console.log('    best      none: no combination can run inside the limits');
   }
   for (const a of portfolio.alternatives) console.log(`    alt       ${(a.reach * 100).toFixed(1)}% · p50 ${Math.round(a.settledP50)} · ${a.members.map((m) => m.title.slice(0, 28)).join(' + ')}`);
-  const shown = [...portfolio.demand].sort((x, y) => y.revenue.p50 - x.revenue.p50 || y.revenue.p90 - x.revenue.p90).slice(0, 12);
+  const est = portfolio.demand.filter((d) => d.opportunityId.startsWith('arr_'));
+  const found = portfolio.demand.length - est.length;
+  console.log(`    compared  ${found} found opening(s) + ${est.length} constructed estimate(s); refused ${portfolio.demand.filter((d) => d.refused).length}; estimates in the best combination ${b ? b.members.filter((m) => m.opportunityId.startsWith('arr_')).length : 0}`);
+  const shown = [...portfolio.demand].sort((x, y) => y.revenue.p50 - x.revenue.p50 || y.revenue.p90 - x.revenue.p90).slice(0, 16);
   for (const d of shown) {
     console.log(
       `    demand    ${d.opportunityId} ${d.repeatable ? 'repeatable' : 'one-off'} · contacted p50 ${r(d.contacted.p50)} · interested ${r(d.interested.p10)}/${r(d.interested.p50)}/${r(d.interested.p90)} · deals ${r(d.deals.p10)}/${r(d.deals.p50)}/${r(d.deals.p90)} · revenue ${r(d.revenue.p10)}/${r(d.revenue.p50)}/${r(d.revenue.p90)} · reply ${r(d.respond.p50)} close ${r(d.close.p50)} price ${r(d.price.p50)} days ${r(d.days.p50)} · ${d.refused ? `REFUSED ${d.refused}` : d.justified ? 'evidenced' : `not established: ${d.unestablished.join(', ')}`} · ${d.title.slice(0, 50)}`,

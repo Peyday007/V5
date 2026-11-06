@@ -44,6 +44,7 @@ import { toScenarioInput } from '../quant/export.ts';
 import { evaluateGoalPortfolio, type GoalPortfolio } from '../goals/portfolio.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
+import type { ConstructedArrangement } from './construct.ts';
 
 /**
  * Phase timings for a plan read, printed as they happen when BRAIN_PLAN_TRACE is
@@ -146,6 +147,126 @@ export interface ModelledOpportunity {
    * and it pays in one lump at the end, not little by little.
    */
   competitiveAward: boolean;
+  /**
+   * A constructed arrangement entered on its reconstructed estimates (§82),
+   * not an opening anybody found. Every link of the plan's chain is missing for
+   * it, so it can never make a plan recommendable; it competes only on what it
+   * could contribute, which is what decides where research goes next.
+   */
+  estimated?: { arrangementKey: string; tier: string; observations: number };
+}
+
+/** The id an estimated arrangement takes in a goal model. Never a row. */
+export const ARRANGEMENT_ID_PREFIX = 'arr_';
+export function isArrangementId(id: string): boolean {
+  return id.startsWith(ARRANGEMENT_ID_PREFIX);
+}
+/** At most this many constructed arrangements enter one goal model as estimates. */
+export const MAX_ESTIMATED_ARRANGEMENTS = 12;
+
+/**
+ * A constructed arrangement as a model candidate, from its reconstructed value
+ * alone — or null when nothing reconstructs its value, or its known worst case
+ * breaks the limits. Price is the reconstruction's own p10–p50–p90; everything
+ * else nobody has established is swept, exactly as for an opening with nothing
+ * on its card. A recurring design is repeatable, with its volume a range from
+ * one deal, never a number assumed. Pure.
+ */
+export function estimatedFromArrangement(one: ConstructedArrangement, input: { projectId: string; currency: string; beforeProofCents: number | null }): ModelledOpportunity | null {
+  const { p10, p50, p90 } = one.value;
+  if (one.value.tier === 'UNKNOWN' || !(p50 > 0) || !(p90 >= p10)) return null;
+  if (one.stress.exposure === 'EXCEEDS') return null;
+  const ref: SourceRef = { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `${one.value.tier} reconstruction from ${one.value.observations} observation(s)` };
+  const low = Math.max(0.01, p10);
+  const high = Math.max(low + 0.01, p90);
+  const price: ModelInput = {
+    value: null,
+    low,
+    high,
+    provenance: 'ASSUMPTION',
+    source: ref,
+    note: `reconstructed (${one.value.tier}, ${one.value.observations} obs.), not shown paid: p10 ${p10} p50 ${p50} p90 ${p90}`,
+    // Swept over the reconstruction's range: an estimate carries no distribution (only evidence may).
+    inferred: { tier: one.value.tier as EvidenceTier, justified: false, p10, p50, p90, observations: one.value.observations },
+  };
+  const worst = one.stress.worstCaseCents === null ? null : one.stress.worstCaseCents / 100;
+  const capital: ModelInput =
+    one.stress.exposure === 'SAFE'
+      ? { value: null, low: 0, high: 0.01, provenance: 'ASSUMPTION', source: ref, note: 'the design spends nothing of ours before buyers commit; not yet established in practice' }
+      : worst !== null
+        ? unknown(0, Math.max(0.01, worst), `the design's known worst case is ${worst}; swept from nothing to it`)
+        : unknown(0, high, 'nobody has established the money tied up; swept from nothing to the top price');
+  const repeatable = one.design.repeat !== 'ONE_OFF';
+  const opportunity = {
+    id: `${ARRANGEMENT_ID_PREFIX}${one.key}`,
+    projectId: input.projectId,
+    title: `Constructed: ${one.label}`.slice(0, 200),
+    mechanism: 'OTHER',
+    industry: one.sector,
+    source: null,
+    payer: null,
+    reachableChannel: null,
+    buyingSignal: null,
+    signalObservedAt: null,
+    offerScope: null,
+    priceCents: null,
+    currency: input.currency,
+    fulfillmentOwner: null,
+    peakFundingCents: null,
+    humanHours: null,
+    expiresAt: null,
+    duplicateOfId: null,
+    requiredCapabilities: [],
+    state: 'DISCOVERED',
+    createdAt: new Date(0).toISOString(),
+  } as unknown as CashOpportunity;
+  return {
+    opportunity,
+    index: 0,
+    tier: 'ESTIMATE',
+    repeatable,
+    price,
+    capital,
+    hours: unknown(1, 40, 'nobody has established the hours; swept from 1 to 40 per deal'),
+    daysToCash: unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days'),
+    close: unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing'),
+    respond: unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%'),
+    directCost: unknown(0, Math.max(0.01, high * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the top price'),
+    volume: repeatable
+      ? unknown(1, MAX_BUYERS_OFFERED, `a ${one.design.repeat.toLowerCase().replace('_', ' ')} design repeats, but nobody has established how many buyers exist; swept from 1 deal`)
+      : known(1, 'ASSUMPTION', ref, 'a one-off design is one deal'),
+    agreed: false,
+    agreedValue: 0,
+    agreedDeals: 0,
+    fulfilledBy: null,
+    competitiveAward: false,
+    estimated: { arrangementKey: one.key, tier: one.value.tier, observations: one.value.observations },
+  };
+}
+
+/**
+ * Which constructed arrangements enter the model: those with a reconstructed
+ * value, inside the limits and the goal's exclusions, largest estimated
+ * contribution first (the p50 price, times the deals a recurring design could
+ * repeat inside the window, capped at what is still needed). Not by how easy
+ * each is to research, and not by sector.
+ */
+export function pickEstimatedArrangements(
+  arrangements: readonly ConstructedArrangement[],
+  input: { projectId: string; currency: string; beforeProofCents: number | null; remaining: number; exclusions: Parameters<typeof excludedBy>[1]; limit?: number },
+): ModelledOpportunity[] {
+  const scored: { one: ModelledOpportunity; score: number }[] = [];
+  for (const arrangement of arrangements) {
+    if (excludedBy(`${arrangement.label} ${arrangement.sector ?? ''} ${arrangement.question}`, input.exclusions)) continue;
+    if (breaksOperatingModel(operatingFit({ title: arrangement.label, offerScope: arrangement.question }))) continue;
+    const one = estimatedFromArrangement(arrangement, input);
+    if (!one) continue;
+    const p50 = arrangement.value.p50;
+    const deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(input.remaining / Math.max(1, p50))) : 1;
+    scored.push({ one, score: Math.min(input.remaining, p50 * deals) });
+  }
+  scored.sort((a, b) => b.score - a.score || a.one.opportunity.id.localeCompare(b.one.opportunity.id));
+  return scored.slice(0, input.limit ?? MAX_ESTIMATED_ARRANGEMENTS).map((one) => one.one);
 }
 
 /**
@@ -326,9 +447,20 @@ async function modelOpportunity(
    * establishes more than one deal inside the window. Nothing else may assume
    * a second sale.
    */
-  const repeatable = isTestFirstPlay(opportunity) || (volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'EVIDENCE');
+  /*
+   * An estimate of repeat volume with a stated basis (Brain's RECOMMENDATION)
+   * also makes an opening repeatable — but only as a range from one deal up to
+   * the estimate, never as the estimate itself, and volume stays an
+   * unestablished link. Production, 2026-11-06: requiring a sourced count before
+   * a second sale could even be modelled made every opening a one-off, so the
+   * plan was a heap of single small deals however much repeat business existed.
+   */
+  const estimatedRepeat = volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'RECOMMENDATION';
+  const repeatable = isTestFirstPlay(opportunity) || (volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'EVIDENCE') || estimatedRepeat;
   const volume: ModelInput = !repeatable
     ? known(1, 'ASSUMPTION', ref, 'a one-off opening is one deal')
+    : estimatedRepeat
+      ? unknown(1, Math.min(MAX_BUYERS_OFFERED, volumeRead!.deals), `estimated, not established: ${volumeRead!.basis}; swept from 1 deal to the estimate`)
     : volumeRead && volumeFact
       ? known(volumeRead.deals, kindToProvenance(volumeFact).provenance, kindToProvenance(volumeFact).source, volumeRead.basis)
       : unknown(1, MAX_BUYERS_OFFERED, volumeFact
@@ -423,7 +555,7 @@ function variable(key: string, label: string, unit: string, input: ModelInput): 
 }
 
 /** Compose the model, or say exactly why there is nothing to model. */
-export async function composeGoalModel(input: { goal: Workstream; target: TargetReading; now?: Date }): Promise<GoalModel> {
+export async function composeGoalModel(input: { goal: Workstream; target: TargetReading; now?: Date; arrangements?: readonly ConstructedArrangement[] }): Promise<GoalModel> {
   const { goal, target } = input;
   const excluded: GoalModel['excluded'] = [];
   const candidates: ModelledOpportunity[] = [];
@@ -504,6 +636,28 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     else candidates.push(modelled);
   }
   /*
+   * Constructed arrangements compete in the same portfolio on their
+   * reconstructed estimates (owner, 2026-11-06). Before, they reached the plan
+   * only after a research round filed an opening for them, so hundreds of
+   * designs were never compared with the small openings that happened to be
+   * found, and the plan was a heap of one-offs. They enter the quant
+   * portfolio — the comparison of contribution that directs research — and
+   * never the gate's slots: an estimate cannot displace an evidenced strategy
+   * or be judged as an opening anybody found.
+   */
+  const estimates: ModelledOpportunity[] = [];
+  if (input.arrangements?.length) {
+    const estimated = pickEstimatedArrangements(input.arrangements, {
+      projectId: target.projectId,
+      currency: target.currency,
+      beforeProofCents: target.capitalBeforeProofCents,
+      remaining: target.remainingCents / 100,
+      exclusions,
+    });
+    estimates.push(...estimated);
+    trace(`estimated arrangements: ${estimated.length} of ${input.arrangements.length}`);
+  }
+  /*
    * Which openings take the engine's few slots is decided by what each could
    * put toward *this* goal, not by how far along it is. Production,
    * 2026-10-28: the slots went to the four "closest to a decision" — a $2.50
@@ -519,9 +673,9 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
    * that combination first, then each by the cash its own demand settles.
    */
   let portfolio: GoalPortfolio | null = null;
-  if (candidates.length > 0) {
+  if (candidates.length + estimates.length > 0) {
     portfolio = evaluateGoalPortfolio({
-      openings: candidates,
+      openings: [...candidates, ...estimates],
       remaining: remainingMajor,
       daysLeft: target.daysLeft,
       capitalCeiling: target.capitalCeilingCents === null ? null : target.capitalCeilingCents / 100,
@@ -554,11 +708,15 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     included.push({ ...one, index: included.length + 1 });
   }
   if (included.length === 0) {
-    return refuse(
-      live.length === 0
-        ? 'There is no live opportunity in this project to build a plan from.'
-        : 'No live opportunity is far enough along to model: each one is evidence only or has no price anywhere.',
-    );
+    // Nothing found can be modelled; the portfolio of estimates still says where research would move the goal.
+    return {
+      ...refuse(
+        live.length === 0
+          ? 'There is no live opportunity in this project to build a plan from.'
+          : 'No live opportunity is far enough along to model: each one is evidence only or has no price anywhere.',
+      ),
+      portfolio,
+    };
   }
 
   const variables: ScenarioVariable[] = [

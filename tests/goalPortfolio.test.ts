@@ -60,14 +60,26 @@ describe('demand estimated by the quant engine, world by world', () => {
     expect(result.missing.join(' ')).toMatch(/reply rate/);
   });
 
-  it('refuses an arrangement that ties up more at its start than one may before it proves itself, including an unknown that could', () => {
+  it('refuses an arrangement that ties up more at its start than one may before it proves itself, but not for an outlay nobody measured', () => {
     const result = evaluateGoalPortfolio({
       ...limits,
-      openings: [opening('a', { capital: fixed(500) }), opening('b', { capital: swept(0, 1500) }, 2), opening('c', {}, 3)],
+      openings: [
+        opening('a', { capital: fixed(500) }),
+        opening('b', { capital: swept(0, 1500) }, 2),
+        opening('c', {}, 3),
+        opening('d', { capital: swept(400, 1500) }, 4),
+      ],
     });
     expect(result.demand.find((d) => d.opportunityId === 'a')!.refused).toMatch(/ties up 500/);
-    expect(result.demand.find((d) => d.opportunityId === 'b')!.refused).toMatch(/not established and could be up to 1500/);
-    expect(result.best?.members.map((m) => m.opportunityId)).toEqual(['c']);
+    // Unknown, and its lowest bound fits: it competes at the middle of what the limit allows, unestablished (2026-11-06).
+    const b = result.demand.find((d) => d.opportunityId === 'b')!;
+    expect(b.refused).toBeNull();
+    expect(b.capitalAtStart).toBe(limits.beforeProof / 2);
+    expect(b.unestablished).toContain('money tied up');
+    // Unknown, but even its lowest bound breaks the limit: refused.
+    expect(result.demand.find((d) => d.opportunityId === 'd')!.refused).toMatch(/not established and is at least 400/);
+    expect(result.best?.members.map((m) => m.opportunityId)).not.toContain('a');
+    expect(result.best?.members.map((m) => m.opportunityId)).not.toContain('d');
   });
 
   it('never gives two openings more than the whole shared outreach', () => {

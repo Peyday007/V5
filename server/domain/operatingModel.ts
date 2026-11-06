@@ -123,6 +123,10 @@ const BROKERED = new RegExp(
   'i',
 );
 
+/** Words that say this operation arranges the work for a fee, rather than doing it. */
+const COORDINATES =
+  /\b(?:broker(?:age|ed|ing|s)?|referr(?:al|als|ing)|commission|finder'?s fee|subcontract(?:s|ed|ing)? (?:the |each |every )?(?:jobs?|work|orders?|deliver(?:y|ies)|pickups?|moves?)|lead[- ]?gen(?:eration)?|per lead|matchmak(?:ing|er)|marketplace (?:fee|commission|take rate)|dispatch(?:es|ed|ing)? (?:the )?(?:jobs?|orders?|pickups?|deliver(?:y|ies)) to)\b/i;
+
 /** A recorded fulfiller that is a third party rather than the owner or Brain. */
 const THIRD_PARTY_FULFILLER =
   /\b(?:contractor|subcontractor|supplier|vendor|partner|installer|crew|printer|manufacturer|wholesaler|provider|company|agency|studio|dropship)s?\b/i;
@@ -156,8 +160,19 @@ export function operatingFit(facts: OperatingFacts): OperatingFit {
   const brokered = words.match(BROKERED)?.[0] ?? null;
   const thirdParty = fulfiller && THIRD_PARTY_FULFILLER.test(fulfiller) && !OWNER_OR_BRAIN.test(fulfiller);
   const gig = words.match(OWNER_AS_GIG_WORKER)?.[0] ?? null;
-  if (gig) {
+  /*
+   * A listing that recruits drivers or movers is a gig the operator would do
+   * itself. An arrangement that brokers jobs to them — a referral fee, a
+   * commission, a dispatched order — is B2C logistics coordinated online. The
+   * gig test ran first and ruled both out; "independent contractor" alone is
+   * how a gig platform describes its own workers, so it does not count.
+   */
+  const coordinates = words.match(COORDINATES)?.[0] ?? null;
+  if (gig && !coordinates) {
     return { kind: 'OWNER_PHYSICAL', because: `it is per-job physical work the operator would do itself ("${gig}"); the owner does no physical work` };
+  }
+  if (gig) {
+    return { kind: 'BROKERED_PHYSICAL', because: `independent workers do the physical part ("${gig}") and this operation coordinates them online ("${coordinates}")` };
   }
   if (physical && (brokered || thirdParty)) {
     return {

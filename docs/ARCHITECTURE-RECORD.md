@@ -13890,6 +13890,42 @@ and the idle-fill lift stay stopped.
   runner now cancels such PLANNED work with the reason and files the packet
   from what it holds. Nothing is approved and no bar moves.
 
+**Constructed arrangements compete in the plan on their estimates (owner,
+2026-11-06).** Production held 404 constructed arrangements and a $10K plan
+built from seventeen found openings, most of them one-off sales of $50–$250.
+Three rules made that the only possible plan:
+
+- **An arrangement reached the model only through an opening.** It was a
+  research question until a round filed a row for it, so no design was ever
+  compared with what happened to be found. Now up to
+  `MAX_ESTIMATED_ARRANGEMENTS` with a reconstructed value
+  (`estimatedFromArrangement`) enter the same portfolio, chosen by what each
+  could put toward the whole goal (`pickEstimatedArrangements`: p50 price ×
+  the deals a recurring design could repeat, capped at what is still needed),
+  inside the owner's exclusions and the operating rule. Each is labelled
+  `estimated`; its price is the reconstruction's p10–p50–p90 with
+  `inferred.justified = false`, everything else is swept, and every link of
+  the chain is missing — so it can never make a plan recommendable, never
+  counts as supported reach, and keeps the portfolio's basis COVERAGE.
+- **An unknown outlay refused every opening priced above $375.** The
+  portfolio swept unestablished capital to the whole price and refused it
+  against the per-arrangement limit: a $1 500 brokered service was out, a
+  $50 one-off in. An unestablished outlay now enters at the middle of the range
+  the limit allows (the sweep's expected outlay, truncated at the limit its
+  test is held to) and stays an unestablished link; only an
+  established outlay, or one whose lowest bound breaks the limit, is refused.
+- **Repeat business needed a sourced count before it could be modelled.** An
+  estimate with a stated basis now makes an opening repeatable, with volume a
+  range from one deal to the estimate — never the estimate itself.
+
+The research follows the model: `askConstructedArrangements` asks first about
+the arrangements that are members of the best combination, then by their
+settled p50 (`arrangementContribution`), with §83's spread across buyer
+populations and structures kept. And the operating rule's gig test no longer
+runs before the brokerage test: an arrangement that dispatches jobs to
+independent movers or drivers for a commission is B2C logistics coordinated
+online; a listing recruiting drivers is still the owner's physical work.
+
 ## 84. Claude routines are reserved for Brain improvement until the owner says otherwise.
 
 **Owner's order, 2026-11-03.** Paid Claude routines do only work that improves
