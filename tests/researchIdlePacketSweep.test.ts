@@ -84,6 +84,20 @@ describe('advanceIdlePackets', () => {
     expect(Date.parse(after.updatedAt)).toBeGreaterThan(Date.now() - PACKET_STALL_WINDOW_MS);
   });
 
+  it('starts a worker packet left QUEUED with nothing queued: its plan is asked for', async () => {
+    // Production 2026-11-06: "QUEUED+nothing queued:7", idle past six hours,
+    // after the launch's first advance failed on a dropped connection.
+    const id = await packet('QUEUED', STALE);
+    const moved = await advanceIdlePackets(10);
+    expect(moved.map((e) => e.orchestrationId)).toContain(id);
+    expect((await getOrchestration(id))!.status).toBe('PLANNING');
+    const plan = await getDb().all<{ work_type: string }>(
+      `SELECT work_type FROM work_items WHERE orchestration_id = ? AND state IN ('QUEUED', 'LEASED')`,
+      [id],
+    );
+    expect(plan.map((p) => p.work_type)).toContain('RESEARCH_PLAN');
+  });
+
   it('leaves a recently updated packet alone', async () => {
     const id = await packet('SYNTHESIZING', 60_000);
     expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);

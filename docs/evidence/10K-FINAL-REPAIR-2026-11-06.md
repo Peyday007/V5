@@ -177,3 +177,48 @@ report with unresolved gaps"; the loop holds that as candidate
 response its caller does not read (a successful upload, a delete, a 404).
 Responses up to 4 MB are now read whole, and an idle socket is ended after
 45 s.
+
+## 8. Final production reading: Deploy 761 (`91944e2`, live 07:23Z)
+
+Connection report 42181863689 (07:35Z): pressure **NORMAL**, statement p90
+325 ms, pool wait p95 0 ms. Storage: 3.5 new TLS sockets a minute (it was
+1 113). Event loop p99 484 ms, worst 5.1 s, while the GPU and free lane run
+at full concurrency.
+
+**GOAL_PLAN map, Admin 42181867838 (06:36–07:36Z):
+`{"WORKING":8,"BROKEN":1,"MISSING":0,"UNPROVEN":4}`.** At 01:46Z it read
+4 / 4 / 5.
+
+| requirement | 01:46Z | 07:36Z |
+|---|---|---|
+| GOAL.PLAN_EVALUATED | WORKING 3/3 | WORKING 7/7 |
+| GOAL.PLAN_FRESH | WORKING 1/1 | WORKING 1/1 |
+| OPENINGS.SEARCH_WIDENS | BROKEN 0/1 | **WORKING 1/1** |
+| EVIDENCE.PATH_ANSWERS | WORKING 539/541 | WORKING 101/104 |
+| QUANT.MODELLED | WORKING 8/17 | WORKING 8/17 |
+| PLAN.READS_NEW_EVIDENCE | UNPROVEN | **WORKING 2/2** |
+| COMPUTE.GPU | BROKEN 0/56 | **WORKING 45/60** |
+| COMPUTE.DATABASE | BROKEN 40/66 | **WORKING 96/96** |
+| EVIDENCE.BUYER_PRICE | BROKEN 0/17 | BROKEN 0/17 |
+| OPENINGS/CONSTRUCTION.ROUNDS_FILE, PACKETS_COMPLETE, FREE_MODELS | UNPROVEN | UNPROVEN (below sample) |
+
+RESEARCH map, same run: 13 WORKING, 4 BROKEN (it was 5 / 6). Audit runs
+28/28, filing 4/4, synthesis 7/7, search 12/16. Still BROKEN:
+`RECOVERY.PROVIDERS` (free providers' quotas, external), `RECOVERY.STALLS` and
+`IDLE_CAPACITY` (packets queued behind bounded capacity, and 7 worker packets
+left QUEUED with nothing queued; #566 makes the idle sweep reach them), and
+`LEARNING.DELIVER` (Factory delivery of improvement candidates; the loop is on).
+
+The one BROKEN link in the goal chain, `EVIDENCE.BUYER_PRICE`, is not a
+software fault. No opening yet has a researched buyer, demand and price. It
+moves only as rounds finish. The plan stays **NOT_VIABLE** (17 considered,
+best reach 250 USD at prices buyers are shown to pay), and nothing tonight
+shows the $10K target to be economically reachable.
+
+## 9. External dependencies, isolated
+
+| dependency | state | how Brain contains it |
+|---|---|---|
+| RunPod GPU host capacity | Refused START all night ("not enough free GPUs on the host"). Accepted at 04:40Z and has run since. | Brain retries the start itself (#536) and falls back to the free lane while the pod is down. It never stops a pod after a refused start. |
+| Free providers (OmniRoute combo) | Cerebras day spent; NVIDIA cooling down; Groq TPM 8 000 | #555 fits Groq's window. Brain rotates models and backs off; provider failures do not count against a model (#558). |
+| Cloudflare Playground in OmniRoute | Needs a browser runtime that the current OmniRoute image lacks | Two of the seven combo slots fail fast and are skipped. No browser-enabled image is published. |

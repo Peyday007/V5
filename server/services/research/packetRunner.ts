@@ -2611,17 +2611,29 @@ export async function advanceIdlePackets(
   const cutoff = new Date(nowMs - PACKET_STALL_WINDOW_MS).toISOString();
   for (const [id, at] of idleNoopAt) if (nowMs - at >= PACKET_NOOP_RETRY_MS) idleNoopAt.delete(id);
   const skip = [...idleNoopAt.keys()];
+  /*
+   * And a worker packet still QUEUED with nothing queued (2026-11-06).
+   *
+   * A worker packet is created QUEUED and its first advance asks for the plan;
+   * if that advance did not happen — the launch's call failed on a database
+   * that dropped the connection — nothing ever asked again, because this sweep
+   * read only the in-flight statuses. Production read "QUEUED+nothing queued:7"
+   * idle past six hours through the night's outages. `advanceOnce` already
+   * turns such a packet into PLANNING with its plan item, so it only has to be
+   * reached. In-process packets are recovered at boot by `recoverInterrupted`
+   * and are left to it.
+   */
   const rows = await getDb().all<{ id: string }>(
     `SELECT o.id AS id
        FROM research_orchestrations o
-      WHERE o.status IN (${live.map(() => '?').join(', ')})
+      WHERE (o.status IN (${live.map(() => '?').join(', ')}) OR (o.status = 'QUEUED' AND o.provider = ?))
         AND o.updated_at < ?
         ${skip.length ? `AND o.id NOT IN (${skip.map(() => '?').join(', ')})` : ''}
         AND NOT EXISTS (SELECT 1 FROM work_items w
                          WHERE w.orchestration_id = o.id AND w.state IN ('QUEUED','LEASED'))
       ORDER BY o.updated_at, o.id
       LIMIT ?`,
-    [...live, cutoff, ...skip, Math.max(1, limit)],
+    [...live, 'WORKER', cutoff, ...skip, Math.max(1, limit)],
   );
   const out: { orchestrationId: string; from: string; to: string }[] = [];
   for (const row of rows) {
