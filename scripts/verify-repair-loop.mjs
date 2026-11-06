@@ -9,6 +9,10 @@
  *   node scripts/verify-repair-loop.mjs resumed       # a cleared gap resumed the goal
  *   node scripts/verify-repair-loop.mjs repair-work   # a failed check is Factory work
  *   node scripts/verify-repair-loop.mjs goal-running  # the goal's plan, construction, quant and search ran
+ *   node scripts/verify-repair-loop.mjs honest-plan   # the shortfall is named, no probability is invented, the search continues
+ *   node scripts/verify-repair-loop.mjs commercial    # a market test is prepared and its owner approval kept
+ *   node scripts/verify-repair-loop.mjs evidence-to-plan  # research answers reach the quant model and the plan re-reads
+ *   node scripts/verify-repair-loop.mjs recovery      # leases, the GPU, the free models and the plan tick are working
  *
  * Usage needs `gh` authenticated for the repository.
  */
@@ -78,8 +82,45 @@ if (what === 'check-ran' || what === 'resumed') {
     ok = Object.values(has).every(Boolean);
     detail = `Goals run ${found.run} on ${serving(log)?.slice(0, 7)}: ${JSON.stringify(has)}`;
   }
+} else if (what === 'honest-plan' || what === 'commercial') {
+  const found = latestLog('goals.yml', 'PLAN wst_');
+  if (!found) detail = 'no Goals plan run';
+  else {
+    const log = found.log;
+    const has =
+      what === 'honest-plan'
+        ? {
+            // A share of worlds is called coverage, never a probability, and no chance is stated without finished plans.
+            coverageNotProbability: /coverage of tested conditions, not a probability/.test(log),
+            chanceMeasuredOrNotStated: /chance +(not stated|\d)/.test(log),
+            shortfallNamed: /missing +the best combination reaches the target in [\d.]+% of worlds/.test(log),
+            keepsSearching: /Brain keeps searching/.test(log),
+            constructs: /constructed +\d+ arrangement\(s\)/.test(log),
+          }
+        : {
+            marketTestPrepared: /market test +cop_\S+/.test(log),
+            nextTestNamed: /next test +\[PERSON\]|next test +\S/.test(log),
+            approvalPreserved: /blocker +.*(CONTACT_BUYER|commercial authority)/.test(log),
+            planningContinues: /searching +\d+ round\(s\)/.test(log),
+          };
+    ok = Object.values(has).every(Boolean);
+    detail = `Goals run ${found.run} on ${serving(log)?.slice(0, 7)}: ${JSON.stringify(has)}`;
+  }
+} else if (what === 'evidence-to-plan' || what === 'recovery') {
+  const found = latestLog('admin.yml', 'MAP GOAL_PLAN');
+  if (!found) detail = 'no Admin capabilities show run';
+  else {
+    const status = (id) => new RegExp(`(WORKING|BROKEN|UNPROVEN|MISSING) +${id.replace('.', '\\.')} `).exec(found.log)?.[1] ?? 'ABSENT';
+    const ids =
+      what === 'evidence-to-plan'
+        ? ['EVIDENCE.PATH_ANSWERS', 'QUANT.MODELLED', 'PLAN.READS_NEW_EVIDENCE', 'GOAL.PLAN_EVALUATED']
+        : ['RECOVERY.LEASES', 'COMPUTE.GPU', 'COMPUTE.FREE_MODELS', 'GOAL.PLAN_FRESH'];
+    const read = Object.fromEntries(ids.map((id) => [id, status(id)]));
+    ok = Object.values(read).every((one) => one === 'WORKING');
+    detail = `Admin run ${found.run} on ${found.sha.slice(0, 7)}: ${JSON.stringify(read)}`;
+  }
 } else {
-  detail = 'name one of: check-ran, resumed, repair-work, goal-running';
+  detail = 'name one of: check-ran, resumed, repair-work, goal-running, honest-plan, commercial, evidence-to-plan, recovery';
 }
 console.log(`${ok ? 'PASS' : 'FAIL'} ${what}: ${detail}`);
 process.exit(ok ? 0 : 1);
