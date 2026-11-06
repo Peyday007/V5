@@ -38,10 +38,10 @@ import { newId } from '../../repos/util.ts';
 import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent } from '../../repos/register.ts';
 import { readCapabilities } from '../cash/capabilities.ts';
 import { checkCommercialAuthority } from '../cash/authority.ts';
-import { bestCaseReach, composeGoalModel, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { readTarget, type TargetReading } from './target.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
-import { constructArrangements } from '../cash/construct.ts';
+import { constructArrangements, type ConstructedArrangement } from '../cash/construct.ts';
 import { goalExclusions } from '../cash/exclusions.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
 import { listMoneyEntries } from '../../repos/cashLedger.ts';
@@ -523,7 +523,13 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const target = await readTarget(goal, now);
   if (!target) return null;
   const trace = planTrace('plan');
-  const model = await composeGoalModel({ goal, target, now });
+  // The goal's constructed arrangements compete in its model on their estimates (§82, owner 2026-11-06).
+  const arrangements = await goalArrangements(goal, target, now).catch((error: unknown) => {
+    console.warn(`goal ${goal.id}: construction for the plan failed: ${String((error as Error)?.message ?? error)}`);
+    return [] as ConstructedArrangement[];
+  });
+  trace(`constructed ${arrangements.length}`);
+  const model = await composeGoalModel({ goal, target, now, arrangements });
   trace('composed');
   const measuredChance = await measuredPlanChance();
   const base = { goalId: goal.id, target, excluded: model.excluded, measuredChance };
@@ -796,12 +802,13 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     needsMoreOpenings: !target.achieved && verdict !== 'RECOMMENDABLE',
     inferred: inferredInputs(model.considered),
     researchPriority: researchPriority(result, model.included, target, chosen?.key ?? null),
-    pool: poolConclusion(bestReach, target, considered.length),
-    ladder: ladderOf(considered),
+    // The pool, the ladder and the diagnosis are about openings found; an estimate is none of them.
+    pool: poolConclusion(bestReach, target, considered.filter((one) => !isArrangementId(one.opportunityId)).length),
+    ladder: ladderOf(considered.filter((one) => !isArrangementId(one.opportunityId))),
     marketTests,
     portfolio: model.portfolio,
     researchDiagnosis: diagnoseGoalResearch({
-      considered,
+      considered: considered.filter((one) => !isArrangementId(one.opportunityId)),
       excludedReasons: model.excluded.map((one) => one.reason),
       rounds: await recentGoalRounds(target.projectId, goal.id),
       remaining: target.remainingCents / 100,
@@ -1087,6 +1094,7 @@ export function requestGoalPlanPass(goalId: string, why: string): void {
 
 /** Tests. */
 export function forgetGoalReadings(): void {
+  lastArrangements.clear();
   lastReadings.clear();
   lastTopUp.clear();
   lastInputs.clear();
@@ -1240,20 +1248,51 @@ export function byLeastAsked<T extends { key: string; structure: string; demand:
 }
 
 /** Open rounds for the best-ranked arrangements Brain constructed, at most `max` this pass. */
+/** The last construction per goal, so one goal pass composes its arrangements once for the plan and the search. */
+const lastArrangements = new Map<string, { at: number; arrangements: ConstructedArrangement[] }>();
+const ARRANGEMENTS_FRESH_MS = 10 * 60_000;
+
+/** The goal's constructed arrangements, composed at most once per ten minutes. */
+export async function goalArrangements(goal: Workstream, target: TargetReading, now: Date, bestReachCents: number | null = null): Promise<ConstructedArrangement[]> {
+  if (target.daysLeft === null || target.daysLeft <= 0 || target.remainingCents <= 0) return [];
+  const held = lastArrangements.get(goal.id);
+  if (held && now.getTime() - held.at >= 0 && now.getTime() - held.at < ARRANGEMENTS_FRESH_MS) return held.arrangements;
+  const frame = await executionFrame(target.projectId, target.currency);
+  const arrangements = await constructArrangements({
+    projectId: target.projectId,
+    currency: target.currency,
+    delivers: frame?.delivers ?? [],
+    capitalCeilingCents: target.capitalCeilingCents,
+    daysLeft: target.daysLeft,
+    limits: { daysLeft: target.daysLeft, remainingCents: target.remainingCents, capitalCeilingCents: target.capitalCeilingCents, capitalBeforeProofCents: target.capitalBeforeProofCents, bestReachCents },
+    exclusions: await goalExclusions(goal),
+    now,
+  });
+  lastArrangements.set(goal.id, { at: now.getTime(), arrangements });
+  return arrangements;
+}
+
+/**
+ * What each estimated arrangement contributes to the goal in the last model:
+ * a member of the best combination first, then its settled cash p50. The
+ * research that asks the world about an arrangement goes to the ones that
+ * would move the whole goal most, not to whichever was asked least.
+ */
+export function arrangementContribution(reading: Pick<PlanReading, 'portfolio'>): Map<string, number> {
+  const out = new Map<string, number>();
+  const best = new Set(reading.portfolio?.best?.members.map((one) => one.opportunityId) ?? []);
+  for (const one of reading.portfolio?.demand ?? []) {
+    if (!isArrangementId(one.opportunityId)) continue;
+    const key = one.opportunityId.slice(ARRANGEMENT_ID_PREFIX.length);
+    out.set(key, (best.has(one.opportunityId) ? 1e9 : 0) + (one.refused ? 0 : one.revenue.p50));
+  }
+  return out;
+}
+
 export async function askConstructedArrangements(goal: Workstream, reading: PlanReading, now: Date, max: number, liveCap: number): Promise<string[]> {
   const t = reading.target;
   if (t.daysLeft === null || t.daysLeft <= 0 || t.remainingCents <= 0) return [];
-  const frame = await executionFrame(t.projectId, t.currency);
-  const arrangements = (await constructArrangements({
-    projectId: t.projectId,
-    currency: t.currency,
-    delivers: frame?.delivers ?? [],
-    capitalCeilingCents: t.capitalCeilingCents,
-    daysLeft: t.daysLeft,
-    limits: goalLimits(reading),
-    exclusions: await goalExclusions(goal),
-    now,
-  }))
+  const arrangements = (await goalArrangements(goal, t, now, goalLimits(reading).bestReachCents))
     // A design whose known worst case is more money than the goal may tie up is rejected, not asked (§82).
     .filter((one) => one.stress.exposure !== 'EXCEEDS');
   const opened: string[] = [];
@@ -1273,7 +1312,13 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
   if (room <= 0) return [];
   max = Math.min(max, room);
   const askedBefore = (await listRounds(t.projectId)).filter((r) => r.bucketId.startsWith(`goal-${goal.id}-mx-`));
-  const order = constructedOrder(byLeastAsked(arrangements, askedBefore), openMx.map((r) => r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4)));
+  // What each would contribute to the whole goal in the last model leads; the least-asked order breaks ties.
+  const contribution = arrangementContribution(reading);
+  const byContribution = [...byLeastAsked(arrangements, askedBefore)]
+    .map((one, at) => ({ one, at }))
+    .sort((a, b) => (contribution.get(b.one.key) ?? -1) - (contribution.get(a.one.key) ?? -1) || a.at - b.at)
+    .map(({ one }) => one);
+  const order = constructedOrder(byContribution, openMx.map((r) => r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4)));
   const thisPass = new Set<string>();
   for (const one of order) {
     if (opened.length >= max) break;

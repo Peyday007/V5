@@ -38,6 +38,9 @@ describe('what the owner would have to do physically', () => {
       { title: 'Broker holiday light installation to independent installers for a 10% commission' },
       { title: 'Corporate food gifts drop-shipped by the supplier to each recipient' },
       { title: 'Holiday light installation for homeowners', fulfillmentOwner: 'A licensed local installer crew (subcontractor)' },
+      // B2C logistics and home services brokered online (owner, 2026-11-06): the gig test used to rule these out first.
+      { title: 'Book residential moves online and dispatch the jobs to independent movers, keeping a 15% commission' },
+      { title: 'Furniture pickup marketplace: drivers per completed pickup are paid by the platform, which takes a referral fee' },
     ]) {
       const fit = operatingFit(facts);
       expect(fit.kind, facts.title).toBe('BROKERED_PHYSICAL');

@@ -327,10 +327,26 @@ export function evaluateGoalPortfolio(input: {
     if (!capital.established) unestablished.push('money tied up');
     if (one.repeatable && stated === null) unestablished.push('outreach a day');
     let refused: string | null = null;
+    /*
+     * An established outlay over the per-arrangement limit is refused. An
+     * unestablished one is not: production, 2026-11-06, refused every opening
+     * priced above 375 because its unknown capital was swept up to the whole
+     * price — a 1 500 brokered service was out while a 50 one-off stayed in,
+     * which is a size bias, not a limit. Unless even its lowest bound breaks
+     * the limit, it enters at the middle of the range the limit allows (the
+     * expected outlay of the existing sweep, truncated at the limit its test is
+     * held to), and "money tied up" stays unestablished. Spending itself is
+     * still held to the limits by the commercial authority (`spending.ts`).
+     */
     if (input.beforeProof !== null && capital.amount > input.beforeProof + 1e-9) {
-      refused = capital.established
-        ? `ties up ${Math.round(capital.amount)} at its start, more than the ${Math.round(input.beforeProof)} one arrangement may before it proves itself`
-        : `the money it ties up is not established and could be up to ${Math.round(capital.amount)}, more than the ${Math.round(input.beforeProof)} one arrangement may before it proves itself`;
+      const floor = one.capital.low ?? one.capital.inferred?.p10 ?? 0;
+      if (capital.established) {
+        refused = `ties up ${Math.round(capital.amount)} at its start, more than the ${Math.round(input.beforeProof)} one arrangement may before it proves itself`;
+      } else if (floor > input.beforeProof + 1e-9) {
+        refused = `the money it ties up is not established and is at least ${Math.round(floor)}, more than the ${Math.round(input.beforeProof)} one arrangement may before it proves itself`;
+      } else {
+        capital.amount = (floor + input.beforeProof) / 2;
+      }
     }
     const full = demandWorlds(one, 1, input.daysLeft, contactsPerDay, worlds, seed);
     demand.push({

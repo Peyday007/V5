@@ -21,6 +21,7 @@
  * yes is a test, and reaching them is a permission. How often comparable buyers
  * said yes is published, and is asked.
  */
+import { isArrangementId } from '../cash/goalScenario.ts';
 import { getOpportunity, listNeeds } from '../../repos/cashPortfolio.ts';
 import { closeNeed, raiseNeed } from '../cash/needs.ts';
 import { cardFact } from '../../repos/cashCardFacts.ts';
@@ -111,7 +112,8 @@ export async function researchGoalPaths(input: {
   const note = (line: string) => input.trace?.push(line);
   const now = input.now ?? new Date();
   const raised: string[] = [];
-  const considered = input.reading.considered;
+  // An estimated arrangement has no opening row to raise a question on: its research is the constructed round (§82).
+  const considered = input.reading.considered.filter((one) => !isArrangementId(one.opportunityId));
   const ids = new Set(considered.map((one) => one.opportunityId));
   const open = await listNeeds({ projectId: input.projectId, states: ['OPEN'] });
   const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
