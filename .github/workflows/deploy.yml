@@ -1012,8 +1012,15 @@ jobs:
             # different places. A pass before the restart that printed no
             # verdict never judged anything, and the restart pass's "no beacon"
             # is then its consequence, not a second finding.
-            if ! grep -q '^HOSTED-VERIFICATION' hosted-verification.txt 2>/dev/null; then
-              echo "::error::RELEASED, VERIFICATION COULD NOT RUN: this commit is serving, and the pass before the restart never ran a check (see its first error above). Not evidence of a defect; the release is not verified."
+            # A pass that printed "could-not-complete" stopped before judging
+            # the whole surface, exactly like one with no verdict, and the
+            # restart pass's "no beacon" is its consequence. Deploy 42137365702
+            # (2026-11-06): 503s on the credential check before the restart,
+            # 274/275 after it with only the beacon missing, read as
+            # BEHAVIOUR DEFECTIVE.
+            if ! grep -q '^HOSTED-VERIFICATION' hosted-verification.txt 2>/dev/null \
+                || grep -q '^HOSTED-VERIFICATION: FAIL could-not-complete' hosted-verification.txt 2>/dev/null; then
+              echo "::error::RELEASED, VERIFICATION COULD NOT RUN: this commit is serving, and the pass before the restart could not complete (see its first error above). Not evidence of a defect; the release is not verified."
             elif grep -q '^HOSTED-VERIFY-GUARD' hosted-verification.txt hosted-after-restart.txt 2>/dev/null \
                 || ! grep -q '^HOSTED-VERIFICATION' hosted-after-restart.txt 2>/dev/null; then
               # A pass the guard stopped answered too slowly to finish; the checks
