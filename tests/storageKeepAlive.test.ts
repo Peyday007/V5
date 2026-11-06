@@ -20,6 +20,11 @@ beforeAll(async () => {
     let body = '';
     req.on('data', (c) => (body += c));
     req.on('end', () => {
+      if (req.url === '/big') {
+        res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': String(6 * 1024 * 1024) });
+        res.write(Buffer.alloc(64 * 1024));
+        return; // the rest never comes: a body nobody finishes
+      }
       if (req.url === '/missing') {
         res.writeHead(404, { 'content-type': 'text/plain' });
         res.end('not here');
@@ -68,5 +73,28 @@ describe('keepAliveFetch', () => {
 
   it('rejects when the signal times out', async () => {
     await expect(keepAliveFetch(`${base}/list`, { method: 'POST', body: '{}', signal: AbortSignal.timeout(1) })).rejects.toBeTruthy();
+  });
+
+  it('a response nobody reads does not hold a socket from the pool', async () => {
+    // A successful upload, a delete or a 404 is rightly ignored by its caller.
+    for (let i = 0; i < 3 * STORE_MAX_SOCKETS; i++) {
+      await keepAliveFetch(`${base}/ignored`, { method: 'PUT', body: 'x' });
+    }
+    const after = await keepAliveFetch(`${base}/list`, { method: 'POST', body: '{}' });
+    expect(after.status).toBe(200);
+  });
+
+  it('an unfinished large body is ended after the idle bound and frees its socket', async () => {
+    process.env['BRAIN_STORE_IDLE_MS'] = '200';
+    try {
+      const stuck = await Promise.all([...Array(STORE_MAX_SOCKETS)].map(() => keepAliveFetch(`${base}/big`)));
+      expect(stuck.every((r) => r.status === 200)).toBe(true);
+      const started = Date.now();
+      const next = await keepAliveFetch(`${base}/list`, { method: 'POST', body: '{}' });
+      expect(next.status).toBe(200);
+      expect(Date.now() - started).toBeLessThan(5_000);
+    } finally {
+      delete process.env['BRAIN_STORE_IDLE_MS'];
+    }
   });
 });
