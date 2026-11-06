@@ -91,3 +91,38 @@ Sources:
   offer priced in the high hundreds or more. Brain holds no such offer with an
   evidenced buyer population, price or conversion rate. This is a gap in
   evidence and research capacity, not a computation that came out against it.
+
+## 4. Repairs released, and the permanent test reading production
+
+Released, in order:
+- **#538** (another session) — the database fix #537 had reached production
+  with a duplicate migration number. The same fix here (#539) was closed as a
+  duplicate. Live at 23:26Z, verified on both sides of a restart.
+- **#541 / #542** (other sessions) — the goal planner's 11.6 s event-loop
+  stall, and dependency checks taking one pool connection per name.
+- **#540** (here) — the goal-plan map, the guard fixes and the newest-first
+  park list. Live at 00:23Z in `31243a6`.
+- **#543** (here) — `latestSnapshots` in one grouped pass. The old query
+  spilled 596 GB to temporary files over 11 171 calls.
+
+**First production reading of the goal-plan map** (`capabilities show 2`,
+Admin 42137353646, 22:32Z → 00:32Z):
+`{"WORKING":5,"BROKEN":3,"MISSING":0,"UNPROVEN":5}`
+
+| requirement | reading |
+|---|---|
+| GOAL.PLAN_EVALUATED | WORKING 5/5 |
+| GOAL.PLAN_FRESH | WORKING 1/1 |
+| OPENINGS.SEARCH_WIDENS | WORKING 1/1 |
+| EVIDENCE.PATH_ANSWERS | WORKING 148/149 |
+| QUANT.MODELLED | WORKING 8/17 |
+| EVIDENCE.BUYER_PRICE | BROKEN 0/17 |
+| COMPUTE.GPU | BROKEN 2/48; 23 pod starts refused (external) |
+| COMPUTE.DATABASE | BROKEN 13/56 (window mostly before the fixes) |
+| ROUNDS_FILE, CONSTRUCTION, PACKETS_COMPLETE, READS_NEW_EVIDENCE, FREE_MODELS | UNPROVEN: too little research finished in the window to judge |
+
+Its first connected gap is the database (rank 473, ten links downstream), which
+is the same order the manual reading found. The map now runs in the hourly
+improvement pass and 15 minutes after every release. It records
+`CAPABILITY_ASSESSED` on the goal when its blocking set changes, and sends gaps
+that carry an improvement route to the self-improvement loop.
