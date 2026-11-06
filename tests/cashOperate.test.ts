@@ -1286,6 +1286,7 @@ describe('the operating pass as the tick calls it', () => {
       continuations: [],
       dependentWork: [],
       validations: { started: [], settled: [] },
+      failures: [],
       // No sprint, no commercial operation, so nothing to finish recording.
       effects: [],
       authority: { took: [], withheld: [] },

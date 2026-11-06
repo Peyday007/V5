@@ -2150,6 +2150,9 @@ async function tickOnce(owner: string): Promise<TickReport> {
            * carries on around it.
            */
           const operated = await withGoalLimitsMemo(() => operate(project.id));
+          for (const failure of operated.failures) {
+            report.passFailures.push({ pass: `cash ${failure.step} ${project.id}`, error: failure.error });
+          }
           const raised = [
             ...operated.capabilities.raised,
             ...operated.gaps.map((one) => one.needId),
@@ -2182,8 +2185,12 @@ async function tickOnce(owner: string): Promise<TickReport> {
               monetizationMoved: operated.monetization.moved,
             });
           }
-        } catch {
-          /* a sprint whose operating pass could not run is left as it was */
+        } catch (error) {
+          // A sprint whose operating pass could not run is left as it was, and the tick says why.
+          report.passFailures.push({
+            pass: `cash-operate ${project.id}`,
+            error: (error instanceof Error ? error.message : String(error)).slice(0, 300),
+          });
         }
 
         try {
