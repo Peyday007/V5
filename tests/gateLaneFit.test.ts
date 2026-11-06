@@ -34,3 +34,14 @@ describe('laneFitFailure', () => {
     expect(laneFitFailure('demand_signal', 'HighRadius is a unified framework.')).toBeNull();
   });
 });
+
+describe('a lane-fit refusal is counted as its own kind of rejection', () => {
+  it('is LANE_FIT in the improvement scoreboard, not a source problem', async () => {
+    const { classifyClaimRejection } = await import('../server/domain/improvement.ts');
+    const reason = laneFitFailure('payer', 'IHPA is an independent authority on key drivers of decision making.');
+    expect(reason).toMatch(/source/);
+    expect(classifyClaimRejection(reason)).toBe('LANE_FIT');
+    expect(classifyClaimRejection(laneFitFailure('cost_evidence', 'The market was valued at USD 12.25 billion, a CAGR of 8.05%'))).toBe('LANE_FIT');
+    expect(classifyClaimRejection('The claim has no usable source.')).toBe('SOURCE_PROBLEM');
+  });
+});
