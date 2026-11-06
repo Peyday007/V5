@@ -729,8 +729,7 @@ export function nextGoalRoundFor(history: CashDiscoveryRound[], now: string): nu
   let barren = 0;
   for (let i = ordered.length - 1; i >= 0; i -= 1) {
     const one = ordered[i]!;
-    // An ABANDONED round found nothing too: research stopped before a packet finished.
-    if (one.state === 'ABANDONED' || (one.state === 'HARVESTED' && one.found === 0)) barren += 1;
+    if (one.state === 'HARVESTED' && one.found === 0) barren += 1;
     else break;
   }
   const wait = Math.min(ROUND_COOL_OFF_MS * 2 ** barren, GOAL_LENS_MAX_BACKOFF_MS);
@@ -868,7 +867,7 @@ export async function openGoalDiscovery(input: {
    */
   const last = [...history].sort((a, b) => b.round - a.round)[0];
   const methodFirst =
-    last && (last.state === 'ABANDONED' || (last.state === 'HARVESTED' && last.found === 0))
+    last && (last.state === 'ABANDONED' || last.state === 'HARVESTED') && last.found === 0
       ? 'The last search from this angle found nothing usable, so start with how such openings are actually found: name the specific directories, public registers, feeds, trade associations and search terms where buyers of this kind publish what they need, open each, say which produced live openings and which did not, and report the openings found through the ones that worked. '
       : '';
   const learned = yieldGuidance(await discoveryYield(t.projectId));
@@ -1656,6 +1655,28 @@ export async function harvest(input: {
  * Guarded on OPEN by `closeRound`, so a second tick or a restart reading the
  * same ended mission closes nothing and writes no second event.
  */
+/**
+ * How long a goal round whose mission is parked at a decision stays OPEN.
+ *
+ * Production read a goal's rounds 0/18: every one closed ABANDONED with found 0
+ * the moment its mission parked, and the routine-decision pass then finished the
+ * mission DONE and filed its claims onto a round already written off as barren —
+ * which the next round was asked "the last search found nothing" over. Within
+ * this grace the round is simply still running; if the mission is finished by
+ * then the round closes HARVESTED with the openings it filed, and if not it
+ * closes ABANDONED as before.
+ */
+export const PARKED_GOAL_ROUND_GRACE_MS = 2 * 60 * 60 * 1000;
+
+export function parkedWithinGrace(
+  round: CashDiscoveryRound,
+  mission: { updatedAt: string },
+  now: number = Date.now(),
+): boolean {
+  if (!round.bucketId.startsWith(GOAL_BUCKET_PREFIX)) return false;
+  return now - Date.parse(mission.updatedAt) < PARKED_GOAL_ROUND_GRACE_MS;
+}
+
 async function closeEndedRounds(input: {
   projectId: string;
   live: Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>;
@@ -1667,7 +1688,7 @@ async function closeEndedRounds(input: {
     const missions = input.roundMissions.get(candidateId);
     const mission = missions?.latest ?? null;
     let to: 'HARVESTED' | 'ABANDONED' | null =
-      missions?.outcome ?? (mission?.state === 'NEEDS_HUMAN' ? 'ABANDONED' : null);
+      missions?.outcome ?? (mission?.state === 'NEEDS_HUMAN' && !parkedWithinGrace(entry.round, mission) ? 'ABANDONED' : null);
     const expired = !to && !mission && (await expireUnlaunchedGoalRound(entry.round, candidateId));
     if (expired) to = 'ABANDONED';
     if (!to) continue;

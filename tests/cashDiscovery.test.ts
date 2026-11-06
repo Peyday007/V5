@@ -1265,22 +1265,27 @@ describe('the wider economy (2026-10-28)', () => {
     );
   });
 
-  it('backs a goal lens off after abandoned rounds as it does after barren harvests', async () => {
-    const { nextGoalRoundFor, GOAL_LENS_MAX_BACKOFF_MS } = await import('../server/services/cash/discovery.ts');
+  it('does not read an abandoned goal round as barren, and holds a parked goal round open for its decision pass', async () => {
+    const { nextGoalRoundFor, parkedWithinGrace, PARKED_GOAL_ROUND_GRACE_MS, GOAL_BUCKET_PREFIX } = await import('../server/services/cash/discovery.ts');
     const day = 24 * 60 * 60 * 1000;
     const t0 = Date.parse('2026-11-01T00:00:00Z');
     const at = (round: number) => new Date(t0 + (round - 3) * day).toISOString();
     const abandoned = [1, 2, 3].map((round) => ({
       round, state: 'ABANDONED', found: 0, openedAt: at(round), harvestedAt: at(round),
     })) as never[];
-    expect(nextGoalRoundFor(abandoned, new Date(t0 + 6 * day).toISOString())).toBeNull();
-    expect(nextGoalRoundFor(abandoned, new Date(t0 + 7 * day + 1).toISOString())).toBe(4);
-    const many = Array.from({ length: 12 }, (_, i) => ({
-      round: i + 1, state: 'ABANDONED', found: 0, openedAt: at(i + 1), harvestedAt: at(i + 1),
+    // An abandoned round is an absence of evidence: the lens is asked again after the ordinary cool-off.
+    expect(nextGoalRoundFor(abandoned, new Date(t0 + 1 * day + 1).toISOString())).toBe(4);
+    const barren = [1, 2, 3].map((round) => ({
+      round, state: 'HARVESTED', found: 0, openedAt: at(round), harvestedAt: at(round),
     })) as never[];
-    expect(nextGoalRoundFor(many, new Date(t0 + 9 * day + GOAL_LENS_MAX_BACKOFF_MS).toISOString())).toBe(13);
-    const filed = [...abandoned, { round: 4, state: 'HARVESTED', found: 2, openedAt: at(3), harvestedAt: at(3) }] as never[];
-    expect(nextGoalRoundFor(filed, new Date(t0 + 1 * day + 1).toISOString())).toBe(5);
-    expect(nextGoalRoundFor([...abandoned, { round: 4, state: 'OPEN', found: 0, openedAt: at(3) }] as never[], new Date(t0 + 90 * day).toISOString())).toBeNull();
+    expect(nextGoalRoundFor(barren, new Date(t0 + 1 * day + 1).toISOString())).toBeNull();
+    // A goal round whose mission just parked is still running; an old park, or an ordinary bucket's, closes.
+    const goalRound = { bucketId: `${GOAL_BUCKET_PREFIX}g1` } as never;
+    const now = t0 + 10 * day;
+    const fresh = { updatedAt: new Date(now - 60_000).toISOString() };
+    const stale = { updatedAt: new Date(now - PARKED_GOAL_ROUND_GRACE_MS - 1).toISOString() };
+    expect(parkedWithinGrace(goalRound, fresh, now)).toBe(true);
+    expect(parkedWithinGrace(goalRound, stale, now)).toBe(false);
+    expect(parkedWithinGrace({ bucketId: 'ordinary' } as never, fresh, now)).toBe(false);
   });
 });
