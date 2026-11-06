@@ -328,9 +328,22 @@ export function check(l, { fetch = true } = {}) {
     if (status === 'done') done.add(id);
     rows.push({ id, text, status, detail, results });
   };
-  // Covered-by evidence depends on other rows: judge plain ones first.
-  const reqs = [...l.requirements].sort((a, b) => Number(a.evidence.some((e) => e.kind === 'covered')) - Number(b.evidence.some((e) => e.kind === 'covered')));
-  for (const r of reqs) judge(r.id, r.text, r.evidence.map((e) => verify(e, l, g, done)), r);
+  // Covered-by evidence depends on other rows: judge plain ones first, then the
+  // covered ones until nothing changes, so a heading covered by an item that is
+  // itself covered is judged after that item (one pass left it open for ever).
+  const isCovered = (r) => r.evidence.some((e) => e.kind === 'covered');
+  for (const r of l.requirements.filter((x) => !isCovered(x))) judge(r.id, r.text, r.evidence.map((e) => verify(e, l, g, done)), r);
+  const covered = l.requirements.filter(isCovered);
+  for (let pass = 0; pass <= covered.length; pass += 1) {
+    const before = done.size;
+    for (const r of covered) {
+      if (done.has(r.id)) continue;
+      const results = r.evidence.map((e) => verify(e, l, g, done));
+      if (results.every((x) => x.ok)) judge(r.id, r.text, results, r);
+    }
+    if (done.size === before) break;
+  }
+  for (const r of covered.filter((x) => !done.has(x.id))) judge(r.id, r.text, r.evidence.map((e) => verify(e, l, g, done)), r);
   for (const a of repoChecks(g, l.base)) {
     const hint = a.pending ? ` — watch it (Monitor) and \`npm run finish -- wait ${a.id} --on "${a.pending}" --wake ${a.pending}\`` : '';
     judge(a.id, a.text, [{ ok: a.ok, detail: `${a.detail}${hint}` }], l.autoMarks[a.id]);
