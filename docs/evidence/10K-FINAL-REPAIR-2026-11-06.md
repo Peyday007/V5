@@ -30,3 +30,45 @@ Buyer identification and pricing are one requirement on the map
 | 10 | Goal rounds end without a report; constructed rounds abandoned | #525, #547 | §90 session | No round settled in the window; 8 open |
 | 11 | Buyer and price never established | behind 8 and 10 | — | `EVIDENCE.BUYER_PRICE` 0/17 |
 | 12 | No opening reaches the plan | behind 10 and 11 | — | `RUNPOD_GOAL_OPENINGS` 0 |
+
+## 2. What still held the chain at 01:46Z, and why
+
+GOAL_PLAN_MAP, Admin 42145895943 (23:46Z → 01:46Z, on `36ac524`):
+`{"WORKING":4,"BROKEN":4,"MISSING":0,"UNPROVEN":5}`. First connected gap:
+`COMPUTE.DATABASE` 40/66 (rank 286, ten links downstream). Then `COMPUTE.GPU`
+0/56 (external), `EVIDENCE.BUYER_PRICE` 0/17, `OPENINGS.SEARCH_WIDENS` 0/1.
+
+The database server was not the cause. Connection report 42145911358 (01:46Z)
+and 42152421973 (02:55Z): no lock waits, no running statements, 25 idle
+connections, pool wait p95 0–57 ms. The failures were the Brain process itself:
+
+| reading | value |
+|---|---|
+| event-loop stalls (04b2895, 01:43Z) | up to 65 s; `CONNECTION_LOST` 54 |
+| event-loop stalls (6794476, 02:48Z) | worst 72.7 s |
+| CPU profile, three windows 02:49–02:52Z (#548) | on the CPU 51–58 s of every 63–70 s |
+| of which | garbage collection 8–10 s; opening TLS connections ~15 s (`wrap`, `init`, `start`, `setSession`, `setCiphers`) |
+
+So "the database is overloaded" was a CPU-saturated Node process: a statement
+whose answer arrived during a 60 s stall reads as a 60 s statement, and the
+pooler drops a connection that went silent that long.
+
+And the free lane, which carries all research while RunPod is down, could not
+answer. OmniRoute's own log (Cheap lane status 42154057446, 03:02Z), combo
+`Brain-a`:
+
+| provider | state |
+|---|---|
+| Cerebras gpt-oss-120b | day's quota spent, resets in 5 h 53 m (external) |
+| NVIDIA gpt-oss-120b | all accounts cooling down (external) |
+| Cloudflare Playground ×2 | 503 "needs Playwright and its Chromium browser" since the OmniRoute image moved to node 26 |
+| Groq gpt-oss-120b | 413 "TPM Limit 8000, Requested 8027" on every research call — **Brain's defect**: research asked `max_tokens: 8000` on top of its prompt |
+
+## 3. Repairs released by this session
+
+| PR | what | evidence |
+|---|---|---|
+| #548 | stall-triggered V8 CPU profiler in the liveness readings | connection report 42152421973 printed three profiles |
+| #553 | ten console workflows get a job timeout; two hung 25 and 66 min on an SSH session a deploy cut, holding their queues | cancelled 42146262020 and 42150580065 |
+| #554 | client sockets counted by host; profile samples with no Brain frame charged to their library | names which client opens the TLS connections |
+| #555 | free-lane requests fit Groq's 8 000-token window when the prompt leaves ≥1 500 for the answer | `tests/cheapLaneFit.test.ts` |
