@@ -198,3 +198,25 @@ After #522, the first recurring screen (`cop_779c9f02`, a directory of 3,720 cor
 - **Result:** Brain recorded the opening as DISQUALIFIED.
 - **Fix:** the question now asks only for the stopped-or-excluded fact, and says that "still bought" is not a ruled_out fact. A test holds both.
 - **Not recovered:** `cop_779c9f02` keeps its recorded disqualifier. A dive does not overwrite a published fact by asking again, and new evidence reaches it through discovery.
+
+### 2026-11-06 01:35Z: where the chain stands
+
+- **What changed since 11-05 16:30Z.** Four fixes are live:
+  - #527: the ruled_out wording.
+  - #532: dives start before the cheap screen.
+  - #538, from another session: document-name lookups are read once per pass, down from about 50,000 an hour to about 7,300.
+  - Production's pool waits are mostly 0 ms again.
+- **Still limiting.** Brain keeps entering SHEDDING, and while it sheds no optional dive starts.
+  - Now 3–5 overload failures in 120 s, down from 500.
+  - The cause is the application's own event loop, which stalls for up to 59 s in the dispatch and factory ticks. The stalls drop connections, and the dropped connections read as database overload.
+  - The ticks belong to other sessions.
+  - Eligible constructed openings still waiting: `cop_e28aa4e`, `cop_6632c4a`.
+- **First constructed opening with an accepted payer claim: `cop_1e58c63d` (shared services / GBS).**
+  - The claim does not name a buyer: "The shared services market is expected to grow significantly from 2026 to 2033".
+  - The gate accepted it, but it establishes no payer.
+  - The plan does not consider the opening: there is no price buyers are shown to pay.
+- **Plan (Goals plan run 42145735469).**
+  - Verdict: NOT_VIABLE (POOL_INSUFFICIENT).
+  - 17 openings considered, 8 simulated.
+  - Best combination: 0.0% of worlds reach $10,000; settled p10 $0 · p50 $50 · p90 $225.
+  - No constructed opening is modelled yet.
