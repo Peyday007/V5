@@ -2300,6 +2300,12 @@ async function tickOnce(owner: string): Promise<TickReport> {
       }
     });
 
+    // A RECORD_GAPS decision whose packet re-parked on spent audit attempts is carried out again.
+    await runPass(report, 'refile-decided-parks', async () => {
+      const { refileDecidedParks } = await import('./routineDecisions.ts');
+      await refileDecidedParks({ limit: 5 });
+    });
+
     await runPass(report, 'answered-requests', async () => {
       // The whole backlog, not one cycle's worth: an answer waiting for a
       // research slot keeps its place, and a window that size would hide a

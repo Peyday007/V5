@@ -295,3 +295,39 @@ export async function parkReadings(): Promise<Array<Record<string, unknown>>> {
       WHERE o.status = 'NEEDS_HUMAN' ORDER BY o.updated_at DESC LIMIT 60`,
   );
 }
+
+/**
+ * A decision Brain already made that the packet never carried out.
+ *
+ * Production, 2026-11-06 10:42Z (`packets parks`): twenty packets answered
+ * RECORD_GAPS — by Brain under the standing grant or on a card — sat at
+ * NEEDS_HUMAN, re-parked by "an audit work item finished without recording
+ * anything" because their audit items had spent every attempt during the
+ * night's outages. The card reads RESUMED, so nothing asks again. The runner
+ * now opens a fresh audit round when attempts are spent (`MAX_AUDIT_REOPENS`);
+ * this re-advances the packets already parked that way, a few per tick.
+ */
+export async function refileDecidedParks(input: { limit?: number; nowMs?: number } = {}): Promise<{ orchestrationId: string; status: string }[]> {
+  const now = input.nowMs ?? Date.now();
+  const before = new Date(now - ROUTINE_DECISION_GRACE_MS).toISOString();
+  const rows = await getDb().all<{ id: string; project_id: string }>(
+    `SELECT id, project_id FROM research_orchestrations
+      WHERE status = 'NEEDS_HUMAN' AND unresolved_gap_policy = 'RECORD_GAPS'
+        AND failure_reason LIKE '%finished without recording anything%' AND updated_at < ?
+      ORDER BY updated_at LIMIT ?`,
+    [before, input.limit ?? 5],
+  );
+  const { advancePacket, auditReopensSoFar, MAX_AUDIT_REOPENS } = await import('../research/packetRunner.ts');
+  const { getMissionByOrchestration, transitionMission } = await import('../../repos/russellMissions.ts');
+  const out: { orchestrationId: string; status: string }[] = [];
+  for (const row of rows) {
+    if ((await auditReopensSoFar({ id: row.id, projectId: row.project_id })) >= MAX_AUDIT_REOPENS) continue;
+    const mission = await getMissionByOrchestration(row.id);
+    if (mission && mission.state === 'NEEDS_HUMAN') {
+      await transitionMission({ missionId: mission.id, from: 'NEEDS_HUMAN', to: 'RUNNING', waitingOn: null });
+    }
+    const result = await advancePacket(row.id);
+    out.push({ orchestrationId: row.id, status: result.status });
+  }
+  return out;
+}
