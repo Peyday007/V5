@@ -689,16 +689,23 @@ export async function recordSnapshot(input: {
 export async function latestSnapshots(
   projectId: string,
 ): Promise<Map<string, MonetizationRankSnapshot>> {
+  /*
+   * One grouped pass for each path's newest time, joined back on the
+   * (path_id, evaluated_at) index. The correlated NOT EXISTS with an OR could
+   * not use that index on Postgres: production (pg_stat_statements,
+   * 2026-11-05) shows 11 171 calls spilling 596 GB to temporary files, about
+   * 53 MB a call, beside the pool floods. Rows sharing a path's newest time
+   * (one pass writes one per path, so rare) arrive ordered by id and the last
+   * wins below, the same tie-break as before.
+   */
   const rows = await getDb().all<MonetizationRankSnapshotRow>(
     `SELECT s.* FROM monetization_rank_snapshots s
+       JOIN (SELECT path_id, MAX(evaluated_at) AS newest FROM monetization_rank_snapshots
+              WHERE project_id = ? GROUP BY path_id) m
+         ON m.path_id = s.path_id AND m.newest = s.evaluated_at
       WHERE s.project_id = ?
-        AND NOT EXISTS (
-          SELECT 1 FROM monetization_rank_snapshots t
-           WHERE t.path_id = s.path_id
-             AND (t.evaluated_at > s.evaluated_at
-                  OR (t.evaluated_at = s.evaluated_at AND t.id > s.id)))
       ORDER BY s.evaluated_at, s.id`,
-    [projectId],
+    [projectId, projectId],
   );
   const out = new Map<string, MonetizationRankSnapshot>();
   for (const row of rows) out.set(row.path_id, mapSnapshot(row));
