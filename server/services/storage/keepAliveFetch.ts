@@ -22,11 +22,29 @@ import { Readable } from 'node:stream';
 
 export const STORE_MAX_SOCKETS = 8;
 export const STORE_KEEP_ALIVE_MS = 60_000;
+/**
+ * A response at most this large is read whole before it is handed back, so its
+ * socket returns to the pool at once whatever the caller does with it.
+ *
+ * With a bounded agent a response nobody reads holds its socket for good —
+ * built-in fetch let the garbage collector reclaim one, an `https.Agent` does
+ * not — and several callers rightly ignore a body (a successful upload, a
+ * delete, a 404). Eight such sockets and every storage call would wait. Only a
+ * larger GET is streamed, and the idle bound below ends one nobody finishes.
+ */
+export const STORE_BUFFER_LIMIT_BYTES = 4 * 1024 * 1024;
+/** A socket that moves no bytes for this long is destroyed: unread, or a store that stopped answering. */
+export const STORE_IDLE_MS = 45_000;
 
 const httpsAgent = new Agent({ keepAlive: true, maxSockets: STORE_MAX_SOCKETS, maxFreeSockets: STORE_MAX_SOCKETS, timeout: STORE_KEEP_ALIVE_MS });
 const httpAgent = new HttpAgent({ keepAlive: true, maxSockets: STORE_MAX_SOCKETS, maxFreeSockets: STORE_MAX_SOCKETS, timeout: STORE_KEEP_ALIVE_MS });
 
 const NO_BODY = new Set([101, 204, 205, 304]);
+
+function idleMs(): number {
+  const raw = Number(process.env['BRAIN_STORE_IDLE_MS'] ?? '');
+  return Number.isFinite(raw) && raw >= 50 ? raw : STORE_IDLE_MS;
+}
 
 function headerRecord(headers: RequestInit['headers']): Record<string, string> {
   if (!headers) return {};
@@ -61,6 +79,7 @@ export const keepAliveFetch: typeof fetch = (input, init = {}) =>
       url,
       { method: init.method ?? 'GET', headers, agent: secure ? httpsAgent : httpAgent, ...(signal ? { signal } : {}) },
       (res) => {
+        res.on('error', () => undefined);
         const responseHeaders = new Headers();
         for (const [key, value] of Object.entries(res.headers)) {
           if (value === undefined) continue;
@@ -72,15 +91,27 @@ export const keepAliveFetch: typeof fetch = (input, init = {}) =>
           resolve(new Response(null, { status, statusText: res.statusMessage ?? '', headers: responseHeaders }));
           return;
         }
-        resolve(
-          new Response(Readable.toWeb(res) as ReadableStream<Uint8Array>, {
-            status,
-            statusText: res.statusMessage ?? '',
-            headers: responseHeaders,
-          }),
+        const length = Number(res.headers['content-length'] ?? NaN);
+        const stream = (init.method ?? 'GET') === 'GET' && !(Number.isFinite(length) && length <= STORE_BUFFER_LIMIT_BYTES);
+        if (stream) {
+          resolve(
+            new Response(Readable.toWeb(res) as ReadableStream<Uint8Array>, {
+              status,
+              statusText: res.statusMessage ?? '',
+              headers: responseHeaders,
+            }),
+          );
+          return;
+        }
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () =>
+          resolve(new Response(Buffer.concat(chunks), { status, statusText: res.statusMessage ?? '', headers: responseHeaders })),
         );
+        res.on('error', reject);
       },
     );
+    req.setTimeout(idleMs(), () => req.destroy(new Error(`the document store sent nothing for ${Math.round(idleMs() / 1000)} s`)));
     req.on('error', reject);
     if (body) req.end(body);
     else req.end();
