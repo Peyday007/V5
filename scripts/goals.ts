@@ -365,6 +365,27 @@ async function printSearching(reading: PlanReading): Promise<void> {
   const rounds = (await listRounds(reading.target.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
   const cycle = await getCycle();
   console.log(`  tick        ${cycle ? `${cycle.state}, last ran ${cycle.lastRanAt ?? 'never'}${cycle.lastError ? `; last problem: ${cycle.lastError.slice(0, 400)}` : ''}` : 'no tick has run'}`);
+  // The repair-to-goal loop (§88): what the capability check last found blocking this goal,
+  // what a repair cleared, and when the goal was resumed because of it. Rows, not a heartbeat.
+  const checks = await getDb().all<{ created_at: string; payload: string }>(
+    `SELECT created_at, payload FROM project_events WHERE entity_type = 'WORKSTREAM' AND entity_id = ? AND event_type = 'CAPABILITY_ASSESSED'
+      ORDER BY created_at DESC LIMIT 3`,
+    [reading.goalId],
+  );
+  for (const one of checks) {
+    let p: { ready?: boolean; blocking?: string[]; cleared?: string[] } = {};
+    try {
+      p = JSON.parse(one.payload) as typeof p;
+    } catch {
+      p = {};
+    }
+    console.log(`  check       ${one.created_at} ready=${p.ready ?? '?'} blocking=${(p.blocking ?? []).join(',') || 'none'} cleared=${(p.cleared ?? []).join(',') || 'none'}`);
+  }
+  const resumes = await getDb().all<{ created_at: string; summary: string }>(
+    `SELECT created_at, summary FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_RESUMED_AFTER_REPAIR' ORDER BY created_at DESC LIMIT 3`,
+    [reading.goalId],
+  );
+  for (const one of resumes) console.log(`  resumed     ${one.created_at} ${one.summary.slice(0, 200)}`);
   // Who can do this research: a search or a path question needs a worker that can open the web.
   const snapshot = await sharedFleetSnapshot();
   const research = snapshot.candidates.filter(
