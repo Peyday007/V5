@@ -695,8 +695,16 @@ export async function runPass(
     report.passFailures.push({ pass: name, error: 'skipped: the database is not answering this tick' });
     return false;
   }
+  const hung = hungPasses.get(name);
+  if (hung) {
+    report.passFailures.push({
+      pass: name,
+      error: `skipped: its run from ${hung} has not settled, and a pass never runs twice at once`,
+    });
+    return false;
+  }
   try {
-    await withActivity(`russell:${name}`, fn);
+    await boundedPass(name, () => withActivity(`russell:${name}`, fn));
     return true;
   } catch (error) {
     const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
@@ -709,6 +717,52 @@ export async function runPass(
 }
 
 const INFRA_MARK = 'infra: ';
+
+/**
+ * A pass that does not settle must not stop the tick (2026-11-06).
+ *
+ * The timer runs one tick at a time, and a tick is forty-odd passes in a row,
+ * so one pass that never settles held `running` for good: production read no
+ * completed Russell tick after the 03:34Z restart, and no deep dive started
+ * from 22:05Z on with "8 eligible, 1 slot free, the next tick starts one".
+ * Every pass now has a bound. One that outruns it is recorded as a failure and
+ * the tick goes on; its run is left to settle on its own, and until it does
+ * the same pass is skipped, so nothing runs twice at once.
+ */
+export const RUSSELL_PASS_LIMIT_MS = 5 * 60_000;
+const hungPasses = new Map<string, string>();
+
+export class PassTimedOut extends Error {}
+
+async function boundedPass(name: string, run: () => Promise<unknown>, limitMs = passLimitMs()): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const started = new Date().toISOString();
+  const work = run();
+  const limit = new Promise<'TIMED_OUT'>((resolve) => {
+    timer = setTimeout(() => resolve('TIMED_OUT'), limitMs);
+    (timer as { unref?: () => void }).unref?.();
+  });
+  try {
+    const outcome = await Promise.race([work.then(() => 'DONE' as const), limit]);
+    if (outcome === 'TIMED_OUT') {
+      hungPasses.set(name, started);
+      void work.catch(() => undefined).finally(() => hungPasses.delete(name));
+      throw new PassTimedOut(`did not settle within ${Math.round(limitMs / 1000)} s; the tick went on without it`);
+    }
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function passLimitMs(): number {
+  const raw = Number(process.env['BRAIN_RUSSELL_PASS_LIMIT_MS'] ?? '');
+  return Number.isFinite(raw) && raw >= 1_000 ? raw : RUSSELL_PASS_LIMIT_MS;
+}
+
+/** Tests: which passes are still running past their bound. */
+export function hungRussellPasses(): string[] {
+  return [...hungPasses.keys()];
+}
 
 /**
  * The passes that start optional work: new questions, promotions, scans and
@@ -3413,6 +3467,8 @@ export async function settleGoalPlans(): Promise<void> {
 
 let timer: ReturnType<typeof setInterval> | null = null;
 let running = false;
+let runningSince = 0;
+export const RUSSELL_TICK_STUCK_MS = 20 * 60_000;
 
 /**
  * Start ticking.
@@ -3434,8 +3490,14 @@ export function startRussell(owner: string, intervalMs = RUSSELL_TICK_MS): void 
      * connection(s) in use, 3 caller(s) waiting" on 2026-09-24, and the tick
      * that could not finish kept being joined by the next.
      */
-    if (running) return;
+    if (running && Date.now() - runningSince < RUSSELL_TICK_STUCK_MS) return;
+    if (running) {
+      // A tick that has not returned in twenty minutes is not slow, it is
+      // stuck on something outside its passes; every pass is already bounded.
+      console.warn(`[russell] tick running since ${new Date(runningSince).toISOString()} never returned; starting the next one`);
+    }
     running = true;
+    runningSince = Date.now();
     void tick(owner)
       .catch(() => {
         // Swallowed here and recorded on the row by `tick` itself. A throwing
