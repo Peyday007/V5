@@ -1400,7 +1400,8 @@ async function main(): Promise<void> {
       {
         const { unfitNow, resetFreeLaneFitness } = await import('../server/services/freeLane/worker.ts');
         resetFreeLaneFitness();
-        const unfit = await unfitNow(t.capacity.map((c) => c.model));
+        const { laneConfig } = await import('../server/services/cheap/lane.ts');
+        const unfit = await unfitNow(t.capacity.map((c) => c.model), Date.now(), laneConfig()?.fallbackModel ?? null);
         console.log(`  held back         ${unfit.size === 0 ? 'none' : [...unfit].join(', ')} (model|work type whose answers Brain rejects, 24h)`);
       }
       const h = t.lastHour;

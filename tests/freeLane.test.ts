@@ -747,5 +747,16 @@ describe('a model keeps only the kinds of work Brain accepts from it', () => {
     expect([...unfit]).toEqual(['small|RESEARCH_AUDIT']);
     // Too few rejections to judge: nothing is marked.
     expect(unfitPairs([{ model: 'small', work_type: 'RESEARCH_AUDIT', outcome: 'FAILED_RETRYABLE', n: 3 }], ['small', 'large']).size).toBe(0);
+    // An outage recorded as a failure is not the model's answer.
+    const outage = [{ model: 'small', work_type: 'RESEARCH_AUDIT', outcome: 'FAILED_RETRYABLE', n: 9, reason: 'model small: threw: The database pool had no free connection within 10000ms' }];
+    expect(unfitPairs(outage, ['small', 'large']).size).toBe(0);
+    // A GPU slot answering through 'large' is 'large': held back with it, and no alternative to it.
+    const viaFallback = [
+      { model: 'a', work_type: 'RESEARCH_AUDIT', outcome: 'FAILED_RETRYABLE', n: 6 },
+      { model: 'gpu', work_type: 'RESEARCH_AUDIT', outcome: 'SUBMITTED', n: 6 },
+    ];
+    expect([...unfitPairs(viaFallback, ['a', 'b', 'gpu'])]).toEqual(['a|RESEARCH_AUDIT']);
+    expect([...unfitPairs(viaFallback, ['a', 'gpu'], { gpu: 'a' })]).toEqual([]);
+    expect([...unfitPairs(viaFallback, ['a', 'b', 'gpu'], { gpu: 'a' })].sort()).toEqual(['a|RESEARCH_AUDIT', 'gpu|RESEARCH_AUDIT']);
   });
 });
