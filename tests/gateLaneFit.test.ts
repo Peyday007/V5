@@ -16,7 +16,6 @@ describe('laneFitFailure', () => {
     expect(laneFitFailure('payer', 'IHPA is an independent authority on key drivers of decision making in the health care space.')).toMatch(/who pays/);
     expect(laneFitFailure('cost_evidence', 'The shared services market was valued at USD 12.25 billion in 2025, growing at a CAGR of 8.05%')).toMatch(/market/);
     expect(laneFitFailure('price_evidence', 'The market is projected to reach USD 22.75 billion by 2033')).toMatch(/market/);
-    expect(laneFitFailure('price_evidence', 'The company was founded in 2004 and is based in Atlanta.')).toMatch(/no price/);
   });
 
   it('passes genuine answers', () => {
@@ -25,6 +24,8 @@ describe('laneFitFailure', () => {
     expect(laneFitFailure('payer', 'Regional HVAC distributors pay agencies to qualify inbound leads.')).toBeNull();
     expect(laneFitFailure('price_evidence', 'Bookkeeping for a small business is typically $300 to $800 per month.')).toBeNull();
     expect(laneFitFailure('cost_evidence', 'A virtual assistant costs $15 to $25 per hour on the platform.')).toBeNull();
+    // A finding about pricing that states no figure is still an answer; the card refuses to read it as one.
+    expect(laneFitFailure('price_evidence', 'Comparable parcel-ownership research engagements are quoted on request.')).toBeNull();
   });
 
   it('leaves every other lane alone', () => {

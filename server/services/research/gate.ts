@@ -275,8 +275,6 @@ const MARKET_SCALE =
   /\b(?:CAGR|compound annual growth|market (?:size|share|value|valuation)|(?:market|industry|sector) (?:is|was) (?:expected|projected|forecast|estimated|valued|worth)|expected to (?:grow|reach|expand)|projected to (?:grow|reach)|forecast (?:period|to (?:grow|reach))|(?:valued|worth) (?:at )?(?:US\$|USD|\$|€|£)\s?[\d.,]+\s?(?:billion|bn|trillion))/i;
 const PAYING_ACT =
   /\b(?:pay|pays|paid|paying|payer|buy|buys|bought|buyer|purchas\w*|procur\w*|contract(?:s|ed|ing)?|award(?:s|ed)?|hire[sd]?|hiring|commission(?:s|ed)?|outsourc\w*|retain(?:s|ed)?|spend(?:s|ing)?|budget\w*|fund(?:s|ed|ing)?|subscri\w*|client|customer|tender|RFP|RFQ|bid|solicit\w*|engag(?:es|ed) (?:a|an|the)?\s?(?:firm|vendor|provider|contractor|agency)|invoice\w*|fee)\b/i;
-const A_PRICE =
-  /(?:US\$|USD|\$|€|£)\s?\d|\d\s?(?:USD|dollars|euros|pounds)\b|\b(?:per (?:hour|hr|day|week|month|year|unit|item|seat|user|order|project|word|page|lead|call|transaction)|an? (?:hour|month|year)|hourly|monthly|annual(?:ly)? fee|flat fee|retainer|rate of|priced at|costs?|fees?|charges?|wages?|salar\w+)\b/i;
 
 export function laneFitFailure(lane: string | null, text: string): string | null {
   if (!lane) return null;
@@ -291,12 +289,11 @@ export function laneFitFailure(lane: string | null, text: string): string | null
     return null;
   }
   if (lane === 'price_evidence' || lane === 'cost_evidence') {
+    // Only a market's size is refused here: "quoted on request" is a finding
+    // about pricing, and the card already refuses to read prose as a figure.
     const what = lane === 'price_evidence' ? 'what one sale earns' : 'what delivering one costs';
     if (MARKET_SCALE.test(t)) {
       return `The ${lane} lane asks ${what}, and this claim states a market\u2019s size or growth. Give a price, fee, rate or cost per unit of work, with the source that states it.`;
-    }
-    if (!A_PRICE.test(t)) {
-      return `The ${lane} lane asks ${what}, and this claim states no price, fee, rate or cost. Give the amount and what it is for, with the source that states it.`;
     }
   }
   return null;
