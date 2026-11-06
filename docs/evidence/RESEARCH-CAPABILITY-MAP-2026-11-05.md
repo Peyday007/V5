@@ -170,3 +170,34 @@ a refunded outage and records the real reason; #524 holds the lane's slots to
 three per database connection). Factory's own two improvements (#508 retries
 with a plan, #510 idle-packet sweep) were merged and released, and the release
 gate no longer holds an improvement for a MINOR note (#520).
+
+## 7. The database flood, and what holds the lane now (2026-11-05 22:18Z → 2026-11-06 01:46Z)
+
+**Before #537/#538** (connection report, 1 h to 22:23Z): `SELECT * FROM documents
+WHERE project_id = $1 AND canonical_name = $2 COLLATE NOCASE` ran 49 932–105 053
+times per process at ~13 s each (max 140 s); 34 507 pool checkout timeouts;
+`effects/engine.ts:257` held a transaction up to 457 s. Postgres cannot use an
+index for the nondeterministic `nocase` collation, and `supersededNameFor`
+walked every "(superseded N)" name one lookup at a time inside the effect.
+Audits and syntheses failed on "no free connection" and "Connection terminated".
+
+**After** (a690d24, released 23:26Z; report 23:36Z): the same lookup, now
+`lower(canonical_name) = lower($2)` on an expression index, ran 1 043 times,
+**15 ms average, 31 ms max**; pressure NORMAL, p90 82 ms, no overload failures.
+A parallel session's #538 (a `COLLATE NOCASE` index, same purpose) and #542/#544
+(one statement per dependency check, named callers) landed beside it.
+
+**The next limit is the event loop, not a query** (connection report, 01:05Z →
+01:44Z, revision 04b2895): pressure SHEDDING again, but with no dominant
+statement — primary-key reads (`russell_candidates`, `research_claims`) up to
+60 s because the event loop was held: p99 19.8 s, worst 65 s, in
+`dispatch:tick`, `factory:remote-tick`, `connect:refresh`, `russell:project-kernels`
+and the cash passes. Parallel sessions own it (#541, #547 hand the loop back;
+#548 profiles each stall).
+
+`capabilities show 2` (23:46Z → 01:46Z): `{"WORKING":5,"BROKEN":6,"MISSING":0,"UNPROVEN":13}`
+— ACCESS.READ 19/28, ANALYSIS.SYNTHESIS 3/3, RECOVERY.LEASES 67/67 WORKING;
+AUDIT 9/15; JOB_OUTCOME 0/5 (CANCELLED×3 judge MORE_RESEARCH, NEEDS_HUMAN×2
+"no fragment cleared its gate"); RECOVERY.PROVIDERS 9/66 — the free providers
+answered one call in seven (external). Too few fragments ran to read discovery
+or extraction.
