@@ -31,6 +31,7 @@
  * `services/infra/incidents.ts` from the listener below.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { Session as InspectorSession } from 'node:inspector';
 import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks';
 import { getHeapStatistics } from 'node:v8';
 
@@ -644,6 +645,7 @@ function ensureStallProbe(): void {
     const late = now - stallLast - STALL_PROBE_MS;
     stallLast = now;
     if (late < STALL_RECORD_MS) return;
+    profileWindowStallMs = Math.max(profileWindowStallMs, late);
     const active = [...activeActivities.keys()].sort();
     recentStalls.push({ ms: late, at: new Date(now).toISOString(), active });
     if (recentStalls.length > 20) recentStalls.shift();
@@ -656,6 +658,194 @@ function ensureStallProbe(): void {
     }
   }, STALL_PROBE_MS);
   stallTimer.unref?.();
+  ensureStallProfiler();
+}
+
+/* ------------------------------------------------------------------------- */
+/* Stall profiles                                                            */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The code that held the event loop, read from V8's own sampler (2026-11-06).
+ *
+ * Labels say which activities were open across a stall; on 2026-11-06 every
+ * long stall was charged to the same three (`dispatch:tick`,
+ * `factory:remote-tick`, `russell:reconcile-bins`) because they are always
+ * open, so the label intersection named nobody — while 65 s stalls cost the
+ * pool its connections (`CONNECTION_LOST`) and read as a database outage.
+ *
+ * So the process samples its own stack, in windows of a minute, and keeps the
+ * window only when a stall happened inside it: the frames that spent the most
+ * time on the CPU there, by their own time and by the nearest Brain frame
+ * above them (a JSON.parse is charged to the Brain function that called it).
+ * Sampling every 10 ms costs well under a percent of one core; a window with
+ * no stall is dropped without being summarised.
+ */
+const PROFILE_WINDOW_MS = 60_000;
+const PROFILE_SAMPLING_US = 10_000;
+const PROFILES_KEPT = 3;
+const PROFILE_FRAMES = 10;
+let profileSession: InspectorSession | null = null;
+let profileTimer: ReturnType<typeof setInterval> | null = null;
+let profileWindowStallMs = 0;
+let profileWindowStartedAt = Date.now();
+const stallProfiles: StallProfile[] = [];
+
+export interface StallProfileFrame {
+  frame: string;
+  ms: number;
+}
+
+export interface StallProfile {
+  /** When the window closed. */
+  at: string;
+  windowMs: number;
+  /** The longest stall inside the window. */
+  stallMs: number;
+  sampledMs: number;
+  /** Frames by their own time on the CPU. */
+  self: StallProfileFrame[];
+  /** Time charged to the nearest frame in Brain's own source above each sample. */
+  brain: StallProfileFrame[];
+}
+
+interface CpuProfileNode {
+  id: number;
+  callFrame: { functionName: string; url: string; lineNumber: number };
+  children?: number[];
+}
+
+export interface CpuProfile {
+  nodes: CpuProfileNode[];
+  samples?: number[];
+  timeDeltas?: number[];
+}
+
+function frameName(node: CpuProfileNode): string {
+  const { functionName, url, lineNumber } = node.callFrame;
+  const name = functionName || '(anonymous)';
+  if (!url) return name;
+  const at = url.lastIndexOf('/server/');
+  const scripts = url.lastIndexOf('/scripts/');
+  const nm = url.lastIndexOf('/node_modules/');
+  const short =
+    nm >= 0 ? url.slice(nm + 1) : at >= 0 ? url.slice(at + 1) : scripts >= 0 ? url.slice(scripts + 1) : url.replace(/^.*\//, '');
+  return `${name} ${short}:${lineNumber + 1}`;
+}
+
+function isBrainFrame(node: CpuProfileNode): boolean {
+  const url = node.callFrame.url;
+  return url.includes('/server/') && !url.includes('/node_modules/');
+}
+
+/** Self time and Brain-frame time per frame, from one V8 CPU profile. Pure. */
+export function summarizeCpuProfile(profile: CpuProfile, limit = PROFILE_FRAMES): { sampledMs: number; self: StallProfileFrame[]; brain: StallProfileFrame[] } {
+  const byId = new Map<number, CpuProfileNode>();
+  const parent = new Map<number, number>();
+  for (const node of profile.nodes) {
+    byId.set(node.id, node);
+    for (const child of node.children ?? []) parent.set(child, node.id);
+  }
+  const brainOf = new Map<number, string>();
+  const nearestBrain = (id: number): string => {
+    const known = brainOf.get(id);
+    if (known !== undefined) return known;
+    let cursor: number | undefined = id;
+    let found = '(outside Brain source)';
+    while (cursor !== undefined) {
+      const node = byId.get(cursor);
+      if (!node) break;
+      if (isBrainFrame(node)) {
+        found = frameName(node);
+        break;
+      }
+      cursor = parent.get(cursor);
+    }
+    brainOf.set(id, found);
+    return found;
+  };
+  const self = new Map<string, number>();
+  const brain = new Map<string, number>();
+  const samples = profile.samples ?? [];
+  const deltas = profile.timeDeltas ?? [];
+  let sampledUs = 0;
+  // A sample's delta is the time since the previous sample, which the sampled
+  // stack was on the CPU for: the next delta belongs to this sample.
+  for (let i = 0; i < samples.length; i++) {
+    const node = byId.get(samples[i]!);
+    if (!node) continue;
+    const us = Math.max(0, deltas[i + 1] ?? deltas[i] ?? 0);
+    if (node.callFrame.functionName === '(idle)') continue;
+    sampledUs += us;
+    const key = frameName(node);
+    self.set(key, (self.get(key) ?? 0) + us);
+    const owner = nearestBrain(node.id);
+    brain.set(owner, (brain.get(owner) ?? 0) + us);
+  }
+  const top = (m: Map<string, number>): StallProfileFrame[] =>
+    [...m.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([frame, us]) => ({ frame, ms: Math.round(us / 1000) }));
+  return { sampledMs: Math.round(sampledUs / 1000), self: top(self), brain: top(brain) };
+}
+
+function profilerWanted(): boolean {
+  const setting = (process.env['BRAIN_STALL_PROFILER'] ?? '').toLowerCase();
+  if (setting === 'off' || setting === '0') return false;
+  if (setting === 'on' || setting === '1') return true;
+  return !process.env['VITEST'];
+}
+
+function ensureStallProfiler(): void {
+  if (profileSession || !profilerWanted()) return;
+  try {
+    const session = new InspectorSession();
+    session.connect();
+    session.post('Profiler.enable');
+    session.post('Profiler.setSamplingInterval', { interval: PROFILE_SAMPLING_US });
+    session.post('Profiler.start');
+    profileSession = session;
+    profileWindowStartedAt = Date.now();
+    profileWindowStallMs = 0;
+    profileTimer = setInterval(rotateStallProfile, PROFILE_WINDOW_MS);
+    profileTimer.unref?.();
+  } catch {
+    profileSession = null;
+  }
+}
+
+function rotateStallProfile(): void {
+  const session = profileSession;
+  if (!session) return;
+  const stallMs = profileWindowStallMs;
+  const startedAt = profileWindowStartedAt;
+  profileWindowStallMs = 0;
+  profileWindowStartedAt = Date.now();
+  try {
+    session.post('Profiler.stop', (err, result) => {
+      try {
+        if (!err && stallMs >= STALL_RECORD_MS && result?.profile) {
+          const summary = summarizeCpuProfile(result.profile as unknown as CpuProfile);
+          stallProfiles.push({ at: new Date().toISOString(), windowMs: Date.now() - startedAt, stallMs, ...summary });
+          if (stallProfiles.length > PROFILES_KEPT) stallProfiles.shift();
+        }
+      } finally {
+        try {
+          session.post('Profiler.start');
+        } catch {
+          /* the next rotation tries again */
+        }
+      }
+    });
+  } catch {
+    /* an inspector that will not answer leaves the labels as the only reading */
+  }
+}
+
+/** The profiles of the latest windows that held a stall, newest last. */
+export function stallProfileReading(): StallProfile[] {
+  return stallProfiles.slice();
 }
 
 /** Run `fn` labelled, so a stall while it is in flight is charged to it. */
@@ -696,11 +886,14 @@ export interface StallReading {
   byActivity: { label: string; stalls: number; totalMs: number; maxMs: number }[];
   recent: { ms: number; at: string; active: string[] }[];
   thresholdMs: number;
+  /** CPU profiles of the latest windows a stall happened in. */
+  profiles: StallProfile[];
 }
 
 export function stallReading(limit = 15): StallReading {
   ensureStallProbe();
   return {
+    profiles: stallProfileReading(),
     byActivity: [...stallTotals.entries()]
       .map(([label, t]) => ({ label, ...t }))
       .sort((a, b) => b.totalMs - a.totalMs)

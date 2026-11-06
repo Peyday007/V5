@@ -636,6 +636,16 @@ async function main(): Promise<void> {
         console.log(`    stalls in    ${s.label.padEnd(36)} n=${s.stalls} total=${Math.round(s.totalMs / 1000)}s max=${s.maxMs}ms`);
       }
       for (const s of stalls.recent) console.log(`    stall        ${s.ms}ms at ${s.at} in [${s.active.join(', ')}]`);
+      // The code that held the loop, from the process's own CPU sampler: by a
+      // frame's own time, and by the nearest Brain frame above each sample.
+      const profiles = (stalls as { profiles?: { at: string; windowMs: number; stallMs: number; sampledMs: number; self: { frame: string; ms: number }[]; brain: { frame: string; ms: number }[] }[] }).profiles;
+      if (profiles === undefined) console.log('    cpu profile  (not sampled by this revision)');
+      else if (profiles.length === 0) console.log('    cpu profile  no window with a stall sampled yet');
+      for (const p of profiles ?? []) {
+        console.log(`    cpu profile  window ending ${p.at} (${Math.round(p.windowMs / 1000)}s, stall ${p.stallMs}ms, ${p.sampledMs}ms on CPU)`);
+        for (const f of p.brain) console.log(`      brain      ${String(f.ms).padStart(6)}ms  ${f.frame}`);
+        for (const f of p.self) console.log(`      self       ${String(f.ms).padStart(6)}ms  ${f.frame}`);
+      }
     }
     const memory = r['memory'] as { rssMB: number; heapUsedMB: number; heapLimitMB: number; externalMB: number; peakRssMB: number; peakRssAt: string | null } | null | undefined;
     if (memory) {
