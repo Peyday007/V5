@@ -28,7 +28,7 @@ Goal `wst_7b4fcbb5f2384f31b6c3`. Every figure below is production's.
 
 ## The portfolio, before and after (same goal, same limits)
 
-| | 08:30Z, `feb5076` | 19:2xZ, `f0ce877` (Goals `plan` 42261464244) |
+| | 08:30Z, `feb5076` | 17:25Z, `f0ce877` (Goals `plan` 42261464244) |
 |---|---|---|
 | compared | 17 found | 18 found + 12 constructed estimates |
 | refused | 9 (outlay unknown or over $375) | 9 (outlay measured over $375, or at least $1 497 / $29 936) |
