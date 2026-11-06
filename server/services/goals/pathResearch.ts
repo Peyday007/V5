@@ -161,10 +161,21 @@ export async function researchGoalPaths(input: {
   const valueOf = (id: string) => Math.max(0, ...[...priority.values()].filter((one) => one.opportunityId === id && one.decision === 'RESEARCH_FIRST').map((one) => one.value));
   if (priority.size > 0) order.sort((a, b) => valueOf(b.opportunityId) - valueOf(a.opportunityId));
   let openings = 0;
+  const squeeze = input.reading.executionPolicy === 'SQUEEZE';
+  const selling = new Set((input.reading.sales ?? []).map((one) => one.opportunityId));
   for (const one of order) {
     if (openings >= openingCap || openHere >= questionCap) break;
-    let asks = one.missing.flatMap((link) => FIELDS_FOR[link] ?? []);
-    if (asks.length === 0 && (one.volumeEstablished !== false || one.competitiveAward)) continue;
+    /*
+     * A SQUEEZE goal learns demand by selling (owner, 2026-11-06): no opening
+     * is asked how many buyers exist, and an opening it is selling is not
+     * asked what buyers pay — the buyers it offers to answer both. Costs and
+     * payment timing are still researched beside the sale: they never hold
+     * the sale up, and they decide what each opening adds before the deadline.
+     */
+    const sold = squeeze && selling.has(one.opportunityId);
+    const learnedBySelling = (link: string) => squeeze && (link === 'MARKET_VOLUME' || link === 'CONVERSION' || (sold && link === 'OFFER_AND_PRICE'));
+    let asks = one.missing.filter((link) => !learnedBySelling(link)).flatMap((link) => FIELDS_FOR[link] ?? []);
+    if (asks.length === 0 && (squeeze || one.volumeEstablished !== false || one.competitiveAward)) continue;
     /*
      * Worth asking about only if the answer could change what Brain pursues.
      * An opening whose most, even with every buyer agreeing, is under a tenth
@@ -177,11 +188,11 @@ export async function researchGoalPaths(input: {
       note(`${one.title.slice(0, 60)}: too small to matter — at most ${Math.round(potential(one))} of the ${Math.round(remaining)} still needed, even if every buyer agreed`);
       continue;
     }
-    if (one.supportedReach < floor) {
+    if (one.supportedReach < floor && !sold) {
       // No supported price big enough yet: what buyers actually pay decides
       // whether anything else about it is worth asking, so ask that alone.
       asks = [FIELDS_FOR.OFFER_AND_PRICE![0]!];
-    } else if (!one.volumeEstablished && one.supportedReach < remaining && !one.competitiveAward && !asks.some((a) => a.field === 'buyerVolume')) {
+    } else if (!squeeze && !one.volumeEstablished && one.supportedReach < remaining && !one.competitiveAward && !asks.some((a) => a.field === 'buyerVolume')) {
       // One deal cannot carry the goal: whether it sells again — how many
       // buyers, how often — is investigated, never assumed (§81).
       asks = [...asks, FIELDS_FOR.MARKET_VOLUME![0]!];

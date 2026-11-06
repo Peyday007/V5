@@ -153,10 +153,10 @@ describe('a market volume is read, never assumed', () => {
     expect(one.volumeEstablished).toBe(false);
     const only = reading.strategies.find((s) => s.opportunityIds[0] === unknown.id)!;
     expect(only.links.find((l) => l.link === 'MARKET_VOLUME')!.basis).toMatch(/nobody has established how many buyers/);
-    // And it is the next research question for this opening.
+    // A SQUEEZE goal (a cash target with a deadline) learns volume by selling, not by a research round first (2026-11-06).
     const trace: string[] = [];
     await researchGoalPaths({ reading, projectId, now, trace, dryRun: true });
-    expect(trace.join('\n')).toMatch(/buyerVolume: would ask/);
+    expect(trace.join('\n')).not.toMatch(/buyerVolume: would ask/);
 
     // Research establishes a small market: three buyers, once each. The plan cannot pretend more.
     await recordCardFact({ projectId, opportunityId: unknown.id, field: 'buyerVolume', kind: 'EVIDENCE', value: 'The registry lists 3 property management firms in the county.', claimId: 'clm_vol', decidedBy: 'BRAIN' });
@@ -173,10 +173,10 @@ describe('a market volume is read, never assumed', () => {
     const id = await goal(400_000);
     let reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
     expect(reading.considered.find((c) => c.opportunityId === o.id)!.supportedReach).toBe(400);
-    // Whether it repeats is investigated rather than assumed.
+    // Whether it repeats is never assumed — and under a SQUEEZE goal it is learned by selling, not researched first.
     const trace: string[] = [];
     await researchGoalPaths({ reading, projectId, now, trace, dryRun: true });
-    expect(trace.join('\n')).toMatch(/Arrange one freight load buyerVolume: would ask/);
+    expect(trace.join('\n')).not.toMatch(/Arrange one freight load buyerVolume: would ask/);
     await recordCardFact({ projectId, opportunityId: o.id, field: 'buyerVolume', kind: 'EVIDENCE', value: 'The load board lists 60 shippers posting this lane, each weekly.', claimId: 'clm_vol2', decidedBy: 'BRAIN' });
     reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
     expect(reading.considered.find((c) => c.opportunityId === o.id)!.supportedReach).toBe(4_000);

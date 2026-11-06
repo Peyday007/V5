@@ -47,6 +47,7 @@ import { withActivity } from '../../db/infra.ts';
  * an attempt, or stops unrelated work. An open need is a valid execution state
  * and Brain carries on around it, which is exactly what the plan means.
  */
+import { executionPolicyForProject } from '../goals/policy.ts';
 import { reconcileCashJobs, type JobReconciliation } from './jobPipeline.ts';
 import { handOffReadyTests, type FactoryHandoffPass } from './factoryHandoff.ts';
 import { advanceJourney, type JourneyTickReport } from './journey/tick.ts';
@@ -514,6 +515,7 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
       opportunity,
       card: engine,
       readiness: card.readiness,
+      policy: await executionPolicyForProject(projectId),
     });
     /*
      * A signal is asked only the questions that could stop it being one.
@@ -676,7 +678,8 @@ export async function reconcileEngineGaps(projectId: string): Promise<Discoverab
     if (await notWorthResearching(opportunity, { now: cashNow() })) continue;
     const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
     if (engine.disqualifiedBy) continue;
-    const reading = cashTier({ opportunity, card: engine, readiness: evidenceCard(opportunity).readiness });
+    // Under a SQUEEZE goal only what a responsible offer needs is asked; the sale answers the rest.
+    const reading = cashTier({ opportunity, card: engine, readiness: evidenceCard(opportunity).readiness, policy: await executionPolicyForProject(projectId) });
     if (reading.tier !== 'CANDIDATE') continue;
     const fields = reading.toAdvance
       .map((one) => one.key as string)
@@ -1110,14 +1113,30 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
       out.took.push({
         opportunityId: opportunity.id,
         did: 'MARKED_READY',
-        detail: 'Every load-bearing field is answered, so this is ready to test.',
+        detail: 'Every load-bearing field is answered, so an offer can be made on it.',
       });
     } else {
       out.withheld.push({ opportunityId: opportunity.id, because: ready.reason });
     }
   }
 
-  for (const opportunity of await listOpportunities({ projectId, states: ['READY'] })) {
+  /*
+   * Buyers are reached in the order the project's SQUEEZE goals sell —
+   * contribution to the whole goal first (`salesOrderForProject`) — so the
+   * few contacts a pass may send go to the largest openings, not to whichever
+   * row is oldest. Pieces no goal ranks keep their order after them.
+   */
+  const { salesOrderForProject } = await import('../goals/plan.ts');
+  const salesOrder = salesOrderForProject(projectId);
+  const rank = (id: string) => {
+    const at = salesOrder.indexOf(id);
+    return at < 0 ? Number.MAX_SAFE_INTEGER : at;
+  };
+  const readyPieces = (await listOpportunities({ projectId, states: ['READY'] }))
+    .map((one, at) => ({ one, at }))
+    .sort((a, b) => rank(a.one.id) - rank(b.one.id) || a.at - b.at)
+    .map(({ one }) => one);
+  for (const opportunity of readyPieces) {
     if (opportunity.duplicateOfId) continue;
     // A piece whose own figures lose money is never contacted for, whoever marked it ready.
     if (losesMoneyOnItsFigures(opportunity)) {

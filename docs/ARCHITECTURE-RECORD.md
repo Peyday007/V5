@@ -13926,6 +13926,47 @@ runs before the brokerage test: an arrangement that dispatches jobs to
 independent movers or drivers for a commission is B2C logistics coordinated
 online; a listing recruiting drivers is still the owner's physical work.
 
+**A SQUEEZE goal sells; it does not test (owner, 2026-11-06).** A SQUEEZE goal
+is a time-constrained cash-generation objective: a money target with a
+deadline (`domain/goalPolicy.ts`, read from the goal rows by
+`goals/policy.ts`, so every such goal is one, now and later). Its calendar is
+the scarce thing, and three rules had made selling wait on an experiment:
+
+- **Qualification asked what only selling reveals.** `markReady` held an
+  opening at CANDIDATE until all sixteen universal facts were researched —
+  revenue range, time to first cash, labour, phone dependence, the dive's
+  confidence and recommendation — while the 2026-10-21 decision had already
+  recorded that most of them "are learned by running a test". Under a SQUEEZE
+  goal the bar is `SQUEEZE_QUALIFICATION`: who pays, the offer, how buyers are
+  reached, delivery and who fulfils, eligibility and disqualifiers, and what it
+  costs and ties up (the money limits). The kind of evidence still adds what it
+  needs to be delivered at all (acquisition access, an exit). The operator's
+  qualification research asks only those, so no round runs to qualify an
+  experiment.
+- **The goal pursued a sale only after one had been measured.** Openings
+  became the goal's PURSUES work only on a RECOMMENDABLE plan, and
+  RECOMMENDABLE needs a conversion rate measured from earlier sales — and the
+  goal's money limits (`spending.ts`) bind only work the goal pursues. Now a
+  SQUEEZE plan's `sales` are every opening a responsible offer can be made on
+  (a reachable buyer, an offer, a price, an outlay inside the limits), ranked
+  by contribution to the whole goal (best-combination member, then its
+  settled p50, then reach), up to `MAX_CONCURRENT_SALES` at once, linked as
+  PURSUES on every persisted read (`GOAL_SALE_PURSUED`), so the limits bind
+  them from the first offer. The verdict is unchanged and still needs
+  measured conversion: it says whether the plan is proven, not whether to
+  sell.
+- **The first offer was framed as a test that could downgrade the plan.** A
+  SQUEEZE goal's `marketTests` is empty; its next step is the sale ("offer it
+  … for an actual sale, contract or deposit; each answer is a sale or a
+  refusal, recorded as the demand and price evidence"), unless an owner's own
+  open decision comes first. The permission to contact buyers and a message
+  channel are blockers on that sale, never a reason to test. Path research
+  stops asking how many buyers exist, and what buyers pay for an opening
+  being sold; costs and payment timing are still researched beside the sale,
+  which they never held up. The operator reaches READY buyers in the goals'
+  sales order (`salesOrderForProject`), so its three contacts a pass go to the
+  largest openings first.
+
 ## 84. Claude routines are reserved for Brain improvement until the owner says otherwise.
 
 **Owner's order, 2026-11-03.** Paid Claude routines do only work that improves

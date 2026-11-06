@@ -484,6 +484,11 @@ function printPlan(reading: PlanReading): void {
   }
   printPortfolio(reading.portfolio);
   console.log(`  ladder      ${Object.entries(reading.ladder).map(([stage, n]) => `${stage} ${n}`).join(' · ')}`);
+  console.log(`  policy      ${reading.executionPolicy}${reading.executionPolicy === 'SQUEEZE' ? ': a cash target with a deadline; no market-testing phase, sellable openings are sold now, several at once' : ''}`);
+  for (const one of reading.sales) {
+    console.log(`  sale        ${one.opportunityId} up to ${one.potentialReach === null ? '?' : Math.round(one.potentialReach)} · [${one.test.by}] ${one.title.slice(0, 70)}`);
+    if (one.test.blocker) console.log(`    blocker   ${one.test.blocker}`);
+  }
   for (const one of reading.marketTests) {
     console.log(`  market test ${one.opportunityId} up to ${one.potentialReach === null ? '?' : Math.round(one.potentialReach)} · [${one.test.by}] ${one.title.slice(0, 70)}`);
     if (one.test.blocker) console.log(`    blocker   ${one.test.blocker}`);
@@ -500,7 +505,7 @@ function printPlan(reading: PlanReading): void {
     for (const failed of s.constraintsFailed) console.log(`    FAILS     ${failed}`);
   }
   if (reading.nextTest) {
-    console.log(`  next test   [${reading.nextTest.by}] ${reading.nextTest.test}`);
+    console.log(`  ${reading.executionPolicy === 'SQUEEZE' ? 'next step  ' : 'next test  '} [${reading.nextTest.by}] ${reading.nextTest.test}`);
     if (reading.nextTest.blocker) console.log(`  blocker     ${reading.nextTest.blocker}`);
   }
   for (const one of reading.excluded.slice(0, 15)) console.log(`  left out    ${one.opportunityId} ${one.title.slice(0, 70)}: ${one.reason}`);
