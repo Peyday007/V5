@@ -97,23 +97,36 @@ describe('dependency checker', () => {
     expect((await checkRunDependencies(run.id)).requiredCount).toBe(2);
   });
 
-  it('tags a single-name lookup with the file and line that asked for it', async () => {
+  it('resolves a run\u2019s names in one statement, before its transaction, with no single-name lookups', async () => {
+    // Production 2026-11-06: one lookup and one storage check per name inside
+    // the transaction held its connection for seconds (lookups 7.8 s average).
     const layer = await fixture.layerByName('Discovery Logic');
     const run = await failedRun(layer.id);
-    const db = getDb() as unknown as Record<'get', (sql: string, ...rest: unknown[]) => unknown>;
-    const original = db.get;
-    const seen: string[] = [];
+    await addDocument(fixture, 'Discovery Logic', 'v1');
+    const db = getDb() as unknown as Record<'get' | 'all', (sql: string, ...rest: unknown[]) => unknown>;
+    const originals = { get: db.get, all: db.all };
+    const single: string[] = [];
+    const batched: string[] = [];
     db.get = (sql: string, ...rest: unknown[]) => {
-      if (sql.includes('lower(canonical_name) = lower(?)')) seen.push(sql);
-      return original.call(db, sql, ...rest);
+      if (sql.includes('lower(canonical_name) = lower(?)')) single.push(sql);
+      return originals.get.call(db, sql, ...rest);
     };
+    db.all = (sql: string, ...rest: unknown[]) => {
+      if (sql.includes('lower(canonical_name) IN (')) batched.push(sql);
+      return originals.all.call(db, sql, ...rest);
+    };
+    let rows: Awaited<ReturnType<typeof setRunDependencies>> = [];
     try {
-      await setRunDependencies(run.id, ['Discovery Logic v1']);
+      rows = await setRunDependencies(run.id, ['Discovery Logic v1', 'Discovery Logic v1B', 'Discovery Logic v1C']);
     } finally {
-      db.get = original;
+      db.get = originals.get;
+      db.all = originals.all;
     }
-    expect(seen.length).toBeGreaterThan(0);
-    expect(seen[0]).toMatch(/\/\* from services\/dependencies\.ts:\d+ \*\/$/);
+    expect(single).toEqual([]);
+    expect(batched).toHaveLength(1);
+    expect(rows).toHaveLength(3);
+    expect(rows.filter((r) => r.requiredDocumentId !== null)).toHaveLength(1);
+    expect(rows.every((r) => r.requiredLayerId === layer.id)).toBe(true);
   });
 });
 
