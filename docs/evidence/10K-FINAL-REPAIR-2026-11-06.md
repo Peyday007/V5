@@ -145,3 +145,80 @@ Russell and deep dives on `93bb258` (DB session, closeout report 42170884262, ~0
   GPOs (queued for launch). Dives started rose to 380, from 376 where it had
   stood since 22:05Z. 4 are in flight, at the operator cap.
 - The Russell cycle completes: lastRan 05:47:53Z, lastError empty.
+
+## 7. Deploy 760 (`357e33c`, live 06:25Z): #563
+
+Connection report 42175258232 (06:34Z):
+- Pressure **NORMAL**, statement p90 162 ms. It was SHEDDING at 15.5 s on
+  `93bb258`.
+- Pool wait p95 0 ms. No lock waits on the server.
+- Storage: 23.8 new TLS sockets a minute, against 1 113 on `4564d96`.
+- CPU profile: TLS setup no longer appears in the top frames. GC takes 8–12 s
+  a minute. Remaining stalls of 4–6 s sit in `russell:launch` as it catches
+  up after the restart.
+
+Research on `357e33c` (Cheap lane `runpod-report` 42175264906, last hour):
+- The RunPod pod started at 04:40Z, once RunPod had capacity again: 48
+  research jobs submitted, 56 claims, 100% sourced, $0.20 for 50 minutes.
+- Accepted claims 38.9 an hour, against 2 an hour in the hour before.
+- The goal opened 3 rounds and abandoned 4, and the plan was re-read 5.8
+  times an hour.
+- Plan: NOT_VIABLE, 17 considered, 8 modelled, no opening with a buyer and
+  price accepted. 6 of the last 6 settled rounds ended without a report.
+
+The self-improvement loop (Admin `improvement show` 42175261601) is ON and
+ACTIVE. 11 candidates are recorded, one measured IMPROVED
+(`FREE_LANE:CITATION_DROPPED`, z = 5.04). Owner interventions run at 59 in the
+last 24 h, 157 of them over 7 days "deciding whether this project accepts a
+report with unresolved gaps"; the loop holds that as candidate
+`OWNER:DECIDING…`, stage DECIDE.
+
+#565 (`91944e2`): #557's bounded store pool would keep the socket of any
+response its caller does not read (a successful upload, a delete, a 404).
+Responses up to 4 MB are now read whole, and an idle socket is ended after
+45 s.
+
+## 8. Final production reading: Deploy 761 (`91944e2`, live 07:23Z)
+
+Connection report 42181863689 (07:35Z): pressure **NORMAL**, statement p90
+325 ms, pool wait p95 0 ms. Storage: 3.5 new TLS sockets a minute (it was
+1 113). Event loop p99 484 ms, worst 5.1 s, while the GPU and free lane run
+at full concurrency.
+
+**GOAL_PLAN map, Admin 42181867838 (06:36–07:36Z):
+`{"WORKING":8,"BROKEN":1,"MISSING":0,"UNPROVEN":4}`.** At 01:46Z it read
+4 / 4 / 5.
+
+| requirement | 01:46Z | 07:36Z |
+|---|---|---|
+| GOAL.PLAN_EVALUATED | WORKING 3/3 | WORKING 7/7 |
+| GOAL.PLAN_FRESH | WORKING 1/1 | WORKING 1/1 |
+| OPENINGS.SEARCH_WIDENS | BROKEN 0/1 | **WORKING 1/1** |
+| EVIDENCE.PATH_ANSWERS | WORKING 539/541 | WORKING 101/104 |
+| QUANT.MODELLED | WORKING 8/17 | WORKING 8/17 |
+| PLAN.READS_NEW_EVIDENCE | UNPROVEN | **WORKING 2/2** |
+| COMPUTE.GPU | BROKEN 0/56 | **WORKING 45/60** |
+| COMPUTE.DATABASE | BROKEN 40/66 | **WORKING 96/96** |
+| EVIDENCE.BUYER_PRICE | BROKEN 0/17 | BROKEN 0/17 |
+| OPENINGS/CONSTRUCTION.ROUNDS_FILE, PACKETS_COMPLETE, FREE_MODELS | UNPROVEN | UNPROVEN (below sample) |
+
+RESEARCH map, same run: 13 WORKING, 4 BROKEN (it was 5 / 6). Audit runs
+28/28, filing 4/4, synthesis 7/7, search 12/16. Still BROKEN:
+`RECOVERY.PROVIDERS` (free providers' quotas, external), `RECOVERY.STALLS` and
+`IDLE_CAPACITY` (packets queued behind bounded capacity, and 7 worker packets
+left QUEUED with nothing queued; #566 makes the idle sweep reach them), and
+`LEARNING.DELIVER` (Factory delivery of improvement candidates; the loop is on).
+
+The one BROKEN link in the goal chain, `EVIDENCE.BUYER_PRICE`, is not a
+software fault. No opening yet has a researched buyer, demand and price. It
+moves only as rounds finish. The plan stays **NOT_VIABLE** (17 considered,
+best reach 250 USD at prices buyers are shown to pay), and nothing tonight
+shows the $10K target to be economically reachable.
+
+## 9. External dependencies, isolated
+
+| dependency | state | how Brain contains it |
+|---|---|---|
+| RunPod GPU host capacity | Refused START all night ("not enough free GPUs on the host"). Accepted at 04:40Z and has run since. | Brain retries the start itself (#536) and falls back to the free lane while the pod is down. It never stops a pod after a refused start. |
+| Free providers (OmniRoute combo) | Cerebras day spent; NVIDIA cooling down; Groq TPM 8 000 | #555 fits Groq's window. Brain rotates models and backs off; provider failures do not count against a model (#558). |
+| Cloudflare Playground in OmniRoute | Needs a browser runtime that the current OmniRoute image lacks | Two of the seven combo slots fail fast and are skipped. No browser-enabled image is published. |
