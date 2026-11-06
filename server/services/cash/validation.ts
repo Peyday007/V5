@@ -1882,6 +1882,15 @@ export const DISQUALIFIER_LANE = 'disqualifier';
 /** The lane where a dive declares a fact that does rule the opening out. */
 export const RULED_OUT_LANE = 'ruled_out';
 
+/**
+ * Whether a ruled_out claim says the opening is closed to us: it ended,
+ * expired, was awarded or cancelled, or a published rule excludes us. Wording
+ * that says none of these is not a disqualifier, whatever lane it was filed in.
+ */
+export function statesExclusion(text: string): boolean {
+  return /\b(?:clos(?:ed|es|ing)|expir(?:ed|es|y)|no longer|not (?:open|accepting|accepted|available|eligible|permitted|allowed)|ineligible|exclud(?:e|es|ed|ing)|prohibit|forbid|restricted to|only (?:open|available) to|limited to|deadline (?:has )?passed|past (?:the|its) deadline|awarded|cancel+ed|withdrawn|suspended|discontinued|ended|shut down|out of business|disallow|refus(?:e|es|ed)|requires? (?:a |an )?(?:licen[cs]e|certification|registration)|must (?:be|hold|have) (?:a |an )?(?:licen|certif|regist|resident|located))/i.test(text);
+}
+
 export interface AppliedValidation {
   opportunityId: string;
   field: string;
@@ -1957,7 +1966,7 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
     for (const orchestrationId of await finishedDivePackets(opportunity)) {
       const claims = await citableClaims(orchestrationId);
       const ruledOut = claims.some(
-        (one) => one.evidenceLane === RULED_OUT_LANE && one.claimType !== 'NEGATIVE_EXISTENCE',
+        (one) => one.evidenceLane === RULED_OUT_LANE && one.claimType !== 'NEGATIVE_EXISTENCE' && statesExclusion(one.claim),
       );
       for (const claim of claims) {
         if (!claim.sourceUrl) continue;
@@ -1996,7 +2005,17 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
         const classifying = await declares(claim.fragmentId);
         if (claim.claimType !== 'NEGATIVE_EXISTENCE') {
           if (lane === RULED_OUT_LANE) {
-            fields.push(DISQUALIFIED_FIELD);
+            /*
+             * Only a claim that states a closure or an exclusion stops the
+             * opening. Production, 2026-11-05/06: free models filed the
+             * opening's own description in ruled_out ("HVAC Business is one of
+             * the largest wholesale distributors…", "Buyers can still buy it
+             * from a supplier like us.") and each disqualified a goal opening.
+             * Anything else in the lane is held as a possible disqualifier,
+             * which still blocks qualification and earns the one classifying
+             * round that settles it.
+             */
+            fields.push(statesExclusion(claim.claim) ? DISQUALIFIED_FIELD : UNCLASSIFIED_DISQUALIFIER_FIELD);
           } else if (lane === DISQUALIFIER_LANE && !classifying) {
             fields.push(UNCLASSIFIED_DISQUALIFIER_FIELD);
           }
