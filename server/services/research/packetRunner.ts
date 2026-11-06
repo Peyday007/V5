@@ -93,6 +93,7 @@ import {
 } from '../../repos/workQueue.ts';
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
+import { parseJson } from '../../repos/util.ts';
 import { workType, AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { recomputeProject } from '../stateEngine.ts';
@@ -237,6 +238,46 @@ export const MAX_ITEMS_PER_TARGET = 3;
  * because a failed filing may have uploaded bytes before rolling back, and
  * that case belongs to `synthesisRecovery`, which asks the store first.
  */
+/**
+ * Every earlier item for this target ran out of attempts: the queue spent
+ * them (retryable failures, lapsed leases) or the unworkable sweep cancelled
+ * them spent. Not a worker that said it was done without recording anything.
+ */
+function allSpent(items: WorkItem[], predicate: (item: WorkItem) => boolean): boolean {
+  const earlier = items.filter(predicate);
+  return (
+    earlier.length > 0 &&
+    earlier.every(
+      (item) =>
+        (item.state === 'FAILED' &&
+          (item.failureCategory === 'ATTEMPTS_EXHAUSTED' || item.failureCategory === 'LEASE_EXPIRED' || item.failureCategory === 'TIMEOUT')) ||
+        (item.state === 'CANCELLED' && item.attemptCount >= item.maxAttempts),
+    )
+  );
+}
+
+/**
+ * How many fresh audit rounds a packet may be given after its audits ran out
+ * of attempts. Production, 2026-11-06 10:42Z (`packets parks`): twenty packets
+ * Brain had already decided to file (RECORD_GAPS) sat at NEEDS_HUMAN for up to
+ * a day, because their audit items had spent every attempt on providers and a
+ * model that could not answer during the night's outages — each resume found
+ * the same dead items, parked again, and the answered card was never reopened.
+ */
+export const MAX_AUDIT_REOPENS = 2;
+export const AUDIT_SPENT_CAUSE = 'AUDIT_ATTEMPTS_SPENT';
+
+export async function auditReopensSoFar(orchestration: Pick<ResearchOrchestration, 'id' | 'projectId'>): Promise<number> {
+  const rows = await getDb().all<{ payload: string }>(
+    `SELECT payload FROM project_events WHERE project_id = ? AND event_type = 'AUDIT_ROUND_REOPENED'`,
+    [orchestration.projectId],
+  );
+  return rows.filter((row) => {
+    const payload = parseJson<Record<string, unknown>>(row.payload, {});
+    return payload['orchestrationId'] === orchestration.id && payload['cause'] === AUDIT_SPENT_CAUSE;
+  }).length;
+}
+
 async function mayReplace(
   items: WorkItem[],
   predicate: (item: WorkItem) => boolean,
@@ -2324,6 +2365,30 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
       };
     }
     if (alreadyCreated(items, auditItem) && !(await mayReplace(items, auditItem, 'RESEARCH_AUDIT'))) {
+      /*
+       * Attempts spent is an outage or an unfit model, not a verdict: the
+       * packet's research and synthesis stand. A new round (a timestamp, never
+       * a mutation — `auditRound.ts`) puts all three roles to work again, a
+       * bounded number of times; after that a person decides, as before.
+       */
+      if (allSpent(items, auditItem) && (await auditReopensSoFar(orchestration)) < MAX_AUDIT_REOPENS) {
+        await recordEvent({
+          projectId: orchestration.projectId,
+          layerId: orchestration.layerId,
+          entityType: 'RUN',
+          entityId: orchestration.runId,
+          eventType: 'AUDIT_ROUND_REOPENED',
+          payload: {
+            orchestrationId: orchestration.id,
+            // A millisecond early, so an item enqueued in the same instant is in the round.
+            roundStartedAt: new Date(Date.now() - 1).toISOString(),
+            cause: AUDIT_SPENT_CAUSE,
+            role,
+            reason: `every ${role.toLowerCase()} audit item ran out of attempts; the audit runs again in a new round`,
+          },
+        });
+        return advanceOnce(orchestrationId);
+      }
       return await faultedOut({ orchestration, what: `${role.toLowerCase()} audit` });
     }
     enqueued.push(
