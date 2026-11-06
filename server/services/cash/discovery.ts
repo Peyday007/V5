@@ -729,7 +729,8 @@ export function nextGoalRoundFor(history: CashDiscoveryRound[], now: string): nu
   let barren = 0;
   for (let i = ordered.length - 1; i >= 0; i -= 1) {
     const one = ordered[i]!;
-    if (one.state === 'HARVESTED' && one.found === 0) barren += 1;
+    // An ABANDONED round found nothing too: research stopped before a packet finished.
+    if (one.state === 'ABANDONED' || (one.state === 'HARVESTED' && one.found === 0)) barren += 1;
     else break;
   }
   const wait = Math.min(ROUND_COOL_OFF_MS * 2 ** barren, GOAL_LENS_MAX_BACKOFF_MS);
