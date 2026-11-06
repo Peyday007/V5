@@ -281,3 +281,24 @@ without anybody being asked.
 quotas and outages), RECOVERY.STALLS 35/46 and RECOVERY.IDLE_CAPACITY 20/36
 (items held in provider cooldown; event-loop stalls owned by the repair
 session), LEARNING.DELIVER 3/8 (Factory deliveries from earlier in the week).
+
+## 10. A claim answers its lane (2026-11-06 18:40Z → 21:30Z)
+
+The $10K-plan session reported (cash-report 42260462536) that the goal's
+openings had their payer, price and cost lanes filled with market-size and
+company-description sentences — "The shared services market is expected to grow
+significantly from 2026 to 2033", "HighRadius is a unified framework…", "valued
+at USD 12.25 billion … CAGR 8.05%" — which the gate accepted because the source
+said them, so no opening reached a named buyer or a price.
+
+#583/#585 add gate condition `LANE_FIT`: a payer claim must say that someone
+pays, buys, contracts or hires, and a price or cost claim may not be a market's
+size or growth; a finding without a figure ("quoted on request") still passes,
+because the card already refuses prose as a number. #587 counts the refusal as
+its own class in the improvement scoreboard (its wording named "the source", so
+it had been read as a source problem).
+
+| reading | value |
+|---|---|
+| `capabilities show 2`, 18:40Z → 20:40Z (after #585) | `{"WORKING":16,"BROKEN":4,"MISSING":0,"UNPROVEN":4}` — VERIFICATION.GATE 20/29, EXTRACTION.ACCEPTED 48/55, ANALYSIS.SYNTHESIS 20/20, ANALYSIS.AUDIT 60/61, ANALYSIS.FILED 6/6, DECISION.JOB_OUTCOME 6/8 |
+| `improvement show` (after #587) | CLAIM REJECTIONS … `LANE_FIT:1` — the gate refusing a claim on production for not answering its lane |
