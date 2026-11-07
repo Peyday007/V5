@@ -36,6 +36,7 @@ server/
     manufacturing.ts    what a capability finding creates, and what it may never
     opportunitySignals.ts  what kind of opening a claim is, and what it becomes
     industry.ts         what a structural finding means, and what it may create
+    construction.ts     §92: positions, assets and fact keys an industry is constructed from
     monetization.ts     every shape of transaction, what it needs and what it leaves
     labor.ts            what a labor finding means, and the one validator both doors call
     engineering.ts      the engineering policy: risk, tests, owners, next action, evidence

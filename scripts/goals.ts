@@ -26,6 +26,7 @@
  *   npm run goals -- create --reason "Collect 10000 dollars in 30 days" --project prj_… --due 2026-11-27 SETTLED_CASH-1000000-USD-50000-120 --admin a@b
  *   npm run goals -- target <wst_…> SETTLED_CASH-1000000-USD-50000-120 --project prj_… --admin a@b
  *   npm run goals -- plan <wst_…>            (reads and prints; writes nothing)
+ *   npm run goals -- industry [wst_…] [--reason "the operator's ambition"]   (§92: reads and prints; writes nothing)
  *
  * A target spec is METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS]], dashes
  * only, so it passes the workflow's id check: the figure, how much, in which
@@ -64,6 +65,9 @@ import { constructArrangements } from '../server/services/cash/construct.ts';
 import { goalExclusions } from '../server/services/cash/exclusions.ts';
 import { targetProperties } from '../server/services/cash/properties.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS } from '../server/services/cash/discovery.ts';
+import { assembleEvidence, evidenceFromMap, goalConstruction } from '../server/services/industry/construction/service.ts';
+import { constructIndustry, renderConstruction } from '../server/services/industry/construction/construction.ts';
+import { interpretIntent } from '../server/services/industry/construction/intent.ts';
 
 class Halt extends Error {}
 
@@ -645,6 +649,31 @@ async function explainIdeaBacklog(): Promise<void> {
   for (const one of counts) console.log(`  ${one.bucket.padEnd(9)} ${one.goal ? 'goal ' : 'other'} ${one.n}  oldest ${one.oldest ?? '-'}`);
 }
 
+/**
+ * Industry construction (§92), read-only: a goal's own intent, or the words
+ * given with --reason, through the industry map, the goal's recorded facts and
+ * any reference evidence, to a decision and its first transaction.
+ */
+async function industry(): Promise<void> {
+  const goalId = words()[1];
+  const text = flag('reason');
+  if (goalId) {
+    const read = await goalConstruction(goalId, { intent: text ?? null });
+    if (!read) fail(`No goal ${goalId}.`);
+    console.log(`industry construction for ${read.goal.id} (${read.goal.title})`);
+    console.log(`  evidence: ${read.evidenceLayers.join('; ') || 'none'}`);
+    console.log(renderConstruction(read.construction));
+  } else {
+    if (!text) fail('industry needs a goal id or --reason "the operator\'s ambition".');
+    const intent = interpretIntent(text);
+    const evidence = assembleEvidence({ text, industry: intent.industry, geography: intent.geography, map: evidenceFromMap([], []), recorded: [] });
+    console.log(`industry construction for: ${text}`);
+    console.log(`  evidence: ${evidence.provenance.join('; ') || 'none'}`);
+    console.log(renderConstruction(constructIndustry({ intentText: text, evidence })));
+  }
+  console.log('GOALS: OK');
+}
+
 async function main(): Promise<void> {
   await initDatabase();
   const [command] = words();
@@ -670,8 +699,10 @@ async function main(): Promise<void> {
       return await plan();
     case 'construct':
       return await construct();
+    case 'industry':
+      return await industry();
     default:
-      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, objective, undepend, create, target, plan, construct');
+      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, objective, undepend, create, target, plan, construct, industry');
       process.exitCode = 1;
       console.log('GOALS: FAIL');
   }
