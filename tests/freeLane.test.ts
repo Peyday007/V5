@@ -348,6 +348,24 @@ describe('the free research lane', () => {
     expect(claims[0]!.retrievalState).toBe('RETRIEVED');
   });
 
+  it('drops a qualifier on a self-describing finding and a closing date with no opening, instead of losing the submission (production, 2026-11-07)', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const base = model();
+    const completer: Completer = async (config, name, system, prompt) => {
+      const answer = await base.completer(config, name, system, prompt);
+      if (!prompt.includes('Extract the material claims')) return answer;
+      const parsed = JSON.parse(answer) as { claims: Record<string, unknown>[] };
+      for (const claim of parsed.claims) Object.assign(claim, { structural_qualifier: 'DEPOSIT', closes_on: '2026-12-01' });
+      return JSON.stringify(parsed);
+    };
+    const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource, search: async () => [] });
+    expect(tick.submitted).toBe(1);
+    const claims = await listClaimsForFragment(fragment.id);
+    expect(claims).toHaveLength(1);
+    expect(claims[0]!.closesOn ?? null).toBeNull();
+  });
+
   it('shows the model why every claim was dropped and takes its corrected answer, under the same checks', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
