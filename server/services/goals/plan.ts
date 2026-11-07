@@ -762,7 +762,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     // test-stage limit, and the rest waits for it to pay.
     if (goalExecutionPolicy(target) === 'SQUEEZE' && nextTest?.link === 'CONVERSION') {
       // A SQUEEZE goal's conversion is learned by selling: the step is the sale, not a test that gates selling.
-      nextTest = await saleFor(members.find(({ one, deals }) => !linkChecks(one, deals, target, capabilities, now).find((check) => check.link === 'CONVERSION')!.ok)?.one ?? members[0]!.one, target);
+      const selling = members.find(({ one, deals }) => !linkChecks(one, deals, target, capabilities, now).find((check) => check.link === 'CONVERSION')!.ok)?.one ?? members[0]!.one;
+      nextTest = await saleFor(selling, target, considered.find((c) => c.opportunityId === selling.opportunity.id)?.potentialReach ?? null);
     } else if (nextTest?.link === 'CONVERSION' && target.capitalBeforeProofCents !== null && !target.proven) {
       nextTest = { ...nextTest, test: `${nextTest.test} Tie up no more than ${target.capitalBeforeProofCents / 100} ${target.currency} until money comes in; the rest waits for that proof.` };
     }
@@ -826,11 +827,16 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     strategies,
     // A SQUEEZE goal's next step is a sale when one can be offered; evidence work runs beside it.
     // An owner's open decision (how much may be committed) still comes first: it is theirs, and it binds the sale.
-    nextTest:
-      (policy === 'SQUEEZE' && !(chosen?.nextTest?.by === 'PERSON' && chosen.nextTest.link !== 'CONVERSION') ? sales[0]?.test : null) ??
-      chosen?.nextTest ??
-      marketTests[0]?.test ??
-      null,
+    nextTest: goalNextStep({
+      policy,
+      verdict,
+      chosen: chosen?.nextTest ?? null,
+      sales: sales.map((one) => one.test),
+      marketTest: marketTests[0]?.test ?? null,
+      bestReach,
+      remaining: target.remainingCents / 100,
+      currency: target.currency,
+    }),
     scenarioModelId,
     scenarioRunId,
     basisNote: result?.basisNote ?? null,
@@ -914,7 +920,7 @@ async function salesFor(
     .slice(0, MAX_CONCURRENT_SALES);
   const out: MarketTest[] = [];
   for (const one of ranked) {
-    out.push({ opportunityId: one.opportunityId, title: one.title, potentialReach: one.potentialReach, test: await saleFor(byId.get(one.opportunityId)!, target) });
+    out.push({ opportunityId: one.opportunityId, title: one.title, potentialReach: one.potentialReach, test: await saleFor(byId.get(one.opportunityId)!, target, one.potentialReach) });
   }
   return out;
 }
@@ -925,7 +931,76 @@ async function salesFor(
  * permission is a blocker on this sale, never a reason to run a test first.
  * The goal's money limits bind the outlay through the PURSUES link.
  */
-async function saleFor(one: ModelledOpportunity, target: TargetReading): Promise<NextTest> {
+/**
+ * A goal's next step. An owner's open decision about the goal itself (how much
+ * may be committed) comes first. A sale Brain can send comes next. A sale that
+ * waits for someone to authorize contacting its buyer is that sale's blocker,
+ * listed with the sale, and never the goal's next step: owner, 2026-11-07,
+ * "CONTACT_BUYER is a blocker to executing an individual sale, not a blocker
+ * to constructing a viable $10K plan". The goal's step is then Brain's own
+ * planning work — the missing evidence, or more and stronger openings.
+ */
+export function goalNextStep(input: {
+  policy: string;
+  verdict: PlanVerdict;
+  chosen: NextTest | null;
+  sales: NextTest[];
+  marketTest: NextTest | null;
+  bestReach: number | null;
+  remaining: number;
+  currency: string;
+}): NextTest | null {
+  const waitsOnSaleAuthorization = (step: NextTest | null): boolean => step !== null && step.by === 'PERSON' && step.link === 'CONVERSION';
+  if (input.chosen && input.chosen.by === 'PERSON' && !waitsOnSaleAuthorization(input.chosen)) return input.chosen;
+  if (input.policy === 'SQUEEZE') {
+    const sendable = input.sales.find((one) => one.by === 'BRAIN');
+    if (sendable) return sendable;
+  }
+  // A plan that reaches the target once buyers agree (NEEDS_EVIDENCE or better):
+  // its sale is the deciding step, so it is the goal's step even while it waits
+  // for authorization, and the step carries the sale's terms.
+  if (input.chosen && (input.verdict !== 'NOT_VIABLE' || !waitsOnSaleAuthorization(input.chosen))) return input.chosen;
+  if (input.marketTest && (input.verdict !== 'NOT_VIABLE' || !waitsOnSaleAuthorization(input.marketTest))) return input.marketTest;
+  if (input.verdict === 'RECOMMENDABLE') return input.sales[0] ?? null;
+  const reach = input.bestReach === null ? 'nothing yet' : `at most ${Math.round(input.bestReach)} ${input.currency}`;
+  return {
+    link: 'OFFER_AND_PRICE',
+    test:
+      `Discover, construct and research openings that can reach the ${Math.round(input.remaining)} ${input.currency} still needed — ` +
+      `the openings held reach ${reach} — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.`,
+    by: 'BRAIN',
+    blocker: null,
+  };
+}
+
+/**
+ * The terms a person authorizes when they let Brain contact this buyer: what is
+ * sold, to whom, at what price, who fulfils it, the margin, when cash settles
+ * and what it adds to the goal. Owner, 2026-11-07: "Before asking me for
+ * authorization, show exactly what Brain intends to sell, to whom, at what
+ * price, with what fulfillment arrangement, expected margin, collection timing,
+ * and realistic contribution." An unknown is said to be unknown.
+ */
+export function saleTerms(one: ModelledOpportunity, target: Pick<TargetReading, 'remainingCents' | 'currency'>, reach: number | null): string {
+  const o = one.opportunity;
+  const cur = target.currency;
+  const known = (input: { value: number | null }): number | null => (input.value !== null && Number.isFinite(input.value) ? input.value : null);
+  const price = known(one.price);
+  const cost = known(one.directCost);
+  const days = known(one.daysToCash);
+  const margin = price !== null && cost !== null ? `${Math.round(price - cost)} ${cur} a sale (${price > 0 ? Math.round(((price - cost) / price) * 100) : 0}%)` : 'not established (direct cost unknown)';
+  return [
+    `sells "${(o.offerScope ?? o.title).slice(0, 100)}"`,
+    `to ${o.payer ?? 'a buyer not yet named'}`,
+    `at ${price !== null ? `${price} ${cur}` : 'a price not yet established'}`,
+    `fulfilled by ${one.fulfilledBy?.value ?? o.fulfillmentOwner ?? 'nobody named yet'}`,
+    `margin ${margin}`,
+    `cash ${days !== null ? `about ${Math.round(days)} day(s) after the sale` : 'timing not established'}`,
+    `contributes up to ${reach !== null ? Math.round(reach) : '?'} of the ${Math.round(target.remainingCents / 100)} ${cur} still needed`,
+  ].join('; ');
+}
+
+async function saleFor(one: ModelledOpportunity, target: TargetReading, reach: number | null = null): Promise<NextTest> {
   const title = one.opportunity.title.slice(0, 80);
   const price = one.opportunity.priceCents !== null ? `${one.opportunity.priceCents / 100} ${one.opportunity.currency}` : 'the card’s price';
   // The owner's spending rule, in its own words: a limit on money, not a stage before selling.
@@ -935,10 +1010,12 @@ async function saleFor(one: ModelledOpportunity, target: TargetReading): Promise
       : '';
   const test = `Sell "${title}": offer it to its reachable buyers at ${price} for an actual sale, contract or deposit. Each answer is a sale or a refusal, and is recorded as the demand and price evidence.${limit}`;
   const missing = await missingForSale(one, target);
+  // A blocker on this one sale, stated with its terms — never a blanket request and never the goal's blocker (owner, 2026-11-07).
+  const terms = `Terms: ${saleTerms(one, target, reach)}.`;
   if (missing.send.length > 0) {
-    return { link: 'CONVERSION', test, by: missing.sendByPerson ? 'PERSON' : 'BRAIN', blocker: saleBlocker(missing) };
+    return { link: 'CONVERSION', test, by: missing.sendByPerson ? 'PERSON' : 'BRAIN', blocker: `This sale waits for authorization. ${terms} ${saleBlocker(missing)}` };
   }
-  return { link: 'CONVERSION', test, by: 'BRAIN', blocker: missing.collect.length > 0 ? saleBlocker(missing) : null };
+  return { link: 'CONVERSION', test, by: 'BRAIN', blocker: missing.collect.length > 0 ? `${terms} ${saleBlocker(missing)}` : null };
 }
 
 /**
