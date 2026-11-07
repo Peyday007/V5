@@ -708,6 +708,11 @@ export const MAX_LIVE_GOAL_ROUNDS = 3;
  * shown paying, collected fast. A preference in the question, not a filter:
  * the gate, harvest and plan judge every opening exactly as before.
  */
+/*
+ * Until 2026-11-07 this asked only for work to fulfil mostly with AI-produced digital output
+ * that businesses pay for, which with the screens beside it steered every goal round away
+ * from brokered home services and household buyers the owner allows (§91).
+ */
 export const REMOTE_AI_FOCUS =
   'Look for work this operation can run entirely online: work it fulfils with AI-produced digital output (documents, data, research, content, code, automations), and services that independent contractors or suppliers perform for businesses or households while this operation sells, books, refers or subcontracts them and coordinates them remotely (home services, local services, consumer services, small repeat purchases). Neither kind is preferred over the other. ' +
   'For each opening give: the kind of buyer and where they are found, a dated sign that buyers want it now, the price buyers are shown paying for it, how many such buyers there are and how often each buys, who performs or produces the work and how it is delivered, what it costs to get each customer, the cost per sale, and how quickly the money is collected.';
