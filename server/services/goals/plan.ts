@@ -45,7 +45,7 @@ import { constructArrangements, type ConstructedArrangement } from '../cash/cons
 import { goalExclusions } from '../cash/exclusions.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
 import { listMoneyEntries } from '../../repos/cashLedger.ts';
-import { recordMateriality } from './materiality.ts';
+import { exemptSales, recordMateriality } from './materiality.ts';
 import { withReadScope } from '../../repos/readScope.ts';
 import { cashSpareSurfaces } from '../cash/researchRoom.ts';
 import { researchGoalPaths } from './pathResearch.ts';
@@ -801,6 +801,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const policy = goalExecutionPolicy(target);
   const marketTests: MarketTest[] = [];
   const sales = policy === 'SQUEEZE' ? await salesFor(considered, model.portfolio, byIdOf(model), target) : [];
+  exemptSales(goal.id, sales.map((one) => one.opportunityId));
   for (const one of policy === 'SQUEEZE' ? [] : [...considered].filter((c) => c.stage === 'C_MARKET_TEST_READY').sort((a, b) => (b.potentialReach ?? 0) - (a.potentialReach ?? 0)).slice(0, MAX_MARKET_TESTS)) {
     let test = await nextTestFor('CONVERSION', byId.get(one.opportunityId)!, target.projectId);
     if (target.capitalBeforeProofCents !== null && !target.proven) {
