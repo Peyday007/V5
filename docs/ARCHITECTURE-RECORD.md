@@ -14743,11 +14743,21 @@ those three and duplicates none.
   whole search; only an input that changes the recommended entry, an unknown
   that prices a stage, or one that prices control nobody can reach is
   decisive. OBSERVED and VERIFIED inputs are never asked again.
+  Deciding is not the same as learning, though: the entry's demand side —
+  buyers reachable, what one account buys, what it pays, how often a pitch
+  converts, how fast it pays (`RESEARCHED_BESIDE_SALE`), and under SQUEEZE
+  every open input of the entry — is researched *beside the sale*
+  (`besideSale`), never marked "not worth researching", and never ahead of the
+  offer: `RESEARCH_FIRST` counts none of it, and a SQUEEZE goal is never
+  `RESEARCH_FIRST` (owner, 2026-11-07: the construction had said "research
+  beside the sale" while its mode was `SELL_NOW` and its list skipped buyer
+  volume, price and conversion).
 - **Execution is the existing path's.** The first transaction carries the cash
   journey's `CashMechanism` and a `cash/properties.ts` structure and design.
   Contacting, signing and spending stay the commercial authority's and the
   goal's money limits'; the goal's capital ceiling caps the words' capital. A
-  SQUEEZE goal sells now with research beside the sale. Another active money
+  SQUEEZE goal sells now with research beside the sale (`RESEARCH_BESIDE_SELLING`,
+  its questions in `researchBesideSale` and the plan's last step). Another active money
   goal is listed and left unchanged.
 - **Learning is a row.** `construction_facts` (append-only) holds what
   operating taught — a quoted price, an accepted rate, payment terms, a

@@ -39,7 +39,8 @@ describe('goal industry construction', () => {
     expect(c.recommended).not.toBeNull();
     expect(c.recommended!.stages[0]!.economics.worst!.upfront).toBeLessThanOrEqual(12_000);
     expect(c.execution!.policy).toBe('SQUEEZE');
-    expect(c.execution!.mode).toBe('SELL_NOW');
+    expect(c.execution!.mode).toBe('RESEARCH_BESIDE_SELLING');
+    expect(c.execution!.researchBesideSale.length).toBeGreaterThan(0);
     expect(read.evidenceLayers.join(' ')).toMatch(/reference pack/);
   });
 

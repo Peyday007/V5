@@ -8,7 +8,7 @@
  * positions and evidence, not from a menu about delivery.
  */
 import { describe, expect, it } from 'vitest';
-import { constructIndustry, type Construction } from '../server/services/industry/construction/construction.ts';
+import { constructIndustry, renderConstruction, type Construction } from '../server/services/industry/construction/construction.ts';
 import { interpretIntent } from '../server/services/industry/construction/intent.ts';
 import { lastMileDelivery } from '../server/services/industry/construction/references.ts';
 import { constructBusinesses } from '../server/services/industry/construction/businesses.ts';
@@ -179,6 +179,10 @@ describe('acceptance: last-mile logistics in Metro Detroit', () => {
     // Research is asked only where its answer can change the decision.
     expect(c.research.some((q) => q.decisive)).toBe(true);
     expect(c.research.some((q) => !q.decisive && /not worth researching/.test(q.because))).toBe(true);
+    // Without a goal deadline the demand side still runs beside the sale, never ahead of it.
+    expect(c.research.filter((q) => q.besideSale).map((q) => q.key)).toEqual(expect.arrayContaining(['price_per_unit', 'account_units_per_month', 'account_win_rate', 'accounts_reachable']));
+    expect(c.research.some((q) => q.besideSale && /not worth researching/.test(q.because))).toBe(false);
+    expect(c.execution!.mode).toBe('RESEARCH_BESIDE_SELLING');
   });
 });
 
@@ -191,8 +195,17 @@ describe('7–8. execution and learning', () => {
       otherMoneyGoals: [{ id: 'wst_other', title: 'Collect $10K', policy: 'SQUEEZE' }],
       now: NOW,
     });
-    expect(c.execution!.mode).toBe('SELL_NOW');
+    expect(c.execution!.mode).toBe('RESEARCH_BESIDE_SELLING');
     expect(c.execution!.steps[0]).toMatch(/no market-testing phase/);
+    // Buyer volume, market size, price, conversion and payment timing are researched while the sale runs.
+    const beside = c.research.filter((q) => q.besideSale);
+    expect(beside.map((q) => q.key)).toEqual(expect.arrayContaining(['accounts_reachable', 'account_units_per_month', 'price_per_unit', 'account_win_rate', 'buyer_payment_days']));
+    expect(beside.every((q) => q.blocksEntry && !/not worth researching/.test(q.because))).toBe(true);
+    expect(c.execution!.researchBesideSale).toHaveLength(beside.length);
+    expect(c.execution!.steps.at(-1)).toMatch(/^Research beside the sale, never ahead of it: /);
+    // None of it is asked first: the offer goes out now.
+    expect(c.execution!.steps.some((st) => /^Establish first/.test(st))).toBe(false);
+    expect(renderConstruction(c)).toMatch(/RESEARCH BESIDE SALE/);
     expect(c.execution!.otherGoals).toMatch(/unchanged/);
     // The goal's own money ceiling caps the words' capital.
     expect(c.intent.capital!.high).toBe(15_000);
