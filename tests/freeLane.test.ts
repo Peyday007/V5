@@ -366,6 +366,28 @@ describe('the free research lane', () => {
     expect(claims[0]!.closesOn ?? null).toBeNull();
   });
 
+  it('keeps the good claims when Brain refuses one numbered claim, without asking the model again (production, 2026-11-07)', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const base = model();
+    const prompts: string[] = [];
+    const completer: Completer = async (config, name, system, prompt) => {
+      const answer = await base.completer(config, name, system, prompt);
+      if (!prompt.includes('Extract the material claims')) return answer;
+      prompts.push(prompt);
+      const parsed = JSON.parse(answer) as { claims: Record<string, unknown>[] };
+      // A second claim on the same sentence with a date that does not exist: Brain refuses claims[1].
+      parsed.claims.push({ ...parsed.claims[0]!, claim: 'The wage was published as a dated opening.', opportunity_signal: 'EXISTING_BUYING_SIGNAL', closes_on: '2026-02-30' });
+      return JSON.stringify(parsed);
+    };
+    const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource, search: async () => [] });
+    expect(tick.submitted).toBe(1);
+    expect(prompts).toHaveLength(1);
+    const claims = await listClaimsForFragment(fragment.id);
+    expect(claims).toHaveLength(1);
+    expect(claims[0]!.claim).toMatch(/median hourly wage/);
+  });
+
   it('shows the model why every claim was dropped and takes its corrected answer, under the same checks', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
