@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
-import { createBin, listBinEvents } from '../server/repos/bins.ts';
+import { createBin, listBinEvents, recordBinEvent } from '../server/repos/bins.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, listClaimsForFragment } from '../server/repos/research.ts';
@@ -328,6 +328,23 @@ describe('the free research lane', () => {
     expect((await getWorkItem(verifyId))?.state).toBe('SUCCEEDED');
     const claims = await listClaimsForFragment(fragment.id);
     expect(claims[0]!.accepted).toBe(true);
+  });
+
+  it('gives a mostly failing model\u2019s role to the other model, not only a model that failed everything (production, 2026-11-07)', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    await freeLaneTick({ config: CONFIG, completer: model().completer, fetchSource, search: async () => [] });
+    const verifyId = (await getDb().get<{ id: string }>("SELECT id FROM work_items WHERE orchestration_id = ? AND work_type = 'RESEARCH_VERIFY'", [orchestration.id]))!.id;
+    // brain-b holds the verify role, but answered 1 of its last 10 items: the role goes to brain-a.
+    await recordBinEvent({ eventType: 'FREE_LANE_ITEM', workloadClass: 'RESEARCH_AUDIT', outcome: 'SUBMITTED', reason: 'model brain-b: ok' });
+    for (let i = 0; i < 9; i += 1) {
+      await recordBinEvent({ eventType: 'FREE_LANE_ITEM', workloadClass: 'RESEARCH_AUDIT', outcome: 'RELEASED_TRANSIENT', reason: 'model brain-b: model call failed: cheap lane HTTP 503' });
+    }
+    const second = model();
+    const tick = await freeLaneTick({ config: CONFIG, completer: second.completer, fetchSource, search: async () => [] });
+    expect(tick.byType['RESEARCH_VERIFY']).toBe(1);
+    expect(second.calls.every((name) => name === 'brain-a')).toBe(true);
+    expect((await getWorkItem(verifyId))?.state).toBe('SUCCEEDED');
   });
 
   it('records a claim on a page Brain read as retrieved, and drops fields the tool does not define (production, 2026-11-07)', async () => {
