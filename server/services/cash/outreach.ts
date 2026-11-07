@@ -64,11 +64,18 @@ export function composeBuyerMessage(opportunity: CashOpportunity): BuyerMessage 
     return { ok: false, reason: 'the card states no price to offer', missing: 'priceCents' };
   }
 
+  /*
+   * Only an explicit paid request is the buyer's own "published request". Every
+   * other opening's title is Brain's evidence sentence about the buyer
+   * ("Artisanal Sudoku (a Substack publication of variant-Sudoku puzzles)
+   * publishes su…", 2026-11-07), and quoting it back to them as their request
+   * is false and reads as a form letter. Those open with the offer.
+   */
+  const asked = opportunity.mechanism === 'EXPLICIT_PAID_REQUEST';
   const lines = [
     opportunity.payer ? `Hello ${opportunity.payer},` : 'Hello,',
     '',
-    `We saw your published request: "${opportunity.title}".`,
-    '',
+    ...(asked ? [`We saw your published request: "${opportunity.title}".`, ''] : []),
     `What we can do: ${opportunity.offerScope.trim()}`,
     `Price: ${money(opportunity.priceCents, opportunity.currency)}`,
   ];
@@ -82,6 +89,6 @@ export function composeBuyerMessage(opportunity: CashOpportunity): BuyerMessage 
     'If you would rather not hear from us, reply "no thanks" and we will not write again.',
   );
 
-  const subject = `Re: ${opportunity.title}`.slice(0, 200);
+  const subject = (asked ? `Re: ${opportunity.title}` : `Offer: ${opportunity.offerScope.trim()}`).slice(0, 200);
   return { ok: true, to: recipient.to, subject, text: lines.join('\n') };
 }
