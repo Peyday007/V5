@@ -166,16 +166,17 @@ export async function researchGoalPaths(input: {
   for (const one of order) {
     if (openings >= openingCap || openHere >= questionCap) break;
     /*
-     * A SQUEEZE goal learns demand by selling (owner, 2026-11-06): no opening
-     * is asked how many buyers exist, and an opening it is selling is not
-     * asked what buyers pay — the buyers it offers to answer both. Costs and
-     * payment timing are still researched beside the sale: they never hold
-     * the sale up, and they decide what each opening adds before the deadline.
+     * Research runs beside a SQUEEZE goal's sales and never ahead of them
+     * (owner, 2026-11-06, twice): an opening being sold is still asked what
+     * buyers pay, how many buyers exist and how often they buy — the
+     * quantitative demand, price and market-size evidence the plan models —
+     * while its offers go out. Nothing here gates a sale: a question is a need
+     * raised for research, and the sale reads none of them.
      */
     const sold = squeeze && selling.has(one.opportunityId);
-    const learnedBySelling = (link: string) => squeeze && (link === 'MARKET_VOLUME' || link === 'CONVERSION' || (sold && link === 'OFFER_AND_PRICE'));
-    let asks = one.missing.filter((link) => !learnedBySelling(link)).flatMap((link) => FIELDS_FOR[link] ?? []);
-    if (asks.length === 0 && (squeeze || one.volumeEstablished !== false || one.competitiveAward)) continue;
+    let asks = one.missing.flatMap((link) => FIELDS_FOR[link] ?? []);
+    if (sold && !one.volumeEstablished && !asks.some((a) => a.field === 'buyerVolume')) asks = [...asks, FIELDS_FOR.MARKET_VOLUME![0]!];
+    if (asks.length === 0 && (one.volumeEstablished !== false || one.competitiveAward)) continue;
     /*
      * Worth asking about only if the answer could change what Brain pursues.
      * An opening whose most, even with every buyer agreeing, is under a tenth
@@ -191,12 +192,13 @@ export async function researchGoalPaths(input: {
       continue;
     }
     if (one.supportedReach < floor && !sold) {
+      // (An opening being sold keeps every question it has: its research runs beside the sale.)
       // No supported price big enough yet: what buyers actually pay decides
       // whether anything else about it is worth asking, so ask that alone.
       asks = [FIELDS_FOR.OFFER_AND_PRICE![0]!];
       // Small per sale with volume unknown: how many buyers, how often, is asked beside the price.
       if (!sizeKnown) asks = [...asks, FIELDS_FOR.MARKET_VOLUME![0]!];
-    } else if (!squeeze && !one.volumeEstablished && one.supportedReach < remaining && !one.competitiveAward && !asks.some((a) => a.field === 'buyerVolume')) {
+    } else if (!one.volumeEstablished && one.supportedReach < remaining && !one.competitiveAward && !asks.some((a) => a.field === 'buyerVolume')) {
       // One deal cannot carry the goal: whether it sells again — how many
       // buyers, how often — is investigated, never assumed (§81).
       asks = [...asks, FIELDS_FOR.MARKET_VOLUME![0]!];

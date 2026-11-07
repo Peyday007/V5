@@ -180,6 +180,32 @@ if (what === 'check-ran' || what === 'resumed') {
     detail = `Goals run ${found.run} on ${serving(log)?.slice(0, 7)}: policy ${policy}, ${sales.length} sale(s), ${tests} market test line(s), next step ${next ? `[${next[1]}] ${next[2].slice(0, 120)}` : 'none'}`;
     for (const one of sales) detail += `\n  sale ${one}`;
   }
+} else if (what === 'sold-research') {
+  // Research beside the sales (owner, 2026-11-06, second order): a sold opening carries demand/price/market-size questions.
+  const found = latestLog('goals.yml', '  policy      ');
+  if (!found) detail = 'no Goals plan run prints the execution policy';
+  else {
+    const log = found.log.split('##[notice]')[0];
+    const lines = log.split('\n').map((l) => l.replace(/^\S+Z /, ''));
+    const sold = [];
+    let current = null;
+    for (const line of lines) {
+      const sale = /^ {2}sale {8}(\S+) /.exec(line);
+      if (sale) {
+        current = { id: sale[1], research: [] };
+        sold.push(current);
+        continue;
+      }
+      const q = /^ {4}research {2}(\S+) (\S+)/.exec(line);
+      if (q && current) current.research.push(`${q[1]} ${q[2]}`);
+      else if (!/^ {4}/.test(line)) current = null;
+    }
+    const quantitative = (one) => one.research.some((r) => /^(buyerVolume|revenueRange|price) /.test(r));
+    const next = /next step {3}\[(\w+)\] (.*)/.exec(log);
+    ok = sold.some(quantitative) && Boolean(next && next[2].startsWith('Sell "'));
+    detail = `Goals run ${found.run} on ${serving(log)?.slice(0, 7)}: ${sold.length} sale(s); next step ${next ? next[2].slice(0, 80) : 'none'}`;
+    for (const one of sold) detail += `\n  sale ${one.id}: ${one.research.join(', ') || 'no research question'}`;
+  }
 } else if (what === 'selection') {
   // Commercial selection (2026-11-06): constructed estimates are compared with found openings in the portfolio.
   const found = latestLog('goals.yml', '    compared  ');
@@ -191,7 +217,7 @@ if (what === 'check-ran' || what === 'resumed') {
     detail = `Goals run ${found.run} on ${serving(found.log)?.slice(0, 7)}: ${m ? `${m[1]} found + ${m[2]} estimates compared, ${m[3]} refused, ${m[4]} estimate(s) in the best combination` : 'no comparison line'}${best ? `; best reaches ${best[1]}% · p10 ${best[2]} p50 ${best[3]} p90 ${best[4]}` : ''}`;
   }
 } else {
-  detail = 'name one of: squeeze, selection, check-ran, resumed, repair-work, goal-running, honest-plan, commercial, evidence-to-plan, recovery';
+  detail = 'name one of: sold-research, squeeze, selection, check-ran, resumed, repair-work, goal-running, honest-plan, commercial, evidence-to-plan, recovery';
 }
 console.log(`${ok ? 'PASS' : 'FAIL'} ${what}: ${detail}`);
 process.exit(ok ? 0 : 1);
