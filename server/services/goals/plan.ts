@@ -836,7 +836,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     considered,
     // Sufficient means a realistic, evidence-supported plan — a recommendation —
     // never openings that merely look valuable. Until there is one, keep looking.
-    needsMoreOpenings: !target.achieved && verdict !== 'RECOMMENDABLE',
+    // A SQUEEZE goal keeps discovering and constructing stronger openings while it sells the ones it has,
+    // until the target is met (owner, 2026-11-06): a recommendation is no reason to stop looking.
+    needsMoreOpenings: !target.achieved && (policy === 'SQUEEZE' || verdict !== 'RECOMMENDABLE'),
     inferred: inferredInputs(model.considered),
     researchPriority: researchPriority(result, model.included, target, chosen?.key ?? null),
     // The pool, the ladder and the diagnosis are about openings found; an estimate is none of them.

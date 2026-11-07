@@ -9,9 +9,12 @@
  *     tested — the first offer pursues an actual sale, contract, deposit or
  *     paid transaction, and its outcome is a sale or a refusal, never a pass
  *     or fail that gates "normal selling";
- *   - what selling reveals (whether buyers reply, how many agree, how many
- *     buy again) is learned by selling, not by research rounds run first to
- *     qualify the opening for an experiment;
+ *   - nothing is researched *first* to qualify an opening for an
+ *     experiment; demand, price and market-size research run beside the
+ *     sales (owner, 2026-11-06, second order), so the plan's quantitative
+ *     model is fed by both the research and what buyers answer;
+ *   - discovery and construction keep searching for stronger openings while
+ *     the existing ones are sold;
  *   - several independent sources are pursued at once, ranked by what each
  *     can collect before the deadline and adds to the whole goal;
  *   - the money limits and the permission to contact buyers, contract and
@@ -30,10 +33,9 @@ export function goalExecutionPolicy(target: { daysLeft: number | null; remaining
 }
 
 /**
- * The links of a plan's chain that a SQUEEZE goal learns by selling. Asking
- * buyers is how a reply rate, a close rate, buyers' willingness to pay the
- * offered price and repeat volume are measured, so none of them is researched
- * first or required before an offer goes out.
+ * The links of a plan's chain a SQUEEZE goal never requires before an offer
+ * goes out: asking buyers measures them. Market volume is also researched in
+ * parallel; neither the research nor its absence holds a sale.
  */
 export const LEARNED_BY_SELLING = ['CONVERSION', 'MARKET_VOLUME'] as const;
 

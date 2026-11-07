@@ -181,6 +181,8 @@ describe('the gate', () => {
     const id = await goal(1_000_000);
     const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
     expect(reading.verdict).toBe('RECOMMENDABLE');
+    // A SQUEEZE goal keeps discovering and constructing stronger openings even with a recommended plan (2026-11-06).
+    expect(reading.needsMoreOpenings).toBe(true);
     expect(reading.strategies[0]!.links.every((one) => one.ok)).toBe(true);
     // No success percentage: there is no record of earlier recommended plans.
     expect(reading.measuredChance).toBeNull();
@@ -728,6 +730,25 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect((await getDb().all("SELECT kind FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_SALE_PURSUED'", [id]))).toHaveLength(1);
   });
 
+  it('researches demand, price and market size for an opening while it is being sold, without holding the sale', async () => {
+    const o = await oneOff({ title: 'Arrange a load for a shipper', priceCents: 40_000, capitalCents: 0 });
+    const id = await goal(1_000_000);
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
+    expect(reading.sales.map((one) => one.opportunityId)).toContain(o.id);
+    const trace: string[] = [];
+    const { researchGoalPaths } = await import('../server/services/goals/pathResearch.ts');
+    await researchGoalPaths({ reading, projectId, now, trace, dryRun: false });
+    const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
+    const asked = (await listNeeds({ projectId, states: ['OPEN'] })).filter((one) => one.opportunityId === o.id).map((one) => one.requestKey);
+    // How many buyers exist and how often they buy (demand and market size), beside the sale.
+    expect(asked).toContain(`question:${o.id}:buyerVolume`);
+    // The sale is unchanged by the research: still the next step, still pursued.
+    const again = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
+    expect(again.sales.map((one) => one.opportunityId)).toContain(o.id);
+    expect(again.nextTest?.test).toMatch(/^Sell /);
+    expect((await listLinks(id)).some((l) => l.kind === 'OPPORTUNITY' && l.ref === o.id && l.relation === 'PURSUES')).toBe(true);
+  });
+
   it('sells several independent openings at once, largest contribution first', async () => {
     const small = await oneOff({ title: 'A small arrangement', priceCents: 5_000, capitalCents: 0 });
     const large = await oneOff({ title: 'A large arrangement', priceCents: 300_000, capitalCents: 0 });
@@ -736,6 +757,8 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     const order = reading.sales.map((one) => one.opportunityId);
     expect(order).toEqual(expect.arrayContaining([small.id, large.id, mid.id]));
     expect(order.indexOf(large.id)).toBeLessThan(order.indexOf(small.id));
+    // Discovery and construction keep looking for stronger openings while these are sold.
+    expect(reading.needsMoreOpenings).toBe(true);
     // The operator reaches buyers in that order (operate.ts advanceWithinAuthority).
     await advanceGoalPlans(now);
     const { salesOrderForProject } = await import('../server/services/goals/plan.ts');
@@ -825,9 +848,10 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
     const open = await listNeeds({ projectId, states: ['OPEN'] });
     expect(open.filter((one) => one.opportunityId === small.id && one.requestKey?.startsWith('question:'))).toHaveLength(0);
-    // Being sold (SQUEEZE): what buyers pay is learned from the offers, so price is not researched first;
-    // when the money settles is still researched beside the sale.
-    expect(open.filter((one) => one.opportunityId === guessed.id).map((one) => one.requestKey)).toEqual([`question:${guessed.id}:timeToFirstCash`]);
+    // Being sold (SQUEEZE), it keeps every question beside the sale: what buyers pay, when money settles,
+    // and how many buyers exist.
+    const asked = open.filter((one) => one.opportunityId === guessed.id).map((one) => one.requestKey);
+    expect(asked).toEqual(expect.arrayContaining([`question:${guessed.id}:revenueRange`, `question:${guessed.id}:buyerVolume`]));
   });
 
   it("does not count Brain's own estimate as an answer, so a question is researched rather than churned", async () => {

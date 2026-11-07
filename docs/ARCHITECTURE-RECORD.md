@@ -13960,10 +13960,14 @@ the scarce thing, and three rules had made selling wait on an experiment:
   … for an actual sale, contract or deposit; each answer is a sale or a
   refusal, recorded as the demand and price evidence"), unless an owner's own
   open decision comes first. The permission to contact buyers and a message
-  channel are blockers on that sale, never a reason to test. Path research
-  stops asking how many buyers exist, and what buyers pay for an opening
-  being sold; costs and payment timing are still researched beside the sale,
-  which they never held up. The operator reaches READY buyers in the goals'
+  channel are blockers on that sale, never a reason to test. Research runs
+  beside the sales and never ahead of them (owner's second order, the same
+  day): an opening being sold is still asked what buyers pay, how many buyers
+  exist and how often they buy, plus costs and payment timing — path research
+  raises needs, and no sale reads one. A SQUEEZE goal's `needsMoreOpenings`
+  stays true until the target is met, so discovery and construction keep
+  looking for stronger openings while the existing ones are sold, a
+  recommended plan included. The operator reaches READY buyers in the goals'
   sales order (`salesOrderForProject`), so its three contacts a pass go to the
   largest openings first.
 

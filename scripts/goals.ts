@@ -468,7 +468,7 @@ async function printSearching(reading: PlanReading): Promise<void> {
   for (const [key, count] of [...groups].sort((a, b) => b[1] - a[1]).slice(0, 40)) console.log(`    ${String(count).padStart(3)}x ${key}`);
 }
 
-function printPlan(reading: PlanReading): void {
+async function printPlan(reading: PlanReading): Promise<void> {
   const t = reading.target;
   console.log(`PLAN ${reading.goalId}  ${reading.verdict}`);
   console.log(`  target      ${t.targetCents / 100} ${t.currency} ${t.metricLabel}; ledger shows ${t.achievedCents / 100} since ${t.since.slice(0, 10)}; ${t.remainingCents / 100} to go; ${t.daysLeft ?? '—'} day(s) left`);
@@ -488,6 +488,9 @@ function printPlan(reading: PlanReading): void {
   for (const one of reading.sales) {
     console.log(`  sale        ${one.opportunityId} up to ${one.potentialReach === null ? '?' : Math.round(one.potentialReach)} · [${one.test.by}] ${one.title.slice(0, 70)}`);
     if (one.test.blocker) console.log(`    blocker   ${one.test.blocker}`);
+    // Research runs beside the sale, never ahead of it: the questions on this opening and where each stands.
+    const questions = (await listNeeds({ projectId: reading.target.projectId })).filter((n) => n.opportunityId === one.opportunityId && n.requestKey?.startsWith('question:'));
+    for (const q of questions) console.log(`    research  ${q.requestKey!.split(':').pop()} ${q.state}`);
   }
   for (const one of reading.marketTests) {
     console.log(`  market test ${one.opportunityId} up to ${one.potentialReach === null ? '?' : Math.round(one.potentialReach)} · [${one.test.by}] ${one.title.slice(0, 70)}`);
@@ -545,7 +548,7 @@ async function plan(): Promise<void> {
   process.env['BRAIN_PLAN_TRACE'] ??= '1';
   const reading = await readGoalPlan({ goalId, persist: false });
   if (!reading) fail(`No targeted goal ${goalId}.`);
-  printPlan(reading);
+  await printPlan(reading);
   console.log(`  timing      plan read in ${Date.now() - started} ms; ${reading.inferred.length} inferred input(s), ${reading.researchPriority.length} ranked question(s)`);
   const searching = Date.now();
   await printSearching(reading);
