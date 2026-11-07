@@ -14684,3 +14684,77 @@ stated correctly in every research question and applied too broadly in code:
   a public buyer.
 - **Breadth is kept.** Nothing new is preferred: the lenses, buckets and
   constructed arrangements are unchanged, and the examples above are examples.
+
+## 92. An industry is constructed from positions and evidence, and the decision is Brain's.
+
+Owner, 2026-11-07: take an operator's ambition ("enter last-mile logistics in
+Metro Detroit with $10,000–$30,000, revenue quickly, no personal deliveries, a
+significant company with control"), reconstruct the industry, construct viable
+businesses, solve their economics, sequence them, decide, and hand the first
+transaction to the existing sales path. Before this, the industry map (§38)
+recorded structure, §81–82 composed one-transaction arrangements for a cash
+goal, and the quant engine priced openings; nothing turned an ambition into a
+staged business. `services/industry/construction/` is the owner; it extends
+those three and duplicates none.
+
+- **A position, not a menu.** A business is five independent choices
+  (`domain/construction.ts`): what we hold with the payer (none, introduce,
+  represent, prime), how the work is done (self, recruit, network, employ),
+  whose assets (none, contractor, leased, owned), whether buyers share capacity,
+  and whether we run an information layer. Coherence rules refuse what cannot
+  exist; every coherent position meets every buyer segment the evidence holds.
+  Driver recruitment, brokerage, subcontracting, capacity coordination and a
+  directly operated fleet are positions nobody listed. Mechanisms (demand
+  ownership, supply coordination, aggregation…) are read off the position.
+- **Evidence has a status, and an unknown is solved for.** Facts are OBSERVED
+  (our own results), VERIFIED, ESTIMATE (a published figure about another
+  market) or ASSUMPTION; absent is UNKNOWN. `resolveFact` takes the strongest
+  and keeps the rest as history (invariant 17). An unknown input is never
+  filled in: the business is UNPRICED and the input's break-even is solved
+  (Amazon's DSP route rate is not public, so the construction states the rate
+  per stop at which that entry breaks even). Reference packs
+  (`references.ts`) are sourced evidence, the weakest layer; the industry map
+  and recorded facts answer ahead of them.
+- **Economics are formulas in the scenario grammar.** Contribution, upfront
+  money, working capital from the cash cycle, time to first collected cash,
+  downside exposure and break-even accounts are written once per position and
+  evaluated at the worst, middle and best of every range; the headline figures
+  also go through `quant/reconstruct.ts` so their tier is stated. Conventions
+  (21.7 working days, weekly payroll, a 30% forced-sale loss, three months to
+  stop a failing stage, the 1/3/8/20-account stage ladder) are named constants,
+  not evidence.
+- **Strategy is a walk over assets.** Each stage needs what earlier stages
+  accumulated (contracts, a delivery record, a supply network, density, a
+  fleet) and the capital the operator has plus what earlier stages earned; an
+  earlier business selling to a different buyer keeps running beside a later
+  one. Strategies are compared lexicographically (feasible, entry viability,
+  unpriced stages, control held, first cash inside the window, exposure,
+  long-run contribution); risk tolerance and urgency reorder the criteria. A
+  chokepoint counts as controlled only when every asset it takes is held, so
+  vertical integration earns nothing by itself.
+- **Brain decides and challenges.** The decision names the entry, the first
+  transaction and why each alternative lost; challenges test the operator's
+  assumptions (capital for a fleet, the cash window, capital-heavy ownership,
+  reachable control); the operator's own preferred sequence is evaluated
+  beside the best one. With no defensible structure it names the decisive
+  obstacle and the nearest better alternative.
+- **Research only where it can change the decision.** Every non-established
+  input of the entry is probed at both ends of its range by re-running the
+  whole search; only an input that changes the recommended entry, an unknown
+  that prices a stage, or one that prices control nobody can reach is
+  decisive. OBSERVED and VERIFIED inputs are never asked again.
+- **Execution is the existing path's.** The first transaction carries the cash
+  journey's `CashMechanism` and a `cash/properties.ts` structure and design.
+  Contacting, signing and spending stay the commercial authority's and the
+  goal's money limits'; the goal's capital ceiling caps the words' capital. A
+  SQUEEZE goal sells now with research beside the sale. Another active money
+  goal is listed and left unchanged.
+- **Learning is a row.** `construction_facts` (append-only) holds what
+  operating taught — a quoted price, an accepted rate, payment terms, a
+  measured conversion — recorded with `POST /goals/:id/construction/facts`;
+  it answers ahead of every published figure and the decision re-derives.
+- **Doors.** `GET /goals/:id/construction` reads; `POST` replans under
+  overrides (capital, urgency, risk, control, scale, appetite) and with
+  `seed: true` puts the industry on the goal's map through `seedSubject` so the
+  kernel researches it; `npm run goals -- industry [wst_…] [--reason "…"]`
+  (and the Goals workflow's `industry` command) prints it on production.

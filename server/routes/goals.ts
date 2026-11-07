@@ -32,6 +32,12 @@ import { decideProjectAccess } from '../services/identity/policy.ts';
 import { goalBriefing } from '../services/goals/briefing.ts';
 import { assembleGoals } from '../services/goals/model.ts';
 import { cancel, changeObjective, pause, reinstate, resume, setDependency, setTerms } from '../services/goals/decide.ts';
+import { goalConstruction, seedGoalIndustry } from '../services/industry/construction/service.ts';
+import type { IntentOverrides } from '../services/industry/construction/intent.ts';
+import { CONTROL_TARGETS, FACT_KEY_LIST, FACT_STATUSES, isFactKey, type ControlTarget, type FactStatus } from '../domain/construction.ts';
+import { recordConstructionFact } from '../repos/construction.ts';
+import { recordWorkstreamEvent } from '../repos/register.ts';
+import { optionalBoolean, optionalNumber, optionalStringArray } from './helpers.ts';
 import type { Principal } from '../domain/types.ts';
 
 export const goalsRouter: Router = Router();
@@ -191,5 +197,112 @@ goalsRouter.post(
       link: made.link,
       consequence: made.consequence,
     };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Industry construction (§92)
+ *
+ * Reading a goal's construction is any reader's: the operator's intent, the
+ * industry model, every constructed business and its economics, the staged
+ * strategy, the decision and the first transaction. It spends nothing and
+ * changes no goal. Replanning is the same read with a person's overrides
+ * (capital, urgency, risk, control, ambition) and changes nothing either.
+ * Recording what operating taught — a quoted price, an accepted rate, payment
+ * terms — and seeding the industry on the map are WRITE, and each records an
+ * event on the goal.
+ * ------------------------------------------------------------------------ */
+
+function overridesFrom(body: Record<string, unknown>): IntentOverrides {
+  const o: IntentOverrides = {};
+  const low = optionalNumber(body.capitalLow, 'capitalLow', { min: 0 });
+  const high = optionalNumber(body.capitalHigh, 'capitalHigh', { min: 0 });
+  if (low !== undefined || high !== undefined) o.capital = { low: low ?? high!, high: high ?? low! };
+  const urgency = optionalEnum(body.urgency, ['IMMEDIATE', 'SOON', 'PATIENT'] as const, 'urgency');
+  if (urgency) o.urgency = urgency;
+  const risk = optionalEnum(body.riskTolerance, ['LOW', 'MEDIUM', 'HIGH'] as const, 'riskTolerance');
+  if (risk) o.riskTolerance = risk;
+  const appetite = optionalEnum(body.capitalAppetite, ['LIGHT', 'HEAVY'] as const, 'capitalAppetite');
+  if (appetite) o.capitalAppetite = appetite;
+  const scale = optionalEnum(body.scale, ['LARGE', 'MODEST'] as const, 'scale');
+  if (scale) o.scale = scale;
+  const durable = optionalBoolean(body.durable, 'durable');
+  if (durable !== undefined) o.durable = durable;
+  const control = optionalStringArray(body.control, 'control');
+  if (control) {
+    const bad = control.find((c) => !(CONTROL_TARGETS as readonly string[]).includes(c.toUpperCase()));
+    if (bad) throw badRequest(`"${bad}" is not a kind of control. Expected: ${CONTROL_TARGETS.join(', ')}.`);
+    o.control = control.map((c) => c.toUpperCase() as ControlTarget);
+  }
+  const industry = optionalString(body.industry, 'industry');
+  if (industry) o.industry = industry;
+  const geography = optionalString(body.geography, 'geography');
+  if (geography) o.geography = geography;
+  return o;
+}
+
+goalsRouter.get(
+  '/goals/:goalId/construction',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const goal = await requireGoal(principal, pathId(req, 'goalId'), 'READ');
+    const read = await goalConstruction(goal.id);
+    if (!read) throw notFound(MISSING);
+    return { construction: read.construction, evidence: read.evidenceLayers };
+  }),
+);
+
+/** Replan: the same construction under a person's overrides, or for exploratory words. Writes nothing unless `seed`. */
+goalsRouter.post(
+  '/goals/:goalId/construction',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const body = bodyOf(req);
+    const seed = optionalBoolean(body.seed, 'seed') === true;
+    const goal = await requireGoal(principal, pathId(req, 'goalId'), seed ? 'WRITE' : 'READ');
+    const read = await goalConstruction(goal.id, { overrides: overridesFrom(body), intent: optionalString(body.intent, 'intent') ?? null });
+    if (!read) throw notFound(MISSING);
+    let seeded: { created: boolean; nodeId: string } | null = null;
+    if (seed && read.construction.intent.industry) {
+      seeded = await seedGoalIndustry(goal, read.construction.intent.industry, actor(principal));
+      if (seeded?.created) {
+        await recordWorkstreamEvent({ workstreamId: goal.id, kind: 'INDUSTRY_SEEDED', summary: `${read.construction.intent.industry} was put on the industry map for research.`, detail: { nodeId: seeded.nodeId }, actorRef: actor(principal) });
+      }
+    }
+    return { construction: read.construction, evidence: read.evidenceLayers, seeded };
+  }),
+);
+
+/** Record what operating taught: it answers ahead of every published figure and the construction re-derives from it. */
+goalsRouter.post(
+  '/goals/:goalId/construction/facts',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const goal = await requireGoal(principal, pathId(req, 'goalId'), 'WRITE');
+    const body = bodyOf(req);
+    const key = requiredString(body.key, 'key');
+    if (!isFactKey(key)) throw badRequest(`"${key}" is not a fact this construction prices. Expected one of: ${FACT_KEY_LIST.join(', ')}.`);
+    const low = optionalNumber(body.low, 'low', { min: 0 });
+    const high = optionalNumber(body.high, 'high', { min: 0 }) ?? low;
+    if (low === undefined || high === undefined) throw badRequest('"low" (and optionally "high") is required.');
+    const status = (optionalEnum(body.status, FACT_STATUSES as readonly FactStatus[], 'status') ?? 'OBSERVED') as FactStatus;
+    const fact = await recordConstructionFact({
+      projectId: goal.projectId,
+      workstreamId: goal.id,
+      fact: {
+        key,
+        segment: optionalString(body.segment, 'segment') ?? null,
+        low,
+        high,
+        status,
+        measures: requiredString(body.measures, 'measures'),
+        sourceTitle: optionalString(body.sourceTitle, 'sourceTitle') ?? `recorded by ${actor(principal)}`,
+        sourceUrl: optionalString(body.sourceUrl, 'sourceUrl') ?? null,
+      },
+      recordedBy: actor(principal),
+    });
+    await recordWorkstreamEvent({ workstreamId: goal.id, kind: 'CONSTRUCTION_FACT_RECORDED', summary: `${status.toLowerCase()} ${key}${fact.segment ? ` (${fact.segment})` : ''}: ${fact.low}–${fact.high}`, detail: { factId: fact.id }, actorRef: actor(principal) });
+    const read = await goalConstruction(goal.id);
+    return { fact, construction: read?.construction ?? null };
   }),
 );

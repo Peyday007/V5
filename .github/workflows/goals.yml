@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'show | file | pause | resume | cancel | reinstate | depends | terms | create | target | plan | construct'
+        description: 'show | file | pause | resume | cancel | reinstate | depends | terms | create | target | plan | construct | industry'
         required: true
         default: show
       goal:
@@ -36,7 +36,7 @@ on:
         required: false
         default: ''
       reason:
-        description: 'For pause and cancel: why. For create: the goal in plain words (letters, digits, spaces and . , - _)'
+        description: 'For pause and cancel: why. For create: the goal in plain words. For industry: the operator ambition to construct from (letters, digits, spaces and . , - _)'
         required: false
         default: ''
       commitment:
@@ -99,7 +99,7 @@ jobs:
 
           # The allowlist is the control; the input's description is a label.
           case "$G_COMMAND" in
-            show|file|pause|resume|cancel|reinstate|depends|terms|create|target|plan|construct) ;;
+            show|file|pause|resume|cancel|reinstate|depends|terms|create|target|plan|construct|industry) ;;
             *) echo "::error::Refusing '$G_COMMAND'."; exit 1 ;;
           esac
 
@@ -122,7 +122,7 @@ jobs:
             '') ;;
             *[!A-Za-z0-9_.@+-]*) echo "::error::Refusing the administrator address."; exit 1 ;;
           esac
-          if [ "$G_COMMAND" != show ] && [ "$G_COMMAND" != plan ] && [ -z "$G_ADMIN" ]; then
+          if [ "$G_COMMAND" != show ] && [ "$G_COMMAND" != plan ] && [ "$G_COMMAND" != industry ] && [ -z "$G_ADMIN" ]; then
             echo "::error::'$G_COMMAND' changes something, so it needs an administrator."
             exit 1
           fi

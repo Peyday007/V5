@@ -894,6 +894,23 @@ export type IndustryNodeKind = (typeof INDUSTRY_NODE_KINDS)[number];
 export const INDUSTRY_NODE_ORIGINS = ['SEED', 'BOOTSTRAP', 'DISCOVERED'] as const;
 export type IndustryNodeOrigin = (typeof INDUSTRY_NODE_ORIGINS)[number];
 
+/** A fact recorded against a goal's industry construction (§92): append-only. */
+export interface ConstructionFactRow {
+  id: string;
+  project_id: string | null;
+  workstream_id: string;
+  fact_key: string;
+  segment: string | null;
+  low: number;
+  high: number;
+  status: string;
+  measures: string;
+  source_title: string;
+  source_url: string | null;
+  recorded_by: string;
+  created_at: string;
+}
+
 export interface IndustryNodeRow {
   id: string;
   project_id: string;
