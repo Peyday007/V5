@@ -834,9 +834,12 @@ describe('RES-6: being able to research is not being able to deliver', () => {
     const { createWorkflow, createTask, recordAllocation } = await import(
       '../server/repos/labor.ts'
     );
-    // Work the owner would do on site is refused before any dive by the standing operating rule.
+    // Work only the owner could do in person is refused before any dive by the standing operating rule.
+    const inPerson = await opening('PAID_TASK_OR_CONTRACT', 'Hand out 3,000 door hangers in two neighbourhoods.', { requiredCapabilities: [] });
+    expect((await whyNotDiving((await getOpportunity(inPerson.id))!)).kind).toBe('NOT_WORTH_RESEARCHING');
+    // An on-site service is researched: which independent provider performs it is the question (owner, 2026-11-07).
     const onSite = await opening('PAID_TASK_OR_CONTRACT', 'Weld and fabricate railings on site.', { requiredCapabilities: [] });
-    expect((await whyNotDiving((await getOpportunity(onSite.id))!)).kind).toBe('NOT_WORTH_RESEARCHING');
+    expect((await whyNotDiving((await getOpportunity(onSite.id))!)).kind).toBe('ELIGIBLE');
     const piece = await opening('PAID_TASK_OR_CONTRACT', 'Fabricate railings for a client.', {
       requiredCapabilities: [],
     });

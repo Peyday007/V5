@@ -185,7 +185,7 @@ export async function researchGoalPaths(input: {
      * because that answer decides whether anything else is worth asking.
      */
     // Judged by size only once its volume is known or it pays once by nature (see materiality.ts).
-    const sizeKnown = one.volumeEstablished !== false || one.competitiveAward;
+    const sizeKnown = one.volumeEstablished !== false || one.competitiveAward || one.paysOnce === true;
     if (sizeKnown && potential(one) < floor && one.potentialReach !== null) {
       note(`${one.title.slice(0, 60)}: too small to matter — at most ${Math.round(potential(one))} of the ${Math.round(remaining)} still needed, even if every buyer agreed`);
       continue;

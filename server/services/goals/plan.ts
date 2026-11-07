@@ -264,6 +264,9 @@ const VARIABLE_FIELD: Record<string, { field: string | null; learnable: boolean 
   hours: { field: null, learnable: true },
 };
 
+/** Openings that pay once by nature, whatever the market's volume. */
+export const PAYS_ONCE = /\b(?:bount(?:y|ies)|contests?|competitions?|prizes?|sweepstakes|one[- ]off|submissions?|hackathons?)\b/i;
+
 export interface ConsideredOpening {
   opportunityId: string;
   title: string;
@@ -280,6 +283,11 @@ export interface ConsideredOpening {
   competitiveAward: boolean;
   /** Whether research established how many deals the market can take (§81). */
   volumeEstablished: boolean;
+  /**
+   * It pays once by nature — an award, a bounty, a contest, a prize, a single
+   * submission — so its size is its size whatever research finds about volume.
+   */
+  paysOnce: boolean;
   /** Where it stands on the commercial validation ladder, derived from its links and the ledger. */
   stage: ValidationStage;
 }
@@ -637,6 +645,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
         : null,
     competitiveAward: one.competitiveAward,
     volumeEstablished: one.repeatable ? volumeEstablished(one) : one.volume.provenance === 'EVIDENCE',
+    paysOnce: one.competitiveAward || PAYS_ONCE.test(one.opportunity.title),
   }));
   considered.sort((a, b) => a.missing.length - b.missing.length || b.supportedReach - a.supportedReach);
   recordMateriality(goal.id, target.remainingCents / 100, considered);

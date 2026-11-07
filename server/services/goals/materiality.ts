@@ -27,7 +27,7 @@ const STALE_MS = 3 * 60 * 60 * 1000;
 export function recordMateriality(
   goalId: string,
   remainingMajor: number,
-  considered: ReadonlyArray<{ opportunityId: string; supportedReach: number; potentialReach: number | null; volumeEstablished?: boolean; competitiveAward?: boolean }>,
+  considered: ReadonlyArray<{ opportunityId: string; supportedReach: number; potentialReach: number | null; volumeEstablished?: boolean; competitiveAward?: boolean; paysOnce?: boolean }>,
   at = Date.now(),
 ): void {
   const floor = remainingMajor * MIN_SHARE_WORTH_RESEARCHING;
@@ -46,7 +46,7 @@ export function recordMateriality(
      * because each transaction is small"). Only an opening whose volume is
      * established, or that pays once by nature (an award), is judged by size.
      */
-    if (one.volumeEstablished === false && !one.competitiveAward) {
+    if (one.volumeEstablished === false && !one.competitiveAward && !one.paysOnce) {
       byOpportunity.get(one.opportunityId)?.delete(goalId);
       continue;
     }

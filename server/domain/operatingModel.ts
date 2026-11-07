@@ -223,7 +223,9 @@ export function operatingFit(facts: OperatingFacts): OperatingFit {
   const physical = words.match(OWNER_PHYSICAL)?.[0] ?? null;
   const service = words.match(PHYSICAL_SERVICE)?.[0] ?? null;
   const brokeredMechanism = facts.mechanism && BROKERED_MECHANISMS.has(facts.mechanism) ? facts.mechanism.toLowerCase().replace(/_/g, ' ') : null;
-  const brokered = words.match(BROKERED)?.[0] ?? brokeredMechanism;
+  // Words can excuse any physical part; a recorded mechanism vouches only for a service someone else performs.
+  const brokeredWords = words.match(BROKERED)?.[0] ?? null;
+  const brokered = brokeredWords ?? (service ? brokeredMechanism : null);
   const ownFulfiller = fulfiller !== '' && OWNER_OR_BRAIN.test(fulfiller) && !THIRD_PARTY_FULFILLER.test(fulfiller);
   const thirdParty = fulfiller && THIRD_PARTY_FULFILLER.test(fulfiller) && !OWNER_OR_BRAIN.test(fulfiller);
   const gig = words.match(OWNER_AS_GIG_WORKER)?.[0] ?? null;
@@ -253,11 +255,12 @@ export function operatingFit(facts: OperatingFacts): OperatingFit {
       because: `delivering it needs physical work ("${physical}") and nothing names an independent supplier or subcontractor to perform it; the owner does no physical work`,
     };
   }
+  // Named as the owner's own work it is the owner's, whatever the mechanism says.
+  if (service && ownFulfiller && !brokeredWords) {
+    return { kind: 'OWNER_PHYSICAL', because: `the service ("${service}") would be performed by ${fulfiller}; the owner does no physical work` };
+  }
   if (service && (brokered || thirdParty)) {
     return { kind: 'BROKERED_PHYSICAL', because: `the service ("${service}") is performed by ${thirdParty ? fulfiller : 'an independent provider'} and sold and coordinated online ("${brokered ?? fulfiller}")` };
-  }
-  if (service && ownFulfiller) {
-    return { kind: 'OWNER_PHYSICAL', because: `the service ("${service}") would be performed by ${fulfiller}; the owner does no physical work` };
   }
   if (service) {
     return {

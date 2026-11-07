@@ -14626,3 +14626,57 @@ time-averaged, fleet-wide and the goal's own; accepted claims, openings filed
 and plan evaluations per hour; for every opening, the wait until the plan next
 read it; minutes the lane sat idle with work queued; each plan run's elapsed
 time; and the GPU's busy job-time over its measured running time.
+
+## 91. The owner does no physical work; selling, brokering and small repeat sales are still the search.
+
+**Owner's order, 2026-11-07.** "My restriction is against ME performing physical
+work, not against selling or brokering services fulfilled by other people …
+Evaluate opportunities by realistic buyer demand, repeatability, acquisition
+cost, fulfillment, cash timing, and total revenue potential. Do not favor or
+reject opportunities merely because each transaction is small … Preserve broad
+exploration."
+
+**What was wrong.** The rule (`domain/operatingModel.ts`, §§ of 2026-11-02) was
+stated correctly in every research question and applied too broadly in code:
+
+- a physical *service* (cleaning, mowing, hauling, installs, a handyman) with no
+  fulfiller recorded read `OWNER_PHYSICAL`, so home-service brokerage was screened
+  before research could look for the crew; "engages cleaners as subcontractors"
+  read as gig work; the classifier never read an opening's mechanism, delivery
+  method or economics note; a physical task in a delivery workflow made an opening
+  undeliverable even when a subcontractor was named;
+- the materiality floor (a tenth of what the goal still needs) judged an opening
+  by one deal at its price whenever volume was unknown, so a $150 service bought
+  by thousands of households was "too small to matter" before anybody asked how
+  many buyers it has;
+- the free-model screens kept only digital work for businesses and dropped
+  household and brokered-service leads; the goal question told researchers to
+  "leave out one-off small payments … a few hundred at most" and preferred
+  AI-produced digital output; §89's diagnosis read physical exclusions as a money
+  limit whose instruction steered the next search back to AI-digital work; and the
+  government exclusion matched any "city of" or "department of".
+
+**What changed.** No bar was lowered; each place now asks the question it skipped.
+
+- **A service someone else performs is a question, an action of the owner's is a
+  refusal.** `PHYSICAL_SERVICE` words with no provider read `UNKNOWN` ("which
+  independent provider performs it"); owner actions (door hangers, canvassing,
+  being on location, gig sign-ups, reselling held goods) and a service whose
+  recorded fulfiller is the owner stay `OWNER_PHYSICAL`. `operatingFactsOf` passes
+  mechanism, delivery method, economics note and payment terms; a brokered
+  mechanism vouches for a service, never for an owner action; broker vocabulary
+  covers booking, dispatch, outsourcing, white-label, vetted pros, contractor
+  networks. `deliveryReading` treats physical tasks as the provider's when the
+  fit is brokered and as `UNALLOCATED` (a task, not undeliverable) when unknown.
+- **Size is judged once volume is known.** `recordMateriality` and
+  `researchGoalPaths` apply the floor only when volume is established or the
+  opening pays once by nature (`paysOnce`: an award, bounty, contest, prize,
+  single submission); otherwise volume is asked beside price.
+- **Every screen and question names both kinds.** The cheap-lane screens keep
+  household buyers and a `BROKERED_SERVICE` lead; `REMOTE_AI_FOCUS` asks for
+  digital work and contractor-performed services alike, with buyer count,
+  frequency and acquisition cost; small prices count by their total; §89 adds
+  `NO_FULFILLER` (name the provider) apart from money limits; a place name is not
+  a public buyer.
+- **Breadth is kept.** Nothing new is preferred: the lenses, buckets and
+  constructed arrangements are unchanged, and the examples above are examples.
