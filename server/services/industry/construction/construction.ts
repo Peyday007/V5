@@ -118,11 +118,37 @@ export interface ResearchQuestion {
   learnedBySelling: boolean;
   /** Whether it bears on the entry itself, rather than a later stage or the ambition. */
   blocksEntry: boolean;
+  /**
+   * Researched while the entry is sold, never ahead of it: the buyer volume,
+   * market size, price, conversion and payment questions keep feeding the
+   * quantitative model, and no offer waits on one (owner, 2026-11-07).
+   */
+  besideSale: boolean;
 }
+
+/**
+ * The demand side of the entry: how many buyers, how much each buys, what they
+ * pay, how often a pitch converts and how fast it pays. Research on these runs
+ * beside every sale of the entry, however settled the decision already is —
+ * the first quotes measure them too, and the two readings meet in the model.
+ */
+export const RESEARCHED_BESIDE_SALE: readonly FactKey[] = [
+  'accounts_reachable',
+  'account_units_per_month',
+  'price_per_unit',
+  'placement_fee',
+  'account_win_rate',
+  'sales_cycle_days',
+  'buyer_payment_days',
+  'contractor_rate_per_unit',
+];
 
 export interface ExecutionHandoff {
   policy: GoalExecutionPolicy | null;
-  mode: 'SELL_NOW' | 'RESEARCH_BESIDE_SELLING' | 'RESEARCH_FIRST';
+  /** A SQUEEZE goal and any entry nothing decisive holds sell now with research beside; research never holds a SQUEEZE sale. */
+  mode: 'RESEARCH_BESIDE_SELLING' | 'RESEARCH_FIRST';
+  /** The questions researched while the entry is sold. */
+  researchBesideSale: string[];
   buyer: string;
   firstTransaction: string;
   offer: string;
@@ -275,7 +301,7 @@ function challengesFor(intent: OperatorIntent, entries: EntryReading[], best: St
 }
 
 function researchFor(input: { best: Strategy | null; evidence: IndustryEvidence; intent: OperatorIntent; businesses: Business[]; policy: GoalExecutionPolicy | null }): ResearchQuestion[] {
-  const { best, evidence, intent, businesses } = input;
+  const { best, evidence, intent, businesses, policy } = input;
   if (!best) return [];
   const entry = best.stages[0]!;
   const next = best.stages[1];
@@ -287,6 +313,15 @@ function researchFor(input: { best: Strategy | null; evidence: IndustryEvidence;
       keys.set(`${f.key}@${seg}`, { key: f.key, segment: seg, stage });
     }
   }
+  // Market size is not an input of one account's economics, but it is how many buyers the sale can reach.
+  {
+    const seg = entry.business.segment.actorId;
+    const size = resolveFact(evidence.facts, 'accounts_reachable', seg);
+    if (size.status !== 'OBSERVED' && size.status !== 'VERIFIED' && !keys.has(`accounts_reachable@${seg}`)) keys.set(`accounts_reachable@${seg}`, { key: 'accounts_reachable', segment: seg, stage: entry });
+  }
+  // Under SQUEEZE every open input of the entry is researched beside the sale (#594's sold-opening questions).
+  const beside = (key: FactKey, stage: Stage) => stage === entry && (policy === 'SQUEEZE' || RESEARCHED_BESIDE_SALE.includes(key));
+  const besideNote = 'researched beside the sale: it keeps refining the estimate and never holds the offer';
   const out: ResearchQuestion[] = [];
   const entryKey = entry.business.key;
   for (const { key, segment, stage } of keys.values()) {
@@ -296,21 +331,23 @@ function researchFor(input: { best: Strategy | null; evidence: IndustryEvidence;
     const question = `${FACT_KEYS[key].label}${segName ? ` — ${segName}` : ''}${where}`;
     const learnedBySelling = ['price_per_unit', 'account_win_rate', 'sales_cycle_days', 'buyer_payment_days', 'account_units_per_month', 'contractor_rate_per_unit', 'placement_fee'].includes(key);
     if (fact.status === 'UNKNOWN') {
-      out.push({ key, segment, question, status: 'UNKNOWN', decisive: true, because: `stage ${stage.index} cannot be priced without it; its threshold is the decision`, learnedBySelling, blocksEntry: stage === entry });
+      out.push({ key, segment, question, status: 'UNKNOWN', decisive: true, because: `stage ${stage.index} cannot be priced without it; its threshold is the decision`, learnedBySelling, blocksEntry: stage === entry, besideSale: beside(key, stage) });
       continue;
     }
     if (stage !== entry) {
-      out.push({ key, segment, question, status: fact.status, decisive: false, because: `it prices stage ${stage.index}, which its advance trigger re-reads before anything is committed`, learnedBySelling, blocksEntry: false });
+      out.push({ key, segment, question, status: fact.status, decisive: false, because: `it prices stage ${stage.index}, which its advance trigger re-reads before anything is committed`, learnedBySelling, blocksEntry: false, besideSale: false });
       continue;
     }
     // Value of information: does the recommended entry change across this input's range?
     let changes = false;
-    for (const at of [fact.low, fact.high]) {
+    const isInput = stage.economics.inputs.some((f) => f.key === key);
+    for (const at of isInput ? [fact.low, fact.high] : []) {
       const facts = evidence.facts.filter((f) => !(f.key === key && (f.segment ?? null) === fact.segment)).concat([{ key, segment: fact.segment, low: at, high: at, status: 'ASSUMPTION', source: { title: 'value-of-information probe', url: null, kind: 'OPERATOR' }, measures: 'probe' }]);
       const probe = searchStrategies(businesses, { ...evidence, facts }, intent, { lite: true })[0];
       if (!probe || probe.stages[0]!.business.key !== entryKey) changes = true;
       if (changes) break;
     }
+    const besideSale = beside(key, stage);
     out.push({
       key,
       segment,
@@ -318,10 +355,13 @@ function researchFor(input: { best: Strategy | null; evidence: IndustryEvidence;
       status: fact.status,
       decisive: changes,
       because: changes
-        ? `across its ${fact.status.toLowerCase()} range the best entry changes, so establishing it can change the decision`
-        : `the recommended entry is the same across its whole ${fact.status.toLowerCase()} range: not worth researching before acting`,
+        ? `across its ${fact.status.toLowerCase()} range the best entry changes, so establishing it can change the decision${besideSale ? `; ${besideNote}` : ''}`
+        : besideSale
+          ? `the recommended entry is the same across its whole ${fact.status.toLowerCase()} range; ${besideNote}`
+          : `the recommended entry is the same across its whole ${fact.status.toLowerCase()} range: not worth researching before acting`,
       learnedBySelling,
       blocksEntry: true,
+      besideSale,
     });
   }
   // Control the ambition asks for that no priced path reaches: what would price the business that holds it.
@@ -341,11 +381,12 @@ function researchFor(input: { best: Strategy | null; evidence: IndustryEvidence;
           because: `${ASSET_LABELS[asset]} is held only by businesses nobody can price yet (${b.label}); this is what prices them`,
           learnedBySelling: false,
           blocksEntry: false,
+          besideSale: false,
         });
       }
     }
   }
-  return out.sort((a, b) => Number(b.decisive) - Number(a.decisive) || Number(a.learnedBySelling) - Number(b.learnedBySelling));
+  return out.sort((a, b) => Number(b.decisive) - Number(a.decisive) || Number(b.besideSale) - Number(a.besideSale) || Number(a.learnedBySelling) - Number(b.learnedBySelling));
 }
 
 function executionFor(best: Strategy | null, goal: ConstructionGoal | null | undefined, others: ConstructionInput['otherMoneyGoals'], research: ResearchQuestion[]): ExecutionHandoff | null {
@@ -353,8 +394,9 @@ function executionFor(best: Strategy | null, goal: ConstructionGoal | null | und
   const entry = best.stages[0]!;
   const b = entry.business;
   const policy = goal ? goalExecutionPolicy({ daysLeft: goal.daysLeft, remainingCents: goal.remainingCents }) : null;
-  const decisiveFirst = research.filter((r) => r.decisive && r.blocksEntry && !r.learnedBySelling);
-  const mode: ExecutionHandoff['mode'] = policy === 'SQUEEZE' ? 'SELL_NOW' : decisiveFirst.length ? 'RESEARCH_FIRST' : 'RESEARCH_BESIDE_SELLING';
+  const decisiveFirst = research.filter((r) => r.decisive && r.blocksEntry && !r.learnedBySelling && !r.besideSale);
+  const mode: ExecutionHandoff['mode'] = policy !== 'SQUEEZE' && decisiveFirst.length ? 'RESEARCH_FIRST' : 'RESEARCH_BESIDE_SELLING';
+  const researchBesideSale = research.filter((r) => r.besideSale).map((r) => r.question);
   const price = entry.economics.thresholds.find((t) => t.key === 'price_per_unit' || t.key === 'placement_fee');
   const priceFloor = price?.breakEven ? `never quote below ${money(price.breakEven)}${price.key === 'placement_fee' ? ' per placement' : ` per unit`} — the break-even at this scale` : null;
   const shape = cashShapeOf(b);
@@ -369,6 +411,7 @@ function executionFor(best: Strategy | null, goal: ConstructionGoal | null | und
   return {
     policy,
     mode,
+    researchBesideSale,
     buyer: b.segmentName,
     firstTransaction: b.answers.firstCollectedDollar,
     offer: b.answers.whatWeProvide,
@@ -397,12 +440,15 @@ function executionFor(best: Strategy | null, goal: ConstructionGoal | null | und
       others && others.length
         ? `${others.length} other active money goal(s) (${others.map((o) => o.title).join('; ')}) are unchanged: this construction reads its own goal and changes no other goal’s plan, priority or sales.`
         : 'No other active money goal is affected.',
-    steps:
-      mode === 'SELL_NOW'
-        ? ['SQUEEZE goal: no market-testing phase — the first offer pursues an actual paid transaction now; research runs beside the sale.', ...steps]
+    steps: [
+      ...(policy === 'SQUEEZE'
+        ? ['SQUEEZE goal: no market-testing phase — the first offer pursues an actual paid transaction now; research runs beside the sale.']
         : mode === 'RESEARCH_FIRST'
-          ? [`Establish first: ${decisiveFirst.map((r) => r.question).join('; ')}.`, ...steps]
-          : steps,
+          ? [`Establish first: ${decisiveFirst.map((r) => r.question).join('; ')}.`]
+          : []),
+      ...steps,
+      ...(mode === 'RESEARCH_BESIDE_SELLING' && researchBesideSale.length ? [`Research beside the sale, never ahead of it: ${researchBesideSale.join('; ')}.`] : []),
+    ],
   };
 }
 
@@ -558,6 +604,7 @@ export function constructIndustry(input: ConstructionInput): Construction {
         because: d.reading === 'UNKNOWN' ? 'nothing establishes it, and no business can be constructed or priced without it' : 'only partly established',
         learnedBySelling: false,
         blocksEntry: true,
+        besideSale: false,
       });
     }
   }
@@ -628,7 +675,7 @@ export function renderConstruction(c: Construction): string {
   }
   if (c.preferredSequence) lines.push(`PREFERRED SEQUENCE  ${c.preferredSequence.verdict}`);
   for (const ch of c.challenges) lines.push(`CHALLENGE ${ch.verdict.padEnd(6)} "${ch.assumption}" — ${ch.because}`);
-  for (const q of c.research) lines.push(`RESEARCH ${q.decisive ? 'DECISIVE' : 'skip    '} ${q.question} [${q.status.toLowerCase()}] — ${q.because}${q.learnedBySelling ? ' (the first sale answers it)' : ''}`);
+  for (const q of c.research) lines.push(`RESEARCH ${q.besideSale ? (q.decisive ? 'BESIDE SALE, DECISIVE' : 'BESIDE SALE') : q.decisive ? 'DECISIVE' : 'skip    '} ${q.question} [${q.status.toLowerCase()}] — ${q.because}${q.learnedBySelling ? ' (the first sale answers it)' : ''}`);
   if (c.execution) {
     lines.push(`EXECUTION  ${c.execution.mode} · policy ${c.execution.policy ?? 'no goal target'} · cash mechanism ${c.execution.cashMechanism ?? 'operated (no arranger structure)'}`);
     for (const s of c.execution.steps) lines.push(`  - ${s}`);
