@@ -22,7 +22,12 @@ import {
 } from '../server/repos/research.ts';
 import { recordEvent } from '../server/repos/events.ts';
 import { advancePacket } from '../server/services/research/packetRunner.ts';
-import { getApprovalEnvelope } from '../server/services/research/approvalEnvelope.ts';
+import {
+  APPROVAL_ENVELOPES,
+  getApprovalEnvelope,
+  planFitsEnvelope,
+} from '../server/services/research/approvalEnvelope.ts';
+import { onlySourceTypeRefusals } from '../server/services/research/replan.ts';
 import { createHash } from 'node:crypto';
 
 const ENVELOPE_ID = 'RUSSELL_CASH_DISCOVERY_V1';
@@ -122,4 +127,32 @@ describe('envelope source-type refusal is asked again once', () => {
     expect(text).toContain('industry association');
     expect(await listFragments(id)).toHaveLength(2);
   });
+});
+
+describe('the re-ask recognises the envelope\'s own refusal sentence', () => {
+  // Drift guard: replan.ts matches the envelope's wording, so the wording the
+  // envelope really produces is what is asserted here, for every envelope. If
+  // approvalEnvelope.ts rewords it, this fails loudly instead of the re-ask
+  // silently going quiet and packets parking at NEEDS_HUMAN.
+  const impossible = 'zzz-no-envelope-admits-this-source-type-zzz';
+  for (const envelope of Object.values(APPROVAL_ENVELOPES)) {
+    it(`${envelope.id}: a refusal only for source type is recognised`, () => {
+      const fragment = {
+        fragmentKey: 'drift-guard', question: 'What is the published rate?', geography: 'United States',
+        requiredEvidence: [{ id: 'rates', description: 'published rates', necessity: 'REQUIRED' }],
+        acceptableSourceTypes: [impossible], excludedSourceTypes: [], completionCriteria: ['a quoted rate'],
+        dependsOn: [], minIndependentSources: 99, attempt: 1,
+      };
+      const verdict = planFitsEnvelope({
+        envelope,
+        orchestration: { id: 'o', assignment: 'a' } as never,
+        fragments: [fragment as never],
+        assignmentAlreadyApproved: true,
+      });
+      const sourceTypeReasons = verdict.reasons.filter((reason) => reason.includes(`"${impossible}"`));
+      expect(sourceTypeReasons).toHaveLength(1);
+      expect(onlySourceTypeRefusals(sourceTypeReasons)).toBe(true);
+      expect(onlySourceTypeRefusals([...sourceTypeReasons, 'fragment "x" instructs the researcher to hire.'])).toBe(false);
+    });
+  }
 });
