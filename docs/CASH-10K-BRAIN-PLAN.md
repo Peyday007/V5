@@ -270,3 +270,11 @@ From Goals plan run 42393447365, which ran after #574 and the lane-fit gate (#58
 **Next research the plan asks for:** buyerVolume, requiredCapital, directCosts and conversionRates.
 
 **90%:** not met.
+
+### Constraints the plan keeps
+
+- Freelance marketplaces are not the main business model. The constructed arrangements are brokerage, pooled purchasing and recurring outsourced work.
+- No paid API has been added: `package.json` is unchanged since the 2026-11-03 assignment, and research runs on the free lane.
+- No government contracts: an opening tagged government is refused as NOT_WORTH_RESEARCHING.
+- No domain speculation, no broken-website plays, and no physical work by the owner.
+- Spending limits: $375 per arrangement before proof, $750 a week tied up, $3,000 in all. The quant engine refuses an arrangement over these limits.
