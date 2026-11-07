@@ -76,12 +76,6 @@ import {
 import { auditRoundFor, auditRoundStartedAt, earlierAuditRole } from './auditBrief.ts';
 import { assessPacket, MANDATORY_COVERAGE_CHECK } from './packet.ts';
 import { directResearch } from './intelligence/apply.ts';
-import {
-  alreadyReasked,
-  firstRefusalOf,
-  onlySourceTypeRefusals,
-  reaskRefusedSourceTypes,
-} from './replan.ts';
 import { assessSufficiency, mayProceedToSynthesis } from './intelligence/sufficiency.ts';
 import { readGraph } from './intelligence/uncertainty.ts';
 import {
@@ -1877,13 +1871,6 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
         fragments: awaitingApproval,
         assignmentAlreadyApproved: await assignmentApprovedUnder(orchestration, envelope.id),
       });
-      /*
-       * A refusal that is only a source-type label is asked again once, with the
-       * envelope's own sourceRule, before a person is. Anything else, or a
-       * second refusal, parks as before.
-       */
-      const reask =
-        !verdict.fits && onlySourceTypeRefusals(verdict.reasons) && !alreadyReasked(awaitingApproval);
       await recordEvent({
         projectId: orchestration.projectId,
         layerId: orchestration.layerId,
@@ -1907,28 +1894,13 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
           fits: verdict.fits,
           reasons: verdict.reasons,
           checked: verdict.checked,
-          ...(reask ? { reask: true } : {}),
         },
       });
 
-      if (reask) {
-        const reasked = await reaskRefusedSourceTypes({
-          orchestrationId,
-          fragments: awaitingApproval,
-          envelope,
-          reasons: verdict.reasons,
-        });
-        if (reasked.length > 0) return await advancePacket(orchestrationId);
-      }
-
       if (!verdict.fits) {
-        const first = alreadyReasked(awaitingApproval) ? firstRefusalOf(awaitingApproval) : '';
         await parkOrchestration(orchestrationId,
             'The proposed plan falls outside the preauthorized envelope: ' +
-            (first
-              ? `${verdict.reasons.join(' ')} It was asked once more under the envelope's source ` +
-                `rule and refused again. First refusal: ${first}`
-              : verdict.reasons.join(' ')));
+            verdict.reasons.join(' '));
         return {
           orchestrationId,
           status: 'NEEDS_HUMAN',
