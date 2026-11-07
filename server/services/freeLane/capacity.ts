@@ -474,10 +474,23 @@ export const SLOTS_PER_SURFACE = 4;
 const MAX_SPARE_SURFACES = 8;
 
 export async function freeLaneSpareSurfaces(now = Date.now()): Promise<number> {
-  if (!laneConfig()) return 0;
+  const config = laneConfig();
+  if (!config) return 0;
   const db = getDb();
-  const rows = await readCapacity();
-  const granted = rows.reduce((sum, r) => sum + r.target, 0) || START_TARGET * 2;
+  const recorded = await readCapacity();
+  // The lane's models now; a row for a model no longer configured is history.
+  const current = recorded.filter((r) => config.models.includes(r.model));
+  const rows = current.length > 0 ? current : recorded;
+  /*
+   * The room is what each model has proven it runs (`stable_high`), not its
+   * current target. The controller lowers a target when nothing is waiting, so
+   * reading the target made idleness self-sustaining: production, 2026-11-07,
+   * targets 2 and 2 against stable highs 19 and 26 left one surface of room,
+   * the $10K goal could open no new round over seven still open, and the GPU
+   * reported "no research waiting" while the plan lacked evidence on 17 of 19
+   * openings. Room opened here is work queued, which raises the target again.
+   */
+  const granted = rows.reduce((sum, r) => sum + Math.max(r.target, r.stableHigh), 0) || START_TARGET * 2;
   const busy = await db.get<{ n: number | string }>(
     `SELECT COUNT(*) AS n FROM work_items WHERE state = 'LEASED' AND lease_expires_at > ?
        AND worker_id IN (SELECT k.id FROM workers k WHERE k.name IN ('free-lane-a', 'free-lane-b'))`,
