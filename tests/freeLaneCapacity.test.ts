@@ -143,6 +143,27 @@ describe('the adaptive pool on a real queue', () => {
   }, 60_000);
 });
 
+describe('idle capacity is room, even after the controller lowered its target (production, 2026-11-07)', () => {
+  it('reads proven capacity, not a target lowered because nothing was waiting', async () => {
+    process.env['BRAIN_CHEAP_LLM_URL'] = 'http://lane.test/v1';
+    process.env['BRAIN_CHEAP_LLM_MODELS'] = 'brain-a,brain-c';
+    try {
+      await getDb().run('DELETE FROM free_lane_capacity', []);
+      await getDb().run('DELETE FROM bin_events', []);
+      await getDb().run(
+        "INSERT INTO free_lane_capacity (model, target, stable_high, updated_at, reason) VALUES ('brain-a', 2, 19, '2026-11-07T16:07:00Z', 'no research waiting'), ('brain-c', 2, 26, '2026-11-07T16:07:00Z', 'no research waiting')",
+        [],
+      );
+      // 19 + 26 proven slots, nothing busy or waiting: the most room a reading opens.
+      // The old reading summed the targets (2 + 2) and opened one.
+      expect(await freeLaneSpareSurfaces()).toBe(8);
+    } finally {
+      delete process.env['BRAIN_CHEAP_LLM_URL'];
+      delete process.env['BRAIN_CHEAP_LLM_MODELS'];
+    }
+  });
+});
+
 describe('generation follows the free lane, not idle Claude surfaces', () => {
   it('opens room in proportion to granted-but-idle slots, and none while answers mostly fail', async () => {
     process.env['BRAIN_CHEAP_LLM_URL'] = 'http://lane.test/v1';
