@@ -28,7 +28,15 @@ export const EXCLUSION_CLASSES = {
      * merely named a city or a corporate procurement team (2026-11-07), so they
      * count only beside a public body or a public buying word.
      */
-    matches: /\b(?:government|federal|sam\.gov|public[- ]sector|public procurement|government procurement|solicitation|rfp|rfq|rfi|tender|state agenc(?:y|ies)|municipal|county (?:commission|board|government)|city of [a-z .'-]{2,30}(?:council|contracts?|bids?|purchasing|procurement)|department of (?:agriculture|defen[cs]e|education|transportation|health|labor|commerce|energy|the interior|justice|state|the treasury|veterans|homeland|housing|environmental|natural resources|corrections)|commonwealth of (?:pennsylvania|massachusetts|virginia|kentucky)|navy|army|air force|veterans affairs|bureau of (?:land|indian|reclamation|prisons|abandoned|labor|the census)|school district|public school|rfpmart|publicsurplus|govdeals|bidnet|[a-z0-9-]+\.gov|[a-z0-9-]+\.mil)\b/i,
+    /*
+     * A county or city department is a public buyer even with no buying word
+     * beside it. Production, 2026-11-07: the industry map held "county
+     * forestry/parks department (standing-timber purchaser via sealed bid)" as a
+     * buyer type, construction paired it with Brain's deliverables, and a
+     * research round was queued to confirm that county parks departments buy
+     * spreadsheets — for a goal that excludes public-sector work.
+     */
+    matches: /\b(?:government|federal|sam\.gov|public[- ]sector|public procurement|government procurement|solicitation|rfp|rfq|rfi|tender|state agenc(?:y|ies)|municipal|county (?:commission|board|government)|county[a-z ,&/'-]{0,40}\b(?:department|dept|office|agency|commission|board)|(?:forest(?:ry)?|parks?|recreation|public works|sheriff'?s?|assessor'?s?|treasurer'?s?)(?: ?(?:and|&|\/) ?(?:forest(?:ry)?|parks?|recreation))? (?:department|dept|office|division)|department of (?:parks|forestry|public works|natural resources)|city council|public works|city of [a-z .'-]{2,30}(?:council|contracts?|bids?|purchasing|procurement)|department of (?:agriculture|defen[cs]e|education|transportation|health|labor|commerce|energy|the interior|justice|state|the treasury|veterans|homeland|housing|environmental|natural resources|corrections)|commonwealth of (?:pennsylvania|massachusetts|virginia|kentucky)|navy|army|air force|veterans affairs|bureau of (?:land|indian|reclamation|prisons|abandoned|labor|the census)|school district|public school|rfpmart|publicsurplus|govdeals|bidnet|[a-z0-9-]+\.gov|[a-z0-9-]+\.mil)\b/i,
   },
   WEBSITE_REPAIR: {
     label: 'broken-website and website-repair plays',
