@@ -58,5 +58,12 @@ describe('a place name is not a public buyer', () => {
     expect(excludedBy('City of Austin purchasing RFP for janitorial services', goal)).toBe('GOVERNMENT_CONTRACTING');
     expect(excludedBy("PA Department of Agriculture's Farm Vitality Planning Grant", goal)).toBe('GOVERNMENT_CONTRACTING');
     expect(excludedBy('Listing at https://www.sam.gov/opp/123', goal)).toBe('GOVERNMENT_CONTRACTING');
+    // A county or city department is a public buyer without a buying word beside it (2026-11-07).
+    expect(excludedBy('county forestry/parks department (standing-timber purchaser via sealed bid)', goal)).toBe('GOVERNMENT_CONTRACTING');
+    expect(excludedBy("Burnett County, Wisconsin's Forest & Parks Department published a timber sale notice", goal)).toBe('GOVERNMENT_CONTRACTING');
+    expect(excludedBy('Parks and Recreation Department youth program booking', goal)).toBe('GOVERNMENT_CONTRACTING');
+    // A county as a place, and a company's own department, stay in scope.
+    expect(excludedBy('Dog groomers in Orange County who buy booking software', goal)).toBeNull();
+    expect(excludedBy('The marketing department of mid-size law firms', goal)).toBeNull();
   });
 });

@@ -149,7 +149,7 @@ import {
   resumeAnsweredRequest,
 } from './needsHuman.ts';
 import { parseJson } from '../../repos/util.ts';
-import { getCashMode } from '../../repos/cashMode.ts';
+import { cashNow, getCashMode } from '../../repos/cashMode.ts';
 import { launchableUnderCashMode } from '../cash/lifecycle.ts';
 import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
@@ -159,7 +159,7 @@ import { runDealflowKernel } from '../dealflow/kernel.ts';
 import { runPuzzleKernel } from '../puzzle/kernel.ts';
 import { operate } from '../cash/operate.ts';
 import { withGoalLimitsMemo } from '../cash/worthResearching.ts';
-import { retireMarketplaceListings, type ListingsRetired } from '../cash/retireListings.ts';
+import { releaseUnworthyResearch, retireMarketplaceListings, type ListingsRetired } from '../cash/retireListings.ts';
 import { retireUnjudgeableBins } from '../bins/retireUnjudgeable.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
@@ -2208,6 +2208,18 @@ async function tickOnce(owner: string): Promise<TickReport> {
           }
         } catch {
           /* a retirement pass that could not run is retried next tick */
+        }
+
+        try {
+          /*
+           * Research still running on an opening no live goal may use — one the
+           * goal's owner excluded, a closed one, one the owner would have to
+           * work physically — is stopped (`cash/retireListings.ts`), so its
+           * fleet slots go to openings that can still become a sale.
+           */
+          await releaseUnworthyResearch(project.id, cashNow());
+        } catch {
+          /* retried next tick */
         }
       }
     });
