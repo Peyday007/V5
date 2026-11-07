@@ -715,15 +715,20 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(sale.test.link).toBe('CONVERSION');
     expect(sale.test.test).toMatch(/^Sell ".*": offer it to its reachable buyers at 400 USD for an actual sale, contract or deposit/);
     expect(sale.test.test).not.toMatch(/test|downgrade/i);
-    // The permission is a blocker on the sale, not a reason to run a test first.
+    // The permission is a blocker on the sale, not a reason to run a test first,
+    // and it names the sale's own terms rather than asking for a blanket grant.
     expect(sale.test.by).toBe('PERSON');
-    expect(sale.test.blocker).toMatch(/CONTACT_BUYER|message provider/);
     // Every missing link at once: one grant alone would send nothing and collect nothing (2026-11-07).
     expect(sale.test.blocker).toMatch(/CONTACT_BUYER/);
     expect(sale.test.blocker).toMatch(/RESEND_API_KEY/);
     expect(sale.test.blocker).toMatch(/QUOTE_AND_INVOICE and ACCEPT_PAYMENT/);
     expect(sale.test.blocker).toMatch(/STRIPE_SECRET_KEY/);
-    expect(reading.nextTest?.test).toBe(sale.test.test);
+    expect(sale.test.blocker).toMatch(/^This sale waits for authorization\. Terms: sells "/);
+    // A $400 sale cannot make a $10K plan viable: the goal's own step stays Brain's
+    // planning work, never the authorization (owner, 2026-11-07).
+    expect(reading.verdict).toBe('NOT_VIABLE');
+    expect(reading.nextTest?.by).toBe('BRAIN');
+    expect(reading.nextTest?.test).toMatch(/^Discover, construct and research openings/);
     // The goal pursues it now, without a RECOMMENDABLE verdict, so its money limits bind it.
     expect(reading.verdict).not.toBe('RECOMMENDABLE');
     const links = await listLinks(id);
@@ -747,11 +752,20 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     const asked = (await listNeeds({ projectId, states: ['OPEN'] })).filter((one) => one.opportunityId === o.id).map((one) => one.requestKey);
     // How many buyers exist and how often they buy (demand and market size), beside the sale.
     expect(asked).toContain(`question:${o.id}:buyerVolume`);
-    // The sale is unchanged by the research: still the next step, still pursued.
+    // The sale is unchanged by the research: still offered, still pursued.
     const again = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
     expect(again.sales.map((one) => one.opportunityId)).toContain(o.id);
-    expect(again.nextTest?.test).toMatch(/^Sell /);
+    expect(again.sales.find((one) => one.opportunityId === o.id)?.test.test).toMatch(/^Sell /);
     expect((await listLinks(id)).some((l) => l.kind === 'OPPORTUNITY' && l.ref === o.id && l.relation === 'PURSUES')).toBe(true);
+  });
+
+  it('asks to authorize one sale by its terms, and never makes that the goal\u2019s blocker (owner, 2026-11-07)', async () => {
+    const o = await oneOff({ title: 'Arrange a load for a shipper', priceCents: 40_000, capitalCents: 0 });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    const blocker = reading.sales.find((one) => one.opportunityId === o.id)!.test.blocker ?? '';
+    // What is sold, to whom, at what price, who fulfils it, the margin, when cash comes and what it adds.
+    for (const part of [/sells "/, /to /, /at 400 USD/, /fulfilled by /, /margin /, /cash /, /contributes up to \d+ of the 10000 USD still needed/]) expect(blocker).toMatch(part);
+    expect(reading.nextTest?.blocker ?? null).toBeNull();
   });
 
   it('researches a small sale too: how many buyers exist is what could make it larger', async () => {
