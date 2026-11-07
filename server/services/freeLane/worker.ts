@@ -847,7 +847,21 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   const answer = await askFor(ctx, prompt);
   const laneIds = new Set(lanes.map((l) => l.id));
   const onlyLane = laneIds.size === 1 ? [...laneIds][0]! : null;
-  const finalize = (raw: Record<string, unknown>): Record<string, unknown> | null => {
+  /*
+   * Brain read every page these claims cite, so each is RETRIEVED whatever the
+   * model wrote, and a field the tool does not define is dropped rather than
+   * sent. Production, 2026-11-07: a 4B model marked read pages unreachable, so
+   * goal rounds' fragments failed the gate on "source could not be read", and
+   * added `geography`/`timeframe`, which refused whole submissions.
+   */
+  const claimFields = new Set(Object.keys((claimSchema as { items?: { properties?: Record<string, unknown> } }).items?.properties ?? {}));
+  const asRead = (c: Record<string, unknown>): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(c)) if (claimFields.size === 0 || claimFields.has(key)) out[key] = value;
+    out['retrieval_state'] = 'RETRIEVED';
+    return out;
+  };
+  const finalize =(raw: Record<string, unknown>): Record<string, unknown> | null => {
     const listed = Array.isArray(raw['claims']) ? (raw['claims'] as Record<string, unknown>[]) : [];
     const claims: Record<string, unknown>[] = [];
     const dropped: Record<string, number> = {};
@@ -874,14 +888,14 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       const cited = citedExcerpt(c, numbered);
       if (cited) {
         const { source: _s, sentences: _n, ...rest } = c;
-        claims.push({ ...rest, source_url: cited.url, evidence_excerpt: cited.excerpt, evidence_locator: cited.locator });
+        claims.push(asRead({ ...rest, source_url: cited.url, evidence_excerpt: cited.excerpt, evidence_locator: cited.locator }));
         continue;
       }
       // A model that quoted instead of citing is still held to the page, word for word.
       const source = readable.find((one) => one.url === c['source_url']);
       if (source && typeof c['evidence_excerpt'] === 'string' && quotedIn(String(c['evidence_excerpt']), source.text)) {
         const { source: _s, sentences: _n, ...rest } = c;
-        claims.push(rest);
+        claims.push(asRead(rest));
         continue;
       }
       drop(c['sentences'] !== undefined ? citationFailure(c, numbered) : 'no citation and no verbatim quote');
