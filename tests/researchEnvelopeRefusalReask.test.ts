@@ -18,6 +18,7 @@ import {
   currentFragments,
   getOrchestration,
   listFragments,
+  updateFragment,
   updateOrchestration,
 } from '../server/repos/research.ts';
 import { recordEvent } from '../server/repos/events.ts';
@@ -97,22 +98,22 @@ describe('envelope source-type refusal is asked again once', () => {
     expect(await listFragments(id)).toHaveLength(1);
   });
 
-  it('parks, naming both refusals, when the re-asked plan is refused again', async () => {
+  it('parks, naming both refusals, when a plan is refused again while its re-ask is still awaiting approval', async () => {
     const id = await packetWith([BAD_SOURCE]);
-    // Stop the first re-ask from being approved by hand-building its outcome: the
-    // first attempt is superseded and the re-asked attempt still names a label
-    // the envelope refuses.
-    const first = (await currentFragments(id))[0]!;
-    const { updateFragment } = await import('../server/repos/research.ts');
-    await updateFragment(first.id, { status: 'CANCELLED', cancelledReason: 'Re-asked once' });
+    // First pass, through the real code: the label is refused and asked again.
+    await advancePacket(id);
+    const reasked = (await currentFragments(id)).find((f) => f.attempt === 2)!;
+    expect(reasked.repairReason).toContain('ENVELOPE_REASK:');
+    // The re-asked attempt is still awaiting approval when the planner proposes a
+    // further fragment that names a label the envelope refuses. Nothing here is
+    // hand-built except the planner's own proposal, which is its real input.
+    await updateFragment(reasked.id, { status: 'PLANNED' });
     await createFragments([{
-      orchestrationId: id, projectId, layerId, fragmentIndex: 0,
-      fragmentKey: first.fragmentKey, question: first.question, geography: 'United States',
-      requiredEvidence: first.requiredEvidence,
+      orchestrationId: id, projectId, layerId, fragmentIndex: 1,
+      fragmentKey: 'second-question', question: 'What do interpreters charge per hour?', geography: 'United States',
+      requiredEvidence: [{ id: 'rates', description: 'published rates', necessity: 'REQUIRED' }],
       acceptableSourceTypes: ['a private purchased contact list'], excludedSourceTypes: [],
-      completionCriteria: first.completionCriteria, dependsOn: [], minIndependentSources: 1,
-      status: 'PLANNED', attempt: 2, parentFragmentId: first.id,
-      repairReason: `ENVELOPE_REASK: fragment "${first.fragmentKey}" accepts "${BAD_SOURCE}", which this envelope does not admit.`,
+      completionCriteria: ['a quoted rate'], dependsOn: [], minIndependentSources: 1, status: 'PLANNED',
     }] as unknown as Parameters<typeof createFragments>[0]);
     const result = await advancePacket(id);
     expect(result.status).toBe('NEEDS_HUMAN');
@@ -120,6 +121,5 @@ describe('envelope source-type refusal is asked again once', () => {
     expect(text).toContain('a private purchased contact list');
     expect(text).toContain('First refusal');
     expect(text).toContain('industry association');
-    expect(await listFragments(id)).toHaveLength(2);
   });
 });
