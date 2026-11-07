@@ -707,6 +707,36 @@ export function guidanceBrief(guidance: unknown): Record<string, unknown> {
   return out;
 }
 
+/** A web search reads at most this many characters of a query (`webSearch` cuts at 240). */
+const SEARCH_QUERY_CHARS = 120;
+
+/**
+ * The searches a fragment runs: the model's own short phrases first, then the
+ * question's quoted subject. Pure.
+ *
+ * Production, 2026-11-07: the lane searched with the fragment's whole question,
+ * and `webSearch` keeps its first 240 characters. For a constructed or goal round
+ * those are the question's preamble ("Brain composed an arrangement nobody has
+ * published as an opening, and needs the world to confirm or refute it: buyers
+ * described as …"), so one of every fragment's two searches asked the shared,
+ * rate-limited search queue for boilerplate. A quoted phrase in the question is
+ * what it is about; with none, its first sentence is the best short form.
+ */
+export function searchQueries(question: string, modelPhrases: unknown): string[] {
+  const out: string[] = [];
+  const add = (one: string): void => {
+    const q = one.replace(/\s+/g, ' ').trim().slice(0, SEARCH_QUERY_CHARS);
+    if (q.length >= 3 && !out.some((have) => have.toLowerCase() === q.toLowerCase())) out.push(q);
+  };
+  const phrases = (Array.isArray(modelPhrases) ? modelPhrases : [modelPhrases]).filter((one): one is string => typeof one === 'string');
+  const quoted = [...question.matchAll(/["“]([^"”]{4,120})["”]/g)].map((m) => m[1]!);
+  // As many searches as before (two): the model's best phrase, then the question's own subject.
+  if (phrases[0]) add(phrases[0]);
+  add(quoted.length > 0 ? quoted.slice(0, 2).join(' ') : (question.split(/(?<=[.?!])\s/)[0] ?? question));
+  for (const one of phrases.slice(1)) add(one);
+  return out.slice(0, 2);
+}
+
 async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<boolean> {
   const frag = (assignment['fragment'] ?? {}) as Record<string, unknown>;
   const lanes = ((frag['requiredEvidence'] as { id: string; description: string }[] | undefined) ?? []).map((lane) => ({
@@ -714,9 +744,12 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     description: lane.description,
   }));
   const question = String(frag['question'] ?? '');
+  // The packet's assignment repeats the question for a one-fragment packet (every goal and constructed
+  // round), doubling a brief a small model must read; it is sent only when it says something else.
+  const packetText = String((assignment['orchestration'] as Record<string, unknown> | undefined)?.['assignment'] ?? '');
   const brief = {
     question,
-    packet: (assignment['orchestration'] as Record<string, unknown> | undefined)?.['assignment'] ?? null,
+    packet: packetText && !packetText.includes(question.slice(0, 400)) ? packetText.slice(0, 4000) : null,
     scope: {
       geography: frag['geography'] ?? null,
       timeframe: frag['timeframe'] ?? null,
@@ -747,14 +780,14 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       'most likely to contain primary evidence for this question (official statistics, regulators, company ' +
       'filings, published price lists, trade bodies). Prefer exact page URLs you are confident exist. ' +
       unreachableNote() +
-      'Reply as {"urls":["https://..."],"search":"a short search phrase"}.',
+      'Reply as {"urls":["https://..."],"searches":["two or three short web search phrases, under ten words each, naming the buyers, product or market the question is about"]}.',
   );
   const urlsOf = (answer: Record<string, unknown> | null): string[] =>
     Array.isArray(answer?.['urls']) ? (answer!['urls'] as unknown[]).filter((u): u is string => typeof u === 'string') : [];
   // Both queries at once: the search module paces its own queue, so this only
   // stops the second waiting on the first's answer before it is even asked.
-  const [byPhrase, byQuestion] = await Promise.all([ctx.search(String(plan?.['search'] ?? question)), ctx.search(question)]);
-  const searched = [...byPhrase, ...byQuestion];
+  const queries = searchQueries(question, plan?.['searches'] ?? plan?.['search']);
+  const searched = (await Promise.all(queries.map((q) => ctx.search(q)))).flat();
   const tried = new Set<string>();
   const skipped = new Set<string>();
   const failedUrls: string[] = [];
