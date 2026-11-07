@@ -1233,7 +1233,21 @@ async function failingModels(now = Date.now()): Promise<Set<string>> {
     else entry.bad += Number(row.n);
     byModel.set(model, entry);
   }
-  return new Set([...byModel].filter(([, e]) => e.ok === 0 && e.bad >= 4).map(([m]) => m));
+  /*
+   * Down when fewer than one in five of its recent items were accepted — the
+   * bar `unfitPairs` already holds a model to — not only when none were.
+   * Production, 2026-11-07: brain-a answered 2 of ~47 items in three hours
+   * (HTTP 503s), kept the audit and verify roles because of those 2, and the
+   * GPU declined those roles 5,762 times ("the other free worker takes this
+   * role"). No audit settled after 20:48Z and 21 goal rounds stayed open, so
+   * nothing reached the harvest or the $10K plan.
+   */
+  return new Set([...byModel].filter(([, e]) => isFailing(e)).map(([m]) => m));
+}
+
+/** A model whose recent items mostly failed: at least four failures and under one in five accepted. Pure. */
+export function isFailing(e: { ok: number; bad: number }): boolean {
+  return e.bad >= 4 && e.ok * 5 < e.ok + e.bad;
 }
 
 /**
@@ -1517,7 +1531,7 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
   try {
     const all = await ensureFreeWorkers(config);
     /*
-     * Reroute: a model whose every free-lane item in the last half hour failed
+     * Reroute: a model whose free-lane items in the last half hour mostly failed
      * (on enough of them) is skipped, and its roles go to the other model.
      */
     const down = await failingModels();
