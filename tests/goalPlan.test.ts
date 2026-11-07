@@ -718,6 +718,11 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     // The permission is a blocker on the sale, not a reason to run a test first.
     expect(sale.test.by).toBe('PERSON');
     expect(sale.test.blocker).toMatch(/CONTACT_BUYER|message provider/);
+    // Every missing link at once: one grant alone would send nothing and collect nothing (2026-11-07).
+    expect(sale.test.blocker).toMatch(/CONTACT_BUYER/);
+    expect(sale.test.blocker).toMatch(/RESEND_API_KEY/);
+    expect(sale.test.blocker).toMatch(/QUOTE_AND_INVOICE and ACCEPT_PAYMENT/);
+    expect(sale.test.blocker).toMatch(/STRIPE_SECRET_KEY/);
     expect(reading.nextTest?.test).toBe(sale.test.test);
     // The goal pursues it now, without a RECOMMENDABLE verdict, so its money limits bind it.
     expect(reading.verdict).not.toBe('RECOMMENDABLE');
