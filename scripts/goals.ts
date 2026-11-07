@@ -510,6 +510,17 @@ function printPlan(reading: PlanReading): void {
   }
   for (const one of reading.excluded.slice(0, 15)) console.log(`  left out    ${one.opportunityId} ${one.title.slice(0, 70)}: ${one.reason}`);
   if (reading.excluded.length > 15) console.log(`  left out    … and ${reading.excluded.length - 15} more`);
+  // Every reason counted, and every physical-work exclusion listed in full: the owner's
+  // rule (§91) refuses only work the owner would do himself, and this is where to check it.
+  const byReason = new Map<string, number>();
+  for (const one of reading.excluded) {
+    const key = one.reason.replace(/:.*$/, '').slice(0, 80);
+    byReason.set(key, (byReason.get(key) ?? 0) + 1);
+  }
+  for (const [reason, n] of [...byReason].sort((a, b) => b[1] - a[1])) console.log(`  left out ×${String(n).padStart(3)} ${reason}`);
+  for (const one of reading.excluded.filter((x) => /physical work/i.test(x.reason))) {
+    console.log(`  physical    ${one.opportunityId} ${one.title.slice(0, 80)} — ${one.reason.replace(/^[^:]*: /, '').slice(0, 160)}`);
+  }
   // §79: what was reconstructed instead of swept, and which questions could change the choice.
   const tiers = new Map<string, number>();
   for (const one of reading.inferred) tiers.set(one.tier, (tiers.get(one.tier) ?? 0) + 1);
