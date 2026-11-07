@@ -1,5 +1,11 @@
 # The $10K plan, rebuilt for remote operation — goal `wst_7b4fcbb5f2384f31b6c3`
 
+> **Superseded** by `docs/CASH-10K-BRAIN-PLAN.md`, the plan Brain's own research, construction and quant engine now produce. The owner's constraints carry over unchanged:
+> - Freelance marketplaces are not the main business model.
+> - No paid API has been added: `package.json` is unchanged since the 2026-11-03 assignment.
+> - No government contracts, domain speculation or broken-website plays.
+> - $375 per arrangement before proof, $750 a week tied up, $3,000 in all.
+
 **Standing rule** (`server/domain/operatingModel.ts`):
 - The business runs entirely online, with AI and software doing as much of the work as possible.
 - **The owner does no physical work.**
