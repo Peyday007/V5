@@ -32,6 +32,7 @@
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { CONNECTOR_SCOPES, type ClaimedWork, type Principal, type WorkItemRow } from '../../domain/types.ts';
+import { findingTakesQualifier, isStructuralFinding } from '../../domain/industry.ts';
 import { createWorker, getWorkerByName, grantMembership, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import { claimWork } from '../../repos/workQueue.ts';
 import { completeUnleasedBin, getBin, recordBinEvent } from '../../repos/bins.ts';
@@ -892,6 +893,16 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(c)) if (claimFields.size === 0 || claimFields.has(key)) out[key] = value;
     out['retrieval_state'] = 'RETRIEVED';
+    /*
+     * Two fields a small model adds where they cannot belong, each of which
+     * refused the whole submission (production, 2026-11-07): a qualifier on a
+     * structural finding that is about itself, and a closing date on a claim
+     * that names no opening. Dropping the field keeps the claim; the rest of it
+     * is held to every rule as before.
+     */
+    const finding = out['structural_finding'];
+    if (out['structural_qualifier'] !== undefined && (!isStructuralFinding(finding) || !findingTakesQualifier(finding))) delete out['structural_qualifier'];
+    if (out['closes_on'] !== undefined && (out['opportunity_signal'] === undefined || out['opportunity_signal'] === null || out['opportunity_signal'] === '')) delete out['closes_on'];
     return out;
   };
   const finalize =(raw: Record<string, unknown>): Record<string, unknown> | null => {
