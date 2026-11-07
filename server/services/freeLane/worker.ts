@@ -640,6 +640,33 @@ function proof(ctx: Ctx): Record<string, unknown> {
 }
 
 /** Submit through a tool; on a refusal, show the model the refusal once and try again. */
+/**
+ * Submit, and when Brain refuses one numbered claim, submit the rest without it.
+ *
+ * `brain_submit_claims` refuses a whole submission for one claim's impossible
+ * field ("a HUMAN_REQUIREMENT finding carries no figure, so labor_qualifier must
+ * be omitted", "closes_on needs an opportunity_signal", …). Production,
+ * 2026-11-07: a small model's one bad claim cost every good claim beside it,
+ * and the repair round usually repeated the mistake. The refused claim is
+ * dropped — never edited — and every other claim meets every rule as before.
+ */
+export async function submitDroppingRefusedClaims(ctx: Ctx, tool: string, args: Record<string, unknown>): Promise<void> {
+  let current = args;
+  for (let dropped = 0; ; dropped += 1) {
+    try {
+      await call(ctx, tool, { ...current, ...proof(ctx) });
+      return;
+    } catch (error) {
+      const message = String((error as Error).message ?? error);
+      const claims = Array.isArray(current['claims']) ? (current['claims'] as unknown[]) : null;
+      const index = /\bclaims\[(\d+)\]/.exec(message);
+      const at = index ? Number(index[1]) : -1;
+      if (tool !== 'brain_submit_claims' || !claims || claims.length < 2 || at < 0 || at >= claims.length || dropped >= 5) throw error;
+      current = { ...current, claims: claims.filter((_, i) => i !== at) };
+    }
+  }
+}
+
 async function submitWithRepair(
   ctx: Ctx,
   tool: string,
@@ -675,7 +702,7 @@ async function submitWithRepair(
       return false;
     }
     try {
-      await call(ctx, tool, { ...args, ...proof(ctx) });
+      await submitDroppingRefusedClaims(ctx, tool, args);
       return true;
     } catch (error) {
       ctx.why = `${tool} refused: ${String((error as Error).message ?? error).slice(0, 300)}`;
