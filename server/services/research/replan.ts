@@ -39,6 +39,7 @@ import { aboutTheSameThing, classifyAgainstExisting } from './contradictions.ts'
 import type { ContradictionAssessment } from './contradictions.ts';
 import { countIndependentSources } from './standards.ts';
 import { assignExecutionPriority } from './quota.ts';
+import type { ApprovalEnvelope } from './approvalEnvelope.ts';
 
 export interface FindingOutcome {
   claimId: string;
@@ -466,4 +467,118 @@ export async function planContradictionFragments(input: {
 
   if (briefs.length === 0) return [];
   return createFragments(assignExecutionPriority(briefs));
+}
+
+/**
+ * A plan refused only for naming a source type the envelope does not admit.
+ *
+ * The envelope's own refusal sentence for that case, matched here so the re-ask
+ * is offered for exactly this class and no other: a forbidden action, a
+ * geography, a floor, a spend or an unpinned assignment never matches and still
+ * parks at NEEDS_HUMAN with the envelope's own words.
+ */
+const SOURCE_TYPE_REFUSAL = /^fragment "[^"]+" accepts ".*", which this envelope does not admit\./s;
+
+/** Written on the repair reason of a re-asked attempt, so "once" is read from rows. */
+export const ENVELOPE_REASK_MARKER = 'ENVELOPE_REASK:';
+
+export function onlySourceTypeRefusals(reasons: string[]): boolean {
+  return reasons.length > 0 && reasons.every((reason) => SOURCE_TYPE_REFUSAL.test(reason));
+}
+
+/** Whether any proposed fragment is already the product of one re-ask. */
+export function alreadyReasked(fragments: ResearchFragment[]): boolean {
+  return fragments.some((fragment) => (fragment.repairReason ?? '').startsWith(ENVELOPE_REASK_MARKER));
+}
+
+/** What the first refusal said, recovered from the re-asked attempts' lineage. */
+export function firstRefusalOf(fragments: ResearchFragment[]): string {
+  return fragments
+    .map((fragment) => fragment.repairReason ?? '')
+    .filter((reason) => reason.startsWith(ENVELOPE_REASK_MARKER))
+    .map((reason) => reason.slice(ENVELOPE_REASK_MARKER.length).trim())
+    .join(' ');
+}
+
+/**
+ * Ask once more, instead of parking, when the only fault is a source-type label.
+ *
+ * Each fragment that declared a refused source type is superseded by a new
+ * attempt of the same key (the older one is CANCELLED with its reason and kept
+ * as history, never edited into the new one). The new attempt's refused source
+ * types are replaced by the envelope's own `sourceRule` text: the instruction
+ * the planner would have read, stated as what may be cited. Nothing is lowered:
+ * the replacement is itself tested by the envelope's regexes when the packet
+ * next reaches approval, and a second refusal parks.
+ */
+export async function reaskRefusedSourceTypes(input: {
+  orchestrationId: string;
+  fragments: ResearchFragment[];
+  envelope: Pick<ApprovalEnvelope, 'allowedSourceTypes' | 'sourceRule' | 'id'>;
+  reasons: string[];
+}): Promise<ResearchFragment[]> {
+  const created: ResearchFragment[] = [];
+  const at = new Date().toISOString();
+  for (const previous of input.fragments) {
+    const refused = previous.acceptableSourceTypes.filter(
+      (source) => !input.envelope.allowedSourceTypes.test(source),
+    );
+    if (refused.length === 0) continue;
+    const kept = previous.acceptableSourceTypes.filter((source) => !refused.includes(source));
+    const reason =
+      `${ENVELOPE_REASK_MARKER} ` +
+      input.reasons.filter((entry) => entry.includes(`fragment "${previous.fragmentKey}"`)).join(' ');
+    await updateFragment(previous.id, {
+      status: 'CANCELLED',
+      cancelledReason: 'Re-asked once: ' + reason.slice(ENVELOPE_REASK_MARKER.length).trim(),
+      blockedReason: null,
+      completedAt: at,
+    });
+    const [next] = await createFragments([
+      {
+        orchestrationId: input.orchestrationId,
+        projectId: previous.projectId,
+        layerId: previous.layerId,
+        fragmentIndex: previous.fragmentIndex,
+        fragmentKey: previous.fragmentKey,
+        question: previous.question,
+        geography: previous.geography,
+        timeframe: previous.timeframe,
+        population: previous.population,
+        definitions: previous.definitions,
+        requiredEvidence: previous.requiredEvidence,
+        acceptableSourceTypes: [...kept, input.envelope.sourceRule],
+        excludedSourceTypes: previous.excludedSourceTypes,
+        completionCriteria: previous.completionCriteria,
+        dependsOn: previous.dependsOn,
+        minIndependentSources: previous.minIndependentSources,
+        requirementIds: previous.requirementIds,
+        evidenceLane: previous.evidenceLane,
+        whyItMatters: previous.whyItMatters,
+        missingEvidence: previous.missingEvidence,
+        whyExistingInsufficient: previous.whyExistingInsufficient,
+        existingClaimIds: previous.existingClaimIds,
+        excludedScope: previous.excludedScope,
+        expectedClaimTypes: previous.expectedClaimTypes,
+        preferredSourceTypes: previous.preferredSourceTypes,
+        prohibitedEvidence: previous.prohibitedEvidence,
+        requiredComparisons: previous.requiredComparisons,
+        requiredCalculations: previous.requiredCalculations,
+        contradictionTargets: previous.contradictionTargets,
+        failureConditions: previous.failureConditions,
+        uncertaintyTolerance: previous.uncertaintyTolerance,
+        priority: previous.priority,
+        estimatedEffort: previous.estimatedEffort,
+        maxRepairs: previous.maxRepairs,
+        archiveMarker: previous.archiveMarker,
+        attempt: previous.attempt + 1,
+        parentFragmentId: previous.id,
+        repairReason: reason.slice(0, 2000),
+        repairStrategy: 'envelope source-type re-ask',
+        status: 'PLANNED',
+      },
+    ]);
+    if (next) created.push(next);
+  }
+  return created;
 }
