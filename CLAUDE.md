@@ -291,7 +291,7 @@ There must be no workflow where the user has to remember "now go update the data
     and never the space, simplification happens in the presentation, and what
     is not in the top five is not thereby worthless.
 
-## 8–90. The architecture record
+## 8–91. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -383,6 +383,7 @@ resolves. Read the section for the area you are changing before you change it
 - §88. A complete system is mapped before it is debugged, and a gap is read from production, never from code.
 - §89. A goal's research is measured at its plan, and a search that does not reach the plan is asked differently.
 - §90. Independent work does not wait for unrelated work, and evidence reaches the plan when it arrives.
+- §91. The owner does no physical work; selling, brokering and small repeat sales are still the search.
 
 ## Conventions
 

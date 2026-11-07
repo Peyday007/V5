@@ -13,12 +13,8 @@ import { describesOwnAction } from '../server/services/research/actorScope.ts';
 describe('what the owner would have to do physically', () => {
   it('rules out openings that need the owner on site, from the plans production actually built', () => {
     for (const title of [
-      'Holiday light installation on single-story homes, Nov 14–Dec 6',
-      'Fresh tree delivered, set up and removed in January',
-      'Leaf and single-story gutter cleanup',
       'Hand out 3,000 door hangers in two neighbourhoods',
       'Texas surplus jewelry lots — needs someone in Austin for preview and pickup',
-      'Junk removal jobs in Phoenix',
       // Production's own openings, 2026-11-03, that the first patterns missed.
       "As of the June 25, 2026 article, the Air Jordan 6 'Bin 23' had a current average resale price above retail",
       'theshitbot.com, citing current StockX resale-market data as of March 2026',
@@ -30,6 +26,29 @@ describe('what the owner would have to do physically', () => {
       expect(fit.kind, title).toBe('OWNER_PHYSICAL');
       expect(breaksOperatingModel(fit)).toBe(true);
     }
+  });
+
+  it('asks who performs a physical service rather than ruling it out (owner, 2026-11-07: brokering services others fulfil is allowed)', () => {
+    for (const title of [
+      'Holiday light installation on single-story homes, Nov 14–Dec 6',
+      'Fresh tree delivered, set up and removed in January',
+      'Leaf and single-story gutter cleanup',
+      'Junk removal jobs in Phoenix',
+      'Recurring house cleaning for busy households in Dallas, $120 a visit',
+      'Lawn care every two weeks for homeowners in Atlanta',
+    ]) {
+      const fit = operatingFit({ title });
+      expect(fit.kind, title).toBe('UNKNOWN');
+      expect(fit.because, title).toMatch(/independent provider/);
+      expect(breaksOperatingModel(fit)).toBe(false);
+    }
+  });
+
+  it('reads the recorded mechanism, delivery and notes, not only the title', () => {
+    expect(operatingFit({ title: 'House cleaning for households in Austin', mechanism: 'SUBCONTRACTED_FULFILMENT' }).kind).toBe('BROKERED_PHYSICAL');
+    expect(operatingFit({ title: 'Gutter cleaning demand in Ohio', notes: 'commission from the contractor per booked job' }).kind).toBe('BROKERED_PHYSICAL');
+    expect(operatingFit({ title: 'Move-out cleaning', delivery: 'booked online and dispatched to vetted local cleaners' }).kind).toBe('BROKERED_PHYSICAL');
+    expect(operatingFit({ title: 'Cleaning service that engages cleaners as independent subcontractors' }).kind).toBe('BROKERED_PHYSICAL');
   });
 
   it('keeps physical work an independent party performs and this operation brokers online', () => {
@@ -82,8 +101,11 @@ describe('the rule is applied where Brain finds and screens openings', () => {
   it('screens an owner-physical opening out before any research is spent, and keeps a brokered one', async () => {
     const now = new Date().toISOString();
     const base = { projectId: '', sourceClaimId: null, expiresAt: null, offerScope: null, fulfillmentOwner: null };
-    const physical = await notWorthResearching({ ...base, id: 'cop_a', title: 'Fresh tree delivered, set up and removed in January' } as never, { now });
+    const physical = await notWorthResearching({ ...base, id: 'cop_a', title: 'Hand out 3,000 door hangers in two neighbourhoods' } as never, { now });
     expect(physical).toMatchObject({ kind: 'SCREENED_OUT', reason: 'OWNER_PHYSICAL_WORK' });
+    // A physical service with no provider named yet is researched: who performs it is the question.
+    const service = await notWorthResearching({ ...base, id: 'cop_c', title: 'Fresh tree delivered, set up and removed in January' } as never, { now });
+    expect(service).toBeNull();
     const brokered = await notWorthResearching({ ...base, id: 'cop_b', title: 'Exclusive junk removal leads sold to local haulers' } as never, { now });
     expect(brokered).toBeNull();
   });

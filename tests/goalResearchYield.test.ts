@@ -48,7 +48,7 @@ describe('why a goal’s research is not producing openings its plan can use', (
     });
     expect(diagnosis.map((one) => one.cause)).toEqual(['NO_BUYER', 'NO_SUPPORTED_PRICE', 'TOO_SMALL']);
     expect(diagnosis[0]!.evidence).toBe('2 of 3 openings held lack a reachable buyer or a dated sign of demand');
-    expect(diagnosisInstructions(diagnosis)).toContain('name the kind of business that pays');
+    expect(diagnosisInstructions(diagnosis)).toContain('name the kind of business or household that pays');
   });
 
   it('names research that does not finish, or finishes empty, from the goal’s own rounds', () => {
@@ -62,11 +62,20 @@ describe('why a goal’s research is not producing openings its plan can use', (
   it('names money limits from the openings the plan left out, and keeps a question to three instructions', () => {
     const diagnosis = diagnoseGoalResearch({
       considered: [held(['REACHABLE_BUYER', 'OFFER_AND_PRICE', 'SETTLES_IN_TIME'], 10, null)],
-      excludedReasons: ['ties up 500 at its start', 'needs the owner’s physical work', 'more than the 375 one arrangement may'],
+      excludedReasons: [
+        'ties up 500 at its start',
+        'more than the 375 one arrangement may',
+        'needs capital the goal does not allow',
+        'needs the owner’s physical work: delivering it needs physical work ("door hangers")',
+        'needs the owner’s physical work: x',
+        'needs the owner’s physical work: y',
+      ],
       rounds: [{ state: 'ABANDONED', found: 0 }, { state: 'ABANDONED', found: 0 }],
       remaining: 10_000,
     });
-    expect(diagnosis.map((one) => one.cause)).toEqual(['RESEARCH_NOT_FINISHING', 'NO_BUYER', 'NO_SUPPORTED_PRICE', 'TOO_SMALL', 'SETTLEMENT_UNKNOWN', 'OVER_LIMITS']);
+    // Physical exclusions ask who performs the work; they are no longer read as a money limit.
+    expect(diagnosis.map((one) => one.cause)).toEqual(['RESEARCH_NOT_FINISHING', 'NO_BUYER', 'NO_SUPPORTED_PRICE', 'TOO_SMALL', 'SETTLEMENT_UNKNOWN', 'NO_FULFILLER', 'OVER_LIMITS']);
+    expect(diagnosis.find((d) => d.cause === 'OVER_LIMITS')!.instruction).not.toMatch(/prefer work delivered remotely by AI/);
     expect(diagnosisInstructions(diagnosis).split('. ').length).toBeLessThan(diagnosis.map((d) => d.instruction).join(' ').split('. ').length);
   });
 
@@ -195,7 +204,7 @@ describe('a goal’s research reaches its plan, and the plan records its progres
     expect(opened).not.toBeNull();
     const row = await getDb().get<{ statement: string }>('SELECT statement FROM russell_candidates WHERE id = ?', [opened!.candidateId]);
     expect(row?.statement).toContain(REMOTE_AI_FOCUS.slice(0, 60));
-    expect(row?.statement).toContain('name the kind of business that pays');
+    expect(row?.statement).toContain('name the kind of business or household that pays');
   });
 
   it('frees a goal round’s research slot when its research is done, while synthesis and audit still run', async () => {

@@ -106,8 +106,8 @@ export interface LeadInput {
 export interface LeadOutput {
   verdict: ScreenVerdict;
   window: CashWindow;
-  /** The one deliverable Brain could sell here, or NONE. */
-  deliverable: DeliverableKind | 'NONE';
+  /** The one deliverable Brain could sell here, a service brokered to a contractor, or NONE. */
+  deliverable: DeliverableKind | 'BROKERED_SERVICE' | 'NONE';
   /** What the business needs, in a few words. */
   need: string;
   /** Who would pay, in a few words, or empty when the post does not say. */
@@ -120,13 +120,15 @@ export const TASKS = {
   SCREEN_OPENING: {
     system:
       'You sort business openings for a very small operation that wants cash fast. It sells ' +
-      'digital work by email (documents, spreadsheets, data work, simple websites, research) ' +
-      'and has little money to spend up front. Answer ONLY with a JSON object.',
+      'digital work by email (documents, spreadsheets, data work, simple websites, research), and it ' +
+      'also sells and coordinates services that independent contractors or suppliers perform for ' +
+      'businesses or households (brokering, referring or subcontracting them online). The owner does ' +
+      'no physical work himself. It has little money to spend up front. Answer ONLY with a JSON object.',
     prompt(input: ScreenInput): string {
       return [
         'Is this opening worth a closer look by a stronger analyst?',
         'KEEP: somebody plausibly pays, soon, for something this operation could deliver.',
-        'DROP: obviously not — nobody pays, needs a licence, big capital, physical work, or it is closed.',
+        'DROP: obviously not — nobody pays, needs a licence, big capital, the owner himself would have to do physical work, or it is closed. Physical work an independent contractor would do while this operation sells and coordinates it is fine; small prices that many buyers pay repeatedly are fine.',
         'UNSURE: you cannot tell.',
         'window: SHORT if the money is a window of weeks (a deadline, an event, a new rule); ONGOING if it repeats; UNKNOWN otherwise.',
         '',
@@ -146,16 +148,18 @@ export const TASKS = {
     system:
       'You read raw public posts for a very small online operation that wants cash fast. It sells ' +
       'finished digital work by email to businesses: documents, spreadsheets, data work, simple ' +
-      'websites, small scripts, presentations, graphics. It does no calls, no on-site work, no ' +
-      'employment and no licensed work. Answer ONLY with a JSON object.',
+      'websites, small scripts, presentations, graphics. It also sells and coordinates, online, ' +
+      'services that independent contractors perform for businesses or households (cleaning, ' +
+      'moving, repairs, installs and the like): it brokers, refers or subcontracts the job and never ' +
+      'does the physical work itself. It does no employment and no licensed work. Answer ONLY with a JSON object.',
     prompt(input: LeadInput): string {
       return [
-        'Does this post show a business that would plausibly pay this operation, soon, for one finished piece of digital work?',
-        'KEEP: yes, there is a clear need it could deliver as a file or site. A business event that creates such a need within weeks also counts: a rule or deadline it must meet soon, a location about to open, a tool it relies on shutting down, a competitor closing, or an event it is rushing to prepare for. The operation wants cash fast, so a need with no near deadline is UNSURE at best.',
-        'DROP: no — personal post, no business need, needs a licence, physical work, a full-time hire only, or spam.',
+        'Does this post show a business or household that would plausibly pay this operation, soon, for one finished piece of digital work or for a service an independent contractor would perform while this operation arranges it?',
+        'KEEP: yes, there is a clear need it could deliver as a file or site, or a service job it could broker to a contractor (deliverable BROKERED_SERVICE). A business event that creates such a need within weeks also counts: a rule or deadline it must meet soon, a location about to open, a tool it relies on shutting down, a competitor closing, or an event it is rushing to prepare for. The operation wants cash fast, so a need with no near deadline is UNSURE at best.',
+        'DROP: no — nothing anybody would pay for, needs a licence, the operator would have to do physical work himself, a full-time hire only, or spam. A small job is not a reason to drop.',
         'UNSURE: you cannot tell.',
         'window: SHORT if there is a deadline, a new rule or an event within weeks; ONGOING if the need repeats; UNKNOWN otherwise.',
-        `deliverable: one of ${[...DELIVERABLE_KINDS, 'NONE'].join(', ')}.`,
+        `deliverable: one of ${[...DELIVERABLE_KINDS, 'BROKERED_SERVICE', 'NONE'].join(', ')}.`,
         '',
         `Source: ${input.source}`,
         `Title: ${input.title}`,
@@ -214,13 +218,13 @@ export function parseLead(text: string): LeadOutput | null {
   const deliverable = record['deliverable'] ?? 'NONE';
   if (typeof verdict !== 'string' || !(SCREEN_VERDICTS as readonly string[]).includes(verdict)) return null;
   if (typeof window !== 'string' || !(CASH_WINDOWS as readonly string[]).includes(window)) return null;
-  if (typeof deliverable !== 'string' || ![...DELIVERABLE_KINDS, 'NONE'].includes(deliverable)) return null;
+  if (typeof deliverable !== 'string' || ![...DELIVERABLE_KINDS, 'BROKERED_SERVICE', 'NONE'].includes(deliverable)) return null;
   const words = (key: string, max: number) =>
     typeof record[key] === 'string' ? (record[key] as string).trim().slice(0, max) : '';
   return {
     verdict: verdict as ScreenVerdict,
     window: window as CashWindow,
-    deliverable: deliverable as DeliverableKind | 'NONE',
+    deliverable: deliverable as DeliverableKind | 'BROKERED_SERVICE' | 'NONE',
     need: words('need', 160),
     payer: words('payer', 120),
     reason: words('reason', 300),

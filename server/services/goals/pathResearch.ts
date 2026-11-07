@@ -184,7 +184,9 @@ export async function researchGoalPaths(input: {
      * only a guess — is asked one thing first, what buyers actually pay,
      * because that answer decides whether anything else is worth asking.
      */
-    if (potential(one) < floor && one.potentialReach !== null) {
+    // Judged by size only once its volume is known or it pays once by nature (see materiality.ts).
+    const sizeKnown = one.volumeEstablished !== false || one.competitiveAward || one.paysOnce === true;
+    if (sizeKnown && potential(one) < floor && one.potentialReach !== null) {
       note(`${one.title.slice(0, 60)}: too small to matter — at most ${Math.round(potential(one))} of the ${Math.round(remaining)} still needed, even if every buyer agreed`);
       continue;
     }
@@ -192,6 +194,8 @@ export async function researchGoalPaths(input: {
       // No supported price big enough yet: what buyers actually pay decides
       // whether anything else about it is worth asking, so ask that alone.
       asks = [FIELDS_FOR.OFFER_AND_PRICE![0]!];
+      // Small per sale with volume unknown: how many buyers, how often, is asked beside the price.
+      if (!sizeKnown) asks = [...asks, FIELDS_FOR.MARKET_VOLUME![0]!];
     } else if (!squeeze && !one.volumeEstablished && one.supportedReach < remaining && !one.competitiveAward && !asks.some((a) => a.field === 'buyerVolume')) {
       // One deal cannot carry the goal: whether it sells again — how many
       // buyers, how often — is investigated, never assumed (§81).

@@ -59,7 +59,7 @@
  *     decides what may be spent, executing still needs a recorded action, and a
  *     person's own answer outranks a proposal permanently.
  */
-import { breaksOperatingModel, operatingFit } from '../../domain/operatingModel.ts';
+import { breaksOperatingModel, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { citableClaims } from '../../repos/research.ts';
 import { getMission } from '../../repos/russellMissions.ts';
 import { missionsForRounds } from '../russell/roundMissions.ts';
@@ -577,7 +577,7 @@ export type DeliveryReading =
  * requirement and proposing past it are the same mistake.
  */
 export async function deliveryReading(opportunity: CashOpportunity): Promise<DeliveryReading> {
-  const fit = operatingFit({ title: opportunity.title, offerScope: opportunity.offerScope, fulfillmentOwner: opportunity.fulfillmentOwner });
+  const fit = operatingFit(operatingFactsOf(opportunity));
   if (breaksOperatingModel(fit)) {
     return { kind: 'WITHHOLD', bar: 'PHYSICAL', because: `Not proposed: ${fit.because}.` };
   }
@@ -600,7 +600,26 @@ export async function deliveryReading(opportunity: CashOpportunity): Promise<Del
     const allocation = live.get(task.id);
     return allocation ? PHYSICAL(allocation) : false;
   });
-  if (physical.length > 0) {
+  /*
+   * A physical task is the owner's only when nobody else performs it. Brokered
+   * (a subcontractor or provider is named, or the arrangement itself is a
+   * referral, brokerage or subcontract) it is the supplier's part and the
+   * delivery reading goes on to what this operation does. A physical service
+   * whose provider is not yet known is a question to research, not a verdict
+   * that it cannot be delivered (owner, 2026-11-07).
+   */
+  if (physical.length > 0 && fit.kind === 'BROKERED_PHYSICAL') {
+    // The physical tasks are the provider's; the rest of the reading decides.
+  } else if (physical.length > 0 && fit.kind === 'UNKNOWN') {
+    return {
+      kind: 'WITHHOLD',
+      bar: 'UNALLOCATED',
+      because:
+        `Delivering this needs physical work (${physical.map((one) => one.name).join(', ')}) that an ` +
+        'independent provider would perform while this operation sells and coordinates it; which ' +
+        'provider is not yet established.',
+    };
+  } else if (physical.length > 0) {
     return {
       kind: 'WITHHOLD',
       bar: 'PHYSICAL',

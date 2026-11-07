@@ -87,7 +87,8 @@ describe('a constructed arrangement as an estimate', () => {
       ],
       { ...base, remaining: 10_000, exclusions: ['GOVERNMENT_CONTRACTING'] },
     );
-    expect(picked.map((one) => one.estimated!.arrangementKey)).toEqual(['moves']);
+    // Mowing is a service a crew performs while this operation sells it: kept, who mows is a question (owner, 2026-11-07).
+    expect(picked.map((one) => one.estimated!.arrangementKey).sort()).toEqual(['moves', 'mow']);
   });
 });
 

@@ -286,7 +286,7 @@ function shortlistLine(item: StoredFeedItem, screen: LeadOutput): string | null 
   const clean = (value: string, max: number) => value.replace(/[.,;:!?—–\n"]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
   const line =
     `"${clean(item.title, 90)}" at ${item.url} — the need as read: ${clean(screen.need, 80)}; ` +
-    `the work it could take: ${DELIVERABLE_LABEL[screen.deliverable as keyof typeof DELIVERABLE_LABEL] ?? screen.deliverable}`;
+    `the work it could take: ${screen.deliverable === 'BROKERED_SERVICE' ? 'a service an independent contractor performs and this operation sells and coordinates' : (DELIVERABLE_LABEL[screen.deliverable as keyof typeof DELIVERABLE_LABEL] ?? screen.deliverable)}`;
   if (safeLeadLine(line)) return line;
   const bare = `${item.url} — the work it could take: ${screen.deliverable}`;
   return safeLeadLine(bare) ? bare : null;

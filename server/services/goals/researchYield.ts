@@ -27,6 +27,7 @@ export const RESEARCH_CAUSES = [
   'NO_SUPPORTED_PRICE',
   'TOO_SMALL',
   'OVER_LIMITS',
+  'NO_FULFILLER',
   'SETTLEMENT_UNKNOWN',
 ] as const;
 export type ResearchCause = (typeof RESEARCH_CAUSES)[number];
@@ -55,15 +56,17 @@ const INSTRUCTION: Record<ResearchCause, string> = {
   RESEARCH_NOT_FINISHING:
     'Recent searches for this goal ended without a report because no claim survived the evidence check, so cite only pages that open without a login or bot wall (official pages, public marketplace listings, public registers) and quote the exact sentence that names the buyer, the work and the price.',
   NO_OPENINGS_REPORTED:
-    'Recent searches for this goal reported no opening, so report buyer-side evidence: a dated public request, job post, tender or marketplace listing where a business asks and pays for this work.',
+    'Recent searches for this goal reported no opening, so report buyer-side evidence: a dated public request, job post, tender or marketplace listing where a business or household asks and pays for this work.',
   NO_BUYER:
-    'Most openings Brain holds are a provider describing its own service, not a buyer asking for one, so for each opening name the kind of business that pays, where it publicly asks for the work, and one dated example of it doing so.',
+    'Most openings Brain holds are a provider describing its own service, not a buyer asking for one, so for each opening name the kind of business or household that pays, where it publicly asks for the work, and one dated example of it doing so.',
   NO_SUPPORTED_PRICE:
     'Most openings Brain holds have no price buyers are shown paying, so give the price buyers pay for this exact deliverable — completed-job prices on a marketplace, or a competitor\'s published price for the same deliverable to the same buyers — with its page.',
   TOO_SMALL:
     'The openings Brain holds are each too small to matter for the goal, so prefer work many buyers pay for repeatedly, and state how many such buyers exist (a count from a directory, register or marketplace) and how often each buys.',
   OVER_LIMITS:
-    'Most openings Brain holds need more money up front, or cost more, than the goal allows, so prefer work delivered remotely by AI-produced digital output with almost no up-front cost, and state the direct cost per sale.',
+    'Most openings Brain holds need more money up front, or cost more, than the goal allows, so prefer ways with almost no up-front cost — work produced digitally, or services an independent contractor performs and the buyer pays for before or on completion — and state the direct cost per sale.',
+  NO_FULFILLER:
+    'Several openings were left out because they need physical work and nobody independent was named to perform it; the owner does no physical work himself but may sell, book, refer or subcontract it. For each such opening name the kind of independent contractor or supplier who performs it, how they are found and paid, and how this operation coordinates the job online.',
   SETTLEMENT_UNKNOWN:
     'Nobody has established when the money from the openings held would settle, so for each opening say how buyers pay (card at checkout, prepaid, invoice terms) and how many days until the cash arrives.',
 };
@@ -107,9 +110,14 @@ export function diagnoseGoalResearch(input: {
     const settles = lacking(['SETTLES_IN_TIME']);
     if (settles / held.length >= CAUSE_SHARE) out.push({ cause: 'SETTLEMENT_UNKNOWN', evidence: `${share(settles)} have no established settlement date`, instruction: INSTRUCTION.SETTLEMENT_UNKNOWN });
   }
-  const limits = input.excludedReasons.filter((reason) => /capital|tie[sd]? up|physical|more than the/i.test(reason)).length;
+  // Physical work with nobody named to perform it is a fulfilment question, not a money limit.
+  const physical = input.excludedReasons.filter((reason) => /physical/i.test(reason)).length;
+  if (physical >= 3) {
+    out.push({ cause: 'NO_FULFILLER', evidence: `${physical} openings were left out for physical work with no independent provider named`, instruction: INSTRUCTION.NO_FULFILLER });
+  }
+  const limits = input.excludedReasons.filter((reason) => /capital|tie[sd]? up|more than the/i.test(reason)).length;
   if (limits >= 3 && !out.some((one) => one.cause === 'OVER_LIMITS')) {
-    out.push({ cause: 'OVER_LIMITS', evidence: `${limits} openings were left out of the plan for money tied up or physical work`, instruction: INSTRUCTION.OVER_LIMITS });
+    out.push({ cause: 'OVER_LIMITS', evidence: `${limits} openings were left out of the plan for money tied up`, instruction: INSTRUCTION.OVER_LIMITS });
   }
   return out;
 }

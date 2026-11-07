@@ -776,12 +776,16 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
 
   it('never builds a plan on the owner doing physical work, and still plans the same service brokered', async () => {
     // The standing rule (domain/operatingModel.ts), owner 2026-11-02: "I DO NOT WANT TO PERFORM PHYSICAL WORK."
-    const own = await oneOff({ title: 'Holiday light installation on single-story homes', priceCents: 35_000 });
+    const own = await oneOff({ title: 'Hand out 3,000 door hangers for a holiday lights promotion', priceCents: 35_000 });
     const brokered = await oneOff({ title: 'Holiday light installation for homeowners', priceCents: 35_000, fulfilledBy: { who: 'An independent installer crew (subcontractor)', kind: 'PERSON' } });
+    // A service nobody has named a provider for is considered, its fulfilment an open question (owner, 2026-11-07).
+    const unnamed = await oneOff({ title: 'Holiday light installation on single-story homes', priceCents: 35_000, fulfilledBy: { who: 'the owner', kind: 'PERSON' } });
     const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
     expect(reading.considered.some((one) => one.opportunityId === own.id)).toBe(false);
     expect(reading.excluded.find((one) => one.opportunityId === own.id)?.reason).toMatch(/owner's physical work/);
     expect(reading.considered.some((one) => one.opportunityId === brokered.id)).toBe(true);
+    // Named as the owner's own work it is still ruled out.
+    expect(reading.considered.some((one) => one.opportunityId === unnamed.id)).toBe(false);
   });
 
   it('raises research for the path to the money on the openings closest to a plan', async () => {
@@ -797,6 +801,19 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     await advanceGoalPlans(new Date(now.getTime() + 31 * 60_000));
     expect((await listNeeds({ projectId, states: ['OPEN'] })).filter((one) => one.requestKey === `question:${o.id}:timeToFirstCash`)).toHaveLength(1);
     expect(id).toBeTruthy();
+  });
+
+  it('researches a small repeat service instead of judging it too small (owner, 2026-11-07)', async () => {
+    const cleaning = await oneOff({ title: 'Recurring house cleaning for busy households, $150 a visit, booked online and done by independent cleaners', priceCents: 15_000, days: null });
+    await goal(1_000_000);
+    await advanceGoalPlans(now);
+    const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
+    const asked = (await listNeeds({ projectId, states: ['OPEN'] })).filter((one) => one.opportunityId === cleaning.id).map((one) => one.requestKey);
+    // Not screened as "too small to matter": its path to the money is researched. (Under SQUEEZE its
+    // volume is learned by selling, so what is asked is how the money settles, not how many buyers.)
+    expect(asked.length).toBeGreaterThan(0);
+    const { tooSmallForGoals } = await import('../server/services/goals/materiality.ts');
+    expect(tooSmallForGoals(cleaning.id)).toBeNull();
   });
 
   it('spends no research on an opening too small to matter, and asks a guessed one only what buyers pay', async () => {

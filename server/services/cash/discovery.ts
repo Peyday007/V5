@@ -709,8 +709,8 @@ export const MAX_LIVE_GOAL_ROUNDS = 3;
  * the gate, harvest and plan judge every opening exactly as before.
  */
 export const REMOTE_AI_FOCUS =
-  'Prefer work this operation can run entirely online and fulfil mostly with AI-produced digital output (documents, data, research, content, code, automations) that businesses already pay providers for. ' +
-  'For each such opening give: the kind of buyer and where they are found, a dated sign that buyers want it now, the price buyers are shown paying for it, how the work would be produced and delivered, the cost per sale, and how quickly the money is collected.';
+  'Look for work this operation can run entirely online: work it fulfils with AI-produced digital output (documents, data, research, content, code, automations), and services that independent contractors or suppliers perform for businesses or households while this operation sells, books, refers or subcontracts them and coordinates them remotely (home services, local services, consumer services, small repeat purchases). Neither kind is preferred over the other. ' +
+  'For each opening give: the kind of buyer and where they are found, a dated sign that buyers want it now, the price buyers are shown paying for it, how many such buyers there are and how often each buys, who performs or produces the work and how it is delivered, what it costs to get each customer, the cost per sale, and how quickly the money is collected.';
 
 /** A barren goal lens waits longer each time, up to this, and is never retired. */
 export const GOAL_LENS_MAX_BACKOFF_MS = 7 * 24 * 60 * 60 * 1000;
@@ -878,7 +878,7 @@ export async function openGoalDiscovery(input: {
     `Looking at ${lens.angle} — in any market or industry, and as one opening or several running at once — ` +
       `which lawful ways could bring this operation ${amount} more of ` +
       `${t.metricLabel} within ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'}? ${held}${elsewhere} ${capital} ${resources} ${pace} ` +
-      `Report only ways that could bring at least ${t.currency} ${Math.round((t.remainingCents / 100) * 0.1)} within that time — alone, or as a stream many buyers pay repeatedly — and leave out one-off small payments, contests, bounties and submissions that pay a few hundred at most. ` +
+      `Report ways that could bring at least ${t.currency} ${Math.round((t.remainingCents / 100) * 0.1)} within that time — alone, or as a stream many buyers pay repeatedly. A small price is not a reason to leave a way out: a $50–$300 service or sale that many households or businesses buy again and again counts by its total, so give how many buyers there are and how often each buys. Leave out only one-off contests, bounties and submissions that pay a few hundred at most. ` +
       'For each, name who pays, what buyers are published as actually paying, when the money would settle, ' +
       'what it needs up front, and what it would need that the operation does not have yet?' +
       ` ${REMOTE_AI_FOCUS}` +
