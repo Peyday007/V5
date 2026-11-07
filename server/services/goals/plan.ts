@@ -38,6 +38,8 @@ import { newId } from '../../repos/util.ts';
 import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent } from '../../repos/register.ts';
 import { readCapabilities } from '../cash/capabilities.ts';
 import { checkCommercialAuthority } from '../cash/authority.ts';
+import { composeBuyerMessage } from '../cash/outreach.ts';
+import { evidenceCard } from '../cash/card.ts';
 import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { readTarget, type TargetReading } from './target.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
@@ -932,11 +934,58 @@ async function saleFor(one: ModelledOpportunity, target: TargetReading): Promise
       ? ` Tie up no more than ${target.capitalBeforeProofCents / 100} ${target.currency} until money comes in.`
       : '';
   const test = `Sell "${title}": offer it to its reachable buyers at ${price} for an actual sale, contract or deposit. Each answer is a sale or a refusal, and is recorded as the demand and price evidence.${limit}`;
-  const contact = await checkCommercialAuthority({ projectId: target.projectId, action: 'CONTACT_BUYER' });
-  if (!contact.ok) return { link: 'CONVERSION', test, by: 'PERSON', blocker: `Selling needs standing permission to contact buyers (${contact.reason}). Grant CONTACT_BUYER under the commercial authority and Brain sends the offers.` };
-  const message = (await readCapabilities(['SEND_A_MESSAGE']))[0];
-  if (message?.state !== 'PRESENT') return { link: 'CONVERSION', test, by: 'PERSON', blocker: 'No message provider is connected, so Brain cannot send the offer. Connect one.' };
-  return { link: 'CONVERSION', test, by: 'BRAIN', blocker: null };
+  const missing = await missingForSale(one, target);
+  if (missing.send.length > 0) {
+    return { link: 'CONVERSION', test, by: missing.sendByPerson ? 'PERSON' : 'BRAIN', blocker: saleBlocker(missing) };
+  }
+  return { link: 'CONVERSION', test, by: 'BRAIN', blocker: missing.collect.length > 0 ? saleBlocker(missing) : null };
+}
+
+/**
+ * Every link between this sale and settled cash that is not in place, read at
+ * once. Production, 2026-11-07: the plan's blocker read "Grant CONTACT_BUYER
+ * … and Brain sends the offers" while the message provider was unconfigured
+ * and no invoice or payment route existed, so the one grant it asked for would
+ * have sent nothing and collected nothing. Naming one missing link at a time
+ * turns one morning's decision into several.
+ */
+export async function missingForSale(one: ModelledOpportunity, target: TargetReading): Promise<{ send: string[]; collect: string[]; sendByPerson: boolean }> {
+  const send: string[] = [];
+  const collect: string[] = [];
+  let sendByPerson = false;
+  const granted = async (action: string) => (await checkCommercialAuthority({ projectId: target.projectId, action })).ok;
+  const caps = new Map((await readCapabilities(['SEND_A_MESSAGE', 'ISSUE_AN_INVOICE', 'TAKE_A_PAYMENT'])).map((cap) => [cap.id, cap.state]));
+  if (!(await granted('CONTACT_BUYER'))) {
+    send.push('a standing commercial authority granting CONTACT_BUYER (none exists for this project)');
+    sendByPerson = true;
+  }
+  if (caps.get('SEND_A_MESSAGE') !== 'PRESENT') {
+    send.push('a message provider: BRAIN_MESSAGING_PROVIDER=resend, RESEND_API_KEY and BRAIN_MESSAGING_FROM on the deployment');
+    sendByPerson = true;
+  }
+  // The operator reaches only a READY piece, and READY is the card's gate, not this plan's tier.
+  if (one.opportunity.state !== 'READY') {
+    const card = evidenceCard(one.opportunity).readiness;
+    if (!card.ready) send.push(`the card answered: ${card.missing.join(', ')} unknown, so the operator cannot mark it READY (Brain researches these)`);
+  }
+  const message = composeBuyerMessage(one.opportunity);
+  if (!message.ok) send.push(`a sendable offer: ${message.reason} (Brain researches this)`);
+  const withheld = [
+    !(await granted('QUOTE_AND_INVOICE')) ? 'QUOTE_AND_INVOICE' : null,
+    !(await granted('ACCEPT_PAYMENT')) ? 'ACCEPT_PAYMENT' : null,
+  ].filter((one): one is string => one !== null);
+  if (withheld.length > 0) collect.push(`the same authority granting ${withheld.join(' and ')}`);
+  if (caps.get('ISSUE_AN_INVOICE') !== 'PRESENT' || caps.get('TAKE_A_PAYMENT') !== 'PRESENT') {
+    collect.push('a billing provider: BRAIN_BILLING_PROVIDER=stripe and STRIPE_SECRET_KEY on the deployment');
+  }
+  return { send, collect, sendByPerson };
+}
+
+function saleBlocker(missing: { send: string[]; collect: string[] }): string {
+  const parts: string[] = [];
+  if (missing.send.length > 0) parts.push(`To send the offer Brain needs ${missing.send.join('; ')}.`);
+  if (missing.collect.length > 0) parts.push(`To be paid it needs ${missing.collect.join('; ')}.`);
+  return parts.join(' ');
 }
 
 /**
