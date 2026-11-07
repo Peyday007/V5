@@ -34,7 +34,11 @@ export const OPERATING_MODEL_SENTENCE =
   'buyers are is a business choice made on demand, margin, fulfilment access, how fast money ' +
   'settles, competition and how much can be automated — never on where the owner lives.';
 
-/** Words that say the operator would have to be physically present or do the work. */
+/**
+ * Words that describe the operator's own physical actions — being somewhere,
+ * handing something out, shipping goods it holds. Unbrokered, these are owner
+ * work and the opening is ruled out.
+ */
 const OWNER_PHYSICAL = new RegExp(
   [
     'door[- ]?hang(?:er|ers|ing)',
@@ -43,22 +47,8 @@ const OWNER_PHYSICAL = new RegExp(
     'door[- ]to[- ]door',
     'canvass(?:ing)?',
     'in[- ]person',
-    'on[- ]site',
-    'onsite',
     '(?:preview|local|curbside|in-store) (?:and )?pick[- ]?up',
     'pick[- ]?up (?:and|from|at) ',
-    'haul(?:ing)?',
-    '(?:light|lighting|fixture|equipment|hvac|solar|fence|flooring|cabinet|appliance|decor(?:ation)?)s? install(?:ation|ations|ing|s)?',
-    'install(?:ing)? (?:the )?(?:lights|fixtures|equipment|decorations)',
-    'take[- ]?down',
-    'set[- ]?up and remov',
-    '(?:house|home|office|gutter|leaf|leaves|window|carpet|deep|move[- ]out|post[- ]construction) clean(?:ing|up|-up)?',
-    'mow(?:ing)?',
-    'snow (?:removal|plowing|plow)',
-    'moving (?:labor|help)',
-    'junk removal',
-    'yard work',
-    'handyman',
     'drive to',
     'local presence',
     'physical(?:ly)? (?:present|presence|attend|deliver|inspect)',
@@ -88,6 +78,42 @@ const OWNER_PHYSICAL = new RegExp(
 );
 
 /**
+ * Physical services a customer buys — cleaning, mowing, hauling, installs, a
+ * handyman. Somebody performs them on site, and that somebody is never the
+ * owner, so such an opening is a service this operation can only sell and
+ * coordinate while an independent provider performs it (owner, 2026-11-07:
+ * "My restriction is against ME performing physical work, not against selling
+ * or brokering services fulfilled by other people"). Until research names that
+ * provider the reading is UNKNOWN — a question about who performs it — and
+ * never a refusal: before 2026-11-07 these words alone ruled the opening out,
+ * so home-service brokerage was screened before anyone could look for the crew.
+ */
+const PHYSICAL_SERVICE = new RegExp(
+  [
+    'on[- ]site',
+    'onsite',
+    'haul(?:ing)?',
+    '(?:light|lighting|fixture|equipment|hvac|solar|fence|flooring|cabinet|appliance|decor(?:ation)?)s? install(?:ation|ations|ing|s)?',
+    'install(?:ing)? (?:the )?(?:lights|fixtures|equipment|decorations)',
+    'take[- ]?down',
+    'set[- ]?up and remov',
+    '(?:house|home|office|gutter|leaf|leaves|window|carpet|deep|move[- ]out|post[- ]construction|pressure|power) (?:clean|wash)(?:ing|up|-up)?',
+    'mow(?:ing)?',
+    'lawn (?:care|service)',
+    'snow (?:removal|plowing|plow)',
+    'moving (?:labor|help|service)',
+    'junk removal',
+    'yard work',
+    'landscap(?:e|ing)',
+    'handyman',
+    'pest control',
+    'pet (?:sitting|grooming)|dog walking',
+    'repair(?:s)? (?:at|in) (?:home|the home)',
+  ].join('|'),
+  'i',
+);
+
+/**
  * Words that say the operator would be the one taking per-job physical work —
  * a gig a platform hands to its drivers or couriers. "Independent contractor"
  * here describes the operator's own status, not somebody it brokers to, so no
@@ -95,7 +121,7 @@ const OWNER_PHYSICAL = new RegExp(
  * per completed pickup … as independent contractors").
  */
 const OWNER_AS_GIG_WORKER =
-  /\b(?:engages? (?:drivers|couriers|haulers|cleaners|movers)|drivers? per (?:completed )?(?:pickup|delivery|job|trip)|per completed (?:pickup|delivery|job|trip)|become an? (?:driver|courier|dasher|shopper|tasker|hauler)|sign up (?:to|as an?) (?:drive|driver|courier))\b/i;
+  /\b(?:drivers? per (?:completed )?(?:pickup|delivery|job|trip)|per completed (?:pickup|delivery|job|trip)|become an? (?:driver|courier|dasher|shopper|tasker|hauler)|sign up (?:to|as an?) (?:drive|driver|courier))\b/i;
 
 /** Words that say somebody else performs the physical part and this operation coordinates it. */
 const BROKERED = new RegExp(
@@ -118,6 +144,17 @@ const BROKERED = new RegExp(
     'matchmak(?:ing|er)',
     'marketplace (?:fee|commission|take rate)',
     'print[- ]on[- ]demand',
+    'book(?:s|ed|ing|ings)? (?:the |a |local )?(?:pros?|providers?|crews?|contractors?|cleaners?|movers?|technicians?)',
+    'dispatch(?:es|ed|ing)?',
+    'outsourc(?:e|es|ed|ing)',
+    'white[- ]label(?:ed)?',
+    'partner network',
+    '(?:vetted|local|independent) (?:pros|professionals|providers|contractors|crews|technicians)',
+    'connects? (?:homeowners|households|customers|clients|buyers) (?:with|to)',
+    'contractor network',
+    'service marketplace',
+    'concierge',
+    'engages? (?:independent )?(?:drivers|couriers|haulers|cleaners|movers|crews|contractors) as (?:independent )?(?:subcontractors|contractors)',
     'fulfil(?:l)?ed by (?:a|an|the|local|independent) (?:supplier|partner|vendor|contractor|printer|crew|provider)',
   ].join('|'),
   'i',
@@ -150,14 +187,44 @@ export interface OperatingFacts {
   captureMechanism?: string | null;
   /** What delivering it takes, where recorded. */
   delivery?: string | null;
+  /** The opening's mechanism (`SUBCONTRACTED_FULFILMENT`, …), where recorded. */
+  mechanism?: string | null;
+  /** Anything else recorded about the economics or payment that can name a fulfiller. */
+  notes?: string | null;
+}
+
+/** Mechanisms that are, by definition, somebody else performing the work this operation sells. */
+const BROKERED_MECHANISMS = new Set(['SUBCONTRACTED_FULFILMENT', 'SUPPLY_DEMAND_MISMATCH', 'BROKERAGE', 'REFERRAL_FEE', 'LEAD_GENERATION', 'MARKETPLACE']);
+
+/** Every recorded field of an opening that can say who performs it. */
+export function operatingFactsOf(o: {
+  title: string;
+  offerScope?: string | null;
+  fulfillmentOwner?: string | null;
+  mechanism?: string | null;
+  deliveryMethod?: string | null;
+  economicsNote?: string | null;
+  paymentTerms?: string | null;
+}): OperatingFacts {
+  return {
+    title: o.title,
+    offerScope: o.offerScope ?? null,
+    fulfillmentOwner: o.fulfillmentOwner ?? null,
+    mechanism: o.mechanism ?? null,
+    delivery: o.deliveryMethod ?? null,
+    notes: [o.economicsNote, o.paymentTerms].filter(Boolean).join(' \n ') || null,
+  };
 }
 
 /** Pure: whether delivering this opening would need the owner's physical work. */
 export function operatingFit(facts: OperatingFacts): OperatingFit {
-  const words = [facts.title, facts.offerScope, facts.captureMechanism, facts.delivery].filter(Boolean).join(' \n ');
+  const words = [facts.title, facts.offerScope, facts.captureMechanism, facts.delivery, facts.notes].filter(Boolean).join(' \n ');
   const fulfiller = facts.fulfillmentOwner?.trim() ?? '';
   const physical = words.match(OWNER_PHYSICAL)?.[0] ?? null;
-  const brokered = words.match(BROKERED)?.[0] ?? null;
+  const service = words.match(PHYSICAL_SERVICE)?.[0] ?? null;
+  const brokeredMechanism = facts.mechanism && BROKERED_MECHANISMS.has(facts.mechanism) ? facts.mechanism.toLowerCase().replace(/_/g, ' ') : null;
+  const brokered = words.match(BROKERED)?.[0] ?? brokeredMechanism;
+  const ownFulfiller = fulfiller !== '' && OWNER_OR_BRAIN.test(fulfiller) && !THIRD_PARTY_FULFILLER.test(fulfiller);
   const thirdParty = fulfiller && THIRD_PARTY_FULFILLER.test(fulfiller) && !OWNER_OR_BRAIN.test(fulfiller);
   const gig = words.match(OWNER_AS_GIG_WORKER)?.[0] ?? null;
   /*
@@ -184,6 +251,18 @@ export function operatingFit(facts: OperatingFacts): OperatingFit {
     return {
       kind: 'OWNER_PHYSICAL',
       because: `delivering it needs physical work ("${physical}") and nothing names an independent supplier or subcontractor to perform it; the owner does no physical work`,
+    };
+  }
+  if (service && (brokered || thirdParty)) {
+    return { kind: 'BROKERED_PHYSICAL', because: `the service ("${service}") is performed by ${thirdParty ? fulfiller : 'an independent provider'} and sold and coordinated online ("${brokered ?? fulfiller}")` };
+  }
+  if (service && ownFulfiller) {
+    return { kind: 'OWNER_PHYSICAL', because: `the service ("${service}") would be performed by ${fulfiller}; the owner does no physical work` };
+  }
+  if (service) {
+    return {
+      kind: 'UNKNOWN',
+      because: `a physical service ("${service}") that this operation can only sell and coordinate: which independent provider performs it is not yet established`,
     };
   }
   if (brokered || thirdParty) return { kind: 'BROKERED_PHYSICAL', because: `coordinated online ("${brokered ?? fulfiller}")` };

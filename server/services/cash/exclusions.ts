@@ -22,7 +22,13 @@ export const EXCLUSION_CLASSES = {
   GOVERNMENT_CONTRACTING: {
     label: 'government and public-sector contracts',
     triggers: /\b(?:government|federal|public[- ]sector|public procurement|state agenc(?:y|ies)|municipal)\b/i,
-    matches: /\b(?:government|federal|sam\.gov|public[- ]sector|procurement|solicitation|rfp|rfq|rfi|tender|state agenc(?:y|ies)|municipal|county (?:commission|board|government)|city of|department of|commonwealth of|navy|army|air force|veterans affairs|bureau of|school district|public school|rfpmart|publicsurplus|govdeals|bidnet|[a-z0-9-]+\.gov|[a-z0-9-]+\.mil)\b/i,
+    /*
+     * A place name is not a public buyer. "City of", "department of", "bureau
+     * of" and a bare "procurement" matched consumer and business openings that
+     * merely named a city or a corporate procurement team (2026-11-07), so they
+     * count only beside a public body or a public buying word.
+     */
+    matches: /\b(?:government|federal|sam\.gov|public[- ]sector|public procurement|government procurement|solicitation|rfp|rfq|rfi|tender|state agenc(?:y|ies)|municipal|county (?:commission|board|government)|city of [a-z .'-]{2,30}(?:council|contracts?|bids?|purchasing|procurement)|department of (?:agriculture|defen[cs]e|education|transportation|health|labor|commerce|energy|the interior|justice|state|the treasury|veterans|homeland|housing|environmental|natural resources|corrections)|commonwealth of (?:pennsylvania|massachusetts|virginia|kentucky)|navy|army|air force|veterans affairs|bureau of (?:land|indian|reclamation|prisons|abandoned|labor|the census)|school district|public school|rfpmart|publicsurplus|govdeals|bidnet|[a-z0-9-]+\.gov|[a-z0-9-]+\.mil)\b/i,
   },
   WEBSITE_REPAIR: {
     label: 'broken-website and website-repair plays',

@@ -24,11 +24,29 @@ const byOpportunity = new Map<string, Map<string, Judgement>>();
 const STALE_MS = 3 * 60 * 60 * 1000;
 
 /** Record one goal's judgement of every opening it considered. */
-export function recordMateriality(goalId: string, remainingMajor: number, considered: ReadonlyArray<{ opportunityId: string; supportedReach: number; potentialReach: number | null }>, at = Date.now()): void {
+export function recordMateriality(
+  goalId: string,
+  remainingMajor: number,
+  considered: ReadonlyArray<{ opportunityId: string; supportedReach: number; potentialReach: number | null; volumeEstablished?: boolean; competitiveAward?: boolean }>,
+  at = Date.now(),
+): void {
   const floor = remainingMajor * MIN_SHARE_WORTH_RESEARCHING;
   for (const one of considered) {
     // No price at all says nothing about size: asking what buyers pay is how it gets one.
     if (one.potentialReach === null) {
+      byOpportunity.get(one.opportunityId)?.delete(goalId);
+      continue;
+    }
+    /*
+     * A small price is not a small opening until research says how many buyers
+     * there are and how often they buy. Without that the reach is one deal at
+     * that price, which judges a $150 job that thousands of households buy
+     * every month as worth $150 — so it was screened before its volume could be
+     * asked (owner, 2026-11-07: "Do not favor or reject opportunities merely
+     * because each transaction is small"). Only an opening whose volume is
+     * established, or that pays once by nature (an award), is judged by size.
+     */
+    if (one.volumeEstablished === false && !one.competitiveAward) {
       byOpportunity.get(one.opportunityId)?.delete(goalId);
       continue;
     }
