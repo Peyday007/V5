@@ -21,6 +21,8 @@ import { getDb } from '../server/db/database.ts';
 import {
   LISTING_ARCHIVE_REASON,
   LISTINGS_RETIRED_EVENT,
+  UNWORTHY_RESEARCH_RELEASED_EVENT,
+  releaseUnworthyResearch,
   retireMarketplaceListings,
 } from '../server/services/cash/retireListings.ts';
 import { retireUnjudgeableBins } from '../server/services/bins/retireUnjudgeable.ts';
@@ -201,6 +203,43 @@ describe('retiring freelance-marketplace listings', () => {
     const second = await retireMarketplaceListings(projectId);
     expect(second).toEqual({ archived: [], needsWithdrawn: [], candidatesRejected: [], missionsCancelled: [], packetsCancelled: [] });
     expect(await cashEventsOfKindInProject(projectId, LISTINGS_RETIRED_EVENT)).toHaveLength(1);
+  });
+});
+
+describe('releasing research Brain already decided is not worth it', () => {
+  it('stops the live dive on a closed opening, keeps the row, and leaves an open one alone, once', async () => {
+    const now = '2026-11-07T09:00:00.000Z';
+    const closed = await opening('https://www.example-buyer.com/rfp/closed');
+    const open = await opening('https://www.example-buyer.com/rfp/open');
+    await getDb().run('UPDATE cash_opportunities SET expires_at = ? WHERE id = ?', ['2026-11-01T00:00:00.000Z', closed]);
+
+    const dive = async (id: string) => {
+      const candidate = await createCandidate({ projectId, visibility: 'SHARED', title: 'Qualify', statement: `Qualify ${id}.` });
+      await transitionCandidate({ candidateId: candidate.id, from: 'CAPTURED', to: 'QUEUED' });
+      const divePacket = await packet(`dive ${id}`);
+      const { mission } = await launchMission({
+        projectId, visibility: 'SHARED', objective: `Qualify ${id}.`, whyNow: 'test', idempotencyKey: `dive-${candidate.id}`, candidateId: candidate.id,
+      });
+      await linkMission({ missionId: mission.id, orchestrationId: divePacket });
+      await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+      await updateOpportunity(id, { candidate_id: candidate.id, validation_orchestration_id: divePacket, validation_state: 'RUNNING' });
+      return { mission: mission.id, packet: divePacket };
+    };
+    const closedDive = await dive(closed);
+    const openDive = await dive(open);
+
+    const first = await releaseUnworthyResearch(projectId, now);
+    expect(first.released).toEqual([closed]);
+    expect(first.missionsCancelled).toEqual([closedDive.mission]);
+    expect(first.packetsCancelled).toEqual([closedDive.packet]);
+    expect((await getOpportunity(closed))!.state).toBe('DISCOVERED');
+    expect((await getOrchestration(openDive.packet))!.status).not.toBe('CANCELLED');
+    expect((await getMission(openDive.mission))!.state).toBe('RUNNING');
+    expect(await cashEventsOfKindInProject(projectId, UNWORTHY_RESEARCH_RELEASED_EVENT)).toHaveLength(1);
+
+    const second = await releaseUnworthyResearch(projectId, now);
+    expect(second.released).toEqual([]);
+    expect(await cashEventsOfKindInProject(projectId, UNWORTHY_RESEARCH_RELEASED_EVENT)).toHaveLength(1);
   });
 });
 

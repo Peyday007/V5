@@ -985,6 +985,8 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
      * ruled out, and it launches by itself the tick that stops being true.
      */
     if (diveOwnsItsQuestions(opportunity)) continue;
+    // Raised before a goal excluded it, or before it closed: never launched (2026-11-07).
+    if (await notWorthResearching(opportunity, { now: cashNow() })) continue;
     if (cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }).disqualifiedBy) {
       continue;
     }

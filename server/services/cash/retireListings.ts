@@ -28,8 +28,8 @@ import { getClaim } from '../../repos/research.ts';
 import { listNeeds, listOpportunities } from '../../repos/cashPortfolio.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
 import { archiveOpportunity } from './opportunities.ts';
-import { releaseOpportunityResearch, type ResearchReleased } from './releaseResearch.ts';
-import { marketplaceOf } from './worthResearching.ts';
+import { emptyRelease, releaseOpportunityResearch, type ResearchReleased } from './releaseResearch.ts';
+import { describeNotWorthResearching, marketplaceOf, notWorthResearching } from './worthResearching.ts';
 import type { CashOpportunity, CashOpportunityState } from '../../domain/types.ts';
 
 const BRAIN = 'BRAIN';
@@ -51,6 +51,67 @@ async function isListing(opportunity: CashOpportunity): Promise<boolean> {
   if (!opportunity.sourceClaimId) return false;
   const claim = await getClaim(opportunity.sourceClaimId);
   return marketplaceOf(claim?.sourceUrl) !== null;
+}
+
+/** The event the excluded-research pass records when it stopped anything. */
+export const UNWORTHY_RESEARCH_RELEASED_EVENT = 'CASH_UNWORTHY_RESEARCH_RELEASED';
+
+/**
+ * Why research may be released for good: reasons no later fact reverses. A
+ * goal's exclusion is its owner's words, a listing stays a listing, a closing
+ * date that passed stays passed, and the owner does no physical work. A
+ * screen's REJECT or a size test is not here — the goal screen already
+ * releases on its own verdicts, and a size is a fact research can still move.
+ */
+const DURABLE: ReadonlySet<string> = new Set(['EXCLUDED_BY_GOAL', 'OWNER_PHYSICAL_WORK']);
+
+function durable(reason: Awaited<ReturnType<typeof notWorthResearching>>): boolean {
+  if (!reason) return false;
+  if (reason.kind === 'MARKETPLACE_LISTING' || reason.kind === 'CLOSES_TOO_SOON') return true;
+  return DURABLE.has(reason.reason);
+}
+
+/**
+ * Research still running for an opening Brain already decided is not worth
+ * researching, stopped (§5: nothing is archived or deleted here).
+ *
+ * `notWorthResearching` refuses a *new* dive or question on an opening every
+ * live goal excludes, but a packet launched before the exclusion existed, or a
+ * question raised before it, kept its slot. Production, 2026-11-07: of 27 open
+ * research items on the $10K goal's project, ten were about openings the goal
+ * excludes (domain resales appraised on Afternic, a City of St. Louis RFP, a
+ * Freelancer.com listing) and kept leasing fleet slots at priority 6–9.
+ *
+ * Only openings that still hold live research are judged, so a quiet project
+ * costs one read of its needs. Idempotent: `releaseOpportunityResearch` acts
+ * only on what is still open, live or unlaunched.
+ */
+export async function releaseUnworthyResearch(projectId: string, now: string): Promise<ResearchReleased & { released: string[] }> {
+  const out: ResearchReleased & { released: string[] } = { ...emptyRelease(), released: [] };
+  const needs = await listNeeds({ projectId });
+  const withOpenNeed = new Set(needs.filter((one) => one.state === 'OPEN' && one.opportunityId).map((one) => one.opportunityId!));
+  for (const opportunity of await listOpportunities({ projectId, states: [...UNCOMMITTED] })) {
+    if (!withOpenNeed.has(opportunity.id) && !opportunity.validationOrchestrationId) continue;
+    const reason = await notWorthResearching(opportunity, { now });
+    if (!durable(reason)) continue;
+    const before = out.needsWithdrawn.length + out.candidatesRejected.length + out.missionsCancelled.length + out.packetsCancelled.length;
+    await releaseOpportunityResearch({ opportunity, needs, reason: `${describeNotWorthResearching(reason!)}.`, out });
+    const after = out.needsWithdrawn.length + out.candidatesRejected.length + out.missionsCancelled.length + out.packetsCancelled.length;
+    if (after > before) out.released.push(opportunity.id);
+  }
+  if (out.released.length > 0) {
+    await recordCashEvent({
+      projectId,
+      kind: UNWORTHY_RESEARCH_RELEASED_EVENT,
+      actorRef: BRAIN,
+      summary:
+        `Stopped research on ${out.released.length} opening(s) no goal may use ` +
+        `(${out.needsWithdrawn.length} need(s) withdrawn, ${out.candidatesRejected.length} idea(s) rejected, ` +
+        `${out.missionsCancelled.length} mission(s) and ${out.packetsCancelled.length} packet(s) cancelled).`,
+      detail: { ...out },
+    });
+  }
+  return out;
 }
 
 export async function retireMarketplaceListings(projectId: string): Promise<ListingsRetired> {
