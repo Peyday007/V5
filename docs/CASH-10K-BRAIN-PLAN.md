@@ -241,3 +241,32 @@ Every "answer" is a market-size or company-description sentence that the evidenc
 No constructed opening therefore carries a named buyer or a price, and the plan cannot model one.
 
 **The next blocker is in the research gate, not in cash.** It needs a lane-fit check: a payer claim must name who pays, and a price claim must be a price. It has been handed to the research-system session (session_01QF5Tk7SnzTKoVwito7goaH) with this evidence.
+
+### 2026-11-07 17:00Z: constructed arrangements now in the quant plan
+
+From Goals plan run 42393447365, which ran after #574 and the lane-fit gate (#583/#585):
+
+**What the engine compared:** 19 openings it found plus 12 constructed estimates; it refused 9.
+
+**Best combination:**
+- Reaches $10,000 in **1.6%** of worlds.
+- Settled p10 $0 · p50 **$649** · p90 **$5,783**.
+- Capital short in 0% of worlds; over the $3,000 ceiling in 13%.
+- Four of its members are constructed:
+  - pooled buyers' purchases with one supplier (100% of outreach);
+  - year-end client and employee gifts;
+  - production-committee distribution;
+  - contractors' exclusive homeowner leads.
+- The fifth member is the Coachella resale one-off.
+
+**Still estimates:** every constructed member's price, reply and close rates, costs and capital are "not established", so they are estimates, not evidence.
+
+**The first constructed opening with a real payer is `cop_75c1c45` (Solarize the Triad).**
+- **Who paid:** 250 residents enrolled and 27 signed installation contracts (145 kW).
+- **How the money arrives:** 30% at signing, 60% after installation.
+- **Reach:** the sponsor's published phone number.
+- **Still missing:** price, costs and the money it ties up.
+
+**Next research the plan asks for:** buyerVolume, requiredCapital, directCosts and conversionRates.
+
+**90%:** not met.
