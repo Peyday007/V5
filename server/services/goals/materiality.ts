@@ -68,6 +68,15 @@ export function tooSmallForGoals(opportunityId: string, now = Date.now()): { pot
   return { potential: largest.potential, floor: largest.floor };
 }
 
+/**
+ * An opening a goal is selling is never too small for that goal to research
+ * (owner, 2026-11-06): its demand, price and market size are researched beside
+ * the sale, because how many buyers exist is what could make it larger.
+ */
+export function exemptSales(goalId: string, opportunityIds: readonly string[]): void {
+  for (const id of opportunityIds) byOpportunity.get(id)?.delete(goalId);
+}
+
 /** For tests. */
 export function clearMateriality(): void {
   byOpportunity.clear();

@@ -163,8 +163,18 @@ export async function researchGoalPaths(input: {
   let openings = 0;
   const squeeze = input.reading.executionPolicy === 'SQUEEZE';
   const selling = new Set((input.reading.sales ?? []).map((one) => one.opportunityId));
+  /*
+   * An opening being sold is researched first and outside the shared caps
+   * (production, 2026-11-07, Goals plan 42349305781: 25 live path questions
+   * on other openings against a cap of 8, so the one sale got no demand,
+   * price or market-size question at all). It is bounded anyway: at most
+   * MAX_CONCURRENT_SALES openings, each question deduplicated and asked at
+   * most MAX_ASKINGS times.
+   */
+  if (squeeze) order.sort((a, b) => Number(selling.has(b.opportunityId)) - Number(selling.has(a.opportunityId)));
   for (const one of order) {
-    if (openings >= openingCap || openHere >= questionCap) break;
+    const beingSold = squeeze && selling.has(one.opportunityId);
+    if ((openings >= openingCap || openHere >= questionCap) && !beingSold) break;
     /*
      * Research runs beside a SQUEEZE goal's sales and never ahead of them
      * (owner, 2026-11-06, twice): an opening being sold is still asked what
@@ -187,7 +197,8 @@ export async function researchGoalPaths(input: {
      */
     // Judged by size only once its volume is known or it pays once by nature (see materiality.ts).
     const sizeKnown = one.volumeEstablished !== false || one.competitiveAward || one.paysOnce === true;
-    if (sizeKnown && potential(one) < floor && one.potentialReach !== null) {
+    // Too small to research — unless it is being sold: how many buyers exist is what could make it larger.
+    if (sizeKnown && potential(one) < floor && one.potentialReach !== null && !sold) {
       note(`${one.title.slice(0, 60)}: too small to matter — at most ${Math.round(potential(one))} of the ${Math.round(remaining)} still needed, even if every buyer agreed`);
       continue;
     }
@@ -214,9 +225,10 @@ export async function researchGoalPaths(input: {
     // next ones unresearched.
     let actedHere = false;
     for (const { field, ask } of asks) {
-      if (openHere >= questionCap) break;
+      if (openHere >= questionCap && !sold) break;
       const measured = priority.get(`${one.opportunityId}:${field}`);
-      if (measured && measured.decision !== 'RESEARCH_FIRST') {
+      // A sale's demand, price and market size are researched beside it whatever the run ranked them.
+      if (measured && measured.decision !== 'RESEARCH_FIRST' && !sold) {
         note(`${one.title.slice(0, 60)} ${field}: not asked — ${measured.decision.toLowerCase().replace(/_/g, ' ')}: ${measured.reason}`);
         continue;
       }

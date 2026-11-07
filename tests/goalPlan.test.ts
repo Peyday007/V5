@@ -749,6 +749,20 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect((await listLinks(id)).some((l) => l.kind === 'OPPORTUNITY' && l.ref === o.id && l.relation === 'PURSUES')).toBe(true);
   });
 
+  it('researches a small sale too: how many buyers exist is what could make it larger', async () => {
+    const o = await oneOff({ title: 'A small puzzle submission', priceCents: 5_000, capitalCents: 0 });
+    const id = await goal(1_000_000);
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
+    expect(reading.sales.map((one) => one.opportunityId)).toContain(o.id);
+    const { tooSmallForGoals } = await import('../server/services/goals/materiality.ts');
+    expect(tooSmallForGoals(o.id)).toBeNull();
+    const { researchGoalPaths } = await import('../server/services/goals/pathResearch.ts');
+    await researchGoalPaths({ reading, projectId, now, dryRun: false });
+    const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
+    const asked = (await listNeeds({ projectId, states: ['OPEN'] })).filter((one) => one.opportunityId === o.id).map((one) => one.requestKey);
+    expect(asked).toContain(`question:${o.id}:buyerVolume`);
+  });
+
   it('sells several independent openings at once, largest contribution first', async () => {
     const small = await oneOff({ title: 'A small arrangement', priceCents: 5_000, capitalCents: 0 });
     const large = await oneOff({ title: 'A large arrangement', priceCents: 300_000, capitalCents: 0 });
@@ -847,7 +861,11 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     await advanceGoalPlans(now);
     const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
     const open = await listNeeds({ projectId, states: ['OPEN'] });
-    expect(open.filter((one) => one.opportunityId === small.id && one.requestKey?.startsWith('question:'))).toHaveLength(0);
+    // Small, but being sold (SQUEEZE): its research runs beside the sale, so it is asked; a small opening
+    // nobody is selling stays unresearched (the pre-sale rule is unchanged).
+    const reading = (await readGoalPlan({ goalId: (await getDb().get<{ id: string }>("SELECT id FROM workstreams ORDER BY created_at DESC LIMIT 1"))!.id, evaluations: 2_000 }))!;
+    const smallSold = reading.sales.some((one) => one.opportunityId === small.id);
+    expect(open.filter((one) => one.opportunityId === small.id && one.requestKey?.startsWith('question:')).length > 0).toBe(smallSold);
     // Being sold (SQUEEZE), it keeps every question beside the sale: what buyers pay, when money settles,
     // and how many buyers exist.
     const asked = open.filter((one) => one.opportunityId === guessed.id).map((one) => one.requestKey);
