@@ -527,6 +527,40 @@ describe('the free research lane', () => {
     expect(taken.claimed?.workItemId).toBe(wanted);
   });
 
+  it('pages past a window of declined rows of the same type, one packet at a time (IDLE_CAPACITY)', async () => {
+    const audit = workType('RESEARCH_AUDIT');
+    const crowded = await packet(play.project.id, 'crowded packet');
+    // Slot 1 declines ADVERSARIAL audits (slot 0's role); more of them than one claim window reads.
+    for (let i = 0; i < 70; i += 1) {
+      await enqueueWork({
+        projectId: play.project.id,
+        workType: 'RESEARCH_AUDIT',
+        payload: audit.validate({ role: 'ADVERSARIAL' }),
+        requiredScopes: audit.requiredScopes,
+        orchestrationId: crowded.orchestration.id,
+        fragmentId: crowded.fragment.id,
+        createdByType: 'SYSTEM',
+        priority: 9,
+      });
+    }
+    const other = await packet(play.project.id, 'other packet');
+    const wanted = (
+      await enqueueWork({
+        projectId: play.project.id,
+        workType: 'RESEARCH_AUDIT',
+        payload: audit.validate({ role: 'PRIMARY' }),
+        requiredScopes: audit.requiredScopes,
+        orchestrationId: other.orchestration.id,
+        fragmentId: other.fragment.id,
+        createdByType: 'SYSTEM',
+      })
+    ).id;
+    const { takeOne } = await import('../server/services/freeLane/worker.ts');
+    const workers = await ensureFreeWorkers(CONFIG);
+    const taken = await takeOne({ workers, worker: workers[1]!, index: 1, completer: model().completer, fetchSource, search: async () => [], config: CONFIG });
+    expect(taken.claimed?.workItemId).toBe(wanted);
+  });
+
   it('counts an item as untakeable only while every model is cooling down on it (the GPU is not kept on for it)', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
