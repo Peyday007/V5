@@ -627,6 +627,14 @@ describe('the free research lane', () => {
     expect(citedExcerpt({ claim: 'x' }, one)).toBeNull();
   });
 
+  it('records which keys an uncited claim carried, names only, so the next widening is read from rows', async () => {
+    const { uncitedReason } = await import('../server/services/freeLane/worker.ts');
+    expect(uncitedReason({ claim: 'x', evidence_lane: 'a' })).toBe('no citation and no verbatim quote');
+    expect(uncitedReason({ claim: 'x', evidence_lane: 'a', ref_ids: [1], page: 'SECRET VALUE' })).toBe('no citation and no verbatim quote (claim keys: ref_ids,page)');
+    expect(uncitedReason({ claim: 'x', 'we ird\n': 1 })).toContain('(claim keys: weird)');
+    expect(uncitedReason({ claim: 'x', ref_ids: [1] })).toMatch(/^no citation and no verbatim quote/);
+  });
+
   it('reads every way models write a citation instead of dropping the claim (FREE_LANE:CITATION_DROPPED)', async () => {
     const { citedExcerpt, citationFailure } = await import('../server/services/freeLane/worker.ts');
     const s = ['First sentence of the page here.', 'Second sentence of the page here.', 'Third sentence of the page here.', 'Fourth sentence of the page here.', 'Fifth sentence of the page here.'];
