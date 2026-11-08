@@ -542,6 +542,15 @@ async function printPlan(reading: PlanReading): Promise<void> {
     for (const r of rows) {
       console.log(`  evidence    ×${String(r.n).padStart(3)} dive ${r.state ?? 'never started'} · payer ${Number(r.payer) ? 'yes' : 'no'} · price ${Number(r.price) ? 'yes' : 'no'} · route ${Number(r.channel) ? 'yes' : 'no'}`);
     }
+    // Why the blocked dives stopped: their fragments' own recorded reasons, most common first.
+    const why = await getDb().all<{ reason: string; n: number | string }>(
+      `SELECT SUBSTR(f.blocked_reason, 1, 140) AS reason, COUNT(*) AS n
+         FROM cash_opportunities o JOIN research_fragments f ON f.orchestration_id = o.validation_orchestration_id
+        WHERE o.id IN (${marks}) AND o.validation_state = 'BLOCKED' AND f.blocked_reason IS NOT NULL
+        GROUP BY SUBSTR(f.blocked_reason, 1, 140) ORDER BY COUNT(*) DESC LIMIT 6`,
+      evidenceOnly,
+    );
+    for (const w of why) console.log(`  dive block  ×${String(w.n).padStart(3)} ${w.reason}`);
   }
   // §79: what was reconstructed instead of swept, and which questions could change the choice.
   const tiers = new Map<string, number>();
