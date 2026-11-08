@@ -60,7 +60,7 @@ import { discoveryYield, type YieldRow } from '../server/services/cash/discovery
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { askConstructedArrangements, CHAIN_LABEL, goalArrangements, goalLimits, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
+import { askConstructedArrangements, askPathwayConstructions, CHAIN_LABEL, goalArrangements, goalLimits, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 import { constructArrangements } from '../server/services/cash/construct.ts';
 import { renderPathways } from '../server/services/goals/pathways.ts';
 import { goalExclusions } from '../server/services/cash/exclusions.ts';
@@ -483,7 +483,16 @@ async function printPlan(reading: PlanReading): Promise<void> {
   console.log(`  spending    ${spendingRuleSentence(t) ?? 'no pace set'}`);
   console.log(`  verdict     ${reading.summary}`);
   console.log(`  pool        ${reading.pool.conclusion}: ${reading.pool.sentence}`);
-  if (reading.pathways) for (const line of renderPathways(reading.pathways)) console.log(line);
+  if (reading.pathways) {
+    for (const line of renderPathways(reading.pathways)) console.log(line);
+    // What the next pass would do with the pathways' constructed moves, and why (§93). Opens nothing.
+    const goal = await getWorkstream(reading.goalId);
+    if (goal) {
+      const why: string[] = [];
+      await askPathwayConstructions(goal, reading, new Date(), MAX_LIVE_GOAL_ROUNDS, why, true);
+      for (const line of why) console.log(`    construct ${line}`);
+    }
+  }
   console.log(`  considered  ${reading.considered.length} opening(s), ${reading.considered.filter((one) => one.modelled).length} in the simulation; ${reading.needsMoreOpenings ? 'not enough yet, so Brain keeps searching' : 'a realistic plan exists'}`);
   for (const one of reading.considered.slice(0, 8)) {
     console.log(`    ${one.modelled ? 'model' : '     '} ${one.stage.slice(0, 1)} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);

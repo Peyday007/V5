@@ -306,13 +306,20 @@ describe('arrangements Brain constructs from what it knows', () => {
     expect(estimates.length).toBe(reading.portfolio!.demand.filter((d) => d.opportunityId.startsWith('arr_')).length);
     expect(estimates.length).toBeGreaterThan(0);
     expect(estimates.every((p) => !p.executable)).toBe(true);
+    // A dry run says what it would ask, and opens nothing.
+    const why: string[] = [];
+    expect(await askPathwayConstructions((await getWorkstream(id))!, reading, now, MAX_LIVE_GOAL_ROUNDS, why, true)).toHaveLength(1);
+    expect(why.join(' ')).toMatch(/would ask mx-pw/);
+    expect((await listRounds(projectId)).filter((one) => one.bucketId.includes('-mx-pw'))).toHaveLength(0);
     const opened = await askPathwayConstructions((await getWorkstream(id))!, reading, now, MAX_LIVE_GOAL_ROUNDS);
     expect(opened).toHaveLength(1);
     const statement = (await getCandidate(opened[0]!))!.statement;
     expect(statement).toMatch(/Brain constructed a transaction from evidence it already holds: Sell the same deliverable to the population of buyers like this one/);
     expect(statement).toMatch(/opportunity_signal/);
     // Its turn is spent: the next construction is an arrangement's again.
-    expect(await askPathwayConstructions((await getWorkstream(id))!, reading, now, MAX_LIVE_GOAL_ROUNDS)).toHaveLength(0);
+    const after: string[] = [];
+    expect(await askPathwayConstructions((await getWorkstream(id))!, reading, now, MAX_LIVE_GOAL_ROUNDS, after)).toHaveLength(0);
+    expect(after.join(' ')).toMatch(/not its turn/);
   });
 
   it('spreads a pass across buyer populations before asking one twice', async () => {
