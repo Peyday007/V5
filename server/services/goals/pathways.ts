@@ -465,7 +465,11 @@ export function pathwayOf(
   const priceMid = mid(revenuePerDeal);
   const smallTicket = priceMid !== null && priceMid < input.remaining * MATERIAL_SHARE;
   if (smallTicket && one.repeatable && volume.status !== 'PROVEN') gaps.push('SMALL_TICKET_VOLUME_UNKNOWN');
-  if (!one.repeatable && !judged?.competitiveAward && (smallTicket || ONE_BUYER.test(o.title))) gaps.push('ONE_BUYER');
+  // One buyer of a found opening is transferred to its population. Not a constructed design (its
+  // round asks the population already), and not a resale: an arbitrage's "population" is more
+  // stock bought first, which is capital, not buyers.
+  const resale = o.opportunitySignal === 'RESALABLE_ASSET_OPENING' || RESALE.test(`${o.title} ${o.buyingSignal ?? ''}`);
+  if (!constructed && !resale && !one.repeatable && !judged?.competitiveAward && (smallTicket || ONE_BUYER.test(o.title))) gaps.push('ONE_BUYER');
   if (o.expiresAt && Date.parse(o.expiresAt) < input.now.getTime()) gaps.push('CLOSED');
 
   const fit = fitOf({ net, conversion, volume, daysToCash, repeatable: one.repeatable, remaining: input.remaining, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, competitiveAward: !!judged?.competitiveAward });
@@ -684,7 +688,8 @@ function constructMoves(input: {
     });
   }
   // Sell what can be sold: a missing permission blocks the send, never the rest.
-  const sellable = !gaps.some((gap) => ['NO_BUYER', 'SUPPLY_WITHOUT_BUYER', 'NO_CHANNEL', 'NO_OFFER', 'NO_PRICE', 'NO_MARGIN', 'OVER_CAPITAL', 'CLOSED'].includes(gap)) && !input.constructed;
+  // Nobody named to fulfil it is not an offer anyone can responsibly make.
+  const sellable = !gaps.some((gap) => ['NO_BUYER', 'SUPPLY_WITHOUT_BUYER', 'NO_CHANNEL', 'NO_OFFER', 'NO_PRICE', 'NO_SUPPLIER', 'NO_MARGIN', 'OVER_CAPITAL', 'CLOSED'].includes(gap)) && !input.constructed;
   if (sellable) {
     moves.unshift({
       gap: 'NO_BUYER',
