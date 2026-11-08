@@ -25,7 +25,8 @@ import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { createWorkstream, getWorkstream, listLinks } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { advanceGoalPlans, askConstructedArrangements, forgetGoalReadings, readGoalPlan } from '../server/services/goals/plan.ts';
+import { advanceGoalPlans, askConstructedArrangements, askPathwayConstructions, forgetGoalReadings, readGoalPlan } from '../server/services/goals/plan.ts';
+import { getDb } from '../server/db/database.ts';
 import { constructArrangements, STRUCTURES } from '../server/services/cash/construct.ts';
 import { harvest, MAX_LIVE_GOAL_ROUNDS, SIGNAL_LANE } from '../server/services/cash/discovery.ts';
 import { readVolume } from '../server/services/cash/volume.ts';
@@ -287,6 +288,26 @@ describe('arrangements Brain constructs from what it knows', () => {
     expect(after.pool.conclusion).toBe('POOL_COULD_REACH');
     const strategy = after.strategies.find((s) => s.opportunityIds.includes(o.id))!;
     expect(strategy.links.find((l) => l.link === 'MARKET_VOLUME')).toMatchObject({ ok: true });
+  });
+
+  it('takes turns: after an arrangement round, the next construction is a transaction built from a held opening (§93)', async () => {
+    await sector('Veterinary care', { buyer: 'Independent veterinary clinics', bottleneck: 'After-hours phone coverage', supply: 'Remote answering services' });
+    await opening({ title: 'One small report', priceCents: 20_000, play: false, signal: 'PAID_TASK_OR_CONTRACT' });
+    const id = await goal(600_000);
+    await advanceGoalPlans(now);
+    const first = (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-mx-`));
+    expect(first).toHaveLength(1);
+    expect(first[0]!.bucketId).not.toMatch(/-mx-pw/);
+    await getDb().run(`UPDATE cash_discovery_rounds SET state = 'HARVESTED', found = 0, harvested_at = ? WHERE candidate_id = ?`, [now.toISOString(), first[0]!.candidateId]);
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000 }))!;
+    expect(reading.pathways!.pathways.some((p) => p.gaps.includes('ONE_BUYER'))).toBe(true);
+    const opened = await askPathwayConstructions((await getWorkstream(id))!, reading, now, MAX_LIVE_GOAL_ROUNDS);
+    expect(opened).toHaveLength(1);
+    const statement = (await getCandidate(opened[0]!))!.statement;
+    expect(statement).toMatch(/Brain constructed a transaction from evidence it already holds: Sell the same deliverable to the population of buyers like this one/);
+    expect(statement).toMatch(/opportunity_signal/);
+    // Its turn is spent: the next construction is an arrangement's again.
+    expect(await askPathwayConstructions((await getWorkstream(id))!, reading, now, MAX_LIVE_GOAL_ROUNDS)).toHaveLength(0);
   });
 
   it('spreads a pass across buyer populations before asking one twice', async () => {

@@ -44,7 +44,8 @@ import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel
 import { readTarget, type TargetReading } from './target.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
 import { constructArrangements, type ConstructedArrangement } from '../cash/construct.ts';
-import { goalExclusions } from '../cash/exclusions.ts';
+import { exclusionSentence, goalExclusions } from '../cash/exclusions.ts';
+import { OPENING_SENTENCE } from '../cash/construct.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
 import { listMoneyEntries } from '../../repos/cashLedger.ts';
 import { exemptSales, recordMateriality } from './materiality.ts';
@@ -63,6 +64,7 @@ import { goalExecutionPolicy, MAX_CONCURRENT_SALES, type GoalExecutionPolicy } f
 import type { GoalPortfolio } from './portfolio.ts';
 import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
+import { readPathways, type PathwayReading } from './pathways.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
@@ -212,6 +214,15 @@ export interface PlanReading {
    * (`researchYield.ts`). The next goal round is asked differently for each.
    */
   researchDiagnosis: ResearchDiagnosis[];
+  /**
+   * The goal-to-transaction reasoning loop (§93, `pathways.ts`): the
+   * transaction structures the goal's own figures require, a transaction model
+   * per opening and constructed estimate with each field PROVEN, ESTIMATED or
+   * UNKNOWN, the moves that construct its missing links, the unknowns ranked
+   * by how far they could move the plan, a living portfolio with its fallback,
+   * and the method's own failures. Null when nothing could be modelled.
+   */
+  pathways: PathwayReading | null;
 }
 
 export interface InferredInput {
@@ -537,6 +548,30 @@ export async function measuredPlanChance(): Promise<PlanReading['measuredChance'
  * reading when the conclusion changed.
  */
 /** A plan read is one read: project-wide lists are fetched once inside it (repos/readScope.ts). */
+/** The permissions and providers a sale needs that this project does not yet have: each blocks only its own action. */
+async function missingPermissions(projectId: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const action of ['CONTACT_BUYER', 'QUOTE_AND_INVOICE', 'ACCEPT_PAYMENT']) {
+    if (!(await checkCommercialAuthority({ projectId, action })).ok) out.push(action);
+  }
+  const caps = new Map((await readCapabilities(['SEND_A_MESSAGE', 'TAKE_A_PAYMENT'])).map((cap) => [cap.id, cap.state]));
+  if (caps.get('SEND_A_MESSAGE') !== 'PRESENT') out.push('a message provider');
+  if (caps.get('TAKE_A_PAYMENT') !== 'PRESENT') out.push('a billing provider');
+  return out;
+}
+
+/** Two diagnoses as one, first wins on a repeated cause. */
+export function mergeDiagnosis(first: ResearchDiagnosis[], second: ResearchDiagnosis[]): ResearchDiagnosis[] {
+  const seen = new Set<string>();
+  const out: ResearchDiagnosis[] = [];
+  for (const one of [...first, ...second]) {
+    if (seen.has(one.cause)) continue;
+    seen.add(one.cause);
+    out.push(one);
+  }
+  return out;
+}
+
 export function readGoalPlan(input: { goalId: string; now?: Date; persist?: boolean; evaluations?: number }): Promise<PlanReading | null> {
   return withReadScope(() => readGoalPlanUnscoped(input));
 }
@@ -589,6 +624,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
         rounds: await recentGoalRounds(target.projectId, goal.id),
         remaining: target.remainingCents / 100,
       }),
+      pathways: null,
     };
     if (input.persist) await persistReading(goal, reading, null);
     return reading;
@@ -813,6 +849,19 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     marketTests.push({ opportunityId: one.opportunityId, title: one.title, potentialReach: one.potentialReach, test });
   }
   trace('strategies and market tests');
+  const rounds = await recentGoalRounds(target.projectId, goal.id);
+  const found = considered.filter((one) => !isArrangementId(one.opportunityId));
+  // The reasoning loop reads what the plan composed; it decides nothing the plan already decides (§93).
+  const pathways = readPathways({
+    modelled: model.considered,
+    considered,
+    target,
+    portfolio: model.portfolio,
+    permissionsMissing: await missingPermissions(target.projectId),
+    rounds,
+    now,
+  });
+  trace('pathways');
   const summary =
     verdict === 'RECOMMENDABLE'
       ? `"${chosen!.label}" is recommendable: every link is established and the cautious numbers reach the target inside the limits.`
@@ -857,12 +906,17 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     executionPolicy: policy,
     sales,
     portfolio: model.portfolio,
-    researchDiagnosis: diagnoseGoalResearch({
-      considered: considered.filter((one) => !isArrangementId(one.opportunityId)),
-      excludedReasons: model.excluded.map((one) => one.reason),
-      rounds: await recentGoalRounds(target.projectId, goal.id),
-      remaining: target.remainingCents / 100,
-    }),
+    // The method's own failures first: they change how Brain searches, not one opening (§93).
+    researchDiagnosis: mergeDiagnosis(
+      pathways.failures,
+      diagnoseGoalResearch({
+        considered: found,
+        excludedReasons: model.excluded.map((one) => one.reason),
+        rounds,
+        remaining: target.remainingCents / 100,
+      }),
+    ),
+    pathways,
   };
   if (input.persist) {
     await persistReading(goal, reading, chosen);
@@ -1195,8 +1249,11 @@ export function planProgress(reading: PlanReading): {
   evidencedBuyerAndPrice: number;
   ladder: Record<ValidationStage, number>;
   causes: string[];
+  /** The reasoning loop's measures (§93), rounded so noise writes no row. */
+  pathways: { pathways: number; executable: number; proceed: number; reachable: number; constructionMoves: number; variants: number; leadingNetP50: number; proven: number; estimated: number; unknown: number } | null;
 } {
   const best = reading.portfolio?.best ?? null;
+  const m = reading.pathways?.measures ?? null;
   return {
     reach: best ? Math.round(best.reach * 100) / 100 : null,
     settledP50: best ? Math.round(best.settledP50 / 50) * 50 : null,
@@ -1206,6 +1263,20 @@ export function planProgress(reading: PlanReading): {
     evidencedBuyerAndPrice: reading.considered.filter((one) => !one.missing.some((link) => link === 'REACHABLE_BUYER' || link === 'CURRENT_DEMAND' || link === 'OFFER_AND_PRICE')).length,
     ladder: reading.ladder,
     causes: reading.researchDiagnosis.map((one) => one.cause),
+    pathways: m
+      ? {
+          pathways: m.pathways,
+          executable: m.executable,
+          proceed: m.proceedWithoutEngineering,
+          reachable: m.withReachableBuyer,
+          constructionMoves: m.constructionMoves,
+          variants: m.variants,
+          leadingNetP50: Math.round(m.leadingNetP50 / 50) * 50,
+          proven: m.facts.proven,
+          estimated: m.facts.estimated,
+          unknown: m.facts.unknown,
+        }
+      : null,
   };
 }
 
@@ -1397,7 +1468,9 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
    * the next lens. Both are new-opening work; the existing openings' paths are
    * researched separately below, so one never crowds the other out.
    */
-  const constructed = await askConstructedArrangements(goal, reading, now, Math.max(1, Math.ceil(attempts / 2)), MAX_LIVE_GOAL_ROUNDS + spare);
+  // A transaction constructed from a held opening's own evidence comes first (§93): it is the nearest to a sale.
+  const fromPathways = await askPathwayConstructions(goal, reading, now, MAX_LIVE_GOAL_ROUNDS + spare);
+  const constructed = [...fromPathways, ...(await askConstructedArrangements(goal, reading, now, Math.max(1, Math.ceil(attempts / 2)), MAX_LIVE_GOAL_ROUNDS + spare))];
   for (const candidateId of constructed) {
     await linkWorkstream({ workstreamId: goal.id, kind: 'CANDIDATE', ref: candidateId, relation: 'PURSUES', recordedBy: 'BRAIN', recordedByUserId: null });
   }
@@ -1407,7 +1480,8 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
       target: reading.target,
       bestReach: reading.bestReach,
       heldTitles: reading.considered.map((one) => one.title),
-      diagnosis: diagnosisInstructions(reading.researchDiagnosis),
+      // The quantity shapes the search (§93): the shape of transaction the gap needs, then why research fell short.
+      diagnosis: [reading.pathways?.structures.searchBrief ?? '', diagnosisInstructions(reading.researchDiagnosis)].filter(Boolean).join(' '),
       now: now.toISOString(),
       liveCap: MAX_LIVE_GOAL_ROUNDS + spare,
     });
@@ -1425,6 +1499,71 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
   // And dig into the openings already held: the path to their money.
   const researched = (await researchGoalPaths({ reading, projectId: reading.target.projectId, now, spare })).length;
   return { asked, constructed: constructed.length, researched };
+}
+
+/** At most this many pathway constructions open a round per pass; they share construction's half of the live cap. */
+export const PATHWAY_CONSTRUCTIONS_PER_PASS = 1;
+export const PATHWAY_KEY_PREFIX = 'pw';
+
+/**
+ * Whether a pathway construction goes before the constructed arrangements this
+ * pass: they take turns inside construction's half of the goal's live cap
+ * (§82), so neither starves the other and the world-search lenses keep their
+ * share. The arrangements go first on a goal that has asked neither. Pure.
+ */
+export function pathwayTurn(rounds: readonly { bucketId: string; openedAt: string }[], goalId: string): boolean {
+  const mx = rounds.filter((r) => r.bucketId.startsWith(`goal-${goalId}-mx-`)).sort((a, b) => b.openedAt.localeCompare(a.openedAt));
+  if (mx.length === 0) return false;
+  return !mx[0]!.bucketId.startsWith(`goal-${goalId}-mx-${PATHWAY_KEY_PREFIX}`);
+}
+
+/** The constructed round's stable key for one pathway's move: `pw` + a hash of the opening and the gap. */
+export function pathwayRoundKey(opportunityId: string, gap: string): string {
+  return `${PATHWAY_KEY_PREFIX}${sha256(`${opportunityId}:${gap}`).slice(0, 10)}`;
+}
+
+/**
+ * Ask the world about a transaction the reasoning loop constructed from a held
+ * opening's own evidence (§93): the buyers of a supplier's published price, the
+ * population of buyers like a single one, a role with a margin. It goes through
+ * the constructed round's door (§81) — the gate, the frame, the harvest and the
+ * live cap — so what comes back is an ordinary opening judged like any other.
+ */
+export async function askPathwayConstructions(goal: Workstream, reading: PlanReading, now: Date, liveCap: number): Promise<string[]> {
+  const t = reading.target;
+  if (!reading.pathways || t.daysLeft === null || t.daysLeft <= 0 || t.remainingCents <= 0) return [];
+  const rounds = await listRounds(t.projectId);
+  if (!pathwayTurn(rounds, goal.id)) return [];
+  // Construction's half of the live cap, shared with the arrangements (§82).
+  const openMx = rounds.filter((r) => r.state === 'OPEN' && r.bucketId.startsWith(`goal-${goal.id}-mx-`));
+  if (Math.max(1, Math.floor(liveCap / 2)) - (await roundsStillResearching(openMx)) <= 0) return [];
+  const exclusions = await goalExclusions(goal);
+  const opened: string[] = [];
+  const byId = new Map(reading.pathways.pathways.map((p) => [p.opportunityId, p]));
+  for (const action of reading.pathways.nextActions) {
+    if (opened.length >= PATHWAY_CONSTRUCTIONS_PER_PASS) break;
+    if (action.action !== 'CONSTRUCT' || !action.ask || isArrangementId(action.opportunityId)) continue;
+    const pathway = byId.get(action.opportunityId);
+    const move = pathway?.moves.find((one) => one.action === 'CONSTRUCT' && one.ask === action.ask);
+    if (!pathway || !move) continue;
+    const question =
+      `Brain constructed a transaction from evidence it already holds: ${move.construct}. ${move.ask} ` +
+      (move.mustHit ? `For it to matter to the goal: ${move.mustHit}. ` : '') +
+      `${exclusionSentence(exclusions)} ` +
+      OPENING_SENTENCE +
+      'Where no source shows buyers pay for this, say so plainly — that refutes the construction and is a useful answer.';
+    const round = await openConstructedRound({
+      goal,
+      projectId: t.projectId,
+      key: pathwayRoundKey(pathway.opportunityId, move.gap),
+      title: `Constructed from "${pathway.title.slice(0, 60)}": ${move.construct.slice(0, 80)}`,
+      question,
+      now: now.toISOString(),
+      liveCap,
+    });
+    if (round) opened.push(round.candidateId);
+  }
+  return opened;
 }
 
 /** The goal's own limits, as construction reads them (§82). */

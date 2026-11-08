@@ -62,6 +62,7 @@ import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { askConstructedArrangements, CHAIN_LABEL, goalArrangements, goalLimits, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 import { constructArrangements } from '../server/services/cash/construct.ts';
+import { renderPathways } from '../server/services/goals/pathways.ts';
 import { goalExclusions } from '../server/services/cash/exclusions.ts';
 import { targetProperties } from '../server/services/cash/properties.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS } from '../server/services/cash/discovery.ts';
@@ -482,6 +483,7 @@ async function printPlan(reading: PlanReading): Promise<void> {
   console.log(`  spending    ${spendingRuleSentence(t) ?? 'no pace set'}`);
   console.log(`  verdict     ${reading.summary}`);
   console.log(`  pool        ${reading.pool.conclusion}: ${reading.pool.sentence}`);
+  if (reading.pathways) for (const line of renderPathways(reading.pathways)) console.log(line);
   console.log(`  considered  ${reading.considered.length} opening(s), ${reading.considered.filter((one) => one.modelled).length} in the simulation; ${reading.needsMoreOpenings ? 'not enough yet, so Brain keeps searching' : 'a realistic plan exists'}`);
   for (const one of reading.considered.slice(0, 8)) {
     console.log(`    ${one.modelled ? 'model' : '     '} ${one.stage.slice(0, 1)} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);
