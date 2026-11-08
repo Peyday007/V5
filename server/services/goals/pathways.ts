@@ -113,7 +113,7 @@ export interface StructureRequirement {
   sellingDays: number;
   /** The most one transaction may tie up before it pays, and in all at once. */
   capitalPerDeal: number | null;
-  verdict: 'OUTREACH_CAN_CARRY' | 'NEEDS_INBOUND_CHANNEL' | 'IMPOSSIBLE';
+  verdict: 'OUTREACH_CAN_CARRY' | 'ONLY_AT_BEST_CONVERSION' | 'NEEDS_INBOUND_CHANNEL' | 'IMPOSSIBLE';
   reason: string;
 }
 
@@ -130,10 +130,6 @@ export interface GoalStructures {
 }
 
 const geometric = (a: number, b: number) => Math.sqrt(a * b);
-
-function round(n: number, step = 1): number {
-  return Math.round(n / step) * step;
-}
 
 export function money(n: number): string {
   if (!Number.isFinite(n)) return '∞';
@@ -173,13 +169,13 @@ export function requiredStructures(input: {
       reason = `a sale takes at least ${MIN_SALES_CYCLE_DAYS} days and its money ${settleDays} more; ${daysLeft} are left`;
     } else if (perDay.middle <= capacity) {
       verdict = 'OUTREACH_CAN_CARRY';
-      reason = `${round(perDay.middle, 0.1)} prospects a day at the middle of the conversion bounds, inside the ${capacity} a day the shared outreach can reach`;
+      reason = `${money(perDay.middle)} prospects a day at the middle of the conversion bounds, inside the ${capacity} a day the shared outreach can reach`;
     } else if (perDay.best <= capacity) {
-      verdict = 'OUTREACH_CAN_CARRY';
-      reason = `only if conversion is near its best: ${round(perDay.best, 0.1)} prospects a day at the best bounds, ${round(perDay.middle)} at the middle, against ${capacity} a day`;
+      verdict = 'ONLY_AT_BEST_CONVERSION';
+      reason = `only if conversion is near its best: ${money(perDay.best)} prospects a day at the best bounds, ${money(perDay.middle)} at the middle, against ${capacity} a day — conversion is the decisive unknown, and only selling measures it`;
     } else {
       verdict = 'NEEDS_INBOUND_CHANNEL';
-      reason = `${round(perDay.best)} prospects a day even at the best conversion, more than the ${capacity} outreach can reach: buyers must come to it (a marketplace listing, a storefront, a partner's list, search)`;
+      reason = `${money(perDay.best)} prospects a day even at the best conversion, more than the ${capacity} outreach can reach: buyers must come to it (a marketplace listing, a storefront, a partner's list, search)`;
     }
     return { prospects, perDay, verdict, reason, window };
   };
@@ -252,6 +248,7 @@ export function requiredStructures(input: {
           ? `either deals netting at least about ${money(minimumNetForOutreach)} ${input.currency} each sold by direct outreach (about ${Math.max(1, Math.floor(dealsByOutreach))} deals at ${capacity} prospects a day and middling conversion)`
           : 'more deals than direct outreach can close in the time left')
         + (inbound.length > 0 ? `, or many smaller sales (${inbound[0]!.deals}+ at ${money(inbound[0]!.netPerDeal)}) through a channel where buyers come to the offer` : '')
+        + `. At unmeasured cold-outreach conversion that is the arithmetic, so prefer buyers already asking for the work (a posted request, an open submission call, a marketplace where buyers post jobs), whose conversion is far above cold outreach`
         + `; each must settle within ${Math.max(1, daysLeft - MIN_SALES_CYCLE_DAYS)} days and tie up no more than ${input.perArrangement === null ? 'the goal allows' : `${money(input.perArrangement)} ${input.currency}`} before it pays. ` +
         `Report any buyer activity of that shape in any industry or place — including a supplier's published price that buyers pay today, which Brain can construct a competing or reselling offer against.`;
   return { remaining, daysLeft, currency: input.currency, outreachPerDay: input.outreachPerDay, structures, minimumNetForOutreach, searchBrief };
@@ -373,7 +370,9 @@ const lowOf = (f: PathFact): number | null => (typeof f.value === 'number' && f.
 const highOf = (f: PathFact): number | null => (typeof f.value === 'number' && f.status === 'PROVEN' ? f.value : f.high);
 
 /** Words that mark evidence as a supplier describing its own price, not a buyer asking for one. */
-export const SUPPLY_SIDE = /\b(?:publishes|published|lists|charges|its (?:own )?pric(?:e|ing)|pricing page|rate card|per[- ](?:word|minute|hour|page|item)|plans? start|subscription costs?|fees? (?:are|is)|sells? (?:at|for))\b/i;
+export const SUPPLY_SIDE = /\b(?:publishes (?:a |its )?(?:per[- ]\w+ )?(?:price|pricing|rates?|fees?)|its (?:own )?pricing|pricing page|rate card|per[- ](?:word|minute|hour|page)\b.*\bpric|plans? start at|subscription costs?)/i;
+/** A resale or an asset bought and sold is an arbitrage, not a supplier's price page. */
+const RESALE = /\b(?:resale|resell|re-sell|ticket|auction|secondary market|StockX|marketplace listing)\b/i;
 /** Words that mark a one-buyer opening: a single submission, a single listing. */
 const ONE_BUYER = /\b(?:submissions?|this one publication|a single|one buyer|one listing)\b/i;
 
@@ -382,7 +381,8 @@ function supplyWithoutBuyer(one: ModelledOpportunity): boolean {
   const text = `${o.title} ${o.buyingSignal ?? ''} ${o.economicsNote ?? ''}`;
   const priced = one.price.value !== null || one.price.high !== null;
   if (!priced) return false;
-  if (o.opportunitySignal === 'PRICING_OR_INFORMATION_ASYMMETRY') return true;
+  if (o.opportunitySignal === 'RESALABLE_ASSET_OPENING' || RESALE.test(text)) return false;
+  if (o.opportunitySignal === 'PRICING_OR_INFORMATION_ASYMMETRY' && SUPPLY_SIDE.test(text)) return true;
   // A provider's own price page: the price is its, and nobody named pays us.
   return SUPPLY_SIDE.test(text) && (!o.payer || (o.title.toLowerCase().includes(o.payer.toLowerCase().split(/[ ,(]/)[0] ?? '\u0000') && SUPPLY_SIDE.test(o.title)));
 }

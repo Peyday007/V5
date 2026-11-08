@@ -301,6 +301,11 @@ describe('arrangements Brain constructs from what it knows', () => {
     await getDb().run(`UPDATE cash_discovery_rounds SET state = 'HARVESTED', found = 0, harvested_at = ? WHERE candidate_id = ?`, [now.toISOString(), first[0]!.candidateId]);
     const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000 }))!;
     expect(reading.pathways!.pathways.some((p) => p.gaps.includes('ONE_BUYER'))).toBe(true);
+    // The constructed estimates the plan compares are pathways too (§93), never executable.
+    const estimates = reading.pathways!.pathways.filter((p) => p.origin === 'CONSTRUCTED');
+    expect(estimates.length).toBe(reading.portfolio!.demand.filter((d) => d.opportunityId.startsWith('arr_')).length);
+    expect(estimates.length).toBeGreaterThan(0);
+    expect(estimates.every((p) => !p.executable)).toBe(true);
     const opened = await askPathwayConstructions((await getWorkstream(id))!, reading, now, MAX_LIVE_GOAL_ROUNDS);
     expect(opened).toHaveLength(1);
     const statement = (await getCandidate(opened[0]!))!.statement;
