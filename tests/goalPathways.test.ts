@@ -109,7 +109,9 @@ describe('backward from the goal', () => {
   it('rejects only arithmetic impossibilities: a thousand deals need buyers who come to the offer', () => {
     const thousand = s.structures.find((x) => x.deals === 1000)!;
     expect(thousand.verdict).toBe('NEEDS_INBOUND_CHANNEL');
-    expect(s.structures.find((x) => x.deals === 3)!.verdict).toBe('OUTREACH_CAN_CARRY');
+    // Three large deals are reachable by outreach only at the best conversion: conversion is the decisive unknown.
+    expect(s.structures.find((x) => x.deals === 3)!.verdict).toBe('ONLY_AT_BEST_CONVERSION');
+    expect(s.searchBrief).toMatch(/buyers already asking/);
     expect(s.minimumNetForOutreach).toBeGreaterThan(100);
     expect(s.searchBrief).toMatch(/supplier's published price/);
   });
@@ -169,6 +171,11 @@ describe('a transaction model per opening', () => {
     expect(p.executable).toBe(false);
     expect(p.notExecutable.join(' ')).toMatch(/constructed/);
     expect(p.revenuePerDeal.status).toBe('ESTIMATED');
+  });
+
+  it('a ticket resale is an arbitrage, not a supplier\'s price page', () => {
+    const resale = modelled(opening({ id: 'cop_tix', title: "On FIFA's Official Resale Marketplace, a Category 1 ticket lists for $3,450" }), { price: evidence(3450) });
+    expect(pathwayOf(resale, null, ctx).gaps).not.toContain('SUPPLY_WITHOUT_BUYER');
   });
 
   it('a closed opening contributes nothing', () => {

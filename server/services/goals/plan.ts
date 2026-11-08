@@ -853,7 +853,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const found = considered.filter((one) => !isArrangementId(one.opportunityId));
   // The reasoning loop reads what the plan composed; it decides nothing the plan already decides (§93).
   const pathways = readPathways({
-    modelled: model.considered,
+    modelled: [...model.considered, ...(model.estimates ?? [])],
     considered,
     target,
     portfolio: model.portfolio,

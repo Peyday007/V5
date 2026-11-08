@@ -295,6 +295,8 @@ export interface GoalModel {
    * its own evidence, so the engine's limit never limits what Brain considers.
    */
   considered: ModelledOpportunity[];
+  /** The constructed arrangements entered on their estimates (§82), for the reasoning loop (§93). */
+  estimates?: ModelledOpportunity[];
   /** Why nothing could be modelled, when nothing could. */
   refusal: string | null;
   /**
@@ -720,6 +722,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
           : 'No live opportunity is far enough along to model: each one is evidence only or has no price anywhere.',
       ),
       portfolio,
+      estimates,
     };
   }
 
@@ -897,6 +900,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     included,
     excluded,
     considered: candidates,
+    estimates,
     refusal: null,
     portfolio,
   };
