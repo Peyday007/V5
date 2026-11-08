@@ -497,8 +497,24 @@ function sourceNumber(value: unknown, numbered: { url: string }[]): number | nul
   return m ? Number(m[1]) : null;
 }
 
+/**
+ * Where a small model puts the sentence numbers when it does not use the key it
+ * was asked for (production, 2026-11-08: Qwen3-4B answers dropped whole as "no
+ * citation and no verbatim quote"). The reference still has to resolve to a real
+ * sentence of a page Brain fetched; only where it may be written is widened.
+ */
+const CITATION_KEYS = ['sentences', 'sentence', 'sentence_numbers', 'sentence_ids', 'sentence_refs', 'citations', 'citation', 'cites', 'evidence_sentences', 'evidence_locator', 'source_ref', 'evidence_excerpt'];
+
+/** The first citation key that holds a reference, or the `sentences` value. */
+function citationValue(claim: Record<string, unknown>): unknown {
+  for (const key of CITATION_KEYS) {
+    if (claim[key] !== undefined && referencesIn(claim[key]).length > 0) return claim[key];
+  }
+  return claim['sentences'];
+}
+
 function resolveCitation(claim: Record<string, unknown>, numbered: { url: string; sentences: string[] }[]): Citation {
-  const refs = referencesIn(claim['sentences']);
+  const refs = referencesIn(citationValue(claim));
   if (refs.length === 0) return { ok: false, why: 'unparseable' };
   // The explicit source wins, then the S-form's own source, then the only source there is.
   const sourceNo = sourceNumber(claim['source'], numbered) ?? refs.find((r) => r.source !== null)?.source ?? (numbered.length === 1 ? 1 : NaN);
@@ -969,7 +985,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
         claims.push(asRead(rest));
         continue;
       }
-      drop(c['sentences'] !== undefined ? citationFailure(c, numbered) : 'no citation and no verbatim quote');
+      drop(CITATION_KEYS.some((key) => c[key] !== undefined && key !== 'evidence_excerpt') ? citationFailure(c, numbered) : 'no citation and no verbatim quote');
     }
     if (claims.length === 0) {
       ctx.why = `the answer did not survive Brain's own checks: ${listed.length} claim(s) offered, dropped ${JSON.stringify(dropped)}`;

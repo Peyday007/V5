@@ -614,6 +614,19 @@ describe('the free research lane', () => {
     expect(citedExcerpt({ sentences: ['S9.1'] }, numbered)).toBeNull();
   });
 
+  it('reads a citation a model put under another key, and still refuses one that resolves to nothing', async () => {
+    const { citedExcerpt, sentencesOf } = await import('../server/services/freeLane/worker.ts');
+    const one = [{ url: 'https://a', sentences: sentencesOf(PAGE) }];
+    const s = one[0]!.sentences;
+    expect(citedExcerpt({ claim: 'x', source: 1, sentence_numbers: [1] }, one)?.excerpt).toBe(s[0]);
+    expect(citedExcerpt({ claim: 'x', citations: ['[S1.2]'] }, one)?.excerpt).toBe(s[1]);
+    expect(citedExcerpt({ claim: 'x', evidence_locator: 'S1.1, S1.2' }, one)?.excerpt).toBe(`${s[0]} ${s[1]}`);
+    expect(citedExcerpt({ claim: 'x', evidence_excerpt: 'see [S1.1]' }, one)?.excerpt).toBe(s[0]);
+    expect(citedExcerpt({ claim: 'x', citations: ['S1.999'] }, one)).toBeNull();
+    expect(citedExcerpt({ claim: 'x', evidence_excerpt: 'published in 2019' }, one)).toBeNull();
+    expect(citedExcerpt({ claim: 'x' }, one)).toBeNull();
+  });
+
   it('reads every way models write a citation instead of dropping the claim (FREE_LANE:CITATION_DROPPED)', async () => {
     const { citedExcerpt, citationFailure } = await import('../server/services/freeLane/worker.ts');
     const s = ['First sentence of the page here.', 'Second sentence of the page here.', 'Third sentence of the page here.', 'Fourth sentence of the page here.', 'Fifth sentence of the page here.'];
