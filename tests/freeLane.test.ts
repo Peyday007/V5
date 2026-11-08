@@ -14,7 +14,7 @@ import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { checkIn } from '../server/services/bins/service.ts';
-import { ensureFreeWorkers, firstJson, freeLaneTick, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
+import { claimAsks, ensureFreeWorkers, firstJson, freeLaneTick, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
 import { freeLaneMayTakeImprovement, resetActivationCache } from '../server/services/improvement/activation.ts';
 import { createLayer } from '../server/repos/layers.ts';
 import { IMPROVEMENT_RESEARCH_SLOT_CAP } from '../server/domain/improvement.ts';
@@ -494,6 +494,37 @@ describe('the free research lane', () => {
     const other = await takeOne({ ...base, worker: workers[1]!, index: 1, spillover: true });
     expect(other.claimed?.workItemId).toBe(first.claimed!.workItemId);
     expect(other.ok).toBe(true);
+  });
+
+  it('asks per work type and never for the other worker\u2019s role, so declined rows cannot fill the claim window (IDLE_CAPACITY)', async () => {
+    const two = [{ model: 'a' }, { model: 'b' }];
+    // Slot 0 never asks for verification (always worker 1's); slot 1 asks for it first among its own.
+    expect(claimAsks(two, 0).flat()).toEqual(['RESEARCH_SYNTHESIZE', 'RESEARCH_AUDIT', 'RESEARCH_PLAN', 'RESEARCH_FRAGMENT']);
+    expect(claimAsks(two, 1).flat()).toEqual(['RESEARCH_AUDIT', 'RESEARCH_VERIFY']);
+    // Spillover and a single worker keep every type, in the lane's priority order, one per ask.
+    expect(claimAsks(two, 0, true).flat()).toEqual(['RESEARCH_SYNTHESIZE', 'RESEARCH_AUDIT', 'RESEARCH_VERIFY', 'RESEARCH_PLAN', 'RESEARCH_FRAGMENT']);
+    expect(claimAsks([{ model: 'a' }], 0).every((ask) => ask.length === 1)).toBe(true);
+
+    // The recorded failure: more declined rows at the head of the queue than one claim window reads.
+    const { orchestration, fragment } = await packet(play.project.id);
+    const verify = workType('RESEARCH_VERIFY');
+    for (let i = 0; i < 70; i += 1) {
+      await enqueueWork({
+        projectId: play.project.id,
+        workType: 'RESEARCH_VERIFY',
+        payload: verify.validate({}),
+        requiredScopes: verify.requiredScopes,
+        orchestrationId: orchestration.id,
+        fragmentId: fragment.id,
+        createdByType: 'SYSTEM',
+        priority: 9,
+      });
+    }
+    const wanted = await enqueue(play.project.id, 'RESEARCH_SYNTHESIZE', orchestration, fragment);
+    const { takeOne } = await import('../server/services/freeLane/worker.ts');
+    const workers = await ensureFreeWorkers(CONFIG);
+    const taken = await takeOne({ workers, worker: workers[0]!, index: 0, completer: model().completer, fetchSource, search: async () => [], config: CONFIG });
+    expect(taken.claimed?.workItemId).toBe(wanted);
   });
 
   it('counts an item as untakeable only while every model is cooling down on it (the GPU is not kept on for it)', async () => {

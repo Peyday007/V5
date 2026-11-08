@@ -1353,6 +1353,36 @@ const CLAIM_ORDER: readonly (readonly FreeLaneWorkType[])[] = [
   ['RESEARCH_PLAN', 'RESEARCH_FRAGMENT'],
 ];
 
+/**
+ * The work types a slot asks the queue for, one list per ask, in priority order.
+ *
+ * `claimWork` reads a bounded window of the queue (8 + 16 + 32 rows) and offers
+ * each row to the lane's `admit` rule. One ask for several types let rows the
+ * slot must decline — the other worker's role, a type it can never take —
+ * fill that window, so claimable work of another type behind them was never
+ * offered while the lane sat idle (rule 9, IDLE_CAPACITY). A slot now never
+ * asks for a type `workerFor` always gives the other worker, and asks for one
+ * type at a time, so declined rows of one type cannot hide another's. Pure.
+ */
+export function claimAsks(
+  workers: readonly { model: string }[],
+  index: number,
+  spillover = false,
+): FreeLaneWorkType[][] {
+  const asks: FreeLaneWorkType[][] = [];
+  for (const group of CLAIM_ORDER) {
+    for (const type of group) {
+      if (!spillover && workers.length >= 2) {
+        // RESEARCH_AUDIT goes to either worker by its payload role; the rest are fixed.
+        const owner = type === 'RESEARCH_VERIFY' ? 1 : type === 'RESEARCH_AUDIT' ? index : 0;
+        if (owner !== index) continue;
+      }
+      asks.push([type]);
+    }
+  }
+  return asks;
+}
+
 /** Memberships, read at most once a minute per worker rather than once per job. */
 const membershipCache = new Map<string, { at: number; projects: string[] }>();
 
@@ -1407,7 +1437,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   let session = '';
   let one: ClaimedWork | undefined;
   const unfit = await unfitNow(workers.map((w) => w.model), Date.now(), config.fallbackModel ?? null);
-  for (const types of CLAIM_ORDER) {
+  for (const types of claimAsks(workers, index, input.spillover)) {
     const claimed = await claimWork({
       workerId: worker.workerId,
       scopes: projectIds.map((projectId) => ({ projectId, scopes: [...CONNECTOR_SCOPES] })),
