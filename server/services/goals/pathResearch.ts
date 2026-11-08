@@ -159,7 +159,26 @@ export async function researchGoalPaths(input: {
   const priority = new Map<string, NonNullable<PlanReading['researchPriority']>[number]>();
   for (const one of input.reading.researchPriority ?? []) if (one.opportunityId && one.field) priority.set(`${one.opportunityId}:${one.field}`, one);
   const valueOf = (id: string) => Math.max(0, ...[...priority.values()].filter((one) => one.opportunityId === id && one.decision === 'RESEARCH_FIRST').map((one) => one.value));
-  if (priority.size > 0) order.sort((a, b) => valueOf(b.opportunityId) - valueOf(a.opportunityId));
+  /*
+   * The reasoning loop (§93): pathways whose unknowns could move the plan go
+   * first after the measured priority, and a research move on a pathway —
+   * where its buyers are reached, who fulfils it, how many buyers there are —
+   * adds to the question on the same field the figure the transaction must hit.
+   * Its constructed moves (a different transaction from the same evidence)
+   * are asked as constructed rounds, not here.
+   */
+  const swing = new Map<string, number>();
+  for (const one of input.reading.pathways?.informationValue ?? []) {
+    swing.set(one.opportunityId, Math.max(swing.get(one.opportunityId) ?? 0, one.swing + (one.changesPlan ? remaining : 0)));
+  }
+  const movesOf = new Map<string, { field: string; mustHit: string }[]>();
+  for (const pathway of input.reading.pathways?.pathways ?? []) {
+    const asks = pathway.moves.filter((move) => move.action === 'RESEARCH' && move.field && move.mustHit).map((move) => ({ field: move.field!, mustHit: move.mustHit! }));
+    if (asks.length > 0) movesOf.set(pathway.opportunityId, asks);
+  }
+  if (swing.size > 0 || priority.size > 0) {
+    order.sort((a, b) => valueOf(b.opportunityId) - valueOf(a.opportunityId) || (swing.get(b.opportunityId) ?? 0) - (swing.get(a.opportunityId) ?? 0));
+  }
   let openings = 0;
   const squeeze = input.reading.executionPolicy === 'SQUEEZE';
   const selling = new Set((input.reading.sales ?? []).map((one) => one.opportunityId));
@@ -214,6 +233,12 @@ export async function researchGoalPaths(input: {
       // buyers, how often — is investigated, never assumed (§81).
       asks = [...asks, FIELDS_FOR.MARKET_VOLUME![0]!];
     }
+    const moves = movesOf.get(one.opportunityId) ?? [];
+    // The question keeps its method and gains the figure the transaction must hit, so the answer is read against the goal.
+    asks = asks.map((a) => {
+      const move = moves.find((one) => one.field === a.field);
+      return move ? { ...a, ask: `${a.ask} For this to matter to the goal: ${move.mustHit}.` } : a;
+    });
     const opportunity = await getOpportunity(one.opportunityId);
     if (!opportunity) continue;
     if (diveOwnsItsQuestions(opportunity)) {

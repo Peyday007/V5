@@ -20,7 +20,7 @@
 import { getDb } from '../../db/database.ts';
 import type { ChainLink, ConsideredOpening } from './plan.ts';
 
-export const RESEARCH_CAUSES = [
+const DATA_CAUSES = [
   'RESEARCH_NOT_FINISHING',
   'NO_OPENINGS_REPORTED',
   'NO_BUYER',
@@ -30,6 +30,12 @@ export const RESEARCH_CAUSES = [
   'NO_FULFILLER',
   'SETTLEMENT_UNKNOWN',
 ] as const;
+/**
+ * The data causes above are read from the plan's judgement of each opening;
+ * the reasoning causes from the goal-to-transaction loop's pathways (§93,
+ * `pathways.ts`) — failures of the method rather than of one opening.
+ */
+export const RESEARCH_CAUSES = [...DATA_CAUSES, 'CONSTRUCTION_FAILURE', 'ACQUISITION_FAILURE', 'CASH_TIMING_FAILURE', 'VOLUME_UNRESEARCHED', 'REPEATED_GAP'] as const;
 export type ResearchCause = (typeof RESEARCH_CAUSES)[number];
 
 export interface ResearchDiagnosis {
@@ -52,7 +58,7 @@ export const BARREN_ROUNDS_FOR_CAUSE = 2;
 /** At most this many instructions go into one question, so it stays a question. */
 export const MAX_INSTRUCTIONS = 3;
 
-const INSTRUCTION: Record<ResearchCause, string> = {
+const INSTRUCTION: Record<(typeof DATA_CAUSES)[number], string> = {
   RESEARCH_NOT_FINISHING:
     'Recent searches for this goal ended without a report because no claim survived the evidence check, so cite only pages that open without a login or bot wall (official pages, public marketplace listings, public registers) and quote the exact sentence that names the buyer, the work and the price.',
   NO_OPENINGS_REPORTED:

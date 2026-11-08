@@ -14768,3 +14768,68 @@ those three and duplicates none.
   `seed: true` puts the industry on the goal's map through `seedSubject` so the
   kernel researches it; `npm run goals -- industry [wst_…] [--reason "…"]`
   (and the Goals workflow's `industry` command) prints it on production.
+
+## 93. A goal is reasoned backward into transactions, and a partial opening is completed, not discarded.
+
+**Owner's order, 2026-11-08.** Rebuild goal-solving reasoning so Brain designs,
+constructs, quantifies and executes paths to a goal instead of waiting for
+preassembled openings; prove it on the $10K SQUEEZE goal; make it transfer to
+any later commercial goal.
+
+**What production showed (Goals plan 42440096724, 02:49Z).** NOT_VIABLE over 19
+openings reaching $250 of $10 000; best combination 1.4% of swept worlds. Most
+openings were a supplier's own price page (Rev.com $1.99 a minute, Verblio per
+word) or one buyer paying once ($50 a Sudoku puzzle), each read only as a list
+of missing links, and the next round was asked for a better opening.
+
+`services/goals/pathways.ts` is the repair: one pure reading over what the plan
+already composed (`readPathways`, `PlanReading.pathways`). No second planner,
+simulator or queue; its outputs go through the existing doors.
+
+- **Backward from the goal.** `requiredStructures` solves, from the remaining
+  cash, the days left, the money limits and the portfolio's outreach bounds,
+  the net per deal, the prospects and prospects a day that 1 … 1 000 deals, a
+  recurring fee and a large-plus-small combination each need, at the
+  conversion bounds the model already sweeps. It rejects only arithmetic: a
+  structure that cannot settle in time is IMPOSSIBLE, one the outreach cannot
+  carry even at the best conversion NEEDS_INBOUND_CHANNEL. Its `searchBrief`
+  leads the goal round's question, so the quantity shapes the search.
+- **A transaction model per opening.** Buyer and motivation, channel, offer,
+  fulfiller, revenue, acquisition and fulfilment cost, net, conversion, volume
+  and frequency, time to cash, capital, dependencies, permissions and failure
+  points, each PROVEN (evidence, history), ESTIMATED (a person's figure, a
+  reconstruction, a stated rule) or UNKNOWN. Nothing is invented: an unknown
+  stays unknown and is solved for instead (the figure a move "must hit").
+- **Missing links are constructed.** A supplier's price with no buyer of ours
+  becomes the reference price for a competing offer to its buyers and a
+  referral variant; one buyer becomes its population; demand with no
+  fulfiller a supplier-acquisition path with the most a supplier may cost; no
+  margin a change of role; slow cash a payment structure; small tickets a
+  volume question, never an exclusion. A CONSTRUCT move is asked through
+  `openConstructedRound` (`askPathwayConstructions`, key `mx-pw…`), taking
+  turns with the constructed arrangements inside construction's half of the
+  live cap (`pathwayTurn`), so world-search lenses keep their share. A
+  RESEARCH move adds its target figure to the path-research question on the
+  same card field, and pathways whose unknowns could move the plan are
+  researched first after the run's measured priority.
+- **Unknowns ranked by the plan.** `informationValue` moves each unproven
+  variable across its range and measures the change in the pathway's
+  contribution, and whether it would bring the pathway into, or drop it out
+  of, the leading combination.
+- **A living portfolio.** Executable pathways (every commercial link
+  established or estimated with a basis; only a permission may block — it
+  blocks the send and nothing else), constructed alternatives, net and gross
+  contribution over each pathway's own bounds, the leading combination under
+  the shared outreach and capital ceiling with a correlated group's second
+  member at half weight, what remains if its largest group fails, a fallback
+  without the leader's group, and the gaps left. Provisional, never a
+  probability.
+- **The method's own failures.** `reasoningFailures` names CONSTRUCTION_FAILURE
+  (barren rounds, few offers), ACQUISITION_FAILURE (priced, unreachable),
+  CASH_TIMING_FAILURE, VOLUME_UNRESEARCHED and REPEATED_GAP, each with the
+  instruction that changes the method; they lead the plan's
+  `researchDiagnosis`, which the next goal round already reads (§89).
+- **Measured on the row.** `planProgress.pathways` (pathways, executable, can
+  proceed without engineering, reachable, construction moves, variants,
+  leading net p50, fact counts) is written with every changed reading;
+  `npm run goals -- plan` prints the whole loop.
