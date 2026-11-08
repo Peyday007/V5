@@ -170,12 +170,16 @@ describe('a transaction model per opening', () => {
     expect(p.origin).toBe('CONSTRUCTED');
     expect(p.executable).toBe(false);
     expect(p.notExecutable.join(' ')).toMatch(/constructed/);
+    expect(p.gaps).not.toContain('ONE_BUYER');
     expect(p.revenuePerDeal.status).toBe('ESTIMATED');
   });
 
   it('a ticket resale is an arbitrage, not a supplier\'s price page', () => {
     const resale = modelled(opening({ id: 'cop_tix', title: "On FIFA's Official Resale Marketplace, a Category 1 ticket lists for $3,450" }), { price: evidence(3450) });
     expect(pathwayOf(resale, null, ctx).gaps).not.toContain('SUPPLY_WITHOUT_BUYER');
+    // Its "population" is more tickets bought first, which is capital, not buyers.
+    expect(pathwayOf(resale, null, ctx).gaps).not.toContain('ONE_BUYER');
+    expect(pathwayOf(resale, null, ctx).moves.some((m) => m.action === 'SELL')).toBe(false);
   });
 
   it('a closed opening contributes nothing', () => {
