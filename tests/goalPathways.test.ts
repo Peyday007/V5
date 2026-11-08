@@ -324,3 +324,18 @@ describe('fulfilment Brain proves it can do, and how buyers are reached (§93)',
     expect(collectibility(slowBig, 19)[0]).toBe(0);
   });
 });
+
+describe('the buyer is never its own fulfiller', () => {
+  it('reads a card naming the payer as fulfiller as nobody, and does not offer the sale', () => {
+    const caps = { delivers: ['business document'], puzzleFormats: ['sudoku'] };
+    const card = modelled(
+      opening({ id: 'cop_as', title: 'Artisanal Sudoku (a Substack publication of variant-Sudoku puzzles) pays $50 per puzzle submission', payer: 'Artisanal Sudoku, editor jwsinclair', reachableChannel: 'email', offerScope: 'one variant sudoku', buyingSignal: 'its submission page says contributors are paid $50' }),
+      { price: assumed(50), fulfilledBy: { value: 'Artisanal Sudoku (Substack, author James Sinclair) states contributors are paid', provenance: 'EVIDENCE', source: null } },
+    );
+    const p = pathwayOf(card, null, { ...ctx, capabilities: caps });
+    expect(p.fulfiller.status).toBe('UNKNOWN');
+    expect(p.gaps).toContain('NO_SUPPLIER');
+    expect(p.moves.some((m) => m.action === 'SELL')).toBe(false);
+    expect(p.moves.find((m) => m.gap === 'NO_SUPPLIER')!.construct).toMatch(/Factory/);
+  });
+});

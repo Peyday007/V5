@@ -508,9 +508,16 @@ export function pathwayOf(
     : textFact(o.buyingSignal ? `${o.buyingSignal}${o.signalObservedAt ? ` (observed ${o.signalObservedAt.slice(0, 10)})` : ''}` : null, 'why the buyer pays now');
   const channel = textFact(o.reachableChannel, 'how the buyer is reached');
   const offer = textFact(o.offerScope, 'the offer');
-  const named = one.fulfilledBy
+  const named: PathFact = one.fulfilledBy
     ? { value: one.fulfilledBy.value.slice(0, 240), low: null, high: null, status: (one.fulfilledBy.provenance === 'EVIDENCE' || one.fulfilledBy.provenance === 'HISTORICAL' ? 'PROVEN' : 'ESTIMATED') as FactStatus, basis: 'the card names who does the work' }
     : textFact(o.fulfillmentOwner, 'who does the work');
+  // The buyer is never its own fulfiller: a card naming the payer as who does the work names nobody (production, 2026-11-08).
+  const payerWord = (o.payer ?? '').toLowerCase().split(/[^a-z0-9]+/).find((w) => w.length > 3 && !['market', 'payer', 'english', 'language'].includes(w)) ?? null;
+  if (named.status !== 'UNKNOWN' && payerWord && String(named.value).toLowerCase().includes(payerWord)) {
+    named.value = null;
+    named.status = 'UNKNOWN';
+    named.basis = 'the card names the buyer itself as who does the work, which names nobody';
+  }
   // Brain's own proven capability is a fulfiller nobody needs to find (§93): estimated, because the buyer's bar is not established.
   const produces = constructed ? null : brainProduces(`${o.offerScope ?? ''} ${o.title} ${o.buyingSignal ?? ''}`, input.capabilities ?? null);
   const fulfiller: PathFact =
