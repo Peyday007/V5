@@ -469,7 +469,7 @@ export function pathwayOf(
   // round asks the population already), and not a resale: an arbitrage's "population" is more
   // stock bought first, which is capital, not buyers.
   const resale = o.opportunitySignal === 'RESALABLE_ASSET_OPENING' || RESALE.test(`${o.title} ${o.buyingSignal ?? ''}`);
-  if (!constructed && !resale && !one.repeatable && !judged?.competitiveAward && (smallTicket || ONE_BUYER.test(o.title))) gaps.push('ONE_BUYER');
+  if (!constructed && !resale && !supply && !one.repeatable && !judged?.competitiveAward && (smallTicket || ONE_BUYER.test(o.title))) gaps.push('ONE_BUYER');
   if (o.expiresAt && Date.parse(o.expiresAt) < input.now.getTime()) gaps.push('CLOSED');
 
   const fit = fitOf({ net, conversion, volume, daysToCash, repeatable: one.repeatable, remaining: input.remaining, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, competitiveAward: !!judged?.competitiveAward });
@@ -1149,7 +1149,10 @@ export function renderPathways(reading: PathwayReading, limit = 12): string[] {
   out.push(`    backward  ${money(s.remaining)} ${s.currency} in ${s.daysLeft} day(s), outreach ${s.outreachPerDay.low}–${s.outreachPerDay.high}/day${s.outreachPerDay.stated ? '' : ' (not stated; bounds)'}; outreach alone needs ≥ ${s.minimumNetForOutreach === null ? '∞' : money(s.minimumNetForOutreach)} net per deal`);
   for (const one of s.structures) out.push(`    structure ${one.kind.padEnd(14)} ${one.verdict.padEnd(21)} ${one.label} · ${money(one.perDay.middle)}/day middle, ${money(one.perDay.best)}/day best · ${one.reason.slice(0, 160)}`);
   const ordered = [...reading.pathways].sort((a, b) => b.contribution.p50 - a.contribution.p50 || b.contribution.p90 - a.contribution.p90);
-  for (const p of ordered.slice(0, limit)) {
+  // The largest by contribution, then every pathway the loop is constructing something from.
+  const shown = [...ordered.slice(0, Math.ceil(limit / 2))];
+  for (const p of ordered) if (shown.length < limit * 2 && !shown.includes(p) && p.moves.some((m) => m.action === 'CONSTRUCT' || m.action === 'SELL')) shown.push(p);
+  for (const p of shown) {
     out.push(`    pathway   ${p.opportunityId} ${p.origin} ${p.executable ? 'EXECUTABLE' : 'not executable'} · net p10/p50/p90 ${money(p.contribution.p10)}/${money(p.contribution.p50)}/${money(p.contribution.p90)} (gross p50 ${money(p.gross.p50)}) · fit ${p.fit.verdict}${p.fit.lever.variable ? ` lever ${p.fit.lever.variable}` : ''} · ${p.title.slice(0, 70)}`);
     out.push(`      model   buyer ${S(p.buyer)} ${V(p.buyer)} | why ${S(p.motivation)} | channel ${S(p.channel)} ${V(p.channel)} | offer ${S(p.offer)} | fulfils ${S(p.fulfiller)} ${V(p.fulfiller)}`);
     out.push(`      money   price ${S(p.revenuePerDeal)} ${V(p.revenuePerDeal)} | acquire ${S(p.acquisitionCost)} ${V(p.acquisitionCost)} | fulfil ${S(p.fulfilmentCost)} ${V(p.fulfilmentCost)} | net ${S(p.net)} ${V(p.net)} | convert ${S(p.conversion)} ${V(p.conversion)} | volume ${S(p.volume)} ${V(p.volume)} ${String(p.frequency.value)} | cash ${S(p.daysToCash)} ${V(p.daysToCash)}d | capital ${S(p.capital)} ${V(p.capital)}`);

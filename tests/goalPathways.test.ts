@@ -150,6 +150,8 @@ describe('a transaction model per opening', () => {
     // The construction never invents our cost: it stays unknown.
     expect(flip.variant!.costPerDeal.status).toBe('UNKNOWN');
     expect(p.moves.some((m) => m.gap === 'NO_MARGIN')).toBe(true);
+    // Its buyers are constructed by the flip; a supplier is not "one buyer" to transfer.
+    expect(p.gaps).not.toContain('ONE_BUYER');
     expect(p.executable).toBe(false);
   });
 
