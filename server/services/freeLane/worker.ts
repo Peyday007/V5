@@ -34,7 +34,7 @@ import { getDb } from '../../db/database.ts';
 import { CONNECTOR_SCOPES, type ClaimedWork, type Principal, type WorkItemRow } from '../../domain/types.ts';
 import { findingTakesQualifier, isStructuralFinding } from '../../domain/industry.ts';
 import { createWorker, getWorkerByName, grantMembership, listMembershipsForPrincipal } from '../../repos/identity.ts';
-import { claimWork } from '../../repos/workQueue.ts';
+import { CLAIMABLE_SQL, claimWork, queueNow } from '../../repos/workQueue.ts';
 import { completeUnleasedBin, getBin, recordBinEvent } from '../../repos/bins.ts';
 import { evaluateContract } from '../bins/contracts.ts';
 import { findTool } from '../../mcp/tools.ts';
@@ -1353,6 +1353,64 @@ const CLAIM_ORDER: readonly (readonly FreeLaneWorkType[])[] = [
   ['RESEARCH_PLAN', 'RESEARCH_FRAGMENT'],
 ];
 
+/**
+ * The work types a slot asks the queue for, one list per ask, in priority order.
+ *
+ * `claimWork` reads a bounded window of the queue (8 + 16 + 32 rows) and offers
+ * each row to the lane's `admit` rule. One ask for several types let rows the
+ * slot must decline — the other worker's role, a type it can never take —
+ * fill that window, so claimable work of another type behind them was never
+ * offered while the lane sat idle (rule 9, IDLE_CAPACITY). A slot now never
+ * asks for a type `workerFor` always gives the other worker, and asks for one
+ * type at a time, so declined rows of one type cannot hide another's. Pure.
+ */
+export function claimAsks(
+  workers: readonly { model: string }[],
+  index: number,
+  spillover = false,
+): FreeLaneWorkType[][] {
+  const asks: FreeLaneWorkType[][] = [];
+  for (const group of CLAIM_ORDER) {
+    for (const type of group) {
+      if (!spillover && workers.length >= 2) {
+        // RESEARCH_AUDIT goes to either worker by its payload role; the rest are fixed.
+        const owner = type === 'RESEARCH_VERIFY' ? 1 : type === 'RESEARCH_AUDIT' ? index : 0;
+        if (owner !== index) continue;
+      }
+      asks.push([type]);
+    }
+  }
+  return asks;
+}
+
+/** Rows one claim reads in all (8 + 16 + 32): a claim that declined this many saw no more. */
+const CLAIM_WINDOW = 56;
+
+/** The work types with at least one claimable row in these projects. */
+async function waitingTypes(projectIds: string[]): Promise<Set<string>> {
+  const now = queueNow();
+  const rows = await getDb().all<{ work_type: string }>(
+    `SELECT DISTINCT work_type FROM work_items
+      WHERE ${CLAIMABLE_SQL} AND project_id IN (${projectIds.map(() => '?').join(', ')})`,
+    [now, now, ...projectIds],
+  );
+  return new Set(rows.map((row) => row.work_type));
+}
+
+/** Packets holding claimable rows of these types, best priority first, bounded. */
+async function waitingPackets(projectIds: string[], types: readonly string[]): Promise<string[]> {
+  const now = queueNow();
+  const rows = await getDb().all<{ orchestration_id: string }>(
+    `SELECT orchestration_id, MAX(priority) AS top FROM work_items
+      WHERE ${CLAIMABLE_SQL} AND orchestration_id IS NOT NULL
+        AND project_id IN (${projectIds.map(() => '?').join(', ')})
+        AND work_type IN (${types.map(() => '?').join(', ')})
+      GROUP BY orchestration_id ORDER BY MAX(priority) DESC, orchestration_id LIMIT 10`,
+    [now, now, ...projectIds, ...types],
+  );
+  return rows.map((row) => row.orchestration_id);
+}
+
 /** Memberships, read at most once a minute per worker rather than once per job. */
 const membershipCache = new Map<string, { at: number; projects: string[] }>();
 
@@ -1407,29 +1465,50 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   let session = '';
   let one: ClaimedWork | undefined;
   const unfit = await unfitNow(workers.map((w) => w.model), Date.now(), config.fallbackModel ?? null);
-  for (const types of CLAIM_ORDER) {
+  const scopes = projectIds.map((projectId) => ({ projectId, scopes: [...CONNECTOR_SCOPES] }));
+  const admit = async (item: WorkItemRow) => {
+    if (!input.spillover && workerFor(workers, item) !== index) {
+      return { ok: false, reason: 'the other free worker takes this role' };
+    }
+    if ((cooldown.get(cooldownKey(worker.model, item.id)) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
+    if (unfit.has(`${worker.model}|${item.work_type}`)) return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
+    if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
+    session = sessionFor(worker, item);
+    return auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
+  };
+  const ask = async (types: FreeLaneWorkType[], orchestrationId: string | null): Promise<ClaimedWork | undefined> => {
+    let declined = 0;
     const claimed = await claimWork({
       workerId: worker.workerId,
-      scopes: projectIds.map((projectId) => ({ projectId, scopes: [...CONNECTOR_SCOPES] })),
+      scopes,
       workTypes: [...types],
+      orchestrationId,
       limit: 1,
       leaseMs: LEASE_MS,
-      admit: async (item) => {
-        if (!input.spillover && workerFor(workers, item) !== index) {
-          return { ok: false, reason: 'the other free worker takes this role' };
-        }
-        if ((cooldown.get(cooldownKey(worker.model, item.id)) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
-        if (unfit.has(`${worker.model}|${item.work_type}`)) return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
-        if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
-        session = sessionFor(worker, item);
-        return auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
-      },
+      admit,
       onSkip: (_item, reason) => {
+        declined += 1;
         const key = reason.slice(0, 80);
         skipTally.set(key, (skipTally.get(key) ?? 0) + 1);
       },
     });
-    one = claimed[0];
+    if (claimed[0]) return claimed[0];
+    // A window the lane declined end to end may hide claimable rows of the same
+    // type behind it (e.g. the other role's audits). Ask once per packet holding
+    // such rows, so one packet's declined rows cannot hide another's.
+    if (orchestrationId === null && declined >= CLAIM_WINDOW) {
+      for (const id of await waitingPackets(projectIds, types)) {
+        const inPacket = await ask(types, id);
+        if (inPacket) return inPacket;
+      }
+    }
+    return undefined;
+  };
+  // Only types that have claimable rows are asked for: each ask is a bounded scan.
+  const waiting = await waitingTypes(projectIds);
+  for (const types of claimAsks(workers, index, input.spillover)) {
+    if (!types.some((type) => waiting.has(type))) continue;
+    one = await ask(types, null);
     if (one) break;
   }
   if (!one) return { claimed: null, ok: false, ms: 0 };
