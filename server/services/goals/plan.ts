@@ -1529,14 +1529,34 @@ export function pathwayRoundKey(opportunityId: string, gap: string): string {
  * the constructed round's door (§81) — the gate, the frame, the harvest and the
  * live cap — so what comes back is an ordinary opening judged like any other.
  */
-export async function askPathwayConstructions(goal: Workstream, reading: PlanReading, now: Date, liveCap: number): Promise<string[]> {
+export async function askPathwayConstructions(
+  goal: Workstream,
+  reading: PlanReading,
+  now: Date,
+  liveCap: number,
+  /** Why each step decided what it did, for the operator readout; with `dryRun`, nothing is opened. */
+  trace?: string[],
+  dryRun = false,
+): Promise<string[]> {
+  const note = (line: string) => trace?.push(line);
   const t = reading.target;
-  if (!reading.pathways || t.daysLeft === null || t.daysLeft <= 0 || t.remainingCents <= 0) return [];
+  if (!reading.pathways || t.daysLeft === null || t.daysLeft <= 0 || t.remainingCents <= 0) {
+    note('no pathways, or the goal has no time or nothing left to raise');
+    return [];
+  }
   const rounds = await listRounds(t.projectId);
-  if (!pathwayTurn(rounds, goal.id)) return [];
+  if (!pathwayTurn(rounds, goal.id)) {
+    note('not its turn: the latest constructed round was a pathway construction, so an arrangement goes next');
+    return [];
+  }
   // Construction's half of the live cap, shared with the arrangements (§82).
   const openMx = rounds.filter((r) => r.state === 'OPEN' && r.bucketId.startsWith(`goal-${goal.id}-mx-`));
-  if (Math.max(1, Math.floor(liveCap / 2)) - (await roundsStillResearching(openMx)) <= 0) return [];
+  const researching = await roundsStillResearching(openMx);
+  const room = Math.max(1, Math.floor(liveCap / 2)) - researching;
+  if (room <= 0) {
+    note(`its turn, but construction's share of the live cap is full: ${researching} constructed round(s) researching against ${Math.max(1, Math.floor(liveCap / 2))}`);
+    return [];
+  }
   const exclusions = await goalExclusions(goal);
   const opened: string[] = [];
   const byId = new Map(reading.pathways.pathways.map((p) => [p.opportunityId, p]));
@@ -1546,6 +1566,12 @@ export async function askPathwayConstructions(goal: Workstream, reading: PlanRea
     const pathway = byId.get(action.opportunityId);
     const move = pathway?.moves.find((one) => one.action === 'CONSTRUCT' && one.ask === action.ask);
     if (!pathway || !move) continue;
+    const key = pathwayRoundKey(pathway.opportunityId, move.gap);
+    if (dryRun) {
+      note(`would ask mx-${key}: ${move.construct.slice(0, 100)} (from "${pathway.title.slice(0, 60)}")`);
+      opened.push(key);
+      continue;
+    }
     const question =
       `Brain constructed a transaction from evidence it already holds: ${move.construct}. ${move.ask} ` +
       (move.mustHit ? `For it to matter to the goal: ${move.mustHit}. ` : '') +
@@ -1555,14 +1581,18 @@ export async function askPathwayConstructions(goal: Workstream, reading: PlanRea
     const round = await openConstructedRound({
       goal,
       projectId: t.projectId,
-      key: pathwayRoundKey(pathway.opportunityId, move.gap),
+      key,
       title: `Constructed from "${pathway.title.slice(0, 60)}": ${move.construct.slice(0, 80)}`,
       question,
       now: now.toISOString(),
       liveCap,
     });
-    if (round) opened.push(round.candidateId);
+    if (round) {
+      opened.push(round.candidateId);
+      note(`asked mx-${key}: ${move.construct.slice(0, 100)}`);
+    } else note(`mx-${key} not opened (its cool-off, the live cap, the focus cap or a closed discovery gate)`);
   }
+  if (opened.length === 0) note('no constructed move on a found opening could be asked this pass');
   return opened;
 }
 
