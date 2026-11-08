@@ -513,6 +513,20 @@ function citationValue(claim: Record<string, unknown>): unknown {
   return claim['sentences'];
 }
 
+/**
+ * The recorded reason for a claim that carried no reference Brain could read. It names
+ * the keys the model did send (names only, never values, capped), so a production row
+ * shows which key a model cites under and CITATION_KEYS can be widened from evidence.
+ */
+export function uncitedReason(claim: Record<string, unknown>): string {
+  const keys = Object.keys(claim)
+    .filter((k) => !['claim', 'evidence_lane'].includes(k))
+    .slice(0, 8)
+    .map((k) => k.replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 40))
+    .filter((k) => k.length > 0);
+  return keys.length > 0 ? `no citation and no verbatim quote (claim keys: ${keys.join(',')})` : 'no citation and no verbatim quote';
+}
+
 function resolveCitation(claim: Record<string, unknown>, numbered: { url: string; sentences: string[] }[]): Citation {
   const refs = referencesIn(citationValue(claim));
   if (refs.length === 0) return { ok: false, why: 'unparseable' };
@@ -985,7 +999,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
         claims.push(asRead(rest));
         continue;
       }
-      drop(CITATION_KEYS.some((key) => c[key] !== undefined && key !== 'evidence_excerpt') ? citationFailure(c, numbered) : 'no citation and no verbatim quote');
+      drop(CITATION_KEYS.some((key) => c[key] !== undefined && key !== 'evidence_excerpt') ? citationFailure(c, numbered) : uncitedReason(c));
     }
     if (claims.length === 0) {
       ctx.why = `the answer did not survive Brain's own checks: ${listed.length} claim(s) offered, dropped ${JSON.stringify(dropped)}`;
