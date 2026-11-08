@@ -77,3 +77,15 @@ So the decisive unknown is conversion, and only selling measures it. The search 
   2. Conversion is unmeasured. At the conversion bounds the plan sweeps, outreach alone cannot close $10,000 in 19 days unless deals net about $9,600 or buyers are already asking.
   3. 14 of 19 openings have nobody named to fulfil them.
   4. Commercial research runs only on the free lane (§84 brain-only mode).
+
+## Execution of the constructed moves (Goals 42460306948 at 07:50Z and 42462929446 at 08:3xZ, on #618)
+
+- The goal tick puts each CONSTRUCT move through `openConstructedRound`, taking turns with the constructed arrangements inside construction's half of the live cap.
+- At 07:50Z the slot freed since 04:57Z had gone to an arrangement round (`mx-0cb8191a49f8`), and nothing recorded why. #618 traces the decision, and `goals plan` now runs it dry.
+- On production it reads: "its turn, but construction's share of the live cap is full: 2 constructed round(s) researching against 1". The next move it would ask is the Puzzle Society transfer (`cop_9fd24b12b74c46c58c38`).
+- If a turn is lost while room is free, a `GOAL_PATHWAY_NOT_ASKED` event records it, so the cause is read from a row rather than guessed.
+
+**Time from starting evidence to usable offer (measured):**
+1. Held evidence to a constructed transaction model with its target figures: one plan read, minutes after release.
+2. Constructed model to a research round asking the world: bounded by the owner's live and focus caps. Not yet reached at 08:3xZ, because two constructed rounds are still researching.
+3. Round to an offer that can be sent: the harvest files an opening, then the sale path. Sending stays blocked on CONTACT_BUYER and a message provider (owner).
