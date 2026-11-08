@@ -1504,6 +1504,9 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
 /** At most this many pathway constructions open a round per pass; they share construction's half of the live cap. */
 export const PATHWAY_CONSTRUCTIONS_PER_PASS = 1;
 export const PATHWAY_KEY_PREFIX = 'pw';
+/** A turn lost with room to spare is recorded at most this often per goal, so a stuck state is one row, not one per pass. */
+export const PATHWAY_NOT_ASKED_EVERY_MS = 6 * 60 * 60 * 1000;
+const pathwayNotAsked = new Map<string, number>();
 
 /**
  * Whether a pathway construction goes before the constructed arrangements this
@@ -1592,7 +1595,20 @@ export async function askPathwayConstructions(
       note(`asked mx-${key}: ${move.construct.slice(0, 100)}`);
     } else note(`mx-${key} not opened (its cool-off, the live cap, the focus cap or a closed discovery gate)`);
   }
-  if (opened.length === 0) note('no constructed move on a found opening could be asked this pass');
+  if (opened.length === 0) {
+    note('no constructed move on a found opening could be asked this pass');
+    // Its turn and room, and still nothing opened: a row says why, so a lost turn is read, not guessed (§93).
+    if (!dryRun && trace === undefined && now.getTime() - (pathwayNotAsked.get(goal.id) ?? 0) >= PATHWAY_NOT_ASKED_EVERY_MS) {
+      pathwayNotAsked.set(goal.id, now.getTime());
+      await recordWorkstreamEvent({
+        workstreamId: goal.id,
+        kind: 'GOAL_PATHWAY_NOT_ASKED',
+        summary: `It was a pathway construction's turn with room for ${room}, and none of ${reading.pathways.nextActions.filter((a) => a.action === 'CONSTRUCT').length} constructed move(s) could be asked.`.slice(0, 400),
+        detail: { room, researching, liveCap },
+        actorRef: 'BRAIN',
+      });
+    }
+  }
   return opened;
 }
 
