@@ -64,7 +64,8 @@ import { goalExecutionPolicy, MAX_CONCURRENT_SALES, type GoalExecutionPolicy } f
 import type { GoalPortfolio } from './portfolio.ts';
 import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
-import { readPathways, type PathwayReading } from './pathways.ts';
+import { readPathways, type BrainCapabilities, type PathwayReading } from './pathways.ts';
+import { implementedFormats } from '../puzzle/formats/index.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
@@ -560,6 +561,17 @@ async function missingPermissions(projectId: string): Promise<string[]> {
   return out;
 }
 
+/**
+ * What Brain itself can fulfil (§93): the deliverable kinds the capability frame
+ * proves available and the puzzle formats it generates (never one it only
+ * validates). Null when the frame cannot be read — then no pathway is credited.
+ */
+async function brainCapabilities(projectId: string, currency: string): Promise<BrainCapabilities | null> {
+  const frame = await executionFrame(projectId, currency);
+  if (!frame) return null;
+  return { delivers: frame.delivers, puzzleFormats: implementedFormats().filter((one) => one.authoring === 'GENERATED').map((one) => one.key) };
+}
+
 /** Two diagnoses as one, first wins on a repeated cause. */
 export function mergeDiagnosis(first: ResearchDiagnosis[], second: ResearchDiagnosis[]): ResearchDiagnosis[] {
   const seen = new Set<string>();
@@ -860,6 +872,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     permissionsMissing: await missingPermissions(target.projectId),
     rounds,
     now,
+    capabilities: await brainCapabilities(target.projectId, target.currency),
   });
   trace('pathways');
   const summary =
