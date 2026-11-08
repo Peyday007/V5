@@ -528,6 +528,21 @@ async function printPlan(reading: PlanReading): Promise<void> {
   for (const one of reading.excluded.filter((x) => /physical work/i.test(x.reason))) {
     console.log(`  physical    ${one.opportunityId} ${one.title.slice(0, 80)} — ${one.reason.replace(/^[^:]*: /, '').slice(0, 160)}`);
   }
+  // Evidence-only openings become usable only through their validation dive (payer, route, buying
+  // evidence). Whether that research is running is the next question when the plan does not move.
+  const evidenceOnly = reading.excluded.filter((x) => /^evidence only/.test(x.reason)).map((x) => x.opportunityId);
+  if (evidenceOnly.length > 0) {
+    const marks = evidenceOnly.map(() => '?').join(',');
+    const rows = await getDb().all<{ state: string | null; payer: number | string; price: number | string; channel: number | string; n: number | string }>(
+      `SELECT validation_state AS state, (payer IS NOT NULL AND payer <> '') AS payer, (price_cents IS NOT NULL) AS price,
+              (reachable_channel IS NOT NULL AND reachable_channel <> '') AS channel, COUNT(*) AS n
+         FROM cash_opportunities WHERE id IN (${marks}) GROUP BY 1, 2, 3, 4 ORDER BY COUNT(*) DESC`,
+      evidenceOnly,
+    );
+    for (const r of rows) {
+      console.log(`  evidence    ×${String(r.n).padStart(3)} dive ${r.state ?? 'never started'} · payer ${Number(r.payer) ? 'yes' : 'no'} · price ${Number(r.price) ? 'yes' : 'no'} · route ${Number(r.channel) ? 'yes' : 'no'}`);
+    }
+  }
   // §79: what was reconstructed instead of swept, and which questions could change the choice.
   const tiers = new Map<string, number>();
   for (const one of reading.inferred) tiers.set(one.tier, (tiers.get(one.tier) ?? 0) + 1);
