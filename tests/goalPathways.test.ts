@@ -8,6 +8,10 @@ import { describe, expect, it } from 'vitest';
 import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 import type { CashOpportunity } from '../server/domain/types.ts';
 import {
+  acquisitionOf,
+  brainProduces,
+  byCollectibility,
+  collectibility,
   informationValue,
   livingPortfolio,
   pathwayOf,
@@ -277,5 +281,46 @@ describe('pathway constructions take turns with the arrangements', () => {
     expect(pathwayTurn([{ bucketId: 'goal-wst_g-mx-abc', openedAt: '2026-11-08T01:00:00Z' }, { bucketId: 'goal-wst_g-mx-pw123', openedAt: '2026-11-08T02:00:00Z' }], 'wst_g')).toBe(false);
     // Another goal's rounds and lens rounds are not this goal's construction.
     expect(pathwayTurn([{ bucketId: 'goal-wst_g-open', openedAt: '2026-11-08T03:00:00Z' }, { bucketId: 'goal-wst_h-mx-pw1', openedAt: '2026-11-08T04:00:00Z' }, { bucketId: 'goal-wst_g-mx-abc', openedAt: '2026-11-08T01:00:00Z' }], 'wst_g')).toBe(true);
+  });
+});
+
+describe('fulfilment Brain proves it can do, and how buyers are reached (§93)', () => {
+  const caps = { delivers: ['business document', 'spreadsheet'], puzzleFormats: ['sudoku', 'word search', 'maze', 'cryptogram'] };
+
+  it('credits Brain as the fulfiller only for what it produces, never a variant its generator does not make', () => {
+    expect(brainProduces('Verblio publishes per-word content pricing', caps)).toBe('business document');
+    expect(brainProduces('Monthly word search pages for a newsletter', caps)).toMatch(/word search/);
+    expect(brainProduces('Artisanal Sudoku (a Substack publication of variant-Sudoku puzzles)', caps)).toBeNull();
+    expect(brainProduces('Rev.com human transcription per minute', caps)).toBeNull();
+    expect(brainProduces('Category 3 ticket resale', caps)).toBeNull();
+    expect(brainProduces('Verblio content', null)).toBeNull();
+  });
+
+  it('a supplier price page Brain can produce for becomes a priced competing offer, and a partner route', () => {
+    const verblio = modelled(opening({ id: 'cop_verblio', title: 'Verblio publishes per-word content pricing on its own pricing page' }), { price: evidence(0.06) });
+    const p = pathwayOf(verblio, null, { ...ctx, capabilities: caps });
+    expect(p.fulfiller.status).toBe('ESTIMATED');
+    expect(p.producedBy).toBe('business document');
+    const flip = p.moves.find((m) => m.gap === 'SUPPLY_WITHOUT_BUYER' && m.variant)!;
+    expect(flip.construct).toMatch(/produced by Brain \(business document\)/);
+    expect(flip.variant!.costPerDeal.status).toBe('ESTIMATED');
+    expect(flip.variant!.net.status).toBe('ESTIMATED');
+    expect(p.moves.some((m) => /partner who already serves them/.test(m.construct) && m.field === 'access')).toBe(true);
+  });
+
+  it('names the acquisition method; only cold outreach is bound by the outreach ceiling', () => {
+    expect(acquisitionOf('email', 'its submission page says contributors are paid $50').method).toBe('DIRECT_DEMAND');
+    expect(acquisitionOf('Etsy listing', null).method).toBe('MARKETPLACE');
+    expect(acquisitionOf('the vendor partner program', null).method).toBe('PARTNER');
+    expect(acquisitionOf('Clutch directory of agencies', null).method).toBe('DIRECTORY');
+    expect(acquisitionOf('published email', null).method).toBe('COLD_OUTREACH');
+    expect(acquisitionOf(null, null).method).toBe('UNKNOWN');
+  });
+
+  it('orders constructions by cash collectible before the deadline, not theoretical value', () => {
+    const slowBig = pathwayOf(modelled(opening({ id: 'cop_slow', title: 'Award pays on publication', reachableChannel: 'email', payer: 'A' }), { price: evidence(5000), daysToCash: evidence(90) }), null, ctx);
+    const fastSmall = pathwayOf(modelled(opening({ id: 'cop_fast', title: 'Monthly word search pages', reachableChannel: 'Etsy listing', payer: 'B', fulfillmentOwner: 'Brain' }), { price: evidence(30), daysToCash: evidence(3), repeatable: true, volume: unknown(1, 100) }), null, ctx);
+    expect(byCollectibility(fastSmall, slowBig, 19)).toBeLessThan(0);
+    expect(collectibility(slowBig, 19)[0]).toBe(0);
   });
 });
