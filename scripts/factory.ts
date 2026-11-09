@@ -114,6 +114,12 @@ async function readObjectiveText(file: string, flags: Map<string, string | true>
   return reply.body;
 }
 
+/** `--contains true|false`: the release workflow's authenticated containment reading, or absent. */
+function containsFlag(flags: Args['flags']): boolean | null {
+  const value = flagString(flags, 'contains');
+  return value === 'true' ? true : value === 'false' ? false : null;
+}
+
 function fail(message: string): never {
   process.stderr.write(`${message}\n`);
   process.exit(1);
@@ -1546,7 +1552,7 @@ async function main(): Promise<void> {
     case 'release-verify': {
       const runId = flagString(flags, 'run') ?? fail('--run is required');
       const { verifyReleaseRun } = await import('../server/services/factory/release/verify.ts');
-      const outcome = await verifyReleaseRun(runId);
+      const outcome = await verifyReleaseRun(runId, { attestedContains: containsFlag(flags) });
       for (const check of outcome.checks) {
         process.stdout.write(`  ${check.ok ? 'PASS' : 'FAIL'} ${check.check} — ${check.detail}\n`);
       }
@@ -1554,10 +1560,21 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * The serving revision, for the release workflow to ask the forge — with its
+     * own token — whether it contains a merge, and hand the answer back in
+     * `--contains` (production reads the forge without one).
+     */
+    case 'release-revision': {
+      const { BRAIN_REVISION } = await import('../server/env.ts');
+      process.stdout.write(`RELEASE-REVISION: ${BRAIN_REVISION ?? 'none'}\n`);
+      break;
+    }
+
     case 'release-reverify': {
       const runId = flagString(flags, 'run') ?? fail('--run is required');
       const { reverifyUnansweredRelease } = await import('../server/services/factory/release/verify.ts');
-      const outcome = await reverifyUnansweredRelease(runId);
+      const outcome = await reverifyUnansweredRelease(runId, { attestedContains: containsFlag(flags) });
       for (const check of outcome.checks) {
         process.stdout.write(`  ${check.ok ? 'PASS' : check.unknown ? 'UNKNOWN' : 'FAIL'} ${check.check} — ${check.detail}\n`);
       }
@@ -1831,7 +1848,7 @@ async function main(): Promise<void> {
           '  set-state, queue, withdraw, admission, line, burnin,\n' +
           '  answer-bin,\n' +
           '  reauthorize, regrant-unit, retire, release,\n' +
-          '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-reverify, release-status,\n' +
+          '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-reverify, release-revision, release-status,\n' +
           '  program-skeleton, program-submit, program-amend, program-release, program-approve, program-tick, program-status, program-depend, capacity\n',
       );
       // An unknown command is the caller getting it wrong, and it used to be
