@@ -15155,3 +15155,110 @@ Its controller recorded `FREE_LANE_IDLE` and kept retrying, but nothing read eve
 - The 13 eligible surfaces were research surfaces.
 
 A bin the router refused in the last `UNROUTED_WINDOW_MS` (15 minutes) now waits on that refusal's named limit and is not counted as executable beside idle capacity. The limit stays visible in `DISPATCH_UNROUTED` and in `dispatch-diagnose`.
+
+
+## 99. A plan short of its requirement is reconstructed, not re-read, and a result keeps the context it was measured in.
+
+**Owner's order, 2026-11-09.** Brain rebuilt the $10K plan, explored too
+narrowly, relied on results from a flawed outreach system, and produced low
+probabilities without reconsidering its strategy. Fix the planning
+intelligence itself, for every goal.
+
+**What production showed.** Goals plan 42692716368 read 2.6% coverage. Its only
+response to a plan short of 90% was "find more openings" (`needsMoreOpenings`).
+#649 had made the owner's workspace record bind every cold-outreach opening:
+4,096 sends of other offers, from lists that bounced 9.7%. On the regression
+fixture that cut the best combination from 52% coverage to 15%. Sending capacity
+was a fixed input, and nothing weighed spending the $3,000 the owner had set
+aside on what was binding.
+
+**Evidence keeps its context** (`goals/evidenceAuthority.ts`). An outreach
+record is judged by its own counts against sourced thresholds:
+- a bounce rate over 5% (Instantly pauses a campaign there by itself) means the
+  list and the sender's reputation were measured, not the market;
+- campaigns that are not Brain's own measured other offers, lists and copy;
+- too few replies cannot say what share were interested.
+
+Each record gets one authority:
+
+| Authority | Meaning | How the portfolio uses it |
+|---|---|---|
+| `TRANSFERABLE` | Brain's own campaign for this opening, on a sound list | Binds |
+| `COMPARABLE` | Brain's campaigns, sound list | Moves an unknown's floor |
+| `CONTEXT_ONLY` | A defect, or another implementation | Never narrows a redesigned plan |
+| `NOISE` | Too small to say anything | Ignored |
+
+A `CONTEXT_ONLY` record is kept as the **as-is floor**: the same plan if the new
+campaign does no better (`GoalPortfolio.measuredRates.asIs`). It is the
+`quant/pool.ts` transfer rule applied to Brain's own history.
+
+**The reconstruction loop** (`goals/reconstruction.ts`, pure, on the one engine
+`evaluateGoalPortfolio`). It runs on every plan read that is not ACCEPTED,
+including the refusal path:
+
+1. **Diagnose.** Volume, reply, close, price, cash timing, market size and money
+   limits are each moved to the favourable end of what is known. The lift each
+   gives ranks what binds. Moving all of them at once gives the openings'
+   **headroom**. Headroom under the requirement is **structural**: the pool or
+   channel must change, not the estimates.
+2. **Challenge.** Six implicit assumptions are named with their evidence status
+   and the dimension that tests them: the history describes the new campaign;
+   capacity is fixed; cold email is the only way in; one unit at list price;
+   cash at listed timing; the openings held are the market.
+3. **Construct.** Generic operators, one dimension each:
+   - **Capacity:** buy sending capacity (`acquisitionLevers.ts`).
+   - **Acquisition:** buy inbound or marketplace demand. It becomes a channel of
+     its own (`ModelledOpportunity.channel`, its own capacity and risk group).
+   - **Transaction:** reshape a small ticket into a bundle or retainer, with the
+     close rate assumed lower.
+   - **Financing:** prepaid fulfilment (`fundedByBuyer`). The buyer's payment,
+     not the owner's limit, funds the supplier.
+   - **Cash timing:** a deposit at signing.
+
+   No operator names a business. A lever is a row of sourced unit costs.
+4. **Evaluate and combine.** Each variant is screened at 1,000 worlds and
+   evaluated once (keyed). Improving ones are combined greedily across
+   dimensions while the combination improves materially (2 points of reach or
+   10% of median cash) and fits the money limits. The loop stops when nothing
+   improves, not after a round count. It yields between evaluations (§63).
+5. **Conclude.** For the strongest plan it states:
+   - the as-is floor on the old record;
+   - the reply rate every outreach opening must reach for the requirement;
+   - what is measured and what is assumed, and whether the reach is coverage or
+     a probability. An assumed change is never a probability, and acceptance
+     (§95) is unchanged.
+
+   Its search brief ("any industry, including ones not searched before", buyers
+   already asking, delivery and ticket from the goal) enters the goal round as a
+   `STRATEGY_RECONSTRUCTION` diagnosis (§89), so discovery reaches beyond the
+   taxonomy.
+
+**Capital-aware.** `purchaseCapacity`, `buyInbound` and `dailyVolumePlan` cost
+each lever from sourced figures:
+- domains, mailboxes (owner-warmed or pre-warmed), warm-up, sends per mailbox,
+  platform plan, lead data and verification;
+- cost per lead and qualified share for paid search, paid social and
+  marketplaces;
+- deliverability limits.
+
+A purchase over the before-proof limit only starts after first cash and is an
+assumption. On 2026-11-09, 10,000 sends a day needed:
+
+| Requirement | Amount |
+|---|---|
+| Mailboxes | 334–500 |
+| Domains | 112–250 |
+| Warm-up | 14–21 days, leaving 9–16 sending days |
+| Cost inside the window | $2,329–$24,308 |
+
+Its first purchase alone breaks the $375 before-proof limit, so it was costed
+and refused, not assumed. Pre-warmed accounts at $10 a month remove the
+warm-up, and $375 of them is a variant the loop evaluates.
+
+**Regression** (`tests/goalReconstruction.test.ts`, fixture
+`tests/fixtures/goal10k.ts`): the record reads `CONTEXT_ONLY` with its three
+defects; at least five dimensions are explored; capacity is costed within the
+limits; acquisition and financing change; the brief reaches the goal round;
+coverage is never called a probability; and the result beats the pre-§99 reading
+by over 20 points. A second, unrelated goal reconstructs with no $10K
+knowledge.

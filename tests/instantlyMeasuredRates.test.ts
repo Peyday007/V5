@@ -62,7 +62,7 @@ beforeEach(() => forgetInstantlyCapacity());
 describe('instantlyMeasuredRates', () => {
   it('sums the four counts over every campaign, read only', async () => {
     const f = fake(CAMPAIGNS);
-    expect(await instantlyMeasuredRates({ fetch: f.fetchImpl, env: ENV })).toEqual({ sent: 4096, replies: 15, opportunities: 2, bounced: 396 });
+    expect(await instantlyMeasuredRates({ fetch: f.fetchImpl, env: ENV })).toMatchObject({ sent: 4096, replies: 15, opportunities: 2, bounced: 396 });
     expect(f.calls).toEqual(['GET /api/v2/campaigns/analytics']);
   });
 
@@ -98,17 +98,38 @@ describe('cold-outreach reply rates from the owner\'s own sends', () => {
     expect(interval.high).toBeLessThan(0.01);
   });
 
-  it('samples a swept opening only inside it, and gives a 3% card the measured interval instead', () => {
-    const result = evaluateGoalPortfolio({
-      ...limits,
-      openings: [opening('swept', swept(0.0045, 0.0343)), opening('card', fixed(0.03))].map((one, i) => ({ ...one, index: i + 1 })),
-      measuredRates: rates,
-    });
+  it('does not let a defective record from other campaigns bind a redesigned plan: it is read as the as-is floor (§99)', () => {
+    const openings = [opening('swept', swept(0.0045, 0.0343)), opening('card', fixed(0.03))].map((one, i) => ({ ...one, index: i + 1 }));
+    const result = evaluateGoalPortfolio({ ...limits, openings, measuredRates: rates });
+    expect(result.measuredRates).toMatchObject({ sent: 4096, replies: 15, opportunities: 2, bounced: 396, applied: 'AS_IS_FLOOR_ONLY' });
+    expect(result.measuredRates!.assessment.authority).toBe('CONTEXT_ONLY');
+    expect(result.measuredRates!.assessment.defects.map((d) => d.kind)).toEqual(expect.arrayContaining(['LIST_QUALITY', 'DIFFERENT_OFFER']));
+    // The redesigned plan keeps its own evidence…
+    expect(result.demand.find((d) => d.opportunityId === 'card')!.respond.p50).toBeCloseTo(0.03, 9);
+    // …and the record still answers what it can: the same plan if nothing improves.
+    expect(result.measuredRates!.asIs).not.toBeNull();
+    expect(result.measuredRates!.asIs!.settledP50).toBeLessThan(result.best!.settledP50);
+  });
+
+  it('binds only when told to (the as-is floor itself), sampling inside the measured interval', () => {
+    const openings = [opening('swept', swept(0.0045, 0.0343)), opening('card', fixed(0.03))].map((one, i) => ({ ...one, index: i + 1 }));
+    const result = evaluateGoalPortfolio({ ...limits, openings, measuredRates: rates, forceMeasured: true });
     for (const d of result.demand) {
       expect(d.respond.p10).toBeGreaterThanOrEqual(interval.low - 1e-9);
       expect(d.respond.p90).toBeLessThanOrEqual(interval.high + 1e-9);
     }
-    expect(result.measuredRates).toMatchObject({ sent: 4096, replies: 15, opportunities: 2, bounced: 396 });
+    expect(result.measuredRates!.applied).toBe('BINDS');
+  });
+
+  it('a sound record from Brain\'s own campaigns is comparable: it moves an unknown\'s floor and leaves a card\'s rate', () => {
+    const sound = { sent: 4000, replies: 60, opportunities: 12, bounced: 40, campaigns: [{ name: 'Brain · buyer outreach', sent: 4000, replies: 60, opportunities: 12, bounced: 40, brainOwned: true }] };
+    const openings = [opening('swept', swept(0.0005, 0.0343)), opening('card', fixed(0.03))].map((one, i) => ({ ...one, index: i + 1 }));
+    const result = evaluateGoalPortfolio({ ...limits, openings, measuredRates: sound });
+    expect(result.measuredRates!.assessment.authority).toBe('COMPARABLE');
+    expect(result.measuredRates!.applied).toBe('FLOOR_OF_RANGE');
+    const floor = measuredReplyInterval(sound)!.low;
+    expect(result.demand.find((d) => d.opportunityId === 'swept')!.respond.p10).toBeGreaterThanOrEqual(floor - 1e-9);
+    expect(result.demand.find((d) => d.opportunityId === 'card')!.respond.p50).toBeCloseTo(0.03, 9);
   });
 
   it('keeps a card rate that already lies inside the interval, and leaves a plan without measured rates alone', () => {

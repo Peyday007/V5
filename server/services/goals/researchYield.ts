@@ -35,7 +35,7 @@ const DATA_CAUSES = [
  * the reasoning causes from the goal-to-transaction loop's pathways (§93,
  * `pathways.ts`) — failures of the method rather than of one opening.
  */
-export const RESEARCH_CAUSES = [...DATA_CAUSES, 'CONSTRUCTION_FAILURE', 'ACQUISITION_FAILURE', 'CASH_TIMING_FAILURE', 'VOLUME_UNRESEARCHED', 'REPEATED_GAP'] as const;
+export const RESEARCH_CAUSES = [...DATA_CAUSES, 'CONSTRUCTION_FAILURE', 'ACQUISITION_FAILURE', 'CASH_TIMING_FAILURE', 'VOLUME_UNRESEARCHED', 'REPEATED_GAP', 'STRATEGY_RECONSTRUCTION'] as const;
 export type ResearchCause = (typeof RESEARCH_CAUSES)[number];
 
 export interface ResearchDiagnosis {

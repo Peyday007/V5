@@ -291,7 +291,7 @@ There must be no workflow where the user has to remember "now go update the data
     and never the space, simplification happens in the presentation, and what
     is not in the top five is not thereby worthless.
 
-## 8–98. The architecture record
+## 8–99. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -391,6 +391,7 @@ resolves. Read the section for the area you are changing before you change it
 - §96. A specification is the authority, and a program is DONE only when every requirement it states is verified on production.
 - §97. A specification grows by releases, and a program's order is when, never whether.
 - §98. Every pool of capacity is fed: idle capacity beside waiting work is a fault Brain finds and corrects itself.
+- §99. A plan short of its requirement is reconstructed, not re-read, and a result keeps the context it was measured in.
 
 ## Conventions
 
