@@ -88,7 +88,7 @@ export interface FunnelReading {
    * Every mechanism that has recorded outcomes, modelled as the full outreach
    * funnel from those rows (COM-13-3). Stages no row states are unknown.
    */
-  outreach: { mechanisms: OutreachFunnelReading[]; mix: MixReading };
+  outreach: { mechanisms: OutreachFunnelReading[]; mix: MixReading; consideredWays: ConsideredWay[] };
 }
 
 /** The Monday on or before `iso`, as `YYYY-MM-DD` (UTC). */
@@ -372,6 +372,7 @@ export function formatFunnel(reading: FunnelReading): string[] {
         : Object.entries(o.settledByCurrency).map(([c, n]) => `${c} ${n}`).join(' ')) +
       ` kinds ${Object.entries(o.byKind).map(([k, n]) => `${k}=${n}`).join(' ') || '(none)'}`,
   );
+  const open = reading.outreach.consideredWays.filter((one) => one.status === 'NO_MECHANISM_RECORDED');
   if (reading.outreach.mechanisms.length === 0) {
     lines.push('  outreach funnel: no mechanism has recorded an outcome yet');
   } else {
@@ -380,6 +381,16 @@ export function formatFunnel(reading: FunnelReading): string[] {
       `  outreach mix ranked=${reading.outreach.mix.ranked.map((one) => one.mode).join(',') || '(none)'}` +
         ` unranked=${reading.outreach.mix.unranked.map((one) => `${one.mode}[${one.firstUnknown ?? 'unknown'}]`).join(',') || '(none)'}`,
     );
+    const c = reading.outreach.mix.combined;
+    if (c) {
+      lines.push(
+        `  outreach combined mix ${c.modes.join('+')} first-purchase ${figure(c.firstPurchaseRevenueCents.low, 2)}–${figure(c.firstPurchaseRevenueCents.high, 2)}` +
+          ` net ${c.netCents ? `${figure(c.netCents.low, 2)}–${figure(c.netCents.high, 2)}` : 'unknown (a cost is unknown)'}`,
+      );
+    }
+  }
+  if (open.length > 0) {
+    lines.push(`  ways to reach demand with no recorded mechanism (open tasks): ${open.map((one) => one.label).join('; ')}`);
   }
   return lines;
 }
@@ -425,6 +436,12 @@ export interface OutreachMechanism {
   inputs: Partial<Record<OutreachStage, StageInput>>;
   /** Value of one fulfilled purchase, in minor units. Unknown unless somebody supplied it. */
   dealValueCents?: StageInput;
+  /**
+   * What running the mechanism costs over the period, in minor units (sending
+   * accounts, partner share, listing fees, people). Unknown unless somebody
+   * supplied it, and an unknown cost is never read as zero.
+   */
+  costCents?: StageInput;
   /** Messages the mechanism proposes to send. Reported as effort only; no stage reads it as a buyer. */
   messagesSent?: number;
 }
@@ -461,9 +478,23 @@ export interface OutreachFunnelReading {
   firstPurchaseRevenueCents: OutreachFigure;
   /** Revenue over the period including repeat purchases. Unknown while repeat is unknown. */
   revenueCents: OutreachFigure;
+  /** First-purchase revenue less cost. Unknown while either side is unknown. */
+  netFirstPurchaseCents: OutreachFigure;
   /** First stage whose input is unknown or refused, in funnel order. */
   firstUnknown: OutreachStage | null;
   permitted: boolean | null;
+}
+
+/** Revenue less cost, worst case against worst case. Unknown on either side stays unknown. */
+function netOfCost(revenue: OutreachFigure, cost: OutreachFigure): OutreachFigure {
+  if (revenue.low === null || revenue.high === null) return UNKNOWN_FIGURE(revenue.because ?? 'revenue is unknown');
+  if (cost.low === null || cost.high === null) return UNKNOWN_FIGURE(cost.because ?? 'cost is unknown');
+  return {
+    basis: revenue.basis === 'MEASURED' && cost.basis === 'MEASURED' ? 'MEASURED' : 'ESTIMATED',
+    low: revenue.low - cost.high,
+    high: revenue.high - cost.low,
+    because: null,
+  };
 }
 
 const UNKNOWN_FIGURE = (because: string): OutreachFigure => ({ basis: 'UNKNOWN', low: null, high: null, because });
@@ -602,35 +633,83 @@ export function modelOutreachFunnel(mechanism: OutreachMechanism): OutreachFunne
     fulfilledBuyers,
     firstPurchaseRevenueCents: firstPurchase,
     revenueCents,
+    netFirstPurchaseCents: netOfCost(firstPurchase, figureOf(mechanism.costCents, 'cost')),
     firstUnknown,
     permitted,
   };
 }
 
 export interface MixReading {
-  /** Mechanisms whose first-purchase revenue is known to a range, strongest lower bound first. */
+  /**
+   * Mechanisms whose first-purchase revenue is known to a range. Those whose cost is also known
+   * come first, by the low end of net revenue; those whose cost is unknown follow, by gross revenue,
+   * because an unknown cost never lets a mechanism outrank one whose cost is known.
+   */
   ranked: OutreachFunnelReading[];
   /** Mechanisms with an unknown or refused stage. Never ranked, never assumed favourable. */
   unranked: { mode: string; label: string; firstUnknown: OutreachStage | null; because: string | null }[];
+  /**
+   * The ranked mechanisms taken together: they reach different prospects, so their first-purchase
+   * revenue adds. `netCents` is known only when every ranked mechanism's cost is. Null when nothing
+   * is ranked.
+   */
+  combined: { modes: string[]; firstPurchaseRevenueCents: Range; netCents: Range | null } | null;
+}
+
+/** A way of reaching demand Brain must weigh whether or not a row has named it yet. */
+export interface ConsideredWay {
+  key: string;
+  label: string;
+  /** Why it is listed: a mechanism that recorded outcomes covers it; otherwise it is an open task. */
+  status: 'MODELLED' | 'NO_MECHANISM_RECORDED';
+  /** The stage nobody has stated yet, which is the work that would make it comparable. */
+  firstUnknown: OutreachStage | null;
+}
+
+/**
+ * Ways to reach demand the owner named. A prompt for comparison, never a whitelist: a mechanism of
+ * any other name is modelled and ranked the same way, and `mode` is never branched on.
+ */
+export const OUTREACH_WAYS: readonly { key: string; label: string }[] = [
+  { key: 'high-value-deals', label: 'few high-value deals' },
+  { key: 'many-small-deals', label: 'large numbers of small deals' },
+  { key: 'partner-access', label: 'partners with existing customer access' },
+  { key: 'customer-request-marketplace', label: 'customer-request marketplaces' },
+];
+
+/**
+ * Every named way to reach demand, each covered by a recorded mechanism or listed as an open task.
+ * A recorded mechanism covers a way when its mode equals the way's key; any other mode is simply an
+ * additional mechanism and does not hide the ways nobody has measured.
+ */
+export function considerOutreachWays(mechanisms: readonly OutreachMechanism[]): ConsideredWay[] {
+  const modes = new Set(mechanisms.map((one) => one.mode.toLowerCase()));
+  return OUTREACH_WAYS.map((way) => ({
+    key: way.key,
+    label: way.label,
+    status: modes.has(way.key) ? 'MODELLED' : 'NO_MECHANISM_RECORDED',
+    firstUnknown: modes.has(way.key) ? null : 'permission',
+  }));
 }
 
 /**
  * Compare any set of mechanisms for the economically strongest mix. Pure.
  *
- * No mode is a default and none is excluded: a mechanism is ranked only on its
- * own stage inputs, by the low end of its first-purchase revenue range, and one with an unknown
- * stage is listed as unranked with the stage that is missing, which is the task
- * to do next.
+ * No mode is a default and none is excluded: a mechanism is ranked only on its own stage inputs,
+ * net of its cost where the cost is known, and one with an unknown stage is listed as unranked
+ * with the stage that is missing, which is the task to do next. The mix is the ranked set summed,
+ * so a strong mix can be several mechanisms and not only the best single one.
  */
 export function searchOutreachMix(mechanisms: readonly OutreachMechanism[]): MixReading {
   const readings = mechanisms.map(modelOutreachFunnel);
-  const ranked = readings
-    .filter((one) => one.firstPurchaseRevenueCents.basis !== 'UNKNOWN')
-    .sort(
-      (a, b) =>
-        (b.firstPurchaseRevenueCents.low ?? 0) - (a.firstPurchaseRevenueCents.low ?? 0) ||
-        (b.firstPurchaseRevenueCents.high ?? 0) - (a.firstPurchaseRevenueCents.high ?? 0),
-    );
+  const known = readings.filter((one) => one.firstPurchaseRevenueCents.basis !== 'UNKNOWN');
+  const costKnown = (one: OutreachFunnelReading): boolean => one.netFirstPurchaseCents.basis !== 'UNKNOWN';
+  const ranked = known.sort((a, b) => {
+    if (costKnown(a) !== costKnown(b)) return costKnown(a) ? -1 : 1;
+    const left = costKnown(a) ? a.netFirstPurchaseCents : a.firstPurchaseRevenueCents;
+    const right = costKnown(b) ? b.netFirstPurchaseCents : b.firstPurchaseRevenueCents;
+    return (right.low ?? 0) - (left.low ?? 0) || (right.high ?? 0) - (left.high ?? 0);
+  });
   const unranked = readings
     .filter((one) => one.firstPurchaseRevenueCents.basis === 'UNKNOWN')
     .map((one) => ({
@@ -639,7 +718,19 @@ export function searchOutreachMix(mechanisms: readonly OutreachMechanism[]): Mix
       firstUnknown: one.firstUnknown,
       because: one.firstPurchaseRevenueCents.because,
     }));
-  return { ranked, unranked };
+  const sum = (pick: (one: OutreachFunnelReading) => OutreachFigure): Range => ({
+    low: ranked.reduce((t, one) => t + (pick(one).low ?? 0), 0),
+    high: ranked.reduce((t, one) => t + (pick(one).high ?? 0), 0),
+  });
+  const combined =
+    ranked.length === 0
+      ? null
+      : {
+          modes: ranked.map((one) => one.mode),
+          firstPurchaseRevenueCents: sum((one) => one.firstPurchaseRevenueCents),
+          netCents: ranked.every(costKnown) ? sum((one) => one.netFirstPurchaseCents) : null,
+        };
+  return { ranked, unranked, combined };
 }
 
 /** The outreach funnel's lines for a reading: every stage with its basis, and what is unknown. */
@@ -654,6 +745,7 @@ export function formatOutreachFunnel(reading: OutreachFunnelReading): string[] {
     `  buyers ${show(reading.buyers)}`,
     `  first-purchase revenue (minor units) ${show(reading.firstPurchaseRevenueCents)}`,
     `  revenue incl. repeat (minor units) ${show(reading.revenueCents)}`,
+    `  net of cost, first purchase (minor units) ${show(reading.netFirstPurchaseCents)}`,
   ];
 }
 
@@ -769,7 +861,13 @@ export async function mechanismsFromRows(projectId: string): Promise<OutreachMec
   return mechanisms;
 }
 
-async function outreachFromRows(projectId: string): Promise<{ mechanisms: OutreachFunnelReading[]; mix: MixReading }> {
+async function outreachFromRows(
+  projectId: string,
+): Promise<{ mechanisms: OutreachFunnelReading[]; mix: MixReading; consideredWays: ConsideredWay[] }> {
   const mechanisms = await mechanismsFromRows(projectId);
-  return { mechanisms: mechanisms.map(modelOutreachFunnel), mix: searchOutreachMix(mechanisms) };
+  return {
+    mechanisms: mechanisms.map(modelOutreachFunnel),
+    mix: searchOutreachMix(mechanisms),
+    consideredWays: considerOutreachWays(mechanisms),
+  };
 }

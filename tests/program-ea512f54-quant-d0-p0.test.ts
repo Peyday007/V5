@@ -7,6 +7,7 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
   cashFunnel,
+  considerOutreachWays,
   formatFunnel,
   modelOutreachFunnel,
   searchOutreachMix,
@@ -129,6 +130,47 @@ describe('outreach funnel: messages are not buyers', () => {
   });
 });
 
+describe('outreach mix: cost, combination and unmeasured ways', () => {
+  it('ranks on net of cost, and an unknown cost never outranks a known one', () => {
+    const cheap = mechanism({ mode: 'cheap', costCents: m(1_000) });
+    const costly = mechanism({ mode: 'costly', costCents: m(100_000) });
+    const uncosted = mechanism({ mode: 'uncosted' });
+    const mix = searchOutreachMix([uncosted, costly, cheap]);
+    expect(mix.ranked.map((r) => r.mode)).toEqual(['cheap', 'costly', 'uncosted']);
+    expect(mix.ranked[0]!.netFirstPurchaseCents.low).toBe(mix.ranked[0]!.firstPurchaseRevenueCents.low! - 1_000);
+    expect(mix.ranked[2]!.netFirstPurchaseCents.basis).toBe('UNKNOWN');
+  });
+
+  it('a cost larger than revenue ranks below a smaller, cheaper mechanism', () => {
+    const big = mechanism({ mode: 'big', dealValueCents: m(1_000_000), costCents: m(10_000_000) });
+    const small = mechanism({ mode: 'small', costCents: m(10) });
+    expect(searchOutreachMix([big, small]).ranked.map((r) => r.mode)).toEqual(['small', 'big']);
+  });
+
+  it('combines the ranked mechanisms, net only when every cost is known', () => {
+    const a = mechanism({ mode: 'a', costCents: m(100) });
+    const b = mechanism({ mode: 'b', costCents: m(200) });
+    const one = modelOutreachFunnel(a).firstPurchaseRevenueCents.low!;
+    const both = searchOutreachMix([a, b]).combined!;
+    expect(both.modes.sort()).toEqual(['a', 'b']);
+    expect(both.firstPurchaseRevenueCents.low).toBeCloseTo(2 * one);
+    expect(both.netCents!.low).toBeCloseTo(2 * one - 300);
+    expect(searchOutreachMix([a, mechanism({ mode: 'c' })]).combined!.netCents).toBeNull();
+    expect(searchOutreachMix([]).combined).toBeNull();
+  });
+
+  it('lists each named way as an open task until a mechanism of that mode exists, without excluding other modes', () => {
+    const ways = considerOutreachWays([mechanism({ mode: 'Partner-Access' }), mechanism({ mode: 'something-else' })]);
+    expect(ways.find((w) => w.key === 'partner-access')!.status).toBe('MODELLED');
+    expect(ways.filter((w) => w.status === 'NO_MECHANISM_RECORDED').map((w) => w.key)).toEqual([
+      'high-value-deals',
+      'many-small-deals',
+      'customer-request-marketplace',
+    ]);
+    expect(searchOutreachMix([mechanism({ mode: 'something-else' })]).ranked).toHaveLength(1);
+  });
+});
+
 describe('outreach funnel read from cash_outcomes rows (outreachFromRows via cashFunnel)', () => {
   let projectId = '';
   let seq = 0;
@@ -169,7 +211,16 @@ describe('outreach funnel read from cash_outcomes rows (outreachFromRows via cas
   it('reports no mechanism, and says so, when no outcome row exists', async () => {
     const reading = await cashFunnel({ projectId });
     expect(reading.outreach.mechanisms).toEqual([]);
-    expect(reading.outreach.mix).toEqual({ ranked: [], unranked: [] });
+    expect(reading.outreach.mix).toEqual({ ranked: [], unranked: [], combined: null });
+    // Ways nobody has measured are still listed, as open tasks, not silently absent.
+    expect(reading.outreach.consideredWays.map((w) => w.key)).toEqual([
+      'high-value-deals',
+      'many-small-deals',
+      'partner-access',
+      'customer-request-marketplace',
+    ]);
+    expect(reading.outreach.consideredWays.every((w) => w.status === 'NO_MECHANISM_RECORDED' && w.firstUnknown === 'permission')).toBe(true);
+    expect(formatFunnel(reading).join('\n')).toMatch(/ways to reach demand with no recorded mechanism/);
     expect(formatFunnel(reading).join('\n')).toMatch(/no mechanism has recorded an outcome yet/);
   });
 
