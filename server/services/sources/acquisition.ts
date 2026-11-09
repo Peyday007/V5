@@ -22,7 +22,6 @@
  */
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
-import { ACCESS_METHODS } from './access.ts';
 
 export const ACQUISITION_CAPABILITIES = ['OPERATE', 'ACQUIRE'] as const;
 export type AcquisitionCapability = (typeof ACQUISITION_CAPABILITIES)[number];
@@ -268,36 +267,84 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
   };
 }
 
-/** Repeated use of a host, counted from `SOURCE_ACCESS` event rows. Pure over rows. */
+/** How far back repetition is counted: work repeated long ago is not a standing need. */
+export const REPEAT_WINDOW_DAYS = 30;
+/** Routes that are a way past a plain read. A CONNECTOR read is already a connector, so it is no evidence one is missing. */
+const FALLBACK_ROUTES: readonly string[] = ['BROWSER', 'SITEMAP', 'ARCHIVE', 'SEARCH'];
+
+/** The shape of a SOURCE_ACCESS row this counts. `at` and `workload_class` are optional so older rows still read. */
+export interface SourceAccessRow {
+  provider: string | null;
+  measures: string | null;
+  at?: string | null;
+  workload_class?: string | null;
+}
+
+/** Without a path or query, so the same page asked for twice is one piece of work. */
+function workKey(url: unknown, caller: string | null | undefined): string | null {
+  if (typeof url !== 'string') return null;
+  try {
+    const u = new URL(url);
+    return `${caller ?? ''}|${u.hostname.toLowerCase()}${u.pathname}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Repetition of one host's work, counted from `SOURCE_ACCESS` event rows. Pure over rows.
+ *
+ * Repetition is the same work asked for again — one caller reading one page — never
+ * the host's traffic: a hundred different pages read once each is volume, not a
+ * workflow, and justifies nothing. The count is the most any single piece of work
+ * repeated inside the window, and the fallback count is how often that same work
+ * needed a route beyond a plain read (a CONNECTOR read is not a fallback).
+ */
 export function repeatedUseFromRows(
-  rows: { provider: string | null; measures: string | null }[],
+  rows: SourceAccessRow[],
   host: string,
+  now: Date = new Date(),
 ): { repeatedUses: number; repeatedUsesNeedingFallback: number } {
   const want = host.toLowerCase();
-  let uses = 0;
-  let fallback = 0;
+  const since = now.getTime() - REPEAT_WINDOW_DAYS * 86_400_000;
+  const work = new Map<string, { uses: number; fallback: number }>();
   for (const row of rows) {
-    let measures: { host?: unknown } = {};
+    if (row.at) {
+      const at = Date.parse(row.at);
+      if (Number.isFinite(at) && (at < since || at > now.getTime())) continue;
+    }
+    let measures: { host?: unknown; url?: unknown } = {};
     try {
       measures = row.measures ? (JSON.parse(row.measures) as typeof measures) : {};
     } catch {
       continue;
     }
     if (typeof measures.host !== 'string' || measures.host.toLowerCase() !== want) continue;
-    uses += 1;
-    if (row.provider && row.provider !== 'DIRECT' && (ACCESS_METHODS as readonly string[]).includes(row.provider)) fallback += 1;
+    const key = workKey(measures.url, row.workload_class);
+    if (!key) continue;
+    const tally = work.get(key) ?? { uses: 0, fallback: 0 };
+    tally.uses += 1;
+    if (row.provider && FALLBACK_ROUTES.includes(row.provider)) tally.fallback += 1;
+    work.set(key, tally);
   }
-  return { repeatedUses: uses, repeatedUsesNeedingFallback: fallback };
+  let best = { uses: 0, fallback: 0 };
+  for (const tally of work.values()) {
+    if (tally.uses > best.uses || (tally.uses === best.uses && tally.fallback > best.fallback)) best = tally;
+  }
+  return { repeatedUses: best.uses, repeatedUsesNeedingFallback: best.fallback };
 }
 
-/** Repeated-use counts for a host from existing SOURCE_ACCESS rows; zeros when unreadable. */
-export async function readRepeatedUse(host: string): Promise<{ repeatedUses: number; repeatedUsesNeedingFallback: number }> {
+/** Repeated-use counts for a host from existing SOURCE_ACCESS rows inside the window; zeros when unreadable. */
+export async function readRepeatedUse(host: string, now: Date = new Date()): Promise<{ repeatedUses: number; repeatedUsesNeedingFallback: number }> {
   try {
-    const rows = await getDb().all<{ provider: string | null; measures: string | null }>(
-      `SELECT provider, measures FROM bin_events WHERE event_type = 'SOURCE_ACCESS' ORDER BY at DESC LIMIT 5000`,
-      [],
+    const since = new Date(now.getTime() - REPEAT_WINDOW_DAYS * 86_400_000).toISOString();
+    // The host prefilter keeps other hosts' traffic from crowding this host's rows out of the limit; the exact host is checked on the parsed row.
+    const rows = await getDb().all<SourceAccessRow>(
+      `SELECT provider, measures, at, workload_class FROM bin_events
+        WHERE event_type = 'SOURCE_ACCESS' AND at >= ? AND measures LIKE ? ORDER BY at DESC LIMIT 5000`,
+      [since, `%${host.toLowerCase().replace(/[\\%_]/g, '')}%`],
     );
-    return repeatedUseFromRows(rows, host);
+    return repeatedUseFromRows(rows, host, now);
   } catch {
     return { repeatedUses: 0, repeatedUsesNeedingFallback: 0 };
   }
