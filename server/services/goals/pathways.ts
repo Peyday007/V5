@@ -272,6 +272,7 @@ export const GAP_KINDS = [
   'ONE_BUYER',
   'CLOSED',
   'ONE_TRANSACTION_SHAPE',
+  'REACH_SHORTFALL',
 ] as const;
 export type GapKind = (typeof GAP_KINDS)[number];
 
@@ -656,6 +657,8 @@ export function pathwayOf(
   if (o.expiresAt && Date.parse(o.expiresAt) < input.now.getTime()) gaps.push('CLOSED');
 
   const fit = fitOf({ net, conversion, volume, daysToCash, repeatable: one.repeatable, remaining: input.remaining, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, competitiveAward: !!judged?.competitiveAward, outreachBound: acquisition.method === 'COLD_OUTREACH' || acquisition.method === 'DIRECTORY' || acquisition.method === 'UNKNOWN' });
+  // The quantity transforms the strategy (§93): a share that needs more prospects a day than the channel reaches is a channel problem, so the channel is what changes.
+  if (fit.lever.variable === 'CHANNEL') gaps.push('REACH_SHORTFALL');
   const moves = constructMoves({ one, gaps, fit, revenuePerDeal, fulfilmentCost, net, remaining: input.remaining, daysLeft: input.daysLeft, currency: input.currency, constructed, permissionsMissing: input.permissionsMissing, produces, paysOnce: !!judged?.paysOnce || !!judged?.competitiveAward, daysToCash: lowOf(daysToCash) });
   const contribution = contributionOf({ net, conversion, volume, repeatable: one.repeatable, daysToCash, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, closed: gaps.includes('CLOSED') });
   const gross = contributionOf({ net: revenuePerDeal, conversion, volume, repeatable: one.repeatable, daysToCash, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, closed: gaps.includes('CLOSED') });
@@ -718,6 +721,7 @@ export const GAP_LABEL: Record<GapKind, string> = {
   ONE_BUYER: 'one buyer, one sale',
   CLOSED: 'closed',
   ONE_TRANSACTION_SHAPE: 'priced at one transaction size only',
+  REACH_SHORTFALL: 'its share needs more buyers a day than the channel reaches',
 };
 
 /** The buyer kind, or the supplier, a pathway's failure is shared with. */
@@ -895,6 +899,18 @@ function constructMoves(input: {
       ask: `"${subject}" is one buyer paying ${money(price)} ${currency}. List other buyers of exactly this deliverable that pay for it — each with its page and its published rate — and how many such buyers a directory or marketplace counts.`,
       action: 'CONSTRUCT',
       variant: { label: 'The same deliverable to buyers like it', revenuePerDeal: { ...input.revenuePerDeal }, costPerDeal: { ...input.fulfilmentCost }, net: { ...input.net } },
+    });
+  }
+  if (gaps.includes('REACH_SHORTFALL')) {
+    const need = input.fit.prospectsPerDay;
+    moves.push({
+      gap: 'REACH_SHORTFALL',
+      construct: 'Change the acquisition channel: a marketplace listing, a partner or reseller that already sells to these buyers, or buyers who publish requests, instead of more cold contact',
+      mustHit: need === null ? null : `a channel that brings about ${Math.ceil(need)} prospects a day for a tenth of the gap, against what cold outreach reaches`,
+      field: 'access',
+      ask: `For "${subject}", where do buyers of this kind already ask for or buy it (a marketplace category, a platform, a partner that serves them, published requests), how many reach it each day or week, and how are they reached there? State each with its page.`,
+      action: 'CONSTRUCT',
+      variant: null,
     });
   }
   // The same deliverable at other transaction sizes, unless one unit already carries the gap.
@@ -1255,6 +1271,7 @@ const REPEATED_FIX: Record<GapKind, string> = {
   ONE_BUYER: 'report the population of buyers like the one found, not the one.',
   CLOSED: 'report only openings still open.',
   ONE_TRANSACTION_SHAPE: 'report the package, retainer and implementation prices buyers pay for the deliverable, not one unit price.',
+  REACH_SHORTFALL: 'report where buyers of this kind already ask or are served (a marketplace category, a partner, published requests), not only how to contact them.',
 };
 
 /* ------------------------------------------------------------------ */
