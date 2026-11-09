@@ -204,3 +204,27 @@ export function assessRole(role: RoleRecord): RoleAssessment {
   }
   return { activities, regulated: true, position, missing, unknown, countEconomics: position === 'COMPLIANT' || position === 'COMPLIANT_VIA_PARTNER', excluded: false, reason };
 }
+
+/**
+ * The one admission question for an opening's economics: is it left out by the
+ * owner's own words, and if it performs a regulated activity, does a compliant
+ * position exist yet? Exclusion and role assessment are answered together so a
+ * caller cannot count a role's economics having asked only half of it.
+ *
+ * `admit` is false for an excluded class (the owner's instruction) and for a
+ * regulated role whose position is not yet established. The second is a
+ * deferral, not an exclusion: `assessment.excluded` is never true, and the
+ * reason names the position to find.
+ */
+export function admitEconomics(
+  text: string | null | undefined,
+  classes: readonly ExclusionClass[],
+  role?: Omit<RoleRecord, 'performs'> | null,
+): { admit: boolean; excludedClass: ExclusionClass | null; assessment: RoleAssessment; reason: string } {
+  const excludedClass = excludedBy(text, classes);
+  const assessment = assessRole({ ...(role ?? {}), performs: text ?? '' });
+  if (excludedClass) {
+    return { admit: false, excludedClass, assessment, reason: `The goal's owner excluded ${EXCLUSION_CLASSES[excludedClass].label}.` };
+  }
+  return { admit: assessment.countEconomics, excludedClass: null, assessment, reason: assessment.reason };
+}
