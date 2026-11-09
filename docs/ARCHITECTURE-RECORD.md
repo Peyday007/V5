@@ -15144,3 +15144,14 @@ Its controller recorded `FREE_LANE_IDLE` and kept retrying, but nothing read eve
 - **Claude routines read "idle" for hours with 3 executable bins.**
   - The watchdog counted bins without the dispatcher's third predicate (`workReadySql`): a research packet bin with no claimable work is not executable.
   - The count is now the dispatcher's own.
+
+**Second reading (21:53Z).** Routines still read "3 executable, 13 eligible, idle" for hours. `dispatch-diagnose` showed why:
+- The 3 bins were Factory work.
+- The router refused them on every tick with named limits:
+  - `NO_SURFACE_SERVES_THIS_FAMILY`: only a repository surface takes Factory work.
+  - `ALL_SURFACES_INELIGIBLE`.
+  - `NO_SURFACE_SERVES_THIS_PROJECT`.
+  - `ACCOUNT_TARGETS_REACHED`.
+- The 13 eligible surfaces were research surfaces.
+
+A bin the router refused in the last `UNROUTED_WINDOW_MS` (15 minutes) now waits on that refusal's named limit and is not counted as executable beside idle capacity. The limit stays visible in `DISPATCH_UNROUTED` and in `dispatch-diagnose`.

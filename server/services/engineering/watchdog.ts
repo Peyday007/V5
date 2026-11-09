@@ -17,6 +17,8 @@ import { capacityReading } from '../fleet/capacity.ts';
 import { dispatchTick } from '../dispatch/loop.ts';
 
 export const IDLE_RECORD_WINDOW_MS = 10 * 60_000;
+/** A bin the router refused this recently waits on that refusal's named limit, not on idle capacity. */
+export const UNROUTED_WINDOW_MS = 15 * 60_000;
 
 export interface IdleReading {
   executableWork: number;
@@ -34,9 +36,17 @@ export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'i
   // The dispatcher's own predicate, all three parts: a research packet bin with
   // no claimable work is not executable, and counting it read as idle capacity
   // for hours while the dispatcher correctly had nothing to fire (§98).
+  //
+  // And a bin the router just refused — no surface serves its family or its
+  // project, every eligible surface is at its account's target — is waiting on
+  // a named limit, not on idle capacity. Production, 2026-11-09: "3 executable,
+  // 13 eligible" for hours, the 3 being Factory bins only a repository surface
+  // can take and the 13 research surfaces.
+  const unroutedSince = new Date(now.getTime() - UNROUTED_WINDOW_MS).toISOString();
   const executable = await getDb().get<{ n: number | string }>(
-    `SELECT COUNT(*) AS n FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}`,
-    [iso, iso, iso, iso],
+    `SELECT COUNT(*) AS n FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
+        AND NOT EXISTS (SELECT 1 FROM bin_events e WHERE e.bin_id = bins.id AND e.event_type = 'DISPATCH_UNROUTED' AND e.at > ?)`,
+    [iso, iso, iso, iso, unroutedSince],
   );
   const active = await getDb().get<{ n: number | string }>(
     "SELECT COUNT(*) AS n FROM bins WHERE state = 'LEASED' AND lease_expires_at > ?",
