@@ -23,20 +23,19 @@
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { ACCESS_METHODS } from './access.ts';
+import { METHOD_CLASSES, selectAccessMethod, type AccessEvidence, type MethodClass } from './accessMethods.ts';
 
 export const ACQUISITION_CAPABILITIES = ['OPERATE', 'ACQUIRE'] as const;
 export type AcquisitionCapability = (typeof ACQUISITION_CAPABILITIES)[number];
 
-/** The access routes a judgment may choose. The first six are Brain's readers in `access.ts`; the rest are the spec's other routes. */
-export const ACQUISITION_ROUTES = [
-  'NATIVE_INTEGRATION',
-  'BULK_SOURCE',
-  'HTTP',
-  'BROWSER_AUTOMATION',
-  'MODEL_ASSISTED_BROWSER',
-  'HUMAN_HANDOFF',
-] as const;
-export type AcquisitionRoute = (typeof ACQUISITION_ROUTES)[number];
+/**
+ * The routes a judgment may choose are the method classes of `accessMethods.ts`
+ * — one vocabulary, one selector. This module adds the policy around that
+ * selection (operate vs acquire, refused boundaries, search-before-crawl) and
+ * never chooses a method itself, so two selectors cannot disagree on a need.
+ */
+export const ACQUISITION_ROUTES = METHOD_CLASSES;
+export type AcquisitionRoute = MethodClass;
 
 export type AcquisitionBoundary =
   | 'CONTACT_STRANGERS'
@@ -82,6 +81,8 @@ export interface AcquisitionEvidence {
   blockedAtBoundary?: boolean;
   /** The data legitimately requires a paid licence, or terms/licence do not permit the intended use. */
   requiresLicence?: boolean;
+  /** The boundary the last attempt met, when known; defaults to AUTHENTICATION when only `blockedAtBoundary` is stated. */
+  boundary?: AccessEvidence['boundary'];
   /** Times this workflow/host has been used, read from SOURCE_ACCESS rows (see `repeatedUseFromRows`). */
   repeatedUses?: number;
   /** Of those, how many needed a route beyond a plain direct read. */
@@ -142,89 +143,12 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
     );
   }
 
-  // A genuine access boundary: stop and seek permitted access.
-  if (evidence.blockedAtBoundary || evidence.requiresLicence) {
-    return {
-      capability,
-      outcome: 'ROUTE_SELECTED',
-      route: 'HUMAN_HANDOFF',
-      reason: evidence.requiresLicence
-        ? 'The data needs a licence or the terms do not permit the use; seek a licence, official export or partner integration rather than automate around it.'
-        : 'Authentication, owner consent, CAPTCHA or bot restrictions block automation; stop at the boundary and seek permitted access, an official export, a licence, a partner integration or a specific human step.',
-      reusableConnectorJustified: false,
-      bespokeCrawlerMayBeProposed: false,
-      boundaries: [evidence.requiresLicence ? 'TERMS_OR_LICENSE' : 'ACCESS_BARRIER'],
-    };
-  }
-
   const justified = connectorJustified(evidence, capability === 'OPERATE');
-
-  if (capability === 'OPERATE') {
-    if (evidence.nativeIntegrationAvailable) {
-      return {
-        capability,
-        outcome: 'ROUTE_SELECTED',
-        route: 'NATIVE_INTEGRATION',
-        reason: 'A first-party integration exists for the functionality; it is the reliable, permitted, low-cost route.',
-        reusableConnectorJustified: justified,
-        bespokeCrawlerMayBeProposed: false,
-        boundaries: [],
-      };
-    }
-    if (!evidence.authorizedAccountOnRecord) {
-      return {
-        capability,
-        outcome: 'ROUTE_SELECTED',
-        route: 'HUMAN_HANDOFF',
-        reason: 'No public API and no authorized account on record: operating the interface needs an account Brain is permitted to use, so the step is a person granting one.',
-        reusableConnectorJustified: false,
-        bespokeCrawlerMayBeProposed: false,
-        boundaries: ['NO_AUTHORIZED_ACCOUNT'],
-      };
-    }
-    const route: AcquisitionRoute = evidence.interfaceUnfamiliarOrChanged ? 'MODEL_ASSISTED_BROWSER' : 'BROWSER_AUTOMATION';
-    return {
-      capability,
-      outcome: 'ROUTE_SELECTED',
-      route,
-      reason:
-        (evidence.interfaceUnfamiliarOrChanged
-          ? 'No public API; an authorized account is on record; the interface is unfamiliar or changed, so a model helps interpret it and propose a reusable routine. '
-          : 'No public API; an authorized account is on record; the interface is operated with reliable locators and explicit success checks. ') +
-        (justified
-          ? `The workflow has repeated ${evidence.repeatedUses} times on record, so a tested reusable connector replaces model-per-click work.`
-          : 'Repetition on record does not yet justify a reusable connector.'),
-      reusableConnectorJustified: justified,
-      bespokeCrawlerMayBeProposed: false,
-      boundaries: [],
-    };
-  }
+  const operate = capability === 'OPERATE';
+  const existing = evidence.existingBulkSources ?? [];
 
   // ACQUIRE: existing corpora, bulk exports and catalogs before any bespoke crawler.
-  const existing = evidence.existingBulkSources ?? [];
-  if (evidence.nativeIntegrationAvailable) {
-    return {
-      capability,
-      outcome: 'ROUTE_SELECTED',
-      route: 'NATIVE_INTEGRATION',
-      reason: 'An official API, export or standard protocol serves the need; it precedes any crawler.',
-      reusableConnectorJustified: justified,
-      bespokeCrawlerMayBeProposed: false,
-      boundaries: [],
-    };
-  }
-  if (existing.length > 0) {
-    return {
-      capability,
-      outcome: 'ROUTE_SELECTED',
-      route: 'BULK_SOURCE',
-      reason: `${existing.length} existing corpus/bulk export/catalog found (${existing.slice(0, 3).join('; ').slice(0, 200)}); use it before writing a bespoke crawler.`,
-      reusableConnectorJustified: justified,
-      bespokeCrawlerMayBeProposed: false,
-      boundaries: [],
-    };
-  }
-  if (!evidence.bulkSearchDone) {
+  if (!operate && !evidence.blockedAtBoundary && !evidence.requiresLicence && !evidence.nativeIntegrationAvailable && existing.length === 0 && !evidence.bulkSearchDone) {
     return {
       capability,
       outcome: 'SEARCH_FIRST',
@@ -235,36 +159,41 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
       boundaries: [],
     };
   }
-  if (evidence.stableHttpDocuments) {
-    return {
-      capability,
-      outcome: 'ROUTE_SELECTED',
-      route: 'HTTP',
-      reason: 'The existing-source search found nothing to reuse; stable documents are reachable by ordinary HTTP honoring terms and rate limits, so a bounded paginated download (a crawler of last resort) may be proposed.',
-      reusableConnectorJustified: justified,
-      bespokeCrawlerMayBeProposed: true,
-      boundaries: [],
-    };
+
+  // The one selector decides the method; this module only states the need's evidence in its terms.
+  const selection = selectAccessMethod({
+    nativeAvailable: evidence.nativeIntegrationAvailable,
+    bulkAvailable: operate ? undefined : existing.length > 0,
+    httpReadable: operate ? undefined : evidence.stableHttpDocuments,
+    interfaceOnly: operate ? true : evidence.interactiveInterfaceOnly,
+    authorizedSession: operate ? evidence.authorizedAccountOnRecord : true,
+    interfaceUnfamiliar: evidence.interfaceUnfamiliarOrChanged,
+    boundary: evidence.blockedAtBoundary ? (evidence.boundary ?? 'AUTHENTICATION') : undefined,
+    needsLicence: evidence.requiresLicence,
+  });
+  const route = selection.method;
+  const boundaries: AcquisitionBoundary[] = [];
+  if (route === 'HUMAN_HANDOFF') {
+    if (evidence.requiresLicence) boundaries.push('TERMS_OR_LICENSE');
+    else if (evidence.blockedAtBoundary) boundaries.push('ACCESS_BARRIER');
+    else if (operate && !evidence.authorizedAccountOnRecord) boundaries.push('NO_AUTHORIZED_ACCOUNT');
   }
-  if (evidence.interactiveInterfaceOnly) {
-    return {
-      capability,
-      outcome: 'ROUTE_SELECTED',
-      route: evidence.interfaceUnfamiliarOrChanged ? 'MODEL_ASSISTED_BROWSER' : 'BROWSER_AUTOMATION',
-      reason: 'The existing-source search found nothing to reuse and the interactive interface is the supported way in; bounded browser work is the route.',
-      reusableConnectorJustified: justified,
-      bespokeCrawlerMayBeProposed: true,
-      boundaries: [],
-    };
-  }
+  const handoff = route === 'HUMAN_HANDOFF';
+  const bespoke = !operate && (route === 'HTTP' || route === 'BROWSER' || route === 'MODEL_ASSISTED');
+  const repeat =
+    operate && (route === 'BROWSER' || route === 'MODEL_ASSISTED')
+      ? justified
+        ? ` The workflow has repeated ${evidence.repeatedUses} times on record, so a tested reusable connector replaces model-per-click work.`
+        : ' Repetition on record does not yet justify a reusable connector.'
+      : '';
   return {
     capability,
     outcome: 'ROUTE_SELECTED',
-    route: 'HUMAN_HANDOFF',
-    reason: 'The existing-source search found nothing to reuse and no permitted automated route is established; seek an official export, licence or partner integration.',
-    reusableConnectorJustified: false,
-    bespokeCrawlerMayBeProposed: false,
-    boundaries: [],
+    route,
+    reason: `${selection.why}.${repeat}`,
+    reusableConnectorJustified: handoff ? false : justified,
+    bespokeCrawlerMayBeProposed: bespoke,
+    boundaries,
   };
 }
 
