@@ -724,7 +724,7 @@ describe('the release workflow’s own readings', () => {
     // A job or step conditioned on always() cannot be cancelled, so nobody could stop a release.
     expect(workflow.split('\n').filter((line) => /^\s*if:.*always\(\)/.test(line))).toEqual([]);
     expect(script).not.toMatch(/'deploy',\s*'--app'/);
-    const gate = workflow.slice(workflow.indexOf('  gate:'), workflow.indexOf('  release:'));
+    const gate = workflow.slice(workflow.indexOf('  gate-tree:'), workflow.indexOf('  release:'));
     expect(gate).not.toMatch(/secrets\./);
     expect(gate).toMatch(/persist-credentials: false/);
     expect(gate).toMatch(/contents: read/);
@@ -733,11 +733,22 @@ describe('the release workflow’s own readings', () => {
 
   it('every test gate finishes before anything merges, the Postgres half included', () => {
     const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
-    const gate = workflow.slice(workflow.indexOf('  gate:'), workflow.indexOf('  release:'));
+    const gate = workflow.slice(workflow.indexOf('  gate-tree:'), workflow.indexOf('  release:'));
     const release = workflow.slice(workflow.indexOf('  release:'));
     // The whole suite against Postgres runs in the gate, from the trusted copy of the cluster script.
     expect(gate).toMatch(/sh \.\.\/trusted\/scripts\/test-postgres\.sh run -- npx vitest run/);
-    expect(gate).toMatch(/POSTGRES: \$\{\{ steps\.postgres\.outcome \}\}/);
+    expect(gate).toMatch(/POSTGRES: \$\{\{ needs\.gate-postgres\.result \}\}/);
+    // In eight shards, each on the exact gated merge, and the verdict refuses a
+    // partition that skipped or repeated a file (§96: the release median was
+    // dominated by this suite run in one job).
+    expect(gate).toMatch(/--shard=\$\{\{ matrix\.shard \}\}\/8/);
+    expect(gate).toMatch(/shard: \[1, 2, 3, 4, 5, 6, 7, 8\]/);
+    expect(gate).toMatch(/\[ "\$\(git rev-parse HEAD\)" = "\$MERGE_SHA" \]/);
+    expect(gate).toMatch(/postgres-shards\.sh check lists\/release-suite-files/);
+    for (let n = 1; n <= 8; n += 1) expect(gate).toContain(`lists/release-shard-${n}/release-shard-${n}.txt`);
+    // The verdict keeps the name the release job reads, and fails when anything failed.
+    expect(gate).toMatch(/^  gate:\n    name: Gate the merged tree \(verdict\)\n    needs: \[plan, gate-tree, gate-postgres\]/m);
+    expect(gate).toMatch(/if \[ -n "\$failure" \]; then echo "::error::\$failure"; exit 1; fi/);
     // The release job runs only after the gate; nothing in it starts a test suite alongside Deploy.
     expect(release).toMatch(/needs: \[plan, gate\]/);
     // It never runs or dispatches the suite itself; it may only attest, as the
