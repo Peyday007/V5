@@ -125,6 +125,8 @@ export interface CalibrationBucket {
   comparableKey: string;
   windowStart: string | null;
   windowEnd: string | null;
+  /** A time window, or every window of the comparable bucket pooled so a thin window does not hide a systematic gap. */
+  scope: 'WINDOW' | 'POOLED';
   /** Resolved opportunities with a stated probability. */
   n: number;
   meanForecast: number | null;
@@ -142,8 +144,11 @@ export const MIN_CALIBRATION_SAMPLE = 20;
 export const MISCALIBRATION_Z = 2;
 
 /**
- * Calibration across comparable opportunities, per bucket and per time window.
- * A single win or loss lands in `INSUFFICIENT`; it is never called a failure.
+ * Calibration across comparable opportunities, per bucket and per time window,
+ * and pooled over all windows of a bucket: a bucket that resolves a few
+ * opportunities per window would otherwise never reach the minimum sample and
+ * so never be judged. Both are judged on the same rule; either being
+ * miscalibrated counts. A single win or loss lands in `INSUFFICIENT`.
  */
 export function calibrate(entries: readonly LedgerEntry[], windowDays = 90): CalibrationBucket[] {
   const groups = new Map<string, LedgerEntry[]>();
@@ -155,8 +160,13 @@ export function calibrate(entries: readonly LedgerEntry[], windowDays = 90): Cal
     list.push(e);
     groups.set(key, list);
   }
-  const out: CalibrationBucket[] = [];
+  const pooled = new Map<string, LedgerEntry[]>();
   for (const [key, list] of groups) {
+    const comparable = key.split('\u0000')[0]!;
+    pooled.set(comparable, [...(pooled.get(comparable) ?? []), ...list]);
+  }
+  const out: CalibrationBucket[] = [];
+  const judge = (comparableKey: string, list: LedgerEntry[], scope: CalibrationBucket['scope']): void => {
     const n = list.length;
     const meanForecast = list.reduce((s, e) => s + (e.prediction.probability as number), 0) / n;
     const observedRate = list.filter((e) => e.outcome!.occurred).length / n;
@@ -166,9 +176,10 @@ export function calibrate(entries: readonly LedgerEntry[], windowDays = 90): Cal
     const enough = n >= MIN_CALIBRATION_SAMPLE;
     const zScore = enough && variance > 0 ? (observedRate * n - meanForecast * n) / Math.sqrt(variance) : null;
     out.push({
-      comparableKey: key.split('\u0000')[0]!,
+      comparableKey,
       windowStart: dates[0] ?? null,
       windowEnd: dates[dates.length - 1] ?? null,
+      scope,
       n,
       meanForecast,
       observedRate,
@@ -176,8 +187,14 @@ export function calibrate(entries: readonly LedgerEntry[], windowDays = 90): Cal
       zScore,
       verdict: !enough || zScore === null ? 'INSUFFICIENT' : Math.abs(zScore) > MISCALIBRATION_Z ? 'MISCALIBRATED' : 'CALIBRATED',
     });
+  };
+  for (const [key, list] of groups) judge(key.split('\u0000')[0]!, list, 'WINDOW');
+  // Pooled only where pooling adds something: more than one window held entries.
+  for (const [comparable, list] of pooled) {
+    const windows = [...groups.keys()].filter((k) => k.startsWith(`${comparable}\u0000`)).length;
+    if (windows > 1) judge(comparable, list, 'POOLED');
   }
-  return out.sort((a, b) => a.comparableKey.localeCompare(b.comparableKey) || (a.windowStart ?? '').localeCompare(b.windowStart ?? ''));
+  return out.sort((a, b) => a.comparableKey.localeCompare(b.comparableKey) || a.scope.localeCompare(b.scope) || (a.windowStart ?? '').localeCompare(b.windowStart ?? ''));
 }
 
 export interface MissDiagnosis {
@@ -188,6 +205,8 @@ export interface MissDiagnosis {
   contradicted: boolean;
   /** What the surprise was worth: the probability the forecast gave the outcome that actually happened. */
   probabilityOfWhatHappened: number | null;
+  /** -log2 of that probability: a 90% forecast that fails (3.3 bits) is a bigger surprise than a 40% forecast that comes true (1.3 bits). Null when no probability was stated. */
+  surpriseBits: number | null;
   kind: 'NOT_A_MISS' | 'EXPECTED_MISS' | 'SYSTEMATIC' | 'UNJUDGED';
   /** Causes the evidence names; empty means unattributed, never a default cause. */
   causes: readonly MissCause[];
@@ -207,16 +226,18 @@ export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket
   const { prediction: p, outcome } = entry;
   const base = { predictionId: p.id, claimId: p.claimId, version: p.version };
   if (!outcome) {
-    return { ...base, contradicted: false, probabilityOfWhatHappened: null, kind: 'UNJUDGED', causes: [], owner: null, claimGaps: [], reason: 'no outcome has been recorded for this version' };
+    return { ...base, contradicted: false, probabilityOfWhatHappened: null, surpriseBits: null, kind: 'UNJUDGED', causes: [], owner: null, claimGaps: [], reason: 'no outcome has been recorded for this version' };
   }
   const given = p.probability === null ? null : outcome.occurred ? p.probability : 1 - p.probability;
   const contradicted = given !== null && given < 0.5;
+  // Zero given to what happened is an unbounded surprise; keep it a finite, comparable number.
+  const surpriseBits = given === null ? null : -Math.log2(Math.max(given, 1e-6));
   const claimGaps: string[] = [];
   if (p.data.length === 0) claimGaps.push('the claim names no data it rests on');
   if (p.assumptions.length === 0) claimGaps.push('the claim states no assumptions');
   if (p.horizonDays === null) claimGaps.push('the claim states no horizon');
   if (!contradicted) {
-    return { ...base, contradicted, probabilityOfWhatHappened: given, kind: 'NOT_A_MISS', causes: [], owner: null, claimGaps, reason: given === null ? 'a point estimate states no probability to contradict' : 'the outcome was the likelier one' };
+    return { ...base, contradicted, probabilityOfWhatHappened: given, surpriseBits, kind: 'NOT_A_MISS', causes: [], owner: null, claimGaps, reason: given === null ? 'a point estimate states no probability to contradict' : 'the outcome was the likelier one' };
   }
   const own = buckets.filter((b) => b.comparableKey === p.comparableKey);
   const miscalibrated = own.some((b) => b.verdict === 'MISCALIBRATED');
@@ -226,6 +247,7 @@ export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket
       ...base,
       contradicted,
       probabilityOfWhatHappened: given,
+      surpriseBits,
       kind: judged ? 'EXPECTED_MISS' : 'UNJUDGED',
       causes: [],
       owner: null,
@@ -240,6 +262,7 @@ export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket
     ...base,
     contradicted,
     probabilityOfWhatHappened: given,
+    surpriseBits,
     kind: 'SYSTEMATIC',
     causes,
     owner: causes.length ? ownerOf(causes) : null,
@@ -303,6 +326,9 @@ export interface CorrectionComparison {
   /** Calibration gap before and after the correction, on the same comparable bucket. */
   before: number | null;
   after: number | null;
+  /** Observations on each side, so TOO_FEW says how far short it is. */
+  nBefore: number;
+  nAfter: number;
   verdict: 'NO_NEW_OBSERVATIONS' | 'TOO_FEW' | 'IMPROVED' | 'NOT_IMPROVED';
 }
 
@@ -311,17 +337,18 @@ export function compareAfterCorrection(
   entries: readonly LedgerEntry[],
   comparableKey: string,
   correctedAt: string,
+  minSample = MIN_CALIBRATION_SAMPLE,
 ): CorrectionComparison {
   const own = entries.filter((e) => e.prediction.comparableKey === comparableKey && e.outcome && e.prediction.probability !== null);
   const gapOf = (list: LedgerEntry[]): number | null =>
-    list.length < MIN_CALIBRATION_SAMPLE
+    list.length < minSample
       ? null
       : list.filter((e) => e.outcome!.occurred).length / list.length - list.reduce((s, e) => s + (e.prediction.probability as number), 0) / list.length;
   const beforeSet = own.filter((e) => e.outcome!.observedAt < correctedAt);
   const afterSet = own.filter((e) => e.outcome!.observedAt >= correctedAt);
-  if (afterSet.length === 0) return { before: gapOf(beforeSet), after: null, verdict: 'NO_NEW_OBSERVATIONS' };
+  if (afterSet.length === 0) return { before: gapOf(beforeSet), after: null, nBefore: beforeSet.length, nAfter: 0, verdict: 'NO_NEW_OBSERVATIONS' };
   const before = gapOf(beforeSet);
   const after = gapOf(afterSet);
-  if (before === null || after === null) return { before, after, verdict: 'TOO_FEW' };
-  return { before, after, verdict: Math.abs(after) < Math.abs(before) ? 'IMPROVED' : 'NOT_IMPROVED' };
+  if (before === null || after === null) return { before, after, nBefore: beforeSet.length, nAfter: afterSet.length, verdict: 'TOO_FEW' };
+  return { before, after, nBefore: beforeSet.length, nAfter: afterSet.length, verdict: Math.abs(after) < Math.abs(before) ? 'IMPROVED' : 'NOT_IMPROVED' };
 }
