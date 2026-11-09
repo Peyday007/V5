@@ -109,6 +109,17 @@ export const ACQUISITION_LEVERS: readonly AcquisitionLever[] = [
   },
 ];
 
+/**
+ * Selling through a partner who already serves the buyers (a supplier, a
+ * complementary vendor). Commission is published; referral volume is not, and
+ * stays an assumption until a partner is signed and its referrals are counted.
+ */
+export const PARTNER_TERMS = {
+  commission: { low: 0.1, high: 0.3, source: 'prospeo.io/s/b2b-partner-programs (2026, 250 programs): referral 5–15% of first-year value, revenue share 10–30% on closed deals' },
+  referralsPerDay: { low: 0.05, high: 0.5, source: 'no published referral volume for a new partner; one referral every 2–20 days assumed' },
+  setupDays: { low: 3, high: 10, source: 'time to find, agree terms with and brief one partner; a convention' },
+} as const;
+
 export interface MoneyLimits {
   beforeProof: number;
   perWeek: number;
@@ -165,7 +176,7 @@ export function purchaseCapacity(lever: AcquisitionLever, budget: number, daysLe
     addedPerDay: added,
     effectivePerDay: effective,
     startDay: start,
-    sentence: `${units} new mailbox(es) on ${domains} domain(s) for ${'$'}${Math.round(cost)}${afterProof ? ' once first cash arrives' : ''}: +${added.low}–${added.high} sends a day from day ${start.low}–${start.high}, ${Math.round(effective.low)}–${Math.round(effective.high)} a day averaged over the ${daysLeft} days`,
+    sentence: `${units} ${lever.label} on ${domains} domain(s) for ${'$'}${Math.round(cost)}${afterProof ? ' once first cash arrives' : ''}: +${added.low}–${added.high} sends a day from day ${start.low}–${start.high}, ${Math.round(effective.low)}–${Math.round(effective.high)} a day averaged over the ${daysLeft} days`,
   };
 }
 

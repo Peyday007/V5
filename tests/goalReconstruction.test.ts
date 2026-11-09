@@ -33,7 +33,7 @@ describe('§99 regression: the $10K plan', () => {
   });
 
   it('explores materially different strategies across dimensions, not percentages of the same one', () => {
-    for (const d of ['CAPACITY', 'ACQUISITION', 'TRANSACTION', 'CAPITAL', 'CASH_TIMING'] as const) expect(dims.has(d)).toBe(true);
+    for (const d of ['CAPACITY', 'ACQUISITION', 'PARTNER', 'TRANSACTION', 'CAPITAL', 'CASH_TIMING'] as const) expect(dims.has(d)).toBe(true);
     // The kept plan changes how the business works, not an estimate.
     expect(r.best.changes.length).toBeGreaterThanOrEqual(2);
     expect(r.best.changes.every((c) => !c.label.startsWith('test:'))).toBe(true);
@@ -65,6 +65,15 @@ describe('§99 regression: the $10K plan', () => {
     expect(bought?.changes[0]!.detail).toMatch(/leads at/);
     const prepaid = tried.find((t) => t.key.includes('prepaid-fulfilment'));
     expect(prepaid).toBeTruthy();
+    // Suppliers and partners: sell through someone who already holds the buyers, commission sourced, volume assumed.
+    const partner = tried.find((t) => t.changes.some((c) => c.dimension === 'PARTNER'))!;
+    expect(partner.changes[0]!.detail).toMatch(/10–30%/);
+    expect(partner.changes[0]!.basis).toBe('ASSUMPTION');
+  });
+
+  it('states the strongest plan as an execution sequence', () => {
+    expect(r.best.changes.every((c) => c.startDay !== undefined)).toBe(true);
+    expect(renderReconstruction(r).some((l) => /^\s+day \d+–\d+/.test(l))).toBe(true);
   });
 
   it('asks the world for openings beyond its existing types, from the binding constraint, through the goal round it already runs', () => {
