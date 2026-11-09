@@ -193,3 +193,65 @@ registerProbe('r01.cap-16-3', async (args) => {
   const ok = submitted >= hours && share < 0.5;
   return { ok, detail: `${hours}h: ${submitted} accepted of ${total} lane outcomes; ${Math.round(share * 100)}% provider failures` };
 });
+
+/**
+ * COM-13-3: the outreach funnel for every targeted cash goal's project is
+ * modelled from its own rows, each ranked mechanism's buyers are bounded by
+ * the prospects it reached, and messages sent are never read as buyers. Until
+ * the funnel model is deployed this answers FAIL with the reason, never PASS.
+ */
+registerProbe('r01.com-13-3', async () => {
+  const funnel = (await import('../../cash/funnel.ts')) as unknown as Record<string, unknown>;
+  const mechanismsFromRows = funnel.mechanismsFromRows as ((projectId: string, evidence?: unknown) => Promise<unknown[]>) | undefined;
+  const outreachEvidenceFor = funnel.outreachEvidenceFor as ((projectId: string) => Promise<unknown>) | undefined;
+  const searchOutreachMix = funnel.searchOutreachMix as ((mechanisms: unknown[]) => {
+    ranked: Array<{ mode: string; messagesSent: number | null; reachedProspects: { high: number | null }; buyers: { high: number | null } }>;
+    unranked: unknown[];
+  }) | undefined;
+  if (!mechanismsFromRows || !outreachEvidenceFor || !searchOutreachMix) return { ok: false, detail: 'the outreach funnel model is not deployed in this Brain' };
+  const { listWorkstreams } = await import('../../../repos/register.ts');
+  const projects = [...new Set((await listWorkstreams()).map((g) => g.target?.projectId).filter((p): p is string => Boolean(p)))];
+  if (projects.length === 0) return { ok: false, detail: 'no targeted cash goal to model' };
+  let modelled = 0;
+  for (const projectId of projects) {
+    const mix = searchOutreachMix(await mechanismsFromRows(projectId, await outreachEvidenceFor(projectId)));
+    modelled += mix.ranked.length + mix.unranked.length;
+    for (const r of mix.ranked) {
+      if (r.buyers.high !== null && r.reachedProspects.high !== null && r.buyers.high > r.reachedProspects.high) {
+        return { ok: false, detail: `${r.mode}: more buyers (${r.buyers.high}) than prospects reached (${r.reachedProspects.high})` };
+      }
+      if (r.messagesSent !== null && r.messagesSent > 0 && r.buyers.high !== null && r.buyers.high >= r.messagesSent) {
+        return { ok: false, detail: `${r.mode}: buyers read as at least the messages sent` };
+      }
+    }
+  }
+  return modelled > 0
+    ? { ok: true, detail: `${modelled} outreach mechanism(s) modelled across ${projects.length} goal project(s); buyers bounded by reach` }
+    : { ok: false, detail: 'no outreach mechanism is recorded for any goal project' };
+});
+
+/**
+ * GOV-22-2: a prepared option is recorded cheaply and is never counted as a
+ * production integration, and an option with neither a sketch nor a source
+ * inventory is refused. Read from the released module's own functions.
+ */
+registerProbe('r01.gov-22-2', async () => {
+  let prepared: Record<string, unknown>;
+  try {
+    prepared = (await import('../../capability/prepared.ts' as string)) as Record<string, unknown>;
+  } catch {
+    return { ok: false, detail: 'prepared options are not deployed in this Brain' };
+  }
+  const counts = prepared.countsAsIntegration as ((o: unknown) => boolean) | undefined;
+  const validate = prepared.validatePreparedOption as ((o: unknown) => unknown) | undefined;
+  if (!counts || !validate) return { ok: false, detail: 'prepared options are not deployed in this Brain' };
+  const sample = { requirementId: 'probe', feasibility: { verdict: 'FEASIBLE', note: 'probe' }, methods: [{ name: 'x', kind: 'API', gates: [], effort: 1, sources: ['probe'] }], sourceInventory: ['probe'] };
+  let refusedEmpty = false;
+  try {
+    validate({ ...sample, sourceInventory: undefined });
+  } catch {
+    refusedEmpty = true;
+  }
+  const ok = counts(validate(sample)) === false && refusedEmpty;
+  return { ok, detail: ok ? 'a prepared option never counts as an integration; an option without sketch or inventory is refused' : 'a prepared option was counted as an integration or an empty one was accepted' };
+});
