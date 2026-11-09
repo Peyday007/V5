@@ -151,3 +151,27 @@ const RELEASE_01_ROLLUPS = [
   'gap-28-1', 'gap-28-2', 'gap-28-3', 'gap-28-4', 'gap-28-5', 'gap-28-6', 'gap-28-7', 'gap-28-8', 'life-29', 'fall-37',
 ];
 for (const key of RELEASE_01_ROLLUPS) registerProbe(`r01.${key}`, architectureProgramHolds);
+
+/**
+ * CAP-16-3: model and verification throughput is restored. Read from the free
+ * lane's own item rows over the last six hours: work is being accepted (at
+ * least one submission per hour on average) and provider failures are not the
+ * majority of outcomes. A window with no lane activity at all is a FAIL, not a
+ * pass — an idle lane restores nothing.
+ */
+registerProbe('r01.cap-16-3', async (args) => {
+  const hours = Number(args.hours ?? 6);
+  const since = new Date(Date.now() - hours * 3_600_000).toISOString();
+  const rows = await getDb().all<{ outcome: string; provider_failed: number; n: number }>(
+    `SELECT outcome, CASE WHEN reason LIKE '%model call failed%' THEN 1 ELSE 0 END AS provider_failed, COUNT(*) AS n
+       FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at >= ?
+      GROUP BY outcome, CASE WHEN reason LIKE '%model call failed%' THEN 1 ELSE 0 END`,
+    [since],
+  );
+  const total = rows.reduce((s, r) => s + Number(r.n), 0);
+  const submitted = rows.filter((r) => r.outcome === 'SUBMITTED').reduce((s, r) => s + Number(r.n), 0);
+  const providerFailed = rows.filter((r) => Number(r.provider_failed) === 1).reduce((s, r) => s + Number(r.n), 0);
+  const share = total > 0 ? providerFailed / total : 1;
+  const ok = submitted >= hours && share < 0.5;
+  return { ok, detail: `${hours}h: ${submitted} accepted of ${total} lane outcomes; ${Math.round(share * 100)}% provider failures` };
+});
