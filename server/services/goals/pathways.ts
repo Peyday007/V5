@@ -63,7 +63,11 @@ import type { TargetReading } from './target.ts';
 import type { ChainLink, ConsideredOpening } from './plan.ts';
 import type { GoalRoundOutcome, ResearchDiagnosis } from './researchYield.ts';
 
-export type FactStatus = 'PROVEN' | 'ESTIMATED' | 'UNKNOWN';
+/**
+ * How far a property is established. `DENIED` is a known answer: something is
+ * known not to hold (a permission not granted) — never read as lack of knowledge.
+ */
+export type FactStatus = 'PROVEN' | 'ESTIMATED' | 'UNKNOWN' | 'DENIED';
 
 /** One property of a transaction, with how far it is established. */
 export interface PathFact {
@@ -624,7 +628,7 @@ export function pathwayOf(
   // A permission held is a record; one not held is known, not unknown, and blocks only its own action — never an assumed yes.
   const rights: PathFact = input.permissionsMissing.length === 0
     ? { value: 'every permission this transaction depends on is granted', low: null, high: null, status: 'PROVEN', basis: 'the project\'s authority grants every action the transaction needs' }
-    : { value: `not yet granted: ${input.permissionsMissing.join(', ')}`, low: null, high: null, status: 'UNKNOWN', basis: 'each missing permission blocks only its own action; none is assumed granted' };
+    : { value: `not yet granted: ${input.permissionsMissing.join(', ')}`, low: null, high: null, status: 'DENIED', basis: 'each missing permission blocks only its own action; none is assumed granted' };
   const capacity: PathFact = fulfiller.status === 'UNKNOWN'
     ? { value: null, low: null, high: null, status: 'UNKNOWN', basis: 'nobody is named to fulfil it, so no delivery capacity is established' }
     : { value: null, low: null, high: null, status: 'ESTIMATED', basis: 'a fulfiller is named; the volume it can deliver is not yet measured' };
@@ -666,6 +670,7 @@ export function pathwayOf(
   if (daysToCash.status !== 'UNKNOWN' && settleLow !== null && settleLow > input.daysLeft - MIN_SALES_CYCLE_DAYS) notExecutable.push('settles after the deadline');
   const facts = [buyer, motivation, channel, offer, fulfiller, revenuePerDeal, acquisitionCost, fulfilmentCost, net, conversion, volume, frequency, daysToCash, capital];
   const counts = { proven: 0, estimated: 0, unknown: 0 };
+  // `facts` are the fourteen commercial facts and none can be DENIED; `rights` (the only denial) and `capacity` are read beside the tally.
   for (const fact of facts) counts[fact.status === 'PROVEN' ? 'proven' : fact.status === 'ESTIMATED' ? 'estimated' : 'unknown'] += 1;
   return {
     opportunityId: o.id,
