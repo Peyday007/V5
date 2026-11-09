@@ -189,14 +189,21 @@ describe('outreach funnel read from cash_outcomes rows (outreachFromRows via cas
     expect(m.messagesSent).toBe(10);
     expect(m.stages.deliverability).toMatchObject({ basis: 'MEASURED', low: 0.8, high: 0.8 });
     expect(m.stages.response.low).toBeCloseTo(5 / 8);
-    expect(m.stages.close.low).toBeCloseTo(2 / 5);
+    // The 2 prospects that agreed are the only ones that engaged with terms: 2 of 5 answered qualified, and both closed.
+    expect(m.stages.qualification.low).toBeCloseTo(2 / 5);
+    expect(m.stages.close.low).toBeCloseTo(1);
     expect(m.stages.fulfillment.low).toBeCloseTo(1 / 2);
-    // Rows never state these, so they stay unknown rather than defaulting.
-    for (const stage of ['permission', 'uniqueProspects', 'throughput', 'qualification', 'settlement', 'repeat'] as const) {
+    // Producers state these from the rows: contacts were sent through the gate, 10 distinct prospects, 10 sent.
+    expect(m.stages.permission).toMatchObject({ basis: 'MEASURED', low: 1, high: 1 });
+    expect(m.stages.uniqueProspects).toMatchObject({ basis: 'MEASURED', low: 10 });
+    expect(m.stages.throughput).toMatchObject({ basis: 'MEASURED', low: 10 });
+    expect(m.permitted).toBe(true);
+    // 10 sent, 8 delivered, 5 answered, 2 qualified, 2 bought: messages are not buyers.
+    expect(m.buyers.low).toBeCloseTo(2);
+    // No settlement and no repeat purchase exists yet. Unknown is not zero, so revenue stays unknown.
+    for (const stage of ['settlement', 'repeat'] as const) {
       expect(m.stages[stage].basis, stage).toBe('UNKNOWN');
     }
-    expect(m.permitted).toBeNull();
-    expect(m.buyers.basis).toBe('UNKNOWN');
     expect(m.revenueCents.basis).toBe('UNKNOWN');
   });
 
@@ -219,13 +226,39 @@ describe('outreach funnel read from cash_outcomes rows (outreachFromRows via cas
     expect(m.stages.fulfillment.basis).toBe('UNKNOWN');
   });
 
-  it('never ranks a row-derived mechanism: no row states permission, so every one is unranked with its first unknown stage', async () => {
+  async function settlement(opp: string, cents: number): Promise<void> {
+    seq += 1;
+    await getDb().run(
+      `INSERT INTO cash_money_entries
+         (id, project_id, opportunity_id, kind, amount_cents, currency, verified_reference, occurred_at, recorded_by, created_at)
+       VALUES (?, ?, ?, 'SETTLEMENT', ?, 'USD', 'ref', ?, 'test', ?)`,
+      [`cme_test_${seq}`, projectId, opp, cents, '2026-01-02T00:00:00.000Z', '2026-01-02T00:00:00.000Z'],
+    );
+  }
+
+  it('leaves a row-derived mechanism unranked at the stage no row states yet: settlement', async () => {
     for (let i = 0; i < 50; i += 1) await outcome({ opp: `c${i}`, kind: 'CONTACT_RESULT', mechanism: 'Big', text: 'BUYER_REPLIED' });
     await outcome({ opp: 'c0', kind: 'ACCEPTED_PRICE', mechanism: 'Big', cents: 1_000_000 });
     const { outreach } = await cashFunnel({ projectId });
     expect(outreach.mix.ranked).toEqual([]);
     expect(outreach.mix.unranked).toHaveLength(1);
-    expect(outreach.mix.unranked[0]).toMatchObject({ mode: 'Big', firstUnknown: 'permission' });
-    expect(formatFunnel(await cashFunnel({ projectId })).join('\n')).toMatch(/outreach mix ranked=\(none\) unranked=Big\[permission\]/);
+    expect(outreach.mix.unranked[0]).toMatchObject({ mode: 'Big', firstUnknown: 'settlement' });
+    expect(formatFunnel(await cashFunnel({ projectId })).join('\n')).toMatch(/outreach mix ranked=\(none\) unranked=Big\[settlement\]/);
+  });
+
+  it('ranks mechanisms on production rows once settlement is recorded, strongest lower bound first', async () => {
+    for (let i = 0; i < 20; i += 1) await outcome({ opp: `big${i}`, kind: 'CONTACT_RESULT', mechanism: 'Big', text: 'BUYER_REPLIED' });
+    await outcome({ opp: 'big0', kind: 'ACCEPTED_PRICE', mechanism: 'Big', cents: 1_000_000 });
+    await settlement('big0', 1_000_000);
+    for (let i = 0; i < 20; i += 1) await outcome({ opp: `sm${i}`, kind: 'CONTACT_RESULT', mechanism: 'Small', text: 'BUYER_REPLIED' });
+    for (let i = 0; i < 5; i += 1) {
+      await outcome({ opp: `sm${i}`, kind: 'ACCEPTED_PRICE', mechanism: 'Small', cents: 10_000 });
+      await settlement(`sm${i}`, 10_000);
+    }
+    await outcome({ opp: 'quiet', kind: 'CONTACT_RESULT', mechanism: 'Quiet', text: 'BUYER_SILENT' });
+    const { outreach } = await cashFunnel({ projectId });
+    expect(outreach.mix.ranked.map((one) => one.mode)).toEqual(['Big', 'Small']);
+    expect(outreach.mix.ranked[0]!.firstPurchaseRevenueCents.low).toBeGreaterThan(outreach.mix.ranked[1]!.firstPurchaseRevenueCents.low!);
+    expect(outreach.mix.unranked.map((one) => one.mode)).toEqual(['Quiet']);
   });
 });

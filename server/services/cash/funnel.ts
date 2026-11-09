@@ -658,18 +658,34 @@ export function formatOutreachFunnel(reading: OutreachFunnelReading): string[] {
 }
 
 /**
- * Build the mechanisms from the outcome rows Brain has written (§94). Only what
- * a row states becomes a measured input: the share of contacts that were
- * answered, the share that bounced, the share of answered contacts that agreed,
- * the share of agreed deals not refunded, and the agreed price. Permission,
- * unique prospects, throughput, qualification, settlement and repeat are stated
- * by no outcome row, so they stay unknown and keep revenue unknown until
- * somebody records them; a message count is never read as a buyer. A mechanism
- * is whatever the rows name (its `mechanism`, else its `channel`), never a
- * list this code knows.
+ * Build the mechanisms from the rows Brain has written (§94). Every stage is read from the rows
+ * that state it, and a stage no row states stays unknown rather than defaulting:
+ *
+ *   permission      1 when contacts were actually sent: a CONTACT_RESULT row is written only for a
+ *                   contact Brain performed through the authority gate, so provider terms and
+ *                   consent were decided before the send. No row, no figure.
+ *   uniqueProspects distinct opportunities contacted: a count of prospects reached so far, never
+ *                   the message count (one prospect messaged twice is one).
+ *   throughput      contacts sent in the rows: what the accounts have actually sent, an observed
+ *                   floor of capacity and not a promise of more.
+ *   deliverability  contacts that did not bounce.
+ *   response        answered contacts among delivered ones.
+ *   qualification   answered prospects that engaged with terms (accepted or countered, or hold an
+ *                   accepted price) among answered ones; a bare reply or a decline did not qualify.
+ *   close           accepted prices among qualified prospects.
+ *   settlement      settled cash against agreed value for accepted opportunities, from
+ *                   `cash_money_entries` SETTLEMENT rows. Known only once a settlement exists:
+ *                   no money yet on an open deal is not evidence it will not settle.
+ *   fulfillment     accepted deals not refunded.
+ *   repeat          further agreements per agreed prospect, from `cash_agreements`. Known only
+ *                   once a repeat purchase exists: a window with none is not a zero.
+ *
+ * A message count is never read as a buyer. A mechanism is whatever the rows name (its
+ * `mechanism`, else its `channel`), never a list this code knows.
  */
-async function outreachFromRows(projectId: string): Promise<{ mechanisms: OutreachFunnelReading[]; mix: MixReading }> {
-  const rows = await getDb().all<{
+export async function mechanismsFromRows(projectId: string): Promise<OutreachMechanism[]> {
+  const db = getDb();
+  const rows = await db.all<{
     mechanism: string | null;
     channel: string | null;
     opportunity_id: string;
@@ -684,37 +700,76 @@ async function outreachFromRows(projectId: string): Promise<{ mechanisms: Outrea
       ORDER BY created_at`,
     [projectId],
   );
+  const settledRows = await db.all<{ opportunity_id: string; total: number }>(
+    `SELECT opportunity_id, SUM(amount_cents) AS total FROM cash_money_entries
+      WHERE project_id = ? AND kind = 'SETTLEMENT' AND opportunity_id IS NOT NULL GROUP BY opportunity_id`,
+    [projectId],
+  );
+  const settledByOpportunity = new Map(settledRows.map((row) => [row.opportunity_id, Number(row.total)]));
+  const agreementRows = await db.all<{ opportunity_id: string; n: number }>(
+    `SELECT opportunity_id, COUNT(*) AS n FROM cash_agreements
+      WHERE project_id = ? AND state = 'AGREED' GROUP BY opportunity_id`,
+    [projectId],
+  );
+  const agreementsByOpportunity = new Map(agreementRows.map((row) => [row.opportunity_id, Number(row.n)]));
+
   const groups = new Map<string, typeof rows>();
   for (const row of rows) {
     const key = row.mechanism ?? row.channel ?? 'unspecified';
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   const measured = (numerator: number, denominator: number): StageInput =>
-    denominator > 0 ? { basis: 'MEASURED', value: numerator / denominator } : { basis: 'UNKNOWN' };
+    denominator > 0 ? { basis: 'MEASURED', value: Math.min(1, numerator / denominator) } : { basis: 'UNKNOWN' };
   const mechanisms: OutreachMechanism[] = [];
   for (const [mode, group] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const contacts = group.filter((one) => one.kind === 'CONTACT_RESULT');
     const bounced = contacts.filter((one) => one.value_text === 'CONTACT_UNDELIVERABLE').length;
-    const answered = contacts.filter(
+    const answeredRows = contacts.filter(
       (one) => one.value_text !== 'BUYER_SILENT' && one.value_text !== 'CONTACT_UNDELIVERABLE',
-    ).length;
+    );
+    const answered = answeredRows.length;
     const accepted = new Map<string, number>();
     for (const one of group) if (one.kind === 'ACCEPTED_PRICE' && one.value_cents !== null) accepted.set(one.opportunity_id, one.value_cents);
     const refunded = new Set(group.filter((one) => one.kind === 'REFUNDED').map((one) => one.opportunity_id));
     const refundedAccepted = [...accepted.keys()].filter((id) => refunded.has(id)).length;
     const price = median([...accepted.values()]);
+
+    const qualifiedIds = new Set<string>();
+    for (const one of answeredRows) {
+      if (one.value_text === 'BUYER_ACCEPTED' || one.value_text === 'BUYER_COUNTERED' || accepted.has(one.opportunity_id)) qualifiedIds.add(one.opportunity_id);
+    }
+    for (const id of accepted.keys()) if (answeredRows.some((one) => one.opportunity_id === id)) qualifiedIds.add(id);
+    const uniqueContacted = new Set(contacts.map((one) => one.opportunity_id)).size;
+
+    const agreed = [...accepted.keys()];
+    const agreedCents = agreed.reduce((t, id) => t + (accepted.get(id) ?? 0), 0);
+    const settledAny = agreed.some((id) => (settledByOpportunity.get(id) ?? 0) > 0);
+    const settledCents = agreed.reduce((t, id) => t + Math.min(settledByOpportunity.get(id) ?? 0, accepted.get(id) ?? 0), 0);
+    const extra = agreed.reduce((t, id) => t + Math.max(0, (agreementsByOpportunity.get(id) ?? 1) - 1), 0);
+
     mechanisms.push({
       mode,
       label: `${mode} (measured from ${contacts.length} recorded contact result(s))`,
       messagesSent: contacts.length > 0 ? contacts.length : undefined,
       inputs: {
+        permission: contacts.length > 0 ? { basis: 'MEASURED', value: 1 } : { basis: 'UNKNOWN' },
+        uniqueProspects: uniqueContacted > 0 ? { basis: 'MEASURED', value: uniqueContacted } : { basis: 'UNKNOWN' },
+        throughput: contacts.length > 0 ? { basis: 'MEASURED', value: contacts.length } : { basis: 'UNKNOWN' },
         deliverability: measured(contacts.length - bounced, contacts.length),
         response: measured(answered, contacts.length - bounced),
-        close: measured(Math.min(accepted.size, answered), answered),
+        qualification: measured(qualifiedIds.size, answered),
+        close: measured(Math.min(accepted.size, qualifiedIds.size), qualifiedIds.size),
+        settlement: settledAny ? measured(settledCents, agreedCents) : { basis: 'UNKNOWN' },
         fulfillment: measured(accepted.size - refundedAccepted, accepted.size),
+        repeat: extra > 0 ? { basis: 'MEASURED', value: extra / agreed.length } : { basis: 'UNKNOWN' },
       },
       dealValueCents: price === null ? { basis: 'UNKNOWN' } : { basis: 'MEASURED', value: price },
     });
   }
+  return mechanisms;
+}
+
+async function outreachFromRows(projectId: string): Promise<{ mechanisms: OutreachFunnelReading[]; mix: MixReading }> {
+  const mechanisms = await mechanismsFromRows(projectId);
   return { mechanisms: mechanisms.map(modelOutreachFunnel), mix: searchOutreachMix(mechanisms) };
 }
