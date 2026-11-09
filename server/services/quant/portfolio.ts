@@ -51,6 +51,28 @@ export interface Activity {
    * the combination in one world, never on an activity's average.
    */
   spend?: number[];
+  /**
+   * What this activity is for the downside, when it is a control rather than a
+   * source of the target: an independent channel, a diversified counterparty,
+   * reserve capacity, a faster cash cycle, a contingency. Open vocabulary — the
+   * kind is a label, and its effect is measured by removing it from the same
+   * worlds, never read from the label.
+   */
+  safeguard?: string;
+  /** What its samples rest on. Absent means nobody said, which is not evidence. */
+  evidence?: ActivityEvidence;
+}
+
+/** The evidence behind an activity's samples, so a probability can be judged and not assumed. */
+export interface ActivityEvidence {
+  /** Independent real observations the samples were built from (not the number of draws). */
+  sampleSize: number;
+  /** When the newest observation was made (ISO-8601), for changing conditions. */
+  observedAt?: string;
+  /** Oldest age, in days, at which the observations still describe today's market. */
+  validForDays?: number;
+  /** True when the samples include the bad tail (a lost buyer, a failed supplier), not only typical outcomes. */
+  tailCovered?: boolean;
 }
 
 export interface PortfolioProblem {
@@ -66,6 +88,8 @@ export interface PortfolioProblem {
   spendCeiling?: number;
   worlds?: number;
   seed?: number;
+  /** The instant the evidence is judged against (ISO-8601); defaults to now. */
+  asOf?: string;
 }
 
 export interface PortfolioReading {
@@ -93,6 +117,45 @@ export interface PortfolioResult {
   /** Combinations refused before any world was drawn. */
   refused: Array<{ keys: string[]; reason: string }>;
   searched: number;
+  /** Added without moving any field above: what the best combination's confidence is entitled to say. */
+  uncertainty?: PortfolioUncertainty;
+}
+
+export interface SafeguardEffect {
+  key: string;
+  safeguard: string;
+  /** Reach with the safeguard minus reach without it, over the identical worlds. */
+  reachGain: number;
+  /** Change in the mean of the worst tenth of worlds (settled cash), with it minus without it. */
+  tailGain: number;
+  /** Change in the tenth percentile of settled cash. */
+  p10Gain: number;
+  /** Change in the share of worlds that ran short of capital (negative is better). */
+  capitalShortChange: number;
+  /** False when the combination without it is not feasible, so no like-for-like comparison exists. */
+  comparable: boolean;
+}
+
+export interface ValidationIssue {
+  key: string;
+  problem: 'SAMPLES_NOT_EVIDENCED' | 'SAMPLE_SIZE_UNDECLARED' | 'SAMPLE_TOO_SMALL' | 'EVIDENCE_STALE' | 'TAIL_NOT_COVERED';
+  detail: string;
+}
+
+export interface PortfolioUncertainty {
+  /** CALIBRATED: every member's inputs pass; otherwise the share of worlds is coverage, not probability. */
+  status: 'CALIBRATED' | 'CALIBRATION_UNAVAILABLE';
+  /** Reach of the best combination in the simulated worlds. */
+  reach: number;
+  /** The strongest defensible interval for the chance of reaching the target; null when calibration is unavailable. */
+  range: { low: number; high: number; level: number; effectiveSamples: number } | null;
+  /** True only when calibrated evidence puts the lower bound at or above 0.9. */
+  meets90: boolean;
+  /** Plain statement of what may and may not be claimed. */
+  statement: string;
+  /** Inputs that are a validation problem — never read as favourable. */
+  validation: ValidationIssue[];
+  safeguards: SafeguardEffect[];
 }
 
 export const EXHAUSTIVE_LIMIT = 12;
@@ -157,7 +220,7 @@ function round(x: number): number {
   return Math.round(x * 100) / 100;
 }
 
-function evaluate(problem: PortfolioProblem, members: number[], picks: number[][], worlds: number): PortfolioReading {
+function evaluate(problem: PortfolioProblem, members: number[], picks: number[][], worlds: number, capture?: { settled?: Float64Array }): PortfolioReading {
   const keys = members.map((m) => problem.activities[m]!.key);
   const refusal = refuse(problem, members);
   const justified = members.every((m) => problem.activities[m]!.justified);
@@ -204,6 +267,7 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
     if (total >= problem.target && !overCeiling) reached += 1;
     if (wasShort) short += 1;
   }
+  if (capture) capture.settled = settled;
   const sorted = Array.from(settled).sort((a, b) => a - b);
   const q = (p: number) => sorted[Math.min(worlds - 1, Math.floor(p * worlds))]!;
   return { keys, reach: reached / worlds, settledP10: q(0.1), settledP50: q(0.5), settledP90: q(0.9), capitalShort: short / worlds, overSpend: over / worlds, feasible: true, infeasibleBecause: null, basis: justified ? 'PROBABILITY' : 'COVERAGE' };
@@ -211,6 +275,110 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
 
 function better(a: PortfolioReading, b: PortfolioReading): number {
   return Number(b.feasible) - Number(a.feasible) || b.reach - a.reach || b.settledP50 - a.settledP50 || a.keys.length - b.keys.length;
+}
+
+export const MIN_EVIDENCE_SAMPLES = 30;
+const CONFIDENCE_LEVEL = 0.95;
+const CLAIM_THRESHOLD = 0.9;
+
+function wilson(successes: number, n: number, z = 1.96): { low: number; high: number } {
+  const p = successes / n;
+  const z2 = z * z;
+  const denom = 1 + z2 / n;
+  const centre = (p + z2 / (2 * n)) / denom;
+  const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / denom;
+  return { low: Math.max(0, centre - half), high: Math.min(1, centre + half) };
+}
+
+function tailMean(settled: Float64Array): number {
+  const sorted = Array.from(settled).sort((a, b) => a - b);
+  const k = Math.max(1, Math.floor(sorted.length * 0.1));
+  let sum = 0;
+  for (let i = 0; i < k; i++) sum += sorted[i]!;
+  return sum / k;
+}
+
+/** Judge what the best combination's confidence may say, and measure each control on the same worlds. */
+function assess(problem: PortfolioProblem, best: PortfolioReading, picks: number[][], worlds: number): PortfolioUncertainty {
+  const index = new Map(problem.activities.map((a, i) => [a.key, i]));
+  const members = best.keys.map((k) => index.get(k)!);
+  const asOf = Date.parse(problem.asOf ?? new Date().toISOString());
+  const validation: ValidationIssue[] = [];
+  for (const m of members) {
+    const act = problem.activities[m]!;
+    if (!act.justified) {
+      validation.push({ key: act.key, problem: 'SAMPLES_NOT_EVIDENCED', detail: 'its samples do not rest on evidence; they are an assumption, so the share of worlds is coverage and never a probability' });
+      continue;
+    }
+    const ev = act.evidence;
+    if (!ev || !Number.isFinite(ev.sampleSize) || ev.sampleSize <= 0) {
+      validation.push({ key: act.key, problem: 'SAMPLE_SIZE_UNDECLARED', detail: 'marked as evidenced but no count of real observations is declared' });
+      continue;
+    }
+    if (ev.sampleSize < MIN_EVIDENCE_SAMPLES) validation.push({ key: act.key, problem: 'SAMPLE_TOO_SMALL', detail: `${ev.sampleSize} observations; at least ${MIN_EVIDENCE_SAMPLES} are needed before a probability is read from them` });
+    if (ev.observedAt !== undefined && ev.validForDays !== undefined) {
+      const age = (asOf - Date.parse(ev.observedAt)) / 86_400_000;
+      if (!(age <= ev.validForDays)) validation.push({ key: act.key, problem: 'EVIDENCE_STALE', detail: `newest observation is ${Number.isFinite(age) ? Math.round(age) + ' days old' : 'undated'}; it describes conditions for ${ev.validForDays} days` });
+    }
+    if (ev.tailCovered !== true) validation.push({ key: act.key, problem: 'TAIL_NOT_COVERED', detail: 'the samples are not shown to include the bad tail, so tail risk is unaccounted for' });
+  }
+
+  const full = new Float64Array(0);
+  const capFull: { settled?: Float64Array } = {};
+  evaluate(problem, members, picks, worlds, capFull);
+  const fullTail = tailMean(capFull.settled ?? full);
+  const safeguards: SafeguardEffect[] = [];
+  for (const m of members) {
+    const act = problem.activities[m]!;
+    if (!act.safeguard) continue;
+    const rest = members.filter((x) => x !== m);
+    if (rest.length === 0) {
+      safeguards.push({ key: act.key, safeguard: act.safeguard, reachGain: 0, tailGain: 0, p10Gain: 0, capitalShortChange: 0, comparable: false });
+      continue;
+    }
+    const cap: { settled?: Float64Array } = {};
+    const without = evaluate(problem, rest, picks, worlds, cap);
+    if (!without.feasible) {
+      safeguards.push({ key: act.key, safeguard: act.safeguard, reachGain: 0, tailGain: 0, p10Gain: 0, capitalShortChange: 0, comparable: false });
+      continue;
+    }
+    safeguards.push({
+      key: act.key,
+      safeguard: act.safeguard,
+      reachGain: round(best.reach - without.reach),
+      tailGain: round(fullTail - tailMean(cap.settled!)),
+      p10Gain: round(best.settledP10 - without.settledP10),
+      capitalShortChange: round(best.capitalShort - without.capitalShort),
+      comparable: true,
+    });
+  }
+
+  if (validation.length > 0) {
+    const keys = [...new Set(validation.map((v) => v.key))].join(', ');
+    return {
+      status: 'CALIBRATION_UNAVAILABLE',
+      reach: best.reach,
+      range: null,
+      meets90: false,
+      statement: `Calibration is unavailable: inputs for ${keys} fail validation. ${round(best.reach * 100)}% of simulated worlds reach the target, which is coverage of the assumptions made and not a probability; no 90% claim is made.`,
+      validation,
+      safeguards,
+    };
+  }
+  const effective = Math.max(1, Math.floor(Math.min(...members.map((m) => problem.activities[m]!.evidence!.sampleSize))));
+  const { low, high } = wilson(Math.round(best.reach * effective), effective);
+  const meets90 = low >= CLAIM_THRESHOLD;
+  return {
+    status: 'CALIBRATED',
+    reach: best.reach,
+    range: { low: round(low), high: round(high), level: CONFIDENCE_LEVEL, effectiveSamples: effective },
+    meets90,
+    statement: meets90
+      ? `Calibrated: the chance of reaching the target is between ${round(low * 100)}% and ${round(high * 100)}% (${CONFIDENCE_LEVEL * 100}% interval, limited by ${effective} observations); the lower bound clears 90%.`
+      : `Calibrated, but 90% is not claimed: the strongest defensible chance of reaching the target is ${round(low * 100)}%–${round(high * 100)}% (${CONFIDENCE_LEVEL * 100}% interval, limited by ${effective} observations).`,
+    validation,
+    safeguards,
+  };
 }
 
 /** Find the combination most likely to reach the target, with every alternative ranked. */
@@ -253,5 +421,7 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
   }
   const ranked = [...readings].sort(better);
   const best = ranked.find((one) => one.feasible) ?? null;
-  return { best, ranked: ranked.slice(0, 8), singles, refused, searched: readings.length };
+  const result: PortfolioResult = { best, ranked: ranked.slice(0, 8), singles, refused, searched: readings.length };
+  if (best) result.uncertainty = assess(problem, best, picks, worlds);
+  return result;
 }
