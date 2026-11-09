@@ -132,6 +132,14 @@ export async function checkCommercialAuthority(input: {
   projectId: string;
   action: string;
   at?: string;
+  /** How the action reaches the world. A browser is a path, not an exemption. Defaults to API. */
+  path?: ActionPath;
+  /** The sum the action commits, when the caller states one. Not stating it never lowers a ceiling for a caller that does. */
+  amountCents?: number | null;
+  /** The authenticated principal, never the action's payload. */
+  principal?: string | null;
+  /** READ_ONLY never reaches past internal work, whatever the grant says. */
+  access?: AccessKind;
 }): Promise<CommercialDecision> {
   if (!isCommercialAction(input.action)) {
     return {
@@ -165,6 +173,28 @@ export async function checkCommercialAuthority(input: {
       reason: `the commercial authority does not cover ${input.action}`,
       policyVersion: authority.policyVersion,
     };
+  }
+  /*
+   * The graduated judgment every action path shares (`decideAction`): an
+   * emergency stop, a revocation, a read-only holder and the action's
+   * consequence class apply here, on the path that performs the effect, and
+   * not only where a caller remembered to ask. The grant checks above stay as
+   * they were; this can only refuse more, never allow what they refused.
+   */
+  const judged = await decideAction({
+    projectId: input.projectId,
+    action: input.action,
+    at: input.at,
+    path: input.path ?? 'API',
+    amountCents: input.amountCents,
+    principal: input.principal,
+    access: input.access,
+  });
+  // A caller that states no amount has its sum bounded by its own path's ceilings (the per-action and committed
+  // limits are read where the money is committed); that alone is not a refusal here. Every other cause is.
+  const amountOnly = !judged.ok && judged.ledger.cause === 'AMOUNT_UNKNOWN' && (input.amountCents === undefined || input.amountCents === null);
+  if (!judged.ok && !amountOnly) {
+    return { ok: false, authority, reason: judged.reason, policyVersion: authority.policyVersion };
   }
   return {
     ok: true,
