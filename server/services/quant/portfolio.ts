@@ -51,6 +51,30 @@ export interface Activity {
    * the combination in one world, never on an activity's average.
    */
   spend?: number[];
+  /**
+   * What the samples rest on. Absent means nothing is stated, which is never read
+   * as favourable: a probability claim needs a stated sample size.
+   */
+  evidence?: {
+    /** Independent real observations behind the samples (not the number of simulated draws). */
+    sampleSize?: number;
+    /** True when conditions have changed since the observations, so they may not transfer. */
+    conditionsChanged?: boolean;
+  };
+}
+
+/** A control whose effect on the downside is measured, not asserted. */
+export interface Safeguard {
+  key: string;
+  kind: 'INDEPENDENT_CHANNEL' | 'DIVERSIFIED_COUNTERPARTY' | 'RESERVE_CAPACITY' | 'FASTER_CASH_CYCLE' | 'CONTINGENCY';
+  /** Members of a risk group stop sharing its shock (independent channel, diversified counterparty). */
+  decorrelate?: string[];
+  /** Added capacity per resource (reserve capacity). */
+  capacityBonus?: Record<string, number>;
+  /** Multiplies days-to-cash of the named activities, 0 < f <= 1 (faster cash cycle). */
+  daysFactor?: { activities: string[]; factor: number };
+  /** Added starting capital held back for contingency. */
+  capitalBonus?: number;
 }
 
 export interface PortfolioProblem {
@@ -64,6 +88,8 @@ export interface PortfolioProblem {
   riskCorrelation?: Record<string, number>;
   /** Total money the combination may pay out in one world. A world over it does not reach the target. */
   spendCeiling?: number;
+  /** Controls to quantify against the best combination, over the same worlds. */
+  safeguards?: Safeguard[];
   worlds?: number;
   seed?: number;
 }
@@ -93,7 +119,45 @@ export interface PortfolioResult {
   /** Combinations refused before any world was drawn. */
   refused: Array<{ keys: string[]; reason: string }>;
   searched: number;
+  /** What the best combination's number may be called. Added alongside, never replacing, the readings. */
+  assurance?: Assurance;
+  /** Measured change to the downside from each safeguard, on the identical worlds. Present when safeguards were given. */
+  safeguardEffects?: SafeguardEffect[];
 }
+
+export interface SafeguardEffect {
+  key: string;
+  kind: Safeguard['kind'];
+  reachBefore: number;
+  reachAfter: number;
+  /** Change in the share of worlds reaching the target (positive helps). */
+  reachChange: number;
+  /** Change in the tenth-percentile settled cash: the bad-world outcome. */
+  downsideChange: number;
+  capitalShortChange: number;
+}
+
+export type AssuranceStatus = 'CLAIMS_AT_LEAST_90' | 'RANGE' | 'CALIBRATION_UNAVAILABLE';
+
+export interface Assurance {
+  status: AssuranceStatus;
+  /** The strongest defensible range for reaching the target; null when calibration is unavailable. */
+  range: { low: number; high: number } | null;
+  /** True only when status is CLAIMS_AT_LEAST_90. */
+  claimsAtLeast90: boolean;
+  /** Share of simulated worlds reaching the target. Coverage of scenarios; not a probability unless status says so. */
+  coverage: number | null;
+  /** Inputs that make the figure a validation problem, never a favourable assumption. */
+  validationProblems: string[];
+  /** Tail: what the tenth-percentile world settles, against the target. */
+  tailSettledP10: number | null;
+  reason: string;
+}
+
+export const MIN_EVIDENCE_SAMPLE = 20;
+/** One-sided 95% normal quantile, used for the lower bound of a claim. */
+const Z95 = 1.6449;
+export const CLAIM_THRESHOLD = 0.9;
 
 export const EXHAUSTIVE_LIMIT = 12;
 const DEFAULT_WORLDS = 2_000;
@@ -253,5 +317,81 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
   }
   const ranked = [...readings].sort(better);
   const best = ranked.find((one) => one.feasible) ?? null;
-  return { best, ranked: ranked.slice(0, 8), singles, refused, searched: readings.length };
+  const result: PortfolioResult = { best, ranked: ranked.slice(0, 8), singles, refused, searched: readings.length, assurance: assess(problem, best) };
+  if (best && problem.safeguards?.length) {
+    const members = best.keys.map((k) => problem.activities.findIndex((a) => a.key === k));
+    result.safeguardEffects = problem.safeguards.map((guard) => {
+      const after = withSafeguard(problem, guard, members, worlds, picks);
+      return {
+        key: guard.key,
+        kind: guard.kind,
+        reachBefore: best.reach,
+        reachAfter: after.reach,
+        reachChange: after.reach - best.reach,
+        downsideChange: after.settledP10 - best.settledP10,
+        capitalShortChange: after.capitalShort - best.capitalShort,
+      };
+    });
+  }
+  return result;
+}
+
+/**
+ * What the best combination's figure may be called. A probability is claimed only
+ * when every member's samples rest on evidence with a stated sample size and
+ * unchanged conditions; the range widens with the smallest sample behind any
+ * member (the weakest link bounds the claim); at least 90% is claimed only when
+ * the lower bound clears it. Otherwise the answer is a range, or that
+ * calibration is unavailable. An input without evidence is a validation problem
+ * and is never read as favourable.
+ */
+export function assess(problem: PortfolioProblem, best: PortfolioReading | null): Assurance {
+  if (!best) {
+    return { status: 'CALIBRATION_UNAVAILABLE', range: null, claimsAtLeast90: false, coverage: null, validationProblems: ['no feasible combination'], tailSettledP10: null, reason: 'no feasible combination exists, so there is nothing to calibrate' };
+  }
+  const members = problem.activities.filter((one) => best.keys.includes(one.key));
+  const problems: string[] = [];
+  for (const one of members) {
+    if (!one.justified) problems.push(`"${one.key}": samples are not evidence-backed (invented or unvalidated inputs)`);
+    else if (one.evidence?.sampleSize === undefined || !(one.evidence.sampleSize >= MIN_EVIDENCE_SAMPLE)) problems.push(`"${one.key}": sample size ${one.evidence?.sampleSize === undefined ? 'is not stated' : `${one.evidence.sampleSize} is under ${MIN_EVIDENCE_SAMPLE}`}`);
+    if (one.evidence?.conditionsChanged) problems.push(`"${one.key}": conditions changed since its observations, so they may not transfer`);
+  }
+  const base = { coverage: best.reach, tailSettledP10: best.settledP10, validationProblems: problems };
+  if (problems.length > 0) {
+    return { ...base, status: 'CALIBRATION_UNAVAILABLE', range: null, claimsAtLeast90: false, reason: `calibration is unavailable: ${problems.length} input(s) fail validation; the ${round(best.reach * 100)}% is share of scenarios covered, not a probability` };
+  }
+  const nMin = Math.min(...members.map((one) => one.evidence!.sampleSize!));
+  // Wilson interval on the weakest sample: unlike the normal interval it never collapses to zero width at 0% or 100%.
+  const z2 = Z95 * Z95;
+  const centre = (best.reach + z2 / (2 * nMin)) / (1 + z2 / nMin);
+  const half = (Z95 * Math.sqrt((best.reach * (1 - best.reach)) / nMin + z2 / (4 * nMin * nMin))) / (1 + z2 / nMin);
+  const low = Math.max(0, centre - half);
+  const high = Math.min(1, centre + half);
+  const claims = low >= CLAIM_THRESHOLD;
+  return {
+    ...base,
+    status: claims ? 'CLAIMS_AT_LEAST_90' : 'RANGE',
+    range: { low, high },
+    claimsAtLeast90: claims,
+    reason: claims
+      ? `calibrated evidence (smallest sample ${nMin}) puts the lower bound at ${round(low * 100)}%, above ${CLAIM_THRESHOLD * 100}%`
+      : `strongest defensible range is ${round(low * 100)}%–${round(high * 100)}% (smallest sample ${nMin}); the lower bound does not reach ${CLAIM_THRESHOLD * 100}%`,
+  };
+}
+
+/** Re-evaluates `members` with a safeguard applied, over the very same drawn worlds. */
+function withSafeguard(problem: PortfolioProblem, guard: Safeguard, members: number[], worlds: number, picks: number[][]): PortfolioReading {
+  const activities = problem.activities.map((one) => {
+    let next = one;
+    if (guard.decorrelate?.includes(one.key) && one.riskGroup) next = { ...next, riskGroup: undefined };
+    if (guard.daysFactor?.activities.includes(one.key)) next = { ...next, days: one.days.map((d) => d * Math.min(1, Math.max(0, guard.daysFactor!.factor))) };
+    return next;
+  });
+  const capacity = { ...(problem.capacity ?? {}) };
+  for (const [r, extra] of Object.entries(guard.capacityBonus ?? {})) capacity[r] = (capacity[r] ?? 0) + extra;
+  const startingCapital = problem.startingCapital === undefined ? undefined : problem.startingCapital + (guard.capitalBonus ?? 0);
+  const adjusted: PortfolioProblem = { ...problem, activities, capacity, startingCapital };
+  // Decorrelating changes how worlds are drawn, so redraw only then; every other safeguard reuses the same picks.
+  const usePicks = guard.decorrelate?.length ? drawWorlds(adjusted, worlds) : picks;
+  return evaluate(adjusted, members, usePicks, worlds);
 }
