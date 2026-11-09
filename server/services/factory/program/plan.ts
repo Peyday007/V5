@@ -358,3 +358,22 @@ export function promotedRequirements(map: RequirementMap, extra: Map<string, str
 export function eligibleCampaigns(plan: ProgramPlan, finished: Set<string>, started: Set<string>): PlannedCampaign[] {
   return plan.campaigns.filter((c) => !started.has(c.key) && c.dependsOn.every((dep) => finished.has(dep)));
 }
+
+/** Whether a glob would reach the program's own verification code. */
+function reachesProtected(glob: string): boolean {
+  return PROTECTED_VERIFICATION_PATHS.some((p) => glob === p || matchesGlob(p.replace('/**', '/x.ts'), glob));
+}
+
+/**
+ * A file widens to its directory; a glob stays as it is. A directory that would
+ * reach the program's verification code keeps its original file instead.
+ */
+export function widenScope(scope: string[]): string[] {
+  const out = new Set<string>();
+  for (const entry of scope) {
+    const wider = entry.includes('*') || !/\.[a-z]+$/i.test(entry) || !entry.includes('/') ? entry : `${entry.slice(0, entry.lastIndexOf('/'))}/**`;
+    out.add(reachesProtected(wider) ? entry : wider);
+  }
+  return [...out].sort();
+}
+
