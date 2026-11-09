@@ -187,3 +187,16 @@ export function resolveNeed(option: PreparedOption | undefined, input: { require
 export function blockedWorkResumed(input: { handedOffAt: string; unitRunTimes: readonly string[] }): boolean {
   return input.unitRunTimes.some((t) => t > input.handedOffAt);
 }
+
+/**
+ * What the prepared options standing behind the capability map currently are, read from the
+ * event log on every Russell tick (through `advanceSources`). It records nothing, holds no
+ * lease and starts no worker: it is the reading that makes a dormant option visible while it
+ * stays a row. Options whose methods are costly are named, never built.
+ */
+export async function reviewPreparedOptions(projectId: string): Promise<{ options: number; costlyRefused: string[] }> {
+  const options = await preparedOptions(projectId);
+  const costlyRefused: string[] = [];
+  for (const o of options.values()) for (const r of warmCost(o).refused) costlyRefused.push(`${o.requirementId}: ${r}`);
+  return { options: options.size, costlyRefused };
+}

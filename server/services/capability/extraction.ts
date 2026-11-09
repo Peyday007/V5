@@ -51,6 +51,9 @@ import { toJson } from '../../repos/util.ts';
 import { getCurrentExtractionRun, listBlocks } from '../../repos/extraction.ts';
 import { getDocument } from '../../repos/documents.ts';
 import { recordEvent } from '../../repos/events.ts';
+import { getProjectBySlug } from '../../repos/projects.ts';
+import { reviewPreparedOptions } from './prepared.ts';
+import { ARCHITECTURE_SLUG } from './ingest.ts';
 import {
   advanceSource,
   getCandidate,
@@ -1112,6 +1115,7 @@ export async function advanceSources(): Promise<{
   audited: number;
   promoted: number;
   recovered: number;
+  preparedOptions: number;
 }> {
   const recovered = await recoverExtraction();
   let dispatched = 0;
@@ -1140,7 +1144,11 @@ export async function advanceSources(): Promise<{
 
   await settleAmendments();
 
-  return { dispatched, settled, audited, promoted, recovered };
+  // Prepared options (GOV-22-2) are read here each tick: recorded as rows, never as integrations.
+  const architecture = await getProjectBySlug(ARCHITECTURE_SLUG);
+  const prepared = architecture ? await reviewPreparedOptions(architecture.id) : { options: 0 };
+
+  return { dispatched, settled, audited, promoted, recovered, preparedOptions: prepared.options };
 }
 
 /**
