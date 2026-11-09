@@ -42,8 +42,10 @@
 import {
   heldCentsForProject,
   listAuthorities,
+  listCommitments,
   liveAuthority,
 } from '../../repos/cashAuthority.ts';
+import { cashEventsOfKindInProject, recordCashEvent } from '../../repos/cashMode.ts';
 import { needForKey, openNeedForKey } from '../../repos/cashPortfolio.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import type { CashAuthority, CashNeed } from '../../domain/types.ts';
@@ -333,7 +335,7 @@ export interface ActionDecision {
   /** The single smallest grant that would change a refusal, or null when none can. */
   neededApproval: { action: string; projectId: string; description: string } | null;
   /** On a stop or revocation: what stays owed and what may still proceed. */
-  obligations: { heldCents: number } | null;
+  obligations: { heldCents: number; heldCommitmentIds?: string[] } | null;
   remainingSafeWork: ConsequenceClass[];
   /** The stored request for `neededApproval`, or the approval that allowed this call (cash_needs row). */
   approvalNeedId?: string | null;
@@ -350,7 +352,11 @@ export interface JudgeInput {
   /** PROPOSE records a draft; only PERFORM is an effect. */
   mode?: 'PERFORM' | 'PROPOSE';
   amountCents?: number | null;
-  /** Set by the owner's stop control, read from its row — never by the action's caller. */
+  /**
+   * Overwritten by `decideAction` from the project's stop control rows
+   * (`setEmergencyStop`). Only the pure `judgeAction` reads it, for tests; no
+   * action path supplies it, so a caller cannot clear a stop by omitting it.
+   */
   emergencyStop?: boolean;
   /** A fact read from the release grant's envelope, for engineering actions. */
   releaseEnvelopeAllows?: boolean;
@@ -565,19 +571,105 @@ async function applyStoredApproval(input: JudgeInput, decision: ActionDecision):
   return { ...decision, approvalNeedId: raised.ok ? raised.value.id : null };
 }
 
+/*
+ * The emergency stop is a row, and the action path reads it.
+ *
+ * It is event-sourced on `cash_events` (append-only, already the project's
+ * cash history), so a stop and a resume are both on the record and neither
+ * rewrites the other. The newest of the two wins, and a tie reads as stopped:
+ * an ambiguity about whether risky mutations are paused resolves to paused.
+ * Stopping pauses consequential effects only — internal work, held commitments
+ * and their accounting carry on (see `remainingSafeWork`).
+ */
+export const EMERGENCY_STOP_KIND = 'AUTHORITY_EMERGENCY_STOP';
+export const EMERGENCY_RESUME_KIND = 'AUTHORITY_EMERGENCY_RESUME';
+
+/** Owner's stop control. Records who and why; changes no commitment, grant or ledger figure. */
+export async function setEmergencyStop(input: {
+  projectId: string;
+  on: boolean;
+  actorUserId: string;
+  reason: string;
+}) {
+  return recordCashEvent({
+    projectId: input.projectId,
+    kind: input.on ? EMERGENCY_STOP_KIND : EMERGENCY_RESUME_KIND,
+    actorRef: input.actorUserId,
+    summary: input.reason.trim() || (input.on ? 'emergency stop on' : 'emergency stop lifted'),
+  });
+}
+
+/** Whether the project's newest stop-control row says risky mutations are paused. */
+export async function emergencyStopOn(projectId: string): Promise<boolean> {
+  const stops = await cashEventsOfKindInProject(projectId, EMERGENCY_STOP_KIND);
+  const last = stops[stops.length - 1];
+  if (!last) return false;
+  const resumes = await cashEventsOfKindInProject(projectId, EMERGENCY_RESUME_KIND);
+  const resumed = resumes[resumes.length - 1];
+  return !resumed || resumed.createdAt <= last.createdAt;
+}
+
+/** Revoked: nothing is in force and the newest grant ended by revocation, not by a later grant or by time. */
+function wasRevoked(all: readonly CashAuthority[]): boolean {
+  const newest = all[0];
+  return !!newest && newest.state === 'REVOKED';
+}
+
+/**
+ * Record what a stop or revocation left behind: the commitments still owed, the
+ * work that may continue, and the one authorization that would resume the
+ * refused action. Append-only and deduplicated, so a retry loop adds one row.
+ */
+async function recordSuspension(input: JudgeInput, decision: ActionDecision, heldIds: string[]): Promise<void> {
+  const cause = decision.ledger.cause;
+  if (cause !== 'REVOKED' && cause !== 'EMERGENCY_STOP') return;
+  const kind = 'AUTHORITY_ACTION_SUSPENDED';
+  const detail = {
+    action: input.action,
+    cause,
+    path: decision.ledger.path,
+    heldCents: decision.obligations?.heldCents ?? 0,
+    heldCommitmentIds: heldIds,
+    remainingSafeWork: decision.remainingSafeWork,
+    needsAuthorization:
+      decision.neededApproval?.description ?? `lift the emergency stop to allow ${input.action}`,
+  };
+  const earlier = await cashEventsOfKindInProject(input.projectId, kind);
+  const last = earlier[earlier.length - 1];
+  const same = last && JSON.stringify(last.detail) === JSON.stringify(detail);
+  if (same) return;
+  await recordCashEvent({
+    projectId: input.projectId,
+    kind,
+    actorRef: 'BRAIN',
+    summary: `${input.action} was refused (${cause}); obligations stay tracked and safe work continues.`,
+    detail,
+  });
+}
+
 /**
  * Judge an action against the live rows. This is the one call every action path
  * — an API, a browser automation, a worker — makes before an effect.
  */
 export async function decideAction(input: JudgeInput): Promise<ActionDecision> {
   const klass = classifyAction(input.action);
-  if (klass === 'INTERNAL' || !klass) return judgeAction(input, { authority: null, revoked: false, heldCents: 0 });
+  if (klass === 'INTERNAL' || !klass) return judgeAction({ ...input, emergencyStop: false }, { authority: null, revoked: false, heldCents: 0 });
+  const stopped = await emergencyStopOn(input.projectId);
   const authority = await liveAuthority(input.projectId, input.at);
   let revoked = false;
-  if (!authority) {
-    const all = await listAuthorities(input.projectId);
-    revoked = all[0]?.state === 'REVOKED';
-  }
+  if (!authority) revoked = wasRevoked(await listAuthorities(input.projectId));
   const held = await heldCentsForProject(input.projectId, authority?.currency);
-  return applyStoredApproval(input, judgeAction(input, { authority, revoked, heldCents: held }));
+  const decision = await applyStoredApproval(
+    input,
+    judgeAction({ ...input, emergencyStop: stopped }, { authority, revoked, heldCents: held }),
+  );
+  const cause = decision.ledger.cause;
+  if (cause !== 'REVOKED' && cause !== 'EMERGENCY_STOP') return decision;
+  const heldIds = (await listCommitments(input.projectId)).filter((one) => one.state === 'HELD').map((one) => one.id);
+  const out: ActionDecision = {
+    ...decision,
+    obligations: { heldCents: held, heldCommitmentIds: heldIds },
+  };
+  await recordSuspension(input, out, heldIds);
+  return out;
 }
