@@ -63,6 +63,7 @@ import { setTarget } from '../server/services/goals/target.ts';
 import { askConstructedArrangements, askPathwayConstructions, CHAIN_LABEL, goalArrangements, goalLimits, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 import { constructArrangements } from '../server/services/cash/construct.ts';
 import { renderPathways } from '../server/services/goals/pathways.ts';
+import { renderReconstruction } from '../server/services/goals/reconstruction.ts';
 import { goalExclusions } from '../server/services/cash/exclusions.ts';
 import { targetProperties } from '../server/services/cash/properties.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS } from '../server/services/cash/discovery.ts';
@@ -503,6 +504,8 @@ async function printPlan(reading: PlanReading): Promise<void> {
     console.log(`    ${one.modelled ? 'model' : '     '} ${one.stage.slice(0, 1)} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);
   }
   printPortfolio(reading.portfolio);
+  // Why the plan falls short, what was changed, and the strongest reconstruction (§99).
+  if (reading.reconstruction) for (const line of renderReconstruction(reading.reconstruction)) console.log(line);
   console.log(`  ladder      ${Object.entries(reading.ladder).map(([stage, n]) => `${stage} ${n}`).join(' · ')}`);
   console.log(`  policy      ${reading.executionPolicy}${reading.executionPolicy === 'SQUEEZE' ? ': a cash target with a deadline; no market-testing phase, sellable openings are sold now, several at once' : ''}`);
   for (const one of reading.sales) {
@@ -768,6 +771,8 @@ function printPortfolio(portfolio: import('../server/services/goals/portfolio.ts
   if (m0) {
     const pc = (x: number) => `${(x * 100).toFixed(2)}%`;
     console.log(`    measured   reply ${pc(m0.low)}–${pc(m0.high)} on ${m0.sent} sends (${m0.replies} replies, ${m0.opportunities} opportunities, ${((m0.bounced / m0.sent) * 100).toFixed(1)}% bounced) from the Instantly workspace`);
+    console.log(`    authority  ${m0.assessment.authority} → ${m0.applied}: ${m0.assessment.sentence}`);
+    if (m0.asIs) console.log(`    as-is      if the new campaign does no better: reach ${(m0.asIs.reach * 100).toFixed(1)}% · settled p10 ${Math.round(m0.asIs.settledP10)} p50 ${Math.round(m0.asIs.settledP50)} p90 ${Math.round(m0.asIs.settledP90)}`);
   }
   const b = portfolio.best;
   if (b) {

@@ -182,6 +182,8 @@ export interface InstantlyMeasuredRates {
   replies: number;
   opportunities: number;
   bounced: number;
+  /** Each campaign's own counts: what produced the record matters as much as the totals (§99). */
+  campaigns: Array<{ name: string; sent: number; replies: number; opportunities: number; bounced: number; brainOwned: boolean }>;
 }
 
 /** Below this many sends a reply rate is noise, and the published range answers instead. */
@@ -212,14 +214,17 @@ export async function instantlyMeasuredRates(options: { fetch?: FetchLike; env?:
   if (answer && answer.kind === 'OK') {
     const body: unknown = answer.body;
     const rows = (Array.isArray(body) ? body : items(answer)) as unknown[];
-    const total: InstantlyMeasuredRates = { sent: 0, replies: 0, opportunities: 0, bounced: 0 };
+    const total: InstantlyMeasuredRates = { sent: 0, replies: 0, opportunities: 0, bounced: 0, campaigns: [] };
     for (const row of rows) {
       if (typeof row !== 'object' || row === null) continue;
       const one = row as Record<string, unknown>;
-      total.sent += count(one, 'emails_sent_count');
-      total.replies += count(one, 'reply_count_unique');
-      total.opportunities += count(one, 'total_opportunities');
-      total.bounced += count(one, 'bounced_count');
+      const name = String(one['campaign_name'] ?? '');
+      const c = { name, sent: count(one, 'emails_sent_count'), replies: count(one, 'reply_count_unique'), opportunities: count(one, 'total_opportunities'), bounced: count(one, 'bounced_count'), brainOwned: name.startsWith(BRAIN_CAMPAIGN_PREFIX) };
+      total.sent += c.sent;
+      total.replies += c.replies;
+      total.opportunities += c.opportunities;
+      total.bounced += c.bounced;
+      total.campaigns.push(c);
     }
     value = total.sent >= MEASURED_RATES_MIN_SENT ? total : null;
   }
