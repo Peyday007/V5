@@ -8,4 +8,9 @@ describe('widening a campaign scope', () => {
     expect(widenScope(['server/domain/factoryProgram.ts', 'server/services/factory/program/probes.ts', 'server/services/factory/release/outcome.ts']))
       .toEqual(['server/domain/factoryProgram.ts', 'server/services/factory/program/probes.ts', 'server/services/factory/release/**']);
   });
+
+  it('never widens a file into a whole top-level directory', () => {
+    expect(widenScope(['docs/FACTORY-PROGRAMS.md', 'docs/FACTORY-PROGRAMS-CHECKLIST.md', 'README.md', 'docs/programs/a/b.md']))
+      .toEqual(['README.md', 'docs/FACTORY-PROGRAMS-CHECKLIST.md', 'docs/FACTORY-PROGRAMS.md', 'docs/programs/a/**']);
+  });
 });

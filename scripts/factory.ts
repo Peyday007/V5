@@ -1813,7 +1813,7 @@ async function main(): Promise<void> {
           `source sha256 ${reading.program.sourceSha256}\n` +
           `counts ${Object.entries(reading.counts).map(([k, v]) => `${k}=${v}`).join(' ')}\n`,
       );
-      for (const p of reading.progress) process.stdout.write(`  campaign ${p.key}: ${p.outcome ?? 'not started'}${p.campaignId ? ` (${p.campaignId})` : ''}${p.blocker ? ` — ${p.blocker}` : ''}\n`);
+      for (const p of reading.progress) process.stdout.write(`  campaign ${p.key}: ${p.outcome ?? 'not started'}${p.campaignId ? ` (${p.campaignId})` : p.changeRequestId ? ` (change request ${p.changeRequestId}, not admitted)` : ''}${p.blocker ? ` — ${p.blocker}` : ''}\n`);
       for (const r of reading.requirements) {
         if (r.status === 'PRODUCTION_VERIFIED' && !flags['all']) continue;
         process.stdout.write(`  ${r.key} ${r.status}${r.reopened ? ' (reopened)' : ''}: ${r.reason}\n`);

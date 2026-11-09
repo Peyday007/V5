@@ -366,12 +366,17 @@ function reachesProtected(glob: string): boolean {
 
 /**
  * A file widens to its directory; a glob stays as it is. A directory that would
- * reach the program's verification code keeps its original file instead.
+ * reach the program's verification code keeps its original file instead, and so
+ * does a file directly under a top-level directory: `docs/**` or `tests/**` is
+ * the whole shared tree, and the line serializes every campaign that overlaps
+ * it (program fpg_2adb7f5e, 2026-11-09: links-d2, two files in docs/, queued
+ * behind a parked campaign owning docs/programs/brain-architecture/**).
  */
 export function widenScope(scope: string[]): string[] {
   const out = new Set<string>();
   for (const entry of scope) {
-    const wider = entry.includes('*') || !/\.[a-z]+$/i.test(entry) || !entry.includes('/') ? entry : `${entry.slice(0, entry.lastIndexOf('/'))}/**`;
+    const parent = entry.includes('/') ? entry.slice(0, entry.lastIndexOf('/')) : '';
+    const wider = entry.includes('*') || !/\.[a-z]+$/i.test(entry) || !parent.includes('/') ? entry : `${parent}/**`;
     out.add(reachesProtected(wider) ? entry : wider);
   }
   return [...out].sort();
