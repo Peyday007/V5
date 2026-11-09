@@ -160,11 +160,13 @@ describe('recordAcquisitionJudgment writes one MEASURED row', () => {
           return { repeatedUses: 4, repeatedUsesNeedingFallback: 0 };
         },
         record: (async (e: Record<string, unknown>) => void recorded.push(e)) as never,
+        proposalOnRecord: async () => false,
         caller: 'test',
       },
     );
     expect(j.reusableConnectorJustified).toBe(true);
-    expect(recorded).toHaveLength(1);
+    // The judgment row, then the proposal a justified connector produces.
+    expect(recorded.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT', 'CONNECTOR_PROPOSED']);
     const row = recorded[0] as { eventType: string; evidenceClass: string; outcome: string; workloadClass: string; measures: Record<string, unknown> };
     expect(row.eventType).toBe('ACQUISITION_JUDGMENT');
     expect(row.evidenceClass).toBe('MEASURED');
