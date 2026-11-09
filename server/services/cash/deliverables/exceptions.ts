@@ -26,7 +26,9 @@
  */
 import type { CashMoneyEntry } from '../../../domain/types.ts';
 import { authorizeRefund } from '../journey/fulfillment.ts';
-import type { CommitmentReading, CommitmentTransition, Party } from './commitments.ts';
+import { recordCashEvent } from '../../../repos/cashMode.ts';
+import { listMoneyEntries } from '../../../repos/cashLedger.ts';
+import { readCommitments, type CommitmentReading, type CommitmentTransition, type DeclaredTransition, type ExternalDependency, type Party } from './commitments.ts';
 
 export const EXCEPTION_KINDS = ['SCOPE_CHANGE', 'MISSED_DATE', 'CANCELLATION', 'PAYMENT_FAILURE', 'DISPUTE'] as const;
 export type ExceptionKind = (typeof EXCEPTION_KINDS)[number];
@@ -417,4 +419,74 @@ export function traceCase(input: {
     steps,
     reached: Object.values(reading.stages).filter((s) => s.state === 'REACHED').map((s) => s.stage),
   };
+}
+
+export interface StoredRehearsal {
+  rehearsal: Rehearsal;
+  detected: DetectedException[];
+  selections: RemedySelection[];
+  /** The `cash_events` row that persists the trace; its kind says whether the trace was valid. */
+  eventId: string;
+  eventKind: 'rehearsal.traced' | 'rehearsal.refused';
+}
+
+/**
+ * Rehearses one stored, sourced case and persists the trace (LIFE-29-3).
+ *
+ * Reads the case from the rows (obligations and the money ledger) through the
+ * existing readers, detects its exceptions, selects each remedy strictly inside
+ * the authority given, traces it, and appends the whole trace to `cash_events` —
+ * the append-only audit table that already owns cash history. No new store. A
+ * trace the rules refuse (no source, no failure path) is still recorded, as
+ * `rehearsal.refused` with its refusals, so a refusal is on record rather than
+ * silent and is never mistaken for a demonstration. Nothing is refunded or
+ * released here; carrying a remedy out stays with `carryOutApprovedRefund`.
+ */
+export async function rehearseStoredCase(input: {
+  projectId: string;
+  opportunityId: string;
+  currency: string;
+  sourceRef: string | null;
+  actorRef: string;
+  signals?: readonly ExceptionSignal[];
+  facts?: RemedyFacts;
+  authority?: RemedyAuthority;
+  declared?: DeclaredTransition[];
+  dependencies?: ExternalDependency[];
+  recovered?: readonly { exceptionId: string; remedy: Remedy; at: string; by: string }[];
+  now?: string;
+}): Promise<StoredRehearsal> {
+  const reading = await readCommitments({
+    projectId: input.projectId,
+    opportunityId: input.opportunityId,
+    currency: input.currency,
+    declared: input.declared,
+    dependencies: input.dependencies,
+    now: input.now,
+  });
+  const entries = await listMoneyEntries({ projectId: input.projectId, opportunityId: input.opportunityId, limit: 2000 });
+  const detected = detectExceptions(reading, input.signals ?? []);
+  const authority: RemedyAuthority = input.authority ?? { standing: [], approved: [] };
+  const selections = detected.map((exception) => selectRemedy({ reading, exception, facts: input.facts ?? {}, authority }));
+  const rehearsal = traceCase({ sourceRef: input.sourceRef, reading, entries, selections, recovered: input.recovered });
+  const eventKind = rehearsal.valid ? 'rehearsal.traced' : 'rehearsal.refused';
+  const event = await recordCashEvent({
+    projectId: input.projectId,
+    opportunityId: input.opportunityId,
+    kind: eventKind,
+    actorRef: input.actorRef,
+    summary: rehearsal.valid
+      ? `rehearsed ${rehearsal.steps.length} steps over ${detected.length} exception(s), reaching ${rehearsal.reached.join(', ') || 'no stage'}`
+      : `rehearsal refused: ${rehearsal.refusals.join('; ')}`,
+    detail: {
+      sourceRef: rehearsal.sourceRef,
+      valid: rehearsal.valid,
+      refusals: rehearsal.refusals,
+      reached: rehearsal.reached,
+      steps: rehearsal.steps,
+      exceptions: detected.map((d) => ({ id: d.id, kind: d.kind, source: d.source })),
+      decisions: selections.map((s) => ({ exceptionId: s.exception.id, chosen: s.chosen?.remedy ?? null, needs: s.needs, consequence: s.consequence })),
+    },
+  });
+  return { rehearsal, detected, selections, eventId: event.id, eventKind };
 }
