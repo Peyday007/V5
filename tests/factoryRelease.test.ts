@@ -479,6 +479,59 @@ describe('verification inside the released Brain', () => {
       (await verifyLive(deps({ revision: 'e'.repeat(40), contains: async () => null }), { mergeSha: 'c'.repeat(40), liveChecks: [] })).live,
     ).toBe(false);
   });
+
+  /*
+   * Release 05f67250 (2026-11-09): one compare request from the machine said
+   * "fetch failed", the revision check read "could not say", and the release was
+   * marked FAILED and a rollback attempted on a change that was live and healthy.
+   * A check nothing answered is UNKNOWN — asked again, never a failure (invariant 26).
+   */
+  it('reads a forge that did not answer as unknown, and an answered no as a failure', async () => {
+    const unanswered = await verifyLive(deps({ revision: 'e'.repeat(40), contains: async () => null }), { mergeSha: 'c'.repeat(40), liveChecks: [] });
+    expect(unanswered).toMatchObject({ live: false, unknown: true });
+    const no = await verifyLive(deps({ revision: 'e'.repeat(40), contains: async () => false }), { mergeSha: 'c'.repeat(40), liveChecks: [] });
+    expect(no).toMatchObject({ live: false, unknown: false });
+    // Unknown beside a definite failure is a failure.
+    const both = await verifyLive(deps({ revision: 'e'.repeat(40), contains: async () => null, health: 503 }), { mergeSha: 'c'.repeat(40), liveChecks: [] });
+    expect(both).toMatchObject({ live: false, unknown: false });
+  });
+
+  it('re-verifies only a release that failed on an unanswered check and was never reverted', async () => {
+    const { reverifyUnansweredRelease } = await import('../server/services/factory/release/verify.ts');
+    const changeRequest = await approved();
+    const campaign = await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    stubForge(['client/a.tsx']);
+    const plan = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    const runId = plan.action!.runId;
+    await advanceRelease({ runId, to: 'MERGED', mergeSha: 'c'.repeat(40) });
+    await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '9' });
+    await advanceRelease({ runId, to: 'VERIFYING' });
+    const unanswered = { checks: [{ check: 'revision', ok: false, detail: 'serving eeee; the forge could not say whether it contains the release' }, { check: 'healthz', ok: true, detail: 'answered 200' }] };
+    await advanceRelease({ runId, to: 'FAILED', failureStage: 'VERIFY', failureDetail: 'revision: could not say', verification: unanswered });
+    // An ordinary move never brings a FAILED run back.
+    expect((await advanceRelease({ runId, to: 'VERIFYING' })).moved).toBe(false);
+    // Not while its revert is unaccounted for.
+    await expect(reverifyUnansweredRelease(runId)).rejects.toThrow(/reverted or its revert is unaccounted for/);
+    await advanceRelease({ runId, to: 'FAILED', failureStage: 'VERIFY', failureDetail: 'verification failed; branch: the revert pull request could not be opened (403)' });
+    // This process carries no BRAIN_REVISION, so the re-verification is not LIVE; the run left FAILED for VERIFYING.
+    const outcome = await reverifyUnansweredRelease(runId);
+    expect(outcome.live).toBe(false);
+    expect((await latestRun(campaign.id))!.state).not.toBe('ROLLED_BACK');
+    // A check that answered "no" is never re-verified.
+    const other = await approved('Show a second friendly line on the Build page.');
+    const otherCampaign = await completeCampaign(other);
+    await grant(other.id);
+    const p2 = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    if (p2.action && p2.action.campaignId === otherCampaign.id) {
+      const id = p2.action.runId;
+      await advanceRelease({ runId: id, to: 'MERGED', mergeSha: 'd'.repeat(40) });
+      await advanceRelease({ runId: id, to: 'DEPLOYING', deployRunId: '10' });
+      await advanceRelease({ runId: id, to: 'VERIFYING' });
+      await advanceRelease({ runId: id, to: 'FAILED', failureStage: 'VERIFY', failureDetail: 'the revert pull request could not be opened', verification: { checks: [{ check: 'healthz', ok: false, detail: 'answered 503' }] } });
+      await expect(reverifyUnansweredRelease(id)).rejects.toThrow(/answered: healthz/);
+    }
+  });
 });
 
 describe('the status a person reads', () => {
