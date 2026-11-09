@@ -49,7 +49,7 @@ export interface AccessEvidence {
   /** What a person has already been granted, e.g. an official export or a licence, by name. */
   permittedRoute?: string;
   /** Terms the source states, honoured whichever method is chosen. */
-  terms?: { robotsDisallows?: boolean; rateLimitPerMinute?: number; privacyRestricted?: boolean; licenceLimitsUse?: string };
+  terms?: { robotsDisallows?: boolean; rateLimited?: boolean; rateLimitPerMinute?: number; privacyRestricted?: boolean; licenceLimitsUse?: string };
   /** Relative cost of each class in cents per read, where measured. */
   costCents?: Partial<Record<MethodClass, number>>;
   /** Observed reliability 0..1 per class on this source, where measured. */
@@ -91,6 +91,7 @@ export function selectAccessMethod(evidence: AccessEvidence = {}): AccessSelecti
   const constraints: string[] = ['honour the source terms, rate limits, privacy and licensing for the use made of what is retrieved'];
   const t = evidence.terms;
   if (t?.rateLimitPerMinute !== undefined) constraints.push(`at most ${t.rateLimitPerMinute} requests a minute`);
+  if (t?.rateLimited) constraints.push('the source rate-limited Brain: slow down and do not retry around the limit');
   if (t?.robotsDisallows) constraints.push('robots.txt disallows automated reads of this path');
   if (t?.privacyRestricted) constraints.push('the material is privacy-restricted: use only as the permission allows');
   if (t?.licenceLimitsUse) constraints.push(`licence limits use: ${t.licenceLimitsUse}`);
@@ -137,6 +138,12 @@ export function selectAccessMethod(evidence: AccessEvidence = {}): AccessSelecti
   const browserIdx = candidates.indexOf('BROWSER');
   const modelIdx = candidates.indexOf('MODEL_ASSISTED');
   if (browserIdx >= 0 && modelIdx >= 0 && !evidence.interfaceUnfamiliar) candidates.splice(modelIdx, 1);
+  // An unfamiliar or changed interface is what the model is for: ahead of the plain routine on the tie-break
+  // (measured reliability and cost still decide first), so the distinction is a choice and not a label.
+  if (browserIdx >= 0 && modelIdx >= 0 && evidence.interfaceUnfamiliar) {
+    candidates.splice(modelIdx, 1);
+    candidates.splice(browserIdx, 0, 'MODEL_ASSISTED');
+  }
 
   if (candidates.length === 0) {
     note('HUMAN_HANDOFF', true, 'no permitted automated route is evidenced');
@@ -179,13 +186,26 @@ export function classOfRoute(route: string): MethodClass {
   }
 }
 
-/** HTTP results that are a boundary and end in a human step, never a fallback. */
-export function boundaryOfRead(read: { readable: boolean; reason?: string; status?: number | null }): AccessEvidence['boundary'] | null {
+/**
+ * HTTP results that are a boundary and end in a human step, never a fallback.
+ *
+ * A bot challenge shows as `challenged` (the reader turns the challenge page into an EMPTY read, so
+ * its own reason no longer says so), a 403 is the site refusing this reader, and 401, 402 and 451
+ * are authentication, payment and legal. A 429 is not a boundary: it is a rate limit, a term to
+ * honour, reported through `terms.rateLimited`.
+ */
+export function boundaryOfRead(read: {
+  readable: boolean;
+  reason?: string;
+  status?: number | null;
+  challenged?: boolean;
+}): AccessEvidence['boundary'] | null {
   if (read.readable) return null;
-  if (read.reason === 'CHALLENGE') return 'CAPTCHA';
+  if (read.challenged || read.reason === 'CHALLENGE') return 'CAPTCHA';
   if (read.reason === 'HTTP_ERROR') {
     if (read.status === 401) return 'AUTHENTICATION';
     if (read.status === 402) return 'PAYMENT';
+    if (read.status === 403) return 'BOT_RESTRICTION';
     if (read.status === 451) return 'LEGAL';
   }
   return null;

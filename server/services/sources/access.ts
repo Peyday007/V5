@@ -55,7 +55,21 @@ export interface AccessAttempt {
   ms: number;
 }
 
-export type SourceRead = SourceFetch & { method: AccessMethod; attempts: AccessAttempt[] };
+/** Terms the reader met while reading, honoured by whichever method is recorded. */
+export interface ReadTerms {
+  /** robots.txt did not let a general reader take the browser route for this path. */
+  robotsDisallows?: boolean;
+  /** A route answered 429. */
+  rateLimited?: boolean;
+}
+
+export type SourceRead = SourceFetch & {
+  method: AccessMethod;
+  attempts: AccessAttempt[];
+  terms?: ReadTerms;
+  /** Set on a browser read: true when the host was not yet known to need the browser, so the interface was new to Brain. */
+  interfaceUnfamiliar?: boolean;
+};
 
 export interface AccessDeps {
   direct?: (url: string) => Promise<SourceFetch>;
@@ -418,10 +432,26 @@ export function resetSourceAccessMemory(): void {
 async function defaultRecord(read: SourceRead, caller: string, ms: number): Promise<void> {
   const host = hostOf(read.requestedUrl);
   // The method class and why it was chosen are recorded on the event this layer already writes.
-  const boundary = boundaryOfRead({ readable: read.readable, reason: read.readable ? undefined : read.reason, status: read.status });
+  // A challenge page is turned into an EMPTY read by `done`, so the attempts still say it was one.
+  const challenged = read.attempts.some((a) => a.reason === 'CHALLENGE');
+  const boundary = boundaryOfRead({ readable: read.readable, reason: read.readable ? undefined : read.reason, status: read.status, challenged });
+  const terms = read.terms ?? {};
+  // robots.txt stops a route; it ends the read at a human step only when nothing else was readable.
+  const stoppedByTerms = !read.readable && terms.robotsDisallows === true;
+  const evidenceTerms = read.readable ? { ...terms, robotsDisallows: undefined } : terms;
   const chosen = boundary
-    ? selectAccessMethod({ boundary })
-    : selectAccessMethod({ [read.method === 'CONNECTOR' ? 'nativeAvailable' : read.method === 'SITEMAP' || read.method === 'ARCHIVE' ? 'bulkAvailable' : read.method === 'BROWSER' ? 'interfaceOnly' : 'httpReadable']: read.readable, authorizedSession: read.method === 'BROWSER' ? true : undefined });
+    ? selectAccessMethod({ boundary, terms: evidenceTerms })
+    : stoppedByTerms
+      ? selectAccessMethod({ terms: evidenceTerms })
+      : selectAccessMethod({
+          [read.method === 'CONNECTOR' ? 'nativeAvailable' : read.method === 'SITEMAP' || read.method === 'ARCHIVE' ? 'bulkAvailable' : read.method === 'BROWSER' ? 'interfaceOnly' : 'httpReadable']: read.readable,
+          authorizedSession: read.method === 'BROWSER' ? true : undefined,
+          interfaceUnfamiliar: read.method === 'BROWSER' ? read.interfaceUnfamiliar : undefined,
+          terms: evidenceTerms,
+        });
+  const constraints = [...chosen.constraints];
+  if (read.readable && terms.robotsDisallows) constraints.push('robots.txt disallows the browser route for this path');
+  const stopped = Boolean(boundary) || stoppedByTerms;
   await recordBinEvent({
     eventType: 'SOURCE_ACCESS',
     provider: read.method,
@@ -436,9 +466,12 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
       finalUrl: read.finalUrl?.slice(0, 400) ?? null,
       chars: read.readable ? read.totalChars : 0,
       attempts: read.attempts,
-      methodClass: boundary ? chosen.method : classOfRoute(read.method),
-      methodReason: (read.readable || boundary ? chosen.why : `${classOfRoute(read.method)} did not yield a readable source (${read.reason}); no boundary was met, so no human step is implied`).slice(0, 300),
-      methodConstraints: chosen.constraints,
+      methodClass: stopped ? chosen.method : classOfRoute(read.method),
+      // What the evidence supports, which is not always the route that read it.
+      methodSelected: chosen.method,
+      interfaceUnfamiliar: read.interfaceUnfamiliar ?? null,
+      methodReason: (read.readable || stopped ? (!stopped && chosen.method !== classOfRoute(read.method) ? `${classOfRoute(read.method)} read it; the evidence supports ${chosen.method}: ${chosen.why}` : chosen.why) : `${classOfRoute(read.method)} did not yield a readable source (${read.reason}); no boundary was met, so no human step is implied`).slice(0, 300),
+      methodConstraints: constraints,
     },
   });
 }
@@ -461,6 +494,19 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   const learned = deps.learned ?? defaultLearned;
   const record = deps.record ?? defaultRecord;
   const attempts: AccessAttempt[] = [];
+  const terms: ReadTerms = {};
+  /** Set once the host's learned lead is known; `done` may run before then. */
+  let leadMethod: AccessMethod | null = null;
+  // robots.txt can only stop the browser route; an error reading it is not a prohibition.
+  const browserAllowed = async (): Promise<boolean> => {
+    try {
+      const allowed = await robotsAllow(url);
+      if (!allowed) terms.robotsDisallows = true;
+      return allowed;
+    } catch {
+      return false;
+    }
+  };
 
   const attempt = async (method: AccessMethod, run: () => Promise<SourceFetch | null>): Promise<SourceFetch | null> => {
     const t = Date.now();
@@ -473,6 +519,7 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
       return null;
     }
     const challenged = Boolean(read && isChallenge(read));
+    if (read?.status === 429) terms.rateLimited = true;
     attempts.push({
       method,
       readable: Boolean(read?.readable) && !challenged,
@@ -495,7 +542,13 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
           detail: 'the site answered with a bot challenge, not the page',
         }
       : read;
-    const out: SourceRead = { ...honest, method, attempts };
+    const out: SourceRead = {
+      ...honest,
+      method,
+      attempts,
+      ...(terms.robotsDisallows || terms.rateLimited ? { terms: { ...terms } } : {}),
+      ...(method === 'BROWSER' ? { interfaceUnfamiliar: leadMethod !== 'BROWSER' } : {}),
+    };
     await record(out, deps.caller ?? 'unknown', Date.now() - started).catch(() => undefined);
     return out;
   };
@@ -518,7 +571,8 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
 
   // A host whose own record says DIRECT never works there and the browser does.
   const lead = await learned(host).catch(() => null);
-  if (lead === 'BROWSER' && browser && (await robotsAllow(url).catch(() => false))) {
+  leadMethod = lead;
+  if (lead === 'BROWSER' && browser && (await browserAllowed())) {
     const rendered = await attempt('BROWSER', () => browser(url));
     if (rendered?.readable && !wantsBrowser(rendered)) return done(rendered, 'BROWSER');
   }
@@ -530,7 +584,7 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   let bestRead: SourceFetch = first;
   let bestMethod: AccessMethod = 'DIRECT';
 
-  if (wantsBrowser(first) && browser && lead !== 'BROWSER' && (await robotsAllow(url).catch(() => false))) {
+  if (wantsBrowser(first) && browser && lead !== 'BROWSER' && (await browserAllowed())) {
     const rendered = await attempt('BROWSER', () => browser(url));
     if (rendered && better(rendered, bestRead)) {
       bestRead = rendered;
