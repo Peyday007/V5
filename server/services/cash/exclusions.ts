@@ -105,3 +105,102 @@ export async function goalExclusions(goal: { title: string; intent: string; outc
   }
   return exclusionsIn(parts.filter(Boolean).join('\n'));
 }
+
+/*
+ * Regulated roles (COM-13-5, S-0106).
+ *
+ * A regulated industry is never an exclusion class: mortgage, insurance,
+ * manufacturing, subcontracting, deposits, consumer protection and advertising
+ * are not in EXCLUSION_CLASSES and no word here removes one by name. What is
+ * regulated is a *role* — an activity somebody performs — and a role is judged by
+ * what it must hold: product, location, licensing and contract. Economics for a
+ * role are counted only once a compliant position exists, which may be an
+ * authorized licensed partner's. A fact the record does not hold is "unknown",
+ * never assumed either way (§34, §39).
+ */
+
+/** The rights a regulated activity can require. Open to extension; no industry is a whitelist or a blacklist. */
+export const ROLE_REQUIREMENTS = ['product', 'location', 'licensing', 'contract'] as const;
+export type RoleRequirement = (typeof ROLE_REQUIREMENTS)[number];
+
+/** Activities whose legality depends on rights and obligations. Matched against what is done, never against the label a role is given. */
+export const REGULATED_ACTIVITIES = {
+  EARN_COMMISSION: /\b(?:commissions?|finder'?s fees?|referral (?:fees?|payments?)|revenue share)\b/i,
+  ORIGINATE: /\b(?:originat(?:e|es|ing|ion)|underwrit(?:e|es|ing)|issue (?:a )?polic(?:y|ies)|lend(?:ing)?)\b/i,
+  ADVISE: /\b(?:advis(?:e|es|ing)|recommend(?:s|ing)? (?:a )?(?:product|policy|loan|plan)|suitability)\b/i,
+  BROKER: /\b(?:brokering|broker(?:s)?|arrang(?:e|es|ing) (?:a )?(?:loan|polic(?:y|ies)|sale))\b/i,
+  SOLICIT: /\b(?:solicit(?:s|ing|ation)?|cold (?:call|email|text)|advertis(?:e|es|ing)|marketing (?:to|of) consumers)\b/i,
+  HOLD_DEPOSITS: /\b(?:deposits?|escrow|hold(?:s|ing)? (?:customer )?funds)\b/i,
+  MANUFACTURE: /\b(?:manufactur(?:e|es|ing)|subcontract(?:s|ing|or)?|private[- ]label)\b/i,
+  CONSUMER_FACING: /\b(?:consumer protection|consumer (?:sales|credit|lending)|retail customers?)\b/i,
+} as const satisfies Record<string, RegExp>;
+export type RegulatedActivity = keyof typeof REGULATED_ACTIVITIES;
+
+/** What a role is known to hold. Absent keys are unknown, which is different from false. */
+export interface RoleRecord {
+  /** What the role actually does, in the words of the row — the role's label is not read. */
+  performs: string;
+  /** The label it was given; kept only so a relabel can be seen to change nothing. */
+  label?: string | null;
+  /** requirement -> held (true), lacking (false); absent = unknown, read from the record. */
+  holds?: Partial<Record<RoleRequirement, boolean>>;
+  /** An authorized licensed partner who holds what the role lacks, with the contract that lets Brain rely on it. */
+  partner?: { holdsLicensing: boolean; contractInPlace: boolean } | null;
+}
+
+export type RolePosition = 'COMPLIANT' | 'COMPLIANT_VIA_PARTNER' | 'NEEDS_POSITION' | 'UNKNOWN';
+
+export interface RoleAssessment {
+  activities: RegulatedActivity[];
+  /** Nothing regulated is performed: no due diligence applies and nothing is excluded. */
+  regulated: boolean;
+  position: RolePosition;
+  /** Requirements the record says are lacking. */
+  missing: RoleRequirement[];
+  /** Requirements the record does not state; recorded as unknown, not assumed. */
+  unknown: RoleRequirement[];
+  /** Whether the role's economics may enter a figure. False until a compliant position is established. */
+  countEconomics: boolean;
+  /** Never true: a regulated role is assessed, not excluded by category. */
+  excluded: false;
+  reason: string;
+}
+
+/** The regulated activities a text performs. */
+export function regulatedActivitiesIn(text: string | null | undefined): RegulatedActivity[] {
+  if (!text) return [];
+  return (Object.keys(REGULATED_ACTIVITIES) as RegulatedActivity[]).filter((key) => REGULATED_ACTIVITIES[key].test(text));
+}
+
+/**
+ * Assess one role by its rights and obligations. The decision reads `performs`
+ * only, so renaming a role (a "referral" that is really brokering) is judged
+ * against the rule for what it does.
+ */
+export function assessRole(role: RoleRecord): RoleAssessment {
+  const activities = regulatedActivitiesIn(role.performs);
+  if (activities.length === 0) {
+    return { activities, regulated: false, position: 'COMPLIANT', missing: [], unknown: [], countEconomics: true, excluded: false, reason: 'No regulated activity is performed; nothing to establish.' };
+  }
+  const holds = role.holds ?? {};
+  const missing = ROLE_REQUIREMENTS.filter((req) => holds[req] === false);
+  const unknown = ROLE_REQUIREMENTS.filter((req) => holds[req] === undefined);
+  const partnerOk = !!role.partner && role.partner.holdsLicensing && role.partner.contractInPlace;
+
+  let position: RolePosition;
+  let reason: string;
+  if (missing.length === 0 && unknown.length === 0) {
+    position = 'COMPLIANT';
+    reason = 'The record shows every requirement held.';
+  } else if (partnerOk && missing.every((req) => req === 'licensing' || req === 'contract') && missing.length > 0 && unknown.length === 0) {
+    position = 'COMPLIANT_VIA_PARTNER';
+    reason = 'An authorized licensed partner holds what the role lacks, under a contract.';
+  } else if (missing.length > 0) {
+    position = 'NEEDS_POSITION';
+    reason = `Lacking ${missing.join(', ')}: find a compliant position (an authorized licensed partner) before counting economics.`;
+  } else {
+    position = 'UNKNOWN';
+    reason = `Not stated in the record: ${unknown.join(', ')}. Recorded as unknown, not assumed.`;
+  }
+  return { activities, regulated: true, position, missing, unknown, countEconomics: position === 'COMPLIANT' || position === 'COMPLIANT_VIA_PARTNER', excluded: false, reason };
+}
