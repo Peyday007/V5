@@ -15133,3 +15133,14 @@ Its controller recorded `FREE_LANE_IDLE` and kept retrying, but nothing read eve
 - The fleet target already excludes Factory.
 - The fire order now follows priority instead of arrival.
 - Brain's runtime has no Factory lock on research, cash, goals or dispatch: `RELEASE_IN_FLIGHT` gates only Factory's own release planner.
+
+**After release (2026-11-09 20:52Z, `admin utilization run`).** The first production reading found two more gaps, and both are now fixed.
+
+- **Research slots: 138 launchable ideas beside 88 free grant slots, 19 running.**
+  - The launch pass started one mission a tick (`max_launches_per_cycle`).
+  - That bound exists so Russell's own follow-ons cannot feed themselves, and it still binds follow-ons.
+  - Fresh ideas now fill free slots, up to `SLOT_FILL_PER_TICK` (5) a pass.
+  - `reserve` still refuses any launch over a grant's at-once ceiling.
+- **Claude routines read "idle" for hours with 3 executable bins.**
+  - The watchdog counted bins without the dispatcher's third predicate (`workReadySql`): a research packet bin with no claimable work is not executable.
+  - The count is now the dispatcher's own.
