@@ -21,6 +21,9 @@
  * it fits the calendar and is worth more than it costs.
  */
 
+import { listMoneyEntries } from '../../repos/cashLedger.ts';
+import type { CashMoneyEntry } from '../../domain/types.ts';
+
 export const RESEARCH_DECISIONS = ['IGNORE', 'RESEARCH_FIRST', 'LEARN_WHILE_EXECUTING', 'ACT_ON_RECONSTRUCTION'] as const;
 export type ResearchDecision = (typeof RESEARCH_DECISIONS)[number];
 
@@ -294,4 +297,87 @@ export function scoreRoutes(
   });
   const key = (s: RouteScore) => (objective === 'TURNOVER' ? s.capitalTurnover : s.riskAdjustedContribution);
   return scored.sort((a, b) => (key(b) ?? -Infinity) - (key(a) ?? -Infinity));
+}
+
+/**
+ * The consumer of the route money model: reads the project's append-only money
+ * ledger (`cash_money_entries`) into `MoneyEvent`s, one route per opportunity,
+ * and quantifies each. This is what puts the figures on production rows — nothing
+ * here stores a result or adds a scheduler.
+ *
+ * Mapping, every line a stated row and nothing inferred:
+ *  - PIPELINE_AGREED is a billing, and its earliest date the commitment;
+ *  - CUSTOMER_PAYMENT is funds received; SETTLEMENT is the same money becoming
+ *    usable, so it dates usable cash and is never counted as a second receipt;
+ *  - COST and COMMITMENT_PAID are supplier outlays whose funder no row states
+ *    (so spend stays unattributed rather than assumed self-funded);
+ *  - REFUND is a refund. Lead time has no ledger row and stays unknown.
+ * Entries with no opportunity belong to no route and are left out.
+ */
+export function routeInputsFromEntries(entries: readonly CashMoneyEntry[]): RouteMoneyInput[] {
+  const byRoute = new Map<string, CashMoneyEntry[]>();
+  for (const e of entries) {
+    if (!e.opportunityId) continue;
+    const list = byRoute.get(e.opportunityId) ?? [];
+    list.push(e);
+    byRoute.set(e.opportunityId, list);
+  }
+  const inputs: RouteMoneyInput[] = [];
+  for (const [routeKey, rows] of byRoute) {
+    const events: MoneyEvent[] = [];
+    const agreed: string[] = [];
+    const settled: string[] = [];
+    for (const e of rows) {
+      const amount = e.amountCents / 100;
+      switch (e.kind) {
+        case 'PIPELINE_AGREED':
+          events.push({ at: e.occurredAt, kind: 'BILLING', amount });
+          agreed.push(e.occurredAt);
+          break;
+        case 'CUSTOMER_PAYMENT':
+          events.push({ at: e.occurredAt, kind: 'FUNDS_RECEIVED', amount });
+          break;
+        case 'SETTLEMENT':
+          settled.push(e.fundsAvailableAt ?? e.occurredAt);
+          break;
+        case 'COST':
+        case 'COMMITMENT_PAID':
+          events.push({ at: e.occurredAt, kind: 'SUPPLIER_OUTLAY', amount });
+          break;
+        case 'REFUND':
+          events.push({ at: e.occurredAt, kind: 'REFUND', amount });
+          break;
+        default:
+          break;
+      }
+    }
+    inputs.push({
+      routeKey,
+      commitmentAt: agreed.sort()[0],
+      usableCashAt: settled.sort()[0],
+      events,
+    });
+  }
+  return inputs;
+}
+
+/** Read one project's money ledger and quantify every route in it, in one currency. */
+export async function readRouteMoney(input: { projectId: string; currency: string }): Promise<RouteMoneyVelocity[]> {
+  const entries = await listMoneyEntries({ projectId: input.projectId, currency: input.currency, limit: 2000 });
+  return routeInputsFromEntries(entries).map(quantifyRouteMoney);
+}
+
+/** The same routes ranked for an objective; unknown inputs score null and sort last. */
+export async function rankRoutesFromLedger(input: {
+  projectId: string;
+  currency: string;
+  objective: 'TURNOVER' | 'CONTRIBUTION';
+  collectionProbability?: Record<string, number>;
+}): Promise<{ money: RouteMoneyVelocity[]; ranking: RouteScore[] }> {
+  const money = await readRouteMoney(input);
+  const ranking = scoreRoutes(
+    money.map((m) => ({ money: m, collectionProbability: input.collectionProbability?.[m.routeKey] })),
+    input.objective,
+  );
+  return { money, ranking };
 }
