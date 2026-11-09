@@ -120,7 +120,18 @@ export async function verifyLive(
 }
 
 /** Verify a release run from inside the released Brain and record the verdict. */
-export async function verifyReleaseRun(runId: string): Promise<VerifyOutcome & { recorded: boolean }> {
+export interface VerifyOptions {
+  /**
+   * Containment as the release workflow read it from the forge with its own
+   * authenticated token, for the one question this process often cannot ask:
+   * production reads the forge without a token (60 reads an hour, shared), and
+   * a spent budget is not evidence about the release. Used only when this
+   * process's own read did not answer.
+   */
+  attestedContains?: boolean | null;
+}
+
+export async function verifyReleaseRun(runId: string, options: VerifyOptions = {}): Promise<VerifyOutcome & { recorded: boolean }> {
   const run = await getRun(runId);
   if (!run) throw new Error(`No release run ${runId}.`);
   if (run.state !== 'VERIFYING') throw new Error(`Release run ${runId} is ${run.state}, not VERIFYING.`);
@@ -128,6 +139,8 @@ export async function verifyReleaseRun(runId: string): Promise<VerifyOutcome & {
   const grant = await getGrant(run.grantId);
   const changeRequest = await getChangeRequest(run.changeRequestId);
   const repository = changeRequest ? parseRemote(changeRequest.repository) : null;
+  let unanswered: string | null = null;
+  let attested = false;
   const deps: VerifyDeps = {
     revision: BRAIN_REVISION,
     baseUrl: `http://127.0.0.1:${PORT}`,
@@ -136,16 +149,27 @@ export async function verifyReleaseRun(runId: string): Promise<VerifyOutcome & {
     // release 05f67250 (2026-11-09) was marked FAILED, and its rollback tried,
     // because one compare request from the machine said "fetch failed".
     contains: async (ancestor, descendant) => {
-      if (!repository) return null;
-      for (let attempt = 0; attempt < CONTAINS_ATTEMPTS; attempt += 1) {
-        if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, CONTAINS_RETRY_MS));
-        const reply = await compareCommits(repository, ancestor, descendant);
-        if (reply.ok && reply.body) return reply.body.status === 'identical' || reply.body.status === 'ahead';
+      if (repository) {
+        for (let attempt = 0; attempt < CONTAINS_ATTEMPTS; attempt += 1) {
+          if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, CONTAINS_RETRY_MS));
+          const reply = await compareCommits(repository, ancestor, descendant);
+          if (reply.ok && reply.body) return reply.body.status === 'identical' || reply.body.status === 'ahead';
+          unanswered = reply.reason ?? `the forge answered ${reply.status}`;
+        }
+      }
+      if (options.attestedContains === true || options.attestedContains === false) {
+        attested = true;
+        return options.attestedContains;
       }
       return null;
     },
   };
   const outcome = await verifyLive(deps, { mergeSha: run.mergeSha, liveChecks: grant?.liveChecks ?? [] });
+  for (const check of outcome.checks) {
+    if (check.check !== 'revision') continue;
+    if (attested) check.detail += ' (the release workflow’s authenticated read of the forge)';
+    else if (check.unknown && unanswered) check.detail += ` (${unanswered})`;
+  }
   const verification = { revision: BRAIN_REVISION, checks: outcome.checks, at: new Date().toISOString() };
   // Unknown is not FAILED: the run stays VERIFYING and the next pass asks again.
   if (outcome.unknown) return { ...outcome, recorded: false };
@@ -172,7 +196,7 @@ export async function verifyReleaseRun(runId: string): Promise<VerifyOutcome & {
  * Refused for any other failure: a check that answered "no" stays a failure,
  * and a release that was rolled back stays rolled back.
  */
-export async function reverifyUnansweredRelease(runId: string): Promise<VerifyOutcome & { recorded: boolean }> {
+export async function reverifyUnansweredRelease(runId: string, options: VerifyOptions = {}): Promise<VerifyOutcome & { recorded: boolean }> {
   const run = await getRun(runId);
   if (!run) throw new Error(`No release run ${runId}.`);
   if (run.state !== 'FAILED' || run.failureStage !== 'VERIFY') {
@@ -188,5 +212,5 @@ export async function reverifyUnansweredRelease(runId: string): Promise<VerifyOu
   }
   const { moved } = await advanceRelease({ runId, to: 'VERIFYING', reverify: true });
   if (!moved) throw new Error(`Release run ${runId} moved while being re-verified.`);
-  return verifyReleaseRun(runId);
+  return verifyReleaseRun(runId, options);
 }

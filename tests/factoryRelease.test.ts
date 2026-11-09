@@ -496,6 +496,16 @@ describe('verification inside the released Brain', () => {
     expect(both).toMatchObject({ live: false, unknown: false });
   });
 
+  it('lets the release workflow answer containment with its own authenticated read, only when Brain\'s did not', () => {
+    const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
+    expect(script).toMatch(/brain\(\['release-revision'\]\)/);
+    expect(script).toMatch(/\/compare\/\$\{mergeSha\}\.\.\.\$\{revision\}/);
+    expect(script).toMatch(/'--contains', String\(contains\)/);
+    const verify = fs.readFileSync('server/services/factory/release/verify.ts', 'utf8');
+    // Brain's own read is asked first; the attested answer is used only when it did not answer.
+    expect(verify.indexOf('compareCommits(repository, ancestor, descendant)')).toBeLessThan(verify.indexOf('options.attestedContains === true'));
+  });
+
   it('re-verifies only a release that failed on an unanswered check and was never reverted', async () => {
     const { reverifyUnansweredRelease } = await import('../server/services/factory/release/verify.ts');
     const changeRequest = await approved();
