@@ -133,6 +133,9 @@ export const REGULATED_ACTIVITIES = {
   HOLD_DEPOSITS: /\b(?:deposits?|escrow|hold(?:s|ing)? (?:customer )?funds)\b/i,
   MANUFACTURE: /\b(?:manufactur(?:e|es|ing)|subcontract(?:s|ing|or)?|private[- ]label)\b/i,
   CONSUMER_FACING: /\b(?:consumer protection|consumer (?:sales|credit|lending)|retail customers?)\b/i,
+  /* Selling or placing a financial or insurance product, and sending borrowers or policyholders to someone who does. */
+  SELL_PRODUCT: /\b(?:sell(?:s|ing)?|offer(?:s|ing)?|plac(?:e|es|ing)|writ(?:e|es|ing)) (?:[a-z-]+ ){0,3}(?:insurance|polic(?:y|ies)|mortgages?|loans?|annuit(?:y|ies)|securities|investments?|warrant(?:y|ies))\b/i,
+  REFER: /\brefer(?:s|ring|ral|rals)?\b[^.]{0,60}\b(?:borrowers?|clients?|customers?|policyholders?|leads?|patients?|homeowners?)\b|\b(?:borrowers?|clients?|customers?|policyholders?|leads?|patients?|homeowners?)\b[^.]{0,40}\brefer(?:red|rals?)\b/i,
 } as const satisfies Record<string, RegExp>;
 export type RegulatedActivity = keyof typeof REGULATED_ACTIVITIES;
 
@@ -146,13 +149,18 @@ export interface RoleRecord {
   holds?: Partial<Record<RoleRequirement, boolean>>;
   /** An authorized licensed partner who holds what the role lacks, with the contract that lets Brain rely on it. */
   partner?: { holdsLicensing: boolean; contractInPlace: boolean } | null;
+  /**
+   * A finding, with its basis, that the role performs nothing regulated. The word lists above are
+   * not exhaustive, so "nothing matched" is not that finding: only this is.
+   */
+  notRegulated?: { basis: string } | null;
 }
 
 export type RolePosition = 'COMPLIANT' | 'COMPLIANT_VIA_PARTNER' | 'NEEDS_POSITION' | 'UNKNOWN';
 
 export interface RoleAssessment {
   activities: RegulatedActivity[];
-  /** Nothing regulated is performed: no due diligence applies and nothing is excluded. */
+  /** A regulated activity was recognised, or a finding says none is performed. False with position UNKNOWN means the text was not understood. */
   regulated: boolean;
   position: RolePosition;
   /** Requirements the record says are lacking. */
@@ -180,7 +188,21 @@ export function regulatedActivitiesIn(text: string | null | undefined): Regulate
 export function assessRole(role: RoleRecord): RoleAssessment {
   const activities = regulatedActivitiesIn(role.performs);
   if (activities.length === 0) {
-    return { activities, regulated: false, position: 'COMPLIANT', missing: [], unknown: [], countEconomics: true, excluded: false, reason: 'No regulated activity is performed; nothing to establish.' };
+    // The lists recognise phrasings; they do not define what is regulated. Text that matches none of them is
+    // unknown until a finding with a basis says otherwise (§39): counting it would let a rewording evade the check.
+    if (role.notRegulated && role.notRegulated.basis.trim().length > 0) {
+      return { activities, regulated: false, position: 'COMPLIANT', missing: [], unknown: [], countEconomics: true, excluded: false, reason: `Found not regulated, on this basis: ${role.notRegulated.basis.trim().slice(0, 200)}` };
+    }
+    return {
+      activities,
+      regulated: false,
+      position: 'UNKNOWN',
+      missing: [],
+      unknown: [...ROLE_REQUIREMENTS],
+      countEconomics: false,
+      excluded: false,
+      reason: 'What the role performs names no activity this reader recognises, and no finding says it is unregulated. Recorded as unknown, not assumed compliant; its economics are not counted.',
+    };
   }
   const holds = role.holds ?? {};
   const missing = ROLE_REQUIREMENTS.filter((req) => holds[req] === false);
