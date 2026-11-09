@@ -122,6 +122,8 @@ export async function cashFunnel(input: {
   standings?: ReadonlyMap<string, Standing>;
   now?: string;
   weeks?: number;
+  /** Provider terms, sending capacity and reputation somebody has stated per mechanism. No row states them. */
+  outreachStated?: Readonly<Record<string, StatedOutreachInputs>>;
 }): Promise<FunnelReading> {
   const db = getDb();
   const until = input.now ?? cashNow();
@@ -312,7 +314,7 @@ export async function cashFunnel(input: {
           : null,
       byKind,
     },
-    outreach: await outreachFromRows(input.projectId),
+    outreach: await outreachFromRows(input.projectId, input.outreachStated),
   };
 }
 
@@ -414,7 +416,8 @@ export const OUTREACH_STAGES = [
   'permission', // provider terms and consent permit this use at all: 1 = permitted, 0 = refused
   'uniqueProspects', // unique relevant prospects reachable (a count, not a message count)
   'deliverability', // share of sends that reach an inbox or inbox-equivalent
-  'throughput', // messages the sending accounts can send in the period, at their reputation
+  'throughput', // messages the sending accounts can send in the period (stated capacity, not what was sent)
+  'reputation', // share of sending capacity from accounts in good standing with their provider
   'response', // share of reached prospects that reply or engage
   'qualification', // share of responders that qualify
   'close', // share of qualified that buy
@@ -508,7 +511,7 @@ const UNKNOWN_FIGURE = (because: string): OutreachFigure => ({ basis: 'UNKNOWN',
  */
 export type StageKind = 'share' | 'count' | 'permission';
 
-const SHARE_STAGES: readonly OutreachStage[] = ['deliverability', 'response', 'qualification', 'close', 'settlement', 'fulfillment'];
+const SHARE_STAGES: readonly OutreachStage[] = ['deliverability', 'reputation', 'response', 'qualification', 'close', 'settlement', 'fulfillment'];
 const COUNT_STAGES: readonly OutreachStage[] = ['uniqueProspects', 'throughput', 'repeat'];
 
 /** The kind of quantity each stage is. Exported so a caller can say what a stage takes. */
@@ -584,19 +587,21 @@ export function modelOutreachFunnel(mechanism: OutreachMechanism): OutreachFunne
     );
   };
 
-  const { uniqueProspects, deliverability, throughput } = stages;
-  const deliverable = gate(step(uniqueProspects, deliverability, 'reached prospects'));
+  const { uniqueProspects, deliverability, throughput, reputation } = stages;
+  // Prospects that can be reached: unique prospects that deliver from sending accounts in good
+  // standing, capped by what the accounts can send. Every one of those is a stated input.
+  const deliverable = gate(step(step(uniqueProspects, deliverability, 'reached prospects'), reputation, 'reached prospects'));
   const reachedProspects: OutreachFigure =
-    deliverable.basis === 'UNKNOWN' || throughput.basis === 'UNKNOWN' || deliverable.high === null || throughput.high === null || throughput.low === null || deliverable.low === null
-      ? deliverable.basis === 'UNKNOWN'
-        ? deliverable
-        : UNKNOWN_FIGURE(throughput.because ?? 'sending throughput is unknown')
-      : {
-          basis: 'ESTIMATED',
-          low: Math.min(deliverable.low, throughput.low),
-          high: Math.min(deliverable.high, throughput.high),
-          because: null,
-        };
+    deliverable.basis === 'UNKNOWN' || deliverable.low === null || deliverable.high === null
+      ? deliverable
+      : throughput.basis === 'UNKNOWN' || throughput.low === null || throughput.high === null
+        ? UNKNOWN_FIGURE(throughput.because ?? 'sending throughput is unknown')
+        : {
+            basis: deliverable.basis === 'MEASURED' && throughput.basis === 'MEASURED' ? 'MEASURED' : 'ESTIMATED',
+            low: Math.min(deliverable.low, throughput.low),
+            high: Math.min(deliverable.high, throughput.high),
+            because: null,
+          };
 
   const responders = step(reachedProspects, stages.response, 'responders');
   const qualified = step(responders, stages.qualification, 'qualified');
@@ -753,13 +758,14 @@ export function formatOutreachFunnel(reading: OutreachFunnelReading): string[] {
  * Build the mechanisms from the rows Brain has written (§94). Every stage is read from the rows
  * that state it, and a stage no row states stays unknown rather than defaulting:
  *
- *   permission      1 when contacts were actually sent: a CONTACT_RESULT row is written only for a
- *                   contact Brain performed through the authority gate, so provider terms and
- *                   consent were decided before the send. No row, no figure.
+ *   permission      stated, never inferred: that a contact was sent does not say provider terms
+ *                   or consent permit the use. Known only from `stated`; otherwise unknown.
  *   uniqueProspects distinct opportunities contacted: a count of prospects reached so far, never
  *                   the message count (one prospect messaged twice is one).
- *   throughput      contacts sent in the rows: what the accounts have actually sent, an observed
- *                   floor of capacity and not a promise of more.
+ *   throughput      stated sending capacity for the period. Contacts already sent are carried as
+ *                   `messagesSent` (effort), never as capacity: a cap read from what was sent is
+ *                   the cap that can never bind.
+ *   reputation      stated share of sending capacity in good standing. Unknown unless stated.
  *   deliverability  contacts that did not bounce.
  *   response        answered contacts among delivered ones.
  *   qualification   answered prospects that engaged with terms (accepted or countered, or hold an
@@ -775,7 +781,12 @@ export function formatOutreachFunnel(reading: OutreachFunnelReading): string[] {
  * A message count is never read as a buyer. A mechanism is whatever the rows name (its
  * `mechanism`, else its `channel`), never a list this code knows.
  */
-export async function mechanismsFromRows(projectId: string): Promise<OutreachMechanism[]> {
+export type StatedOutreachInputs = Partial<Record<'permission' | 'throughput' | 'reputation', StageInput>>;
+
+export async function mechanismsFromRows(
+  projectId: string,
+  stated: Readonly<Record<string, StatedOutreachInputs>> = {},
+): Promise<OutreachMechanism[]> {
   const db = getDb();
   const rows = await db.all<{
     mechanism: string | null;
@@ -844,9 +855,10 @@ export async function mechanismsFromRows(projectId: string): Promise<OutreachMec
       label: `${mode} (measured from ${contacts.length} recorded contact result(s))`,
       messagesSent: contacts.length > 0 ? contacts.length : undefined,
       inputs: {
-        permission: contacts.length > 0 ? { basis: 'MEASURED', value: 1 } : { basis: 'UNKNOWN' },
+        permission: stated[mode]?.permission ?? { basis: 'UNKNOWN' },
         uniqueProspects: uniqueContacted > 0 ? { basis: 'MEASURED', value: uniqueContacted } : { basis: 'UNKNOWN' },
-        throughput: contacts.length > 0 ? { basis: 'MEASURED', value: contacts.length } : { basis: 'UNKNOWN' },
+        throughput: stated[mode]?.throughput ?? { basis: 'UNKNOWN' },
+        reputation: stated[mode]?.reputation ?? { basis: 'UNKNOWN' },
         deliverability: measured(contacts.length - bounced, contacts.length),
         response: measured(answered, contacts.length - bounced),
         qualification: measured(qualifiedIds.size, answered),
@@ -863,8 +875,9 @@ export async function mechanismsFromRows(projectId: string): Promise<OutreachMec
 
 async function outreachFromRows(
   projectId: string,
+  stated?: Readonly<Record<string, StatedOutreachInputs>>,
 ): Promise<{ mechanisms: OutreachFunnelReading[]; mix: MixReading; consideredWays: ConsideredWay[] }> {
-  const mechanisms = await mechanismsFromRows(projectId);
+  const mechanisms = await mechanismsFromRows(projectId, stated);
   return {
     mechanisms: mechanisms.map(modelOutreachFunnel),
     mix: searchOutreachMix(mechanisms),
