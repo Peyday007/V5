@@ -44,6 +44,9 @@ import {
   listAuthorities,
   liveAuthority,
 } from '../../repos/cashAuthority.ts';
+import { getDb } from '../../db/database.ts';
+import { recordCashEvent } from '../../repos/cashMode.ts';
+import { parseJson } from '../../repos/util.ts';
 import { needForKey, openNeedForKey } from '../../repos/cashPortfolio.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import type { CashAuthority, CashNeed } from '../../domain/types.ts';
@@ -320,7 +323,9 @@ export interface AuthorityLedgerRecord {
     | 'OVER_PER_ACTION_CEILING'
     | 'OVER_COMMITTED_CEILING'
     | 'RELEASE_ENVELOPE'
-    | 'OWNER_APPROVED';
+    | 'OWNER_APPROVED'
+    /** The decision could not be written to the ledger, so no effect is authorized. */
+    | 'AUDIT_UNAVAILABLE';
   policyVersion: number | null;
   amountCents: number | null;
   at: string;
@@ -337,7 +342,7 @@ export interface ActionDecision {
   remainingSafeWork: ConsequenceClass[];
   /** The stored request for `neededApproval`, or the approval that allowed this call (cash_needs row). */
   approvalNeedId?: string | null;
-  /** Ready for `project_events`. Carries no credential and no free text from a caller. */
+  /** Appended to the ledger by `decideAction` (`cash_events`). Carries no credential and no free text from a caller. */
   ledger: AuthorityLedgerRecord;
 }
 
@@ -565,11 +570,91 @@ async function applyStoredApproval(input: JudgeInput, decision: ActionDecision):
   return { ...decision, approvalNeedId: raised.ok ? raised.value.id : null };
 }
 
+/* ------------------------------------------------------------------------- */
+/* The durable ledger                                                         */
+/* ------------------------------------------------------------------------- */
+
 /**
- * Judge an action against the live rows. This is the one call every action path
- * — an API, a browser automation, a worker — makes before an effect.
+ * The event kind every authority decision is appended under. It lives in
+ * `cash_events`, the project's append-only ledger with no foreign keys, on
+ * purpose: an audit row that a cascade can delete is not an audit row. No new
+ * table, store or authority path.
+ */
+export const AUTHORITY_DECISION_KIND = 'AUTHORITY_DECISION';
+
+/**
+ * Append the decision to the ledger. Every decision except an allowed piece of
+ * internal work is recorded — approvals, refusals, proposals, unknown actions —
+ * because routine reading is not an audit subject and a refusal always is. The
+ * payload is the ledger record plus the sentences the server composed; no
+ * caller-supplied text, credential or free argument reaches it.
+ *
+ * Fails closed: an effect whose approval could not be written down is refused,
+ * because an approval nobody can later inspect is the one this must never allow.
+ * A refusal whose record could not be written stays a refusal.
+ */
+async function recordDecision(decision: ActionDecision): Promise<ActionDecision> {
+  if (decision.ok && decision.consequenceClass === 'INTERNAL') return decision;
+  const record = decision.ledger;
+  const summary = `${record.disposition} ${record.action}: ${record.cause}`;
+  try {
+    await recordCashEvent({
+      projectId: record.projectId,
+      kind: AUTHORITY_DECISION_KIND,
+      actorRef: 'BRAIN',
+      summary,
+      detail: {
+        record,
+        reason: decision.reason,
+        neededApproval: decision.neededApproval?.description ?? null,
+        approvalNeedId: decision.approvalNeedId ?? null,
+      },
+    });
+    return decision;
+  } catch {
+    if (!decision.ok) return decision;
+    return {
+      ...decision,
+      ok: false,
+      reason: 'the decision could not be recorded in the ledger, so nothing is authorized',
+      neededApproval: null,
+      ledger: { ...record, disposition: 'REFUSED', cause: 'AUDIT_UNAVAILABLE' },
+    };
+  }
+}
+
+export interface LedgerEntry {
+  id: string;
+  at: string;
+  summary: string;
+  record: AuthorityLedgerRecord | null;
+  reason: string | null;
+}
+
+/** What Brain decided for a project, newest first, so an owner can ask later what was done, proposed or refused. */
+export async function authorityLedger(projectId: string, limit = 100): Promise<LedgerEntry[]> {
+  const rows = await getDb().all<{ id: string; created_at: string; summary: string; detail: string }>(
+    `SELECT id, created_at, summary, detail FROM cash_events
+      WHERE project_id = ? AND kind = ?
+      ORDER BY created_at DESC, id DESC LIMIT ?`,
+    [projectId, AUTHORITY_DECISION_KIND, Math.max(1, Math.min(500, limit))],
+  );
+  return rows.map((row) => {
+    const detail = parseJson<{ record?: AuthorityLedgerRecord; reason?: string }>(row.detail, {});
+    return { id: row.id, at: row.created_at, summary: row.summary, record: detail.record ?? null, reason: detail.reason ?? null };
+  });
+}
+
+/**
+ * Judge an action against the live rows and write the decision to the ledger.
+ * This is the one call every action path — an API, a browser automation, a
+ * worker — makes before an effect.
  */
 export async function decideAction(input: JudgeInput): Promise<ActionDecision> {
+  return recordDecision(await decideUnrecorded(input));
+}
+
+async function decideUnrecorded(input: JudgeInput): Promise<ActionDecision> {
   const klass = classifyAction(input.action);
   if (klass === 'INTERNAL' || !klass) return judgeAction(input, { authority: null, revoked: false, heldCents: 0 });
   const authority = await liveAuthority(input.projectId, input.at);
