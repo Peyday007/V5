@@ -12,6 +12,9 @@
 import { DISTRIBUTION_TIERS, type Estimate } from '../../domain/quant.ts';
 import type { SourceRef, VariableProvenance, VariableSpec } from '../../domain/scenario.ts';
 
+/** Model learning (LEARN-15-1) is reached from the same entry the scenario engine uses for estimates. */
+export { assessModelLearning } from './learning.ts';
+
 /** Quantiles kept when an estimate becomes an empirical distribution. */
 export const EXPORT_QUANTILES = 101;
 
