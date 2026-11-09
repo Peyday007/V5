@@ -41,6 +41,8 @@ export interface TargetReading {
   achieved: boolean;
   /** Days until the goal's own due date, or null when it has none. */
   daysLeft: number | null;
+  /** The ledger entry kinds this reading adds up, read from the goal's own metric. */
+  counted: string[];
   /** Real money facts that are deliberately NOT counted toward the target. */
   notCounted: { label: string; cents: number }[];
   since: string;
@@ -55,6 +57,13 @@ export interface TargetReading {
 }
 
 const DAY = 86_400_000;
+
+/** What each metric adds up. Anything not listed here is never added, whatever it is called. */
+const COUNTED_KINDS: Record<GoalMetric, string[]> = {
+  SETTLED_CASH: ['SETTLEMENT', '-REFUND'],
+  COLLECTED_CASH: ['CUSTOMER_PAYMENT', '-REFUND'],
+  CONTRIBUTION: ['CUSTOMER_PAYMENT', '-REFUND', '-COST', '-UNPAID_COMMITMENT'],
+};
 
 export async function readTarget(goal: Workstream, now: Date = new Date()): Promise<TargetReading | null> {
   const target = goal.target;
@@ -86,6 +95,7 @@ export async function readTarget(goal: Workstream, now: Date = new Date()): Prom
     remainingCents: Math.max(0, target.amountCents - achieved),
     achieved: achieved >= target.amountCents,
     daysLeft: goal.dueAt ? Math.ceil((Date.parse(goal.dueAt) - now.getTime()) / DAY) : null,
+    counted: COUNTED_KINDS[target.metric],
     notCounted,
     since: target.setAt,
     capitalCeilingCents: target.capitalCeilingCents,
