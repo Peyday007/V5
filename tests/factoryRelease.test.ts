@@ -540,6 +540,7 @@ describe('verification inside the released Brain', () => {
       await advanceRelease({ runId: id, to: 'VERIFYING' });
       await advanceRelease({ runId: id, to: 'FAILED', failureStage: 'VERIFY', failureDetail: 'the revert pull request could not be opened', verification: { checks: [{ check: 'healthz', ok: false, detail: 'answered 503' }] } });
       await expect(reverifyUnansweredRelease(id)).rejects.toThrow(/answered: healthz/);
+      // A run the script failed with no recorded check is re-verified: nothing answered no.
     }
   });
 });
