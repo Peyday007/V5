@@ -1278,6 +1278,10 @@ export interface PathwayReading {
     proceedWithoutEngineering: number;
     withReachableBuyer: number;
     withFulfiller: number;
+    /** Pathways whose every needed permission is granted (a proven `rights`). */
+    withRightsGranted: number;
+    /** Pathways with a delivery capacity at least estimated (a `capacity` that is not unknown). */
+    withCapacity: number;
     /** Of those, fulfilled by Brain's own proven capability. */
     producedByBrain: number;
     /** Pathways by how their buyers are reached. */
@@ -1368,6 +1372,8 @@ export function readPathways(input: {
       proceedWithoutEngineering: pathways.filter((p) => p.executable || p.moves.some((m) => m.action === 'SELL')).length,
       withReachableBuyer: pathways.filter((p) => p.channel.status !== 'UNKNOWN' && p.buyer.status !== 'UNKNOWN' && !p.gaps.includes('SUPPLY_WITHOUT_BUYER')).length,
       withFulfiller: pathways.filter((p) => p.fulfiller.status !== 'UNKNOWN').length,
+      withRightsGranted: pathways.filter((p) => p.rights.status === 'PROVEN').length,
+      withCapacity: pathways.filter((p) => p.capacity.status !== 'UNKNOWN').length,
       producedByBrain: pathways.filter((p) => p.producedBy !== null).length,
       acquisition: Object.fromEntries(ACQUISITION_METHODS.map((m) => [m, pathways.filter((p) => p.acquisition.method === m).length])) as Record<AcquisitionMethod, number>,
       facts,
@@ -1391,7 +1397,7 @@ export function renderPathways(reading: PathwayReading, limit = 12): string[] {
   const out: string[] = [];
   const s = reading.structures;
   const m = reading.measures;
-  out.push(`  reasoning   goal-to-transaction loop (§93): ${m.pathways} pathway(s) (${m.found} found, ${m.constructed} constructed), ${m.executable} executable, ${m.proceedWithoutEngineering} can proceed without engineering, ${m.withReachableBuyer} with a reachable buyer, ${m.withFulfiller} with a fulfiller (${m.producedByBrain} by Brain's own capability); reached by ${ACQUISITION_METHODS.filter((k) => m.acquisition[k] > 0).map((k) => `${k} ${m.acquisition[k]}`).join(' · ')}; facts P ${m.facts.proven} · E ${m.facts.estimated} · ? ${m.facts.unknown}; ${m.constructionMoves} construction move(s), ${m.variants} new variant(s)`);
+  out.push(`  reasoning   goal-to-transaction loop (§93): ${m.pathways} pathway(s) (${m.found} found, ${m.constructed} constructed), ${m.executable} executable, ${m.proceedWithoutEngineering} can proceed without engineering, ${m.withReachableBuyer} with a reachable buyer, ${m.withFulfiller} with a fulfiller (${m.producedByBrain} by Brain's own capability), ${m.withRightsGranted} with every permission granted, ${m.withCapacity} with a delivery capacity at least estimated; reached by ${ACQUISITION_METHODS.filter((k) => m.acquisition[k] > 0).map((k) => `${k} ${m.acquisition[k]}`).join(' · ')}; facts P ${m.facts.proven} · E ${m.facts.estimated} · ? ${m.facts.unknown}; ${m.constructionMoves} construction move(s), ${m.variants} new variant(s)`);
   out.push(`    backward  ${money(s.remaining)} ${s.currency} in ${s.daysLeft} day(s), outreach ${s.outreachPerDay.low}–${s.outreachPerDay.high}/day${s.outreachPerDay.stated ? '' : ' (not stated; bounds)'}; outreach alone needs ≥ ${s.minimumNetForOutreach === null ? '∞' : money(s.minimumNetForOutreach)} net per deal`);
   for (const one of s.structures) out.push(`    structure ${one.kind.padEnd(14)} ${one.verdict.padEnd(21)} ${one.label} · ${money(one.perDay.middle)}/day middle, ${money(one.perDay.best)}/day best · ${one.reason.slice(0, 160)}`);
   const ordered = [...reading.pathways].sort((a, b) => b.contribution.p50 - a.contribution.p50 || b.contribution.p90 - a.contribution.p90);
@@ -1399,7 +1405,7 @@ export function renderPathways(reading: PathwayReading, limit = 12): string[] {
   const shown = [...ordered.slice(0, Math.ceil(limit / 2))];
   for (const p of ordered) if (shown.length < limit * 2 && !shown.includes(p) && p.moves.some((m) => m.action === 'CONSTRUCT' || m.action === 'SELL')) shown.push(p);
   for (const p of shown) {
-    out.push(`    pathway   ${p.opportunityId} ${p.origin} ${p.executable ? 'EXECUTABLE' : 'not executable'} · net p10/p50/p90 ${money(p.contribution.p10)}/${money(p.contribution.p50)}/${money(p.contribution.p90)} (gross p50 ${money(p.gross.p50)}) · fit ${p.fit.verdict}${p.fit.lever.variable ? ` lever ${p.fit.lever.variable}` : ''} · ${p.title.slice(0, 70)}`);
+    out.push(`    pathway   ${p.opportunityId} ${p.origin} ${p.executable ? 'EXECUTABLE' : 'not executable'} · net p10/p50/p90 ${money(p.contribution.p10)}/${money(p.contribution.p50)}/${money(p.contribution.p90)} (gross p50 ${money(p.gross.p50)}) · rights ${S(p.rights)} · capacity ${S(p.capacity)} · fit ${p.fit.verdict}${p.fit.lever.variable ? ` lever ${p.fit.lever.variable}` : ''} · ${p.title.slice(0, 70)}`);
     out.push(`      model   buyer ${S(p.buyer)} ${V(p.buyer)} | why ${S(p.motivation)} | channel ${S(p.channel)} ${V(p.channel)} [${p.acquisition.method}] | offer ${S(p.offer)} | fulfils ${S(p.fulfiller)} ${V(p.fulfiller)}`);
     out.push(`      money   price ${S(p.revenuePerDeal)} ${V(p.revenuePerDeal)} | acquire ${S(p.acquisitionCost)} ${V(p.acquisitionCost)} | fulfil ${S(p.fulfilmentCost)} ${V(p.fulfilmentCost)} | net ${S(p.net)} ${V(p.net)} | convert ${S(p.conversion)} ${V(p.conversion)} | volume ${S(p.volume)} ${V(p.volume)} ${String(p.frequency.value)} | cash ${S(p.daysToCash)} ${V(p.daysToCash)}d | capital ${S(p.capital)} ${V(p.capital)}`);
     out.push(`      gaps    ${p.gaps.map((g) => GAP_LABEL[g]).join('; ') || 'none'}${p.permissionsMissing.length ? ` · permissions: ${p.permissionsMissing.join(', ')}` : ''} · ${p.fit.lever.change.slice(0, 140)}`);

@@ -21,7 +21,6 @@
 import { getDb } from '../../db/database.ts';
 import { totalsByKind } from '../../repos/cashLedger.ts';
 import { getProject } from '../../repos/projects.ts';
-import { contributionFrom } from '../cash/money.ts';
 import { GOAL_METRICS, type GoalMetric, type GoalTarget, type Workstream } from '../../domain/register.ts';
 
 export const GOAL_METRIC_LABEL: Record<GoalMetric, string> = {
@@ -74,12 +73,14 @@ export async function readTarget(goal: Workstream, now: Date = new Date()): Prom
   const payments = t('CUSTOMER_PAYMENT');
   const settled = t('SETTLEMENT');
   const unpaid = Math.max(0, t('UNPAID_COMMITMENT') - t('COMMITMENT_PAID') - t('COMMITMENT_RELEASED'));
-  const achieved =
-    target.metric === 'SETTLED_CASH'
-      ? settled - refunds
-      : target.metric === 'COLLECTED_CASH'
-        ? payments - refunds
-        : contributionFrom({ payments, refunds, costs: t('COST'), unpaidCommitments: unpaid });
+  // The metric's own list of counted kinds is what is added, so what the reading
+  // says it counts and what it adds up cannot differ. A '-' kind is subtracted;
+  // an unpaid supplier commitment counts as what is still owed, net of paid and released.
+  const amountOf = (kind: string) => (kind === 'UNPAID_COMMITMENT' ? unpaid : t(kind));
+  const achieved = COUNTED_KINDS[target.metric].reduce(
+    (sum, kind) => (kind.startsWith('-') ? sum - amountOf(kind.slice(1)) : sum + amountOf(kind)),
+    0,
+  );
   const pipeline = Math.max(0, t('PIPELINE_AGREED') - t('PIPELINE_RELEASED'));
   const notCounted = [
     { label: 'agreed but not paid (pipeline)', cents: pipeline },
