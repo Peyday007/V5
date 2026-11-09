@@ -9,7 +9,7 @@ import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createGoal } from '../server/repos/russellAuthority.ts';
 import { capture } from '../server/services/russell/judgment.ts';
-import { brainUtilization, watchUtilization } from '../server/services/engineering/watchdog.ts';
+import { brainUtilization, idleCounts, watchUtilization } from '../server/services/engineering/watchdog.ts';
 import { claimDispatchIntent, createBin, ensureDispatchIntent, getBin } from '../server/repos/bins.ts';
 import type { BinManifest } from '../server/domain/types.ts';
 
@@ -122,6 +122,13 @@ describe('the most important work fires first', () => {
           priority,
         })
       ).id;
+    // A bin the router just refused waits on that refusal, not on idle capacity.
+    const refused = await make('refused by the router', 5);
+    const before = (await idleCounts()).executableWork;
+    const { recordBinEvent } = await import('../server/repos/bins.ts');
+    await recordBinEvent({ eventType: 'DISPATCH_UNROUTED', binId: refused, projectId, outcome: 'NO_SURFACE_SERVES_THIS_FAMILY', reason: 'test' });
+    expect((await idleCounts()).executableWork).toBe(before - 1);
+    await getDb().run("UPDATE bins SET state = 'CANCELLED' WHERE id = ?", [refused]);
     const older = await make('older, ordinary', 5);
     await ensureDispatchIntent((await getBin(older))!);
     const urgent = await make('newer, revenue goal', 8);
