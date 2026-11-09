@@ -121,7 +121,7 @@ export interface RouteMoneyInput {
   commitmentAt?: string;
   usableCashAt?: string;
   events: MoneyEvent[];
-  /** Cash identities, each stated by its own row or left undefined. Never derived from each other. */
+  /** Cash identities stated by their own rows; billings, settled and usable cash are derived from `events` when those rows exist. */
   identities?: Partial<Record<CashIdentity, number>>;
 }
 
@@ -156,7 +156,7 @@ export interface RouteMoneyVelocity {
   /** Funds received minus encumbered funds minus refunds; null when no funds row exists. */
   usableCash: number | null;
   excludedFromUsable: number;
-  /** The nine identities as stated; unstated ones are null. Never summed or substituted. */
+  /** The nine identities: billings, settled and usable cash derived from rows, the rest as validly stated; otherwise null. */
   identities: Record<CashIdentity, number | null>;
   unknowns: string[];
 }
@@ -229,10 +229,29 @@ export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
   const usable = received === null ? null : Math.max(0, received - encumbered - (refunds ?? 0));
   if (received === null) unknowns.push('no funds-received row, usable cash unknown');
 
+  // Each identity is stated by its own row. Two are derivable from rows this model already
+  // holds (billings and funds received) and are derived whenever those rows exist, so a
+  // caller-supplied map cannot leave them null or contradict the rows. The rest are taken
+  // from the supplied map only when it is a finite number (and non-negative unless the
+  // identity can legitimately be a loss); anything else is treated as not stated.
+  const mayBeNegative: CashIdentity[] = ['GROSS_MARGIN', 'NET_PROFIT'];
   const identities = {} as Record<CashIdentity, number | null>;
-  for (const k of CASH_IDENTITIES) identities[k] = route.identities?.[k] ?? null;
-  // USABLE_CASH is the one identity this model computes, from funds actually received.
-  if (identities.USABLE_CASH === null) identities.USABLE_CASH = usable;
+  for (const k of CASH_IDENTITIES) {
+    const v = route.identities?.[k];
+    if (v === undefined || v === null) identities[k] = null;
+    else if (typeof v !== 'number' || !Number.isFinite(v) || (v < 0 && !mayBeNegative.includes(k))) {
+      identities[k] = null;
+      unknowns.push(`${k.toLowerCase()} supplied value is not a valid amount, treated as not stated`);
+    } else identities[k] = v;
+  }
+  const derive = (k: CashIdentity, rowValue: number | null) => {
+    if (rowValue === null) return;
+    if (identities[k] !== null && identities[k] !== rowValue) unknowns.push(`${k.toLowerCase()} supplied ${identities[k]} disagrees with the rows (${rowValue}); the rows govern`);
+    identities[k] = rowValue;
+  };
+  derive('GROSS_BILLINGS', billed);
+  derive('SETTLED_CASH', received);
+  derive('USABLE_CASH', usable);
   for (const k of CASH_IDENTITIES) if (identities[k] === null) unknowns.push(`${k.toLowerCase()} not stated`);
 
   return {
