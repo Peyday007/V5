@@ -115,6 +115,8 @@ export interface CommercialDecision {
   /** Safe to show a person. Names the rule, never a credential or an id. */
   reason: string;
   policyVersion: number | null;
+  /** The consequence-class judgment, its ledger record and any smallest missing approval; set whenever the action is a known one. */
+  judgment?: ActionDecision;
 }
 
 /**
@@ -128,7 +130,43 @@ export async function checkCommercialAuthority(input: {
   projectId: string;
   action: string;
   at?: string;
+  /** How the action reaches the world; the browser is a path, not an exemption. */
+  path?: ActionPath;
+  /** What the caller holds toward it: READ_ONLY never authorizes an effect. */
+  access?: AccessKind;
+  /** The sum an act would commit, judged against the grant's ceilings. */
+  amountCents?: number | null;
+  /** Read by the caller from the owner's stop control, never from the action's own request. */
+  emergencyStop?: boolean;
 }): Promise<CommercialDecision> {
+  const base = await checkGrant(input);
+  /*
+   * Every action path — outreach, spend, browser, contract, merge, deploy —
+   * asks this function, so it is where the consequence class, the read-only
+   * rule, the ceilings and the stop are judged (§16, AUTH-21-6, AUTH-34). The
+   * grant check above answers first and keeps its own words; the judgment can
+   * only narrow it, never widen it.
+   */
+  if (!isCommercialAction(input.action)) return base;
+  const judgment = await decideAction({
+    projectId: input.projectId,
+    action: input.action,
+    at: input.at,
+    path: input.path ?? 'API',
+    access: input.access ?? 'OPERATE',
+    // A caller that states no sum judges it in its own commitment gate (ceilings, deployable cash); here the
+    // class, read-only rule, stop and revocation still apply. A stated sum is judged against the ceilings,
+    // and an explicit null is a refusal, never a favourable reading.
+    amountCents: input.amountCents === undefined && SPENDING_ACTIONS.includes(input.action) ? 0 : input.amountCents,
+    emergencyStop: input.emergencyStop,
+    // Commercial actions are never engineering ones; an engineering caller supplies its own envelope fact.
+    releaseEnvelopeAllows: false,
+  });
+  if (base.ok && !judgment.ok) return { ...base, ok: false, reason: judgment.reason, judgment };
+  return { ...base, judgment };
+}
+
+async function checkGrant(input: { projectId: string; action: string; at?: string }): Promise<CommercialDecision> {
   if (!isCommercialAction(input.action)) {
     return {
       ok: false,
