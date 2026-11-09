@@ -17,8 +17,10 @@ import type {
   ProgramValidation,
   RequirementCheck,
   RequirementMap,
+  RequirementPriority,
   SourceItem,
 } from '../../../domain/factoryProgram.ts';
+import { REQUIREMENT_PRIORITIES } from '../../../domain/factoryProgram.ts';
 
 export class ProgramMapError extends Error {}
 
@@ -122,6 +124,8 @@ export function parseRequirementMap(input: unknown): RequirementMap {
         ? r.verification.map((c, j) => parseCheck(c, `${where}.verification[${j}]`))
         : [],
       ambiguities,
+      ...(r.priority === undefined || r.priority === null ? {} : { priority: text(r.priority, `${where}.priority`) as RequirementPriority }),
+      ...(r.prepared === true ? { prepared: true } : {}),
     };
   });
   const context = Array.isArray(record.context)
@@ -268,6 +272,9 @@ export function validateRequirementMap(
       if (!texts.some((t) => t.includes(requirement.quote!))) {
         issue(errors, 'QUOTE_NOT_IN_SOURCE', subject, `Its quote is not verbatim in ${requirement.source.join(', ')}.`);
       }
+    }
+    if (requirement.priority !== undefined && !(REQUIREMENT_PRIORITIES as readonly string[]).includes(requirement.priority)) {
+      issue(errors, 'INVALID_PRIORITY', subject, `Priority ${String(requirement.priority)} is not one of ${REQUIREMENT_PRIORITIES.join(', ')}.`);
     }
     if (requirement.behavior.length < 8) issue(errors, 'NO_BEHAVIOR', subject, 'It does not say what observable behavior is required.');
     if (requirement.verification.length === 0) {

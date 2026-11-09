@@ -9,6 +9,7 @@ import { getDb } from '../db/database.ts';
 import type {
   DiscoveredDependency,
   FactoryProgram,
+  ProgramAmendment,
   ProgramPlan,
   RequirementMap,
   RequirementVerification,
@@ -40,7 +41,7 @@ const SELECT_PROGRAM = `
          (SELECT MAX(version) FROM factory_program_plans l WHERE l.program_id = p.id) AS plan_version
     FROM factory_programs p`;
 
-function mapProgram(row: ProgramRow): FactoryProgram {
+function mapProgram(row: ProgramRow, amendments: ProgramAmendment[]): FactoryProgram {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -48,6 +49,7 @@ function mapProgram(row: ProgramRow): FactoryProgram {
     title: row.title,
     sourceText: row.source_text,
     sourceSha256: row.source_sha256,
+    amendments,
     repository: row.repository,
     baseBranch: row.base_branch,
     state: row.state,
@@ -61,15 +63,76 @@ function mapProgram(row: ProgramRow): FactoryProgram {
   };
 }
 
+interface AmendmentRow {
+  program_id: string;
+  number: number;
+  title: string;
+  source_text: string;
+  source_sha256: string;
+  actor_type: 'PERSON' | 'FACTORY';
+  actor_id: string | null;
+  created_at: string;
+}
+
+const mapAmendment = (row: AmendmentRow): ProgramAmendment => ({
+  number: Number(row.number),
+  title: row.title,
+  sourceText: row.source_text,
+  sourceSha256: row.source_sha256,
+  actorType: row.actor_type,
+  actorId: row.actor_id,
+  createdAt: row.created_at,
+});
+
+export async function listAmendments(programId: string): Promise<ProgramAmendment[]> {
+  const rows = await getDb().all<AmendmentRow>(`SELECT * FROM factory_program_amendments WHERE program_id = ? ORDER BY number`, [programId]);
+  return rows.map(mapAmendment);
+}
+
+async function withAmendments(row: ProgramRow): Promise<FactoryProgram> {
+  return mapProgram(row, await listAmendments(row.id));
+}
+
 export async function getProgram(id: string): Promise<FactoryProgram | null> {
   const row = await getDb().get<ProgramRow>(`${SELECT_PROGRAM} WHERE p.id = ?`, [id]);
-  return row ? mapProgram(row) : null;
+  return row ? withAmendments(row) : null;
 }
 
 export async function listPrograms(states: FactoryProgram['state'][] = ['DRAFT', 'APPROVED']): Promise<FactoryProgram[]> {
   const marks = states.map(() => '?').join(', ');
   const rows = await getDb().all<ProgramRow>(`${SELECT_PROGRAM} WHERE p.state IN (${marks}) ORDER BY p.created_at`, states);
-  return rows.map(mapProgram);
+  return Promise.all(rows.map(withAmendments));
+}
+
+/**
+ * Append the next release, or return the one with this exact text. The number
+ * is the next after the last; two writers racing for one number meet the
+ * primary key, and the loser reads the winner's row — the same text twice is
+ * one amendment (the unique hash), never two.
+ */
+export async function appendAmendment(input: {
+  programId: string;
+  title: string;
+  sourceText: string;
+  sourceSha256: string;
+  actorType: 'PERSON' | 'FACTORY';
+  actorId: string | null;
+}): Promise<{ amendment: ProgramAmendment; created: boolean }> {
+  const db = getDb();
+  const find = async (): Promise<AmendmentRow | undefined> =>
+    db.get<AmendmentRow>(`SELECT * FROM factory_program_amendments WHERE program_id = ? AND source_sha256 = ?`, [input.programId, input.sourceSha256]);
+  const existing = await find();
+  if (existing) return { amendment: mapAmendment(existing), created: false };
+  const last = await db.get<{ n: number | null }>(`SELECT MAX(number) AS n FROM factory_program_amendments WHERE program_id = ?`, [input.programId]);
+  const number = Number(last?.n ?? 0) + 1;
+  const result = await db.run(
+    `INSERT INTO factory_program_amendments (program_id, number, title, source_text, source_sha256, actor_type, actor_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+    [input.programId, number, input.title, input.sourceText, input.sourceSha256, input.actorType, input.actorId, nowIso()],
+  );
+  const row = await find();
+  if (!row) throw new Error(`amendment ${number} of program ${input.programId} lost a race; retry`);
+  return { amendment: mapAmendment(row), created: result.changes > 0 };
 }
 
 /** Insert a program, or return the one this submission key already made. */
@@ -87,7 +150,7 @@ export async function ensureProgram(input: {
     input.projectId,
     input.submissionKey,
   ]);
-  if (existing) return { program: mapProgram(existing), created: false };
+  if (existing) return { program: await withAmendments(existing), created: false };
   const id = newId('fpg');
   const at = nowIso();
   await db.run(
@@ -102,7 +165,7 @@ export async function ensureProgram(input: {
     input.submissionKey,
   ]);
   if (!row) throw new Error('factory program vanished immediately after insert');
-  return { program: mapProgram(row), created: row.id === id };
+  return { program: await withAmendments(row), created: row.id === id };
 }
 
 /** DRAFT → APPROVED, once. Returns whether this call moved it. */
