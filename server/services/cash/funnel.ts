@@ -454,7 +454,12 @@ export interface OutreachFunnelReading {
   buyers: OutreachFigure;
   settledBuyers: OutreachFigure;
   fulfilledBuyers: OutreachFigure;
-  /** Settled revenue in minor units, over the period, including repeat purchases. */
+  /**
+   * Settled revenue from first purchases alone, in minor units. It does not
+   * depend on the repeat stage, so an unknown repeat input leaves it known.
+   */
+  firstPurchaseRevenueCents: OutreachFigure;
+  /** Revenue over the period including repeat purchases. Unknown while repeat is unknown. */
   revenueCents: OutreachFigure;
   /** First stage whose input is unknown or refused, in funnel order. */
   firstUnknown: OutreachStage | null;
@@ -463,18 +468,47 @@ export interface OutreachFunnelReading {
 
 const UNKNOWN_FIGURE = (because: string): OutreachFigure => ({ basis: 'UNKNOWN', low: null, high: null, because });
 
-function figureOf(input: StageInput | undefined, what: string): OutreachFigure {
+/**
+ * What a stage input is a quantity of. A share is a fraction of the stage before
+ * it and cannot exceed 1; a count or amount is any non-negative number; a
+ * permission is a yes or a no and is never a fraction. A value that is not the
+ * kind its stage needs is unknown, not clamped: clamping would turn a bad
+ * recording into a favourable number.
+ */
+export type StageKind = 'share' | 'count' | 'permission';
+
+const SHARE_STAGES: readonly OutreachStage[] = ['deliverability', 'response', 'qualification', 'close', 'settlement', 'fulfillment'];
+const COUNT_STAGES: readonly OutreachStage[] = ['uniqueProspects', 'throughput', 'repeat'];
+
+/** The kind of quantity each stage is. Exported so a caller can say what a stage takes. */
+export function stageKind(stage: OutreachStage): StageKind {
+  if (stage === 'permission') return 'permission';
+  if (SHARE_STAGES.includes(stage)) return 'share';
+  if (COUNT_STAGES.includes(stage)) return 'count';
+  return 'count';
+}
+
+function figureOf(input: StageInput | undefined, what: string, kind: StageKind = 'count'): OutreachFigure {
   if (!input || input.basis === 'UNKNOWN') return UNKNOWN_FIGURE(`${what} is unknown`);
+  const fits = (value: number): boolean => {
+    if (!Number.isFinite(value) || value < 0) return false;
+    if (kind === 'share') return value <= 1;
+    if (kind === 'permission') return value === 0 || value === 1;
+    return true;
+  };
+  const describe = kind === 'share' ? 'a share between 0 and 1' : kind === 'permission' ? 'a yes (1) or a no (0)' : 'a count or an amount';
   if (input.basis === 'MEASURED') {
-    return Number.isFinite(input.value) && input.value >= 0
+    return fits(input.value)
       ? { basis: 'MEASURED', low: input.value, high: input.value, because: null }
-      : UNKNOWN_FIGURE(`${what} was recorded as a value that is not a count or a share`);
+      : UNKNOWN_FIGURE(`${what} was recorded as a value that is not ${describe}`);
   }
+  // Permission is a fact about provider terms, so a range over it says nothing.
+  if (kind === 'permission') return UNKNOWN_FIGURE(`${what} is a yes or a no; an estimate over it is not evidence`);
   const low = Math.min(input.low, input.high);
   const high = Math.max(input.low, input.high);
-  return Number.isFinite(low) && Number.isFinite(high) && low >= 0
+  return fits(low) && fits(high)
     ? { basis: 'ESTIMATED', low, high, because: null }
-    : UNKNOWN_FIGURE(`${what} was recorded as a range that is not a count or a share`);
+    : UNKNOWN_FIGURE(`${what} was recorded as a range that is not ${describe}`);
 }
 
 /** One step of the funnel: a count times a share. Unknown on either side stays unknown. */
@@ -500,7 +534,7 @@ function step(count: OutreachFigure, share: OutreachFigure, what: string): Outre
  */
 export function modelOutreachFunnel(mechanism: OutreachMechanism): OutreachFunnelReading {
   const stages = Object.fromEntries(
-    OUTREACH_STAGES.map((stage) => [stage, figureOf(mechanism.inputs[stage], stage)]),
+    OUTREACH_STAGES.map((stage) => [stage, figureOf(mechanism.inputs[stage], stage, stageKind(stage))]),
   ) as Record<OutreachStage, OutreachFigure>;
 
   const permission = stages.permission;
@@ -566,6 +600,7 @@ export function modelOutreachFunnel(mechanism: OutreachMechanism): OutreachFunne
     buyers,
     settledBuyers,
     fulfilledBuyers,
+    firstPurchaseRevenueCents: firstPurchase,
     revenueCents,
     firstUnknown,
     permitted,
@@ -573,7 +608,7 @@ export function modelOutreachFunnel(mechanism: OutreachMechanism): OutreachFunne
 }
 
 export interface MixReading {
-  /** Mechanisms whose revenue is fully known to a range, strongest lower bound first. */
+  /** Mechanisms whose first-purchase revenue is known to a range, strongest lower bound first. */
   ranked: OutreachFunnelReading[];
   /** Mechanisms with an unknown or refused stage. Never ranked, never assumed favourable. */
   unranked: { mode: string; label: string; firstUnknown: OutreachStage | null; because: string | null }[];
@@ -583,18 +618,27 @@ export interface MixReading {
  * Compare any set of mechanisms for the economically strongest mix. Pure.
  *
  * No mode is a default and none is excluded: a mechanism is ranked only on its
- * own stage inputs, by the low end of its revenue range, and one with an unknown
+ * own stage inputs, by the low end of its first-purchase revenue range, and one with an unknown
  * stage is listed as unranked with the stage that is missing, which is the task
  * to do next.
  */
 export function searchOutreachMix(mechanisms: readonly OutreachMechanism[]): MixReading {
   const readings = mechanisms.map(modelOutreachFunnel);
   const ranked = readings
-    .filter((one) => one.revenueCents.basis !== 'UNKNOWN')
-    .sort((a, b) => (b.revenueCents.low ?? 0) - (a.revenueCents.low ?? 0) || (b.revenueCents.high ?? 0) - (a.revenueCents.high ?? 0));
+    .filter((one) => one.firstPurchaseRevenueCents.basis !== 'UNKNOWN')
+    .sort(
+      (a, b) =>
+        (b.firstPurchaseRevenueCents.low ?? 0) - (a.firstPurchaseRevenueCents.low ?? 0) ||
+        (b.firstPurchaseRevenueCents.high ?? 0) - (a.firstPurchaseRevenueCents.high ?? 0),
+    );
   const unranked = readings
-    .filter((one) => one.revenueCents.basis === 'UNKNOWN')
-    .map((one) => ({ mode: one.mode, label: one.label, firstUnknown: one.firstUnknown, because: one.revenueCents.because }));
+    .filter((one) => one.firstPurchaseRevenueCents.basis === 'UNKNOWN')
+    .map((one) => ({
+      mode: one.mode,
+      label: one.label,
+      firstUnknown: one.firstUnknown,
+      because: one.firstPurchaseRevenueCents.because,
+    }));
   return { ranked, unranked };
 }
 
@@ -608,7 +652,8 @@ export function formatOutreachFunnel(reading: OutreachFunnelReading): string[] {
     ...OUTREACH_STAGES.map((stage) => `  ${stage.padEnd(16)} ${show(reading.stages[stage])}`),
     `  reached prospects ${show(reading.reachedProspects)}`,
     `  buyers ${show(reading.buyers)}`,
-    `  revenue (minor units) ${show(reading.revenueCents)}`,
+    `  first-purchase revenue (minor units) ${show(reading.firstPurchaseRevenueCents)}`,
+    `  revenue incl. repeat (minor units) ${show(reading.revenueCents)}`,
   ];
 }
 
