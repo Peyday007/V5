@@ -207,6 +207,8 @@ export interface FactoryHandoffContext {
   verificationCommands: string[];
   rollbackRequirement: string;
   repositoryRoot?: string | null;
+  /** The originating goal's work items that waited on this capability; `advancePreparedOptions` judges their resumption. */
+  blockedWorkItemIds?: string[];
 }
 
 /**
@@ -254,7 +256,7 @@ export async function handOffToFactory(
       entityType: 'capability_requirement',
       entityId: resolution.requirementId,
       eventType: 'CAPABILITY_ASSESSED',
-      payload: { kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId: changeRequest.id, goal: context.goal, method: resolution.minimum.name },
+      payload: { kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId: changeRequest.id, goal: context.goal, method: resolution.minimum.name, blockedWorkItemIds: context.blockedWorkItemIds ?? [] },
     });
   }
   return { changeRequest, created };
@@ -283,4 +285,53 @@ export async function resumeOf(
   const times = rows.filter((r) => r.completed_at !== null);
   const resumed = blockedWorkResumed({ handedOffAt: handoff, unitRunTimes: times.map((r) => r.completed_at!) });
   return { handedOffAt: handoff, resumed, completedAfter: times.filter((r) => r.completed_at! > handoff).map((r) => r.id) };
+}
+
+export const PREPARED_RESUMED_KIND = 'PREPARED_OPTION_RESUMED';
+
+/**
+ * Judge, from rows, every handoff whose blocked work has not yet been recorded
+ * as resumed. Called from `advanceSources` on the Russell tick, so nobody has to
+ * remember an old option: a handoff that names blocked work items is re-read
+ * each pass and, the first time `resumeOf` finds one of them completed after
+ * the handoff, a single RESUMED event is appended. It creates no work, holds no
+ * lease and spends nothing; a handoff that names no work items is never judged.
+ */
+export async function advancePreparedOptions(): Promise<{ judged: number; resumed: number }> {
+  const rows = await getDb().all<{ project_id: string; entity_id: string; payload: string }>(
+    `SELECT project_id, entity_id, payload FROM project_events
+      WHERE entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED'
+        AND (payload LIKE ? OR payload LIKE ?)`,
+    [`%${PREPARED_HANDOFF_KIND}"%`, `%${PREPARED_RESUMED_KIND}"%`],
+  );
+  const parse = (raw: string): Record<string, unknown> => {
+    try { return JSON.parse(raw) as Record<string, unknown>; } catch { return {}; }
+  };
+  const done = new Set<string>();
+  const pending: Array<{ projectId: string; requirementId: string; changeRequestId: string; blocked: string[] }> = [];
+  for (const r of rows) {
+    const p = parse(r.payload);
+    const crId = typeof p.changeRequestId === 'string' ? p.changeRequestId : '';
+    if (p.kind === PREPARED_RESUMED_KIND) done.add(crId);
+    else if (p.kind === PREPARED_HANDOFF_KIND && Array.isArray(p.blockedWorkItemIds) && p.blockedWorkItemIds.length > 0) {
+      pending.push({ projectId: r.project_id, requirementId: r.entity_id, changeRequestId: crId, blocked: p.blockedWorkItemIds.filter((x): x is string => typeof x === 'string') });
+    }
+  }
+  let judged = 0;
+  let resumed = 0;
+  for (const h of pending) {
+    if (done.has(h.changeRequestId)) continue;
+    judged += 1;
+    const r = await resumeOf(h.projectId, h.requirementId, h.blocked);
+    if (!r.resumed) continue;
+    await recordEvent({
+      projectId: h.projectId,
+      entityType: 'capability_requirement',
+      entityId: h.requirementId,
+      eventType: 'CAPABILITY_ASSESSED',
+      payload: { kind: PREPARED_RESUMED_KIND, integration: false, changeRequestId: h.changeRequestId, completedAfter: r.completedAfter },
+    });
+    resumed += 1;
+  }
+  return { judged, resumed };
 }

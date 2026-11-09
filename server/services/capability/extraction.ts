@@ -41,6 +41,7 @@
  * document about Research Intelligence establishes what Brain is supposed to be
  * able to do and nothing whatsoever about whether it can.
  */
+import { advancePreparedOptions } from './prepared.ts';
 import {
   createBin,
   getBin,
@@ -1139,6 +1140,9 @@ export async function advanceSources(): Promise<{
   }
 
   await settleAmendments();
+
+  // Deferred options: judge from rows whether handed-off work resumed (GOV-22-2).
+  await advancePreparedOptions();
 
   return { dispatched, settled, audited, promoted, recovered };
 }
