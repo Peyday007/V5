@@ -86,3 +86,203 @@ export function finishesInTime(steps: number[][], daysLeft: number, delayDays = 
 function fmt(x: number): string {
   return Math.abs(x) < 10 ? x.toFixed(2).replace(/\.?0+$/, '') : String(Math.round(x));
 }
+
+// ---------------------------------------------------------------------------
+// Money velocity and deal structure (MONEY-13-4)
+//
+// The same calendar that bounds research bounds money: how long from a lead to
+// a commitment, from a commitment to funds, from funds to cash that may be
+// spent. Every figure here is derived from rows the caller already holds; a
+// figure no row states is `null` (unknown), never zero and never assumed.
+// Nothing here is a whitelist of categories or industries, and it adds no
+// store, scheduler or authority path.
+// ---------------------------------------------------------------------------
+
+/** One dated money movement on a route. Amounts are positive; `kind` gives direction. */
+export interface MoneyEvent {
+  /** ISO-8601 UTC instant the movement happened (or is due). */
+  at: string;
+  kind:
+    | 'BILLING' // invoiced / committed by the buyer
+    | 'FUNDS_RECEIVED' // money reached the account
+    | 'SUPPLIER_OUTLAY'
+    | 'REFUND'
+    | 'CHARGEBACK';
+  amount: number;
+  /** Who funded an outlay. Only meaningful for SUPPLIER_OUTLAY; unstated stays unknown. */
+  fundedBy?: 'CUSTOMER' | 'SELF';
+  /** True when the money is restricted, refundable, or earmarked for a fulfilment liability. */
+  encumbered?: boolean;
+}
+
+export interface RouteMoneyInput {
+  routeKey: string;
+  leadAt?: string;
+  commitmentAt?: string;
+  usableCashAt?: string;
+  events: MoneyEvent[];
+  /** Cash identities, each stated by its own row or left undefined. Never derived from each other. */
+  identities?: Partial<Record<CashIdentity, number>>;
+}
+
+export const CASH_IDENTITIES = [
+  'GROSS_BILLINGS',
+  'GROSS_MARGIN',
+  'NET_PROFIT',
+  'SETTLED_CASH',
+  'RETAINED_CASH',
+  'OWNER_DISTRIBUTIONS',
+  'ENTERPRISE_VALUE',
+  'BORROWED_PROCEEDS',
+  'USABLE_CASH',
+] as const;
+export type CashIdentity = (typeof CASH_IDENTITIES)[number];
+
+export interface RouteMoneyVelocity {
+  routeKey: string;
+  customerFundedSpend: number | null;
+  selfFundedSpend: number | null;
+  /** Outlays whose funder no row states. */
+  unattributedSpend: number | null;
+  daysLeadToCommitment: number | null;
+  daysCommitmentToFunds: number | null;
+  daysFundsToUsableCash: number | null;
+  supplierOutlays: { at: string; amount: number }[];
+  refundsAndChargebacks: number | null;
+  /** Billed but not yet received. */
+  receivables: number | null;
+  /** Largest cumulative cash shortfall while outlays and receipts overlap. */
+  peakWorkingCapital: number | null;
+  /** Funds received minus encumbered funds minus refunds; null when no funds row exists. */
+  usableCash: number | null;
+  excludedFromUsable: number;
+  /** The nine identities as stated; unstated ones are null. Never summed or substituted. */
+  identities: Record<CashIdentity, number | null>;
+  unknowns: string[];
+}
+
+function ms(iso: string | undefined): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : null;
+}
+
+function daysBetween(from: string | undefined, to: string | undefined): number | null {
+  const a = ms(from);
+  const b = ms(to);
+  if (a === null || b === null || b < a) return null;
+  return (b - a) / 86_400_000;
+}
+
+function sum(xs: number[]): number {
+  return xs.reduce((t, x) => t + x, 0);
+}
+
+export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
+  const unknowns: string[] = [];
+  const ev = route.events.filter((e) => Number.isFinite(e.amount) && e.amount >= 0 && ms(e.at) !== null);
+  const of = (k: MoneyEvent['kind']) => ev.filter((e) => e.kind === k);
+
+  const outlays = of('SUPPLIER_OUTLAY').sort((a, b) => ms(a.at)! - ms(b.at)!);
+  const spendBy = (who: 'CUSTOMER' | 'SELF') => (outlays.some((o) => o.fundedBy === who) ? sum(outlays.filter((o) => o.fundedBy === who).map((o) => o.amount)) : null);
+  const unattributed = outlays.filter((o) => !o.fundedBy);
+  if (outlays.length === 0) unknowns.push('no supplier outlay row');
+  else if (unattributed.length > 0) unknowns.push('some supplier outlays do not say who funded them');
+
+  const billings = of('BILLING');
+  const funds = of('FUNDS_RECEIVED');
+  const returned = [...of('REFUND'), ...of('CHARGEBACK')];
+  const billed = billings.length ? sum(billings.map((e) => e.amount)) : null;
+  const received = funds.length ? sum(funds.map((e) => e.amount)) : null;
+  const encumbered = sum(funds.filter((e) => e.encumbered).map((e) => e.amount));
+  const refunds = returned.length ? sum(returned.map((e) => e.amount)) : null;
+
+  const firstFunds = funds.length ? funds.map((e) => e.at).sort()[0] : undefined;
+  const lead = daysBetween(route.leadAt, route.commitmentAt);
+  const toFunds = daysBetween(route.commitmentAt, firstFunds);
+  const toUsable = daysBetween(firstFunds, route.usableCashAt);
+  if (lead === null) unknowns.push('lead-to-commitment time not stated');
+  if (toFunds === null) unknowns.push('commitment-to-funds time not stated');
+  if (toUsable === null) unknowns.push('funds-to-usable-cash time not stated');
+
+  // Receivables are only knowable when billings are; received can exceed billed (advances), floor at 0.
+  const receivables = billed === null ? null : Math.max(0, billed - (received ?? 0));
+  if (billed === null) unknowns.push('no billing row, receivables unknown');
+
+  // Peak working capital: walk movements in time order; outlays and refunds drain, receipts refill.
+  let peak: number | null = null;
+  if (outlays.length > 0 || returned.length > 0) {
+    const flow = [
+      ...outlays.map((e) => ({ t: ms(e.at)!, d: -e.amount })),
+      ...returned.map((e) => ({ t: ms(e.at)!, d: -e.amount })),
+      ...funds.map((e) => ({ t: ms(e.at)!, d: e.amount })),
+    ].sort((a, b) => a.t - b.t || a.d - b.d);
+    let bal = 0;
+    let low = 0;
+    for (const f of flow) {
+      bal += f.d;
+      low = Math.min(low, bal);
+    }
+    peak = -low;
+  } else unknowns.push('no outflow rows, peak working capital unknown');
+
+  const usable = received === null ? null : Math.max(0, received - encumbered - (refunds ?? 0));
+  if (received === null) unknowns.push('no funds-received row, usable cash unknown');
+
+  const identities = {} as Record<CashIdentity, number | null>;
+  for (const k of CASH_IDENTITIES) identities[k] = route.identities?.[k] ?? null;
+  // USABLE_CASH is the one identity this model computes, from funds actually received.
+  if (identities.USABLE_CASH === null) identities.USABLE_CASH = usable;
+  for (const k of CASH_IDENTITIES) if (identities[k] === null) unknowns.push(`${k.toLowerCase()} not stated`);
+
+  return {
+    routeKey: route.routeKey,
+    customerFundedSpend: spendBy('CUSTOMER'),
+    selfFundedSpend: spendBy('SELF'),
+    unattributedSpend: outlays.length ? sum(unattributed.map((o) => o.amount)) : null,
+    daysLeadToCommitment: lead,
+    daysCommitmentToFunds: toFunds,
+    daysFundsToUsableCash: toUsable,
+    supplierOutlays: outlays.map((o) => ({ at: o.at, amount: o.amount })),
+    refundsAndChargebacks: refunds,
+    receivables,
+    peakWorkingCapital: peak,
+    usableCash: usable,
+    excludedFromUsable: encumbered + (refunds ?? 0),
+    identities,
+    unknowns,
+  };
+}
+
+export interface RouteScore {
+  routeKey: string;
+  /** Collectible contribution per unit of peak capital per day of cycle; null when any input is unknown. */
+  capitalTurnover: number | null;
+  riskAdjustedContribution: number | null;
+}
+
+/**
+ * Rank routes for an objective. Contribution is the stated gross margin times the
+ * probability it is collected; turnover divides by the capital held for the cycle.
+ * A route with an unknown input is scored null and sorted last, never as zero, and
+ * retaining all cash is not a requirement: nothing here reads RETAINED_CASH.
+ */
+export function scoreRoutes(
+  routes: { money: RouteMoneyVelocity; collectionProbability?: number }[],
+  objective: 'TURNOVER' | 'CONTRIBUTION',
+): RouteScore[] {
+  const scored = routes.map(({ money, collectionProbability }) => {
+    const margin = money.identities.GROSS_MARGIN;
+    const p = collectionProbability;
+    const contribution = margin === null || p === undefined || p < 0 || p > 1 ? null : margin * p;
+    const cycle =
+      money.daysLeadToCommitment !== null && money.daysCommitmentToFunds !== null && money.daysFundsToUsableCash !== null
+        ? money.daysLeadToCommitment + money.daysCommitmentToFunds + money.daysFundsToUsableCash
+        : null;
+    const capital = money.peakWorkingCapital;
+    const turnover = contribution === null || cycle === null || capital === null ? null : contribution / (Math.max(capital, 1) * Math.max(cycle, 1));
+    return { routeKey: money.routeKey, capitalTurnover: turnover, riskAdjustedContribution: contribution };
+  });
+  const key = (s: RouteScore) => (objective === 'TURNOVER' ? s.capitalTurnover : s.riskAdjustedContribution);
+  return scored.sort((a, b) => (key(b) ?? -Infinity) - (key(a) ?? -Infinity));
+}
