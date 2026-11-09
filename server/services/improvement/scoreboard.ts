@@ -10,6 +10,8 @@ import { getDb } from '../../db/database.ts';
 import {
   classifyClaimRejection,
   classifyFreeLaneFailure,
+  compare,
+  type Comparison,
   METRIC_KEYS,
   reading,
   type FailureCount,
@@ -210,4 +212,85 @@ export async function ownerInterventions(from: string, to: string): Promise<{ to
     byClass.set(cls, entry);
   }
   return { total: rows.length, causes: [...byClass.values()].sort((a, b) => b.n - a.n) };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Gaps Brain found and closed by itself (AUTO-20-4)                          */
+/* ------------------------------------------------------------------------- */
+
+/** A figure Brain has no row for is said to be unmeasured; it is never a zero. */
+export interface Unmeasured {
+  status: 'NOT_MEASURED';
+  reason: string;
+}
+
+export interface GapMeasures {
+  from: string;
+  to: string;
+  /** Candidates opened in the window: weaknesses Brain detected, not recommendations anyone wrote. */
+  identified: number;
+  /**
+   * Closed = decided KEPT, which `decideAfterMeasurement` reaches only when the
+   * measured metric moved in production. A delivered or merged change is not
+   * closed, and KEPT_NO_EFFECT is not a success.
+   */
+  closed: number;
+  /** Closed candidates whose recorded history holds no OWNER_* event. The loop records none, so this is read, not assumed. */
+  closedWithoutOwnerInput: number;
+  /** Delivered (merged) but not shown to have worked: reported beside, never counted as success. */
+  deliveredNotProven: number;
+  /** Median hours from detection to a measured KEPT decision, or unmeasured. */
+  hoursToUseMedian: number | null;
+  regressions: { reverted: number; keptNoEffect: number };
+  /** The constructed-round yield, this window against the one before it, through the existing comparison. */
+  goalQuality: Comparison;
+  productiveWorkResumed: Unmeasured;
+  cost: Unmeasured;
+}
+
+/** Gaps identified and closed over [from, to), counted from improvement rows. */
+export async function readGapMeasures(from: string, to: string): Promise<GapMeasures> {
+  const db = getDb();
+  const [opened, decided, delivered, owner] = await Promise.all([
+    db.get<{ n: number | string }>('SELECT COUNT(*) AS n FROM improvement_candidates WHERE created_at >= ? AND created_at < ?', [from, to]),
+    db.all<{ id: string; decision: string; created_at: string; updated_at: string }>(
+      `SELECT id, decision, created_at, updated_at FROM improvement_candidates
+        WHERE decision IN ('KEPT', 'KEPT_NO_EFFECT', 'REVERTED') AND updated_at >= ? AND updated_at < ?`,
+      [from, to],
+    ),
+    db.get<{ n: number | string }>(
+      "SELECT COUNT(*) AS n FROM improvement_candidates WHERE delivered_at >= ? AND delivered_at < ? AND (decision IS NULL OR decision <> 'KEPT')",
+      [from, to],
+    ),
+    db.all<{ candidate_id: string }>(
+      "SELECT DISTINCT candidate_id FROM improvement_events WHERE kind LIKE 'OWNER_%' AND candidate_id IS NOT NULL",
+      [],
+    ),
+  ]);
+  const kept = decided.filter((r) => r.decision === 'KEPT');
+  const touched = new Set(owner.map((r) => r.candidate_id));
+  const hours = kept
+    .map((r) => (Date.parse(r.updated_at) - Date.parse(r.created_at)) / 3_600_000)
+    .filter((h) => Number.isFinite(h) && h >= 0)
+    .sort((a, b) => a - b);
+  const median = hours.length === 0 ? null : hours.length % 2 ? hours[(hours.length - 1) / 2]! : (hours[hours.length / 2 - 1]! + hours[hours.length / 2]!) / 2;
+  const span = Date.parse(to) - Date.parse(from);
+  const before = new Date(Date.parse(from) - span).toISOString();
+  const goalQuality = compare(await readMetric('CONSTRUCTED_ROUND_YIELD', before, from), await readMetric('CONSTRUCTED_ROUND_YIELD', from, to));
+  return {
+    from,
+    to,
+    identified: n(opened?.n),
+    closed: kept.length,
+    closedWithoutOwnerInput: kept.filter((r) => !touched.has(r.id)).length,
+    deliveredNotProven: n(delivered?.n),
+    hoursToUseMedian: median === null ? null : Number(median.toFixed(2)),
+    regressions: {
+      reverted: decided.filter((r) => r.decision === 'REVERTED').length,
+      keptNoEffect: decided.filter((r) => r.decision === 'KEPT_NO_EFFECT').length,
+    },
+    goalQuality,
+    productiveWorkResumed: { status: 'NOT_MEASURED', reason: 'no row links a closed gap to the work it released' },
+    cost: { status: 'NOT_MEASURED', reason: 'no append-only entry attributes spend to a gap' },
+  };
 }
