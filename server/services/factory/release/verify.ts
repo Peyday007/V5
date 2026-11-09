@@ -190,7 +190,7 @@ export async function verifyReleaseRun(runId: string, options: VerifyOptions = {
 
 /**
  * Re-verify a release that was failed only because a check could not be
- * answered, and whose revert never landed — so production still carries the
+ * answered, or whose Deploy failed, and whose revert never landed — so production still carries the
  * merge, and the honest question ("is it live?") was never answered.
  *
  * Refused for any other failure: a check that answered "no" stays a failure,
@@ -199,8 +199,13 @@ export async function verifyReleaseRun(runId: string, options: VerifyOptions = {
 export async function reverifyUnansweredRelease(runId: string, options: VerifyOptions = {}): Promise<VerifyOutcome & { recorded: boolean }> {
   const run = await getRun(runId);
   if (!run) throw new Error(`No release run ${runId}.`);
-  if (run.state !== 'FAILED' || run.failureStage !== 'VERIFY') {
-    throw new Error(`Release run ${runId} is ${run.state}${run.failureStage ? ` at ${run.failureStage}` : ''}; only a VERIFY failure is re-verified.`);
+  // A DEPLOY failure whose revert never landed leaves the merge on the canonical
+  // branch, and the next Deploy ships it (release frr_155d11cd, 2026-11-09: its
+  // Deploy failed, the revert PR was refused, and a later Deploy carried it).
+  // Verification asks whether the serving revision contains the merge, so a
+  // merge that is not live still answers no.
+  if (run.state !== 'FAILED' || (run.failureStage !== 'VERIFY' && run.failureStage !== 'DEPLOY') || !run.mergeSha) {
+    throw new Error(`Release run ${runId} is ${run.state}${run.failureStage ? ` at ${run.failureStage}` : ''}; only a merged VERIFY or DEPLOY failure is re-verified.`);
   }
   const checks = ((run.verification as { checks?: CheckResult[] } | null)?.checks ?? []);
   const answeredNo = checks.filter((one) => !one.ok && !(one.check === 'revision' && /could not say/.test(one.detail)));

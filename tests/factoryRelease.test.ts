@@ -543,6 +543,24 @@ describe('verification inside the released Brain', () => {
       // A run the script failed with no recorded check is re-verified: nothing answered no.
     }
   });
+
+  it('re-verifies a merged release whose Deploy failed and whose revert never landed', async () => {
+    const { reverifyUnansweredRelease } = await import('../server/services/factory/release/verify.ts');
+    const changeRequest = await approved('Show a third friendly line on the Build page.');
+    const campaign = await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    stubForge(['client/a.tsx']);
+    const plan = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    expect(plan.action?.campaignId).toBe(campaign.id);
+    const runId = plan.action!.runId;
+    await advanceRelease({ runId, to: 'MERGED', mergeSha: 'e'.repeat(40) });
+    await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '11' });
+    await advanceRelease({ runId, to: 'FAILED', failureStage: 'DEPLOY', failureDetail: 'Deploy concluded failure; nothing had been released; branch: the revert pull request could not be opened (403)' });
+    const outcome = await reverifyUnansweredRelease(runId);
+    // No BRAIN_REVISION here, so it is not LIVE — but it was asked again rather than refused.
+    expect(outcome.live).toBe(false);
+    expect((await latestRun(campaign.id))!.state).not.toBe('ROLLED_BACK');
+  });
 });
 
 describe('the status a person reads', () => {
