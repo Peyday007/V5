@@ -41,7 +41,7 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { browserMcpUrl, renderInBrowser } from './browserMcp.ts';
 import { connectorFor } from './connectors.ts';
 import { searchSuccessor } from './discover.ts';
-import { boundaryOfRead, classOfRoute, selectAccessMethod } from './accessMethods.ts';
+import { boundaryOfRead, classOfRoute, selectAccessMethod, type AccessEvidence } from './accessMethods.ts';
 import { checkDestination, fetchForWorker, systemResolver, type Resolver, type SourceFetch } from './fetchForWorker.ts';
 
 export const ACCESS_METHODS = ['DIRECT', 'CONNECTOR', 'BROWSER', 'SITEMAP', 'ARCHIVE', 'SEARCH'] as const;
@@ -415,13 +415,49 @@ export function resetSourceAccessMemory(): void {
   robotsCache.clear();
 }
 
+/**
+ * What the attempts made on one read say about each way in. Pure.
+ *
+ * Each class is evidenced only by an attempt at a route of that class, and a
+ * route no attempt tried is left unknown rather than assumed either way. The
+ * route that finally produced the text is not special: it counts the same as any
+ * other attempt at its class, so the evidence can name a different method than
+ * the one used. No account is ever asserted — a browser render here is a public
+ * page read, and says nothing about a session.
+ */
+export function accessEvidenceOfAttempts(attempts: readonly AccessAttempt[]): AccessEvidence {
+  const evidence: AccessEvidence = {};
+  const verdict = (methods: readonly AccessMethod[]): boolean | undefined => {
+    const tried = attempts.filter((a) => methods.includes(a.method));
+    return tried.length === 0 ? undefined : tried.some((a) => a.readable);
+  };
+  evidence.nativeAvailable = verdict(['CONNECTOR']);
+  evidence.bulkAvailable = verdict(['SITEMAP', 'ARCHIVE']);
+  evidence.httpReadable = verdict(['DIRECT', 'SEARCH']);
+  const browser = verdict(['BROWSER']);
+  // The interface is the only way in when a render read what plain HTTP could not.
+  evidence.interfaceOnly = browser === undefined ? undefined : browser && evidence.httpReadable !== true;
+  return evidence;
+}
+
 async function defaultRecord(read: SourceRead, caller: string, ms: number): Promise<void> {
   const host = hostOf(read.requestedUrl);
-  // The method class and why it was chosen are recorded on the event this layer already writes.
+  const used = classOfRoute(read.method);
   const boundary = boundaryOfRead({ readable: read.readable, reason: read.readable ? undefined : read.reason, status: read.status });
-  const chosen = boundary
-    ? selectAccessMethod({ boundary })
-    : selectAccessMethod({ [read.method === 'CONNECTOR' ? 'nativeAvailable' : read.method === 'SITEMAP' || read.method === 'ARCHIVE' ? 'bulkAvailable' : read.method === 'BROWSER' ? 'interfaceOnly' : 'httpReadable']: read.readable, authorizedSession: read.method === 'BROWSER' ? true : undefined });
+  const evidence: AccessEvidence = boundary ? { boundary } : accessEvidenceOfAttempts(read.attempts);
+  const judged = selectAccessMethod(evidence);
+  // A boundary is a stop; otherwise the method used is the route that ran, and the
+  // judgment is what the evidence of every attempt supports, so a disagreement shows.
+  const agrees = judged.method === used;
+  const methodReason = (
+    boundary
+      ? judged.why
+      : read.readable
+        ? agrees
+          ? `${used} was used and the attempts support it: ${judged.why}`
+          : `${used} was used; the attempts on this read support ${judged.method} (${judged.why}); no session was evidenced`
+        : `${used} did not yield a readable source (${read.reason}); no boundary was met, so no human step is implied`
+  ).slice(0, 300);
   await recordBinEvent({
     eventType: 'SOURCE_ACCESS',
     provider: read.method,
@@ -436,9 +472,12 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
       finalUrl: read.finalUrl?.slice(0, 400) ?? null,
       chars: read.readable ? read.totalChars : 0,
       attempts: read.attempts,
-      methodClass: boundary ? chosen.method : classOfRoute(read.method),
-      methodReason: (read.readable || boundary ? chosen.why : `${classOfRoute(read.method)} did not yield a readable source (${read.reason}); no boundary was met, so no human step is implied`).slice(0, 300),
-      methodConstraints: chosen.constraints,
+      methodClass: boundary ? judged.method : used,
+      methodJudged: judged.method,
+      methodAgrees: boundary ? true : agrees,
+      methodReason,
+      methodConsidered: judged.considered,
+      methodConstraints: judged.constraints,
     },
   });
 }
