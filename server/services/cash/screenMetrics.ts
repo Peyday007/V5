@@ -31,6 +31,28 @@ export interface ScreenMetrics {
   research: { needsWithdrawn: number; missionsCancelled: number };
   claudeJobsAvoided: { rejectedBeforeAnyDive: number; questionsSkipped: number; total: number };
   notes: string[];
+  /**
+   * The system-wide rolling 1h/6h/24h reading, each measure as numerator over an
+   * explicit denominator (TEL-07-1). It is not scoped to the project: job queues,
+   * provider failure and utilization belong to the whole Brain, and `telemetryLines`
+   * is the same reading rendered for a report.
+   */
+  telemetry: RollingTelemetry;
+  telemetryLines: string[];
+}
+
+/** The reading is built from a few dozen aggregate queries, so a screen that loads often reuses one for a minute. */
+const TELEMETRY_TTL_MS = 60_000;
+let cachedTelemetry: { at: number; reading: RollingTelemetry } | null = null;
+
+/** The current telemetry reading, reused for up to a minute so a busy screen cannot multiply the load. */
+export async function currentTelemetry(now: Date = new Date()): Promise<RollingTelemetry> {
+  if (cachedTelemetry && now.getTime() - cachedTelemetry.at < TELEMETRY_TTL_MS && now.getTime() >= cachedTelemetry.at) {
+    return cachedTelemetry.reading;
+  }
+  const reading = await rollingTelemetry(now);
+  cachedTelemetry = { at: now.getTime(), reading };
+  return reading;
 }
 
 const VERDICTS: readonly DecisionVerdict[] = ['REJECT', 'HOLD', 'PRIORITIZE'];
@@ -78,6 +100,8 @@ export async function screenMetrics(projectId: string, goalId?: string): Promise
   const skipped = (await cashEventsOfKindInProject(projectId, QUESTION_SKIPPED_EVENT)).length;
   const rejectedBeforeAnyDive = Number(rejected?.n ?? 0);
 
+  const telemetry = await currentTelemetry();
+
   const notes: string[] = [];
   if (skipped === 0) notes.push('No question has been recorded as skipped; 0 is the count of recorded rows, not a measurement of questions asked.');
   if (decisions.REJECT + decisions.HOLD + decisions.PRIORITIZE === 0) notes.push('No decision has been recorded for this scope yet.');
@@ -92,6 +116,8 @@ export async function screenMetrics(projectId: string, goalId?: string): Promise
     research: { needsWithdrawn: Number(needs?.n ?? 0), missionsCancelled: Number(missions?.n ?? 0) },
     claudeJobsAvoided: { rejectedBeforeAnyDive, questionsSkipped: skipped, total: rejectedBeforeAnyDive + skipped },
     notes,
+    telemetry,
+    telemetryLines: formatTelemetry(telemetry),
   };
 }
 
