@@ -610,6 +610,7 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
       methodJudged: judged.method,
       methodAgrees: boundary ? true : agrees,
       methodReason,
+      convertToScript: judged.convertToScript,
       methodConsidered: judged.considered,
       methodConstraints: judged.constraints,
     },

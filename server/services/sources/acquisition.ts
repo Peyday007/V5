@@ -100,6 +100,8 @@ export interface AcquisitionJudgment {
   /** Bespoke crawler may be proposed (ACQUIRE only: existing sources were searched for and none serves). */
   bespokeCrawlerMayBeProposed: boolean;
   boundaries: AcquisitionBoundary[];
+  /** A stable recurring model-assisted pattern should become a tested script (from the one selector). */
+  convertToScript: boolean;
 }
 
 /**
@@ -127,6 +129,7 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
     reusableConnectorJustified: false,
     bespokeCrawlerMayBeProposed: false,
     boundaries,
+    convertToScript: false,
   });
 
   // Boundaries first: neither capability authorizes any of these.
@@ -157,6 +160,7 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
       reusableConnectorJustified: false,
       bespokeCrawlerMayBeProposed: false,
       boundaries: [],
+      convertToScript: false,
     };
   }
 
@@ -194,6 +198,7 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
     reusableConnectorJustified: handoff ? false : justified,
     bespokeCrawlerMayBeProposed: bespoke,
     boundaries,
+    convertToScript: handoff ? false : selection.convertToScript,
   };
 }
 
@@ -279,7 +284,30 @@ export async function readRepeatedUse(host: string): Promise<{ repeatedUses: num
 export interface RecordAcquisitionDeps {
   repeatedUse?: (host: string) => Promise<{ repeatedUses: number; repeatedUsesNeedingFallback: number }>;
   record?: typeof recordBinEvent;
+  /** Whether a proposal for this host and route is already on record inside the window. */
+  proposalOnRecord?: (host: string, route: string) => Promise<boolean>;
   caller?: string;
+}
+
+/** A connector or script is proposed once per host and route per window, not once per read. */
+async function readProposalOnRecord(host: string, route: string): Promise<boolean> {
+  try {
+    const since = new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString();
+    const rows = await getDb().all<{ measures: string | null }>(
+      `SELECT measures FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED' AND at >= ? ORDER BY at DESC LIMIT 500`,
+      [since],
+    );
+    return rows.some((r) => {
+      try {
+        const m = JSON.parse(r.measures ?? '{}') as { host?: unknown; route?: unknown };
+        return m.host === host && m.route === route;
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -311,6 +339,7 @@ export async function recordAcquisitionJudgment(
       purpose: need.purpose.slice(0, 300),
       host: need.host?.toLowerCase() ?? null,
       reusableConnectorJustified: judgment.reusableConnectorJustified,
+      convertToScript: judgment.convertToScript,
       bespokeCrawlerMayBeProposed: judgment.bespokeCrawlerMayBeProposed,
       boundaries: judgment.boundaries,
       repeatedUses: used.repeatedUses ?? null,
@@ -319,5 +348,32 @@ export async function recordAcquisitionJudgment(
       bulkSearchDone: Boolean(used.bulkSearchDone),
     },
   });
+  // The consumer of both flags: a justified connector or script is written down as a proposal
+  // for the host and route, once per window, so the decision to build it is a row someone can act on.
+  if ((judgment.reusableConnectorJustified || judgment.convertToScript) && need.host && judgment.route) {
+    const host = need.host.toLowerCase();
+    const seen = await (deps.proposalOnRecord ?? readProposalOnRecord)(host, judgment.route);
+    if (!seen) {
+      await (deps.record ?? recordBinEvent)({
+        eventType: 'CONNECTOR_PROPOSED',
+        provider: judgment.route,
+        workloadClass: deps.caller ?? 'acquisition',
+        outcome: judgment.convertToScript ? 'SCRIPT' : 'CONNECTOR',
+        reason: (judgment.convertToScript
+          ? `A model-assisted routine on ${host} has run unchanged ${used.repeatedUses ?? 'repeatedly'} times: convert it to a tested script.`
+          : `${need.kind === 'OPERATE' ? 'The workflow' : 'Reads'} on ${host} repeated ${used.repeatedUses} times on record: build a reusable ${judgment.route} connector.`
+        ).slice(0, 480),
+        evidenceClass: 'MEASURED',
+        measures: {
+          host,
+          route: judgment.route,
+          capability: judgment.capability,
+          kind: judgment.convertToScript ? 'SCRIPT' : 'CONNECTOR',
+          repeatedUses: used.repeatedUses ?? null,
+          repeatedUsesNeedingFallback: used.repeatedUsesNeedingFallback ?? null,
+        },
+      });
+    }
+  }
   return judgment;
 }
