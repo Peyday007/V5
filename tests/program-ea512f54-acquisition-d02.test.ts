@@ -5,7 +5,9 @@ import {
   repeatedUseFromRows,
 } from '../server/services/sources/acquisition.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, SCRIPT_CONVERSION_RUNS } from '../server/services/sources/accessMethods.ts';
-import { robotsAllows, robotsRules } from '../server/services/sources/access.ts';
+import { operateEvidenceOfRead, readSource, resetSourceAccessMemory, robotsAllows, robotsRules } from '../server/services/sources/access.ts';
+import { getDb } from '../server/db/database.ts';
+import { freshProject } from './helpers.ts';
 
 describe('boundaries are stops, never routes around', () => {
   it.each([
@@ -233,5 +235,66 @@ describe('read results map to boundaries and method classes', () => {
 describe('repeatedUseFromRows is exercised alongside the judgment', () => {
   it('returns zeros for a host with no rows', () => {
     expect(repeatedUseFromRows([], 'none.example')).toEqual({ repeatedUses: 0, repeatedUsesNeedingFallback: 0 });
+  });
+});
+
+describe('OPERATE has a production producer, separate from ACQUIRE', () => {
+  const attempt = (method: string, readable: boolean) => ({ method: method as never, readable, reason: readable ? null : 'EMPTY', status: null, ms: 1 });
+  const PAGE = 'Official statistics say the median wage was 41,000 dollars in 2025. '.repeat(10);
+  const okFetch = (url: string) => ({ readable: true as const, requestedUrl: url, finalUrl: url, status: 200, contentType: 'text/html', retrievedAt: 'now', sha256: 'x', text: PAGE, truncated: false, totalChars: PAGE.length });
+  const emptyFetch = (url: string) => ({ readable: false as const, requestedUrl: url, finalUrl: url, status: 200, retrievedAt: 'now', reason: 'EMPTY' as never, detail: 'needs a browser' });
+  const capabilitiesOf = async (caller: string) => {
+    const rows = await getDb().all<{ measures: string }>(`SELECT measures FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT' AND workload_class = ?`, [caller]);
+    return rows.map((r) => (JSON.parse(r.measures) as { capability: string }).capability).sort();
+  };
+
+  it('a read that never opened the browser says nothing about operating an interface', () => {
+    expect(operateEvidenceOfRead({ attempts: [attempt('DIRECT', true)] }, null, {})).toBeNull();
+  });
+
+  it('a browser attempt is OPERATE evidence, and no account is ever asserted', () => {
+    const ev = operateEvidenceOfRead({ attempts: [attempt('DIRECT', false), attempt('BROWSER', true)] }, null, { interfaceOnly: true, interfaceUnfamiliar: true });
+    expect(ev).toMatchObject({ interactiveInterfaceOnly: true, interfaceUnfamiliarOrChanged: true, authorizedAccountOnRecord: false });
+    const j = judgeAcquisitionNeed({ kind: 'OPERATE', purpose: 'p' }, ev!);
+    expect(j.capability).toBe('OPERATE');
+    expect(j.route).toBe('HUMAN_HANDOFF');
+    expect(j.boundaries).toEqual(['NO_AUTHORIZED_ACCOUNT']);
+  });
+
+  it('a boundary met after the browser is carried into the OPERATE judgment', () => {
+    const ev = operateEvidenceOfRead({ attempts: [attempt('BROWSER', false)] }, 'CAPTCHA', {})!;
+    expect(ev.blockedAtBoundary).toBe(true);
+    expect(judgeAcquisitionNeed({ kind: 'OPERATE', purpose: 'p' }, ev).boundaries).toEqual(['ACCESS_BARRIER']);
+  });
+
+  it('readSource writes one OPERATE and one ACQUIRE ACQUISITION_JUDGMENT row when the browser ran', async () => {
+    await freshProject();
+    resetSourceAccessMemory();
+    await readSource('https://operate-producer.example/app', {
+      resolve: async () => ['93.184.216.34'],
+      robotsAllow: async () => true,
+      learned: async () => null,
+      archive: async () => null,
+      sitemap: async () => null,
+      search: null,
+      connector: async () => null,
+      direct: async (u) => emptyFetch(u),
+      browser: async (u) => okFetch(u),
+      caller: 'operate-producer-test',
+    });
+    expect(await capabilitiesOf('operate-producer-test')).toEqual(['ACQUIRE', 'OPERATE']);
+  });
+
+  it('a plain direct read produces no OPERATE row', async () => {
+    await freshProject();
+    resetSourceAccessMemory();
+    await readSource('https://plain-direct.example/p', {
+      resolve: async () => ['93.184.216.34'],
+      robotsAllow: async () => true,
+      learned: async () => null,
+      direct: async (u) => okFetch(u),
+      caller: 'plain-direct-test',
+    });
+    expect(await capabilitiesOf('plain-direct-test')).toEqual(['ACQUIRE']);
   });
 });
