@@ -106,6 +106,8 @@ export interface PortfolioCombination {
 export interface GoalPortfolio {
   /** PROBABILITY only when every input of every member rests on evidence. */
   basis: 'PROBABILITY' | 'COVERAGE';
+  /** Worlds each combination was evaluated over: the sample a reach's interval is read from. */
+  worlds: number;
   best: PortfolioCombination | null;
   alternatives: PortfolioCombination[];
   demand: DemandEstimate[];
@@ -431,6 +433,7 @@ export function evaluateGoalPortfolio(input: {
   if (!best) missing.push('no combination of the openings held can run inside the limits');
   return {
     basis,
+    worlds,
     best,
     alternatives,
     demand,

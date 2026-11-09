@@ -96,6 +96,13 @@ export const RECOMMENDATION_POLICY = {
   minPlanOutcomes: 10,
   /** The lower bound of that rate a quoted chance must clear to be called likely. */
   likelyLowerBound: 0.5,
+  /**
+   * The owner's hard acceptance condition (2026-11-09): a plan meets a cash
+   * goal only when a defensible probability of collecting the target before
+   * the deadline is at least this — read at the lower bound of its interval,
+   * never at a point estimate, and never from coverage of tested conditions.
+   */
+  requiredProbability: 0.9,
 } as const;
 
 export interface LinkCheck {
@@ -126,7 +133,44 @@ export interface StrategyReading {
   sweep: { goalMetShare: number | null; settledP50: number | null; settledP90: number | null; infeasibleShare: number | null; probabilistic: boolean };
   /** The conservative settled figure, when every input it needs is established. */
   conservativeSettled: number | null;
+  /**
+   * Every link established and the cautious numbers reach the target. A
+   * qualified candidate, not an accepted plan: acceptance also needs the
+   * required probability (`judgeAcceptance`).
+   */
+  chainComplete: boolean;
   nextTest: NextTest | null;
+}
+
+/**
+ * Whether the goal has an accepted plan, kept apart from its candidates.
+ *
+ * ACCEPTED — the target is already collected, or a defensible probability of
+ * collecting it before the deadline clears `requiredProbability` at the lower
+ * bound of its interval. CANDIDATE_ONLY — Brain holds a strongest provisional
+ * plan that does not (yet) meet that bar; it is pursued and improved, never
+ * reported as meeting the objective. NO_CANDIDATE — nothing to pursue yet.
+ */
+export interface PlanAcceptance {
+  status: 'ACCEPTED' | 'CANDIDATE_ONLY' | 'NO_CANDIDATE';
+  required: number;
+  /** Only a defensible probability: the ledger, an all-evidence Monte Carlo, or this Brain's own record. */
+  probability: { value: number; lowerBound: number; basis: 'TARGET_MET' | 'EVIDENCED_PORTFOLIO' | 'MEASURED_RECORD'; sample: number; note: string } | null;
+  /** The plan that meets the objective, when one does. */
+  accepted: { label: string; opportunityIds: string[] } | null;
+  /** The strongest provisional plan, kept and improved while nothing is accepted. */
+  candidate: {
+    label: string;
+    opportunityIds: string[];
+    source: 'QUANT_PORTFOLIO' | 'STRATEGY' | 'PATHWAYS';
+    settledP50: number | null;
+    /** Share of worlds reaching the target, and whether it is a probability or only coverage. */
+    reach: number | null;
+    reachBasis: 'PROBABILITY' | 'COVERAGE' | null;
+  } | null;
+  /** Why the candidate is not accepted, each a thing work can change. */
+  shortfalls: string[];
+  sentence: string;
 }
 
 export interface PlanReading {
@@ -143,6 +187,8 @@ export interface PlanReading {
   basisNote: string | null;
   /** What the model left out, and why. */
   excluded: { opportunityId: string; title: string; reason: string }[];
+  /** Accepted plan versus candidates, under the owner's 90% condition. RECOMMENDABLE iff ACCEPTED. */
+  acceptance: PlanAcceptance;
   /** Only from this Brain's own record of earlier recommended plans. */
   measuredChance: { estimate: number; lowerBound: number; upperBound: number; sampleSize: number; cohort: string } | null;
   target: TargetReading;
@@ -543,6 +589,128 @@ export async function measuredPlanChance(): Promise<PlanReading['measuredChance'
 }
 
 /**
+ * The owner's acceptance rule (2026-11-09), applied to what the plan read
+ * composed. Pure.
+ *
+ * A plan is ACCEPTED only on a defensible probability of collecting the
+ * target before the deadline of at least `requiredProbability`, read at the
+ * lower bound of its interval:
+ *
+ *   1. TARGET_MET — the ledger already holds it.
+ *   2. EVIDENCED_PORTFOLIO — the quant engine's best combination, when every
+ *      input of every member rests on evidence or this Brain's measurements
+ *      (basis PROBABILITY), every member's chain is complete, and the Wilson
+ *      lower bound of its reach over the worlds evaluated clears the bar.
+ *   3. MEASURED_RECORD — the chosen strategy's chain is complete and this
+ *      Brain's own record of how its accepted plans ended clears the bar.
+ *
+ * Coverage of tested conditions, a cautious point reading, a sweep, a model's
+ * assumed conversion rate or a recorded agreement is never one of these: each
+ * leaves the plan a candidate. The strongest candidate is still named, so it
+ * is pursued and improved while nothing is accepted.
+ */
+export function judgeAcceptance(input: {
+  achieved: boolean;
+  chosen: StrategyReading | null;
+  portfolio: GoalPortfolio | null;
+  measuredChance: PlanReading['measuredChance'];
+  considered: Pick<ConsideredOpening, 'opportunityId' | 'missing'>[];
+  pathways?: Pick<PathwayReading, 'portfolio'> | null;
+  required?: number;
+}): PlanAcceptance {
+  const required = input.required ?? RECOMMENDATION_POLICY.requiredProbability;
+  const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
+  const best = input.portfolio?.best ?? null;
+  const bestIds = best ? [...new Set(best.members.map((m) => m.opportunityId))] : [];
+  const candidate: PlanAcceptance['candidate'] =
+    best && bestIds.length > 0
+      ? { label: best.members.map((m) => m.title.slice(0, 60)).join(' + '), opportunityIds: bestIds, source: 'QUANT_PORTFOLIO', settledP50: best.settledP50, reach: best.reach, reachBasis: input.portfolio!.basis }
+      : input.chosen && input.chosen.verdict !== 'NOT_VIABLE'
+        ? { label: input.chosen.label, opportunityIds: input.chosen.opportunityIds, source: 'STRATEGY', settledP50: input.chosen.conservativeSettled ?? input.chosen.sweep.settledP50, reach: input.chosen.sweep.goalMetShare, reachBasis: input.chosen.sweep.goalMetShare === null ? null : input.chosen.sweep.probabilistic ? 'PROBABILITY' : 'COVERAGE' }
+        : input.pathways?.portfolio.leading
+          ? { label: input.pathways.portfolio.leading.members.join(' + '), opportunityIds: input.pathways.portfolio.leading.members, source: 'PATHWAYS', settledP50: input.pathways.portfolio.leading.net.p50, reach: null, reachBasis: null }
+          : null;
+  if (input.achieved) {
+    return {
+      status: 'ACCEPTED',
+      required,
+      probability: { value: 1, lowerBound: 1, basis: 'TARGET_MET', sample: 1, note: 'the ledger already holds the target' },
+      accepted: { label: 'target collected', opportunityIds: [] },
+      candidate,
+      shortfalls: [],
+      sentence: 'The target is collected: the ledger holds it.',
+    };
+  }
+  const shortfalls: string[] = [];
+  // 2. The evidenced portfolio.
+  if (best && input.portfolio) {
+    const worlds = Math.max(1, input.portfolio.worlds);
+    const bounds = wilson(Math.round(best.reach * worlds), worlds);
+    const missingLinks = bestIds.flatMap((id) => {
+      const c = input.considered.find((one) => one.opportunityId === id);
+      return c ? c.missing.map((link) => `${id}: ${CHAIN_LABEL[link]}`) : [`${id}: not judged on its chain`];
+    });
+    if (input.portfolio.basis !== 'PROBABILITY') {
+      shortfalls.push(
+        `the best combination reaches the target in ${pct(best.reach)} of worlds, which is coverage of assumed inputs, not a probability: ${input.portfolio.missing.filter((one) => !/of worlds; more openings/.test(one)).slice(0, 4).join('; ') || 'inputs are not established'}`,
+      );
+    } else if (missingLinks.length > 0) {
+      shortfalls.push(`the evidenced combination's chain is incomplete: ${missingLinks.slice(0, 4).join('; ')}`);
+    } else if (bounds.low < required) {
+      shortfalls.push(`the evidenced combination reaches the target in ${pct(best.reach)} of ${worlds} worlds (lower bound ${pct(bounds.low)}), under the required ${pct(required)}`);
+    } else {
+      return {
+        status: 'ACCEPTED',
+        required,
+        probability: {
+          value: best.reach,
+          lowerBound: bounds.low,
+          basis: 'EVIDENCED_PORTFOLIO',
+          sample: worlds,
+          note: `every input of every member rests on evidence or this Brain's measurements; openings sharing outreach fail together at correlation ${input.portfolio.limits.correlation}`,
+        },
+        accepted: { label: candidate!.label, opportunityIds: bestIds },
+        candidate,
+        shortfalls: [],
+        sentence: `Accepted: the evidenced combination collects the target before the deadline in ${pct(best.reach)} of ${worlds} worlds (lower bound ${pct(bounds.low)} ≥ ${pct(required)}).`,
+      };
+    }
+  } else {
+    shortfalls.push('no combination of the openings held can run inside the limits');
+  }
+  // 3. This Brain's own record.
+  const m = input.measuredChance;
+  if (input.chosen?.chainComplete && m && m.lowerBound >= required) {
+    return {
+      status: 'ACCEPTED',
+      required,
+      probability: { value: m.estimate, lowerBound: m.lowerBound, basis: 'MEASURED_RECORD', sample: m.sampleSize, note: m.cohort },
+      accepted: { label: input.chosen.label, opportunityIds: input.chosen.opportunityIds },
+      candidate,
+      shortfalls: [],
+      sentence: `Accepted: "${input.chosen.label}" has every link established, and ${m.sampleSize} accepted plans like it ended with a success rate whose lower bound is ${pct(m.lowerBound)} ≥ ${pct(required)}.`,
+    };
+  }
+  shortfalls.push(
+    m
+      ? `this Brain's record of accepted plans has a lower bound of ${pct(m.lowerBound)} over ${m.sampleSize}, under ${pct(required)}${input.chosen?.chainComplete ? '' : ', and the chosen strategy\'s chain is not complete'}`
+      : `this Brain has too few finished accepted plans (under ${RECOMMENDATION_POLICY.minPlanOutcomes}) to calibrate a success rate`,
+  );
+  if (input.chosen?.chainComplete) shortfalls.push(`"${input.chosen.label}" has every link established and its cautious numbers reach the target — a qualified candidate, but that is a point reading, not a ${pct(required)} probability`);
+  return {
+    status: candidate ? 'CANDIDATE_ONLY' : 'NO_CANDIDATE',
+    required,
+    probability: null,
+    accepted: null,
+    candidate,
+    shortfalls,
+    sentence: candidate
+      ? `NOT ACCEPTED: no plan has a defensible ${pct(required)} probability of collecting the target before the deadline. The strongest candidate is "${candidate.label.slice(0, 160)}"${candidate.reach !== null ? ` (reaches the target in ${pct(candidate.reach)} of worlds, ${candidate.reachBasis === 'PROBABILITY' ? 'a probability' : 'coverage, not a probability'})` : ''}; Brain keeps constructing, combining and comparing strategies.`
+      : `NOT ACCEPTED: no candidate plan yet; Brain keeps constructing and comparing strategies.`,
+  };
+}
+
+/**
  * Read a goal's plan: compose the model from rows, run the existing engine,
  * and apply the gate. Writes nothing unless `persist` is set, and then only the
  * scenario model and run (through the scenario service) and an append-only
@@ -610,6 +778,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       ...base,
       verdict: target.achieved ? 'RECOMMENDABLE' : 'NEEDS_EVIDENCE',
       summary: model.refusal,
+      acceptance: judgeAcceptance({ achieved: target.achieved, chosen: null, portfolio: model.portfolio, measuredChance, considered: [] }),
       chosen: null,
       strategies: [],
       nextTest: target.achieved
@@ -621,7 +790,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       refusal: model.refusal,
       bestReach: null,
       considered: [],
-      needsMoreOpenings: !target.achieved && target.daysLeft !== null && target.daysLeft > 0,
+      // No accepted plan: keep constructing while there is time (a goal without a deadline always has).
+      needsMoreOpenings: !target.achieved && (target.daysLeft === null || target.daysLeft > 0),
       inferred: inferredInputs(model.considered),
       researchPriority: [],
       pool: { conclusion: 'NO_POOL', sentence: `No opening held is far enough along to model (${model.considered.length} read). That is a statement about what Brain holds, not about what exists, so it keeps searching and constructing.` },
@@ -824,6 +994,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       constraintsFailed,
       sweep,
       conservativeSettled: cons.settled,
+      chainComplete: verdict === 'RECOMMENDABLE',
       nextTest,
     });
   }
@@ -840,7 +1011,6 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       (b.sweep.goalMetShare ?? 0) - (a.sweep.goalMetShare ?? 0),
   );
   const chosen = ordered[0] ?? null;
-  const verdict: PlanVerdict = chosen?.verdict ?? 'NEEDS_EVIDENCE';
   /*
    * The bounded tests the ladder allows now. A plan whose held openings cannot
    * reach the goal is still NOT_VIABLE — a test changes no verdict — but its next
@@ -875,16 +1045,43 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     capabilities: await brainCapabilities(target.projectId, target.currency),
   });
   trace('pathways');
+  /*
+   * The owner's acceptance rule (2026-11-09): a complete chain whose cautious
+   * numbers reach the target is a qualified candidate, not an accepted plan.
+   * RECOMMENDABLE — the verdict every consumer reads as "meets the objective"
+   * — is given only with a defensible probability at or over the required
+   * one. Until then the candidate keeps its sale and its pursuit, and its next
+   * step is to raise that probability.
+   */
+  const acceptance = judgeAcceptance({ achieved: target.achieved, chosen, portfolio: model.portfolio, measuredChance, considered, pathways });
+  if (acceptance.status !== 'ACCEPTED') {
+    for (const s of strategies) {
+      if (s.verdict !== 'RECOMMENDABLE') continue;
+      s.verdict = 'NEEDS_EVIDENCE';
+      s.nextTest ??= {
+        link: 'CONVERSION',
+        test:
+          `Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a ${Math.round(acceptance.required * 100)}% chance of collecting it before the deadline: ` +
+          'sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.',
+        by: 'BRAIN',
+        blocker: null,
+      };
+    }
+  }
+  const verdict: PlanVerdict = acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
   const summary =
     verdict === 'RECOMMENDABLE'
-      ? `"${chosen!.label}" is recommendable: every link is established and the cautious numbers reach the target inside the limits.`
-      : verdict === 'NOT_VIABLE'
+      ? acceptance.sentence
+      : chosen?.chainComplete
+        ? `"${chosen.label}" is a qualified candidate, not an accepted plan: ${acceptance.sentence}`
+        : verdict === 'NOT_VIABLE'
         ? `No modelled strategy can work under the current limits: ${chosen?.constraintsFailed[0] ?? 'every one fails a limit'}.`
         : `Not yet proven. The closest plan is "${chosen?.label}", and what it is missing first is ${CHAIN_LABEL[chosen!.nextTest!.link]}.`;
   const reading: PlanReading = {
     ...base,
     verdict,
     summary,
+    acceptance,
     chosen: chosen?.key ?? null,
     strategies,
     // A SQUEEZE goal's next step is a sale when one can be offered; evidence work runs beside it.
@@ -909,7 +1106,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     // never openings that merely look valuable. Until there is one, keep looking.
     // A SQUEEZE goal keeps discovering and constructing stronger openings while it sells the ones it has,
     // until the target is met (owner, 2026-11-06): a recommendation is no reason to stop looking.
-    needsMoreOpenings: !target.achieved && (policy === 'SQUEEZE' || verdict !== 'RECOMMENDABLE'),
+    // No accepted plan means keep constructing, modifying, combining and comparing (owner, 2026-11-09).
+    needsMoreOpenings: !target.achieved && (policy === 'SQUEEZE' || acceptance.status !== 'ACCEPTED'),
     inferred: inferredInputs(model.considered),
     researchPriority: researchPriority(result, model.included, target, chosen?.key ?? null),
     // The pool, the ladder and the diagnosis are about openings found; an estimate is none of them.
@@ -1306,12 +1504,14 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     // shows whether research is improving it (owner, 2026-11-05).
     progress: planProgress(reading),
     sales: reading.sales.map((one) => one.opportunityId),
+    acceptance: { status: reading.acceptance.status, basis: reading.acceptance.probability?.basis ?? null, candidate: reading.acceptance.candidate?.opportunityIds ?? [] },
   };
   const digest = sha256(canonicalJson(summary));
   const last = await latestReading(goal.id);
   if (last && last.digest === digest) return;
   const forecast = {
     ...(chosen ? { conservativeSettled: chosen.conservativeSettled, sweep: chosen.sweep } : {}),
+    acceptance: reading.acceptance,
     remainingCents: reading.target.remainingCents,
     daysLeft: reading.target.daysLeft,
     ...planProgress(reading),
@@ -1342,9 +1542,12 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
   // A recommended plan's opportunities become work this goal pursues, so the
   // goal tick holds and prioritizes them. Execution itself stays with the
   // existing commercial authority and its effects.
-  if (reading.verdict === 'RECOMMENDABLE' && chosen) {
+  // A qualified candidate is pursued too: it is the strongest provisional plan, sold and improved while
+  // nothing is accepted (owner, 2026-11-09). Only the verdict says whether it meets the objective.
+  const pursued = reading.acceptance.accepted?.opportunityIds.length ? reading.acceptance.accepted.opportunityIds : chosen?.chainComplete ? chosen.opportunityIds : [];
+  if (pursued.length > 0) {
     const links = await listLinks(goal.id);
-    for (const opportunityId of chosen.opportunityIds) {
+    for (const opportunityId of pursued) {
       if (links.some((one) => one.kind === 'OPPORTUNITY' && one.ref === opportunityId && one.relation === 'PURSUES')) continue;
       await linkWorkstream({ workstreamId: goal.id, kind: 'OPPORTUNITY', ref: opportunityId, relation: 'PURSUES', recordedBy: 'BRAIN', recordedByUserId: null });
     }

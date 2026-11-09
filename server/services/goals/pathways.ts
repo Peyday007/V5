@@ -271,6 +271,7 @@ export const GAP_KINDS = [
   'SMALL_TICKET_VOLUME_UNKNOWN',
   'ONE_BUYER',
   'CLOSED',
+  'ONE_TRANSACTION_SHAPE',
 ] as const;
 export type GapKind = (typeof GAP_KINDS)[number];
 
@@ -290,6 +291,61 @@ export interface ConstructionMove {
   action: MoveAction;
   /** The transaction the move would produce, re-quantified from the same evidence, when one can be. */
   variant: { label: string; revenuePerDeal: PathFact; costPerDeal: PathFact; net: PathFact } | null;
+  /** Other transaction sizes and arrangements for the same deliverable, compared on cash collectible before the deadline. */
+  shapes?: TransactionShape[];
+}
+
+/**
+ * One way to sell the same deliverable: a single unit, a prepaid bundle, a
+ * monthly retainer, or an implementation engagement. Every figure is the
+ * unit's own evidence times a stated quantity — ESTIMATED until a buyer of
+ * that size is evidenced — and `collectible` counts only what settles before
+ * the deadline (a retainer's later months do not).
+ */
+export interface TransactionShape {
+  kind: 'UNIT' | 'BUNDLE' | 'RETAINER' | 'IMPLEMENTATION';
+  label: string;
+  /** Price per transaction, major units. */
+  price: number;
+  units: number;
+  /** What one such transaction puts toward the goal before the deadline, net of the bounded unit cost. */
+  collectible: number;
+  /** Transactions of this size that carry the whole gap. */
+  dealsForGap: number;
+  basis: string;
+}
+
+/** Bundle, retainer and implementation sizes, relative to one unit. Exploration bounds, not findings. */
+export const SHAPE_MULTIPLES = { bundle: { units: 10, discount: 0.1 }, retainer: { unitsPerMonth: 4, discount: 0.15 }, implementation: { units: 5, setupUnits: 3 } } as const;
+
+/**
+ * The transaction sizes worth comparing for a priced deliverable (owner,
+ * 2026-11-09: "do not freeze business models at one price, offer, buyer, or
+ * delivery method"). Pure; ranked by what one transaction collects before
+ * the deadline, so a larger arrangement that cannot settle in time does not
+ * outrank a smaller one that can.
+ */
+export function transactionShapes(input: { unitPrice: number; unitCost: number | null; remaining: number; daysLeft: number; daysToCash: number | null }): TransactionShape[] {
+  const { unitPrice, remaining } = input;
+  if (!(unitPrice > 0)) return [];
+  const cost = Math.max(0, input.unitCost ?? 0);
+  const settles = input.daysToCash === null || input.daysToCash <= Math.max(0, input.daysLeft - MIN_SALES_CYCLE_DAYS);
+  const months = Math.max(1, Math.floor(Math.max(0, input.daysLeft - MIN_SALES_CYCLE_DAYS) / RECURRING_CYCLE_DAYS) + 1);
+  const b = SHAPE_MULTIPLES.bundle;
+  const r = SHAPE_MULTIPLES.retainer;
+  const i = SHAPE_MULTIPLES.implementation;
+  const shape = (kind: TransactionShape['kind'], label: string, price: number, units: number, collectibleGross: number, basis: string): TransactionShape => {
+    const collectible = settles ? Math.max(0, collectibleGross - cost * units) : 0;
+    return { kind, label, price, units, collectible, dealsForGap: collectible > 0 ? Math.ceil(remaining / collectible) : Infinity, basis };
+  };
+  const retainerMonthly = unitPrice * r.unitsPerMonth * (1 - r.discount);
+  const out = [
+    shape('UNIT', 'one unit at the evidenced price', unitPrice, 1, unitPrice, 'the unit price on the card'),
+    shape('BUNDLE', `a prepaid bundle of ${b.units} at ${b.discount * 100}% off`, unitPrice * b.units * (1 - b.discount), b.units, unitPrice * b.units * (1 - b.discount), `${b.units} units, paid at order`),
+    shape('RETAINER', `a monthly retainer of ${r.unitsPerMonth} units, billed monthly in advance`, retainerMonthly, r.unitsPerMonth * months, retainerMonthly * months, `${months} month(s) billed before the deadline; later months do not count`),
+    shape('IMPLEMENTATION', `an implementation engagement: setup and process design (${i.setupUnits} units' worth) plus ${i.units} delivered units, deposit at signature`, unitPrice * (i.units + i.setupUnits), i.units, unitPrice * (i.units + i.setupUnits), 'consulting and implementation priced from the unit, paid as a deposit and on delivery'),
+  ];
+  return out.sort((x, y) => y.collectible - x.collectible);
 }
 
 export interface TransactionFit {
@@ -588,7 +644,7 @@ export function pathwayOf(
   if (o.expiresAt && Date.parse(o.expiresAt) < input.now.getTime()) gaps.push('CLOSED');
 
   const fit = fitOf({ net, conversion, volume, daysToCash, repeatable: one.repeatable, remaining: input.remaining, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, competitiveAward: !!judged?.competitiveAward, outreachBound: acquisition.method === 'COLD_OUTREACH' || acquisition.method === 'DIRECTORY' || acquisition.method === 'UNKNOWN' });
-  const moves = constructMoves({ one, gaps, fit, revenuePerDeal, fulfilmentCost, net, remaining: input.remaining, daysLeft: input.daysLeft, currency: input.currency, constructed, permissionsMissing: input.permissionsMissing, produces });
+  const moves = constructMoves({ one, gaps, fit, revenuePerDeal, fulfilmentCost, net, remaining: input.remaining, daysLeft: input.daysLeft, currency: input.currency, constructed, permissionsMissing: input.permissionsMissing, produces, paysOnce: !!judged?.paysOnce || !!judged?.competitiveAward, daysToCash: lowOf(daysToCash) });
   const contribution = contributionOf({ net, conversion, volume, repeatable: one.repeatable, daysToCash, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, closed: gaps.includes('CLOSED') });
   const gross = contributionOf({ net: revenuePerDeal, conversion, volume, repeatable: one.repeatable, daysToCash, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, closed: gaps.includes('CLOSED') });
   const notExecutable: string[] = [];
@@ -647,6 +703,7 @@ export const GAP_LABEL: Record<GapKind, string> = {
   SMALL_TICKET_VOLUME_UNKNOWN: 'small per sale and volume unknown',
   ONE_BUYER: 'one buyer, one sale',
   CLOSED: 'closed',
+  ONE_TRANSACTION_SHAPE: 'priced at one transaction size only',
 };
 
 /** The buyer kind, or the supplier, a pathway's failure is shared with. */
@@ -676,6 +733,10 @@ function constructMoves(input: {
   permissionsMissing: string[];
   /** The Brain capability that would produce the deliverable, when one does. */
   produces?: string | null;
+  /** It pays once by nature, so its size is its size. */
+  paysOnce?: boolean;
+  /** Days until its cash is usable, when known. */
+  daysToCash?: number | null;
 }): ConstructionMove[] {
   const { one, gaps, remaining, currency } = input;
   const o = one.opportunity;
@@ -821,6 +882,30 @@ function constructMoves(input: {
       action: 'CONSTRUCT',
       variant: { label: 'The same deliverable to buyers like it', revenuePerDeal: { ...input.revenuePerDeal }, costPerDeal: { ...input.fulfilmentCost }, net: { ...input.net } },
     });
+  }
+  // The same deliverable at other transaction sizes, unless one unit already carries the gap.
+  if (price !== null && !gaps.includes('CLOSED') && !gaps.includes('NO_MARGIN') && !gaps.includes('NO_PRICE') && input.fit.verdict !== 'CARRIES_GAP' && !input.paysOnce) {
+    const shapes = transactionShapes({ unitPrice: price, unitCost: mid(input.fulfilmentCost), remaining, daysLeft: input.daysLeft, daysToCash: input.daysToCash ?? null });
+    const top = shapes[0];
+    if (top && top.kind !== 'UNIT') {
+      moves.push({
+        gap: 'ONE_TRANSACTION_SHAPE',
+        construct: `Sell the same deliverable at other transaction sizes — ${shapes.filter((one) => one.kind !== 'UNIT').map((one) => one.label).join('; ')} — and keep whichever collects most before the deadline`,
+        mustHit: `${top.label}: ${Number.isFinite(top.dealsForGap) ? top.dealsForGap : '∞'} such deal(s) carry the whole gap, against ${Number.isFinite(shapes.find((one) => one.kind === 'UNIT')?.dealsForGap ?? Infinity) ? shapes.find((one) => one.kind === 'UNIT')!.dealsForGap : '∞'} single units`,
+        field: 'revenueRange',
+        ask:
+          `"${subject}" sells one unit at about ${money(price)} ${currency}. Do buyers of this deliverable buy it as a prepaid bundle, a monthly retainer, or an implementation/consulting engagement? ` +
+          'State each published package price, what it includes, how it is paid (card at order, deposit, monthly in advance), and how many buyers of that size a directory or marketplace counts, with the page.',
+        action: 'CONSTRUCT',
+        variant: {
+          label: top.label,
+          revenuePerDeal: { value: top.price, low: top.price * 0.5, high: top.price, status: 'ESTIMATED', basis: top.basis },
+          costPerDeal: { value: null, low: 0, high: (mid(input.fulfilmentCost) ?? 0) * top.units, status: 'ESTIMATED', basis: `${top.units} unit(s) at the unit's cost` },
+          net: { value: top.collectible, low: top.collectible * 0.5, high: top.collectible, status: 'ESTIMATED', basis: 'price less the units\' cost, counted only if it settles before the deadline' },
+        },
+        shapes,
+      });
+    }
   }
   // Sell what can be sold: a missing permission blocks the send, never the rest.
   // Nobody named to fulfil it is not an offer anyone can responsibly make.
@@ -1155,6 +1240,7 @@ const REPEATED_FIX: Record<GapKind, string> = {
   SMALL_TICKET_VOLUME_UNKNOWN: 'report the buyer count and purchase frequency with every small-ticket opening.',
   ONE_BUYER: 'report the population of buyers like the one found, not the one.',
   CLOSED: 'report only openings still open.',
+  ONE_TRANSACTION_SHAPE: 'report the package, retainer and implementation prices buyers pay for the deliverable, not one unit price.',
 };
 
 /* ------------------------------------------------------------------ */
