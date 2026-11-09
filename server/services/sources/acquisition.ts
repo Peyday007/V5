@@ -268,36 +268,76 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
   };
 }
 
-/** Repeated use of a host, counted from `SOURCE_ACCESS` event rows. Pure over rows. */
+/** Only recent use counts as repetition: a host busy last year is not repeated work now. */
+export const REPEATED_USE_WINDOW_DAYS = 30;
+
+/** One workflow on a host: its path without query or fragment, so a repeat is the same work again. */
+function workflowKey(url: unknown, host: string): string {
+  if (typeof url !== 'string') return host;
+  try {
+    const u = new URL(url);
+    return `${u.hostname.toLowerCase()}${u.pathname.replace(/\/+$/, '') || '/'}`;
+  } catch {
+    return host;
+  }
+}
+
+/**
+ * Repeated use of one workflow on a host, counted from `SOURCE_ACCESS` event rows. Pure over rows.
+ *
+ * Repetition is the busiest single workflow (same host and path) inside the window, not every
+ * row for the host: traffic across many different pages is volume, not repeated work. A use
+ * "needed a fallback" only when its own attempts show an earlier route failing before a
+ * different one served; a row that records no attempts says nothing and is not counted.
+ * A row with an `at` older than the window is ignored; rows without one are taken as current.
+ */
 export function repeatedUseFromRows(
-  rows: { provider: string | null; measures: string | null }[],
+  rows: { provider: string | null; measures: string | null; at?: string | null }[],
   host: string,
+  now: number = Date.now(),
 ): { repeatedUses: number; repeatedUsesNeedingFallback: number } {
   const want = host.toLowerCase();
-  let uses = 0;
-  let fallback = 0;
+  const since = now - REPEATED_USE_WINDOW_DAYS * 86_400_000;
+  const flows = new Map<string, { uses: number; fallback: number }>();
   for (const row of rows) {
-    let measures: { host?: unknown } = {};
+    if (row.at) {
+      const t = Date.parse(row.at);
+      if (Number.isFinite(t) && t < since) continue;
+    }
+    let measures: { host?: unknown; url?: unknown; attempts?: unknown } = {};
     try {
       measures = row.measures ? (JSON.parse(row.measures) as typeof measures) : {};
     } catch {
       continue;
     }
     if (typeof measures.host !== 'string' || measures.host.toLowerCase() !== want) continue;
-    uses += 1;
-    if (row.provider && row.provider !== 'DIRECT' && (ACCESS_METHODS as readonly string[]).includes(row.provider)) fallback += 1;
+    const flow = flows.get(workflowKey(measures.url, want)) ?? { uses: 0, fallback: 0 };
+    flow.uses += 1;
+    const attempts = Array.isArray(measures.attempts) ? (measures.attempts as { readable?: unknown }[]) : [];
+    const failedFirst = attempts.length > 1 && attempts[0]?.readable === false;
+    if (row.provider && row.provider !== 'DIRECT' && (ACCESS_METHODS as readonly string[]).includes(row.provider) && failedFirst) flow.fallback += 1;
+    flows.set(workflowKey(measures.url, want), flow);
   }
-  return { repeatedUses: uses, repeatedUsesNeedingFallback: fallback };
+  let repeatedUses = 0;
+  let repeatedUsesNeedingFallback = 0;
+  for (const flow of flows.values()) {
+    if (flow.uses > repeatedUses) repeatedUses = flow.uses;
+    if (flow.fallback > repeatedUsesNeedingFallback) repeatedUsesNeedingFallback = flow.fallback;
+  }
+  return { repeatedUses, repeatedUsesNeedingFallback };
 }
 
-/** Repeated-use counts for a host from existing SOURCE_ACCESS rows; zeros when unreadable. */
+/** Repeated-use counts for a host from existing SOURCE_ACCESS rows in the window; zeros when unreadable. */
 export async function readRepeatedUse(host: string): Promise<{ repeatedUses: number; repeatedUsesNeedingFallback: number }> {
   try {
-    const rows = await getDb().all<{ provider: string | null; measures: string | null }>(
-      `SELECT provider, measures FROM bin_events WHERE event_type = 'SOURCE_ACCESS' ORDER BY at DESC LIMIT 5000`,
-      [],
+    const now = Date.now();
+    const since = new Date(now - REPEATED_USE_WINDOW_DAYS * 86_400_000).toISOString();
+    // Filtered by host in the query, so other hosts' traffic cannot fill the row limit.
+    const rows = await getDb().all<{ provider: string | null; measures: string | null; at: string | null }>(
+      `SELECT provider, measures, at FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? AND measures LIKE ? ORDER BY at DESC LIMIT 5000`,
+      [since, `%${host.toLowerCase().replace(/[\\%]/g, '')}%`],
     );
-    return repeatedUseFromRows(rows, host);
+    return repeatedUseFromRows(rows, host, now);
   } catch {
     return { repeatedUses: 0, repeatedUsesNeedingFallback: 0 };
   }
