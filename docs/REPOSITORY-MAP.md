@@ -167,6 +167,14 @@ server/
       prompts.ts        every assignment, compiled from rows
       loop.ts           the tick, and every stage's answering transition
       executors/        how a worker is actually run; adding one is a row
+      program/          one specification across many campaigns (§96)
+        spec.ts         the verbatim source, located into items, nothing lost
+        map.ts          requirements checked against the source: omitted, duplicated, conflicting, ambiguous
+        plan.ts         bounded campaigns derived from the map, and the coverage gate
+        status.ts       SPECIFIED → … → PRODUCTION_VERIFIED, derived; earliest-failure repair
+        coordinator.ts  submit, approve, tick: verify, repair, queue through the line
+        probes.ts       read-only production probes, under the protected path
+        capacity.ts     where the factory's hours go, and the bottleneck
     connect/
       sites.ts          a connected site's identity, credential and status, as one action
       contract.ts       the frozen wire contract, and nothing about it trusted

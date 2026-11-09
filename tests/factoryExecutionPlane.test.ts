@@ -1142,6 +1142,50 @@ describe('the hosted tick hands out one stage at a time', () => {
     expect(cleared.blockerKind).toBeNull();
   });
 
+  /*
+   * A plan that serves no unit to a mandatory acceptance condition is refused at
+   * the bin boundary, as the local architect always refused it. The hosted plane
+   * reported `uncoveredConditions` and installed the plan anyway — a campaign
+   * silently smaller than its contract, and under a program a requirement lost
+   * between the program's plan and the campaign's (§96).
+   */
+  it('refuses a plan that leaves a mandatory acceptance condition to nobody', async () => {
+    stubForge({});
+    await tickRemoteCampaign(campaignId);
+    const assigned = await assignNextBin({ workerId, projectIds: [fixture.project.id] });
+    expect(assigned?.bin.kind).toBe('FACTORY_PLAN');
+    await putBinUnitResult({
+      binId: assigned!.bin.id,
+      unitKey: 'plan',
+      value: JSON.stringify({
+        units: [
+          {
+            key: 'unrelated',
+            kind: 'DOCS',
+            title: 'Something else',
+            objective: 'Write documentation nobody asked for, serving no condition.',
+            acceptance: ['a doc exists'],
+            ownedPaths: ['docs/x.md'],
+            requiredContext: [],
+            verification: ['npm test'],
+            expectedArtifact: 'a doc',
+            risk: 'LOW',
+            criticalPath: true,
+            dependsOn: [],
+            serves: [],
+          },
+        ],
+      }),
+      contentHash: 'h-uncovered',
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+    const { evaluateContract } = await import('../server/services/bins/contracts.ts');
+    const verdict = await evaluateContract((await listBins({ projectId: fixture.project.id })).find((b) => b.id === assigned!.bin.id)!);
+    expect(verdict.satisfied).toBe(false);
+    expect(JSON.stringify(verdict)).toContain('No unit serves mandatory acceptance condition A01');
+  });
+
   it('waits for an integrator rather than reviewing work that is only implemented', async () => {
     stubForge({});
     // A unit that has been implemented on its own branch but not integrated.

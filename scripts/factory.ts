@@ -1646,6 +1646,137 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * Programs (§96): one specification, many campaigns. The spec and map files
+     * are read from this image or, with `--ref <branch>`, from that branch through
+     * the forge, exactly like `submit`.
+     */
+    case 'program-skeleton': {
+      const { extractSourceItems } = await import('../server/services/factory/program/spec.ts');
+      const { skeletonMap } = await import('../server/services/factory/program/map.ts');
+      const source = await readObjectiveText(flagString(flags, 'spec') ?? fail('--spec is required'), flags);
+      const items = extractSourceItems(source);
+      process.stdout.write(`${JSON.stringify({ items, map: skeletonMap(items) }, null, 2)}\n`);
+      break;
+    }
+
+    case 'program-submit': {
+      const { submitProgram } = await import('../server/services/factory/program/coordinator.ts');
+      const projects = await listProjects();
+      const projectId = flagString(flags, 'project') ?? projects[0]?.id ?? fail('no project exists');
+      const source = await readObjectiveText(flagString(flags, 'spec') ?? fail('--spec is required'), flags);
+      const mapText = await readObjectiveText(flagString(flags, 'map') ?? fail('--map is required'), flags);
+      const result = await submitProgram({
+        projectId,
+        title: flagString(flags, 'title') ?? source.split('\n').find((line) => line.trim())?.replace(/^#+\s*/, '') ?? 'Program',
+        sourceText: source,
+        map: JSON.parse(mapText) as unknown,
+        repository: flagString(flags, 'repository') ?? 'https://github.com/Peyday007/V5',
+        baseBranch: flagString(flags, 'base') ?? 'production',
+        submissionKey: flagString(flags, 'submission-key'),
+      });
+      process.stdout.write(
+        `${result.created ? 'created' : 'already existed'} program ${result.program.id}\n` +
+          `source sha256 ${result.program.sourceSha256} (${result.sourceItems} items, ${result.normativeItems} normative)\n`,
+      );
+      for (const issue of result.map.errors) process.stdout.write(`MAP-REFUSED ${issue.code} ${issue.subject}: ${issue.detail}\n`);
+      for (const issue of result.map.warnings) process.stdout.write(`map-warning ${issue.code} ${issue.subject}: ${issue.detail}\n`);
+      for (const issue of result.plan?.errors ?? []) process.stdout.write(`PLAN-REFUSED ${issue.code} ${issue.subject}: ${issue.detail}\n`);
+      if (result.planned && result.plan?.ok) {
+        process.stdout.write(`map v${result.program.mapVersion}, plan v${result.program.planVersion}: ${result.planned.campaigns.length} campaign(s), ${result.planned.verifyOnly.length} existing requirement(s) to verify\n`);
+        for (const c of result.planned.campaigns) process.stdout.write(`  ${c.key} [${c.implements.join(', ')}] after [${c.dependsOn.join(', ')}] scope ${c.mutationScope.join(', ')}\n`);
+        for (const s of result.planned.serialized) process.stdout.write(`  serialized ${s.campaign} after ${s.after} on ${s.paths.join(', ')}\n`);
+      } else {
+        process.exitCode = 1;
+        process.stdout.write('FACTORY REFUSED: the map or plan does not account for the specification\n');
+      }
+      break;
+    }
+
+    case 'program-amend': {
+      const { proposeMap } = await import('../server/services/factory/program/coordinator.ts');
+      const programId = flagString(flags, 'program') ?? fail('--program is required');
+      const mapText = await readObjectiveText(flagString(flags, 'map') ?? fail('--map is required'), flags);
+      const users = await listUsers();
+      const result = await proposeMap({
+        programId,
+        map: JSON.parse(mapText) as unknown,
+        actorType: flags['as-factory'] ? 'FACTORY' : 'PERSON',
+        actorId: flags['as-factory'] ? null : (flagString(flags, 'user') ?? users.find((u) => u.isBrainAdmin)?.id ?? null),
+        reason: flagString(flags, 'reason') ?? fail('--reason is required'),
+      });
+      for (const issue of [...result.map.errors, ...(result.plan?.errors ?? [])]) process.stdout.write(`REFUSED ${issue.code} ${issue.subject}: ${issue.detail}\n`);
+      if (result.version === null) {
+        process.exitCode = 1;
+        process.stdout.write('FACTORY REFUSED: the revision was not installed\n');
+      } else process.stdout.write(`installed map v${result.version}\n`);
+      break;
+    }
+
+    case 'program-approve': {
+      const { approveProgram } = await import('../server/services/factory/program/coordinator.ts');
+      const programId = flagString(flags, 'program') ?? fail('--program is required');
+      const users = await listUsers();
+      const userFlag = flagString(flags, 'user');
+      const user = userFlag ? users.find((u) => u.id === userFlag) : users.find((u) => u.isBrainAdmin && !u.disabled) ?? users[0];
+      if (!user) fail('no person exists to approve this');
+      const result = await approveProgram({ programId, userId: user.id, autoRelease: flags['auto-release'] === true });
+      for (const question of result.openQuestions) process.stdout.write(`open question (blocks its requirement): ${question}\n`);
+      if (!result.ok) fail(result.reason ?? 'refused');
+      process.stdout.write(`approved by ${user.email}${result.reason ? ` (${result.reason})` : ''}\n`);
+      break;
+    }
+
+    case 'program-tick':
+    case 'program-status': {
+      const { readProgram, tickProgram } = await import('../server/services/factory/program/coordinator.ts');
+      const { productionPorts } = await import('../server/services/factory/program/ports.ts');
+      const { listPrograms } = await import('../server/repos/factoryProgram.ts');
+      const programId = flagString(flags, 'program') ?? (await listPrograms(['APPROVED', 'DRAFT'])).at(-1)?.id ?? fail('--program is required');
+      const ports = productionPorts();
+      if (command === 'program-tick') {
+        const report = await tickProgram(programId, ports);
+        process.stdout.write(`tick: verified ${report.verified.map((v) => `${v.requirement}=${v.outcome}`).join(', ') || 'none'}; repairs ${report.repairs.map((r) => r.campaign).join(', ') || 'none'}; queued ${report.queued.join(', ') || 'none'}\n`);
+        for (const r of report.refused) process.stdout.write(`  REFUSED ${r.campaign}: ${r.reason}\n`);
+      }
+      const reading = await readProgram(programId, ports);
+      process.stdout.write(
+        `program ${reading.program.id} "${reading.program.title}" ${reading.program.state} map v${reading.program.mapVersion} plan v${reading.program.planVersion}\n` +
+          `source sha256 ${reading.program.sourceSha256}\n` +
+          `counts ${Object.entries(reading.counts).map(([k, v]) => `${k}=${v}`).join(' ')}\n`,
+      );
+      for (const p of reading.progress) process.stdout.write(`  campaign ${p.key}: ${p.outcome ?? 'not started'}${p.campaignId ? ` (${p.campaignId})` : ''}${p.blocker ? ` — ${p.blocker}` : ''}\n`);
+      for (const r of reading.requirements) {
+        if (r.status === 'PRODUCTION_VERIFIED' && !flags['all']) continue;
+        process.stdout.write(`  ${r.key} ${r.status}${r.reopened ? ' (reopened)' : ''}: ${r.reason}\n`);
+      }
+      process.stdout.write(`PROGRAM-VERDICT: ${reading.verdict}\n`);
+      break;
+    }
+
+    case 'program-depend': {
+      const { recordDiscoveredDependency } = await import('../server/services/factory/program/coordinator.ts');
+      const result = await recordDiscoveredDependency({
+        programId: flagString(flags, 'program') ?? fail('--program is required'),
+        requirementKey: flagString(flags, 'requirement') ?? fail('--requirement is required'),
+        dependsOn: flagString(flags, 'depends-on') ?? fail('--depends-on is required'),
+        reason: flagString(flags, 'reason') ?? fail('--reason is required'),
+        actorType: 'FACTORY',
+        actorId: null,
+      });
+      if (!result.ok) fail(result.reason ?? 'refused');
+      process.stdout.write(`replanned: plan v${result.planVersion}\n`);
+      break;
+    }
+
+    case 'capacity': {
+      const { readCapacity } = await import('../server/services/factory/program/capacity.ts');
+      const reading = await readCapacity({ sinceHours: Number(flagString(flags, 'hours') ?? '168') });
+      process.stdout.write(`${JSON.stringify(reading, null, 2)}\n`);
+      process.stdout.write(`CAPACITY-BOTTLENECK: ${reading.bottleneck}\n`);
+      break;
+    }
+
     default:
       process.stdout.write(
         'commands: fleet, allocation, register, submit, approve, amend, plan, run, tick, tick-all, outcome,\n' +
@@ -1653,7 +1784,8 @@ async function main(): Promise<void> {
           '  set-state, queue, withdraw, admission, line, burnin,\n' +
           '  answer-bin,\n' +
           '  reauthorize, regrant-unit, retire, release,\n' +
-          '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-status\n',
+          '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-status,\n' +
+          '  program-skeleton, program-submit, program-amend, program-approve, program-tick, program-status, program-depend, capacity\n',
       );
       // An unknown command is the caller getting it wrong, and it used to be
       // reported as success — see the verdict line below.

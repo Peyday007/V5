@@ -344,6 +344,15 @@ export async function ensureChangeRequest(
   return { changeRequest: mapChangeRequest(row), created: result.changes === 1 };
 }
 
+/** The change request a submission key already made, if any. */
+export async function getChangeRequestBySubmissionKey(projectId: string, submissionKey: string): Promise<FactoryChangeRequest | null> {
+  const row = await getDb().get<FactoryChangeRequestRow>(
+    `SELECT * FROM factory_change_requests WHERE project_id = ? AND submission_key = ?`,
+    [projectId, submissionKey],
+  );
+  return row ? mapChangeRequest(row) : null;
+}
+
 export async function getChangeRequest(id: string): Promise<FactoryChangeRequest | null> {
   const row = await getDb().get<FactoryChangeRequestRow>(
     `SELECT * FROM factory_change_requests WHERE id = ?`,

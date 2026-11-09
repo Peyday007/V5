@@ -714,6 +714,26 @@ factoryRouter.get(
   }),
 );
 
+/**
+ * A program (§96): its requirement statuses, derived from rows on this read, and
+ * the verdict — DONE only when every requirement passed on production. The
+ * source is returned verbatim with its hash, because it is the authority the
+ * statuses answer to. Refused exactly like a campaign that is not there.
+ */
+factoryRouter.get(
+  '/factory/programs/:programId',
+  handler(async (req, res) => {
+    const programId = pathId(req, 'programId');
+    const { getProgram } = await import('../repos/factoryProgram.ts');
+    const program = await getProgram(programId);
+    if (!program) throw notFound('No such program.');
+    await authorizeOrDeny(program.projectId, 'read', 'No such program.');
+    const { readProgram } = await import('../services/factory/program/coordinator.ts');
+    const { productionPorts } = await import('../services/factory/program/ports.ts');
+    res.json(await readProgram(programId, productionPorts()));
+  }),
+);
+
 /** The briefing: objective, stage, active work, blocker and result, nothing invented. */
 factoryRouter.get(
   '/factory/campaigns/:campaignId/briefing',
