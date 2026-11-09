@@ -197,13 +197,22 @@ export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
   const encumbered = sum(funds.filter((e) => e.encumbered).map((e) => e.amount));
   const refunds = returned.length ? sum(returned.map((e) => e.amount)) : null;
 
-  const firstFunds = funds.length ? funds.map((e) => e.at).sort()[0] : undefined;
+  // Earliest receipt by parsed instant, never by string order: offsets and fractional-second
+  // formats make ISO strings sort differently from the moments they name.
+  const firstFunds = funds.length ? funds.reduce((a, b) => (ms(b.at)! < ms(a.at)! ? b : a)).at : undefined;
   const lead = daysBetween(route.leadAt, route.commitmentAt);
   const toFunds = daysBetween(route.commitmentAt, firstFunds);
   const toUsable = daysBetween(firstFunds, route.usableCashAt);
-  if (lead === null) unknowns.push('lead-to-commitment time not stated');
-  if (toFunds === null) unknowns.push('commitment-to-funds time not stated');
-  if (toUsable === null) unknowns.push('funds-to-usable-cash time not stated');
+  // A stage whose end precedes its start is a data error, which is not the same as an absence.
+  const stage = (label: string, days: number | null, from: string | undefined, to: string | undefined) => {
+    if (days !== null) return;
+    const a = ms(from);
+    const b = ms(to);
+    unknowns.push(a !== null && b !== null && b < a ? `${label} time is inconsistent: the later event is dated before the earlier one` : `${label} time not stated`);
+  };
+  stage('lead-to-commitment', lead, route.leadAt, route.commitmentAt);
+  stage('commitment-to-funds', toFunds, route.commitmentAt, firstFunds);
+  stage('funds-to-usable-cash', toUsable, firstFunds, route.usableCashAt);
 
   // Receivables are only knowable when billings are; received can exceed billed (advances), floor at 0.
   const receivables = billed === null ? null : Math.max(0, billed - (received ?? 0));
