@@ -341,6 +341,24 @@ describe('a large program across many campaigns', () => {
     expect(events.filter((e) => (e.detail as { programId?: string }).programId === programId)).toHaveLength(1);
   });
 
+  it('clears a failure that was read wrongly at the next revision, while its repair is still running', async () => {
+    const world = new World();
+    const { result, falseClaim } = await submitLarge(world);
+    const programId = result.program.id;
+    await approveProgram({ programId, userId: approverId, autoRelease: true });
+    const first = await tickProgram(programId, world);
+    expect(first.verified.find((v) => v.requirement === falseClaim)?.outcome).toBe('FAIL');
+    expect(first.repairs.map((r) => r.requirement)).toEqual([falseClaim]);
+    // The failure was a misreading: production already serves it. Nothing is deployed for the repair yet.
+    world.existingWorks.add(falseClaim);
+    world.revisionNo += 1;
+    const next = await tickProgram(programId, world);
+    expect(next.verified.find((v) => v.requirement === falseClaim)?.outcome).toBe('PASS');
+    expect(next.repairs).toEqual([]);
+    const reading = await readProgram(programId, world);
+    expect(reading.requirements.find((r) => r.key === falseClaim)!.status).toBe('PRODUCTION_VERIFIED');
+  });
+
   it('keeps the source verbatim and refuses to redefine an approved requirement', async () => {
     const world = new World();
     const { spec, map, result } = await submitLarge(world);

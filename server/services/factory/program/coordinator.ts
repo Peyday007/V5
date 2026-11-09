@@ -582,11 +582,10 @@ export async function tickProgram(programId: string, ports: ProgramPorts): Promi
   for (const requirement of reading.requirements) {
     const due = requirement.status === 'INTEGRATED' || requirement.status === 'PRODUCTION_VERIFIED' || requirement.status === 'NOT_DONE';
     if (!due) continue;
-    // A requirement under repair is re-verified only once its repair is live.
-    if (requirement.status === 'NOT_DONE') {
-      const answering = input.plan.campaigns.find((c) => c.key === requirement.campaign);
-      if (answering?.kind !== 'BUILD' && input.progress.get(answering?.key ?? '')?.outcome !== 'LIVE') continue;
-    }
+    // A reopened requirement is asked again at every new revision, not only once
+    // its repair is live: a failure read wrongly (program fpg_2adb7f5e, 2026-11-09:
+    // a spent forge budget read as a missing file) then clears itself, and the
+    // repair it opened stops mattering. One answer per revision bounds the cost.
     // One answer per revision: a definite answer stands until production changes;
     // an UNKNOWN is asked again after a while.
     const last = latest.get(requirement.key);
