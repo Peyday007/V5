@@ -156,7 +156,7 @@ export interface RouteMoneyVelocity {
   receivables: number | null;
   /** Largest cumulative cash shortfall while outlays and receipts overlap. */
   peakWorkingCapital: number | null;
-  /** Funds received minus encumbered funds minus refunds; null when no funds row exists. */
+  /** Funds received minus what is still encumbered minus refunds, each dollar once; negative when refunds exceed receipts; null when no funds row exists. */
   usableCash: number | null;
   excludedFromUsable: number;
   /** The nine identities as stated; unstated ones are null. Never summed or substituted. */
@@ -238,8 +238,16 @@ export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
     peak = -low;
   } else unknowns.push('no outflow rows, peak working capital unknown');
 
-  const usable = received === null ? null : Math.max(0, received - encumbered - (refunds ?? 0));
+  // A dollar leaves usable cash once. A refund of money that was received encumbered (refundable) is
+  // that encumbrance being discharged, so it comes out of the encumbered pool first and only the rest
+  // of the refund reduces the unencumbered money. Subtracting both would count the same dollars twice (§37).
+  const refundTotal = refunds ?? 0;
+  const refundedFromEncumbered = Math.min(refundTotal, encumbered);
+  const stillEncumbered = encumbered - refundedFromEncumbered;
+  // Not clamped: refunds beyond what was received are a liability, and a negative figure says so.
+  const usable = received === null ? null : received - stillEncumbered - refundTotal;
   if (received === null) unknowns.push('no funds-received row, usable cash unknown');
+  else if (usable !== null && usable < 0) unknowns.push(`refunds and chargebacks exceed funds received by ${-usable}: a liability, not usable cash`);
 
   const identities = {} as Record<CashIdentity, number | null>;
   for (const k of CASH_IDENTITIES) identities[k] = route.identities?.[k] ?? null;
@@ -260,7 +268,8 @@ export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
     receivables,
     peakWorkingCapital: peak,
     usableCash: usable,
-    excludedFromUsable: encumbered + (refunds ?? 0),
+    // What leaves usable cash, each dollar once: usable cash plus this equals funds received.
+    excludedFromUsable: stillEncumbered + refundTotal,
     identities,
     unknowns,
   };
