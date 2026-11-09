@@ -211,6 +211,8 @@ export interface MissDiagnosis {
   /** Causes the evidence names; empty means unattributed, never a default cause. */
   causes: readonly MissCause[];
   owner: CorrectionOwner | null;
+  /** Every owner the named causes need; `owner` is the one that acts first. */
+  owners: readonly CorrectionOwner[];
   /** Gaps in the claim itself that make a cause plausible. */
   claimGaps: readonly string[];
   reason: string;
@@ -226,7 +228,7 @@ export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket
   const { prediction: p, outcome } = entry;
   const base = { predictionId: p.id, claimId: p.claimId, version: p.version };
   if (!outcome) {
-    return { ...base, contradicted: false, probabilityOfWhatHappened: null, surpriseBits: null, kind: 'UNJUDGED', causes: [], owner: null, claimGaps: [], reason: 'no outcome has been recorded for this version' };
+    return { ...base, contradicted: false, probabilityOfWhatHappened: null, surpriseBits: null, kind: 'UNJUDGED', causes: [], owner: null, owners: [], claimGaps: [], reason: 'no outcome has been recorded for this version' };
   }
   const given = p.probability === null ? null : outcome.occurred ? p.probability : 1 - p.probability;
   const contradicted = given !== null && given < 0.5;
@@ -237,7 +239,7 @@ export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket
   if (p.assumptions.length === 0) claimGaps.push('the claim states no assumptions');
   if (p.horizonDays === null) claimGaps.push('the claim states no horizon');
   if (!contradicted) {
-    return { ...base, contradicted, probabilityOfWhatHappened: given, surpriseBits, kind: 'NOT_A_MISS', causes: [], owner: null, claimGaps, reason: given === null ? 'a point estimate states no probability to contradict' : 'the outcome was the likelier one' };
+    return { ...base, contradicted, probabilityOfWhatHappened: given, surpriseBits, kind: 'NOT_A_MISS', causes: [], owner: null, owners: [], claimGaps, reason: given === null ? 'a point estimate states no probability to contradict' : 'the outcome was the likelier one' };
   }
   const own = buckets.filter((b) => b.comparableKey === p.comparableKey);
   const miscalibrated = own.some((b) => b.verdict === 'MISCALIBRATED');
@@ -251,6 +253,7 @@ export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket
       kind: judged ? 'EXPECTED_MISS' : 'UNJUDGED',
       causes: [],
       owner: null,
+      owners: [],
       claimGaps,
       reason: judged
         ? 'the comparable bucket is calibrated, so this is the ordinary downside the forecast allowed for, not a model failure'
@@ -266,6 +269,7 @@ export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket
     kind: 'SYSTEMATIC',
     causes,
     owner: causes.length ? ownerOf(causes) : null,
+    owners: ownersOf(causes),
     claimGaps,
     reason: causes.length
       ? 'the comparable bucket is miscalibrated and the observation names the cause'
@@ -273,11 +277,26 @@ export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket
   };
 }
 
-/** Software owns a correction only when every named cause is a software cause; otherwise the non-software owner does. */
+/**
+ * The owner that acts first on a set of causes; `ownersOf` lists every owner the set needs.
+ *
+ * A software defect is corrected first: an implementation fault corrupts every
+ * estimate built on it, so correcting the others before it measures nothing —
+ * Factory leads whenever MODEL_IMPLEMENTATION is among the causes, and the
+ * non-software owners still receive their own causes (see `ownersOf`). Without
+ * a software cause the owner covering the most named causes leads, ties going to
+ * the order in which the causes were observed. No owner is ranked by name.
+ */
 function ownerOf(causes: readonly MissCause[]): CorrectionOwner {
-  const owners = new Set(causes.map((c) => CAUSE_OWNER[c]));
-  if (owners.size === 1) return [...owners][0]!;
-  return owners.has('RESEARCH') ? 'RESEARCH' : owners.has('COMMERCIAL_OPERATIONS') ? 'COMMERCIAL_OPERATIONS' : 'FACTORY';
+  const owners = ownersOf(causes);
+  if (owners.includes('FACTORY')) return 'FACTORY';
+  const covers = (o: CorrectionOwner): number => causes.filter((c) => CAUSE_OWNER[c] === o).length;
+  return owners.reduce((best, o) => (covers(o) > covers(best) ? o : best), owners[0]!);
+}
+
+/** Every owner a set of causes needs, in the order the causes were observed. */
+export function ownersOf(causes: readonly MissCause[]): CorrectionOwner[] {
+  return [...new Set(causes.map((c) => CAUSE_OWNER[c]))];
 }
 
 export interface Correction {
