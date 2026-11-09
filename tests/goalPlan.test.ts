@@ -761,7 +761,7 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(sale.test.by).toBe('PERSON');
     // Every missing link at once: one grant alone would send nothing and collect nothing (2026-11-07).
     expect(sale.test.blocker).toMatch(/CONTACT_BUYER/);
-    expect(sale.test.blocker).toMatch(/RESEND_API_KEY/);
+    expect(sale.test.blocker).toMatch(/BRAIN_MESSAGING_PROVIDER=instantly and INSTANTLY_API_KEY/);
     expect(sale.test.blocker).toMatch(/QUOTE_AND_INVOICE and ACCEPT_PAYMENT/);
     expect(sale.test.blocker).toMatch(/STRIPE_SECRET_KEY/);
     expect(sale.test.blocker).toMatch(/^This sale waits for authorization\. Terms: sells "/);

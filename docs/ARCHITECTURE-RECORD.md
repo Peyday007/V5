@@ -14834,7 +14834,52 @@ simulator or queue; its outputs go through the existing doors.
   leading net p50, fact counts) is written with every changed reading;
   `npm run goals -- plan` prints the whole loop.
 
-## 94. A candidate is not an accepted plan: a cash goal is met at a defensible 90%, never at a point reading.
+## 94. Buyer outreach goes through the owner's Instantly workspace, and its replies are measurements.
+
+**Owner's order, 2026-11-09.** The owner already runs Instantly.ai. Resend is no
+longer the required outbound provider; Brain's messaging and sales system uses
+Instantly's API v2 — prepare leads, create campaigns, manage approved outreach,
+read replies, and feed real results to the quant engine — with CONTACT_BUYER
+before any outreach is activated, billing kept on Stripe, and verification
+against the owner's account without sending anything unauthorized.
+
+`services/cash/providers/instantly.ts` is a provider beside Resend under the
+existing effects engine (§20, §54); nothing about authority, idempotency or the
+perform path changed.
+
+- **What the effect is.** Instantly mails a lead in an *active* campaign on its
+  schedule, so CONTACT_BUYER is: add exactly one lead (the buyer's published
+  address; the card's subject and body as the lead's own custom variables) to
+  Brain's campaign, then activate the campaign if it is not running. Both are
+  inside the effect, and the effect runs only under a standing CONTACT_BUYER
+  grant (`perform.ts`). EXTERNAL_OPAQUE, as Resend: one automated attempt; a
+  lost answer is UNCERTAIN, and a lead added to a campaign that did not
+  activate is UNCERTAIN too, because nothing is being mailed.
+  `skip_if_in_workspace` keeps a buyer the owner's other campaigns hold from
+  being mailed twice.
+- **What sends nothing.** Reading accounts and campaigns; drafting Brain's
+  campaign (`Brain · buyer outreach`: one step `{{brain_subject}}` /
+  `{{brain_body}}`, the workspace's healthy accounts, weekdays, stop on reply);
+  putting prepared leads into a lead list; reading the unibox. Brain never
+  changes a campaign it did not create unless `BRAIN_INSTANTLY_CAMPAIGN_ID`
+  names one.
+- **Replies are evidence.** Each pass reads received mail on Brain's campaign
+  (`instantlySync.ts`, at most every five minutes a project; the unibox allows
+  20 requests a minute), matches it to the contact by the lead id the contact
+  was recorded with, and records `BUYER_REPLIED` from the PROVIDER keyed by the
+  email id; auto-replies and strangers are skipped. `journey/learning.ts` turns
+  those into the measured reply rates the plan models instead of a sweep.
+- **Capacity is measured.** The healthy sending accounts' daily limits are the
+  top of the outreach range the portfolio sweeps (`instantlyCapacity`, ten
+  minutes fresh). They are shared with the owner's other campaigns, so the
+  figure widens the range and is never Brain's own; an owner's stated figure
+  still wins. On the owner's workspace (2026-11-09): 12 of 18 accounts healthy,
+  930 a day — against the 60 a day the plan had assumed.
+- **Doors.** `admin cash instantly` reads the workspace, Brain's campaign and
+  its replies; the provider status page and `report:cash --probe` name
+  Instantly as the messaging setup.
+
+## 95. A candidate is not an accepted plan: a cash goal is met at a defensible 90%, never at a point reading.
 
 Owner, 2026-11-09: "The owner requires a plan with at least 90% defensible
 probability of collecting $10K before the deadline. This is a hard acceptance

@@ -301,6 +301,13 @@ export function evaluateGoalPortfolio(input: {
   beforeProof: number | null;
   perWeek: number | null;
   resources: string | null;
+  /**
+   * The outreach a day the owner's healthy sending accounts can carry, read
+   * from the messaging provider (§94). Shared with the owner's other
+   * campaigns, so it widens the swept range's top and is never Brain's own
+   * figure; an owner's stated figure wins.
+   */
+  measuredCapacity?: { perDay: number; accounts: number } | null;
   worlds?: number;
   seed?: number;
 }): GoalPortfolio {
@@ -310,7 +317,9 @@ export function evaluateGoalPortfolio(input: {
   const contactsPerDay: ModelInput =
     stated !== null
       ? { value: stated, low: stated, high: stated, provenance: 'EVIDENCE', source: { kind: 'PERSON', ref: 'goal resources' }, note: 'the outreach a day the owner stated' }
-      : { value: null, low: CONTACTS_PER_DAY_BOUNDS.low, high: CONTACTS_PER_DAY_BOUNDS.high, provenance: 'UNKNOWN', source: null, note: 'nobody has stated the outreach a day; swept' };
+      : input.measuredCapacity && input.measuredCapacity.perDay > CONTACTS_PER_DAY_BOUNDS.low
+        ? { value: null, low: CONTACTS_PER_DAY_BOUNDS.low, high: input.measuredCapacity.perDay, provenance: 'UNKNOWN', source: { kind: 'OTHER', ref: 'instantly:accounts' }, note: `up to ${input.measuredCapacity.perDay} a day across the owner's ${input.measuredCapacity.accounts} healthy Instantly sending accounts, shared with the owner's other campaigns; swept` }
+        : { value: null, low: CONTACTS_PER_DAY_BOUNDS.low, high: CONTACTS_PER_DAY_BOUNDS.high, provenance: 'UNKNOWN', source: null, note: 'nobody has stated the outreach a day; swept' };
   /*
    * Money tied up before anything has been proved: the owner's per-week limit
    * is what may go out in the first week, before any cash can have returned,
@@ -443,7 +452,7 @@ export function evaluateGoalPortfolio(input: {
       startingCapital,
       perArrangement: input.beforeProof,
       spendCeiling: input.capitalCeiling,
-      contactsPerDay: { value: stated, low: contactsPerDay.low ?? 0, high: contactsPerDay.high ?? 0, source: stated !== null ? 'stated by the owner on the goal' : 'not stated; swept' },
+      contactsPerDay: { value: stated, low: contactsPerDay.low ?? 0, high: contactsPerDay.high ?? 0, source: stated !== null ? 'stated by the owner on the goal' : input.measuredCapacity && input.measuredCapacity.perDay > CONTACTS_PER_DAY_BOUNDS.low ? `measured: up to ${input.measuredCapacity.perDay}/day on ${input.measuredCapacity.accounts} healthy Instantly accounts (shared); swept` : 'not stated; swept' },
       correlation: SHARED_OUTREACH_CORRELATION,
     },
     missing,

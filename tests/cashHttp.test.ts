@@ -682,7 +682,7 @@ describe('one account’s whole journey', () => {
       ['INVOICES', 'MISSING'],
       ['PAYMENTS', 'MISSING'],
     ]);
-    expect(status.body.providers[0]!.nextAction).toContain('RESEND_API_KEY');
+    expect(status.body.providers[0]!.nextAction).toContain('INSTANTLY_API_KEY');
     expect(status.body.providers[1]!.nextAction).toContain('STRIPE_SECRET_KEY');
   });
 

@@ -2475,6 +2475,27 @@ async function main(): Promise<void> {
      * decides when the subject is asked about, the discovery grant decides
      * whether that may run, and the evidence gate decides what may be claimed.
      */
+    case 'cash instantly': {
+      /*
+       * Read-only (§94): the owner's Instantly workspace as Brain sees it —
+       * sending accounts and their health, the daily capacity between them,
+       * the campaigns, Brain's own campaign, and the replies on it that Brain
+       * would record. Sends nothing, creates nothing, activates nothing.
+       */
+      const { probeInstantly, readInstantlyReplies, BRAIN_CAMPAIGN_NAME } = await import('../server/services/cash/providers/instantly.ts');
+      const probe = await probeInstantly();
+      console.log(`  instantly        ${probe.verdict}: ${probe.detail}`);
+      if (probe.workspace) {
+        for (const one of probe.workspace.accounts) console.log(`  account          ${one.healthy ? 'healthy  ' : 'unhealthy'} status ${one.status} warmup ${one.warmupStatus ?? '-'} limit ${one.dailyLimit ?? '-'}/day ${one.email.replace(/^[^@]+/, '…')}`);
+        for (const one of probe.workspace.campaigns) console.log(`  campaign         ${one.id} status ${one.status} ${one.brains ? '(Brain\'s)' : '(the owner\'s; Brain never changes it)'} ${one.name.slice(0, 60)}`);
+        const brain = probe.workspace.campaigns.find((one) => one.name === BRAIN_CAMPAIGN_NAME);
+        if (brain) {
+          const replies = await readInstantlyReplies({ campaignId: brain.id, pages: 1 });
+          console.log(`  replies          ${replies.ok ? `${replies.replies.length} received on Brain's campaign (${replies.replies.filter((r) => r.autoReply).length} auto-replies)` : replies.reason}`);
+        }
+      }
+      break;
+    }
     case 'cash constraints': {
       const project = await projectFrom(rest[0] ?? fail('Name the project.'));
       if (rest.length < 2) {
