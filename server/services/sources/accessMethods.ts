@@ -14,6 +14,10 @@
  * workaround.
  */
 
+/** The readers `access.ts` runs, in the order it tries them. Defined here so `acquisition.ts` can name them without importing the reader. */
+export const ACCESS_METHODS = ['DIRECT', 'CONNECTOR', 'BROWSER', 'SITEMAP', 'ARCHIVE', 'SEARCH'] as const;
+export type AccessMethod = (typeof ACCESS_METHODS)[number];
+
 export const METHOD_CLASSES = ['NATIVE', 'BULK', 'HTTP', 'BROWSER', 'MODEL_ASSISTED', 'HUMAN_HANDOFF'] as const;
 export type MethodClass = (typeof METHOD_CLASSES)[number];
 

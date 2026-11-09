@@ -22,7 +22,7 @@
  */
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
-import { ACCESS_METHODS } from './access.ts';
+import { ACCESS_METHODS } from './accessMethods.ts';
 
 export const ACQUISITION_CAPABILITIES = ['OPERATE', 'ACQUIRE'] as const;
 export type AcquisitionCapability = (typeof ACQUISITION_CAPABILITIES)[number];

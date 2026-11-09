@@ -41,11 +41,12 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { browserMcpUrl, renderInBrowser } from './browserMcp.ts';
 import { connectorFor } from './connectors.ts';
 import { searchSuccessor } from './discover.ts';
-import { boundaryOfRead, classOfRoute, selectAccessMethod } from './accessMethods.ts';
+import { ACCESS_METHODS, boundaryOfRead, classOfRoute, selectAccessMethod, type AccessMethod } from './accessMethods.ts';
+import { recordAcquisitionJudgment } from './acquisition.ts';
 import { checkDestination, fetchForWorker, systemResolver, type Resolver, type SourceFetch } from './fetchForWorker.ts';
 
-export const ACCESS_METHODS = ['DIRECT', 'CONNECTOR', 'BROWSER', 'SITEMAP', 'ARCHIVE', 'SEARCH'] as const;
-export type AccessMethod = (typeof ACCESS_METHODS)[number];
+export { ACCESS_METHODS };
+export type { AccessMethod };
 
 export interface AccessAttempt {
   method: AccessMethod;
@@ -74,6 +75,12 @@ export interface AccessDeps {
   search?: ((url: string) => Promise<SourceFetch | null>) | null;
   learned?: (host: string) => Promise<AccessMethod | null>;
   record?: (read: SourceRead, caller: string, ms: number) => Promise<void>;
+  /**
+   * Records the OPERATE/ACQUIRE judgment for a read that needed more than a plain
+   * direct read (`acquisition.ts`). Defaults on only with the default recorder, so a
+   * caller that brings its own `record` brings its own history too.
+   */
+  judge?: (read: SourceRead, caller: string) => Promise<void>;
   /** Which part of Brain asked, for the event. */
   caller?: string;
 }
@@ -415,6 +422,34 @@ export function resetSourceAccessMemory(): void {
   robotsCache.clear();
 }
 
+/**
+ * Every read is an ACQUIRE need (information, not a site's functionality). A read
+ * that needed a fallback route, or met a boundary, is judged and the judgment is
+ * recorded beside its SOURCE_ACCESS row: which route the evidence supports, whether
+ * existing bulk sources served, whether repetition on this host justifies a reusable
+ * connector, and — at a boundary — a human handoff rather than a workaround. A plain
+ * successful direct read needs no routing decision and writes nothing extra.
+ */
+async function defaultJudge(read: SourceRead, caller: string): Promise<void> {
+  const host = hostOf(read.requestedUrl);
+  const boundary = boundaryOfRead({ readable: read.readable, reason: read.readable ? undefined : read.reason, status: read.status });
+  if (read.readable && read.method === 'DIRECT' && !boundary) return;
+  const bulk = read.readable && (read.method === 'SITEMAP' || read.method === 'ARCHIVE');
+  await recordAcquisitionJudgment(
+    { kind: 'ACQUIRE', purpose: `read ${read.requestedUrl}`, host },
+    {
+      nativeIntegrationAvailable: read.readable && read.method === 'CONNECTOR',
+      existingBulkSources: bulk ? [read.finalUrl ?? read.requestedUrl] : [],
+      // The sitemap and archive routes are the existing-source search this layer runs.
+      bulkSearchDone: read.attempts.some((a) => a.method === 'SITEMAP' || a.method === 'ARCHIVE'),
+      stableHttpDocuments: read.readable && read.method === 'DIRECT',
+      interactiveInterfaceOnly: read.readable && read.method === 'BROWSER',
+      blockedAtBoundary: Boolean(boundary),
+    },
+    { caller },
+  );
+}
+
 async function defaultRecord(read: SourceRead, caller: string, ms: number): Promise<void> {
   const host = hostOf(read.requestedUrl);
   // The method class and why it was chosen are recorded on the event this layer already writes.
@@ -441,6 +476,7 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
       methodConstraints: chosen.constraints,
     },
   });
+  await defaultJudge(read, caller).catch(() => undefined);
 }
 
 /* ------------------------------------------------------------------------- */
