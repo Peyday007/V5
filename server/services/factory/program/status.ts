@@ -30,6 +30,7 @@ import {
   type RequirementVerification,
 } from '../../../domain/factoryProgram.ts';
 import { edgesOf } from './map.ts';
+import { promotedRequirements } from './plan.ts';
 
 export interface StatusInput {
   programId: string;
@@ -87,6 +88,7 @@ export function deriveProgramReading(input: StatusInput): ProgramReading {
   const latest = latestVerifications(input.verifications);
   const memo = new Map<string, RequirementReading>();
   const visiting = new Set<string>();
+  const promoted = promotedRequirements(input.map, input.extraEdges);
 
   const read = (requirement: ProgramRequirement): RequirementReading => {
     const known = memo.get(requirement.key);
@@ -133,6 +135,8 @@ export function deriveProgramReading(input: StatusInput): ProgramReading {
       reading = requirement.existing && input.plan.verifyOnly.includes(requirement.key)
         ? make('INTEGRATED', 'claimed as existing; production has not confirmed it yet')
         : make('SPECIFIED', 'no campaign implements it');
+    } else if (requirement.prepared && !input.progress.get(campaign.key)?.changeRequestId && !promoted.has(requirement.key)) {
+      reading = make('MAPPED', 'prepared: specified and kept ready; it starts when a live requirement depends on it');
     } else {
       const derived = campaignStatus(input.progress.get(campaign.key));
       reading = make(derived.status, derived.reason, everFailed);

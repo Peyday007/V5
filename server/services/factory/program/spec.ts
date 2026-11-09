@@ -213,3 +213,30 @@ export function uncoveredLines(source: string, items: SourceItem[]): number[] {
   });
   return missing;
 }
+
+/** Joins one release to the text before it: a blank line, so the last earlier item always ends where it ended. */
+export const AMENDMENT_SEPARATOR = '\n\n';
+
+/**
+ * The whole specification of a program: its original source followed by every
+ * amendment in order (§97). Appending is the only way it grows.
+ */
+export function programSource(program: { sourceText: string; amendments?: Array<{ sourceText: string }> }): string {
+  return [program.sourceText, ...(program.amendments ?? []).map((a) => a.sourceText)].join(AMENDMENT_SEPARATOR);
+}
+
+/**
+ * The amendment property, checked: every item of the text before the release
+ * is, after it, the same item — same id, same offsets, same words, same
+ * normativity. Returns the ids that moved (empty when the release only adds).
+ */
+export function itemsMovedBy(before: SourceItem[], after: SourceItem[]): string[] {
+  const moved: string[] = [];
+  for (const [index, item] of before.entries()) {
+    const now = after[index];
+    if (!now || now.id !== item.id || now.start !== item.start || now.end !== item.end || now.text !== item.text || now.normative !== item.normative) {
+      moved.push(item.id);
+    }
+  }
+  return moved;
+}

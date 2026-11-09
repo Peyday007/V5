@@ -19,6 +19,7 @@
  * code that verifies it.
  */
 import {
+  LINE_PRIORITY,
   MAX_REQUIREMENTS_PER_CAMPAIGN,
   PROTECTED_VERIFICATION_PATHS,
   type PlannedCampaign,
@@ -80,6 +81,12 @@ function depthOf(map: RequirementMap, extra: Map<string, string[]>): Map<string,
 
 const slug = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'general';
 
+/** A campaign's priority and readiness, which merging may never mix. */
+function classOf(map: RequirementMap, campaign: PlannedCampaign): string {
+  const first = map.requirements.find((r) => r.key === campaign.implements[0]);
+  return `${first?.priority ?? 'P2'}:${first?.prepared ? 'prepared' : 'live'}`;
+}
+
 /** Campaign-level edges implied by requirement edges. */
 export function deriveCampaignEdges(
   map: RequirementMap,
@@ -133,7 +140,9 @@ export function deriveProgramPlan(
   const buckets = new Map<string, ProgramRequirement[]>();
   for (const requirement of map.requirements) {
     if (!needsWork(requirement) || keptKeys.has(requirement.key)) continue;
-    const bucket = `${requirement.subsystem}\u0000${String(depth.get(requirement.key) ?? 0).padStart(4, '0')}`;
+    // Priority and readiness are part of the bucket, so a P0 is never held in a
+    // campaign with a P3, and a prepared capability never rides along with live work.
+    const bucket = `${requirement.subsystem}\u0000${String(depth.get(requirement.key) ?? 0).padStart(4, '0')}\u0000${requirement.priority ?? 'P2'}\u0000${requirement.prepared ? 'prepared' : 'live'}`;
     buckets.set(bucket, [...(buckets.get(bucket) ?? []), requirement]);
   }
   let campaigns: PlannedCampaign[] = [...kept];
@@ -146,12 +155,12 @@ export function deriveProgramPlan(
     return key;
   };
   for (const name of [...buckets.keys()].sort()) {
-    const [subsystem, d] = name.split('\u0000') as [string, string];
+    const [subsystem, d, priority, readiness] = name.split('\u0000') as [string, string, string, string];
     const members = buckets.get(name)!.sort((a, b) => a.key.localeCompare(b.key));
     for (let i = 0; i < members.length; i += max) {
       const chunk = members.slice(i, i + max);
       campaigns.push({
-        key: uniqueKey(`${slug(subsystem)}-d${Number(d)}${members.length > max ? `-${i / max + 1}` : ''}`),
+        key: uniqueKey(`${slug(subsystem)}-d${Number(d)}${priority === 'P2' ? '' : `-${priority.toLowerCase()}`}${readiness === 'prepared' ? '-prep' : ''}${members.length > max ? `-${i / max + 1}` : ''}`),
         kind: 'BUILD',
         title: `${subsystem}: ${chunk.map((r) => r.key).join(', ')}`.slice(0, 160),
         subsystem,
@@ -172,6 +181,7 @@ export function deriveProgramPlan(
       if (kept.includes(a)) continue;
       for (const b of campaigns) {
         if (a === b || kept.includes(b) || a.subsystem !== b.subsystem) continue;
+        if (classOf(map, a) !== classOf(map, b)) continue;
         if (a.implements.length + b.implements.length > max) continue;
         // Merging is safe only when no path between them runs through a third campaign.
         const trial = new Map([...edges].map(([k, v]) => [k, new Set(v)]));
@@ -208,7 +218,13 @@ export function deriveProgramPlan(
       if (shared.length === 0) continue;
       if (hasPath(edges, a.key, b.key) || hasPath(edges, b.key, a.key)) continue;
       // The later one waits; a kept (already submitted) campaign never waits on a new one.
-      const [later, earlier] = kept.includes(b) && !kept.includes(a) ? [a, b] : [b, a];
+      // Otherwise the less urgent one waits, so a shared file never holds a P0 behind a P3.
+      const urgency = (c: PlannedCampaign): number => campaignLinePriority(map, c) + (campaignIsPrepared(map, c) ? 100 : 0);
+      const [later, earlier] = kept.includes(b) && !kept.includes(a)
+        ? [a, b]
+        : kept.includes(a) && !kept.includes(b)
+          ? [b, a]
+          : urgency(a) > urgency(b) ? [a, b] : [b, a];
       edges.get(later.key)!.add(earlier.key);
       serialized.push({ campaign: later.key, after: earlier.key, paths: shared });
     }
@@ -304,6 +320,38 @@ export function validateProgramPlan(
     }
   }
   return { ok: errors.length === 0, errors, warnings, coverage };
+}
+
+/** The line priority a campaign carries: its most urgent requirement's (§97). Repairs are 1. */
+export function campaignLinePriority(map: RequirementMap, campaign: PlannedCampaign): number {
+  if (campaign.kind !== 'BUILD') return 1;
+  const priorities = campaign.implements.map((key) => LINE_PRIORITY[map.requirements.find((r) => r.key === key)?.priority ?? 'P2']);
+  return priorities.length ? Math.min(...priorities) : LINE_PRIORITY.P2;
+}
+
+/** Whether every requirement a campaign implements is prepared (specified, kept ready, not yet needed). */
+export function campaignIsPrepared(map: RequirementMap, campaign: PlannedCampaign): boolean {
+  return campaign.kind === 'BUILD' && campaign.implements.length > 0 &&
+    campaign.implements.every((key) => map.requirements.find((r) => r.key === key)?.prepared === true);
+}
+
+/**
+ * Prepared requirements some live requirement needs now: reached from any
+ * requirement that is not prepared, through declared and discovered edges.
+ * Needing one is what promotes it (§22, §97) — no person has to remember it.
+ */
+export function promotedRequirements(map: RequirementMap, extra: Map<string, string[]> = new Map()): Set<string> {
+  const byKey = new Map(map.requirements.map((r) => [r.key, r]));
+  const promoted = new Set<string>();
+  const stack = map.requirements.filter((r) => !r.prepared).flatMap((r) => edgesOf(r, extra));
+  while (stack.length) {
+    const key = stack.pop()!;
+    const r = byKey.get(key);
+    if (!r || promoted.has(key)) continue;
+    if (r.prepared) promoted.add(key);
+    stack.push(...edgesOf(r, extra));
+  }
+  return promoted;
 }
 
 /** Campaigns that may start now: every campaign they wait for is finished. */

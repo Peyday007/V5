@@ -103,7 +103,26 @@ export interface ProgramRequirement {
   paths: string[];
   verification: RequirementCheck[];
   ambiguities: RequirementAmbiguity[];
+  /**
+   * When the work is wanted, never whether (§97). Campaigns are put in the line
+   * in this order; the line still admits by capacity and file ownership, so
+   * independent lower-priority work runs beside higher-priority work whenever a
+   * slot is free. Absent means P2.
+   */
+  priority?: RequirementPriority;
+  /**
+   * Specified and kept ready, but not started until another requirement that is
+   * not prepared depends on it (directly, transitively, or through a dependency
+   * Factory discovered). §22 of the first program: a capability prepared in
+   * advance consumes no worker until a live objective needs it.
+   */
+  prepared?: boolean;
 }
+
+export const REQUIREMENT_PRIORITIES = ['P0', 'P1', 'P2', 'P3'] as const;
+export type RequirementPriority = (typeof REQUIREMENT_PRIORITIES)[number];
+/** The line priority (lower starts sooner) a campaign carries, by its most urgent requirement. Repairs are 1. */
+export const LINE_PRIORITY: Record<RequirementPriority, number> = { P0: 2, P1: 3, P2: 4, P3: 6 };
 
 export interface RequirementMap {
   requirements: ProgramRequirement[];
@@ -154,6 +173,8 @@ export type ProgramIssueCode =
   | 'NO_WORK_DECLARED'
   | 'AMBIGUITY_HIDDEN'
   | 'INVALID_CHECK'
+  | 'INVALID_PRIORITY'
+  | 'AMENDMENT_MOVES_ITEMS'
   | 'REQUIREMENT_DROPPED'
   | 'REQUIREMENT_REDEFINED'
   | 'RELATIONSHIP_LOST'
@@ -183,14 +204,31 @@ export interface ProgramValidation {
 
 export type ProgramState = 'DRAFT' | 'APPROVED' | 'WITHDRAWN';
 
+/**
+ * A numbered release appended to a program's source (§97). The program's
+ * specification is its original source followed by every amendment in order;
+ * no earlier text moves, so every earlier item keeps its id.
+ */
+export interface ProgramAmendment {
+  number: number;
+  title: string;
+  sourceText: string;
+  sourceSha256: string;
+  actorType: 'PERSON' | 'FACTORY';
+  actorId: string | null;
+  createdAt: string;
+}
+
 export interface FactoryProgram {
   id: string;
   projectId: string;
   submissionKey: string;
   title: string;
-  /** The verbatim specification. Authoritative; the map never replaces it. */
+  /** The verbatim specification as first submitted. Authoritative; the map never replaces it. */
   sourceText: string;
   sourceSha256: string;
+  /** Releases appended since, in order. The whole specification is `programSource(program)`. */
+  amendments: ProgramAmendment[];
   repository: string;
   baseBranch: string;
   state: ProgramState;

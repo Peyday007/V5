@@ -1713,6 +1713,32 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'program-release': {
+      // Append the owner's next release to a program and map what it adds (§97).
+      const { amendProgram } = await import('../server/services/factory/program/coordinator.ts');
+      const programId = flagString(flags, 'program') ?? fail('--program is required');
+      const source = await readObjectiveText(flagString(flags, 'spec') ?? fail('--spec is required'), flags);
+      const mapText = await readObjectiveText(flagString(flags, 'map') ?? fail('--map is required'), flags);
+      const users = await listUsers();
+      const result = await amendProgram({
+        programId,
+        title: flagString(flags, 'title') ?? source.split('\n').find((line) => line.trim())?.replace(/^#+\s*/, '') ?? 'Release',
+        sourceText: source,
+        map: JSON.parse(mapText) as unknown,
+        actorType: 'PERSON',
+        actorId: flagString(flags, 'user') ?? users.find((u) => u.isBrainAdmin && !u.disabled)?.id ?? null,
+      });
+      process.stdout.write(
+        `release ${result.amendment.number} ${result.amendment.created ? 'appended' : 'already appended'} (sha256 ${result.amendment.sourceSha256}, ${result.newItems} new item(s), ${result.newNormativeItems} normative)\n`,
+      );
+      for (const issue of [...result.map.errors, ...(result.plan?.errors ?? [])]) process.stdout.write(`REFUSED ${issue.code} ${issue.subject}: ${issue.detail}\n`);
+      if (result.version === null) {
+        process.exitCode = 1;
+        process.stdout.write('FACTORY REFUSED: the release map was not installed\n');
+      } else process.stdout.write(`installed map v${result.version}: ${result.planned?.campaigns.length ?? 0} campaign(s) planned\n`);
+      break;
+    }
+
     case 'program-approve': {
       const { approveProgram } = await import('../server/services/factory/program/coordinator.ts');
       const programId = flagString(flags, 'program') ?? fail('--program is required');
@@ -1785,7 +1811,7 @@ async function main(): Promise<void> {
           '  answer-bin,\n' +
           '  reauthorize, regrant-unit, retire, release,\n' +
           '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-status,\n' +
-          '  program-skeleton, program-submit, program-amend, program-approve, program-tick, program-status, program-depend, capacity\n',
+          '  program-skeleton, program-submit, program-amend, program-release, program-approve, program-tick, program-status, program-depend, capacity\n',
       );
       // An unknown command is the caller getting it wrong, and it used to be
       // reported as success — see the verdict line below.

@@ -34,6 +34,7 @@ import { MAX_REPAIR_EPISODES } from '../../../domain/factoryProgram.ts';
 import type { LiveCheck } from '../../../domain/factoryRelease.ts';
 import {
   addDiscoveredDependency,
+  appendAmendment,
   ensureProgram,
   getMap,
   getPlan,
@@ -50,8 +51,8 @@ import {
 } from '../../../repos/factoryProgram.ts';
 import { recordFactoryEvent } from '../../../repos/factoryFleet.ts';
 import { edgesOf, findCycle, parseRequirementMap, validateRequirementMap } from './map.ts';
-import { deriveProgramPlan, eligibleCampaigns, validateProgramPlan } from './plan.ts';
-import { extractSourceItems, sha256 } from './spec.ts';
+import { campaignIsPrepared, campaignLinePriority, deriveProgramPlan, eligibleCampaigns, promotedRequirements, validateProgramPlan } from './plan.ts';
+import { extractSourceItems, itemsMovedBy, programSource, sha256 } from './spec.ts';
 import { deriveProgramReading, repairTargets, type StatusInput } from './status.ts';
 
 export class ProgramError extends Error {}
@@ -68,6 +69,7 @@ export const PROGRAM_EVENT_KINDS = {
   repairOpened: 'PROGRAM_REPAIR_OPENED',
   replanned: 'PROGRAM_REPLANNED',
   done: 'PROGRAM_DONE',
+  amended: 'PROGRAM_AMENDED',
 } as const;
 
 /* ------------------------------------------------------------------------- */
@@ -192,11 +194,13 @@ export async function proposeMap(input: {
   actorType: 'PERSON' | 'FACTORY';
   actorId: string | null;
   reason: string;
+  /** Judge the revision as additive even though a person proposes it: an amendment adds, it never rewrites (§97). */
+  additive?: boolean;
 }): Promise<{ map: ProgramValidation; plan: ProgramSubmissionResult['plan']; planned: ProgramPlan | null; version: number | null }> {
   const program = await getProgram(input.programId);
   if (!program) throw new ProgramError('No such program.');
   if (program.state === 'WITHDRAWN') throw new ProgramError('This program was withdrawn.');
-  const items = extractSourceItems(program.sourceText);
+  const items = extractSourceItems(programSource(program));
   let parsed: RequirementMap;
   try {
     parsed = parseRequirementMap(input.map);
@@ -205,7 +209,7 @@ export async function proposeMap(input: {
     return { map: { ok: false, errors: [{ code: 'NO_BEHAVIOR', subject: 'map', detail }], warnings: [] }, plan: null, planned: null, version: null };
   }
   const extraEdges = await extraEdgesOf(program.id);
-  const approved = program.state === 'APPROVED' && input.actorType === 'FACTORY' ? await getMap(program.id) : null;
+  const approved = program.state === 'APPROVED' && (input.actorType === 'FACTORY' || input.additive) ? await getMap(program.id) : null;
   const mapValidation = validateRequirementMap(items, parsed, { previous: approved?.map ?? null, extraEdges });
   if (!mapValidation.ok) {
     await recordFactoryEvent({
@@ -276,6 +280,83 @@ export async function approveProgram(input: { programId: string; userId: string;
     },
   });
   return { ok: moved, openQuestions };
+}
+
+/**
+ * Append a release to a program and map what it adds (§97).
+ *
+ * The release text is stored verbatim after everything before it, only if no
+ * earlier item moves — so every requirement, campaign and verification already
+ * recorded still points at the same words. The map that comes with it must
+ * cover the release's normative items and keep every earlier requirement with
+ * its meaning, checks and relationships unchanged (the additive gate Factory
+ * revisions pass); started campaigns are kept, so nothing completed is redone.
+ * The same text twice is one amendment. An amendment whose map is refused stays
+ * recorded — the refusal names lines in the text the owner wrote — and the next
+ * proposal for it is an ordinary `proposeMap`.
+ */
+export async function amendProgram(input: {
+  programId: string;
+  title: string;
+  sourceText: string;
+  map: unknown;
+  actorType: 'PERSON' | 'FACTORY';
+  actorId: string | null;
+}): Promise<{
+  amendment: { number: number; created: boolean; sourceSha256: string };
+  newItems: number;
+  newNormativeItems: number;
+  map: ProgramValidation;
+  plan: ProgramSubmissionResult['plan'];
+  planned: ProgramPlan | null;
+  version: number | null;
+}> {
+  const program = await getProgram(input.programId);
+  if (!program) throw new ProgramError('No such program.');
+  if (program.state === 'WITHDRAWN') throw new ProgramError('This program was withdrawn.');
+  const text = input.sourceText.replace(/\s+$/, '');
+  if (text.trim().length < 40) throw new ProgramError('A release has to say something; this one is under 40 characters.');
+  const sourceSha256 = sha256(text);
+  const before = extractSourceItems(programSource(program));
+  const known = program.amendments.find((a) => a.sourceSha256 === sourceSha256);
+  if (!known) {
+    const after = extractSourceItems(programSource({ ...program, amendments: [...program.amendments, { sourceText: text }] }));
+    const moved = itemsMovedBy(before, after);
+    if (moved.length > 0) {
+      throw new ProgramError(`Appending this release would change earlier items (${moved.slice(0, 5).join(', ')}${moved.length > 5 ? '…' : ''}); a release is appended after a blank line and must start with a heading.`);
+    }
+  }
+  const { amendment, created } = await appendAmendment({
+    programId: program.id,
+    title: input.title.trim().slice(0, 200) || 'Release',
+    sourceText: text,
+    sourceSha256,
+    actorType: input.actorType,
+    actorId: input.actorId,
+  });
+  const all = extractSourceItems(programSource((await getProgram(program.id))!));
+  const added = all.slice(before.length);
+  if (created) {
+    await recordFactoryEvent({
+      kind: PROGRAM_EVENT_KINDS.amended,
+      evidenceClass: 'MEASURED',
+      detail: { programId: program.id, number: amendment.number, sourceSha256, bytes: text.length, items: added.length, normative: added.filter((i) => i.normative).length, actorType: input.actorType },
+    });
+  }
+  const result = await proposeMap({
+    programId: program.id,
+    map: input.map,
+    actorType: input.actorType,
+    actorId: input.actorId,
+    reason: `release ${amendment.number}: ${amendment.title}`,
+    additive: true,
+  });
+  return {
+    amendment: { number: amendment.number, created, sourceSha256 },
+    newItems: created ? added.length : 0,
+    newNormativeItems: created ? added.filter((i) => i.normative).length : 0,
+    ...result,
+  };
 }
 
 /**
@@ -393,7 +474,7 @@ export interface ProgramTickReport {
 
 export function campaignObjective(program: FactoryProgram, campaign: PlannedCampaign, map: RequirementMap): CampaignSubmission {
   const byKey = new Map(map.requirements.map((r) => [r.key, r]));
-  const items = new Map(extractSourceItems(program.sourceText).map((i) => [i.id, i]));
+  const items = new Map(extractSourceItems(programSource(program)).map((i) => [i.id, i]));
   const requirements = campaign.implements.map((key) => byKey.get(key)!).filter(Boolean);
   const lines: string[] = [
     campaign.kind === 'BUILD'
@@ -553,7 +634,7 @@ export async function tickProgram(programId: string, ports: ProgramPorts): Promi
   const ambiguous = (campaign: PlannedCampaign): boolean =>
     campaign.implements.some((key) => input.map.requirements.find((x) => x.key === key)?.ambiguities.some((a) => a.interpretation === null && !a.resolvedBy));
   const queueAndGrant = async (campaign: PlannedCampaign, changeRequestId: string, riskClass: string | null): Promise<void> => {
-    await ports.queue({ changeRequestId, projectId: program.projectId, userId: program.approvedByUserId!, priority: repairing.has(campaign.key) ? 1 : 5 });
+    await ports.queue({ changeRequestId, projectId: program.projectId, userId: program.approvedByUserId!, priority: repairing.has(campaign.key) ? 1 : campaignLinePriority(input.map, campaign) });
     if (program.autoRelease && (riskClass ?? (await ports.riskOf(changeRequestId))) === 'LOW') {
       await ports.authorizeRelease({
         changeRequestId,
@@ -568,7 +649,14 @@ export async function tickProgram(programId: string, ports: ProgramPorts): Promi
     const changeRequestId = input.links.get(campaign.key);
     if (changeRequestId && input.progress.get(campaign.key)?.campaignId === null) await queueAndGrant(campaign, changeRequestId, null);
   }
-  for (const campaign of eligibleCampaigns(input.plan, finished, started)) {
+  // Most urgent first; a prepared capability waits until a live requirement needs it.
+  const promoted = promotedRequirements(input.map, input.extraEdges);
+  const waiting = (campaign: PlannedCampaign): boolean =>
+    campaignIsPrepared(input.map, campaign) && !campaign.implements.some((key) => promoted.has(key));
+  const eligible = eligibleCampaigns(input.plan, finished, started)
+    .filter((campaign) => !waiting(campaign))
+    .sort((a, b) => campaignLinePriority(input.map, a) - campaignLinePriority(input.map, b) || a.key.localeCompare(b.key));
+  for (const campaign of eligible) {
     if (ambiguous(campaign)) continue;
     let submitted: { changeRequestId: string; riskClass: string };
     try {
