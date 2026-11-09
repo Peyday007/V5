@@ -371,3 +371,100 @@ export function rankCapabilities(
     };
   });
 }
+
+/* ------------------------------------------------------------------------- */
+/* The consumer: facts built from goal and cash rows, then decided           */
+/* ------------------------------------------------------------------------- */
+
+/** A goal-side row that says a capability is holding a transaction up. */
+export interface BlockedTransactionRow {
+  transactionId: string;
+  capabilityId: string;
+  /** Cents from the cash row; null when no cash row states a value. */
+  valueCents: number | null;
+  businessKey: string | null;
+}
+
+/** What is recorded about a capability itself. Every figure is nullable: unknown stays unknown. */
+export interface CapabilityRecordRow {
+  id: string;
+  readiness: CapabilityReadiness;
+  prerequisitesMet: boolean | null;
+  needStillExists: boolean | null;
+  dueAt: string | null;
+  workaroundCostCents: number | null;
+  buildCostCents: number | null;
+  interfaceChanged: boolean | null;
+  otherBeneficiaries: number | null;
+  uncertainty: number | null;
+  opportunityCostCents: number | null;
+}
+
+/**
+ * Build `CapabilityFacts` from rows. A blocked-transaction row naming a
+ * capability that has no record is dropped rather than inventing a capability,
+ * and a duplicate transaction id counts once. An unrecorded `interfaceChanged`
+ * is false, never true: an unknown is not a reason to promote.
+ */
+export function capabilityFactsFromRows(
+  capabilities: CapabilityRecordRow[],
+  blocked: BlockedTransactionRow[],
+): CapabilityFacts[] {
+  const byCapability = new Map<string, Map<string, BlockedTransaction>>();
+  for (const row of blocked) {
+    let txs = byCapability.get(row.capabilityId);
+    if (!txs) {
+      txs = new Map();
+      byCapability.set(row.capabilityId, txs);
+    }
+    if (!txs.has(row.transactionId)) {
+      txs.set(row.transactionId, {
+        id: row.transactionId,
+        valueCents: row.valueCents,
+        businessKey: row.businessKey,
+      });
+    }
+  }
+  return capabilities.map((c) => ({
+    id: c.id,
+    readiness: c.readiness,
+    prerequisitesMet: c.prerequisitesMet,
+    needStillExists: c.needStillExists,
+    dueAt: c.dueAt,
+    blocked: [...(byCapability.get(c.id)?.values() ?? [])],
+    workaroundCostCents: c.workaroundCostCents,
+    buildCostCents: c.buildCostCents,
+    interfaceChanged: c.interfaceChanged === true,
+    otherBeneficiaries: c.otherBeneficiaries,
+    uncertainty: c.uncertainty,
+    opportunityCostCents: c.opportunityCostCents,
+  }));
+}
+
+export interface CapabilityReconciliation {
+  ranked: RankedCapability[];
+  /** Capabilities to move to NEEDED_NOW, with the measured reasons. */
+  promotions: { id: string; decision: PromotionDecision }[];
+  /** Capabilities to move to SUSPENDED because their need disappeared; never deleted. */
+  demotions: { id: string; to: CapabilityReadiness; requirementRetained: true }[];
+}
+
+/**
+ * One pass from rows to decisions: promote from measured blockers, demote
+ * vanished needs, and rank what may be worked within the parallel workers.
+ * Pure; the caller applies the transitions and records the events.
+ */
+export function reconcileCapabilities(
+  capabilities: CapabilityRecordRow[],
+  blocked: BlockedTransactionRow[],
+  options: { parallelWorkers: number | null },
+): CapabilityReconciliation {
+  const facts = capabilityFactsFromRows(capabilities, blocked);
+  const ranked = rankCapabilities(facts, options);
+  const promotions = ranked.filter((r) => r.promotion.promote).map((r) => ({ id: r.id, decision: r.promotion }));
+  const demotions = facts
+    .map((f) => ({ id: f.id, ...demotionForVanishedNeed(f) }))
+    .filter((d) => d.demote)
+    .map(({ id, to, requirementRetained }) => ({ id, to, requirementRetained }));
+  return { ranked, promotions, demotions };
+}
