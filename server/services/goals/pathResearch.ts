@@ -64,6 +64,18 @@ const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> =
         'Name who pays for this — a named buyer or a buyer class — and the published channel through which they can be reached ' +
         '(a directory, register, association list, marketplace category or contact page), with its source.',
     },
+    /*
+     * The link needs a payer AND a channel (plan.ts), and the channel is its own
+     * card field, 'access'. It is asked only once the payer is established — the
+     * combined question above covers both while neither is — so an opening with a
+     * payer and no channel is no longer left with a missing link nothing asks about.
+     */
+    {
+      field: 'access',
+      ask:
+        'The buyer is already named. Find the published channel through which they can be reached (a directory, register, ' +
+        'association list, marketplace category or contact page), with its source and the date it was read.',
+    },
   ],
   CURRENT_DEMAND: [
     {
@@ -268,6 +280,12 @@ export async function researchGoalPaths(input: {
     });
     const opportunity = await getOpportunity(one.opportunityId);
     if (!opportunity) continue;
+    if (asks.some((a) => a.field === 'access')) {
+      // One question per link while neither half is known; the channel alone once the payer is.
+      const payerFact = await cardFact(opportunity.id, 'payer');
+      const payerKnown = !!opportunity.payer || (!!payerFact && payerFact.value !== null && payerFact.kind !== 'RECOMMENDATION');
+      asks = asks.filter((a) => (payerKnown ? a.field !== 'payer' : a.field !== 'access'));
+    }
     if (diveOwnsItsQuestions(opportunity)) {
       note(`${one.title.slice(0, 60)}: its deep dive owns these questions (${opportunity.validationState})`);
       continue;
