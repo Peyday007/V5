@@ -1417,14 +1417,35 @@ export function claimAsks(
 const CLAIM_WINDOW = 56;
 
 /** The work types with at least one claimable row in these projects. */
-async function waitingTypes(projectIds: string[]): Promise<Set<string>> {
+async function waitingTypes(projectIds: string[]): Promise<Map<string, number>> {
   const now = queueNow();
-  const rows = await getDb().all<{ work_type: string }>(
-    `SELECT DISTINCT work_type FROM work_items
-      WHERE ${CLAIMABLE_SQL} AND project_id IN (${projectIds.map(() => '?').join(', ')})`,
+  const rows = await getDb().all<{ work_type: string; top: number | string }>(
+    `SELECT work_type, MAX(priority) AS top FROM work_items
+      WHERE ${CLAIMABLE_SQL} AND project_id IN (${projectIds.map(() => '?').join(', ')})
+      GROUP BY work_type`,
     [now, now, ...projectIds],
   );
-  return new Set(rows.map((row) => row.work_type));
+  return new Map(rows.map((row) => [row.work_type, Number(row.top)]));
+}
+
+/**
+ * The asks, most important waiting work first (Brain-wide resource rule, §98).
+ *
+ * Stage order (`CLAIM_ORDER`) used to come before priority, so an approved
+ * revenue goal's research — boosted by `GOAL_PRIORITY_BOOST` — waited behind
+ * any unrelated synthesis, audit or verification. The highest priority waiting
+ * in each ask now decides the order; stage order breaks ties. Pure.
+ */
+export function asksByPriority(
+  asks: readonly FreeLaneWorkType[][],
+  waiting: ReadonlyMap<string, number>,
+): FreeLaneWorkType[][] {
+  const top = (types: readonly string[]) => Math.max(-Infinity, ...types.map((type) => waiting.get(type) ?? -Infinity));
+  return asks
+    .map((types, index) => ({ types, index, top: top(types) }))
+    .filter((one) => one.top > -Infinity)
+    .sort((a, b) => b.top - a.top || a.index - b.index)
+    .map((one) => one.types);
 }
 
 /** Packets holding claimable rows of these types, best priority first, bounded. */
@@ -1536,8 +1557,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   };
   // Only types that have claimable rows are asked for: each ask is a bounded scan.
   const waiting = await waitingTypes(projectIds);
-  for (const types of claimAsks(workers, index, input.spillover)) {
-    if (!types.some((type) => waiting.has(type))) continue;
+  for (const types of asksByPriority(claimAsks(workers, index, input.spillover), waiting)) {
     one = await ask(types, null);
     if (one) break;
   }
