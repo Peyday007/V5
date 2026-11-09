@@ -97,6 +97,25 @@ export function productionPorts(): ProgramPorts {
         if (!(error instanceof ReleaseGrantError)) throw error;
       }
     },
+    async extendScope(input) {
+      const changeRequest = await getChangeRequest(input.changeRequestId);
+      if (!changeRequest) return;
+      const missing = input.add.filter((path) => !changeRequest.mutationScope.includes(path));
+      if (missing.length === 0) return;
+      const { amendContract } = await import('../contract.ts');
+      const campaign = await getCampaignByChangeRequest(input.changeRequestId);
+      const result = await amendContract({
+        changeRequestId: input.changeRequestId,
+        campaignId: campaign?.id ?? null,
+        field: 'mutation_scope',
+        newValue: [...changeRequest.mutationScope, ...missing],
+        reason: input.reason,
+        actorType: 'PERSON',
+        actorId: input.userId,
+        affectedWork: [],
+      });
+      if (!result.ok) throw new Error(result.reason);
+    },
     async riskOf(changeRequestId) {
       return (await getChangeRequest(changeRequestId))?.riskClass ?? null;
     },

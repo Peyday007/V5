@@ -95,6 +95,12 @@ export interface ProgramPorts {
   queue(input: { changeRequestId: string; projectId: string; userId: string; priority: number }): Promise<void>;
   /** Grant automatic release with these live checks. Idempotent. */
   authorizeRelease(input: { changeRequestId: string; userId: string; liveChecks: LiveCheck[]; reason: string }): Promise<void>;
+  /**
+   * Add paths to a submitted campaign's contract scope, as the program's approver,
+   * through the contract's own amendment (recorded with both values). Optional:
+   * a port without it leaves submitted scopes as they are.
+   */
+  extendScope?(input: { changeRequestId: string; add: string[]; userId: string; reason: string }): Promise<void>;
   /** The risk class the contract derived for a change request. */
   riskOf(changeRequestId: string): Promise<string | null>;
   /** What one change request has become, read from the existing campaign rows. */
@@ -661,6 +667,23 @@ export async function tickProgram(programId: string, ports: ProgramPorts): Promi
   for (const campaign of input.plan.campaigns) {
     const changeRequestId = input.links.get(campaign.key);
     if (changeRequestId && input.progress.get(campaign.key)?.campaignId === null) await queueAndGrant(campaign, changeRequestId, null);
+  }
+  // Campaigns submitted before they owned a test file get theirs (idempotent: the port adds only what is missing).
+  if (ports.extendScope) {
+    for (const campaign of input.plan.campaigns) {
+      const changeRequestId = input.links.get(campaign.key);
+      if (!changeRequestId || input.progress.get(campaign.key)?.outcome === 'LIVE') continue;
+      try {
+        await ports.extendScope({
+          changeRequestId,
+          add: [campaignTestPath(program, campaign)],
+          userId: program.approvedByUserId!,
+          reason: `Program ${program.id}: every campaign owns its own test file, so a review that asks for a regression test can be satisfied.`,
+        });
+      } catch {
+        // Refused or unreachable: the next tick asks again; the campaign is unchanged.
+      }
+    }
   }
   // Most urgent first; a prepared capability waits until a live requirement needs it.
   const promoted = promotedRequirements(input.map, input.extraEdges);

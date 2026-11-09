@@ -294,3 +294,23 @@ describe('a campaign owns a test file of its own', () => {
     expect(new Set(seen.map((s) => s.mutationScope.at(-1))).size).toBe(seen.length);
   });
 });
+
+describe('campaigns submitted before they owned a test file', () => {
+  it('get their test path added through the scope port, and a live campaign is left alone', async () => {
+    const programId = await submitAndApprove();
+    const line = new Line();
+    const extended: Array<{ changeRequestId: string; add: string[] }> = [];
+    (line as ProgramPorts).extendScope = async (input) => {
+      extended.push({ changeRequestId: input.changeRequestId, add: input.add });
+    };
+    await tickProgram(programId, line);
+    await tickProgram(programId, line);
+    const links = await listCampaignLinks(programId);
+    expect(new Set(extended.map((e) => e.changeRequestId))).toEqual(new Set(links.map((l) => l.changeRequestId)));
+    for (const e of extended) expect(e.add[0]).toMatch(/^tests\/program-/);
+    for (const [id] of line.keyOf) line.live.add(id);
+    extended.length = 0;
+    await tickProgram(programId, line);
+    expect(extended).toEqual([]);
+  });
+});
