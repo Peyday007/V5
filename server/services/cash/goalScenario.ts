@@ -24,7 +24,7 @@
  * pays after the deadline contributes nothing, which is what lets a smaller,
  * faster plan beat a bigger, slower one.
  */
-import { instantlyCapacity } from './providers/instantly.ts';
+import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
 import { breaksOperatingModel, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
@@ -690,6 +690,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       perWeek: target.capitalPerWeekCents === null ? null : target.capitalPerWeekCents / 100,
       resources: target.resources,
       measuredCapacity: await instantlyCapacity().catch(() => null),
+      measuredRates: await instantlyMeasuredRates().catch(() => null),
     });
     trace('quant portfolio');
   }

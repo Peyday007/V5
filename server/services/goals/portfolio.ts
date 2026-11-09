@@ -103,6 +103,16 @@ export interface PortfolioCombination {
   overSpend: number;
 }
 
+/** What the owner's own sends measured, and the interval it puts on a cold-outreach reply rate (§92). */
+export interface MeasuredRatesReading {
+  sent: number;
+  replies: number;
+  opportunities: number;
+  bounced: number;
+  low: number;
+  high: number;
+}
+
 export interface GoalPortfolio {
   /** PROBABILITY only when every input of every member rests on evidence. */
   basis: 'PROBABILITY' | 'COVERAGE';
@@ -123,6 +133,8 @@ export interface GoalPortfolio {
   /** What keeps the reading from being a probability, or the target from being reached. */
   missing: string[];
   searched: number;
+  /** The measured reply interval cold-outreach openings were sampled in, when one was passed. */
+  measuredRates?: MeasuredRatesReading | null;
 }
 
 /** Whether an input may be read as a distribution of the world rather than a range swept. */
@@ -225,6 +237,58 @@ interface Worlds {
   close: number[];
 }
 
+/** Two-sided 90% Wilson score interval. */
+const Z90 = 1.6449;
+function wilson90(successes: number, trials: number): { low: number; high: number } {
+  if (trials <= 0) return { low: 0, high: 1 };
+  const p = successes / trials;
+  const denom = 1 + (Z90 * Z90) / trials;
+  const centre = p + (Z90 * Z90) / (2 * trials);
+  const margin = Z90 * Math.sqrt((p * (1 - p)) / trials + (Z90 * Z90) / (4 * trials * trials));
+  return { low: Math.max(0, (centre - margin) / denom), high: Math.min(1, (centre + margin) / denom) };
+}
+
+/**
+ * The interval the owner's own sends put on a cold-outreach reply rate: from
+ * the lower bound of opportunities per send to the upper bound of unique
+ * replies per send, each at 90%. Null when nothing was sent.
+ */
+export function measuredReplyInterval(rates: { sent: number; replies: number; opportunities: number }): { low: number; high: number } | null {
+  if (!(rates.sent > 0)) return null;
+  const low = wilson90(Math.min(rates.opportunities, rates.sent), rates.sent).low;
+  const high = wilson90(Math.min(rates.replies, rates.sent), rates.sent).high;
+  return low <= high ? { low, high } : { low: high, high: low };
+}
+
+/**
+ * An opening that sells through the shared cold outreach has its reply rate
+ * sampled inside the measured interval. A card's own rate (published or
+ * measured) survives only where it lies inside that interval; otherwise the
+ * observed figure wins over the estimate (§92). A rate of exactly one is a
+ * per-contact agreement measurement that already contains replying, so it is
+ * not a reply rate and is left alone.
+ */
+function withMeasuredReply(one: ModelledOpportunity, rates: MeasuredRatesReading): ModelledOpportunity {
+  if (!one.repeatable || one.agreedValue > 0) return one;
+  const own = one.respond;
+  if (own.value === 1 && own.provenance === 'HISTORICAL') return one;
+  const ownLow = own.value ?? own.low ?? own.inferred?.p10 ?? null;
+  const ownHigh = own.value ?? own.high ?? own.inferred?.p90 ?? null;
+  if (ownLow !== null && ownHigh !== null && ownLow >= rates.low - 1e-12 && ownHigh <= rates.high + 1e-12) return one;
+  const pct = (x: number) => `${(x * 100).toFixed(2)}%`;
+  return {
+    ...one,
+    respond: {
+      value: null,
+      low: rates.low,
+      high: rates.high,
+      provenance: 'UNKNOWN',
+      source: { kind: 'OTHER', ref: 'instantly:analytics' },
+      note: `measured on the owner's own sends: ${rates.replies} unique replies and ${rates.opportunities} opportunities from ${rates.sent} emails (${rates.bounced} bounced); sampled from ${pct(rates.low)} to ${pct(rates.high)} at 90%`,
+    },
+  };
+}
+
 /** One opening's demand and cash, world by world, at one share of the shared outreach. */
 export function demandWorlds(one: ModelledOpportunity, share: number, daysLeft: number, contactsPerDay: ModelInput, worlds: number, seed: number): Worlds {
   const rng = makeRng(seed, one.index * 97 + Math.round(share * 100));
@@ -308,12 +372,21 @@ export function evaluateGoalPortfolio(input: {
    * figure; an owner's stated figure wins.
    */
   measuredCapacity?: { perDay: number; accounts: number } | null;
+  /**
+   * What the owner's own sends measured (§92). When passed, the reply rate of
+   * every opening that sells through the shared cold outreach is sampled in
+   * the interval those sends allow rather than over the published bounds.
+   */
+  measuredRates?: { sent: number; replies: number; opportunities: number; bounced?: number } | null;
   worlds?: number;
   seed?: number;
 }): GoalPortfolio {
   const worlds = input.worlds ?? PORTFOLIO_WORLDS;
   const seed = input.seed ?? 20261103;
   const stated = statedContactsPerDay(input.resources);
+  const interval = input.measuredRates ? measuredReplyInterval(input.measuredRates) : null;
+  const measuredRates: MeasuredRatesReading | null =
+    input.measuredRates && interval ? { sent: input.measuredRates.sent, replies: input.measuredRates.replies, opportunities: input.measuredRates.opportunities, bounced: input.measuredRates.bounced ?? 0, ...interval } : null;
   const contactsPerDay: ModelInput =
     stated !== null
       ? { value: stated, low: stated, high: stated, provenance: 'EVIDENCE', source: { kind: 'PERSON', ref: 'goal resources' }, note: 'the outreach a day the owner stated' }
@@ -331,7 +404,8 @@ export function evaluateGoalPortfolio(input: {
   const activities: Activity[] = [];
   const memberOf = new Map<string, PortfolioMember>();
   const demand: DemandEstimate[] = [];
-  for (const one of input.openings) {
+  for (const card of input.openings) {
+    const one = measuredRates ? withMeasuredReply(card, measuredRates) : card;
     const id = one.opportunity.id;
     const capital = capitalAtStart(one);
     const unestablished = INPUT_NAMES.filter(([key]) => !established(one[key] as ModelInput)).map(([, name]) => name);
@@ -457,5 +531,6 @@ export function evaluateGoalPortfolio(input: {
     },
     missing,
     searched: result.searched,
+    measuredRates,
   };
 }

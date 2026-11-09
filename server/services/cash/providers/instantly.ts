@@ -173,6 +173,59 @@ export async function instantlyCapacity(options: { fetch?: FetchLike; env?: Node
 
 export function forgetInstantlyCapacity(): void {
   cachedCapacity = null;
+  cachedRates = null;
+}
+
+/** What the owner's own sends have measured, summed over every campaign in the workspace (§92). */
+export interface InstantlyMeasuredRates {
+  sent: number;
+  replies: number;
+  opportunities: number;
+  bounced: number;
+}
+
+/** Below this many sends a reply rate is noise, and the published range answers instead. */
+export const MEASURED_RATES_MIN_SENT = 500;
+
+let cachedRates: { at: number; value: InstantlyMeasuredRates | null } | null = null;
+
+function count(row: Record<string, unknown>, key: string): number {
+  const n = Number(row[key]);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+/**
+ * The reply and opportunity rates the owner's workspace has measured on its own
+ * sends (read only: `GET /campaigns/analytics`), or null when Instantly is not
+ * the configured provider (no request is made), cannot be read, or has sent too
+ * few emails to say anything. An observed figure answers ahead of a published
+ * estimate (§92); it is read at the same ten-minute freshness as the capacity.
+ */
+export async function instantlyMeasuredRates(options: { fetch?: FetchLike; env?: NodeJS.ProcessEnv; now?: number } = {}): Promise<InstantlyMeasuredRates | null> {
+  const env = options.env ?? process.env;
+  const reading = messagingConfig(env);
+  if (reading.provider !== 'instantly' || !reading.configured) return null;
+  const now = options.now ?? Date.now();
+  if (cachedRates && now - cachedRates.at < CAPACITY_FRESH_MS) return cachedRates.value;
+  const answer = await call(ctxOf(options), 'GET', '/campaigns/analytics').catch(() => null);
+  let value: InstantlyMeasuredRates | null = null;
+  if (answer && answer.kind === 'OK') {
+    const body: unknown = answer.body;
+    const rows = (Array.isArray(body) ? body : items(answer)) as unknown[];
+    const total: InstantlyMeasuredRates = { sent: 0, replies: 0, opportunities: 0, bounced: 0 };
+    for (const row of rows) {
+      if (typeof row !== 'object' || row === null) continue;
+      const one = row as Record<string, unknown>;
+      total.sent += count(one, 'emails_sent_count');
+      total.replies += count(one, 'reply_count_unique');
+      total.opportunities += count(one, 'total_opportunities');
+      total.bounced += count(one, 'bounced_count');
+    }
+    value = total.sent >= MEASURED_RATES_MIN_SENT ? total : null;
+  }
+  // A failed read is not cached: the next plan asks again rather than trusting a gap for ten minutes.
+  if (answer && answer.kind === 'OK') cachedRates = { at: now, value };
+  return value;
 }
 
 /* ------------------------------------------------------------------ */
