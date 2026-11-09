@@ -77,6 +77,17 @@ describe('capacity', () => {
     expect(reading.bottleneck).toBe('WORKERS');
   });
 
+  it('names the release pipeline when it dwarfs building, and unusable surfaces', () => {
+    const reading = computeCapacity({
+      ...base,
+      releaseRuns: [{ createdAt: at(100), finishedAt: at(212), state: 'LIVE' }],
+      fleet: { registered: 7, usable: 1, inFlight: 0, admissionLimit: 15 },
+      bins: [bin('FACTORY_PLAN', 0, 0, 1), bin('FACTORY_UNITS', 1, 1, 4), bin('FACTORY_REVIEW', 4, 4, 6)],
+    });
+    expect(reading.bottleneck).toBe('RELEASE');
+    expect(reading.recommendation.join(' ')).toMatch(/Only 1 of 7 registered factory surfaces/);
+  });
+
   it('says there is no data rather than inventing a bottleneck', () => {
     expect(computeCapacity({ ...base, bins: [] }).bottleneck).toBe('NO_DATA');
   });
