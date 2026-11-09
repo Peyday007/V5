@@ -1777,6 +1777,16 @@ async function main(): Promise<void> {
         process.stdout.write(`  ${r.key} ${r.status}${r.reopened ? ' (reopened)' : ''}: ${r.reason}\n`);
       }
       process.stdout.write(`PROGRAM-VERDICT: ${reading.verdict}\n`);
+      // The second, independent status (Release 01, R01-C): whether each cash goal
+      // is met, read from the ledger and the goal's own acceptance policy. A
+      // release, a merged campaign or a verified requirement never moves it.
+      const { cashGoalStatuses } = await import('../server/services/goals/status.ts');
+      for (const goal of await cashGoalStatuses()) {
+        process.stdout.write(
+          `CASH-GOAL ${goal.goalId} ${goal.achieved ? 'ACHIEVED' : 'NOT_ACHIEVED'}: ${goal.achievedLabel} of ${goal.targetLabel} ${goal.metric}` +
+            `${goal.daysLeft === null ? '' : `, ${goal.daysLeft} day(s) left`}; plan ${goal.planVerdict ?? 'not yet read'} — ${goal.title}\n`,
+        );
+      }
       break;
     }
 
