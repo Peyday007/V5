@@ -156,7 +156,7 @@ export interface RouteMoneyVelocity {
   /** Funds received minus encumbered funds minus refunds; null when no funds row exists. */
   usableCash: number | null;
   excludedFromUsable: number;
-  /** The nine identities as stated; unstated ones are null. Never summed or substituted. */
+  /** The nine identities: row-derived where rows state them (billings, settled, usable), else validated as stated, else null. */
   identities: Record<CashIdentity, number | null>;
   unknowns: string[];
 }
@@ -230,9 +230,25 @@ export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
   if (received === null) unknowns.push('no funds-received row, usable cash unknown');
 
   const identities = {} as Record<CashIdentity, number | null>;
-  for (const k of CASH_IDENTITIES) identities[k] = route.identities?.[k] ?? null;
-  // USABLE_CASH is the one identity this model computes, from funds actually received.
-  if (identities.USABLE_CASH === null) identities.USABLE_CASH = usable;
+  // Only NET_PROFIT and GROSS_MARGIN can legitimately be negative; every other identity is a non-negative balance.
+  const mayBeNegative = new Set<CashIdentity>(['NET_PROFIT', 'GROSS_MARGIN']);
+  for (const k of CASH_IDENTITIES) {
+    const stated = route.identities?.[k];
+    if (stated === undefined || stated === null) {
+      identities[k] = null;
+    } else if (typeof stated !== 'number' || !Number.isFinite(stated) || (stated < 0 && !mayBeNegative.has(k))) {
+      identities[k] = null;
+      unknowns.push(`${k.toLowerCase()} stated value is not a valid amount, ignored`);
+    } else identities[k] = stated;
+  }
+  // Identities the rows themselves state are derived from the rows; a caller-supplied figure never overrides them.
+  const derived: Partial<Record<CashIdentity, number | null>> = { GROSS_BILLINGS: billed, SETTLED_CASH: received, USABLE_CASH: usable };
+  for (const k of Object.keys(derived) as CashIdentity[]) {
+    const fromRows = derived[k] ?? null;
+    if (fromRows === null) continue;
+    if (identities[k] !== null && identities[k] !== fromRows) unknowns.push(`${k.toLowerCase()} stated value disagrees with the rows, rows used`);
+    identities[k] = fromRows;
+  }
   for (const k of CASH_IDENTITIES) if (identities[k] === null) unknowns.push(`${k.toLowerCase()} not stated`);
 
   return {
