@@ -119,3 +119,30 @@ describe('production checks', () => {
     expect(results[4]!.detail).toMatch(/no such probe/);
   });
 });
+
+describe('a probe whose source did not answer', () => {
+  it('reads a forge that did not answer as unknown, and only its 404 as an absence', async () => {
+    const { vi } = await import('vitest');
+    vi.resetModules();
+    process.env.BRAIN_REVISION = 'a'.repeat(40);
+    try {
+      const { getProbe } = await import('../server/services/factory/program/probes.ts');
+      const probe = getProbe('repo.file-at-revision')!;
+      const respond = (status: number, body = '') =>
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(body, { status, headers: { 'x-ratelimit-remaining': '0' } })));
+      respond(403, '{"message":"API rate limit exceeded"}');
+      expect((await probe({ path: 'docs/a.md', contains: 'x' })).ok).toBeNull();
+      respond(404);
+      expect((await probe({ path: 'docs/b.md' })).ok).toBe(false);
+      respond(200, JSON.stringify({ content: Buffer.from('hello program-submit').toString('base64'), encoding: 'base64' }));
+      expect((await probe({ path: 'docs/c.md', contains: 'program-submit' })).ok).toBe(true);
+      // Cached per revision: a second read of the same file costs no request.
+      respond(500);
+      expect((await probe({ path: 'docs/c.md', contains: 'program-submit' })).ok).toBe(true);
+    } finally {
+      delete process.env.BRAIN_REVISION;
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
+  });
+});
