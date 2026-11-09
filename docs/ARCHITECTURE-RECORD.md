@@ -15211,6 +15211,9 @@ including the refusal path:
      its own (`ModelledOpportunity.channel`, its own capacity and risk group).
    - **Transaction:** reshape a small ticket into a bundle or retainer, with the
      close rate assumed lower.
+   - **Partner:** sell through a partner who already holds the buyers. The
+     commission is sourced (10–30%); referral volume is assumed until a partner
+     is signed.
    - **Financing:** prepaid fulfilment (`fundedByBuyer`). The buyer's payment,
      not the owner's limit, funds the supplier.
    - **Cash timing:** a deposit at signing.
@@ -15222,6 +15225,7 @@ including the refusal path:
    10% of median cash) and fits the money limits. The loop stops when nothing
    improves, not after a round count. It yields between evaluations (§63).
 5. **Conclude.** For the strongest plan it states:
+   - its changes as a dated execution sequence (`StrategyChange.startDay`);
    - the as-is floor on the old record;
    - the reply rate every outreach opening must reach for the requirement;
    - what is measured and what is assumed, and whether the reach is coverage or

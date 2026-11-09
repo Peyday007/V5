@@ -40,7 +40,7 @@
  */
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { evaluateGoalPortfolio, type GoalPortfolio } from './portfolio.ts';
-import { ACQUISITION_LEVERS, budgetsAllowed, purchaseCapacity, buyInbound, dailyVolumePlan, type AcquisitionLever, type VolumePlan } from './acquisitionLevers.ts';
+import { ACQUISITION_LEVERS, DAYS_TO_FIRST_PROOF, PARTNER_TERMS, budgetsAllowed, purchaseCapacity, buyInbound, dailyVolumePlan, type AcquisitionLever, type VolumePlan } from './acquisitionLevers.ts';
 import { MATERIAL_SHARE, SHAPE_MULTIPLES } from './pathways.ts';
 
 /** A change smaller than this, in reach and in median settled cash, is not an improvement. */
@@ -49,7 +49,7 @@ export const MATERIAL_P50 = 0.1;
 /** Worlds per screened variant; the strongest is read again at the plan's own count. */
 export const SCREEN_WORLDS = 1000;
 
-export type Dimension = 'EVIDENCE' | 'CAPACITY' | 'ACQUISITION' | 'TRANSACTION' | 'CASH_TIMING' | 'CAPITAL' | 'MARKET';
+export type Dimension = 'EVIDENCE' | 'CAPACITY' | 'ACQUISITION' | 'PARTNER' | 'TRANSACTION' | 'CASH_TIMING' | 'CAPITAL' | 'MARKET';
 export type Basis = 'MEASURED' | 'ESTIMATE' | 'ASSUMPTION';
 
 export interface StrategyChange {
@@ -59,6 +59,8 @@ export interface StrategyChange {
   /** Money it commits before any opening pays (major units). */
   cost: number;
   basis: Basis;
+  /** The day it takes effect: the order in which a reconstructed plan is executed. */
+  startDay?: { low: number; high: number };
 }
 
 export interface VariantReading {
@@ -278,7 +280,7 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
             ...s,
             contactsPerDay: contacts,
             committed: s.committed + buy.cost,
-            changes: [...s.changes, { dimension: 'CAPACITY', label: `${lever.key}@${Math.round(budget)}`, detail: buy.sentence, cost: buy.cost, basis: budget > allowed.beforeProof ? 'ASSUMPTION' : 'ESTIMATE' }],
+            changes: [...s.changes, { dimension: 'CAPACITY', label: `${lever.key}@${Math.round(budget)}`, detail: buy.sentence, cost: buy.cost, basis: budget > allowed.beforeProof ? 'ASSUMPTION' : 'ESTIMATE', startDay: buy.startDay }],
           };
         },
       });
@@ -306,12 +308,35 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
             ...s,
             openings: [...s.openings, clone],
             committed: s.committed + buy.cost,
-            changes: [...s.changes, { dimension: 'ACQUISITION', label: `${lever.key}@${Math.round(budget)}`, detail: `${buy.sentence}, selling ${target.opportunity.title.slice(0, 50)}`, cost: buy.cost, basis: budget > allowed.beforeProof ? 'ASSUMPTION' : 'ESTIMATE' }],
+            changes: [...s.changes, { dimension: 'ACQUISITION', label: `${lever.key}@${Math.round(budget)}`, detail: `${buy.sentence}, selling ${target.opportunity.title.slice(0, 50)}`, cost: buy.cost, basis: budget > allowed.beforeProof ? 'ASSUMPTION' : 'ESTIMATE', startDay: { low: lever.setupDays.low + (budget > allowed.beforeProof ? DAYS_TO_FIRST_PROOF.low : 0), high: lever.setupDays.high + (budget > allowed.beforeProof ? DAYS_TO_FIRST_PROOF.high : 0) } }],
           };
         },
       });
     }
   }
+  // Suppliers and partners: sell through someone who already holds the buyers, for a commission.
+  operators.push({
+    dimension: 'PARTNER',
+    apply: (s) => {
+      const target = [...sellable].sort((a, b) => valuePerInterested(b) - valuePerInterested(a))[0];
+      if (!target) return null;
+      const keep = 1 - (PARTNER_TERMS.commission.low + PARTNER_TERMS.commission.high) / 2;
+      const clone: ModelledOpportunity = {
+        ...target,
+        index: 950 + s.openings.length,
+        opportunity: { ...target.opportunity, id: `${target.opportunity.id}~partner`, title: `${target.opportunity.title.slice(0, 50)} via a referral partner` },
+        price: { ...scale(target.price, keep), note: `after a ${Math.round(PARTNER_TERMS.commission.low * 100)}–${Math.round(PARTNER_TERMS.commission.high * 100)}% partner commission` },
+        // A referred buyer has already said they are interested; whether they buy is the opening's own close rate.
+        respond: { value: 1, low: 1, high: 1, provenance: 'ASSUMPTION', source: null, note: 'a referral is an interested buyer' },
+        channel: { label: 'partner referrals', perDay: { value: null, low: PARTNER_TERMS.referralsPerDay.low, high: PARTNER_TERMS.referralsPerDay.high, provenance: 'ASSUMPTION', source: null, note: PARTNER_TERMS.referralsPerDay.source }, resource: 'channel:partner', riskGroup: 'channel:partner' },
+      };
+      return {
+        ...s,
+        openings: [...s.openings, clone],
+        changes: [...s.changes, { dimension: 'PARTNER', label: 'referral-partner', detail: `sell ${target.opportunity.title.slice(0, 50)} through a partner who already serves its buyers (a supplier or complementary vendor), paying ${Math.round(PARTNER_TERMS.commission.low * 100)}–${Math.round(PARTNER_TERMS.commission.high * 100)}% (${PARTNER_TERMS.commission.source}); ${PARTNER_TERMS.referralsPerDay.low}–${PARTNER_TERMS.referralsPerDay.high} referrals a day assumed until a partner is signed`, cost: 0, basis: 'ASSUMPTION', startDay: PARTNER_TERMS.setupDays }],
+      };
+    },
+  });
   // Transaction shapes: sell more per buyer, at the cost of a lower and unmeasured close rate.
   for (const [shape, multiple, closeFactor] of [
     ['bundle', SHAPE_MULTIPLES.bundle.units * (1 - SHAPE_MULTIPLES.bundle.discount), 0.5],
@@ -330,7 +355,7 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
               ? { ...o, price: scale(o.price, multiple), close: { ...scale(o.close, closeFactor, 1), provenance: 'ASSUMPTION' as ModelInput['provenance'], note: `${o.close.note}; ${shape}: close assumed ×${closeFactor}, not measured` }, volume: scale(o.volume, 1 / multiple) }
               : o,
           ),
-          changes: [...s.changes, { dimension: 'TRANSACTION', label: shape, detail: `sell a ${shape} worth ×${multiple.toFixed(1)} the unit price; close rate assumed ×${closeFactor} until measured`, cost: 0, basis: 'ASSUMPTION' }],
+          changes: [...s.changes, { dimension: 'TRANSACTION', label: shape, detail: `sell a ${shape} worth ×${multiple.toFixed(1)} the unit price; close rate assumed ×${closeFactor} until measured`, cost: 0, basis: 'ASSUMPTION', startDay: { low: 0, high: 0 } }],
         };
       },
     });
@@ -344,7 +369,7 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
       return {
         ...s,
         openings: s.openings.map((o) => (touched.includes(o) ? { ...o, fundedByBuyer: true } : o)),
-        changes: [...s.changes, { dimension: 'CAPITAL', label: 'prepaid-fulfilment', detail: `the buyer pays in full before the supplier is paid, so ${touched.length} opening(s)' direct costs come from the buyer's money, not the ${money(allowed.ceiling)} limit`, cost: 0, basis: 'ASSUMPTION' }],
+        changes: [...s.changes, { dimension: 'CAPITAL', label: 'prepaid-fulfilment', detail: `the buyer pays in full before the supplier is paid, so ${touched.length} opening(s)' direct costs come from the buyer's money, not the ${money(allowed.ceiling)} limit`, cost: 0, basis: 'ASSUMPTION', startDay: { low: 0, high: 0 } }],
       };
     },
   });
@@ -357,7 +382,7 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
       return {
         ...s,
         openings: s.openings.map((o) => (touched.includes(o) ? { ...o, daysToCash: { ...favourable(o.daysToCash, 'LOW', 2), provenance: 'ASSUMPTION' as ModelInput['provenance'], note: 'deposit at signing, assumed accepted' } } : o)),
-        changes: [...s.changes, { dimension: 'CASH_TIMING', label: 'deposit', detail: 'ask for a deposit or prepayment at signing, so cash arrives at the fast end of each opening\'s timing', cost: 0, basis: 'ASSUMPTION' }],
+        changes: [...s.changes, { dimension: 'CASH_TIMING', label: 'deposit', detail: 'ask for a deposit or prepayment at signing, so cash arrives at the fast end of each opening\'s timing', cost: 0, basis: 'ASSUMPTION', startDay: { low: 0, high: 0 } }],
       };
     },
   });
@@ -565,7 +590,7 @@ export function renderReconstruction(r: Reconstruction, limit = 8): string[] {
   lines.push(`    best      ${r.best.key} · ${v(r.best)}`);
   if (r.floor) lines.push(`    as-is     the same plan on the old campaigns' measured rates · ${v(r.floor)}`);
   lines.push(`    needs     ${r.requiredReply !== null ? `a reply rate of ${pct(r.requiredReply)} on every outreach opening for ${pct(r.required)}` : `no reply rate up to 15% reaches ${pct(r.required)}`}`);
-  for (const c of r.best.changes) lines.push(`      change  [${c.basis}] ${c.dimension}: ${c.detail}`);
+  for (const c of [...r.best.changes].sort((a, b) => (a.startDay?.low ?? 0) - (b.startDay?.low ?? 0))) lines.push(`      day ${c.startDay ? `${c.startDay.low}–${c.startDay.high}` : '0'}`.padEnd(16) + `[${c.basis}] ${c.dimension}: ${c.detail}`);
   lines.push(`    confidence ${r.confidence.statement}`);
   if (r.limitation) lines.push(`    limitation ${r.limitation}`);
   if (r.searchBrief) lines.push(`    brief     ${r.searchBrief}`);
