@@ -154,3 +154,220 @@ export function rankGoals(goals: PriorityFacts[]): RankedGoal[] {
   }
   return out;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Capabilities: readiness kept apart from urgency, promoted by measured need */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Where a proposed capability stands. Readiness answers "may it be worked on
+ * now"; it says nothing about how pressing it is, and urgency says nothing about
+ * whether it may start. Neither field is derived from the other.
+ */
+export const CAPABILITY_READINESS = [
+  'SPECIFIED',
+  'PREPOSITIONED',
+  'NEEDED_NOW',
+  'BUILDING',
+  'VERIFIED',
+  'SUSPENDED',
+] as const;
+export type CapabilityReadiness = (typeof CAPABILITY_READINESS)[number];
+
+/** One transaction a missing capability is holding up, read from goal/cash rows. */
+export interface BlockedTransaction {
+  id: string;
+  /** Null when no row states the value. An unknown value counts for nothing. */
+  valueCents: number | null;
+  /** The business the transaction belongs to, or null when unstated. */
+  businessKey: string | null;
+}
+
+export interface CapabilityFacts {
+  id: string;
+  readiness: CapabilityReadiness;
+  /** True only when every prerequisite is recorded as met; null is unknown. */
+  prerequisitesMet: boolean | null;
+  /** False when the need disappeared; null is unknown and never demotes or promotes. */
+  needStillExists: boolean | null;
+  dueAt: string | null;
+  /** Measured from goal and cash rows. */
+  blocked: BlockedTransaction[];
+  /** What the current workaround costs over its horizon, or null if unmeasured. */
+  workaroundCostCents: number | null;
+  /** What building the reusable capability costs, or null if unestimated. */
+  buildCostCents: number | null;
+  /** A source, partner or interface changed so the old implementation fails. */
+  interfaceChanged: boolean;
+  /** Planned businesses, beyond those with blocked transactions, that would reuse it. */
+  otherBeneficiaries: number | null;
+  /** 0..1 chance the estimate is wrong; null is unknown and read as 1. */
+  uncertainty: number | null;
+  opportunityCostCents: number | null;
+}
+
+export type PromotionReason =
+  | 'SEVERAL_BLOCKED_TRANSACTIONS'
+  | 'WORKAROUND_COSTS_MORE'
+  | 'SHARED_BY_BUSINESSES'
+  | 'INTERFACE_CHANGED';
+
+export interface PromotionDecision {
+  /** Move SPECIFIED/PREPOSITIONED to NEEDED_NOW. */
+  promote: boolean;
+  reasons: PromotionReason[];
+  /** The measured figures behind each reason, for the record. Never free text from a caller. */
+  evidence: string[];
+}
+
+const PROMOTABLE: readonly CapabilityReadiness[] = ['SPECIFIED', 'PREPOSITIONED'];
+const FINISHED_OR_SUSPENDED: readonly CapabilityReadiness[] = ['VERIFIED', 'SUSPENDED', 'BUILDING'];
+
+function valuedBlocked(facts: CapabilityFacts): BlockedTransaction[] {
+  return facts.blocked.filter((t) => typeof t.valueCents === 'number' && Number.isFinite(t.valueCents) && t.valueCents > 0);
+}
+
+function distinctBusinesses(facts: CapabilityFacts): number {
+  const keys = new Set(facts.blocked.map((t) => t.businessKey).filter((k): k is string => !!k));
+  const others = typeof facts.otherBeneficiaries === 'number' && facts.otherBeneficiaries > 0 ? facts.otherBeneficiaries : 0;
+  return keys.size + others;
+}
+
+/**
+ * Whether a prepared capability should be promoted, from what the rows measure.
+ * A declared dependency edge is not required and is not consulted here. Unknown
+ * inputs never produce a reason, and unmet or unknown prerequisites never promote.
+ */
+export function promotionFromBlockers(facts: CapabilityFacts): PromotionDecision {
+  const none: PromotionDecision = { promote: false, reasons: [], evidence: [] };
+  if (!PROMOTABLE.includes(facts.readiness)) return none;
+  if (facts.needStillExists === false) return none;
+  if (facts.prerequisitesMet !== true) return none;
+
+  const reasons: PromotionReason[] = [];
+  const evidence: string[] = [];
+
+  const valued = valuedBlocked(facts);
+  if (valued.length >= 2) {
+    const total = valued.reduce((sum, t) => sum + (t.valueCents ?? 0), 0);
+    reasons.push('SEVERAL_BLOCKED_TRANSACTIONS');
+    evidence.push(`${valued.length} valued transactions blocked, ${total} cents in all`);
+  }
+  if (
+    typeof facts.workaroundCostCents === 'number' &&
+    typeof facts.buildCostCents === 'number' &&
+    facts.workaroundCostCents > facts.buildCostCents
+  ) {
+    reasons.push('WORKAROUND_COSTS_MORE');
+    evidence.push(`workaround ${facts.workaroundCostCents} cents against ${facts.buildCostCents} to build`);
+  }
+  const businesses = distinctBusinesses(facts);
+  if (businesses >= 2) {
+    reasons.push('SHARED_BY_BUSINESSES');
+    evidence.push(`${businesses} businesses would use it`);
+  }
+  if (facts.interfaceChanged) {
+    reasons.push('INTERFACE_CHANGED');
+    evidence.push('an interface it depends on changed');
+  }
+  return { promote: reasons.length > 0, reasons, evidence };
+}
+
+/**
+ * Work whose need disappeared is put down to SUSPENDED. The requirement is
+ * never removed from the specification: `requirementRetained` is always true.
+ * Only an explicit false demotes; an unknown need leaves the state alone.
+ */
+export function demotionForVanishedNeed(facts: CapabilityFacts): {
+  demote: boolean;
+  to: CapabilityReadiness;
+  requirementRetained: true;
+} {
+  const demote = facts.needStillExists === false && !FINISHED_OR_SUSPENDED.includes(facts.readiness);
+  return { demote, to: demote ? 'SUSPENDED' : facts.readiness, requirementRetained: true };
+}
+
+export interface RankedCapability {
+  id: string;
+  readiness: CapabilityReadiness;
+  /** Separate from readiness: how pressing, from what the rows say. */
+  urgency: { dueAt: string | null; blockedTransactions: number };
+  rank: number;
+  /** Net expected value after cost, opportunity cost and uncertainty. Unknowns add nothing. */
+  netValueCents: number;
+  reuse: number;
+  /** Within the available parallel workers, in rank order. Unknown workers fit none. */
+  startable: boolean;
+  promotion: PromotionDecision;
+}
+
+/**
+ * Rank capabilities that may be worked now, most worth doing first. Compares
+ * urgency, then net value (expected value less cost and opportunity cost,
+ * discounted by uncertainty), then reuse, then known cost. An unknown value or
+ * reuse counts as zero, an unknown cost sorts after a known one and an unknown
+ * uncertainty is the worst case, so no gap in the data raises a rank.
+ * Capabilities that are not promoted and not already NEEDED_NOW sort last and
+ * are never startable. Only the promoted capability is ranked, not its program.
+ */
+export function rankCapabilities(
+  capabilities: CapabilityFacts[],
+  options: { parallelWorkers: number | null },
+): RankedCapability[] {
+  const rows = capabilities.map((c) => {
+    const promotion = promotionFromBlockers(c);
+    const valued = valuedBlocked(c);
+    const gross = valued.reduce((sum, t) => sum + (t.valueCents ?? 0), 0);
+    const uncertainty = typeof c.uncertainty === 'number' && c.uncertainty >= 0 && c.uncertainty <= 1 ? c.uncertainty : 1;
+    const cost = typeof c.buildCostCents === 'number' ? c.buildCostCents : null;
+    const opportunity = typeof c.opportunityCostCents === 'number' ? c.opportunityCostCents : 0;
+    const net = Math.round(gross * (1 - uncertainty)) - (cost ?? 0) - opportunity;
+    const eligible =
+      c.needStillExists !== false &&
+      c.prerequisitesMet === true &&
+      (c.readiness === 'NEEDED_NOW' || promotion.promote);
+    return {
+      c,
+      promotion,
+      eligible,
+      net,
+      cost,
+      reuse: distinctBusinesses(c),
+      blocked: c.blocked.length,
+    };
+  });
+
+  rows.sort((a, b) => {
+    if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
+    if (a.c.dueAt !== b.c.dueAt) {
+      if (a.c.dueAt === null) return 1;
+      if (b.c.dueAt === null) return -1;
+      return a.c.dueAt < b.c.dueAt ? -1 : 1;
+    }
+    if (a.net !== b.net) return b.net - a.net;
+    if (a.reuse !== b.reuse) return b.reuse - a.reuse;
+    if (a.cost !== b.cost) {
+      if (a.cost === null) return 1;
+      if (b.cost === null) return -1;
+      return a.cost - b.cost;
+    }
+    return a.c.id < b.c.id ? -1 : a.c.id > b.c.id ? 1 : 0;
+  });
+
+  const workers = typeof options.parallelWorkers === 'number' && options.parallelWorkers > 0 ? Math.floor(options.parallelWorkers) : 0;
+  let slots = workers;
+  return rows.map((r, index) => {
+    const startable = r.eligible && slots > 0;
+    if (startable) slots -= 1;
+    return {
+      id: r.c.id,
+      readiness: r.c.readiness,
+      urgency: { dueAt: r.c.dueAt, blockedTransactions: r.blocked },
+      rank: index,
+      netValueCents: r.net,
+      reuse: r.reuse,
+      startable,
+      promotion: r.promotion,
+    };
+  });
+}
