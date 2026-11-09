@@ -379,6 +379,10 @@ export interface TransactionPathway {
   frequency: PathFact;
   daysToCash: PathFact;
   capital: PathFact;
+  /** Rights and authorization: what this transaction may do under the permissions held; never a guess (§93). */
+  rights: PathFact;
+  /** Whether the fulfiller can deliver the volume this pathway needs; unmeasured capacity is stated as such. */
+  capacity: PathFact;
   /** How the buyer is reached, and whether that waits on cold outreach (§93). */
   acquisition: { method: AcquisitionMethod; basis: string };
   /** The Brain capability that fulfils it, when Brain does. */
@@ -402,6 +406,7 @@ export interface TransactionPathway {
   notExecutable: string[];
   /** A group whose members fail together: the same buyer kind, or the same supplier. */
   correlationGroup: string;
+  /** Tally of the fourteen commercial facts; `rights` and `capacity` are marked on their own and read beside it. */
   counts: { proven: number; estimated: number; unknown: number };
 }
 
@@ -616,6 +621,13 @@ export function pathwayOf(
     : { value: 'one-off', low: null, high: null, status: 'PROVEN', basis: judged?.paysOnce ? 'pays once by nature' : 'one deal' };
   const daysToCash = factOf(one.daysToCash);
   const capital = factOf(one.capital);
+  // A permission held is a record; one not held is known, not unknown, and blocks only its own action — never an assumed yes.
+  const rights: PathFact = input.permissionsMissing.length === 0
+    ? { value: 'every permission this transaction depends on is granted', low: null, high: null, status: 'PROVEN', basis: 'the project\'s authority grants every action the transaction needs' }
+    : { value: `not yet granted: ${input.permissionsMissing.join(', ')}`, low: null, high: null, status: 'UNKNOWN', basis: 'each missing permission blocks only its own action; none is assumed granted' };
+  const capacity: PathFact = fulfiller.status === 'UNKNOWN'
+    ? { value: null, low: null, high: null, status: 'UNKNOWN', basis: 'nobody is named to fulfil it, so no delivery capacity is established' }
+    : { value: null, low: null, high: null, status: 'ESTIMATED', basis: 'a fulfiller is named; the volume it can deliver is not yet measured' };
   const dependencies = [...new Set([...o.requiredCapabilities, 'CONTACT_BUYER', 'QUOTE_AND_INVOICE', 'ACCEPT_PAYMENT'])];
   const failurePoints = judged?.missing ?? [];
 
@@ -673,6 +685,8 @@ export function pathwayOf(
     frequency,
     daysToCash,
     capital,
+    rights,
+    capacity,
     acquisition,
     producedBy: fulfiller.value !== null && String(fulfiller.value).startsWith('Brain produces it') ? produces : null,
     dependencies,
