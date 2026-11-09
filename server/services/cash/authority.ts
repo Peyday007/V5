@@ -317,7 +317,17 @@ export interface AuthorityLedgerRecord {
     | 'AMOUNT_UNKNOWN'
     | 'OVER_PER_ACTION_CEILING'
     | 'OVER_COMMITTED_CEILING'
-    | 'RELEASE_ENVELOPE';
+    | 'RELEASE_ENVELOPE'
+    | 'NO_PRINCIPAL'
+    | 'NO_ACCOUNT_SCOPE'
+    | 'OUT_OF_ACCOUNT_SCOPE'
+    | 'ACTION_TYPE_NOT_APPROVED'
+    | 'RATE_LIMITED'
+    | 'SECRET_NOT_IN_STORE';
+  /** Who the action was done for, when one was stated. Never a credential. */
+  principal: string | null;
+  /** The account scope the action was judged against, when one applied. */
+  scope: string | null;
   policyVersion: number | null;
   amountCents: number | null;
   at: string;
@@ -331,6 +341,10 @@ export interface ActionDecision {
   neededApproval: { action: string; projectId: string; description: string } | null;
   /** On a stop or revocation: what stays owed and what may still proceed. */
   obligations: { heldCents: number } | null;
+  /** The responsible principal the decision was made for, or null when none was stated. */
+  principal: string | null;
+  /** The account scope the decision was judged against, or null when none applied. */
+  scope: string | null;
   remainingSafeWork: ConsequenceClass[];
   /** Ready for `project_events`. Carries no credential and no free text from a caller. */
   ledger: AuthorityLedgerRecord;
@@ -349,6 +363,22 @@ export interface JudgeInput {
   emergencyStop?: boolean;
   /** A fact read from the release grant's envelope, for engineering actions. */
   releaseEnvelopeAllows?: boolean;
+  /**
+   * Third-party authenticated actions (AUTHENTICATED_READ / AUTHENTICATED_OPERATION).
+   * Every field below is a fact read from the connected account's own row, the
+   * site's recorded rules and the secrets store — not claimed by the caller —
+   * and an absent one is a refusal, never a favourable reading.
+   */
+  /** The responsible principal: the person or account the action is done for. */
+  principal?: string | null;
+  /** The connected account, and the scopes its owner authorized for it. */
+  account?: { ref: string; scopes: readonly string[]; approvedActionTypes: readonly string[] } | null;
+  /** The scope this one action needs inside that account. */
+  requiredScope?: string | null;
+  /** Calls already made in the provider's current window, against its stated limit. */
+  rate?: { usedInWindow: number; limit: number } | null;
+  /** Where the credential lives. Only a store reference may travel; INLINE is a refusal. */
+  credential?: 'SECRET_STORE' | 'INLINE' | 'NONE';
   at?: string;
 }
 
@@ -385,6 +415,8 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
       reason,
       neededApproval: ok ? null : needs,
       obligations: !ok && (cause === 'REVOKED' || cause === 'EMERGENCY_STOP') ? { heldCents: state.heldCents } : null,
+      principal: input.principal ?? null,
+      scope: klass === 'THIRD_PARTY_AUTHENTICATED' ? (input.requiredScope ?? null) : null,
       remainingSafeWork: !ok && (cause === 'REVOKED' || cause === 'EMERGENCY_STOP') ? SAFE_WORK : [],
       ledger: {
         kind: 'AUTHORITY_DECISION',
@@ -394,6 +426,8 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
         path,
         disposition: !ok ? 'REFUSED' : proposed ? 'PROPOSED' : 'PERFORMED',
         cause,
+        principal: input.principal ?? null,
+        scope: klass === 'THIRD_PARTY_AUTHENTICATED' ? (input.requiredScope ?? null) : null,
         policyVersion: state.authority?.policyVersion ?? null,
         amountCents: amount,
         at,
@@ -415,6 +449,40 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
   if ((ALWAYS_PROHIBITED_COMMERCIAL as readonly string[]).includes(input.action)) {
     return finish(false, 'PROHIBITED', `${input.action} can never be authorized`);
   }
+  // A third-party authenticated action is judged by the account it runs in, not
+  // by the commercial grant: the account's own scope, its approved action
+  // types, the provider's rate limit and where the secret lives. A read keeps
+  // going under a stop or a revocation (routine research continues); an
+  // operation does not. Read-only access can read, and nothing more.
+  if (klass === 'THIRD_PARTY_AUTHENTICATED') {
+    const isRead = input.action === 'AUTHENTICATED_READ';
+    if (!isRead && input.access === 'READ_ONLY') {
+      return finish(false, 'READ_ONLY_GRANT', `read-only access does not authorize ${input.action}${path === 'BROWSER' ? ' through a browser' : ''}`, ask(`authority to ${input.action}, separate from the read-only access already held`));
+    }
+    if (!isRead && input.emergencyStop) return finish(false, 'EMERGENCY_STOP', 'emergency stop is on: risky mutations are paused');
+    if (!isRead && state.revoked && !state.authority) {
+      return finish(false, 'REVOKED', 'the standing authority was revoked', ask(`renewed authority covering ${input.action}`));
+    }
+    if (!input.principal) return finish(false, 'NO_PRINCIPAL', 'no responsible principal is stated for this action');
+    if (input.credential !== 'SECRET_STORE') {
+      return finish(false, 'SECRET_NOT_IN_STORE', 'the credential must be held in the secrets store and referenced, never carried in the request');
+    }
+    const account = input.account;
+    if (!account) {
+      return finish(false, 'NO_ACCOUNT_SCOPE', 'no authorized account is on record for this action', ask(`an authorized account for ${input.action}`));
+    }
+    if (!input.requiredScope || !account.scopes.includes(input.requiredScope)) {
+      return finish(false, 'OUT_OF_ACCOUNT_SCOPE', `the account ${account.ref} is not authorized for the scope this action needs`, ask(`scope ${input.requiredScope ?? '(unstated)'} on account ${account.ref}`));
+    }
+    if (!isRead && !account.approvedActionTypes.includes(input.action)) {
+      return finish(false, 'ACTION_TYPE_NOT_APPROVED', `${input.action} is not a previously approved action type for account ${account.ref}`, ask(`approval of ${input.action} on account ${account.ref}`));
+    }
+    if (!input.rate || input.rate.usedInWindow >= input.rate.limit) {
+      return finish(false, 'RATE_LIMITED', input.rate ? 'the provider rate limit for this window is used up' : 'the provider rate limit is not known, so it cannot be respected');
+    }
+    return finish(true, 'ALLOWED', `within account ${account.ref}'s authorized scope`);
+  }
+
   if (input.access === 'READ_ONLY') {
     return finish(
       false,
