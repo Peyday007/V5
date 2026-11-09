@@ -44,7 +44,9 @@ import {
   listAuthorities,
   liveAuthority,
 } from '../../repos/cashAuthority.ts';
-import type { CashAuthority } from '../../domain/types.ts';
+import { needForKey, openNeedForKey } from '../../repos/cashPortfolio.ts';
+import { closeNeed, raiseNeed } from './needs.ts';
+import type { CashAuthority, CashNeed } from '../../domain/types.ts';
 
 /**
  * Everything a commercial grant may authorize.
@@ -317,7 +319,8 @@ export interface AuthorityLedgerRecord {
     | 'AMOUNT_UNKNOWN'
     | 'OVER_PER_ACTION_CEILING'
     | 'OVER_COMMITTED_CEILING'
-    | 'RELEASE_ENVELOPE';
+    | 'RELEASE_ENVELOPE'
+    | 'OWNER_APPROVED';
   policyVersion: number | null;
   amountCents: number | null;
   at: string;
@@ -332,6 +335,8 @@ export interface ActionDecision {
   /** On a stop or revocation: what stays owed and what may still proceed. */
   obligations: { heldCents: number } | null;
   remainingSafeWork: ConsequenceClass[];
+  /** The stored request for `neededApproval`, or the approval that allowed this call (cash_needs row). */
+  approvalNeedId?: string | null;
   /** Ready for `project_events`. Carries no credential and no free text from a caller. */
   ledger: AuthorityLedgerRecord;
 }
@@ -462,6 +467,104 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
   return finish(true, 'ALLOWED', 'within the standing commercial authority');
 }
 
+/*
+ * Asking for the smallest missing approval, and remembering the answer.
+ *
+ * `neededApproval` used to be text the caller was handed and nothing kept. The
+ * existing owner of "something only a person can supply" is the needs register
+ * (`cash_needs`), so a refusal that names an approval raises one need, keyed by
+ * the scope it asks for, and an owner's answer settles that same row. No new
+ * store: the ask, the answer, who gave it and when are all on that row and on
+ * its `project_events` history.
+ *
+ *   - the same scope asked twice is one open need, not one per call;
+ *   - RESOLVED by a person is an approval, and a later call for the same scope
+ *     is allowed on it without asking again;
+ *   - WITHDRAWN is a "no": it is remembered, and the same scope is not re-asked;
+ *   - an approval that named an amount covers amounts up to it, and a larger one
+ *     is a different scope, asked once more at a new occurrence.
+ *
+ * Only the causes a person's answer can address are honoured. A prohibition, an
+ * emergency stop, a read-only grant's own limits and a lapsed or revoked grant
+ * are never turned into a pass by an old answer: renewal is a grant row.
+ */
+const APPROVABLE_CAUSES: ReadonlyArray<AuthorityLedgerRecord['cause']> = [
+  'NOT_COVERED',
+  'NO_AUTHORITY',
+  'RELEASE_ENVELOPE',
+  'OVER_PER_ACTION_CEILING',
+  'OVER_COMMITTED_CEILING',
+];
+
+/** The scope an approval covers: one project, one action, one kind of shortfall. */
+export function approvalScopeKey(projectId: string, action: string, cause: AuthorityLedgerRecord['cause']): string {
+  return `authority-approval:${projectId}:${action}:${cause}`;
+}
+
+function approvalCovers(need: CashNeed, amountCents: number | null): boolean {
+  return need.expectedCostCents === null || (amountCents !== null && amountCents <= need.expectedCostCents);
+}
+
+/** Record an owner's answer to a stored approval request. `approve: false` is remembered as a refusal. */
+export async function answerApprovalRequest(input: {
+  needId: string;
+  approve: boolean;
+  actorUserId: string;
+  note: string;
+}) {
+  return closeNeed({
+    needId: input.needId,
+    to: input.approve ? 'RESOLVED' : 'WITHDRAWN',
+    resolution: input.note,
+    actorUserId: input.actorUserId,
+  });
+}
+
+async function applyStoredApproval(input: JudgeInput, decision: ActionDecision): Promise<ActionDecision> {
+  const needed = decision.neededApproval;
+  const cause = decision.ledger.cause;
+  if (decision.ok || !needed || !APPROVABLE_CAUSES.includes(cause)) return decision;
+  const key = approvalScopeKey(input.projectId, input.action, cause);
+  const amount = decision.ledger.amountCents;
+
+  const latest = await needForKey(input.projectId, key);
+  if (latest?.state === 'RESOLVED' && latest.resolvedByUserId && approvalCovers(latest, amount)) {
+    return {
+      ...decision,
+      ok: true,
+      reason: 'within an approval the owner already gave for this scope',
+      neededApproval: null,
+      obligations: null,
+      remainingSafeWork: [],
+      approvalNeedId: latest.id,
+      ledger: { ...decision.ledger, disposition: 'PERFORMED', cause: 'OWNER_APPROVED' },
+    };
+  }
+  if (latest?.state === 'WITHDRAWN' && approvalCovers(latest, amount)) {
+    return {
+      ...decision,
+      reason: `${decision.reason}; the owner declined this approval, so it is not asked again`,
+      neededApproval: null,
+      approvalNeedId: latest.id,
+    };
+  }
+  const open = await openNeedForKey(input.projectId, key);
+  if (open) return { ...decision, approvalNeedId: open.id };
+  const raised = await raiseNeed({
+    projectId: input.projectId,
+    actorRef: 'BRAIN',
+    blockedAction: input.action,
+    whyItMatters: decision.reason,
+    recommendedPath: needed.description,
+    expectedCostCents: amount,
+    setupEffort: 'One approval from the owner; all other work continues meanwhile.',
+    nextStep: `Approve or decline: ${needed.description}`,
+    completionCondition: `The owner has answered the request for ${needed.description}.`,
+    requestKey: key,
+  });
+  return { ...decision, approvalNeedId: raised.ok ? raised.value.id : null };
+}
+
 /**
  * Judge an action against the live rows. This is the one call every action path
  * — an API, a browser automation, a worker — makes before an effect.
@@ -476,5 +579,5 @@ export async function decideAction(input: JudgeInput): Promise<ActionDecision> {
     revoked = all[0]?.state === 'REVOKED';
   }
   const held = await heldCentsForProject(input.projectId, authority?.currency);
-  return judgeAction(input, { authority, revoked, heldCents: held });
+  return applyStoredApproval(input, judgeAction(input, { authority, revoked, heldCents: held }));
 }
