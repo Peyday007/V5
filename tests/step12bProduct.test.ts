@@ -752,7 +752,10 @@ describe('the frontier reads a project’s edges from its own rows', () => {
       sourceId: 'k-gone',
     });
     // A pass that does not observe it resolves it — and it is still readable,
-    // because a delete would make a dark spot look like progress.
+    // because a delete would make a dark spot look like progress. The pass
+    // resolves what was last seen strictly before it started, so it starts on a
+    // later millisecond than the observation (in one millisecond it flaked).
+    await new Promise((resolve) => setTimeout(resolve, 5));
     await refreshFrontier(project.id);
     const all = await listFrontier({ projectId: project.id, includeResolved: true });
     const gone = all.find((item) => item.subject === 'Something that will stop being true');
