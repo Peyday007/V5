@@ -189,13 +189,41 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
     parentId = latest.id;
   }
   const key = attempt === 1 ? weakness.key : `${weakness.key}#${attempt}`;
-  const { candidate, created } = await upsertCandidate(toInput(weakness, attempt, parentId, key));
+  const input = toInput(weakness, attempt, parentId, key);
+  const evidence: Record<string, unknown> = { ...input.evidence };
+  // §87 (AUTO-20-1): a weakness that persists after an attempt that was kept without effect, or reverted,
+  // is evidence that the method was inadequate, not that it needs running again. The judgment is
+  // made from the earlier attempts' own recorded decisions and stored on the candidate, so the
+  // next objective asks for a different method and names what was tried.
+  const inadequate = members.filter((m) => m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED');
+  let methodInadequacy: { judgment: string; failedAttempts: number[] } | null = null;
+  if (attempt > 1 && inadequate.length > 0) {
+    methodInadequacy = {
+      judgment:
+        `Attempt(s) ${inadequate.map((m) => m.attempt).join(', ')} ended ${inadequate.map((m) => m.decision).join(', ')} ` +
+        'and the weakness still shows in the rows: the method used was inadequate for this cause. ' +
+        'Change the method (the approach, the owner of the behaviour, or the measure), do not re-run it.',
+      failedAttempts: inadequate.map((m) => m.attempt),
+    };
+    Object.assign(evidence, {
+      methodInadequacy,
+      researchQuestion: `${String(evidence['researchQuestion'] ?? weakness.title)} Earlier methods did not work (attempt ${methodInadequacy.failedAttempts.join(', ')}); find a different class of method.`,
+    });
+  }
+  const { candidate, created } = await upsertCandidate({ ...input, evidence });
   if (!created) return;
   report.opened.push(candidate.weaknessKey);
   await recordImprovementEvent({
     candidateId: candidate.id,
     kind: 'WEAKNESS_DETECTED',
-    detail: { key: candidate.weaknessKey, frequency: weakness.frequency, denominator: weakness.denominator, samples: weakness.samples, attempt },
+    detail: {
+      key: candidate.weaknessKey,
+      frequency: weakness.frequency,
+      denominator: weakness.denominator,
+      samples: weakness.samples,
+      attempt,
+      ...(methodInadequacy ? { methodInadequacy } : {}),
+    },
   });
   // Combine: one owner, one objective. A weakness on a component whose candidate
   // has not yet been sent to Factory joins it rather than racing it.
@@ -381,6 +409,9 @@ export function composeObjective(candidate: ImprovementCandidate, link: Linked, 
       ? `Accepted method research Brain holds that bears on it: ${methods.map((m) => `${m.claim} (${m.source ?? 'no source'})`).join(' | ')}. `
       : '') +
     (earlier.length ? `Earlier attempts on this weakness — do not repeat their strategy: ${earlier.join(' | ')}. ` : '') +
+    (candidate.evidence['methodInadequacy']
+      ? `Method judged inadequate by Brain: ${String((candidate.evidence['methodInadequacy'] as { judgment?: string }).judgment ?? '')} `
+      : '') +
     'Make the smallest general change that removes the cause for every future job of this kind, with a test that ' +
     'reproduces the recorded failure class and passes after the change. Lower no evidence bar, gate or permission.';
   return {
