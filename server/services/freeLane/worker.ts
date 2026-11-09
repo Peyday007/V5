@@ -411,7 +411,8 @@ async function ask(
     try {
       text = await completer({ ...config, timeoutMs: 180_000 }, model, SYSTEM, prompt, { maxTokens: 8000 });
     } catch (error) {
-      onFail(`model call failed: ${String((error as Error).message ?? error).slice(0, 200)}`);
+      const message = String((error as Error).message ?? error);
+      onFail(`model call failed [${classifyRouteFailure(message)}]: ${redactSecrets(message).slice(0, 200)}`);
       continue;
     }
     const parsed = firstJson(text);
@@ -1343,6 +1344,7 @@ let fitness: { at: number; unfit: Set<string> } | null = null;
 /** Tests: forget the cached fitness reading. */
 export function resetFreeLaneFitness(): void {
   fitness = null;
+  resetRouteHealth();
 }
 export async function unfitNow(models: readonly string[], now = Date.now(), fallbackModel: string | null = null): Promise<Set<string>> {
   if (fitness && now - fitness.at < 5 * 60_000) return fitness.unfit;
@@ -1488,6 +1490,77 @@ export function freeLaneSkips(): Record<string, number> {
   return Object.fromEntries([...skipTally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10));
 }
 
+/* ------------------------------------------------------------------------- */
+/* Route health: which cause, and which route to stop sending items to        */
+/* ------------------------------------------------------------------------- */
+
+/** The cause a failing model route reports, read from its own error, never a guess. */
+export type RouteFailureCause =
+  | 'credentials'
+  | 'task routing'
+  | 'broken GPU'
+  | 'provider availability'
+  | 'database'
+  | 'unclassified';
+
+/** Names the actual cause of a model-call failure so the recorded reason says which one it was. */
+export function classifyRouteFailure(message: string): RouteFailureCause {
+  if (/\b(?:HTTP (?:401|403)|unauthori[sz]ed|forbidden|invalid[ _-]?api[ _-]?key|authentication|credential)/i.test(message)) return 'credentials';
+  if (/\b(?:HTTP 404|model[^.]{0,40}not (?:found|available|loaded)|no such model|unknown model|unsupported model)/i.test(message)) return 'task routing';
+  if (/\b(?:gpu|cuda|runpod|pod (?:not|is|has)|out of memory|OOM)\b/i.test(message)) return 'broken GPU';
+  if (BRAIN_UNAVAILABLE.test(message)) return 'database';
+  if (PROVIDER_BUSY.test(message)) return 'provider availability';
+  return 'unclassified';
+}
+
+/** A credential never reaches a recorded reason: bearer tokens and key-shaped strings are cut out. */
+export function redactSecrets(text: string): string {
+  return text
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/\b(?:sk|rpa|ghp|gho|ghs|xox[a-z])[-_][A-Za-z0-9_-]{12,}/g, '[redacted]')
+    .replace(/([?&](?:api[_-]?key|key|token|access_token)=)[^&\s]+/gi, '$1[redacted]');
+}
+
+/** Consecutive provider failures after which a route stops being offered items. */
+export const ROUTE_FAILURE_LIMIT = 3;
+const ROUTE_REPROBE_MS = 5 * 60_000;
+const routeHealth = new Map<string, { failures: number; cause: RouteFailureCause; nextProbeAt: number }>();
+
+/** Tests: forget every route's health. */
+export function resetRouteHealth(): void {
+  routeHealth.clear();
+}
+
+/** A failing route's standing: null when it is healthy or due its single re-probe item. */
+export function routeHold(model: string, now = Date.now()): string | null {
+  const state = routeHealth.get(model);
+  if (!state || state.failures < ROUTE_FAILURE_LIMIT) return null;
+  if (now >= state.nextProbeAt) {
+    // One item re-probes the route; the next is held until it answers.
+    state.nextProbeAt = now + ROUTE_REPROBE_MS;
+    return null;
+  }
+  return `model route failing (${state.cause}); another model takes the work until it is re-probed`;
+}
+
+/** A route that answered is healthy again; a route that did not is counted, with its cause. */
+export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: string }, now = Date.now()): void {
+  if (outcome.ok) {
+    routeHealth.delete(model);
+    return;
+  }
+  const why = outcome.why ?? '';
+  if (!/^model call failed/.test(why) && !BRAIN_UNAVAILABLE.test(why)) return;
+  const cause = classifyRouteFailure(why);
+  // Brain's own database being busy says nothing about the model route.
+  if (cause === 'database') return;
+  const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now + ROUTE_REPROBE_MS };
+  state.failures += 1;
+  state.cause = cause;
+  if (state.failures === ROUTE_FAILURE_LIMIT) state.nextProbeAt = now + ROUTE_REPROBE_MS;
+  routeHealth.set(model, state);
+}
+
 export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
   const { workers, worker, index, config } = input;
   const projectIds = await projectsFor(worker);
@@ -1501,6 +1574,8 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
       return { ok: false, reason: 'the other free worker takes this role' };
     }
     if ((cooldown.get(cooldownKey(worker.model, item.id)) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
+    const held = routeHold(worker.model);
+    if (held) return { ok: false, reason: held };
     if (unfit.has(`${worker.model}|${item.work_type}`)) return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
     if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
     session = sessionFor(worker, item);
@@ -1615,6 +1690,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
       // Lease already gone: the queue's expiry returns it.
     }
   }
+  recordRouteOutcome(worker.model, { ok, why: ctx.why });
   const ms = Date.now() - started;
   await recordBinEvent({
     eventType: 'FREE_LANE_ITEM',
