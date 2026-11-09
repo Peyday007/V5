@@ -502,6 +502,7 @@ export function campaignObjective(program: FactoryProgram, campaign: PlannedCamp
     lines.push(`Checks: ${r.verification.map(describeCheck).join(' | ')}`);
   }
   if (campaign.repairOf) lines.push('', `Failures: ${campaign.repairOf.failures.join(' | ')}`);
+  lines.push('', `Tests: write this campaign's own regression tests in ${campaignTestPath(program, campaign)} (owned by this campaign alone).`);
   return {
     projectId: program.projectId,
     submissionKey: `program:${program.id}:${campaign.key}`,
@@ -512,10 +513,22 @@ export function campaignObjective(program: FactoryProgram, campaign: PlannedCamp
       statement: `${r.key}: ${r.behavior}`.slice(0, 1_000),
       verification: r.verification.map(describeCheck).join(' AND ').slice(0, 1_000),
     })),
-    mutationScope: campaign.mutationScope,
+    mutationScope: [...campaign.mutationScope, campaignTestPath(program, campaign)],
     repository: program.repository,
     baseBranch: program.baseBranch,
   };
+}
+
+/**
+ * The test file a campaign owns beside its source scope. A campaign whose
+ * scope named only source files could not add the regression test its own
+ * review demanded (production 2026-11-09: quant-d0-p0's repair unit spent three
+ * attempts refusing to write outside server/services/cash/funnel.ts). The path
+ * is unique to the program and campaign, so it never makes two campaigns wait
+ * on each other.
+ */
+export function campaignTestPath(program: Pick<FactoryProgram, 'id'>, campaign: Pick<PlannedCampaign, 'key'>): string {
+  return `tests/program-${program.id.replace(/^fpg_/, '').slice(0, 8)}-${campaign.key}*.test.ts`;
 }
 
 export function describeCheck(check: RequirementCheck): string {
