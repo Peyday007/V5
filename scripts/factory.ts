@@ -1767,6 +1767,20 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'program-unblock': {
+      // Widen a program's started campaigns to their directories and own test file, regrant
+      // units that ran out on scope, reopen parked bins — as the program's approver (§97).
+      const { unblockProgram } = await import('../server/services/factory/program/unblock.ts');
+      const { getProgram: readProgramRow } = await import('../server/repos/factoryProgram.ts');
+      const programId = flagString(flags, 'program') ?? fail('--program is required');
+      const row = await readProgramRow(programId);
+      if (!row?.approvedByUserId) fail('the program is not approved');
+      const steps = await unblockProgram({ programId, operatorId: row!.approvedByUserId! });
+      for (const step of steps) process.stdout.write(`${step.action} ${step.campaign}: ${step.detail}\n`);
+      process.stdout.write(`unblock: ${steps.filter((s) => s.action !== 'SKIP' && s.action !== 'REFUSED').length} step(s), ${steps.filter((s) => s.action === 'REFUSED').length} refused\n`);
+      break;
+    }
+
     case 'program-approve': {
       const { approveProgram } = await import('../server/services/factory/program/coordinator.ts');
       const programId = flagString(flags, 'program') ?? fail('--program is required');
@@ -1849,7 +1863,7 @@ async function main(): Promise<void> {
           '  answer-bin,\n' +
           '  reauthorize, regrant-unit, retire, release,\n' +
           '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-reverify, release-revision, release-status,\n' +
-          '  program-skeleton, program-submit, program-amend, program-release, program-approve, program-tick, program-status, program-depend, capacity\n',
+          '  program-skeleton, program-submit, program-amend, program-release, program-unblock, program-approve, program-tick, program-status, program-depend, capacity\n',
       );
       // An unknown command is the caller getting it wrong, and it used to be
       // reported as success — see the verdict line below.

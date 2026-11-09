@@ -51,7 +51,7 @@ import {
 } from '../../../repos/factoryProgram.ts';
 import { recordFactoryEvent } from '../../../repos/factoryFleet.ts';
 import { edgesOf, findCycle, parseRequirementMap, validateRequirementMap } from './map.ts';
-import { campaignIsPrepared, campaignLinePriority, deriveProgramPlan, eligibleCampaigns, promotedRequirements, validateProgramPlan } from './plan.ts';
+import { widenScope, campaignIsPrepared, campaignLinePriority, deriveProgramPlan, eligibleCampaigns, promotedRequirements, validateProgramPlan } from './plan.ts';
 import { extractSourceItems, itemsMovedBy, programSource, sha256 } from './spec.ts';
 import { deriveProgramReading, repairTargets, type StatusInput } from './status.ts';
 
@@ -519,7 +519,7 @@ export function campaignObjective(program: FactoryProgram, campaign: PlannedCamp
       statement: `${r.key}: ${r.behavior}`.slice(0, 1_000),
       verification: r.verification.map(describeCheck).join(' AND ').slice(0, 1_000),
     })),
-    mutationScope: [...campaign.mutationScope, campaignTestPath(program, campaign)],
+    mutationScope: [...widenScope(campaign.mutationScope), campaignTestPath(program, campaign)],
     repository: program.repository,
     baseBranch: program.baseBranch,
   };
