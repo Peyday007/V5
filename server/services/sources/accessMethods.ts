@@ -49,7 +49,7 @@ export interface AccessEvidence {
   /** What a person has already been granted, e.g. an official export or a licence, by name. */
   permittedRoute?: string;
   /** Terms the source states, honoured whichever method is chosen. */
-  terms?: { robotsDisallows?: boolean; rateLimitPerMinute?: number; privacyRestricted?: boolean; licenceLimitsUse?: string };
+  terms?: { robotsDisallows?: boolean; rateLimited?: boolean; rateLimitPerMinute?: number; privacyRestricted?: boolean; licenceLimitsUse?: string };
   /** Relative cost of each class in cents per read, where measured. */
   costCents?: Partial<Record<MethodClass, number>>;
   /** Observed reliability 0..1 per class on this source, where measured. */
@@ -91,6 +91,7 @@ export function selectAccessMethod(evidence: AccessEvidence = {}): AccessSelecti
   const constraints: string[] = ['honour the source terms, rate limits, privacy and licensing for the use made of what is retrieved'];
   const t = evidence.terms;
   if (t?.rateLimitPerMinute !== undefined) constraints.push(`at most ${t.rateLimitPerMinute} requests a minute`);
+  if (t?.rateLimited) constraints.push('the source answered 429: slow down and honour its Retry-After before reading again');
   if (t?.robotsDisallows) constraints.push('robots.txt disallows automated reads of this path');
   if (t?.privacyRestricted) constraints.push('the material is privacy-restricted: use only as the permission allows');
   if (t?.licenceLimitsUse) constraints.push(`licence limits use: ${t.licenceLimitsUse}`);
@@ -179,14 +180,22 @@ export function classOfRoute(route: string): MethodClass {
   }
 }
 
-/** HTTP results that are a boundary and end in a human step, never a fallback. */
-export function boundaryOfRead(read: { readable: boolean; reason?: string; status?: number | null }): AccessEvidence['boundary'] | null {
+/**
+ * HTTP results that are a boundary and end in a human step, never a fallback.
+ * A 403 is the site refusing this reader, and a robots.txt block (`robotsBlocked`:
+ * the one route that would have worked was refused by the site's own rules) is the
+ * same refusal stated in advance — both are the bot-restriction boundary.
+ */
+export function boundaryOfRead(read: { readable: boolean; reason?: string; status?: number | null; robotsBlocked?: boolean }): AccessEvidence['boundary'] | null {
   if (read.readable) return null;
   if (read.reason === 'CHALLENGE') return 'CAPTCHA';
   if (read.reason === 'HTTP_ERROR') {
     if (read.status === 401) return 'AUTHENTICATION';
     if (read.status === 402) return 'PAYMENT';
+    if (read.status === 403) return 'BOT_RESTRICTION';
     if (read.status === 451) return 'LEGAL';
   }
+  // The site's own HTTP answer (a 404, a 500) is not a block; only a read that needed the refused route is.
+  if (read.robotsBlocked && read.reason !== 'HTTP_ERROR') return 'BOT_RESTRICTION';
   return null;
 }

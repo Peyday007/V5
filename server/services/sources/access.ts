@@ -56,7 +56,15 @@ export interface AccessAttempt {
   ms: number;
 }
 
-export type SourceRead = SourceFetch & { method: AccessMethod; attempts: AccessAttempt[] };
+/** What the reader learned about the source's own terms while reading it. */
+export interface ReadTerms {
+  /** robots.txt refused the browser route this read needed. */
+  robotsDisallows?: boolean;
+  /** Some attempt was answered 429. */
+  rateLimited?: boolean;
+}
+
+export type SourceRead = SourceFetch & { method: AccessMethod; attempts: AccessAttempt[]; terms?: ReadTerms };
 
 export interface AccessDeps {
   direct?: (url: string) => Promise<SourceFetch>;
@@ -388,6 +396,38 @@ export function learnFrom(rows: { provider: string | null; outcome: string | nul
   return out;
 }
 
+/** Browser reads of a host from SOURCE_ACCESS rows, newest first. */
+export interface BrowserRecord {
+  runs: number;
+  stable: number;
+  /** The most recent browser attempt on the host read the page. */
+  lastOk: boolean;
+}
+
+/** How often the browser route ran on each host and how often it read the page. Pure. */
+export function browserRecordFrom(rows: { measures: string | null }[]): Map<string, BrowserRecord> {
+  const out = new Map<string, BrowserRecord>();
+  for (const row of rows) {
+    let measures: { host?: string; attempts?: AccessAttempt[] };
+    try {
+      measures = JSON.parse(row.measures ?? '{}') as typeof measures;
+    } catch {
+      continue;
+    }
+    if (!measures.host) continue;
+    for (const attempt of measures.attempts ?? []) {
+      if (attempt.method !== 'BROWSER') continue;
+      const entry = out.get(measures.host) ?? { runs: 0, stable: 0, lastOk: attempt.readable };
+      entry.runs += 1;
+      if (attempt.readable) entry.stable += 1;
+      out.set(measures.host, entry);
+    }
+  }
+  return out;
+}
+
+let browserRecords = new Map<string, BrowserRecord>();
+
 async function defaultLearned(host: string): Promise<AccessMethod | null> {
   if (Date.now() - learnedAt > LEARN_REFRESH_MS) {
     learning ??= (async () => {
@@ -398,6 +438,7 @@ async function defaultLearned(host: string): Promise<AccessMethod | null> {
           [since],
         );
         learnedMap = learnFrom(rows);
+        browserRecords = browserRecordFrom(rows);
       } catch {
         // A record that cannot be read teaches nothing; DIRECT leads.
       } finally {
@@ -413,6 +454,7 @@ async function defaultLearned(host: string): Promise<AccessMethod | null> {
 export function resetSourceAccessMemory(): void {
   learnedAt = 0;
   learnedMap = new Map();
+  browserRecords = new Map();
   robotsCache.clear();
 }
 
@@ -426,8 +468,14 @@ export function resetSourceAccessMemory(): void {
  * the one used. No account is ever asserted — a browser render here is a public
  * page read, and says nothing about a session.
  */
-export function accessEvidenceOfAttempts(attempts: readonly AccessAttempt[]): AccessEvidence {
+export function accessEvidenceOfAttempts(
+  attempts: readonly AccessAttempt[],
+  context: { terms?: ReadTerms; browserRecord?: BrowserRecord | null } = {},
+): AccessEvidence {
   const evidence: AccessEvidence = {};
+  const terms = context.terms;
+  const rateLimited = terms?.rateLimited === true || attempts.some((a) => a.status === 429);
+  if (terms?.robotsDisallows || rateLimited) evidence.terms = { ...(terms?.robotsDisallows ? { robotsDisallows: true } : {}), ...(rateLimited ? { rateLimited: true } : {}) };
   const verdict = (methods: readonly AccessMethod[]): boolean | undefined => {
     const tried = attempts.filter((a) => methods.includes(a.method));
     return tried.length === 0 ? undefined : tried.some((a) => a.readable);
@@ -438,6 +486,13 @@ export function accessEvidenceOfAttempts(attempts: readonly AccessAttempt[]): Ac
   const browser = verdict(['BROWSER']);
   // The interface is the only way in when a render read what plain HTTP could not.
   evidence.interfaceOnly = browser === undefined ? undefined : browser && evidence.httpReadable !== true;
+  // The interface is unfamiliar when the host has no browser history or its last browser read failed
+  // after others worked (it changed); stated only where this read used the browser or the host has a record.
+  const record = context.browserRecord;
+  if (record || browser !== undefined) {
+    evidence.interfaceUnfamiliar = !record || !record.lastOk;
+    if (record) evidence.recurrence = { runs: record.runs, stable: record.stable };
+  }
   return evidence;
 }
 
@@ -477,8 +532,14 @@ async function judgeReadAsAcquisition(
 async function defaultRecord(read: SourceRead, caller: string, ms: number): Promise<void> {
   const host = hostOf(read.requestedUrl);
   const used = classOfRoute(read.method);
-  const boundary = boundaryOfRead({ readable: read.readable, reason: read.readable ? undefined : read.reason, status: read.status });
-  const evidence: AccessEvidence = boundary ? { boundary } : accessEvidenceOfAttempts(read.attempts);
+  const boundary = boundaryOfRead({
+    readable: read.readable,
+    reason: read.readable ? undefined : read.reason,
+    status: read.status,
+    robotsBlocked: read.terms?.robotsDisallows === true,
+  });
+  const attemptEvidence = accessEvidenceOfAttempts(read.attempts, { terms: read.terms, browserRecord: host ? browserRecords.get(host) : null });
+  const evidence: AccessEvidence = boundary ? { boundary, ...(attemptEvidence.terms ? { terms: attemptEvidence.terms } : {}) } : attemptEvidence;
   const judged = selectAccessMethod(evidence);
   // A boundary is a stop; otherwise the method used is the route that ran, and the
   // judgment is what the evidence of every attempt supports, so a disagreement shows.
@@ -538,6 +599,13 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   const learned = deps.learned ?? defaultLearned;
   const record = deps.record ?? defaultRecord;
   const attempts: AccessAttempt[] = [];
+  const terms: ReadTerms = {};
+  /** Whether the site's robots.txt allows the browser route; a refusal is recorded as a term of this read. */
+  const browserAllowed = async (): Promise<boolean> => {
+    const allowed = await robotsAllow(url).catch(() => false);
+    if (!allowed) terms.robotsDisallows = true;
+    return allowed;
+  };
 
   const attempt = async (method: AccessMethod, run: () => Promise<SourceFetch | null>): Promise<SourceFetch | null> => {
     const t = Date.now();
@@ -572,7 +640,7 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
           detail: 'the site answered with a bot challenge, not the page',
         }
       : read;
-    const out: SourceRead = { ...honest, method, attempts };
+    const out: SourceRead = { ...honest, method, attempts, ...(terms.robotsDisallows || attempts.some((a) => a.status === 429) ? { terms: { ...terms, ...(attempts.some((a) => a.status === 429) ? { rateLimited: true } : {}) } } : {}) };
     await record(out, deps.caller ?? 'unknown', Date.now() - started).catch(() => undefined);
     return out;
   };
@@ -595,7 +663,7 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
 
   // A host whose own record says DIRECT never works there and the browser does.
   const lead = await learned(host).catch(() => null);
-  if (lead === 'BROWSER' && browser && (await robotsAllow(url).catch(() => false))) {
+  if (lead === 'BROWSER' && browser && (await browserAllowed())) {
     const rendered = await attempt('BROWSER', () => browser(url));
     if (rendered?.readable && !wantsBrowser(rendered)) return done(rendered, 'BROWSER');
   }
@@ -607,7 +675,7 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   let bestRead: SourceFetch = first;
   let bestMethod: AccessMethod = 'DIRECT';
 
-  if (wantsBrowser(first) && browser && lead !== 'BROWSER' && (await robotsAllow(url).catch(() => false))) {
+  if (wantsBrowser(first) && browser && lead !== 'BROWSER' && (await browserAllowed())) {
     const rendered = await attempt('BROWSER', () => browser(url));
     if (rendered && better(rendered, bestRead)) {
       bestRead = rendered;
