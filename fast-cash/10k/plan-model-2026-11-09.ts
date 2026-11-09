@@ -91,6 +91,11 @@ export const LINES: Line[] = [
   { key: 'ai', label: 'AI receptionist setups (home-service firms)', lastUsefulSendDay: 18, close: [0.04, 0.2], ticket: [1500, 2297], costShare: [0.05, 0.15], settled: [0.5, 0.95] },
   // Trigger / prospect lists Brain compiles from public business records.
   { key: 'list', label: 'Trigger lists (Brain-produced data)', lastUsefulSendDay: 25, close: [0.1, 0.35], ticket: [149, 499], costShare: [0, 0.05], settled: [0.9, 1] },
+  // Commercial cleaning brokerage: a vetted local crew does the work, Brain
+  // owns the contract and invoices the first month up front. The workspace's
+  // only real quote request (May 2026, 5,000 sq ft office, twice a week) came
+  // from this line: 1 in 1,437 sends.
+  { key: 'clean', label: 'Commercial cleaning brokerage (subcontracted crew)', lastUsefulSendDay: 16, close: [0.05, 0.25], ticket: [600, 1800], costShare: [0.7, 0.8], settled: [0.6, 0.95] },
   // Puzzle licence packs for senior-living activity directors (Brain generates puzzles).
   { key: 'puzzle', label: 'Puzzle licence packs (senior living)', lastUsefulSendDay: 25, close: [0.05, 0.25], ticket: [49, 199], costShare: [0, 0.03], settled: [0.9, 1] },
 ];
@@ -104,7 +109,8 @@ export interface Strategy {
 
 export const STRATEGIES: Strategy[] = [
   { key: 'gift_lead', label: 'Gifts first (seasonal), AI setups second', shares: { gift: 0.55, ai: 0.3, list: 0.1, puzzle: 0.05 }, ads: 0 },
-  { key: 'balanced', label: 'Balanced four lines', shares: { gift: 0.35, ai: 0.35, list: 0.15, puzzle: 0.15 }, ads: 0 },
+  { key: 'gift_clean', label: 'Gifts first, cleaning contracts second', shares: { gift: 0.5, clean: 0.3, ai: 0.1, list: 0.1 }, ads: 0 },
+  { key: 'balanced', label: 'Balanced four lines', shares: { gift: 0.3, ai: 0.25, clean: 0.2, list: 0.15, puzzle: 0.1 }, ads: 0 },
   { key: 'ai_lead', label: 'AI setups first', shares: { gift: 0.25, ai: 0.6, list: 0.1, puzzle: 0.05 }, ads: 0 },
   { key: 'gift_lead_ads', label: 'Gifts first + $300 lead brokerage', shares: { gift: 0.55, ai: 0.3, list: 0.1, puzzle: 0.05 }, ads: 300 },
 ];
@@ -149,16 +155,21 @@ export interface Outcome {
   positives: number;
 }
 
-export function simulate(strategy: Strategy, a: Assumptions, worlds: number, seed = 20261109): Outcome[] {
+/**
+ * `independent: true` redraws the reply, positive and credibility factors for
+ * every line, as a naive model that multiplies per-line chances would. It
+ * exists only to show how much that overstates the tails; the plan never uses it.
+ */
+export function simulate(strategy: Strategy, a: Assumptions, worlds: number, seed = 20261109, independent = false): Outcome[] {
   const r = rng(seed);
   const out: Outcome[] = [];
   for (let w = 0; w < worlds; w++) {
     // Shared, correlated draws: one per world, applied to every line.
     const perDay = u(a.brainSendsPerDay, r());
     const start = Math.round(u(a.startDay, r()));
-    const reply = u(a.replyRate, r());
-    const positive = u(a.positiveShare, r());
-    const cred = u(a.credibility, r());
+    const replyShared = u(a.replyRate, r());
+    const positiveShared = u(a.positiveShare, r());
+    const credShared = u(a.credibility, r());
     const incident = r() < a.incidentChance;
     const incidentDay = start + Math.floor(r() * 14);
     const cut = u(a.incidentCut, r());
@@ -167,6 +178,9 @@ export function simulate(strategy: Strategy, a: Assumptions, worlds: number, see
     let net = 0;
     let positives = 0;
     for (const line of LINES) {
+      const reply = independent ? u(a.replyRate, r()) : replyShared;
+      const positive = independent ? u(a.positiveShare, r()) : positiveShared;
+      const cred = independent ? u(a.credibility, r()) : credShared;
       const share = strategy.shares[line.key] ?? 0;
       let sends = 0;
       for (let d = start; d <= line.lastUsefulSendDay; d++) sends += perDay * share * (incident && d >= incidentDay ? 1 - cut : 1);
@@ -184,7 +198,7 @@ export function simulate(strategy: Strategy, a: Assumptions, worlds: number, see
     if (strategy.ads > 0) {
       const cpl = u([25, 60], r());
       const leads = Math.floor(strategy.ads / cpl);
-      const sold = binom(leads, u([0.4, 0.9], r()) * cred, r);
+      const sold = binom(leads, Math.min(1, u([0.4, 0.9], r()) * credShared), r);
       const g = sold * u([20, 43], r());
       byLine['leads'] = g;
       gross += g;
@@ -207,8 +221,8 @@ export function wilsonLower(k: number, n: number, z = 1.645) {
   return (p + (z * z) / (2 * n) - z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
 }
 
-export function summarize(strategy: Strategy, a: Assumptions, worlds = 20_000) {
-  const res = simulate(strategy, a, worlds);
+export function summarize(strategy: Strategy, a: Assumptions, worlds = 20_000, independent = false) {
+  const res = simulate(strategy, a, worlds, 20261109, independent);
   const gross = res.map((o) => o.gross);
   const net = res.map((o) => o.net);
   const hit = res.filter((o) => o.gross >= 10_000).length;
@@ -257,6 +271,8 @@ if (process.argv[1]?.endsWith('plan-model-2026-11-09.ts')) {
     console.log(`  ${s.strategy.padEnd(14)} gross p10 ${usd(s.grossP10)} · p50 ${usd(s.grossP50)} · p90 ${usd(s.grossP90)} · reach $10k ${pct(s.reachGross)} (Wilson lower ${pct(wilsonLower(Math.round(s.reachGross * 20_000), 20_000))})`);
   }
   const best = all.reduce((x, y) => (y.reachGross > x.reachGross ? y : x));
+  const naive = summarize(STRATEGIES.find((x) => x.key === best.strategy)!, NOV9, 20_000, true);
+  console.log(`\nIf the lines failed independently (they do not): ${best.strategy} p10 ${usd(naive.grossP10)} · reach ${pct(naive.reachGross)} — vs ${usd(best.grossP10)} · ${pct(best.reachGross)} correlated.`);
   console.log(`\nBest: ${best.strategy}. What would raise confidence (one input moved, the rest held):`);
   for (const p of whatRaisesConfidence(STRATEGIES.find((s) => s.key === best.strategy)!)) {
     console.log(`  ${p.name.padEnd(62)} reach ${pct(p.reachGross)} · p10 ${usd(p.grossP10)} · p50 ${usd(p.grossP50)}`);

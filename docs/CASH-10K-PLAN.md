@@ -1,3 +1,5 @@
+> **Superseded 2026-11-09** by [`CASH-10K-PLAN-2026-11-09.md`](CASH-10K-PLAN-2026-11-09.md). Kept as the record of how the plan got here.
+
 # The $10K plan, rebuilt for remote operation — goal `wst_7b4fcbb5f2384f31b6c3`
 
 > **Superseded** by `docs/CASH-10K-BRAIN-PLAN.md`, the plan Brain's own research, construction and quant engine now produce. The owner's constraints carry over unchanged:

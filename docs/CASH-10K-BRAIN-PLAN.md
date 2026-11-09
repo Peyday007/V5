@@ -1,3 +1,5 @@
+> **Superseded 2026-11-09** by [`CASH-10K-PLAN-2026-11-09.md`](CASH-10K-PLAN-2026-11-09.md). Kept as the record of how the plan got here.
+
 # The $10K plan, produced by Brain itself — goal `wst_7b4fcbb5f2384f31b6c3`
 
 Assignment of 2026-11-03 17:20Z: make Brain's own chain produce the plan
