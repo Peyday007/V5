@@ -721,6 +721,48 @@ async function recordSuspension(input: JudgeInput, decision: ActionDecision, hel
  * — an API, a browser automation, a worker — makes before an effect.
  */
 export async function decideAction(input: JudgeInput): Promise<ActionDecision> {
+  const decision = await judgeLive(input);
+  await recordDecision(decision);
+  return decision;
+}
+
+export const AUTHORITY_DECISION_KIND = 'AUTHORITY_DECISION';
+
+/**
+ * Append the decision's ledger record to `cash_events`, the project's append-only history, so what
+ * Brain performed, proposed or was refused is inspectable later and not only returned to a caller.
+ * Every consequential decision leaves a row, allowed or refused, one per attempt; routine internal
+ * actions leave none (a presentation choice: they are reversible and inside authorized scope).
+ * The row carries references and machine causes only — never a credential or a caller's free text.
+ * If the row cannot be written the error propagates, so no effect follows an unrecorded decision.
+ */
+async function recordDecision(decision: ActionDecision): Promise<void> {
+  const l = decision.ledger;
+  if (decision.consequenceClass === null || decision.consequenceClass === 'INTERNAL') return;
+  await recordCashEvent({
+    projectId: l.projectId,
+    kind: AUTHORITY_DECISION_KIND,
+    actorRef: 'BRAIN',
+    summary: `${l.action}: ${l.disposition} (${l.cause})`,
+    detail: {
+      action: l.action,
+      consequenceClass: l.consequenceClass,
+      path: l.path,
+      principal: l.principal,
+      scope: l.scope,
+      disposition: l.disposition,
+      cause: l.cause,
+      policyVersion: l.policyVersion,
+      amountCents: l.amountCents,
+      decidedAt: l.at,
+      ok: decision.ok,
+      approvalNeedId: decision.approvalNeedId ?? null,
+      neededApproval: decision.neededApproval?.description ?? null,
+    },
+  });
+}
+
+async function judgeLive(input: JudgeInput): Promise<ActionDecision> {
   const klass = classifyAction(input.action);
   if (klass === 'INTERNAL' || !klass) return judgeAction({ ...input, emergencyStop: false }, { authority: null, revoked: false, heldCents: 0 });
   const stopped = await emergencyStopOn(input.projectId);
