@@ -51,6 +51,28 @@ export const REASK_AFTER_MS = 24 * 60 * 60 * 1000;
 export const MAX_ASKINGS = 3;
 
 const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> = {
+  /*
+   * An opening with no payer, an undated signal or a guessed price raised no
+   * question at all: these links had no field, so a plan read "no payer",
+   * "undated signal" and "price a guess" and nothing went to find them. One
+   * narrow question per missing fact; the dated, sourced form is the answer.
+   */
+  REACHABLE_BUYER: [
+    {
+      field: 'payer',
+      ask:
+        'Name who pays for this — a named buyer or a buyer class — and the published channel through which they can be reached ' +
+        '(a directory, register, association list, marketplace category or contact page), with its source.',
+    },
+  ],
+  CURRENT_DEMAND: [
+    {
+      field: 'buyingEvidence',
+      ask:
+        'Find a sign that buyers of this kind need this now: the post, tender, listing or request itself, with the date it was ' +
+        'observed and its source. An undated signal is not an answer.',
+    },
+  ],
   SETTLES_IN_TIME: [
     {
       field: 'timeToFirstCash',
@@ -87,7 +109,12 @@ const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> =
     },
   ],
   OFFER_AND_PRICE: [
-    { field: 'revenueRange', ask: 'Find what buyers are published as actually paying for this — a figure or a range, each with its source and date.' },
+    {
+      field: 'revenueRange',
+      ask:
+        'Find what buyers are published as actually paying for this — a figure or a range, each with its source, its date and the ' +
+        'population it was measured on. A guessed or unsourced price is not an answer.',
+    },
   ],
 };
 
