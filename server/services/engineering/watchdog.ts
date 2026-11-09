@@ -10,7 +10,7 @@
  * intervention rather than a row every ten seconds.
  */
 import { getDb } from '../../db/database.ts';
-import { DISPATCHABLE_SQL, FIREABLE_SQL } from '../../repos/bins.ts';
+import { DISPATCHABLE_SQL, FIREABLE_SQL, workReadySql } from '../../repos/bins.ts';
 import { recordIntervention } from '../../repos/engineering.ts';
 import { idleCheck } from '../../domain/engineering.ts';
 import { capacityReading } from '../fleet/capacity.ts';
@@ -31,9 +31,12 @@ export interface IdleReading {
 
 export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'idle' | 'reason' | 'intervened' | 'fired'>> {
   const iso = now.toISOString();
+  // The dispatcher's own predicate, all three parts: a research packet bin with
+  // no claimable work is not executable, and counting it read as idle capacity
+  // for hours while the dispatcher correctly had nothing to fire (§98).
   const executable = await getDb().get<{ n: number | string }>(
-    `SELECT COUNT(*) AS n FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL}`,
-    [iso, iso],
+    `SELECT COUNT(*) AS n FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}`,
+    [iso, iso, iso, iso],
   );
   const active = await getDb().get<{ n: number | string }>(
     "SELECT COUNT(*) AS n FROM bins WHERE state = 'LEASED' AND lease_expires_at > ?",
@@ -176,6 +179,12 @@ async function researchSlotPool(now: Date): Promise<PoolReading> {
         ? 'nothing launchable is waiting'
         : `every research slot is held (${r}/${c})`,
   };
+}
+
+/** Free research slots across active grants: at-once ceilings minus live holds. */
+export async function researchSlotsFree(now = new Date()): Promise<number> {
+  const slots = await researchSlotPool(now);
+  return Math.max(0, slots.capacity - slots.running);
 }
 
 /** The Factory line, as its own reading says (`readLine`). */
