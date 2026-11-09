@@ -592,6 +592,13 @@ async function verify(action: Action, mergeSha: string): Promise<void> {
     log(`RELEASE: LIVE ${action.runId} ${mergeSha}`);
     return;
   }
+  // Nothing answered (the forge did not reply): the run stays VERIFYING and is
+  // never rolled back for it. This pass ends unfinished, so the workflow asks
+  // for the pass that resumes it, which verifies again (invariant 26).
+  if (verdict === 'UNKNOWN') {
+    log(`RELEASE: UNKNOWN ${action.runId} — verification could not be answered; the next pass verifies again`);
+    return;
+  }
   // FAILED first: ROLLED_BACK may only follow a recorded failure, and a run left
   // at VERIFYING would be resumed, re-verified and reverted a second time.
   advance(action.runId, 'FAILED', { stage: 'VERIFY', detail: 'verification inside the released Brain failed' });

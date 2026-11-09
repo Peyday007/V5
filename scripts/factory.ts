@@ -1550,7 +1550,18 @@ async function main(): Promise<void> {
       for (const check of outcome.checks) {
         process.stdout.write(`  ${check.ok ? 'PASS' : 'FAIL'} ${check.check} — ${check.detail}\n`);
       }
-      process.stdout.write(`RELEASE-VERIFY: ${outcome.live ? 'LIVE' : 'FAILED'}\n`);
+      process.stdout.write(`RELEASE-VERIFY: ${outcome.live ? 'LIVE' : outcome.unknown ? 'UNKNOWN' : 'FAILED'}\n`);
+      break;
+    }
+
+    case 'release-reverify': {
+      const runId = flagString(flags, 'run') ?? fail('--run is required');
+      const { reverifyUnansweredRelease } = await import('../server/services/factory/release/verify.ts');
+      const outcome = await reverifyUnansweredRelease(runId);
+      for (const check of outcome.checks) {
+        process.stdout.write(`  ${check.ok ? 'PASS' : check.unknown ? 'UNKNOWN' : 'FAIL'} ${check.check} — ${check.detail}\n`);
+      }
+      process.stdout.write(`RELEASE-VERIFY: ${outcome.live ? 'LIVE' : outcome.unknown ? 'UNKNOWN' : 'FAILED'}\n`);
       break;
     }
 
@@ -1820,7 +1831,7 @@ async function main(): Promise<void> {
           '  set-state, queue, withdraw, admission, line, burnin,\n' +
           '  answer-bin,\n' +
           '  reauthorize, regrant-unit, retire, release,\n' +
-          '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-status,\n' +
+          '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-reverify, release-status,\n' +
           '  program-skeleton, program-submit, program-amend, program-release, program-approve, program-tick, program-status, program-depend, capacity\n',
       );
       // An unknown command is the caller getting it wrong, and it used to be

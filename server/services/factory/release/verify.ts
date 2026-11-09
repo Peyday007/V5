@@ -26,6 +26,8 @@ export interface CheckResult {
   check: string;
   ok: boolean;
   detail: string;
+  /** Set when nothing answered: not a pass, and not evidence of a failure either (invariant 26). */
+  unknown?: boolean;
 }
 
 export interface VerifyDeps {
@@ -36,6 +38,8 @@ export interface VerifyDeps {
 }
 
 const TIMEOUT_MS = 20_000;
+export const CONTAINS_ATTEMPTS = 3;
+const CONTAINS_RETRY_MS = 10_000;
 
 async function getText(deps: VerifyDeps, path: string): Promise<{ status: number; text: string } | { error: string }> {
   try {
@@ -75,6 +79,8 @@ export async function runLiveCheck(deps: VerifyDeps, check: LiveCheck): Promise<
 
 export interface VerifyOutcome {
   live: boolean;
+  /** No check failed, and at least one could not be answered: ask again, never roll back. */
+  unknown: boolean;
   checks: CheckResult[];
 }
 
@@ -92,6 +98,7 @@ export async function verifyLive(
     checks.push({
       check: 'revision',
       ok: contains === true,
+      ...(contains === null ? { unknown: true } : {}),
       detail:
         contains === true
           ? `serving ${deps.revision.slice(0, 12)}, which contains ${input.mergeSha.slice(0, 12)}`
@@ -107,7 +114,9 @@ export async function verifyLive(
       : { check: 'healthz', ok: health.status === 200, detail: `answered ${health.status}` },
   );
   for (const check of input.liveChecks) checks.push(await runLiveCheck(deps, check));
-  return { live: checks.every((one) => one.ok), checks };
+  const live = checks.every((one) => one.ok);
+  const unknown = !live && checks.every((one) => one.ok || one.unknown === true);
+  return { live, unknown, checks };
 }
 
 /** Verify a release run from inside the released Brain and record the verdict. */
@@ -123,15 +132,23 @@ export async function verifyReleaseRun(runId: string): Promise<VerifyOutcome & {
     revision: BRAIN_REVISION,
     baseUrl: `http://127.0.0.1:${PORT}`,
     fetch,
+    // A forge that does not answer is asked again before anything is concluded:
+    // release 05f67250 (2026-11-09) was marked FAILED, and its rollback tried,
+    // because one compare request from the machine said "fetch failed".
     contains: async (ancestor, descendant) => {
       if (!repository) return null;
-      const reply = await compareCommits(repository, ancestor, descendant);
-      if (!reply.ok || !reply.body) return null;
-      return reply.body.status === 'identical' || reply.body.status === 'ahead';
+      for (let attempt = 0; attempt < CONTAINS_ATTEMPTS; attempt += 1) {
+        if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, CONTAINS_RETRY_MS));
+        const reply = await compareCommits(repository, ancestor, descendant);
+        if (reply.ok && reply.body) return reply.body.status === 'identical' || reply.body.status === 'ahead';
+      }
+      return null;
     },
   };
   const outcome = await verifyLive(deps, { mergeSha: run.mergeSha, liveChecks: grant?.liveChecks ?? [] });
   const verification = { revision: BRAIN_REVISION, checks: outcome.checks, at: new Date().toISOString() };
+  // Unknown is not FAILED: the run stays VERIFYING and the next pass asks again.
+  if (outcome.unknown) return { ...outcome, recorded: false };
   const { moved } = outcome.live
     ? await advanceRelease({ runId, to: 'LIVE', verification })
     : await advanceRelease({
@@ -145,4 +162,31 @@ export async function verifyReleaseRun(runId: string): Promise<VerifyOutcome & {
         verification,
       });
   return { ...outcome, recorded: moved };
+}
+
+/**
+ * Re-verify a release that was failed only because a check could not be
+ * answered, and whose revert never landed — so production still carries the
+ * merge, and the honest question ("is it live?") was never answered.
+ *
+ * Refused for any other failure: a check that answered "no" stays a failure,
+ * and a release that was rolled back stays rolled back.
+ */
+export async function reverifyUnansweredRelease(runId: string): Promise<VerifyOutcome & { recorded: boolean }> {
+  const run = await getRun(runId);
+  if (!run) throw new Error(`No release run ${runId}.`);
+  if (run.state !== 'FAILED' || run.failureStage !== 'VERIFY') {
+    throw new Error(`Release run ${runId} is ${run.state}${run.failureStage ? ` at ${run.failureStage}` : ''}; only a VERIFY failure is re-verified.`);
+  }
+  const checks = ((run.verification as { checks?: CheckResult[] } | null)?.checks ?? []);
+  const answeredNo = checks.filter((one) => !one.ok && !(one.check === 'revision' && /could not say/.test(one.detail)));
+  if (checks.length === 0 || answeredNo.length > 0) {
+    throw new Error(`Release run ${runId} failed on a check that answered: ${answeredNo.map((one) => one.check).join(', ') || 'no recorded checks'}.`);
+  }
+  if (!/the revert did not land|could not be opened/.test(run.failureDetail ?? '')) {
+    throw new Error(`Release run ${runId} was reverted or its revert is unaccounted for; it is not re-verified.`);
+  }
+  const { moved } = await advanceRelease({ runId, to: 'VERIFYING', reverify: true });
+  if (!moved) throw new Error(`Release run ${runId} moved while being re-verified.`);
+  return verifyReleaseRun(runId);
 }

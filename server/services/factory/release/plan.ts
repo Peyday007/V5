@@ -280,7 +280,10 @@ const FROM: Record<ReleaseRunState, readonly ReleaseRunState[]> = {
   // DEPLOYING may restamp DEPLOYING: a Deploy evicted before it started is
   // replaced by the one that carries the merge, and the attempt records which.
   DEPLOYING: ['MERGED', 'DEPLOYING'],
-  VERIFYING: ['DEPLOYING'],
+  // FAILED → VERIFYING only through reverifyUnansweredRelease: a verification
+  // nothing answered, whose revert never landed, is asked again rather than
+  // left for a person (invariant 26).
+  VERIFYING: ['DEPLOYING', 'FAILED'],
   LIVE: ['VERIFYING'],
   // FAILED may restamp FAILED: a rollback whose revert could not land records
   // what a person must do on the attempt that already failed.
@@ -296,10 +299,12 @@ export interface AdvanceRequest {
   failureStage?: ReleaseFailureStage | null;
   failureDetail?: string | null;
   verification?: Record<string, unknown>;
+  /** Only `reverifyUnansweredRelease` sets this: the one way a FAILED run returns to VERIFYING. */
+  reverify?: boolean;
 }
 
 export async function advanceRelease(request: AdvanceRequest): Promise<{ moved: boolean; run: ReleaseRun | null }> {
-  const from = FROM[request.to];
+  const from = request.to === 'VERIFYING' && !request.reverify ? FROM.VERIFYING.filter((state) => state !== 'FAILED') : FROM[request.to];
   if (from.length === 0) throw new Error(`Nothing moves a release run to ${request.to}.`);
   if (request.to === 'FAILED' && !request.failureStage) throw new Error('A failure needs a stage.');
   const moved = await advanceRun(request.runId, {
