@@ -128,10 +128,14 @@ export const REGULATED_ACTIVITIES = {
   EARN_COMMISSION: /\b(?:commissions?|finder'?s fees?|referral (?:fees?|payments?)|revenue share)\b/i,
   ORIGINATE: /\b(?:originat(?:e|es|ing|ion)|underwrit(?:e|es|ing)|issue (?:a )?polic(?:y|ies)|lend(?:ing)?)\b/i,
   ADVISE: /\b(?:advis(?:e|es|ing)|recommend(?:s|ing)? (?:a )?(?:product|policy|loan|plan)|suitability)\b/i,
-  BROKER: /\b(?:brokering|broker(?:s)?|arrang(?:e|es|ing) (?:a )?(?:loan|polic(?:y|ies)|sale))\b/i,
-  SOLICIT: /\b(?:solicit(?:s|ing|ation)?|cold (?:call|email|text)|advertis(?:e|es|ing)|marketing (?:to|of) consumers)\b/i,
-  HOLD_DEPOSITS: /\b(?:deposits?|escrow|hold(?:s|ing)? (?:customer )?funds)\b/i,
-  MANUFACTURE: /\b(?:manufactur(?:e|es|ing)|subcontract(?:s|ing|or)?|private[- ]label)\b/i,
+  // A broker of something regulated, not the bare word: "data broker" or "stock broker photo" says nothing about rights held.
+  BROKER: /\b(?:(?:insurance|mortgage|loan|real[- ]estate|securities|investment|freight|customs|ticket) brok(?:er|ers|ering|erage)|brok(?:er|ers|ering) (?:a |an |the )?(?:[a-z-]+ ){0,2}(?:loans?|polic(?:y|ies)|insurance|mortgages?|sale of|deals?)|arrang(?:e|es|ing) (?:a |the )?(?:loan|polic(?:y|ies)|sale))\b/i,
+  // Advertising is regulated by what is advertised and to whom, so it counts beside a consumer or a regulated product, not on its own.
+  SOLICIT: /\b(?:solicit(?:s|ing|ation)?|cold (?:call|email|text)s?|marketing (?:to|of) consumers|(?:advertis(?:e|es|ing)|market(?:s|ing)?) (?:[a-z-]+ ){0,3}(?:to (?:consumers|the public|retail (?:customers|buyers))|(?:insurance|loans?|mortgages?|investments?|securities|credit|supplements?|medical|health) ))/i,
+  // Money held for someone, not the word: "mineral deposits" and "sediment deposits" hold nothing for anybody.
+  HOLD_DEPOSITS: /\b(?:(?:customer|client|buyer|security|earnest[- ]money|down|advance|prepaid|refundable|booking) deposits?|(?:takes?|taking|collects?|collecting|holds?|holding|accepts?|accepting) (?:a |the |an )?(?:[a-z-]+ ){0,2}deposits?|escrow|hold(?:s|ing)? (?:customer )?funds)\b/i,
+  // Making or subcontracting the making of goods for sale, not any mention of a manufacturer or of a subcontractor doing other work.
+  MANUFACTURE: /\b(?:manufactur(?:e|es|ing) (?:and sell(?:s|ing)?|for (?:sale|consumers|retail)|(?:a |the |our |its |own )?(?:products?|goods|devices?|supplements?|foods?|cosmetics?|toys?))|subcontract(?:s|ing)? (?:the )?(?:manufactur(?:e|ing)|production|fabrication|assembly)|private[- ]label)\b/i,
   CONSUMER_FACING: /\b(?:consumer protection|consumer (?:sales|credit|lending)|retail customers?)\b/i,
   /* Selling or placing a financial or insurance product, and sending borrowers or policyholders to someone who does. */
   SELL_PRODUCT: /\b(?:sell(?:s|ing)?|offer(?:s|ing)?|plac(?:e|es|ing)|writ(?:e|es|ing)) (?:[a-z-]+ ){0,3}(?:insurance|polic(?:y|ies)|mortgages?|loans?|annuit(?:y|ies)|securities|investments?|warrant(?:y|ies))\b/i,
