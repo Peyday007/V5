@@ -14,7 +14,7 @@ import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { checkIn } from '../server/services/bins/service.ts';
-import { claimAsks, ensureFreeWorkers, firstJson, freeLaneTick, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
+import { asksByPriority, claimAsks, ensureFreeWorkers, firstJson, freeLaneTick, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
 import { freeLaneMayTakeImprovement, resetActivationCache } from '../server/services/improvement/activation.ts';
 import { createLayer } from '../server/repos/layers.ts';
 import { IMPROVEMENT_RESEARCH_SLOT_CAP } from '../server/domain/improvement.ts';
@@ -494,6 +494,18 @@ describe('the free research lane', () => {
     const other = await takeOne({ ...base, worker: workers[1]!, index: 1, spillover: true });
     expect(other.claimed?.workItemId).toBe(first.claimed!.workItemId);
     expect(other.ok).toBe(true);
+  });
+
+  it('asks for the most important waiting work first, so a revenue goal\u2019s research does not wait behind unrelated later stages', () => {
+    const asks = claimAsks([{ model: 'a' }], 0);
+    // A goal fragment boosted to 7 outranks an ordinary synthesis at 5.
+    const goalFirst = asksByPriority(asks, new Map([['RESEARCH_SYNTHESIZE', 5], ['RESEARCH_FRAGMENT', 7]]));
+    expect(goalFirst.flat()).toEqual(['RESEARCH_FRAGMENT', 'RESEARCH_SYNTHESIZE']);
+    // Equal priority keeps stage order: finish what is paid for first.
+    const tie = asksByPriority(asks, new Map([['RESEARCH_SYNTHESIZE', 5], ['RESEARCH_FRAGMENT', 5]]));
+    expect(tie.flat()).toEqual(['RESEARCH_SYNTHESIZE', 'RESEARCH_FRAGMENT']);
+    // A type with nothing waiting is not asked for.
+    expect(asksByPriority(asks, new Map()).length).toBe(0);
   });
 
   it('asks per work type and never for the other worker\u2019s role, so declined rows cannot fill the claim window (IDLE_CAPACITY)', async () => {

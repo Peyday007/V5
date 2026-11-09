@@ -468,6 +468,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
 
   people    list | foundation | rename <user|email> "<name>"
   brain-only show [<bin_…> …] | on | off   (Claude routines take only Brain-improvement work, §84)
+  utilization show | run   (every capacity pool: waiting, running, capacity, idle beside work, §98)
   free-lane show | run [ticks]             (free models do the displaced research, §85)
   sources   show [hours] | compare [n]     (how research reads public pages, and what each route recovered)
   capacity  show | adopt <user|email> <trig_…>
@@ -1345,6 +1346,28 @@ async function main(): Promise<void> {
      * real administrator; turning it on also runs the clean-up pass at once.
      * The owner said the mode stays on until they say otherwise.
      */
+    /*
+     * Every pool Brain schedules onto (§98): waiting, running, capacity, and
+     * whether it is idle beside waiting work, with the interventions recorded
+     * in the last day. `run` also continues what is idle.
+     */
+    case 'utilization show':
+    case 'utilization run': {
+      const { brainUtilization, watchUtilization } = await import('../server/services/engineering/watchdog.ts');
+      const pools = command === 'run' ? (await watchUtilization({})).pools : await brainUtilization();
+      for (const one of pools) {
+        console.log(
+          `  ${one.pool.padEnd(15)} waiting ${String(one.waiting).padStart(5)}  running ${String(one.running).padStart(4)}  capacity ${String(one.capacity).padStart(4)}  ${one.idle ? 'IDLE BESIDE WORK' : 'ok'}  ${one.because.slice(0, 160)}`,
+        );
+      }
+      const recent = await getDb().all<{ created_at: string; attempted_action: string; replacement_action: string }>(
+        "SELECT created_at, attempted_action, replacement_action FROM engineering_interventions WHERE kind = 'IDLE_WITH_EXECUTABLE_WORK' AND created_at > ? ORDER BY created_at DESC LIMIT 15",
+        [new Date(Date.now() - 24 * 3_600_000).toISOString()],
+      );
+      console.log(`  interventions (24h): ${recent.length}`);
+      for (const one of recent) console.log(`    ${one.created_at}  ${one.attempted_action.slice(0, 140)}  -> ${one.replacement_action}`);
+      break;
+    }
     case 'brain-only show': {
       const reading = await brainOnlyReading();
       console.log(`  brain_only_mode  ${reading.mode ? 'ON' : 'OFF'}  (set ${reading.updatedAt ?? '—'} by ${reading.updatedBy ?? '—'})`);

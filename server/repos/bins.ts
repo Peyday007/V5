@@ -3960,9 +3960,15 @@ export async function claimDispatchIntent(): Promise<BinDispatch | null> {
   const now = binNow();
   const deadline = plusMs(now, DISPATCH_CLAIM_MS);
   const candidates = await db.all<BinDispatchRow>(
-    `SELECT * FROM bin_dispatch
-      WHERE (state = 'PENDING' OR state = 'SENDING') AND next_attempt_at <= ?
-      ORDER BY next_attempt_at, rowid LIMIT 10`,
+    /*
+     * The most important work fires first (Brain-wide resource rule, §98).
+     * The intent queue was ordered by time alone, so a burst of five could be
+     * spent on whatever was queued first while a goal's higher-priority bin
+     * waited a tick; the bin's own priority now leads, time breaks ties.
+     */
+    `SELECT d.* FROM bin_dispatch d LEFT JOIN bins b ON b.id = d.bin_id
+      WHERE (d.state = 'PENDING' OR d.state = 'SENDING') AND d.next_attempt_at <= ?
+      ORDER BY COALESCE(b.priority, 0) DESC, d.next_attempt_at, d.rowid LIMIT 10`,
     [now],
   );
   for (const row of candidates) {

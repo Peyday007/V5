@@ -15083,3 +15083,53 @@ the rest. Every other requirement names an `r01.<key>` probe that is not yet
 registered, so it reads UNKNOWN — never PASS — until a reviewed probe reads
 the behavior from production rows; a probe lives under the protected path, so
 the campaign that builds a behavior cannot write its own judge.
+
+## 98. Every pool of capacity is fed: idle capacity beside waiting work is a fault Brain finds and corrects itself.
+
+**Owner's order, 2026-11-09.** A permanent Brain-wide rule, not a Factory one:
+- Allocate every AI worker, Claude account, GPU slot, research lane and Factory worker to eligible work.
+- Run independent objectives at the same time; revenue is the highest priority now.
+- Limit parallelism only for capacity, quota, dependency, reliability, cost or safety.
+- Detect waiting, stalls, idle capacity and poor allocation, and correct them.
+- Reuse the existing schedulers.
+
+**What production showed.** The free research lane, which does all commercial research (§85):
+- had **76 items waiting and submitted nothing for ten hours** (09:10–19:30Z), with 191 provider errors an hour;
+- the cause was that the free-model gateway's 1 GB volume was full of its own debugging output (a JSON file per call, 276 MB in a day, and 260 MB of rotated logs);
+- so every call failed with "database or disk is full".
+
+Its controller recorded `FREE_LANE_IDLE` and kept retrying, but nothing read every pool together, and nothing cleared the gateway.
+
+**The pools, and the scheduler that already owns each.** No second scheduler was built:
+
+| pool | waiting | running | capacity | continuation |
+|---|---|---|---|---|
+| Claude routines (bins) | `DISPATCHABLE_SQL` ∧ `FIREABLE_SQL` | leased bins | fleet target (`capacityReading`) | `dispatchTickIfIdle` (guarded) |
+| Free lane and GPU (§86) | `waitingNow` | busy slots / leased free-lane items | the controller's per-model targets | `controlStep`, which tops up idle slots |
+| Research slots | QUEUED ideas with a mission spec and no live mission | live MISSION holds | sum of active grants' `max_concurrent` | Russell's launch pass, goal ideas first (§78) |
+| Factory line | executable campaigns and bins | leased and arriving bins | plus free repository surfaces | the Factory remote loop (`readLine`) |
+
+**What changed.**
+- **One reading of every pool, acted on.**
+  - `brainUtilization` reads the four pools from their own counts.
+  - `watchUtilization` records each idle pool once per ten-minute window, as `IDLE_WITH_EXECUTABLE_WORK` naming the pool and the reason.
+  - It then continues the pool through its own path.
+  - The durable tick runs it every five minutes. Before, the tick's idle watch only recorded, and only for routines.
+  - `admin utilization show | run` prints every pool, and the day's interventions.
+- **The most important work first, in every queue.**
+  - The free lane asked by stage before priority, so an approved revenue goal's boosted research (`GOAL_PRIORITY_BOOST`) waited behind any unrelated synthesis. It now asks for the type holding the highest-priority waiting item first (`asksByPriority`), and stage order breaks ties.
+  - The dispatch intent queue was ordered by time alone. `claimDispatchIntent` now orders by the bin's priority, then time.
+- **The gateway cannot fill again.** The hourly cheap-lane run prunes its call logs older than two hours and all but its two newest rotated logs. Its database is not touched.
+
+**Limits kept, each for a reason this rule allows.**
+- The grant's at-once ceiling and account and routine targets: quota and capacity.
+- The free lane's controller and its database share: reliability.
+- Its start-up hold after a restart: reliability on a cold machine.
+- Synthesis waiting for its fragments, and audits in sequence: dependencies (§90, §71).
+- The await-release gate on operator workflows: it holds only while a machine is being replaced, then fails open.
+
+**Factory does not block unrelated work.**
+- Factory and research bins need different surfaces.
+- The fleet target already excludes Factory.
+- The fire order now follows priority instead of arrival.
+- Brain's runtime has no Factory lock on research, cash, goals or dispatch: `RELEASE_IN_FLIGHT` gates only Factory's own release planner.
