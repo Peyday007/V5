@@ -197,34 +197,78 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
   };
 }
 
-/** Repeated use of a host, counted from `SOURCE_ACCESS` event rows. Pure over rows. */
+/** Repetition is only evidence inside a recent window; older reads say nothing about today's work. */
+export const REPEATED_USE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** The workflow a SOURCE_ACCESS row belongs to: host plus path, never the query, so one workflow read again is one key. */
+function workflowKeyOf(measures: { host?: unknown; url?: unknown }, host: string): string {
+  if (typeof measures.url === 'string') {
+    try {
+      const u = new URL(measures.url);
+      return `${host}${u.pathname.replace(/\/+$/, '') || '/'}`;
+    } catch {
+      /* fall through to the host-only key */
+    }
+  }
+  return host;
+}
+
+/** Whether the read needed a route beyond a plain direct read, judged from its own attempts. */
+function neededFallback(row: { provider: string | null }, measures: { attempts?: unknown }): boolean {
+  if (Array.isArray(measures.attempts)) {
+    return (measures.attempts as { method?: unknown }[]).some(
+      (a) => typeof a?.method === 'string' && a.method !== 'DIRECT' && (ACCESS_METHODS as readonly string[]).includes(a.method),
+    );
+  }
+  return Boolean(row.provider && row.provider !== 'DIRECT' && (ACCESS_METHODS as readonly string[]).includes(row.provider));
+}
+
+/**
+ * Repeated use of a host's workflow, counted from `SOURCE_ACCESS` event rows. Pure over rows.
+ *
+ * Repetition is the same workflow done again inside a recent window, not traffic to
+ * the host: rows are grouped by workflow key (host + path) and the most-repeated
+ * workflow decides, so many different pages on one host never add up to "repeated".
+ * Rows older than the window are ignored; a row with no usable `at` is ignored too,
+ * because an undated read cannot be shown to be recent.
+ */
 export function repeatedUseFromRows(
-  rows: { provider: string | null; measures: string | null }[],
+  rows: { provider: string | null; measures: string | null; at?: string | null }[],
   host: string,
+  opts: { now?: number; windowMs?: number } = {},
 ): { repeatedUses: number; repeatedUsesNeedingFallback: number } {
   const want = host.toLowerCase();
-  let uses = 0;
-  let fallback = 0;
+  const now = opts.now ?? Date.now();
+  const since = now - (opts.windowMs ?? REPEATED_USE_WINDOW_MS);
+  const groups = new Map<string, { uses: number; fallback: number }>();
   for (const row of rows) {
-    let measures: { host?: unknown } = {};
+    const at = row.at ? Date.parse(row.at) : Number.NaN;
+    if (!Number.isFinite(at) || at < since || at > now) continue;
+    let measures: { host?: unknown; url?: unknown; attempts?: unknown } = {};
     try {
       measures = row.measures ? (JSON.parse(row.measures) as typeof measures) : {};
     } catch {
       continue;
     }
     if (typeof measures.host !== 'string' || measures.host.toLowerCase() !== want) continue;
-    uses += 1;
-    if (row.provider && row.provider !== 'DIRECT' && (ACCESS_METHODS as readonly string[]).includes(row.provider)) fallback += 1;
+    const key = workflowKeyOf(measures, want);
+    const g = groups.get(key) ?? { uses: 0, fallback: 0 };
+    g.uses += 1;
+    if (neededFallback(row, measures)) g.fallback += 1;
+    groups.set(key, g);
   }
-  return { repeatedUses: uses, repeatedUsesNeedingFallback: fallback };
+  let best = { uses: 0, fallback: 0 };
+  for (const g of groups.values()) if (g.uses > best.uses || (g.uses === best.uses && g.fallback > best.fallback)) best = g;
+  return { repeatedUses: best.uses, repeatedUsesNeedingFallback: best.fallback };
 }
 
 /** Repeated-use counts for a host from existing SOURCE_ACCESS rows; zeros when unreadable. */
 export async function readRepeatedUse(host: string): Promise<{ repeatedUses: number; repeatedUsesNeedingFallback: number }> {
   try {
-    const rows = await getDb().all<{ provider: string | null; measures: string | null }>(
-      `SELECT provider, measures FROM bin_events WHERE event_type = 'SOURCE_ACCESS' ORDER BY at DESC LIMIT 5000`,
-      [],
+    const since = new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString();
+    const rows = await getDb().all<{ provider: string | null; measures: string | null; at: string | null }>(
+      `SELECT provider, measures, at FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? ORDER BY at DESC LIMIT 5000`,
+      [since],
     );
     return repeatedUseFromRows(rows, host);
   } catch {
