@@ -6,7 +6,8 @@ CLAUDE.md §54 is the reasoning. This is the setup.
 
 | Area | Capability | Provider | What Brain does once connected |
 |---|---|---|---|
-| Messaging | `SEND_A_MESSAGE` | Resend | Writes one email to the single address a READY opportunity's buyer published, with the card's offer, price and an opt-out. Only under `CONTACT_BUYER` authority, at most three per tick. |
+| Messaging | `SEND_A_MESSAGE` | **Instantly** (the owner's workspace, API v2) | Adds one lead — the buyer's published address with this card's offer as the lead's own subject and body — to Brain's campaign `Brain · buyer outreach` in the owner's Instantly workspace, and activates that campaign, which then mails it from the workspace's healthy sending accounts. Only under `CONTACT_BUYER` authority, at most three per tick. Replies in the unibox on Brain's campaign are recorded as `BUYER_REPLIED` on the deal (§94). |
+| Messaging (alternative) | `SEND_A_MESSAGE` | Resend | Writes one email to the single address a READY opportunity's buyer published, with the card's offer, price and an opt-out. Only under `CONTACT_BUYER` authority, at most three per tick. |
 | Invoices | `ISSUE_AN_INVOICE` | Stripe | Issues and sends an invoice a person requested, for the amount recorded as `PIPELINE_AGREED`. Only under `QUOTE_AND_INVOICE` authority. |
 | Payments | `TAKE_A_PAYMENT` | Stripe | The invoice's hosted page takes the payment. Brain reads Stripe and records `CUSTOMER_PAYMENT` when paid (under `ACCEPT_PAYMENT`) and `SETTLEMENT` + the fee as `COST` when the funds are available. |
 
@@ -20,14 +21,30 @@ GET /api/projects/:id/cash/providers
 
 ## Connecting — the owner's decisions
 
-1. **Messaging.** Create a Resend account, verify the sending domain, create an
-   API key (a sending-only key is enough), then on the deployment:
+1. **Messaging — Instantly (the owner's provider).** In Instantly, Settings →
+   Integrations → API, create an **API v2** key with scopes for accounts,
+   campaigns, leads, lead lists and emails (`all:all` is simplest), then on the
+   deployment:
 
    ```
-   flyctl secrets set BRAIN_MESSAGING_PROVIDER=resend \
-     RESEND_API_KEY=re_... \
-     BRAIN_MESSAGING_FROM='Your Name <you@your-verified-domain>'
+   flyctl secrets set BRAIN_MESSAGING_PROVIDER=instantly INSTANTLY_API_KEY=...
    ```
+
+   Optional: `BRAIN_INSTANTLY_CAMPAIGN_ID=<uuid>` to have Brain add its leads to
+   an existing campaign instead of its own. Without it Brain uses the campaign
+   named `Brain · buyer outreach`, creating it as a **draft** if it does not
+   exist (verified against the owner's workspace on 2026-11-09:
+   `4499afed-d066-494c-b448-33e966f46ad3`). Brain never changes a campaign it did
+   not create.
+
+   What sends nothing, and needs no grant: reading accounts and campaigns
+   (the sending capacity the plan models), drafting Brain's campaign, putting
+   prepared leads in a lead list, reading replies. What sends: adding a lead to
+   Brain's campaign and activating it — only inside the `CONTACT_BUYER` effect.
+   Check it with `admin cash instantly` (read-only).
+
+   Resend remains implemented (`BRAIN_MESSAGING_PROVIDER=resend`, `RESEND_API_KEY`,
+   `BRAIN_MESSAGING_FROM`) for a deployment that chooses it.
 
 2. **Invoices and payments.** Create a Stripe account. Start with the **test**
    key; switch to the live key only after a test invoice has gone through

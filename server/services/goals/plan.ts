@@ -556,7 +556,7 @@ async function missingPermissions(projectId: string): Promise<string[]> {
     if (!(await checkCommercialAuthority({ projectId, action })).ok) out.push(action);
   }
   const caps = new Map((await readCapabilities(['SEND_A_MESSAGE', 'TAKE_A_PAYMENT'])).map((cap) => [cap.id, cap.state]));
-  if (caps.get('SEND_A_MESSAGE') !== 'PRESENT') out.push('a message provider');
+  if (caps.get('SEND_A_MESSAGE') !== 'PRESENT') out.push('Instantly connected (messaging)');
   if (caps.get('TAKE_A_PAYMENT') !== 'PRESENT') out.push('a billing provider');
   return out;
 }
@@ -1104,7 +1104,7 @@ export async function missingForSale(one: ModelledOpportunity, target: TargetRea
     sendByPerson = true;
   }
   if (caps.get('SEND_A_MESSAGE') !== 'PRESENT') {
-    send.push('a message provider: BRAIN_MESSAGING_PROVIDER=resend, RESEND_API_KEY and BRAIN_MESSAGING_FROM on the deployment');
+    send.push('the owner\'s Instantly workspace connected: BRAIN_MESSAGING_PROVIDER=instantly and INSTANTLY_API_KEY on the deployment');
     sendByPerson = true;
   }
   // The operator reaches only a READY piece, and READY is the card's gate, not this plan's tier.

@@ -255,7 +255,7 @@ describe('MESSAGING — Resend, one email to one published address', () => {
     const lines = await commercialProviderStatus({} as NodeJS.ProcessEnv);
     const messaging = lines.find((one) => one.area === 'MESSAGING')!;
     expect(messaging.state).toBe('MISSING');
-    expect(messaging.nextAction).toContain('RESEND_API_KEY');
+    expect(messaging.nextAction).toContain('INSTANTLY_API_KEY');
     expect(lines.map((one) => one.state)).toEqual(['MISSING', 'MISSING', 'MISSING']);
 
     // Configured and registered: CONNECTED, and still no value anywhere.

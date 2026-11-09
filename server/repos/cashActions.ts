@@ -112,3 +112,16 @@ export async function countActions(opportunityId: string): Promise<number> {
   );
   return Number(rows[0]?.n ?? 0);
 }
+
+/**
+ * The contact a provider's own reference answers to, in one project — how a
+ * reply read from a provider finds the deal it belongs to. Null when no
+ * recorded contact carries that reference.
+ */
+export async function contactByReference(projectId: string, reference: string): Promise<{ id: string; opportunityId: string } | null> {
+  const row = await getDb().get<{ id: string; opportunity_id: string }>(
+    `SELECT id, opportunity_id FROM cash_actions WHERE project_id = ? AND action = 'CONTACT_BUYER' AND reference = ? ORDER BY created_at DESC LIMIT 1`,
+    [projectId, reference],
+  );
+  return row ? { id: row.id, opportunityId: row.opportunity_id } : null;
+}

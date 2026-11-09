@@ -47,6 +47,7 @@ import { withActivity } from '../../db/infra.ts';
  * an attempt, or stops unrelated work. An open need is a valid execution state
  * and Brain carries on around it, which is exactly what the plan means.
  */
+import { syncInstantlyReplies } from './providers/instantlySync.ts';
 import { executionPolicyForProject } from '../goals/policy.ts';
 import { reconcileCashJobs, type JobReconciliation } from './jobPipeline.ts';
 import { handOffReadyTests, type FactoryHandoffPass } from './factoryHandoff.ts';
@@ -1622,6 +1623,13 @@ export async function operate(
    * journey because the journey reads money this may have just recorded.
    */
   const invoicing = await withActivity('cash:runInvoicing', () => runInvoicing(projectId, now ? new Date(now) : new Date()));
+  /*
+   * Buyers' replies in the owner's Instantly unibox, read onto the deals they
+   * answer before the journey derives silence from contacts nobody answered
+   * (§94). Read-only toward Instantly, at most every few minutes a project
+   * (its unibox allows 20 requests a minute), and its own failure domain.
+   */
+  if (replySyncDue(projectId)) await withActivity('cash:syncInstantlyReplies', () => syncInstantlyReplies(projectId)).catch(() => null);
   const journey = await withActivity('cash:advanceJourney', () => advanceJourney(projectId, now ? new Date(now) : new Date()));
   /*
    * Then the jobs: every opening the passes above qualified, readied or took
@@ -1822,3 +1830,12 @@ function triggeredThisTick(reconsidered: unknown): boolean {
   return Array.isArray(triggered) ? triggered.length > 0 : Boolean(triggered);
 }
 
+
+/** Replies are read at most this often per project; the unibox allows 20 requests a minute. */
+export const REPLY_SYNC_EVERY_MS = 5 * 60_000;
+const lastReplySync = new Map<string, number>();
+function replySyncDue(projectId: string, now = Date.now()): boolean {
+  if (now - (lastReplySync.get(projectId) ?? 0) < REPLY_SYNC_EVERY_MS) return false;
+  lastReplySync.set(projectId, now);
+  return true;
+}

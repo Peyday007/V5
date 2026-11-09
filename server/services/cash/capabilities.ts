@@ -109,10 +109,11 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
     id: 'SEND_A_MESSAGE',
     does: 'Deliver a message to a buyer at an address or number they published.',
     requires:
-      'An outbound messaging integration connected to this Brain: BRAIN_MESSAGING_PROVIDER=resend, ' +
-      'RESEND_API_KEY and BRAIN_MESSAGING_FROM set on the deployment.',
+      'An outbound messaging integration connected to this Brain: the owner\'s Instantly workspace ' +
+      '(BRAIN_MESSAGING_PROVIDER=instantly and INSTANTLY_API_KEY on the deployment), or Resend ' +
+      '(BRAIN_MESSAGING_PROVIDER=resend, RESEND_API_KEY, BRAIN_MESSAGING_FROM).',
     nextStep:
-      'Set the three messaging secrets on the deployment and restart. Until then, the message is ' +
+      'Set BRAIN_MESSAGING_PROVIDER=instantly and INSTANTLY_API_KEY on the deployment and restart. Until then, the message is ' +
       'sent by a person and the send is recorded as a confirmed action on the opportunity.',
     // `PRESENT` means a real effect adapter is registered for this operation
     // and its configuration reads usable now — never a boolean somebody
