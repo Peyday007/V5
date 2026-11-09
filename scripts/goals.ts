@@ -764,6 +764,11 @@ function printPortfolio(portfolio: import('../server/services/goals/portfolio.ts
   const l = portfolio.limits;
   console.log(`  quant       ${portfolio.basis === 'PROBABILITY' ? 'probability' : 'coverage of tested conditions, not a probability'}; ${portfolio.searched} combination(s) searched; target ${Math.round(l.target)} in ${l.deadlineDays} day(s)`);
   console.log(`    limits    start capital ${l.startingCapital ?? 'none'} · per arrangement ${l.perArrangement ?? 'none'} · spend ceiling ${l.spendCeiling ?? 'none'} · outreach ${l.contactsPerDay.value ?? `${l.contactsPerDay.low}–${l.contactsPerDay.high}`}/day (${l.contactsPerDay.source}) · shared-outreach correlation ${l.correlation}`);
+  const m0 = portfolio.measuredRates;
+  if (m0) {
+    const pc = (x: number) => `${(x * 100).toFixed(2)}%`;
+    console.log(`    measured   reply ${pc(m0.low)}–${pc(m0.high)} on ${m0.sent} sends (${m0.replies} replies, ${m0.opportunities} opportunities, ${((m0.bounced / m0.sent) * 100).toFixed(1)}% bounced) from the Instantly workspace`);
+  }
   const b = portfolio.best;
   if (b) {
     console.log(`    best      reaches the target in ${(b.reach * 100).toFixed(1)}% of worlds · settled p10 ${Math.round(b.settledP10)} p50 ${Math.round(b.settledP50)} p90 ${Math.round(b.settledP90)} · capital short ${(b.capitalShort * 100).toFixed(0)}% · over spend ${(b.overSpend * 100).toFixed(0)}%`);
