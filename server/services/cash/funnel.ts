@@ -368,3 +368,231 @@ export function formatFunnel(reading: FunnelReading): string[] {
   );
   return lines;
 }
+
+/* ------------------------------------------------------------------------- */
+/* The outreach funnel (COM-13-3): messages are not buyers                    */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * A stage input is measured, estimated with a range, or unknown. Unknown is a
+ * state of its own: it is never turned into a favourable number, and it makes
+ * every figure downstream of it unknown too.
+ */
+export type StageInput =
+  | { basis: 'MEASURED'; value: number }
+  | { basis: 'ESTIMATED'; low: number; high: number }
+  | { basis: 'UNKNOWN' };
+
+/** The stages of any outreach mechanism, each its own figure, in funnel order. */
+export const OUTREACH_STAGES = [
+  'permission', // provider terms and consent permit this use at all: 1 = permitted, 0 = refused
+  'uniqueProspects', // unique relevant prospects reachable (a count, not a message count)
+  'deliverability', // share of sends that reach an inbox or inbox-equivalent
+  'throughput', // messages the sending accounts can send in the period, at their reputation
+  'response', // share of reached prospects that reply or engage
+  'qualification', // share of responders that qualify
+  'close', // share of qualified that buy
+  'settlement', // share of closed value that settles as cash
+  'fulfillment', // share of settled orders delivered without refund
+  'repeat', // additional purchases per fulfilled buyer
+] as const;
+export type OutreachStage = (typeof OUTREACH_STAGES)[number];
+
+/**
+ * One way of reaching demand. `mode` is a label for the comparison, not a
+ * category the model branches on: volume, high-ticket, partner and marketplace
+ * mechanisms are modelled by the same stages with different inputs, and a
+ * mechanism of any other kind is modelled the same way.
+ */
+export interface OutreachMechanism {
+  mode: string;
+  label: string;
+  inputs: Partial<Record<OutreachStage, StageInput>>;
+  /** Value of one fulfilled purchase, in minor units. Unknown unless somebody supplied it. */
+  dealValueCents?: StageInput;
+  /** Messages the mechanism proposes to send. Reported as effort only; no stage reads it as a buyer. */
+  messagesSent?: number;
+}
+
+export interface Range {
+  low: number | null;
+  high: number | null;
+}
+
+export interface OutreachFigure extends Range {
+  basis: 'MEASURED' | 'ESTIMATED' | 'UNKNOWN';
+  /** Why the figure is unknown, when it is. */
+  because: string | null;
+}
+
+export interface OutreachFunnelReading {
+  mode: string;
+  label: string;
+  /** Every stage input as given, defaulting to unknown. */
+  stages: Record<OutreachStage, OutreachFigure>;
+  /** Messages proposed. Effort, never buyers, sales or revenue. */
+  messagesSent: number | null;
+  /** Counts at each step, derived from the stage inputs and never from messagesSent. */
+  reachedProspects: OutreachFigure;
+  responders: OutreachFigure;
+  qualified: OutreachFigure;
+  buyers: OutreachFigure;
+  settledBuyers: OutreachFigure;
+  fulfilledBuyers: OutreachFigure;
+  /** Settled revenue in minor units, over the period, including repeat purchases. */
+  revenueCents: OutreachFigure;
+  /** First stage whose input is unknown or refused, in funnel order. */
+  firstUnknown: OutreachStage | null;
+  permitted: boolean | null;
+}
+
+const UNKNOWN_FIGURE = (because: string): OutreachFigure => ({ basis: 'UNKNOWN', low: null, high: null, because });
+
+function figureOf(input: StageInput | undefined, what: string): OutreachFigure {
+  if (!input || input.basis === 'UNKNOWN') return UNKNOWN_FIGURE(`${what} is unknown`);
+  if (input.basis === 'MEASURED') {
+    return Number.isFinite(input.value) && input.value >= 0
+      ? { basis: 'MEASURED', low: input.value, high: input.value, because: null }
+      : UNKNOWN_FIGURE(`${what} was recorded as a value that is not a count or a share`);
+  }
+  const low = Math.min(input.low, input.high);
+  const high = Math.max(input.low, input.high);
+  return Number.isFinite(low) && Number.isFinite(high) && low >= 0
+    ? { basis: 'ESTIMATED', low, high, because: null }
+    : UNKNOWN_FIGURE(`${what} was recorded as a range that is not a count or a share`);
+}
+
+/** One step of the funnel: a count times a share. Unknown on either side stays unknown. */
+function step(count: OutreachFigure, share: OutreachFigure, what: string): OutreachFigure {
+  if (count.basis === 'UNKNOWN' || count.low === null || count.high === null) {
+    return UNKNOWN_FIGURE(count.because ?? `${what} follows an unknown stage`);
+  }
+  if (share.basis === 'UNKNOWN' || share.low === null || share.high === null) {
+    return UNKNOWN_FIGURE(share.because ?? `${what} needs an input that is unknown`);
+  }
+  const basis = count.basis === 'MEASURED' && share.basis === 'MEASURED' ? 'MEASURED' : 'ESTIMATED';
+  return { basis, low: count.low * share.low, high: count.high * share.high, because: null };
+}
+
+/**
+ * Model one outreach mechanism as the full funnel. Pure.
+ *
+ * Reached prospects are the unique relevant prospects times deliverability,
+ * capped by what sending throughput can reach. The number of messages sent is
+ * carried as effort and is read by no stage, so sending more messages never
+ * produces a buyer by itself, and a permission that is refused or unknown makes
+ * every figure after it unknown rather than zero or favourable.
+ */
+export function modelOutreachFunnel(mechanism: OutreachMechanism): OutreachFunnelReading {
+  const stages = Object.fromEntries(
+    OUTREACH_STAGES.map((stage) => [stage, figureOf(mechanism.inputs[stage], stage)]),
+  ) as Record<OutreachStage, OutreachFigure>;
+
+  const permission = stages.permission;
+  const permitted: boolean | null =
+    permission.basis === 'UNKNOWN' || permission.low === null || permission.high === null
+      ? null
+      : permission.high > 0 && permission.low > 0
+        ? true
+        : permission.high === 0
+          ? false
+          : null;
+  const gate = (figure: OutreachFigure): OutreachFigure => {
+    if (permitted === true) return figure;
+    return UNKNOWN_FIGURE(
+      permitted === false ? 'provider terms or consent refuse this use' : 'whether provider terms and consent permit this use is unknown',
+    );
+  };
+
+  const { uniqueProspects, deliverability, throughput } = stages;
+  const deliverable = gate(step(uniqueProspects, deliverability, 'reached prospects'));
+  const reachedProspects: OutreachFigure =
+    deliverable.basis === 'UNKNOWN' || throughput.basis === 'UNKNOWN' || deliverable.high === null || throughput.high === null || throughput.low === null || deliverable.low === null
+      ? deliverable.basis === 'UNKNOWN'
+        ? deliverable
+        : UNKNOWN_FIGURE(throughput.because ?? 'sending throughput is unknown')
+      : {
+          basis: 'ESTIMATED',
+          low: Math.min(deliverable.low, throughput.low),
+          high: Math.min(deliverable.high, throughput.high),
+          because: null,
+        };
+
+  const responders = step(reachedProspects, stages.response, 'responders');
+  const qualified = step(responders, stages.qualification, 'qualified');
+  const buyers = step(qualified, stages.close, 'buyers');
+  const settledBuyers = step(buyers, stages.settlement, 'settled buyers');
+  const fulfilledBuyers = step(settledBuyers, stages.fulfillment, 'fulfilled buyers');
+  const deal = figureOf(mechanism.dealValueCents, 'deal value');
+  const firstPurchase = step(fulfilledBuyers, deal, 'revenue');
+  // Each fulfilled buyer buys once, plus `repeat` further purchases on average.
+  const repeat = stages.repeat;
+  const revenueCents: OutreachFigure =
+    firstPurchase.basis === 'UNKNOWN' || repeat.basis === 'UNKNOWN' || firstPurchase.low === null || firstPurchase.high === null || repeat.low === null || repeat.high === null
+      ? UNKNOWN_FIGURE(firstPurchase.because ?? repeat.because ?? 'repeat purchase is unknown')
+      : {
+          basis: firstPurchase.basis === 'MEASURED' && repeat.basis === 'MEASURED' ? 'MEASURED' : 'ESTIMATED',
+          low: firstPurchase.low * (1 + repeat.low),
+          high: firstPurchase.high * (1 + repeat.high),
+          because: null,
+        };
+
+  const firstUnknown =
+    OUTREACH_STAGES.find((stage) => stages[stage].basis === 'UNKNOWN' || (stage === 'permission' && permitted !== true)) ?? null;
+
+  return {
+    mode: mechanism.mode,
+    label: mechanism.label,
+    stages,
+    messagesSent: mechanism.messagesSent ?? null,
+    reachedProspects,
+    responders,
+    qualified,
+    buyers,
+    settledBuyers,
+    fulfilledBuyers,
+    revenueCents,
+    firstUnknown,
+    permitted,
+  };
+}
+
+export interface MixReading {
+  /** Mechanisms whose revenue is fully known to a range, strongest lower bound first. */
+  ranked: OutreachFunnelReading[];
+  /** Mechanisms with an unknown or refused stage. Never ranked, never assumed favourable. */
+  unranked: { mode: string; label: string; firstUnknown: OutreachStage | null; because: string | null }[];
+}
+
+/**
+ * Compare any set of mechanisms for the economically strongest mix. Pure.
+ *
+ * No mode is a default and none is excluded: a mechanism is ranked only on its
+ * own stage inputs, by the low end of its revenue range, and one with an unknown
+ * stage is listed as unranked with the stage that is missing, which is the task
+ * to do next.
+ */
+export function searchOutreachMix(mechanisms: readonly OutreachMechanism[]): MixReading {
+  const readings = mechanisms.map(modelOutreachFunnel);
+  const ranked = readings
+    .filter((one) => one.revenueCents.basis !== 'UNKNOWN')
+    .sort((a, b) => (b.revenueCents.low ?? 0) - (a.revenueCents.low ?? 0) || (b.revenueCents.high ?? 0) - (a.revenueCents.high ?? 0));
+  const unranked = readings
+    .filter((one) => one.revenueCents.basis === 'UNKNOWN')
+    .map((one) => ({ mode: one.mode, label: one.label, firstUnknown: one.firstUnknown, because: one.revenueCents.because }));
+  return { ranked, unranked };
+}
+
+/** The outreach funnel's lines for a reading: every stage with its basis, and what is unknown. */
+export function formatOutreachFunnel(reading: OutreachFunnelReading): string[] {
+  const show = (f: OutreachFigure): string =>
+    f.basis === 'UNKNOWN' ? `unknown (${f.because ?? 'no input'})` : `${figure(f.low, 2)}–${figure(f.high, 2)} ${f.basis.toLowerCase()}`;
+  return [
+    `OUTREACH FUNNEL ${reading.mode}: ${reading.label}`,
+    `  messages sent ${figure(reading.messagesSent)} (effort only; not prospects, buyers or revenue)`,
+    ...OUTREACH_STAGES.map((stage) => `  ${stage.padEnd(16)} ${show(reading.stages[stage])}`),
+    `  reached prospects ${show(reading.reachedProspects)}`,
+    `  buyers ${show(reading.buyers)}`,
+    `  revenue (minor units) ${show(reading.revenueCents)}`,
+  ];
+}
