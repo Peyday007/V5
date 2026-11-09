@@ -3,8 +3,8 @@
  * of the claim was wrong (LEARN-15-1).
  *
  * This module is pure: it reads the prediction, exposure and outcome rows a
- * caller passes in (the rows the cash forecast and the quant graph already
- * write) and returns judgments. It owns no table, no schedule and no queue —
+ * caller passes in (the rows `ledger.ts` writes and reads back) and returns
+ * judgments. It owns no table, no schedule and no queue —
  * a ledger is a set of rows, and this reads them. Nothing here reads prose.
  *
  *  - A prediction names its outcome, horizon, population, data and assumptions,
