@@ -418,6 +418,15 @@ const EVIDENCE_RULES = [
   '',
   'A claim you cannot source is still worth reporting — put it in "unresolved" rather than',
   'dressing it up as evidence. Reporting that the evidence does not exist is a real answer.',
+  '',
+  'Two things are discarded most often, so check every claim against them before you return it:',
+  '  NO SOURCE URL      a claim with an empty or missing sourceUrl is your own assertion, not evidence.',
+  '                     If you cannot give the absolute http(s) address of the document you opened and',
+  '                     that states it, the statement belongs in "unresolved", never in "claims".',
+  '  SELF-DESCRIPTION   when the only source is the organisation describing itself (its own site,',
+  '                     press release, filing or marketing), the claim is SELF_REPORT. Word it as what',
+  '                     the organisation says ("X states that …"), never as an objective fact, and',
+  '                     state it as fact only when an independent source you also cite confirms it.',
 ].join('\n');
 
 /**
