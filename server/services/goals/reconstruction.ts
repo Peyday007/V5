@@ -46,8 +46,15 @@ import { MATERIAL_SHARE, SHAPE_MULTIPLES } from './pathways.ts';
 /** A change smaller than this, in reach and in median settled cash, is not an improvement. */
 export const MATERIAL_REACH = 0.02;
 export const MATERIAL_P50 = 0.1;
-/** Worlds per screened variant; the strongest is read again at the plan's own count. */
-export const SCREEN_WORLDS = 1000;
+/**
+ * Worlds per screened variant; the strongest is read again at the plan's own
+ * count. An evaluation's cost grows with worlds × openings, so screening holds
+ * that product near SCREEN_WORK: a plan of a dozen openings screens at about
+ * 600 worlds, one of forty at about 200 (never fewer than SCREEN_MIN_WORLDS).
+ */
+export const SCREEN_WORLDS = 600;
+export const SCREEN_WORK = 7_200;
+export const SCREEN_MIN_WORLDS = 150;
 
 export type Dimension = 'EVIDENCE' | 'CAPACITY' | 'ACQUISITION' | 'PARTNER' | 'TRANSACTION' | 'CASH_TIMING' | 'CAPITAL' | 'MARKET';
 export type Basis = 'MEASURED' | 'ESTIMATE' | 'ASSUMPTION';
@@ -167,9 +174,23 @@ function knownMid(input: ModelInput): number | null {
   return input.low ?? input.high ?? null;
 }
 
+/**
+ * The openings a reconstruction can move: every member of a combination the
+ * engine ranked, and every repeatable opening it did not refuse. A one-off the
+ * engine left out of every combination cannot be moved by capacity, reply rate,
+ * channel or financing, so re-evaluating it on every variant is cost without
+ * information (production test, 2026-11-09: 40 one-offs took a plan read from 5 s to 23 s).
+ */
+export function movableOpenings(openings: ModelledOpportunity[], baseline: GoalPortfolio): ModelledOpportunity[] {
+  const ranked = new Set([...(baseline.best?.members ?? []), ...baseline.alternatives.flatMap((a) => a.members)].map((m) => m.opportunityId));
+  const refused = new Set(baseline.demand.filter((d) => d.refused).map((d) => d.opportunityId));
+  return openings.filter((o) => ranked.has(o.opportunity.id) || (o.repeatable && o.agreedValue === 0 && !refused.has(o.opportunity.id)));
+}
+
 export async function reconstructPlan(input: ReconstructionInput): Promise<Reconstruction> {
+  input = { ...input, openings: movableOpenings(input.openings, input.baseline) };
   const levers = input.levers ?? ACQUISITION_LEVERS;
-  const worlds = input.worlds ?? SCREEN_WORLDS;
+  const worlds = input.worlds ?? Math.max(SCREEN_MIN_WORLDS, Math.min(SCREEN_WORLDS, Math.round(SCREEN_WORK / Math.max(1, input.openings.length))));
   const seen = new Map<string, VariantReading>();
   let evaluations = 0;
   const limits = input.portfolio;
@@ -427,7 +448,7 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
     used = new Set(current.changes.map((c) => c.dimension));
   }
   // The strongest plan, read again at the plan's own number of worlds.
-  const best = current === base ? baseline : await evaluate(current, limits.worlds ?? 2000);
+  const best = current === base ? baseline : await evaluate(current, Math.max(worlds, Math.min(limits.worlds ?? 2000, Math.round((SCREEN_WORK * 3) / Math.max(1, input.openings.length)))));
   // Robustness: the strongest plan if the new campaign does no better than the old record.
   const floor = limits.measuredRates ? await evaluate(current, worlds, true, ' @as-is-record') : null;
   // The conversion it needs: the lowest reply rate (shared by every outreach opening) at which it reaches the requirement.
