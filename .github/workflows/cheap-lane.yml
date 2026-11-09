@@ -43,7 +43,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle'
+        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle'
         required: true
         default: deploy
       hours:
@@ -139,6 +139,16 @@ jobs:
               echo "::warning title=runpod::No research job submitted on the GPU in the last ${HOURS:-6}h yet (fallbacks in log: $fb)."
             fi
           }
+          # The gateway keeps a JSON file per call and rotated application logs on
+          # a 1 GB volume. Production, 2026-11-09: they filled it (call_logs 276 MB
+          # in one day, logs 260 MB), every call failed "database or disk is full",
+          # and the free lane sat idle for ten hours beside 76 waiting research items.
+          # Its own debugging output is pruned every hour; its database is not touched.
+          gateway_prune() {
+            [ -n "${FLY_ORG_TOKEN:-}" ] || { echo "::warning title=cheap lane::No FLY_ORG_TOKEN: the gateway's logs were not pruned."; return 0; }
+            FLY_API_TOKEN="$FLY_ORG_TOKEN" flyctl ssh console --app "$cheap" -C "sh -c 'find /app/data/call_logs -type f -mmin +120 -delete 2>/dev/null; find /app/data/call_logs -mindepth 1 -type d -empty -delete 2>/dev/null; ls -1t /app/data/logs/application/app.*.log 2>/dev/null | tail -n +3 | xargs -r rm -f; df -h /app/data | tail -1'" \
+              || echo "::warning title=cheap lane::The gateway prune did not run."
+          }
           case "$ACTION" in
             runpod-test)
               [ -n "$RUNPOD_VLLM_URL" ] || { echo "::error::Set the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
@@ -164,7 +174,11 @@ jobs:
               grep -q '^RUNPOD-CYCLE: PASS' cycle.txt || { echo "::error title=runpod::The automatic stop/start test did not pass; the lines above say which step."; exit 1; }
               echo "::notice title=runpod::Automatic power proven: stopped, started by Brain for waiting research, model served."
               ;;
+            prune)
+              gateway_prune
+              ;;
             runpod-auto)
+              gateway_prune
               if [ -z "$RUNPOD_VLLM_URL" ]; then
                 echo "::notice title=runpod::Waiting for the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY secrets. Free providers only."
                 exit 0
