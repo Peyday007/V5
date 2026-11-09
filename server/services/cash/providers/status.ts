@@ -11,14 +11,14 @@
 import { readCapability } from '../capabilities.ts';
 import {
   BILLING_PROVIDER_ENV,
-  MESSAGING_FROM_ENV,
+  INSTANTLY_KEY_ENV,
   MESSAGING_PROVIDER_ENV,
-  RESEND_KEY_ENV,
   STRIPE_KEY_ENV,
   billingConfig,
   messagingConfig,
 } from './config.ts';
 import { probeResend } from './resend.ts';
+import { probeInstantly } from './instantly.ts';
 import { probeStripe } from './stripe.ts';
 
 export interface ProviderLine {
@@ -32,10 +32,10 @@ export interface ProviderLine {
   nextAction: string;
 }
 
+// The owner's provider is Instantly (owner, 2026-11-09); Resend stays implemented for a deployment that chooses it.
 const MESSAGING_SETUP =
-  `Set ${MESSAGING_PROVIDER_ENV}=resend, ${RESEND_KEY_ENV} (a Resend API key) and ` +
-  `${MESSAGING_FROM_ENV} (an address on a domain verified in Resend) as deployment secrets, ` +
-  'then restart.';
+  `Set ${MESSAGING_PROVIDER_ENV}=instantly and ${INSTANTLY_KEY_ENV} (an Instantly API v2 workspace key) as ` +
+  'deployment secrets, then restart. Brain mails from the workspace\'s own sending accounts.';
 const BILLING_SETUP =
   `Set ${BILLING_PROVIDER_ENV}=stripe and ${STRIPE_KEY_ENV} (an sk_test_ key first, an sk_live_ ` +
   'key once a test invoice has been paid) as deployment secrets, then restart.';
@@ -78,9 +78,10 @@ export async function commercialProviderStatus(env: NodeJS.ProcessEnv = process.
 
 /** Ask each configured provider whether it accepts the key. Sends nothing. */
 export async function probeProviders(): Promise<{ messaging: string; billing: string }> {
-  const [resend, stripe] = await Promise.all([probeResend(), probeStripe()]);
+  const instantly = messagingConfig().provider === 'instantly';
+  const [message, stripe] = await Promise.all([instantly ? probeInstantly() : probeResend(), probeStripe()]);
   return {
-    messaging: `${resend.verdict}: ${resend.detail}`,
+    messaging: `${message.verdict}: ${message.detail}`,
     billing: `${stripe.verdict}: ${stripe.detail}`,
   };
 }

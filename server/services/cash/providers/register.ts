@@ -13,6 +13,7 @@ import { CONTACT_BUYER_NAMESPACE, ISSUE_INVOICE_NAMESPACE } from '../effects.ts'
 import { billingConfig, messagingConfig } from './config.ts';
 import { registerPaymentReader } from './payments.ts';
 import { createResendAdapter } from './resend.ts';
+import { createInstantlyAdapter } from './instantly.ts';
 import { createStripeInvoiceAdapter, readStripeInvoice } from './stripe.ts';
 
 export interface ProviderRegistration {
@@ -25,6 +26,10 @@ export function registerCommercialProviders(env: NodeJS.ProcessEnv = process.env
   if (messagingConfig(env).provider === 'resend') {
     registerAdapter(createResendAdapter({ namespace: CONTACT_BUYER_NAMESPACE.name }));
     out.messaging = 'resend';
+  } else if (messagingConfig(env).provider === 'instantly') {
+    // The owner's Instantly workspace (§94): a lead in Brain's campaign, activated only inside the granted effect.
+    registerAdapter(createInstantlyAdapter({ namespace: CONTACT_BUYER_NAMESPACE.name }));
+    out.messaging = 'instantly';
   }
   if (billingConfig(env).provider === 'stripe') {
     registerAdapter(createStripeInvoiceAdapter({ namespace: ISSUE_INVOICE_NAMESPACE.name }));
