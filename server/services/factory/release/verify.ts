@@ -204,8 +204,12 @@ export async function reverifyUnansweredRelease(runId: string, options: VerifyOp
   }
   const checks = ((run.verification as { checks?: CheckResult[] } | null)?.checks ?? []);
   const answeredNo = checks.filter((one) => !one.ok && !(one.check === 'revision' && /could not say/.test(one.detail)));
-  if (checks.length === 0 || answeredNo.length > 0) {
-    throw new Error(`Release run ${runId} failed on a check that answered: ${answeredNo.map((one) => one.check).join(', ') || 'no recorded checks'}.`);
+  // No recorded checks means Brain never recorded a "no": release frr_0b5011df
+  // (2026-11-09) answered UNKNOWN to a release script that predated reading it,
+  // and the script failed the run itself. Re-verifying runs every check again,
+  // so only a check that answered "no" is a reason to refuse.
+  if (answeredNo.length > 0) {
+    throw new Error(`Release run ${runId} failed on a check that answered: ${answeredNo.map((one) => one.check).join(', ')}.`);
   }
   if (!/the revert did not land|could not be opened/.test(run.failureDetail ?? '')) {
     throw new Error(`Release run ${runId} was reverted or its revert is unaccounted for; it is not re-verified.`);
