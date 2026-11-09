@@ -230,3 +230,47 @@ export function assessRole(role: RoleRecord): RoleAssessment {
   }
   return { activities, regulated: true, position, missing, unknown, countEconomics: position === 'COMPLIANT' || position === 'COMPLIANT_VIA_PARTNER', excluded: false, reason };
 }
+
+/** A role and the money it is expected to bring, as a row a figure is built from. */
+export interface RoleEconomics {
+  id: string;
+  role: RoleRecord;
+  /** Cents the role is expected to bring; null when no row states it. */
+  valueCents: number | null;
+}
+
+/** One role's assessment kept beside the id, so a record can show it was made. */
+export interface RoleAssessmentRecord {
+  id: string;
+  assessment: RoleAssessment;
+  /** Cents this role contributed to the figure: its value when countable, otherwise 0. */
+  countedCents: number;
+}
+
+export interface CountedEconomics {
+  totalCents: number;
+  /** Every role, counted or not, with the reason; this is what a production record shows. */
+  assessments: RoleAssessmentRecord[];
+  /** Roles whose economics were held back, each with the missing position. Held back is not excluded. */
+  heldBack: string[];
+}
+
+/**
+ * The single place a regulated role's economics enter a figure. Every role is
+ * assessed first; only a role with a compliant position (its own, or an
+ * authorized licensed partner's) adds its value. A role that is not yet
+ * compliant is held back with its reason and may be counted on a later call once
+ * its record says it holds what it lacked. Nothing here is excluded by category.
+ */
+export function countRoleEconomics(rows: readonly RoleEconomics[]): CountedEconomics {
+  const assessments = rows.map((row): RoleAssessmentRecord => {
+    const assessment = assessRole(row.role);
+    const value = typeof row.valueCents === 'number' && Number.isFinite(row.valueCents) && row.valueCents > 0 ? row.valueCents : 0;
+    return { id: row.id, assessment, countedCents: assessment.countEconomics ? value : 0 };
+  });
+  return {
+    totalCents: assessments.reduce((sum, a) => sum + a.countedCents, 0),
+    assessments,
+    heldBack: assessments.filter((a) => !a.assessment.countEconomics).map((a) => a.id),
+  };
+}
