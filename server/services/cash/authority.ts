@@ -44,7 +44,8 @@ import {
   listAuthorities,
   liveAuthority,
 } from '../../repos/cashAuthority.ts';
-import type { CashAuthority } from '../../domain/types.ts';
+import { recordEvent } from '../../repos/events.ts';
+import type { CashAuthority, EventType } from '../../domain/types.ts';
 
 /**
  * Everything a commercial grant may authorize.
@@ -467,6 +468,46 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
  * — an API, a browser automation, a worker — makes before an effect.
  */
 export async function decideAction(input: JudgeInput): Promise<ActionDecision> {
+  const decision = await judgeLive(input);
+  return recordDecision(input, decision);
+}
+
+/**
+ * The event type of a decision. `project_events.event_type` is unconstrained
+ * text and append-only; the ledger record is its payload, which carries no
+ * credential and no caller free text.
+ */
+export const AUTHORITY_DECISION_EVENT = 'AUTHORITY_DECISION' as EventType;
+
+/**
+ * Append the decision to `project_events`, so what Brain performed, proposed and
+ * was refused is inspectable after the fact. An action that would be an effect
+ * is not allowed on a ledger that could not be written: no unrecorded mutation.
+ * Internal work never needs a grant, so a failed write cannot stop research.
+ */
+async function recordDecision(input: JudgeInput, decision: ActionDecision): Promise<ActionDecision> {
+  try {
+    await recordEvent({
+      projectId: input.projectId,
+      entityType: 'authority',
+      entityId: decision.ledger.action,
+      eventType: AUTHORITY_DECISION_EVENT,
+      payload: { ...decision.ledger, ok: decision.ok, neededApproval: decision.neededApproval, obligations: decision.obligations },
+    });
+  } catch {
+    if (decision.consequenceClass !== 'INTERNAL' && decision.ok && input.mode !== 'PROPOSE') {
+      return {
+        ...decision,
+        ok: false,
+        reason: 'the authority ledger could not be written, so the effect was not allowed',
+        ledger: { ...decision.ledger, disposition: 'REFUSED' },
+      };
+    }
+  }
+  return decision;
+}
+
+async function judgeLive(input: JudgeInput): Promise<ActionDecision> {
   const klass = classifyAction(input.action);
   if (klass === 'INTERNAL' || !klass) return judgeAction(input, { authority: null, revoked: false, heldCents: 0 });
   const authority = await liveAuthority(input.projectId, input.at);
