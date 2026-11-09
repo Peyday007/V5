@@ -273,3 +273,24 @@ describe('the research-throughput probe (CAP-16-3)', () => {
     expect(passing.detail).toMatch(/5 accepted of 9/);
   });
 });
+
+describe('a campaign owns a test file of its own', () => {
+  it('adds a unique tests/ path to every submitted campaign scope and says so in the objective', async () => {
+    const programId = await submitAndApprove();
+    const line = new Line();
+    const seen: CampaignSubmission[] = [];
+    const submit = line.submit.bind(line);
+    line.submit = async (input: CampaignSubmission) => {
+      seen.push(input);
+      return submit(input);
+    };
+    await tickProgram(programId, line);
+    expect(seen.length).toBeGreaterThan(0);
+    for (const s of seen) {
+      const testPath = s.mutationScope.find((p) => p.startsWith('tests/program-'));
+      expect(testPath).toMatch(/^tests\/program-[a-z0-9]{1,8}-[a-z0-9-]+\*\.test\.ts$/);
+      expect(s.objective).toContain(testPath!);
+    }
+    expect(new Set(seen.map((s) => s.mutationScope.at(-1))).size).toBe(seen.length);
+  });
+});
