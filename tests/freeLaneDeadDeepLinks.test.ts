@@ -100,17 +100,24 @@ async function enqueue(projectId: string, orchestration: ResearchOrchestration, 
 }
 
 /** Run one fragment whose model names `urls`, with `answer` deciding every fetch; returns what was fetched. */
-async function run(urls: string[], answer: (url: string) => SourceFetch, title: string): Promise<{ fetched: string[]; failed: number }> {
+async function run(
+  urls: string[],
+  answer: (url: string) => SourceFetch,
+  title: string,
+  claims: Record<string, unknown>[] = [],
+): Promise<{ fetched: string[]; failed: number; submitted: number }> {
   const fetched: string[] = [];
   const fetchSource = async (url: string): Promise<SourceFetch> => {
     fetched.push(url);
     return answer(url);
   };
-  const completer: Completer = async () => JSON.stringify({ urls, search: 'q' });
+  // One model, two questions: which pages to read, then (when Brain shows it sentences) which claims they state.
+  const completer: Completer = async (_c, _m, _s, prompt) =>
+    JSON.stringify(/numbered sentences/.test(prompt) ? { claims } : { urls, search: 'q' });
   const p = await packet(play.project.id, title);
   await enqueue(play.project.id, p.orchestration, p.fragment);
   const result = await freeLaneTick({ config: CONFIG, completer, fetchSource, search: async () => [] });
-  return { fetched, failed: result.failed };
+  return { fetched, failed: result.failed, submitted: result.submitted };
 }
 
 beforeEach(async () => {
@@ -156,8 +163,19 @@ describe('dead deep links on a live host', () => {
       url === 'https://live.example/'
         ? { readable: true, requestedUrl: url, finalUrl: url, status: 200, contentType: 'text/html', retrievedAt: new Date().toISOString(), sha256: 'x', text, truncated: false, totalChars: text.length }
         : refused(url, 'HTTP_ERROR', 404);
-    const { fetched } = await run(['https://live.example/deep/dead-link'], answer, 'origin readable');
+    const claim = {
+      source: 1,
+      sentences: [1],
+      claim: 'The US median hourly wage of a receptionist was 17.50 dollars in 2024.',
+      evidence_lane: 'wage',
+      confidence: 0.8,
+      source_class: 'PRIMARY',
+    };
+    const { fetched, failed, submitted } = await run(['https://live.example/deep/dead-link'], answer, 'origin readable', [claim]);
     expect(fetched).toContain('https://live.example/');
+    // The recorded failure was "no readable source": with a readable origin the fragment must not fail.
+    expect(failed).toBe(0);
+    expect(submitted).toBe(1);
   });
 
   it('opens nothing extra for a 403, a 429 or a host-level failure', async () => {
