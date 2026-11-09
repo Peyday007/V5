@@ -119,6 +119,23 @@ function hostOf(url: string): string | null {
   }
 }
 
+/**
+ * The origin page to read in place of a deep link the site says is gone (404 or 410).
+ * Only those two statuses on a non-root path qualify: a 403 or 429 is a refusal Brain does
+ * not work around, and a host-level failure (DNS, network, timeout) says the origin is no
+ * better. Null means no fallback.
+ */
+export function deadDeepLinkOrigin(url: string, reason: string, status: number | null): string | null {
+  if (reason !== 'HTTP_ERROR' || (status !== 404 && status !== 410)) return null;
+  try {
+    const parsed = new URL(url);
+    if (!/^https?:$/.test(parsed.protocol) || parsed.pathname === '/' || parsed.pathname === '') return null;
+    return `${parsed.protocol}//${parsed.host}/`;
+  } catch {
+    return null;
+  }
+}
+
 export function rememberUnreachable(url: string, reason: string, now = Date.now()): void {
   const host = hostOf(url);
   if (!host) return;
@@ -847,6 +864,8 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   const queries = searchQueries(question, plan?.['searches'] ?? plan?.['search']);
   const searched = (await Promise.all(queries.map((q) => ctx.search(q)))).flat();
   const tried = new Set<string>();
+  /** Hosts whose origin page was already queued after a dead deep link, so each host is tried once per fragment. */
+  const originFallbacks = new Set<string>();
   const skipped = new Set<string>();
   const failedUrls: string[] = [];
   const fetchReasons: string[] = [];
@@ -882,6 +901,12 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
         const host = hostOf(url);
         if (fetched.readable && host) forgiveHost(url);
         if (!fetched.readable) rememberUnreachable(url, String(fetched.reason));
+        const origin = !fetched.readable ? deadDeepLinkOrigin(url, fetched.reason, fetched.status) : null;
+        if (origin && host && !originFallbacks.has(host) && !tried.has(origin) && !queue.includes(origin)) {
+          // A dead deep link on a live host: read the host's own front page once, as any other candidate.
+          originFallbacks.add(host);
+          queue.push(origin);
+        }
         if (fetched.readable && fetched.text.trim().length > 200 && readable.length < MAX_SOURCES) {
           readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, SOURCE_CHARS) });
         } else if (!(fetched.readable && fetched.text.trim().length > 200)) {
