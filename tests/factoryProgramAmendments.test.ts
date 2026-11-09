@@ -259,3 +259,17 @@ describe('the Brain architecture program, Release 01', () => {
     }
   });
 });
+
+describe('the research-throughput probe (CAP-16-3)', () => {
+  it('fails while providers fail and passes once work is accepted again', async () => {
+    const { recordBinEvent } = await import('../server/repos/bins.ts');
+    const probe = getProbe('r01.cap-16-3')!;
+    expect((await probe({ hours: 1 })).ok).toBe(false);
+    for (let i = 0; i < 4; i += 1) await recordBinEvent({ eventType: 'FREE_LANE_ITEM', outcome: 'RELEASED_TRANSIENT', reason: 'model brain-a: model call failed: cheap lane HTTP 503', evidenceClass: 'MEASURED' });
+    expect((await probe({ hours: 1 })).ok).toBe(false);
+    for (let i = 0; i < 5; i += 1) await recordBinEvent({ eventType: 'FREE_LANE_ITEM', outcome: 'SUBMITTED', reason: 'model brain-a', evidenceClass: 'MEASURED' });
+    const passing = await probe({ hours: 1 });
+    expect(passing).toMatchObject({ ok: true });
+    expect(passing.detail).toMatch(/5 accepted of 9/);
+  });
+});
