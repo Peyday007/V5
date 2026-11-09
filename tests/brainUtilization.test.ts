@@ -83,6 +83,38 @@ describe('every pool is read, and idle capacity beside waiting work is acted on'
     expect(rows[0]!.attempted_action).toMatch(/launchable idea/);
   });
 
+  it('does not count another project\u2019s free slots for ideas whose own grant is full', async () => {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'full-grant',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 5,
+      maxFragments: 5,
+      maxConcurrent: 0,
+      maxProbes: 1,
+    });
+    const { createProject } = await import('../server/repos/projects.ts');
+    const other = await createProject({ name: `Elsewhere ${Math.random().toString(36).slice(2, 8)}` });
+    await createGoal({
+      projectId: other.id,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'idle-elsewhere',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 5,
+      maxFragments: 5,
+      maxConcurrent: 9,
+      maxProbes: 1,
+    });
+    await launchableIdea('Kansas permits');
+    const slots = (await brainUtilization()).find((one) => one.pool === 'RESEARCH_SLOTS')!;
+    expect(slots.waiting).toBeGreaterThanOrEqual(1);
+    expect(slots.idle).toBe(false);
+    expect(slots.because).toMatch(/at-once ceiling/);
+  });
+
   it('says nothing is idle when nothing is waiting', async () => {
     const slots = (await brainUtilization()).find((one) => one.pool === 'RESEARCH_SLOTS')!;
     if (slots.waiting === 0) expect(slots.idle).toBe(false);

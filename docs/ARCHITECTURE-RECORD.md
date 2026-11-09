@@ -15266,3 +15266,9 @@ limits; acquisition and financing change; the brief reaches the goal round;
 coverage is never called a probability; and the result beats the pre-§99 reading
 by over 20 points. A second, unrelated goal reconstructs with no $10K
 knowledge.
+
+**Third reading (22:40Z, both fixes live).**
+- **Routines:** read correctly. Nothing executable was idle.
+- **Research slots:** still read "132 waiting beside 89 free". The count summed every grant's slots, and a grant serves only its own project, so free slots in one project do nothing for ideas waiting in another.
+- **The fix:** the pool now matches project by project. An idea is startable only when its own project's grants have a free slot.
+- **The launch fill:** it uses the same matched number.

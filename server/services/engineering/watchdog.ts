@@ -157,44 +157,71 @@ async function freeLanePool(now: Date): Promise<PoolReading | null> {
   };
 }
 
-/** Research grant mission slots: launchable ideas, live holds, and the grants' at-once ceilings. */
-async function researchSlotPool(now: Date): Promise<PoolReading> {
+/**
+ * Research grant mission slots, matched project by project.
+ *
+ * A grant's slots serve only its own project, so free slots in one project do
+ * nothing for ideas waiting in another. Production, 2026-11-09 22:40Z: "132
+ * waiting beside 89 free" summed across every grant, while the waiting ideas'
+ * own grants were full. `startable` is what could actually launch now: for
+ * each project, the lesser of its launchable ideas and its grants' free slots.
+ */
+async function researchSlotRows(now: Date): Promise<{ waiting: number; running: number; capacity: number; startable: number }> {
   const iso = now.toISOString();
   const db = getDb();
-  const waiting = await db.get<{ n: number | string }>(
-    `SELECT COUNT(*) AS n FROM russell_candidates c
+  const waitingRows = await db.all<{ project_id: string; n: number | string }>(
+    `SELECT c.project_id, COUNT(*) AS n FROM russell_candidates c
       WHERE c.state = 'QUEUED' AND c.project_id IS NOT NULL AND c.judgment LIKE '%"missionSpec"%'
-        AND NOT EXISTS (SELECT 1 FROM russell_missions m WHERE m.candidate_id = c.id AND m.state NOT IN ('FAILED','CANCELLED'))`,
+        AND NOT EXISTS (SELECT 1 FROM russell_missions m WHERE m.candidate_id = c.id AND m.state NOT IN ('FAILED','CANCELLED'))
+      GROUP BY c.project_id`,
   );
-  const live = await db.get<{ n: number | string }>(
-    "SELECT COUNT(*) AS n FROM russell_budget_reservations WHERE kind = 'MISSION' AND state = 'HELD' AND expires_at > ?",
+  const grantRows = await db.all<{ project_id: string; cap: number | string; live: number | string }>(
+    `SELECT g.project_id, g.max_concurrent AS cap,
+            (SELECT COUNT(*) FROM russell_budget_reservations r
+              WHERE r.goal_id = g.id AND r.kind = 'MISSION' AND r.state = 'HELD' AND r.expires_at > ?) AS live
+       FROM russell_goals g WHERE g.state = 'ACTIVE'`,
     [iso],
   );
-  const cap = await db.get<{ n: number | string | null }>(
-    "SELECT COALESCE(SUM(max_concurrent), 0) AS n FROM russell_goals WHERE state = 'ACTIVE'",
-  );
-  const w = Number(waiting?.n ?? 0);
-  const r = Number(live?.n ?? 0);
-  const c = Number(cap?.n ?? 0);
-  const idle = w > 0 && r < c;
+  const free = new Map<string, number>();
+  let running = 0;
+  let capacity = 0;
+  for (const row of grantRows) {
+    const cap = Number(row.cap);
+    const live = Number(row.live);
+    running += live;
+    capacity += cap;
+    free.set(row.project_id, (free.get(row.project_id) ?? 0) + Math.max(0, cap - live));
+  }
+  let waiting = 0;
+  let startable = 0;
+  for (const row of waitingRows) {
+    const n = Number(row.n);
+    waiting += n;
+    startable += Math.min(n, free.get(row.project_id) ?? 0);
+  }
+  return { waiting, running, capacity, startable };
+}
+
+async function researchSlotPool(now: Date): Promise<PoolReading> {
+  const { waiting, running, capacity, startable } = await researchSlotRows(now);
+  const idle = startable > 0;
   return {
     pool: 'RESEARCH_SLOTS',
-    waiting: w,
-    running: r,
-    capacity: c,
+    waiting,
+    running,
+    capacity,
     idle,
     because: idle
-      ? `${w} launchable idea(s) and ${c - r} free research slot(s): the launch pass takes the most important first`
-      : w === 0
+      ? `${startable} launchable idea(s) have a free slot in their own project's grant: the launch pass takes the most important first`
+      : waiting === 0
         ? 'nothing launchable is waiting'
-        : `every research slot is held (${r}/${c})`,
+        : `${waiting} launchable idea(s), and every one of their projects' grants is at its at-once ceiling`,
   };
 }
 
-/** Free research slots across active grants: at-once ceilings minus live holds. */
+/** Ideas that could launch now: per project, waiting ideas matched to that project's free grant slots. */
 export async function researchSlotsFree(now = new Date()): Promise<number> {
-  const slots = await researchSlotPool(now);
-  return Math.max(0, slots.capacity - slots.running);
+  return (await researchSlotRows(now)).startable;
 }
 
 /** The Factory line, as its own reading says (`readLine`). */
