@@ -303,6 +303,10 @@ export interface AuthorityLedgerRecord {
   action: string;
   consequenceClass: ConsequenceClass | null;
   path: ActionPath;
+  /** Who the action is for: the responsible principal, as a reference (never a credential). Null when none was stated. */
+  principal: string | null;
+  /** The project, and the third-party account the action is scoped to, when it has one. */
+  scope: { projectId: string; accountRef: string | null };
   /** What Brain did, versus what it only proposed. */
   disposition: 'PERFORMED' | 'PROPOSED' | 'REFUSED';
   /** Machine-readable cause; a person's words are in `reason`. */
@@ -320,7 +324,12 @@ export interface AuthorityLedgerRecord {
     | 'OVER_PER_ACTION_CEILING'
     | 'OVER_COMMITTED_CEILING'
     | 'RELEASE_ENVELOPE'
-    | 'OWNER_APPROVED';
+    | 'OWNER_APPROVED'
+    | 'NO_ACCOUNT_SCOPE'
+    | 'ACCOUNT_OUT_OF_SCOPE'
+    | 'ACTION_TYPE_NOT_APPROVED'
+    | 'RATE_LIMITED'
+    | 'SECRET_NOT_IN_STORE';
   policyVersion: number | null;
   amountCents: number | null;
   at: string;
@@ -354,7 +363,29 @@ export interface JudgeInput {
   emergencyStop?: boolean;
   /** A fact read from the release grant's envelope, for engineering actions. */
   releaseEnvelopeAllows?: boolean;
+  /** The responsible principal, read from the authenticated request — never from the action's payload. */
+  principal?: string | null;
+  /**
+   * For a third-party authenticated action: the authorized account's own
+   * limits, read from its record by the caller. Absent means no scope is
+   * established, and the action is refused (deny by default).
+   */
+  account?: ThirdPartyAccountScope | null;
   at?: string;
+}
+
+/** One authorized third-party account's scope, as its record states it. */
+export interface ThirdPartyAccountScope {
+  /** A reference to the account, never its login or secret. */
+  ref: string;
+  /** The account is connected to this project and its owner's consent is on record. */
+  inScope: boolean;
+  /** The action types previously approved for this account. An action not listed is not approved. */
+  approvedActionTypes: readonly string[];
+  /** The site's rate limit and what has been used in the current window; both known, or the limit is treated as spent. */
+  rateLimit?: { used: number; max: number } | null;
+  /** The credential is held as a reference into the secrets store. False means it would travel inline (a prompt, an output, source). */
+  credentialFromSecretsStore: boolean;
 }
 
 export interface JudgeState {
@@ -397,6 +428,8 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
         action: klass ? input.action : 'UNKNOWN',
         consequenceClass: klass,
         path,
+        principal: input.principal?.trim() ? input.principal.trim().slice(0, 120) : null,
+        scope: { projectId: input.projectId, accountRef: input.account?.ref ?? null },
         disposition: !ok ? 'REFUSED' : proposed ? 'PROPOSED' : 'PERFORMED',
         cause,
         policyVersion: state.authority?.policyVersion ?? null,
@@ -440,6 +473,8 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
       : finish(false, 'RELEASE_ENVELOPE', 'the release approval envelope does not allow this', ask(`release approval for ${input.action}`));
   }
 
+  if (klass === 'THIRD_PARTY_AUTHENTICATED') return judgeThirdParty(input, finish, ask);
+
   const authority = state.authority;
   if (!authority) {
     return finish(false, 'NO_AUTHORITY', 'no standing commercial authority exists for this project', ask(`a standing grant covering ${input.action}`));
@@ -467,6 +502,39 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
   return finish(true, 'ALLOWED', 'within the standing commercial authority');
 }
 
+/**
+ * A third-party authenticated action is judged inside the account's own scope:
+ * the account must be connected and consented, the action type must have been
+ * approved for it, its rate limit must have room, and its credential must come
+ * from the secrets store. Each refusal says which, so the smallest missing
+ * approval is the one thing that changes it. The account's facts are supplied
+ * from its record; when they are not, nothing is assumed.
+ */
+function judgeThirdParty(
+  input: JudgeInput,
+  finish: (ok: boolean, cause: AuthorityLedgerRecord['cause'], reason: string, needs?: ActionDecision['neededApproval']) => ActionDecision,
+  ask: (description: string) => NonNullable<ActionDecision['neededApproval']>,
+): ActionDecision {
+  const account = input.account;
+  if (!account) {
+    return finish(false, 'NO_ACCOUNT_SCOPE', 'no authorized account scope is established for this action', ask(`an authorized account, with its scope, for ${input.action}`));
+  }
+  if (!account.inScope) {
+    return finish(false, 'ACCOUNT_OUT_OF_SCOPE', 'the account is not connected to this project with its owner\'s consent', ask(`the account owner's consent to connect this account to the project`));
+  }
+  if (!account.credentialFromSecretsStore) {
+    return finish(false, 'SECRET_NOT_IN_STORE', 'the credential is not held in the secrets store, and a secret may not travel inline');
+  }
+  if (!account.approvedActionTypes.includes(input.action)) {
+    return finish(false, 'ACTION_TYPE_NOT_APPROVED', `${input.action} is not an action type approved for this account`, ask(`approval of ${input.action} for this account`));
+  }
+  const limit = account.rateLimit;
+  if (limit && (!Number.isFinite(limit.used) || !Number.isFinite(limit.max) || limit.used >= limit.max)) {
+    return finish(false, 'RATE_LIMITED', 'the site\'s rate limit has no room left in this window');
+  }
+  return finish(true, 'ALLOWED', 'within the account\'s own scope, approved action types and rate limit');
+}
+
 /*
  * Asking for the smallest missing approval, and remembering the answer.
  *
@@ -491,6 +559,7 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
 const APPROVABLE_CAUSES: ReadonlyArray<AuthorityLedgerRecord['cause']> = [
   'NOT_COVERED',
   'NO_AUTHORITY',
+  'ACTION_TYPE_NOT_APPROVED',
   'RELEASE_ENVELOPE',
   'OVER_PER_ACTION_CEILING',
   'OVER_COMMITTED_CEILING',
