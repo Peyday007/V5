@@ -60,9 +60,20 @@ const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> =
   REACHABLE_BUYER: [
     {
       field: 'payer',
+      ask: 'Name who pays for this — a named buyer or a buyer class — with the source that shows they buy it.',
+    },
+    /*
+     * The link needs a payer and a channel (plan.ts reads both). They were one
+     * question keyed on the payer, so an opening whose payer was already known
+     * and whose channel was not raised nothing: the link stayed missing and
+     * nothing went to find the half that was. Each half is its own field, so a
+     * known payer skips only its own question.
+     */
+    {
+      field: 'access',
       ask:
-        'Name who pays for this — a named buyer or a buyer class — and the published channel through which they can be reached ' +
-        '(a directory, register, association list, marketplace category or contact page), with its source.',
+        'Find the published channel through which this buyer can be reached (a directory, register, association list, ' +
+        'marketplace category or contact page), with its source.',
     },
   ],
   CURRENT_DEMAND: [
