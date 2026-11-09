@@ -150,7 +150,7 @@ export async function readInstantlyWorkspace(options: { fetch?: FetchLike; env?:
 }
 
 /** The last workspace reading, so a plan read costs no request when one is fresh. */
-let cachedCapacity: { at: number; value: { perDay: number; accounts: number; totalAccounts: number } | null } | null = null;
+let cachedCapacity: { at: number; value: { perDay: number; accounts: number } | null } | null = null;
 export const CAPACITY_FRESH_MS = 10 * 60_000;
 
 /**
@@ -159,20 +159,41 @@ export const CAPACITY_FRESH_MS = 10 * 60_000;
  * cannot be read. It is shared with the owner's other campaigns, so the plan
  * uses it as the top of the range it sweeps, never as Brain's own figure.
  */
-export async function instantlyCapacity(options: { fetch?: FetchLike; env?: NodeJS.ProcessEnv; now?: number } = {}): Promise<{ perDay: number; accounts: number; totalAccounts: number } | null> {
+export async function instantlyCapacity(options: { fetch?: FetchLike; env?: NodeJS.ProcessEnv; now?: number } = {}): Promise<{ perDay: number; accounts: number } | null> {
   const env = options.env ?? process.env;
   const reading = messagingConfig(env);
   if (reading.provider !== 'instantly' || !reading.configured) return null;
   const now = options.now ?? Date.now();
   if (cachedCapacity && now - cachedCapacity.at < CAPACITY_FRESH_MS) return cachedCapacity.value;
   const read = await readInstantlyWorkspace(options).catch(() => ({ ok: false as const, reason: 'unreadable' }));
-  const value = read.ok && read.workspace.dailyCapacity > 0 ? { perDay: read.workspace.dailyCapacity, accounts: read.workspace.healthyAccounts.length, totalAccounts: read.workspace.accounts.length } : null;
+  const value = read.ok && read.workspace.dailyCapacity > 0 ? { perDay: read.workspace.dailyCapacity, accounts: read.workspace.healthyAccounts.length } : null;
   cachedCapacity = { at: now, value };
   return value;
 }
 
+/**
+ * The sending accounts in good standing out of all of them, from the same fresh workspace
+ * reading `instantlyCapacity` uses: the reputation stage of an outreach funnel. Null when
+ * Instantly is not the configured provider or cannot be read.
+ */
+export async function instantlySendingStanding(options: { fetch?: FetchLike; env?: NodeJS.ProcessEnv; now?: number } = {}): Promise<{ perDay: number; healthyAccounts: number; totalAccounts: number } | null> {
+  const env = options.env ?? process.env;
+  const reading = messagingConfig(env);
+  if (reading.provider !== 'instantly' || !reading.configured) return null;
+  const now = options.now ?? Date.now();
+  if (cachedStanding && now - cachedStanding.at < CAPACITY_FRESH_MS) return cachedStanding.value;
+  const read = await readInstantlyWorkspace(options).catch(() => ({ ok: false as const, reason: 'unreadable' }));
+  const value = read.ok && read.workspace.accounts.length > 0
+    ? { perDay: read.workspace.dailyCapacity, healthyAccounts: read.workspace.healthyAccounts.length, totalAccounts: read.workspace.accounts.length }
+    : null;
+  cachedStanding = { at: now, value };
+  return value;
+}
+let cachedStanding: { at: number; value: { perDay: number; healthyAccounts: number; totalAccounts: number } | null } | null = null;
+
 export function forgetInstantlyCapacity(): void {
   cachedCapacity = null;
+  cachedStanding = null;
 }
 
 /* ------------------------------------------------------------------ */

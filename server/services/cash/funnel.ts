@@ -27,7 +27,7 @@ import { CASH_TIERS, cashTier, tierRank, type CashTier } from './tier.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { checkCommercialAuthority } from './authority.ts';
-import { instantlyCapacity } from './providers/instantly.ts';
+import { instantlySendingStanding } from './providers/instantly.ts';
 
 export const FUNNEL_WEEKS = 8;
 
@@ -895,11 +895,7 @@ export async function outreachEvidenceFor(projectId: string): Promise<OutreachEv
     : decision.authority
       ? { basis: 'MEASURED', value: 0 }
       : { basis: 'UNKNOWN' };
-  const capacity = await instantlyCapacity().catch(() => null);
-  return {
-    permission,
-    sending: capacity ? { perDay: capacity.perDay, healthyAccounts: capacity.accounts, totalAccounts: capacity.totalAccounts } : null,
-  };
+  return { permission, sending: await instantlySendingStanding().catch(() => null) };
 }
 
 async function outreachFromRows(
