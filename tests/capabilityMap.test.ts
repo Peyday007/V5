@@ -32,6 +32,7 @@ import { assessLiveObjectives } from '../server/services/selfmodel/objectives.ts
 
 const req = (id: string) => RESEARCH_MAP.requirements.find((r) => r.id === id)!;
 
+// Every assessment reads "now + 1s": rows written in the same millisecond as `now` fall outside `at < now`.
 describe('the research map is whole', () => {
   it('covers every stage the owner named, and every reference resolves', () => {
     const stages = new Set(RESEARCH_MAP.requirements.map((r) => r.stage));
@@ -173,11 +174,11 @@ describe('the assessor reads production rows', () => {
       ['wst_cap', project!.id, '$10K', 'Research demand and validate buyers for a $10K plan', 'REVENUE_DIRECT', now, now, 300000],
     );
     for (let i = 0; i < 20; i += 1) await laneItem('FAILED_RETRYABLE', 'model m: no readable source among 3 candidate page(s): {}');
-    const first = await assessLiveObjectives({});
+    const first = await assessLiveObjectives({ now: new Date(Date.now() + 1000) });
     expect(first).toHaveLength(1);
     expect(first[0]!.recorded).toBe(true);
     expect(first[0]!.assessment.blocking.map((g) => g.id)).toContain('DISCOVERY.SEARCH');
-    const again = await assessLiveObjectives({});
+    const again = await assessLiveObjectives({ now: new Date(Date.now() + 1000) });
     expect(again[0]!.recorded).toBe(false);
     const events = await db.all<{ n: number }>(
       "SELECT COUNT(*) AS n FROM project_events WHERE event_type = 'CAPABILITY_ASSESSED' AND entity_id = 'wst_cap'",
@@ -359,12 +360,12 @@ describe('the automatic repair loop: a failed check produces repair work, a rele
       ['wst_rep', project!.id, '$10K', 'Research demand and validate buyers for a $10K plan', 'REVENUE_DIRECT', now, now, 300000],
     );
     for (let i = 0; i < 20; i += 1) await laneItem('FAILED_RETRYABLE', 'model m: no readable source among 3 candidate page(s): {}');
-    const first = await assessLiveObjectives({});
+    const first = await assessLiveObjectives({ now: new Date(Date.now() + 1000) });
     expect(first[0]!.assessment.blocking.map((g) => g.id)).toContain('DISCOVERY.SEARCH');
     expect(first[0]!.cleared).toEqual([]);
     // The repair is released: the failing rows are the previous build's.
     await db.run(`UPDATE bin_events SET at = ? WHERE event_type = 'FREE_LANE_ITEM'`, [new Date(Date.now() - 48 * 3_600_000).toISOString()]);
-    const after = await assessLiveObjectives({});
+    const after = await assessLiveObjectives({ now: new Date(Date.now() + 1000) });
     expect(after[0]!.recorded).toBe(true);
     expect(after[0]!.cleared).toContain('DISCOVERY.SEARCH');
     const payload = await db.get<{ payload: string }>(
@@ -372,7 +373,7 @@ describe('the automatic repair loop: a failed check produces repair work, a rele
     );
     expect(JSON.parse(payload!.payload).cleared).toContain('DISCOVERY.SEARCH');
     // Unchanged on the same release: no row. The first check on a new release: one row, nothing cleared.
-    expect((await assessLiveObjectives({}))[0]!.recorded).toBe(false);
+    expect((await assessLiveObjectives({ now: new Date(Date.now() + 1000) }))[0]!.recorded).toBe(false);
     const release = new Date(Date.now() + 5);
     await new Promise((r) => setTimeout(r, 10));
     const onRelease = await assessLiveObjectives({ since: release });
