@@ -60,3 +60,11 @@ and then prints the same status.
 - `program-amend` installs a revised map (`--program`, `--map`, `--reason`).
 - `program-release` appends a new release of the specification (§97).
 - `program-depend` records a dependency found during work.
+
+## Quick reference
+
+| step | command | what it does |
+|---|---|---|
+| submit | `npm run factory -- program-submit --spec <file> --map <file>` | registers a draft program and plans its campaigns |
+| approve | `npm run factory -- program-approve --program <id>` | a person approves once; campaigns start after this |
+| read status | `npm run factory -- program-status --program <id>` | prints state, counts, blockers and the `PROGRAM-VERDICT` line |
