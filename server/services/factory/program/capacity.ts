@@ -51,7 +51,7 @@ export interface CapacityReading {
   requirements: { verified: number; perHour: number | null };
   idle: { readyBinsNow: number | null; idleEvents: number; idleMs: number | null; basis: string };
   failures: { binsFailed: number; leaseExpiries: number; noShows: number; dedupedSubmissions: number; supersededUnits: number; releaseFailures: number };
-  bottleneck: 'SCHEDULING' | 'WORKERS' | 'PROVIDER_LIMITS' | 'WORK_ITSELF' | 'NO_DATA';
+  bottleneck: 'SCHEDULING' | 'WORKERS' | 'PROVIDER_LIMITS' | 'RELEASE' | 'WORK_ITSELF' | 'NO_DATA';
   recommendation: string[];
 }
 
@@ -193,8 +193,15 @@ function recommend(r: CapacityReading, windowMs: number): Pick<CapacityReading, 
   } else if (queueMedian !== null && workMedian !== null && queueMedian > workMedian && saturated) {
     bottleneck = 'WORKERS';
     out.push(`Median queue ${Math.round(queueMedian / 60_000)} min exceeds median coding ${Math.round(workMedian / 60_000)} min with every usable surface busy at peak: additional workers would raise throughput roughly in proportion until the admission limit (${r.workers.admissionLimit ?? '?'}).`);
+  } else if (r.releaseMs.medianMs !== null && workMedian !== null && r.releaseMs.medianMs > 4 * (workMedian + (r.integrationAndReviewMs.medianMs ?? 0) + (r.planningMs.medianMs ?? 0))) {
+    // Release (merge → deploy → verify) is serial per objective and dwarfs building it.
+    bottleneck = 'RELEASE';
+    out.push(`A release takes a median ${Math.round(r.releaseMs.medianMs / 60_000)} min against ${Math.round((workMedian + (r.integrationAndReviewMs.medianMs ?? 0) + (r.planningMs.medianMs ?? 0)) / 60_000)} min to plan, code, integrate and review: the deploy pipeline, not workers or compute, bounds objectives per hour. Batching several campaigns' merges into one deploy, or a faster deploy test job, raises throughput; more workers would not.`);
   } else {
     out.push('Time is spent doing the work itself, not waiting for a worker or a slot: more workers or a bigger server would not materially raise throughput. Larger gains come from smaller campaigns (more parallel units) and faster review/repair cycles.');
+  }
+  if (r.workers.registered !== null && r.workers.usable !== null && r.workers.usable < r.workers.registered) {
+    out.push(`Only ${r.workers.usable} of ${r.workers.registered} registered factory surfaces are usable now; restoring the others costs nothing and raises the concurrency ceiling (peak observed ${r.concurrency.peak}).`);
   }
   out.push('Brain’s server runs ticks and reads, not the work; no server-side delay is on a stage’s critical path in these rows, so a larger server is not indicated.');
   if (r.failures.dedupedSubmissions > 0) out.push(`${r.failures.dedupedSubmissions} duplicate submission(s) were absorbed by the submission key — no duplicate campaign ran.`);
