@@ -23,6 +23,7 @@
  */
 import type { WorkstreamPurpose } from '../../domain/register.ts';
 import type { GoalCommitment, PriorityCriterion } from '../../domain/goals.ts';
+import type { RequirementStatus } from '../../domain/factoryProgram.ts';
 
 export interface PriorityFacts {
   id: string;
@@ -160,19 +161,25 @@ export function rankGoals(goals: PriorityFacts[]): RankedGoal[] {
 /* ------------------------------------------------------------------------- */
 
 /**
- * Where a proposed capability stands. Readiness answers "may it be worked on
- * now"; it says nothing about how pressing it is, and urgency says nothing about
- * whether it may start. Neither field is derived from the other.
+ * Where a proposed capability stands is the program's own vocabulary, not a new
+ * one: `RequirementStatus` (domain/factoryProgram.ts, derived from rows) and the
+ * requirement's `prepared` flag (§97), which is what keeps it from consuming a
+ * worker until a live need depends on it. The spec's words read onto those:
+ *
+ *   specified     SPECIFIED, not prepared       live, ready, not yet assigned
+ *   prepositioned SPECIFIED, prepared           waiting; costs a row, no worker
+ *   needed now    SPECIFIED, promoted           what `promotionFromBlockers` decides
+ *   building      MAPPED / IMPLEMENTED / INTEGRATED
+ *   verified      PRODUCTION_VERIFIED
+ *   suspended     SPECIFIED, prepared again     what `demotionForVanishedNeed` decides
+ *
+ * Readiness (status and prepared) answers "may it be worked on now"; urgency is
+ * read separately from due date and blocked transactions, and neither is derived
+ * from the other. Promotion and demotion move only `prepared`, so no status is
+ * written here and the requirement is never removed from the specification.
+ * This ranks prepared requirements for promotion; it is unrelated to
+ * `design/priority.ts`, whose `rankCapabilities` ranks design capabilities.
  */
-export const CAPABILITY_READINESS = [
-  'SPECIFIED',
-  'PREPOSITIONED',
-  'NEEDED_NOW',
-  'BUILDING',
-  'VERIFIED',
-  'SUSPENDED',
-] as const;
-export type CapabilityReadiness = (typeof CAPABILITY_READINESS)[number];
 
 /** One transaction a missing capability is holding up, read from goal/cash rows. */
 export interface BlockedTransaction {
@@ -185,7 +192,10 @@ export interface BlockedTransaction {
 
 export interface CapabilityFacts {
   id: string;
-  readiness: CapabilityReadiness;
+  /** The requirement's derived status. Only a SPECIFIED one has not started. */
+  status: RequirementStatus;
+  /** The requirement's `prepared` flag: true waits, false is live. */
+  prepared: boolean;
   /** True only when every prerequisite is recorded as met; null is unknown. */
   prerequisitesMet: boolean | null;
   /** False when the need disappeared; null is unknown and never demotes or promotes. */
@@ -213,15 +223,17 @@ export type PromotionReason =
   | 'INTERFACE_CHANGED';
 
 export interface PromotionDecision {
-  /** Move SPECIFIED/PREPOSITIONED to NEEDED_NOW. */
+  /** Clear `prepared` on a SPECIFIED requirement: it becomes live. */
   promote: boolean;
   reasons: PromotionReason[];
   /** The measured figures behind each reason, for the record. Never free text from a caller. */
   evidence: string[];
 }
 
-const PROMOTABLE: readonly CapabilityReadiness[] = ['SPECIFIED', 'PREPOSITIONED'];
-const FINISHED_OR_SUSPENDED: readonly CapabilityReadiness[] = ['VERIFIED', 'SUSPENDED', 'BUILDING'];
+/** Waiting: specified and prepared, so nothing is spending on it yet. */
+const isWaiting = (facts: { status: RequirementStatus; prepared: boolean }): boolean => facts.status === 'SPECIFIED' && facts.prepared;
+/** Live and unassigned: specified and not prepared. */
+const isLive = (facts: { status: RequirementStatus; prepared: boolean }): boolean => facts.status === 'SPECIFIED' && !facts.prepared;
 
 function valuedBlocked(facts: CapabilityFacts): BlockedTransaction[] {
   return facts.blocked.filter((t) => typeof t.valueCents === 'number' && Number.isFinite(t.valueCents) && t.valueCents > 0);
@@ -240,7 +252,7 @@ function distinctBusinesses(facts: CapabilityFacts): number {
  */
 export function promotionFromBlockers(facts: CapabilityFacts): PromotionDecision {
   const none: PromotionDecision = { promote: false, reasons: [], evidence: [] };
-  if (!PROMOTABLE.includes(facts.readiness)) return none;
+  if (!isWaiting(facts)) return none;
   if (facts.needStillExists === false) return none;
   if (facts.prerequisitesMet !== true) return none;
 
@@ -274,22 +286,25 @@ export function promotionFromBlockers(facts: CapabilityFacts): PromotionDecision
 }
 
 /**
- * Work whose need disappeared is put down to SUSPENDED. The requirement is
- * never removed from the specification: `requirementRetained` is always true.
- * Only an explicit false demotes; an unknown need leaves the state alone.
+ * Work whose need disappeared goes back to waiting: `prepared` is set again. The
+ * requirement is never removed from the specification (`requirementRetained` is
+ * always true), and nothing already assigned or finished is touched. Only an
+ * explicit false demotes; an unknown need leaves it alone.
  */
 export function demotionForVanishedNeed(facts: CapabilityFacts): {
   demote: boolean;
-  to: CapabilityReadiness;
+  /** The value `prepared` should take. */
+  prepared: boolean;
   requirementRetained: true;
 } {
-  const demote = facts.needStillExists === false && !FINISHED_OR_SUSPENDED.includes(facts.readiness);
-  return { demote, to: demote ? 'SUSPENDED' : facts.readiness, requirementRetained: true };
+  const demote = facts.needStillExists === false && isLive(facts);
+  return { demote, prepared: demote ? true : facts.prepared, requirementRetained: true };
 }
 
-export interface RankedCapability {
+export interface RankedPreparedRequirement {
   id: string;
-  readiness: CapabilityReadiness;
+  status: RequirementStatus;
+  prepared: boolean;
   /** Separate from readiness: how pressing, from what the rows say. */
   urgency: { dueAt: string | null; blockedTransactions: number };
   rank: number;
@@ -302,18 +317,18 @@ export interface RankedCapability {
 }
 
 /**
- * Rank capabilities that may be worked now, most worth doing first. Compares
+ * Rank prepared requirements that may be worked now, most worth doing first. Compares
  * urgency, then net value (expected value less cost and opportunity cost,
  * discounted by uncertainty), then reuse, then known cost. An unknown value or
  * reuse counts as zero, an unknown cost sorts after a known one and an unknown
  * uncertainty is the worst case, so no gap in the data raises a rank.
- * Capabilities that are not promoted and not already NEEDED_NOW sort last and
- * are never startable. Only the promoted capability is ranked, not its program.
+ * Requirements that are not promoted and not already live sort last and are
+ * never startable. Only the promoted capability is ranked, not its program.
  */
-export function rankCapabilities(
+export function rankPreparedRequirements(
   capabilities: CapabilityFacts[],
   options: { parallelWorkers: number | null },
-): RankedCapability[] {
+): RankedPreparedRequirement[] {
   const rows = capabilities.map((c) => {
     const promotion = promotionFromBlockers(c);
     const valued = valuedBlocked(c);
@@ -325,7 +340,7 @@ export function rankCapabilities(
     const eligible =
       c.needStillExists !== false &&
       c.prerequisitesMet === true &&
-      (c.readiness === 'NEEDED_NOW' || promotion.promote);
+      (isLive(c) || promotion.promote);
     return {
       c,
       promotion,
@@ -361,7 +376,8 @@ export function rankCapabilities(
     if (startable) slots -= 1;
     return {
       id: r.c.id,
-      readiness: r.c.readiness,
+      status: r.c.status,
+      prepared: r.c.prepared,
       urgency: { dueAt: r.c.dueAt, blockedTransactions: r.blocked },
       rank: index,
       netValueCents: r.net,
@@ -388,7 +404,8 @@ export interface BlockedTransactionRow {
 /** What is recorded about a capability itself. Every figure is nullable: unknown stays unknown. */
 export interface CapabilityRecordRow {
   id: string;
-  readiness: CapabilityReadiness;
+  status: RequirementStatus;
+  prepared: boolean;
   prerequisitesMet: boolean | null;
   needStillExists: boolean | null;
   dueAt: string | null;
@@ -427,7 +444,8 @@ export function capabilityFactsFromRows(
   }
   return capabilities.map((c) => ({
     id: c.id,
-    readiness: c.readiness,
+    status: c.status,
+    prepared: c.prepared,
     prerequisitesMet: c.prerequisitesMet,
     needStillExists: c.needStillExists,
     dueAt: c.dueAt,
@@ -442,11 +460,11 @@ export function capabilityFactsFromRows(
 }
 
 export interface CapabilityReconciliation {
-  ranked: RankedCapability[];
-  /** Capabilities to move to NEEDED_NOW, with the measured reasons. */
+  ranked: RankedPreparedRequirement[];
+  /** Requirements whose `prepared` flag to clear, with the measured reasons. */
   promotions: { id: string; decision: PromotionDecision }[];
-  /** Capabilities to move to SUSPENDED because their need disappeared; never deleted. */
-  demotions: { id: string; to: CapabilityReadiness; requirementRetained: true }[];
+  /** Requirements to set `prepared` on again because their need disappeared; never deleted. */
+  demotions: { id: string; prepared: true; requirementRetained: true }[];
 }
 
 /**
@@ -460,11 +478,11 @@ export function reconcileCapabilities(
   options: { parallelWorkers: number | null },
 ): CapabilityReconciliation {
   const facts = capabilityFactsFromRows(capabilities, blocked);
-  const ranked = rankCapabilities(facts, options);
+  const ranked = rankPreparedRequirements(facts, options);
   const promotions = ranked.filter((r) => r.promotion.promote).map((r) => ({ id: r.id, decision: r.promotion }));
   const demotions = facts
     .map((f) => ({ id: f.id, ...demotionForVanishedNeed(f) }))
     .filter((d) => d.demote)
-    .map(({ id, to, requirementRetained }) => ({ id, to, requirementRetained }));
+    .map(({ id, requirementRetained }) => ({ id, prepared: true as const, requirementRetained }));
   return { ranked, promotions, demotions };
 }
