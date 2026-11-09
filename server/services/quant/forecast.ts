@@ -123,6 +123,8 @@ export function buildLedger(
 
 export interface CalibrationBucket {
   comparableKey: string;
+  /** A time window of `windowDays`, or every window of the comparable key pooled. */
+  scope: 'WINDOW' | 'POOLED';
   windowStart: string | null;
   windowEnd: string | null;
   /** Resolved opportunities with a stated probability. */
@@ -146,17 +148,16 @@ export const MISCALIBRATION_Z = 2;
  * A single win or loss lands in `INSUFFICIENT`; it is never called a failure.
  */
 export function calibrate(entries: readonly LedgerEntry[], windowDays = 90): CalibrationBucket[] {
-  const groups = new Map<string, LedgerEntry[]>();
+  const windows = new Map<string, LedgerEntry[]>();
+  const pooled = new Map<string, LedgerEntry[]>();
   for (const e of entries) {
     if (!e.outcome || e.prediction.probability === null) continue;
     const window = Math.floor(Date.parse(e.outcome.observedAt) / (windowDays * 86_400_000));
     const key = `${e.prediction.comparableKey}\u0000${Number.isFinite(window) ? window : 'undated'}`;
-    const list = groups.get(key) ?? [];
-    list.push(e);
-    groups.set(key, list);
+    windows.set(key, [...(windows.get(key) ?? []), e]);
+    pooled.set(e.prediction.comparableKey, [...(pooled.get(e.prediction.comparableKey) ?? []), e]);
   }
-  const out: CalibrationBucket[] = [];
-  for (const [key, list] of groups) {
+  const bucket = (comparableKey: string, scope: CalibrationBucket['scope'], list: LedgerEntry[]): CalibrationBucket => {
     const n = list.length;
     const meanForecast = list.reduce((s, e) => s + (e.prediction.probability as number), 0) / n;
     const observedRate = list.filter((e) => e.outcome!.occurred).length / n;
@@ -165,8 +166,9 @@ export function calibrate(entries: readonly LedgerEntry[], windowDays = 90): Cal
     const variance = list.reduce((s, e) => s + (e.prediction.probability as number) * (1 - (e.prediction.probability as number)), 0);
     const enough = n >= MIN_CALIBRATION_SAMPLE;
     const zScore = enough && variance > 0 ? (observedRate * n - meanForecast * n) / Math.sqrt(variance) : null;
-    out.push({
-      comparableKey: key.split('\u0000')[0]!,
+    return {
+      comparableKey,
+      scope,
       windowStart: dates[0] ?? null,
       windowEnd: dates[dates.length - 1] ?? null,
       n,
@@ -175,9 +177,16 @@ export function calibrate(entries: readonly LedgerEntry[], windowDays = 90): Cal
       gap: enough ? observedRate - meanForecast : null,
       zScore,
       verdict: !enough || zScore === null ? 'INSUFFICIENT' : Math.abs(zScore) > MISCALIBRATION_Z ? 'MISCALIBRATED' : 'CALIBRATED',
-    });
-  }
-  return out.sort((a, b) => a.comparableKey.localeCompare(b.comparableKey) || (a.windowStart ?? '').localeCompare(b.windowStart ?? ''));
+    };
+  };
+  const out: CalibrationBucket[] = [];
+  for (const [key, list] of windows) out.push(bucket(key.split('\u0000')[0]!, 'WINDOW', list));
+  // A comparable key whose resolved opportunities arrive a few per window would never reach the
+  // minimum inside any one window; pooled across windows it is judged on all the evidence it has.
+  for (const [key, list] of pooled) out.push(bucket(key, 'POOLED', list));
+  return out.sort(
+    (a, b) => a.comparableKey.localeCompare(b.comparableKey) || a.scope.localeCompare(b.scope) || (a.windowStart ?? '').localeCompare(b.windowStart ?? ''),
+  );
 }
 
 export interface MissDiagnosis {
@@ -188,6 +197,12 @@ export interface MissDiagnosis {
   contradicted: boolean;
   /** What the surprise was worth: the probability the forecast gave the outcome that actually happened. */
   probabilityOfWhatHappened: number | null;
+  /**
+   * Bits of surprise, -log2 of that probability: a 90% forecast that fails (3.3 bits) is a far larger
+   * surprise than a 40% forecast that fails (1.3 bits). Null when no probability was stated; infinite
+   * when the forecast gave what happened no chance.
+   */
+  surpriseBits: number | null;
   kind: 'NOT_A_MISS' | 'EXPECTED_MISS' | 'SYSTEMATIC' | 'UNJUDGED';
   /** Causes the evidence names; empty means unattributed, never a default cause. */
   causes: readonly MissCause[];
@@ -205,12 +220,13 @@ export interface MissDiagnosis {
  */
 export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket[]): MissDiagnosis {
   const { prediction: p, outcome } = entry;
-  const base = { predictionId: p.id, claimId: p.claimId, version: p.version };
+  const base = { predictionId: p.id, claimId: p.claimId, version: p.version, surpriseBits: null as number | null };
   if (!outcome) {
     return { ...base, contradicted: false, probabilityOfWhatHappened: null, kind: 'UNJUDGED', causes: [], owner: null, claimGaps: [], reason: 'no outcome has been recorded for this version' };
   }
   const given = p.probability === null ? null : outcome.occurred ? p.probability : 1 - p.probability;
   const contradicted = given !== null && given < 0.5;
+  base.surpriseBits = given === null ? null : given <= 0 ? Infinity : Number((-Math.log2(given)).toFixed(3));
   const claimGaps: string[] = [];
   if (p.data.length === 0) claimGaps.push('the claim names no data it rests on');
   if (p.assumptions.length === 0) claimGaps.push('the claim states no assumptions');
@@ -303,6 +319,10 @@ export interface CorrectionComparison {
   /** Calibration gap before and after the correction, on the same comparable bucket. */
   before: number | null;
   after: number | null;
+  /** Observations on each side, and the fewest each side needs, so TOO_FEW says how many more it wants. */
+  nBefore: number;
+  nAfter: number;
+  needed: number;
   verdict: 'NO_NEW_OBSERVATIONS' | 'TOO_FEW' | 'IMPROVED' | 'NOT_IMPROVED';
 }
 
@@ -319,9 +339,10 @@ export function compareAfterCorrection(
       : list.filter((e) => e.outcome!.occurred).length / list.length - list.reduce((s, e) => s + (e.prediction.probability as number), 0) / list.length;
   const beforeSet = own.filter((e) => e.outcome!.observedAt < correctedAt);
   const afterSet = own.filter((e) => e.outcome!.observedAt >= correctedAt);
-  if (afterSet.length === 0) return { before: gapOf(beforeSet), after: null, verdict: 'NO_NEW_OBSERVATIONS' };
+  const sizes = { nBefore: beforeSet.length, nAfter: afterSet.length, needed: MIN_CALIBRATION_SAMPLE };
+  if (afterSet.length === 0) return { before: gapOf(beforeSet), after: null, ...sizes, verdict: 'NO_NEW_OBSERVATIONS' };
   const before = gapOf(beforeSet);
   const after = gapOf(afterSet);
-  if (before === null || after === null) return { before, after, verdict: 'TOO_FEW' };
-  return { before, after, verdict: Math.abs(after) < Math.abs(before) ? 'IMPROVED' : 'NOT_IMPROVED' };
+  if (before === null || after === null) return { before, after, ...sizes, verdict: 'TOO_FEW' };
+  return { before, after, ...sizes, verdict: Math.abs(after) < Math.abs(before) ? 'IMPROVED' : 'NOT_IMPROVED' };
 }
