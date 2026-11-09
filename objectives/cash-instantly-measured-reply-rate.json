@@ -1,0 +1,43 @@
+{
+  "objective": "The quant engine sweeps every cold-outreach opening's reply rate over published bounds although the owner's Instantly workspace has measured its own. Read 2026-11-09 (GET https://api.instantly.ai/api/v2/campaigns/analytics, read-only): four campaigns, 4,096 emails sent, 15 unique replies (0.37%), 2 opportunities, 396 bounces — below the published low end (0.45%) the plan assumes. §92: an OBSERVED figure answers ahead of a published ESTIMATE. Add `instantlyMeasuredRates()` in server/services/cash/providers/instantly.ts beside `instantlyCapacity()` (same env, fetch injection and ten-minute freshness): sum emails_sent_count, reply_count_unique, total_opportunities and bounced_count over every campaign in the workspace; return null when the provider is not configured or fewer than 500 emails were sent. In server/services/goals/portfolio.ts, when `measuredRates` is passed (new optional input beside `measuredCapacity`), the respond rate of every opening whose acquisition is shared cold outreach is sampled between the 90% Wilson lower bound of opportunities/sent and the 90% Wilson upper bound of unique replies/sent, with source {kind:'OTHER', ref:'instantly:analytics'} and a note stating the counts; an opening whose card carries its own published or measured respond rate keeps the narrower of the two only if it lies inside the measured interval, otherwise the measured interval wins. goalScenario.ts passes `await instantlyMeasuredRates().catch(() => null)`. `npm run goals -- plan` prints one line `measured   reply <lo>–<hi> on <sent> sends (<replies> replies, <opps> opportunities, <bounce>% bounced) from the Instantly workspace`. The only external host is api.instantly.ai, already the provider's host; tests use an injected fetch and never call it.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "On production, once the Instantly key is set, the $10K goal's plan models cold-outreach reply rates from the owner's own sends instead of the published 0.45–3.43% sweep, and says so on the plan.",
+  "nonGoals": [
+    "Sending anything, adding leads or changing any campaign",
+    "Changing the acceptance rule (§95) or its 90% threshold",
+    "Any schema or migration change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/instantlyMeasuredRates.test.ts: with an injected fetch returning the four campaigns above, instantlyMeasuredRates() returns sent 4096, replies 15, opportunities 2, bounced 396; with 300 sends it returns null; with BRAIN_MESSAGING_PROVIDER unset it returns null and makes no request.",
+      "verification": "npx vitest run tests/instantlyMeasuredRates.test.ts",
+      "mandatory": true
+    },
+    {
+      "statement": "evaluateGoalPortfolio with measuredRates {sent:4096, replies:15, opportunities:2} samples a cold-outreach opening's respond rate only inside [Wilson90 lower of 2/4096, Wilson90 upper of 15/4096], and an opening with a card rate of 3% gets the measured interval instead.",
+      "verification": "npx vitest run tests/instantlyMeasuredRates.test.ts",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks and the impacted tests pass.",
+      "verification": "npm run typecheck && npm run test:impacted",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/cash/providers/instantly.ts",
+    "server/services/goals/portfolio.ts",
+    "server/services/cash/goalScenario.ts",
+    "scripts/goals.ts",
+    "tests/instantlyMeasuredRates.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npx vitest run tests/instantlyMeasuredRates.test.ts"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "submissionKey": "cash-instantly-measured-reply-rate-2026-11-09",
+  "rollbackRequirement": "Revert the commit; no schema or data change, and no external effect."
+}

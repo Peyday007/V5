@@ -1,0 +1,31 @@
+$10K by 2026-12-09 — correlated simulation, 20,000 worlds per strategy (coverage of published ranges, not a probability)
+
+gift_lead: Gifts first (seasonal), AI setups second
+  gross collected p10 $0 · p50 $2,745 · p90 $9,312 · net p50 $564
+  reach $10k gross 8.4% (Wilson lower 8.1%) · net 0.0% · positive conversations p50 16
+  mean by line gift $3,062 · ai $639 · list $128 · puzzle $16
+balanced: Balanced four lines
+  gross collected p10 $0 · p50 $2,051 · p90 $7,449 · net p50 $534
+  reach $10k gross 4.5% (Wilson lower 4.3%) · net 0.0% · positive conversations p50 16
+  mean by line gift $1,962 · ai $739 · list $187 · puzzle $48
+ai_lead: AI setups first
+  gross collected p10 $0 · p50 $2,010 · p90 $7,064 · net p50 $604
+  reach $10k gross 3.8% (Wilson lower 3.6%) · net 0.3% · positive conversations p50 15
+  mean by line gift $1,381 · ai $1,267 · list $129 · puzzle $17
+gift_lead_ads: Gifts first + $300 lead brokerage
+  gross collected p10 $91 · p50 $2,821 · p90 $9,536 · net p50 $380
+  reach $10k gross 8.9% (Wilson lower 8.6%) · net 0.0% · positive conversations p50 16
+  mean by line gift $3,053 · ai $643 · list $125 · puzzle $16 · leads $116
+
+On the workspace's own measured reply and positive rates (0.24–0.55% reply, 4–35% positive):
+  gift_lead      gross p10 $0 · p50 $0 · p90 $3,255 · reach $10k 0.1% (Wilson lower 0.1%)
+  balanced       gross p10 $0 · p50 $0 · p90 $2,794 · reach $10k 0.1% (Wilson lower 0.1%)
+  ai_lead        gross p10 $0 · p50 $0 · p90 $2,556 · reach $10k 0.1% (Wilson lower 0.0%)
+  gift_lead_ads  gross p10 $50 · p50 $172 · p90 $3,379 · reach $10k 0.2% (Wilson lower 0.2%)
+
+Best: gift_lead_ads. What would raise confidence (one input moved, the rest held):
+  measured reply ≥ 2.5% (first 1,000 sends)                      reach 18.3% · p10 $275 · p50 $4,860
+  Brain sends 600/day (owner dedicates the workspace)            reach 21.1% · p10 $244 · p50 $4,969
+  grant today (start day 1)                                      reach 11.3% · p10 $102 · p50 $3,236
+  credibility at published close rates (case study / referral)   reach 14.9% · p10 $164 · p50 $3,746
+  all four together                                              reach 65.5% · p10 $4,928 · p50 $12,929
