@@ -2839,6 +2839,20 @@ export function startFactoryRemoteLoop(intervalMs = DEFAULT_INTERVAL_MS): void {
           // The next pass reads the same rows.
         }
         /*
+         * The step between a program's campaigns (§96), on the same timer: verify
+         * what went live, open the smallest repair for what production disproved,
+         * and queue every campaign whose dependencies are live — so a program
+         * continues into its next eligible work without anybody asking. The line
+         * above admits what this queues on its next pass. Caught on its own, like
+         * the line: a program that cannot be read never stops a campaign.
+         */
+        try {
+          const { tickAllProgramsIfDue } = await import('./program/loop.ts');
+          await tickAllProgramsIfDue();
+        } catch {
+          // The next pass reads the same rows.
+        }
+        /*
          * Place what this tick created, now, instead of leaving it for the
          * dispatcher's own wake.
          *

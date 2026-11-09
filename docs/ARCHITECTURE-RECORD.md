@@ -14927,3 +14927,101 @@ an `ONE_TRANSACTION_SHAPE` CONSTRUCT move comparing unit, prepaid bundle,
 monthly retainer and implementation engagement on cash collectible before
 the deadline (`transactionShapes`; a retainer's months after the deadline
 count for nothing), and asks the world what buyers pay at each size.
+
+## 96. A specification is the authority, and a program is DONE only when every requirement it states is verified on production.
+
+**The gap.** Every safeguard the Factory had was per campaign: one change
+request, its acceptance conditions frozen at approval, a plan refused when a
+unit escapes its scope, review and repair inside the campaign, release verified
+inside the released Brain (§58). Nothing sat above a campaign. A large
+architecture had to be cut into dozens of objectives by hand, and every cut was
+a place a requirement could fall out unseen: the owner's text was paraphrased
+into objectives, nothing compared the objectives back to the text, nothing knew
+that two campaigns had to work together, and "all PRs merged" was the only
+reading of done. On the hosted plane even the per-campaign check was soft: a
+plan leaving a mandatory acceptance condition to no unit was *reported*
+(`uncoveredConditions`) and installed anyway — the local architect refused it,
+`bins/contracts.ts` did not. That is now a `RETRY` refusal on both planes.
+
+**The program** (`server/services/factory/program/`, migrations SQLite 140 /
+Postgres 131) is the minimum layer above existing campaigns, and it runs none
+of them itself:
+
+1. **Source.** `factory_programs.source_text` is the specification verbatim,
+   with its SHA-256. No code path updates it; a resubmission under the same key
+   with a different text is refused ("a source is never edited").
+2. **Items.** `spec.ts` locates every non-heading line in exactly one item
+   (`S-0001`…, char offsets, line range, heading path) and checks that property
+   (`uncoveredLines`). An item is normative when it states an obligation,
+   commands (imperative, or a command behind a condition), states a negative
+   rule, or is enumerated by a lead-in ending in a colon. Over-reading is the
+   safe direction. Words that admit two readings (`as appropriate`, `TBD`, `?`…)
+   are flagged verbatim.
+3. **Map.** A requirement has a stable key, cited source items (optionally an
+   exact quote), behavior, inputs, outputs, constraints, dependencies,
+   interactions, existing implementation (files + evidence), missing work,
+   files, verification checks and ambiguities. `validateRequirementMap` refuses:
+   a normative item cited by nothing (`OMITTED_REQUIREMENT`, by line) or set
+   aside as context; a quote not in the source; two requirements stating the
+   same behavior for one clause (`DUPLICATE_REQUIREMENT`) or different behaviors
+   (`CONFLICTING_INTERPRETATION` — split by exact quotes, or carry one ambiguity);
+   a flagged ambiguity not carried (`AMBIGUITY_HIDDEN`); an unknown dependency or
+   a cycle; an interaction with fewer than two participants; no check; an
+   existing claim without files and evidence. A revision of an approved map by
+   FACTORY may only add: `REQUIREMENT_DROPPED`, `REQUIREMENT_REDEFINED` (source,
+   behavior or checks changed) and `RELATIONSHIP_LOST` are refused; only a
+   PERSON amends. Maps and plans are versioned inserts, never overwritten.
+4. **Plan.** `deriveProgramPlan` buckets requirements needing work by subsystem
+   and dependency depth (so campaign edges only point shallower and cannot
+   cycle), merges where bounded (≤ 8 requirements) and acyclic, derives campaign
+   edges from requirement edges, and serializes two campaigns owning one file.
+   Requirements fully answered by existing code are `verifyOnly` — reused, and
+   still verified. `validateProgramPlan` refuses an unassigned or doubly
+   implemented requirement, a cross-campaign dependency the campaign graph does
+   not carry, a cycle, an unbounded scope, an unordered overlap, and any scope
+   reaching `PROTECTED_VERIFICATION_PATHS` — the code that verifies it.
+5. **Approval** is one person's, for the whole program; open questions are
+   listed and block only their requirements' campaigns; proposed readings are
+   recorded as accepted. Automatic release of LOW-risk campaigns is a separate
+   yes on the same approval (§58's grant, unchanged).
+6. **Tick** (`coordinator.ts`, on the remote loop's timer at most once a minute,
+   and `factory program-tick`): verify every integrated requirement **inside the
+   running Brain** with the release verifier's own HTTP/bundle checks or a
+   registered read-only probe (`probes.ts`), once per production revision; open
+   the smallest repair; queue every campaign whose dependencies are LIVE through
+   the line (`enqueueChangeRequest`, approved as the program's approver), which
+   admits against capacity and file ownership as it always has. Every write is
+   keyed — submission key `program:<id>:<campaign>`, the campaign link, the queue
+   entry, the grant, the plan version — so a crash between any two steps, a
+   restart, or a second process completes the step rather than repeating it.
+7. **Status** is derived on every read, never stored: SPECIFIED → MAPPED →
+   IMPLEMENTED (delivered, not running) → INTEGRATED (running, unproven) →
+   PRODUCTION_VERIFIED, or BLOCKED / NOT_DONE. PRODUCTION_VERIFIED needs the
+   requirement's own latest checks passing at a real revision **and** every
+   dependency and participant verified; a later failure reopens it and drops
+   every dependent with it. A PASS from a process with no `BRAIN_REVISION`, or a
+   probe that is not registered, is UNKNOWN. The verdict is DONE only when every
+   requirement is PRODUCTION_VERIFIED.
+8. **Repair.** Only the earliest failure is repaired (a failing requirement none
+   of whose own dependencies fail); its transitive dependents are named as
+   affected and re-verified once it holds. One repair campaign per episode,
+   resumed while in flight, never duplicated; after three that went live and did
+   not hold, one STRUCTURAL campaign; after that the requirement is BLOCKED.
+9. **Replanning.** `recordDiscoveredDependency` lets Factory add an ordering it
+   discovered (refused if it closes a cycle); unstarted work is re-derived and
+   passes the same gate; started campaigns and open repairs are kept.
+10. **Capacity.** `capacity.ts` (`factory capacity --hours N`) reads every
+   factory bin's timeline in a window: usable surfaces, peak and average
+   concurrency, queue delay, plan/code/integrate+review/repair/release times,
+   units, campaigns and requirements per hour, idle time beside ready work,
+   failures, no-shows and absorbed duplicates — and names the bottleneck
+   (SCHEDULING before WORKERS before PROVIDER_LIMITS; a bigger server only on a
+   measured server-side delay, which the hosted plane does not have).
+
+**What it does not do.** A program does not invent requirements, write the map
+by itself (an architect proposes it; `program-skeleton` hands one a map that
+already omits nothing), or merge MEDIUM/HIGH-risk campaigns: those end at a pull
+request exactly as before, and their requirements read IMPLEMENTED until a
+merge and deploy make them running. A probe is reviewed code under the protected
+path; a requirement whose check needs a new probe needs a person-approved
+amendment that adds it.

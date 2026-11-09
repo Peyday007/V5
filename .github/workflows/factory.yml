@@ -39,7 +39,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'submit | approve | status | outcome | wait | allocation | events | throughput | pull-request | campaigns | bins | remote-tick | amend | plan | release | set-state | answer-bin | reauthorize | regrant-unit | retire'
+        description: 'submit | approve | status | outcome | wait | allocation | events | throughput | pull-request | campaigns | bins | remote-tick | amend | plan | release | set-state | answer-bin | reauthorize | regrant-unit | retire | program-submit | program-approve | program-status | program-tick | program-depend | program-amend | capacity'
         required: true
         default: status
       file:
