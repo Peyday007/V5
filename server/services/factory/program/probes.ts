@@ -13,7 +13,8 @@
 import { getDb } from '../../../db/database.ts';
 
 export interface ProbeResult {
-  ok: boolean;
+  /** null: nothing answered (the forge's read budget, a timeout). UNKNOWN, never a failure (invariant 26). */
+  ok: boolean | null;
   detail: string;
 }
 
@@ -76,18 +77,35 @@ registerProbe('factory.campaign.live', async (args) => {
 });
 
 /** A file is present in the source tree of the revision production runs (optionally containing a text, within a length). */
+/**
+ * Files read at a revision, kept for the process: a file at one commit never
+ * changes, and three requirements reading one guide spent three of the 60
+ * unauthenticated reads an hour production has.
+ */
+const filesAtRevision = new Map<string, string | null>();
+
 registerProbe('repo.file-at-revision', async (args) => {
   const { BRAIN_REVISION } = await import('../../../env.ts');
   const { parseRemote, readFile } = await import('../forge.ts');
   if (!BRAIN_REVISION) return { ok: false, detail: 'this process carries no BRAIN_REVISION' };
   const repository = parseRemote(str(args.repository) || 'https://github.com/Peyday007/V5');
   if (!repository) return { ok: false, detail: 'not a repository the forge can read' };
-  const reply = await readFile(repository, str(args.path), BRAIN_REVISION);
+  const key = `${repository.slug}:${str(args.path)}@${BRAIN_REVISION}`;
+  let body = filesAtRevision.get(key);
+  if (body === undefined) {
+    const reply = await readFile(repository, str(args.path), BRAIN_REVISION);
+    // A forge that did not answer says nothing about the file (program fpg_2adb7f5e,
+    // 2026-11-09: a spent read budget reopened a guide that was there, and opened a
+    // repair for it). Only the forge's own "no such file" is an absence.
+    if (!reply.ok) return { ok: null, detail: `the forge did not answer: ${reply.reason ?? reply.status}` };
+    body = reply.body;
+    filesAtRevision.set(key, body);
+  }
   const contains = str(args.contains);
-  if (!reply.ok || reply.body === null) return { ok: false, detail: `not at ${BRAIN_REVISION.slice(0, 12)}` };
-  if (contains && !reply.body.includes(contains)) return { ok: false, detail: `present, without "${contains}"` };
+  if (body === null) return { ok: false, detail: `not at ${BRAIN_REVISION.slice(0, 12)}` };
+  if (contains && !body.includes(contains)) return { ok: false, detail: `present, without "${contains}"` };
   const maxLines = Number(args.maxLines ?? 0);
-  const lines = reply.body.split('\n').length;
+  const lines = body.split('\n').length;
   if (maxLines > 0 && lines > maxLines) return { ok: false, detail: `${lines} lines, over ${maxLines}` };
   return { ok: true, detail: `present at ${BRAIN_REVISION.slice(0, 12)} (${lines} lines)` };
 });
