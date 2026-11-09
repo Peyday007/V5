@@ -41,6 +41,7 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { browserMcpUrl, renderInBrowser } from './browserMcp.ts';
 import { connectorFor } from './connectors.ts';
 import { searchSuccessor } from './discover.ts';
+import { boundaryOfRead, classOfRoute, selectAccessMethod } from './accessMethods.ts';
 import { checkDestination, fetchForWorker, systemResolver, type Resolver, type SourceFetch } from './fetchForWorker.ts';
 
 export const ACCESS_METHODS = ['DIRECT', 'CONNECTOR', 'BROWSER', 'SITEMAP', 'ARCHIVE', 'SEARCH'] as const;
@@ -416,6 +417,11 @@ export function resetSourceAccessMemory(): void {
 
 async function defaultRecord(read: SourceRead, caller: string, ms: number): Promise<void> {
   const host = hostOf(read.requestedUrl);
+  // The method class and why it was chosen are recorded on the event this layer already writes.
+  const boundary = boundaryOfRead({ readable: read.readable, reason: read.readable ? undefined : read.reason, status: read.status });
+  const chosen = boundary
+    ? selectAccessMethod({ boundary })
+    : selectAccessMethod({ [read.method === 'CONNECTOR' ? 'nativeAvailable' : read.method === 'SITEMAP' || read.method === 'ARCHIVE' ? 'bulkAvailable' : read.method === 'BROWSER' ? 'interfaceOnly' : 'httpReadable']: read.readable, authorizedSession: read.method === 'BROWSER' ? true : undefined });
   await recordBinEvent({
     eventType: 'SOURCE_ACCESS',
     provider: read.method,
@@ -430,6 +436,9 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
       finalUrl: read.finalUrl?.slice(0, 400) ?? null,
       chars: read.readable ? read.totalChars : 0,
       attempts: read.attempts,
+      methodClass: boundary ? chosen.method : classOfRoute(read.method),
+      methodReason: (read.readable || boundary ? chosen.why : `${classOfRoute(read.method)} did not yield a readable source (${read.reason}); no boundary was met, so no human step is implied`).slice(0, 300),
+      methodConstraints: chosen.constraints,
     },
   });
 }
