@@ -26,6 +26,7 @@ function mechanism(overrides: Partial<OutreachMechanism> = {}): OutreachMechanis
       uniqueProspects: m(1000),
       deliverability: m(0.9),
       throughput: m(5000),
+      reputation: m(1),
       response: m(0.1),
       qualification: m(0.5),
       close: m(0.2),
@@ -174,6 +175,11 @@ describe('outreach mix: cost, combination and unmeasured ways', () => {
 describe('outreach funnel read from cash_outcomes rows (outreachFromRows via cashFunnel)', () => {
   let projectId = '';
   let seq = 0;
+  // What a caller who has read the authority row and the workspace states: permitted, 100 a day, all 2 accounts healthy.
+  const stated = {
+    permission: m(1),
+    sending: { perDay: 100, healthyAccounts: 2, totalAccounts: 2 },
+  };
 
   beforeEach(async () => {
     projectId = (await freshProject()).project.id;
@@ -209,7 +215,7 @@ describe('outreach funnel read from cash_outcomes rows (outreachFromRows via cas
   }
 
   it('reports no mechanism, and says so, when no outcome row exists', async () => {
-    const reading = await cashFunnel({ projectId });
+    const reading = await cashFunnel({ projectId, outreachEvidence: stated });
     expect(reading.outreach.mechanisms).toEqual([]);
     expect(reading.outreach.mix).toEqual({ ranked: [], unranked: [], combined: null });
     // Ways nobody has measured are still listed, as open tasks, not silently absent.
@@ -233,7 +239,7 @@ describe('outreach funnel read from cash_outcomes rows (outreachFromRows via cas
     await outcome({ opp: 'a1', kind: 'ACCEPTED_PRICE', mechanism: 'M', cents: 300 });
     await outcome({ opp: 'a1', kind: 'REFUNDED', mechanism: 'M' });
 
-    const { outreach } = await cashFunnel({ projectId });
+    const { outreach } = await cashFunnel({ projectId, outreachEvidence: stated });
     expect(outreach.mechanisms).toHaveLength(1);
     const m = outreach.mechanisms[0]!;
     expect(m.mode).toBe('M');
@@ -244,10 +250,12 @@ describe('outreach funnel read from cash_outcomes rows (outreachFromRows via cas
     expect(m.stages.qualification.low).toBeCloseTo(2 / 5);
     expect(m.stages.close.low).toBeCloseTo(1);
     expect(m.stages.fulfillment.low).toBeCloseTo(1 / 2);
-    // Producers state these from the rows: contacts were sent through the gate, 10 distinct prospects, 10 sent.
+    // Permission and capacity are stated by the evidence handed in, not inferred from the contacts: 10 distinct
+    // prospects are read from the rows, throughput is 100 a day over the one day they span.
     expect(m.stages.permission).toMatchObject({ basis: 'MEASURED', low: 1, high: 1 });
     expect(m.stages.uniqueProspects).toMatchObject({ basis: 'MEASURED', low: 10 });
-    expect(m.stages.throughput).toMatchObject({ basis: 'MEASURED', low: 10 });
+    expect(m.stages.throughput).toMatchObject({ basis: 'MEASURED', low: 100 });
+    expect(m.stages.reputation).toMatchObject({ basis: 'MEASURED', low: 1 });
     expect(m.permitted).toBe(true);
     // 10 sent, 8 delivered, 5 answered, 2 qualified, 2 bought: messages are not buyers.
     expect(m.buyers.low).toBeCloseTo(2);
@@ -263,14 +271,14 @@ describe('outreach funnel read from cash_outcomes rows (outreachFromRows via cas
     await outcome({ opp: 'y', kind: 'CONTACT_RESULT', channel: 'phone', text: 'BUYER_SILENT' });
     await outcome({ opp: 'z', kind: 'CONTACT_RESULT', text: 'BUYER_SILENT' });
     await outcome({ opp: 'w', kind: 'CONTACT_RESULT', mechanism: 'Alpha', text: 'BUYER_SILENT' });
-    const { outreach } = await cashFunnel({ projectId });
+    const { outreach } = await cashFunnel({ projectId, outreachEvidence: stated });
     expect(outreach.mechanisms.map((one) => one.mode)).toEqual(['Alpha', 'phone', 'unspecified']);
     expect(outreach.mechanisms.find((one) => one.mode === 'Alpha')!.messagesSent).toBe(2);
   });
 
   it('keeps unknown, not zero, for shares with no denominator', async () => {
     await outcome({ opp: 'only', kind: 'CONTACT_RESULT', mechanism: 'M', text: 'CONTACT_UNDELIVERABLE' });
-    const m = (await cashFunnel({ projectId })).outreach.mechanisms[0]!;
+    const m = (await cashFunnel({ projectId, outreachEvidence: stated })).outreach.mechanisms[0]!;
     expect(m.stages.deliverability).toMatchObject({ basis: 'MEASURED', low: 0 });
     expect(m.stages.response.basis).toBe('UNKNOWN');
     expect(m.stages.close.basis).toBe('UNKNOWN');
@@ -290,11 +298,11 @@ describe('outreach funnel read from cash_outcomes rows (outreachFromRows via cas
   it('leaves a row-derived mechanism unranked at the stage no row states yet: settlement', async () => {
     for (let i = 0; i < 50; i += 1) await outcome({ opp: `c${i}`, kind: 'CONTACT_RESULT', mechanism: 'Big', text: 'BUYER_REPLIED' });
     await outcome({ opp: 'c0', kind: 'ACCEPTED_PRICE', mechanism: 'Big', cents: 1_000_000 });
-    const { outreach } = await cashFunnel({ projectId });
+    const { outreach } = await cashFunnel({ projectId, outreachEvidence: stated });
     expect(outreach.mix.ranked).toEqual([]);
     expect(outreach.mix.unranked).toHaveLength(1);
     expect(outreach.mix.unranked[0]).toMatchObject({ mode: 'Big', firstUnknown: 'settlement' });
-    expect(formatFunnel(await cashFunnel({ projectId })).join('\n')).toMatch(/outreach mix ranked=\(none\) unranked=Big\[settlement\]/);
+    expect(formatFunnel(await cashFunnel({ projectId, outreachEvidence: stated })).join('\n')).toMatch(/outreach mix ranked=\(none\) unranked=Big\[settlement\]/);
   });
 
   it('ranks mechanisms on production rows once settlement is recorded, strongest lower bound first', async () => {
@@ -307,9 +315,53 @@ describe('outreach funnel read from cash_outcomes rows (outreachFromRows via cas
       await settlement(`sm${i}`, 10_000);
     }
     await outcome({ opp: 'quiet', kind: 'CONTACT_RESULT', mechanism: 'Quiet', text: 'BUYER_SILENT' });
-    const { outreach } = await cashFunnel({ projectId });
+    const { outreach } = await cashFunnel({ projectId, outreachEvidence: stated });
     expect(outreach.mix.ranked.map((one) => one.mode)).toEqual(['Big', 'Small']);
     expect(outreach.mix.ranked[0]!.firstPurchaseRevenueCents.low).toBeGreaterThan(outreach.mix.ranked[1]!.firstPurchaseRevenueCents.low!);
     expect(outreach.mix.unranked.map((one) => one.mode)).toEqual(['Quiet']);
+  });
+
+  it('does not read contacts having been sent as permission, capacity or reputation (§39)', async () => {
+    for (let i = 0; i < 10; i += 1) await outcome({ opp: `u${i}`, kind: 'CONTACT_RESULT', mechanism: 'M', text: 'BUYER_REPLIED' });
+    const m = (await cashFunnel({ projectId, outreachEvidence: {} })).outreach.mechanisms[0]!;
+    for (const stage of ['permission', 'throughput', 'reputation'] as const) expect(m.stages[stage].basis, stage).toBe('UNKNOWN');
+    expect(m.permitted).toBeNull();
+    expect(m.buyers.basis).toBe('UNKNOWN');
+    expect(m.reachedProspects.basis).toBe('UNKNOWN');
+  });
+
+  it('reads a refusing standing authority as a no, and an absent one as unknown', async () => {
+    await outcome({ opp: 'p', kind: 'CONTACT_RESULT', mechanism: 'M', text: 'BUYER_REPLIED' });
+    const refused = (await cashFunnel({ projectId, outreachEvidence: { ...stated, permission: m(0) } })).outreach.mechanisms[0]!;
+    expect(refused.permitted).toBe(false);
+    // With no grant row in this project, reading the evidence from the rows says nobody has said.
+    const fromRows = (await cashFunnel({ projectId })).outreach.mechanisms[0]!;
+    expect(fromRows.stages.permission.basis).toBe('UNKNOWN');
+    expect(fromRows.permitted).toBeNull();
+  });
+
+  it('lets the sending cap bind: throughput is the accounts\' capacity, not the contacts already sent', async () => {
+    for (let i = 0; i < 50; i += 1) await outcome({ opp: `c${i}`, kind: 'CONTACT_RESULT', mechanism: 'M', text: 'BUYER_REPLIED' });
+    const cap = { permission: m(1), sending: { perDay: 10, healthyAccounts: 1, totalAccounts: 1 } };
+    const reading = (await cashFunnel({ projectId, outreachEvidence: cap })).outreach.mechanisms[0]!;
+    expect(reading.stages.throughput.low).toBe(10);
+    expect(reading.reachedProspects.low).toBe(10); // 50 deliverable prospects, only 10 can be sent to
+    const ample = (await cashFunnel({ projectId, outreachEvidence: { permission: m(1), sending: { perDay: 1000, healthyAccounts: 1, totalAccounts: 1 } } })).outreach.mechanisms[0]!;
+    expect(ample.reachedProspects.low).toBe(50);
+  });
+
+  it('scales capacity by the share of sending accounts in good standing', async () => {
+    for (let i = 0; i < 50; i += 1) await outcome({ opp: `r${i}`, kind: 'CONTACT_RESULT', mechanism: 'M', text: 'BUYER_REPLIED' });
+    const half = { permission: m(1), sending: { perDay: 40, healthyAccounts: 1, totalAccounts: 2 } };
+    const reading = (await cashFunnel({ projectId, outreachEvidence: half })).outreach.mechanisms[0]!;
+    expect(reading.stages.reputation.low).toBe(0.5);
+    expect(reading.reachedProspects.low).toBe(20);
+  });
+
+  it('makes reached prospects unknown while the sending accounts\' reputation is unknown', () => {
+    const { reputation: _r, ...rest } = mechanism().inputs;
+    const r = modelOutreachFunnel(mechanism({ inputs: rest }));
+    expect(r.reachedProspects.basis).toBe('UNKNOWN');
+    expect(r.buyers.basis).toBe('UNKNOWN');
   });
 });

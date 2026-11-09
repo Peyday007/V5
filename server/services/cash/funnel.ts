@@ -26,6 +26,8 @@ import type { CashCardFact, Standing } from '../../domain/types.ts';
 import { CASH_TIERS, cashTier, tierRank, type CashTier } from './tier.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
+import { checkCommercialAuthority } from './authority.ts';
+import { instantlyCapacity } from './providers/instantly.ts';
 
 export const FUNNEL_WEEKS = 8;
 
@@ -122,6 +124,8 @@ export async function cashFunnel(input: {
   standings?: ReadonlyMap<string, Standing>;
   now?: string;
   weeks?: number;
+  /** Permission and sending capacity, when the caller already has them; read from their rows otherwise. */
+  outreachEvidence?: OutreachEvidence;
 }): Promise<FunnelReading> {
   const db = getDb();
   const until = input.now ?? cashNow();
@@ -312,7 +316,7 @@ export async function cashFunnel(input: {
           : null,
       byKind,
     },
-    outreach: await outreachFromRows(input.projectId),
+    outreach: await outreachFromRows(input.projectId, input.outreachEvidence),
   };
 }
 
@@ -414,7 +418,8 @@ export const OUTREACH_STAGES = [
   'permission', // provider terms and consent permit this use at all: 1 = permitted, 0 = refused
   'uniqueProspects', // unique relevant prospects reachable (a count, not a message count)
   'deliverability', // share of sends that reach an inbox or inbox-equivalent
-  'throughput', // messages the sending accounts can send in the period, at their reputation
+  'throughput', // messages the sending accounts can send in the period (their stated capacity)
+  'reputation', // share of the sending accounts in good standing: only those carry the throughput
   'response', // share of reached prospects that reply or engage
   'qualification', // share of responders that qualify
   'close', // share of qualified that buy
@@ -508,7 +513,7 @@ const UNKNOWN_FIGURE = (because: string): OutreachFigure => ({ basis: 'UNKNOWN',
  */
 export type StageKind = 'share' | 'count' | 'permission';
 
-const SHARE_STAGES: readonly OutreachStage[] = ['deliverability', 'response', 'qualification', 'close', 'settlement', 'fulfillment'];
+const SHARE_STAGES: readonly OutreachStage[] = ['deliverability', 'reputation', 'response', 'qualification', 'close', 'settlement', 'fulfillment'];
 const COUNT_STAGES: readonly OutreachStage[] = ['uniqueProspects', 'throughput', 'repeat'];
 
 /** The kind of quantity each stage is. Exported so a caller can say what a stage takes. */
@@ -584,7 +589,9 @@ export function modelOutreachFunnel(mechanism: OutreachMechanism): OutreachFunne
     );
   };
 
-  const { uniqueProspects, deliverability, throughput } = stages;
+  const { uniqueProspects, deliverability } = stages;
+  // Only the accounts in good standing send, so capacity is throughput times reputation.
+  const throughput = step(stages.throughput, stages.reputation, 'effective sending throughput');
   const deliverable = gate(step(uniqueProspects, deliverability, 'reached prospects'));
   const reachedProspects: OutreachFigure =
     deliverable.basis === 'UNKNOWN' || throughput.basis === 'UNKNOWN' || deliverable.high === null || throughput.high === null || throughput.low === null || deliverable.low === null
@@ -753,13 +760,14 @@ export function formatOutreachFunnel(reading: OutreachFunnelReading): string[] {
  * Build the mechanisms from the rows Brain has written (§94). Every stage is read from the rows
  * that state it, and a stage no row states stays unknown rather than defaulting:
  *
- *   permission      1 when contacts were actually sent: a CONTACT_RESULT row is written only for a
- *                   contact Brain performed through the authority gate, so provider terms and
- *                   consent were decided before the send. No row, no figure.
+ *   permission      stated by the standing commercial authority row (CONTACT_BUYER allowed = 1,
+ *                   prohibited or not covered = 0). A contact having been sent proves nothing about
+ *                   it, and provider terms have no row of their own, so with no grant it is unknown.
  *   uniqueProspects distinct opportunities contacted: a count of prospects reached so far, never
  *                   the message count (one prospect messaged twice is one).
- *   throughput      contacts sent in the rows: what the accounts have actually sent, an observed
- *                   floor of capacity and not a promise of more.
+ *   throughput      the sending accounts' measured daily limit over the days the contact rows span.
+ *                   Never the number of contacts already sent: that is the quantity the cap bounds.
+ *   reputation      healthy sending accounts among all of them, from the workspace reading.
  *   deliverability  contacts that did not bounce.
  *   response        answered contacts among delivered ones.
  *   qualification   answered prospects that engaged with terms (accepted or countered, or hold an
@@ -775,7 +783,17 @@ export function formatOutreachFunnel(reading: OutreachFunnelReading): string[] {
  * A message count is never read as a buyer. A mechanism is whatever the rows name (its
  * `mechanism`, else its `channel`), never a list this code knows.
  */
-export async function mechanismsFromRows(projectId: string): Promise<OutreachMechanism[]> {
+export interface OutreachEvidence {
+  /** Whether the standing commercial authority permits contacting buyers. Absent = nobody has said. */
+  permission?: StageInput;
+  /**
+   * What the sending accounts measure: the most they send a day, and how many of the accounts
+   * are in good standing out of all of them. Absent = no workspace could be read.
+   */
+  sending?: { perDay: number; healthyAccounts: number; totalAccounts: number } | null;
+}
+
+export async function mechanismsFromRows(projectId: string, evidence: OutreachEvidence = {}): Promise<OutreachMechanism[]> {
   const db = getDb();
   const rows = await db.all<{
     mechanism: string | null;
@@ -785,8 +803,9 @@ export async function mechanismsFromRows(projectId: string): Promise<OutreachMec
     value_cents: number | null;
     value_text: string | null;
     request_key: string;
+    created_at: string;
   }>(
-    `SELECT mechanism, channel, opportunity_id, kind, value_cents, value_text, request_key
+    `SELECT mechanism, channel, opportunity_id, kind, value_cents, value_text, request_key, created_at
        FROM cash_outcomes
       WHERE project_id = ? AND kind IN ('CONTACT_RESULT', 'ACCEPTED_PRICE', 'REFUNDED')
       ORDER BY created_at`,
@@ -839,14 +858,21 @@ export async function mechanismsFromRows(projectId: string): Promise<OutreachMec
     const settledCents = agreed.reduce((t, id) => t + Math.min(settledByOpportunity.get(id) ?? 0, accepted.get(id) ?? 0), 0);
     const extra = agreed.reduce((t, id) => t + Math.max(0, (agreementsByOpportunity.get(id) ?? 1) - 1), 0);
 
+    // The period the rows cover, whole days, at least one: capacity is a rate, and the cap is what
+    // the accounts could have sent over that period, not what they did send.
+    const stamps = contacts.map((one) => Date.parse(String(one.created_at))).filter((t) => Number.isFinite(t));
+    const days = stamps.length > 0 ? Math.max(1, Math.ceil((Math.max(...stamps) - Math.min(...stamps)) / 86_400_000)) : 1;
+    const sending = evidence.sending && evidence.sending.perDay > 0 && evidence.sending.totalAccounts > 0 ? evidence.sending : null;
+
     mechanisms.push({
       mode,
       label: `${mode} (measured from ${contacts.length} recorded contact result(s))`,
       messagesSent: contacts.length > 0 ? contacts.length : undefined,
       inputs: {
-        permission: contacts.length > 0 ? { basis: 'MEASURED', value: 1 } : { basis: 'UNKNOWN' },
+        permission: evidence.permission ?? { basis: 'UNKNOWN' },
         uniqueProspects: uniqueContacted > 0 ? { basis: 'MEASURED', value: uniqueContacted } : { basis: 'UNKNOWN' },
-        throughput: contacts.length > 0 ? { basis: 'MEASURED', value: contacts.length } : { basis: 'UNKNOWN' },
+        throughput: sending ? { basis: 'MEASURED', value: sending.perDay * days } : { basis: 'UNKNOWN' },
+        reputation: sending ? { basis: 'MEASURED', value: Math.min(1, sending.healthyAccounts / sending.totalAccounts) } : { basis: 'UNKNOWN' },
         deliverability: measured(contacts.length - bounced, contacts.length),
         response: measured(answered, contacts.length - bounced),
         qualification: measured(qualifiedIds.size, answered),
@@ -861,10 +887,26 @@ export async function mechanismsFromRows(projectId: string): Promise<OutreachMec
   return mechanisms;
 }
 
+/** Read what states permission and sending capacity: the authority row and the workspace reading. */
+export async function outreachEvidenceFor(projectId: string): Promise<OutreachEvidence> {
+  const decision = await checkCommercialAuthority({ projectId, action: 'CONTACT_BUYER' });
+  const permission: StageInput = decision.ok
+    ? { basis: 'MEASURED', value: 1 }
+    : decision.authority
+      ? { basis: 'MEASURED', value: 0 }
+      : { basis: 'UNKNOWN' };
+  const capacity = await instantlyCapacity().catch(() => null);
+  return {
+    permission,
+    sending: capacity ? { perDay: capacity.perDay, healthyAccounts: capacity.accounts, totalAccounts: capacity.totalAccounts } : null,
+  };
+}
+
 async function outreachFromRows(
   projectId: string,
+  evidence?: OutreachEvidence,
 ): Promise<{ mechanisms: OutreachFunnelReading[]; mix: MixReading; consideredWays: ConsideredWay[] }> {
-  const mechanisms = await mechanismsFromRows(projectId);
+  const mechanisms = await mechanismsFromRows(projectId, evidence ?? (await outreachEvidenceFor(projectId)));
   return {
     mechanisms: mechanisms.map(modelOutreachFunnel),
     mix: searchOutreachMix(mechanisms),
