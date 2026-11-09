@@ -44,6 +44,9 @@ import {
   listAuthorities,
   liveAuthority,
 } from '../../repos/cashAuthority.ts';
+import { listFulfillments, unresolvedRefundCents } from '../../repos/cashFulfillment.ts';
+import { getDb } from '../../db/database.ts';
+import { recordCashEvent } from '../../repos/cashMode.ts';
 import type { CashAuthority } from '../../domain/types.ts';
 
 /**
@@ -321,6 +324,24 @@ export interface AuthorityLedgerRecord {
   policyVersion: number | null;
   amountCents: number | null;
   at: string;
+  /** On a stop or revocation: what stays owed, as read from rows. Null otherwise. */
+  obligations: Obligations | null;
+  /** On a stop or revocation: the classes of work that may still proceed. */
+  remainingSafeWork: ConsequenceClass[];
+  /** On a refusal that a person can cure: the precise approval that would. */
+  renewalNeeded: string | null;
+}
+
+/**
+ * What a stop or a revocation leaves owed. Read from the rows that hold the
+ * obligations — held commitments, declared fulfillments and authorized refunds
+ * not yet confirmed — and never from the caller. A stop pauses new mutations;
+ * it does not release a hold, close a fulfillment or forget a refund.
+ */
+export interface Obligations {
+  heldCents: number;
+  trackedFulfillments: { id: string; opportunityId: string; kind: string }[];
+  unresolvedRefundCents: number;
 }
 
 export interface ActionDecision {
@@ -330,7 +351,7 @@ export interface ActionDecision {
   /** The single smallest grant that would change a refusal, or null when none can. */
   neededApproval: { action: string; projectId: string; description: string } | null;
   /** On a stop or revocation: what stays owed and what may still proceed. */
-  obligations: { heldCents: number } | null;
+  obligations: Obligations | null;
   remainingSafeWork: ConsequenceClass[];
   /** Ready for `project_events`. Carries no credential and no free text from a caller. */
   ledger: AuthorityLedgerRecord;
@@ -345,8 +366,6 @@ export interface JudgeInput {
   /** PROPOSE records a draft; only PERFORM is an effect. */
   mode?: 'PERFORM' | 'PROPOSE';
   amountCents?: number | null;
-  /** Set by the owner's stop control, read from its row — never by the action's caller. */
-  emergencyStop?: boolean;
   /** A fact read from the release grant's envelope, for engineering actions. */
   releaseEnvelopeAllows?: boolean;
   at?: string;
@@ -354,12 +373,43 @@ export interface JudgeInput {
 
 export interface JudgeState {
   authority: CashAuthority | null;
-  /** The newest grant for the project was revoked, and no live one replaced it. */
+  /** A grant was revoked and nothing granted after that revocation is in force. */
   revoked: boolean;
+  /**
+   * The owner's stop control for this project is on. Read by `decideAction` from
+   * the project's own stop rows (`cash_events`, see `emergencyStopOn`); an
+   * action's caller has no way to set it, and no way to clear it.
+   */
+  stopped: boolean;
   heldCents: number;
+  /** Loaded by `decideAction` when the decision is a stop or a revocation. */
+  obligations?: Obligations | null;
 }
 
-const SAFE_WORK: ConsequenceClass[] = ['INTERNAL', 'STANDING_GRANT_ENGINEERING'];
+/**
+ * Work that may still proceed after a stop or a revocation. A revoked grant
+ * leaves the release envelope's engineering in force; a stop pauses every
+ * mutation that is not internal, engineering included.
+ */
+const SAFE_WORK_AFTER: Record<'REVOKED' | 'EMERGENCY_STOP', ConsequenceClass[]> = {
+  REVOKED: ['INTERNAL', 'STANDING_GRANT_ENGINEERING'],
+  EMERGENCY_STOP: ['INTERNAL'],
+};
+
+/**
+ * Whether the project's authority was withdrawn rather than never granted: some
+ * grant was revoked, and no grant created after the latest revocation exists.
+ * Reading only the newest row missed a revocation that an expired or later
+ * draft row sat on top of, and mistook an older revocation for the present.
+ */
+export function revocationStands(authorities: readonly CashAuthority[]): boolean {
+  let latest: string | null = null;
+  for (const one of authorities) {
+    if (one.state === 'REVOKED' && one.revokedAt && (latest === null || one.revokedAt > latest)) latest = one.revokedAt;
+  }
+  if (latest === null) return false;
+  return !authorities.some((one) => one.state === 'ACTIVE' && one.createdAt > (latest as string));
+}
 
 /**
  * The pure judgment: a closed action, a grant row and a few facts in; a decision
@@ -379,13 +429,16 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
     needs: ActionDecision['neededApproval'] = null,
   ): ActionDecision => {
     const proposed = ok && input.mode === 'PROPOSE';
+    const withdrawn = !ok && (cause === 'REVOKED' || cause === 'EMERGENCY_STOP') ? cause : null;
+    const obligations = withdrawn ? (state.obligations ?? { heldCents: state.heldCents, trackedFulfillments: [], unresolvedRefundCents: 0 }) : null;
+    const remainingSafeWork = withdrawn ? SAFE_WORK_AFTER[withdrawn] : [];
     return {
       ok,
       consequenceClass: klass,
       reason,
       neededApproval: ok ? null : needs,
-      obligations: !ok && (cause === 'REVOKED' || cause === 'EMERGENCY_STOP') ? { heldCents: state.heldCents } : null,
-      remainingSafeWork: !ok && (cause === 'REVOKED' || cause === 'EMERGENCY_STOP') ? SAFE_WORK : [],
+      obligations,
+      remainingSafeWork,
       ledger: {
         kind: 'AUTHORITY_DECISION',
         projectId: input.projectId,
@@ -397,6 +450,9 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
         policyVersion: state.authority?.policyVersion ?? null,
         amountCents: amount,
         at,
+        obligations,
+        remainingSafeWork,
+        renewalNeeded: !ok && needs ? needs.description : null,
       },
     };
   };
@@ -423,8 +479,13 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
       ask(`authority to ${input.action}, separate from the read-only access already held`),
     );
   }
-  if (input.emergencyStop) {
-    return finish(false, 'EMERGENCY_STOP', 'emergency stop is on: risky mutations are paused');
+  if (state.stopped) {
+    return finish(
+      false,
+      'EMERGENCY_STOP',
+      'emergency stop is on: risky mutations are paused',
+      ask(`the owner to lift the stop before ${input.action}`),
+    );
   }
   if (state.revoked && !state.authority) {
     return finish(false, 'REVOKED', 'the standing authority was revoked', ask(`renewed authority covering ${input.action}`));
@@ -462,19 +523,89 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
   return finish(true, 'ALLOWED', 'within the standing commercial authority');
 }
 
+/*
+ * The stop control. It is the project's own append-only rows in `cash_events`
+ * and never the Russell cycle: pausing that singleton stops the whole Brain,
+ * and a sprint's stop must not (§30, §40, and the guard in `cashMode.test.ts`).
+ * Stopping pauses new risky mutations only. It deletes no grant, releases no
+ * hold, closes no fulfillment and forgets no refund — `readObligations` is how
+ * a stopped project still says what it owes.
+ */
+export const EMERGENCY_STOP_KIND = 'EMERGENCY_STOP_ON';
+export const EMERGENCY_RESUME_KIND = 'EMERGENCY_STOP_LIFTED';
+
+/** The owner stops, or lifts the stop on, risky mutations for one project. Appends; never edits. */
+export async function setEmergencyStop(input: {
+  projectId: string;
+  on: boolean;
+  actorUserId: string;
+  reason: string;
+}): Promise<void> {
+  await recordCashEvent({
+    projectId: input.projectId,
+    kind: input.on ? EMERGENCY_STOP_KIND : EMERGENCY_RESUME_KIND,
+    actorRef: input.actorUserId,
+    summary: input.on ? 'Emergency stop: risky mutations paused' : 'Emergency stop lifted',
+    detail: { reason: input.reason },
+  });
+}
+
+/**
+ * Is the project's stop on? The newest of the two kinds decides. Fails closed:
+ * two rows written in the same instant that disagree read as stopped, and a row
+ * that cannot be read is a stop, because no answer is never read as go.
+ */
+export async function emergencyStopOn(projectId: string): Promise<boolean> {
+  try {
+    const rows = await getDb().all<{ kind: string; created_at: string }>(
+      `SELECT kind, created_at FROM cash_events
+        WHERE project_id = ? AND kind IN (?, ?)
+        ORDER BY created_at DESC, id DESC LIMIT 2`,
+      [projectId, EMERGENCY_STOP_KIND, EMERGENCY_RESUME_KIND],
+    );
+    const newest = rows[0];
+    if (!newest) return false;
+    const next = rows[1];
+    if (next && next.created_at === newest.created_at && next.kind !== newest.kind) return true;
+    return newest.kind === EMERGENCY_STOP_KIND;
+  } catch {
+    return true;
+  }
+}
+
+/** Everything the project still owes, read from the rows that hold it. */
+async function readObligations(projectId: string, currency?: string): Promise<Obligations> {
+  const [held, fulfillments] = await Promise.all([heldCentsForProject(projectId, currency), listFulfillments(projectId)]);
+  const opportunities = [...new Set(fulfillments.map((f) => f.opportunityId))];
+  let unresolved = 0;
+  for (const opportunityId of opportunities) unresolved += await unresolvedRefundCents({ projectId, opportunityId });
+  return {
+    heldCents: held,
+    trackedFulfillments: fulfillments.map((f) => ({ id: f.id, opportunityId: f.opportunityId, kind: f.kind })),
+    unresolvedRefundCents: unresolved,
+  };
+}
+
 /**
  * Judge an action against the live rows. This is the one call every action path
  * — an API, a browser automation, a worker — makes before an effect.
+ *
+ * The stop control and the revocation are read here, from their rows, on every
+ * call: nothing a caller passes can set or clear either. A stop control that
+ * cannot be read is a stop, because "no answer" is never read as "go".
  */
 export async function decideAction(input: JudgeInput): Promise<ActionDecision> {
   const klass = classifyAction(input.action);
-  if (klass === 'INTERNAL' || !klass) return judgeAction(input, { authority: null, revoked: false, heldCents: 0 });
-  const authority = await liveAuthority(input.projectId, input.at);
-  let revoked = false;
-  if (!authority) {
-    const all = await listAuthorities(input.projectId);
-    revoked = all[0]?.state === 'REVOKED';
+  if (klass === 'INTERNAL' || !klass) {
+    return judgeAction(input, { authority: null, revoked: false, stopped: false, heldCents: 0 });
   }
+  const [authority, stopped] = await Promise.all([liveAuthority(input.projectId, input.at), emergencyStopOn(input.projectId)]);
+  let revoked = false;
+  if (!authority) revoked = revocationStands(await listAuthorities(input.projectId));
   const held = await heldCentsForProject(input.projectId, authority?.currency);
-  return judgeAction(input, { authority, revoked, heldCents: held });
+  const state: JudgeState = { authority, revoked, stopped, heldCents: held };
+  const first = judgeAction(input, state);
+  if (first.ok || (first.ledger.cause !== 'EMERGENCY_STOP' && first.ledger.cause !== 'REVOKED')) return first;
+  // A stop or a revocation keeps what is owed: record it from the rows.
+  return judgeAction(input, { ...state, obligations: await readObligations(input.projectId, authority?.currency) });
 }
