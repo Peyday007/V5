@@ -84,6 +84,11 @@ export interface FunnelReading {
     settledByCurrency: Record<string, number> | null;
     byKind: Record<string, number>;
   };
+  /**
+   * Every mechanism that has recorded outcomes, modelled as the full outreach
+   * funnel from those rows (COM-13-3). Stages no row states are unknown.
+   */
+  outreach: { mechanisms: OutreachFunnelReading[]; mix: MixReading };
 }
 
 /** The Monday on or before `iso`, as `YYYY-MM-DD` (UTC). */
@@ -307,6 +312,7 @@ export async function cashFunnel(input: {
           : null,
       byKind,
     },
+    outreach: await outreachFromRows(input.projectId),
   };
 }
 
@@ -366,6 +372,15 @@ export function formatFunnel(reading: FunnelReading): string[] {
         : Object.entries(o.settledByCurrency).map(([c, n]) => `${c} ${n}`).join(' ')) +
       ` kinds ${Object.entries(o.byKind).map(([k, n]) => `${k}=${n}`).join(' ') || '(none)'}`,
   );
+  if (reading.outreach.mechanisms.length === 0) {
+    lines.push('  outreach funnel: no mechanism has recorded an outcome yet');
+  } else {
+    for (const mechanism of reading.outreach.mechanisms) lines.push(...formatOutreachFunnel(mechanism).map((line) => `  ${line}`));
+    lines.push(
+      `  outreach mix ranked=${reading.outreach.mix.ranked.map((one) => one.mode).join(',') || '(none)'}` +
+        ` unranked=${reading.outreach.mix.unranked.map((one) => `${one.mode}[${one.firstUnknown ?? 'unknown'}]`).join(',') || '(none)'}`,
+    );
+  }
   return lines;
 }
 
@@ -595,4 +610,66 @@ export function formatOutreachFunnel(reading: OutreachFunnelReading): string[] {
     `  buyers ${show(reading.buyers)}`,
     `  revenue (minor units) ${show(reading.revenueCents)}`,
   ];
+}
+
+/**
+ * Build the mechanisms from the outcome rows Brain has written (§94). Only what
+ * a row states becomes a measured input: the share of contacts that were
+ * answered, the share that bounced, the share of answered contacts that agreed,
+ * the share of agreed deals not refunded, and the agreed price. Permission,
+ * unique prospects, throughput, qualification, settlement and repeat are stated
+ * by no outcome row, so they stay unknown and keep revenue unknown until
+ * somebody records them; a message count is never read as a buyer. A mechanism
+ * is whatever the rows name (its `mechanism`, else its `channel`), never a
+ * list this code knows.
+ */
+async function outreachFromRows(projectId: string): Promise<{ mechanisms: OutreachFunnelReading[]; mix: MixReading }> {
+  const rows = await getDb().all<{
+    mechanism: string | null;
+    channel: string | null;
+    opportunity_id: string;
+    kind: string;
+    value_cents: number | null;
+    value_text: string | null;
+    request_key: string;
+  }>(
+    `SELECT mechanism, channel, opportunity_id, kind, value_cents, value_text, request_key
+       FROM cash_outcomes
+      WHERE project_id = ? AND kind IN ('CONTACT_RESULT', 'ACCEPTED_PRICE', 'REFUNDED')
+      ORDER BY created_at`,
+    [projectId],
+  );
+  const groups = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = row.mechanism ?? row.channel ?? 'unspecified';
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  const measured = (numerator: number, denominator: number): StageInput =>
+    denominator > 0 ? { basis: 'MEASURED', value: numerator / denominator } : { basis: 'UNKNOWN' };
+  const mechanisms: OutreachMechanism[] = [];
+  for (const [mode, group] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const contacts = group.filter((one) => one.kind === 'CONTACT_RESULT');
+    const bounced = contacts.filter((one) => one.value_text === 'CONTACT_UNDELIVERABLE').length;
+    const answered = contacts.filter(
+      (one) => one.value_text !== 'BUYER_SILENT' && one.value_text !== 'CONTACT_UNDELIVERABLE',
+    ).length;
+    const accepted = new Map<string, number>();
+    for (const one of group) if (one.kind === 'ACCEPTED_PRICE' && one.value_cents !== null) accepted.set(one.opportunity_id, one.value_cents);
+    const refunded = new Set(group.filter((one) => one.kind === 'REFUNDED').map((one) => one.opportunity_id));
+    const refundedAccepted = [...accepted.keys()].filter((id) => refunded.has(id)).length;
+    const price = median([...accepted.values()]);
+    mechanisms.push({
+      mode,
+      label: `${mode} (measured from ${contacts.length} recorded contact result(s))`,
+      messagesSent: contacts.length > 0 ? contacts.length : undefined,
+      inputs: {
+        deliverability: measured(contacts.length - bounced, contacts.length),
+        response: measured(answered, contacts.length - bounced),
+        close: measured(Math.min(accepted.size, answered), answered),
+        fulfillment: measured(accepted.size - refundedAccepted, accepted.size),
+      },
+      dealValueCents: price === null ? { basis: 'UNKNOWN' } : { basis: 'MEASURED', value: price },
+    });
+  }
+  return { mechanisms: mechanisms.map(modelOutreachFunnel), mix: searchOutreachMix(mechanisms) };
 }
