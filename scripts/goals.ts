@@ -482,6 +482,11 @@ async function printPlan(reading: PlanReading): Promise<void> {
   console.log(`  resources   ${t.resources ?? 'not stated'}`);
   console.log(`  spending    ${spendingRuleSentence(t) ?? 'no pace set'}`);
   console.log(`  verdict     ${reading.summary}`);
+  const acc = reading.acceptance;
+  console.log(`  acceptance  ${acc.status} (requires a defensible ${Math.round(acc.required * 100)}% chance of collecting the target before the deadline) · ${acc.sentence}`);
+  if (acc.probability) console.log(`    basis     ${acc.probability.basis} ${Math.round(acc.probability.value * 1000) / 10}% (lower bound ${Math.round(acc.probability.lowerBound * 1000) / 10}%, n=${acc.probability.sample}) · ${acc.probability.note}`);
+  if (acc.candidate) console.log(`    candidate ${acc.candidate.source} ${acc.candidate.opportunityIds.join(' + ')} · settled p50 ${acc.candidate.settledP50 === null ? '—' : Math.round(acc.candidate.settledP50)} · ${acc.candidate.reach === null ? 'reach not computed' : `reach ${Math.round(acc.candidate.reach * 1000) / 10}% (${acc.candidate.reachBasis === 'PROBABILITY' ? 'probability' : 'coverage, not a probability'})`}`);
+  for (const why of acc.shortfalls) console.log(`    short     ${why}`);
   console.log(`  pool        ${reading.pool.conclusion}: ${reading.pool.sentence}`);
   if (reading.pathways) {
     for (const line of renderPathways(reading.pathways)) console.log(line);
@@ -493,7 +498,7 @@ async function printPlan(reading: PlanReading): Promise<void> {
       for (const line of why) console.log(`    construct ${line}`);
     }
   }
-  console.log(`  considered  ${reading.considered.length} opening(s), ${reading.considered.filter((one) => one.modelled).length} in the simulation; ${reading.needsMoreOpenings ? 'not enough yet, so Brain keeps searching' : 'a realistic plan exists'}`);
+  console.log(`  considered  ${reading.considered.length} opening(s), ${reading.considered.filter((one) => one.modelled).length} in the simulation; ${reading.needsMoreOpenings ? (reading.acceptance.status === 'ACCEPTED' ? 'an accepted plan exists; Brain keeps searching for stronger openings' : 'no accepted plan, so Brain keeps constructing and searching') : 'an accepted plan exists'}`);
   for (const one of reading.considered.slice(0, 8)) {
     console.log(`    ${one.modelled ? 'model' : '     '} ${one.stage.slice(0, 1)} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);
   }

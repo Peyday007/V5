@@ -173,22 +173,59 @@ describe('the gate', () => {
     expect(reading.strategies[0]!.constraintsFailed.join(' ')).toMatch(/more than the 500 the owner said this goal may commit/);
   });
 
-  it('recommends only when every link is established and the cautious numbers reach the target', async () => {
+  it('a complete chain whose cautious numbers reach the target is a candidate, not an accepted plan, without a calibrated 90%', async () => {
     // Fulfilment is a real proof: Brain renders and verifies a sample of the deliverable.
     expect((await proveCapabilities()).SPREADSHEET.available).toBe(true);
     const o = await play({ title: 'Agreed monthly reports', priceCents: 400_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
     await insertAgreement({ projectId, opportunityId: o.id, amountCents: 1_200_000, currency: 'USD', deliverable: 'reports', acceptanceCondition: 'delivered', evidenceKind: 'WRITTEN_ACCEPTANCE', evidenceRef: 'email-1', recordedBy: 'PERSON', requestKey: 'agree-1' });
     const id = await goal(1_000_000);
     const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
-    expect(reading.verdict).toBe('RECOMMENDABLE');
-    // A SQUEEZE goal keeps discovering and constructing stronger openings even with a recommended plan (2026-11-06).
-    expect(reading.needsMoreOpenings).toBe(true);
+    // Owner, 2026-11-09: acceptance needs a defensible 90% chance; a point reading is not one.
+    expect(reading.verdict).toBe('NEEDS_EVIDENCE');
+    expect(reading.strategies.some((one) => one.verdict === 'RECOMMENDABLE')).toBe(false);
+    expect(reading.acceptance.status).toBe('CANDIDATE_ONLY');
+    expect(reading.acceptance.probability).toBeNull();
+    expect(reading.acceptance.accepted).toBeNull();
+    expect(reading.acceptance.candidate?.opportunityIds).toContain(o.id);
+    expect(reading.acceptance.shortfalls.join(' ')).toMatch(/point reading, not a 90% probability/);
+    expect(reading.summary).toMatch(/qualified candidate, not an accepted plan/);
+    expect(reading.strategies[0]!.chainComplete).toBe(true);
     expect(reading.strategies[0]!.links.every((one) => one.ok)).toBe(true);
-    // No success percentage: there is no record of earlier recommended plans.
+    // Keeps constructing, modifying and comparing while nothing is accepted.
+    expect(reading.needsMoreOpenings).toBe(true);
+    // No success percentage: there is no record of earlier accepted plans.
     expect(reading.measuredChance).toBeNull();
-    // The recommended plan's opportunity is now work the goal pursues.
+    // The candidate is still pursued — it is the strongest provisional plan.
     expect((await listLinks(id)).some((one) => one.kind === 'OPPORTUNITY' && one.ref === o.id && one.relation === 'PURSUES')).toBe(true);
     expect(reading.scenarioRunId).toBeTruthy();
+    // The persisted reading records the acceptance, not just the verdict.
+    const row = (await listReadings(id))[0]!;
+    expect(row.verdict).toBe('NEEDS_EVIDENCE');
+    expect(JSON.parse(row.forecast!).acceptance.status).toBe('CANDIDATE_ONLY');
+  });
+
+  it('accepts the same plan only once this Brain measured a 90% record of plans like it', async () => {
+    await proveCapabilities();
+    const o = await play({ title: 'Agreed monthly reports', priceCents: 400_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    await insertAgreement({ projectId, opportunityId: o.id, amountCents: 1_200_000, currency: 'USD', deliverable: 'reports', acceptanceCondition: 'delivered', evidenceKind: 'WRITTEN_ACCEPTANCE', evidenceRef: 'email-9', recordedBy: 'PERSON', requestKey: 'agree-9' });
+    // 40 earlier accepted plans, every one achieved: Wilson lower bound ≈ 0.91.
+    const history = await createWorkstream({ projectId, title: 'history', intent: 'history', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    const at = new Date(now.getTime() - 86_400_000).toISOString();
+    for (let i = 0; i < 40; i += 1) {
+      await getDb().run(
+        `INSERT INTO goal_plan_readings (id, workstream_id, digest, scenario_model_id, scenario_run_id, verdict, chosen_strategy, strategies, next_test, forecast, created_at) VALUES (?, ?, ?, NULL, NULL, 'RECOMMENDABLE', NULL, '[]', NULL, NULL, ?)`,
+        [`gpr_hist_${i}`, history.id, `d${i}`, at],
+      );
+      await getDb().run(
+        `INSERT INTO goal_outcomes (id, workstream_id, reading_id, kind, achieved_cents, target_cents, detail, observed_at) VALUES (?, ?, ?, 'ACHIEVED', 100, 100, '{}', ?)`,
+        [`gou_hist_${i}`, history.id, `gpr_hist_${i}`, at],
+      );
+    }
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    expect(reading.measuredChance!.lowerBound).toBeGreaterThanOrEqual(0.9);
+    expect(reading.acceptance.status).toBe('ACCEPTED');
+    expect(reading.acceptance.probability).toMatchObject({ basis: 'MEASURED_RECORD', sample: 40 });
+    expect(reading.verdict).toBe('RECOMMENDABLE');
   });
 
   it('does not let one buyer saying yes stand for a rate: a smaller agreement still needs evidence', async () => {
@@ -372,8 +409,12 @@ describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
     expect(unstated.nextTest).toMatchObject({ link: 'ECONOMICS', by: 'PERSON' });
     expect(unstated.nextTest!.test).toMatch(/ties up about 4000 USD/);
 
-    // The owner says more may be used: the same plan is recommendable.
-    expect((await readGoalPlan({ goalId: await goal(1_000_000, 1_000_000), evaluations: 2_000 }))!.verdict).toBe('RECOMMENDABLE');
+    // The owner says more may be used: the same plan qualifies on every link — a candidate,
+    // not an accepted plan, until a calibrated 90% supports it (owner, 2026-11-09).
+    const roomy = (await readGoalPlan({ goalId: await goal(1_000_000, 1_000_000), evaluations: 2_000 }))!;
+    expect(roomy.strategies[0]!.chainComplete).toBe(true);
+    expect(roomy.acceptance.status).toBe('CANDIDATE_ONLY');
+    expect(roomy.verdict).toBe('NEEDS_EVIDENCE');
     // The owner says less: not viable, and it says why.
     const tight = (await readGoalPlan({ goalId: await goal(1_000_000, 100_000), evaluations: 2_000 }))!;
     expect(tight.verdict).toBe('NOT_VIABLE');

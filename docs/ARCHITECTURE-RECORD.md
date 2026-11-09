@@ -14878,3 +14878,52 @@ perform path changed.
 - **Doors.** `admin cash instantly` reads the workspace, Brain's campaign and
   its replies; the provider status page and `report:cash --probe` name
   Instantly as the messaging setup.
+
+## 95. A candidate is not an accepted plan: a cash goal is met at a defensible 90%, never at a point reading.
+
+Owner, 2026-11-09: "The owner requires a plan with at least 90% defensible
+probability of collecting $10K before the deadline. This is a hard acceptance
+condition, not an aspirational metric. The $900 agency package is an
+unqualified candidate, not an accepted $10K plan."
+
+**What was wrong.** `RECOMMENDABLE` — the verdict every consumer reads as
+"meets the objective" — was given when every chain link was established and
+a *cautious point reading* reached the target. That is one world, not a
+probability. The quant portfolio already wrote "more openings are needed for
+90%" into its `missing` list, and nothing read it: the 90% existed as prose,
+not as a gate. A tested-conditions coverage of 95% and an assumed conversion
+rate could sit beside a "recommendable" plan.
+
+**The rule** (`judgeAcceptance`, `plan.ts`; `RECOMMENDATION_POLICY.requiredProbability = 0.9`,
+changeable by code review only). A plan is ACCEPTED only on one of:
+
+1. `TARGET_MET` — the ledger holds the target.
+2. `EVIDENCED_PORTFOLIO` — the quant engine's best combination with basis
+   PROBABILITY (every input of every member on evidence or this Brain's own
+   measurements), every member's chain complete, and the **Wilson lower
+   bound** of its reach over the worlds evaluated (`GoalPortfolio.worlds`)
+   at or over 90%. Shared-outreach correlation stays a stated assumption on
+   the reading.
+3. `MEASURED_RECORD` — the chosen strategy's chain complete and this Brain's
+   own record of how its accepted plans ended has a lower bound ≥ 90%.
+
+Anything else is `CANDIDATE_ONLY` (or `NO_CANDIDATE`). `PlanReading.acceptance`
+names the strongest provisional plan (the quant best combination, else the
+chosen strategy, else the pathways' leading combination), its reach and
+whether that reach is a probability or coverage, and every shortfall. A
+strategy whose chain is complete is `chainComplete: true` and `NEEDS_EVIDENCE`,
+with a next step to raise the probability; the plan's verdict is
+`RECOMMENDABLE` iff acceptance is ACCEPTED, so `measuredPlanChance` now
+measures accepted plans.
+
+**Continuation.** `needsMoreOpenings` is true whenever nothing is accepted
+(and for a SQUEEZE goal until the target is met), so `advanceGoalPlans` keeps
+widening discovery and construction. A candidate's opportunities are still
+linked PURSUES, so the strongest provisional plan is sold and its limits
+bind it. Contact permission blocks only the send (§93), never construction.
+
+**Transaction sizes.** A priced pathway that cannot carry the gap alone gets
+an `ONE_TRANSACTION_SHAPE` CONSTRUCT move comparing unit, prepaid bundle,
+monthly retainer and implementation engagement on cash collectible before
+the deadline (`transactionShapes`; a retainer's months after the deadline
+count for nothing), and asks the world what buyers pay at each size.
