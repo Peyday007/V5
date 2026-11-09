@@ -8,15 +8,19 @@
  * principal type. Levels come from `services/identity/policy.ts`'s defaults: a
  * POST is WRITE and nothing here widens that.
  *
- * Nothing here acts on the world or stores anything. The graph travels in the
- * request and every answer is computed from it by `services/quant/graph.ts`, the
- * one owner of the model: a route that wrote graph rows would be a second store,
- * and one that re-derived a figure would be a second model. A figure with no
+ * Nothing here acts on the world. A graph may travel in the request, or be named
+ * by `graphKey` and read back from what an earlier request stored. Storing is an
+ * append to `project_events` (the existing append-only history), one row per
+ * version of a named graph, so there is no second store and no migration; the
+ * version is the row's position in that history. Every answer is computed from the
+ * graph by `services/quant/graph.ts`, the one owner of the model: a route that
+ * re-derived a figure would be a second model. A figure with no
  * lineage is refused, an unknown stays unknown in every answer, and a question the
  * graph cannot answer is returned as a named need rather than a guess.
  */
 import { Router } from 'express';
-import { badRequest, bodyOf, handler, pathId, requirePerson, requireProject, unprocessable } from './helpers.ts';
+import { badRequest, bodyOf, handler, notFound, pathId, requirePerson, requireProject, unprocessable } from './helpers.ts';
+import { listEvents, recordEvent } from '../repos/events.ts';
 import {
   FIGURE_STATUSES,
   addAction,
@@ -239,6 +243,63 @@ function readingsOf(graph: CausalGraph): MoneyRouteReading[] {
 }
 
 /* ------------------------------------------------------------------------- */
+/* Stored graphs: one append-only history per named graph                     */
+/* ------------------------------------------------------------------------- */
+
+const GRAPH_VERSION_KIND = 'CAUSAL_GRAPH_VERSION';
+const GRAPH_ENTITY = 'causal_graph';
+
+interface StoredGraphVersion {
+  version: number;
+  at: string;
+  reason: string;
+  /** The validated request-form graph, which `graphFrom` replays. */
+  graph: Json;
+}
+
+function graphKeyOf(value: unknown): string {
+  const key = text(value).trim();
+  if (!key || key.length > 120) throw badRequest('A graph key is 1 to 120 characters.');
+  return key;
+}
+
+/** Every stored version of one named graph, oldest first, numbered by position in the history. */
+async function storedVersions(projectId: string, key: string): Promise<StoredGraphVersion[]> {
+  const events = await listEvents(projectId, 5000);
+  return events
+    .filter((e) => e.entityType === GRAPH_ENTITY && e.entityId === key && e.payload.kind === GRAPH_VERSION_KIND && isObject(e.payload.graph))
+    .reverse()
+    .map((e, index) => ({ version: index + 1, at: e.createdAt, reason: text(e.payload.reason), graph: e.payload.graph as Json }));
+}
+
+/**
+ * Claims accumulate across versions: the earlier history is carried into the new
+ * snapshot, and a claim whose figure is unchanged adds nothing. A replaced figure
+ * becomes the next version of its claim, so history survives the request.
+ */
+function carryClaims(previous: Json | null, next: Json): Json {
+  const earlier = previous ? list(previous.claims, 'graph.claims', LIMITS.claims) : [];
+  const latest = new Map<string, string>();
+  for (const one of earlier) latest.set(text(one.key), JSON.stringify(one.figure ?? null));
+  const added = list(next.claims, 'graph.claims', LIMITS.claims).filter((one) => latest.get(text(one.key)) !== JSON.stringify(one.figure ?? null));
+  const merged = [...earlier, ...added];
+  if (merged.length > LIMITS.claims) throw badRequest(`A stored graph keeps at most ${LIMITS.claims} claim versions.`);
+  return { ...next, claims: merged };
+}
+
+/** The graph a request names: its own body, or a stored version of a named graph (latest unless `graphVersion` is given). */
+async function graphOf(projectId: string, body: Json): Promise<CausalGraph> {
+  if (body.graph !== undefined || body.graphKey === undefined) return graphFrom(body.graph);
+  const key = graphKeyOf(body.graphKey);
+  const versions = await storedVersions(projectId, key);
+  if (versions.length === 0) throw notFound(`No stored graph named ${key}.`);
+  const wanted = body.graphVersion === undefined ? versions.length : Number(body.graphVersion);
+  const found = versions.find((one) => one.version === wanted);
+  if (!found) throw notFound(`Graph ${key} has no version ${String(body.graphVersion)}.`);
+  return graphFrom(found.graph);
+}
+
+/* ------------------------------------------------------------------------- */
 /* Routes                                                                     */
 /* ------------------------------------------------------------------------- */
 
@@ -247,8 +308,8 @@ causalRouter.post(
   '/projects/:projectId/causal/account',
   handler(async (req) => {
     requirePerson();
-    await requireProject(pathId(req, 'projectId'));
-    const graph = graphFrom(bodyOf(req).graph);
+    const projectId = (await requireProject(pathId(req, 'projectId'))).id;
+    const graph = await graphOf(projectId, bodyOf(req));
     return { account: fullAccount(graph), ...needsOf(graph, readingsOf(graph), null) };
   }),
 );
@@ -258,9 +319,9 @@ causalRouter.post(
   '/projects/:projectId/causal/trace',
   handler(async (req) => {
     requirePerson();
-    await requireProject(pathId(req, 'projectId'));
+    const projectId = (await requireProject(pathId(req, 'projectId'))).id;
     const body = bodyOf(req);
-    const graph = graphFrom(body.graph);
+    const graph = await graphOf(projectId, body);
     const direction = body.direction === 'backward' ? 'backward' : body.direction === 'forward' || body.direction === undefined ? 'forward' : null;
     if (!direction) throw badRequest('"direction" must be forward or backward.');
     const maxDepth = body.maxDepth === undefined ? Infinity : Number(body.maxDepth);
@@ -276,9 +337,9 @@ causalRouter.post(
   '/projects/:projectId/causal/claim',
   handler(async (req) => {
     requirePerson();
-    await requireProject(pathId(req, 'projectId'));
+    const projectId = (await requireProject(pathId(req, 'projectId'))).id;
     const body = bodyOf(req);
-    const graph = graphFrom(body.graph);
+    const graph = await graphOf(projectId, body);
     const key = text(body.key);
     const history = claimHistory(graph, key);
     if (history.length === 0) throw unprocessable(`No claim named ${key} in this graph.`);
@@ -294,9 +355,9 @@ causalRouter.post(
   '/projects/:projectId/causal/money-path',
   handler(async (req) => {
     requirePerson();
-    await requireProject(pathId(req, 'projectId'));
+    const projectId = (await requireProject(pathId(req, 'projectId'))).id;
     const body = bodyOf(req);
-    const graph = graphFrom(body.graph);
+    const graph = await graphOf(projectId, body);
     const wanted = textOrNull(body.route);
     const routes = [...graph.routes.values()].filter((one) => !wanted || one.id === wanted);
     if (routes.length === 0) throw unprocessable(wanted ? `Route ${wanted} is not in this graph.` : 'This graph has no money route.');
@@ -394,12 +455,12 @@ causalRouter.post(
   '/projects/:projectId/causal/what-if',
   handler(async (req) => {
     requirePerson();
-    await requireProject(pathId(req, 'projectId'));
+    const projectId = (await requireProject(pathId(req, 'projectId'))).id;
     const body = bodyOf(req);
     const changes = list(body.changes, 'changes', 50);
     if (changes.length === 0) throw badRequest('"changes" must name at least one assumption to change.');
-    const beforeGraph = graphFrom(body.graph);
-    const afterGraph = graphFrom(body.graph);
+    const beforeGraph = await graphOf(projectId, body);
+    const afterGraph = await graphOf(projectId, body);
     const beforeChain = chainFrom(body.chain);
     const afterChain = chainFrom(body.chain);
     const branches: string[] = [];
@@ -533,6 +594,56 @@ causalRouter.post(
       subproblems,
       notApplicable: [...skipped].map(([id, reason]) => ({ id, reason })),
       note: 'Every subproblem is UNKNOWN until an observation settles it. The starting links are a vocabulary to extend, not a checklist.',
+    };
+  }),
+);
+
+/**
+ * Store a version of a named graph. The request-form graph is validated by
+ * building it, carried forward with every earlier claim version, and appended
+ * to the project's history; nothing earlier is edited or removed.
+ */
+causalRouter.post(
+  '/projects/:projectId/causal/graphs/:key',
+  handler(async (req) => {
+    requirePerson();
+    const projectId = (await requireProject(pathId(req, 'projectId'))).id;
+    const key = graphKeyOf(pathId(req, 'key'));
+    const body = bodyOf(req);
+    if (!isObject(body.graph)) throw badRequest('"graph" must be a graph object.');
+    const earlier = await storedVersions(projectId, key);
+    const merged = carryClaims(earlier.length ? (earlier[earlier.length - 1] as StoredGraphVersion).graph : null, body.graph);
+    const graph = graphFrom(merged);
+    const reason = text(body.reason).trim().slice(0, 500) || (earlier.length ? 'replaced without a stated reason' : '');
+    await recordEvent({
+      projectId,
+      entityType: GRAPH_ENTITY,
+      entityId: key,
+      eventType: 'CAPABILITY_ASSESSED',
+      payload: { kind: GRAPH_VERSION_KIND, reason, graph: merged },
+    });
+    return { key, version: earlier.length + 1, subject: graph.subject, claims: graph.claims.size };
+  }),
+);
+
+/** A stored graph: the latest version unless one is named, and the list of every version with its reason. */
+causalRouter.get(
+  '/projects/:projectId/causal/graphs/:key',
+  handler(async (req) => {
+    requirePerson();
+    const projectId = (await requireProject(pathId(req, 'projectId'))).id;
+    const key = graphKeyOf(pathId(req, 'key'));
+    const versions = await storedVersions(projectId, key);
+    if (versions.length === 0) throw notFound(`No stored graph named ${key}.`);
+    const asked = typeof req.query.version === 'string' ? Number(req.query.version) : versions.length;
+    const found = versions.find((one) => one.version === asked);
+    if (!found) throw notFound(`Graph ${key} has no version ${String(req.query.version)}.`);
+    return {
+      key,
+      version: found.version,
+      graph: found.graph,
+      account: fullAccount(graphFrom(found.graph)),
+      versions: versions.map((one) => ({ version: one.version, at: one.at, reason: one.reason })),
     };
   }),
 );
