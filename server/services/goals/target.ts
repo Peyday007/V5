@@ -21,7 +21,6 @@
 import { getDb } from '../../db/database.ts';
 import { totalsByKind } from '../../repos/cashLedger.ts';
 import { getProject } from '../../repos/projects.ts';
-import { contributionFrom } from '../cash/money.ts';
 import { GOAL_METRICS, type GoalMetric, type GoalTarget, type Workstream } from '../../domain/register.ts';
 
 export const GOAL_METRIC_LABEL: Record<GoalMetric, string> = {
@@ -58,12 +57,55 @@ export interface TargetReading {
 
 const DAY = 86_400_000;
 
-/** What each metric adds up. Anything not listed here is never added, whatever it is called. */
-const COUNTED_KINDS: Record<GoalMetric, string[]> = {
-  SETTLED_CASH: ['SETTLEMENT', '-REFUND'],
-  COLLECTED_CASH: ['CUSTOMER_PAYMENT', '-REFUND'],
-  CONTRIBUTION: ['CUSTOMER_PAYMENT', '-REFUND', '-COST', '-UNPAID_COMMITMENT'],
+/**
+ * The one statement of what each metric adds up. `counted` and the arithmetic
+ * are both derived from these rules, so the list a person reads cannot drift
+ * from the figure they are shown. A term adds (`+1`) or subtracts (`-1`) the
+ * ledger total of its kind; a `netOf` term is the amount still open — the kind's
+ * total less the kinds that close it, never below zero — so an unpaid commitment
+ * stops counting once it is paid (`COMMITMENT_PAID`, which brings its own `COST`)
+ * or released (`COMMITMENT_RELEASED`). Anything not named here is never added.
+ */
+export interface MetricTerm {
+  kind: string;
+  sign: 1 | -1;
+  netOf?: readonly string[];
+}
+
+export const METRIC_RULES: Record<GoalMetric, readonly MetricTerm[]> = {
+  SETTLED_CASH: [
+    { kind: 'SETTLEMENT', sign: 1 },
+    { kind: 'REFUND', sign: -1 },
+  ],
+  COLLECTED_CASH: [
+    { kind: 'CUSTOMER_PAYMENT', sign: 1 },
+    { kind: 'REFUND', sign: -1 },
+  ],
+  // The same arithmetic as `contributionFrom` in cash/money.ts (payments − refunds − costs − unpaid commitments).
+  CONTRIBUTION: [
+    { kind: 'CUSTOMER_PAYMENT', sign: 1 },
+    { kind: 'REFUND', sign: -1 },
+    { kind: 'COST', sign: -1 },
+    { kind: 'UNPAID_COMMITMENT', sign: -1, netOf: ['COMMITMENT_PAID', 'COMMITMENT_RELEASED'] },
+  ],
 };
+
+/** The ledger kinds a metric reads, as a person sees them: `-` is taken off, `+` added back by a closing entry. */
+export function countedKinds(metric: GoalMetric): string[] {
+  return METRIC_RULES[metric].flatMap((term) => [
+    `${term.sign < 0 ? '-' : ''}${term.kind}`,
+    ...(term.netOf ?? []).map((closing) => `${term.sign < 0 ? '+' : '-'}${closing}`),
+  ]);
+}
+
+/** Evaluate a metric over ledger totals by kind. */
+export function achievedFrom(metric: GoalMetric, totals: Record<string, number>): number {
+  const t = (kind: string) => Number(totals[kind] ?? 0);
+  return METRIC_RULES[metric].reduce((sum, term) => {
+    const amount = term.netOf ? Math.max(0, t(term.kind) - term.netOf.reduce((open, closing) => open + t(closing), 0)) : t(term.kind);
+    return sum + term.sign * amount;
+  }, 0);
+}
 
 export async function readTarget(goal: Workstream, now: Date = new Date()): Promise<TargetReading | null> {
   const target = goal.target;
@@ -73,13 +115,7 @@ export async function readTarget(goal: Workstream, now: Date = new Date()): Prom
   const refunds = t('REFUND');
   const payments = t('CUSTOMER_PAYMENT');
   const settled = t('SETTLEMENT');
-  const unpaid = Math.max(0, t('UNPAID_COMMITMENT') - t('COMMITMENT_PAID') - t('COMMITMENT_RELEASED'));
-  const achieved =
-    target.metric === 'SETTLED_CASH'
-      ? settled - refunds
-      : target.metric === 'COLLECTED_CASH'
-        ? payments - refunds
-        : contributionFrom({ payments, refunds, costs: t('COST'), unpaidCommitments: unpaid });
+  const achieved = achievedFrom(target.metric, totals as Record<string, number>);
   const pipeline = Math.max(0, t('PIPELINE_AGREED') - t('PIPELINE_RELEASED'));
   const notCounted = [
     { label: 'agreed but not paid (pipeline)', cents: pipeline },
@@ -95,7 +131,7 @@ export async function readTarget(goal: Workstream, now: Date = new Date()): Prom
     remainingCents: Math.max(0, target.amountCents - achieved),
     achieved: achieved >= target.amountCents,
     daysLeft: goal.dueAt ? Math.ceil((Date.parse(goal.dueAt) - now.getTime()) / DAY) : null,
-    counted: COUNTED_KINDS[target.metric],
+    counted: countedKinds(target.metric),
     notCounted,
     since: target.setAt,
     capitalCeilingCents: target.capitalCeilingCents,
