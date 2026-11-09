@@ -41,6 +41,7 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { browserMcpUrl, renderInBrowser } from './browserMcp.ts';
 import { connectorFor } from './connectors.ts';
 import { searchSuccessor } from './discover.ts';
+import { recordAcquisitionJudgment, type AcquisitionEvidence } from './acquisition.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, type AccessEvidence } from './accessMethods.ts';
 import { checkDestination, fetchForWorker, systemResolver, type Resolver, type SourceFetch } from './fetchForWorker.ts';
 
@@ -440,6 +441,39 @@ export function accessEvidenceOfAttempts(attempts: readonly AccessAttempt[]): Ac
   return evidence;
 }
 
+/** What the attempts on one read say, in the acquisition judgment's terms. Pure. */
+export function acquisitionEvidenceOfRead(
+  read: Pick<SourceRead, 'attempts' | 'readable' | 'method'>,
+  boundary: AccessEvidence['boundary'] | null,
+  evidence: AccessEvidence,
+): AcquisitionEvidence {
+  const bulkTried = read.attempts.some((a) => a.method === 'SITEMAP' || a.method === 'ARCHIVE');
+  const bulkFound = read.attempts.filter((a) => (a.method === 'SITEMAP' || a.method === 'ARCHIVE') && a.readable).map((a) => a.method);
+  return {
+    nativeIntegrationAvailable: evidence.nativeAvailable === true,
+    existingBulkSources: bulkFound,
+    bulkSearchDone: bulkTried,
+    stableHttpDocuments: evidence.httpReadable === true,
+    interactiveInterfaceOnly: evidence.interfaceOnly === true,
+    blockedAtBoundary: boundary !== null && boundary !== 'PAYMENT' && boundary !== 'LEGAL',
+    requiresLicence: boundary === 'PAYMENT' || boundary === 'LEGAL',
+  };
+}
+
+async function judgeReadAsAcquisition(
+  read: SourceRead,
+  host: string | null,
+  boundary: AccessEvidence['boundary'] | null,
+  evidence: AccessEvidence,
+  caller: string,
+): Promise<void> {
+  await recordAcquisitionJudgment(
+    { kind: 'ACQUIRE', purpose: `read ${read.requestedUrl}`, host },
+    acquisitionEvidenceOfRead(read, boundary, evidence),
+    { caller },
+  );
+}
+
 async function defaultRecord(read: SourceRead, caller: string, ms: number): Promise<void> {
   const host = hostOf(read.requestedUrl);
   const used = classOfRoute(read.method);
@@ -480,6 +514,10 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
       methodConstraints: judged.constraints,
     },
   });
+  // Reading a public source is the ACQUIRE capability: ask the acquisition judgment what
+  // this read's own evidence supports (existing bulk sources first, a connector when the
+  // host's SOURCE_ACCESS history justifies one) and record it beside the access row.
+  await judgeReadAsAcquisition(read, host, boundary ?? null, evidence, caller).catch(() => undefined);
 }
 
 /* ------------------------------------------------------------------------- */
