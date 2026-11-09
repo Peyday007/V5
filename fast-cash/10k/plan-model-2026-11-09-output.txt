@@ -1,0 +1,38 @@
+$10K by 2026-12-09 — correlated simulation, 20,000 worlds per strategy (coverage of published ranges, not a probability)
+
+gift_lead: Gifts first (seasonal), AI setups second
+  gross collected p10 $0 · p50 $2,728 · p90 $9,623 · net p50 $561
+  reach $10k gross 9.2% (Wilson lower 8.8%) · net 0.1% · positive conversations p50 16
+  mean by line gift $3,095 · ai $639 · list $127 · clean $0 · puzzle $16
+gift_clean: Gifts first, cleaning contracts second
+  gross collected p10 $0 · p50 $2,508 · p90 $8,769 · net p50 $467
+  reach $10k gross 7.2% (Wilson lower 6.9%) · net 0.0% · positive conversations p50 15
+  mean by line gift $2,746 · ai $218 · list $126 · clean $466 · puzzle $0
+balanced: Balanced four lines
+  gross collected p10 $0 · p50 $1,868 · p90 $6,880 · net p50 $480
+  reach $10k gross 3.6% (Wilson lower 3.4%) · net 0.0% · positive conversations p50 15
+  mean by line gift $1,662 · ai $527 · list $195 · clean $310 · puzzle $34
+ai_lead: AI setups first
+  gross collected p10 $0 · p50 $2,018 · p90 $7,200 · net p50 $623
+  reach $10k gross 4.0% (Wilson lower 3.8%) · net 0.4% · positive conversations p50 15
+  mean by line gift $1,406 · ai $1,299 · list $131 · clean $0 · puzzle $16
+gift_lead_ads: Gifts first + $300 lead brokerage
+  gross collected p10 $91 · p50 $2,859 · p90 $9,512 · net p50 $385
+  reach $10k gross 8.8% (Wilson lower 8.5%) · net 0.1% · positive conversations p50 16
+  mean by line gift $3,058 · ai $648 · list $128 · clean $0 · puzzle $16 · leads $115
+
+On the workspace's own measured reply and positive rates (0.24–0.55% reply, 4–35% positive):
+  gift_lead      gross p10 $0 · p50 $0 · p90 $3,284 · reach $10k 0.2% (Wilson lower 0.1%)
+  gift_clean     gross p10 $0 · p50 $0 · p90 $3,144 · reach $10k 0.2% (Wilson lower 0.1%)
+  balanced       gross p10 $0 · p50 $0 · p90 $2,620 · reach $10k 0.0% (Wilson lower 0.0%)
+  ai_lead        gross p10 $0 · p50 $0 · p90 $2,599 · reach $10k 0.1% (Wilson lower 0.0%)
+  gift_lead_ads  gross p10 $48 · p50 $173 · p90 $3,383 · reach $10k 0.2% (Wilson lower 0.1%)
+
+If the lines failed independently (they do not): gift_lead p10 $0 · reach 8.0% — vs $0 · 9.2% correlated.
+
+Best: gift_lead. What would raise confidence (one input moved, the rest held):
+  measured reply ≥ 2.5% (first 1,000 sends)                      reach 18.3% · p10 $156 · p50 $4,795
+  Brain sends 600/day (owner dedicates the workspace)            reach 20.4% · p10 $0 · p50 $4,922
+  grant today (start day 1)                                      reach 10.9% · p10 $0 · p50 $2,992
+  credibility at published close rates (case study / referral)   reach 13.8% · p10 $0 · p50 $3,649
+  all four together                                              reach 65.7% · p10 $4,784 · p50 $12,973
