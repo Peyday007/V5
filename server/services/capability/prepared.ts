@@ -17,11 +17,18 @@
  *    receives through `ensureChangeRequest`, and the originating goal's
  *    blocked work is judged resumed only by rows that show it ran afterwards.
  *
+ * `handOffToFactory` is the one place the handoff is made, and `resumeOf` is the
+ * one place resumption is judged, from `work_items` rows.
+ *
  * No category, provider or example here is a whitelist: every access method is
  * data the preparer supplied, and the comparison is over its declared traits.
  */
-import { recordEvent, listEvents } from '../../repos/events.ts';
+import { createHash } from 'node:crypto';
+import { getDb } from '../../db/database.ts';
+import { recordEvent, listEvents, listEventsByEntity } from '../../repos/events.ts';
+import { ensureChangeRequest } from '../../repos/factory.ts';
 import type { ProjectEvent } from '../../domain/types.ts';
+import type { FactoryChangeRequest } from '../../domain/factory.ts';
 
 export class PreparedOptionError extends Error {}
 
@@ -144,7 +151,7 @@ export interface NeedResolution {
   gated: Array<{ method: AccessMethod; gates: Gate[] }>;
   /** The minimum missing capability: the cheapest permitted method, if any. */
   minimum: AccessMethod | null;
-  /** The exact requirement to hand the existing Factory (feed to ensureChangeRequest). */
+  /** The exact requirement `handOffToFactory` gives the existing Factory. */
   handoff: { objective: string; acceptanceConditions: string[] } | null;
   /** Gate-crossing steps are listed for the end report; they never block the permitted work. */
   needsPerson: Gate[];
@@ -183,7 +190,97 @@ export function resolveNeed(option: PreparedOption | undefined, input: { require
   };
 }
 
-/** The originating goal's blocked work resumed only if a unit ran after the capability was handed off — read from rows, not asserted. */
+/** The comparison alone: a unit ran after the capability was handed off. `resumeOf` supplies its times from rows. */
 export function blockedWorkResumed(input: { handedOffAt: string; unitRunTimes: readonly string[] }): boolean {
   return input.unitRunTimes.some((t) => t > input.handedOffAt);
+}
+
+export const PREPARED_HANDOFF_KIND = 'PREPARED_OPTION_HANDOFF';
+
+/** What the Factory needs that a need does not carry: where the code lives and how it is verified. */
+export interface FactoryHandoffContext {
+  goal: string;
+  repository: string;
+  baseBranch: string;
+  baseSha: string;
+  mutationScope: string[];
+  verificationCommands: string[];
+  rollbackRequirement: string;
+  repositoryRoot?: string | null;
+}
+
+/**
+ * Hand the minimum missing capability to the existing Factory as a change
+ * request, once. The submission key is derived from the requirement and the
+ * goal, so a second call returns the same request instead of a duplicate, and
+ * the handoff is written to `project_events` so `resumeOf` can find its time.
+ * Nothing is handed over when no permitted method exists: gated work is for a
+ * person and is reported, not forced. The request is created as a draft with
+ * external spend prohibited; approval stays where the Factory puts it.
+ */
+export async function handOffToFactory(
+  projectId: string,
+  resolution: NeedResolution,
+  context: FactoryHandoffContext,
+): Promise<{ changeRequest: FactoryChangeRequest; created: boolean } | null> {
+  if (!resolution.handoff || !resolution.minimum) return null;
+  const submissionKey = `prepared-option:${createHash('sha256').update(`${projectId}\u0000${resolution.requirementId}\u0000${context.goal}`).digest('hex').slice(0, 24)}`;
+  const { changeRequest, created } = await ensureChangeRequest({
+    projectId,
+    submissionKey,
+    objective: resolution.handoff.objective,
+    expectedOutcome: `${resolution.requirementId} works in production and the blocked work of ${context.goal} resumes`,
+    nonGoals: ['keeping the option warm', 'crossing a credential, contract, spend or permission gate'],
+    acceptanceConditions: resolution.handoff.acceptanceConditions.map((statement, i) => ({
+      id: `A${String(i + 1).padStart(2, '0')}`,
+      statement,
+      verification: 'proof reading over real attempts, and rows showing the goal\'s work ran afterwards',
+      mandatory: true,
+    })),
+    repository: context.repository,
+    repositoryRoot: context.repositoryRoot ?? null,
+    baseBranch: context.baseBranch,
+    baseSha: context.baseSha,
+    environment: 'LOCAL',
+    riskClass: 'MEDIUM',
+    mutationScope: context.mutationScope,
+    deploymentPolicy: 'NONE',
+    rollbackRequirement: context.rollbackRequirement,
+    verificationCommands: context.verificationCommands,
+  });
+  if (created) {
+    await recordEvent({
+      projectId,
+      entityType: 'capability_requirement',
+      entityId: resolution.requirementId,
+      eventType: 'CAPABILITY_ASSESSED',
+      payload: { kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId: changeRequest.id, goal: context.goal, method: resolution.minimum.name },
+    });
+  }
+  return { changeRequest, created };
+}
+
+/**
+ * Did the originating goal's blocked work resume? Read from `work_items`: the
+ * named items must have completed successfully after the handoff event was
+ * written. Nothing is asserted by the caller but which items were blocked.
+ */
+export async function resumeOf(
+  projectId: string,
+  requirementId: string,
+  blockedWorkItemIds: readonly string[],
+): Promise<{ handedOffAt: string | null; resumed: boolean; completedAfter: string[] }> {
+  const events = await listEventsByEntity('capability_requirement', requirementId);
+  const handoff = events
+    .filter((e) => e.projectId === projectId && e.payload.kind === PREPARED_HANDOFF_KIND)
+    .map((e) => e.createdAt)
+    .sort()[0];
+  if (!handoff || blockedWorkItemIds.length === 0) return { handedOffAt: handoff ?? null, resumed: false, completedAfter: [] };
+  const rows = await getDb().all<{ id: string; completed_at: string | null }>(
+    `SELECT id, completed_at FROM work_items WHERE project_id = ? AND state = 'SUCCEEDED' AND id IN (${blockedWorkItemIds.map(() => '?').join(',')})`,
+    [projectId, ...blockedWorkItemIds],
+  );
+  const times = rows.filter((r) => r.completed_at !== null);
+  const resumed = blockedWorkResumed({ handedOffAt: handoff, unitRunTimes: times.map((r) => r.completed_at!) });
+  return { handedOffAt: handoff, resumed, completedAfter: times.filter((r) => r.completed_at! > handoff).map((r) => r.id) };
 }
