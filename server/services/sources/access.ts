@@ -75,12 +75,6 @@ export interface AccessDeps {
   search?: ((url: string) => Promise<SourceFetch | null>) | null;
   learned?: (host: string) => Promise<AccessMethod | null>;
   record?: (read: SourceRead, caller: string, ms: number) => Promise<void>;
-  /**
-   * Records the OPERATE/ACQUIRE judgment for a read that needed more than a plain
-   * direct read (`acquisition.ts`). Defaults on only with the default recorder, so a
-   * caller that brings its own `record` brings its own history too.
-   */
-  judge?: (read: SourceRead, caller: string) => Promise<void>;
   /** Which part of Brain asked, for the event. */
   caller?: string;
 }
