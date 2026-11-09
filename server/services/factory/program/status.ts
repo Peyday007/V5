@@ -222,7 +222,8 @@ export function repairTargets(input: StatusInput): RepairTarget[] {
     if (newest) {
       const progress = input.progress.get(newest.key);
       // In flight (or not yet submitted): resume it, do not open another.
-      if (!progress || progress.outcome !== 'LIVE') continue;
+      // A cancelled repair delivered nothing; the next episode is opened instead.
+      if (!progress || (progress.outcome !== 'LIVE' && progress.outcome !== 'CANCELLED')) continue;
       // It went live and the requirement still fails: the repair did not hold.
     } else {
       // The original build is still running: its own review and repair loop owns the work.
