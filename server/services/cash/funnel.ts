@@ -25,6 +25,7 @@ import { parseJson } from '../../repos/util.ts';
 import type { CashCardFact, Standing } from '../../domain/types.ts';
 import { CASH_TIERS, cashTier, tierRank, type CashTier } from './tier.ts';
 import { cashEngineCard } from './engineCard.ts';
+import { checkCommercialAuthority } from './authority.ts';
 import { evidenceCard } from './card.ts';
 
 export const FUNNEL_WEEKS = 8;
@@ -657,34 +658,44 @@ export function formatOutreachFunnel(reading: OutreachFunnelReading): string[] {
   ];
 }
 
+/** One outcome row, as the outreach funnel reads it. */
+export interface OutreachOutcomeRow {
+  mechanism: string | null;
+  channel: string | null;
+  opportunity_id: string;
+  kind: string;
+  value_cents: number | null;
+  value_text: string | null;
+}
+
 /**
- * Build the mechanisms from the outcome rows Brain has written (§94). Only what
- * a row states becomes a measured input: the share of contacts that were
- * answered, the share that bounced, the share of answered contacts that agreed,
- * the share of agreed deals not refunded, and the agreed price. Permission,
- * unique prospects, throughput, qualification, settlement and repeat are stated
- * by no outcome row, so they stay unknown and keep revenue unknown until
- * somebody records them; a message count is never read as a buyer. A mechanism
- * is whatever the rows name (its `mechanism`, else its `channel`), never a
- * list this code knows.
+ * Build the mechanisms from the outcome rows Brain has written (§94), counted
+ * per prospect (an opportunity), so a prospect contacted twice is one prospect.
+ * Every stage a row states becomes a measured input:
+ *
+ *   uniqueProspects  distinct opportunities with a recorded contact result
+ *   deliverability   prospects with at least one result that was not a bounce
+ *   throughput       contact results actually recorded (sent and measured)
+ *   response         reached prospects that answered
+ *   qualification    answered prospects that accepted or countered
+ *   close            qualified prospects that accepted a price
+ *   settlement       accepted deals with a settled-funds entry (`settledOpportunities`)
+ *   fulfillment      accepted deals not refunded
+ *   permission       a live CONTACT_BUYER grant (`contactPermitted`): the owner's
+ *                    authority to reach payers, which is not a reading of any
+ *                    provider's terms; absent a grant it is unknown, never "no"
+ *
+ * Repeat purchase is stated by no row and stays unknown, so revenue including
+ * repeat stays unknown while first-purchase revenue is known. Throughput is what
+ * was actually sent and measured, a floor on capacity rather than a ceiling. A
+ * message count is never read as a buyer. A mechanism is whatever the rows name
+ * (its `mechanism`, else its `channel`), never a list this code knows. Pure.
  */
-async function outreachFromRows(projectId: string): Promise<{ mechanisms: OutreachFunnelReading[]; mix: MixReading }> {
-  const rows = await getDb().all<{
-    mechanism: string | null;
-    channel: string | null;
-    opportunity_id: string;
-    kind: string;
-    value_cents: number | null;
-    value_text: string | null;
-    request_key: string;
-  }>(
-    `SELECT mechanism, channel, opportunity_id, kind, value_cents, value_text, request_key
-       FROM cash_outcomes
-      WHERE project_id = ? AND kind IN ('CONTACT_RESULT', 'ACCEPTED_PRICE', 'REFUNDED')
-      ORDER BY created_at`,
-    [projectId],
-  );
-  const groups = new Map<string, typeof rows>();
+export function mechanismsFromRows(
+  rows: readonly OutreachOutcomeRow[],
+  context: { settledOpportunities?: ReadonlySet<string>; contactPermitted?: boolean } = {},
+): OutreachMechanism[] {
+  const groups = new Map<string, OutreachOutcomeRow[]>();
   for (const row of rows) {
     const key = row.mechanism ?? row.channel ?? 'unspecified';
     groups.set(key, [...(groups.get(key) ?? []), row]);
@@ -694,27 +705,59 @@ async function outreachFromRows(projectId: string): Promise<{ mechanisms: Outrea
   const mechanisms: OutreachMechanism[] = [];
   for (const [mode, group] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const contacts = group.filter((one) => one.kind === 'CONTACT_RESULT');
-    const bounced = contacts.filter((one) => one.value_text === 'CONTACT_UNDELIVERABLE').length;
-    const answered = contacts.filter(
-      (one) => one.value_text !== 'BUYER_SILENT' && one.value_text !== 'CONTACT_UNDELIVERABLE',
-    ).length;
+    const results = new Map<string, string[]>();
+    for (const one of contacts) results.set(one.opportunity_id, [...(results.get(one.opportunity_id) ?? []), one.value_text ?? '']);
     const accepted = new Map<string, number>();
     for (const one of group) if (one.kind === 'ACCEPTED_PRICE' && one.value_cents !== null) accepted.set(one.opportunity_id, one.value_cents);
     const refunded = new Set(group.filter((one) => one.kind === 'REFUNDED').map((one) => one.opportunity_id));
+    const prospects = results.size;
+    const reached = [...results.values()].filter((texts) => texts.some((t) => t !== 'CONTACT_UNDELIVERABLE')).length;
+    const answered = [...results.entries()].filter(([, texts]) => texts.some((t) => t !== 'BUYER_SILENT' && t !== 'CONTACT_UNDELIVERABLE'));
+    const qualified = new Set<string>(accepted.keys());
+    for (const [id, texts] of answered) if (texts.some((t) => t === 'BUYER_ACCEPTED' || t === 'BUYER_COUNTERED')) qualified.add(id);
+    const answeredIds = new Set(answered.map(([id]) => id));
+    // A prospect that accepted without a recorded answer was reached and answered by definition.
+    const answeredCount = new Set([...answeredIds, ...accepted.keys()]).size;
+    const settled = context.settledOpportunities;
+    const settledAccepted = settled ? [...accepted.keys()].filter((id) => settled.has(id)).length : 0;
     const refundedAccepted = [...accepted.keys()].filter((id) => refunded.has(id)).length;
     const price = median([...accepted.values()]);
     mechanisms.push({
       mode,
-      label: `${mode} (measured from ${contacts.length} recorded contact result(s))`,
+      label: `${mode} (measured from ${contacts.length} recorded contact result(s) over ${prospects} prospect(s))`,
       messagesSent: contacts.length > 0 ? contacts.length : undefined,
       inputs: {
-        deliverability: measured(contacts.length - bounced, contacts.length),
-        response: measured(answered, contacts.length - bounced),
-        close: measured(Math.min(accepted.size, answered), answered),
+        permission: context.contactPermitted ? { basis: 'MEASURED', value: 1 } : { basis: 'UNKNOWN' },
+        uniqueProspects: prospects > 0 ? { basis: 'MEASURED', value: prospects } : { basis: 'UNKNOWN' },
+        deliverability: measured(reached, prospects),
+        throughput: contacts.length > 0 ? { basis: 'MEASURED', value: contacts.length } : { basis: 'UNKNOWN' },
+        response: measured(answeredCount, Math.max(reached, answeredCount)),
+        qualification: measured(qualified.size, answeredCount),
+        close: measured(accepted.size, qualified.size),
+        settlement: settled ? measured(settledAccepted, accepted.size) : { basis: 'UNKNOWN' },
         fulfillment: measured(accepted.size - refundedAccepted, accepted.size),
       },
       dealValueCents: price === null ? { basis: 'UNKNOWN' } : { basis: 'MEASURED', value: price },
     });
   }
+  return mechanisms;
+}
+
+async function outreachFromRows(projectId: string): Promise<{ mechanisms: OutreachFunnelReading[]; mix: MixReading }> {
+  const db = getDb();
+  const rows = await db.all<OutreachOutcomeRow>(
+    `SELECT mechanism, channel, opportunity_id, kind, value_cents, value_text
+       FROM cash_outcomes
+      WHERE project_id = ? AND kind IN ('CONTACT_RESULT', 'ACCEPTED_PRICE', 'REFUNDED')
+      ORDER BY created_at`,
+    [projectId],
+  );
+  const settledRows = await db.all<{ opportunity_id: string | null }>(
+    `SELECT DISTINCT opportunity_id FROM cash_money_entries WHERE project_id = ? AND kind = 'SETTLEMENT'`,
+    [projectId],
+  );
+  const settledOpportunities = new Set(settledRows.flatMap((row) => (row.opportunity_id ? [row.opportunity_id] : [])));
+  const contactPermitted = (await checkCommercialAuthority({ projectId, action: 'CONTACT_BUYER' })).ok;
+  const mechanisms = mechanismsFromRows(rows, { settledOpportunities, contactPermitted });
   return { mechanisms: mechanisms.map(modelOutreachFunnel), mix: searchOutreachMix(mechanisms) };
 }

@@ -4,7 +4,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  mechanismsFromRows,
   modelOutreachFunnel,
+  type OutreachOutcomeRow,
   searchOutreachMix,
   type OutreachMechanism,
   type StageInput,
@@ -122,5 +124,63 @@ describe('outreach funnel: messages are not buyers', () => {
     expect(mix.ranked.map((r) => r.mode)).toEqual(['good']);
     expect(mix.unranked.map((u) => u.mode)).toEqual(['refused']);
     expect(mix.unranked[0]?.firstUnknown).toBe('permission');
+  });
+});
+
+describe('outreach funnel from production rows', () => {
+  const row = (opp: string, kind: string, text: string | null = null, cents: number | null = null, mech = 'mail'): OutreachOutcomeRow => ({
+    mechanism: mech,
+    channel: null,
+    opportunity_id: opp,
+    kind,
+    value_cents: cents,
+    value_text: text,
+  });
+  // p1 bounced; p2 silent; p3 declined; p4 countered only; p5 and p6 accepted (p5 settled, p6 refunded). p5 was contacted twice.
+  const rows: OutreachOutcomeRow[] = [
+    row('p1', 'CONTACT_RESULT', 'CONTACT_UNDELIVERABLE'),
+    row('p2', 'CONTACT_RESULT', 'BUYER_SILENT'),
+    row('p3', 'CONTACT_RESULT', 'BUYER_DECLINED'),
+    row('p4', 'CONTACT_RESULT', 'BUYER_COUNTERED'),
+    row('p5', 'CONTACT_RESULT', 'BUYER_SILENT'),
+    row('p5', 'CONTACT_RESULT', 'BUYER_ACCEPTED'),
+    row('p6', 'CONTACT_RESULT', 'BUYER_ACCEPTED'),
+    row('p5', 'ACCEPTED_PRICE', null, 20_000),
+    row('p6', 'ACCEPTED_PRICE', null, 20_000),
+    row('p6', 'REFUNDED'),
+  ];
+
+  it('states every stage but repeat from rows, per prospect, and ranks the mechanism on production data alone', () => {
+    const [mech] = mechanismsFromRows(rows, { settledOpportunities: new Set(['p5']), contactPermitted: true });
+    const r = modelOutreachFunnel(mech!);
+    expect(r.stages.uniqueProspects.low).toBe(6); // six prospects, seven results
+    expect(r.messagesSent).toBe(7);
+    expect(r.stages.deliverability.low).toBeCloseTo(5 / 6);
+    expect(r.stages.qualification.low).toBeCloseTo(3 / 4); // answered {p3,p4,p5,p6}; qualified {p4,p5,p6}
+    expect(r.stages.close.low).toBeCloseTo(2 / 3);
+    expect(r.stages.settlement.low).toBeCloseTo(1 / 2);
+    expect(r.stages.fulfillment.low).toBeCloseTo(1 / 2);
+    expect(r.stages.repeat.basis).toBe('UNKNOWN');
+    expect(r.firstPurchaseRevenueCents.basis).not.toBe('UNKNOWN');
+    expect(r.revenueCents.basis).toBe('UNKNOWN'); // repeat is stated by no row
+    expect(searchOutreachMix(mechanismsFromRows(rows, { settledOpportunities: new Set(['p5']), contactPermitted: true })).ranked).toHaveLength(1);
+  });
+
+  it('never ranks when nothing states permission or settlement, and never reads a missing grant as a refusal', () => {
+    const noGrant = modelOutreachFunnel(mechanismsFromRows(rows, { settledOpportunities: new Set(['p5']) })[0]!);
+    expect(noGrant.permitted).toBeNull();
+    expect(noGrant.firstPurchaseRevenueCents.basis).toBe('UNKNOWN');
+    const noSettlement = modelOutreachFunnel(mechanismsFromRows(rows, { contactPermitted: true })[0]!);
+    expect(noSettlement.stages.settlement.basis).toBe('UNKNOWN');
+    expect(noSettlement.firstPurchaseRevenueCents.basis).toBe('UNKNOWN');
+  });
+
+  it('more recorded contacts for the same prospects add no buyers', () => {
+    const more = [...rows, row('p2', 'CONTACT_RESULT', 'BUYER_SILENT'), row('p2', 'CONTACT_RESULT', 'BUYER_SILENT')];
+    const ctx = { settledOpportunities: new Set(['p5']), contactPermitted: true };
+    const a = modelOutreachFunnel(mechanismsFromRows(rows, ctx)[0]!);
+    const b = modelOutreachFunnel(mechanismsFromRows(more, ctx)[0]!);
+    expect(b.buyers).toEqual(a.buyers);
+    expect(b.messagesSent).toBe(9);
   });
 });
