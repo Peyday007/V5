@@ -1049,6 +1049,9 @@ function Campaigns({
       <p className="rs-hint">
         A change that lands after its review is reviewed again before it ships.
       </p>
+      <p className="rs-hint">
+        A program of many campaigns is done only when every requirement passes its checks in the running Brain.
+      </p>
       {state.phase !== 'READY' ? (
         <p className={`rs-state rs-state-${state.phase.toLowerCase()}`}>
           {state.message}
