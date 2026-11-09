@@ -17,6 +17,8 @@
  */
 import { clauseBefore, NEGATORS } from '../russell/negation.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
+import { listCapitalFor, listConstraintsForProject } from '../../repos/industry.ts';
+import type { CapitalStructure, OpportunityConstraint } from '../../domain/types.ts';
 
 export const EXCLUSION_CLASSES = {
   GOVERNMENT_CONTRACTING: {
@@ -273,4 +275,58 @@ export function countRoleEconomics(rows: readonly RoleEconomics[]): CountedEcono
     assessments,
     heldBack: assessments.filter((a) => !a.assessment.countEconomics).map((a) => a.id),
   };
+}
+
+/*
+ * Reading a role from rows. holds / partner come from what Brain has recorded about an opening
+ * (capital_structures, opportunity_constraints), never from a literal a caller types in.
+ *
+ *  - a LICENSING / COMPLIANCE / INSURANCE requirement, or a CREDENTIAL_REQUIRED / REGULATORY_CAPITAL
+ *    constraint, says a licence is needed and not held: licensing = false;
+ *  - a RESTRUCTURING row answering that requirement through an agency, brokerage, licence-in,
+ *    revenue-share or management-contract mechanism names an authorized licensed partner who holds it;
+ *  - a SUBCONTRACTING_PROHIBITED or PLATFORM_TERMS constraint says the contract the role needs is lacking;
+ *  - a published practice is not an executed contract, so contractInPlace and the facts no row carries
+ *    (product, location) come only from `attested` — a person's recorded statement — else they stay unknown.
+ */
+const PARTNER_MECHANISMS = new Set(['AGENCY', 'BROKERAGE', 'LICENSE_IN', 'REVENUE_SHARE', 'MANAGEMENT_CONTRACT']);
+const LICENCE_REQUIREMENTS = new Set(['LICENSING', 'COMPLIANCE', 'INSURANCE']);
+const LICENCE_CONSTRAINTS = new Set(['CREDENTIAL_REQUIRED', 'REGULATORY_CAPITAL']);
+const CONTRACT_CONSTRAINTS = new Set(['SUBCONTRACTING_PROHIBITED', 'PLATFORM_TERMS']);
+
+export interface RoleAttestation {
+  /** Facts a person attested to that no row carries. */
+  holds?: Partial<Record<RoleRequirement, boolean>>;
+  /** A signed contract with the partner exists. */
+  partnerContractInPlace?: boolean;
+}
+
+export function roleRecordFromRows(
+  capital: readonly CapitalStructure[],
+  constraints: readonly OpportunityConstraint[],
+  attested: RoleAttestation = {},
+): RoleRecord {
+  const performs = [...capital.map((c) => c.statement), ...constraints.map((c) => c.statement)].join('\n');
+  const holds: Partial<Record<RoleRequirement, boolean>> = { ...(attested.holds ?? {}) };
+  const licenceNeeds = capital.filter((c) => c.entryKind === 'REQUIREMENT' && c.requirement && LICENCE_REQUIREMENTS.has(c.requirement));
+  const licenceConstrained = constraints.some((c) => LICENCE_CONSTRAINTS.has(c.kind));
+  if (licenceNeeds.length > 0 || licenceConstrained) holds.licensing = attested.holds?.licensing ?? false;
+  if (constraints.some((c) => CONTRACT_CONSTRAINTS.has(c.kind))) holds.contract = attested.holds?.contract ?? false;
+  const needIds = new Set(licenceNeeds.map((c) => c.id));
+  const partnered = capital.some(
+    (c) => c.entryKind === 'RESTRUCTURING' && c.mechanism !== null && PARTNER_MECHANISMS.has(c.mechanism) && c.answersId !== null && needIds.has(c.answersId),
+  );
+  const partner = partnered ? { holdsLicensing: true, contractInPlace: attested.partnerContractInPlace === true } : null;
+  return { performs, holds, partner };
+}
+
+/** One opening's regulated role, assessed from the rows Brain holds for it. */
+export async function assessOpportunityRole(input: {
+  projectId: string;
+  opportunityId: string;
+  attested?: RoleAttestation;
+}): Promise<RoleAssessment> {
+  const [capital, constraints] = await Promise.all([listCapitalFor(input.opportunityId), listConstraintsForProject(input.projectId)]);
+  const own = constraints.filter((c) => c.opportunityId === input.opportunityId);
+  return assessRole(roleRecordFromRows(capital, own, input.attested));
 }

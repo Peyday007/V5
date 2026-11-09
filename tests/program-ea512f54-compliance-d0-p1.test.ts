@@ -1,3 +1,4 @@
+import type { CapitalStructure, OpportunityConstraint } from '../server/domain/types.ts';
 import { describe, expect, it } from 'vitest';
 import {
   EXCLUSION_CLASSES,
@@ -6,6 +7,7 @@ import {
   assessRole,
   countRoleEconomics,
   regulatedActivitiesIn,
+  roleRecordFromRows,
 } from '../server/services/cash/exclusions.ts';
 
 const ALL_HELD = { product: true, location: true, licensing: true, contract: true } as const;
@@ -70,5 +72,50 @@ describe('regulated roles are assessed, never excluded by category (COM-13-5)', 
     expect(result.heldBack).toEqual(['needs']);
     expect(result.assessments).toHaveLength(3);
     expect(result.assessments.every((a) => a.assessment.excluded === false)).toBe(true);
+  });
+});
+
+const cap = (over: Partial<CapitalStructure>): CapitalStructure => ({
+  id: 'cap_1', projectId: 'prj_1', opportunityId: 'cop_1', entryKind: 'REQUIREMENT', requirement: 'LICENSING',
+  mechanism: null, answersId: null, amountCents: null, residualCents: null,
+  statement: 'earns a referral fee for sending borrowers to a lender; needs a mortgage originator licence',
+  sourceClaimId: 'clm_1', createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z', ...over,
+});
+const partnerRow = cap({ id: 'cap_2', entryKind: 'RESTRUCTURING', requirement: null, mechanism: 'AGENCY', answersId: 'cap_1', statement: 'refer through a licensed lender partner' });
+const rest = { product: true, location: true } as const;
+
+describe('a role is read from the rows Brain holds, not from literals (COM-13-5)', () => {
+  it('a licensing requirement row means licensing is lacking and economics are held back', () => {
+    const a = assessRole(roleRecordFromRows([cap({})], [], { holds: rest }));
+    expect(a.missing).toEqual(['licensing']);
+    expect(a.position).toBe('NEEDS_POSITION');
+    expect(a.countEconomics).toBe(false);
+  });
+
+  it('a partner restructuring row answering it is a partner, but not a contract', () => {
+    const rec = roleRecordFromRows([cap({}), partnerRow], [], { holds: { ...rest, contract: true } });
+    expect(rec.partner).toEqual({ holdsLicensing: true, contractInPlace: false });
+    expect(assessRole(rec).countEconomics).toBe(false);
+  });
+
+  it('counts via the partner only once a person attests the contract is in place', () => {
+    const a = assessRole(roleRecordFromRows([cap({}), partnerRow], [], { holds: { ...rest, contract: true }, partnerContractInPlace: true }));
+    expect(a.position).toBe('COMPLIANT_VIA_PARTNER');
+    expect(a.countEconomics).toBe(true);
+  });
+
+  it('ignores a restructuring that answers a different requirement', () => {
+    const rec = roleRecordFromRows([cap({}), { ...partnerRow, answersId: 'cap_other' }], []);
+    expect(rec.partner).toBeNull();
+  });
+
+  it('reads credential and subcontracting constraints, and leaves unrecorded facts unknown', () => {
+    const con: OpportunityConstraint = {
+      id: 'con_1', projectId: 'prj_1', opportunityId: 'cop_1', nodeId: null, kind: 'CREDENTIAL_REQUIRED',
+      statement: 'sells insurance policies', effect: null, sourceClaimId: 'clm_2', createdAt: '', updatedAt: '',
+    };
+    const a = assessRole(roleRecordFromRows([], [con]));
+    expect(a.missing).toEqual(['licensing']);
+    expect(a.unknown).toEqual(['product', 'location', 'contract']);
   });
 });
