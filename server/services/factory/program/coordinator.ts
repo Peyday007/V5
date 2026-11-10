@@ -490,6 +490,11 @@ export function campaignObjective(program: FactoryProgram, campaign: PlannedCamp
         : `Structural review of requirement ${campaign.repairOf?.requirement} of program ${program.id}: ${MAX_REPAIR_EPISODES} repairs did not hold. Find the shared root cause across the failures below and change the structure that keeps producing it.`,
     'Each requirement below quotes the approved specification verbatim; the quote governs over any summary here, and its checks are fixed.',
   ];
+  // Production 2026-11-10: units spent up to twelve attempts each trying to register their own
+  // acceptance probes. The judge is not the campaign's to write (§96, §97).
+  lines.push(
+    'Probes: a check named "probe …" is defined by the program owner, never by this campaign. A probe that is not registered yet is not a defect of this work and not a reason to fail a unit: implement the behavior and its tests, and the owner adds the probe that reads it from real rows.',
+  );
   for (const r of requirements) {
     lines.push(
       '',
@@ -509,6 +514,7 @@ export function campaignObjective(program: FactoryProgram, campaign: PlannedCamp
   }
   if (campaign.repairOf) lines.push('', `Failures: ${campaign.repairOf.failures.join(' | ')}`);
   lines.push('', `Tests: write this campaign's own regression tests in ${campaignTestPath(program, campaign)} (owned by this campaign alone).`);
+
   return {
     projectId: program.projectId,
     submissionKey: `program:${program.id}:${campaign.key}`,
