@@ -15278,3 +15278,66 @@ knowledge.
 - **Research slots:** still read "26 startable" for two readings in a row. The project-by-project count still added up every active grant in a project. `launch()` takes slots only from the one grant that governs research, which `checkAuthority` resolves for work class `RESEARCH`, so outreach and cash grants were counted as research slots.
 - **The fix:** the pool now reads `researchMissionSlots(projectId)` in `russell/launch.ts`. That is the same grant and the same live-hold arithmetic that `reserve` enforces, so the watchdog can only call slots idle when a launch would actually be accepted.
 - **A gate that moved under it:** #661's Deploy and Postgres suite both failed `ocr.test.ts` ("a scan too poor to trust") because `ubuntu-latest` moved from 24.04 to 26.04 between two runs, taking tesseract from 5.3 to 5.5, and 5.5 reads the deliberately poor fixture as text. Production's image is Debian bookworm with tesseract 5.3, so the test jobs are now pinned to `ubuntu-24.04`. CI now checks the OCR engine production actually runs, and the refusal test still means what it says.
+
+## 100. A goal is examined from many directions, and the ways of reasoning that work are learned.
+
+**Owner's order, 2026-11-10.** Brain must examine one problem from dozens or
+hundreds of genuinely different directions, discover approaches nobody
+programmed, run them concurrently, let them challenge, combine and replace one
+another, learn which ways of reasoning work, and do it inside the real planning
+pipeline for every goal. The $10K goal is the test.
+
+**What production showed (Goals plan 42901469599, 2026-11-10 21:15Z, before).**
+Baseline 4.2% coverage, structural. §99 walked one greedy path and kept
+prepaid fulfilment + deposit + a ×9 bundle at 75.4% — every move an untested
+assumption. Nothing asked what the plan holds if those assumptions fail, and
+nothing could reason about the goal in a way not already written as an operator.
+
+`services/goals/reasoning/` extends §99; it is not a second planner. The one
+engine (`evaluateGoalPortfolio`) judges everything, and the result goes out
+through the same `Reconstruction` the plan read already persists and the goal
+round already reads (§89).
+
+- **A direction is a way of reasoning, written as a program.** Stances are
+  strings, not an enum. The vocabulary is small and honest: §99's costed
+  operators (now pointable at any opening: `buildOperators({ target })`), a
+  price change that pays for itself in close rate (elasticity 1.2, assumed),
+  FOCUS and DROP. Nothing can raise a reply or close rate by declaring it.
+- **Generated three ways.** Cheap algorithms derive directions from the
+  problem's data — backward from the remaining amount, forward from each held
+  opening, middle-out from §99's plan (each move removed or swapped), through
+  each binding constraint, each resource, each relationship, inversions,
+  portfolio. The library (`reasoning_methods`) supplies what worked before,
+  ranked by an upper confidence bound. Brain's free-lane models invent methods
+  (`invent.ts`): several calls at once, each told the stances already held,
+  answers validated and refused when off-shape — at most every 15 minutes a goal.
+- **Distinct, not counted.** A signature over the program (factors bucketed
+  by half-powers of two) makes a meaningless variation the same direction; a
+  near-copy of a kept direction of the same stance is dropped. The budget is
+  the problem's: openings + operators + 3 × binding factors, scaled by how far
+  the challenged plan is from its requirement, 12 to 120. An accepted plan is
+  not explored.
+- **Concurrent.** Directions are screened on a pool of niced worker threads
+  (`evaluatorPool.ts`, `availableParallelism() − 1`, at most 4; inline if a
+  pool cannot start). The model invents while the seeds are screened.
+- **Challenge, combine, modify, replace.** Every direction that improves the
+  plan is challenged twice — conversion halved, and every assumption-based
+  move removed — and scored on reach and the weaker challenged reach equally.
+  Leaders of different stances are recombined, mutated (re-pointed, another
+  budget, a step back, rebuilt from scratch), and the next generation is
+  challenged again until nothing improves materially. A winner replaces §99's
+  plan, and the floor, required reply and confidence are then computed on it.
+  A direction that starts from the plan as held is a full reconstruction.
+- **Learned.** Each persisted plan read records every direction (tries,
+  improvements, wins, lift) and one append-only `reasoning_explorations` row
+  (migrations 143 / pg 134). `npm run goals -- plan` prints the exploration,
+  the stance yield, the methods on record and the goal's recent explorations.
+- **Questions reach the world.** A direction's `ask` (a fact the openings
+  cannot answer) is appended to the search brief the next goal round reads.
+
+**Regression** (`tests/multidirectionalReasoning.test.ts`, fixture
+`tests/fixtures/goal10k.ts`): before, §99 alone keeps a plan resting on a
+$2,999 purchase before proof; after, over 100 distinct directions across more
+than ten stances (two invented by the model), the winner holds over 60% with
+its assumptions removed against §99's 47%, adds an estimate-backed move, and
+stays coverage, never a probability.
