@@ -78,6 +78,7 @@ import {
   integrationBranchDrift,
   acceptUnitReport,
   binBaseOf,
+  integrationUnitsFor,
   binIdentity,
   campaignBins,
   createDeliverBin,
@@ -1093,11 +1094,14 @@ async function ingestIntegrateBin(
     {
       integrationBranch: campaign.integrationBranch,
       baseSha: base,
-      units: implemented.map((unit) => ({
-        unitKey: unit.unitKey,
-        headSha: unit.headSha as string,
-        ownedPaths: unit.ownedPaths,
-      })),
+      units: integrationUnitsFor(
+        bin,
+        implemented.map((unit) => ({
+          unitKey: unit.unitKey,
+          headSha: unit.headSha as string,
+          ownedPaths: unit.ownedPaths,
+        })),
+      ),
     },
     parsed.value,
   );
