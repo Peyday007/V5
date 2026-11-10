@@ -28,6 +28,8 @@ import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { listCapitalForProject, listConstraintsForProject } from '../../repos/industry.ts';
 import { countRoleEconomics, roleRecordFromRows, type RoleEconomics } from './exclusions.ts';
+import { checkCommercialAuthority } from './authority.ts';
+import { instantlySendingStanding } from './providers/instantly.ts';
 
 export const FUNNEL_WEEKS = 8;
 
@@ -94,6 +96,11 @@ export interface FunnelReading {
     /** Openings with settled cash whose role is not yet compliant, with the reason. */
     heldBack: Array<{ opportunityId: string; position: string; reason: string }>;
   };
+  /**
+   * Every mechanism that has recorded outcomes, modelled as the full outreach
+   * funnel from those rows (COM-13-3). Stages no row states are unknown.
+   */
+  outreach: { mechanisms: OutreachFunnelReading[]; mix: MixReading; consideredWays: ConsideredWay[] };
 }
 
 /** The Monday on or before `iso`, as `YYYY-MM-DD` (UTC). */
@@ -127,6 +134,8 @@ export async function cashFunnel(input: {
   standings?: ReadonlyMap<string, Standing>;
   now?: string;
   weeks?: number;
+  /** Permission and sending capacity, when the caller already has them; read from their rows otherwise. */
+  outreachEvidence?: OutreachEvidence;
 }): Promise<FunnelReading> {
   const db = getDb();
   const until = input.now ?? cashNow();
@@ -350,6 +359,7 @@ export async function cashFunnel(input: {
       countedByCurrency: settledByOpening.length > 0 ? countedByCurrency : null,
       heldBack,
     },
+    outreach: await outreachFromRows(input.projectId, input.outreachEvidence),
   };
 }
 
@@ -412,5 +422,536 @@ export function formatFunnel(reading: FunnelReading): string[] {
   if (o.heldBack.length > 0) {
     lines.push(`  settled cash held back pending a compliant position: ${o.heldBack.map((h) => `${h.opportunityId}=${h.position}`).join(' ')}`);
   }
+  const open = reading.outreach.consideredWays.filter((one) => one.status === 'NO_MECHANISM_RECORDED');
+  if (reading.outreach.mechanisms.length === 0) {
+    lines.push('  outreach funnel: no mechanism has recorded an outcome yet');
+  } else {
+    for (const mechanism of reading.outreach.mechanisms) lines.push(...formatOutreachFunnel(mechanism).map((line) => `  ${line}`));
+    lines.push(
+      `  outreach mix ranked=${reading.outreach.mix.ranked.map((one) => one.mode).join(',') || '(none)'}` +
+        ` unranked=${reading.outreach.mix.unranked.map((one) => `${one.mode}[${one.firstUnknown ?? 'unknown'}]`).join(',') || '(none)'}`,
+    );
+    const c = reading.outreach.mix.combined;
+    if (c) {
+      lines.push(
+        `  outreach combined mix ${c.modes.join('+')} first-purchase ${figure(c.firstPurchaseRevenueCents.low, 2)}–${figure(c.firstPurchaseRevenueCents.high, 2)}` +
+          ` net ${c.netCents ? `${figure(c.netCents.low, 2)}–${figure(c.netCents.high, 2)}` : 'unknown (a cost is unknown)'}`,
+      );
+    }
+  }
+  if (open.length > 0) {
+    lines.push(`  ways to reach demand with no recorded mechanism (open tasks): ${open.map((one) => one.label).join('; ')}`);
+  }
   return lines;
+}
+
+/* ------------------------------------------------------------------------- */
+/* The outreach funnel (COM-13-3): messages are not buyers                    */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * A stage input is measured, estimated with a range, or unknown. Unknown is a
+ * state of its own: it is never turned into a favourable number, and it makes
+ * every figure downstream of it unknown too.
+ */
+export type StageInput =
+  | { basis: 'MEASURED'; value: number }
+  | { basis: 'ESTIMATED'; low: number; high: number }
+  | { basis: 'UNKNOWN' };
+
+/** The stages of any outreach mechanism, each its own figure, in funnel order. */
+export const OUTREACH_STAGES = [
+  'permission', // provider terms and consent permit this use at all: 1 = permitted, 0 = refused
+  'uniqueProspects', // unique relevant prospects reachable (a count, not a message count)
+  'deliverability', // share of sends that reach an inbox or inbox-equivalent
+  'throughput', // messages the sending accounts can send in the period (their stated capacity)
+  'reputation', // share of the sending accounts in good standing: only those carry the throughput
+  'response', // share of reached prospects that reply or engage
+  'qualification', // share of responders that qualify
+  'close', // share of qualified that buy
+  'settlement', // share of closed value that settles as cash
+  'fulfillment', // share of settled orders delivered without refund
+  'repeat', // additional purchases per fulfilled buyer
+] as const;
+export type OutreachStage = (typeof OUTREACH_STAGES)[number];
+
+/**
+ * One way of reaching demand. `mode` is a label for the comparison, not a
+ * category the model branches on: volume, high-ticket, partner and marketplace
+ * mechanisms are modelled by the same stages with different inputs, and a
+ * mechanism of any other kind is modelled the same way.
+ */
+export interface OutreachMechanism {
+  mode: string;
+  label: string;
+  inputs: Partial<Record<OutreachStage, StageInput>>;
+  /** Value of one fulfilled purchase, in minor units. Unknown unless somebody supplied it. */
+  dealValueCents?: StageInput;
+  /**
+   * What running the mechanism costs over the period, in minor units (sending
+   * accounts, partner share, listing fees, people). Unknown unless somebody
+   * supplied it, and an unknown cost is never read as zero.
+   */
+  costCents?: StageInput;
+  /** Messages the mechanism proposes to send. Reported as effort only; no stage reads it as a buyer. */
+  messagesSent?: number;
+}
+
+export interface Range {
+  low: number | null;
+  high: number | null;
+}
+
+export interface OutreachFigure extends Range {
+  basis: 'MEASURED' | 'ESTIMATED' | 'UNKNOWN';
+  /** Why the figure is unknown, when it is. */
+  because: string | null;
+}
+
+export interface OutreachFunnelReading {
+  mode: string;
+  label: string;
+  /** Every stage input as given, defaulting to unknown. */
+  stages: Record<OutreachStage, OutreachFigure>;
+  /** Messages proposed. Effort, never buyers, sales or revenue. */
+  messagesSent: number | null;
+  /** Counts at each step, derived from the stage inputs and never from messagesSent. */
+  reachedProspects: OutreachFigure;
+  responders: OutreachFigure;
+  qualified: OutreachFigure;
+  buyers: OutreachFigure;
+  settledBuyers: OutreachFigure;
+  fulfilledBuyers: OutreachFigure;
+  /**
+   * Settled revenue from first purchases alone, in minor units. It does not
+   * depend on the repeat stage, so an unknown repeat input leaves it known.
+   */
+  firstPurchaseRevenueCents: OutreachFigure;
+  /** Revenue over the period including repeat purchases. Unknown while repeat is unknown. */
+  revenueCents: OutreachFigure;
+  /** First-purchase revenue less cost. Unknown while either side is unknown. */
+  netFirstPurchaseCents: OutreachFigure;
+  /** First stage whose input is unknown or refused, in funnel order. */
+  firstUnknown: OutreachStage | null;
+  permitted: boolean | null;
+}
+
+/** Revenue less cost, worst case against worst case. Unknown on either side stays unknown. */
+function netOfCost(revenue: OutreachFigure, cost: OutreachFigure): OutreachFigure {
+  if (revenue.low === null || revenue.high === null) return UNKNOWN_FIGURE(revenue.because ?? 'revenue is unknown');
+  if (cost.low === null || cost.high === null) return UNKNOWN_FIGURE(cost.because ?? 'cost is unknown');
+  return {
+    basis: revenue.basis === 'MEASURED' && cost.basis === 'MEASURED' ? 'MEASURED' : 'ESTIMATED',
+    low: revenue.low - cost.high,
+    high: revenue.high - cost.low,
+    because: null,
+  };
+}
+
+const UNKNOWN_FIGURE = (because: string): OutreachFigure => ({ basis: 'UNKNOWN', low: null, high: null, because });
+
+/**
+ * What a stage input is a quantity of. A share is a fraction of the stage before
+ * it and cannot exceed 1; a count or amount is any non-negative number; a
+ * permission is a yes or a no and is never a fraction. A value that is not the
+ * kind its stage needs is unknown, not clamped: clamping would turn a bad
+ * recording into a favourable number.
+ */
+export type StageKind = 'share' | 'count' | 'permission';
+
+const SHARE_STAGES: readonly OutreachStage[] = ['deliverability', 'reputation', 'response', 'qualification', 'close', 'settlement', 'fulfillment'];
+const COUNT_STAGES: readonly OutreachStage[] = ['uniqueProspects', 'throughput', 'repeat'];
+
+/** The kind of quantity each stage is. Exported so a caller can say what a stage takes. */
+export function stageKind(stage: OutreachStage): StageKind {
+  if (stage === 'permission') return 'permission';
+  if (SHARE_STAGES.includes(stage)) return 'share';
+  if (COUNT_STAGES.includes(stage)) return 'count';
+  return 'count';
+}
+
+function figureOf(input: StageInput | undefined, what: string, kind: StageKind = 'count'): OutreachFigure {
+  if (!input || input.basis === 'UNKNOWN') return UNKNOWN_FIGURE(`${what} is unknown`);
+  const fits = (value: number): boolean => {
+    if (!Number.isFinite(value) || value < 0) return false;
+    if (kind === 'share') return value <= 1;
+    if (kind === 'permission') return value === 0 || value === 1;
+    return true;
+  };
+  const describe = kind === 'share' ? 'a share between 0 and 1' : kind === 'permission' ? 'a yes (1) or a no (0)' : 'a count or an amount';
+  if (input.basis === 'MEASURED') {
+    return fits(input.value)
+      ? { basis: 'MEASURED', low: input.value, high: input.value, because: null }
+      : UNKNOWN_FIGURE(`${what} was recorded as a value that is not ${describe}`);
+  }
+  // Permission is a fact about provider terms, so a range over it says nothing.
+  if (kind === 'permission') return UNKNOWN_FIGURE(`${what} is a yes or a no; an estimate over it is not evidence`);
+  const low = Math.min(input.low, input.high);
+  const high = Math.max(input.low, input.high);
+  return fits(low) && fits(high)
+    ? { basis: 'ESTIMATED', low, high, because: null }
+    : UNKNOWN_FIGURE(`${what} was recorded as a range that is not ${describe}`);
+}
+
+/** One step of the funnel: a count times a share. Unknown on either side stays unknown. */
+function step(count: OutreachFigure, share: OutreachFigure, what: string): OutreachFigure {
+  if (count.basis === 'UNKNOWN' || count.low === null || count.high === null) {
+    return UNKNOWN_FIGURE(count.because ?? `${what} follows an unknown stage`);
+  }
+  if (share.basis === 'UNKNOWN' || share.low === null || share.high === null) {
+    return UNKNOWN_FIGURE(share.because ?? `${what} needs an input that is unknown`);
+  }
+  const basis = count.basis === 'MEASURED' && share.basis === 'MEASURED' ? 'MEASURED' : 'ESTIMATED';
+  return { basis, low: count.low * share.low, high: count.high * share.high, because: null };
+}
+
+/**
+ * Model one outreach mechanism as the full funnel. Pure.
+ *
+ * Reached prospects are the unique relevant prospects times deliverability,
+ * capped by what sending throughput can reach. The number of messages sent is
+ * carried as effort and is read by no stage, so sending more messages never
+ * produces a buyer by itself, and a permission that is refused or unknown makes
+ * every figure after it unknown rather than zero or favourable.
+ */
+export function modelOutreachFunnel(mechanism: OutreachMechanism): OutreachFunnelReading {
+  const stages = Object.fromEntries(
+    OUTREACH_STAGES.map((stage) => [stage, figureOf(mechanism.inputs[stage], stage, stageKind(stage))]),
+  ) as Record<OutreachStage, OutreachFigure>;
+
+  const permission = stages.permission;
+  const permitted: boolean | null =
+    permission.basis === 'UNKNOWN' || permission.low === null || permission.high === null
+      ? null
+      : permission.high > 0 && permission.low > 0
+        ? true
+        : permission.high === 0
+          ? false
+          : null;
+  const gate = (figure: OutreachFigure): OutreachFigure => {
+    if (permitted === true) return figure;
+    return UNKNOWN_FIGURE(
+      permitted === false ? 'provider terms or consent refuse this use' : 'whether provider terms and consent permit this use is unknown',
+    );
+  };
+
+  const { uniqueProspects, deliverability } = stages;
+  // Only the accounts in good standing send, so capacity is throughput times reputation.
+  const throughput = step(stages.throughput, stages.reputation, 'effective sending throughput');
+  const deliverable = gate(step(uniqueProspects, deliverability, 'reached prospects'));
+  const reachedProspects: OutreachFigure =
+    deliverable.basis === 'UNKNOWN' || throughput.basis === 'UNKNOWN' || deliverable.high === null || throughput.high === null || throughput.low === null || deliverable.low === null
+      ? deliverable.basis === 'UNKNOWN'
+        ? deliverable
+        : UNKNOWN_FIGURE(throughput.because ?? 'sending throughput is unknown')
+      : {
+          basis: 'ESTIMATED',
+          low: Math.min(deliverable.low, throughput.low),
+          high: Math.min(deliverable.high, throughput.high),
+          because: null,
+        };
+
+  const responders = step(reachedProspects, stages.response, 'responders');
+  const qualified = step(responders, stages.qualification, 'qualified');
+  const buyers = step(qualified, stages.close, 'buyers');
+  const settledBuyers = step(buyers, stages.settlement, 'settled buyers');
+  const fulfilledBuyers = step(settledBuyers, stages.fulfillment, 'fulfilled buyers');
+  const deal = figureOf(mechanism.dealValueCents, 'deal value');
+  const firstPurchase = step(fulfilledBuyers, deal, 'revenue');
+  // Each fulfilled buyer buys once, plus `repeat` further purchases on average.
+  const repeat = stages.repeat;
+  const revenueCents: OutreachFigure =
+    firstPurchase.basis === 'UNKNOWN' || repeat.basis === 'UNKNOWN' || firstPurchase.low === null || firstPurchase.high === null || repeat.low === null || repeat.high === null
+      ? UNKNOWN_FIGURE(firstPurchase.because ?? repeat.because ?? 'repeat purchase is unknown')
+      : {
+          basis: firstPurchase.basis === 'MEASURED' && repeat.basis === 'MEASURED' ? 'MEASURED' : 'ESTIMATED',
+          low: firstPurchase.low * (1 + repeat.low),
+          high: firstPurchase.high * (1 + repeat.high),
+          because: null,
+        };
+
+  const firstUnknown =
+    OUTREACH_STAGES.find((stage) => stages[stage].basis === 'UNKNOWN' || (stage === 'permission' && permitted !== true)) ?? null;
+
+  return {
+    mode: mechanism.mode,
+    label: mechanism.label,
+    stages,
+    messagesSent: mechanism.messagesSent ?? null,
+    reachedProspects,
+    responders,
+    qualified,
+    buyers,
+    settledBuyers,
+    fulfilledBuyers,
+    firstPurchaseRevenueCents: firstPurchase,
+    revenueCents,
+    netFirstPurchaseCents: netOfCost(firstPurchase, figureOf(mechanism.costCents, 'cost')),
+    firstUnknown,
+    permitted,
+  };
+}
+
+export interface MixReading {
+  /**
+   * Mechanisms whose first-purchase revenue is known to a range. Those whose cost is also known
+   * come first, by the low end of net revenue; those whose cost is unknown follow, by gross revenue,
+   * because an unknown cost never lets a mechanism outrank one whose cost is known.
+   */
+  ranked: OutreachFunnelReading[];
+  /** Mechanisms with an unknown or refused stage. Never ranked, never assumed favourable. */
+  unranked: { mode: string; label: string; firstUnknown: OutreachStage | null; because: string | null }[];
+  /**
+   * The ranked mechanisms taken together: they reach different prospects, so their first-purchase
+   * revenue adds. `netCents` is known only when every ranked mechanism's cost is. Null when nothing
+   * is ranked.
+   */
+  combined: { modes: string[]; firstPurchaseRevenueCents: Range; netCents: Range | null } | null;
+}
+
+/** A way of reaching demand Brain must weigh whether or not a row has named it yet. */
+export interface ConsideredWay {
+  key: string;
+  label: string;
+  /** Why it is listed: a mechanism that recorded outcomes covers it; otherwise it is an open task. */
+  status: 'MODELLED' | 'NO_MECHANISM_RECORDED';
+  /** The stage nobody has stated yet, which is the work that would make it comparable. */
+  firstUnknown: OutreachStage | null;
+}
+
+/**
+ * Ways to reach demand the owner named. A prompt for comparison, never a whitelist: a mechanism of
+ * any other name is modelled and ranked the same way, and `mode` is never branched on.
+ */
+export const OUTREACH_WAYS: readonly { key: string; label: string }[] = [
+  { key: 'high-value-deals', label: 'few high-value deals' },
+  { key: 'many-small-deals', label: 'large numbers of small deals' },
+  { key: 'partner-access', label: 'partners with existing customer access' },
+  { key: 'customer-request-marketplace', label: 'customer-request marketplaces' },
+];
+
+/**
+ * Every named way to reach demand, each covered by a recorded mechanism or listed as an open task.
+ * A recorded mechanism covers a way when its mode equals the way's key; any other mode is simply an
+ * additional mechanism and does not hide the ways nobody has measured.
+ */
+export function considerOutreachWays(mechanisms: readonly OutreachMechanism[]): ConsideredWay[] {
+  const modes = new Set(mechanisms.map((one) => one.mode.toLowerCase()));
+  return OUTREACH_WAYS.map((way) => ({
+    key: way.key,
+    label: way.label,
+    status: modes.has(way.key) ? 'MODELLED' : 'NO_MECHANISM_RECORDED',
+    firstUnknown: modes.has(way.key) ? null : 'permission',
+  }));
+}
+
+/**
+ * Compare any set of mechanisms for the economically strongest mix. Pure.
+ *
+ * No mode is a default and none is excluded: a mechanism is ranked only on its own stage inputs,
+ * net of its cost where the cost is known, and one with an unknown stage is listed as unranked
+ * with the stage that is missing, which is the task to do next. The mix is the ranked set summed,
+ * so a strong mix can be several mechanisms and not only the best single one.
+ */
+export function searchOutreachMix(mechanisms: readonly OutreachMechanism[]): MixReading {
+  const readings = mechanisms.map(modelOutreachFunnel);
+  const known = readings.filter((one) => one.firstPurchaseRevenueCents.basis !== 'UNKNOWN');
+  const costKnown = (one: OutreachFunnelReading): boolean => one.netFirstPurchaseCents.basis !== 'UNKNOWN';
+  const ranked = known.sort((a, b) => {
+    if (costKnown(a) !== costKnown(b)) return costKnown(a) ? -1 : 1;
+    const left = costKnown(a) ? a.netFirstPurchaseCents : a.firstPurchaseRevenueCents;
+    const right = costKnown(b) ? b.netFirstPurchaseCents : b.firstPurchaseRevenueCents;
+    return (right.low ?? 0) - (left.low ?? 0) || (right.high ?? 0) - (left.high ?? 0);
+  });
+  const unranked = readings
+    .filter((one) => one.firstPurchaseRevenueCents.basis === 'UNKNOWN')
+    .map((one) => ({
+      mode: one.mode,
+      label: one.label,
+      firstUnknown: one.firstUnknown,
+      because: one.firstPurchaseRevenueCents.because,
+    }));
+  const sum = (pick: (one: OutreachFunnelReading) => OutreachFigure): Range => ({
+    low: ranked.reduce((t, one) => t + (pick(one).low ?? 0), 0),
+    high: ranked.reduce((t, one) => t + (pick(one).high ?? 0), 0),
+  });
+  const combined =
+    ranked.length === 0
+      ? null
+      : {
+          modes: ranked.map((one) => one.mode),
+          firstPurchaseRevenueCents: sum((one) => one.firstPurchaseRevenueCents),
+          netCents: ranked.every(costKnown) ? sum((one) => one.netFirstPurchaseCents) : null,
+        };
+  return { ranked, unranked, combined };
+}
+
+/** The outreach funnel's lines for a reading: every stage with its basis, and what is unknown. */
+export function formatOutreachFunnel(reading: OutreachFunnelReading): string[] {
+  const show = (f: OutreachFigure): string =>
+    f.basis === 'UNKNOWN' ? `unknown (${f.because ?? 'no input'})` : `${figure(f.low, 2)}–${figure(f.high, 2)} ${f.basis.toLowerCase()}`;
+  return [
+    `OUTREACH FUNNEL ${reading.mode}: ${reading.label}`,
+    `  messages sent ${figure(reading.messagesSent)} (effort only; not prospects, buyers or revenue)`,
+    ...OUTREACH_STAGES.map((stage) => `  ${stage.padEnd(16)} ${show(reading.stages[stage])}`),
+    `  reached prospects ${show(reading.reachedProspects)}`,
+    `  buyers ${show(reading.buyers)}`,
+    `  first-purchase revenue (minor units) ${show(reading.firstPurchaseRevenueCents)}`,
+    `  revenue incl. repeat (minor units) ${show(reading.revenueCents)}`,
+    `  net of cost, first purchase (minor units) ${show(reading.netFirstPurchaseCents)}`,
+  ];
+}
+
+/**
+ * Build the mechanisms from the rows Brain has written (§94). Every stage is read from the rows
+ * that state it, and a stage no row states stays unknown rather than defaulting:
+ *
+ *   permission      stated by the standing commercial authority row (CONTACT_BUYER allowed = 1,
+ *                   prohibited or not covered = 0). A contact having been sent proves nothing about
+ *                   it, and provider terms have no row of their own, so with no grant it is unknown.
+ *   uniqueProspects distinct opportunities contacted: a count of prospects reached so far, never
+ *                   the message count (one prospect messaged twice is one).
+ *   throughput      the sending accounts' measured daily limit over the days the contact rows span.
+ *                   Never the number of contacts already sent: that is the quantity the cap bounds.
+ *   reputation      healthy sending accounts among all of them, from the workspace reading.
+ *   deliverability  contacts that did not bounce.
+ *   response        answered contacts among delivered ones.
+ *   qualification   answered prospects that engaged with terms (accepted or countered, or hold an
+ *                   accepted price) among answered ones; a bare reply or a decline did not qualify.
+ *   close           accepted prices among qualified prospects.
+ *   settlement      settled cash against agreed value for accepted opportunities, from
+ *                   `cash_money_entries` SETTLEMENT rows. Known only once a settlement exists:
+ *                   no money yet on an open deal is not evidence it will not settle.
+ *   fulfillment     accepted deals not refunded.
+ *   repeat          further agreements per agreed prospect, from `cash_agreements`. Known only
+ *                   once a repeat purchase exists: a window with none is not a zero.
+ *
+ * A message count is never read as a buyer. A mechanism is whatever the rows name (its
+ * `mechanism`, else its `channel`), never a list this code knows.
+ */
+export interface OutreachEvidence {
+  /** Whether the standing commercial authority permits contacting buyers. Absent = nobody has said. */
+  permission?: StageInput;
+  /**
+   * What the sending accounts measure: the most they send a day, and how many of the accounts
+   * are in good standing out of all of them. Absent = no workspace could be read.
+   */
+  sending?: { perDay: number; healthyAccounts: number; totalAccounts: number } | null;
+}
+
+export async function mechanismsFromRows(projectId: string, evidence: OutreachEvidence = {}): Promise<OutreachMechanism[]> {
+  const db = getDb();
+  const rows = await db.all<{
+    mechanism: string | null;
+    channel: string | null;
+    opportunity_id: string;
+    kind: string;
+    value_cents: number | null;
+    value_text: string | null;
+    request_key: string;
+    created_at: string;
+  }>(
+    `SELECT mechanism, channel, opportunity_id, kind, value_cents, value_text, request_key, created_at
+       FROM cash_outcomes
+      WHERE project_id = ? AND kind IN ('CONTACT_RESULT', 'ACCEPTED_PRICE', 'REFUNDED')
+      ORDER BY created_at`,
+    [projectId],
+  );
+  const settledRows = await db.all<{ opportunity_id: string; total: number }>(
+    `SELECT opportunity_id, SUM(amount_cents) AS total FROM cash_money_entries
+      WHERE project_id = ? AND kind = 'SETTLEMENT' AND opportunity_id IS NOT NULL GROUP BY opportunity_id`,
+    [projectId],
+  );
+  const settledByOpportunity = new Map(settledRows.map((row) => [row.opportunity_id, Number(row.total)]));
+  const agreementRows = await db.all<{ opportunity_id: string; n: number }>(
+    `SELECT opportunity_id, COUNT(*) AS n FROM cash_agreements
+      WHERE project_id = ? AND state = 'AGREED' GROUP BY opportunity_id`,
+    [projectId],
+  );
+  const agreementsByOpportunity = new Map(agreementRows.map((row) => [row.opportunity_id, Number(row.n)]));
+
+  const groups = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = row.mechanism ?? row.channel ?? 'unspecified';
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  const measured = (numerator: number, denominator: number): StageInput =>
+    denominator > 0 ? { basis: 'MEASURED', value: Math.min(1, numerator / denominator) } : { basis: 'UNKNOWN' };
+  const mechanisms: OutreachMechanism[] = [];
+  for (const [mode, group] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const contacts = group.filter((one) => one.kind === 'CONTACT_RESULT');
+    const bounced = contacts.filter((one) => one.value_text === 'CONTACT_UNDELIVERABLE').length;
+    const answeredRows = contacts.filter(
+      (one) => one.value_text !== 'BUYER_SILENT' && one.value_text !== 'CONTACT_UNDELIVERABLE',
+    );
+    const answered = answeredRows.length;
+    const accepted = new Map<string, number>();
+    for (const one of group) if (one.kind === 'ACCEPTED_PRICE' && one.value_cents !== null) accepted.set(one.opportunity_id, one.value_cents);
+    const refunded = new Set(group.filter((one) => one.kind === 'REFUNDED').map((one) => one.opportunity_id));
+    const refundedAccepted = [...accepted.keys()].filter((id) => refunded.has(id)).length;
+    const price = median([...accepted.values()]);
+
+    const qualifiedIds = new Set<string>();
+    for (const one of answeredRows) {
+      if (one.value_text === 'BUYER_ACCEPTED' || one.value_text === 'BUYER_COUNTERED' || accepted.has(one.opportunity_id)) qualifiedIds.add(one.opportunity_id);
+    }
+    for (const id of accepted.keys()) if (answeredRows.some((one) => one.opportunity_id === id)) qualifiedIds.add(id);
+    const uniqueContacted = new Set(contacts.map((one) => one.opportunity_id)).size;
+
+    const agreed = [...accepted.keys()];
+    const agreedCents = agreed.reduce((t, id) => t + (accepted.get(id) ?? 0), 0);
+    const settledAny = agreed.some((id) => (settledByOpportunity.get(id) ?? 0) > 0);
+    const settledCents = agreed.reduce((t, id) => t + Math.min(settledByOpportunity.get(id) ?? 0, accepted.get(id) ?? 0), 0);
+    const extra = agreed.reduce((t, id) => t + Math.max(0, (agreementsByOpportunity.get(id) ?? 1) - 1), 0);
+
+    // The period the rows cover, whole days, at least one: capacity is a rate, and the cap is what
+    // the accounts could have sent over that period, not what they did send.
+    const stamps = contacts.map((one) => Date.parse(String(one.created_at))).filter((t) => Number.isFinite(t));
+    const days = stamps.length > 0 ? Math.max(1, Math.ceil((Math.max(...stamps) - Math.min(...stamps)) / 86_400_000)) : 1;
+    const sending = evidence.sending && evidence.sending.perDay > 0 && evidence.sending.totalAccounts > 0 ? evidence.sending : null;
+
+    mechanisms.push({
+      mode,
+      label: `${mode} (measured from ${contacts.length} recorded contact result(s))`,
+      messagesSent: contacts.length > 0 ? contacts.length : undefined,
+      inputs: {
+        permission: evidence.permission ?? { basis: 'UNKNOWN' },
+        uniqueProspects: uniqueContacted > 0 ? { basis: 'MEASURED', value: uniqueContacted } : { basis: 'UNKNOWN' },
+        throughput: sending ? { basis: 'MEASURED', value: sending.perDay * days } : { basis: 'UNKNOWN' },
+        reputation: sending ? { basis: 'MEASURED', value: Math.min(1, sending.healthyAccounts / sending.totalAccounts) } : { basis: 'UNKNOWN' },
+        deliverability: measured(contacts.length - bounced, contacts.length),
+        response: measured(answered, contacts.length - bounced),
+        qualification: measured(qualifiedIds.size, answered),
+        close: measured(Math.min(accepted.size, qualifiedIds.size), qualifiedIds.size),
+        settlement: settledAny ? measured(settledCents, agreedCents) : { basis: 'UNKNOWN' },
+        fulfillment: measured(accepted.size - refundedAccepted, accepted.size),
+        repeat: extra > 0 ? { basis: 'MEASURED', value: extra / agreed.length } : { basis: 'UNKNOWN' },
+      },
+      dealValueCents: price === null ? { basis: 'UNKNOWN' } : { basis: 'MEASURED', value: price },
+    });
+  }
+  return mechanisms;
+}
+
+/** Read what states permission and sending capacity: the authority row and the workspace reading. */
+export async function outreachEvidenceFor(projectId: string): Promise<OutreachEvidence> {
+  const decision = await checkCommercialAuthority({ projectId, action: 'CONTACT_BUYER' });
+  const permission: StageInput = decision.ok
+    ? { basis: 'MEASURED', value: 1 }
+    : decision.authority
+      ? { basis: 'MEASURED', value: 0 }
+      : { basis: 'UNKNOWN' };
+  return { permission, sending: await instantlySendingStanding().catch(() => null) };
+}
+
+async function outreachFromRows(
+  projectId: string,
+  evidence?: OutreachEvidence,
+): Promise<{ mechanisms: OutreachFunnelReading[]; mix: MixReading; consideredWays: ConsideredWay[] }> {
+  const mechanisms = await mechanismsFromRows(projectId, evidence ?? (await outreachEvidenceFor(projectId)));
+  return {
+    mechanisms: mechanisms.map(modelOutreachFunnel),
+    mix: searchOutreachMix(mechanisms),
+    consideredWays: considerOutreachWays(mechanisms),
+  };
 }

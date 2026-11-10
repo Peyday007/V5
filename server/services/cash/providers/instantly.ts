@@ -171,9 +171,30 @@ export async function instantlyCapacity(options: { fetch?: FetchLike; env?: Node
   return value;
 }
 
+/**
+ * The sending accounts in good standing out of all of them, from the same fresh workspace
+ * reading `instantlyCapacity` uses: the reputation stage of an outreach funnel. Null when
+ * Instantly is not the configured provider or cannot be read.
+ */
+export async function instantlySendingStanding(options: { fetch?: FetchLike; env?: NodeJS.ProcessEnv; now?: number } = {}): Promise<{ perDay: number; healthyAccounts: number; totalAccounts: number } | null> {
+  const env = options.env ?? process.env;
+  const reading = messagingConfig(env);
+  if (reading.provider !== 'instantly' || !reading.configured) return null;
+  const now = options.now ?? Date.now();
+  if (cachedStanding && now - cachedStanding.at < CAPACITY_FRESH_MS) return cachedStanding.value;
+  const read = await readInstantlyWorkspace(options).catch(() => ({ ok: false as const, reason: 'unreadable' }));
+  const value = read.ok && read.workspace.accounts.length > 0
+    ? { perDay: read.workspace.dailyCapacity, healthyAccounts: read.workspace.healthyAccounts.length, totalAccounts: read.workspace.accounts.length }
+    : null;
+  cachedStanding = { at: now, value };
+  return value;
+}
+let cachedStanding: { at: number; value: { perDay: number; healthyAccounts: number; totalAccounts: number } | null } | null = null;
+
 export function forgetInstantlyCapacity(): void {
   cachedCapacity = null;
   cachedRates = null;
+  cachedStanding = null;
 }
 
 /** What the owner's own sends have measured, summed over every campaign in the workspace (§92). */
