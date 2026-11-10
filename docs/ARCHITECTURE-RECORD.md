@@ -15272,3 +15272,8 @@ knowledge.
 - **Research slots:** still read "132 waiting beside 89 free". The count summed every grant's slots, and a grant serves only its own project, so free slots in one project do nothing for ideas waiting in another.
 - **The fix:** the pool now matches project by project. An idea is startable only when its own project's grants have a free slot.
 - **The launch fill:** it uses the same matched number.
+
+**Fourth reading (2026-11-10 00:32Z, on 7422b13).**
+- **Concurrency:** all four pools were working at the same time. Factory had 1 stage running, the free lane 4 calls, and research 13 missions. Routines were idle because nothing was executable.
+- **Research slots:** still read "26 startable" for two readings in a row. The project-by-project count still added up every active grant in a project. `launch()` takes slots only from the one grant that governs research, which `checkAuthority` resolves for work class `RESEARCH`, so outreach and cash grants were counted as research slots.
+- **The fix:** the pool now reads `researchMissionSlots(projectId)` in `russell/launch.ts`. That is the same grant and the same live-hold arithmetic that `reserve` enforces, so the watchdog can only call slots idle when a launch would actually be accepted.

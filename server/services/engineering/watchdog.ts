@@ -167,37 +167,36 @@ async function freeLanePool(now: Date): Promise<PoolReading | null> {
  * each project, the lesser of its launchable ideas and its grants' free slots.
  */
 async function researchSlotRows(now: Date): Promise<{ waiting: number; running: number; capacity: number; startable: number }> {
-  const iso = now.toISOString();
-  const db = getDb();
-  const waitingRows = await db.all<{ project_id: string; n: number | string }>(
+  void now;
+  const waitingRows = await getDb().all<{ project_id: string; n: number | string }>(
     `SELECT c.project_id, COUNT(*) AS n FROM russell_candidates c
       WHERE c.state = 'QUEUED' AND c.project_id IS NOT NULL AND c.judgment LIKE '%"missionSpec"%'
         AND NOT EXISTS (SELECT 1 FROM russell_missions m WHERE m.candidate_id = c.id AND m.state NOT IN ('FAILED','CANCELLED'))
       GROUP BY c.project_id`,
   );
-  const grantRows = await db.all<{ project_id: string; cap: number | string; live: number | string }>(
-    `SELECT g.project_id, g.max_concurrent AS cap,
-            (SELECT COUNT(*) FROM russell_budget_reservations r
-              WHERE r.goal_id = g.id AND r.kind = 'MISSION' AND r.state = 'HELD' AND r.expires_at > ?) AS live
-       FROM russell_goals g WHERE g.state = 'ACTIVE'`,
-    [iso],
-  );
-  const free = new Map<string, number>();
-  let running = 0;
-  let capacity = 0;
-  for (const row of grantRows) {
-    const cap = Number(row.cap);
-    const live = Number(row.live);
-    running += live;
-    capacity += cap;
-    free.set(row.project_id, (free.get(row.project_id) ?? 0) + Math.max(0, cap - live));
-  }
+  /*
+   * The slots a waiting idea can take are its project's research grant's — the
+   * one grant `launch()` resolves and `reserve` enforces — and no other. Summing
+   * every active grant in a project counted cash and other grants' slots that no
+   * research launch can use (production 2026-11-10: "26 startable" for two
+   * readings while every launch was refused AT_ONCE).
+   */
+  const { researchMissionSlots } = await import('../russell/launch.ts');
+  const seen = new Set<string>();
   let waiting = 0;
   let startable = 0;
+  let running = 0;
+  let capacity = 0;
   for (const row of waitingRows) {
     const n = Number(row.n);
     waiting += n;
-    startable += Math.min(n, free.get(row.project_id) ?? 0);
+    const slots = await researchMissionSlots(row.project_id).catch(() => null);
+    if (!slots) continue;
+    startable += Math.min(n, Math.max(0, slots.cap - slots.live));
+    if (seen.has(slots.goalId)) continue;
+    seen.add(slots.goalId);
+    running += slots.live;
+    capacity += slots.cap;
   }
   return { waiting, running, capacity, startable };
 }

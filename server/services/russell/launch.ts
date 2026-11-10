@@ -81,10 +81,16 @@ export const RESEARCH_WORK_CLASS = 'RESEARCH';
  * slot, it is a different refusal with its own remedy.
  */
 export async function researchMissionSlotsFull(projectId: string): Promise<boolean | null> {
+  const slots = await researchMissionSlots(projectId);
+  return slots === null ? null : slots.live >= slots.cap;
+}
+
+/** The research grant's at-once ceiling and live holds for this project, as `launch()` resolves them; null when no grant governs research here. */
+export async function researchMissionSlots(projectId: string): Promise<{ goalId: string; cap: number; live: number } | null> {
   const authority = await checkAuthority({ projectId, workClass: RESEARCH_WORK_CLASS });
   if (!authority.ok || !authority.goal) return null;
   const { live } = await spendTotals(authority.goal.id, 'MISSION', authorityNow());
-  return live >= authority.goal.maxConcurrent;
+  return { goalId: authority.goal.id, cap: authority.goal.maxConcurrent, live };
 }
 
 export interface LaunchInput {
