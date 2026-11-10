@@ -110,6 +110,24 @@ describe('probe r01.goal-09 on rows', () => {
     expect(r.detail).toMatch(/not a defensible probability/);
   });
 
+  it('judges from the first reading stamped with an acceptance, and still refuses an unstamped one after it', async () => {
+    await liveGoal();
+    // Written on the rule's day by the Brain released before the rule: no acceptance key at all.
+    seq += 1;
+    await getDb().run(
+      `INSERT INTO goal_plan_readings (id, workstream_id, digest, verdict, strategies, forecast, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [`gpr-t${seq}`, goalId, `d${seq}`, 'NOT_VIABLE', '[]', JSON.stringify({ remainingCents: 1 }), '2026-11-09T05:00:00.000Z'],
+    );
+    await reading('NOT_VIABLE', candidate, '2026-11-09T12:00:00.000Z');
+    expect((await probe()).ok).toBe(true);
+    seq += 1;
+    await getDb().run(
+      `INSERT INTO goal_plan_readings (id, workstream_id, digest, verdict, strategies, forecast, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [`gpr-t${seq}`, goalId, `d${seq}`, 'NOT_VIABLE', '[]', JSON.stringify({ remainingCents: 1 }), '2026-11-09T13:00:00.000Z'],
+    );
+    expect((await probe()).ok).toBe(false);
+  });
+
   it('does not judge readings from before the acceptance rule', async () => {
     await liveGoal();
     await reading('RECOMMENDABLE', null, '2026-11-01T00:00:00.000Z');

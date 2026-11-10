@@ -604,11 +604,14 @@ export function pathwayOf(
   const netHigh = highOf(revenuePerDeal) !== null ? highOf(revenuePerDeal)! - (lowOf(fulfilmentCost) ?? 0) - (acquisitionCost.low ?? 0) : null;
   const netMid = mid(revenuePerDeal) !== null ? mid(revenuePerDeal)! - (mid(fulfilmentCost) ?? 0) - (typeof acquisitionCost.value === 'number' ? acquisitionCost.value : 0) : null;
   const weakest = (a: FactStatus, b: FactStatus): FactStatus => (a === 'UNKNOWN' || b === 'UNKNOWN' ? 'UNKNOWN' : a === 'ESTIMATED' || b === 'ESTIMATED' ? 'ESTIMATED' : 'PROVEN');
+  const netStatus: FactStatus = revenuePerDeal.status === 'UNKNOWN' ? 'UNKNOWN' : weakest(revenuePerDeal.status, fulfilmentCost.status === 'UNKNOWN' ? 'ESTIMATED' : fulfilmentCost.status);
   const net: PathFact = {
-    value: netMid,
+    // An unknown states no point value (§39, §93): with no price established, a midpoint of the
+    // swept range is a guess, and it is never read as a favourable number (production r01.opp-04).
+    value: netStatus === 'UNKNOWN' ? null : netMid,
     low: netLow,
     high: netHigh,
-    status: revenuePerDeal.status === 'UNKNOWN' ? 'UNKNOWN' : weakest(revenuePerDeal.status, fulfilmentCost.status === 'UNKNOWN' ? 'ESTIMATED' : fulfilmentCost.status),
+    status: netStatus,
     basis: fulfilmentCost.status === 'UNKNOWN' ? 'price less a direct cost nobody has established (swept)' : 'price less the direct cost',
   };
   const respond = factOf(one.respond);
