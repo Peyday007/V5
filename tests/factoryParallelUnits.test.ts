@@ -191,6 +191,23 @@ describe('independent units are separately claimable', () => {
     expect(text(without)).not.toContain('a migration number');
   });
 
+  it('retires an integration bin whose units are all integrated, so the waiting units get one', async () => {
+    // Production 2026-11-10: fcp_ca724ae4's integrate bin named one unit an earlier
+    // round had integrated; three units implemented since waited behind it while it
+    // ran to 24 attempts merging nothing.
+    const campaign = (await getCampaign(campaignId))!;
+    const changeRequest = (await getChangeRequest(campaign.changeRequestId))!;
+    const alpha = { ...(await getUnitByKey(campaignId, 'alpha'))!, branch: 'b/alpha', headSha: 'd'.repeat(40) };
+    const stale = await createIntegrateBin(campaign, changeRequest, [alpha]);
+    await getDbForTest().run("UPDATE factory_work_units SET state = 'INTEGRATED', branch = 'b/alpha', head_sha = ? WHERE campaign_id = ? AND unit_key = 'alpha'", ['d'.repeat(40), campaignId]);
+    await getDbForTest().run("UPDATE factory_work_units SET state = 'IMPLEMENTED', branch = 'b/beta', head_sha = ? WHERE campaign_id = ? AND unit_key = 'beta'", ['e'.repeat(40), campaignId]);
+    stubForge({});
+    const report = await tickRemoteCampaign(campaignId);
+    expect(report.notes.join(' ')).toContain(`retired stale integration ${stale!.id}`);
+    const row = await getDbForTest().get<{ state: string }>('SELECT state FROM bins WHERE id = ?', [stale!.id]);
+    expect(row?.state).toBe('CANCELLED');
+  });
+
   it('lets two workers hold the two units at once', async () => {
     stubForge({});
     await tickRemoteCampaign(campaignId);
