@@ -59,7 +59,7 @@ import {
   recordFactoryEvent,
   recordReview,
 } from '../../repos/factoryFleet.ts';
-import { listDispatchesForBin } from '../../repos/bins.ts';
+import { listDispatchesForBin, terminateUnleasedBin } from '../../repos/bins.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { installPlan, validatePlan } from './planner.ts';
 import { FactoryError } from './errors.ts';
@@ -1878,6 +1878,37 @@ async function runRemoteTick(
    */
   const liveBins = binsThisPassMayJudge(bins, await campaignBins(fresh.id));
   const reauthorizedAt = await lastReauthorization(fresh.id);
+
+  /*
+   * 1a. An integration bin whose list is already history is retired, not retried.
+   *
+   * Production 2026-11-10: fcp_ca724ae4's integrate bin was made to merge one unit;
+   * an earlier round integrated it, three other units were implemented since, and
+   * the bin's workers could only merge what it named. Every report moved nothing
+   * (NO_UNIT_MOVED), the bin ran to 24 attempts, and because one live integration
+   * bin holds the stage, no bin for the three waiting units was ever made. A bin
+   * none of whose units is still IMPLEMENTED can integrate nothing; it is cancelled
+   * so the next pass makes one from the units that are.
+   */
+  const integrating = liveBinOfKind(liveBins, 'FACTORY_INTEGRATE');
+  if (integrating) {
+    const named = integrationUnitsFor(integrating, []).map((unit) => unit.unitKey);
+    const waiting = new Set(units.filter((unit) => unit.state === 'IMPLEMENTED').map((unit) => unit.unitKey));
+    if (named.length > 0 && !named.some((key) => waiting.has(key))) {
+      const retired = await terminateUnleasedBin(
+        integrating.id,
+        integrating.leaseGeneration,
+        'CANCELLED',
+        `Every unit this integration was given (${named.join(', ')}) is already integrated or no longer ` +
+          'implemented, so it can merge nothing. Retired so the next pass integrates the units that are waiting.',
+      );
+      if (retired) {
+        report.notes.push(`retired stale integration ${integrating.id}`);
+        report.progress = true;
+        return report;
+      }
+    }
+  }
 
   /*
    * 1b. Say so when a stage is ready and nobody may be handed it.
