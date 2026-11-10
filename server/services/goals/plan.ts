@@ -66,6 +66,9 @@ import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type Res
 import type { EvidenceTier } from '../../domain/quant.ts';
 import { readPathways, type BrainCapabilities, type PathwayReading } from './pathways.ts';
 import { reconstructPlan, type Reconstruction } from './reconstruction.ts';
+import { sharedEvaluator } from './reasoning/evaluatorPool.ts';
+import { inventDirections } from './reasoning/invent.ts';
+import { loadLibrary, recordExploration } from './reasoning/learning.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
@@ -780,7 +783,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const measuredChance = await measuredPlanChance();
   const base = { goalId: goal.id, target, excluded: model.excluded, measuredChance };
   if (model.refusal) {
-    const refusedReconstruction = target.achieved ? null : await reconstructionFor(model, RECOMMENDATION_POLICY.requiredProbability);
+    const refusedReconstruction = target.achieved ? null : await reconstructionFor(model, RECOMMENDATION_POLICY.requiredProbability, { goalId: goal.id, persist: !!input.persist });
     const reading: PlanReading = {
       ...base,
       verdict: target.achieved ? 'RECOMMENDABLE' : 'NEEDS_EVIDENCE',
@@ -1080,7 +1083,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     }
   }
   // A plan short of its requirement is reconstructed, not just re-read (§99).
-  const reconstruction = acceptance.status !== 'ACCEPTED' ? await reconstructionFor(model, acceptance.required) : null;
+  const reconstruction = acceptance.status !== 'ACCEPTED' ? await reconstructionFor(model, acceptance.required, { goalId: goal.id, persist: !!input.persist }) : null;
   trace('reconstruction');
   const verdict: PlanVerdict = acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
   const summary =
@@ -1151,15 +1154,52 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   return reading;
 }
 
-/** The reconstruction loop over exactly what the portfolio was evaluated on; null when there is nothing to reconstruct. */
-export async function reconstructionFor(model: { portfolio: GoalPortfolio | null; portfolioInput?: Parameters<typeof reconstructPlan>[0]['portfolio'] & { openings: Parameters<typeof reconstructPlan>[0]['openings'] } | null }, required: number): Promise<Reconstruction | null> {
+/** How often a goal's plan read asks the model to invent new ways of reasoning (§101). */
+export const INVENT_EVERY_MS = 15 * 60_000;
+const lastInvent = new Map<string, number>();
+export function inventDue(goalId: string | undefined, now = Date.now()): boolean {
+  const key = goalId ?? '';
+  if (now - (lastInvent.get(key) ?? 0) < INVENT_EVERY_MS) return false;
+  lastInvent.set(key, now);
+  return true;
+}
+
+/**
+ * The reconstruction loop over exactly what the portfolio was evaluated on;
+ * null when there is nothing to reconstruct. It explores the plan from many
+ * directions (§101): the methods that worked before, Brain's model inventing
+ * new ones, all evaluated concurrently on the pool's threads. A persisted read
+ * records what it learned, so the next read — of this goal or another —
+ * starts from what worked.
+ */
+export async function reconstructionFor(
+  model: { portfolio: GoalPortfolio | null; portfolioInput?: Parameters<typeof reconstructPlan>[0]['portfolio'] & { openings: Parameters<typeof reconstructPlan>[0]['openings'] } | null },
+  required: number,
+  context: { goalId?: string; persist?: boolean } = {},
+): Promise<Reconstruction | null> {
   if (!model.portfolio || !model.portfolioInput || model.portfolioInput.openings.length === 0) return null;
   const { openings, ...portfolio } = model.portfolioInput;
+  const evaluator = sharedEvaluator();
   try {
-    return await reconstructPlan({ openings, portfolio, baseline: model.portfolio, required });
+    const library = await loadLibrary().catch(() => []);
+    const r = await reconstructPlan({
+      openings,
+      portfolio,
+      baseline: model.portfolio,
+      required,
+      evaluator,
+      // The model is asked at most every INVENT_EVERY_MS per goal; between, the library carries what it invented.
+      explore: { library, ...(inventDue(context.goalId) ? { invent: (brief) => inventDirections(brief) } : {}) },
+    });
+    if (context.persist && context.goalId && r.exploration) {
+      await recordExploration(context.goalId, r.exploration).catch((error: unknown) => console.warn(`reasoning record failed: ${String((error as Error)?.message ?? error)}`));
+    }
+    return r;
   } catch (error) {
     console.warn(`reconstruction failed: ${String((error as Error)?.message ?? error)}`);
     return null;
+  } finally {
+    await evaluator.close();
   }
 }
 
@@ -1170,7 +1210,7 @@ export function reconstructionDiagnosis(r: Reconstruction | null): ResearchDiagn
   return [
     {
       cause: 'STRATEGY_RECONSTRUCTION',
-      evidence: `the plan reaches ${(r.baseline.reach * 100).toFixed(1)}% as built and ${(r.best.reach * 100).toFixed(1)}% reconstructed (${r.best.basis.toLowerCase()})${top ? `; ${top.factor} binds` : ''}${r.structural ? '; the openings held cannot reach the requirement at their best' : ''}`,
+      evidence: `the plan reaches ${(r.baseline.reach * 100).toFixed(1)}% as built and ${(r.best.reach * 100).toFixed(1)}% reconstructed (${r.best.basis.toLowerCase()})${top ? `; ${top.factor} binds` : ''}${r.structural ? '; the openings held cannot reach the requirement at their best' : ''}${r.exploration ? `; explored: ${r.exploration.sentence}` : ''}`,
       instruction: r.searchBrief,
     },
   ];
@@ -1544,6 +1584,11 @@ export function reconstructionSummary(r: Reconstruction | null): Record<string, 
     binding: r.diagnosis[0]?.factor ?? null,
     structural: r.structural,
     variants: r.rounds.reduce((n, x) => n + x.tried.length, 0),
+    // What the multidirectional exploration concluded (§101): a different winning way of reasoning is a new row.
+    // How many directions ran is not a conclusion — the library changes it between identical reads.
+    explored: r.exploration
+      ? { winner: r.exploration.winner?.direction.name ?? null, replaced: r.exploration.replaced }
+      : null,
   };
 }
 

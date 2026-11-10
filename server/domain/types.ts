@@ -11198,3 +11198,39 @@ export interface ImprovementEventRow {
   detail: string;
   at: string;
 }
+
+/** A way of reasoning about a goal and its record (§101, migration 143). */
+export interface ReasoningMethodRow {
+  id: string;
+  signature: string;
+  name: string;
+  stance: string;
+  origin: string;
+  thinking: string;
+  /** JSON: `{ from, program }` — the direction's executable program. */
+  program: string;
+  tries: number;
+  improvements: number;
+  wins: number;
+  total_lift: number;
+  best_lift: number;
+  first_goal_id: string | null;
+  created_at: string;
+  last_used_at: string;
+}
+
+/** One exploration a plan read ran (§101, migration 143); append-only. */
+export interface ReasoningExplorationRow {
+  id: string;
+  goal_id: string;
+  directions: number;
+  model_directions: number;
+  stances: number;
+  baseline_reach: number;
+  greedy_reach: number;
+  best_reach: number;
+  best_method: string | null;
+  replaced: number;
+  summary: string;
+  created_at: string;
+}

@@ -60,6 +60,7 @@ import { discoveryYield, type YieldRow } from '../server/services/cash/discovery
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
+import { methodYield, recentExplorations } from '../server/services/goals/reasoning/learning.ts';
 import { askConstructedArrangements, askPathwayConstructions, CHAIN_LABEL, goalArrangements, goalLimits, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 import { constructArrangements } from '../server/services/cash/construct.ts';
 import { renderPathways } from '../server/services/goals/pathways.ts';
@@ -506,6 +507,13 @@ async function printPlan(reading: PlanReading): Promise<void> {
   printPortfolio(reading.portfolio);
   // Why the plan falls short, what was changed, and the strongest reconstruction (§99).
   if (reading.reconstruction) for (const line of renderReconstruction(reading.reconstruction)) console.log(line);
+  // Which ways of reasoning have worked, across every goal, and this goal's recent explorations (§101).
+  const yieldRows = await methodYield().catch(() => []);
+  if (yieldRows.length) {
+    console.log(`  methods     ${yieldRows.reduce((n, x) => n + x.methods, 0)} way(s) of reasoning on record`);
+    for (const y of yieldRows.slice(0, 12)) console.log(`    learned   ${y.stance.padEnd(24)} ${y.origin.toLowerCase().padEnd(10)} ${y.methods} method(s), ${y.tries} tri(es), ${y.improvements} improved, ${y.wins} won, mean lift ${(y.meanLift * 100).toFixed(1)}%`);
+  }
+  for (const x of await recentExplorations(reading.goalId).catch(() => [])) console.log(`    explored  ${x.created_at} ${x.directions} direction(s), ${x.model_directions} from the model; best ${(x.best_reach * 100).toFixed(1)}% vs greedy ${(x.greedy_reach * 100).toFixed(1)}%${x.replaced ? ' (strategy replaced)' : ''}: ${x.best_method ?? 'greedy kept'}`);
   console.log(`  ladder      ${Object.entries(reading.ladder).map(([stage, n]) => `${stage} ${n}`).join(' · ')}`);
   console.log(`  policy      ${reading.executionPolicy}${reading.executionPolicy === 'SQUEEZE' ? ': a cash target with a deadline; no market-testing phase, sellable openings are sold now, several at once' : ''}`);
   for (const one of reading.sales) {

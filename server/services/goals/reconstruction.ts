@@ -42,6 +42,9 @@ import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { evaluateGoalPortfolio, type GoalPortfolio } from './portfolio.ts';
 import { ACQUISITION_LEVERS, DAYS_TO_FIRST_PROOF, PARTNER_TERMS, budgetsAllowed, purchaseCapacity, buyInbound, dailyVolumePlan, type AcquisitionLever, type VolumePlan } from './acquisitionLevers.ts';
 import { MATERIAL_SHARE, SHAPE_MULTIPLES } from './pathways.ts';
+import { createHash } from 'node:crypto';
+import { inlineEvaluator, type Evaluator } from './reasoning/evaluatorPool.ts';
+import { exploreDirections, renderExploration, type ExploreContext, type Exploration } from './reasoning/directions.ts';
 
 /** A change smaller than this, in reach and in median settled cash, is not an improvement. */
 export const MATERIAL_REACH = 0.02;
@@ -56,7 +59,7 @@ export const SCREEN_WORLDS = 600;
 export const SCREEN_WORK = 7_200;
 export const SCREEN_MIN_WORLDS = 150;
 
-export type Dimension = 'EVIDENCE' | 'CAPACITY' | 'ACQUISITION' | 'PARTNER' | 'TRANSACTION' | 'CASH_TIMING' | 'CAPITAL' | 'MARKET';
+export type Dimension = 'EVIDENCE' | 'CAPACITY' | 'ACQUISITION' | 'PARTNER' | 'TRANSACTION' | 'CASH_TIMING' | 'CAPITAL' | 'MARKET' | 'PRICE' | 'PORTFOLIO';
 export type Basis = 'MEASURED' | 'ESTIMATE' | 'ASSUMPTION';
 
 export interface StrategyChange {
@@ -127,6 +130,8 @@ export interface Reconstruction {
   /** What the next discovery round is asked for, from the binding constraint. */
   searchBrief: string;
   evaluations: number;
+  /** The multidirectional exploration that ran over this plan (§101); null when it did not run. */
+  exploration?: Exploration | null;
 }
 
 export interface ReconstructionInput {
@@ -138,10 +143,14 @@ export interface ReconstructionInput {
   /** Daily volumes to cost explicitly (the owner asked about 10,000 a day). */
   volumeQuestions?: number[];
   worlds?: number;
+  /** Where evaluations run (§101): a pool of threads, or inline when omitted. */
+  evaluator?: Evaluator;
+  /** The multidirectional exploration's inputs (library, model, time); null turns it off. */
+  explore?: Pick<ExploreContext, 'library' | 'invent' | 'maxMs'> | null;
 }
 
 /** A strategy state the operators transform. */
-interface State {
+export interface StrategyState {
   openings: ModelledOpportunity[];
   contactsPerDay?: ModelInput;
   committed: number;
@@ -196,12 +205,13 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
   const limits = input.portfolio;
   const daysLeft = limits.daysLeft;
 
-  const evaluate = async (state: State, w = worlds, forceMeasured = false, tag = ''): Promise<VariantReading> => {
+  const evaluator = input.evaluator ?? inlineEvaluator();
+  const evaluate = async (state: StrategyState, w = worlds, forceMeasured = false, tag = ''): Promise<VariantReading> => {
     const key = (state.changes.map((c) => `${c.dimension}:${c.label}`).sort().join(' + ') || 'as planned') + tag;
-    const cached = seen.get(key);
-    if (cached && w === worlds) return cached;
-    // Each evaluation is a few hundred milliseconds of CPU: let the server breathe between them (§63).
-    await new Promise<void>((resolve) => setImmediate(resolve));
+    // The cache also knows which openings the state holds: two orders of the same changes can hold different ones.
+    const cacheKey = `${key}#${w}#${createHash('sha1').update(state.openings.map((o) => o.opportunity.id).sort().join(',')).digest('hex').slice(0, 12)}`;
+    const cached = seen.get(cacheKey);
+    if (cached) return cached;
     const allowed = budgetsAllowed(limits);
     const fits = state.committed <= allowed.ceiling + 1e-9;
     let reading: VariantReading;
@@ -209,7 +219,8 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
       reading = { key, changes: state.changes, reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, basis: 'COVERAGE', committed: state.committed, feasible: false, why: `commits ${money(state.committed)}, more than the ${money(allowed.ceiling)} the goal allows in all`, members: [] };
     } else {
       evaluations++;
-      const p = evaluateGoalPortfolio({
+      // On the pool's threads when one is open (§101), inline otherwise; inline yields first (§63).
+      const p = await evaluator.evaluate({
         ...limits,
         openings: state.openings,
         ...(state.contactsPerDay ? { contactsPerDay: state.contactsPerDay } : {}),
@@ -233,16 +244,16 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
         members: b?.members.map((m) => m.title.slice(0, 50)) ?? [],
       };
     }
-    if (w === worlds) seen.set(key, reading);
+    seen.set(cacheKey, reading);
     return reading;
   };
 
-  const base: State = { openings: input.openings, committed: 0, changes: [] };
+  const base: StrategyState = { openings: input.openings, committed: 0, changes: [] };
   const baseline = await evaluate(base);
 
   // 1. Diagnose: one factor at a time to its favourable end.
   const outreachOpenings = input.openings.filter(sellsThroughOutreach);
-  const factorStates: Array<{ factor: Factor; moved: string; state: State }> = [];
+  const factorStates: Array<{ factor: Factor; moved: string; state: StrategyState }> = [];
   const allOpen = (f: (o: ModelledOpportunity) => ModelledOpportunity): ModelledOpportunity[] => input.openings.map((o) => (o.agreedValue > 0 ? o : f(o)));
   factorStates.push({ factor: 'VOLUME', moved: 'outreach a day ×3', state: { ...base, contactsPerDay: scale(currentContacts(limits, input.baseline), 3) } });
   factorStates.push({ factor: 'REPLY', moved: 'reply rate at the top of its range (×3 if fixed)', state: { ...base, openings: allOpen((o) => (sellsThroughOutreach(o) ? { ...o, respond: favourable(o.respond, 'HIGH', 3, 1) } : o)) } });
@@ -257,7 +268,7 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
     diagnosis.push({ factor, moved, reach: r.reach, settledP50: r.settledP50, liftReach: r.reach - baseline.reach, liftP50: r.settledP50 - baseline.settledP50 });
   }
   diagnosis.sort((a, b) => b.liftReach - a.liftReach || b.liftP50 - a.liftP50);
-  const all: State = {
+  const all: StrategyState = {
     ...base,
     contactsPerDay: scale(currentContacts(limits, input.baseline), 3),
     openings: allOpen((o) => ({
@@ -275,138 +286,8 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
   const structural = headroom.reach < input.required;
 
   // 3. Construct: generic operators over the plan's own openings and the cost evidence.
-  const operators: Array<{ dimension: Dimension; apply: (s: State) => State | null }> = [];
+  const operators = buildOperators({ input, levers, base });
   const allowed = budgetsAllowed(limits);
-  const budgets = [...new Set([allowed.beforeProof, allowed.perWeek, allowed.ceiling].filter((b) => b > 0))];
-  for (const lever of levers.filter((l) => l.kind === 'SENDING_CAPACITY')) {
-    for (const budget of budgets) {
-      operators.push({
-        dimension: 'CAPACITY',
-        apply: (s) => {
-          if (outreachOpenings.length === 0) return null;
-          const buy = purchaseCapacity(lever, budget - s.committed, daysLeft, budget > allowed.beforeProof);
-          if (!buy || buy.addedPerDay.high <= 0) return null;
-          const now = s.contactsPerDay ?? currentContacts(limits, input.baseline);
-          const contacts: ModelInput = {
-            ...now,
-            value: null,
-            low: (now.low ?? now.value ?? 0) + buy.effectivePerDay.low,
-            high: (now.high ?? now.value ?? 0) + buy.effectivePerDay.high,
-            provenance: 'UNKNOWN',
-            distribution: undefined,
-            inferred: undefined,
-            note: `${now.note}; plus ${buy.sentence}`,
-          };
-          return {
-            ...s,
-            contactsPerDay: contacts,
-            committed: s.committed + buy.cost,
-            changes: [...s.changes, { dimension: 'CAPACITY', label: `${lever.key}@${Math.round(budget)}`, detail: buy.sentence, cost: buy.cost, basis: budget > allowed.beforeProof ? 'ASSUMPTION' : 'ESTIMATE', startDay: buy.startDay }],
-          };
-        },
-      });
-    }
-  }
-  const sellable = input.openings.filter((o) => sellsThroughOutreach(o) && knownMid(o.price) !== null && (knownMid(o.price) ?? 0) > 0);
-  for (const lever of levers.filter((l) => l.kind === 'PAID_INBOUND' || l.kind === 'MARKETPLACE')) {
-    for (const budget of budgets) {
-      operators.push({
-        dimension: 'ACQUISITION',
-        apply: (s) => {
-          // The opening the inbound channel sells: the one that settles most per interested buyer.
-          const target = [...sellable].sort((a, b) => valuePerInterested(b) - valuePerInterested(a))[0];
-          if (!target) return null;
-          const buy = buyInbound(lever, budget - s.committed, daysLeft, budget > allowed.beforeProof);
-          if (!buy) return null;
-          const clone: ModelledOpportunity = {
-            ...target,
-            index: 900 + s.openings.length,
-            opportunity: { ...target.opportunity, id: `${target.opportunity.id}~${lever.key}`, title: `${target.opportunity.title.slice(0, 50)} via ${lever.label}` },
-            respond: { value: null, low: buy.qualified.low, high: buy.qualified.high, provenance: 'UNKNOWN', source: { kind: 'OTHER', ref: `lever:${lever.key}` }, note: `share of ${lever.label} leads who are interested buyers` },
-            channel: { label: `${lever.label} leads`, perDay: { value: null, low: buy.leadsPerDay.low, high: buy.leadsPerDay.high, provenance: 'UNKNOWN', source: { kind: 'OTHER', ref: `lever:${lever.key}` }, note: buy.sentence }, resource: `channel:${lever.key}`, riskGroup: `channel:${lever.key}` },
-          };
-          return {
-            ...s,
-            openings: [...s.openings, clone],
-            committed: s.committed + buy.cost,
-            changes: [...s.changes, { dimension: 'ACQUISITION', label: `${lever.key}@${Math.round(budget)}`, detail: `${buy.sentence}, selling ${target.opportunity.title.slice(0, 50)}`, cost: buy.cost, basis: budget > allowed.beforeProof ? 'ASSUMPTION' : 'ESTIMATE', startDay: { low: lever.setupDays.low + (budget > allowed.beforeProof ? DAYS_TO_FIRST_PROOF.low : 0), high: lever.setupDays.high + (budget > allowed.beforeProof ? DAYS_TO_FIRST_PROOF.high : 0) } }],
-          };
-        },
-      });
-    }
-  }
-  // Suppliers and partners: sell through someone who already holds the buyers, for a commission.
-  operators.push({
-    dimension: 'PARTNER',
-    apply: (s) => {
-      const target = [...sellable].sort((a, b) => valuePerInterested(b) - valuePerInterested(a))[0];
-      if (!target) return null;
-      const keep = 1 - (PARTNER_TERMS.commission.low + PARTNER_TERMS.commission.high) / 2;
-      const clone: ModelledOpportunity = {
-        ...target,
-        index: 950 + s.openings.length,
-        opportunity: { ...target.opportunity, id: `${target.opportunity.id}~partner`, title: `${target.opportunity.title.slice(0, 50)} via a referral partner` },
-        price: { ...scale(target.price, keep), note: `after a ${Math.round(PARTNER_TERMS.commission.low * 100)}–${Math.round(PARTNER_TERMS.commission.high * 100)}% partner commission` },
-        // A referred buyer has already said they are interested; whether they buy is the opening's own close rate.
-        respond: { value: 1, low: 1, high: 1, provenance: 'ASSUMPTION', source: null, note: 'a referral is an interested buyer' },
-        channel: { label: 'partner referrals', perDay: { value: null, low: PARTNER_TERMS.referralsPerDay.low, high: PARTNER_TERMS.referralsPerDay.high, provenance: 'ASSUMPTION', source: null, note: PARTNER_TERMS.referralsPerDay.source }, resource: 'channel:partner', riskGroup: 'channel:partner' },
-      };
-      return {
-        ...s,
-        openings: [...s.openings, clone],
-        changes: [...s.changes, { dimension: 'PARTNER', label: 'referral-partner', detail: `sell ${target.opportunity.title.slice(0, 50)} through a partner who already serves its buyers (a supplier or complementary vendor), paying ${Math.round(PARTNER_TERMS.commission.low * 100)}–${Math.round(PARTNER_TERMS.commission.high * 100)}% (${PARTNER_TERMS.commission.source}); ${PARTNER_TERMS.referralsPerDay.low}–${PARTNER_TERMS.referralsPerDay.high} referrals a day assumed until a partner is signed`, cost: 0, basis: 'ASSUMPTION', startDay: PARTNER_TERMS.setupDays }],
-      };
-    },
-  });
-  // Transaction shapes: sell more per buyer, at the cost of a lower and unmeasured close rate.
-  for (const [shape, multiple, closeFactor] of [
-    ['bundle', SHAPE_MULTIPLES.bundle.units * (1 - SHAPE_MULTIPLES.bundle.discount), 0.5],
-    ['retainer', SHAPE_MULTIPLES.retainer.unitsPerMonth * (1 - SHAPE_MULTIPLES.retainer.discount), 0.6],
-  ] as const) {
-    operators.push({
-      dimension: 'TRANSACTION',
-      apply: (s) => {
-        // Only a ticket too small to carry a material share of the gap is worth reshaping (§95's ONE_TRANSACTION_SHAPE).
-        const touched = s.openings.filter((o) => o.repeatable && o.agreedValue === 0 && knownMid(o.price) !== null && (knownMid(o.price) ?? 0) < limits.remaining * MATERIAL_SHARE);
-        if (touched.length === 0) return null;
-        return {
-          ...s,
-          openings: s.openings.map((o) =>
-            touched.includes(o)
-              ? { ...o, price: scale(o.price, multiple), close: { ...scale(o.close, closeFactor, 1), provenance: 'ASSUMPTION' as ModelInput['provenance'], note: `${o.close.note}; ${shape}: close assumed ×${closeFactor}, not measured` }, volume: scale(o.volume, 1 / multiple) }
-              : o,
-          ),
-          changes: [...s.changes, { dimension: 'TRANSACTION', label: shape, detail: `sell a ${shape} worth ×${multiple.toFixed(1)} the unit price; close rate assumed ×${closeFactor} until measured`, cost: 0, basis: 'ASSUMPTION', startDay: { low: 0, high: 0 } }],
-        };
-      },
-    });
-  }
-  // Financing: the buyer prepays, so a supplier's cost is paid from the buyer's money, not the owner's.
-  operators.push({
-    dimension: 'CAPITAL',
-    apply: (s) => {
-      const touched = s.openings.filter((o) => o.agreedValue === 0 && !o.fundedByBuyer && (o.directCost.high ?? o.directCost.value ?? 0) > 0);
-      if (touched.length === 0) return null;
-      return {
-        ...s,
-        openings: s.openings.map((o) => (touched.includes(o) ? { ...o, fundedByBuyer: true } : o)),
-        changes: [...s.changes, { dimension: 'CAPITAL', label: 'prepaid-fulfilment', detail: `the buyer pays in full before the supplier is paid, so ${touched.length} opening(s)' direct costs come from the buyer's money, not the ${money(allowed.ceiling)} limit`, cost: 0, basis: 'ASSUMPTION', startDay: { low: 0, high: 0 } }],
-      };
-    },
-  });
-  // Cash timing: a deposit at signing.
-  operators.push({
-    dimension: 'CASH_TIMING',
-    apply: (s) => {
-      const touched = s.openings.filter((o) => o.agreedValue === 0 && (o.daysToCash.high ?? o.daysToCash.value ?? 0) > 3);
-      if (touched.length === 0) return null;
-      return {
-        ...s,
-        openings: s.openings.map((o) => (touched.includes(o) ? { ...o, daysToCash: { ...favourable(o.daysToCash, 'LOW', 2), provenance: 'ASSUMPTION' as ModelInput['provenance'], note: 'deposit at signing, assumed accepted' } } : o)),
-        changes: [...s.changes, { dimension: 'CASH_TIMING', label: 'deposit', detail: 'ask for a deposit or prepayment at signing, so cash arrives at the fast end of each opening\'s timing', cost: 0, basis: 'ASSUMPTION', startDay: { low: 0, high: 0 } }],
-      };
-    },
-  });
 
   // 4. Evaluate singles, then combine across dimensions while it improves materially.
   const rounds: Reconstruction['rounds'] = [];
@@ -421,7 +302,7 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
     singles.push({ op, reading: r });
   }
   const useful = singles.filter((one) => improves(one.reading, baseline)).sort((a, b) => b.reading.reach - a.reading.reach || b.reading.settledP50 - a.reading.settledP50);
-  let current: State = base;
+  let current: StrategyState = base;
   let currentReading = baseline;
   if (useful[0]) {
     current = useful[0].op.apply(base)!;
@@ -431,7 +312,7 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
   let used = new Set<Dimension>(current.changes.map((c) => c.dimension));
   for (let round = 2; ; round++) {
     const tried: VariantReading[] = [];
-    let bestNext: { state: State; reading: VariantReading } | null = null;
+    let bestNext: { state: StrategyState; reading: VariantReading } | null = null;
     for (const one of useful) {
       if (used.has(one.op.dimension)) continue;
       const next = one.op.apply(current);
@@ -446,6 +327,35 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
     current = bestNext.state;
     currentReading = bestNext.reading;
     used = new Set(current.changes.map((c) => c.dimension));
+  }
+  // 4b. Explore from many directions (§101): the greedy path is one line of reasoning among many.
+  let exploration: Exploration | null = null;
+  // The exploration reports its own evaluations; `evaluations` stays §99's own.
+  const ownEvaluations = evaluations;
+  if (input.explore !== null) {
+    const screenWorlds = Math.max(100, Math.round(worlds / 2));
+    exploration = await exploreDirections({
+      base,
+      greedy: current,
+      greedyReading: currentReading,
+      baselineReading: baseline,
+      operators,
+      operatorsFor: (target) => buildOperators({ input, levers, base, target }),
+      evaluate: (state, screen, tag = '') => evaluate(state, screen ? screenWorlds : worlds, false, tag),
+      required: input.required,
+      remaining: limits.remaining,
+      daysLeft,
+      binding: diagnosis.map((d) => ({ factor: d.factor, liftReach: d.liftReach })),
+      structural,
+      threads: evaluator.threads,
+      ...(input.explore ?? {}),
+    });
+    if (exploration.winner) {
+      const w = exploration.winner;
+      if (w.state) current = w.state;
+    }
+    evaluations = ownEvaluations;
+    if (exploration.winner) currentReading = await evaluate(current);
   }
   // The strongest plan, read again at the plan's own number of worlds.
   const best = current === base ? baseline : await evaluate(current, Math.max(worlds, Math.min(limits.worlds ?? 2000, Math.round((SCREEN_WORK * 3) / Math.max(1, input.openings.length)))));
@@ -571,8 +481,9 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
     volumePlans,
     limitation,
     confidence: { basis: best.basis, measured, assumed: [...assumed, ...unestablished], statement: statement0 + confidenceStatement.value },
-    searchBrief,
+    searchBrief: exploration?.asks.length ? `${searchBrief} Directions Brain explored need answers to: ${exploration.asks.slice(0, 3).join(' ')}`.trim() : searchBrief,
     evaluations,
+    exploration,
   };
 }
 
@@ -593,6 +504,173 @@ function currentContacts(limits: ReconstructionInput['portfolio'], baseline: Goa
 }
 
 /** One-sided 95% Wilson lower bound, the test §95 applies. */
+/** One generic change to a strategy: the §99 operators, reused by the multidirectional explorer (§101). */
+export interface StrategyOperator {
+  dimension: Dimension;
+  /** A stable name, so a stored reasoning method can name the operator it uses. */
+  key: string;
+  apply: (s: StrategyState) => StrategyState | null;
+}
+
+/**
+ * The generic operators over a plan's own openings and the cost evidence. A
+ * `target` names the opening a channel operator sells (by default the one
+ * that settles most per interested buyer), so another line of reasoning can
+ * point the same operator at a different opening.
+ */
+export function buildOperators(ctx: { input: ReconstructionInput; levers?: readonly AcquisitionLever[]; base?: StrategyState; target?: string }): StrategyOperator[] {
+  const { input } = ctx;
+  const levers = ctx.levers ?? ACQUISITION_LEVERS;
+  const limits = input.portfolio;
+  const daysLeft = limits.daysLeft;
+  const outreachOpenings = input.openings.filter(sellsThroughOutreach);
+  const operators: StrategyOperator[] = [];
+  const allowed = budgetsAllowed(limits);
+  const budgets = [...new Set([allowed.beforeProof, allowed.perWeek, allowed.ceiling].filter((b) => b > 0))];
+  for (const lever of levers.filter((l) => l.kind === 'SENDING_CAPACITY')) {
+    for (const budget of budgets) {
+      operators.push({
+        dimension: 'CAPACITY',
+        key: `capacity:${lever.key}@${Math.round(budget)}`,
+        apply: (s) => {
+          if (outreachOpenings.length === 0) return null;
+          const buy = purchaseCapacity(lever, budget - s.committed, daysLeft, budget > allowed.beforeProof);
+          if (!buy || buy.addedPerDay.high <= 0) return null;
+          const now = s.contactsPerDay ?? currentContacts(limits, input.baseline);
+          const contacts: ModelInput = {
+            ...now,
+            value: null,
+            low: (now.low ?? now.value ?? 0) + buy.effectivePerDay.low,
+            high: (now.high ?? now.value ?? 0) + buy.effectivePerDay.high,
+            provenance: 'UNKNOWN',
+            distribution: undefined,
+            inferred: undefined,
+            note: `${now.note}; plus ${buy.sentence}`,
+          };
+          return {
+            ...s,
+            contactsPerDay: contacts,
+            committed: s.committed + buy.cost,
+            changes: [...s.changes, { dimension: 'CAPACITY', label: `${lever.key}@${Math.round(budget)}`, detail: buy.sentence, cost: buy.cost, basis: budget > allowed.beforeProof ? 'ASSUMPTION' : 'ESTIMATE', startDay: buy.startDay }],
+          };
+        },
+      });
+    }
+  }
+  const sellable = input.openings.filter((o) => sellsThroughOutreach(o) && knownMid(o.price) !== null && (knownMid(o.price) ?? 0) > 0);
+  for (const lever of levers.filter((l) => l.kind === 'PAID_INBOUND' || l.kind === 'MARKETPLACE')) {
+    for (const budget of budgets) {
+      operators.push({
+        dimension: 'ACQUISITION',
+        key: `acquisition:${lever.key}@${Math.round(budget)}`,
+        apply: (s) => {
+          // The opening the inbound channel sells: the one that settles most per interested buyer.
+          const target = pickTarget(sellable, ctx.target);
+          if (!target) return null;
+          const buy = buyInbound(lever, budget - s.committed, daysLeft, budget > allowed.beforeProof);
+          if (!buy) return null;
+          const clone: ModelledOpportunity = {
+            ...target,
+            index: 900 + s.openings.length,
+            opportunity: { ...target.opportunity, id: `${target.opportunity.id}~${lever.key}`, title: `${target.opportunity.title.slice(0, 50)} via ${lever.label}` },
+            respond: { value: null, low: buy.qualified.low, high: buy.qualified.high, provenance: 'UNKNOWN', source: { kind: 'OTHER', ref: `lever:${lever.key}` }, note: `share of ${lever.label} leads who are interested buyers` },
+            channel: { label: `${lever.label} leads`, perDay: { value: null, low: buy.leadsPerDay.low, high: buy.leadsPerDay.high, provenance: 'UNKNOWN', source: { kind: 'OTHER', ref: `lever:${lever.key}` }, note: buy.sentence }, resource: `channel:${lever.key}`, riskGroup: `channel:${lever.key}` },
+          };
+          return {
+            ...s,
+            openings: [...s.openings, clone],
+            committed: s.committed + buy.cost,
+            changes: [...s.changes, { dimension: 'ACQUISITION', label: `${lever.key}@${Math.round(budget)}${ctx.target ? `>${target.opportunity.id}` : ''}`, detail: `${buy.sentence}, selling ${target.opportunity.title.slice(0, 50)}`, cost: buy.cost, basis: budget > allowed.beforeProof ? 'ASSUMPTION' : 'ESTIMATE', startDay: { low: lever.setupDays.low + (budget > allowed.beforeProof ? DAYS_TO_FIRST_PROOF.low : 0), high: lever.setupDays.high + (budget > allowed.beforeProof ? DAYS_TO_FIRST_PROOF.high : 0) } }],
+          };
+        },
+      });
+    }
+  }
+  // Suppliers and partners: sell through someone who already holds the buyers, for a commission.
+  operators.push({
+    dimension: 'PARTNER',
+    key: 'partner:referral-partner',
+    apply: (s) => {
+      const target = pickTarget(sellable, ctx.target);
+      if (!target) return null;
+      const keep = 1 - (PARTNER_TERMS.commission.low + PARTNER_TERMS.commission.high) / 2;
+      const clone: ModelledOpportunity = {
+        ...target,
+        index: 950 + s.openings.length,
+        opportunity: { ...target.opportunity, id: `${target.opportunity.id}~partner`, title: `${target.opportunity.title.slice(0, 50)} via a referral partner` },
+        price: { ...scale(target.price, keep), note: `after a ${Math.round(PARTNER_TERMS.commission.low * 100)}–${Math.round(PARTNER_TERMS.commission.high * 100)}% partner commission` },
+        // A referred buyer has already said they are interested; whether they buy is the opening's own close rate.
+        respond: { value: 1, low: 1, high: 1, provenance: 'ASSUMPTION', source: null, note: 'a referral is an interested buyer' },
+        channel: { label: 'partner referrals', perDay: { value: null, low: PARTNER_TERMS.referralsPerDay.low, high: PARTNER_TERMS.referralsPerDay.high, provenance: 'ASSUMPTION', source: null, note: PARTNER_TERMS.referralsPerDay.source }, resource: 'channel:partner', riskGroup: 'channel:partner' },
+      };
+      return {
+        ...s,
+        openings: [...s.openings, clone],
+        changes: [...s.changes, { dimension: 'PARTNER', label: `referral-partner${ctx.target ? `>${target.opportunity.id}` : ''}`, detail: `sell ${target.opportunity.title.slice(0, 50)} through a partner who already serves its buyers (a supplier or complementary vendor), paying ${Math.round(PARTNER_TERMS.commission.low * 100)}–${Math.round(PARTNER_TERMS.commission.high * 100)}% (${PARTNER_TERMS.commission.source}); ${PARTNER_TERMS.referralsPerDay.low}–${PARTNER_TERMS.referralsPerDay.high} referrals a day assumed until a partner is signed`, cost: 0, basis: 'ASSUMPTION', startDay: PARTNER_TERMS.setupDays }],
+      };
+    },
+  });
+  // Transaction shapes: sell more per buyer, at the cost of a lower and unmeasured close rate.
+  for (const [shape, multiple, closeFactor] of [
+    ['bundle', SHAPE_MULTIPLES.bundle.units * (1 - SHAPE_MULTIPLES.bundle.discount), 0.5],
+    ['retainer', SHAPE_MULTIPLES.retainer.unitsPerMonth * (1 - SHAPE_MULTIPLES.retainer.discount), 0.6],
+  ] as const) {
+    operators.push({
+      dimension: 'TRANSACTION',
+      key: `transaction:${shape}`,
+      apply: (s) => {
+        // Only a ticket too small to carry a material share of the gap is worth reshaping (§95's ONE_TRANSACTION_SHAPE).
+        const touched = s.openings.filter((o) => o.repeatable && o.agreedValue === 0 && knownMid(o.price) !== null && (knownMid(o.price) ?? 0) < limits.remaining * MATERIAL_SHARE);
+        if (touched.length === 0) return null;
+        return {
+          ...s,
+          openings: s.openings.map((o) =>
+            touched.includes(o)
+              ? { ...o, price: scale(o.price, multiple), close: { ...scale(o.close, closeFactor, 1), provenance: 'ASSUMPTION' as ModelInput['provenance'], note: `${o.close.note}; ${shape}: close assumed ×${closeFactor}, not measured` }, volume: scale(o.volume, 1 / multiple) }
+              : o,
+          ),
+          changes: [...s.changes, { dimension: 'TRANSACTION', label: shape, detail: `sell a ${shape} worth ×${multiple.toFixed(1)} the unit price; close rate assumed ×${closeFactor} until measured`, cost: 0, basis: 'ASSUMPTION', startDay: { low: 0, high: 0 } }],
+        };
+      },
+    });
+  }
+  // Financing: the buyer prepays, so a supplier's cost is paid from the buyer's money, not the owner's.
+  operators.push({
+    dimension: 'CAPITAL',
+    key: 'capital:prepaid-fulfilment',
+    apply: (s) => {
+      const touched = s.openings.filter((o) => o.agreedValue === 0 && !o.fundedByBuyer && (o.directCost.high ?? o.directCost.value ?? 0) > 0);
+      if (touched.length === 0) return null;
+      return {
+        ...s,
+        openings: s.openings.map((o) => (touched.includes(o) ? { ...o, fundedByBuyer: true } : o)),
+        changes: [...s.changes, { dimension: 'CAPITAL', label: 'prepaid-fulfilment', detail: `the buyer pays in full before the supplier is paid, so ${touched.length} opening(s)' direct costs come from the buyer's money, not the ${money(allowed.ceiling)} limit`, cost: 0, basis: 'ASSUMPTION', startDay: { low: 0, high: 0 } }],
+      };
+    },
+  });
+  // Cash timing: a deposit at signing.
+  operators.push({
+    dimension: 'CASH_TIMING',
+    key: 'timing:deposit',
+    apply: (s) => {
+      const touched = s.openings.filter((o) => o.agreedValue === 0 && (o.daysToCash.high ?? o.daysToCash.value ?? 0) > 3);
+      if (touched.length === 0) return null;
+      return {
+        ...s,
+        openings: s.openings.map((o) => (touched.includes(o) ? { ...o, daysToCash: { ...favourable(o.daysToCash, 'LOW', 2), provenance: 'ASSUMPTION' as ModelInput['provenance'], note: 'deposit at signing, assumed accepted' } } : o)),
+        changes: [...s.changes, { dimension: 'CASH_TIMING', label: 'deposit', detail: 'ask for a deposit or prepayment at signing, so cash arrives at the fast end of each opening\'s timing', cost: 0, basis: 'ASSUMPTION', startDay: { low: 0, high: 0 } }],
+      };
+    },
+  });
+
+  return operators;
+}
+
+function pickTarget(sellable: ModelledOpportunity[], id?: string): ModelledOpportunity | undefined {
+  if (id) return sellable.find((o) => o.opportunity.id === id);
+  return [...sellable].sort((a, b) => valuePerInterested(b) - valuePerInterested(a))[0];
+}
+
 export function wilsonLower(k: number, n: number, z = 1.645): number {
   if (n <= 0) return 0;
   const p = k / n;
@@ -619,6 +697,7 @@ export function renderReconstruction(r: Reconstruction, limit = 8): string[] {
   for (const c of [...r.best.changes].sort((a, b) => (a.startDay?.low ?? 0) - (b.startDay?.low ?? 0))) lines.push(`      day ${c.startDay ? `${c.startDay.low}–${c.startDay.high}` : '0'}`.padEnd(16) + `[${c.basis}] ${c.dimension}: ${c.detail}`);
   lines.push(`    confidence ${r.confidence.statement}`);
   if (r.limitation) lines.push(`    limitation ${r.limitation}`);
+  if (r.exploration) lines.push(...renderExploration(r.exploration));
   if (r.searchBrief) lines.push(`    brief     ${r.searchBrief}`);
   return lines;
 }
