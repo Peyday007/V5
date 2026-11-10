@@ -63,7 +63,11 @@ import type { TargetReading } from './target.ts';
 import type { ChainLink, ConsideredOpening } from './plan.ts';
 import type { GoalRoundOutcome, ResearchDiagnosis } from './researchYield.ts';
 
-export type FactStatus = 'PROVEN' | 'ESTIMATED' | 'UNKNOWN';
+/**
+ * How far a property is established. `DENIED` is a known answer: something is
+ * known not to hold (a permission not granted) — never read as lack of knowledge.
+ */
+export type FactStatus = 'PROVEN' | 'ESTIMATED' | 'UNKNOWN' | 'DENIED';
 
 /** One property of a transaction, with how far it is established. */
 export interface PathFact {
@@ -272,6 +276,7 @@ export const GAP_KINDS = [
   'ONE_BUYER',
   'CLOSED',
   'ONE_TRANSACTION_SHAPE',
+  'REACH_SHORTFALL',
 ] as const;
 export type GapKind = (typeof GAP_KINDS)[number];
 
@@ -379,6 +384,10 @@ export interface TransactionPathway {
   frequency: PathFact;
   daysToCash: PathFact;
   capital: PathFact;
+  /** Rights and authorization: what this transaction may do under the permissions held; never a guess (§93). */
+  rights: PathFact;
+  /** Whether the fulfiller can deliver the volume this pathway needs; stated as an estimate only once a range can be justified, otherwise unknown. */
+  capacity: PathFact;
   /** How the buyer is reached, and whether that waits on cold outreach (§93). */
   acquisition: { method: AcquisitionMethod; basis: string };
   /** The Brain capability that fulfils it, when Brain does. */
@@ -402,6 +411,7 @@ export interface TransactionPathway {
   notExecutable: string[];
   /** A group whose members fail together: the same buyer kind, or the same supplier. */
   correlationGroup: string;
+  /** Tally of the fourteen commercial facts; `rights` and `capacity` are marked on their own and read beside it. */
   counts: { proven: number; estimated: number; unknown: number };
 }
 
@@ -603,11 +613,13 @@ export function pathwayOf(
   };
   const respond = factOf(one.respond);
   const close = factOf(one.close);
+  const conversionStatus = weakest(respond.status, close.status);
   const conversion: PathFact = {
-    value: mid(respond) !== null && mid(close) !== null ? mid(respond)! * mid(close)! : null,
+    // An unknown states no point value: the swept range below is all there is, and `mid` reads it from there (§93).
+    value: conversionStatus !== 'UNKNOWN' && mid(respond) !== null && mid(close) !== null ? mid(respond)! * mid(close)! : null,
     low: lowOf(respond) !== null && lowOf(close) !== null ? lowOf(respond)! * lowOf(close)! : null,
     high: highOf(respond) !== null && highOf(close) !== null ? highOf(respond)! * highOf(close)! : null,
-    status: weakest(respond.status, close.status),
+    status: conversionStatus,
     basis: `reply ${respond.status.toLowerCase()} × close ${close.status.toLowerCase()}: ${close.basis.slice(0, 120)}`,
   };
   const volume = factOf(one.volume);
@@ -616,6 +628,18 @@ export function pathwayOf(
     : { value: 'one-off', low: null, high: null, status: 'PROVEN', basis: judged?.paysOnce ? 'pays once by nature' : 'one deal' };
   const daysToCash = factOf(one.daysToCash);
   const capital = factOf(one.capital);
+  // A permission held is a record; one not held is known, not unknown, and blocks only its own action — never an assumed yes.
+  const rights: PathFact = input.permissionsMissing.length === 0
+    ? { value: 'every permission this transaction depends on is granted', low: null, high: null, status: 'PROVEN', basis: 'the project\'s authority grants every action the transaction needs' }
+    : { value: `not yet granted: ${input.permissionsMissing.join(', ')}`, low: null, high: null, status: 'DENIED', basis: 'each missing permission blocks only its own action; none is assumed granted' };
+  // An estimate carries a justified range (§93). Nothing measures the volume a named fulfiller can deliver, so capacity is unknown either way; naming the fulfiller changes only what is said.
+  const capacity: PathFact = {
+    value: null,
+    low: null,
+    high: null,
+    status: 'UNKNOWN',
+    basis: fulfiller.status === 'UNKNOWN' ? 'nobody is named to fulfil it, so no delivery capacity is established' : 'a fulfiller is named; the volume it can deliver is not yet measured, so no range can be justified',
+  };
   const dependencies = [...new Set([...o.requiredCapabilities, 'CONTACT_BUYER', 'QUOTE_AND_INVOICE', 'ACCEPT_PAYMENT'])];
   const failurePoints = judged?.missing ?? [];
 
@@ -644,6 +668,8 @@ export function pathwayOf(
   if (o.expiresAt && Date.parse(o.expiresAt) < input.now.getTime()) gaps.push('CLOSED');
 
   const fit = fitOf({ net, conversion, volume, daysToCash, repeatable: one.repeatable, remaining: input.remaining, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, competitiveAward: !!judged?.competitiveAward, outreachBound: acquisition.method === 'COLD_OUTREACH' || acquisition.method === 'DIRECTORY' || acquisition.method === 'UNKNOWN' });
+  // The quantity transforms the strategy (§93): a share that needs more prospects a day than the channel reaches is a channel problem, so the channel is what changes.
+  if (fit.lever.variable === 'CHANNEL') gaps.push('REACH_SHORTFALL');
   const moves = constructMoves({ one, gaps, fit, revenuePerDeal, fulfilmentCost, net, remaining: input.remaining, daysLeft: input.daysLeft, currency: input.currency, constructed, permissionsMissing: input.permissionsMissing, produces, paysOnce: !!judged?.paysOnce || !!judged?.competitiveAward, daysToCash: lowOf(daysToCash) });
   const contribution = contributionOf({ net, conversion, volume, repeatable: one.repeatable, daysToCash, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, closed: gaps.includes('CLOSED') });
   const gross = contributionOf({ net: revenuePerDeal, conversion, volume, repeatable: one.repeatable, daysToCash, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, closed: gaps.includes('CLOSED') });
@@ -654,6 +680,7 @@ export function pathwayOf(
   if (daysToCash.status !== 'UNKNOWN' && settleLow !== null && settleLow > input.daysLeft - MIN_SALES_CYCLE_DAYS) notExecutable.push('settles after the deadline');
   const facts = [buyer, motivation, channel, offer, fulfiller, revenuePerDeal, acquisitionCost, fulfilmentCost, net, conversion, volume, frequency, daysToCash, capital];
   const counts = { proven: 0, estimated: 0, unknown: 0 };
+  // `facts` are the fourteen commercial facts and none can be DENIED; `rights` (the only denial) and `capacity` are read beside the tally.
   for (const fact of facts) counts[fact.status === 'PROVEN' ? 'proven' : fact.status === 'ESTIMATED' ? 'estimated' : 'unknown'] += 1;
   return {
     opportunityId: o.id,
@@ -673,6 +700,8 @@ export function pathwayOf(
     frequency,
     daysToCash,
     capital,
+    rights,
+    capacity,
     acquisition,
     producedBy: fulfiller.value !== null && String(fulfiller.value).startsWith('Brain produces it') ? produces : null,
     dependencies,
@@ -704,6 +733,7 @@ export const GAP_LABEL: Record<GapKind, string> = {
   ONE_BUYER: 'one buyer, one sale',
   CLOSED: 'closed',
   ONE_TRANSACTION_SHAPE: 'priced at one transaction size only',
+  REACH_SHORTFALL: 'its share needs more buyers a day than the channel reaches',
 };
 
 /** The buyer kind, or the supplier, a pathway's failure is shared with. */
@@ -881,6 +911,18 @@ function constructMoves(input: {
       ask: `"${subject}" is one buyer paying ${money(price)} ${currency}. List other buyers of exactly this deliverable that pay for it — each with its page and its published rate — and how many such buyers a directory or marketplace counts.`,
       action: 'CONSTRUCT',
       variant: { label: 'The same deliverable to buyers like it', revenuePerDeal: { ...input.revenuePerDeal }, costPerDeal: { ...input.fulfilmentCost }, net: { ...input.net } },
+    });
+  }
+  if (gaps.includes('REACH_SHORTFALL')) {
+    const need = input.fit.prospectsPerDay;
+    moves.push({
+      gap: 'REACH_SHORTFALL',
+      construct: 'Change the acquisition channel: a marketplace listing, a partner or reseller that already sells to these buyers, or buyers who publish requests, instead of more cold contact',
+      mustHit: need === null ? null : `a channel that brings about ${Math.ceil(need)} prospects a day for a tenth of the gap, against what cold outreach reaches`,
+      field: 'access',
+      ask: `For "${subject}", where do buyers of this kind already ask for or buy it (a marketplace category, a platform, a partner that serves them, published requests), how many reach it each day or week, and how are they reached there? State each with its page.`,
+      action: 'CONSTRUCT',
+      variant: null,
     });
   }
   // The same deliverable at other transaction sizes, unless one unit already carries the gap.
@@ -1241,6 +1283,7 @@ const REPEATED_FIX: Record<GapKind, string> = {
   ONE_BUYER: 'report the population of buyers like the one found, not the one.',
   CLOSED: 'report only openings still open.',
   ONE_TRANSACTION_SHAPE: 'report the package, retainer and implementation prices buyers pay for the deliverable, not one unit price.',
+  REACH_SHORTFALL: 'report where buyers of this kind already ask or are served (a marketplace category, a partner, published requests), not only how to contact them.',
 };
 
 /* ------------------------------------------------------------------ */
@@ -1264,6 +1307,10 @@ export interface PathwayReading {
     proceedWithoutEngineering: number;
     withReachableBuyer: number;
     withFulfiller: number;
+    /** Pathways whose every needed permission is granted (a proven `rights`). */
+    withRightsGranted: number;
+    /** Pathways with a delivery capacity at least estimated (a `capacity` that is not unknown). */
+    withCapacity: number;
     /** Of those, fulfilled by Brain's own proven capability. */
     producedByBrain: number;
     /** Pathways by how their buyers are reached. */
@@ -1354,6 +1401,8 @@ export function readPathways(input: {
       proceedWithoutEngineering: pathways.filter((p) => p.executable || p.moves.some((m) => m.action === 'SELL')).length,
       withReachableBuyer: pathways.filter((p) => p.channel.status !== 'UNKNOWN' && p.buyer.status !== 'UNKNOWN' && !p.gaps.includes('SUPPLY_WITHOUT_BUYER')).length,
       withFulfiller: pathways.filter((p) => p.fulfiller.status !== 'UNKNOWN').length,
+      withRightsGranted: pathways.filter((p) => p.rights.status === 'PROVEN').length,
+      withCapacity: pathways.filter((p) => p.capacity.status !== 'UNKNOWN').length,
       producedByBrain: pathways.filter((p) => p.producedBy !== null).length,
       acquisition: Object.fromEntries(ACQUISITION_METHODS.map((m) => [m, pathways.filter((p) => p.acquisition.method === m).length])) as Record<AcquisitionMethod, number>,
       facts,
@@ -1377,7 +1426,7 @@ export function renderPathways(reading: PathwayReading, limit = 12): string[] {
   const out: string[] = [];
   const s = reading.structures;
   const m = reading.measures;
-  out.push(`  reasoning   goal-to-transaction loop (§93): ${m.pathways} pathway(s) (${m.found} found, ${m.constructed} constructed), ${m.executable} executable, ${m.proceedWithoutEngineering} can proceed without engineering, ${m.withReachableBuyer} with a reachable buyer, ${m.withFulfiller} with a fulfiller (${m.producedByBrain} by Brain's own capability); reached by ${ACQUISITION_METHODS.filter((k) => m.acquisition[k] > 0).map((k) => `${k} ${m.acquisition[k]}`).join(' · ')}; facts P ${m.facts.proven} · E ${m.facts.estimated} · ? ${m.facts.unknown}; ${m.constructionMoves} construction move(s), ${m.variants} new variant(s)`);
+  out.push(`  reasoning   goal-to-transaction loop (§93): ${m.pathways} pathway(s) (${m.found} found, ${m.constructed} constructed), ${m.executable} executable, ${m.proceedWithoutEngineering} can proceed without engineering, ${m.withReachableBuyer} with a reachable buyer, ${m.withFulfiller} with a fulfiller (${m.producedByBrain} by Brain's own capability), ${m.withRightsGranted} with every permission granted, ${m.withCapacity} with a delivery capacity at least estimated; reached by ${ACQUISITION_METHODS.filter((k) => m.acquisition[k] > 0).map((k) => `${k} ${m.acquisition[k]}`).join(' · ')}; facts P ${m.facts.proven} · E ${m.facts.estimated} · ? ${m.facts.unknown}; ${m.constructionMoves} construction move(s), ${m.variants} new variant(s)`);
   out.push(`    backward  ${money(s.remaining)} ${s.currency} in ${s.daysLeft} day(s), outreach ${s.outreachPerDay.low}–${s.outreachPerDay.high}/day${s.outreachPerDay.stated ? '' : ' (not stated; bounds)'}; outreach alone needs ≥ ${s.minimumNetForOutreach === null ? '∞' : money(s.minimumNetForOutreach)} net per deal`);
   for (const one of s.structures) out.push(`    structure ${one.kind.padEnd(14)} ${one.verdict.padEnd(21)} ${one.label} · ${money(one.perDay.middle)}/day middle, ${money(one.perDay.best)}/day best · ${one.reason.slice(0, 160)}`);
   const ordered = [...reading.pathways].sort((a, b) => b.contribution.p50 - a.contribution.p50 || b.contribution.p90 - a.contribution.p90);
@@ -1385,7 +1434,7 @@ export function renderPathways(reading: PathwayReading, limit = 12): string[] {
   const shown = [...ordered.slice(0, Math.ceil(limit / 2))];
   for (const p of ordered) if (shown.length < limit * 2 && !shown.includes(p) && p.moves.some((m) => m.action === 'CONSTRUCT' || m.action === 'SELL')) shown.push(p);
   for (const p of shown) {
-    out.push(`    pathway   ${p.opportunityId} ${p.origin} ${p.executable ? 'EXECUTABLE' : 'not executable'} · net p10/p50/p90 ${money(p.contribution.p10)}/${money(p.contribution.p50)}/${money(p.contribution.p90)} (gross p50 ${money(p.gross.p50)}) · fit ${p.fit.verdict}${p.fit.lever.variable ? ` lever ${p.fit.lever.variable}` : ''} · ${p.title.slice(0, 70)}`);
+    out.push(`    pathway   ${p.opportunityId} ${p.origin} ${p.executable ? 'EXECUTABLE' : 'not executable'} · net p10/p50/p90 ${money(p.contribution.p10)}/${money(p.contribution.p50)}/${money(p.contribution.p90)} (gross p50 ${money(p.gross.p50)}) · rights ${S(p.rights)} · capacity ${S(p.capacity)} · fit ${p.fit.verdict}${p.fit.lever.variable ? ` lever ${p.fit.lever.variable}` : ''} · ${p.title.slice(0, 70)}`);
     out.push(`      model   buyer ${S(p.buyer)} ${V(p.buyer)} | why ${S(p.motivation)} | channel ${S(p.channel)} ${V(p.channel)} [${p.acquisition.method}] | offer ${S(p.offer)} | fulfils ${S(p.fulfiller)} ${V(p.fulfiller)}`);
     out.push(`      money   price ${S(p.revenuePerDeal)} ${V(p.revenuePerDeal)} | acquire ${S(p.acquisitionCost)} ${V(p.acquisitionCost)} | fulfil ${S(p.fulfilmentCost)} ${V(p.fulfilmentCost)} | net ${S(p.net)} ${V(p.net)} | convert ${S(p.conversion)} ${V(p.conversion)} | volume ${S(p.volume)} ${V(p.volume)} ${String(p.frequency.value)} | cash ${S(p.daysToCash)} ${V(p.daysToCash)}d | capital ${S(p.capital)} ${V(p.capital)}`);
     out.push(`      gaps    ${p.gaps.map((g) => GAP_LABEL[g]).join('; ') || 'none'}${p.permissionsMissing.length ? ` · permissions: ${p.permissionsMissing.join(', ')}` : ''} · ${p.fit.lever.change.slice(0, 140)}`);

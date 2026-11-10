@@ -304,3 +304,16 @@ define('r01.com-13-5', async () => {
     ? { ok: true, detail: `${regulated} of ${openings.length} opening(s) are regulated roles, all assessed by rights and none excluded by category` }
     : { ok: false, detail: `${openings.length} opening(s) read; none performs a regulated activity, so the behaviour is not yet demonstrated` };
 });
+
+/*
+ * Release 01 goal probes (GOAL-02, GOAL-09, OPP-04), written by the goals
+ * campaign and adopted here after review: their files live under this
+ * protected directory, so the campaign that is judged by them can no longer
+ * change them. Loaded lazily so this module stays free of import cycles.
+ */
+async function releaseOne<T>(file: string, pick: (m: T) => Probe): Promise<Probe> {
+  return pick((await import(file)) as T);
+}
+define('r01.goal-02', async (args) => (await releaseOne<typeof import('./release01/metricProbe.ts')>('./release01/metricProbe.ts', (m) => m.goalTwoHoldsOnRows))(args));
+define('r01.goal-09', async (args) => (await releaseOne<typeof import('./release01/acceptanceProbe.ts')>('./release01/acceptanceProbe.ts', (m) => m.goalAcceptanceHoldsOnRows))(args));
+define('r01.opp-04', async (args) => (await releaseOne<typeof import('./release01/pathwaysProbe.ts')>('./release01/pathwaysProbe.ts', (m) => m.opportunityPathsMarkedOnRows))(args));
