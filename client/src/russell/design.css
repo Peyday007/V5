@@ -4925,8 +4925,8 @@ details.rs-card > section.rs-card {
 .rs-memory-timeline { padding-left: 1.25rem; }
 .rs-memory-timeline > li { margin-bottom: 0.75rem; }
 .rs-memory-transcript { list-style: none; padding: 0; }
-.rs-memory-transcript > li { border-left: 3px solid var(--rs-line, #ccc); padding: 0.25rem 0.75rem; margin: 0.5rem 0; }
-.rs-memory-transcript > li[data-role='USER'] { border-left-color: var(--rs-accent, #4a6cf7); }
+.rs-memory-transcript > li { border-left: 3px solid var(--rule); padding: 0.25rem 0.75rem; margin: 0.5rem 0; }
+.rs-memory-transcript > li[data-role='USER'] { border-left-color: var(--verdigris); }
 .rs-memory-transcript > li[data-alternate='true'] { opacity: 0.7; border-left-style: dashed; }
 .rs-memory-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.25rem 0; }
 .rs-memory-image { max-width: 100%; height: auto; display: block; margin-top: 0.25rem; }
