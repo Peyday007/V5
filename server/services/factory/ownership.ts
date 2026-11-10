@@ -27,6 +27,7 @@
  * Pure: no rows, no clock. The reads live with the callers, so a decision is
  * answerable from its inputs.
  */
+import { existsSync } from 'node:fs';
 import { narrowsOrEqual } from './contract.ts';
 import { ownershipReachesForbidden, forbiddenIn } from './forbidden.ts';
 import { matchesGlob } from './glob.ts';
@@ -700,7 +701,13 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
       const candidate = `${dir}${path}`;
       if (input.mutationScope.some((glob) => matchesGlob(candidate, glob))) candidates.add(candidate);
     }
-    return candidates.size === 1 ? [...candidates][0]! : path;
+    if (candidates.size === 1) return [...candidates][0]!;
+    // Several readings of a reviewer's short path: a file that exists beats one only a glob
+    // could compose (production 2026-11-10: "goals/portfolio.ts" read as both
+    // server/services/goals/portfolio.ts and server/services/quant/goals/portfolio.ts, so the
+    // repair was never created and the campaign stayed blocked after its scope was amended).
+    const existing = [...candidates].filter((candidate) => existsSync(candidate));
+    return existing.length === 1 ? existing[0]! : path;
   };
   const evidenceFiles = [...new Set(named.filter(isConcrete).map(canonical))];
 
