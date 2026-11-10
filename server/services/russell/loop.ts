@@ -189,6 +189,7 @@ import { scanIfStale } from '../selfmodel/refresh.ts';
 import { watchIdleOnTick } from '../engineering/watchdog.ts';
 import { databasePressure } from '../../db/pressure.ts';
 import { withArchiveMemo } from '../reconcile/coverage.ts';
+import { runMemoryPass, type MemoryPassReport } from '../memory/pipeline.ts';
 
 export interface TickReport {
   /**
@@ -197,6 +198,8 @@ export interface TickReport {
    * could not read the goals leaves it out rather than reporting zeros.
    */
   goals?: GoalTickReport;
+  /** What the historical-memory pass did (docs/HISTORICAL-MEMORY.md); absent when it did not run. */
+  memory?: MemoryPassReport;
   /** What the research-goal continuation pass did; absent when it could not run. */
   researchGoals?: GoalContinuationReport;
   ran: boolean;
@@ -792,6 +795,7 @@ export const DEFERRABLE_UNDER_PRESSURE: ReadonlySet<string> = new Set([
   'lens-inquiries',
   'feeds',
   'improvement-loop',
+  'historical-memory',
 ]);
 
 /** True, and recorded on the report, when optional work should wait. */
@@ -1365,6 +1369,17 @@ async function tickOnce(owner: string): Promise<TickReport> {
      */
     await runPass(report, 'research-goals', async () => {
       report.researchGoals = await advanceResearchGoals();
+    });
+
+    /*
+     * Historical memory: index, organize, excavate and re-evaluate a person's
+     * conversation history in bounded steps (docs/HISTORICAL-MEMORY.md). Every
+     * stage reads what is due from its own checkpoints, so a pass cut short
+     * resumes where it stopped. Optional work, deferred under database
+     * pressure; an idle pass costs a handful of indexed reads.
+     */
+    await runPass(report, 'historical-memory', async () => {
+      report.memory = await runMemoryPass({ budgetMs: 15_000 });
     });
 
     /*

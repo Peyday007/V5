@@ -508,6 +508,12 @@ export const EVENT_TYPES = [
   'RUSSELL_ROUTINE_DECISION',
   /** A substantial goal checked against the capability maps; recorded when what blocks it changes (§88). */
   'CAPABILITY_ASSESSED',
+  /** A rediscovered historical idea the owner chose to explore or plan became a Russell idea here. */
+  'MEMORY_IDEA_PROMOTED',
+  /** A rediscovered historical idea the owner gave its own section became this project. */
+  'MEMORY_SECTION_CREATED',
+  /** A hub prepared from a sustained commitment in the owner's history was accepted as this project. */
+  'MEMORY_HUB_ACCEPTED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
