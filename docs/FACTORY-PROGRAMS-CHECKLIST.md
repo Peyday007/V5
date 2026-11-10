@@ -6,6 +6,8 @@ statuses below are the ones `server/domain/factoryProgram.ts` defines
 fails if this file omits one. How to submit, approve and read a program is in
 `docs/FACTORY-PROGRAMS.md`.
 
+See the [guide](FACTORY-PROGRAMS.md) for the commands.
+
 ## Fields of a requirement
 
 Give every requirement all of these.

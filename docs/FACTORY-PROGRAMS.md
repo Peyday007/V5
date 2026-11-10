@@ -3,6 +3,8 @@
 A program carries one specification across several campaigns. It is done only
 when every requirement in it passes its checks in the running Brain (§96).
 
+Writing the requirement map? Follow the [checklist](FACTORY-PROGRAMS-CHECKLIST.md).
+
 All commands run from the repository root as `npm run factory -- <command> …`.
 
 ## 1. Submit: `program-submit`
