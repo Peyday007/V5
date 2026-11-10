@@ -19,3 +19,18 @@ describe('Release 01 probes before their behavior ships', () => {
     }
   });
 });
+
+describe('a campaign may not define its own judge', () => {
+  it('refuses a release probe registered outside the protected module and keeps the protected one', async () => {
+    const { registerProbe } = await import('../server/services/factory/program/probes.ts');
+    const before = getProbe('r01.com-13-5');
+    expect(before).not.toBeNull();
+    registerProbe('r01.com-13-5', async () => ({ ok: true, detail: 'self-graded' }));
+    registerProbe('r02.anything', async () => ({ ok: true, detail: 'self-graded' }));
+    expect(getProbe('r01.com-13-5')).toBe(before);
+    expect(getProbe('r02.anything')).toBeNull();
+    // Ordinary named probes are still registered.
+    registerProbe('test.ordinary', async () => ({ ok: true, detail: 'fine' }));
+    expect(getProbe('test.ordinary')).not.toBeNull();
+  });
+});
