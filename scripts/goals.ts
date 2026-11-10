@@ -507,7 +507,7 @@ async function printPlan(reading: PlanReading): Promise<void> {
   printPortfolio(reading.portfolio);
   // Why the plan falls short, what was changed, and the strongest reconstruction (§99).
   if (reading.reconstruction) for (const line of renderReconstruction(reading.reconstruction)) console.log(line);
-  // Which ways of reasoning have worked, across every goal, and this goal's recent explorations (§100).
+  // Which ways of reasoning have worked, across every goal, and this goal's recent explorations (§101).
   const yieldRows = await methodYield().catch(() => []);
   if (yieldRows.length) {
     console.log(`  methods     ${yieldRows.reduce((n, x) => n + x.methods, 0)} way(s) of reasoning on record`);

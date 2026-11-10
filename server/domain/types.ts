@@ -11199,7 +11199,7 @@ export interface ImprovementEventRow {
   at: string;
 }
 
-/** A way of reasoning about a goal and its record (§100, migration 143). */
+/** A way of reasoning about a goal and its record (§101, migration 143). */
 export interface ReasoningMethodRow {
   id: string;
   signature: string;
@@ -11219,7 +11219,7 @@ export interface ReasoningMethodRow {
   last_used_at: string;
 }
 
-/** One exploration a plan read ran (§100, migration 143); append-only. */
+/** One exploration a plan read ran (§101, migration 143); append-only. */
 export interface ReasoningExplorationRow {
   id: string;
   goal_id: string;

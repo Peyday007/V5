@@ -1,5 +1,5 @@
 /**
- * Brain's own model invents ways of reasoning about a goal (§100).
+ * Brain's own model invents ways of reasoning about a goal (§101).
  *
  * The cheap algorithms in `directions.ts` derive directions from the
  * problem's data; they can only reason in the ways somebody wrote down. Here

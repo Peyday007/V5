@@ -1,5 +1,5 @@
 /**
- * Concurrent evaluation for multidirectional reasoning (§100).
+ * Concurrent evaluation for multidirectional reasoning (§101).
  *
  * Every line of exploration is judged by the one engine every plan uses
  * (`evaluateGoalPortfolio`). That engine is synchronous, so on the main loop

@@ -1,5 +1,5 @@
 /**
- * Multidirectional reasoning (§100): one goal, examined from many genuinely
+ * Multidirectional reasoning (§101): one goal, examined from many genuinely
  * different directions, with the directions themselves open-ended.
  *
  * §99's reconstruction loop changes one dimension at a time and combines the

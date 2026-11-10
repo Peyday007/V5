@@ -1,5 +1,5 @@
 /**
- * §100: Brain examines a goal from many genuinely different directions —
+ * §101: Brain examines a goal from many genuinely different directions —
  * algorithmic, remembered and invented by its own model — evaluates them
  * concurrently, lets them challenge, combine and replace one another, and
  * learns which ways of reasoning work. The $10K goal is the regression case;
@@ -53,7 +53,7 @@ afterAll(async () => {
   await teardown();
 });
 
-describe('§100 regression: the $10K plan, before and after', () => {
+describe('§101 regression: the $10K plan, before and after', () => {
   it('before: §99 alone walks one path and keeps a plan that rests on spending $2,999 before any cash is proven', () => {
     expect(before.exploration ?? null).toBeNull();
     expect(before.best.changes.some((c) => c.dimension === 'CAPACITY' && c.basis === 'ASSUMPTION' && c.cost > 2000)).toBe(true);
@@ -98,7 +98,7 @@ describe('§100 regression: the $10K plan, before and after', () => {
   });
 });
 
-describe('§100 mechanics', () => {
+describe('§101 mechanics', () => {
   it('meaningless variations are one direction, and the budget is the problem\'s, not a fixed hundred', () => {
     const a = makeDirection({ name: 'a', stance: 'X', origin: 'MODEL', thinking: '', from: 'GREEDY', program: [{ op: 'PRICE', factor: 1.5, scope: 'TOP' }] });
     const b = makeDirection({ name: 'b', stance: 'X', origin: 'MODEL', thinking: '', from: 'GREEDY', program: [{ op: 'PRICE', factor: 1.55, scope: 'TOP' }] });

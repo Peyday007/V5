@@ -1,5 +1,5 @@
 /**
- * One thread of the reasoning evaluator pool (§100): it receives a portfolio
+ * One thread of the reasoning evaluator pool (§101): it receives a portfolio
  * input, runs the one pure engine on it, and posts the result back. Niced, so
  * the server's own loop wins every contended slice (scenario/worker.ts).
  */

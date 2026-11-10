@@ -130,7 +130,7 @@ export interface Reconstruction {
   /** What the next discovery round is asked for, from the binding constraint. */
   searchBrief: string;
   evaluations: number;
-  /** The multidirectional exploration that ran over this plan (§100); null when it did not run. */
+  /** The multidirectional exploration that ran over this plan (§101); null when it did not run. */
   exploration?: Exploration | null;
 }
 
@@ -143,7 +143,7 @@ export interface ReconstructionInput {
   /** Daily volumes to cost explicitly (the owner asked about 10,000 a day). */
   volumeQuestions?: number[];
   worlds?: number;
-  /** Where evaluations run (§100): a pool of threads, or inline when omitted. */
+  /** Where evaluations run (§101): a pool of threads, or inline when omitted. */
   evaluator?: Evaluator;
   /** The multidirectional exploration's inputs (library, model, time); null turns it off. */
   explore?: Pick<ExploreContext, 'library' | 'invent' | 'maxMs'> | null;
@@ -219,7 +219,7 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
       reading = { key, changes: state.changes, reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, basis: 'COVERAGE', committed: state.committed, feasible: false, why: `commits ${money(state.committed)}, more than the ${money(allowed.ceiling)} the goal allows in all`, members: [] };
     } else {
       evaluations++;
-      // On the pool's threads when one is open (§100), inline otherwise; inline yields first (§63).
+      // On the pool's threads when one is open (§101), inline otherwise; inline yields first (§63).
       const p = await evaluator.evaluate({
         ...limits,
         openings: state.openings,
@@ -328,7 +328,7 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
     currentReading = bestNext.reading;
     used = new Set(current.changes.map((c) => c.dimension));
   }
-  // 4b. Explore from many directions (§100): the greedy path is one line of reasoning among many.
+  // 4b. Explore from many directions (§101): the greedy path is one line of reasoning among many.
   let exploration: Exploration | null = null;
   // The exploration reports its own evaluations; `evaluations` stays §99's own.
   const ownEvaluations = evaluations;
@@ -504,7 +504,7 @@ function currentContacts(limits: ReconstructionInput['portfolio'], baseline: Goa
 }
 
 /** One-sided 95% Wilson lower bound, the test §95 applies. */
-/** One generic change to a strategy: the §99 operators, reused by the multidirectional explorer (§100). */
+/** One generic change to a strategy: the §99 operators, reused by the multidirectional explorer (§101). */
 export interface StrategyOperator {
   dimension: Dimension;
   /** A stable name, so a stored reasoning method can name the operator it uses. */

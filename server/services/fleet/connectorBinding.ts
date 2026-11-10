@@ -387,3 +387,29 @@ export async function touchConnectorRoutines(connectorId: string): Promise<void>
   // exchange): cleared before it, a tick in between re-caches the old health.
   afterCommit(forgetRoutingHealth);
 }
+
+/**
+ * A Routine bound to a connector verified to authorize as a different worker
+ * than the Routine is registered for holds a stale record: one connector
+ * authorizes as exactly one worker, so the binding cannot be right. An
+ * operator's `repoint-worker` left these behind (it changes the worker, not the
+ * binding), and every later arrival through the right connector then read as a
+ * CONFLICT. The binding is cleared, guarded on itself, so the next proven
+ * arrival binds the right connector (`observeFiredSessionArrival`). Nothing is
+ * re-pointed from a guess.
+ */
+export async function clearStaleConnectorBindings(): Promise<string[]> {
+  const rows = await getDb().all<{ id: string; connector_id: string }>(
+    `SELECT r.id AS id, r.connector_id AS connector_id
+       FROM fleet_routines r JOIN connectors k ON k.id = r.connector_id
+      WHERE r.state <> 'RETIRED' AND r.worker_id IS NOT NULL AND k.worker_id IS NOT NULL
+        AND r.worker_id <> k.worker_id`,
+  );
+  const cleared: string[] = [];
+  const { clearRoutineConnector } = await import('../../repos/connectors.ts');
+  for (const row of rows) {
+    if (await clearRoutineConnector({ routineId: row.id, from: row.connector_id })) cleared.push(row.id);
+  }
+  if (cleared.length > 0) forgetRoutingHealth();
+  return cleared;
+}

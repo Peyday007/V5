@@ -1,5 +1,5 @@
 /**
- * What Brain learns about its own reasoning (§100).
+ * What Brain learns about its own reasoning (§101).
  *
  * Every direction an exploration evaluated is a row in `reasoning_methods`,
  * keyed by its program's signature: how often it was tried, how often it

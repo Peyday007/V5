@@ -1154,7 +1154,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   return reading;
 }
 
-/** How often a goal's plan read asks the model to invent new ways of reasoning (§100). */
+/** How often a goal's plan read asks the model to invent new ways of reasoning (§101). */
 export const INVENT_EVERY_MS = 15 * 60_000;
 const lastInvent = new Map<string, number>();
 export function inventDue(goalId: string | undefined, now = Date.now()): boolean {
@@ -1167,7 +1167,7 @@ export function inventDue(goalId: string | undefined, now = Date.now()): boolean
 /**
  * The reconstruction loop over exactly what the portfolio was evaluated on;
  * null when there is nothing to reconstruct. It explores the plan from many
- * directions (§100): the methods that worked before, Brain's model inventing
+ * directions (§101): the methods that worked before, Brain's model inventing
  * new ones, all evaluated concurrently on the pool's threads. A persisted read
  * records what it learned, so the next read — of this goal or another —
  * starts from what worked.
@@ -1584,7 +1584,7 @@ export function reconstructionSummary(r: Reconstruction | null): Record<string, 
     binding: r.diagnosis[0]?.factor ?? null,
     structural: r.structural,
     variants: r.rounds.reduce((n, x) => n + x.tried.length, 0),
-    // What the multidirectional exploration concluded (§100): a different winning way of reasoning is a new row.
+    // What the multidirectional exploration concluded (§101): a different winning way of reasoning is a new row.
     // How many directions ran is not a conclusion — the library changes it between identical reads.
     explored: r.exploration
       ? { winner: r.exploration.winner?.direction.name ?? null, replaced: r.exploration.replaced }

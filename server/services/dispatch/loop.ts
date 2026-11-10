@@ -191,6 +191,8 @@ export interface TickResult {
   /** Surfaces put back after their connector was re-authorized. */
   recoveredAfterReauth: string[];
   /** Surfaces stopped at their first session that arrived as another worker. */
+  /** Routines re-registered for the worker their owner switched them to (`adoptSwitchedIdentities`). */
+  adoptedIdentities: string[];
   quarantinedForWrongWorker: string[];
   /** Surfaces put back because their registration now matches the worker that arrived. */
   recoveredAfterRebind: string[];
@@ -256,6 +258,7 @@ export async function dispatchTick(
     revivedAbandoned: 0,
     quarantinedForNoShow: [],
     recoveredAfterReauth: [],
+    adoptedIdentities: [],
     quarantinedForWrongWorker: [],
     recoveredAfterRebind: [],
     autoProbe: null,
@@ -503,6 +506,8 @@ export async function dispatchTick(
     lastConnectorReconcile = Date.now();
     try {
       await reconcileConnectorBindings();
+      const { clearStaleConnectorBindings } = await import('../fleet/connectorBinding.ts');
+      await clearStaleConnectorBindings();
     } catch {
       // Evidence, not a precondition. The next pass retries it.
     }
@@ -520,7 +525,10 @@ export async function dispatchTick(
    * dispatch.
    */
   try {
-    const { quarantineWrongWorkerSurfaces, recoverRebindedSurfaces } = await import('../fleet/arrivalIdentity.ts');
+    const { adoptSwitchedIdentities, quarantineWrongWorkerSurfaces, recoverRebindedSurfaces } = await import(
+      '../fleet/arrivalIdentity.ts'
+    );
+    result.adoptedIdentities = (await adoptSwitchedIdentities()).filter((d) => d.adopted).map((d) => d.routineId);
     result.quarantinedForWrongWorker = await quarantineWrongWorkerSurfaces();
     result.recoveredAfterRebind = await recoverRebindedSurfaces();
   } catch {

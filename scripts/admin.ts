@@ -480,7 +480,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
             clear <worker> | retire <worker> --reason "why"
   connectors show | derive | attach <brnc_…> <trig_…>
              reconnect <cnr_…|trig_…> <user|email>
-             probe <trig_…> [--no-wait] | probe-status <trig_…|crp_…>
+             probe <trig_…> [--no-wait] | probe-status <trig_…|crp_…> | auto-probe
              repoint-worker <cnr_…> <to-worker>
   projects  list | create <name>
   access    show <worker> | grant <worker> <project> | revoke <worker> <project>
@@ -1308,6 +1308,25 @@ async function main(): Promise<void> {
       }
       forgetRoutingHealth();
       console.log(`  ${connectorId} now authorizes as ${to} (was ${before.workerId ?? 'none'}); recorded against ${actor.id}.`);
+      break;
+    }
+    /*
+     * Brain's own probe pass (§100): every quarantined Routine, when Brain will
+     * next probe it by itself, or the one reason it never will.
+     */
+    case 'connectors auto-probe': {
+      const { autoProbePlan } = await import('../server/services/fleet/autoRecovery.ts');
+      const { liveRecoveryProbe } = await import('../server/repos/recoveryProbes.ts');
+      const live = await liveRecoveryProbe();
+      console.log(`  live probe: ${live ? `${live.id} for ${live.routineId} until ${live.expiresAt}` : 'none'}`);
+      for (const row of await autoProbePlan()) {
+        console.log(
+          `  ${row.routineName.padEnd(22)} ${row.routineRef}  ` +
+            (row.dueAt
+              ? `due=${row.dueAt} failed=${row.failed} last=${row.lastProbeAt ?? '—'} signal=${row.signal ?? '—'}`
+              : `never: ${row.never}`),
+        );
+      }
       break;
     }
     case 'connectors probe-status': {

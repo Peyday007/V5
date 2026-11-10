@@ -583,7 +583,7 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
         reason: wrongWorkerReason({
           routineName: routine.name,
           routineRef: routine.routineRef,
-          evidence: { ...wrong, routineId: routine.id, binId: probe.binId, credentialId: null },
+          evidence: { ...wrong, routineId: routine.id, binId: probe.binId, credentialId: null, firedAt: null },
         }),
       });
     }

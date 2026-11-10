@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- MULTIDIRECTIONAL REASONING (§100)
+-- MULTIDIRECTIONAL REASONING (§101)
 --
 -- A reasoning method is a way of looking at a goal: forward from what is held,
 -- backward from the target, out from the middle of the best plan, through a

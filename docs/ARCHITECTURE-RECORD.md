@@ -12723,7 +12723,9 @@ only. `docs/CONNECTOR-LIFECYCLE.md` describes the mechanism.
 - **One wrong-worker arrival stops the Routine.** It is quarantined with the
   cause and both remedies: the account owner picks the right connector in
   Claude, or an operator repoints the Routine. Brain never adopts the arriving
-  identity. Once a person registers the Routine for the worker it was proven to
+  identity (amended by §100: a clean switch to a connector in the same Claude
+  account is now adopted; this rule still holds for every case §100 refuses).
+  Once a person registers the Routine for the worker it was proven to
   run as, the Routine comes back by itself, and its next arrival binds the
   connector. Old evidence binds nothing and re-enables nothing; a later
   quarantine for another reason waits for its own recovery.
@@ -15279,7 +15281,37 @@ knowledge.
 - **The fix:** the pool now reads `researchMissionSlots(projectId)` in `russell/launch.ts`. That is the same grant and the same live-hold arithmetic that `reserve` enforces, so the watchdog can only call slots idle when a launch would actually be accepted.
 - **A gate that moved under it:** #661's Deploy and Postgres suite both failed `ocr.test.ts` ("a scan too poor to trust") because `ubuntu-latest` moved from 24.04 to 26.04 between two runs, taking tesseract from 5.3 to 5.5, and 5.5 reads the deliberately poor fixture as text. Production's image is Debian bookworm with tesseract 5.3, so the test jobs are now pinned to `ubuntu-24.04`. CI now checks the OCR engine production actually runs, and the refusal test still means what it says.
 
-## 100. A goal is examined from many directions, and the ways of reasoning that work are learned.
+## 100. A change is recognized where it happens, and the work it enables resumes without a person restating it.
+
+**Owner's order, 2026-11-10.** Brain recognizes meaningful changes across the whole system — accounts, connectors, Routines, workers, credentials, configuration, providers, GPU pods, capacity, Factory campaigns and dependencies, research, opportunities, budgets and constraints — reconciles its records, and resumes, reroutes or reprioritizes the work the change enables. Event-driven wherever an event exists; a bounded periodic check only where none does. A person is asked only for authorization, a missing credential, or what Brain cannot do safely. No second control system.
+
+**What production showed.** Caleb's *Factory surface 3* (`trig_01EhddNq…`, registered for `factory-brain`) was quarantined on 2026-10-15 because its sessions arrived as his research worker. Its fast probes, then its daily probes, ran out by the end of October. When Caleb moved the Routine onto the Factory Brain connector, nothing would ever fire it again, so the change was invisible: the alert still told him to fix the connector he had already fixed. The reverse case was no better. §59 refused to adopt an arriving identity, so a Routine its owner deliberately switched to another connector was quarantined until an operator restated the switch with `repoint-worker`.
+
+**What changed.**
+- **A connector switch is adopted** (`fleet/arrivalIdentity.ts:adoptSwitchedIdentities`, on the dispatch tick, before the wrong-worker quarantine). The event is the fired session's authenticated check-in: its provider session matches the fire, within 30 minutes, and it authenticated as another worker.
+  - **What adoption does:** the Routine is repointed (compare-and-swap, audited `REPOINT_ROUTINE_WORKER` by `brain:arrival-adoption`, with the reverse command in the reason). Its stale connector is replaced by the one the session came through, or cleared. Its capabilities gain what the new worker's routing declares. A wrong-worker quarantine lifts on the same tick (`recoverRebindedSurfaces`), and the re-armed deferred intents fire it for the new worker's work.
+  - **The verification is the next arrival.** A MATCH binds the connector. An arrival as the old worker is a reversal, refused, and quarantined as mixed.
+  - **Refused, so §59's quarantine still applies:** the same session also arrived as the registered worker; interleaved arrivals; a connector attributed to another Claude account; a stale or replayed session; a worker that is disabled or serves no project; a surface commissioned for `repository` work arriving as a worker not routed for it. Adoption widens what a surface serves and never retires its role.
+  - **§59 is amended accordingly:** "Brain never adopts the arriving identity" now holds only for these refusals.
+- **A quarantine is never abandoned** (`fleet/autoRecovery.ts`).
+  - `identityChangeSignal` reads the token rows the authorization server already writes: a new consent for the registered worker, from an unattributed client or one in this Routine's account, or use of a client no connector is attributed to.
+  - A signal newer than the last probe buys one probe, at most hourly, whatever the budget says.
+  - Past the fast and daily budgets, a weekly probe remains, at about four activations a month for a surface nobody has fixed.
+- **A stale binding is repaired** (`fleet/connectorBinding.ts:clearStaleConnectorBindings`). A Routine bound to a connector verified to authorize as a different worker is unbound, guarded on that binding, and the next proven arrival binds the right one. Repoints used to leave these behind, and every later arrival through the right connector read as a CONFLICT.
+- **The register** (`server/domain/changeRecognition.ts`) names, for every change class, the existing recognizer, the running file that calls it, EVENT or PERIODIC (and for PERIODIC, why no event exists), and what it corrects and resumes. `tests/changeRecognition.test.ts` fails when a class has no recognizer, a recognizer disappears, or it is no longer called from its loop. **A new capability that holds state other work depends on adds its row in the same change.**
+
+**Left manual, deliberately.** `fleet reconcile-secrets` pairs deployment secrets with triggers by elimination, and every attempt is a real activation on someone's account. It runs only when a person asks.
+
+**Regression.** `tests/calebDurability.test.ts`:
+- Factory surface 3 with every budget spent is lifted by the consent signal alone.
+- The weekly fallback fires.
+- A research Routine switched to the Factory Brain connector is adopted and given work.
+- Both-connector and reversal cases are refused.
+- Stale bindings are cleared.
+
+Also `tests/connectionRecovery.test.ts` and `tests/changeRecognition.test.ts`.
+
+## 101. A goal is examined from many directions, and the ways of reasoning that work are learned.
 
 **Owner's order, 2026-11-10.** Brain must examine one problem from dozens or
 hundreds of genuinely different directions, discover approaches nobody
