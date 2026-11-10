@@ -27,9 +27,13 @@
 #   runpod-report — research jobs by model on production, and GPU fallbacks.
 #   runpod-cycle — the production test of automatic power: stop the pod, watch
 #             Brain start it again for waiting research, wait for vLLM to serve.
+#   runpod-restore — find Brain's pod, or recreate it from the recipe in
+#             `cheap/runpodRestore.ts` (same GPU, image, model, no paid volume,
+#             refused above RUNPOD_MAX_USD_PER_HOUR), wait for vLLM, probe, connect.
 #   runpod-auto — what the hourly schedule runs: nothing until the RUNPOD_*
 #             secrets exist; then probe and connect on its own; once connected,
 #             reconnect if the secrets change, and report the GPU's research jobs.
+#             With RUNPOD_API_KEY, a deleted pod is recreated first (runpod-restore).
 #
 # No key is printed. Free provider keys never pass through here: they are
 # entered in OmniRoute's own dashboard.
@@ -43,7 +47,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle'
+        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore'
         required: true
         default: deploy
       hours:
@@ -92,6 +96,8 @@ jobs:
           RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
           # The pod's hourly price (a repository variable, not a secret), for cost per research job.
           RUNPOD_USD_PER_HOUR: ${{ vars.RUNPOD_USD_PER_HOUR }}
+          # The most a recreated pod may cost (a repository variable); unset = the measured $0.24/h.
+          RUNPOD_MAX_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_USD_PER_HOUR }}
           ACTION: ${{ inputs.action || 'runpod-auto' }}
           HOURS_INPUT: ${{ inputs.hours || '6' }}
         run: |
@@ -104,7 +110,23 @@ jobs:
           [ "$HOURS" -gt 48 ] && HOURS=48
           cheap=northline-cheap
           # The GPU's settings, fingerprinted so a changed secret is noticed without reading one back.
-          gpu_fp=$(printf '%s\n%s\n%s\n%s' "$RUNPOD_VLLM_URL" "$RUNPOD_VLLM_KEY" "$RUNPOD_VLLM_MODEL" "${RUNPOD_API_KEY:-}" | sha256sum | cut -c1-16)
+          fingerprint() { gpu_fp=$(printf '%s\n%s\n%s\n%s' "$RUNPOD_VLLM_URL" "$RUNPOD_VLLM_KEY" "$RUNPOD_VLLM_MODEL" "${RUNPOD_API_KEY:-}" | sha256sum | cut -c1-16); }
+          fingerprint
+          # The pod's address is read from RunPod, not from the secret, so a pod
+          # RunPod deleted (an empty balance, 2026-11-10) is recreated and found
+          # without anyone editing a secret. Never starts or stops a pod.
+          pod_id=''
+          restore() {
+            [ -n "${RUNPOD_API_KEY:-}" ] || return 0
+            rc=0; npx tsx scripts/runpod-restore.ts "$@" > restore.txt 2>&1 || rc=$?
+            cat restore.txt
+            [ $rc -eq 0 ] || { echo "::error title=runpod::No GPU pod could be found or recreated; the lines above give RunPod's answer."; return $rc; }
+            url=$(grep '^URL ' restore.txt | cut -d' ' -f2-)
+            pod_id=$(grep '^POD ' restore.txt | cut -d' ' -f2)
+            grep -q '^CREATED ' restore.txt && echo "::notice title=runpod::Recreated the GPU pod ($(grep '^POD ' restore.txt | cut -d' ' -f2-)/h)."
+            [ -n "$url" ] && RUNPOD_VLLM_URL="$url"
+            fingerprint
+          }
           probe() { rc=0; npx tsx scripts/runpod-probe.ts > probe.txt 2>&1 || rc=$?; cat probe.txt; return $rc; }
           gpu_connect() {
             model=$(grep '^MODEL ' probe.txt | cut -d' ' -f2-)
@@ -114,6 +136,7 @@ jobs:
               BRAIN_RUNPOD_MODEL="$model" \
               BRAIN_RUNPOD_FINGERPRINT="$gpu_fp" \
               BRAIN_RUNPOD_MODE=primary >/dev/null
+            [ -z "$pod_id" ] || flyctl secrets set --app "$brain" BRAIN_RUNPOD_POD_ID="$pod_id" >/dev/null
             if [ -n "${RUNPOD_API_KEY:-}" ]; then
               flyctl secrets set --app "$brain" BRAIN_RUNPOD_API_KEY="$RUNPOD_API_KEY" >/dev/null
               echo "::notice title=runpod::Auto stop/start on: Brain stops the pod after 15 idle minutes and starts it when research arrives."
@@ -152,10 +175,12 @@ jobs:
           case "$ACTION" in
             runpod-test)
               [ -n "$RUNPOD_VLLM_URL" ] || { echo "::error::Set the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
+              restore
               probe
               ;;
             runpod-connect)
               [ -n "$RUNPOD_VLLM_URL" ] || { echo "::error::Set the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
+              restore
               probe || { echo "::error::The GPU did not pass the probe; nothing on the Brain changed."; exit 1; }
               gpu_connect
               ;;
@@ -165,6 +190,12 @@ jobs:
               ;;
             runpod-report)
               gpu_report
+              ;;
+            runpod-restore)
+              [ -n "${RUNPOD_API_KEY:-}" ] && [ -n "$RUNPOD_VLLM_KEY" ] || { echo "::error::Set the RUNPOD_API_KEY and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
+              restore --wait
+              probe || { echo "::error::The GPU did not pass the probe; nothing on the Brain changed."; exit 1; }
+              gpu_connect
               ;;
             runpod-cycle)
               # The production test of automatic power: stop the pod, watch the running
@@ -183,6 +214,7 @@ jobs:
                 echo "::notice title=runpod::Waiting for the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY secrets. Free providers only."
                 exit 0
               fi
+              restore --wait || true
               # What the Brain runs now: its mode and the fingerprint of the settings it was given (never a key).
               state=$(flyctl ssh console --app "$brain" -C 'printenv BRAIN_RUNPOD_MODE BRAIN_RUNPOD_FINGERPRINT' 2>/dev/null | tr -d '\r' | tr '\n' ' ' || true)
               if echo "$state" | grep -qw primary && echo "$state" | grep -qw "$gpu_fp"; then

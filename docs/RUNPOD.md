@@ -6,9 +6,22 @@ Brain's own model on a rented GPU, used before the free providers and backed by 
 |---|---|
 | GPU | RTX 2000 Ada, 16 GB |
 | Server | vLLM (`vllm-latest` template, OpenAI-compatible, port 8000) |
-| Model | `Qwen/Qwen3-8B-AWQ` (4-bit, ~6 GB). Full-precision Qwen3-8B (~16 GB) does not fit with room for a KV cache. `Qwen/Qwen3-8B-FP8` (~9 GB) also fits; AWQ leaves more KV cache, so more jobs at once. |
+| Model | `Qwen/Qwen3-4B` (what production ran from 2026-11-05; ~8 GB bf16). `Qwen/Qwen3-8B-AWQ` also fits. |
+| Price | measured $0.24/h; a recreated pod above `RUNPOD_MAX_USD_PER_HOUR` (default 0.24) is deleted at once |
 | Code | `server/services/cheap/runpod.ts`, wired in `cheap/lane.ts` |
 | Workflow | `Cheap lane` (`.github/workflows/cheap-lane.yml`), `runpod-*` actions + an hourly `runpod-auto` |
+
+## Recovering a lost pod
+
+RunPod deletes a pod when the account balance runs out (2026-11-10). The pod's
+recipe is code: `server/services/cheap/runpodRestore.ts` (GPU, image
+`vllm/vllm-openai`, start command, model, `volumeInGb: 0` so no paid volume).
+With `RUNPOD_API_KEY` set, every hourly `runpod-auto` finds the pod through
+RunPod's API — by the old address, else by the name `brain-vllm` — and creates
+it from the recipe when it is gone, reusing `RUNPOD_VLLM_KEY` as vLLM's key, waits
+for vLLM, probes and reconnects the Brain to the new address. No secret has to be
+edited. `runpod-restore` does the same on demand. It never starts or stops an
+existing pod (that is `runpodPod.ts`).
 
 ## Pod settings
 
