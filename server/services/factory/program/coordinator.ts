@@ -468,6 +468,9 @@ export async function readProgram(programId: string, ports: Pick<ProgramPorts, '
 /** Verification is repeated at most this often for a requirement whose answer has not changed revision. */
 export const REVERIFY_AFTER_MS = 15 * 60_000;
 
+/** Requirements already asked ahead of their campaign at a revision (in memory: once per revision per process). */
+const opportunisticAsked = new Map<string, string>();
+
 export interface ProgramTickReport {
   programId: string;
   verified: Array<{ requirement: string; outcome: string }>;
@@ -611,6 +614,25 @@ export async function tickProgram(programId: string, ports: ProgramPorts): Promi
     } else if (outcome === 'PASS' && last?.outcome !== 'PASS') {
       await recordFactoryEvent({ kind: PROGRAM_EVENT_KINDS.verified, evidenceClass: 'MEASURED', detail: { programId, requirement: requirement.key, revision: result.revision, verificationId: recorded.id } });
     }
+  }
+  // 1b. Production evidence decides whatever route the code took. A requirement whose campaign
+  //     stalled or never started may already hold on production (production 2026-11-10: the
+  //     quant campaign's funnel was landed by review after its last unit stalled on a finding
+  //     that no longer reproduced). Its checks are asked once per revision, and only a PASS is
+  //     recorded: a failure of unbuilt work is not a regression and must not open a repair.
+  for (const requirement of reading.requirements) {
+    if (requirement.status !== 'BLOCKED' && requirement.status !== 'IMPLEMENTED' && requirement.status !== 'MAPPED') continue;
+    if (revision === null) continue;
+    const askedKey = `${programId}:${requirement.key}`;
+    if (opportunisticAsked.get(askedKey) === revision) continue;
+    opportunisticAsked.set(askedKey, revision);
+    const def = input.map.requirements.find((r) => r.key === requirement.key)!;
+    if (def.ambiguities.some((a) => a.interpretation === null && !a.resolvedBy)) continue;
+    const result = await ports.verify(def.verification);
+    if (result.revision === null || !result.checks.length || !result.checks.every((c) => c.ok === true)) continue;
+    const recorded = await recordVerification({ programId, requirementKey: requirement.key, outcome: 'PASS', revision: result.revision, checks: result.checks, at: now.toISOString() });
+    report.verified.push({ requirement: requirement.key, outcome: 'PASS' });
+    await recordFactoryEvent({ kind: PROGRAM_EVENT_KINDS.verified, evidenceClass: 'MEASURED', detail: { programId, requirement: requirement.key, revision: result.revision, verificationId: recorded.id, route: 'evidence-ahead-of-campaign' } });
   }
   input = await statusInput(program, ports);
 
