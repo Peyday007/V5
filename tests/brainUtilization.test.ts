@@ -115,6 +115,35 @@ describe('every pool is read, and idle capacity beside waiting work is acted on'
     expect(slots.because).toMatch(/at-once ceiling/);
   });
 
+  it('does not count a grant in the same project that does not govern research', async () => {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'research-full',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 5,
+      maxFragments: 5,
+      maxConcurrent: 0,
+      maxProbes: 1,
+    });
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'outreach-only',
+      allowedWork: ['OUTREACH'],
+      maxMissions: 5,
+      maxFragments: 5,
+      maxConcurrent: 26,
+      maxProbes: 1,
+    });
+    await launchableIdea('Ohio permits');
+    const slots = (await brainUtilization()).find((one) => one.pool === 'RESEARCH_SLOTS')!;
+    expect(slots.idle).toBe(false);
+    expect(slots.because).toMatch(/at-once ceiling/);
+  });
+
   it('says nothing is idle when nothing is waiting', async () => {
     const slots = (await brainUtilization()).find((one) => one.pool === 'RESEARCH_SLOTS')!;
     if (slots.waiting === 0) expect(slots.idle).toBe(false);
