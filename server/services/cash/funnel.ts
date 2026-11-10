@@ -26,6 +26,7 @@ import type { CashCardFact, Standing } from '../../domain/types.ts';
 import { CASH_TIERS, cashTier, tierRank, type CashTier } from './tier.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
+import { registerProbe, type ProbeResult } from '../factory/program/probes.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { instantlySendingStanding } from './providers/instantly.ts';
 
@@ -909,3 +910,52 @@ async function outreachFromRows(
     consideredWays: considerOutreachWays(mechanisms),
   };
 }
+
+/* ------------------------------------------------------------------------- */
+/* Production probe for COM-13-3                                              */
+/* ------------------------------------------------------------------------- */
+
+export const OUTREACH_FUNNEL_PROBE = 'r01.com-13-3';
+
+/**
+ * Reads the outcome rows production holds and checks each quoted clause of the
+ * source against the funnel it produces from them: every mechanism is modelled
+ * through every stage; a figure is known only when every stage upstream of it is
+ * (so messages sent never stand in for buyers, sales or revenue); every named way
+ * to reach demand is either modelled or an open task; and nothing with an unknown
+ * or refused stage is ranked. With no mechanism recorded the answer is a failure:
+ * nothing to look at is not a demonstration (§39).
+ */
+export async function outreachFunnelHoldsOnRows(): Promise<ProbeResult> {
+  const projects = await getDb().all<{ project_id: string }>(
+    `SELECT DISTINCT project_id FROM cash_outcomes ORDER BY project_id`,
+  );
+  if (projects.length === 0) return { ok: false, detail: 'no cash_outcomes rows: no outreach mechanism has recorded an outcome on production' };
+  let mechanismCount = 0;
+  let withMessages = 0;
+  for (const { project_id: projectId } of projects) {
+    const outreach = await outreachFromRows(projectId);
+    for (const m of outreach.mechanisms) {
+      mechanismCount += 1;
+      const missing = OUTREACH_STAGES.filter((stage) => !m.stages[stage]);
+      if (missing.length > 0) return { ok: false, detail: `mechanism ${m.mode} in ${projectId} does not model ${missing.join(', ')}` };
+      if (m.messagesSent !== null) withMessages += 1;
+      const known = (figure: OutreachFigure): boolean => figure.basis !== 'UNKNOWN';
+      if (m.firstUnknown !== null && [m.buyers, m.settledBuyers, m.firstPurchaseRevenueCents, m.revenueCents].some(known)) {
+        return { ok: false, detail: `mechanism ${m.mode} in ${projectId} states a buyer or revenue figure while ${m.firstUnknown} is unknown` };
+      }
+    }
+    const ways = new Set(outreach.consideredWays.map((w) => w.key));
+    const absent = OUTREACH_WAYS.filter((w) => !ways.has(w.key));
+    if (absent.length > 0) return { ok: false, detail: `${projectId} does not consider ${absent.map((w) => w.key).join(', ')}` };
+    const ranked = outreach.mix.ranked.find((m) => m.firstUnknown !== null || m.permitted !== true);
+    if (ranked) return { ok: false, detail: `${ranked.mode} in ${projectId} is ranked with ${ranked.firstUnknown ?? 'permission'} unknown or refused` };
+  }
+  if (mechanismCount === 0) return { ok: false, detail: `${projects.length} project(s) have outcome rows but none records an outreach mechanism` };
+  return {
+    ok: true,
+    detail: `${mechanismCount} mechanism(s) across ${projects.length} project(s) modelled through all ${OUTREACH_STAGES.length} stages; ${withMessages} carry messages sent as effort only; no buyer or revenue figure stated past an unknown stage; every named way considered; nothing unknown ranked`,
+  };
+}
+
+registerProbe(OUTREACH_FUNNEL_PROBE, outreachFunnelHoldsOnRows);
