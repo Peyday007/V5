@@ -197,7 +197,12 @@ export interface TelemetryFigure {
   /** The rows it is out of, said in `denominatorIs`. Null when unknown. */
   denominator: number | null;
   denominatorIs: string;
-  /** numerator / denominator, or null when either is unknown or the denominator is zero. */
+  /**
+   * What numerator and denominator are counted in. A rate is only defined when both are
+   * counts of rows; MINOR_UNITS numerators (money) never divide by a row count.
+   */
+  numeratorUnit: 'COUNT' | 'MINOR_UNITS';
+  /** numerator / denominator, or null when either is unknown, the denominator is zero, or the units differ. */
   rate: number | null;
   basis: 'ROWS' | 'UNKNOWN';
   /** Breakdown (by provider, purpose, state…) whose counts sum to the numerator, or null. */
@@ -210,7 +215,7 @@ export interface RollingTelemetry {
   windows: Record<TelemetryWindowKey, TelemetryFigure[]>;
 }
 
-type Reader = (since: string, until: string) => Promise<{ numerator: number; denominator: number | null; groups?: Array<{ key: string; count: number }>; note?: string }>;
+type Reader = (since: string, until: string) => Promise<{ numeratorUnit?: 'MINOR_UNITS'; numerator: number; denominator: number | null; groups?: Array<{ key: string; count: number }>; note?: string }>;
 
 interface Measure {
   measure: string;
@@ -514,9 +519,10 @@ const MEASURES: readonly Measure[] = [
     label: 'cost actually paid, minor units',
     denominatorIs: 'cost entries recorded in the window',
     read: async (since, until) => ({
+      numeratorUnit: 'MINOR_UNITS',
       numerator: await one(`SELECT COALESCE(SUM(amount_cents), 0) AS n FROM cash_money_entries WHERE kind = 'COST' AND created_at >= ? AND created_at < ?`, [since, until]),
       denominator: await one(`SELECT COUNT(*) AS n FROM cash_money_entries WHERE kind = 'COST' AND created_at >= ? AND created_at < ?`, [since, until]),
-      note: 'numerator is minor units; model and compute run on subscriptions and record no per-job cost, so their cost is not included and not claimed to be zero',
+      note: 'numerator is minor units and denominator is an entry count, so no rate is computed; model and compute run on subscriptions and record no per-job cost, so their cost is not included and not claimed to be zero',
     }),
   },
   {
@@ -550,13 +556,15 @@ export async function rollingTelemetry(now: Date = new Date()): Promise<RollingT
         const base = { measure: m.measure, label: m.label, window: { key: window.key, since, until }, denominatorIs: m.denominatorIs };
         try {
           const read = await m.read(since, until);
-          const rate = read.denominator !== null && read.denominator > 0 ? read.numerator / read.denominator : null;
-          return { ...base, numerator: read.numerator, denominator: read.denominator, rate, basis: 'ROWS', groups: read.groups ?? null, note: read.note ?? null };
+          const numeratorUnit = read.numeratorUnit ?? 'COUNT';
+          const rate = numeratorUnit === 'COUNT' && read.denominator !== null && read.denominator > 0 ? read.numerator / read.denominator : null;
+          return { ...base, numeratorUnit, numerator: read.numerator, denominator: read.denominator, rate, basis: 'ROWS', groups: read.groups ?? null, note: read.note ?? null };
         } catch (error) {
           return {
             ...base,
             numerator: null,
             denominator: null,
+            numeratorUnit: 'COUNT',
             rate: null,
             basis: 'UNKNOWN',
             groups: null,
@@ -577,7 +585,7 @@ export function telemetryMeasureKeys(): string[] {
 /** Lines for a report: one row per measure, a column per window, each as numerator/denominator. */
 export function formatTelemetry(reading: RollingTelemetry): string[] {
   const cell = (f: TelemetryFigure): string =>
-    f.basis === 'UNKNOWN' ? 'unknown' : `${f.numerator}/${f.denominator === null ? 'unknown' : f.denominator}${f.rate === null ? '' : ` (${(f.rate * 100).toFixed(1)}%)`}`;
+    f.basis === 'UNKNOWN' ? 'unknown' : f.numeratorUnit === 'MINOR_UNITS' ? `${f.numerator} minor units over ${f.denominator === null ? 'unknown' : f.denominator} entries` : `${f.numerator}/${f.denominator === null ? 'unknown' : f.denominator}${f.rate === null ? '' : ` (${(f.rate * 100).toFixed(1)}%)`}`;
   const lines = [`TELEMETRY at ${reading.at.slice(0, 19)}Z (numerator/denominator; read from rows now)`];
   for (const [index, m] of MEASURES.entries()) {
     lines.push(`  ${m.measure.padEnd(22)} ${TELEMETRY_WINDOWS.map((w) => `${w.key} ${cell(reading.windows[w.key][index]!)}`).join('   ')}`);
