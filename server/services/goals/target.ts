@@ -117,9 +117,14 @@ export async function readTarget(goal: Workstream, now: Date = new Date()): Prom
   const settled = t('SETTLEMENT');
   const achieved = achievedFrom(target.metric, totals as Record<string, number>);
   const pipeline = Math.max(0, t('PIPELINE_AGREED') - t('PIPELINE_RELEASED'));
+  // What the reading says it counts decides what it reports as left out: a customer
+  // payment is "not yet settled" only when the metric counts settlements and not payments.
+  const counted = countedKinds(target.metric);
+  const countsPayments = counted.includes('CUSTOMER_PAYMENT');
+  const countsSettlements = counted.includes('SETTLEMENT');
   const notCounted = [
     { label: 'agreed but not paid (pipeline)', cents: pipeline },
-    ...(target.metric === 'SETTLED_CASH' ? [{ label: 'paid but not yet settled', cents: Math.max(0, payments - settled) }] : []),
+    ...(!countsPayments && countsSettlements ? [{ label: 'paid but not yet settled', cents: Math.max(0, payments - settled) }] : []),
   ].filter((one) => one.cents > 0);
   return {
     metric: target.metric,
@@ -131,7 +136,7 @@ export async function readTarget(goal: Workstream, now: Date = new Date()): Prom
     remainingCents: Math.max(0, target.amountCents - achieved),
     achieved: achieved >= target.amountCents,
     daysLeft: goal.dueAt ? Math.ceil((Date.parse(goal.dueAt) - now.getTime()) / DAY) : null,
-    counted: countedKinds(target.metric),
+    counted,
     notCounted,
     since: target.setAt,
     capitalCeilingCents: target.capitalCeilingCents,
