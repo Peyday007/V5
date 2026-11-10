@@ -559,6 +559,32 @@ describe("Airyn's four Routines over simulated time", () => {
     expect(clock - firstRightAt!).toBeLessThan(HOUR);
   });
 
+  it('a session that picks the wrong connector is sent to its other one, and the surface stays up', async () => {
+    // Production 2026-11-10: one Factory session signed in through the research
+    // connector, ended on "no work", and the only Factory surface was quarantined.
+    const routines = await airyn();
+    const right = await connector(research, 'https://brain.example/mcp/factory');
+    const wrong = await connector(factory, 'https://brain.example/mcp');
+    const b = routines[1]!;
+    at(clock + HOUR);
+    await fire(b, 'redirect_1');
+    await touchToken(wrong.accessId);
+    const first = await checkIn({
+      principal: {
+        type: 'WORKER', id: factory, handle: factory, displayName: factory, isBrainAdmin: false, mustChangePassword: false,
+        credentialId: wrong.accessId, authMethod: 'OAUTH_BEARER', memberships: [], requestId: 'req_redirect_1',
+      } as unknown as Principal,
+      workerId: factory,
+      sessionRef: 'session_redirect_1',
+    });
+    expect(first).toEqual({ assigned: false, reason: 'WRONG_CONNECTOR' });
+    // It does what it is told: the same session checks in through the other connector.
+    expect(await arriveAndWork(research, right, 'redirect_1', [projectId])).toBe(true);
+    at(clock + 5 * 60_000);
+    await judge();
+    expect((await getRoutine(b.id))!.state).toBe('ENABLED');
+  });
+
   it('a Routine that keeps choosing both connectors still reaches a person', async () => {
     const routines = await airyn();
     const right = await connector(research, 'https://brain.example/mcp/factory');
