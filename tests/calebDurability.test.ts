@@ -490,5 +490,18 @@ describe("Caleb's account over simulated time", () => {
     expect(await state(b)).toBe('ENABLED');
     expect((await getRoutine(b.id))!.workerId).toBe(research);
   });
-});
 
+  it('a Routine bound to a connector that authorizes as another worker has the stale binding cleared, and only that one', async () => {
+    const { a, f3 } = await caleb();
+    const accountId = (await getRoutine(a.id))!.accountId;
+    const { ensureConnector, bindRoutineConnector } = await import('../server/repos/connectors.ts');
+    const { clearStaleConnectorBindings } = await import('../server/services/fleet/connectorBinding.ts');
+    const researchCnr = await ensureConnector({ accountId, resource: 'https://brain.example/mcp', workerId: research });
+    await bindRoutineConnector(a.id, researchCnr.id);
+    await bindRoutineConnector(f3.id, researchCnr.id); // the record an operator repoint left behind
+    expect(await clearStaleConnectorBindings()).toEqual([f3.id]);
+    expect((await getRoutine(f3.id))!.connectorId).toBeNull();
+    expect((await getRoutine(a.id))!.connectorId).toBe(researchCnr.id);
+    expect(await clearStaleConnectorBindings()).toEqual([]);
+  });
+});

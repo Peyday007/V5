@@ -506,6 +506,8 @@ export async function dispatchTick(
     lastConnectorReconcile = Date.now();
     try {
       await reconcileConnectorBindings();
+      const { clearStaleConnectorBindings } = await import('../fleet/connectorBinding.ts');
+      await clearStaleConnectorBindings();
     } catch {
       // Evidence, not a precondition. The next pass retries it.
     }
