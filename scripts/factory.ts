@@ -851,9 +851,7 @@ async function main(): Promise<void> {
       const { listBins, listDispatchesForBin } = await import('../server/repos/bins.ts');
       const now = new Date().toISOString();
       const snapshot = await fleetSnapshot(new Date(now));
-      const ready = (await listBins({ states: ['READY'], limit: 500 })).filter((bin) =>
-        bin.kind.startsWith('FACTORY_'),
-      );
+      const ready = await listBins({ states: ['READY'], kindPrefix: 'FACTORY_', limit: 500 });
       const bins = [];
       for (const bin of ready) {
         const dispatches = await listDispatchesForBin(bin.id);
