@@ -13,7 +13,7 @@ import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { forgetExecutionPolicies } from '../server/services/goals/policy.ts';
-import { readingProblem } from '../server/services/goals/acceptanceProbe.ts';
+import { readingProblem } from '../server/services/factory/program/release01/acceptanceProbe.ts';
 import { getProbe } from '../server/services/factory/program/probes.ts';
 
 const now = new Date();

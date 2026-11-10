@@ -21,11 +21,7 @@
 import { getDb } from '../../db/database.ts';
 import { totalsByKind } from '../../repos/cashLedger.ts';
 import { getProject } from '../../repos/projects.ts';
-// Registers the production probe r01.goal-02 wherever the goals are loaded; the probe imports this module back and only uses it at call time.
-import './goalConditionProbe.ts';
 import { GOAL_METRICS, type GoalMetric, type GoalTarget, type Workstream } from '../../domain/register.ts';
-// Registers the production probe r01.goal-02 wherever targets are read; the probe reaches this module only at call time.
-import './metricProbe.ts';
 
 export const GOAL_METRIC_LABEL: Record<GoalMetric, string> = {
   SETTLED_CASH: 'settled cash',

@@ -10,7 +10,7 @@ import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { pathwayOf, type PathFact } from '../server/services/goals/pathways.ts';
-import { factProblem, pathwayProblem } from '../server/services/goals/pathwaysProbe.ts';
+import { factProblem, pathwayProblem } from '../server/services/factory/program/release01/pathwaysProbe.ts';
 import { getProbe } from '../server/services/factory/program/probes.ts';
 import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 import type { CashOpportunity } from '../server/domain/types.ts';

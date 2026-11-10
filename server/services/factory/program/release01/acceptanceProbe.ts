@@ -20,9 +20,9 @@
  * Registered here because `probes.ts` is a protected path; `policy.ts` imports
  * this module so it is registered wherever the policy is resolved.
  */
-import { getDb } from '../../db/database.ts';
-import { registerProbe, type ProbeResult } from '../factory/program/probes.ts';
-import { executionPolicyForProject, forgetExecutionPolicies } from './policy.ts';
+import { getDb } from '../../../../db/database.ts';
+import type { ProbeResult } from '../probes.ts';
+import { executionPolicyForProject, forgetExecutionPolicies } from '../../../goals/policy.ts';
 
 export const GOAL_ACCEPTANCE_PROBE = 'r01.goal-09';
 
@@ -72,7 +72,7 @@ function parse(json: string | null): Record<string, unknown> | null {
 
 export async function goalAcceptanceHoldsOnRows(): Promise<ProbeResult> {
   const db = getDb();
-  const { RECOMMENDATION_POLICY } = await import('./plan.ts');
+  const { RECOMMENDATION_POLICY } = await import('../../../goals/plan.ts');
   forgetExecutionPolicies();
   const goals = await db.all<{ id: string; target_project_id: string }>(
     `SELECT id, target_project_id FROM workstreams
@@ -113,4 +113,4 @@ export async function goalAcceptanceHoldsOnRows(): Promise<ProbeResult> {
   };
 }
 
-registerProbe(GOAL_ACCEPTANCE_PROBE, goalAcceptanceHoldsOnRows);
+// Registered by the protected probes module (§97); a campaign never registers its own judge.

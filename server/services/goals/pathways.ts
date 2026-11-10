@@ -62,8 +62,6 @@ import type { GoalPortfolio } from './portfolio.ts';
 import type { TargetReading } from './target.ts';
 import type { ChainLink, ConsideredOpening } from './plan.ts';
 import type { GoalRoundOutcome, ResearchDiagnosis } from './researchYield.ts';
-// Registers the production probe r01.opp-04 wherever pathways load; the probe reaches this module only at call time.
-import './pathwaysProbe.ts';
 
 /**
  * How far a property is established. `DENIED` is a known answer: something is

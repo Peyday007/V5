@@ -28,7 +28,7 @@ async function goal(metric: string, amountCents: number, days = 30): Promise<str
 
 
 import { getProbe } from '../server/services/factory/program/probes.ts';
-import { GOAL_CONDITION_PROBE, goalConditionsHoldOnRows } from '../server/services/goals/goalConditionProbe.ts';
+import { GOAL_CONDITION_PROBE, goalConditionsHoldOnRows } from '../server/services/factory/program/release01/goalConditionProbe.ts';
 import '../server/services/goals/target.ts';
 
 describe('r01.goal-02 reads production rows (GOAL-02)', () => {

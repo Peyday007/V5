@@ -10,7 +10,7 @@ import { recordMoney } from '../server/repos/cashLedger.ts';
 import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { readTarget, setTarget } from '../server/services/goals/target.ts';
-import { metricProblem, type GoalRow } from '../server/services/goals/metricProbe.ts';
+import { metricProblem, type GoalRow } from '../server/services/factory/program/release01/metricProbe.ts';
 import { getProbe } from '../server/services/factory/program/probes.ts';
 
 const now = new Date();

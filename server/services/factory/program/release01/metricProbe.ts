@@ -16,9 +16,9 @@
  * demonstration (§39). Registered here because `probes.ts` is a protected path;
  * `target.ts` imports this module so it is registered wherever targets are read.
  */
-import { getDb } from '../../db/database.ts';
-import { registerProbe, type ProbeResult } from '../factory/program/probes.ts';
-import type { TargetReading } from './target.ts';
+import { getDb } from '../../../../db/database.ts';
+import type { ProbeResult } from '../probes.ts';
+import type { TargetReading } from '../../../goals/target.ts';
 import { goalConditionsHoldOnRows } from './goalConditionProbe.ts';
 
 export const GOAL_METRIC_PROBE = 'r01.goal-02';
@@ -64,9 +64,9 @@ export function metricProblem(goal: GoalRow, reading: TargetReading, raw: Record
 
 export async function goalMetricsHoldOnRows(): Promise<ProbeResult> {
   const db = getDb();
-  const { readTarget } = await import('./target.ts');
-  const { getWorkstream } = await import('../../repos/register.ts');
-  const { contributionFrom } = await import('../cash/money.ts');
+  const { readTarget } = await import('../../../goals/target.ts');
+  const { getWorkstream } = await import('../../../../repos/register.ts');
+  const { contributionFrom } = await import('../../../cash/money.ts');
   const now = new Date();
   const goals = await db.all<GoalRow>(
     `SELECT id, target_metric, target_amount_cents, target_currency, target_project_id, target_set_at, due_at FROM workstreams
@@ -118,4 +118,4 @@ export async function goalTwoHoldsOnRows(): Promise<ProbeResult> {
   return { ok: true, detail: `${metrics.detail}; ${conditions.detail}` };
 }
 
-registerProbe(GOAL_METRIC_PROBE, goalTwoHoldsOnRows);
+// Registered by the protected probes module (§97); a campaign never registers its own judge.

@@ -15,9 +15,9 @@
  * demonstration (§39). Registered here because `probes.ts` is a protected path;
  * `pathways.ts` imports this module so it is registered wherever pathways load.
  */
-import { getDb } from '../../db/database.ts';
-import { registerProbe, type ProbeResult } from '../factory/program/probes.ts';
-import type { PathFact, TransactionPathway } from './pathways.ts';
+import { getDb } from '../../../../db/database.ts';
+import type { ProbeResult } from '../probes.ts';
+import type { PathFact, TransactionPathway } from '../../../goals/pathways.ts';
 
 export const PATHWAYS_PROBE = 'r01.opp-04';
 
@@ -55,7 +55,7 @@ export function pathwayProblem(p: TransactionPathway): string | null {
 }
 
 export async function opportunityPathsMarkedOnRows(): Promise<ProbeResult> {
-  const { readGoalPlan } = await import('./plan.ts');
+  const { readGoalPlan } = await import('../../../goals/plan.ts');
   const goals = await getDb().all<{ id: string }>(
     `SELECT id FROM workstreams
       WHERE target_metric IS NOT NULL AND target_amount_cents IS NOT NULL AND due_at IS NOT NULL AND due_at > ?
@@ -88,4 +88,4 @@ export async function opportunityPathsMarkedOnRows(): Promise<ProbeResult> {
   };
 }
 
-registerProbe(PATHWAYS_PROBE, opportunityPathsMarkedOnRows);
+// Registered by the protected probes module (§97); a campaign never registers its own judge.

@@ -17,14 +17,14 @@
  * same name from two modules would let the later one silently replace the
  * earlier, so the check here would never be reached.
  */
-import type { ProbeResult } from '../factory/program/probes.ts';
+import type { ProbeResult } from '../probes.ts';
 
 export const GOAL_CONDITION_PROBE = 'r01.goal-02';
 
 export async function goalConditionsHoldOnRows(): Promise<ProbeResult> {
-  const { listWorkstreams } = await import('../../repos/register.ts');
-  const { totalsByKind } = await import('../../repos/cashLedger.ts');
-  const { readTarget, countedKinds } = await import('./target.ts');
+  const { listWorkstreams } = await import('../../../../repos/register.ts');
+  const { totalsByKind } = await import('../../../../repos/cashLedger.ts');
+  const { readTarget, countedKinds } = await import('../../../goals/target.ts');
   const goals = (await listWorkstreams()).filter((g) => g.target !== null);
   if (goals.length === 0) return { ok: false, detail: 'no goal carries a target: nothing to read a metric from on production records' };
   let settledGoals = 0;
