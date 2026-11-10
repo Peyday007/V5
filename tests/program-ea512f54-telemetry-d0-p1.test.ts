@@ -15,7 +15,7 @@ import {
 
 const LISTED = [
   'jobs', 'claimsAccepted', 'claimsRejected', 'usefulClaims', 'auditCompletion', 'readableSources',
-  'openingsFiled', 'actionableOpenings', 'mechanismDiversity', 'usableOffers', 'salesAndReceipts',
+  'openingsFiled', 'actionableOpenings', 'mechanismDiversity', 'constructedVariants', 'usableOffers', 'salesAndReceipts',
   'queue', 'utilization', 'idleTime', 'retries', 'providerFailure', 'providerQuota', 'cost',
   'improvementPrOutcomes',
 ];
