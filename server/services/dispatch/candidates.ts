@@ -577,6 +577,11 @@ export interface FleetSnapshot {
  * slot's compare-and-swap and the provider's own refusals all still bound the
  * other direction.
  */
+/** The unproductive-starts bucket a Routine's fires are judged in: its account, per family. */
+export function productivityKey(routine: { accountId: string; capabilities: readonly string[] }): string {
+  return routine.capabilities.includes('repository') ? `${routine.accountId}#factory` : routine.accountId;
+}
+
 export async function inFlightByRoutine(nowMs: number): Promise<Map<string, number>> {
   const since = new Date(nowMs - IN_FLIGHT_WINDOW_MS).toISOString();
   const now = new Date(nowMs).toISOString();
@@ -722,9 +727,16 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
 
   const accountById = new Map<string, FleetAccount>(accounts.map((a) => [a.id, a]));
   // Both read defensively: an unreadable count routes as it always did.
+  /*
+   * Judged per account *and family*. Production 2026-11-10: research sessions on
+   * an account that also hosts the Factory surface ended with nothing to claim,
+   * and three Factory bins waited on ACCOUNT_SESSIONS_UNPRODUCTIVE although no
+   * Factory session there had been unproductive. A research start that found no
+   * research is not evidence about the Factory surface beside it.
+   */
   const productivity = await productivityByAccount(
     now.getTime(),
-    new Map(routines.map((routine) => [routine.id, routine.accountId])),
+    new Map(routines.map((routine) => [routine.id, productivityKey(routine)])),
   ).catch(() => new Map<string, AccountProductivity>());
   const networkBlocked = await networkBlockedRoutines(now.getTime()).catch(() => new Set<string>());
   const perAccount = new Map<string, number>();
@@ -798,7 +810,7 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
       accountInFlight: perAccount.get(account.id) ?? 0,
       routineTarget: routinePolicy ? effectiveTarget(routinePolicy, nowIso).target : null,
       accountTarget: accountPolicy ? effectiveTarget(accountPolicy, nowIso).target : null,
-      accountUnproductiveStarts: productivity.get(account.id)?.unproductive ?? 0,
+      accountUnproductiveStarts: productivity.get(productivityKey(routine))?.unproductive ?? 0,
       accountUnproductiveLimit: UNPRODUCTIVE_STARTS_THRESHOLD,
       allowanceReport: allowanceReports.get(account.id) ?? null,
     });
