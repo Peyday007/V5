@@ -378,6 +378,9 @@ export function widenScope(scope: string[]): string[] {
     const parent = entry.includes('/') ? entry.slice(0, entry.lastIndexOf('/')) : '';
     const wider = entry.includes('*') || !/\.[a-z]+$/i.test(entry) || !parent.includes('/') ? entry : `${parent}/**`;
     out.add(reachesProtected(wider) ? entry : wider);
+    // The exact file stays named too: a repair is anchored only to a file the scope names
+    // exactly, and a person's grant must survive the next widening (production 2026-11-10).
+    if (wider !== entry && !entry.includes('*')) out.add(entry);
   }
   return [...out].sort();
 }
