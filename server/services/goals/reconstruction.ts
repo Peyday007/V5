@@ -538,12 +538,17 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
     (floor ? ` If the new campaign does no better than the measured record, it reaches ${pct(floor.reach)} (p50 ${money(floor.settledP50)}).` : '') +
     (requiredReply !== null ? ` It needs a reply rate of about ${pct(requiredReply)} to reach ${pct(input.required)}; the first sends measure that.` : ' No reply rate up to 15% reaches the requirement on its own.');
   confidenceStatement.value += robustness;
-  const limitation =
-    best.reach >= input.required && best.basis === 'PROBABILITY'
-      ? null
-      : structural
-        ? `Structural: with every input of the openings held at its favourable end the plan reaches ${pct(headroom.reach)}, short of ${pct(input.required)}. More capacity or better estimates cannot close that; it needs openings with larger or faster demand, or a channel where buyers already ask.`
-        : `${binding ? `${binding.factor} binds (moving it alone lifts reach by ${pct(binding.liftReach)})` : 'nothing binds alone'}; the strongest reconstruction reaches ${pct(best.reach)} and rests on ${assumed.length} assumption(s) that only selling can measure.`;
+  const changedDims = [...new Set(best.changes.map((c) => c.dimension.toLowerCase().replace('_', ' ')))];
+  const parts: string[] = [];
+  if (structural) parts.push(`For the openings as held, even every estimate at its favourable end reaches ${pct(headroom.reach)}: better estimates or more capacity cannot close the gap.`);
+  else if (binding) parts.push(`${binding.factor} binds (moving it alone lifts reach by ${pct(binding.liftReach)}).`);
+  if (best !== baseline && best.reach > baseline.reach + MATERIAL_REACH) {
+    parts.push(`Changing ${changedDims.join(', ')} reaches ${pct(best.reach)} of the worlds tested, resting on ${assumed.length} assumption(s) that only selling can measure.`);
+  } else parts.push('No change tried improves the plan materially.');
+  if (best.reach < input.required || best.basis !== 'PROBABILITY' || assumed.length > 0) {
+    parts.push(structural ? 'A defensible plan needs openings with larger or faster demand, or a channel where buyers already ask, and the assumptions measured by selling.' : 'A defensible plan needs those assumptions measured by selling.');
+  }
+  const limitation = best.reach >= input.required && best.basis === 'PROBABILITY' && assumed.length === 0 ? null : parts.join(' ');
   const ticket = Math.max(250, Math.round(limits.remaining / 20 / 50) * 50);
   // Coverage that reaches the requirement is still not a plan anybody can rely on: keep asking the world.
   const searchBrief =
