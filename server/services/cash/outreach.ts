@@ -22,6 +22,12 @@
  */
 import type { CashOpportunity } from '../../domain/types.ts';
 import { ADDRESS } from './providers/config.ts';
+// The outreach owner registers the production probe r01.com-13-3. funnel.ts has
+// no importer in the released server, so registering it only there left the
+// probe absent wherever the program coordinator runs it, and the check answered
+// UNKNOWN. This module is on the server's boot graph (routes → cash/view →
+// record → perform → outreach); the probe's graph does not reach back here.
+import './outreachFunnelProbe.ts';
 
 export type BuyerMessage =
   | { ok: true; to: string; subject: string; text: string }
