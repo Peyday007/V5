@@ -11,10 +11,13 @@
  * settled-cash goal, the answer is a failure — "nothing to look at" is not a
  * demonstration (§39) — never a pass.
  *
- * Registered here, and imported by target.ts, so it exists wherever the goals
- * are loaded; the probe imports target.ts back and only at call time.
+ * This module does not register a probe. `r01.goal-02` has exactly one owner,
+ * metricProbe.ts, which runs this check (the stricter settled-cash clauses)
+ * and then its own ledger cross-check under that one name; registering the
+ * same name from two modules would let the later one silently replace the
+ * earlier, so the check here would never be reached.
  */
-import { registerProbe, type ProbeResult } from '../factory/program/probes.ts';
+import type { ProbeResult } from '../factory/program/probes.ts';
 
 export const GOAL_CONDITION_PROBE = 'r01.goal-02';
 
@@ -51,5 +54,3 @@ export async function goalConditionsHoldOnRows(): Promise<ProbeResult> {
     detail: `${goals.length} targeted goal(s) each read the metric they stored (${[...metrics].join(', ')}); ${settledGoals} settled-cash goal(s) count exactly settlements less refunds; ${withDeadline} carry their own deadline`,
   };
 }
-
-registerProbe(GOAL_CONDITION_PROBE, goalConditionsHoldOnRows);
