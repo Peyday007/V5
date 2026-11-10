@@ -236,6 +236,9 @@ async function grouped(sql: string, params: unknown[]): Promise<Array<{ key: str
   return rows.map((row) => ({ key: row.k ?? '(none)', count: n(row.n) })).sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
 }
 
+/** A constructed arrangement's round: `openConstructedRound` names its bucket `goal-<goalId>-mx-<key>` (§81). */
+const CONSTRUCTED_BUCKET_LIKE = 'goal-%-mx-%';
+
 const LANE = `event_type = 'FREE_LANE_ITEM' AND at >= ? AND at < ?`;
 
 /**
@@ -403,7 +406,41 @@ const MEASURES: readonly Measure[] = [
         numerator: groups.length,
         denominator: groups.reduce((sum, g) => sum + g.count, 0),
         groups,
-        note: 'variety of mechanism among filed openings; the count of constructed variants is not recorded as its own row, so it is not claimed',
+        note: 'variety of mechanism among filed openings; the variants Brain constructed itself are counted by constructedVariants',
+      };
+    },
+  },
+  {
+    /*
+     * A constructed arrangement (§81-83) is asked through `openConstructedRound`,
+     * which records it as an ordinary discovery round whose bucket id is
+     * `goal-<goalId>-mx-<key>`: the key is the arrangement's design, so one
+     * bucket id is one constructed variant and each further round re-asks it.
+     */
+    measure: 'constructedVariants',
+    label: 'constructed variants: rounds asking an arrangement Brain composed itself, by state',
+    denominatorIs: 'discovery rounds opened in the window, constructed or not',
+    read: async (since, until) => {
+      const groups = await grouped(
+        `SELECT state AS k, COUNT(*) AS n FROM cash_discovery_rounds
+          WHERE opened_at >= ? AND opened_at < ? AND bucket_id LIKE '${CONSTRUCTED_BUCKET_LIKE}' GROUP BY state`,
+        [since, until],
+      );
+      const distinct = await one(
+        `SELECT COUNT(DISTINCT bucket_id) AS n FROM cash_discovery_rounds
+          WHERE opened_at >= ? AND opened_at < ? AND bucket_id LIKE '${CONSTRUCTED_BUCKET_LIKE}'`,
+        [since, until],
+      );
+      const found = await one(
+        `SELECT COUNT(*) AS n FROM cash_discovery_rounds
+          WHERE opened_at >= ? AND opened_at < ? AND bucket_id LIKE '${CONSTRUCTED_BUCKET_LIKE}' AND found > 0`,
+        [since, until],
+      );
+      return {
+        numerator: groups.reduce((sum, g) => sum + g.count, 0),
+        denominator: await one(`SELECT COUNT(*) AS n FROM cash_discovery_rounds WHERE opened_at >= ? AND opened_at < ?`, [since, until]),
+        groups,
+        note: `${distinct} distinct constructed variant(s) asked; ${found} round(s) found at least one opening`,
       };
     },
   },
