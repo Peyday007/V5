@@ -82,8 +82,17 @@ class Line implements ProgramPorts {
     const live = this.live.has(changeRequestId);
     return { changeRequestId, campaignId: admitted ? `fc:${changeRequestId}` : null, outcome: admitted ? (live ? 'LIVE' : 'BUILDING') : null, delivered: live, needsPerson: false, blocker: null };
   }
+  /** Requirement keys whose behavior production shows; null means every check passes. */
+  holding: Set<string> | null = null;
   async verify(checks: RequirementCheck[]) {
-    return { revision: 'rev1', checks: checks.map((c) => ({ check: c.kind, ok: true, detail: 'ok' })) };
+    return {
+      revision: 'rev1',
+      checks: checks.map((c) => {
+        const key = c.kind === 'BUNDLE_TEXT' ? c.text.replace('marker:', '') : '';
+        const ok = this.holding === null || this.holding.has(key);
+        return { check: c.kind, ok, detail: ok ? 'ok' : 'missing' };
+      }),
+    };
   }
   revision() {
     return 'rev1';
@@ -169,6 +178,7 @@ describe('a program scheduled by priority, with prepared capabilities', () => {
   it('queues the most urgent first with its priority and keeps a prepared capability out of the line', async () => {
     const programId = await submitAndApprove();
     const line = new Line();
+    line.holding = new Set();
     const report = await tickProgram(programId, line);
     expect(report.queued).toEqual(['cash-d0-p0', 'feeds-d0-p1']);
     expect(line.priorityOf('cash-d0-p0')).toBe(2);
@@ -328,5 +338,23 @@ describe('a campaign is told its probes are not its own to write', () => {
     await tickProgram(programId, line);
     expect(seen.length).toBeGreaterThan(0);
     for (const s of seen) expect(s.objective).toMatch(/defined by the program owner, never by this campaign/);
+  });
+});
+
+describe('production evidence decides whatever route the code took', () => {
+  it('verifies a requirement whose campaign never finished once production shows it, and records nothing for one that does not hold', async () => {
+    const programId = await submitAndApprove();
+    const line = new Line();
+    line.holding = new Set(['FEEDS']);
+    const report = await tickProgram(programId, line);
+    expect(report.verified).toEqual([{ requirement: 'FEEDS', outcome: 'PASS' }]);
+    const reading = await readProgram(programId, line);
+    expect(reading.requirements.find((r) => r.key === 'FEEDS')!.status).toBe('PRODUCTION_VERIFIED');
+    expect(reading.requirements.find((r) => r.key === 'CASH')!.status).toBe('MAPPED');
+    // No failure was recorded for unbuilt work, so no repair is opened for it.
+    expect(report.repairs).toEqual([]);
+    // Asked once per revision.
+    const again = await tickProgram(programId, line);
+    expect(again.verified.filter((v) => v.requirement === 'CASH')).toEqual([]);
   });
 });
