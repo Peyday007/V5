@@ -40,7 +40,7 @@ import {
 import { checkIn, requestCompletion, submitUnit } from '../server/services/bins/service.ts';
 import { UNIT_TRANSFORMS } from '../server/services/bins/contracts.ts';
 import { forgetRoutingHealth } from '../server/services/fleet/connectorHealth.ts';
-import { quarantineWrongWorkerSurfaces, WRONG_WORKER_GRACE_MS } from '../server/services/fleet/arrivalIdentity.ts';
+import { adoptSwitchedIdentities, quarantineWrongWorkerSurfaces, WRONG_WORKER_GRACE_MS } from '../server/services/fleet/arrivalIdentity.ts';
 import {
   autoProbeQuarantinedSurfaces,
   autoRecoveryExhausted,
@@ -396,4 +396,99 @@ describe("Caleb's account over simulated time", () => {
     expect(started).toBe(0);
     expect(await autoRecoveryExhausted()).toEqual([]);
   });
+
+  it('Factory surface 3, its daily budget spent weeks ago: Caleb adding the Factory Brain connector is itself the signal that gets it probed and lifted', async () => {
+    const { f3 } = await caleb();
+    const researchConn = await connector(research, 'https://brain.example/mcp');
+    await fire(f3, 'f3_wrong_long_ago');
+    await arriveAndWork(research, researchConn, 'f3_wrong_long_ago');
+    at(clock + WRONG_WORKER_GRACE_MS + 60_000);
+    await judge();
+    expect(await state(f3)).toBe('QUARANTINED');
+    // Every probe for three weeks arrives as worker-04: the fast and the daily budgets are spent.
+    expect((await recoveryLoop(30 * DAY, (rid) => (rid === f3.id ? { workerId: research, c: researchConn } : null))).length).toBeGreaterThanOrEqual(18);
+    expect(await state(f3)).toBe('QUARANTINED');
+    // Past every budget only the weekly fallback is left: the next probe is days away.
+    await recoveryLoop(8 * DAY, () => null);
+    expect(Date.parse((await nextAutoProbeAt(f3.id))!)).toBeGreaterThan(clock + 2 * HOUR);
+
+    // Caleb adds the Factory Brain connector in Claude and selects it in the Routine.
+    // He tells nobody, and nobody presses anything.
+    const calebFactory = await connector(factory, 'https://brain.example/mcp/factory');
+    const after = await recoveryLoop(2 * HOUR, (rid) => (rid === f3.id ? { workerId: factory, c: calebFactory } : null));
+    expect(after.filter((p) => p.routineId === f3.id).map((p) => p.state)).toEqual(['HEALTHY']);
+    expect(await state(f3)).toBe('ENABLED');
+    expect((await getRoutine(f3.id))!.workerId).toBe(factory);
+  });
+
+  it('a quarantine whose every budget is spent is still asked once a week, without any signal', async () => {
+    const { f3 } = await caleb();
+    const researchConn = await connector(research, 'https://brain.example/mcp');
+    await fire(f3, 'f3_wrong');
+    await arriveAndWork(research, researchConn, 'f3_wrong');
+    at(clock + WRONG_WORKER_GRACE_MS + 60_000);
+    await judge();
+    expect((await recoveryLoop(30 * DAY, (rid) => (rid === f3.id ? { workerId: research, c: researchConn } : null))).length).toBeGreaterThanOrEqual(18);
+    const weeks = await recoveryLoop(21 * DAY, () => null);
+    expect(weeks.filter((p) => p.routineId === f3.id).length).toBe(3);
+  });
+
+  it('Caleb switches research Routine 3-A to the Factory Brain connector: Brain adopts the Factory identity and serves the Routine, never quarantining it', async () => {
+    const { a } = await caleb();
+    const researchConn = await connector(research, 'https://brain.example/mcp');
+    at(clock + HOUR);
+    await fire(a, 'a_before');
+    expect(await arriveAndWork(research, researchConn, 'a_before')).toBe(true);
+
+    const calebFactory = await connector(factory, 'https://brain.example/mcp/factory');
+    at(clock + HOUR);
+    await fire(a, 'a_switched');
+    expect(await arriveAndWork(factory, calebFactory, 'a_switched')).toBe(false); // WRONG_CONNECTOR this once
+    at(clock + WRONG_WORKER_GRACE_MS + 60_000);
+    const decisions = await adoptSwitchedIdentities(clock);
+    expect(decisions.map((d) => [d.routineId, d.adopted])).toEqual([[a.id, true]]);
+    await judge();
+    const adopted = (await getRoutine(a.id))!;
+    expect(adopted.state).toBe('ENABLED');
+    expect(adopted.workerId).toBe(factory);
+    const audit = await getDb().get<{ actor_id: string }>(
+      `SELECT actor_id FROM identity_events WHERE action = 'REPOINT_ROUTINE_WORKER' AND target_id = ?`,
+      [a.id],
+    );
+    expect(audit?.actor_id).toBe('brain:arrival-adoption');
+
+    // The verification: its next fired session arrives as the adopted worker and is given work.
+    at(clock + HOUR);
+    await fire(a, 'a_after');
+    expect(await arriveAndWork(factory, calebFactory, 'a_after')).toBe(true);
+    expect(await state(a)).toBe('ENABLED');
+  });
+
+  it('adoption is refused — and the quarantine applies — when the Routine picks between both connectors, or when the switch would reverse an adoption', async () => {
+    const { a, b } = await caleb();
+    const researchConn = await connector(research, 'https://brain.example/mcp');
+    const calebFactory = await connector(factory, 'https://brain.example/mcp/factory');
+    // 3-B's one session checks in through both connectors.
+    await fire(b, 'b_both');
+    await arriveAndWork(factory, calebFactory, 'b_both');
+    await arriveAndWork(research, researchConn, 'b_both');
+    // 3-A switches once (adopted), then its sessions go back to the research connector.
+    await fire(a, 'a_switch');
+    await arriveAndWork(factory, calebFactory, 'a_switch');
+    at(clock + WRONG_WORKER_GRACE_MS + 60_000);
+    expect((await adoptSwitchedIdentities(clock)).filter((d) => d.adopted).map((d) => d.routineId)).toEqual([a.id]);
+    at(clock + HOUR);
+    await fire(a, 'a_back');
+    await arriveAndWork(research, researchConn, 'a_back');
+    at(clock + WRONG_WORKER_GRACE_MS + 60_000);
+    const second = await adoptSwitchedIdentities(clock);
+    const refusedA = second.find((d) => d.routineId === a.id)!;
+    expect(refusedA.adopted).toBe(false);
+    await judge();
+    expect(await state(a)).toBe('QUARANTINED');
+    expect((await getRoutine(a.id))!.workerId).toBe(factory);
+    expect(await state(b)).toBe('ENABLED');
+    expect((await getRoutine(b.id))!.workerId).toBe(research);
+  });
 });
+

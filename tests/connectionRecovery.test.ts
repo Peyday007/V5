@@ -405,7 +405,7 @@ describe('a quarantine Brain derived is probed again by Brain', () => {
     expect((await getRoutine(s.routineId))!.state).toBe('ENABLED');
   });
 
-  it('past its fast budget it names the account owner, keeps checking once a day, and then stops', async () => {
+  it('past its fast budget it names the account owner, keeps checking once a day, and then once a week indefinitely', async () => {
     const s = await surface('auto-dead', research);
     await setRoutineState({ routineId: s.routineId, from: 'ENABLED', to: 'QUARANTINED', reason: NO_SHOW_REASON });
     let n = 0;
@@ -438,14 +438,16 @@ describe('a quarantine Brain derived is probed again by Brain', () => {
     const last = (await getRecoveryProbe(started[started.length - 1]!))!;
     const next = await nextAutoProbeAt(s.routineId);
     expect(Date.parse(next!) - Date.parse(last.createdAt)).toBe(SLOW_PROBE_EVERY_MS);
-    // ...then daily, up to the slow bound, and never again after it.
+    // ...then daily, up to the slow bound, and after it still once a week
+    // (the spacing is measured in calebDurability.test.ts, on a clock the
+    // probe rows share): an owner's silent fix is still found.
     for (let i = 0; i < SLOW_PROBE_LIMIT; i += 1) {
       clock += 25 * 60 * 60_000;
       await probeOnce();
     }
-    expect(started).toHaveLength(SLOW_PROBE_LIMIT);
-    clock += 30 * 24 * 60 * 60_000;
-    expect(await autoProbeQuarantinedSurfaces({ force: true, fire, now: clock })).toBeNull();
+    expect(started.length).toBeGreaterThan(SLOW_PROBE_LIMIT);
+    clock += 8 * 24 * 60 * 60_000;
+    expect(await probeOnce()).not.toBeNull();
   });
 
   it('a daily check after the fast budget lifts a surface whose owner fixed it without telling anybody', async () => {
