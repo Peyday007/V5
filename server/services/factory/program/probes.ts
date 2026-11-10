@@ -211,41 +211,8 @@ define('r01.cap-16-3', async (args) => {
   return { ok, detail: `${hours}h: ${submitted} accepted of ${total} lane outcomes; ${Math.round(share * 100)}% provider failures` };
 });
 
-/**
- * COM-13-3: the outreach funnel for every targeted cash goal's project is
- * modelled from its own rows, each ranked mechanism's buyers are bounded by
- * the prospects it reached, and messages sent are never read as buyers. Until
- * the funnel model is deployed this answers FAIL with the reason, never PASS.
- */
-define('r01.com-13-3', async () => {
-  const funnel = (await import('../../cash/funnel.ts')) as unknown as Record<string, unknown>;
-  const mechanismsFromRows = funnel.mechanismsFromRows as ((projectId: string, evidence?: unknown) => Promise<unknown[]>) | undefined;
-  const outreachEvidenceFor = funnel.outreachEvidenceFor as ((projectId: string) => Promise<unknown>) | undefined;
-  const searchOutreachMix = funnel.searchOutreachMix as ((mechanisms: unknown[]) => {
-    ranked: Array<{ mode: string; messagesSent: number | null; reachedProspects: { high: number | null }; buyers: { high: number | null } }>;
-    unranked: unknown[];
-  }) | undefined;
-  if (!mechanismsFromRows || !outreachEvidenceFor || !searchOutreachMix) return { ok: false, detail: 'the outreach funnel model is not deployed in this Brain' };
-  const { listWorkstreams } = await import('../../../repos/register.ts');
-  const projects = [...new Set((await listWorkstreams()).map((g) => g.target?.projectId).filter((p): p is string => Boolean(p)))];
-  if (projects.length === 0) return { ok: false, detail: 'no targeted cash goal to model' };
-  let modelled = 0;
-  for (const projectId of projects) {
-    const mix = searchOutreachMix(await mechanismsFromRows(projectId, await outreachEvidenceFor(projectId)));
-    modelled += mix.ranked.length + mix.unranked.length;
-    for (const r of mix.ranked) {
-      if (r.buyers.high !== null && r.reachedProspects.high !== null && r.buyers.high > r.reachedProspects.high) {
-        return { ok: false, detail: `${r.mode}: more buyers (${r.buyers.high}) than prospects reached (${r.reachedProspects.high})` };
-      }
-      if (r.messagesSent !== null && r.messagesSent > 0 && r.buyers.high !== null && r.buyers.high >= r.messagesSent) {
-        return { ok: false, detail: `${r.mode}: buyers read as at least the messages sent` };
-      }
-    }
-  }
-  return modelled > 0
-    ? { ok: true, detail: `${modelled} outreach mechanism(s) modelled across ${projects.length} goal project(s); buyers bounded by reach` }
-    : { ok: false, detail: 'no outreach mechanism is recorded for any goal project' };
-});
+/** COM-13-3: adopted from the quant campaign (release01/outreachFunnelProbe.ts). */
+define('r01.com-13-3', async () => (await import('./release01/outreachFunnelProbe.ts')).outreachFunnelHoldsOnRows());
 
 /**
  * GOV-22-2: a prepared option is recorded cheaply and is never counted as a
