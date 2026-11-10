@@ -26,6 +26,8 @@ import type { CashCardFact, Standing } from '../../domain/types.ts';
 import { CASH_TIERS, cashTier, tierRank, type CashTier } from './tier.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
+import { listCapitalForProject, listConstraintsForProject } from '../../repos/industry.ts';
+import { countRoleEconomics, roleRecordFromRows, type RoleEconomics } from './exclusions.ts';
 
 export const FUNNEL_WEEKS = 8;
 
@@ -83,6 +85,14 @@ export interface FunnelReading {
     /** Settled cash in minor units, by currency. Unknown when nothing has settled. */
     settledByCurrency: Record<string, number> | null;
     byKind: Record<string, number>;
+    /**
+     * Settled cash that passed a role assessment before it was counted (COM-13-5). `settledByCurrency` is
+     * what the ledger holds; this is the part whose opening's role has a compliant position. The rest is
+     * held back, not excluded, and enters on a later reading once the record says the position exists.
+     */
+    countedByCurrency: Record<string, number> | null;
+    /** Openings with settled cash whose role is not yet compliant, with the reason. */
+    heldBack: Array<{ opportunityId: string; position: string; reason: string }>;
   };
 }
 
@@ -265,6 +275,37 @@ export async function cashFunnel(input: {
     [input.projectId],
   );
 
+  // Settled cash is counted only through a role assessment: each opening's role is read from its rows.
+  const settledByOpening = await db.all<{ opportunity_id: string; currency: string; total: number }>(
+    `SELECT opportunity_id, currency, SUM(amount_cents) AS total FROM cash_money_entries
+      WHERE project_id = ? AND kind = 'SETTLEMENT' AND opportunity_id IS NOT NULL
+      GROUP BY opportunity_id, currency`,
+    [input.projectId],
+  );
+  const [capitalRows, constraintRows] = await Promise.all([
+    listCapitalForProject(input.projectId),
+    listConstraintsForProject(input.projectId),
+  ]);
+  const roleRows: Array<RoleEconomics & { currency: string; opportunityId: string }> = settledByOpening.map((row) => ({
+    id: `${row.opportunity_id}|${row.currency}`,
+    opportunityId: row.opportunity_id,
+    currency: row.currency,
+    valueCents: Number(row.total),
+    role: roleRecordFromRows(
+      capitalRows.filter((c) => c.opportunityId === row.opportunity_id),
+      constraintRows.filter((c) => c.opportunityId === row.opportunity_id),
+    ),
+  }));
+  const counted = countRoleEconomics(roleRows);
+  const countedByCurrency: Record<string, number> = {};
+  for (const record of counted.assessments) {
+    const row = roleRows.find((r) => r.id === record.id)!;
+    countedByCurrency[row.currency] = (countedByCurrency[row.currency] ?? 0) + record.countedCents;
+  }
+  const heldBack = counted.assessments
+    .filter((a) => !a.assessment.countEconomics)
+    .map((a) => ({ opportunityId: roleRows.find((r) => r.id === a.id)!.opportunityId, position: a.assessment.position, reason: a.assessment.reason }));
+
   const qualifiedCount = qualifiedNow.length;
   return {
     window: { since, until, weeks: weeksCount },
@@ -306,6 +347,8 @@ export async function cashFunnel(input: {
           ? Object.fromEntries(settlements.map((row) => [row.currency, Number(row.total)]))
           : null,
       byKind,
+      countedByCurrency: settledByOpening.length > 0 ? countedByCurrency : null,
+      heldBack,
     },
   };
 }
@@ -366,5 +409,8 @@ export function formatFunnel(reading: FunnelReading): string[] {
         : Object.entries(o.settledByCurrency).map(([c, n]) => `${c} ${n}`).join(' ')) +
       ` kinds ${Object.entries(o.byKind).map(([k, n]) => `${k}=${n}`).join(' ') || '(none)'}`,
   );
+  if (o.heldBack.length > 0) {
+    lines.push(`  settled cash held back pending a compliant position: ${o.heldBack.map((h) => `${h.opportunityId}=${h.position}`).join(' ')}`);
+  }
   return lines;
 }
