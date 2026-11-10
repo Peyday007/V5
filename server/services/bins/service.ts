@@ -163,7 +163,17 @@ export type CheckInResult =
    * the database did not answer, or choosing ran past the check-in's time
    * budget. Not a refusal and not "no work": the caller asks again.
    */
-  | { assigned: false; reason: 'RETRY_LATER' };
+  | { assigned: false; reason: 'RETRY_LATER' }
+  /**
+   * The session Brain fired for one worker arrived through a connector that
+   * signs it in as another. A Routine holding two of a person's Brain
+   * connectors picks one per session; this one picked the other. Nothing is
+   * chosen for it here — the fire was for the registered worker — and it is
+   * told to check in again through its other connector, which makes the same
+   * session arrive right (`sessionAlsoArrivedRight`) instead of quarantining
+   * the surface for one wrong pick.
+   */
+  | { assigned: false; reason: 'WRONG_CONNECTOR' };
 
 /**
  * How long choosing work may take inside one check-in.
@@ -612,13 +622,17 @@ export async function checkIn(input: {
      */
     // Bounded: evidence must not spend the admission budget a session's work needs.
     let evidenceLost: InfraFailureKind | null = null;
+    let verdict: Awaited<ReturnType<typeof observeFiredSessionArrival>> | null = null;
     const evidence = asWorkload(() =>
       observeFiredSessionArrival({
         workerId: input.workerId,
         credentialId: input.principal.credentialId ?? null,
         sessionRef: input.sessionRef ?? null,
       }),
-    );
+    ).then((value) => {
+      verdict = value;
+      return value;
+    });
     // Abandoned past its budget, it finishes (or fails) in the background, observed.
     evidence.catch(() => undefined);
     try {
@@ -633,6 +647,10 @@ export async function checkIn(input: {
         noteInfraFailure(kind, 'check_in:arrival');
         evidenceLost = kind;
       }
+    }
+    // Fired for another worker: redirect rather than serve this identity's queue.
+    if ((verdict as Awaited<ReturnType<typeof observeFiredSessionArrival>> | null)?.kind === 'WRONG_WORKER') {
+      return { assigned: false, reason: 'WRONG_CONNECTOR' };
     }
     /*
      * The infrastructure failure is caught *inside* the workload scope (CON-7).

@@ -157,6 +157,21 @@ const checkInTool: McpTool = {
         projectId: null,
       };
     }
+    if (!result.assigned && result.reason === 'WRONG_CONNECTOR') {
+      return {
+        value: {
+          assigned: false,
+          reason: result.reason,
+          notify: false,
+          message:
+            'WRONG_CONNECTOR: this session was started for a different Brain worker than the connector you ' +
+            'just called signs in as. You have more than one Brain connector. Call brain_check_in again now, ' +
+            'with the same session_ref, through your OTHER Brain connector (for Factory work it is the one ' +
+            'whose address ends in /mcp/factory). Do not end the session and do not send a notification.',
+        },
+        projectId: null,
+      };
+    }
     if (!result.assigned) {
       return {
         value: {
