@@ -124,7 +124,12 @@ export function deriveOutcome(input: OutcomeInput): ObjectiveOutcome {
    * while 53 such requests sat open (docs/FACTORY-PERFORMANCE-2026-11-02.md).
    */
   const delivery = input.delivery ?? null;
-  if (delivery && (!run || !base.autoRelease)) {
+  // A release that ended without merging (refused, or failed at the gate for
+  // good) leaves the merge to a person — its own blocker says "release by hand" —
+  // and that merge is then read like any other (program fpg_2adb7f5e, 2026-11-10:
+  // links-d2 refused twice by flakes in the shared suite, never by its change).
+  const releaseEndedUnmerged = run !== null && !run.mergeSha && (run.state === 'REFUSED' || (run.state === 'FAILED' && !releaseRetryable(run)));
+  if (delivery && (!run || !base.autoRelease || releaseEndedUnmerged)) {
     if (delivery.state === 'CLOSED') {
       return make('CANCELLED', 'The pull request was closed without merging; nothing was delivered.');
     }

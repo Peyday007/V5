@@ -602,6 +602,21 @@ describe('the status a person reads', () => {
       blocker: 'no surface',
     });
   });
+
+  it('reads a hand merge after a release that ended unmerged, and only then', () => {
+    const complete = { ...campaign, state: 'COMPLETE', prUrl: `${REMOTE}/pull/77` } as FactoryCampaign;
+    const grantRow = { revokedAt: null, pagePath: '/build' } as ReleaseGrant;
+    const refused = { state: 'FAILED', headSha: HEAD, attempt: 2, mergeSha: null, failureStage: 'GATE', failureDetail: 'the release gate refused: the whole suite against Postgres failed on the merged tree' } as ReleaseRun;
+    const deployed = { state: 'MERGED', mergeSha: 'm'.repeat(40), deployed: true, revision: 'r'.repeat(40), via: null } as const;
+    expect(deriveOutcome({ campaign: complete, grant: grantRow, latestRun: refused, origin: null }).status).toBe('BLOCKED');
+    expect(deriveOutcome({ campaign: complete, grant: grantRow, latestRun: refused, origin: null, delivery: deployed }).status).toBe('LIVE');
+    expect(deriveOutcome({ campaign: complete, grant: grantRow, latestRun: refused, origin: null, delivery: { ...deployed, deployed: false } }).status).toBe('BLOCKED');
+    // A release still in its hands, or one that merged itself, is not overridden by the forge.
+    const retrying = { ...refused, attempt: 1 } as ReleaseRun;
+    expect(deriveOutcome({ campaign: complete, grant: grantRow, latestRun: retrying, origin: null, delivery: deployed }).status).toBe('RELEASING');
+    const failedAfterMerge = { ...refused, mergeSha: 'm'.repeat(40), failureStage: 'VERIFY' } as ReleaseRun;
+    expect(deriveOutcome({ campaign: complete, grant: grantRow, latestRun: failedAfterMerge, origin: null, delivery: deployed }).status).toBe('BLOCKED');
+  });
 });
 
 describe('the last moment a merge can be stopped', () => {
