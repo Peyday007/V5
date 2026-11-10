@@ -15,7 +15,7 @@
  */
 import { getDb } from '../../db/database.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
-import { createProject, getProject, listProjects } from '../../repos/projects.ts';
+import { createProject, getProject, getProjectBySlug, listProjects } from '../../repos/projects.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { newId, nowIso, parseJson, toJson } from '../../repos/util.ts';
 import { tokens } from './classify.ts';
@@ -234,7 +234,7 @@ export async function reevaluate(ownerId: string, now = nowIso()): Promise<{ sur
       kind: 'NEW_RELATED_DISCUSSION',
       ref: r.conversation_id,
       why: `A conversation from ${monthYear(r.said_at)} came back to this.`,
-      boost: 0.3,
+      boost: 1.0,
     });
   }
 
@@ -258,9 +258,9 @@ export async function reevaluate(ownerId: string, now = nowIso()): Promise<{ sur
         const unblocks = removes.some((o) => obstacles.includes(o)) && (c.kind !== 'CAPABILITY' || overlap >= 1);
         const relates = overlap >= 2;
         if (unblocks) {
-          put(idea.id, { kind: 'CIRCUMSTANCE', ref: c.id, why: `${c.statement} This idea stalled on exactly that.`, boost: 0.6 });
+          put(idea.id, { kind: 'CIRCUMSTANCE', ref: c.id, why: `${c.statement} This idea stalled on exactly that.`, boost: 1.5 });
         } else if (relates && (c.kind === 'PRIORITY' || c.kind === 'OPPORTUNITY')) {
-          put(idea.id, { kind: 'CIRCUMSTANCE', ref: c.id, why: `${c.statement} This older idea is about the same thing.`, boost: 0.35 });
+          put(idea.id, { kind: 'CIRCUMSTANCE', ref: c.id, why: `${c.statement} This older idea is about the same thing.`, boost: 1.0 });
         }
       }
       await db.run('UPDATE memory_circumstances SET applied_at = ? WHERE id = ?', [now, c.id]);
@@ -270,7 +270,7 @@ export async function reevaluate(ownerId: string, now = nowIso()): Promise<{ sur
   // 3. Retire open discoveries the record has since settled.
   const retired = await db.run(
     `UPDATE memory_discoveries SET state = 'RETIRED', decided_at = ?
-      WHERE owner_user_id = ? AND state = 'OPEN'
+      WHERE owner_user_id = ? AND state IN ('OPEN','QUEUED')
         AND idea_id IN (SELECT id FROM memory_ideas WHERE owner_user_id = ? AND state IN ('COMPLETED','REJECTED'))`,
     [now, ownerId, ownerId],
   );
@@ -282,12 +282,22 @@ export async function reevaluate(ownerId: string, now = nowIso()): Promise<{ sur
 
 async function surface(ownerId: string, triggers: Map<string, Trigger>, now: string): Promise<number> {
   const db = getDb();
+  // Triggered findings that did not fit last time wait in QUEUED; they are
+  // candidates again now, with the reason they were queued for.
+  const queued = await db.all<{ idea_id: string; trigger_kind: TriggerKind; trigger_ref: string | null; why_now: string }>(
+    `SELECT idea_id, trigger_kind, trigger_ref, why_now FROM memory_discoveries WHERE owner_user_id = ? AND state = 'QUEUED'`,
+    [ownerId],
+  );
+  for (const q of queued) {
+    if (!triggers.has(q.idea_id)) {
+      triggers.set(q.idea_id, { kind: q.trigger_kind, ref: q.trigger_ref, why: q.why_now, boost: q.trigger_kind === 'CIRCUMSTANCE' ? 1.2 : 1.0 });
+    }
+  }
   const open = await db.get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM memory_discoveries WHERE owner_user_id = ? AND state = 'OPEN'`,
     [ownerId],
   );
-  let room = Math.min(MAX_NEW_PER_PASS, MAX_OPEN_DISCOVERIES - Number(open?.n ?? 0));
-  if (room <= 0) return 0;
+  let openCount = Number(open?.n ?? 0);
 
   const learned = await learnedWeights(ownerId);
   const ideas = await db.all<IdeaForScoring & { last_decision: string | null; last_decided_at: string | null; has_open: number }>(
@@ -333,21 +343,63 @@ async function surface(ownerId: string, triggers: Map<string, Trigger>, now: str
   }
   scored.sort((a, b) => b.score - a.score);
 
+  // Quiet reminders are rationed per pass and fill only spare room. A finding
+  // something triggered is never dropped: it takes spare room, displaces a
+  // weaker quiet reminder, or waits in QUEUED for the next free place.
   let surfaced = 0;
+  let quietAdded = 0;
   for (const entry of scored) {
-    if (room <= 0) break;
-    const id = newId('mds');
-    const r = await db.run(
-      `INSERT INTO memory_discoveries (id, owner_user_id, idea_id, state, score, why_matters, why_now, trigger_kind, trigger_ref, surfaced_at)
-       VALUES (?, ?, ?, 'OPEN', ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (idea_id) WHERE state = 'OPEN' DO NOTHING`,
-      [id, ownerId, entry.idea.id, entry.score, whyMatters(entry.idea), entry.trigger.why, entry.trigger.kind, entry.trigger.ref, now],
-    );
-    if (Number(r.changes) > 0) {
-      surfaced += 1;
-      room -= 1;
-      await recordMemoryEvent(ownerId, 'DISCOVERY', id, 'DISCOVERY_SURFACED', { ideaId: entry.idea.id, trigger: entry.trigger.kind });
+    const triggered = entry.trigger.kind !== 'UNRESOLVED_AND_QUIET';
+    if (!triggered && quietAdded >= MAX_NEW_PER_PASS) continue;
+    if (openCount >= MAX_OPEN_DISCOVERIES && triggered) {
+      const weakest = await db.get<{ id: string; score: number }>(
+        `SELECT id, score FROM memory_discoveries WHERE owner_user_id = ? AND state = 'OPEN' AND trigger_kind = 'UNRESOLVED_AND_QUIET'
+          ORDER BY score LIMIT 1`,
+        [ownerId],
+      );
+      if (weakest && Number(weakest.score) < entry.score) {
+        await db.run(`UPDATE memory_discoveries SET state = 'RETIRED', decided_at = ? WHERE id = ?`, [now, weakest.id]);
+        await recordMemoryEvent(ownerId, 'DISCOVERY', weakest.id, 'DISCOVERY_DISPLACED', { by: entry.idea.id });
+        openCount -= 1;
+      }
     }
+    if (openCount >= MAX_OPEN_DISCOVERIES) {
+      if (triggered) {
+        await db.run(
+          `INSERT INTO memory_discoveries (id, owner_user_id, idea_id, state, score, why_matters, why_now, trigger_kind, trigger_ref, surfaced_at)
+           VALUES (?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (idea_id) WHERE state = 'QUEUED' DO NOTHING`,
+          [newId('mds'), ownerId, entry.idea.id, entry.score, whyMatters(entry.idea), entry.trigger.why, entry.trigger.kind, entry.trigger.ref, now],
+        );
+      }
+      continue;
+    }
+    const waiting = await db.get<{ id: string }>(
+      `SELECT id FROM memory_discoveries WHERE idea_id = ? AND state = 'QUEUED'`,
+      [entry.idea.id],
+    );
+    let id: string;
+    if (waiting) {
+      id = waiting.id;
+      await db.run(
+        `UPDATE memory_discoveries SET state = 'OPEN', score = ?, why_matters = ?, why_now = ?, trigger_kind = ?, trigger_ref = ?, surfaced_at = ?
+          WHERE id = ?`,
+        [entry.score, whyMatters(entry.idea), entry.trigger.why, entry.trigger.kind, entry.trigger.ref, now, id],
+      );
+    } else {
+      id = newId('mds');
+      const r = await db.run(
+        `INSERT INTO memory_discoveries (id, owner_user_id, idea_id, state, score, why_matters, why_now, trigger_kind, trigger_ref, surfaced_at)
+         VALUES (?, ?, ?, 'OPEN', ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (idea_id) WHERE state = 'OPEN' DO NOTHING`,
+        [id, ownerId, entry.idea.id, entry.score, whyMatters(entry.idea), entry.trigger.why, entry.trigger.kind, entry.trigger.ref, now],
+      );
+      if (Number(r.changes) === 0) continue;
+    }
+    surfaced += 1;
+    openCount += 1;
+    if (!triggered) quietAdded += 1;
+    await recordMemoryEvent(ownerId, 'DISCOVERY', id, 'DISCOVERY_SURFACED', { ideaId: entry.idea.id, trigger: entry.trigger.kind });
   }
   return surfaced;
 }
@@ -399,6 +451,16 @@ export function gamePlanFor(idea: Pick<IdeaRow, 'title' | 'statement' | 'owner_i
   return steps;
 }
 
+/** A slug no project holds yet: a second section from one idea is a branch, not a collision. */
+export async function freeSlug(name: string): Promise<string> {
+  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'rediscovered';
+  for (let n = 1; n < 1000; n += 1) {
+    const slug = n === 1 ? base : `${base}-${n}`;
+    if (!(await getProjectBySlug(slug))) return slug;
+  }
+  return `${base}-${Date.now()}`;
+}
+
 async function defaultProjectFor(ownerId: string): Promise<string | null> {
   const projects = (await listProjects()).filter((p) => p.status === 'ACTIVE');
   // An explicit "Historical memory" project, if the person made one; else the
@@ -419,6 +481,8 @@ export async function decide(input: {
   feedback?: string | null;
   projectId?: string | null;
   wantedNow?: string | null;
+  /** Branch: a further project or idea from the same origin, keeping the first. */
+  branch?: boolean;
 }): Promise<DecisionResult> {
   const db = getDb();
   const idea = await db.get<IdeaRow>('SELECT * FROM memory_ideas WHERE id = ? AND owner_user_id = ?', [input.ideaId, input.ownerId]);
@@ -449,7 +513,8 @@ export async function decide(input: {
         feedback ? `\nInstruction from the owner: ${feedback}` : '',
         nextActions ? `\nDraft plan:\n${nextActions.map((s, i) => `${i + 1}. ${s}`).join('\n')}` : '',
       ].join('\n');
-      if (!idea.candidate_id) {
+      const sameTarget = !input.projectId || input.projectId === idea.project_id;
+      if (!idea.candidate_id || input.branch || !sameTarget) {
         const candidate = await createCandidate({
           title: (ownerIntent ?? idea.title).slice(0, 200),
           statement,
@@ -457,7 +522,7 @@ export async function decide(input: {
           visibility: 'PRIVATE',
         });
         created = { kind: 'CANDIDATE', id: candidate.id, projectId };
-        await db.run('UPDATE memory_ideas SET candidate_id = ?, project_id = COALESCE(project_id, ?) WHERE id = ?', [candidate.id, projectId, idea.id]);
+        await db.run('UPDATE memory_ideas SET candidate_id = COALESCE(candidate_id, ?), project_id = COALESCE(project_id, ?) WHERE id = ?', [candidate.id, projectId, idea.id]);
         await linkIdeas(idea.id, 'CANDIDATE', candidate.id, 'PROMOTED_TO', `Owner chose ${input.decision}.`);
         if (projectId) {
           await recordEvent({
@@ -475,10 +540,12 @@ export async function decide(input: {
     }
     case 'CREATE_SECTION': {
       ownerState = 'ACTIVE';
-      let projectId = idea.project_id;
+      let projectId = input.branch ? null : idea.project_id;
       if (!projectId || !(await getProject(projectId))) {
+        const name = (ownerIntent ?? idea.title).slice(0, 120);
         const project = await createProject({
-          name: (ownerIntent ?? idea.title).slice(0, 120),
+          name,
+          slug: await freeSlug(name),
           description: `Rediscovered from your conversation history.\n\n${history}`.slice(0, 4000),
           northStar: ownerIntent ?? idea.title,
         });
@@ -492,7 +559,7 @@ export async function decide(input: {
         });
       }
       created = { kind: 'PROJECT', id: projectId, projectId };
-      await db.run('UPDATE memory_ideas SET project_id = ? WHERE id = ?', [projectId, idea.id]);
+      await db.run('UPDATE memory_ideas SET project_id = COALESCE(project_id, ?) WHERE id = ?', [projectId, idea.id]);
       await linkIdeas(idea.id, 'PROJECT', projectId, 'PROMOTED_TO', 'Owner created a dedicated section.');
       break;
     }
@@ -540,6 +607,9 @@ export async function decide(input: {
       `INSERT INTO memory_idea_versions (idea_id, version, snapshot, reason, created_at) VALUES (?, ?, ?, ?, ?)`,
       [idea.id, version, toJson({ state, ownerIntent, decision: input.decision, feedback, created }), `You chose ${input.decision}.`, at],
     );
+    if (input.decision !== 'FEEDBACK') {
+      await db.run(`UPDATE memory_discoveries SET state = 'RETIRED', decided_at = ? WHERE idea_id = ? AND state = 'QUEUED'`, [at, idea.id]);
+    }
     if (discovery && input.decision !== 'FEEDBACK') {
       await db.run(
         `UPDATE memory_discoveries SET state = 'DECIDED', decided_at = ?, decision = ? WHERE id = ?`,

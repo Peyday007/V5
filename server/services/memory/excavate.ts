@@ -34,7 +34,8 @@ const INTENT_WORDS = new Set(
   'build create write launch open plan plans planning goal goals dream dreams someday hope hoping become start starting ' +
     'eventually decided decide deciding committed commit serious trying try aim aiming intend wanna gonna really definitely ' +
     'finally actually also maybe should could would just own whole life always wanted thinking idea concept project app ' +
-    'business company money make made doing done next first step steps lot little bit big huge kind sort'.split(/\s+/),
+    'business company money make made doing done next first step steps lot little bit big huge kind sort ' +
+    'instead actually rather finished finish completed complete started launched shipped wrote going'.split(/\s+/),
 );
 
 /** The subject words of an intention, in the order said. Exported for tests. */
@@ -45,26 +46,46 @@ export function signatureOf(sentence: string): string[] {
     if (INTENT_WORDS.has(word) || seen.has(word)) continue;
     seen.add(word);
     out.push(word);
-    if (out.length >= 6) break;
+    if (out.length >= 8) break;
   }
   return out;
 }
 
-/** Whether two signatures name the same idea. */
-export function sameIdea(a: readonly string[], b: readonly string[]): boolean {
-  if (a.length === 0 || b.length === 0) return false;
+/**
+ * How alike two signatures are, 0..1: Jaccard, or — when at least three
+ * subject words are shared and they make up most of the shorter one — that
+ * share. A passage that mentions another idea in passing shares a few words
+ * and not most of either, and stays apart.
+ */
+export function ideaSimilarity(a: readonly string[], b: readonly string[]): number {
+  if (a.length === 0 || b.length === 0) return 0;
   const setB = new Set(b);
   const shared = a.filter((t) => setB.has(t)).length;
   const union = new Set([...a, ...b]).size;
-  if (shared >= 3) return true;
-  if (Math.min(a.length, b.length) <= 2) return shared >= Math.min(a.length, b.length) && shared >= 1 && shared / union >= 0.5;
-  return shared / union >= 0.5;
+  const jaccard = shared / union;
+  const ofShorter = shared / Math.min(a.length, b.length);
+  return shared >= 3 && ofShorter >= 0.6 ? Math.max(jaccard, ofShorter) : jaccard;
+}
+
+/** Whether two signatures name the same idea. */
+export function sameIdea(a: readonly string[], b: readonly string[], strict = false): boolean {
+  const score = ideaSimilarity(a, b);
+  if (strict) return score >= 0.6 && ideaJaccard(a, b) >= 0.6;
+  if (Math.min(a.length, b.length) <= 2) return ideaJaccard(a, b) >= 0.5;
+  return score >= 0.5;
+}
+
+function ideaJaccard(a: readonly string[], b: readonly string[]): number {
+  const setB = new Set(b);
+  const shared = a.filter((t) => setB.has(t)).length;
+  return shared / (new Set([...a, ...b]).size || 1);
 }
 
 export function kindOfMention(kinds: readonly PassageKind[], text: string): IdeaKind {
   const has = (k: PassageKind): boolean => kinds.includes(k);
   if (has('BUSINESS')) return 'BUSINESS';
   if (has('FINANCIAL')) return 'FINANCIAL';
+  if (has('PROJECT') && /\b(?:my (?:project|app|website|site|business|company|store|channel|startup|game|brand|podcast|book|course|product)|i'?m (?:building|developing|launching|designing))\b/i.test(text)) return 'PROJECT';
   if (has('CREATIVE') && (has('IDEA') || has('PROJECT') || has('GOAL'))) return 'CREATIVE';
   if (has('PROJECT')) return 'PROJECT';
   if (has('GOAL')) {
@@ -153,7 +174,19 @@ export async function excavateConversation(conversationId: string, index?: IdeaI
     const sentence = cueSentence(passage.text);
     const signature = signatureOf(sentence);
     if (signature.length === 0) continue;
-    let idea = ideas.find((i) => sameIdea(i.signature, signature));
+    // The closest existing idea, if it is the same one. A change of direction
+    // ("instead, I want…") founds a new idea unless it is nearly identical.
+    const strict = kinds.includes('DIRECTION_CHANGE');
+    let idea: IdeaIndexEntry | undefined;
+    let best = 0;
+    for (const candidate of ideas) {
+      if (!sameIdea(candidate.signature, signature, strict)) continue;
+      const score = ideaSimilarity(candidate.signature, signature);
+      if (score > best) {
+        best = score;
+        idea = candidate;
+      }
+    }
     if (!idea) {
       const id = newId('mid');
       const kind = kindOfMention(kinds as PassageKind[], passage.text);
@@ -193,11 +226,26 @@ export async function excavateConversation(conversationId: string, index?: IdeaI
     );
     touched.add(idea.id);
   }
-  if (touched.size > 0) {
-    await db.run(
-      `UPDATE memory_ideas SET evidence_changed_at = ? WHERE id IN (${[...touched].map(() => '?').join(',')})`,
-      [at, ...touched],
-    );
+  // Talk that returns to an idea without restating it ("thinking again about
+  // the gym") still bears on it: mark those ideas due for reconstruction, which
+  // finds the passage and records it as related evidence.
+  const byWord = new Map<string, string[]>();
+  for (const entry of ideas) for (const word of entry.signature) byWord.set(word, [...(byWord.get(word) ?? []), entry.id]);
+  const sizeOf = new Map(ideas.map((i) => [i.id, i.signature.length]));
+  const returnedTo = new Set<string>();
+  for (const passage of passages) {
+    const counts = new Map<string, number>();
+    for (const word of new Set(tokens(passage.text))) {
+      for (const id of byWord.get(word) ?? []) counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    for (const [id, n] of counts) {
+      if (n >= 2 && n >= 0.4 * (sizeOf.get(id) ?? 99) && !touched.has(id)) returnedTo.add(id);
+    }
+  }
+  const due = [...touched, ...returnedTo];
+  for (let i = 0; i < due.length; i += 200) {
+    const chunk = due.slice(i, i + 200);
+    await db.run(`UPDATE memory_ideas SET evidence_changed_at = ? WHERE id IN (${chunk.map(() => '?').join(',')})`, [at, ...chunk]);
   }
   await db.run('UPDATE memory_conversations SET excavated_version = indexed_version WHERE id = ?', [conversationId]);
   return { ideasTouched: [...touched], created };
@@ -207,7 +255,7 @@ export async function conversationsToExcavate(ownerId: string | null, limit: num
   const rows = await getDb().all<{ id: string }>(
     `SELECT id FROM memory_conversations
       WHERE ${ownerId ? 'owner_user_id = ? AND' : ''} excavated_version < indexed_version
-      ORDER BY last_said_at DESC LIMIT ?`,
+      ORDER BY first_said_at, id LIMIT ?`,
     ownerId ? [ownerId, limit] : [limit],
   );
   return rows.map((r) => r.id);
@@ -297,6 +345,16 @@ export async function reconstructIdea(ideaId: string): Promise<{ changed: boolea
 
   // The earliest piece is the origin; it keeps its own kind in `kinds`.
   const origin = evidence[0]!;
+  // What was originally wanted is the earliest of the person's own statements
+  // of it, wherever the archive happened to be read from first.
+  const firstDirect = evidence.find((e) => e.direct === 1);
+  if (firstDirect) {
+    const sentence = cueSentence(firstDirect.text);
+    const title = sentence.length > 140 ? `${sentence.slice(0, 137)}…` : sentence;
+    if (title !== idea.title) {
+      await db.run('UPDATE memory_ideas SET title = ?, statement = ? WHERE id = ?', [title, excerpt(firstDirect.text), idea.id]);
+    }
+  }
   if (origin.stage !== 'ORIGIN') {
     await db.run(`UPDATE memory_idea_evidence SET stage = 'ORIGIN' WHERE idea_id = ? AND passage_id = ?`, [idea.id, origin.passage_id]);
     await db.run(`UPDATE memory_idea_evidence SET stage = ? WHERE idea_id = ? AND stage = 'ORIGIN' AND passage_id <> ?`, [
@@ -403,6 +461,18 @@ export async function reconstructIdea(ideaId: string): Promise<{ changed: boolea
   if (supersededBy) {
     await linkIdeas(idea.id, 'IDEA', supersededBy, 'BRANCHED_INTO', 'A direction change in the archive led here.');
   }
+  // Folded into a project: a later passage about this idea that is also the
+  // person's own statement of a different project.
+  const hosts = await db.all<{ idea_id: string; said_at: string | null }>(
+    `SELECT e2.idea_id, e2.said_at FROM memory_idea_evidence e1
+       JOIN memory_idea_evidence e2 ON e2.passage_id = e1.passage_id AND e2.idea_id <> e1.idea_id AND e2.direct = 1
+       JOIN memory_ideas host ON host.id = e2.idea_id AND host.kind = 'PROJECT'
+      WHERE e1.idea_id = ? AND e1.direct = 0`,
+    [idea.id],
+  );
+  for (const host of hosts) {
+    await linkIdeas(idea.id, 'IDEA', host.idea_id, 'PART_OF', `Discussed as part of this project on ${host.said_at?.slice(0, 10) ?? 'an unknown date'}.`);
+  }
   return { changed };
 }
 
@@ -464,7 +534,7 @@ export async function linkOwnerIdeas(ownerId: string): Promise<{ links: number }
   const convs = new Map<string, Set<string>>();
   for (const row of await db.all<{ idea_id: string; conversation_id: string }>(
     `SELECT DISTINCT e.idea_id, e.conversation_id FROM memory_idea_evidence e JOIN memory_ideas i ON i.id = e.idea_id
-      WHERE i.owner_user_id = ?`,
+      WHERE i.owner_user_id = ? AND e.direct = 1`,
     [ownerId],
   )) {
     convs.set(row.idea_id, (convs.get(row.idea_id) ?? new Set()).add(row.conversation_id));

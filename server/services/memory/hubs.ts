@@ -352,8 +352,10 @@ export async function decideHub(input: { ownerId: string; hubId: string; decisio
   }
   let projectId = hub.project_id;
   if (!projectId) {
+    const { freeSlug } = await import('./rediscover.ts');
     const project = await createProject({
       name: hub.title,
+      slug: await freeSlug(hub.title),
       description: hub.draft_plan.slice(0, 4000),
       northStar: hub.title,
     });

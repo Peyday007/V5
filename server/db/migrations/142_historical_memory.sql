@@ -312,6 +312,8 @@ CREATE TABLE memory_idea_links (
 );
 
 -- What Brain put in front of the person, and why. At most one OPEN per idea.
+-- QUEUED is a triggered finding waiting for room on a full list: kept rather
+-- than dropped, surfaced first when a place frees.
 CREATE TABLE memory_discoveries (
   id            TEXT PRIMARY KEY,
   owner_user_id TEXT NOT NULL,
@@ -325,9 +327,10 @@ CREATE TABLE memory_discoveries (
   surfaced_at   TEXT NOT NULL,
   decided_at    TEXT,
   decision      TEXT,
-  CHECK (state IN ('OPEN','DECIDED','RETIRED'))
+  CHECK (state IN ('OPEN','QUEUED','DECIDED','RETIRED'))
 );
 CREATE UNIQUE INDEX idx_memory_discoveries_open ON memory_discoveries (idea_id) WHERE state = 'OPEN';
+CREATE UNIQUE INDEX idx_memory_discoveries_queued ON memory_discoveries (idea_id) WHERE state = 'QUEUED';
 CREATE INDEX idx_memory_discoveries_owner ON memory_discoveries (owner_user_id, state, score);
 
 -- The person's decisions. Append-only.

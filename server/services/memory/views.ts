@@ -163,6 +163,10 @@ export interface IdeaDetail {
   related: { id: string; title: string; relation: string; basis: string; state: string }[];
   topics: { id: string; label: string }[];
   currentConnections: { kind: 'PROJECT' | 'IDEA_IN_BRAIN' | 'KNOWLEDGE'; id: string; title: string; projectId: string | null }[];
+  /** Where this idea went in Brain: every project and Russell idea it was promoted into. */
+  promotedTo: { kind: string; id: string; basis: string }[];
+  /** What can happen next, and when Brain will raise it again. */
+  eligible: { actions: string[]; resurfaces: string };
 }
 
 export async function ideaDetail(ownerId: string, ideaId: string): Promise<IdeaDetail> {
@@ -222,7 +226,29 @@ export async function ideaDetail(ownerId: string, ideaId: string): Promise<IdeaD
     related,
     topics,
     currentConnections: await currentConnections(String(row.signature)),
+    promotedTo: (await db.all<{ to_kind: string; to_id: string; basis: string }>(
+      `SELECT to_kind, to_id, basis FROM memory_idea_links WHERE idea_id = ? AND relation = 'PROMOTED_TO' ORDER BY created_at`,
+      [ideaId],
+    )).map((l) => ({ kind: l.to_kind, id: l.to_id, basis: l.basis })),
+    eligible: eligibleFor(String(row.state), decisions[0]?.decision ?? null),
   };
+}
+
+/** The next eligible actions for a record, from its state and the person's last decision. */
+export function eligibleFor(state: string, lastDecision: string | null): IdeaDetail['eligible'] {
+  if (lastDecision === 'NOT_INTERESTED') {
+    return { actions: ['EXPLORE', 'UPDATE_WANT', 'FEEDBACK'], resurfaces: 'Never on its own — you said you are not interested. It stays in the record and you can reopen it here.' };
+  }
+  if (lastDecision && ['EXPLORE', 'PLAN', 'CREATE_SECTION'].includes(lastDecision)) {
+    return { actions: ['PLAN', 'CREATE_SECTION', 'LATER', 'NOT_INTERESTED', 'UPDATE_WANT', 'FEEDBACK'], resurfaces: 'Not as a discovery — it is now work in Brain.' };
+  }
+  if (lastDecision === 'LATER') {
+    return { actions: ['EXPLORE', 'PLAN', 'CREATE_SECTION', 'NOT_INTERESTED', 'UPDATE_WANT', 'FEEDBACK'], resurfaces: 'When something relevant changes — a new conversation about it, or a change in circumstance — and at least 30 days after you deferred it.' };
+  }
+  if (state === 'COMPLETED' || state === 'REJECTED') {
+    return { actions: ['EXPLORE', 'UPDATE_WANT', 'FEEDBACK'], resurfaces: 'Not on its own: the record says it is settled.' };
+  }
+  return { actions: ['EXPLORE', 'PLAN', 'CREATE_SECTION', 'LATER', 'NOT_INTERESTED', 'UPDATE_WANT', 'FEEDBACK'], resurfaces: 'When it has been quiet and unresolved, or when something relevant changes.' };
 }
 
 /**
@@ -230,25 +256,32 @@ export async function ideaDetail(ownerId: string, ideaId: string): Promise<IdeaD
  * shared knowledge — by the idea's own subject words. Bounded, read-only.
  */
 async function currentConnections(signature: string): Promise<IdeaDetail['currentConnections']> {
-  const words = signature.split(' ').filter((w) => w.length >= 4).sort((a, b) => b.length - a.length).slice(0, 2);
-  if (words.length === 0) return [];
+  const words = signature.split(' ').filter((w) => w.length >= 4);
+  const probe = [...words].sort((a, b) => b.length - a.length).slice(0, 3);
+  if (probe.length === 0) return [];
   const db = getDb();
+  const any = (col: string): string => probe.map(() => `LOWER(${col}) LIKE ?`).join(' OR ');
+  const params = probe.map((w) => `%${w}%`);
+  // Candidates carry any of the most specific words; a connection needs two of
+  // the idea's words (or its only one).
+  const enough = (text: string): boolean => {
+    const lower = text.toLowerCase();
+    return words.filter((w) => lower.includes(w)).length >= Math.min(2, words.length);
+  };
   const out: IdeaDetail['currentConnections'] = [];
-  const cond = (col: string): string => words.map(() => `LOWER(${col}) LIKE ?`).join(' AND ');
-  const params = words.map((w) => `%${w}%`);
-  for (const p of await db.all<{ id: string; name: string }>(
-    `SELECT id, name FROM projects WHERE status = 'ACTIVE' AND (${cond(`name || ' ' || COALESCE(description, '')`)}) LIMIT 5`,
+  for (const p of await db.all<{ id: string; name: string; description: string | null }>(
+    `SELECT id, name, description FROM projects WHERE status = 'ACTIVE' AND (${any(`name || ' ' || COALESCE(description, '')`)}) LIMIT 20`,
     params,
-  )) out.push({ kind: 'PROJECT', id: p.id, title: p.name, projectId: p.id });
-  for (const c of await db.all<{ id: string; title: string; project_id: string | null }>(
-    `SELECT id, title, project_id FROM russell_candidates WHERE ${cond(`title || ' ' || statement`)} ORDER BY updated_at DESC LIMIT 5`,
+  )) if (enough(`${p.name} ${p.description ?? ''}`) && out.length < 5) out.push({ kind: 'PROJECT', id: p.id, title: p.name, projectId: p.id });
+  for (const c of await db.all<{ id: string; title: string; statement: string; project_id: string | null }>(
+    `SELECT id, title, statement, project_id FROM russell_candidates WHERE ${any(`title || ' ' || statement`)} ORDER BY updated_at DESC LIMIT 20`,
     params,
-  )) out.push({ kind: 'IDEA_IN_BRAIN', id: c.id, title: c.title, projectId: c.project_id });
+  )) if (enough(`${c.title} ${c.statement}`)) out.push({ kind: 'IDEA_IN_BRAIN', id: c.id, title: c.title, projectId: c.project_id });
   for (const k of await db.all<{ id: string; statement: string; project_id: string }>(
-    `SELECT id, statement, project_id FROM russell_knowledge WHERE superseded_by_id IS NULL AND ${cond('statement')} ORDER BY updated_at DESC LIMIT 5`,
+    `SELECT id, statement, project_id FROM russell_knowledge WHERE superseded_by_id IS NULL AND (${any('statement')}) ORDER BY updated_at DESC LIMIT 20`,
     params,
-  )) out.push({ kind: 'KNOWLEDGE', id: k.id, title: k.statement.slice(0, 200), projectId: k.project_id });
-  return out;
+  )) if (enough(k.statement)) out.push({ kind: 'KNOWLEDGE', id: k.id, title: k.statement.slice(0, 200), projectId: k.project_id });
+  return out.slice(0, 15);
 }
 
 export interface ConversationRecord {

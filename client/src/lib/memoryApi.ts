@@ -45,7 +45,7 @@ export const MemoryApi = {
     api(`/api/memory/discoveries?state=${state}`),
   decide: (
     ideaId: string,
-    body: { decision: MemoryDecision; feedback?: string; projectId?: string; wantedNow?: string },
+    body: { decision: MemoryDecision; feedback?: string; projectId?: string; wantedNow?: string; branch?: boolean },
   ): Promise<{ result: DecisionResult }> => post(`/api/memory/ideas/${id(ideaId)}/decide`, body),
   ideas: (filter: { state?: string; kind?: string; q?: string } = {}): Promise<{ ideas: IdeaSummary[] }> => {
     const params = new URLSearchParams(Object.entries(filter).filter(([, v]) => !!v) as [string, string][]);

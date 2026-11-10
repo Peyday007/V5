@@ -330,6 +330,15 @@ function IdeaPanel({
           <ul className="rs-list">{data.decisions.map((d) => <li key={d.createdAt} className="rs-item-meta">{when(d.createdAt)}: {d.decision.toLowerCase().replace('_', ' ')}{d.feedback ? ` — “${d.feedback}”` : ''}</li>)}</ul>
         </>
       ) : null}
+      <p className="rs-item-meta"><strong>Next:</strong> {data.eligible.resurfaces}</p>
+      {data.promotedTo.length ? (
+        <p className="rs-quiet">In Brain as: {data.promotedTo.map((p) => `${p.kind.toLowerCase()} ${p.id}`).join(', ')}</p>
+      ) : null}
+      {data.promotedTo.length ? (
+        <button type="button" className="rs-button-quiet" onClick={() => void MemoryApi.decide(idea.id, { decision: 'CREATE_SECTION', branch: true }).then(reload)}>
+          Branch into another project (keeps this origin)
+        </button>
+      ) : null}
       <details className="rs-details">
         <summary>Earlier versions ({data.versions.length})</summary>
         <ul className="rs-list">{data.versions.map((v) => <li key={v.version} className="rs-item-meta">v{v.version} · {when(v.createdAt)} · {v.reason}</li>)}</ul>
@@ -695,5 +704,25 @@ function Coverage({ c }: { c: CoverageReport }): JSX.Element {
         </details>
       ) : null}
     </article>
+  );
+}
+
+/**
+ * The proactive half on Home: when Brain has found something in the person's
+ * history worth another look, it says so where they already are. Silent when
+ * there is nothing — Home is not a place for an empty card.
+ */
+export function MemoryHome(): JSX.Element | null {
+  const { data } = useLoad(() => MemoryApi.discoveries('OPEN'), []);
+  const top = data?.discoveries[0];
+  if (!data || !top) return null;
+  return (
+    <section className="rs-panel rs-memory-home" aria-label="From your history">
+      <p className="rs-card-title">
+        From your history: {data.discoveries.length} idea{data.discoveries.length === 1 ? '' : 's'} worth another look
+      </p>
+      <p className="rs-item-meta"><strong>{top.title}</strong> — {top.whyNow}</p>
+      <a className="rs-button" href="/memory">Review them</a>
+    </section>
   );
 }

@@ -166,7 +166,7 @@ const INFORMATIONAL_WANT = /\bi (?:want|would like|'d like|wanna) to (?:know|und
 
 const CUES: Record<Exclude<PassageKind, 'CREATIVE' | 'BUSINESS' | 'FINANCIAL' | 'PERSONAL'>, RegExp> = {
   GOAL: /\b(?:my (?:goal|dream|ambition|mission|aim) (?:is|was)|i (?:want|wanna|would like|'d like|hope|plan|intend|aim|aspire|dream) to|i'?m (?:planning|hoping|trying|aiming) to|one day i|someday i|eventually i|long[- ]term,? i|by (?:the end of|next) (?:the )?(?:year|month|summer)|i really want)\b/i,
-  IDEA: /\b(?:what if (?:i|we|there|you)|i (?:have|had) (?:an|this|a) (?:idea|concept|thought)|my idea|here'?s (?:an|my) idea|idea for (?:a|an|my)|i (?:could|should) (?:build|make|create|start|write|launch|sell|open)|how about (?:i|we)|i was thinking (?:about|of) (?:making|building|starting|creating|writing|doing|launching|opening)|imagine (?:a|an|if))\b/i,
+  IDEA: /\b(?:what if (?:i|we|there|you)|i (?:have|had) (?:an?|this|my|one)(?: [\w-]+){0,2} (?:idea|concept|thought)|my idea|here'?s (?:an|my) idea|idea for (?:a|an|my)|i (?:could|should) (?:build|make|create|start|write|launch|sell|open)|how about (?:i|we)|i was thinking (?:about|of) (?:making|building|starting|creating|writing|doing|launching|opening)|imagine (?:a|an|if))\b/i,
   PROJECT: /\b(?:my (?:project|app|film|movie|short|business|book|channel|website|site|startup|game|script|screenplay|company|brand|store|podcast|album|novel|course|product)|i'?m (?:building|making|writing|developing|creating|filming|shooting|working on|designing|launching))\b/i,
   QUESTION: /\b(?:should i|would it be (?:smart|wise|worth)|is it worth|do you think i should|which (?:one|option) should|what would you do|how (?:do|can|should) i (?:start|get|become|make|build|learn))\b/i,
   DECISION: /\b(?:i(?:'ve| have)? decided|i'?m (?:deciding|torn) (?:between|whether)|trying to decide|can'?t decide|i chose|i'?m choosing|option (?:a|b|1|2)|or should i)\b/i,
@@ -195,7 +195,7 @@ const FACET_CUES: Record<FilmFacet, RegExp> = {
   DIRECTING: /\b(?:direct(?:ing|or|ed|orial)|blocking|shot list|coverage|mise[- ]en[- ]sc[eè]ne|camera (?:movement|angle|placement)|lens|framing|composition|lighting|long take|tracking shot|close[- ]up|wide shot)\b/i,
   SCREENWRITING: /\b(?:screenplay|screenwriting|script|act (?:one|two|three|1|2|3|i|ii|iii)|three[- ]act|structure|beat sheet|logline|dialogue|outline|treatment|inciting incident|midpoint|climax|plot)\b/i,
   CHARACTER_THEME: /\b(?:character(?:s)?|arc|protagonist|antagonist|theme|themes|motif|symbolism|backstory|motivation|subtext)\b/i,
-  FILM_CONCEPT: /\b(?:(?:film|movie|short|story|script) idea|idea for a (?:film|movie|short|story|script)|(?:a|my) (?:film|movie|short film|story) (?:about|where|in which)|premise|what if a)\b/i,
+  FILM_CONCEPT: /\b(?:(?:film|movie|short|story|script) ideas?|idea for a (?:film|movie|short|story|script)|(?:a|my) (?:film|movie|short film|story) (?:about|where|in which)|premise|what if a)\b/i,
   CREATIVE_STANDARD: /\b(?:i (?:prefer|like|love|want|hate) (?:films|movies|stories|when (?:a )?(?:film|movie)s?)|my (?:style|aesthetic|taste|voice)|tone|i always want|it has to feel|i can'?t stand)\b/i,
   EXERCISE: /\b(?:exercise|practice|assignment|drill|homework|study (?:plan|guide)|learning (?:plan|objective|goal)|lesson|curriculum|watch list|watchlist)\b/i,
   PROJECT_REVISION: /\b(?:rewrite|rewriting|revision|revise|redraft|new draft|second draft|next draft|changed the (?:ending|beginning|opening|script|story)|cut (?:the|that) scene|new version)\b/i,

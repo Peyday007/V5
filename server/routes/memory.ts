@@ -226,6 +226,7 @@ memoryRouter.post(
         feedback: optionalString(body.feedback, 'feedback') ?? null,
         projectId: optionalString(body.projectId, 'projectId') ?? null,
         wantedNow: optionalString(body.wantedNow, 'wantedNow') ?? null,
+        branch: body.branch === true,
       }),
     }));
   }),

@@ -34,7 +34,7 @@ export interface CoverageReport {
   search: { messagesWithText: number; messagesIndexed: number; passages: number; conversationsIndexed: number; conversationsPending: number };
   organization: { topics: number; subtopics: number; merged: number; retired: number; conversationsInTopics: number };
   registry: { ideas: number; byState: Record<string, number>; byKind: Record<string, number>; withEvidence: number; reconstructed: number };
-  rediscovery: { open: number; decided: number; retired: number; decisions: number };
+  rediscovery: { open: number; queued: number; decided: number; retired: number; decisions: number };
   hubs: { total: number; byState: Record<string, number> };
   dateRange: { first: string | null; last: string | null; since2025Summer: number; before2025Summer: number };
   classes: { recovered: string; discoveredNotRecovered: string; unverifiable: string };
@@ -190,7 +190,7 @@ export async function coverageReport(ownerId: string): Promise<CoverageReport> {
       withEvidence,
       reconstructed,
     },
-    rediscovery: { open: discoveryStates.OPEN ?? 0, decided: discoveryStates.DECIDED ?? 0, retired: discoveryStates.RETIRED ?? 0, decisions },
+    rediscovery: { open: discoveryStates.OPEN ?? 0, queued: discoveryStates.QUEUED ?? 0, decided: discoveryStates.DECIDED ?? 0, retired: discoveryStates.RETIRED ?? 0, decisions },
     hubs: { total: Object.values(hubStates).reduce((s, n) => s + n, 0), byState: hubStates },
     dateRange: { first: range?.first ?? null, last: range?.last ?? null, since2025Summer: recent, before2025Summer: older },
     classes: {
