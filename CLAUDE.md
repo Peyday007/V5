@@ -392,6 +392,7 @@ resolves. Read the section for the area you are changing before you change it
 - §97. A specification grows by releases, and a program's order is when, never whether.
 - §98. Every pool of capacity is fed: idle capacity beside waiting work is a fault Brain finds and corrects itself.
 - §99. A plan short of its requirement is reconstructed, not re-read, and a result keeps the context it was measured in.
+- §100. A change is recognized where it happens, and the work it enables resumes without a person restating it.
 
 ## Conventions
 
