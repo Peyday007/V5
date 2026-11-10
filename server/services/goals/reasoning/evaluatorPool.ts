@@ -127,3 +127,42 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
     },
   };
 }
+
+/** Idle this long, the shared pool's threads are ended; the next exploration starts them again. */
+export const SHARED_IDLE_MS = 60_000;
+let shared: { evaluator: Evaluator; busy: number; timer: NodeJS.Timeout | null } | null = null;
+
+/**
+ * The process's shared pool: a thread costs a second or two to start (it
+ * loads the TypeScript loader and the engine), so successive plan reads share
+ * one pool instead of each starting its own. Its `close` releases this
+ * reader's hold; the threads end after `SHARED_IDLE_MS` with no reader.
+ */
+export function sharedEvaluator(): Evaluator {
+  if (!shared) shared = { evaluator: openEvaluator(), busy: 0, timer: null };
+  const s = shared;
+  s.busy++;
+  if (s.timer) {
+    clearTimeout(s.timer);
+    s.timer = null;
+  }
+  let released = false;
+  return {
+    threads: s.evaluator.threads,
+    evaluate: (input) => s.evaluator.evaluate(input),
+    async close() {
+      if (released) return;
+      released = true;
+      s.busy--;
+      if (s.busy === 0) {
+        s.timer = setTimeout(() => {
+          if (shared === s && s.busy === 0) {
+            shared = null;
+            void s.evaluator.close();
+          }
+        }, SHARED_IDLE_MS);
+        s.timer.unref();
+      }
+    },
+  };
+}

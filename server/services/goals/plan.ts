@@ -66,7 +66,7 @@ import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type Res
 import type { EvidenceTier } from '../../domain/quant.ts';
 import { readPathways, type BrainCapabilities, type PathwayReading } from './pathways.ts';
 import { reconstructPlan, type Reconstruction } from './reconstruction.ts';
-import { openEvaluator } from './reasoning/evaluatorPool.ts';
+import { sharedEvaluator } from './reasoning/evaluatorPool.ts';
 import { inventDirections } from './reasoning/invent.ts';
 import { loadLibrary, recordExploration } from './reasoning/learning.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
@@ -1179,7 +1179,7 @@ export async function reconstructionFor(
 ): Promise<Reconstruction | null> {
   if (!model.portfolio || !model.portfolioInput || model.portfolioInput.openings.length === 0) return null;
   const { openings, ...portfolio } = model.portfolioInput;
-  const evaluator = openEvaluator();
+  const evaluator = sharedEvaluator();
   try {
     const library = await loadLibrary().catch(() => []);
     const r = await reconstructPlan({
@@ -1585,8 +1585,9 @@ export function reconstructionSummary(r: Reconstruction | null): Record<string, 
     structural: r.structural,
     variants: r.rounds.reduce((n, x) => n + x.tried.length, 0),
     // What the multidirectional exploration concluded (§100): a different winning way of reasoning is a new row.
+    // How many directions ran is not a conclusion — the library changes it between identical reads.
     explored: r.exploration
-      ? { directions: Math.round(r.exploration.directions / 10) * 10, stances: r.exploration.stances.length, winner: r.exploration.winner?.direction.name ?? null, replaced: r.exploration.replaced }
+      ? { winner: r.exploration.winner?.direction.name ?? null, replaced: r.exploration.replaced }
       : null,
   };
 }

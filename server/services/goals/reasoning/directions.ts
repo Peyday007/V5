@@ -54,6 +54,8 @@ export const MAX_GENERATIONS = 4;
 export const PRICE_ELASTICITY = 1.2;
 /** The challenge every leader must survive: its conversion halved. */
 export const CHALLENGE_FACTOR = 0.5;
+/** Evaluations an exploration may spend per direction its budget allows: screening, challenges and generations together. */
+export const EVALUATIONS_PER_DIRECTION = 4;
 
 export type Field = 'price' | 'close' | 'respond' | 'volume' | 'daysToCash' | 'directCost';
 /** Which openings a transform touches. `id:<opportunityId>` names one. */
@@ -536,8 +538,11 @@ export function scoreOf(reading: VariantReading, challenged: VariantReading | nu
 export async function exploreDirections(ctx: ExploreContext): Promise<Exploration> {
   const now = ctx.now ?? Date.now;
   const started = now();
-  const maxMs = ctx.maxMs ?? 90_000;
-  const late = () => now() - started > maxMs;
+  // Depth is bounded by evaluations, so the same inputs explore the same way on a busy or an idle machine;
+  // the clock is only a far safety stop.
+  const maxMs = ctx.maxMs ?? 10 * 60_000;
+  let evaluationCap = Infinity;
+  const late = () => now() - started > maxMs || evaluations > evaluationCap;
   const seen = new Map<string, DirectionReading>();
   const all: DirectionReading[] = [];
   let evaluations = 0;
@@ -568,11 +573,13 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
         const reading = await ctx.evaluate(state, true);
         const out: DirectionReading = { direction: d, reading, challenged: null, score: scoreOf(reading, null), generation, applied, state };
         seen.set(d.signature, out);
-        all.push(out);
         return out;
       }),
     );
-    return results.filter((x): x is DirectionReading => !!x);
+    // In the batch's own order, never the order threads finished in: ties must break the same way every read.
+    const kept = results.filter((x): x is DirectionReading => !!x);
+    all.push(...kept);
+    return kept;
   };
   const challenge = async (rows: DirectionReading[]) => {
     await Promise.all(
@@ -605,6 +612,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   greedyRow.challenged = await challengeOf(greedyProgram);
   greedyRow.score = scoreOf(ctx.greedyReading, greedyRow.challenged);
   const budget = explorationBudget({ openings: ctx.base.openings.length, operators: ctx.operators.length, binding: ctx.binding.filter((b) => b.liftReach > 0).length, reach: Math.min(ctx.greedyReading.reach, greedyRow.challenged?.reach ?? 0), required: ctx.required, structural: ctx.structural });
+  evaluationCap = EVALUATIONS_PER_DIRECTION * budget;
 
   // 1–2. Generate and screen: the library first (what worked), then the cheap seeds, kept distinct.
   const pool = budget > 0 ? distinct([...(ctx.library ?? []), ...seedDirections(ctx)], budget) : [];
