@@ -160,6 +160,44 @@ export function roundBaseFor(campaign: FactoryCampaign): string {
  * read. The bin recorded it, so the bin is asked — which is the same reason every
  * other decision here is taken from a row rather than from the clock.
  */
+/**
+ * The units an integration report is judged against: the ones this bin's own
+ * manifest told the worker to merge, plus any implemented since.
+ *
+ * Production 2026-11-10: the validator read the campaign's *current*
+ * IMPLEMENTED units while the worker had been handed the list frozen into the
+ * manifest at creation. Once a unit on that list was integrated by an earlier
+ * round, every honest report — merging exactly what the manifest named — was
+ * refused as "not one of the units this bin was given", eighteen attempts
+ * running, until the bin parked and its campaign stopped for a person.
+ */
+export function integrationUnitsFor(
+  bin: Bin,
+  implemented: { unitKey: string; headSha: string | null; ownedPaths: string[] }[],
+): { unitKey: string; headSha: string; ownedPaths: string[] }[] {
+  const out = new Map<string, { unitKey: string; headSha: string; ownedPaths: string[] }>();
+  for (const unit of bin.manifest.units ?? []) {
+    let input: unknown = null;
+    try {
+      input = typeof unit.input === 'string' ? JSON.parse(unit.input) : null;
+    } catch {
+      input = null;
+    }
+    const order = (input as { mergeInOrder?: unknown } | null)?.mergeInOrder;
+    if (!Array.isArray(order)) continue;
+    for (const entry of order as { unitKey?: unknown; headSha?: unknown; ownedPaths?: unknown }[]) {
+      if (typeof entry?.unitKey !== 'string' || typeof entry.headSha !== 'string') continue;
+      const paths = Array.isArray(entry.ownedPaths) ? entry.ownedPaths.filter((p): p is string => typeof p === 'string') : [];
+      out.set(entry.unitKey, { unitKey: entry.unitKey, headSha: entry.headSha, ownedPaths: paths });
+    }
+  }
+  for (const unit of implemented) {
+    if (unit.headSha === null || out.has(unit.unitKey)) continue;
+    out.set(unit.unitKey, { unitKey: unit.unitKey, headSha: unit.headSha, ownedPaths: unit.ownedPaths });
+  }
+  return [...out.values()];
+}
+
 export function binBaseOf(bin: Bin, campaign: FactoryCampaign): string {
   const recorded = bin.manifest.repository?.baseSha;
   return typeof recorded === 'string' && /^[0-9a-f]{40}$/.test(recorded)

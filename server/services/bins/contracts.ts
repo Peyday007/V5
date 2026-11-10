@@ -746,7 +746,7 @@ async function evaluateFactoryUnits(bin: Bin): Promise<ContractVerdict> {
  * bin fail instead would spend its attempts on a correct report.
  */
 async function evaluateFactoryIntegration(bin: Bin): Promise<ContractVerdict> {
-  const { readIntegrationReport, verifyIntegrationReport, binBaseOf } = await import(
+  const { readIntegrationReport, verifyIntegrationReport, binBaseOf, integrationUnitsFor } = await import(
     '../factory/remote.ts'
   );
   const { getCampaign, getChangeRequest, listUnits } = await import('../../repos/factory.ts');
@@ -797,7 +797,7 @@ async function evaluateFactoryIntegration(bin: Bin): Promise<ContractVerdict> {
     {
       integrationBranch: campaign.integrationBranch,
       baseSha: binBaseOf(bin, campaign),
-      units: implemented,
+      units: integrationUnitsFor(bin, implemented),
     },
     report.value,
   );
