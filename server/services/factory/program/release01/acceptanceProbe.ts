@@ -93,10 +93,15 @@ export async function goalAcceptanceHoldsOnRows(): Promise<ProbeResult> {
     unbound += 1;
   }
 
-  const readings = await db.all<{ id: string; workstream_id: string; verdict: string; forecast: string | null; created_at: string }>(
+  const all = await db.all<{ id: string; workstream_id: string; verdict: string; forecast: string | null; created_at: string }>(
     `SELECT id, workstream_id, verdict, forecast, created_at FROM goal_plan_readings WHERE created_at >= ? ORDER BY created_at, id`,
     [ACCEPTANCE_RULE_FROM],
   );
+  // The rule is judged from the first reading the released writer stamped with an acceptance:
+  // a reading written on the rule's day by the Brain released before it carries none, and is
+  // history, not a counterfeit (production 2026-11-10, gpr_8c679e2aefba4625a30f).
+  const firstStamped = all.findIndex((r) => parse(r.forecast)?.acceptance !== undefined);
+  const readings = firstStamped < 0 ? [] : all.slice(firstStamped);
   let accepted = 0;
   let candidates = 0;
   for (const r of readings) {
