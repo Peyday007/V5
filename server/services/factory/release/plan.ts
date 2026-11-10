@@ -29,7 +29,7 @@ import {
 import {
   MAX_RELEASE_ATTEMPTS,
   RELEASE_IN_FLIGHT,
-  RETRYABLE_FAILURE_STAGES,
+  releaseRetryable,
   type LiveCheck,
   type ReleaseFailureStage,
   type ReleaseRun,
@@ -119,11 +119,7 @@ export async function planRelease(input: {
     if (latest && latest.headSha === head) {
       if (latest.state === 'LIVE' || latest.state === 'ROLLED_BACK' || latest.state === 'REFUSED') continue;
       if (latest.state === 'FAILED') {
-        const retryable =
-          latest.failureStage !== null &&
-          RETRYABLE_FAILURE_STAGES.includes(latest.failureStage) &&
-          latest.attempt < MAX_RELEASE_ATTEMPTS;
-        if (!retryable) continue;
+        if (!releaseRetryable(latest)) continue;
         attempt = latest.attempt + 1;
       }
     }

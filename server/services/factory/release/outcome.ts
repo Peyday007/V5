@@ -9,7 +9,7 @@
  * green review or a merge is never LIVE.
  */
 import type { FactoryBlockerKind, FactoryCampaign } from '../../../domain/factory.ts';
-import { MAX_RELEASE_ATTEMPTS, type ObjectiveOutcome, type ReleaseGrant, type ReleaseRun } from '../../../domain/factoryRelease.ts';
+import { releaseRetryable, type ObjectiveOutcome, type ReleaseGrant, type ReleaseRun } from '../../../domain/factoryRelease.ts';
 import type { DeliveryObservation } from '../delivery.ts';
 
 /**
@@ -176,8 +176,8 @@ export function deriveOutcome(input: OutcomeInput): ObjectiveOutcome {
     case 'LIVE':
       return { ...make('LIVE', `Live and verified at ${run.mergeSha?.slice(0, 12) ?? '—'}.`), pageUrl: pageUrl(input) };
     case 'FAILED':
-      if ((run.failureStage === 'INFRA' || run.failureStage === 'DISPATCH') && run.attempt < MAX_RELEASE_ATTEMPTS) {
-        return make('RELEASING', `The last attempt stopped on the runner (${run.failureDetail ?? 'no detail'}); it will be tried again.`);
+      if (releaseRetryable(run)) {
+        return make('RELEASING', `The last attempt stopped (${run.failureStage}: ${run.failureDetail ?? 'no detail'}); it will be tried again.`);
       }
       return make(
         'BLOCKED',

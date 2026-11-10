@@ -379,6 +379,24 @@ describe('the release plan and its state machine', () => {
     expect(outcome).toMatchObject({ status: 'BLOCKED', needsPerson: true });
     expect(outcome.blocker).toBe('tests failed');
   });
+
+  it('gives the whole suite failing on the merged tree one more gate, and no more', async () => {
+    const { SUITE_FAILED_ON_MERGED_TREE } = await import('../server/domain/factoryRelease.ts');
+    const changeRequest = await approved('Show a fourth friendly line on the Build page.');
+    const campaign = await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    stubForge(['client/a.tsx']);
+    const first = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    expect(first.action?.campaignId).toBe(campaign.id);
+    await advanceRelease({ runId: first.action!.runId, to: 'FAILED', failureStage: 'GATE', failureDetail: `the release gate refused: ${SUITE_FAILED_ON_MERGED_TREE}` });
+    expect((await objectiveOutcome(campaign)).status).toBe('RELEASING');
+    const second = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    expect(second.action?.action).toBe('RELEASE');
+    expect((await latestRun(campaign.id))!.attempt).toBe(2);
+    await advanceRelease({ runId: second.action!.runId, to: 'FAILED', failureStage: 'GATE', failureDetail: `the release gate refused: ${SUITE_FAILED_ON_MERGED_TREE}` });
+    expect((await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null })).action).toBeNull();
+    expect((await objectiveOutcome(campaign)).status).toBe('BLOCKED');
+  });
 });
 
 describe('a pass asked about one campaign knows whether waiting is worth it (FAC-5)', () => {
