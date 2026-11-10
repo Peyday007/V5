@@ -12,7 +12,7 @@
  * is not a demonstration (§39) — never a pass.
  */
 import { getDb } from '../../db/database.ts';
-import { registerProbe, type ProbeResult } from '../factory/program/probes.ts';
+import type { ProbeResult } from '../factory/program/probes.ts';
 import { assessOpportunityRole, type RoleAssessment } from './exclusions.ts';
 
 export const REGULATED_ROLE_PROBE = 'r01.com-13-5';
@@ -40,4 +40,4 @@ export async function regulatedRolesAssessedFromRows(): Promise<ProbeResult> {
   };
 }
 
-registerProbe(REGULATED_ROLE_PROBE, regulatedRolesAssessedFromRows);
+// The probe itself is defined in the protected probes module (§97): a campaign never registers its own judge.

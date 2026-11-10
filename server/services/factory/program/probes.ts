@@ -22,7 +22,24 @@ export type Probe = (args: Record<string, string | number | boolean>) => Promise
 
 const PROBES = new Map<string, Probe>();
 
+/**
+ * A program release's acceptance probes (`r01.…`, `r02.…`) are the judge of
+ * the campaigns that implement them, so only this protected module defines
+ * them (§96, §97). Production 2026-11-10: a campaign registered its own
+ * `r01.com-13-5` from server/services/cash — honest that time, and a hole
+ * every time after. Any other module asking for a release name is ignored.
+ */
+const RELEASE_PROBE = /^r\d{2}\./;
+
+function define(name: string, probe: Probe): void {
+  PROBES.set(name, probe);
+}
+
 export function registerProbe(name: string, probe: Probe): void {
+  if (RELEASE_PROBE.test(name)) {
+    console.warn(`[program] refused to register ${name} outside the protected probes module; a campaign may not define its own judge`);
+    return;
+  }
   PROBES.set(name, probe);
 }
 
@@ -156,7 +173,7 @@ const RELEASE_01_GOVERNANCE = [
   'r01-head', 'gov-draft', 'gov-10-1', 'gov-10-2', 'gov-10-3', 'gov-10-4', 'gov-10-5', 'gov-12', 'gov-17', 'gov-17-1',
   'gov-17-2', 'gov-17-4', 'gov-18-7', 'gov-22', 'gov-28', 'gov-28-9', 'gov-38',
 ];
-for (const key of RELEASE_01_GOVERNANCE) registerProbe(`r01.${key}`, architectureProgramHolds);
+for (const key of RELEASE_01_GOVERNANCE) define(`r01.${key}`, architectureProgramHolds);
 
 /**
  * A rollup (a heading whose subsections carry the work, or a §28 gap answered
@@ -168,7 +185,7 @@ const RELEASE_01_ROLLUPS = [
   'com-13', 'causal-14', 'acc-15', 'algo-16', 'vent-24', 'know-25', 'comp-26', 'ui-27',
   'gap-28-1', 'gap-28-2', 'gap-28-3', 'gap-28-4', 'gap-28-5', 'gap-28-6', 'gap-28-7', 'gap-28-8', 'life-29', 'fall-37',
 ];
-for (const key of RELEASE_01_ROLLUPS) registerProbe(`r01.${key}`, architectureProgramHolds);
+for (const key of RELEASE_01_ROLLUPS) define(`r01.${key}`, architectureProgramHolds);
 
 /**
  * CAP-16-3: model and verification throughput is restored. Read from the free
@@ -177,7 +194,7 @@ for (const key of RELEASE_01_ROLLUPS) registerProbe(`r01.${key}`, architecturePr
  * majority of outcomes. A window with no lane activity at all is a FAIL, not a
  * pass — an idle lane restores nothing.
  */
-registerProbe('r01.cap-16-3', async (args) => {
+define('r01.cap-16-3', async (args) => {
   const hours = Number(args.hours ?? 6);
   const since = new Date(Date.now() - hours * 3_600_000).toISOString();
   const rows = await getDb().all<{ outcome: string; provider_failed: number; n: number }>(
@@ -200,7 +217,7 @@ registerProbe('r01.cap-16-3', async (args) => {
  * the prospects it reached, and messages sent are never read as buyers. Until
  * the funnel model is deployed this answers FAIL with the reason, never PASS.
  */
-registerProbe('r01.com-13-3', async () => {
+define('r01.com-13-3', async () => {
   const funnel = (await import('../../cash/funnel.ts')) as unknown as Record<string, unknown>;
   const mechanismsFromRows = funnel.mechanismsFromRows as ((projectId: string, evidence?: unknown) => Promise<unknown[]>) | undefined;
   const outreachEvidenceFor = funnel.outreachEvidenceFor as ((projectId: string) => Promise<unknown>) | undefined;
@@ -235,7 +252,7 @@ registerProbe('r01.com-13-3', async () => {
  * production integration, and an option with neither a sketch nor a source
  * inventory is refused. Read from the released module's own functions.
  */
-registerProbe('r01.gov-22-2', async () => {
+define('r01.gov-22-2', async () => {
   let prepared: Record<string, unknown>;
   try {
     prepared = (await import('../../capability/prepared.ts' as string)) as Record<string, unknown>;
@@ -254,4 +271,36 @@ registerProbe('r01.gov-22-2', async () => {
   }
   const ok = counts(validate(sample)) === false && refusedEmpty;
   return { ok, detail: ok ? 'a prepared option never counts as an integration; an option without sketch or inventory is refused' : 'a prepared option was counted as an integration or an empty one was accepted' };
+});
+
+/**
+ * COM-13-5: regulated roles are assessed by rights and obligations, never
+ * excluded by category. Every opening with a capital structure is assessed by
+ * the one role reader; none may be excluded by category, economics count only
+ * where a compliant position (its own or a licensed partner's) is established,
+ * and at least one assessed opening must be a regulated role — "nothing to look
+ * at" is not a demonstration (§39). Adopted from the compliance campaign's own
+ * reading of the rows, and held here so later campaigns cannot change it.
+ */
+define('r01.com-13-5', async () => {
+  const exclusions = (await import('../../cash/exclusions.ts')) as unknown as Record<string, unknown>;
+  const assess = exclusions.assessOpportunityRole as ((input: { projectId: string; opportunityId: string }) => Promise<{
+    excluded: unknown; regulated: boolean; countEconomics: boolean; position: string;
+  }>) | undefined;
+  if (!assess) return { ok: false, detail: 'the role reader is not deployed in this Brain' };
+  const openings = await getDb().all<{ project_id: string; opportunity_id: string }>(
+    `SELECT DISTINCT project_id, opportunity_id FROM capital_structures ORDER BY project_id, opportunity_id`,
+  );
+  if (openings.length === 0) return { ok: false, detail: 'no capital_structures rows: no role to assess on production records' };
+  let regulated = 0;
+  for (const o of openings) {
+    const a = await assess({ projectId: o.project_id, opportunityId: o.opportunity_id });
+    if (a.excluded !== false) return { ok: false, detail: `opening ${o.opportunity_id} was excluded by category` };
+    const compliant = a.position === 'COMPLIANT' || a.position === 'COMPLIANT_VIA_PARTNER';
+    if (a.countEconomics !== compliant) return { ok: false, detail: `opening ${o.opportunity_id}: economics counted=${a.countEconomics} with position ${a.position}` };
+    if (a.regulated) regulated += 1;
+  }
+  return regulated > 0
+    ? { ok: true, detail: `${regulated} of ${openings.length} opening(s) are regulated roles, all assessed by rights and none excluded by category` }
+    : { ok: false, detail: `${openings.length} opening(s) read; none performs a regulated activity, so the behaviour is not yet demonstrated` };
 });

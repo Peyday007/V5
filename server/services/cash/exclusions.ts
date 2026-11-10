@@ -19,8 +19,6 @@ import { clauseBefore, NEGATORS } from '../russell/negation.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { listCapitalFor, listConstraintsForProject } from '../../repos/industry.ts';
 import type { CapitalStructure, OpportunityConstraint } from '../../domain/types.ts';
-// Registers the production probe r01.com-13-5 wherever the role reader is loaded; the probe imports this module back, which is safe because it only uses it at call time.
-import './regulatedRoleProbe.ts';
 
 export const EXCLUSION_CLASSES = {
   GOVERNMENT_CONTRACTING: {
