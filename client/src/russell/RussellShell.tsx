@@ -42,6 +42,7 @@ import { LaborView } from './Labor.tsx';
 import { PuzzlesView } from './Puzzles.tsx';
 import { ScenariosView } from './Scenarios.tsx';
 import { MagicView } from './Magic.tsx';
+import { MemoryView } from './Memory.tsx';
 import { ResearchView } from './Research.tsx';
 import { ConnectionsPanel } from './Connections.tsx';
 import { ClaudeConnectionCard } from './ClaudeConnection.tsx';
@@ -91,6 +92,8 @@ export const SECTIONS = [
   { name: 'WORK' as const, label: 'All work', primary: false },
   { name: 'PROJECTS' as const, label: 'Ideas', primary: false },
   { name: 'KNOWLEDGE' as const, label: 'What Brain knows', primary: false },
+  /* Historical memory: a person's own recovered history; not project-scoped. */
+  { name: 'MEMORY' as const, label: 'Historical memory', primary: false },
   { name: 'SITES' as const, label: 'Connected sites', primary: false },
   /*
    * Machines, Labor, Puzzles and Scenarios are specialized business systems,
@@ -614,6 +617,7 @@ export function RussellShell({
         {route.name === 'BUILD' ? <BuildView projectId={projectId} /> : null}
         {route.name === 'PROJECTS' ? <ProjectView projectId={projectId} /> : null}
         {route.name === 'KNOWLEDGE' ? <KnowledgeView projectId={projectId} /> : null}
+        {route.name === 'MEMORY' ? <MemoryView /> : null}
         {route.name === 'FLEET' ? (
           <>
             {/*

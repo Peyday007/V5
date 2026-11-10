@@ -1538,6 +1538,50 @@ async function main(): Promise<void> {
      * weaknesses from detection to measured decision, and what happened.
      * `tick` runs one pass of the loop now, the same pass the tick runs.
      */
+    /*
+     * Historical memory (docs/HISTORICAL-MEMORY.md). Counts only — never a
+     * conversation, a title or an idea: this output lands in a workflow log.
+     */
+    case 'memory show': {
+      const { coverageReport } = await import('../server/services/memory/coverage.ts');
+      const owners = await getDb().all<{ owner_user_id: string }>(
+        `SELECT DISTINCT owner_user_id FROM memory_conversations
+         UNION SELECT DISTINCT owner_user_id FROM bridge_conversations WHERE message_count > 0
+         UNION SELECT DISTINCT owner_user_id FROM memory_archives`,
+      );
+      console.log(`  owners with history  ${owners.length}`);
+      for (const { owner_user_id: owner } of owners) {
+        const c = await coverageReport(owner);
+        console.log(`  OWNER ${owner}`);
+        console.log(`    archives            ${c.archives.total} (complete ${c.archives.complete}, receiving ${c.archives.receiving})`);
+        console.log(`    conversations       declared ${c.conversations.declared}, recovered ${c.conversations.recovered}, bridge ${c.conversations.fromBridge}, failed ${c.conversations.failed}, not sent ${c.conversations.notYetSent}`);
+        console.log(`    messages            declared ${c.messages.declared}, stored ${c.messages.stored}, alternate ${c.messages.alternateBranches}, superseded ${c.messages.supersededVersions}`);
+        console.log(`    attachments         referenced ${c.attachments.referenced}, recovered ${c.attachments.recovered}, referenced-only ${c.attachments.referencedOnly}, failed ${c.attachments.failed}`);
+        console.log(`    search index        messages ${c.search.messagesIndexed}/${c.search.messagesWithText}, passages ${c.search.passages}, conversations pending ${c.search.conversationsPending}`);
+        console.log(`    organization        topics ${c.organization.topics}, subtopics ${c.organization.subtopics}, merged ${c.organization.merged}, retired ${c.organization.retired}`);
+        console.log(`    registry            ideas ${c.registry.ideas} ${JSON.stringify(c.registry.byState)}, reconstructed ${c.registry.reconstructed}`);
+        console.log(`    rediscovery         open ${c.rediscovery.open}, decided ${c.rediscovery.decided}, decisions ${c.rediscovery.decisions}`);
+        console.log(`    hubs                ${c.hubs.total} ${JSON.stringify(c.hubs.byState)}`);
+        console.log(`    range               ${c.dateRange.first ?? '—'} → ${c.dateRange.last ?? '—'} (since summer 2025: ${c.dateRange.since2025Summer}, before: ${c.dateRange.before2025Summer})`);
+      }
+      break;
+    }
+    case 'memory sweep': {
+      await administrator();
+      const { sweepToCompletion } = await import('../server/services/memory/pipeline.ts');
+      const reports = await sweepToCompletion({ maxPasses: 40 });
+      const total = reports.reduce(
+        (a, r) => ({
+          absorbed: a.absorbed + r.absorbed, indexed: a.indexed + r.indexed, passages: a.passages + r.passages,
+          excavated: a.excavated + r.excavated, ideas: a.ideas + r.ideasCreated, reconstructed: a.reconstructed + r.reconstructed,
+          surfaced: a.surfaced + r.surfaced, hubs: a.hubs + r.hubsPrepared,
+        }),
+        { absorbed: 0, indexed: 0, passages: 0, excavated: 0, ideas: 0, reconstructed: 0, surfaced: 0, hubs: 0 },
+      );
+      const last = reports[reports.length - 1];
+      console.log(`  passes ${reports.length}  ${JSON.stringify(total)}  remaining ${JSON.stringify(last?.remaining ?? {})}`);
+      break;
+    }
     case 'improvement show': {
       const { improvementReading } = await import('../server/services/improvement/loop.ts');
       const reading = await improvementReading();

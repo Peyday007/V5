@@ -207,6 +207,19 @@ server/
       sync.ts           exact, ordered, idempotent — and handed to the machinery that reads it
       status.ts         what Brain did with what was said, as rows rather than prose
       import.ts         a pasted or exported conversation, read two ways and never guessed
+    memory/             historical memory (docs/HISTORICAL-MEMORY.md)
+      parse.ts          a whole export read whole: every branch, file, project and time
+      ingest.ts         manifest, batches, versions, attachments, bridge absorption
+      classify.ts       passages, kinds, facets and subject terms, deterministically
+      indexing.ts       messages into searchable passages, once each
+      organize.ts       topics the material suggests: merged, split, many-to-many
+      excavate.ts       the idea registry and what happened to each idea
+      hubs.ts           sustained commitments, prepared hubs, Movie School's foundation
+      rediscover.ts     why now, the open list, and the person's decisions
+      coverage.ts       what is here, with denominators and named gaps
+      views.ts          discoveries, ideas, conversations, topics, search
+      pipeline.ts       the resumable pass Russell's tick runs
+      upload.ts         one uploader for the page and the terminal
     fleet/
       view.ts           three capacity numbers that are not each other, and why it is slow
       capacity.ts       what the dispatcher would fire, counted once and labelled honestly
@@ -513,6 +526,7 @@ server/
     manufacturing.ts    the programme's door: the ladder, the categories, the ledger
     register.ts         the work register's door: workstreams, links, corrections
     bridge.ts           the conversation entrance: credentials, sync, transcript, status
+    memory.ts           historical memory: import, coverage, discoveries, decisions, search
     russell.ts          Russell's surface: threads, briefing, work, ideas, sites, Needs You
     passkeys.ts         enrolling, signing in with a device, and your own devices
     people.ts           who has joined, what can run, and connecting your Claude account
