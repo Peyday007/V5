@@ -19,6 +19,7 @@
 import { getDb } from '../../db/database.ts';
 import { registerProbe, type ProbeResult } from '../factory/program/probes.ts';
 import type { TargetReading } from './target.ts';
+import { goalConditionsHoldOnRows } from './goalConditionProbe.ts';
 
 export const GOAL_METRIC_PROBE = 'r01.goal-02';
 
@@ -104,4 +105,17 @@ export async function goalMetricsHoldOnRows(): Promise<ProbeResult> {
   };
 }
 
-registerProbe(GOAL_METRIC_PROBE, goalMetricsHoldOnRows);
+/**
+ * The one `r01.goal-02` check: the settled-cash clauses of goalConditionProbe
+ * (which needs a settled-cash goal to exist) and the ledger cross-check above,
+ * the cross-check first. Both must hold; the first failure is the answer.
+ */
+export async function goalTwoHoldsOnRows(): Promise<ProbeResult> {
+  const metrics = await goalMetricsHoldOnRows();
+  if (!metrics.ok) return metrics;
+  const conditions = await goalConditionsHoldOnRows();
+  if (!conditions.ok) return conditions;
+  return { ok: true, detail: `${metrics.detail}; ${conditions.detail}` };
+}
+
+registerProbe(GOAL_METRIC_PROBE, goalTwoHoldsOnRows);
