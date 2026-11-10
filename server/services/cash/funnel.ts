@@ -368,3 +368,227 @@ export function formatFunnel(reading: FunnelReading): string[] {
   );
   return lines;
 }
+
+/* ------------------------------------------------------------------ */
+/* COM-13-3 — the outreach funnel, for any channel                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The owner's one-million-email figure is a thought experiment about
+ * distribution leverage. Nothing here treats it as a reachable prospect count:
+ * every stage below is a count of rows or `null` (unknown, never zero), each
+ * stage is bounded by the one before it, and a message sent is never read as a
+ * prospect reached, a buyer, a sale or revenue.
+ *
+ * A mechanism is grouped by what its rows say (`mechanism` and
+ * `reachable_channel`), not by a list of approved categories: a channel Brain
+ * has never seen is modelled exactly as one it has.
+ */
+export const OUTREACH_STAGES = [
+  'permission',
+  'uniqueProspects',
+  'deliverable',
+  'throughput',
+  'replied',
+  'qualified',
+  'closed',
+  'settled',
+  'repeat',
+] as const;
+
+export interface OutreachRange {
+  low: number | null;
+  high: number | null;
+}
+
+export interface OutreachEvidence {
+  projectId: string;
+  /** A standing CONTACT_BUYER grant exists. Unknown (null) when no authority row says either way. */
+  permissionGranted: boolean | null;
+  /** Provider-measured sending capacity per day, shared with other campaigns. Null when never measured. */
+  capacityPerDay: number | null;
+}
+
+export interface OutreachMechanism {
+  key: string;
+  mechanism: string;
+  channel: string | null;
+  /** Deal-size reading from agreements: VOLUME (many small), HIGH_TICKET (few large) or UNCLASSIFIED. */
+  mode: 'VOLUME' | 'HIGH_TICKET' | 'UNCLASSIFIED';
+  permission: boolean | null;
+  openings: number;
+  messagesSent: number | null;
+  uniqueProspects: number | null;
+  undeliverable: number | null;
+  replied: number | null;
+  qualified: number | null;
+  agreed: number | null;
+  settled: number | null;
+  repeat: number | null;
+  settledCents: number | null;
+  capacityPerDay: number | null;
+  /** Stages with no row behind them. They are named, never filled with a guess. */
+  unknownStages: string[];
+}
+
+export interface RankedOutreach {
+  key: string;
+  mode: string;
+  mechanism: string;
+  channel: string | null;
+  messagesSent: number | null;
+  reachedProspects: OutreachRange;
+  buyers: OutreachRange;
+  replyRate: OutreachRange;
+  closeRate: OutreachRange;
+  /** Settled revenue per prospect reached, in minor units; null until something settled. */
+  centsPerProspect: number | null;
+  unknownStages: string[];
+}
+
+/** Rate bounds with a 95% Wilson interval; null when nothing was observed. */
+export function rateRange(successes: number | null, trials: number | null): OutreachRange {
+  if (successes === null || trials === null || trials <= 0) return { low: null, high: null };
+  const z = 1.96;
+  const p = Math.min(1, successes / trials);
+  const denom = 1 + (z * z) / trials;
+  const centre = (p + (z * z) / (2 * trials)) / denom;
+  const margin = (z * Math.sqrt((p * (1 - p)) / trials + (z * z) / (4 * trials * trials))) / denom;
+  return { low: Math.max(0, centre - margin), high: Math.min(1, centre + margin) };
+}
+
+export async function outreachEvidenceFor(projectId: string): Promise<OutreachEvidence> {
+  const db = getDb();
+  const grants = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM cash_actions WHERE project_id = ? AND action = 'CONTACT_BUYER'`,
+    [projectId],
+  );
+  let capacityPerDay: number | null = null;
+  try {
+    const { instantlyCapacity } = await import('./providers/instantly.ts');
+    capacityPerDay = (await instantlyCapacity())?.perDay ?? null;
+  } catch {
+    capacityPerDay = null;
+  }
+  return { projectId, permissionGranted: Number(grants?.n ?? 0) > 0 ? true : null, capacityPerDay };
+}
+
+export async function mechanismsFromRows(projectId: string, evidence?: unknown): Promise<OutreachMechanism[]> {
+  const db = getDb();
+  const ev = (evidence ?? null) as OutreachEvidence | null;
+  const opps = await db.all<{ id: string; mechanism: string; reachable_channel: string | null }>(
+    `SELECT id, mechanism, reachable_channel FROM cash_opportunities
+      WHERE project_id = ? AND duplicate_of_id IS NULL`,
+    [projectId],
+  );
+  const groupOf = new Map<string, { mechanism: string; channel: string | null; ids: Set<string> }>();
+  const keyOfOpp = new Map<string, string>();
+  for (const o of opps) {
+    const key = `${o.mechanism}|${o.reachable_channel ?? ''}`;
+    const g = groupOf.get(key) ?? { mechanism: o.mechanism, channel: o.reachable_channel, ids: new Set<string>() };
+    g.ids.add(o.id);
+    groupOf.set(key, g);
+    keyOfOpp.set(o.id, key);
+  }
+  const contacts = await db.all<{ opportunity_id: string; reference: string | null }>(
+    `SELECT opportunity_id, reference FROM cash_actions WHERE project_id = ? AND action = 'CONTACT_BUYER'`,
+    [projectId],
+  );
+  const obs = await db.all<{ opportunity_id: string; kind: string }>(
+    `SELECT opportunity_id, kind FROM cash_observations WHERE project_id = ?`,
+    [projectId],
+  );
+  const agreements = await db.all<{ opportunity_id: string; amount_cents: number; state: string }>(
+    `SELECT opportunity_id, amount_cents, state FROM cash_agreements WHERE project_id = ?`,
+    [projectId],
+  );
+  const money = await db.all<{ opportunity_id: string | null; kind: string; amount_cents: number }>(
+    `SELECT opportunity_id, kind, amount_cents FROM cash_money_entries
+      WHERE project_id = ? AND kind IN ('SETTLEMENT','CUSTOMER_PAYMENT')`,
+    [projectId],
+  );
+
+  const out: OutreachMechanism[] = [];
+  for (const [key, g] of groupOf) {
+    const inGroup = (id: string | null): boolean => id !== null && g.ids.has(id);
+    const mine = contacts.filter((c) => inGroup(c.opportunity_id));
+    const sent = mine.length;
+    const prospects = new Set(mine.map((c) => c.opportunity_id)).size;
+    const o = obs.filter((x) => inGroup(x.opportunity_id));
+    const repliedSet = new Set(o.filter((x) => x.kind === 'BUYER_REPLIED').map((x) => x.opportunity_id));
+    const decided = new Set(
+      o.filter((x) => ['BUYER_ACCEPTED', 'BUYER_COUNTERED', 'BUYER_DECLINED'].includes(x.kind)).map((x) => x.opportunity_id),
+    );
+    const agreed = agreements.filter((a) => inGroup(a.opportunity_id) && a.state === 'AGREED');
+    const settledRows = money.filter((m) => inGroup(m.opportunity_id));
+    const settledPieces = new Set(settledRows.map((m) => m.opportunity_id));
+    const paymentsByPiece = new Map<string, number>();
+    for (const m of money.filter((x) => inGroup(x.opportunity_id) && x.kind === 'CUSTOMER_PAYMENT')) {
+      paymentsByPiece.set(m.opportunity_id!, (paymentsByPiece.get(m.opportunity_id!) ?? 0) + 1);
+    }
+    const undeliverable = o.filter((x) => x.kind === 'CONTACT_UNDELIVERABLE').length;
+    const amounts = agreed.map((a) => a.amount_cents);
+    const mid = median(amounts);
+    const mode: OutreachMechanism['mode'] =
+      mid === null || sent === 0 ? 'UNCLASSIFIED' : sent >= 20 && mid < 100_000 ? 'VOLUME' : mid >= 100_000 ? 'HIGH_TICKET' : 'UNCLASSIFIED';
+    const known = (n: number, have: boolean): number | null => (have ? n : null);
+    const m: OutreachMechanism = {
+      key,
+      mechanism: g.mechanism,
+      channel: g.channel,
+      mode,
+      permission: ev?.permissionGranted ?? null,
+      openings: g.ids.size,
+      messagesSent: known(sent, sent > 0),
+      uniqueProspects: known(prospects, sent > 0),
+      undeliverable: known(undeliverable, sent > 0),
+      replied: known(repliedSet.size, sent > 0),
+      qualified: known(decided.size, sent > 0),
+      agreed: known(new Set(agreed.map((a) => a.opportunity_id)).size, sent > 0),
+      settled: known(settledPieces.size, sent > 0),
+      repeat: known([...paymentsByPiece.values()].filter((n) => n >= 2).length, sent > 0),
+      settledCents: settledRows.length > 0 ? settledRows.filter((x) => x.kind === 'SETTLEMENT').reduce((s, x) => s + Number(x.amount_cents), 0) : null,
+      capacityPerDay: ev?.capacityPerDay ?? null,
+      unknownStages: [],
+    };
+    if (m.permission === null) m.unknownStages.push('permission');
+    if (m.capacityPerDay === null) m.unknownStages.push('throughput');
+    if (m.messagesSent === null) m.unknownStages.push('uniqueProspects', 'deliverable', 'replied', 'qualified', 'closed', 'settled', 'repeat');
+    out.push(m);
+  }
+  return out;
+}
+
+/**
+ * Rank mechanisms by settled revenue per prospect reached. A mechanism with no
+ * messages sent has no funnel to rank and is returned unranked with its unknown
+ * stages named. Buyers are bounded by prospects reached, which are bounded by
+ * messages sent — never the other way round.
+ */
+export function searchOutreachMix(mechanisms: readonly OutreachMechanism[]): { ranked: RankedOutreach[]; unranked: OutreachMechanism[] } {
+  const ranked: RankedOutreach[] = [];
+  const unranked: OutreachMechanism[] = [];
+  for (const m of mechanisms) {
+    if (m.messagesSent === null || m.uniqueProspects === null) {
+      unranked.push(m);
+      continue;
+    }
+    const reached = Math.max(0, m.uniqueProspects - (m.undeliverable ?? 0));
+    const buyersObserved = Math.min(m.agreed ?? 0, reached);
+    ranked.push({
+      key: m.key,
+      mode: m.mode,
+      mechanism: m.mechanism,
+      channel: m.channel,
+      messagesSent: m.messagesSent,
+      reachedProspects: { low: reached, high: reached },
+      buyers: { low: Math.min(m.settled ?? 0, buyersObserved), high: buyersObserved },
+      replyRate: rateRange(m.replied, reached),
+      closeRate: rateRange(buyersObserved, m.qualified !== null && m.qualified > 0 ? m.qualified : null),
+      centsPerProspect: m.settledCents !== null && reached > 0 ? m.settledCents / reached : null,
+      unknownStages: m.unknownStages,
+    });
+  }
+  ranked.sort((a, b) => (b.centsPerProspect ?? -1) - (a.centsPerProspect ?? -1));
+  return { ranked, unranked };
+}
