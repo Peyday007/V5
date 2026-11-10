@@ -14,6 +14,8 @@
  */
 import { getDb } from '../../db/database.ts';
 import type { GoalExecutionPolicy } from '../../domain/goalPolicy.ts';
+// Registers the production probe r01.goal-09 wherever the policy is resolved; the probe imports this module back and only uses it at call time.
+import './acceptanceProbe.ts';
 
 const TTL_MS = 60_000;
 const cache = new Map<string, { at: number; policy: GoalExecutionPolicy }>();
