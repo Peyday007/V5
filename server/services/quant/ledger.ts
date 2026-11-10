@@ -22,6 +22,7 @@ import {
   assessModelLearning,
   type ModelLearningReading,
 } from './learning.ts';
+import { cashForecast, type CashForecast, type Estimate } from '../cash/forecast.ts';
 import type { ExposureRow, MissCause, OutcomeRow, PredictionRow } from './forecast.ts';
 
 export const LEDGER_EVENTS = {
@@ -219,4 +220,55 @@ export async function assessLedger(
   deps: Pick<LedgerDeps, 'read'> = {},
 ): Promise<ModelLearningReading> {
   return assessModelLearning({ ...(await (deps.read ?? readLedger)()), ...input });
+}
+
+/**
+ * The cash forecast, written to the ledger as the claims it makes. This is the
+ * connection to `cash/forecast.ts`, the existing owner of the figures: it calls
+ * that function and records what it returned, one versioned prediction per
+ * figure that has a value. A withheld estimate (`valueCents: null`) is not a
+ * claim, so it writes nothing and is never recorded as zero. The forecast
+ * states a spread of sourced rows, not a probability, so `probability` is null.
+ * Claim ids are per project and currency, so a recomputed forecast is the next
+ * version of the same claim, and calibration compares like with like.
+ */
+export async function recordCashForecast(
+  projectId: string,
+  forecast: CashForecast,
+  deps: LedgerDeps = {},
+): Promise<PredictionRow[]> {
+  const horizonDays = forecast.timeToFirstDollar.days;
+  const figures: [string, Estimate][] = [
+    ['revenue', forecast.revenue],
+    ['contribution', forecast.contribution],
+  ];
+  const written: PredictionRow[] = [];
+  for (const [name, est] of figures) {
+    if (est.valueCents === null) continue;
+    written.push(
+      await recordPrediction(
+        {
+          claimId: `cash:${projectId}:${forecast.currency}:${name}`,
+          outcome: `${name} of ${est.valueCents} ${forecast.currency} cents (range ${est.lowCents}..${est.highCents})`,
+          horizonDays,
+          population: `${forecast.qualified} qualified of ${forecast.considered} opportunities in ${forecast.currency}`,
+          data: [est.basis],
+          assumptions: [`derived from ${est.fromRows} opportunity row(s)`],
+          probability: null,
+          comparableKey: `cash:${forecast.currency}:${name}`,
+        },
+        deps,
+      ),
+    );
+  }
+  return written;
+}
+
+/** Run the cash forecast and record it: the cash forecast's output reaches the ledger through here. */
+export async function forecastAndRecordCash(
+  input: { projectId: string; currency: string },
+  deps: LedgerDeps = {},
+): Promise<{ forecast: CashForecast; predictions: PredictionRow[] }> {
+  const forecast = await cashForecast(input);
+  return { forecast, predictions: await recordCashForecast(input.projectId, forecast, deps) };
 }
