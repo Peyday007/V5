@@ -411,6 +411,10 @@ describe("Caleb's account over simulated time", () => {
     // Past every budget only the weekly fallback is left: the next probe is days away.
     await recoveryLoop(8 * DAY, () => null);
     expect(Date.parse((await nextAutoProbeAt(f3.id))!)).toBeGreaterThan(clock + 2 * HOUR);
+    const { autoProbePlan } = await import('../server/services/fleet/autoRecovery.ts');
+    const row = (await autoProbePlan()).find((r) => r.routineId === f3.id)!;
+    expect(row.never).toBeNull();
+    expect(row.failed).toBeGreaterThanOrEqual(18);
 
     // Caleb adds the Factory Brain connector in Claude and selects it in the Routine.
     // He tells nobody, and nobody presses anything.
