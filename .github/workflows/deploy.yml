@@ -157,7 +157,8 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
-    runs-on: ubuntu-latest
+    # Pinned: the OCR fixtures are calibrated to tesseract 5.3 (24.04); ubuntu-latest became 26.04 with tesseract 5.5 on 2026-11-10 and tests/ocr.test.ts stopped reading the poor scan as BLOCKED.
+    runs-on: ubuntu-24.04
     outputs:
       superseded: ${{ steps.fresh.outputs.superseded || steps.tests.outputs.superseded }}
     steps:
