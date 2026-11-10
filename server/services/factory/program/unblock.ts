@@ -43,6 +43,13 @@ export async function unblockProgram(input: {
    * from the blocker and given deliberately — never inferred by the program.
    */
   grant?: { campaign: string; paths: string[] };
+  /**
+   * Brain's own hourly pass rather than a person's command. It does not reopen
+   * a bin already granted AUTO_REOPEN_CEILING attempts: production 2026-11-10,
+   * a plan bin whose contract named only a protected file refused 22 sessions
+   * in a row, and reopening it hourly only spends two more.
+   */
+  automatic?: boolean;
 }): Promise<UnblockStep[]> {
   const program = await getProgram(input.programId);
   if (!program) throw new Error('No such program.');
@@ -100,6 +107,10 @@ export async function unblockProgram(input: {
     }
     // 3. Parked bins.
     for (const bin of parked.filter((b) => b.factoryCampaignId === campaign.id)) {
+      if (input.automatic && bin.maxAttempts >= AUTO_REOPEN_CEILING) {
+        steps.push({ campaign: link.campaignKey, action: 'SKIP', detail: `${bin.id} has had ${bin.maxAttempts} attempts; left for a person` });
+        continue;
+      }
       await regrantBinAttempts({ binId: bin.id, maxAttempts: Math.min(40, bin.maxAttempts + 2), reason: 'Parked while the campaign scope was too narrow or no worker surface arrived; the scope is widened and surfaces are arriving. Not spent on the work failing.' });
       const reopened = await reopenParkedBin({ binId: bin.id, operator: `operator:${input.operatorId}`, reason: 'Program approver reopened a bin parked for scope or capacity, not for the work.' });
       steps.push(reopened.ok
@@ -123,6 +134,8 @@ export async function unblockProgram(input: {
  * so a unit that cannot be done at any scope stops, and is still a person's.
  */
 export const AUTO_UNBLOCK_INTERVAL_MS = 60 * 60_000;
+/** A parked bin given this many attempts is not reopened by the automatic pass. */
+export const AUTO_REOPEN_CEILING = 12;
 let lastAutoUnblock = 0;
 
 export async function unblockApprovedPrograms(now = Date.now(), force = false): Promise<UnblockStep[]> {
@@ -138,7 +151,7 @@ export async function unblockApprovedPrograms(now = Date.now(), force = false): 
       if (campaign?.state === 'BLOCKED') { blocked = true; break; }
     }
     if (!blocked) continue;
-    steps.push(...(await unblockProgram({ programId: program.id, operatorId: program.approvedByUserId })));
+    steps.push(...(await unblockProgram({ programId: program.id, operatorId: program.approvedByUserId, automatic: true })));
   }
   return steps;
 }
