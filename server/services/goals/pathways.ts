@@ -62,6 +62,8 @@ import type { GoalPortfolio } from './portfolio.ts';
 import type { TargetReading } from './target.ts';
 import type { ChainLink, ConsideredOpening } from './plan.ts';
 import type { GoalRoundOutcome, ResearchDiagnosis } from './researchYield.ts';
+// Registers the production probe r01.opp-04 wherever pathways load; the probe reaches this module only at call time.
+import './pathwaysProbe.ts';
 
 /**
  * How far a property is established. `DENIED` is a known answer: something is
@@ -386,7 +388,7 @@ export interface TransactionPathway {
   capital: PathFact;
   /** Rights and authorization: what this transaction may do under the permissions held; never a guess (§93). */
   rights: PathFact;
-  /** Whether the fulfiller can deliver the volume this pathway needs; unmeasured capacity is stated as such. */
+  /** Whether the fulfiller can deliver the volume this pathway needs; stated as an estimate only once a range can be justified, otherwise unknown. */
   capacity: PathFact;
   /** How the buyer is reached, and whether that waits on cold outreach (§93). */
   acquisition: { method: AcquisitionMethod; basis: string };
@@ -613,11 +615,13 @@ export function pathwayOf(
   };
   const respond = factOf(one.respond);
   const close = factOf(one.close);
+  const conversionStatus = weakest(respond.status, close.status);
   const conversion: PathFact = {
-    value: mid(respond) !== null && mid(close) !== null ? mid(respond)! * mid(close)! : null,
+    // An unknown states no point value: the swept range below is all there is, and `mid` reads it from there (§93).
+    value: conversionStatus !== 'UNKNOWN' && mid(respond) !== null && mid(close) !== null ? mid(respond)! * mid(close)! : null,
     low: lowOf(respond) !== null && lowOf(close) !== null ? lowOf(respond)! * lowOf(close)! : null,
     high: highOf(respond) !== null && highOf(close) !== null ? highOf(respond)! * highOf(close)! : null,
-    status: weakest(respond.status, close.status),
+    status: conversionStatus,
     basis: `reply ${respond.status.toLowerCase()} × close ${close.status.toLowerCase()}: ${close.basis.slice(0, 120)}`,
   };
   const volume = factOf(one.volume);
@@ -630,9 +634,14 @@ export function pathwayOf(
   const rights: PathFact = input.permissionsMissing.length === 0
     ? { value: 'every permission this transaction depends on is granted', low: null, high: null, status: 'PROVEN', basis: 'the project\'s authority grants every action the transaction needs' }
     : { value: `not yet granted: ${input.permissionsMissing.join(', ')}`, low: null, high: null, status: 'DENIED', basis: 'each missing permission blocks only its own action; none is assumed granted' };
-  const capacity: PathFact = fulfiller.status === 'UNKNOWN'
-    ? { value: null, low: null, high: null, status: 'UNKNOWN', basis: 'nobody is named to fulfil it, so no delivery capacity is established' }
-    : { value: null, low: null, high: null, status: 'ESTIMATED', basis: 'a fulfiller is named; the volume it can deliver is not yet measured' };
+  // An estimate carries a justified range (§93). Nothing measures the volume a named fulfiller can deliver, so capacity is unknown either way; naming the fulfiller changes only what is said.
+  const capacity: PathFact = {
+    value: null,
+    low: null,
+    high: null,
+    status: 'UNKNOWN',
+    basis: fulfiller.status === 'UNKNOWN' ? 'nobody is named to fulfil it, so no delivery capacity is established' : 'a fulfiller is named; the volume it can deliver is not yet measured, so no range can be justified',
+  };
   const dependencies = [...new Set([...o.requiredCapabilities, 'CONTACT_BUYER', 'QUOTE_AND_INVOICE', 'ACCEPT_PAYMENT'])];
   const failurePoints = judged?.missing ?? [];
 
