@@ -252,13 +252,14 @@ async function state(r: Routine): Promise<string> {
 async function recoveryLoop(
   span: number,
   arrival: (routineId: string) => { workerId: string; c: Connector } | null,
+  step = 5 * 60_000,
 ): Promise<Array<{ routineId: string; state: string; at: number }>> {
   const pending = new Map<string, string>(); // probe id -> routine id
   const fireProbe: Fire = async ({ target }) => ({ ok: true, sessionRef: `cse_PRB${(probeSessions += 1)}`, fireEventId: 'f', routineId: target.routineId });
   const out: Array<{ routineId: string; state: string; at: number }> = [];
   const end = clock + span;
   while (clock < end) {
-    at(clock + 5 * 60_000);
+    at(clock + step);
     const id = await autoProbeQuarantinedSurfaces({ force: true, fire: fireProbe, now: clock });
     if (id) {
       const probe = (await getRecoveryProbe(id))!;
@@ -406,10 +407,10 @@ describe("Caleb's account over simulated time", () => {
     await judge();
     expect(await state(f3)).toBe('QUARANTINED');
     // Every probe for three weeks arrives as worker-04: the fast and the daily budgets are spent.
-    expect((await recoveryLoop(30 * DAY, (rid) => (rid === f3.id ? { workerId: research, c: researchConn } : null))).length).toBeGreaterThanOrEqual(18);
+    expect((await recoveryLoop(30 * DAY, (rid) => (rid === f3.id ? { workerId: research, c: researchConn } : null), HOUR)).length).toBeGreaterThanOrEqual(18);
     expect(await state(f3)).toBe('QUARANTINED');
     // Past every budget only the weekly fallback is left: the next probe is days away.
-    await recoveryLoop(8 * DAY, () => null);
+    await recoveryLoop(8 * DAY, () => null, HOUR);
     expect(Date.parse((await nextAutoProbeAt(f3.id))!)).toBeGreaterThan(clock + 2 * HOUR);
     const { autoProbePlan } = await import('../server/services/fleet/autoRecovery.ts');
     const row = (await autoProbePlan()).find((r) => r.routineId === f3.id)!;
@@ -432,8 +433,8 @@ describe("Caleb's account over simulated time", () => {
     await arriveAndWork(research, researchConn, 'f3_wrong');
     at(clock + WRONG_WORKER_GRACE_MS + 60_000);
     await judge();
-    expect((await recoveryLoop(30 * DAY, (rid) => (rid === f3.id ? { workerId: research, c: researchConn } : null))).length).toBeGreaterThanOrEqual(18);
-    const weeks = await recoveryLoop(21 * DAY, () => null);
+    expect((await recoveryLoop(30 * DAY, (rid) => (rid === f3.id ? { workerId: research, c: researchConn } : null), HOUR)).length).toBeGreaterThanOrEqual(18);
+    const weeks = await recoveryLoop(21 * DAY, () => null, HOUR);
     expect(weeks.filter((p) => p.routineId === f3.id).length).toBe(3);
   });
 
