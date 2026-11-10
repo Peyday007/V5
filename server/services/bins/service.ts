@@ -54,6 +54,7 @@ import {
   recordBinEvent,
   recordBinRefusal,
   releaseBin,
+  regrantBinAttempts,
   reopenNeedsHumanBin,
   resolveNeedsHumanBin,
   terminateUnleasedBin,
@@ -1871,6 +1872,26 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
     const full = await getBin(bin.id);
     if (!full) continue;
     const verdict = await evaluateContract(full);
+    /*
+     * Not a decision for a person when the only thing outstanding is the
+     * forge's own read budget, or nothing at all. Production 2026-11-09/10:
+     * fifteen program campaigns drained Brain's unauthenticated 60 reads an
+     * hour, every integration reported "the forge's read rate limit is spent
+     * … not a fault in the work", the attempts ran out on that alone, and the
+     * stage parked waiting for a person who had nothing to decide. One more
+     * attempt is granted instead, so a worker reports again once it resets.
+     */
+    if (forgeOnly(verdict)) {
+      const regranted = await regrantBinAttempts({
+        binId: full.id,
+        maxAttempts: full.maxAttempts + 1,
+        reason: 'Attempts spent while the forge refused reads for its rate limit, or with nothing outstanding; not spent on the work failing.',
+      });
+      if (regranted.raised) {
+        report.details.push({ binId: bin.id, disposition: 'RETRY_FORGE', reason: verdict.reasons[0] ?? 'nothing outstanding' });
+        continue;
+      }
+    }
     const reason =
       `The bin used all ${full.maxAttempts} attempts without satisfying ` +
       `${full.completionContract} v${full.contractVersion}. ` +
@@ -1936,6 +1957,12 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
  * gets it wrong for a packet that has legitimately gone back to work; see the
  * comment at the check itself.
  */
+/** A verdict whose only outstanding reason is the forge's read rate limit, or none at all. */
+export function forgeOnly(verdict: Pick<ContractVerdict, 'reasons' | 'disposition'>): boolean {
+  if (verdict.disposition === 'HUMAN') return false;
+  return verdict.reasons.every((reason) => /read rate limit is spent/.test(reason));
+}
+
 export async function reopenParkedBin(input: {
   binId: string;
   operator: string;
