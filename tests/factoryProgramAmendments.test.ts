@@ -314,3 +314,19 @@ describe('campaigns submitted before they owned a test file', () => {
     expect(extended).toEqual([]);
   });
 });
+
+describe('a campaign is told its probes are not its own to write', () => {
+  it('says so in every submitted objective', async () => {
+    const programId = await submitAndApprove();
+    const line = new Line();
+    const seen: CampaignSubmission[] = [];
+    const submit = line.submit.bind(line);
+    line.submit = async (input: CampaignSubmission) => {
+      seen.push(input);
+      return submit(input);
+    };
+    await tickProgram(programId, line);
+    expect(seen.length).toBeGreaterThan(0);
+    for (const s of seen) expect(s.objective).toMatch(/defined by the program owner, never by this campaign/);
+  });
+});
