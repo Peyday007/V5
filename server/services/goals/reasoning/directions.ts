@@ -709,7 +709,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
 }
 
 function rank(rows: DirectionReading[]): DirectionReading[] {
-  return [...rows].sort((a, b) => b.score - a.score || b.reading.reach - a.reading.reach || b.reading.settledP50 - a.reading.settledP50);
+  return [...rows].sort((a, b) => b.score - a.score || b.reading.reach - a.reading.reach || b.reading.settledP50 - a.reading.settledP50 || (a.direction.signature < b.direction.signature ? -1 : a.direction.signature > b.direction.signature ? 1 : 0));
 }
 
 /** The strongest directions that are not near-copies of a stronger one: leaders must disagree to challenge one another. */
