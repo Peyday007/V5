@@ -157,7 +157,10 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
-    runs-on: ubuntu-latest
+    # Pinned to the OS whose OCR stack matches production's image (tesseract 5.3,
+    # Debian bookworm). ubuntu-latest moved to 26.04 on 2026-11-10 (tesseract
+    # 5.5), which reads the deliberately poor test scan as text (§98 record).
+    runs-on: ubuntu-24.04
     outputs:
       superseded: ${{ steps.fresh.outputs.superseded || steps.tests.outputs.superseded }}
     steps:
