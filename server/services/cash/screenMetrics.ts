@@ -233,6 +233,41 @@ async function grouped(sql: string, params: unknown[]): Promise<Array<{ key: str
 
 const LANE = `event_type = 'FREE_LANE_ITEM' AND at >= ? AND at < ?`;
 
+/**
+ * The spans of the window during which a lane item was running, merged so that
+ * overlapping items count once. An item's event is recorded when it ends, so it
+ * spans `duration_ms` back from `at`; an event with no duration is a point.
+ * Shared by two measures that report different facts about the same spans.
+ */
+async function laneBusyIntervals(
+  since: string,
+  until: string,
+): Promise<{ merged: Array<[number, number]>; windowMs: number; startMs: number; endMs: number; items: number }> {
+  const startMs = Date.parse(since);
+  const endMs = Date.parse(until);
+  const rows = await getDb().all<{ at: string; duration_ms: number | string | null }>(
+    `SELECT at, duration_ms FROM bin_events WHERE ${LANE} ORDER BY at LIMIT 20000`,
+    [since, until],
+  );
+  const spans: Array<[number, number]> = [];
+  for (const row of rows) {
+    const stop = Date.parse(row.at);
+    if (!Number.isFinite(stop)) continue;
+    const length = Math.max(0, n(row.duration_ms));
+    const a = Math.max(startMs, stop - length);
+    const b = Math.min(endMs, stop);
+    if (b >= a) spans.push([a, b]);
+  }
+  spans.sort((x, y) => x[0] - y[0]);
+  const merged: Array<[number, number]> = [];
+  for (const span of spans) {
+    const last = merged[merged.length - 1];
+    if (last && span[0] <= last[1]) last[1] = Math.max(last[1], span[1]);
+    else merged.push([span[0], span[1]]);
+  }
+  return { merged, windowMs: Math.max(0, endMs - startMs), startMs, endMs, items: rows.length };
+}
+
 const MEASURES: readonly Measure[] = [
   {
     measure: 'jobs',
@@ -411,28 +446,35 @@ const MEASURES: readonly Measure[] = [
   },
   {
     measure: 'utilization',
-    label: 'utilization: slices of the window with lane work running',
-    denominatorIs: 'twelve equal slices of the window',
+    label: 'utilization: share of the window with lane work running',
+    denominatorIs: 'milliseconds in the window',
     read: async (since, until) => {
-      const start = Date.parse(since);
-      const slice = (Date.parse(until) - start) / 12;
-      const rows = await getDb().all<{ at: string }>(`SELECT at FROM bin_events WHERE ${LANE} LIMIT 20000`, [since, until]);
-      const busy = new Set<number>();
-      for (const row of rows) busy.add(Math.min(11, Math.max(0, Math.floor((Date.parse(row.at) - start) / slice))));
-      return { numerator: busy.size, denominator: 12 };
+      const { merged, windowMs, items } = await laneBusyIntervals(since, until);
+      const busyMs = merged.reduce((sum, [a, b]) => sum + (b - a), 0);
+      return {
+        numerator: busyMs,
+        denominator: windowMs,
+        note: `wall-clock covered by at least one lane item (each item spans its recorded duration back from its event, overlaps counted once), over ${items} item(s); work that began before the window and ended inside it counts only the part inside`,
+      };
     },
   },
   {
+    // A different fact from utilization: the longest unbroken stretch with nothing running, which is what shows
+    // capacity left idle in one piece. Busy coverage and longest gap are not complements: a window can be half
+    // covered by many short gaps or by one long one, and only the second leaves a block of capacity unused.
     measure: 'idleTime',
-    label: 'idle time: slices of the window with no lane work',
-    denominatorIs: 'twelve equal slices of the window',
+    label: 'idle time: the longest unbroken stretch of the window with no lane work',
+    denominatorIs: 'milliseconds in the window',
     read: async (since, until) => {
-      const start = Date.parse(since);
-      const slice = (Date.parse(until) - start) / 12;
-      const rows = await getDb().all<{ at: string }>(`SELECT at FROM bin_events WHERE ${LANE} LIMIT 20000`, [since, until]);
-      const busy = new Set<number>();
-      for (const row of rows) busy.add(Math.min(11, Math.max(0, Math.floor((Date.parse(row.at) - start) / slice))));
-      return { numerator: 12 - busy.size, denominator: 12 };
+      const { merged, windowMs, startMs, endMs, items } = await laneBusyIntervals(since, until);
+      let longest = 0;
+      let cursor = startMs;
+      for (const [a, b] of merged) {
+        longest = Math.max(longest, a - cursor);
+        cursor = Math.max(cursor, b);
+      }
+      longest = Math.max(longest, endMs - cursor);
+      return { numerator: longest, denominator: windowMs, note: `gaps between merged lane items and at both edges of the window, over ${items} item(s)` };
     },
   },
   {
