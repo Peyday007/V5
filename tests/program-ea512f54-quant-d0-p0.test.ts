@@ -365,3 +365,32 @@ describe('outreach funnel read from cash_outcomes rows (outreachFromRows via cas
     expect(r.buyers.basis).toBe('UNKNOWN');
   });
 });
+
+describe('probe r01.com-13-3 is registered and judges production rows', () => {
+  it('is registered once the funnel is loaded, and fails with no outreach rows rather than passing', async () => {
+    const { getProbe } = await import('../server/services/factory/program/probes.ts');
+    const probe = getProbe('r01.com-13-3');
+    expect(probe).not.toBeNull();
+    await freshProject();
+    const result = await probe!({});
+    expect(result.ok).toBe(false);
+    expect(result.detail).toMatch(/no outreach outcome rows/);
+  });
+
+  it('passes on real cash_outcomes rows and names what it saw', async () => {
+    const { getProbe } = await import('../server/services/factory/program/probes.ts');
+    const projectId = (await freshProject()).project.id;
+    const db = getDb();
+    const insert = (id: string, opp: string, kind: string, text: string | null, cents: number | null) =>
+      db.run(
+        `INSERT INTO cash_outcomes (id, project_id, opportunity_id, kind, mechanism, channel, value_cents, value_text, basis, request_key, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, projectId, opp, kind, 'partner-access', null, cents, text, 'MEASURED', `k-${id}`, '2026-11-01T00:00:00.000Z'],
+      );
+    await insert('o1', 'opp-1', 'CONTACT_RESULT', 'BUYER_ACCEPTED', null);
+    await insert('o2', 'opp-2', 'CONTACT_RESULT', 'BUYER_SILENT', null);
+    const result = await getProbe('r01.com-13-3')!({});
+    expect(result.detail).toMatch(/1 mechanism/);
+    expect(result.ok).toBe(true);
+  });
+});

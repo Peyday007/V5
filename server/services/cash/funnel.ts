@@ -28,6 +28,8 @@ import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { instantlySendingStanding } from './providers/instantly.ts';
+// Registers the production probe r01.com-13-3 wherever the funnel is loaded; the probe imports this module back and only uses it at call time.
+import './outreachFunnelProbe.ts';
 
 export const FUNNEL_WEEKS = 8;
 
