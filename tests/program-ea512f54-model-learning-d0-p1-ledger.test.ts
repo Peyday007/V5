@@ -120,3 +120,22 @@ describe('a systematic miss reaches an owner from recorded rows alone', () => {
     expect(reading.corrections).toEqual([]);
   });
 });
+
+describe('the cash forecast is the ledger\'s producer', () => {
+  it('quant/ledger.ts calls cash/forecast.ts and records its figures', async () => {
+    expect(readFileSync('server/services/quant/ledger.ts', 'utf8')).toContain("../cash/forecast.ts");
+    const { recordCashForecast } = await import('../server/services/quant/ledger.ts');
+    const est = (v: number | null) => ({ valueCents: v, lowCents: v, highCents: v, fromRows: v === null ? 0 : 2, confidence: 'SEVERAL_ROWS' as const, basis: 'prices', unknown: [], blocking: '' });
+    const dur = { days: 14, lowDays: 7, highDays: 21, fromRows: 2, confidence: 'SEVERAL_ROWS' as const, basis: 'b', unknown: [], blocking: '' };
+    const rows: unknown[] = [];
+    const deps = { record: (async (e: { measures: unknown }) => { rows.push(e.measures); }) as never, read: async () => ({ predictions: [], exposures: [], outcomes: [] }) };
+    const written = await recordCashForecast('prj', {
+      currency: 'USD', qualified: 2, considered: 3, upfrontCash: est(null), ongoingCosts: est(null),
+      revenue: est(5000), contribution: est(null), timeToFirstDollar: dur, breakEven: dur,
+      humanHours: { total: null, fromRows: 0, unknown: [] },
+    }, deps);
+    expect(written.map((w) => w.claimId)).toEqual(['cash:prj:USD:revenue']);
+    expect(written[0]?.horizonDays).toBe(14);
+    expect(rows).toHaveLength(1);
+  });
+});
