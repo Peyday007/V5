@@ -445,6 +445,12 @@ export async function listBinHeads(filter: {
   projectId?: string;
   states?: BinState[];
   limit?: number;
+  /**
+   * Only bins whose attempts are spent. A page of 500 in priority order once
+   * hid two exhausted Factory bins behind 500 READY research bins, so the
+   * reconcile pass never saw them and their campaigns waited for ten hours.
+   */
+  exhausted?: boolean;
 }): Promise<BinHead[]> {
   const clauses: string[] = [];
   const params: SqlParam[] = [];
@@ -456,6 +462,7 @@ export async function listBinHeads(filter: {
     clauses.push(`state IN (${filter.states.map(() => '?').join(', ')})`);
     params.push(...filter.states);
   }
+  if (filter.exhausted) clauses.push('attempt_count >= max_attempts');
   const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
   params.push(Math.min(500, Math.max(1, filter.limit ?? 100)));
   const rows = await getDb().all<BinRow>(
@@ -475,6 +482,8 @@ export async function listBins(filter: {
   projectId?: string;
   states?: BinState[];
   limit?: number;
+  /** Only bins whose kind starts with this, e.g. `FACTORY_`; filtered before the limit. */
+  kindPrefix?: string;
 }): Promise<Bin[]> {
   const clauses: string[] = [];
   const params: SqlParam[] = [];
@@ -485,6 +494,10 @@ export async function listBins(filter: {
   if (filter.states && filter.states.length > 0) {
     clauses.push(`state IN (${filter.states.map(() => '?').join(', ')})`);
     params.push(...filter.states);
+  }
+  if (filter.kindPrefix) {
+    clauses.push('substr(kind, 1, ?) = ?');
+    params.push(filter.kindPrefix.length, filter.kindPrefix);
   }
   const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
   params.push(Math.min(500, Math.max(1, filter.limit ?? 100)));

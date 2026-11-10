@@ -276,6 +276,19 @@ describe('a bin that has spent its attempts', () => {
     expect((await getBin(binId))?.state).toBe('LEASED');
   });
 
+  it('is reached even when five hundred healthier bins come first', async () => {
+    // Production 2026-11-10: two exhausted Factory bins sat behind 500 READY
+    // research bins in the page the pass read, so they stayed READY at 2/2 for
+    // ten hours — not assignable, not a decision — and held three campaigns.
+    const spent = await readyBin('the one past the page');
+    await spend(spent, 'byRelease');
+    for (let n = 0; n < 500; n += 1) await readyBin(`ahead ${n}`);
+    await getDb().run('UPDATE bins SET priority = 0 WHERE id = ?', [spent]);
+    await getDb().run('UPDATE bins SET priority = 9 WHERE id <> ?', [spent]);
+    await reconcileBins(projectId);
+    expect((await getBin(spent))?.state).toBe('NEEDS_HUMAN');
+  }, 60_000);
+
   it('does not take its siblings down with it', async () => {
     const spent = await readyBin('the one nobody can finish');
     const healthy = await readyBin('the one that is fine');

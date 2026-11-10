@@ -1817,11 +1817,23 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
     });
   }
 
-  const bins = await listBinHeads({
+  const page = await listBinHeads({
     projectId,
     states: ['DRAFT', 'READY', 'LEASED'],
     limit: 500,
   });
+  /*
+   * The exhausted bins are the ones this pass exists to act on, and a page in
+   * priority order is not guaranteed to reach them: production 2026-11-10 had
+   * 500 READY research bins ahead of two exhausted Factory bins, which stayed
+   * READY at 2/2 — neither assignable nor a decision — and held a chain of
+   * three campaigns for ten hours. They are read on their own as well.
+   */
+  const seen = new Set(page.map((bin) => bin.id));
+  const exhausted = (
+    await listBinHeads({ projectId, states: ['READY', 'LEASED'], exhausted: true, limit: 500 })
+  ).filter((bin) => !seen.has(bin.id));
+  const bins = [...page, ...exhausted];
   const report: ReconcileReport = { examined: bins.length, healthy: 0, escalated: 0, details: [...closedWithPacket] };
 
   for (const bin of bins) {
