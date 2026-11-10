@@ -190,7 +190,10 @@ jobs:
     name: Gate the merged tree
     needs: plan
     if: needs.plan.outputs.needs_gate == 'true'
-    runs-on: ubuntu-latest
+    # Pinned with Deploy and the Postgres suite (#663): ubuntu-latest became
+    # 26.04, whose tesseract 5.5 reads ocr.test's deliberately poor scan, so
+    # every release gate failed on a test production's tesseract 5.3 passes.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
       contents: read
@@ -346,7 +349,10 @@ jobs:
     name: The whole suite against Postgres, on the merged tree (shard ${{ matrix.shard }}/8)
     needs: [plan, gate-tree]
     if: needs.gate-tree.result == 'success'
-    runs-on: ubuntu-latest
+    # Pinned with Deploy and the Postgres suite (#663): ubuntu-latest became
+    # 26.04, whose tesseract 5.5 reads ocr.test's deliberately poor scan, so
+    # every release gate failed on a test production's tesseract 5.3 passes.
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
       contents: read
