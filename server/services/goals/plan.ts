@@ -1154,6 +1154,10 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   return reading;
 }
 
+/** How long a goal's exploration is reused while its inputs are unchanged (§101); after it, the library and the model get another turn. */
+export const EXPLORATION_HELD_MS = 6 * 60 * 60_000;
+const explored = new Map<string, { key: string; at: number; reconstruction: Reconstruction }>();
+
 /** How often a goal's plan read asks the model to invent new ways of reasoning (§101). */
 export const INVENT_EVERY_MS = 15 * 60_000;
 const lastInvent = new Map<string, number>();
@@ -1179,6 +1183,10 @@ export async function reconstructionFor(
 ): Promise<Reconstruction | null> {
   if (!model.portfolio || !model.portfolioInput || model.portfolioInput.openings.length === 0) return null;
   const { openings, ...portfolio } = model.portfolioInput;
+  // Unchanged inputs are not re-explored: the same plan reads the same, and the CPU goes to goals whose inputs moved.
+  const inputsKey = sha256(JSON.stringify({ openings, portfolio, required }));
+  const held = context.goalId ? explored.get(context.goalId) : undefined;
+  if (held && held.key === inputsKey && Date.now() - held.at < EXPLORATION_HELD_MS) return held.reconstruction;
   const evaluator = sharedEvaluator();
   try {
     const library = await loadLibrary().catch(() => []);
@@ -1191,6 +1199,7 @@ export async function reconstructionFor(
       // The model is asked at most every INVENT_EVERY_MS per goal; between, the library carries what it invented.
       explore: { library, ...(inventDue(context.goalId) ? { invent: (brief) => inventDirections(brief) } : {}) },
     });
+    if (context.goalId) explored.set(context.goalId, { key: inputsKey, at: Date.now(), reconstruction: r });
     if (context.persist && context.goalId && r.exploration) {
       await recordExploration(context.goalId, r.exploration).catch((error: unknown) => console.warn(`reasoning record failed: ${String((error as Error)?.message ?? error)}`));
     }
@@ -1758,6 +1767,7 @@ export function requestGoalPlanPass(goalId: string, why: string): void {
 /** Tests. */
 export function forgetGoalReadings(): void {
   lastArrangements.clear();
+  explored.clear();
   lastReadings.clear();
   lastTopUp.clear();
   lastInputs.clear();
