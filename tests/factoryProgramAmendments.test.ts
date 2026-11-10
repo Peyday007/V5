@@ -358,3 +358,40 @@ describe('production evidence decides whatever route the code took', () => {
     expect(again.verified.filter((v) => v.requirement === 'CASH')).toEqual([]);
   });
 });
+
+describe('an approved program answers its own blocked campaigns', () => {
+  it('unblocks a BLOCKED campaign on the approver’s standing approval, hourly, and leaves the rest alone', async () => {
+    const { unblockApprovedPrograms, resetAutoUnblock } = await import('../server/services/factory/program/unblock.ts');
+    const { ensureCampaign, getChangeRequest, patchCampaign } = await import('../server/repos/factory.ts');
+    resetAutoUnblock();
+    const programId = await submitAndApprove();
+    await tickProgram(programId, new Line());
+    // Nothing blocked: nothing done.
+    expect(await unblockApprovedPrograms(Date.now(), true)).toEqual([]);
+
+    const [link] = await listCampaignLinks(programId);
+    const { campaign } = await ensureCampaign({
+      changeRequestId: link!.changeRequestId,
+      projectId: fixture.project.id,
+      baseSha: 'a'.repeat(40),
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    } as never);
+    await patchCampaign(campaign.id, { state: 'BLOCKED', blockerKind: 'UNIT_EXHAUSTED_ATTEMPTS' as never, blockerDetail: 'out of attempts on scope' });
+    // A map that named one file, the shape that ran units out of attempts in production.
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run('UPDATE factory_change_requests SET mutation_scope = ? WHERE id = ?', [JSON.stringify(['server/services/cash/funnel.ts']), link!.changeRequestId]);
+    const before = (await getChangeRequest(link!.changeRequestId))!.mutationScope;
+
+    const steps = await unblockApprovedPrograms(Date.now(), true);
+    // The blocked campaign was answered through the program door (its scope step is
+    // refused here only because this test project never onboarded the repository).
+    const mine = steps.filter((step) => step.campaign === link!.campaignKey);
+    expect(mine.length).toBeGreaterThan(0);
+    expect(mine[0]!.action === 'SCOPE' || mine[0]!.detail.startsWith('scope:')).toBe(true);
+    expect(before).toEqual(['server/services/cash/funnel.ts']);
+    // Hourly: an unforced call inside the interval does nothing.
+    expect(await unblockApprovedPrograms(Date.now() + 60_000)).toEqual([]);
+  });
+});

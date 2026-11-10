@@ -109,3 +109,41 @@ export async function unblockProgram(input: {
   }
   return steps;
 }
+
+/*
+ * The same answer, given by Brain on the approver's standing approval rather
+ * than waiting for somebody to type it (§97, production 2026-11-10).
+ *
+ * Every campaign of the approved program sat BLOCKED(person) on exhausted
+ * attempts or scope with every worker idle, and the answer was this function,
+ * which only ever ran when a session thought to dispatch `program-unblock`. A
+ * program is approved once (§52); a unit that ran out on scope is not a new
+ * decision. Bounded by what the doors already bound: a unit's ceiling never
+ * passes MAX_UNIT_ATTEMPTS, a bin's never 40, and the pass runs at most hourly,
+ * so a unit that cannot be done at any scope stops, and is still a person's.
+ */
+export const AUTO_UNBLOCK_INTERVAL_MS = 60 * 60_000;
+let lastAutoUnblock = 0;
+
+export async function unblockApprovedPrograms(now = Date.now(), force = false): Promise<UnblockStep[]> {
+  if (!force && now - lastAutoUnblock < AUTO_UNBLOCK_INTERVAL_MS) return [];
+  lastAutoUnblock = now;
+  const { listPrograms } = await import('../../../repos/factoryProgram.ts');
+  const steps: UnblockStep[] = [];
+  for (const program of await listPrograms(['APPROVED'])) {
+    if (!program.approvedByUserId) continue;
+    let blocked = false;
+    for (const link of await listCampaignLinks(program.id)) {
+      const campaign = await getCampaignByChangeRequest(link.changeRequestId);
+      if (campaign?.state === 'BLOCKED') { blocked = true; break; }
+    }
+    if (!blocked) continue;
+    steps.push(...(await unblockProgram({ programId: program.id, operatorId: program.approvedByUserId })));
+  }
+  return steps;
+}
+
+/** Tests: let the next call run. */
+export function resetAutoUnblock(): void {
+  lastAutoUnblock = 0;
+}

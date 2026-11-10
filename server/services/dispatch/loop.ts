@@ -298,6 +298,30 @@ export async function dispatchTick(
     } catch (error) {
       console.warn('[dispatch] improvement activation fallback failed:', (error as Error).message);
     }
+    /*
+     * Throughput self-correction, each bounded by its own interval: account
+     * targets follow the provider's answers (`autoScaleAccounts`, ten minutes),
+     * and an approved program's campaigns stopped on scope or exhausted
+     * attempts are answered on the approver's standing approval
+     * (`unblockApprovedPrograms`, hourly). Neither creates work.
+     */
+    try {
+      const { autoScaleAccounts } = await import('./scaler.ts');
+      const scaled = await autoScaleAccounts();
+      for (const step of scaled) {
+        console.log(`[dispatch] auto-scale ${step.accountId} ${step.from} -> ${step.to}: ${step.reason}`);
+      }
+    } catch (error) {
+      console.warn('[dispatch] auto-scale failed:', (error as Error).message);
+    }
+    try {
+      const { unblockApprovedPrograms } = await import('../factory/program/unblock.ts');
+      const steps = await unblockApprovedPrograms();
+      const acted = steps.filter((step) => step.action !== 'SKIP');
+      if (acted.length > 0) console.log(`[dispatch] program auto-unblock: ${acted.map((s) => `${s.action} ${s.campaign}`).join('; ')}`);
+    } catch (error) {
+      console.warn('[dispatch] program auto-unblock failed:', (error as Error).message);
+    }
   }
 
   result.superseded = await supersedeStaleIntents();
