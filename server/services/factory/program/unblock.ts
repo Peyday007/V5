@@ -32,7 +32,18 @@ export interface UnblockStep {
   detail: string;
 }
 
-export async function unblockProgram(input: { programId: string; operatorId: string; maxAttempts?: number }): Promise<UnblockStep[]> {
+export async function unblockProgram(input: {
+  programId: string;
+  operatorId: string;
+  maxAttempts?: number;
+  /**
+   * Grant exact extra paths to one campaign: the answer to a blocker that names
+   * a file outside the approved scope (a map that put a requirement's code in
+   * the wrong module, a caller in a neighbouring one). A person's grant, read
+   * from the blocker and given deliberately — never inferred by the program.
+   */
+  grant?: { campaign: string; paths: string[] };
+}): Promise<UnblockStep[]> {
   const program = await getProgram(input.programId);
   if (!program) throw new Error('No such program.');
   const plan = await getPlan(program.id);
@@ -52,7 +63,9 @@ export async function unblockProgram(input: { programId: string; operatorId: str
       continue;
     }
     // 1. Scope.
-    const widened = [...new Set([...widenScope(changeRequest.mutationScope), campaignTestPath(program, planned)])].sort();
+    const granted = input.grant && input.grant.campaign === link.campaignKey ? input.grant.paths : [];
+    if (input.grant && input.grant.campaign !== link.campaignKey) continue;
+    const widened = [...new Set([...widenScope(changeRequest.mutationScope), campaignTestPath(program, planned), ...granted])].sort();
     if (widened.join() !== [...changeRequest.mutationScope].sort().join()) {
       const result = await amendContract({
         changeRequestId: changeRequest.id,

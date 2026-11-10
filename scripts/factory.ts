@@ -1775,7 +1775,14 @@ async function main(): Promise<void> {
       const programId = flagString(flags, 'program') ?? fail('--program is required');
       const row = await readProgramRow(programId);
       if (!row?.approvedByUserId) fail('the program is not approved');
-      const steps = await unblockProgram({ programId, operatorId: row!.approvedByUserId! });
+      const grantCampaign = flagString(flags, 'campaign');
+      const grantPaths = (flagString(flags, 'add') ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+      if ((grantCampaign === undefined) !== (grantPaths.length === 0)) fail('--campaign and --add go together: the campaign key and the exact paths granted to it');
+      const steps = await unblockProgram({
+        programId,
+        operatorId: row!.approvedByUserId!,
+        ...(grantCampaign ? { grant: { campaign: grantCampaign, paths: grantPaths } } : {}),
+      });
       for (const step of steps) process.stdout.write(`${step.action} ${step.campaign}: ${step.detail}\n`);
       process.stdout.write(`unblock: ${steps.filter((s) => s.action !== 'SKIP' && s.action !== 'REFUSED').length} step(s), ${steps.filter((s) => s.action === 'REFUSED').length} refused\n`);
       break;
