@@ -237,6 +237,18 @@ export async function repointRoutineConnector(input: {
 }
 
 /**
+ * Unbind a Routine from a connector its sessions no longer arrive through,
+ * guarded on that binding, so the next proven arrival binds the right one.
+ */
+export async function clearRoutineConnector(input: { routineId: string; from: string }): Promise<boolean> {
+  const result = await getDb().run(
+    'UPDATE fleet_routines SET connector_id = NULL, updated_at = ? WHERE id = ? AND connector_id = ?',
+    [nowIso(), input.routineId, input.from],
+  );
+  return result.changes === 1;
+}
+
+/**
  * The operator's correction of which worker a connector authorizes as, guarded
  * on the value they say they are replacing. An observation never re-points it
  * (`ensureConnector`); a worker that legitimately changed at the same endpoint

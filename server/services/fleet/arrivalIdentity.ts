@@ -30,11 +30,14 @@
  *     worker its sessions were proven to authenticate as — an operator's
  *     `repoint-worker` — it comes back by itself, bound to that connector.
  *
- * Nothing here changes a Routine's registered worker, a membership, a scope, a
- * routing row or a consent. A wrong worker is never adopted: the Routine is
- * stopped and a person says which identity is intended (in Claude, by choosing
- * the connector; or in Brain, by repointing). Brain only notices, stops
- * spending, and restores what a person already corrected.
+ *   - `adoptSwitchedIdentities` (tick, before the quarantine): a clean switch
+ *     — the owner moved the Routine to another connector in the same Claude
+ *     account — is adopted: the Routine is re-registered for the worker its
+ *     sessions now arrive as. Only a switch it cannot prove (both connectors,
+ *     interleaved arrivals, another account, a stale or replayed session, a
+ *     worker that serves nothing) falls through to the quarantine.
+ *
+ * Nothing here changes a membership, a scope, a routing row or a consent.
  */
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
@@ -99,6 +102,8 @@ export interface WrongWorkerEvidence {
   credentialId: string | null;
   clientId: string | null;
   endpoint: string | null;
+  /** When Brain sent the fire this arrival answered; null on evidence written before it was recorded. */
+  firedAt: string | null;
 }
 
 /**
@@ -180,6 +185,8 @@ export async function observeFiredSessionArrival(input: {
         credentialId: input.credentialId,
         clientId: token?.clientId ?? null,
         endpoint,
+        firedAt: fired.sent_at,
+        probe: Number(fired.probe) === 1,
       },
       reason: wrong
         ? `Brain fired ${routine.name} (registered for ${routine.workerId}); its session arrived authenticated as ` +
@@ -335,6 +342,8 @@ export interface ArrivalMix {
   rightBeforeLastWrong: boolean;
   /** The workers the wrong-only sessions authenticated as. */
   otherWorkers: string[];
+  /** Right sessions that began after the oldest wrong-only one: zero is a clean switch. */
+  rightAfterFirstWrong: number;
 }
 
 /**
@@ -368,7 +377,9 @@ export async function arrivalMix(routineId: string, now = Date.now()): Promise<A
     if (!s.right) lastWrongIndex = i;
   });
   const wrongSessions = ordered.filter((s) => !s.right);
+  const firstWrongIndex = ordered.findIndex((s) => !s.right);
   return {
+    rightAfterFirstWrong: firstWrongIndex < 0 ? 0 : ordered.slice(firstWrongIndex + 1).filter((s) => s.right).length,
     right: ordered.length - wrongSessions.length,
     wrong: wrongSessions.length,
     lastWrongAt: lastWrongIndex >= 0 ? ordered[lastWrongIndex]!.at : null,
@@ -516,6 +527,7 @@ export async function latestWrongWorkerEvidence(since: string): Promise<Map<stri
       credentialId: typeof m['credentialId'] === 'string' ? m['credentialId'] : null,
       clientId: typeof m['clientId'] === 'string' ? m['clientId'] : null,
       endpoint: typeof m['endpoint'] === 'string' ? m['endpoint'] : null,
+      firedAt: typeof m['firedAt'] === 'string' ? m['firedAt'] : null,
     });
   }
   return out;
@@ -538,6 +550,173 @@ export function wrongWorkerReason(input: {
     `or (operator, if ${e.arrivedWorkerId} is the intended identity) \`fleet repoint-worker --ref ${input.routineRef} ` +
     `--expect ${e.expectedWorkerId} --worker ${e.arrivedWorkerId}\`, after which Brain re-enables it by itself.`
   );
+}
+
+/* ------------------------------------------------------------------------- */
+/* A connector switch is adopted, not quarantined (§59, amended 2026-11-10)    */
+/* ------------------------------------------------------------------------- */
+
+/** The actor every adoption is recorded under, so a reversal can be recognised. */
+export const ADOPTION_ACTOR = 'brain:arrival-adoption';
+
+/** How far back an adoption is remembered when judging whether a new one would reverse it. */
+export const ADOPTION_MEMORY_MS = 7 * 24 * 60 * 60_000;
+
+export interface AdoptionDecision {
+  routineId: string;
+  routineName: string;
+  from: string;
+  to: string;
+  adopted: boolean;
+  /** Why it was not adopted (the wrong-worker quarantine then applies), or what was changed. */
+  detail: string;
+}
+
+/**
+ * Why a proven wrong-worker arrival must not be adopted as the Routine's new
+ * identity, or null when it may be.
+ *
+ * Adoption is the account owner's own change, read from the one place it is
+ * observable: a session Brain fired at this Routine — the provider session id
+ * matches the fire — authenticated as another worker through a connector held
+ * by the same Claude account. Everything that would make that reading anything
+ * other than "the owner chose this connector" refuses it:
+ */
+export async function adoptionRefusal(routine: FleetRoutine, e: WrongWorkerEvidence, now = Date.now()): Promise<string | null> {
+  // The fire time bounds replay: a session id presented long after its fire binds nothing.
+  if (!e.firedAt) return 'the arrival predates fire-time recording, so its freshness cannot be shown';
+  if (Date.parse(e.at) - Date.parse(e.firedAt) > ATTRIBUTION_WINDOW_MS) {
+    return 'the session arrived more than 30 minutes after its fire, which binds nothing';
+  }
+  if (await sessionAlsoArrivedRight(e.sessionRef, routine.workerId ?? '')) {
+    return 'the same session also arrived as the registered worker, so it holds both connectors';
+  }
+  const mix = await arrivalMix(routine.id, now);
+  if (mix.rightAfterFirstWrong > 0) {
+    return 'its sessions arrive as both workers, interleaved, so the Routine picks a connector per session';
+  }
+  // An adoption that would undo one Brain made is a Routine alternating, not a switch.
+  const since = new Date(now - ADOPTION_MEMORY_MS).toISOString();
+  const earlier = await getDb().all<{ created_at: string; metadata: string | null }>(
+    `SELECT created_at, metadata FROM identity_events
+      WHERE action = 'REPOINT_ROUTINE_WORKER' AND actor_id = ? AND target_id = ? AND created_at >= ?`,
+    [ADOPTION_ACTOR, routine.id, since],
+  );
+  const reversed = earlier.find((row) => parseJson<Record<string, unknown>>(row.metadata, {})['from'] === e.arrivedWorkerId);
+  if (reversed) {
+    return `adopting ${e.arrivedWorkerId} would reverse Brain's own adoption at ${reversed.created_at}, so the Routine alternates connectors`;
+  }
+  const worker = await getWorker(e.arrivedWorkerId);
+  if (!worker || worker.disabled || worker.archived) return `${e.arrivedWorkerId} is disabled or archived`;
+  const memberships = (await listMembershipsForPrincipal('WORKER', worker.id)).filter((m) => m.active);
+  if (memberships.length === 0) return `${e.arrivedWorkerId} holds no project membership, so adopting it would serve nothing`;
+  // A surface commissioned for repository work keeps that role: adoption may widen what it serves, never retire it.
+  const commissioned = routine.capabilities.filter((c) => c === 'repository' || c === 'repository-write');
+  if (commissioned.length > 0) {
+    const { getWorkerRouting } = await import('../../repos/identity.ts');
+    const routing = await getWorkerRouting(e.arrivedWorkerId);
+    if (!commissioned.every((c) => routing?.capabilities.includes(c))) {
+      return `it was commissioned for ${commissioned.join(', ')} work, which ${e.arrivedWorkerId} is not routed for`;
+    }
+  }
+  if (e.clientId) {
+    const attributed = await connectorClient(e.clientId);
+    const connector = attributed ? await getConnector(attributed.connectorId) : null;
+    if (connector && connector.accountId !== routine.accountId) {
+      return 'the connector it arrived through belongs to another Claude account';
+    }
+    if (connector?.workerId && connector.workerId !== e.arrivedWorkerId) {
+      return `the connector it arrived through is verified to authorize as ${connector.workerId}, not ${e.arrivedWorkerId}`;
+    }
+  }
+  return null;
+}
+
+/**
+ * A Routine whose owner switched it to another Brain connector is re-registered
+ * for the worker its sessions now arrive as, and keeps working.
+ *
+ * Production, 2026-11-10: Caleb pointed his existing Routine at the Factory
+ * Brain connector. §59 as first written would quarantine it on the first
+ * arrival and wait for an operator's `repoint-worker` — asking a person to
+ * restate a change the Routine's own authenticated session had already proved.
+ * Now Brain adopts it: the Routine is repointed (compare-and-swap, audited as
+ * `REPOINT_ROUTINE_WORKER` by `brain:arrival-adoption`, reversible by the same
+ * command), its stale connector binding is replaced by the one the session came
+ * through (or cleared, so the next proven arrival binds it), its capabilities
+ * gain what the new worker's routing declares, and a wrong-worker quarantine is
+ * lifted on the same tick by `recoverRebindedSurfaces`. The re-armed deferred
+ * intents then fire it for the work its new worker serves, and its next
+ * arrival is the verification: a MATCH binds the connector, a session that
+ * arrives as the old worker again is refused adoption (a reversal) and the
+ * ordinary mixed-arrival quarantine applies.
+ *
+ * Runs before `quarantineWrongWorkerSurfaces`, so a switch it adopts is never
+ * quarantined, and a refusal leaves exactly the old behaviour.
+ */
+export async function adoptSwitchedIdentities(now = Date.now()): Promise<AdoptionDecision[]> {
+  const decisions: AdoptionDecision[] = [];
+  const evidence = await latestWrongWorkerEvidence(new Date(now - ARRIVAL_LOOKBACK_MS * 4).toISOString());
+  for (const [routineId, e] of evidence) {
+    if (now - Date.parse(e.at) < WRONG_WORKER_GRACE_MS) continue;
+    const routine = await getRoutine(routineId);
+    if (!routine || routine.workerId !== e.expectedWorkerId) continue;
+    // Never over a state a person set: only a working surface, or a quarantine this evidence caused.
+    const ours = routine.state === 'QUARANTINED' && (routine.stateReason ?? '').includes(WRONG_WORKER_MARK);
+    if (routine.state !== 'ENABLED' && !ours) continue;
+    if (routine.noShowsForgivenAt && e.at <= routine.noShowsForgivenAt) continue;
+    const refusal = await adoptionRefusal(routine, e, now);
+    const base = { routineId, routineName: routine.name, from: e.expectedWorkerId, to: e.arrivedWorkerId };
+    if (refusal) {
+      decisions.push({ ...base, adopted: false, detail: refusal });
+      continue;
+    }
+    const { repointRoutineWorker, setRoutineCapabilities } = await import('../../repos/fleet.ts');
+    const moved = await repointRoutineWorker({
+      routineId,
+      expectedWorkerId: e.expectedWorkerId,
+      workerId: e.arrivedWorkerId,
+      actor: ADOPTION_ACTOR,
+      reason:
+        `Adopted automatically: Brain fired ${routine.name} and its session ${e.sessionRef ?? ''} authenticated as ` +
+        `${e.arrivedWorkerId}${e.endpoint ? ` through ${e.endpoint}` : ''} at ${e.at}, a connector switch made in the ` +
+        `Routine's own Claude account. Reverse with \`fleet repoint-worker --ref ${routine.routineRef} --expect ` +
+        `${e.arrivedWorkerId} --worker ${e.expectedWorkerId}\`.`,
+    });
+    if (!moved) continue;
+    const changed: string[] = [`worker ${e.expectedWorkerId} → ${e.arrivedWorkerId}`];
+
+    const attributed = e.clientId ? await connectorClient(e.clientId) : null;
+    const { repointRoutineConnector, clearRoutineConnector } = await import('../../repos/connectors.ts');
+    if (attributed && routine.connectorId !== attributed.connectorId) {
+      if (await repointRoutineConnector({ routineId, from: routine.connectorId, to: attributed.connectorId })) {
+        changed.push(`connector → ${attributed.connectorId}`);
+      }
+    } else if (!attributed && routine.connectorId) {
+      if (await clearRoutineConnector({ routineId, from: routine.connectorId })) {
+        changed.push('stale connector binding cleared; the next proven arrival binds it');
+      }
+    }
+
+    const { getWorkerRouting } = await import('../../repos/identity.ts');
+    const routing = await getWorkerRouting(e.arrivedWorkerId);
+    const missing = (routing?.capabilities ?? []).filter((c) => !routine.capabilities.includes(c));
+    if (missing.length > 0) {
+      await setRoutineCapabilities({
+        routineId,
+        capabilities: [...routine.capabilities, ...missing],
+        actor: ADOPTION_ACTOR,
+        reason: `${e.arrivedWorkerId}'s routing declares ${missing.join(', ')}; the adopted surface may be routed that work.`,
+      });
+      changed.push(`capabilities + ${missing.join(', ')}`);
+    }
+    decisions.push({ ...base, adopted: true, detail: changed.join('; ') });
+  }
+  if (decisions.some((d) => d.adopted)) {
+    const { forgetRoutingHealth } = await import('./connectorHealth.ts');
+    forgetRoutingHealth();
+  }
+  return decisions;
 }
 
 /**

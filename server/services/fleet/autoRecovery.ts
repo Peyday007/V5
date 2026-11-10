@@ -177,6 +177,45 @@ async function historyFor(routine: FleetRoutine): Promise<ProbeHistory> {
   return { failed, outages, lastWasOutage, lastWasProgress, lastAt, lastNextAction, lastState };
 }
 
+/**
+ * Past the daily budget Brain still asks once a week, indefinitely. Production,
+ * 2026-11-10: Caleb moved Factory surface 3 onto the Factory Brain connector
+ * three weeks after its daily probes ran out, and nothing would ever have fired
+ * it again to see — the change was invisible to Brain for want of one
+ * activation. Four a month is the price of never needing a person to say so.
+ */
+export const PERPETUAL_PROBE_EVERY_MS = 7 * 24 * 60 * 60_000;
+/** However often the change signal moves, it buys at most one probe per Routine this often. */
+export const SIGNAL_PROBE_MIN_GAP_MS = 60 * 60_000;
+
+/**
+ * The newest observable sign that the Routine's registered worker gained, or
+ * is using, a connector Brain has not attributed — the event a Routine's owner
+ * produces when they add or switch to the right Brain connector in Claude:
+ *
+ *   - a new consent (an OAuth grant root) for the registered worker, from a
+ *     client that is unattributed or attributed to this Routine's own account;
+ *   - authenticated use, by the registered worker, of a client no connector
+ *     has been attributed to yet.
+ *
+ * Read from the token rows the authorization server already writes, so the
+ * recognition costs no provider call and no activation until it fires.
+ */
+export async function identityChangeSignal(routine: FleetRoutine): Promise<string | null> {
+  if (!routine.workerId) return null;
+  const row = await getDb().get<{ consented: string | null; used: string | null }>(
+    `SELECT MAX(CASE WHEN t.kind = 'REFRESH' AND t.parent_token_id IS NULL THEN t.created_at END) AS consented,
+            MAX(CASE WHEN c.client_id IS NULL THEN t.last_used_at END) AS used
+       FROM oauth_tokens t
+       LEFT JOIN connector_clients c ON c.client_id = t.client_id
+       LEFT JOIN connectors k ON k.id = c.connector_id
+      WHERE t.worker_id = ? AND (k.id IS NULL OR k.account_id = ?)`,
+    [routine.workerId, routine.accountId],
+  );
+  const values = [row?.consented ?? null, row?.used ?? null].filter((v): v is string => !!v);
+  return values.length === 0 ? null : values.sort().at(-1)!;
+}
+
 /** May Brain probe this Routine by itself, and when? Null when never. */
 async function dueAt(routine: FleetRoutine): Promise<{ at: number; history: ProbeHistory } | null> {
   if (routine.state !== 'QUARANTINED' || !liftableQuarantine(routine.stateReason)) return null;
@@ -184,9 +223,17 @@ async function dueAt(routine: FleetRoutine): Promise<{ at: number; history: Prob
   if (!account || account.kind !== 'CAPACITY') return null;
   if (await recoveryIneligibility(routine)) return null;
   const history = await historyFor(routine);
-  if (history.failed >= SLOW_PROBE_LIMIT) return null;
   // The quarantine's own instant, not `updatedAt`, which every touch moves.
   const base = history.lastAt ?? routine.stateChangedAt ?? routine.updatedAt;
+  /*
+   * A change the owner made is asked about when it happens, whatever the
+   * budget says: one probe per new signal, no closer than an hour apart.
+   */
+  const signal = await identityChangeSignal(routine);
+  if (signal && signal > base) {
+    return { at: Math.max(Date.parse(signal), Date.parse(base) + SIGNAL_PROBE_MIN_GAP_MS), history };
+  }
+  if (history.failed >= SLOW_PROBE_LIMIT) return { at: Date.parse(base) + PERPETUAL_PROBE_EVERY_MS, history };
   // After progress, the next right session is asked for soon: waiting longer
   // would only delay a lift the evidence is already moving toward.
   const wait = history.lastWasProgress
