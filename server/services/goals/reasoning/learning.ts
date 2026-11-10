@@ -28,12 +28,13 @@ export function ucb(row: Pick<ReasoningMethodRow, 'tries' | 'total_lift' | 'impr
 
 /** The methods to start the next exploration from: those that worked best, as directions. */
 export async function loadLibrary(limit = LIBRARY_SIZE): Promise<Direction[]> {
-  const rows = await getDb().all<ReasoningMethodRow>('SELECT * FROM reasoning_methods WHERE improvements > 0 ORDER BY best_lift DESC LIMIT 400', []);
+  const rows = await getDb().all<ReasoningMethodRow>('SELECT * FROM reasoning_methods WHERE improvements > 0 ORDER BY best_lift DESC, signature LIMIT 400', []);
   if (rows.length === 0) return [];
   const total = rows.reduce((n, r) => n + Number(r.tries), 0);
   return rows
     .map((r) => ({ r, score: ucb(r, total) }))
-    .sort((a, b) => b.score - a.score)
+    // Ties broken by signature: Postgres returns tied rows in any order, and the library's order steers the exploration.
+    .sort((a, b) => b.score - a.score || (a.r.signature < b.r.signature ? -1 : a.r.signature > b.r.signature ? 1 : 0))
     .slice(0, limit)
     .flatMap(({ r }) => {
       try {
