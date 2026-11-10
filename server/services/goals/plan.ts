@@ -66,6 +66,8 @@ import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type Res
 import type { EvidenceTier } from '../../domain/quant.ts';
 import { readPathways, type BrainCapabilities, type PathwayReading } from './pathways.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
+// Registers the production probe r01.gov-11 (the owner's open-questions register) wherever goals load.
+import './openQuestions.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];

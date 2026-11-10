@@ -16,6 +16,10 @@ project state; the program, its map and its plan live in the database.
 - Figures, categories and examples are data, never a whitelist (R01-A1, §18.1).
 - The owner will continue adding and refining the architecture. A new release appends
   new entries here; it never removes one.
+- Code reads this register: `server/services/goals/openQuestions.ts` holds the same entries,
+  probe `r01.gov-11` checks them verbatim against the program source on production, and
+  `tests/program-ea512f54-factory-program-d0-p1-register.test.ts` refuses the document and the
+  code disagreeing. Re-mapping an answer is a change to both.
 - Vocabulary is the program owner's (§96/§97): no new status set. `OPEN` and `ANSWERED`
   describe a question, not a requirement, and do not appear in the program's own status.
 
