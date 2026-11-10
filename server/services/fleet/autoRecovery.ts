@@ -218,10 +218,20 @@ export async function identityChangeSignal(routine: FleetRoutine): Promise<strin
 
 /** May Brain probe this Routine by itself, and when? Null when never. */
 async function dueAt(routine: FleetRoutine): Promise<{ at: number; history: ProbeHistory } | null> {
-  if (routine.state !== 'QUARANTINED' || !liftableQuarantine(routine.stateReason)) return null;
+  const plan = await probePlanFor(routine);
+  return 'at' in plan ? plan : null;
+}
+
+/** When Brain will probe this Routine by itself, or the one reason it never will. */
+async function probePlanFor(
+  routine: FleetRoutine,
+): Promise<{ at: number; history: ProbeHistory; signal: string | null } | { never: string }> {
+  if (routine.state !== 'QUARANTINED') return { never: `it is ${routine.state}` };
+  if (!liftableQuarantine(routine.stateReason)) return { never: 'its quarantine is not one a probe can disprove' };
   const account = await getAccount(routine.accountId);
-  if (!account || account.kind !== 'CAPACITY') return null;
-  if (await recoveryIneligibility(routine)) return null;
+  if (!account || account.kind !== 'CAPACITY') return { never: `its account is ${account ? account.kind : 'missing'}, not CAPACITY` };
+  const ineligible = await recoveryIneligibility(routine);
+  if (ineligible) return { never: ineligible };
   const history = await historyFor(routine);
   // The quarantine's own instant, not `updatedAt`, which every touch moves.
   const base = history.lastAt ?? routine.stateChangedAt ?? routine.updatedAt;
@@ -231,9 +241,9 @@ async function dueAt(routine: FleetRoutine): Promise<{ at: number; history: Prob
    */
   const signal = await identityChangeSignal(routine);
   if (signal && signal > base) {
-    return { at: Math.max(Date.parse(signal), Date.parse(base) + SIGNAL_PROBE_MIN_GAP_MS), history };
+    return { at: Math.max(Date.parse(signal), Date.parse(base) + SIGNAL_PROBE_MIN_GAP_MS), history, signal };
   }
-  if (history.failed >= SLOW_PROBE_LIMIT) return { at: Date.parse(base) + PERPETUAL_PROBE_EVERY_MS, history };
+  if (history.failed >= SLOW_PROBE_LIMIT) return { at: Date.parse(base) + PERPETUAL_PROBE_EVERY_MS, history, signal };
   // After progress, the next right session is asked for soon: waiting longer
   // would only delay a lift the evidence is already moving toward.
   const wait = history.lastWasProgress
@@ -241,7 +251,35 @@ async function dueAt(routine: FleetRoutine): Promise<{ at: number; history: Prob
     : history.failed >= AUTO_PROBE_LIMIT
       ? SLOW_PROBE_EVERY_MS
       : AUTO_PROBE_BACKOFF_MS[Math.min(history.failed, AUTO_PROBE_BACKOFF_MS.length - 1)]!;
-  return { at: Date.parse(base) + wait, history };
+  return { at: Date.parse(base) + wait, history, signal };
+}
+
+export interface AutoProbePlanRow {
+  routineId: string;
+  routineName: string;
+  routineRef: string;
+  /** ISO time the next automatic probe is due, or null when Brain will not probe it. */
+  dueAt: string | null;
+  never: string | null;
+  failed: number | null;
+  lastProbeAt: string | null;
+  signal: string | null;
+}
+
+/** Every quarantined Routine and when (or why never) Brain probes it — the operator's reading of this pass. */
+export async function autoProbePlan(): Promise<AutoProbePlanRow[]> {
+  const rows: AutoProbePlanRow[] = [];
+  for (const routine of await listRoutines()) {
+    if (routine.state !== 'QUARANTINED') continue;
+    const plan = await probePlanFor(routine);
+    const base = { routineId: routine.id, routineName: routine.name, routineRef: routine.routineRef };
+    rows.push(
+      'at' in plan
+        ? { ...base, dueAt: new Date(plan.at).toISOString(), never: null, failed: plan.history.failed, lastProbeAt: plan.history.lastAt, signal: plan.signal }
+        : { ...base, dueAt: null, never: plan.never, failed: null, lastProbeAt: null, signal: null },
+    );
+  }
+  return rows;
 }
 
 /**
@@ -262,26 +300,31 @@ export async function autoProbeQuarantinedSurfaces(options: { now?: number; fire
   if (restartWindowPending()) return null;
   if (recentInfraFailures(new Date(now - HEALTHY_FOR_MS).toISOString()).length > 0) return null;
   if (await liveRecoveryProbe()) return null;
-  let best: { routine: FleetRoutine; at: number } | null = null;
+  const due: Array<{ routine: FleetRoutine; at: number }> = [];
   for (const routine of await listRoutines()) {
-    const due = await dueAt(routine);
-    if (!due || due.at > now) continue;
-    if (!best || due.at < best.at) best = { routine, at: due.at };
+    const plan = await dueAt(routine);
+    if (plan && plan.at <= now) due.push({ routine, at: plan.at });
   }
-  if (!best) return null;
-  try {
-    const probe = await startRecoveryProbe({
-      routineRef: best.routine.routineRef,
-      requestedById: AUTO_RECOVERY_ACTOR,
-      authorityChannel: 'SYSTEM',
-      ...(options.fire ? { fire: options.fire } : {}),
-      now,
-    });
-    return probe.id;
-  } catch {
-    // Refused (another probe took the slot, the surface changed): next pass.
-    return null;
+  due.sort((a, b) => a.at - b.at);
+  /*
+   * Most overdue first, and a refusal moves on to the next: one Routine whose
+   * probe cannot start must not hold every other quarantine behind it.
+   */
+  for (const candidate of due.slice(0, 5)) {
+    try {
+      const probe = await startRecoveryProbe({
+        routineRef: candidate.routine.routineRef,
+        requestedById: AUTO_RECOVERY_ACTOR,
+        authorityChannel: 'SYSTEM',
+        ...(options.fire ? { fire: options.fire } : {}),
+        now,
+      });
+      return probe.id;
+    } catch {
+      if (await liveRecoveryProbe()) return null; // another probe took the slot: next pass
+    }
   }
+  return null;
 }
 
 export interface ExhaustedRecovery {
