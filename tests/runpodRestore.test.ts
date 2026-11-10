@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { POD_GPU, POD_NAME, ensurePod, podSpec } from '../server/services/cheap/runpodRestore.ts';
+import { POD_GPUS, POD_NAME, ensurePod, podSpec } from '../server/services/cheap/runpodRestore.ts';
 
 type Call = { method: string; url: string; body?: Record<string, unknown> };
 
@@ -33,7 +33,7 @@ describe('GPU pod recovery', () => {
     const pod = await ensurePod({ apiKey: 'k', vllmKey: 'v', oldUrl: 'https://gone99-8000.proxy.runpod.net', fetchImpl });
     expect(pod).toMatchObject({ podId: 'new1', created: true, costPerHr: 0.24 });
     const body = calls.find((c) => c.method === 'POST')!.body!;
-    expect(body).toMatchObject({ name: POD_NAME, gpuTypeIds: [POD_GPU], volumeInGb: 0, interruptible: false, ports: ['8000/http'] });
+    expect(body).toMatchObject({ name: POD_NAME, gpuTypeIds: POD_GPUS, volumeInGb: 0, interruptible: false, ports: ['8000/http'] });
     expect(body['dockerStartCmd']).toContain('--api-key');
   });
 

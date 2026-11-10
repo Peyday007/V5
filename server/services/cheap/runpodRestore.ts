@@ -17,7 +17,14 @@ const API = 'https://rest.runpod.io/v1';
 /** What production ran: RTX 2000 Ada (16 GB), vLLM, Qwen3-4B, measured at $0.24/h. */
 export const POD_NAME = 'brain-vllm';
 export const POD_GPU = 'NVIDIA RTX 2000 Ada Generation';
-export const POD_IMAGE = 'vllm/vllm-openai:v0.10.1.1';
+/**
+ * Production's GPU first, then cards with at least its 16 GB. RunPod had no
+ * RTX 2000 Ada free on 2026-11-10; the price ceiling, not this list, keeps a
+ * dearer card out — one priced above it is deleted the moment it is created.
+ */
+export const POD_GPUS = [POD_GPU, 'NVIDIA RTX A4000', 'NVIDIA RTX A4500', 'NVIDIA RTX 4000 Ada Generation'];
+/** Qwen3 needs vLLM 0.8.5+; this build runs on CUDA 12.4 drivers, so more hosts qualify. */
+export const POD_IMAGE = 'vllm/vllm-openai:v0.8.5.post1';
 export const POD_MODEL = 'Qwen/Qwen3-4B';
 /** The pod's measured price (docs/PARALLEL-EXECUTION-RESULT-2026-11-06.md). A dearer pod is refused. */
 export const DEFAULT_MAX_USD_PER_HOUR = 0.24;
@@ -27,11 +34,12 @@ export function podSpec(apiKey: string, model = POD_MODEL, cloudType: 'SECURE' |
     name: POD_NAME,
     cloudType,
     computeType: 'GPU',
-    gpuTypeIds: [POD_GPU],
+    gpuTypeIds: POD_GPUS,
+    gpuTypePriority: 'custom',
     gpuCount: 1,
     interruptible: false,
     imageName: POD_IMAGE,
-    allowedCudaVersions: ['12.8', '12.9', '13.0'],
+    allowedCudaVersions: ['12.4', '12.5', '12.6', '12.7', '12.8', '12.9', '13.0'],
     dockerEntrypoint: ['python3', '-m', 'vllm.entrypoints.openai.api_server'],
     dockerStartCmd: [
       '--model', model, '--served-model-name', model,

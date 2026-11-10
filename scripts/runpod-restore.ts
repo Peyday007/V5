@@ -19,16 +19,31 @@ if (!apiKey || !vllmKey) {
 const ceiling = Number(process.env['RUNPOD_MAX_USD_PER_HOUR']);
 
 async function main(): Promise<void> {
-  const pod = await ensurePod({
-    apiKey: apiKey!,
-    vllmKey: vllmKey!,
-    oldUrl: process.env['RUNPOD_VLLM_URL'] ?? null,
-    model: process.env['RUNPOD_VLLM_MODEL']?.trim() || undefined,
-    maxUsdPerHour: Number.isFinite(ceiling) && ceiling > 0 ? ceiling : undefined,
-  });
+  const wait = process.argv.includes('--wait');
+  const attempt = () =>
+    ensurePod({
+      apiKey: apiKey!,
+      vllmKey: vllmKey!,
+      oldUrl: process.env['RUNPOD_VLLM_URL'] ?? null,
+      model: process.env['RUNPOD_VLLM_MODEL']?.trim() || undefined,
+      maxUsdPerHour: Number.isFinite(ceiling) && ceiling > 0 ? ceiling : undefined,
+    });
+  // RunPod's stock comes and goes by the minute; with --wait, keep asking for 20 minutes.
+  const firstTry = Date.now();
+  let pod: Awaited<ReturnType<typeof ensurePod>>;
+  for (;;) {
+    try {
+      pod = await attempt();
+      break;
+    } catch (error) {
+      if (!wait || Date.now() - firstTry > 20 * 60_000) throw error;
+      console.log(`retrying in 2 min: ${(error as Error).message.slice(0, 300)}`);
+      await new Promise((resolve) => setTimeout(resolve, 120_000));
+    }
+  }
   for (const line of pod.log) console.log(line);
   if (pod.created) console.log(`CREATED ${pod.podId}`);
-  if (process.argv.includes('--wait') && pod.status === 'RUNNING') {
+  if (wait && pod.status === 'RUNNING') {
     const started = Date.now();
     let ready = false;
     while (!ready && Date.now() - started < 30 * 60_000) {
