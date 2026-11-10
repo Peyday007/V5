@@ -28,6 +28,8 @@ export type Route =
   | { name: 'BUILD' }
   | { name: 'PROJECTS' }
   | { name: 'KNOWLEDGE' }
+  /** Historical memory: the person's recovered conversation history and its rediscoveries. */
+  | { name: 'MEMORY' }
   | { name: 'FLEET' }
   | { name: 'NEEDS_YOU' }
   | { name: 'SITES' }
@@ -108,6 +110,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'PROJECTS' };
     case 'knowledge':
       return { name: 'KNOWLEDGE' };
+    case 'memory':
+      return { name: 'MEMORY' };
     case 'fleet':
       return { name: 'FLEET' };
     case 'needs-you':
@@ -168,6 +172,8 @@ export function pathFor(route: Route): string {
       return '/projects';
     case 'KNOWLEDGE':
       return '/knowledge';
+    case 'MEMORY':
+      return '/memory';
     case 'FLEET':
       return '/fleet';
     case 'NEEDS_YOU':

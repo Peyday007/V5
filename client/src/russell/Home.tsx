@@ -17,6 +17,7 @@
  * true to put in them.
  */
 import { GoalsHome } from './Goals.tsx';
+import { MemoryHome } from './Memory.tsx';
 import type { Route } from '../lib/router.ts';
 import type { SummaryLine } from '../../../server/services/russell/summary.ts';
 import { RussellApi } from '../lib/russellApi.ts';
@@ -116,6 +117,7 @@ export function RussellHome({
       {connection}
       <Hero view={view} />
       <GoalsHome />
+      <MemoryHome />
       <Maturity view={view} />
       <Changes view={view} />
       <WhyThisMatters projectId={projectId} />

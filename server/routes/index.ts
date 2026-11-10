@@ -32,6 +32,7 @@ import { registerRouter } from './register.ts';
 import { goalsRouter } from './goals.ts';
 import { bridgeRouter } from './bridge.ts';
 import { magicRouter } from './magic.ts';
+import { memoryRouter } from './memory.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
 export function createApiRouter(): Router {
@@ -78,6 +79,13 @@ export function createApiRouter(): Router {
    * arrived on one.
    */
   router.use(bridgeRouter);
+
+  /*
+   * Historical memory: a person's own conversation history, recovered,
+   * organized and rediscovered. Every route is `requirePerson` and scoped to
+   * the owner in its own statements; nothing here is addressed by a project.
+   */
+  router.use(memoryRouter);
 
   /*
    * Magic Deck Lab. Every route is `requirePerson` and owner-scoped in the
