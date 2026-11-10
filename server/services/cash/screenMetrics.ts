@@ -55,6 +55,11 @@ export async function currentTelemetry(now: Date = new Date()): Promise<RollingT
   return reading;
 }
 
+/** Drop the reused reading, so the next capacity decision or screen reads the rows again. */
+export function forgetTelemetryReading(): void {
+  cachedTelemetry = null;
+}
+
 const VERDICTS: readonly DecisionVerdict[] = ['REJECT', 'HOLD', 'PRIORITIZE'];
 
 export async function screenMetrics(projectId: string, goalId?: string): Promise<ScreenMetrics> {
@@ -628,4 +633,126 @@ export function formatTelemetry(reading: RollingTelemetry): string[] {
     lines.push(`  ${m.measure.padEnd(22)} ${TELEMETRY_WINDOWS.map((w) => `${w.key} ${cell(reading.windows[w.key][index]!)}`).join('   ')}`);
   }
   return lines;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Capacity changes read fresh telemetry first (TEL-07-1, S-0083)             */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * What a capacity change adds. CPU, memory, GPU and model are machine
+ * capacity; CONCURRENCY is how much of the existing fleet one grant may hold at
+ * once — provider capacity, and an increase of it is an upgrade too.
+ */
+export type CapacityResource = 'CPU' | 'MEMORY' | 'GPU' | 'MODEL' | 'CONCURRENCY';
+
+export interface CapacityProposal {
+  resource: CapacityResource;
+  direction: 'INCREASE' | 'DECREASE';
+  from?: number | null;
+  to?: number | null;
+  /** Who is asking and why, for the record of the decision. */
+  reason: string;
+}
+
+export interface CapacityGateDecision {
+  allowed: boolean;
+  /** FRESH_READING, NOT_AN_UPGRADE, or why it was refused. */
+  code: 'FRESH_READING' | 'NOT_AN_UPGRADE' | 'STALE_READING' | 'UNREADABLE_TELEMETRY' | 'NOTHING_WAITING' | 'CAPACITY_IDLE';
+  reason: string;
+  /** When the reading the decision rests on was taken, and how old it was. Null only when no reading was needed. */
+  readingAt: string | null;
+  readingAgeMs: number | null;
+  /** The figures the decision read, every window, so the decision can be replayed. */
+  figures: TelemetryFigure[];
+}
+
+/**
+ * How old a reading may be and still decide a capacity change. A reading is a
+ * measurement of the present; one older than this is history, and earlier
+ * window readings are "NOT a reliable daily throughput estimate or a current
+ * machine-capacity ceiling" (S-0083).
+ */
+export const CAPACITY_READING_MAX_AGE_MS = 5 * 60_000;
+
+/** The measures a capacity decision rests on. Any of them unreadable in any window refuses the change. */
+export const CAPACITY_DECIDING_MEASURES = ['queue', 'utilization', 'idleTime', 'providerFailure', 'providerQuota'] as const;
+
+/** A machine upgrade beside capacity that sat idle this long in one piece within the last hour buys idle capacity. */
+export const CAPACITY_IDLE_REFUSAL_MS = 10 * 60_000;
+
+const MACHINE: ReadonlySet<CapacityResource> = new Set(['CPU', 'MEMORY', 'GPU', 'MODEL']);
+
+/**
+ * The one gate every capacity upgrade passes: it reads current production
+ * telemetry (or checks the reading it was handed is current) and refuses the
+ * upgrade without it.
+ *
+ * - A reading older than `CAPACITY_READING_MAX_AGE_MS`, or dated in the future,
+ *   refuses: a remembered figure is not a reading.
+ * - Any deciding measure that is UNKNOWN in any window refuses: an unknown is
+ *   never read as a favourable assumption (§7.39).
+ * - A machine upgrade (CPU, memory, GPU, model) is refused when the fresh
+ *   reading shows nothing waiting, or capacity idle in one piece for
+ *   `CAPACITY_IDLE_REFUSAL_MS` within the last hour — more of a machine that is
+ *   not saturated is not what is short.
+ *
+ * A decrease is not an upgrade and is not gated here. Pure apart from the read,
+ * so a caller can pass the reading it already holds and the decision replays.
+ */
+export async function capacityChangeGate(
+  proposal: CapacityProposal,
+  options: { now?: Date; reading?: RollingTelemetry } = {},
+): Promise<CapacityGateDecision> {
+  if (proposal.direction === 'DECREASE') {
+    return { allowed: true, code: 'NOT_AN_UPGRADE', reason: `${proposal.resource} decrease is not an upgrade; no reading needed`, readingAt: null, readingAgeMs: null, figures: [] };
+  }
+  const now = options.now ?? new Date();
+  const reading = options.reading ?? (await currentTelemetry(now));
+  const age = now.getTime() - Date.parse(reading.at);
+  const deciding = TELEMETRY_WINDOWS.flatMap((w) =>
+    reading.windows[w.key].filter((f) => (CAPACITY_DECIDING_MEASURES as readonly string[]).includes(f.measure)),
+  );
+  const base = { readingAt: reading.at, readingAgeMs: Number.isFinite(age) ? age : null, figures: deciding };
+  if (!Number.isFinite(age) || age < 0 || age > CAPACITY_READING_MAX_AGE_MS) {
+    return {
+      ...base,
+      allowed: false,
+      code: 'STALE_READING',
+      reason: `${proposal.resource} upgrade refused: the telemetry reading is ${Number.isFinite(age) ? `${Math.round(age / 1000)}s old` : 'undated'}, and a capacity change needs one no older than ${CAPACITY_READING_MAX_AGE_MS / 1000}s`,
+    };
+  }
+  const missing = CAPACITY_DECIDING_MEASURES.filter(
+    (measure) => !TELEMETRY_WINDOWS.every((w) => reading.windows[w.key].some((f) => f.measure === measure && f.basis === 'ROWS')),
+  );
+  if (missing.length > 0) {
+    return {
+      ...base,
+      allowed: false,
+      code: 'UNREADABLE_TELEMETRY',
+      reason: `${proposal.resource} upgrade refused: ${missing.join(', ')} could not be read in every window, and an unknown never favours a change`,
+    };
+  }
+  if (MACHINE.has(proposal.resource)) {
+    const figure = (measure: string, key: TelemetryWindowKey) => reading.windows[key].find((f) => f.measure === measure)!;
+    const waiting = figure('queue', '1h').numerator ?? 0;
+    if (waiting === 0) {
+      return { ...base, allowed: false, code: 'NOTHING_WAITING', reason: `${proposal.resource} upgrade refused: the fresh reading shows 0 work items waiting, so added capacity would sit idle` };
+    }
+    const idle = figure('idleTime', '1h');
+    if ((idle.numerator ?? 0) >= CAPACITY_IDLE_REFUSAL_MS) {
+      return {
+        ...base,
+        allowed: false,
+        code: 'CAPACITY_IDLE',
+        reason: `${proposal.resource} upgrade refused: in the last hour the lane sat idle for ${Math.round((idle.numerator ?? 0) / 60_000)} min in one piece (of ${Math.round((idle.denominator ?? 0) / 60_000)} min), so the capacity it has is not saturated`,
+      };
+    }
+  }
+  return {
+    ...base,
+    allowed: true,
+    code: 'FRESH_READING',
+    reason: `${proposal.resource} upgrade rests on a telemetry reading ${Math.round(age / 1000)}s old with every deciding measure readable`,
+  };
 }
