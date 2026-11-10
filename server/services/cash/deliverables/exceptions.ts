@@ -26,9 +26,11 @@
  */
 import type { CashMoneyEntry } from '../../../domain/types.ts';
 import { authorizeRefund } from '../journey/fulfillment.ts';
-import { recordCashEvent } from '../../../repos/cashMode.ts';
+import { cashEventsOfKind, recordCashEvent } from '../../../repos/cashMode.ts';
 import { listMoneyEntries } from '../../../repos/cashLedger.ts';
 import { readCommitments, type CommitmentReading, type CommitmentTransition, type DeclaredTransition, type ExternalDependency, type Party } from './commitments.ts';
+// Registers the production probes r01.life-29-1 and r01.life-29-3 wherever the journey tick loads; they reach this module only at call time.
+import './lifecycleProbes.ts';
 
 export const EXCEPTION_KINDS = ['SCOPE_CHANGE', 'MISSED_DATE', 'CANCELLATION', 'PAYMENT_FAILURE', 'DISPUTE'] as const;
 export type ExceptionKind = (typeof EXCEPTION_KINDS)[number];
@@ -489,4 +491,60 @@ export async function rehearseStoredCase(input: {
     },
   });
   return { rehearsal, detected, selections, eventId: event.id, eventKind };
+}
+
+/**
+ * The journey tick's consumer of the commitment model (LIFE-29-3).
+ *
+ * Reads one deal's commitments from the rows, detects the exceptions the rows
+ * show (a missed date, a payment that failed, a rejected delivery, a released
+ * commitment), quantifies each one's consequence and works out which remedy
+ * each would take, strictly inside the authority held — which is none, so what
+ * each needs is stated and nothing is carried out. A new exception is appended
+ * once to `cash_events` as `exception.detected`; one already on record (by its
+ * id, which is derived from the transition that shows it) is not recorded
+ * again, so the tick can run as often as it likes. Stated exceptions (a scope
+ * change, a dispute a person reports) come from signals and are not invented
+ * here. Nothing is refunded, released or contacted: carrying a remedy out stays
+ * with `carryOutApprovedRefund` and a person's approval.
+ */
+export async function recordDetectedExceptions(input: {
+  projectId: string;
+  opportunityId: string;
+  currency: string;
+  now?: string;
+}): Promise<{ detected: number; recorded: number }> {
+  const reading = await readCommitments({ projectId: input.projectId, opportunityId: input.opportunityId, currency: input.currency, now: input.now });
+  const detected = detectExceptions(reading).filter((one) => one.source === 'ROWS');
+  if (detected.length === 0) return { detected: 0, recorded: 0 };
+  const known = new Set(
+    (await cashEventsOfKind(input.opportunityId, 'exception.detected')).map((event) => String((event.detail as { exceptionId?: unknown } | null)?.exceptionId ?? '')),
+  );
+  let recorded = 0;
+  for (const exception of detected) {
+    if (known.has(exception.id)) continue;
+    const selection = selectRemedy({ reading, exception, facts: {}, authority: { standing: [], approved: [] } });
+    await recordCashEvent({
+      projectId: input.projectId,
+      opportunityId: input.opportunityId,
+      kind: 'exception.detected',
+      actorRef: 'BRAIN',
+      summary: `${exception.kind.toLowerCase().replace(/_/g, ' ')}: ${exception.detail}`.slice(0, 300),
+      detail: {
+        exceptionId: exception.id,
+        kind: exception.kind,
+        source: exception.source,
+        transitionId: exception.transitionId,
+        evidence: exception.evidence,
+        consequence: selection.consequence,
+        remedies: selection.options.map((o) => ({ remedy: o.remedy, feasible: o.feasible, withinAuthority: o.withinAuthority, needsApproval: o.needsApproval })),
+        chosen: selection.chosen?.remedy ?? null,
+        needs: selection.needs,
+        safeWork: selection.safeWork,
+      },
+    });
+    known.add(exception.id);
+    recorded += 1;
+  }
+  return { detected: detected.length, recorded };
 }

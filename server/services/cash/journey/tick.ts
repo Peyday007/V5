@@ -18,7 +18,11 @@
  *   6. (an unpaid invoice past its due date is reported, never rewritten);
  *   7. EXECUTING → DELIVERING once something agreed was delivered,
  *      DELIVERING → COLLECTED once `collectable` holds;
- *   8. what the deal taught is recorded as outcomes (`learning.ts`).
+ *   8. what the deal taught is recorded as outcomes (`learning.ts`);
+ *   9. an exception its commitments show — a missed date, a failed payment, a rejected
+ *      delivery, a released commitment — is detected, its consequence quantified and its
+ *      remedy worked out inside the authority held, and recorded once
+ *      (`deliverables/exceptions.ts`). Detecting is all it does.
  *
  * It sends nothing. Every external effect is still a person's press or a
  * granted tick through `perform.ts`, and nothing here calls an adapter.
@@ -38,6 +42,7 @@ import { agreementAnswering } from '../../../domain/cashJourney.ts';
 import { advanceFulfillment, moveToDelivering, type FulfillmentPass } from './fulfillment.ts';
 import { collectable, dealPosition } from './position.ts';
 import { recordOutcomes } from './learning.ts';
+import { recordDetectedExceptions } from '../deliverables/exceptions.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -53,6 +58,8 @@ export interface JourneyTickReport {
   delivering: number;
   collected: number;
   outcomes: number;
+  /** Exceptions the commitment rows show, and the new ones recorded this pass. */
+  exceptions: { detected: number; recorded: number };
 }
 
 export async function advanceJourney(
@@ -67,6 +74,7 @@ export async function advanceJourney(
     delivering: 0,
     collected: 0,
     outcomes: 0,
+    exceptions: { detected: 0, recorded: 0 },
   };
   const mode = await getCashMode(projectId);
   if (!mode) return report;
@@ -149,6 +157,11 @@ export async function advanceJourney(
       }
     }
     report.outcomes += await recordOutcomes((await getOpportunity(listed.id))!, mode.currency);
+    if ((await agreementsFor(listed.id)).length > 0) {
+      const found = await recordDetectedExceptions({ projectId, opportunityId: listed.id, currency: mode.currency, now: now.toISOString() });
+      report.exceptions.detected += found.detected;
+      report.exceptions.recorded += found.recorded;
+    }
   }
   return report;
 }
