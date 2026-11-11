@@ -246,6 +246,9 @@ export function inScope(openings: ModelledOpportunity[], scope: Scope, remaining
   }
 }
 
+/** The price change a direction may make: from a quarter to four times. */
+export const clampPrice = (k: number) => Math.min(4, Math.max(0.25, k));
+
 const bucket = (k: number) => Math.round(Math.log2(Math.max(1e-6, k)) * 2) / 2;
 
 function token(t: Transform): string {
@@ -253,7 +256,7 @@ function token(t: Transform): string {
     case 'OPERATOR':
       return `op:${t.key}${t.target ? `>${t.target}` : ''}`;
     case 'PRICE':
-      return `price:${bucket(t.factor)}@${t.scope}`;
+      return `price:${bucket(clampPrice(t.factor))}@${t.scope}`;
     case 'FOCUS':
       return `focus:${Math.max(1, Math.round(t.count))}`;
     case 'DROP':
@@ -337,7 +340,7 @@ export function applyProgram(
     }
     if (t.op === 'PRICE') {
       if (skipAssumed) continue;
-      const k = Math.min(4, Math.max(0.25, t.factor));
+      const k = clampPrice(t.factor);
       const ids = inScope(s.openings, t.scope, ctx.remaining);
       if (ids.size === 0 || Math.abs(k - 1) < 0.05) {
         skipped++;
@@ -521,7 +524,11 @@ export function mutate(d: Direction, ctx: Pick<ExploreContext, 'base' | 'operato
       const sib = siblings[salt % Math.max(1, siblings.length)];
       if (sib) out.push(makeDirection({ ...d, origin: 'MUTATED', name: `${d.name} (${sib.key.split('@')[1]} budget)`, program: d.program.map((x, j) => (j === i ? { ...t, key: sib.key } : x)), parents: [d.signature] }));
     }
-    if (t.op === 'PRICE') out.push(makeDirection({ ...d, origin: 'MUTATED', name: `${d.name} (price ×${(t.factor * 1.5).toFixed(2)})`, program: d.program.map((x, j) => (j === i ? { ...t, factor: t.factor * 1.5 } : x)), parents: [d.signature] }));
+    // A price step past the clamp is the same move under another name, so it is not a new direction.
+    if (t.op === 'PRICE' && clampPrice(t.factor * 1.5) > clampPrice(t.factor)) {
+      const next = clampPrice(t.factor * 1.5);
+      out.push(makeDirection({ ...d, origin: 'MUTATED', name: `${d.name.replace(/ \(price ×[0-9.]+\)/g, '')} (price ×${next.toFixed(2)})`, program: d.program.map((x, j) => (j === i ? { ...t, factor: next } : x)), parents: [d.signature] }));
+    }
     if (t.op === 'FOCUS') out.push(makeDirection({ ...d, origin: 'MUTATED', name: `${d.name} (${t.count + 1})`, program: d.program.map((x, j) => (j === i ? { ...t, count: t.count + 1 } : x)), parents: [d.signature] }));
   });
   if (d.program.length > 1) out.push(makeDirection({ ...d, origin: 'MUTATED', name: `${d.name} (without its last move)`, program: d.program.slice(0, -1), parents: [d.signature] }));
