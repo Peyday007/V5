@@ -439,10 +439,13 @@ async function faultedFragment(input: {
   orchestration: ResearchOrchestration;
   fragment: ResearchFragment;
   what: string;
+  /** Why, when it is not that an item finished without recording anything. */
+  reason?: string;
 }): Promise<void> {
   const reason =
+    input.reason ??
     `A ${input.what} work item for this fragment finished without recording anything. ` +
-    'Its research is kept; reissue the verification or give the fragment another attempt.';
+      'Its research is kept; reissue the verification or give the fragment another attempt.';
   await updateFragment(input.fragment.id, {
     status: 'BLOCKED',
     blockedReason: reason,
@@ -1334,7 +1337,9 @@ async function creditPacketProgress(orchestrationId: string): Promise<void> {
  *
  * `AWAITING_REPAIR` with only a sentence is the same failure wearing a better
  * word, so it is held to the stronger test: either there is claimable or leased
- * repair work, or a fragment carries a `next_retry_at` saying when it returns.
+ * repair work, or a fragment carries a `next_retry_at` still ahead saying when
+ * it returns. A `next_retry_at` that has passed is a repair that is due, not a
+ * wait, and is acted on.
  * With neither, the packet is not awaiting anything and belongs to a person.
  *
  * Checked here rather than at each of the dozen returns, because a rule
@@ -1365,14 +1370,53 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   if (result.status === 'AWAITING_REPAIR') {
     const fragments = await currentFragments(orchestrationId);
-    const waiting = fragments.some((fragment) => fragment.nextRetryAt !== null);
-    if (waiting) return result;
     /*
-     * Reachable now only through a race — the verdict branch asks
-     * `assessRepairs` before it writes AWAITING_REPAIR — so when it does happen
-     * it names the refusals rather than only that nothing is pending.
+     * A retry time is a wait only while it is still ahead.
+     *
+     * This read any `nextRetryAt` as a wait, so a repair whose time had already
+     * come was waited on for ever: nothing was queued, nothing was scheduled,
+     * and the packet sat AWAITING_REPAIR until the progress deadline concluded
+     * it FAILED — its repair, still allowed, abandoned rather than run
+     * (RECOVERY.STALLS, "packet idle holding a slot"). A time that has passed
+     * is due, and a due repair is acted on now.
      */
+    const now = queueNow();
+    const waiting = fragments.some(
+      (fragment) => fragment.nextRetryAt !== null && fragment.nextRetryAt > now,
+    );
+    if (waiting) return result;
     const orchestration = await getOrchestration(orchestrationId);
+    /*
+     * Due, on a fragment still RUNNING with no work out: the attempt it was
+     * waiting on is gone, so it ended. It is blocked with that reason, and the
+     * re-derive hands it to the one repair path every blocked fragment takes —
+     * `mintRepairs` mints its next attempt when `assessRepairs` allows one, and
+     * the park below names the refusal when it does not. No ladder, budget or
+     * grant check is bypassed, and the recursion ends: the fragment is no longer
+     * RUNNING on the next pass.
+     */
+    const due = fragments.filter(
+      (fragment) =>
+        fragment.status === 'RUNNING' && fragment.nextRetryAt !== null && fragment.nextRetryAt <= now,
+    );
+    if (orchestration && due.length > 0) {
+      for (const fragment of due) {
+        await faultedFragment({
+          orchestration,
+          fragment,
+          what: 'research',
+          reason:
+            `Its repair was due at ${fragment.nextRetryAt} and no work for it was queued or leased, ` +
+            'so the attempt it was waiting on has ended. Its research is kept, and it takes the ' +
+            'repair path every blocked fragment takes.',
+        });
+      }
+      return await advancePacket(orchestrationId);
+    }
+    /*
+     * Nothing due can move, so the packet names the refusals rather than only
+     * that nothing is pending.
+     */
     const repairs = orchestration
       ? await assessRepairs({ orchestration, fragments })
       : { mintable: [], refused: [] };
@@ -2798,9 +2842,10 @@ export async function advanceIdlePackets(
  *
  * A packet one of whose fragments is itself NEEDS_HUMAN already needs a person
  * by its own rows, so that packet parks at NEEDS_HUMAN with the same sentence
- * and a `RESEARCH_BLOCKED` event. The stall this was built for is
- * AWAITING_REPAIR with a fragment whose `nextRetryAt` has already passed:
- * `advancePacket` reads any retry time as a wait.
+ * and a `RESEARCH_BLOCKED` event. It is the backstop for what still cannot
+ * move — chiefly an advance that keeps failing. A repair whose `nextRetryAt` has
+ * passed is not that: `advancePacket` treats it as due and mints it or parks
+ * with its refusal, so it never reaches this deadline as a FAILED packet.
  *
  * Everything else is concluded through the transition a packet that cannot go
  * on already takes, FAILED with its reason, plus a `RESEARCH_FAILED` event.

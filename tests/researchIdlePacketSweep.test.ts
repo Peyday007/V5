@@ -16,12 +16,30 @@ vi.mock('../server/services/stateEngine.ts', async (importOriginal) => {
   return { ...actual, recomputeProject: vi.fn(actual.recomputeProject) };
 });
 import { recomputeProject } from '../server/services/stateEngine.ts';
+
+/*
+ * A packet whose advance keeps failing — production's was a database that
+ * dropped the connection — is what the progress deadline is the backstop for.
+ * Its park is refused for the ids listed here; every other call is the real one.
+ */
+const refusingPark = new Set<string>();
+vi.mock('../server/repos/research.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../server/repos/research.ts')>();
+  return {
+    ...actual,
+    parkOrchestration: vi.fn(async (...args: Parameters<typeof actual.parkOrchestration>) => {
+      if (refusingPark.has(args[0])) throw new Error('the database refused the write');
+      return actual.parkOrchestration(...args);
+    }),
+  };
+});
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createRun } from '../server/repos/runs.ts';
 import {
   createFragments,
   createOrchestration,
+  currentFragments,
   getOrchestration,
   updateFragment,
   updateOrchestration,
@@ -41,6 +59,7 @@ let layerId = '';
 
 beforeEach(async () => {
   resetIdlePacketAttempts();
+  refusingPark.clear();
   const fixture = await freshProject();
   projectId = fixture.project.id;
   layerId = (await fixture.layerByName('World Model')).id;
@@ -205,16 +224,71 @@ describe('the progress deadline', () => {
   }
 
   /**
-   * The recorded failure class, from rows: AWAITING_REPAIR whose repair time has
-   * already passed, on a fragment left RUNNING with no item. `advancePacket`
-   * reads any `nextRetryAt` as a wait, so it changes nothing, every time.
+   * A packet that genuinely cannot move: AWAITING_REPAIR, a fragment with no
+   * repair left whose time has passed and no item, and an advance that fails at
+   * the write that would park it. Every advance changes nothing, every time.
    */
   async function stalled(ageMs: number, fragmentStatus: 'RUNNING' | 'NEEDS_HUMAN' = 'RUNNING'): Promise<string> {
     const id = await packet('AWAITING_REPAIR', ageMs);
-    await fragmentOn(id, { status: fragmentStatus, nextRetryAt: new Date(Date.now() - 3_600_000).toISOString() });
+    await fragmentOn(id, {
+      status: fragmentStatus,
+      maxRepairs: 1,
+      nextRetryAt: new Date(Date.now() - 3_600_000).toISOString(),
+    });
+    refusingPark.add(id);
     await age(id, ageMs);
     return id;
   }
+
+  /**
+   * The finding, from rows: AWAITING_REPAIR whose repair time has already
+   * passed, on a fragment left RUNNING with no item and repairs still allowed.
+   * It used to be read as a wait, idle until the deadline concluded it FAILED.
+   */
+  async function dueRepair(ageMs: number, maxRepairs = 2): Promise<string> {
+    const id = await packet('AWAITING_REPAIR', ageMs);
+    await fragmentOn(id, {
+      status: 'RUNNING',
+      maxRepairs,
+      nextRetryAt: new Date(Date.now() - 3_600_000).toISOString(),
+    });
+    await age(id, ageMs);
+    return id;
+  }
+
+  it('mints a repair that is due and still allowed instead of waiting on it or concluding it', async () => {
+    for (const ageMs of [UNDER, OVERDUE]) {
+      const id = await dueRepair(ageMs);
+      const moved = (await advanceIdlePackets(10)).filter((e) => e.orchestrationId === id);
+      expect(moved).toEqual([{ orchestrationId: id, from: 'AWAITING_REPAIR', to: 'RESEARCHING' }]);
+      const after = (await getOrchestration(id))!;
+      expect(after.status).toBe('RESEARCHING');
+      expect(after.failedAt).toBeNull();
+      const [fragment] = await currentFragments(id);
+      expect(fragment).toMatchObject({ attempt: 2, status: 'QUEUED' });
+      const items = await getDb().all<{ work_type: string; state: string; fragment_id: string }>(
+        'SELECT work_type, state, fragment_id FROM work_items WHERE orchestration_id = ?',
+        [id],
+      );
+      expect(items).toEqual([{ work_type: 'RESEARCH_FRAGMENT', state: 'QUEUED', fragment_id: fragment!.id }]);
+      expect((await events(id)).map((e) => e.event_type)).not.toContain('RESEARCH_FAILED');
+    }
+  });
+
+  it('parks a due repair the ladder refuses with that refusal, rather than concluding it FAILED', async () => {
+    const id = await dueRepair(OVERDUE, 1);
+    const moved = await advanceIdlePackets(10);
+    expect(moved).toEqual([{ orchestrationId: id, from: 'AWAITING_REPAIR', to: 'NEEDS_HUMAN' }]);
+    const after = (await getOrchestration(id))!;
+    expect(after.status).toBe('NEEDS_HUMAN');
+    expect(after.failedAt).toBeNull();
+    expect(after.failureReason).toMatch(/f0 has had 1 of its 1 attempt/);
+    expect(after.failureReason).not.toMatch(/progress deadline/);
+    const [fragment] = await currentFragments(id);
+    expect(fragment).toMatchObject({ attempt: 1, status: 'BLOCKED' });
+    expect(fragment!.blockedReason).toMatch(/repair was due at/);
+    expect((await events(id)).map((e) => e.event_type)).not.toContain('RESEARCH_FAILED');
+  });
 
   async function events(id: string): Promise<{ event_type: string; payload: string }[]> {
     return getDb().all<{ event_type: string; payload: string }>(
