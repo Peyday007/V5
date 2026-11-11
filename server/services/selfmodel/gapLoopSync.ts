@@ -20,6 +20,13 @@
  *   INTEGRATE        kept as a versioned capability, or retired
  *   CONTINUE         what the loop resumes, and when it reconsiders the gap
  *
+ * SEARCH_EXISTING is not only written down here. `searchBeforeAcquire` runs the
+ * search, records NOTICE, HYPOTHESIS and SEARCH_EXISTING, and returns what it
+ * found; the improvement loop calls it *before* it opens research or submits a
+ * Factory change, refuses to hand the work to an owner without it, and puts
+ * what it found into the research assignment and the engineering objective.
+ * The archive count it records is the very count the stage decision read.
+ *
  * Because the steps due are derived from the candidate and the gap's rows
  * alone, a worker that dies or a deploy that restarts the process loses
  * nothing: the next tick reads both and records what is missing. Every step is
@@ -105,13 +112,17 @@ export function gapStepsDue(c: ImprovementCandidate, state: GapLoopState, found:
     });
   }
   if (!has('SEARCH_EXISTING') && found) {
+    // A candidate handed to an owner before the search ran (rows from before the loop searched first)
+    // is recorded as searched afterwards, never as if the search had preceded the work.
+    const after = Boolean(c.changeRequestId || c.researchGoalId);
     due.push({
       step: 'SEARCH_EXISTING',
-      summary: `${found.archiveClaims} archive claim(s), ${found.existing.length} existing match(es)`,
+      summary: `${found.archiveClaims} archive claim(s), ${found.existing.length} existing match(es)${after ? ' (recorded after the work was handed off)' : ''}`,
       detail: {
         searched: ['method archive (accepted claims)', 'system scan components', `owner path ${c.ownerComponent}`],
         archiveClaims: found.archiveClaims,
         existing: found.existing.slice(0, 10),
+        beforeAcquire: !after,
       },
     });
   }
@@ -179,6 +190,44 @@ export function gapStepsDue(c: ImprovementCandidate, state: GapLoopState, found:
   return due;
 }
 
+export interface SearchFound {
+  archiveClaims: number;
+  existing: ExistingMatch[];
+  /** True when this call ran the search and recorded it; false when an earlier SEARCH_EXISTING row answered. */
+  recorded: boolean;
+}
+
+/** The search terms and paths for a candidate: its owner component and its kind. Pure. */
+export function searchQueryFor(c: Pick<ImprovementCandidate, 'ownerComponent' | 'kind'>): { terms: string[]; paths: string[] } {
+  return { terms: [c.ownerComponent.split('/').pop()?.replace(/\.[a-z]+$/, '') ?? '', c.kind.toLowerCase()], paths: [c.ownerComponent] };
+}
+
+/**
+ * Search what exists before anything is acquired (AUTO-20-2 step 3). Called by
+ * the improvement loop before it opens research or submits engineering: records
+ * NOTICE and HYPOTHESIS if missing, then SEARCH_EXISTING, and returns what was
+ * found for the decision to use. `archiveClaims` is the count the caller's own
+ * stage decision read, so the row records what decided. An earlier search on
+ * the gap answers without searching again.
+ */
+export async function searchBeforeAcquire(
+  c: ImprovementCandidate,
+  input: { archiveClaims: number; root?: string; search?: typeof searchExisting },
+): Promise<SearchFound> {
+  const state = await readGapLoop(c.weaknessKey);
+  const prior = state.latest.SEARCH_EXISTING;
+  if (prior) {
+    const existing = Array.isArray(prior.detail['existing']) ? (prior.detail['existing'] as ExistingMatch[]) : [];
+    return { archiveClaims: Number(prior.detail['archiveClaims'] ?? 0), existing, recorded: false };
+  }
+  const existing = await (input.search ?? searchExisting)({ ...searchQueryFor(c), root: input.root });
+  const found = { archiveClaims: input.archiveClaims, existing };
+  for (const step of gapStepsDue(c, state, found).filter((s) => s.step === 'NOTICE' || s.step === 'HYPOTHESIS' || s.step === 'SEARCH_EXISTING')) {
+    await recordGapStep({ gapKey: c.weaknessKey, step: step.step, summary: step.summary, detail: step.detail });
+  }
+  return { ...found, recorded: true };
+}
+
 /** Record the steps one candidate's rows justify. Returns the steps written. */
 export async function syncCandidateGap(c: ImprovementCandidate, input: { archive?: () => Promise<number>; root?: string } = {}): Promise<GapLoopStep[]> {
   const state = await readGapLoop(c.weaknessKey);
@@ -186,7 +235,7 @@ export async function syncCandidateGap(c: ImprovementCandidate, input: { archive
   const found = needsSearch
     ? {
         archiveClaims: input.archive ? await input.archive() : 0,
-        existing: await searchExisting({ terms: [c.ownerComponent.split('/').pop()?.replace(/\.[a-z]+$/, '') ?? '', c.kind.toLowerCase()], paths: [c.ownerComponent], root: input.root }),
+        existing: await searchExisting({ ...searchQueryFor(c), root: input.root }),
       }
     : null;
   const written: GapLoopStep[] = [];
