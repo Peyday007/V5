@@ -30,7 +30,10 @@ import {
   claimHistory,
   createGraph,
   declareType,
+  discoverMissing,
+  expandToFixpoint,
   fullAccount,
+  linkGraphs,
   makeFigure,
   passVolume,
   readMoneyRoute,
@@ -40,6 +43,7 @@ import {
   type CausalGraph,
   type ChainReading,
   type ChainStage,
+  type CrossLink,
   type Figure,
   type FigureStatus,
   type GraphResult,
@@ -310,7 +314,8 @@ causalRouter.post(
     requirePerson();
     const projectId = (await requireProject(pathId(req, 'projectId'))).id;
     const graph = await graphOf(projectId, bodyOf(req));
-    return { account: fullAccount(graph), ...needsOf(graph, readingsOf(graph), null) };
+    // What the graph implies but does not hold yet: shown, not silently added.
+    return { account: fullAccount(graph), discovered: discoverMissing(graph), ...needsOf(graph, readingsOf(graph), null) };
   }),
 );
 
@@ -598,6 +603,119 @@ causalRouter.post(
   }),
 );
 
+/** The request form of a graph, which `graphFrom` replays: what a constructed graph is stored as. */
+function graphToJson(graph: CausalGraph): Json {
+  const declared = (table: Map<string, { name: string; reason: string }>) =>
+    [...table.values()].filter((one) => one.reason !== 'seed').map((one) => ({ name: one.name, reason: one.reason }));
+  return {
+    subject: graph.subject,
+    nodeTypes: declared(graph.nodeTypes),
+    relationTypes: declared(graph.relationTypes),
+    nodes: [...graph.nodes.values()],
+    relations: [...graph.relations.values()],
+    actions: [...graph.actions.values()],
+    routes: [...graph.routes.values()],
+    claims: [...graph.claims].flatMap(([key, versions]) => versions.map((one) => ({ key, figure: one.figure, reason: one.reason }))),
+  };
+}
+
+async function storeVersion(projectId: string, key: string, next: Json, reasonText: unknown): Promise<{ version: number; graph: CausalGraph }> {
+  const earlier = await storedVersions(projectId, key);
+  const merged = carryClaims(earlier.length ? (earlier[earlier.length - 1] as StoredGraphVersion).graph : null, next);
+  const graph = graphFrom(merged);
+  const reason = text(reasonText).trim().slice(0, 500) || (earlier.length ? 'replaced without a stated reason' : '');
+  await recordEvent({
+    projectId,
+    entityType: GRAPH_ENTITY,
+    entityId: key,
+    eventType: 'CAPABILITY_ASSESSED',
+    payload: { kind: GRAPH_VERSION_KIND, reason, graph: merged },
+  });
+  return { version: earlier.length + 1, graph };
+}
+
+/**
+ * Brain constructs the graph (CAUSAL-14-1): from whatever the request or a stored
+ * version states — routes, actions, a few nodes — it discovers every variable
+ * those imply and does not yet model (the payer, the offer, the channel, each
+ * party paid out to, a hold against refunds, the actor, approvals and outside
+ * dependencies of each action), declares a type when the vocabulary has none for
+ * the role, and expands until nothing new is implied. Every addition names what
+ * implied it. With `storeAs`, the constructed graph becomes the next version of
+ * that named graph, so later questions read the expanded one.
+ */
+causalRouter.post(
+  '/projects/:projectId/causal/construct',
+  handler(async (req) => {
+    requirePerson();
+    const projectId = (await requireProject(pathId(req, 'projectId'))).id;
+    const body = bodyOf(req);
+    const graph = await graphOf(projectId, body);
+    const expanded = expandToFixpoint(graph);
+    if (!expanded.ok) throw unprocessable(expanded.reason);
+    let stored: { key: string; version: number } | null = null;
+    if (body.storeAs !== undefined) {
+      const key = graphKeyOf(body.storeAs);
+      const done = await storeVersion(projectId, key, graphToJson(graph), body.reason ?? 'constructed: variables the graph implied were added');
+      stored = { key, version: done.version };
+    }
+    return { discovered: expanded.value, stored, account: fullAccount(graph), ...needsOf(graph, readingsOf(graph), null) };
+  }),
+);
+
+/**
+ * Several graphs as one portfolio: each member keeps its own nodes under its
+ * subject, a party or resource more than one member depends on becomes one shared
+ * node that constrains each of them, and stated links join members. Members are
+ * constructed first, so a dependency two businesses share is found even when
+ * neither graph names it as a node. `trace` follows implications across members.
+ */
+causalRouter.post(
+  '/projects/:projectId/causal/portfolio',
+  handler(async (req) => {
+    requirePerson();
+    const projectId = (await requireProject(pathId(req, 'projectId'))).id;
+    const body = bodyOf(req);
+    const subject = text(body.subject).trim() || 'portfolio';
+    const rawMembers = list(body.members, 'members', 50);
+    if (rawMembers.length < 2) throw badRequest('"members" names at least two graphs.');
+    const members: CausalGraph[] = [];
+    for (const [index, raw] of rawMembers.entries()) {
+      const member = await graphOf(projectId, raw);
+      const expanded = expandToFixpoint(member);
+      if (!expanded.ok) throw unprocessable(`members[${index}]: ${expanded.reason}`);
+      members.push(member);
+    }
+    const links: CrossLink[] = list(body.links, 'links', LIMITS.relations).map((one, index) => {
+      const end = (value: unknown, side: string) => {
+        if (!isObject(value)) throw badRequest(`"links[${index}].${side}" must name a graph and a node.`);
+        return { graph: text(value.graph), node: text(value.node) };
+      };
+      const label = textOrNull(one.label);
+      return { from: end(one.from, 'from'), to: end(one.to, 'to'), type: text(one.type), ...(label ? { label } : {}) };
+    });
+    const linked = linkGraphs(subject, members, links);
+    if (!linked.ok) throw unprocessable(linked.reason);
+    const portfolio = linked.value;
+    let traced = null;
+    if (isObject(body.trace)) {
+      const from = text(body.trace.from);
+      const direction = body.trace.direction === 'backward' ? 'backward' : 'forward';
+      traced = trace(portfolio.graph, from, direction);
+      if (!traced) throw unprocessable(`Node ${from} is not in this portfolio.`);
+    }
+    return {
+      subject,
+      members: portfolio.members,
+      shared: portfolio.shared,
+      links: portfolio.links,
+      trace: traced,
+      account: fullAccount(portfolio.graph),
+      ...needsOf(portfolio.graph, readingsOf(portfolio.graph), null),
+    };
+  }),
+);
+
 /**
  * Store a version of a named graph. The request-form graph is validated by
  * building it, carried forward with every earlier claim version, and appended
@@ -611,18 +729,8 @@ causalRouter.post(
     const key = graphKeyOf(pathId(req, 'key'));
     const body = bodyOf(req);
     if (!isObject(body.graph)) throw badRequest('"graph" must be a graph object.');
-    const earlier = await storedVersions(projectId, key);
-    const merged = carryClaims(earlier.length ? (earlier[earlier.length - 1] as StoredGraphVersion).graph : null, body.graph);
-    const graph = graphFrom(merged);
-    const reason = text(body.reason).trim().slice(0, 500) || (earlier.length ? 'replaced without a stated reason' : '');
-    await recordEvent({
-      projectId,
-      entityType: GRAPH_ENTITY,
-      entityId: key,
-      eventType: 'CAPABILITY_ASSESSED',
-      payload: { kind: GRAPH_VERSION_KIND, reason, graph: merged },
-    });
-    return { key, version: earlier.length + 1, subject: graph.subject, claims: graph.claims.size };
+    const { version, graph } = await storeVersion(projectId, key, body.graph, body.reason);
+    return { key, version, subject: graph.subject, claims: graph.claims.size };
   }),
 );
 

@@ -195,6 +195,8 @@ describe('who can reach the causal routes', () => {
     { method: 'POST', route: `${CAUSAL()}/what-if` },
     { method: 'POST', route: `${CAUSAL()}/chain` },
     { method: 'POST', route: `${CAUSAL()}/decompose` },
+    { method: 'POST', route: `${CAUSAL()}/construct` },
+    { method: 'POST', route: `${CAUSAL()}/portfolio` },
     { method: 'POST', route: `${CAUSAL()}/graphs/k` },
     { method: 'GET', route: `${CAUSAL()}/graphs/k` },
   ];
@@ -514,5 +516,71 @@ describe('stored graphs keep every version', () => {
     const r = await call('GET', `${CAUSAL()}/graphs/g1`, { cookie: outsiderCookie });
     expect(r.status).toBe(404);
     expect(r.text).not.toContain('price');
+  });
+});
+
+describe('Brain constructs the graph and links graphs across businesses (CAUSAL-14-1)', () => {
+  const SPARSE = (subject: string, supplier: string) => ({
+    subject,
+    actions: [
+      { id: 'ship', label: 'Ship order', actor: 'Ops lead', permissions: ['carrier account'], effect: 'order shipped', timing: 'same day', evidence: ['order row'], completionCondition: 'tracking number issued', externalDependencies: ['Carrier API'], prerequisites: [] },
+    ],
+    routes: [
+      { id: 'sale', payer: 'Retail buyer', for: `${subject} order`, terms: 'prepaid', channel: 'storefront', invoicedAt: '2026-11-01', collectedAt: '2026-11-01',
+        collectedCents: fig(50_000, 'OBSERVED'), heldAgainstCents: fig(5_000, 'CONTRACTED'),
+        outflows: [{ to: supplier, reason: 'goods', amountCents: 20_000, at: '2026-11-03' }] },
+    ],
+  });
+
+  it('the account names what the graph implies but does not hold, without adding it', async () => {
+    const r = await call('POST', `${CAUSAL()}/account`, { cookie: adminCookie, body: { graph: SPARSE('shop', 'Mill Co') } });
+    expect(r.status).toBe(200);
+    expect(r.body.account.nodes).toHaveLength(0);
+    expect(r.body.discovered.some((d: any) => d.kind === 'node' && d.node.label === 'Mill Co')).toBe(true);
+  });
+
+  it('constructs the variables, declares a missing type with its reason, and stores the expanded graph', async () => {
+    const r = await call('POST', `${CAUSAL()}/construct`, { cookie: adminCookie, body: { graph: SPARSE('shop', 'Mill Co'), storeAs: 'built' } });
+    expect(r.status).toBe(200);
+    const labels = r.body.account.nodes.map((n: any) => n.label);
+    for (const label of ['Retail buyer', 'shop order', 'storefront', 'Mill Co', 'Ops lead', 'carrier account', 'Carrier API']) expect(labels).toContain(label);
+    expect(r.body.account.nodeTypes.find((t: any) => t.name === 'payee').reason).toMatch(/outflow/);
+    expect(r.body.discovered.every((d: any) => typeof d.because === 'string' && d.because.length > 0)).toBe(true);
+    expect(r.body.stored).toEqual({ key: 'built', version: 1 });
+    const again = await call('POST', `${CAUSAL()}/construct`, { cookie: adminCookie, body: { graphKey: 'built' } });
+    expect(again.body.discovered).toEqual([]);
+    const back = await call('POST', `${CAUSAL()}/trace`, { cookie: adminCookie, body: { graphKey: 'built', from: 'payee:mill-co', direction: 'backward' } });
+    expect(back.body.trace.reached.map((x: any) => x.node.label)).toContain('Retail buyer');
+  });
+
+  it('finds a supplier two businesses share and traces its failure into both', async () => {
+    const r = await call('POST', `${CAUSAL()}/portfolio`, {
+      cookie: adminCookie,
+      body: {
+        subject: 'holdings',
+        members: [{ graph: SPARSE('shop', 'Mill Co') }, { graph: SPARSE('wholesale', 'mill co') }],
+        links: [{ from: { graph: 'shop', node: 'offer:shop-order' }, to: { graph: 'wholesale', node: 'offer:wholesale-order' }, type: 'depends_on' }],
+        trace: { from: 'portfolio::payee:mill-co', direction: 'forward' },
+      },
+    });
+    expect(r.status).toBe(200);
+    const mill = r.body.shared.find((s: any) => s.label === 'Mill Co');
+    expect(mill.members.sort()).toEqual(['shop::payee:mill-co', 'wholesale::payee:mill-co']);
+    const reached = r.body.trace.reached.map((x: any) => x.node.id);
+    expect(reached).toEqual(expect.arrayContaining(['shop::payee:mill-co', 'wholesale::payee:mill-co']));
+    expect(r.body.links).toHaveLength(1);
+    expect(r.body.account.routes.map((x: any) => x.route).sort()).toEqual(['shop::sale', 'wholesale::sale']);
+  });
+
+  it('refuses a portfolio of one, a repeated member, and a link to a node that is not there', async () => {
+    const one = await call('POST', `${CAUSAL()}/portfolio`, { cookie: adminCookie, body: { members: [{ graph: SPARSE('shop', 'Mill Co') }] } });
+    expect(one.status).toBe(400);
+    const twice = await call('POST', `${CAUSAL()}/portfolio`, { cookie: adminCookie, body: { members: [{ graph: SPARSE('shop', 'A') }, { graph: SPARSE('shop', 'B') }] } });
+    expect(twice.status).toBe(422);
+    const dangling = await call('POST', `${CAUSAL()}/portfolio`, {
+      cookie: adminCookie,
+      body: { members: [{ graph: SPARSE('shop', 'A') }, { graph: SPARSE('wholesale', 'B') }], links: [{ from: { graph: 'shop', node: 'nope' }, to: { graph: 'wholesale', node: 'offer:wholesale-order' }, type: 'depends_on' }] },
+    });
+    expect(dangling.status).toBe(422);
   });
 });

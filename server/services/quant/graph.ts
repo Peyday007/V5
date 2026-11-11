@@ -29,6 +29,11 @@
  *     revenue, yield falls as volume saturates a stage, and streams that share
  *     a resource fail together rather than being summed at their best case.
  *   * A claim replaced by new information keeps its history.
+ *   * Brain constructs the graph: `discoverMissing` names every variable the
+ *     routes and actions imply but the graph does not model (declaring a type
+ *     when the vocabulary has no word for the role), `expandToFixpoint` adds
+ *     them, and `linkGraphs` joins several graphs into a portfolio in which a
+ *     party or resource more than one member depends on is one shared node.
  */
 import { evaluateCombination } from './portfolio.ts';
 
@@ -627,4 +632,281 @@ export function fullAccount(graph: CausalGraph): {
     routes: [...graph.routes.values()].map(readMoneyRoute),
     claims: Object.fromEntries(graph.claims),
   };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Construction: Brain builds the graph and discovers what it lacks           */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * A variable the graph implies but does not model. Every one names what in the
+ * graph implied it, so an expansion is auditable rather than invented: a money
+ * route names a payer, an offer, a channel and the people it pays out to; an
+ * action names an actor, the approvals it needs and the outside parties it waits
+ * on. When none of those is a node, the graph is missing a variable, and when the
+ * vocabulary has no type for the role, the type is missing too.
+ */
+export interface Discovery {
+  kind: 'type' | 'node' | 'relation';
+  /** What in the graph implied this variable. */
+  because: string;
+  type?: { kind: 'node' | 'relation'; name: string; reason: string };
+  node?: GraphNode;
+  relation?: GraphRelation;
+}
+
+/**
+ * Types Brain declares on its own when the seed vocabulary has no word for a role
+ * the graph already implies. Each reason is the vocabulary's own insufficiency.
+ */
+const DISCOVERED_TYPES: Record<string, { kind: 'node' | 'relation'; reason: string }> = {
+  payee: { kind: 'node', reason: 'A route pays money out to a party that is neither payer, supplier nor beneficiary of the offer; no seed type names the recipient of an outflow.' },
+  external_dependency: { kind: 'node', reason: 'An action waits on an outside party or system the arrangement does not control; no seed type names a dependency outside the graph.' },
+  shared_dependency: { kind: 'node', reason: 'More than one business in a portfolio depends on the same party or resource; no seed type names a node that belongs to the portfolio rather than one member.' },
+};
+
+const normal = (value: string): string => value.trim().toLowerCase().replace(/\s+/g, ' ');
+const slug = (value: string): string => normal(value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'unnamed';
+
+/**
+ * Everything the graph implies but does not yet hold, in the order it would be
+ * added. Pure: the graph is not changed. Applying the result with `expandGraph`
+ * and asking again returns nothing new, so discovery reaches a fixpoint.
+ */
+export function discoverMissing(graph: CausalGraph): Discovery[] {
+  const found: Discovery[] = [];
+  const types = { node: new Set(graph.nodeTypes.keys()), relation: new Set(graph.relationTypes.keys()) };
+  const byId = new Map(graph.nodes);
+  const byLabel = new Map<string, string>();
+  for (const node of graph.nodes.values()) if (!byLabel.has(normal(node.label))) byLabel.set(normal(node.label), node.id);
+  const relationKeys = new Set([...graph.relations.values()].map((rel) => `${rel.type}|${rel.from}|${rel.to}`));
+  const relationIds = new Set(graph.relations.keys());
+
+  const needType = (kind: 'node' | 'relation', name: string, because: string): void => {
+    if (types[kind].has(name)) return;
+    const known = DISCOVERED_TYPES[name];
+    types[kind].add(name);
+    found.push({ kind: 'type', because, type: { kind, name, reason: known?.reason ?? `Implied by ${because}.` } });
+  };
+
+  /** The node a reference names: an existing node by id or label, or a new one. */
+  const nodeFor = (reference: string, type: string, because: string, attributes: GraphNode['attributes'] = {}): string | null => {
+    const label = reference.trim();
+    if (!label) return null;
+    if (byId.has(label)) return label;
+    const existing = byLabel.get(normal(label));
+    if (existing) return existing;
+    needType('node', type, because);
+    let id = `${type}:${slug(label)}`;
+    for (let n = 2; byId.has(id); n++) id = `${type}:${slug(label)}-${n}`;
+    const node: GraphNode = { id, type, label, attributes: { ...attributes, discovered: true, discoveredBecause: because } };
+    byId.set(id, node);
+    byLabel.set(normal(label), id);
+    found.push({ kind: 'node', because, node });
+    return id;
+  };
+
+  const relate = (type: string, from: string | null, to: string | null, because: string): void => {
+    if (!from || !to || from === to) return;
+    const key = `${type}|${from}|${to}`;
+    if (relationKeys.has(key)) return;
+    needType('relation', type, because);
+    let id = `${type}:${from}->${to}`;
+    for (let n = 2; relationIds.has(id); n++) id = `${type}:${from}->${to}#${n}`;
+    relationKeys.add(key);
+    relationIds.add(id);
+    found.push({ kind: 'relation', because, relation: { id, type, from, to } });
+  };
+
+  for (const route of graph.routes.values()) {
+    const because = `money route ${route.id}`;
+    const payer = nodeFor(route.payer, 'payer', `${because} names its payer`);
+    const offer = nodeFor(route.for, 'offer', `${because} says what is paid for`);
+    const channel = nodeFor(route.channel, 'channel', `${because} names the channel the money moves through`);
+    relate('pays', payer, offer, `${because}: the payer pays for the offer`);
+    relate('depends_on', offer, channel, `${because}: collection depends on the channel`);
+    for (const outflow of route.outflows) {
+      const payee = nodeFor(outflow.to, 'payee', `${because} pays out to ${outflow.to.trim() || 'an unnamed party'}`, { reason: outflow.reason });
+      relate('obliges', offer, payee, `${because}: each sale obliges the outflow "${outflow.reason}"`);
+    }
+    const held = route.heldAgainstCents;
+    if (held.status === 'UNKNOWN' || (held.value ?? 0) > 0) {
+      const hold = nodeFor(`refund or fulfilment hold on ${route.id}`, 'obligation', `${because} holds collected money against refund or fulfilment`, { route: route.id });
+      relate('obliges', offer, hold, `${because}: collected money is not free while the hold stands`);
+    }
+  }
+
+  for (const action of graph.actions.values()) {
+    const because = `action ${action.id}`;
+    const step = nodeFor(`action:${action.id}`, 'workflow_step', `${because} is a step of the operation`, { action: action.id, label: action.label });
+    const actor = nodeFor(action.actor, 'actor', `${because} names its responsible actor`);
+    relate('causes', actor, step, `${because}: the actor performs the step`);
+    for (const prerequisite of action.prerequisites) {
+      const before = nodeFor(`action:${prerequisite}`, 'workflow_step', `action ${prerequisite} is a prerequisite of ${action.id}`, { action: prerequisite });
+      relate('requires', step, before, `${because} requires ${prerequisite} first`);
+    }
+    for (const permission of action.permissions) {
+      if (normal(permission) === 'none') continue;
+      const approval = nodeFor(permission, 'approval', `${because} needs the permission "${permission}"`);
+      relate('requires', step, approval, `${because} cannot run without "${permission}"`);
+    }
+    for (const dependency of action.externalDependencies) {
+      const outside = nodeFor(dependency, 'external_dependency', `${because} waits on "${dependency}"`);
+      relate('depends_on', step, outside, `${because} depends on "${dependency}"`);
+    }
+  }
+
+  return found;
+}
+
+/** Apply discoveries through the model's own constructors. Returns how many were applied. */
+export function expandGraph(graph: CausalGraph, discoveries: readonly Discovery[]): GraphResult<number> {
+  let applied = 0;
+  for (const one of discoveries) {
+    let result: GraphResult = { ok: true };
+    if (one.kind === 'type' && one.type) result = declareType(graph, one.type.kind, one.type.name, one.type.reason);
+    else if (one.kind === 'node' && one.node) result = graph.nodes.has(one.node.id) ? { ok: true } : addNode(graph, one.node);
+    else if (one.kind === 'relation' && one.relation) result = graph.relations.has(one.relation.id) ? { ok: true } : addRelation(graph, one.relation);
+    if (!result.ok) return { ok: false, reason: `${one.because}: ${result.reason}` };
+    applied += 1;
+  }
+  return { ok: true, value: applied };
+}
+
+/**
+ * Discover and expand until nothing new is implied. The graph is changed in
+ * place and every discovery is returned, in order, so the owner can see what
+ * Brain added and why.
+ */
+export function expandToFixpoint(graph: CausalGraph, maxPasses = 8): GraphResult<Discovery[]> {
+  const all: Discovery[] = [];
+  for (let pass = 0; pass < maxPasses; pass++) {
+    const next = discoverMissing(graph);
+    if (next.length === 0) return { ok: true, value: all };
+    const applied = expandGraph(graph, next);
+    if (!applied.ok) return applied;
+    all.push(...next);
+  }
+  return discoverMissing(graph).length === 0 ? { ok: true, value: all } : { ok: false, reason: `Discovery did not settle in ${maxPasses} passes.` };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Portfolios: graphs that depend on each other                               */
+/* ------------------------------------------------------------------------- */
+
+export interface CrossLink {
+  from: { graph: string; node: string };
+  to: { graph: string; node: string };
+  type: string;
+  label?: string;
+}
+
+export interface SharedDependency {
+  /** The portfolio-level node standing for the one party or resource. */
+  node: string;
+  type: string;
+  label: string;
+  /** The member nodes that are the same party or resource, as `member::node`. */
+  members: string[];
+}
+
+export interface PortfolioGraph {
+  graph: CausalGraph;
+  members: string[];
+  shared: SharedDependency[];
+  links: GraphRelation[];
+}
+
+/** The id a member's node has inside a portfolio. */
+export const memberNodeId = (member: string, node: string): string => `${member}::${node}`;
+
+/**
+ * One graph over several businesses, deals or portfolios. Each member keeps its
+ * own nodes, relations, actions, routes and claims under its subject, so nothing
+ * is hand-copied and nothing collides. Two kinds of cross-graph dependency are
+ * then made explicit:
+ *
+ *   * discovered — the same party or resource (same type, same name) appearing in
+ *     more than one member becomes one portfolio node that constrains each of
+ *     them, so a supplier two businesses share fails both of them in a trace;
+ *   * stated — a link the caller names between nodes of two members.
+ *
+ * Tracing forward from a shared node reaches every member it can stop.
+ */
+export function linkGraphs(subject: string, members: readonly CausalGraph[], links: readonly CrossLink[] = []): GraphResult<PortfolioGraph> {
+  const subjects = members.map((one) => one.subject);
+  const duplicate = subjects.find((one, index) => subjects.indexOf(one) !== index);
+  if (duplicate !== undefined) return { ok: false, reason: `Two members share the subject ${duplicate}; a portfolio names each member once.` };
+  const portfolio = createGraph(subject);
+  for (const member of members) {
+    for (const [name, declared] of member.nodeTypes) if (!portfolio.nodeTypes.has(name)) portfolio.nodeTypes.set(name, declared);
+    for (const [name, declared] of member.relationTypes) if (!portfolio.relationTypes.has(name)) portfolio.relationTypes.set(name, declared);
+  }
+  for (const member of members) {
+    const m = member.subject;
+    for (const node of member.nodes.values()) portfolio.nodes.set(memberNodeId(m, node.id), { ...node, id: memberNodeId(m, node.id), attributes: { ...node.attributes, member: m } });
+    for (const rel of member.relations.values()) {
+      portfolio.relations.set(memberNodeId(m, rel.id), { ...rel, id: memberNodeId(m, rel.id), from: memberNodeId(m, rel.from), to: memberNodeId(m, rel.to) });
+    }
+    for (const action of member.actions.values()) {
+      portfolio.actions.set(memberNodeId(m, action.id), { ...action, id: memberNodeId(m, action.id), prerequisites: action.prerequisites.map((p) => memberNodeId(m, p)) });
+    }
+    for (const route of member.routes.values()) portfolio.routes.set(memberNodeId(m, route.id), { ...route, id: memberNodeId(m, route.id) });
+    for (const [key, history] of member.claims) portfolio.claims.set(memberNodeId(m, key), history);
+  }
+
+  // Discovered: one party or resource that more than one member depends on.
+  const groups = new Map<string, { type: string; label: string; nodes: string[]; owners: Set<string> }>();
+  for (const member of members) {
+    for (const node of member.nodes.values()) {
+      if (node.type === 'workflow_step' || node.type === 'offer' || node.type === 'obligation') continue; // a member's own steps, offers and holds are its own
+      const key = `${node.type}|${normal(node.label)}`;
+      const group = groups.get(key) ?? { type: node.type, label: node.label, nodes: [], owners: new Set<string>() };
+      group.nodes.push(memberNodeId(member.subject, node.id));
+      group.owners.add(member.subject);
+      groups.set(key, group);
+    }
+  }
+  const shared: SharedDependency[] = [];
+  for (const group of groups.values()) {
+    if (group.owners.size < 2) continue;
+    if (!portfolio.nodeTypes.has('shared_dependency')) {
+      const declared = DISCOVERED_TYPES.shared_dependency as { reason: string };
+      portfolio.nodeTypes.set('shared_dependency', { name: 'shared_dependency', reason: declared.reason });
+    }
+    const id = `portfolio::${group.type}:${slug(group.label)}`;
+    portfolio.nodes.set(id, {
+      id,
+      type: 'shared_dependency',
+      label: group.label,
+      attributes: { sharedType: group.type, members: [...group.owners].sort().join(', '), discovered: true, discoveredBecause: `${group.owners.size} members depend on ${group.label}` },
+    });
+    for (const memberNode of group.nodes) {
+      const relId = `constrains:${id}->${memberNode}`;
+      portfolio.relations.set(relId, { id: relId, type: 'constrains', from: id, to: memberNode, label: 'the same party or resource' });
+    }
+    shared.push({ node: id, type: group.type, label: group.label, members: group.nodes });
+  }
+
+  // Stated: links the caller names between members.
+  const stated: GraphRelation[] = [];
+  const known = new Set(subjects);
+  for (const [index, link] of links.entries()) {
+    for (const end of [link.from, link.to]) {
+      if (!known.has(end.graph)) return { ok: false, reason: `links[${index}] names ${end.graph}, which is not a member of this portfolio.` };
+      if (!portfolio.nodes.has(memberNodeId(end.graph, end.node))) return { ok: false, reason: `links[${index}]: node ${end.node} is not in ${end.graph}.` };
+    }
+    const relation: GraphRelation = {
+      id: `link:${index + 1}`,
+      type: link.type,
+      from: memberNodeId(link.from.graph, link.from.node),
+      to: memberNodeId(link.to.graph, link.to.node),
+      ...(link.label ? { label: link.label } : {}),
+    };
+    const added = addRelation(portfolio, relation);
+    if (!added.ok) return { ok: false, reason: `links[${index}]: ${added.reason}` };
+    stated.push(relation);
+  }
+
+  return { ok: true, value: { graph: portfolio, members: subjects, shared, links: stated } };
 }
