@@ -7,12 +7,14 @@
 import { getDb } from '../../../db/database.ts';
 import { parseJson } from '../../../repos/util.ts';
 import {
-  keepPossibility, listPossibilities, triggerCondition, watchCondition, watchersOf,
+  keepPossibility, listPossibilities, possibilityEdges, triggerCondition, watchCondition, watchersOf,
 } from '../../../repos/economy.ts';
 import type {
   Possibility, PossibilityKind, PossibilityRequirements,
 } from '../../../domain/economy.ts';
-import { screenPossibility, type GoalLimits, type ScreenResult } from './screen.ts';
+import {
+  reachOf, researchNext, screenPossibility, type GoalLimits, type ScreenResult,
+} from './screen.ts';
 
 /** Machines never keep, reconsider or share a person's possibilities. */
 export interface Actor { type: 'PERSON' | 'WORKER'; userId: string }
@@ -87,4 +89,54 @@ export async function visiblePossibilities(
 ): Promise<Possibility[]> {
   requirePerson(actor, ownerUserId);
   return listPossibilities(projectId, ownerUserId);
+}
+
+export interface ResearchQueueEntry {
+  possibilityId: string;
+  title: string;
+  /** How many of the owner's other possibilities this one leads to. */
+  reach: number;
+}
+
+export interface ResearchQueue {
+  /** What may be researched next, strongest reach first. */
+  next: ResearchQueueEntry[];
+  /** Zero-reach candidates passed over because something stronger remains. */
+  passedOver: ResearchQueueEntry[];
+  /** Parked by the code screen: never offered for research until reconsidered. */
+  parked: number;
+}
+
+/**
+ * The research order over one owner's kept possibilities, read from the store.
+ * Candidates are the ones the code screen advanced (not parked) and not yet
+ * explored; reach is measured over that owner's own edges only. A zero-reach
+ * candidate waits while any stronger one remains (`researchNext`).
+ */
+export async function researchQueue(input: {
+  actor: Actor; projectId: string; ownerUserId: string; explored?: ReadonlySet<string>;
+}): Promise<ResearchQueue> {
+  requirePerson(input.actor, input.ownerUserId);
+  const all = await listPossibilities(input.projectId, input.ownerUserId);
+  const edges = await possibilityEdges(input.projectId, input.ownerUserId);
+  const explored = input.explored ?? new Set<string>();
+  const candidates = all.filter((p) => p.parkedReason === null);
+  const byId = new Map(all.map((p) => [p.id, p]));
+  const entry = (id: string): ResearchQueueEntry =>
+    ({ possibilityId: id, title: byId.get(id)?.title ?? id, reach: reachOf(id, edges) });
+  const nextIds = researchNext(candidates, edges, explored);
+  const chosen = new Set(nextIds);
+  return {
+    next: nextIds.map(entry),
+    passedOver: candidates.filter((p) => !explored.has(p.id) && !chosen.has(p.id)).map((p) => entry(p.id)),
+    parked: all.length - candidates.length,
+  };
+}
+
+/** Terminal lines for a research queue; prints what the store says, nothing composed. */
+export function researchQueueLines(queue: ResearchQueue): string[] {
+  const lines = [`  research    ${queue.next.length} next, ${queue.passedOver.length} passed over (zero reach while stronger remain), ${queue.parked} parked by the screen`];
+  queue.next.forEach((e, i) => lines.push(`  next ${String(i + 1).padStart(3)}    ${e.possibilityId} reach=${e.reach}  ${e.title}`));
+  for (const e of queue.passedOver) lines.push(`  waits       ${e.possibilityId} reach=0  ${e.title}`);
+  return lines;
 }

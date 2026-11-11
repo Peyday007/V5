@@ -24,6 +24,7 @@
  *   npm run goals -- create --reason "Collect 10000 dollars in 30 days" --project prj_… --due 2026-11-27 SETTLED_CASH-1000000-USD-50000-120 --admin a@b
  *   npm run goals -- target <wst_…> SETTLED_CASH-1000000-USD-50000-120 --project prj_… --admin a@b
  *   npm run goals -- plan <wst_…>            (reads and prints; writes nothing)
+ *   npm run goals -- possibilities --project prj_… --owner a@b   (research order of kept possibilities; writes nothing)
  *
  * A target spec is METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS]], dashes
  * only, so it passes the workflow's id check: the figure, how much, in which
@@ -57,6 +58,7 @@ import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { measurePlan, measurementLines } from '../server/services/economy/measure/index.ts';
+import { researchQueue, researchQueueLines } from '../server/services/economy/possibilities/store.ts';
 import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 
 class Halt extends Error {}
@@ -450,6 +452,24 @@ async function plan(): Promise<void> {
   console.log('GOALS: OK');
 }
 
+/**
+ * The research order over a person's kept possibilities: what the code screen
+ * advanced, strongest reach first, zero-reach candidates waiting while anything
+ * stronger remains. Reads, never writes; the owner is resolved from the
+ * database and is the only person whose rows are read.
+ */
+async function possibilities(): Promise<void> {
+  const projectId = flag('project');
+  const email = flag('owner');
+  if (!projectId || !email) fail('Usage: npm run goals -- possibilities --project prj_… --owner <email>');
+  const owner = await getUserByEmail(email);
+  if (!owner || owner.disabledAt) fail(`${email} is not an enabled person in this Brain.`);
+  const queue = await researchQueue({ actor: { type: 'PERSON', userId: owner.id }, projectId, ownerUserId: owner.id });
+  console.log(`POSSIBILITIES ${projectId} owner ${email}`);
+  for (const line of researchQueueLines(queue)) console.log(line);
+  console.log('GOALS: OK');
+}
+
 async function main(): Promise<void> {
   await initDatabase();
   const [command] = words();
@@ -471,8 +491,10 @@ async function main(): Promise<void> {
       return await targetCommand(command);
     case 'plan':
       return await plan();
+    case 'possibilities':
+      return await possibilities();
     default:
-      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, plan');
+      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, plan, possibilities');
       process.exitCode = 1;
       console.log('GOALS: FAIL');
   }
