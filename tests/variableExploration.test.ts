@@ -120,6 +120,16 @@ describe('§102 mechanics', () => {
     expect(worst).toBeLessThan(150);
   });
 
+  it('a time bound is shared between stages: a slow machine still searches locally and moves the world', async () => {
+    // Production, 2026-11-11 (Goals plan 43003547180): one bound let the factorial take all 49 s; local search and conditions read nothing.
+    const quick = await reconstructPlan({ openings: GOAL_10K_OPENINGS, portfolio: portfolioInput, baseline, required: 0.9, explore: { maxMs: 1, sweepMs: 600 } });
+    const s = quick.exploration!.sweep!;
+    expect(s.stopped).toBe('TIME');
+    expect(s.factorial).toBeGreaterThan(0);
+    expect(s.local).toBeGreaterThan(0);
+    expect(s.conditionReads).toBeGreaterThan(1000);
+  });
+
   it('a second goal with nothing in common sweeps its own variables', async () => {
     const openings = [one('opp_x', {}), one('opp_y', { price: swept(2000, 4000), close: swept(0.02, 0.08), volume: swept(5, 30) }), one('opp_z', { repeatable: false, price: swept(800, 1200), close: swept(0.3, 0.6) })];
     const input = { remaining: 6000, daysLeft: 45, capitalCeiling: 1500, beforeProof: 200, perWeek: 400, resources: null, worlds: 300, seed: 3 };
