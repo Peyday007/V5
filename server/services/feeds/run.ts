@@ -34,6 +34,8 @@ import { FEED_SOURCES, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
+import { escalatedFirst, routeStoredItems } from './learned.ts';
+import { FEED_READER } from './learnedRun.ts';
 
 export type Fetcher = (url: string, headers: Record<string, string>, timeoutMs?: number) => Promise<unknown>;
 
@@ -172,13 +174,36 @@ export async function screenFeedLeads(input: {
   const pace = lanePacing(health, isDown);
   // A record a code rule already accounts for is not asked about one by one.
   const covered = await coveredItems(recent.map((one) => one.id));
-  const todo = recent
+  const eligible = recent
     .filter((item) => item.source !== SITE_SOURCE && item.source !== CODE_SIGNAL_SOURCE && !covered.has(item.id) && !done.has(item.id))
     .filter((item) => {
       const published = Date.parse(item.publishedAt ?? item.fetchedAt);
       return !Number.isFinite(published) || now.getTime() - published <= LEAD_MAX_AGE_MS;
-    })
-    .slice(0, pace.perPass);
+    });
+  /*
+   * What a learned detector came close on but could not classify is escalated:
+   * it is screened first, so the bounded pass reaches it before the volume. A
+   * fault reading the learned detectors leaves the order as it was.
+   */
+  let ordered = eligible;
+  try {
+    const routing = await routeStoredItems(
+      FEED_READER,
+      eligible.map((item) => ({
+        id: item.id,
+        source: item.source,
+        url: item.url,
+        title: item.title,
+        organization: item.organization,
+        publishedAt: item.publishedAt,
+        fetchedAt: item.fetchedAt,
+      })),
+    );
+    ordered = escalatedFirst(eligible, routing);
+  } catch {
+    /* the screen still runs in arrival order */
+  }
+  const todo = ordered.slice(0, pace.perPass);
   let screened = 0;
   let next = 0;
   const worker = async (): Promise<void> => {

@@ -235,3 +235,27 @@ export function routeRecords(detectors: readonly LearnedDetector[], records: rea
   out.aiJobsAvoided = out.handled.length;
   return out;
 }
+
+/**
+ * The real feed run's use of the routing: the order the free-model screen takes
+ * unscreened items in. Items a learned detector came close on but did not fire
+ * for (`escalate`) go first, so a pass bounded by `SCREENS_PER_PASS` spends its
+ * screens on them before anything else and they reach the cheap lane — and,
+ * through it, the Claude shortlist — instead of waiting behind the volume. An
+ * ACTIVE detector's confident items are already covered by `runDetectors` and
+ * never reach this list. Pure; order is otherwise preserved.
+ */
+export function escalatedFirst<T extends { id: string }>(items: readonly T[], routing: Pick<LearnedRouting, 'escalate'>): T[] {
+  if (routing.escalate.length === 0) return [...items];
+  const up = new Set(routing.escalate);
+  return [...items.filter((item) => up.has(item.id)), ...items.filter((item) => !up.has(item.id))];
+}
+
+/**
+ * Route stored feed items through the learned detectors a reader may use.
+ * Reads detector rows only; never calls a model.
+ */
+export async function routeStoredItems(reader: SearchReader, records: readonly DetectorRecord[]): Promise<LearnedRouting> {
+  if (records.length === 0) return { handled: [], observed: [], escalate: [], aiJobsAvoided: 0 };
+  return routeRecords(await listLearnedDetectors(reader), records);
+}
