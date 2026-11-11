@@ -83,8 +83,10 @@ describe('OPERATE is reachable through a person\'s permission, and only by an op
     });
     expect(j.route).toBe('HUMAN_HANDOFF');
     expect(j.boundaries).toEqual(['NO_AUTHORIZED_ACCOUNT']);
-    expect(r.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT']);
+    // No connector is proposed without a grant; the missing grant is opened for a person instead.
+    expect(r.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT', 'ACCESS_HANDOFF']);
     expect(r.events[0]!.measures).toMatchObject({ authorizedAccount: 'NONE', accountRef: null });
+    expect(r.events[1]!.measures).toMatchObject({ host: 'app.example', boundary: 'NO_AUTHORIZED_ACCOUNT' });
   });
 
   it('a granted permission turns the same producer evidence into a BROWSER route and a connector proposal', async () => {
@@ -142,8 +144,11 @@ describe('OPERATE is reachable through a person\'s permission, and only by an op
     expect(consulted).toBe(0);
     expect(j.route).toBe('HUMAN_HANDOFF');
     expect(j.boundaries).toEqual(['NO_AUTHORIZED_ACCOUNT']);
-    expect(r.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT']);
+    // The missing account is opened for a person to act on; neither row names the grant's account.
+    expect(r.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT', 'ACCESS_HANDOFF']);
     expect(r.events[0]!.measures).toMatchObject({ authorizedAccount: 'NONE', accountRef: null });
+    expect(r.events[1]!.measures).toMatchObject({ host: 'app.example', boundary: 'NO_AUTHORIZED_ACCOUNT' });
+    expect(JSON.stringify(r.events[1]!.measures)).not.toContain('owner account on');
   });
 
   it('the newest row for the host decides, and a revocation ends the grant', () => {

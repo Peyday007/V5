@@ -42,11 +42,18 @@ import { browserMcpUrl, renderInBrowser } from './browserMcp.ts';
 import { connectorFor } from './connectors.ts';
 import { searchSuccessor } from './discover.ts';
 import {
+  ACCESS_HANDOFF_EVENT,
+  discoverExistingSources,
+  discoveryFromRows,
+  handoffKey,
   recordAcquisitionJudgment,
   repeatedUseFromRows,
   REPEATED_USE_WINDOW_MS,
+  SOURCE_DISCOVERY_EVENT,
   type AcquisitionEvidence,
+  type AcquisitionNeed,
   type RecordAcquisitionDeps,
+  type SourceDiscovery,
 } from './acquisition.ts';
 import { activeRoutine, routinesFrom, type Routine, type RoutineUse } from './routines.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, type AccessEvidence } from './accessMethods.ts';
@@ -95,6 +102,11 @@ export interface AccessDeps {
    */
   search?: ((url: string) => Promise<SourceFetch | null>) | null;
   learned?: (host: string) => Promise<AccessMethod | null>;
+  /**
+   * The search for existing corpora a SEARCH_FIRST judgment starts (`discoverExistingSources`).
+   * Defaults on exactly where `search` does; null turns it off.
+   */
+  discover?: ((need: AcquisitionNeed) => Promise<SourceDiscovery>) | null;
   /** The routine a CONNECTOR_PROPOSED row built for this host (`routines.ts`); defaults to the recorded rows. */
   routine?: (host: string) => Promise<Routine | null>;
   record?: (read: SourceRead, caller: string, ms: number) => Promise<void>;
@@ -461,6 +473,8 @@ interface HistoryAccessRow {
   at: string | null;
 }
 interface HistoryProposalRow {
+  event_type?: string | null;
+  outcome?: string | null;
   measures: string | null;
   at: string | null;
 }
@@ -472,6 +486,12 @@ let historyAccess: HistoryAccessRow[] = [];
 /** `host|route` of each CONNECTOR_PROPOSED row inside the window, held or written here. */
 let historyProposals = new Set<string>();
 let routineMap = new Map<string, Routine>();
+/** SOURCE_DISCOVERY per host inside the window, held or written here: the search is made once per window, not per read. */
+let historyDiscoveries = new Map<string, SourceDiscovery>();
+/** Hosts whose discovery this process has started and not yet recorded, so concurrent reads start one search. */
+const discoveriesInFlight = new Set<string>();
+/** `handoffKey` of each ACCESS_HANDOFF inside the window, held or written here. */
+let historyHandoffs = new Set<string>();
 
 /** What the history reads and writes cost the database since the last reset: the load this module adds, measured. */
 const dbLoad = { historyLoads: 0, queries: 0, writes: 0, judgmentsSkipped: 0 };
@@ -499,8 +519,9 @@ async function loadHistory(): Promise<void> {
   }
   try {
     dbLoad.queries += 1;
+    // The rows a judgment's consumers read back — proposals, discoveries, open handoffs — in the same one query.
     proposals = await getDb().all<HistoryProposalRow>(
-      `SELECT measures, at FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED' AND at >= ? ORDER BY at DESC LIMIT 500`,
+      `SELECT event_type, outcome, measures, at FROM bin_events WHERE event_type IN ('CONNECTOR_PROPOSED', '${SOURCE_DISCOVERY_EVENT}', '${ACCESS_HANDOFF_EVENT}') AND at >= ? ORDER BY at DESC LIMIT 1500`,
       [new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString()],
     );
   } catch {
@@ -510,8 +531,33 @@ async function loadHistory(): Promise<void> {
   const learnRows = access.filter((r) => (r.at ? Date.parse(r.at) >= learnSince : false));
   learnedMap = learnFrom(learnRows);
   browserRecords = browserRecordFrom(learnRows);
+  const discoveryRows = proposals.filter((p) => p.event_type === SOURCE_DISCOVERY_EVENT);
+  const handoffRows = proposals.filter((p) => p.event_type === ACCESS_HANDOFF_EVENT);
+  proposals = proposals.filter((p) => !p.event_type || p.event_type === 'CONNECTOR_PROPOSED');
   routineMap = routinesFrom(proposals, access);
   historyAccess = access;
+  historyDiscoveries = new Map();
+  for (const d of discoveryRows) {
+    const m = (() => {
+      try {
+        return JSON.parse(d.measures ?? '{}') as { host?: unknown };
+      } catch {
+        return {};
+      }
+    })();
+    if (typeof m.host !== 'string' || historyDiscoveries.has(m.host)) continue;
+    const found = discoveryFromRows([d], m.host);
+    if (found) historyDiscoveries.set(m.host, found);
+  }
+  historyHandoffs = new Set();
+  for (const h of handoffRows) {
+    try {
+      const m = JSON.parse(h.measures ?? '{}') as { host?: unknown; capability?: unknown; boundary?: unknown };
+      if (typeof m.host === 'string') historyHandoffs.add(handoffKey(m.host, String(m.capability), String(m.boundary)));
+    } catch {
+      /* an unparseable row opens nothing */
+    }
+  }
   historyProposals = new Set();
   for (const p of proposals) {
     try {
@@ -540,6 +586,12 @@ function noteHistory(eventType: string, provider: string | null, measures: Recor
     if (historyAccess.length > HISTORY_ACCESS_MAX) historyAccess.length = HISTORY_ACCESS_MAX;
   } else if (eventType === 'CONNECTOR_PROPOSED' && typeof measures.host === 'string' && typeof measures.route === 'string') {
     historyProposals.add(proposalKey(measures.host, measures.route));
+  } else if (eventType === SOURCE_DISCOVERY_EVENT && typeof measures.host === 'string') {
+    const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+    historyDiscoveries.set(measures.host, { query: String(measures.query ?? ''), candidates: list(measures.candidates), bulkCandidates: list(measures.bulkCandidates) });
+    discoveriesInFlight.delete(measures.host);
+  } else if (eventType === ACCESS_HANDOFF_EVENT && typeof measures.host === 'string') {
+    historyHandoffs.add(handoffKey(measures.host, String(measures.capability), String(measures.boundary)));
   }
 }
 
@@ -564,6 +616,16 @@ async function heldProposalOnRecord(host: string, route: string): Promise<boolea
   return historyProposals.has(proposalKey(host, route));
 }
 
+async function heldDiscoveryOnRecord(host: string): Promise<SourceDiscovery | null> {
+  await freshHistory();
+  return historyDiscoveries.get(host.toLowerCase()) ?? null;
+}
+
+async function heldHandoffOnRecord(host: string, capability: string, boundary: string): Promise<boolean> {
+  await freshHistory();
+  return historyHandoffs.has(handoffKey(host, capability, boundary));
+}
+
 /*
  * A judgment that has not changed is not written again. The SOURCE_ACCESS row is
  * the record of every read; the ACQUISITION_JUDGMENT row records a decision, and a
@@ -580,6 +642,9 @@ export function resetSourceAccessMemory(): void {
   historyAccess = [];
   historyProposals = new Set();
   routineMap = new Map();
+  historyDiscoveries = new Map();
+  discoveriesInFlight.clear();
+  historyHandoffs = new Set();
   learnedMap = new Map();
   browserRecords = new Map();
   robotsCache.clear();
@@ -657,6 +722,10 @@ function judgmentDeps(caller: string): RecordAcquisitionDeps {
     caller,
     repeatedUse: heldRepeatedUse,
     proposalOnRecord: heldProposalOnRecord,
+    discoveryOnRecord: heldDiscoveryOnRecord,
+    handoffOnRecord: heldHandoffOnRecord,
+    // A read path that is itself driven by injected readers runs no search of its own.
+    discover: null,
     record: async (event) => {
       const measures = (event.measures ?? {}) as Record<string, unknown>;
       if (event.eventType === 'ACQUISITION_JUDGMENT') {
@@ -682,15 +751,35 @@ async function judgeReadAsAcquisition(
   boundary: AccessEvidence['boundary'] | null,
   evidence: AccessEvidence,
   caller: string,
+  discover: ((need: AcquisitionNeed) => Promise<SourceDiscovery>) | null,
 ): Promise<void> {
-  await recordAcquisitionJudgment(
-    { kind: 'ACQUIRE', purpose: `read ${read.requestedUrl}`, host },
-    acquisitionEvidenceOfRead(read, boundary, evidence),
-    judgmentDeps(caller),
-  );
+  // A SEARCH_FIRST read starts one discovery for its host — in the background, because a read never
+  // waits on a search — and every later read of the host is judged on the discovery once it is recorded.
+  const starts = Boolean(discover && host && !discoveriesInFlight.has(host) && !historyDiscoveries.has(host));
+  const deps: RecordAcquisitionDeps = {
+    ...judgmentDeps(caller),
+    discover: starts
+      ? async (need) => {
+          discoveriesInFlight.add(host!);
+          try {
+            return await discover!(need);
+          } finally {
+            // Recorded or not, the host may be searched again after the next refresh.
+            setTimeout(() => discoveriesInFlight.delete(host!), LEARN_REFRESH_MS).unref?.();
+          }
+        }
+      : null,
+    discoverInBackground: true,
+  };
+  await recordAcquisitionJudgment({ kind: 'ACQUIRE', purpose: `read ${read.requestedUrl}`, host }, acquisitionEvidenceOfRead(read, boundary, evidence), deps);
 }
 
-async function defaultRecord(read: SourceRead, caller: string, ms: number): Promise<void> {
+async function defaultRecord(
+  read: SourceRead,
+  caller: string,
+  ms: number,
+  opts: { discover?: ((need: AcquisitionNeed) => Promise<SourceDiscovery>) | null } = {},
+): Promise<void> {
   const host = hostOf(read.requestedUrl);
   const used = classOfRoute(read.method);
   const boundary = boundaryOfRead({
@@ -747,7 +836,7 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
   // Reading a public source is the ACQUIRE capability: ask the acquisition judgment what
   // this read's own evidence supports (existing bulk sources first, a connector when the
   // host's SOURCE_ACCESS history justifies one) and record it beside the access row.
-  await judgeReadAsAcquisition(read, host, boundary ?? null, evidence, caller).catch(() => undefined);
+  await judgeReadAsAcquisition(read, host, boundary ?? null, evidence, caller, opts.discover ?? null).catch(() => undefined);
   // A read never records the OPERATE capability, whatever rendered it and whatever permission
   // stands for its host: the research browser opens one isolated, signed-out session per page
   // (`browserMcp.ts`), so no account was used and no interface was operated. An OPERATE judgment
@@ -771,7 +860,10 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   const search =
     deps.search !== undefined ? deps.search : deps.direct ? null : (u: string) => searchSuccessor(u, direct);
   const learned = deps.learned ?? defaultLearned;
-  const record = deps.record ?? defaultRecord;
+  // Source discovery runs from the read path exactly where the site search does: a caller that
+  // brings its own readers brings its own search, so an injected read never reaches a real one.
+  const record =
+    deps.record ?? ((r: SourceRead, c: string, ms: number) => defaultRecord(r, c, ms, { discover: deps.discover !== undefined ? deps.discover : search ? (need) => discoverExistingSources(need) : null }));
   const routineOf = deps.routine ?? defaultRoutine;
   const attempts: AccessAttempt[] = [];
   let routineUsed: RoutineUse | undefined;
