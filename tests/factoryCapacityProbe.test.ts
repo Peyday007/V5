@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown } from './helpers.ts';
-import { getProbe } from '../server/services/factory/program/probes.ts';
+import { stageCapacityHoldsOnRows } from '../server/services/factory/program/release01/capacityProbe.ts';
 import { getDb } from '../server/db/database.ts';
 import { newId } from '../server/repos/util.ts';
 
@@ -92,7 +92,8 @@ async function record(minutesAgo: number, measures: Record<string, unknown> | nu
   );
 }
 
-const probe = async () => (await getProbe('r01.cap-16-3')!({}));
+// The stage half of r01.cap-16-3; the throughput half is tested in factoryProgramAmendments.
+const probe = async () => stageCapacityHoldsOnRows();
 
 describe('r01.cap-16-3: stage-level research capacity', () => {
   it('is UNKNOWN with no reading, and with only one', async () => {
