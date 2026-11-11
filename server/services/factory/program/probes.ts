@@ -32,6 +32,9 @@ const PROBES = new Map<string, Probe>();
 const RELEASE_PROBE = /^r\d{2}\./;
 
 function define(name: string, probe: Probe): void {
+  // A second definition would silently replace the first judge (production
+  // 2026-11-11: r01.cap-16-3's throughput check was overwritten by its stage check).
+  if (PROBES.has(name)) throw new Error(`probe ${name} is defined twice in the protected module`);
   PROBES.set(name, probe);
 }
 
@@ -188,13 +191,13 @@ const RELEASE_01_ROLLUPS = [
 for (const key of RELEASE_01_ROLLUPS) define(`r01.${key}`, architectureProgramHolds);
 
 /**
- * CAP-16-3: model and verification throughput is restored. Read from the free
- * lane's own item rows over the last six hours: work is being accepted (at
- * least one submission per hour on average) and provider failures are not the
- * majority of outcomes. A window with no lane activity at all is a FAIL, not a
- * pass — an idle lane restores nothing.
+ * CAP-16-3, first half: model and verification throughput is restored. Read from
+ * the free lane's own item rows over the last six hours: work is being accepted
+ * (at least one submission per hour on average) and provider failures are not
+ * the majority of outcomes. A window with no lane activity at all is a FAIL, not
+ * a pass — an idle lane restores nothing.
  */
-define('r01.cap-16-3', async (args) => {
+const throughputRestored: Probe = async (args) => {
   const hours = Number(args.hours ?? 6);
   const since = new Date(Date.now() - hours * 3_600_000).toISOString();
   const rows = await getDb().all<{ outcome: string; provider_failed: number; n: number }>(
@@ -209,7 +212,7 @@ define('r01.cap-16-3', async (args) => {
   const share = total > 0 ? providerFailed / total : 1;
   const ok = submitted >= hours && share < 0.5;
   return { ok, detail: `${hours}h: ${submitted} accepted of ${total} lane outcomes; ${Math.round(share * 100)}% provider failures` };
-});
+};
 
 /** COM-13-3: adopted from the quant campaign (release01/outreachFunnelProbe.ts). */
 define('r01.com-13-3', async () => (await import('./release01/outreachFunnelProbe.ts')).outreachFunnelHoldsOnRows());
@@ -291,7 +294,17 @@ define('r01.auth-34', async (args) => (await releaseOne<typeof import('./release
 define('r01.auto-20-1', async (args) => (await releaseOne<typeof import('./release01/autonomyProbe.ts')>('./release01/autonomyProbe.ts', (m) => m.originationHoldsOnRows))(args));
 define('r01.auto-20-2', async (args) => (await releaseOne<typeof import('./release01/autonomyProbe.ts')>('./release01/autonomyProbe.ts', (m) => m.gapLoopHoldsOnRows))(args));
 define('r01.auto-20-4', async (args) => (await releaseOne<typeof import('./release01/autonomyProbe.ts')>('./release01/autonomyProbe.ts', (m) => m.gapMeasuresHoldOnRows))(args));
-define('r01.cap-16-3', async (args) => (await releaseOne<typeof import('./release01/capacityProbe.ts')>('./release01/capacityProbe.ts', (m) => m.stageCapacityHoldsOnRows))(args));
+/**
+ * CAP-16-3 is both halves: throughput restored first, and every stage measured
+ * (release01/capacityProbe.ts). A throughput failure answers first; otherwise
+ * the stage reading decides, with both details stated.
+ */
+define('r01.cap-16-3', async (args) => {
+  const throughput = await throughputRestored(args);
+  if (throughput.ok !== true) return throughput;
+  const stages = await (await releaseOne<typeof import('./release01/capacityProbe.ts')>('./release01/capacityProbe.ts', (m) => m.stageCapacityHoldsOnRows))(args);
+  return { ok: stages.ok, detail: `throughput: ${throughput.detail}; stages: ${stages.detail}` };
+});
 define('r01.life-29-1', async (args) => (await releaseOne<typeof import('../../cash/deliverables/lifecycleProbes.ts')>('../../cash/deliverables/lifecycleProbes.ts', (m) => m.commitmentsHoldOnRows))(args));
 define('r01.life-29-2', async (args) => (await releaseOne<typeof import('../../cash/deliverables/lifecycleProbes.ts')>('../../cash/deliverables/lifecycleProbes.ts', (m) => m.realizationHoldsOnRows))(args));
 define('r01.life-29-3', async (args) => (await releaseOne<typeof import('../../cash/deliverables/lifecycleProbes.ts')>('../../cash/deliverables/lifecycleProbes.ts', (m) => m.exceptionsHoldOnRows))(args));

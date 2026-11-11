@@ -278,8 +278,10 @@ describe('the research-throughput probe (CAP-16-3)', () => {
     for (let i = 0; i < 4; i += 1) await recordBinEvent({ eventType: 'FREE_LANE_ITEM', outcome: 'RELEASED_TRANSIENT', reason: 'model brain-a: model call failed: cheap lane HTTP 503', evidenceClass: 'MEASURED' });
     expect((await probe({ hours: 1 })).ok).toBe(false);
     for (let i = 0; i < 5; i += 1) await recordBinEvent({ eventType: 'FREE_LANE_ITEM', outcome: 'SUBMITTED', reason: 'model brain-a', evidenceClass: 'MEASURED' });
+    // Throughput restored; the stage half (release01/capacityProbe.ts) then decides,
+    // and with no stage reading yet that is UNKNOWN rather than a failure.
     const passing = await probe({ hours: 1 });
-    expect(passing).toMatchObject({ ok: true });
+    expect(passing.ok).toBeNull();
     expect(passing.detail).toMatch(/5 accepted of 9/);
   });
 });
