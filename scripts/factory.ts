@@ -1396,7 +1396,7 @@ async function main(): Promise<void> {
         process.stdout.write(`  campaign ${row.campaign.id} ${row.campaign.state}${row.working ? '' : ' (holds no slot)'}\n`);
         if (row.blocked) {
           process.stdout.write(
-            `      blocked (${row.blocked.wait === 'PERSON' ? 'NEEDS YOU' : 'automatic wait'}) ${row.blocked.kind}: ` +
+            `      blocked (${row.blocked.wait === 'PERSON' ? 'NEEDS YOU' : row.blocked.wait === 'MAINTAINER' ? 'maintainer session' : 'automatic wait'}) ${row.blocked.kind}: ` +
               `${row.blocked.detail.slice(0, 200)}\n      remedy ${row.blocked.remedy}\n`,
           );
         }

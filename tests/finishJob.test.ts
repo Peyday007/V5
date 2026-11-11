@@ -234,12 +234,15 @@ describe('waiting on the outside world without looping', () => {
     expect(res.out).toContain('has ended — act on its result');
   });
 
-  it('the same failing state three checks running is STALLED: released, not looped, and the failed probe is not re-run', () => {
+  it('the same failing state three checks running first demands a different strategy, then is STALLED: released, not looped, and the failed probe is not re-run', () => {
     assign('Make the probe pass:\n- the probe passes\n- nothing else\n');
     cli('evidence', 'R1', '--cmd', 'date >> ../count.txt; grep -q yes missing.txt');
     cli('block', 'R2', '--code', 'MISSING_AUTHORITY', '--detail', 'needs a login');
     expect(cli('check').out).toMatch(/^FINISH-JOB CONTINUE/);
     expect(cli('check').out).toMatch(/^FINISH-JOB CONTINUE/);
+    expect(cli('check').out).toMatch(/^FINISH-JOB CONTINUE — CHANGE STRATEGY/);
+    expect(ralph()).toContain('CHANGE STRATEGY');
+    expect(cli('check').out).toMatch(/^FINISH-JOB CONTINUE — Actionable/);
     expect(cli('check').out).toMatch(/^FINISH-JOB STALLED/);
     expect(ralph()).toBeNull();
     expect(fs.readFileSync(path.join(dir, 'count.txt'), 'utf8').trim().split('\n')).toHaveLength(1);
@@ -257,11 +260,45 @@ describe('waiting on the outside world without looping', () => {
   });
 });
 
+describe('the owner\'s words become requirements whole', () => {
+  it('prose paragraphs after a list are requirements of their own under their heading, not the tail of the last item', () => {
+    assign(
+      'OBJECTIVE: remove routine intervention.\n\nEXISTING INFRASTRUCTURE:\n- Ralph Loop\n- the deploy machinery\n\n' +
+        'PRIORITY 1 — AUTHORITY\n\nInspect actual authority denials.\n\nPRIORITY 4 — DEMONSTRATION\n\n1. Plan and delegate.\n' +
+        '2. Verify the outcome,\n   on production.\n\nMeasure human interventions.\n',
+    );
+    expect(ledger().requirements.map((r: { text: string }) => r.text)).toEqual([
+      '- Ralph Loop',
+      '- the deploy machinery',
+      'PRIORITY 1 — AUTHORITY: Inspect actual authority denials.',
+      '1. Plan and delegate.',
+      '2. Verify the outcome,\non production.',
+      'PRIORITY 4 — DEMONSTRATION: Measure human interventions.',
+    ]);
+  });
+
+  it('a requirement newly verified renews the iteration budget; an unproductive stop does not', () => {
+    assign('Two things:\n- first\n- second\n');
+    const state = path.join(work, '.claude/ralph-loop.local.md');
+    fs.writeFileSync(state, ralph()!.replace(/^iteration: \d+$/m, 'iteration: 17'));
+    cli('check');
+    expect(ralph()).toMatch(/^iteration: 17$/m);
+    fs.writeFileSync(path.join(work, 'ok.txt'), 'yes');
+    cli('evidence', 'R1', '--cmd', 'grep -q yes ok.txt');
+    cli('check');
+    expect(ralph()).toMatch(/^iteration: 1$/m);
+  });
+});
+
 describe('arming, cancelling and surviving a restart', () => {
   it('a harness notice is not the owner: a subagent report with a list adds no requirement', () => {
     assign(TEN_K);
     const before = ledger().requirements.length;
     assign('<task-notification>\n<result>Findings:\n- one finding\n- two finding\n- three finding</result>\n</task-notification>');
+    expect(ledger().requirements.length).toBe(before);
+    // 2026-11-11: a subagent hand-back arrives as an agent-message, and its bullets became R18-R33.
+    assign('<agent-message from="ad9b5cf3">\n[Subagent hand-back] The report follows:\n  - add Bash(cat:*)\n  - add Bash(jq:*)\n</agent-message>');
+    assign('[SYSTEM NOTIFICATION - NOT USER INPUT]\n- one\n- two\n');
     expect(ledger().requirements.length).toBe(before);
   });
 

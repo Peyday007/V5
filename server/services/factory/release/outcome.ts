@@ -18,6 +18,15 @@ import type { DeliveryObservation } from '../delivery.ts';
  * arrive, a base that will be re-read — is not a person's, and saying it is
  * would send somebody to answer a question the next tick answers.
  */
+/**
+ * Not a person's: the maintainer route. The waiting Brain engineering session
+ * (`.claude/skills/factory-objective`) acts on any BLOCKED outcome that is not a
+ * rule-11 reason, and this one names what it does.
+ */
+export const MAINTAINER_ACTION =
+  'MAINTAINER: the scope is protected from Factory workers. A direct Brain engineering session makes ' +
+  'this change itself (merge, Deploy, verify), or amends the scope to writable paths; no owner action.';
+
 const PERSON_BLOCKERS: Record<FactoryBlockerKind, string | null> = {
   NO_HEALTHY_EXECUTION_SURFACE: null,
   NO_ELIGIBLE_REVIEWER: null,
@@ -29,6 +38,7 @@ const PERSON_BLOCKERS: Record<FactoryBlockerKind, string | null> = {
   EXTERNAL_CREDENTIAL_REQUIRED: 'Grant the named access where the worker runs; Brain resumes by itself.',
   SCOPE_AMENDMENT_REQUIRED: 'Widen the mutation scope to the named file, or withdraw the objective.',
   REPAIR_OWNERSHIP_UNRESOLVED: 'Name the file the repair may change in the objective’s scope.',
+  PROTECTED_SCOPE: MAINTAINER_ACTION,
 };
 
 export interface OutcomeInput {
@@ -90,7 +100,11 @@ export function deriveOutcome(input: OutcomeInput): ObjectiveOutcome {
       const action = kind ? PERSON_BLOCKERS[kind] : null;
       return make(
         'BLOCKED',
-        action ? 'Stopped until a person acts.' : 'Stopped; Brain re-examines this by itself every tick.',
+        kind === 'PROTECTED_SCOPE'
+          ? 'Routed to the maintainer: no Factory worker may change this scope.'
+          : action
+            ? 'Stopped until a person acts.'
+            : 'Stopped; Brain re-examines this by itself every tick.',
         campaign.blockerDetail ?? kind ?? 'blocked',
         action,
       );

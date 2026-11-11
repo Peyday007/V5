@@ -60,6 +60,7 @@ import {
   recordReview,
 } from '../../repos/factoryFleet.ts';
 import { listDispatchesForBin, terminateUnleasedBin } from '../../repos/bins.ts';
+import { forbiddenPathsFor, scopeOnlyForbidden } from './forbidden.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { installPlan, validatePlan } from './planner.ts';
 import { FactoryError } from './errors.ts';
@@ -1634,7 +1635,7 @@ async function conflictingUnitOfOtherCampaign(
      * 2026-10-30, through a unit owning the same goal files; the escalation was
      * recorded and nothing could release it.
      */
-    if (other.state === 'BLOCKED' && other.blockerKind && BLOCKER_WAIT[other.blockerKind]?.wait === 'PERSON') continue;
+    if (other.state === 'BLOCKED' && other.blockerKind && BLOCKER_WAIT[other.blockerKind]?.wait !== 'AUTOMATIC') continue;
     const otherRequest = await getChangeRequest(other.changeRequestId);
     if (!otherRequest || otherRequest.repository !== repository) continue;
     const otherUnits = await listUnits(other.id);
@@ -1922,6 +1923,40 @@ async function runRemoteTick(
 
   // 2. Make the next thing available, at most one bin per stage.
   if (units.length === 0) {
+    /*
+     * Work no worker may ever do is not handed to one (see `scopeOnlyForbidden`).
+     * A live plan bin nobody holds is retired with it; one a worker holds ends on
+     * its own report. Re-read every tick, so an amended scope plans at once.
+     */
+    const protectedScope = scopeOnlyForbidden(changeRequest.mutationScope, forbiddenPathsFor(changeRequest.repository));
+    if (protectedScope) {
+      const waiting = liveBinOfKind(liveBins, 'FACTORY_PLAN');
+      if (waiting && waiting.state !== 'LEASED') {
+        await terminateUnleasedBin(
+          waiting.id,
+          waiting.leaseGeneration,
+          'CANCELLED',
+          'The approved scope is protected from every Factory worker; routed to the maintainer instead.',
+        );
+      }
+      if (fresh.state === 'BLOCKED' && fresh.blockerKind === 'PROTECTED_SCOPE') {
+        report.notes.push('routed to the maintainer: the approved scope is protected');
+        return report;
+      }
+      return await blockStage(
+        fresh,
+        'planning',
+        {
+          detail:
+            `Every path in the approved scope (${protectedScope.join(', ')}) is one this repository's grant ` +
+            'puts out of every Factory worker\'s reach, so no worker is dispatched to plan it. ' +
+            'Routed to the maintainer: a direct Brain engineering session makes this change, or the ' +
+            'scope is amended to writable paths.',
+        },
+        report,
+        'PROTECTED_SCOPE',
+      );
+    }
     if (liveBinOfKind(liveBins, 'FACTORY_PLAN')) {
       report.notes.push('waiting for a worker to take the plan');
       await stageIsLive(fresh, 'PLANNING', 'waiting for a worker to take the plan', report);
@@ -2671,7 +2706,7 @@ async function blockedWatermark(campaign: FactoryCampaign): Promise<string> {
 async function quietlyBlocked(campaign: FactoryCampaign, now: number): Promise<boolean> {
   if (campaign.state !== 'BLOCKED' || !campaign.blockerKind) return false;
   const { BLOCKER_WAIT } = await import('./line.ts');
-  if (BLOCKER_WAIT[campaign.blockerKind]?.wait !== 'PERSON') return false;
+  if (BLOCKER_WAIT[campaign.blockerKind]?.wait === 'AUTOMATIC') return false;
   const seen = quietBlocked.get(campaign.id);
   if (!seen || now - seen.at >= PERSON_WAIT_RECHECK_MS) return false;
   return seen.mark === (await blockedWatermark(campaign));

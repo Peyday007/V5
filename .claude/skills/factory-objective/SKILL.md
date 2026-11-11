@@ -51,6 +51,7 @@ Read the run's annotations for `FACTORY-OUTCOME-TERMINAL:` (or `STILL-RUNNING`).
 | `LIVE` | Verify every acceptance condition yourself on production. Then the final report. |
 | `BLOCKED (needs: Read and merge <pr>…)` | Yours, by the owner's standing order (never his): read the diff, merge it, dispatch `Deploy` on `production`, then `wait` again. |
 | `BLOCKED (needs: Dispatch Deploy…)` | Dispatch `Deploy` on `production`, then `wait` again. |
+| `BLOCKED (needs: MAINTAINER: …)` — `PROTECTED_SCOPE` | The scope is one no Factory worker may change (release gate, workflows, `.claude/**`). You are the maintainer: make the change directly on your branch, merge it, dispatch `Deploy`, verify — or `amend` the scope to writable paths and `wait` again. Never the owner's. |
 | `BLOCKED (needs: …regrant/amend…)` | Fix it through the operator door (`amend`, `regrant-unit`, `reauthorize`) and `wait` again — unless the need is a rule-11 reason. |
 | `CANCELLED` | Find out why (`factory status`), resubmit if the objective still stands, else report. |
 | `STILL-RUNNING` | Dispatch `wait` again. |
