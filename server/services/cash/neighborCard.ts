@@ -178,7 +178,7 @@ export async function hasMailServer(domain: string, fetcher: Fetch = fetch): Pro
 class InstantlyError extends Error {}
 
 /** 429 and 5xx and network errors are retried with backoff (Retry-After honoured); other refusals are not. */
-async function instantly(deps: Deps, method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown): Promise<Record<string, unknown>> {
+export async function instantly(deps: Deps, method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown): Promise<Record<string, unknown>> {
   const key = secretValue('INSTANTLY_API_KEY', deps.env);
   if (!key) throw new InstantlyError('INSTANTLY_API_KEY is not configured');
   let wait = 2000;
@@ -207,7 +207,7 @@ async function instantly(deps: Deps, method: 'GET' | 'POST' | 'PATCH', path: str
   }
 }
 
-function itemsOf(answer: Record<string, unknown>): Record<string, unknown>[] {
+export function itemsOf(answer: Record<string, unknown>): Record<string, unknown>[] {
   return Array.isArray(answer.items) ? (answer.items as Record<string, unknown>[]) : [];
 }
 
