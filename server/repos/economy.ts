@@ -206,10 +206,10 @@ export async function triggerCondition(conditionId: string, changeRef: string): 
 }
 
 export async function recordStageMeasurement(
-  input: Omit<StageMeasurement, 'id' | 'measuredAt' | 'note'> & { note?: string | null },
+  input: Omit<StageMeasurement, 'id' | 'measuredAt' | 'note'> & { note?: string | null; measuredAt?: string },
 ): Promise<StageMeasurement> {
   const id = newId('smm');
-  const at = nowIso();
+  const at = input.measuredAt ?? nowIso();
   await getDb().run(
     `INSERT INTO stage_measurements (id, project_id, owner_user_id, goal_id, stage, duration_ms,
        screened, rejected, advanced, research_jobs, premium_ai_jobs, note, measured_at)
@@ -218,7 +218,12 @@ export async function recordStageMeasurement(
       input.screened, input.rejected, input.advanced, input.researchJobs, input.premiumAiJobs,
       input.note ?? null, at],
   );
-  return { ...input, id, note: input.note ?? null, measuredAt: at };
+  return {
+    projectId: input.projectId, ownerUserId: input.ownerUserId, goalId: input.goalId, stage: input.stage,
+    durationMs: input.durationMs, screened: input.screened, rejected: input.rejected, advanced: input.advanced,
+    researchJobs: input.researchJobs, premiumAiJobs: input.premiumAiJobs,
+    id, note: input.note ?? null, measuredAt: at,
+  };
 }
 
 export async function stageMeasurements(
@@ -234,4 +239,117 @@ export async function stageMeasurements(
     researchJobs: Number(r['research_jobs']), premiumAiJobs: Number(r['premium_ai_jobs']),
     note: sn(r['note']), measuredAt: s(r['measured_at']),
   }));
+}
+
+/*
+ * Benchmarks. The measurement readout (services/economy/measure) is derived on
+ * read and stores nothing, so on its own it can only ever say "now". A
+ * benchmark is that readout frozen into stage_measurements at a moment a
+ * person chose — "before" a change, "after" it — so the live goal's figures can
+ * be compared across a change instead of claimed. One snapshot is one row per
+ * stage sharing a snapshot id and a measured_at. A figure the readout did not
+ * know is stored as 0 in its column and named in the note's `unknown` list, and
+ * every read restores it to null: an unknown is never compared as a zero.
+ */
+
+/** One stage's figures as the readout states them; null is unknown. */
+export interface BenchmarkStage {
+  stage: Stage;
+  timeMs: number | null;
+  screened: number | null;
+  rejected: number | null;
+  advanced: number | null;
+  researchJobs: number | null;
+  aiJobs: number | null;
+}
+
+export interface BenchmarkSnapshot {
+  snapshotId: string;
+  label: string;
+  measuredAt: string;
+  stages: BenchmarkStage[];
+}
+
+const BENCHMARK_FIELDS = ['timeMs', 'screened', 'rejected', 'advanced', 'researchJobs', 'aiJobs'] as const;
+type BenchmarkField = (typeof BENCHMARK_FIELDS)[number];
+
+interface BenchmarkNote { benchmark: string; label: string; unknown: BenchmarkField[] }
+
+function benchmarkNote(note: string | null): BenchmarkNote | null {
+  if (!note) return null;
+  const parsed = parseJson<Partial<BenchmarkNote> | null>(note, null);
+  if (!parsed || typeof parsed.benchmark !== 'string' || typeof parsed.label !== 'string') return null;
+  const unknown = Array.isArray(parsed.unknown)
+    ? parsed.unknown.filter((f): f is BenchmarkField => (BENCHMARK_FIELDS as readonly string[]).includes(f as string))
+    : [];
+  return { benchmark: parsed.benchmark, label: parsed.label, unknown };
+}
+
+/** Freezes the current readout for a goal under a label, one row per stage. */
+export async function recordBenchmarkSnapshot(input: {
+  projectId: string; ownerUserId: string; goalId: string; label: string; stages: BenchmarkStage[];
+}): Promise<BenchmarkSnapshot> {
+  const label = input.label.trim();
+  if (!label) throw new Error('A benchmark needs a label, such as "before" or "after".');
+  if (input.stages.length === 0) throw new Error('A benchmark needs at least one stage reading.');
+  const snapshotId = newId('smb');
+  const measuredAt = nowIso();
+  for (const one of input.stages) {
+    const unknown = BENCHMARK_FIELDS.filter((f) => one[f] === null);
+    const note: BenchmarkNote = { benchmark: snapshotId, label, unknown };
+    await recordStageMeasurement({
+      projectId: input.projectId, ownerUserId: input.ownerUserId, goalId: input.goalId, stage: one.stage,
+      durationMs: one.timeMs ?? 0, screened: one.screened ?? 0, rejected: one.rejected ?? 0,
+      advanced: one.advanced ?? 0, researchJobs: one.researchJobs ?? 0, premiumAiJobs: one.aiJobs ?? 0,
+      note: toJson(note), measuredAt,
+    });
+  }
+  return { snapshotId, label, measuredAt, stages: input.stages.map((one) => ({ ...one })) };
+}
+
+/** Every benchmark snapshot recorded for a goal, oldest first. Unknowns read back as null. */
+export async function benchmarkSnapshots(
+  projectId: string, ownerUserId: string, goalId: string,
+): Promise<BenchmarkSnapshot[]> {
+  const out = new Map<string, BenchmarkSnapshot>();
+  for (const row of await stageMeasurements(projectId, ownerUserId, goalId)) {
+    const note = benchmarkNote(row.note);
+    if (!note) continue;
+    const gone = new Set(note.unknown);
+    const value = (f: BenchmarkField, v: number): number | null => (gone.has(f) ? null : v);
+    const stage: BenchmarkStage = {
+      stage: row.stage, timeMs: value('timeMs', row.durationMs), screened: value('screened', row.screened),
+      rejected: value('rejected', row.rejected), advanced: value('advanced', row.advanced),
+      researchJobs: value('researchJobs', row.researchJobs), aiJobs: value('aiJobs', row.premiumAiJobs),
+    };
+    const snapshot = out.get(note.benchmark) ?? { snapshotId: note.benchmark, label: note.label, measuredAt: row.measuredAt, stages: [] };
+    snapshot.stages.push(stage);
+    out.set(note.benchmark, snapshot);
+  }
+  return [...out.values()].sort((a, b) => a.measuredAt.localeCompare(b.measuredAt) || a.snapshotId.localeCompare(b.snapshotId));
+}
+
+export interface BenchmarkDelta {
+  stage: Stage;
+  field: BenchmarkField;
+  before: number | null;
+  after: number | null;
+  /** after − before, or null when either side is unknown. */
+  change: number | null;
+}
+
+/** Field-by-field change between two snapshots. Never compares an unknown. */
+export function compareBenchmarks(before: BenchmarkSnapshot, after: BenchmarkSnapshot): BenchmarkDelta[] {
+  const out: BenchmarkDelta[] = [];
+  const stages = [...new Set([...before.stages, ...after.stages].map((one) => one.stage))];
+  for (const stage of stages) {
+    const b = before.stages.find((one) => one.stage === stage);
+    const a = after.stages.find((one) => one.stage === stage);
+    for (const field of BENCHMARK_FIELDS) {
+      const bv = b ? b[field] : null;
+      const av = a ? a[field] : null;
+      out.push({ stage, field, before: bv, after: av, change: bv === null || av === null ? null : av - bv });
+    }
+  }
+  return out;
 }

@@ -24,6 +24,13 @@
  *   npm run goals -- create --reason "Collect 10000 dollars in 30 days" --project prj_… --due 2026-11-27 SETTLED_CASH-1000000-USD-50000-120 --admin a@b
  *   npm run goals -- target <wst_…> SETTLED_CASH-1000000-USD-50000-120 --project prj_… --admin a@b
  *   npm run goals -- plan <wst_…>            (reads and prints; writes nothing)
+ *   npm run goals -- benchmark <wst_…> --label before --admin a@b
+ *
+ * `benchmark` freezes the plan's per-stage measurement into stage_measurements
+ * under a label, so a change can be judged on the live goal by comparing the
+ * "before" snapshot with an "after" one taken once the change has run. `plan`
+ * prints the first and latest snapshot side by side; an unknown is shown as
+ * unknown on either side and never compared. No speed is claimed without two.
  *
  * A target spec is METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS]], dashes
  * only, so it passes the workflow's id check: the figure, how much, in which
@@ -56,7 +63,8 @@ import { discoveryYield, type YieldRow } from '../server/services/cash/discovery
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { measurePlan, measurementLines } from '../server/services/economy/measure/index.ts';
+import { measurePlan, measurementLines, STAGE_LABEL, type GoalMeasurement } from '../server/services/economy/measure/index.ts';
+import { benchmarkSnapshots, compareBenchmarks, recordBenchmarkSnapshot, type BenchmarkStage } from '../server/repos/economy.ts';
 import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 
 class Halt extends Error {}
@@ -444,9 +452,63 @@ async function plan(): Promise<void> {
   if (!reading) fail(`No targeted goal ${goalId}.`);
   printPlan(reading);
   for (const line of measurementLines(await measurePlan(reading))) console.log(line);
+  await printBenchmark(reading);
   await printSearching(reading);
   const history = await listReadings(goalId);
   for (const row of history.slice(-10)) console.log(`  history     ${row.created_at} ${row.verdict} chosen=${row.chosen_strategy ?? '—'}${row.scenario_run_id ? ` run=${row.scenario_run_id}` : ''}`);
+  console.log('GOALS: OK');
+}
+
+/** The readout's stages in the shape a benchmark row stores. */
+function benchmarkStages(m: GoalMeasurement): BenchmarkStage[] {
+  return m.stages.map((one) => ({
+    stage: one.stage, timeMs: one.timeMs, screened: one.candidatesScreened, rejected: one.candidatesRejected,
+    advanced: one.candidatesAdvanced, researchJobs: one.researchJobs, aiJobs: one.aiPasses,
+  }));
+}
+
+async function goalOwner(goalId: string): Promise<string> {
+  const goal = await getWorkstream(goalId);
+  const owner = goal?.ownerUserId ?? goal?.createdByUserId ?? null;
+  if (!owner) fail(`Goal ${goalId} has no owner to record a benchmark against.`);
+  return owner;
+}
+
+async function printBenchmark(reading: PlanReading): Promise<void> {
+  const goal = await getWorkstream(reading.goalId);
+  const owner = goal?.ownerUserId ?? goal?.createdByUserId ?? null;
+  if (!owner) return;
+  const snapshots = await benchmarkSnapshots(reading.target.projectId, owner, reading.goalId);
+  const first = snapshots[0];
+  const last = snapshots.at(-1);
+  if (!first || !last || first === last) {
+    console.log(`  benchmark   ${snapshots.length} snapshot(s); a before/after comparison needs two (npm run goals -- benchmark ${reading.goalId} --label before --admin …)`);
+    return;
+  }
+  console.log(`  benchmark   "${first.label}" ${first.measuredAt} → "${last.label}" ${last.measuredAt}`);
+  const show = (v: number | null): string => (v === null ? 'unknown' : String(v));
+  for (const d of compareBenchmarks(first, last)) {
+    if (d.before === null && d.after === null) continue;
+    const change = d.change === null ? 'not comparable' : `${d.change >= 0 ? '+' : ''}${d.change}`;
+    console.log(`    ${STAGE_LABEL[d.stage].padEnd(34)} ${d.field.padEnd(12)} ${show(d.before)} → ${show(d.after)} (${change})`);
+  }
+}
+
+async function benchmark(): Promise<void> {
+  const [, goalId] = words();
+  if (!goalId) fail('benchmark needs a goal id.');
+  const label = flag('label');
+  if (!label) fail('benchmark needs --label, such as before or after.');
+  await administrator();
+  const reading = await readGoalPlan({ goalId, persist: false });
+  if (!reading) fail(`No targeted goal ${goalId}.`);
+  const owner = await goalOwner(goalId);
+  const snapshot = await recordBenchmarkSnapshot({
+    projectId: reading.target.projectId, ownerUserId: owner, goalId, label,
+    stages: benchmarkStages(await measurePlan(reading)),
+  });
+  console.log(`BENCHMARK ${goalId} "${snapshot.label}" ${snapshot.snapshotId} at ${snapshot.measuredAt}, ${snapshot.stages.length} stage(s)`);
+  await printBenchmark(reading);
   console.log('GOALS: OK');
 }
 
@@ -471,8 +533,10 @@ async function main(): Promise<void> {
       return await targetCommand(command);
     case 'plan':
       return await plan();
+    case 'benchmark':
+      return await benchmark();
     default:
-      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, plan');
+      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, plan, benchmark');
       process.exitCode = 1;
       console.log('GOALS: FAIL');
   }
