@@ -37,6 +37,24 @@ export const MAX_SPLIT_PARTS = 4;
 const CONJUNCTIONS = /\s+(?:and also|as well as|in addition to|,\s*and)\s+/i;
 
 /**
+ * Say, durably, that a split was declined because it would exceed the cap.
+ *
+ * A decline is a decision, and a decision nobody can read is the silent
+ * truncation this cap exists to prevent, moved one step later. The sentence is
+ * appended to the gate's own reasons, which is what the repair that follows
+ * records as its `repairReason` (or as the fragment's `blockedReason` when its
+ * attempts are spent), so the record says why the fragment is being repaired
+ * whole rather than split. Without a gate there is no repair to carry it.
+ */
+function recordDecline(gate: GateResult | null, what: string, count: number): void {
+  if (!gate) return;
+  const sentence =
+    `Not split: the fragment names ${count} ${what}, more than the ${MAX_SPLIT_PARTS} one split ` +
+    'may produce, so it is repaired whole rather than divided with the rest dropped.';
+  if (!gate.reasons.includes(sentence)) gate.reasons.push(sentence);
+}
+
+/**
  * Would this fragment be better as several?
  *
  * Cheap, structural checks only. Guessing at semantic overlap would split
@@ -50,7 +68,10 @@ export function shouldSplit(
   // Two questions in one. The plan is supposed to catch this; a fragment that
   // slipped through asks for an answer nobody can give in one place.
   const questionMarks = fragment.question.split('?').filter((part) => part.trim().length > 0);
-  if (questionMarks.length > MAX_SPLIT_PARTS) return null;
+  if (questionMarks.length > MAX_SPLIT_PARTS) {
+    recordDecline(gate, 'questions', questionMarks.length);
+    return null;
+  }
   if (questionMarks.length > 1) {
     return {
       reason: 'The fragment asks more than one question, so no single answer can complete it.',
@@ -63,7 +84,11 @@ export function shouldSplit(
   if (gate && fragment.requiredEvidence.length > 1) {
     const empty = gate.coverage.filter((lane) => !lane.meetsThreshold);
     const filled = gate.coverage.filter((lane) => lane.meetsThreshold);
-    if (empty.length > 0 && filled.length > 0 && empty.length <= MAX_SPLIT_PARTS) {
+    if (empty.length > MAX_SPLIT_PARTS && filled.length > 0) {
+      recordDecline(gate, 'empty evidence lanes', empty.length);
+      return null;
+    }
+    if (empty.length > 0 && filled.length > 0) {
       return {
         reason:
           `${filled.length} evidence lane(s) are complete and ${empty.length} are empty, so the ` +
@@ -79,7 +104,11 @@ export function shouldSplit(
   // A question joined by "and also" is usually two questions wearing one hat.
   if (CONJUNCTIONS.test(fragment.question) && fragment.question.length > 120) {
     const parts = fragment.question.split(CONJUNCTIONS).filter((part) => part.trim().length > 20);
-    if (parts.length > 1 && parts.length <= MAX_SPLIT_PARTS) {
+    if (parts.length > MAX_SPLIT_PARTS) {
+      recordDecline(gate, 'joined investigations', parts.length);
+      return null;
+    }
+    if (parts.length > 1) {
       return {
         reason: 'The question joins separate investigations that have different sources.',
         questions: parts.map((part) => (part.trim().endsWith('?') ? part.trim() : `${part.trim()}?`)),

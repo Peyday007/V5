@@ -37,7 +37,7 @@ function fragment(overrides: Partial<ResearchFragment> = {}): ResearchFragment {
 
 const cov = (id: string, ok: boolean) => ({ lane: id, meetsThreshold: ok });
 const gate = (...lanes: [string, boolean][]) =>
-  ({ coverage: lanes.map(([id, ok]) => cov(id, ok)) }) as unknown as GateResult;
+  ({ coverage: lanes.map(([id, ok]) => cov(id, ok)), reasons: [] as string[] }) as unknown as GateResult;
 
 beforeEach(() => {
   created.length = 0;
@@ -75,5 +75,39 @@ describe('a split that is not by lane', () => {
     await expect(splitFragment({ fragment: parent, signal, startIndex: 1 })).rejects.toThrow(/at most/);
     expect(created).toHaveLength(0);
     expect(MAX_SPLIT_PARTS).toBe(4);
+  });
+});
+
+describe('a split declined for exceeding the cap', () => {
+  it('records why on the gate the repair carries, instead of repairing silently', () => {
+    const g = gate(['fees', true]);
+    expect(shouldSplit(fragment({ question: 'a? b? c? d? e?' }), g)).toBeNull();
+    expect(g.reasons).toHaveLength(1);
+    expect(g.reasons[0]).toMatch(/Not split: the fragment names 5 questions, more than the 4/);
+  });
+
+  it('records a lane split it declines, and does not fall through to another split', () => {
+    const ids = ['fees', 'a1', 'a2', 'a3', 'a4', 'a5'];
+    const parent = fragment({
+      requiredEvidence: ids.map(lane),
+      question: `${'Which vendors serve the regional market and also'.repeat(2)} what fees do they charge, and also when did they change them?`,
+    });
+    const g = gate(...ids.map((id, i) => [id, i === 0] as [string, boolean]));
+    expect(shouldSplit(parent, g)).toBeNull();
+    expect(g.reasons.join(' ')).toMatch(/5 empty evidence lanes/);
+  });
+
+  it('records the decline once however often the gate is asked', () => {
+    const g = gate(['fees', true]);
+    const parent = fragment({ question: 'a? b? c? d? e?' });
+    shouldSplit(parent, g);
+    shouldSplit(parent, g);
+    expect(g.reasons).toHaveLength(1);
+  });
+
+  it('records nothing when it splits within the cap', () => {
+    const g = gate(['fees', true], ['vendors', false]);
+    expect(shouldSplit(fragment({ requiredEvidence: [lane('fees'), lane('vendors')] }), g)).not.toBeNull();
+    expect(g.reasons).toEqual([]);
   });
 });
