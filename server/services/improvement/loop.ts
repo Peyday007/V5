@@ -93,6 +93,8 @@ export interface ImprovementTickReport {
   objectives?: string[];
   /** Capability-gap loop steps recorded this pass, `KEY:STEP` (AUTO-20-2, `selfmodel/gapLoopSync.ts`). */
   gapSteps?: string[];
+  /** Weaknesses Brain originated from goals, failures, idle capacity, openings and needs this pass (AUTO-20-1, `selfmodel/originate.ts`). */
+  originated?: string[];
 }
 
 const OBJECTIVE_CHECK_MS = 60 * 60_000;
@@ -103,6 +105,7 @@ export const CAPABILITY_BOOT_GRACE_MS = 15 * 60_000;
 const CAPABILITY_EVERY_MS = 60 * 60_000;
 let lastCapabilityAt = 0;
 let lastCapabilityGaps: Weakness[] = [];
+let lastOriginated: Weakness[] = [];
 let processStartedAt = Date.now();
 
 function capabilityDue(now: Date): boolean {
@@ -122,6 +125,7 @@ export function resetImprovementTick(): void {
   lastObjectiveCheck = 0;
   lastCapabilityAt = 0;
   lastCapabilityGaps = [];
+  lastOriginated = [];
   processStartedAt = Date.now() - CAPABILITY_BOOT_GRACE_MS;
 }
 
@@ -131,6 +135,10 @@ export function resetImprovementTick(): void {
 
 /** Every weakness the rows show now. Pure reads. */
 export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
+  return (await detectAll(now)).weaknesses;
+}
+
+async function detectAll(now: Date): Promise<{ weaknesses: Weakness[]; originated: string[]; errors: string[] }> {
   const to = now.toISOString();
   const day = new Date(now.getTime() - 24 * HOUR).toISOString();
   const week = new Date(now.getTime() - 7 * 24 * HOUR).toISOString();
@@ -150,7 +158,12 @@ export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
   // At most hourly, and never in the first minutes after boot: the assessment is ~25
   // reads, and a restart is when the database is busiest (Deploy 41940346030 and
   // 41945448533 timed out verifying right after the restart).
-  if (!capabilityDue(now)) return [...detected, ...lastCapabilityGaps];
+  const cached = (): { weaknesses: Weakness[]; originated: string[]; errors: string[] } => ({
+    weaknesses: [...detected, ...lastCapabilityGaps, ...lastOriginated.filter((w) => !detected.some((d) => d.key === w.key))],
+    originated: lastOriginated.map((w) => w.key),
+    errors: [],
+  });
+  if (!capabilityDue(now)) return cached();
   lastCapabilityAt = now.getTime();
   const open = (await listCandidates({ open: true })).map((c) => c.weaknessKey);
   const { capabilityWeaknesses } = await import('../selfmodel/capabilities.ts');
@@ -159,7 +172,16 @@ export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
     console.warn(`capability assessment failed: ${String((error as Error)?.message ?? error)}`);
     return [];
   });
-  return [...detected, ...lastCapabilityGaps];
+  // AUTO-20-1: the work nobody told Brain to look for — live goals held by the same gaps for days,
+  // bins failing the same way, capacity idle beside waiting work, openings closing unpursued, and a
+  // resource several opportunities wait on. Same unit, same loop, same hourly cadence as the maps.
+  const { originatedWeaknesses } = await import('../selfmodel/originate.ts');
+  const origination = await originatedWeaknesses(now, [...detected, ...lastCapabilityGaps].map((w) => w.key)).catch((error: unknown) => ({
+    weaknesses: [],
+    errors: [`origination: ${String((error as Error)?.message ?? error).slice(0, 200)}`],
+  }));
+  lastOriginated = origination.weaknesses;
+  return { ...cached(), errors: origination.errors };
 }
 
 /** The candidates of one weakness family (`KEY`, `KEY#2`, …), newest attempt last. */
@@ -199,6 +221,13 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
   // next objective asks for a different method and names what was tried.
   const inadequate = members.filter((m) => m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED');
   let methodInadequacy: { judgment: string; failedAttempts: number[] } | null = null;
+  // AUTO-20-1: work Brain originated carries the judgment that made an observation into work, and an
+  // observation that says an earlier repair did not move the objective is a method judged inadequate.
+  const { isOriginated } = await import('../selfmodel/originate.ts');
+  if (isOriginated(weakness)) {
+    evidence['origination'] = weakness.origination;
+    if (weakness.origination.methodInadequate) methodInadequacy = { judgment: weakness.origination.methodInadequate, failedAttempts: [] };
+  }
   if (attempt > 1 && inadequate.length > 0) {
     methodInadequacy = {
       judgment:
@@ -212,6 +241,7 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
       researchQuestion: `${String(evidence['researchQuestion'] ?? weakness.title)} Earlier methods did not work (attempt ${methodInadequacy.failedAttempts.join(', ')}); find a different class of method.`,
     });
   }
+  if (methodInadequacy && !evidence['methodInadequacy']) evidence['methodInadequacy'] = methodInadequacy;
   const { candidate, created } = await upsertCandidate({ ...input, evidence });
   if (!created) return;
   report.opened.push(candidate.weaknessKey);
@@ -225,6 +255,7 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
       samples: weakness.samples,
       attempt,
       ...(methodInadequacy ? { methodInadequacy } : {}),
+      ...(evidence['origination'] ? { origination: evidence['origination'] } : {}),
     },
   });
   // Combine: one owner, one objective. A weakness on a component whose candidate
@@ -405,6 +436,9 @@ export function composeObjective(candidate: ImprovementCandidate, link: Linked, 
     `${baseline.value === null ? 'not measured' : baseline.value} over ${baseline.numerator}/${baseline.denominator}). ` +
     (combined.length ? `It also covers ${combined.join(', ')} (same owner). ` : '') +
     `The owner of this behaviour is ${candidate.ownerComponent}; extend it, do not add a second mechanism. ` +
+    (candidate.evidence['origination']
+      ? `Brain originated this from its own observation of the rows (${String((candidate.evidence['origination'] as { family?: string }).family ?? '')}): ${String((candidate.evidence['origination'] as { judgment?: string }).judgment ?? '')} `
+      : '') +
     (candidate.evidence['knownCause'] ? `Diagnosis from the rows: ${String(candidate.evidence['knownCause'])} ` : '') +
     `Recorded failure reasons, verbatim: ${samples.map((s) => JSON.stringify(s)).join('; ')}. ` +
     (methods.length
@@ -753,8 +787,11 @@ export async function improvementTick(now = new Date()): Promise<ImprovementTick
     return report;
   }
   report.ran = true;
-  const weaknesses = await detectWeaknesses(now);
+  const detection = await detectAll(now);
+  const weaknesses = detection.weaknesses;
   report.detected = weaknesses.length;
+  report.originated = detection.originated;
+  for (const error of detection.errors) report.errors.push(error);
   // §88: substantial live goals are checked against the capability maps, at most hourly.
   if (now.getTime() - processStartedAt >= CAPABILITY_BOOT_GRACE_MS && now.getTime() - lastObjectiveCheck >= OBJECTIVE_CHECK_MS) {
     lastObjectiveCheck = now.getTime();
