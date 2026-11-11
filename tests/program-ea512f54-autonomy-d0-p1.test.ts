@@ -15,6 +15,9 @@
  *  - `readGapMeasures`: identified, closed (only KEPT), closed without owner
  *    input, delivered-but-not-proven, regressions and the median hours to use.
  */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, restartDatabase } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -43,6 +46,10 @@ import {
 } from '../server/services/selfmodel/gapLoop.ts';
 import { improvementTick } from '../server/services/improvement/loop.ts';
 import { readGapMeasures } from '../server/services/improvement/scoreboard.ts';
+import { approveObjective, submitObjective } from '../server/services/factory/contract.ts';
+import { run } from '../server/services/factory/git.ts';
+import { ensureCampaign } from '../server/repos/factory.ts';
+import { advanceRun, grantRelease, openRun } from '../server/repos/factoryRelease.ts';
 
 const empty = (gapKey = 'GAP:X'): GapLoopState => gapStateFrom(gapKey, []);
 
@@ -342,7 +349,9 @@ describe('readGapMeasures: gaps identified and closed, counted from improvement 
     const m = await readGapMeasures(FROM, TO);
     expect(m.identified).toBe(7);
     expect(m.closed).toBe(3);
-    expect(m.closedWithoutOwnerInput).toBe(2);
+    // K1 the owner touched; K2 and K3 link no campaign, so the rows cannot say how they were merged: unmeasured, never "without owner input".
+    expect(m.closedWithoutOwnerInput).toBe(0);
+    expect(m.ownerInput).toMatchObject({ gaps: 3, withoutOwnerInput: 0, withOwnerInput: 1, unmeasured: 2 });
     expect(m.deliveredNotProven).toBe(1);
     expect(m.hoursToUseMedian).toBe(10);
     expect(m.regressions).toEqual({ reverted: 1, keptNoEffect: 1 });
@@ -392,13 +401,101 @@ describe('readGapMeasures: gaps identified and closed, counted from improvement 
     expect(m.cost).toEqual({ status: 'MEASURED', gaps: 2, attributed: 2, bins: 2, leases: 3, leasesUntimed: 1, workerMs: 90_000 });
   });
 
+  it('reads owner input from how each gap was merged and whether Factory stopped for a person (F-OWNER-INPUT-UNMEASURED)', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'owner-input-repo-'));
+    try {
+      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'subject', scripts: {} }));
+      await run('git', ['init', '-b', 'main'], { cwd: root });
+      await run('git', ['config', 'user.email', 'factory@test'], { cwd: root });
+      await run('git', ['config', 'user.name', 'Factory Test'], { cwd: root });
+      await run('git', ['add', '-A'], { cwd: root });
+      await run('git', ['commit', '-m', 'initial', '--no-verify'], { cwd: root });
+      const project = (await getProjectBySlug('deal-dispatch'))!;
+      const admin = await createUser({ email: 'owner-input@test.local', displayName: 'Owner', password: 'a-long-enough-password', isBrainAdmin: true });
+      // One approved change request and campaign per gap; `grantBy` says who executed the release grant, when there is one.
+      const gap = async (key: string, merge: string, release: { grantBy: string | null; live: boolean } | null) => {
+        const id = await candidate(key, { created: '2026-10-02T00:00:00.000Z', decision: 'KEPT', decided: '2026-10-03T00:00:00.000Z' });
+        const submitted = await submitObjective({
+          projectId: project.id,
+          objective: `Improve ${key} so its metric moves.`,
+          expectedOutcome: 'the metric moves',
+          acceptanceConditions: [{ statement: 'the metric moves', verification: 'measure it' }],
+          repositoryRoot: root,
+          mutationScope: ['client/**'],
+        });
+        const approved = await approveObjective({ changeRequestId: submitted.changeRequest.id, via: 'PERSON', userId: admin.id });
+        expect(approved.ok).toBe(true);
+        const { campaign } = await ensureCampaign({
+          changeRequestId: submitted.changeRequest.id,
+          projectId: project.id,
+          baseSha: approved.changeRequest.baseSha,
+          laneTarget: 1,
+          laneTargetReason: 'initial',
+        });
+        await getDb().run('UPDATE improvement_candidates SET campaign_id = ?, delivered_ref = ? WHERE id = ?', [campaign.id, merge, id]);
+        if (release) {
+          const { grant } = await grantRelease({
+            changeRequestId: submitted.changeRequest.id,
+            projectId: project.id,
+            liveChecks: [],
+            pagePath: null,
+            grantedByUserId: admin.id,
+            authorityChannel: 'SHELL',
+            executedByRef: release.grantBy,
+            reason: 'test',
+          });
+          const { run: opened } = await openRun({ campaignId: campaign.id, changeRequestId: submitted.changeRequest.id, grantId: grant.id, headSha: 'a'.repeat(40), attempt: 1, state: 'GATING', refusal: [], workflowRunId: null });
+          if (release.live) await advanceRun(opened!.id, { from: ['GATING'], to: 'LIVE', mergeSha: merge });
+          else await advanceRun(opened!.id, { from: ['GATING'], to: 'FAILED', failureStage: 'GATE', failureDetail: 'flaky suite' });
+        }
+        return id;
+      };
+      // Brain released it alone, under the loop's standing grant.
+      await gap('AUTO', 'b'.repeat(40), { grantBy: 'improvement-loop', live: true });
+      // Its release failed and the merge happened anyway: a hand merge.
+      await gap('HAND', 'c'.repeat(40), { grantBy: 'improvement-loop', live: false });
+      // Never granted: a person merged it.
+      await gap('NOGRANT', 'd'.repeat(40), null);
+      // Released, but under a grant a person gave for that change.
+      await gap('PERSONGRANT', 'e'.repeat(40), { grantBy: null, live: true });
+      // Brain released it, but Factory had stopped for a person on the way.
+      const stopped = await gap('STOPPED', 'f'.repeat(40), { grantBy: 'improvement-loop', live: true });
+      await recordImprovementEvent({ candidateId: stopped, kind: 'FACTORY_BLOCKED', detail: { detail: 'x', needsPerson: true, personAction: 'Approve or refuse the release on Build.' } });
+      // Brain released it, and the stop on the way was Brain's own.
+      const own = await gap('OWNSTOP', '1'.repeat(40), { grantBy: 'improvement-loop', live: true });
+      await recordImprovementEvent({ candidateId: own, kind: 'FACTORY_BLOCKED', detail: { detail: 'no surface', needsPerson: false, personAction: null } });
+      // Brain released it, but a stop recorded before the loop said whether it waited on a person.
+      const legacy = await gap('LEGACYSTOP', '2'.repeat(40), { grantBy: 'improvement-loop', live: true });
+      await recordImprovementEvent({ candidateId: legacy, kind: 'FACTORY_BLOCKED', detail: { detail: 'old' } });
+
+      const m = await readGapMeasures(FROM, TO);
+      const finding = Object.fromEntries(m.ownerInput.perGap.map((g) => [g.weaknessKey, g.finding]));
+      expect(finding).toEqual({
+        AUTO: 'NONE',
+        HAND: 'OWNER_INPUT',
+        NOGRANT: 'OWNER_INPUT',
+        PERSONGRANT: 'OWNER_INPUT',
+        STOPPED: 'OWNER_INPUT',
+        OWNSTOP: 'NONE',
+        LEGACYSTOP: 'UNMEASURED',
+      });
+      expect(m.closed).toBe(7);
+      expect(m.closedWithoutOwnerInput).toBe(2);
+      expect(m.ownerInput).toMatchObject({ gaps: 7, withoutOwnerInput: 2, withOwnerInput: 4, unmeasured: 1 });
+      expect(m.ownerInput.perGap.find((g) => g.weaknessKey === 'HAND')!.reason).toMatch(/hand merge/);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('averages the middle two for an even count, and says unmeasured when nothing closed', async () => {
     expect((await readGapMeasures(FROM, TO)).hoursToUseMedian).toBeNull();
     await candidate('A', { created: '2026-10-02T00:00:00.000Z', decision: 'KEPT', decided: '2026-10-02T04:00:00.000Z' });
     await candidate('B', { created: '2026-10-02T00:00:00.000Z', decision: 'KEPT', decided: '2026-10-02T07:00:00.000Z' });
     const m = await readGapMeasures(FROM, TO);
     expect(m.closed).toBe(2);
-    expect(m.closedWithoutOwnerInput).toBe(2);
+    expect(m.closedWithoutOwnerInput).toBe(0);
+    expect(m.ownerInput.unmeasured).toBe(2);
     expect(m.hoursToUseMedian).toBe(5.5);
   });
 

@@ -242,8 +242,16 @@ export interface GapMeasures {
    * closed, and KEPT_NO_EFFECT is not a success.
    */
   closed: number;
-  /** Closed candidates whose recorded history holds no OWNER_* event. The loop records none, so this is read, not assumed. */
+  /**
+   * Closed gaps whose rows show they reached production without a person:
+   * released by Brain's own automatic release, under the standing improvement
+   * grant, with no Factory stop that waited on a person and no OWNER_* event.
+   * Only gaps measured as such are counted; a gap whose rows cannot say is in
+   * `ownerInput.unmeasured`, never here (invariant 33).
+   */
   closedWithoutOwnerInput: number;
+  /** How each closed gap's owner input was read, and which ones the rows cannot answer. */
+  ownerInput: OwnerInputMeasure;
   /** Delivered (merged) but not shown to have worked: reported beside, never counted as success. */
   deliveredNotProven: number;
   /** Median hours from detection to a measured KEPT decision, or unmeasured. */
@@ -253,6 +261,94 @@ export interface GapMeasures {
   goalQuality: Comparison;
   productiveWorkResumed: ProductiveWorkResumed;
   cost: GapCost;
+}
+
+/**
+ * Whether a person had to act for a closed gap to reach production, read per
+ * gap from the rows that would show it:
+ *
+ *  - an improvement event of an OWNER_* kind on the candidate;
+ *  - a FACTORY_BLOCKED event whose outcome said it waited on a person
+ *    (`needsPerson`, recorded by the loop from the release outcome);
+ *  - how the merge happened: a LIVE `factory_release_runs` row for the
+ *    candidate's campaign, at the merge the candidate records, under a grant the
+ *    improvement loop itself executed, is Brain releasing alone. A delivery with
+ *    no such run was merged outside Brain's release — by hand — and a run under
+ *    a grant a person gave for that change is that person's decision.
+ *
+ * A gap with no campaign, or with a Factory stop recorded before the loop
+ * carried `needsPerson`, cannot be answered from rows and is UNMEASURED.
+ */
+export interface OwnerInputMeasure {
+  status: 'MEASURED';
+  /** Gaps kept in the window. */
+  gaps: number;
+  withoutOwnerInput: number;
+  withOwnerInput: number;
+  unmeasured: number;
+  perGap: { weaknessKey: string; finding: 'NONE' | 'OWNER_INPUT' | 'UNMEASURED'; reason: string }[];
+}
+
+/** The `executed_by_ref` the improvement loop writes on the release grant it gives under the standing order. */
+const LOOP_GRANT_REF = 'improvement-loop';
+
+async function readOwnerInput(kept: DecidedGap[]): Promise<OwnerInputMeasure> {
+  const db = getDb();
+  const perGap: OwnerInputMeasure['perGap'] = [];
+  if (kept.length === 0) return { status: 'MEASURED', gaps: 0, withoutOwnerInput: 0, withOwnerInput: 0, unmeasured: 0, perGap };
+  const ids = kept.map((g) => g.id);
+  const events = await db.all<{ candidate_id: string; kind: string; detail: string }>(
+    `SELECT candidate_id, kind, detail FROM improvement_events
+      WHERE candidate_id IN (${ids.map(() => '?').join(', ')}) AND (kind LIKE 'OWNER_%' OR kind = 'FACTORY_BLOCKED')`,
+    ids,
+  );
+  const campaigns = [...new Set(kept.map((g) => g.campaignId).filter((c): c is string => Boolean(c)))];
+  const runs = campaigns.length
+    ? await db.all<{ campaign_id: string; merge_sha: string | null; executed_by_ref: string | null }>(
+        `SELECT r.campaign_id, r.merge_sha, g.executed_by_ref FROM factory_release_runs r
+           JOIN factory_release_grants g ON g.id = r.grant_id
+          WHERE r.state = 'LIVE' AND r.campaign_id IN (${campaigns.map(() => '?').join(', ')})`,
+        campaigns,
+      )
+    : [];
+  for (const gap of kept) {
+    const owner: string[] = [];
+    const unknown: string[] = [];
+    for (const event of events.filter((e) => e.candidate_id === gap.id)) {
+      if (event.kind !== 'FACTORY_BLOCKED') {
+        owner.push(`recorded ${event.kind}`);
+        continue;
+      }
+      let detail: Record<string, unknown> = {};
+      try {
+        detail = JSON.parse(event.detail) as Record<string, unknown>;
+      } catch {
+        /* unreadable: treated as unrecorded below */
+      }
+      if (detail['needsPerson'] === true) owner.push(`Factory stopped for a person: ${String(detail['personAction'] ?? detail['detail'] ?? '')}`.trim());
+      else if (typeof detail['needsPerson'] !== 'boolean') unknown.push('a Factory stop recorded without saying whether it waited on a person');
+    }
+    if (!gap.campaignId) {
+      unknown.push('no Factory campaign links the delivery, so how it was merged is not on record');
+    } else {
+      // The loop records the change request id as the ref when the outcome named no merge; then any LIVE run of the campaign is its delivery.
+      const atMerge = gap.deliveredRef !== null && /^[0-9a-f]{7,40}$/i.test(gap.deliveredRef);
+      const live = runs.filter((r) => r.campaign_id === gap.campaignId && (!atMerge || r.merge_sha === gap.deliveredRef));
+      if (live.length === 0) owner.push(`merged outside Brain's automatic release (${gap.deliveredRef ?? 'no merge recorded'}): a hand merge`);
+      else if (!live.some((r) => r.executed_by_ref === LOOP_GRANT_REF)) owner.push('released under a grant a person gave for this change');
+    }
+    const finding = owner.length ? 'OWNER_INPUT' : unknown.length ? 'UNMEASURED' : 'NONE';
+    const reason = owner.length ? owner.join('; ') : unknown.length ? unknown.join('; ') : "released by Brain's own automatic release under the standing improvement grant, with no stop for a person";
+    perGap.push({ weaknessKey: gap.weaknessKey, finding, reason });
+  }
+  return {
+    status: 'MEASURED',
+    gaps: kept.length,
+    withoutOwnerInput: perGap.filter((g) => g.finding === 'NONE').length,
+    withOwnerInput: perGap.filter((g) => g.finding === 'OWNER_INPUT').length,
+    unmeasured: perGap.filter((g) => g.finding === 'UNMEASURED').length,
+    perGap,
+  };
 }
 
 /**
@@ -310,6 +406,8 @@ interface DecidedGap {
   id: string;
   weaknessKey: string;
   campaignId: string | null;
+  /** The merge the loop recorded at delivery (`delivered_ref`). */
+  deliveredRef: string | null;
   metric: string;
   result: string | null;
   decision: string;
@@ -347,8 +445,8 @@ async function readDecisions(from: string, to: string): Promise<DecidedGap[]> {
     first.set(event.candidate_id, list);
   }
   if (first.size === 0) return [];
-  const rows = await db.all<{ id: string; weakness_key: string; campaign_id: string | null; metric_key: string; result: string | null; decision: string; created_at: string }>(
-    `SELECT id, weakness_key, campaign_id, metric_key, result, decision, created_at FROM improvement_candidates WHERE decision IN ('KEPT', 'KEPT_NO_EFFECT', 'REVERTED')`,
+  const rows = await db.all<{ id: string; weakness_key: string; campaign_id: string | null; delivered_ref: string | null; metric_key: string; result: string | null; decision: string; created_at: string }>(
+    `SELECT id, weakness_key, campaign_id, delivered_ref, metric_key, result, decision, created_at FROM improvement_candidates WHERE decision IN ('KEPT', 'KEPT_NO_EFFECT', 'REVERTED')`,
     [],
   );
   const out: DecidedGap[] = [];
@@ -359,6 +457,7 @@ async function readDecisions(from: string, to: string): Promise<DecidedGap[]> {
       id: row.id,
       weaknessKey: row.weakness_key,
       campaignId: row.campaign_id,
+      deliveredRef: row.delivered_ref,
       metric: row.metric_key,
       result: row.result,
       decision: row.decision,
@@ -480,20 +579,16 @@ async function readGapCost(decided: readonly DecidedGap[]): Promise<GapCost> {
 /** Gaps identified and closed over [from, to), counted from improvement rows. */
 export async function readGapMeasures(from: string, to: string): Promise<GapMeasures> {
   const db = getDb();
-  const [opened, decided, delivered, owner] = await Promise.all([
+  const [opened, decided, delivered] = await Promise.all([
     db.get<{ n: number | string }>('SELECT COUNT(*) AS n FROM improvement_candidates WHERE created_at >= ? AND created_at < ?', [from, to]),
     readDecisions(from, to),
     db.get<{ n: number | string }>(
       "SELECT COUNT(*) AS n FROM improvement_candidates WHERE delivered_at >= ? AND delivered_at < ? AND (decision IS NULL OR decision <> 'KEPT')",
       [from, to],
     ),
-    db.all<{ candidate_id: string }>(
-      "SELECT DISTINCT candidate_id FROM improvement_events WHERE kind LIKE 'OWNER_%' AND candidate_id IS NOT NULL",
-      [],
-    ),
   ]);
   const kept = decided.filter((r) => r.decision === 'KEPT');
-  const touched = new Set(owner.map((r) => r.candidate_id));
+  const ownerInput = await readOwnerInput(kept);
   const hours = kept
     .map((r) => (Date.parse(r.decidedAt) - Date.parse(r.createdAt)) / 3_600_000)
     .filter((h) => Number.isFinite(h) && h >= 0)
@@ -507,7 +602,8 @@ export async function readGapMeasures(from: string, to: string): Promise<GapMeas
     to,
     identified: n(opened?.n),
     closed: kept.length,
-    closedWithoutOwnerInput: kept.filter((r) => !touched.has(r.id)).length,
+    closedWithoutOwnerInput: ownerInput.withoutOwnerInput,
+    ownerInput,
     deliveredNotProven: n(delivered?.n),
     hoursToUseMedian: median === null ? null : Number(median.toFixed(2)),
     regressions: {

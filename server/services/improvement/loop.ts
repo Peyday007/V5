@@ -306,7 +306,13 @@ function toInput(weakness: Weakness, attempt: number, parentId: string | null, k
 
 export interface Linked {
   research: { settled: boolean; acceptedClaims: number; status: string | null; claims: { claim: string; source: string | null }[] } | null;
-  factory: { state: string; detail: string; mergeSha: string | null; since: string } | null;
+  /**
+   * `needsPerson` is the outcome's own word that the campaign stopped for a
+   * person (its blocker names a person's action). It is carried onto the
+   * FACTORY_BLOCKED event so the scoreboard can tell a gap a person had to
+   * unblock from one Brain closed alone (AUTO-20-4).
+   */
+  factory: { state: string; detail: string; mergeSha: string | null; since: string; needsPerson: boolean; personAction: string | null } | null;
   archive: { claim: string; source: string | null; topic: string | null }[];
 }
 
@@ -349,9 +355,11 @@ async function linked(candidate: ImprovementCandidate): Promise<Linked> {
         detail: outcome.blocker ?? outcome.detail,
         mergeSha: outcome.release?.mergeSha ?? delivery?.mergeSha ?? null,
         since: campaign.updatedAt,
+        needsPerson: outcome.needsPerson,
+        personAction: outcome.personAction,
       };
     } else {
-      factory = { state: 'BUILDING', detail: 'no campaign yet', mergeSha: null, since: candidate.updatedAt };
+      factory = { state: 'BUILDING', detail: 'no campaign yet', mergeSha: null, since: candidate.updatedAt, needsPerson: false, personAction: null };
     }
   }
   const { methodClaimsAnswering } = await import('../research/methodRules.ts');
@@ -655,7 +663,7 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
       if (factory.state === 'BLOCKED') {
         const prior = (await listImprovementEvents({ candidateId: candidate.id, kinds: ['FACTORY_BLOCKED'], limit: 1 }))[0];
         if (!prior || prior.detail['detail'] !== factory.detail) {
-          await recordImprovementEvent({ candidateId: candidate.id, kind: 'FACTORY_BLOCKED', detail: { detail: factory.detail } });
+          await recordImprovementEvent({ candidateId: candidate.id, kind: 'FACTORY_BLOCKED', detail: { detail: factory.detail, needsPerson: factory.needsPerson, personAction: factory.personAction } });
         } else if (now.getTime() - Date.parse(prior.at) >= BLOCKED_HOLD_HOURS * HOUR) {
           await decideCandidate(candidate.id, 'HELD', `Factory blocked for ${BLOCKED_HOLD_HOURS} h on: ${factory.detail}`, { heldOn: factory.detail.slice(0, 300) });
           await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'HELD', factory } });
