@@ -654,6 +654,8 @@ export async function rankRoutesFromLedger(input: {
   currency: string;
   objective: RouteObjective;
   collectionProbability?: Record<string, number>;
+  /** The project's opportunity rows when the caller already read them, so they are not read twice. */
+  opportunities?: readonly CashOpportunity[];
 }): Promise<{ money: RouteMoneyVelocity[]; ranking: RouteScore[] }> {
   const money = await readRouteMoney(input);
   const ranking = scoreRoutes(
@@ -661,4 +663,33 @@ export async function rankRoutesFromLedger(input: {
     input.objective,
   );
   return { money, ranking };
+}
+
+/**
+ * Every S-0105 figure one route's rows state, in one sentence a person can
+ * check, each named and none merged into another: who funded the spend, the
+ * three stage times, outlays, refunds and chargebacks, receivables, peak
+ * working capital, what is still owed to suppliers or restricted, usable cash,
+ * and the nine cash identities, each its own figure. A figure no row states is
+ * written "unknown", never zero (invariant 39). With a score, the route's
+ * capital turnover and risk-adjusted collectible contribution are stated too.
+ *
+ * This is the reader the production goal model carries: `knowledge.ts` puts it
+ * on every ledger observation's source, and the goal scenario hands that
+ * source to the plan, so the figures reach the plan a person reads rather than
+ * stopping at the three the scenario turns into numbers.
+ */
+export function routeMoneyStatement(money: RouteMoneyVelocity, score: RouteScore | null = null): string {
+  const n = (x: number | null) => (x === null || !Number.isFinite(x) ? 'unknown' : Math.abs(x) >= 100 ? String(Math.round(x)) : String(Math.round(x * 100) / 100));
+  const outlays = money.supplierOutlays.length ? sum(money.supplierOutlays.map((o) => o.amount)) : null;
+  const parts = [
+    `spend customer-funded ${n(money.customerFundedSpend)}, self-funded ${n(money.selfFundedSpend)}${money.unattributedSpend ? `, unattributed ${n(money.unattributedSpend)}` : ''}`,
+    `days lead→commitment ${n(money.daysLeadToCommitment)}, commitment→funds ${n(money.daysCommitmentToFunds)}, funds→usable ${n(money.daysFundsToUsableCash)}`,
+    `supplier outlays ${n(outlays)} in ${money.supplierOutlays.length} payment(s), owed ${n(money.supplierLiabilityOutstanding)}`,
+    `refunds/chargebacks ${n(money.refundsAndChargebacks)}, receivables ${n(money.receivables)}, peak working capital ${n(money.peakWorkingCapital)}`,
+    `restricted ${n(money.restrictedCash)}, usable cash ${n(money.usableCash)}`,
+    `identities ${CASH_IDENTITIES.map((k) => `${k.toLowerCase()} ${n(money.identities[k])}`).join(', ')}`,
+  ];
+  if (score) parts.push(`capital turnover ${score.capitalTurnover === null ? 'unknown' : score.capitalTurnover.toPrecision(3)}, risk-adjusted collectible contribution ${n(score.riskAdjustedContribution)}`);
+  return parts.join('; ');
 }

@@ -35,7 +35,7 @@ import { readMoneyFigures } from '../cash/figures.ts';
 import type { CashCardFact, CashOpportunity } from '../../domain/types.ts';
 import type { Estimate, Observation, QuantityNode } from '../../domain/quant.ts';
 import { reconstruct } from './reconstruct.ts';
-import { readRouteMoney, type RouteMoneyVelocity } from './deadline.ts';
+import { rankRoutesFromLedger, routeMoneyStatement, type RouteMoneyVelocity, type RouteScore } from './deadline.ts';
 
 /** The opportunity quantities this adapter can infer, and how each is measured. */
 export const CASH_QUANTITIES = {
@@ -71,6 +71,13 @@ export interface CashKnowledge {
    * the rest, so a goal's scenario is built on what money actually did.
    */
   routeMoney: Map<string, RouteMoneyVelocity>;
+  /**
+   * Each route's capital turnover and risk-adjusted collectible contribution,
+   * scored from its own ledger figures (`scoreRoutes`), keyed by opportunity id.
+   * Stated on that route's ledger observations, so the plan names how fast a
+   * measured route returned its capital — never a requirement to retain cash.
+   */
+  routeScores: Map<string, RouteScore>;
   /** Why the ledger could not be read, when it could not; the rest of the knowledge still stands. */
   routeMoneyError: string | null;
   /** Estimates already made for one quantity in one context, reused across openings. */
@@ -91,8 +98,8 @@ export async function loadCashKnowledge(projectId: string, now = Date.now()): Pr
   const evidence = facts.filter((one) => one.kind === 'EVIDENCE');
   const sources = await claimSources(evidence.map((one) => one.claimId).filter((one): one is string => !!one));
   const watermark = facts.reduce((max, one) => (one.updatedAt > max ? one.updatedAt : max), '');
-  const { routeMoney, routeMoneyError } = await loadRouteMoney(projectId, opportunities);
-  const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, routeMoney, routeMoneyError, estimates: new Map() };
+  const { routeMoney, routeScores, routeMoneyError } = await loadRouteMoney(projectId, opportunities);
+  const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, routeMoney, routeScores, routeMoneyError, estimates: new Map() };
   cache.set(projectId, { at: now, value });
   return value;
 }
@@ -102,27 +109,45 @@ export async function loadCashKnowledge(projectId: string, now = Date.now()): Pr
  * project's openings are priced in, and kept only in its own opening's
  * currency (a figure in another currency is not about that price).
  */
-async function loadRouteMoney(projectId: string, opportunities: readonly CashOpportunity[]): Promise<{ routeMoney: Map<string, RouteMoneyVelocity>; routeMoneyError: string | null }> {
+async function loadRouteMoney(
+  projectId: string,
+  opportunities: readonly CashOpportunity[],
+): Promise<{ routeMoney: Map<string, RouteMoneyVelocity>; routeScores: Map<string, RouteScore>; routeMoneyError: string | null }> {
   const routeMoney = new Map<string, RouteMoneyVelocity>();
+  const routeScores = new Map<string, RouteScore>();
   const currencyOf = new Map(opportunities.map((one) => [one.id, one.currency] as const));
   try {
     for (const currency of new Set(opportunities.map((one) => one.currency))) {
-      for (const money of await readRouteMoney({ projectId, currency, opportunities })) {
+      // Scored within one currency, against routes priced in it: a score is only comparable there.
+      const { money: routes, ranking } = await rankRoutesFromLedger({ projectId, currency, objective: 'TURNOVER', opportunities });
+      for (const money of routes) {
         if (currencyOf.get(money.routeKey) === currency) routeMoney.set(money.routeKey, money);
       }
+      for (const score of ranking) {
+        if (currencyOf.get(score.routeKey) === currency) routeScores.set(score.routeKey, score);
+      }
     }
-    return { routeMoney, routeMoneyError: null };
+    return { routeMoney, routeScores, routeMoneyError: null };
   } catch (err) {
-    return { routeMoney: new Map(), routeMoneyError: err instanceof Error ? err.message : String(err) };
+    return { routeMoney: new Map(), routeScores: new Map(), routeMoneyError: err instanceof Error ? err.message : String(err) };
   }
 }
 
 /**
  * What a route's ledger measured about one quantity, or null when its rows do
  * not state it. Days to cash is the whole lead-to-usable-cash cycle and needs
- * every stage; a share is an amount over the billings it was measured against,
- * so it travels between prices. A share over one is a loss, not a rate, and is
- * left out rather than clamped into one.
+ * every stage. A share is an amount over the billings it was measured against,
+ * so it travels between prices:
+ *
+ *   * direct cost is billings less the row-derived gross margin, so refunds,
+ *     chargebacks and supplier costs incurred but not yet paid are costs as
+ *     well as the outlays already made — a route whose buyer took money back
+ *     did not cost only what left for suppliers;
+ *   * money tied up is the peak working capital the route's own cash carried
+ *     plus what is still restricted (a reserve held from receipts is in the
+ *     account and cannot be deployed).
+ *
+ * A share over one is a loss, not a rate, and is left out rather than clamped.
  */
 export function ledgerValue(money: RouteMoneyVelocity, quantity: CashQuantity): Observation['value'] | null {
   if (quantity === 'daysToCash') {
@@ -131,13 +156,16 @@ export function ledgerValue(money: RouteMoneyVelocity, quantity: CashQuantity): 
   }
   const billed = money.identities.GROSS_BILLINGS;
   if (billed === null || billed <= 0) return null;
+  const margin = money.identities.GROSS_MARGIN;
   const amount =
     quantity === 'costShare'
-      ? money.supplierOutlays.length > 0
-        ? money.supplierOutlays.reduce((t, o) => t + o.amount, 0)
-        : null
+      ? margin === null
+        ? null
+        : billed - margin
       : quantity === 'capitalShare'
-        ? money.peakWorkingCapital
+        ? money.peakWorkingCapital === null
+          ? null
+          : money.peakWorkingCapital + money.restrictedCash
         : null;
   if (amount === null) return null;
   const share = amount / billed;
@@ -158,7 +186,7 @@ export function ledgerObservations(knowledge: CashKnowledge, quantity: CashQuant
       value,
       context: contextOf(opportunity),
       lineage: [`cash_money_entries:${routeKey}`],
-      source: { kind: 'LEDGER_ENTRY', ref: routeKey, note: `money ledger of "${opportunity.title.slice(0, 60)}"` },
+      source: { kind: 'LEDGER_ENTRY', ref: routeKey, note: `money ledger of "${opportunity.title.slice(0, 60)}": ${routeMoneyStatement(money, knowledge.routeScores.get(routeKey) ?? null)}` },
       observedAt: last,
       broad: opportunity.mechanism !== target.mechanism,
       measures: `${CASH_QUANTITIES[quantity].label.toLowerCase()} measured on the money ledger of "${opportunity.title.slice(0, 60)}"`,
