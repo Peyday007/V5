@@ -427,7 +427,12 @@ async function ask(
       text = await completer({ ...config, timeoutMs: 180_000 }, model, SYSTEM, prompt, { maxTokens: 8000 });
     } catch (error) {
       const message = String((error as Error).message ?? error);
-      onFail(`model call failed [${classifyRouteFailure(message)}]: ${redactSecrets(message).slice(0, 200)}`);
+      // On the GPU slot the error that reaches here is the fallback's: the GPU's
+      // own failure was swallowed when the call fell back. When the GPU's own
+      // calls are failing, that is the cause, and the reason says so.
+      const down = gpuDown(model);
+      const detail = down ? `GPU slot's own calls failing; the fallback then said: ${message}` : message;
+      onFail(`model call failed [${classifyRouteFailure(message, { gpuDown: down })}]: ${redactSecrets(detail).slice(0, 200)}`);
       continue;
     }
     const parsed = firstJson(text);
@@ -1518,8 +1523,25 @@ export type RouteFailureCause =
   | 'database'
   | 'unclassified';
 
-/** Names the actual cause of a model-call failure so the recorded reason says which one it was. */
-export function classifyRouteFailure(message: string): RouteFailureCause {
+export const ROUTE_FAILURE_CAUSES: readonly RouteFailureCause[] = [
+  'credentials',
+  'task routing',
+  'broken GPU',
+  'provider availability',
+  'database',
+  'unclassified',
+];
+
+/**
+ * Names the actual cause of a model-call failure so the recorded reason says which one it was.
+ * `gpuDown` is the GPU slot's own measured state (`gpuDown`): on that slot the
+ * message is usually the free fallback's error, because the GPU's own error
+ * was swallowed when the call fell back — 2026-11-09, run 42577770227, the pod
+ * had been deleted, every GPU call got a 404, and 325 failures were recorded
+ * as "cheap lane HTTP N", which named the fallback and hid the GPU.
+ */
+export function classifyRouteFailure(message: string, route: { gpuDown?: boolean } = {}): RouteFailureCause {
+  if (route.gpuDown || /\brunpod (?:HTTP|returned|unavailable)\b/i.test(message)) return 'broken GPU';
   if (/\b(?:HTTP (?:401|403)|unauthori[sz]ed|forbidden|invalid[ _-]?api[ _-]?key|authentication|credential)/i.test(message)) return 'credentials';
   if (/\b(?:HTTP 404|model[^.]{0,40}not (?:found|available|loaded)|no such model|unknown model|unsupported model)/i.test(message)) return 'task routing';
   if (/\b(?:gpu|cuda|runpod|pod (?:not|is|has)|out of memory|OOM)\b/i.test(message)) return 'broken GPU';
@@ -1534,6 +1556,34 @@ export function redactSecrets(text: string): string {
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
     .replace(/\b(?:sk|rpa|ghp|gho|ghs|xox[a-z])[-_][A-Za-z0-9_-]{12,}/g, '[redacted]')
     .replace(/([?&](?:api[_-]?key|key|token|access_token)=)[^&\s]+/gi, '$1[redacted]');
+}
+
+/** How far back the GPU slot's own calls are read to say it is down. */
+export const GPU_DOWN_WINDOW_MS = 15 * 60_000;
+
+/**
+ * Whether a GPU slot's own calls are failing: in the window at least one GPU
+ * call failed and none answered. A pod paused on purpose is not down (its calls
+ * go to the fallback without touching the GPU), and a free-provider route never is.
+ */
+export function gpuDown(model: string, now = Date.now()): boolean {
+  if (!isRunpodSlot(model) || runpodPaused()) return false;
+  const window = runpodCallWindow(GPU_DOWN_WINDOW_MS, now);
+  return window.failed > 0 && window.ok === 0;
+}
+
+/**
+ * The cause a recorded reason names: the `[cause]` tag `ask` wrote when there
+ * is one (it was decided with the GPU's state in hand, which the text alone no
+ * longer carries), otherwise classified from the text. Null for a reason that
+ * is not a model-call failure.
+ */
+export function causeOfReason(reason: string | null): RouteFailureCause | null {
+  const text = reason ?? '';
+  if (!/model call failed/.test(text)) return null;
+  const tag = /model call failed \[([^\]]+)\]/.exec(text)?.[1];
+  const known = ROUTE_FAILURE_CAUSES.find((cause) => cause === tag);
+  return known ?? classifyRouteFailure(text);
 }
 
 /** Consecutive provider failures after which a route stops being offered items. */
@@ -1578,7 +1628,7 @@ export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: 
   }
   const why = outcome.why ?? '';
   if (!/^model call failed/.test(why) && !BRAIN_UNAVAILABLE.test(why)) return;
-  const cause = classifyRouteFailure(why);
+  const cause = causeOfReason(why) ?? classifyRouteFailure(why);
   // Brain's own database being busy says nothing about the model route.
   if (cause === 'database') return;
   const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now + ROUTE_REPROBE_MS };

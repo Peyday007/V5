@@ -17,6 +17,8 @@ import { getDb } from '../../db/database.ts';
 import { databasePoolReadings } from '../../db/database.ts';
 import { waitingNow } from './capacity.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
+import { isRunpodSlot } from '../cheap/runpod.ts';
+import { causeOfReason, type RouteFailureCause } from './worker.ts';
 
 export type Measured<T> = { measured: true; value: T } | { measured: false; reason: string };
 
@@ -87,7 +89,60 @@ export interface StageCapacityReport {
   totalProductiveJobs: number;
   purposesSumToTotal: boolean;
   process: ProcessReading;
+  /** Which model route is failing, the cause the rows name, and whether it has answered since. */
+  diagnosis: ThroughputDiagnosis;
   constrained: Constraint;
+}
+
+/**
+ * One model route's window, read from its `FREE_LANE_ITEM` rows (`reason`
+ * begins `model <route>`). `restored` is a row fact: the route had an item
+ * accepted after its last failure.
+ */
+export interface RouteDiagnosis {
+  route: string;
+  submitted: number;
+  providerFailures: number;
+  /** The cause most of its failures name, or the GPU's when the supervisor's samples show the pod was not running. */
+  cause: RouteFailureCause | null;
+  causeCounts: Partial<Record<RouteFailureCause, number>>;
+  lastFailureAt: string | null;
+  lastSubmittedAt: string | null;
+  restored: boolean;
+  evidence: string;
+}
+
+/** What the pod supervisor (`runpodPod.ts`) recorded in the window, as `RUNPOD_POD` rows. */
+export interface GpuPodReading {
+  /** Supervisor samples by the pod status RunPod reported: RUNNING, EXITED, TERMINATED or UNKNOWN (RunPod could not return the pod). */
+  samples: Record<string, number>;
+  startFailures: number;
+  lastStartFailure: string | null;
+  /** Samples exist and none of them saw the pod running. */
+  notRunning: boolean;
+}
+
+export interface ThroughputDiagnosis {
+  routes: RouteDiagnosis[];
+  gpu: GpuPodReading;
+  /** The failing route with the most failures that has not answered since: what to restore first. */
+  primary: { route: string; cause: RouteFailureCause; failures: number; evidence: string } | null;
+  /** Routes that failed in the window and then had work accepted again. */
+  restored: { route: string; cause: RouteFailureCause | null; at: string }[];
+}
+
+/**
+ * Whether existing queued work advanced since the previous recorded reading
+ * (`ADVANCING`: something was accepted since; `STALLED`: work waited and
+ * nothing was accepted; `IDLE`: nothing waited; `FIRST_READING`: nothing to
+ * compare with).
+ */
+export interface QueueAdvance {
+  verdict: 'ADVANCING' | 'STALLED' | 'IDLE' | 'FIRST_READING';
+  previousAt: string | null;
+  previousQueued: number | null;
+  queuedNow: number;
+  acceptedSincePrevious: number | null;
 }
 
 const n = (value: unknown): number => Number(value ?? 0) || 0;
@@ -226,8 +281,12 @@ function readProcess(): ProcessReading {
  * nothing waiting is not constrained, however slow. A gain is projected only
  * where it can be measured, and never as a reason to scale the web process.
  */
-export function chooseConstraint(stages: StageReading[]): Constraint {
+export function chooseConstraint(stages: StageReading[], failing: ThroughputDiagnosis['primary'] = null): Constraint {
+  const first = failing
+    ? `Restore model route ${failing.route} first: ${failing.failures} failure(s) in the window name ${failing.cause} (${failing.evidence}). `
+    : '';
   const recommendation =
+    first +
     'Restore the failing provider, credential, route or verification path first and watch whether queued work advances; ' +
     'scale independent workers only after a measured gain. Do not enlarge the web process because a queue is long.';
   let worst: { stage: StageReading; waiting: number; rate: number } | null = null;
@@ -243,7 +302,9 @@ export function chooseConstraint(stages: StageReading[]): Constraint {
   if (!worst) {
     return {
       stage: null,
-      basis: 'No measured stage has work waiting, so none is shown to be constraining.',
+      basis: failing
+        ? `No measured stage has work waiting; model route ${failing.route} is failing (${failing.cause}).`
+        : 'No measured stage has work waiting, so none is shown to be constraining.',
       expectedGain: NOT('no constrained stage'),
       recommendation,
     };
@@ -251,11 +312,137 @@ export function chooseConstraint(stages: StageReading[]): Constraint {
   const { stage } = worst;
   return {
     stage: stage.stage,
-    basis: `${stage.label}: ${worst.waiting} waiting, ${Math.round(worst.rate * 100)}% of processed items accepted.`,
+    basis:
+      `${stage.label}: ${worst.waiting} waiting, ${Math.round(worst.rate * 100)}% of processed items accepted.` +
+      (failing ? ` Failing route ${failing.route}: ${failing.cause}.` : ''),
     // Dollars per job are not recorded, so a gain per dollar cannot be claimed.
     expectedGain: NOT('accepted facts per hour per dollar needs a recorded dollar cost, which the lane does not keep'),
     recommendation,
   };
+}
+
+/** The model route a `FREE_LANE_ITEM` reason names (`model <route>` or `model <route>: …`). */
+export function routeOfReason(reason: string | null): string | null {
+  return /^model (\S+?)(?::|$)/.exec(reason ?? '')?.[1] ?? null;
+}
+
+/** `RUNPOD_POD` rows in the window: one sample per five minutes plus each power action, so a few dozen. */
+async function readPodRows(since: string): Promise<{ outcome: string; at: string }[]> {
+  const rows = await getDb().all<{ outcome: string | null; at: string }>(
+    `SELECT outcome, at FROM bin_events WHERE event_type = 'RUNPOD_POD' AND at >= ? ORDER BY at`,
+    [since],
+  );
+  return rows.map((r) => ({ outcome: r.outcome ?? '', at: r.at }));
+}
+
+/** The supervisor's view up to `until` (inclusive), or of the whole window when `until` is null. */
+export function gpuPodReading(rows: readonly { outcome: string; at: string }[], until: string | null = null): GpuPodReading {
+  const samples: Record<string, number> = {};
+  let startFailures = 0;
+  let lastStartFailure: string | null = null;
+  for (const row of rows) {
+    if (until !== null && row.at > until) continue;
+    if (row.outcome.startsWith('SAMPLE_')) {
+      const status = row.outcome.slice('SAMPLE_'.length);
+      samples[status] = (samples[status] ?? 0) + 1;
+    }
+    if (row.outcome === 'START_FAILED') {
+      startFailures += 1;
+      lastStartFailure = row.at;
+    }
+  }
+  const total = Object.values(samples).reduce((sum, k) => sum + k, 0);
+  return { samples, startFailures, lastStartFailure, notRunning: total > 0 && !samples['RUNNING'] };
+}
+
+/**
+ * Which model route is failing and why, from the rows alone (CAP-16-3: identify
+ * the actual cause from current signals before any scale-up). A route's cause is
+ * what most of its failures name; on a GPU slot whose supervisor samples never
+ * saw the pod running, it is the GPU, whatever the fallback's error said.
+ */
+export async function diagnoseThroughput(since: string): Promise<ThroughputDiagnosis> {
+  const rows = await getDb().all<{ outcome: string | null; reason: string | null; k: number | string; last: string | null }>(
+    `SELECT outcome, reason, COUNT(*) AS k, MAX(at) AS last FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND reason LIKE 'model %'
+      GROUP BY outcome, reason`,
+    [since],
+  );
+  const podRows = await readPodRows(since);
+  const gpu = gpuPodReading(podRows);
+  const byRoute = new Map<string, RouteDiagnosis>();
+  for (const row of rows) {
+    const route = routeOfReason(row.reason);
+    if (!route) continue;
+    const entry = byRoute.get(route) ?? {
+      route, submitted: 0, providerFailures: 0, cause: null, causeCounts: {}, lastFailureAt: null, lastSubmittedAt: null, restored: false, evidence: '',
+    };
+    if (row.outcome === 'SUBMITTED') {
+      entry.submitted += n(row.k);
+      if (row.last && (!entry.lastSubmittedAt || row.last > entry.lastSubmittedAt)) entry.lastSubmittedAt = row.last;
+    }
+    const cause = causeOfReason(row.reason);
+    if (cause && cause !== 'database') {
+      entry.providerFailures += n(row.k);
+      entry.causeCounts[cause] = (entry.causeCounts[cause] ?? 0) + n(row.k);
+      if (row.last && (!entry.lastFailureAt || row.last > entry.lastFailureAt)) entry.lastFailureAt = row.last;
+    }
+    byRoute.set(route, entry);
+  }
+  const routes = [...byRoute.values()].filter((r) => r.providerFailures > 0);
+  for (const route of routes) {
+    const ranked = (Object.entries(route.causeCounts) as [RouteFailureCause, number][]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const top = ranked[0]!;
+    // The pod as the supervisor saw it while the route was failing: a pod
+    // recreated afterwards does not rewrite why the earlier calls failed.
+    const during = gpuPodReading(podRows, route.lastFailureAt);
+    if (isRunpodSlot(route.route) && during.notRunning) {
+      const seen = Object.entries(during.samples).map(([status, k]) => `${status} ${k}`).join(', ');
+      route.cause = 'broken GPU';
+      route.evidence =
+        `the pod supervisor never saw the pod running while the route failed (samples: ${seen}` +
+        `${during.startFailures > 0 ? `; ${during.startFailures} refused start(s)` : ''}); the failures' own text named ${top[0]} ×${top[1]}`;
+    } else {
+      route.cause = top[0];
+      route.evidence = ranked.map(([cause, k]) => `${cause} ×${k}`).join(', ');
+    }
+    route.restored = route.lastSubmittedAt !== null && route.lastFailureAt !== null && route.lastSubmittedAt > route.lastFailureAt;
+  }
+  routes.sort((a, b) => b.providerFailures - a.providerFailures || a.route.localeCompare(b.route));
+  const open = routes.find((r) => !r.restored);
+  return {
+    routes,
+    gpu,
+    primary: open && open.cause ? { route: open.route, cause: open.cause, failures: open.providerFailures, evidence: open.evidence } : null,
+    restored: routes.filter((r) => r.restored).map((r) => ({ route: r.route, cause: r.cause, at: r.lastSubmittedAt! })),
+  };
+}
+
+/** Compares the queue and the accepted work with the previous recorded reading. Read it before writing the new one. */
+export async function readQueueAdvance(queuedNowCount: number): Promise<QueueAdvance> {
+  const db = getDb();
+  const previous = await db.get<{ at: string; measures: string | null }>(
+    `SELECT at, measures FROM bin_events WHERE event_type = ? AND outcome = 'MEASURED' ORDER BY at DESC LIMIT 1`,
+    [STAGE_CAPACITY_EVENT],
+  );
+  if (!previous) {
+    return { verdict: 'FIRST_READING', previousAt: null, previousQueued: null, queuedNow: queuedNowCount, acceptedSincePrevious: null };
+  }
+  let previousQueued: number | null = null;
+  try {
+    const parsed = JSON.parse(previous.measures ?? '{}') as { queuedNow?: unknown };
+    previousQueued = typeof parsed.queuedNow === 'number' ? parsed.queuedNow : null;
+  } catch {
+    previousQueued = null;
+  }
+  const accepted = await db.get<{ k: number | string }>(
+    "SELECT COUNT(*) AS k FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'SUBMITTED' AND at > ?",
+    [previous.at],
+  );
+  const acceptedSincePrevious = n(accepted?.k);
+  const waited = queuedNowCount > 0 || (previousQueued ?? 0) > 0;
+  const verdict: QueueAdvance['verdict'] = acceptedSincePrevious > 0 ? 'ADVANCING' : waited ? 'STALLED' : 'IDLE';
+  return { verdict, previousAt: previous.at, previousQueued, queuedNow: queuedNowCount, acceptedSincePrevious };
 }
 
 /** The per-stage, per-purpose measurement for the last `hours` hours (default 6). */
@@ -271,6 +458,7 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
     "SELECT COUNT(*) AS k FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'SUBMITTED' AND at >= ?",
     [since],
   );
+  const diagnosis = await diagnoseThroughput(since);
   return {
     windowHours: hours,
     since,
@@ -279,7 +467,8 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
     totalProductiveJobs,
     purposesSumToTotal: totalProductiveJobs === n(total?.k),
     process: readProcess(),
-    constrained: chooseConstraint(stages),
+    diagnosis,
+    constrained: chooseConstraint(stages, diagnosis.primary),
   };
 }
 
@@ -303,13 +492,21 @@ export async function recordStageCapacity(options: { hours?: number; now?: numbe
   try {
     const report = await stageCapacity(options);
     const waiting = await queuedNow();
+    // Read before this row is written, so the comparison is with the previous reading.
+    const advance = await readQueueAdvance(waiting);
+    const { primary, restored } = report.diagnosis;
+    const cause = primary
+      ? ` Failing: ${primary.route} (${primary.cause}; ${primary.failures} failure(s)).`
+      : restored.length > 0
+        ? ` Restored: ${restored.map((r) => `${r.route} (${r.cause ?? 'unclassified'})`).join(', ')}.`
+        : ' No model route failing.';
     await recordBinEvent({
       eventType: STAGE_CAPACITY_EVENT,
       outcome: 'MEASURED',
-      reason: report.constrained.basis,
+      reason: `${report.constrained.basis}${cause} Queued work ${advance.verdict.toLowerCase().replace('_', ' ')}.`,
       durationMs: Date.now() - started,
       evidenceClass: 'MEASURED',
-      measures: { ...report, queuedNow: waiting } as unknown as Record<string, unknown>,
+      measures: { ...report, queuedNow: waiting, queueAdvance: advance } as unknown as Record<string, unknown>,
     });
     return report;
   } catch (error) {
