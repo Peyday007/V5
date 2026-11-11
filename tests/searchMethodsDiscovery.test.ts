@@ -14,7 +14,7 @@ import { createUser } from '../server/repos/identity.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, currentFragments, decideClaim, insertClaims, updateFragment } from '../server/repos/research.ts';
 import { launchMission, linkMission, transitionMission } from '../server/repos/russellMissions.ts';
-import { listMethodRuns, listSearchMethods } from '../server/repos/searchMethods.ts';
+import { createSearchMethod, listMethodComparisons, listMethodRuns, listSearchMethods } from '../server/repos/searchMethods.ts';
 import { bucketGates, outcomeOfRound, recordRoundAsRun } from '../server/services/research/searchMethods/bucketMethods.ts';
 import { FAILURE_STREAK } from '../server/services/research/searchFailures/classify.ts';
 import { runSearchCli } from '../server/services/research/searchReport/cli.ts';
@@ -151,5 +151,24 @@ describe('the search report terminal', () => {
     const one = await runSearchCli(['compare', '--project', projectId, '--subject', 's', '--file', 'r.json'], { readFile: (p) => files[p]! });
     expect(one.code).toBe(1);
     expect(one.out).toContain('at least two methods');
+  });
+
+  it('records the comparison it prints, in the project it was asked for', async () => {
+    const m1 = await createSearchMethod({ scope: 'GENERAL', methodKey: 'cli-1', subjectId: 's', finds: 'x', sources: ['s'], checkProcedure: 'c' });
+    const m2 = await createSearchMethod({ scope: 'GENERAL', methodKey: 'cli-2', subjectId: 's', finds: 'x', sources: ['s'], checkProcedure: 'c' });
+    const files: Record<string, string> = {
+      'r.json': JSON.stringify({
+        items: ['a', 'b'],
+        results: { [m1.id]: { surfaced: ['a'], confirmed: ['a'], rejected: [] }, [m2.id]: { surfaced: ['a', 'b'], confirmed: ['a'], rejected: ['b'] } },
+      }),
+    };
+    const out = await runSearchCli(['compare', '--project', projectId, '--subject', 's', '--file', 'r.json'], { readFile: (p) => files[p]! });
+    expect(out.code).toBe(0);
+    const stored = await listMethodComparisons({ projectIds: [projectId], userId: null }, { subjectId: 's' });
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.scope).toBe('PROJECT');
+    expect(stored[0]!.projectId).toBe(projectId);
+    expect(stored[0]!.entries.map((e) => [e.methodId, e.rank, e.precision])).toEqual([[m1.id, 1, 1], [m2.id, 2, 0.5]]);
+    expect(out.out).toContain(`comparison ${stored[0]!.id} recorded`);
   });
 });

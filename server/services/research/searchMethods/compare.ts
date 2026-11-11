@@ -5,9 +5,20 @@
  * and rejected from it, so every method is judged on identical items. A method
  * that reports something outside the shared set is refused rather than
  * counted. The result is ranked by precision, never by volume.
+ *
+ * A comparison that is accepted is recorded — `search_method_comparisons` with
+ * one `search_method_comparison_entries` row per method carrying its rank and
+ * metrics on the shared data — so a later decision reads which method
+ * outranked which and why, rather than a printout nobody kept. A refused
+ * comparison writes nothing.
+ *
+ * Where it is recorded: the scope the caller names, or else the narrowest one
+ * the reader holds — its one project, else its user, else GENERAL. A GENERAL
+ * comparison is refused if the shared data it names holds anything private.
  */
-import { getSearchMethod } from '../../../repos/searchMethods.ts';
-import type { SearchReader } from '../../../domain/searchIntelligence.ts';
+import { getSearchMethod, recordMethodComparison } from '../../../repos/searchMethods.ts';
+import { scopeProblem, type ScopeRef, type SearchReader } from '../../../domain/searchIntelligence.ts';
+import { PrivateDataRefused } from '../../knowledge/scope/privacy.ts';
 import { rankByPrecision, type MethodMetrics } from './metrics.ts';
 
 export interface MethodResult {
@@ -17,6 +28,10 @@ export interface MethodResult {
 }
 
 export interface MethodComparison {
+  /** The stored comparison's id. */
+  id: string;
+  createdAt: string;
+  scope: ScopeRef;
   subjectId: string;
   items: number;
   ranking: { methodId: string; metrics: MethodMetrics }[];
@@ -26,10 +41,32 @@ export interface MethodComparison {
 
 export type CompareResult = { ok: true; comparison: MethodComparison } | { ok: false; reason: string };
 
+/** The narrowest scope the reader holds: its one project, else its user, else GENERAL. */
+export function comparisonScopeFor(reader: SearchReader): ScopeRef {
+  if (reader.projectIds.length === 1) return { scope: 'PROJECT', projectId: reader.projectIds[0]! };
+  if (reader.userId) return { scope: 'USER', userId: reader.userId };
+  return { scope: 'GENERAL' };
+}
+
 export async function compareMethods(
   reader: SearchReader,
-  input: { subjectId: string; items: readonly string[]; results: Readonly<Record<string, MethodResult>> },
+  input: {
+    subjectId: string;
+    items: readonly string[];
+    results: Readonly<Record<string, MethodResult>>;
+    /** Where to record it; defaults to `comparisonScopeFor(reader)`. */
+    scope?: ScopeRef;
+  },
 ): Promise<CompareResult> {
+  const scope = input.scope ?? comparisonScopeFor(reader);
+  const scopeRefusal = scopeProblem(scope);
+  if (scopeRefusal) return { ok: false, reason: scopeRefusal };
+  if (scope.scope === 'PROJECT' && !reader.projectIds.includes(scope.projectId ?? '')) {
+    return { ok: false, reason: 'A comparison can be recorded only in a project the reader holds.' };
+  }
+  if (scope.scope === 'USER' && reader.userId !== (scope.userId ?? null)) {
+    return { ok: false, reason: 'A comparison can be recorded only for the reader\'s own user.' };
+  }
   const ids = Object.keys(input.results);
   if (ids.length < 2) return { ok: false, reason: 'A comparison needs at least two methods.' };
   const items = new Set(input.items);
@@ -76,9 +113,33 @@ export async function compareMethods(
         : a!.metrics.precision !== b!.metrics.precision
           ? `Precision ${a!.metrics.precision.toFixed(2)} against ${b!.metrics.precision.toFixed(2)}; volume was not considered.`
           : 'Equal precision; the one with more verified results ranks first.';
+  let stored;
+  try {
+    stored = await recordMethodComparison({
+      ...scope,
+      subjectId: input.subjectId,
+      itemRefs: [...items],
+      decidedBy,
+      entries: ranked.map((x) => ({
+        methodId: x.id,
+        examined: x.metrics.examined,
+        surfaced: x.metrics.surfaced,
+        confirmed: x.metrics.confirmed,
+        rejected: x.metrics.rejected,
+        verified: x.metrics.verified,
+        precision: x.metrics.precision,
+      })),
+    });
+  } catch (err) {
+    if (err instanceof PrivateDataRefused) return { ok: false, reason: err.message };
+    throw err;
+  }
   return {
     ok: true,
     comparison: {
+      id: stored.id,
+      createdAt: stored.createdAt,
+      scope: { scope: stored.scope, projectId: stored.projectId, userId: stored.userId },
       subjectId: input.subjectId,
       items: items.size,
       ranking: ranked.map((x) => ({ methodId: x.id, metrics: x.metrics })),

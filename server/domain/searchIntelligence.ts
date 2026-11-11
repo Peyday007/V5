@@ -93,6 +93,35 @@ export interface SearchMethodRun {
   finishedAt: string;
 }
 
+/** One method's place and metrics in a stored comparison on shared data. */
+export interface MethodComparisonEntry {
+  methodId: string;
+  /** 1 is first. */
+  rank: number;
+  examined: number;
+  surfaced: number;
+  confirmed: number;
+  rejected: number;
+  verified: number;
+  /** confirmed / verified, or null when nothing was verified. */
+  precision: number | null;
+}
+
+/** A comparison of methods for one subject on the same data, as recorded. */
+export interface StoredMethodComparison {
+  id: string;
+  scope: SearchScope;
+  projectId: string | null;
+  userId: string | null;
+  subjectId: string;
+  items: number;
+  itemRefs: string[];
+  decidedBy: string;
+  createdAt: string;
+  /** Ordered by rank. */
+  entries: MethodComparisonEntry[];
+}
+
 export interface LearnedDetector {
   id: string;
   scope: SearchScope;

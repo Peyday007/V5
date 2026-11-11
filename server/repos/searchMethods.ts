@@ -14,6 +14,7 @@ import {
   type ExampleVerdict,
   type LearnedDetector,
   type LearnedSubject,
+  type MethodComparisonEntry,
   type MethodTrustState,
   type RunExecutor,
   type RunOutcome,
@@ -21,6 +22,7 @@ import {
   type SearchMethod,
   type SearchMethodRun,
   type SearchReader,
+  type StoredMethodComparison,
 } from '../domain/searchIntelligence.ts';
 
 type Row = Record<string, unknown>;
@@ -370,4 +372,112 @@ export async function listDetectorExamples(reader: SearchReader, detectorId: str
     [detectorId, ...vis.params],
   );
   return rows.map(toExample);
+}
+
+// ---- comparisons ------------------------------------------------------------
+
+const toEntry = (r: Row): MethodComparisonEntry => ({
+  methodId: str(r.method_id),
+  rank: Number(r.rank_order),
+  examined: Number(r.examined),
+  surfaced: Number(r.surfaced),
+  confirmed: Number(r.confirmed),
+  rejected: Number(r.rejected),
+  verified: Number(r.verified),
+  precision: r.precision_rate === null || r.precision_rate === undefined ? null : Number(r.precision_rate),
+});
+
+async function withEntries(rows: Row[]): Promise<StoredMethodComparison[]> {
+  const out: StoredMethodComparison[] = [];
+  for (const r of rows) {
+    const entries = await getDb().all<Row>(
+      `SELECT * FROM search_method_comparison_entries WHERE comparison_id = ? ORDER BY rank_order, method_id`,
+      [str(r.id)],
+    );
+    out.push({
+      id: str(r.id),
+      scope: r.scope as StoredMethodComparison['scope'],
+      projectId: optStr(r.project_id),
+      userId: optStr(r.user_id),
+      subjectId: str(r.subject_id),
+      items: Number(r.items),
+      itemRefs: parseJson<string[]>(optStr(r.item_refs), []),
+      decidedBy: str(r.decided_by),
+      createdAt: str(r.created_at),
+      entries: entries.map(toEntry),
+    });
+  }
+  return out;
+}
+
+/**
+ * Record a comparison of methods on shared data, with each method's rank and
+ * metrics, in one transaction. A GENERAL comparison is readable by everyone,
+ * so the shared data it names may hold nothing private.
+ */
+export async function recordMethodComparison(
+  input: ScopeRef & {
+    subjectId: string;
+    itemRefs: readonly string[];
+    decidedBy: string;
+    entries: readonly Omit<MethodComparisonEntry, 'rank'>[];
+  },
+): Promise<StoredMethodComparison> {
+  requireScope(input);
+  if (input.entries.length < 2) throw new Error('A comparison needs at least two methods.');
+  if (input.scope === 'GENERAL') {
+    refusePrivateGeneral({
+      finds: input.decidedBy, usefulWhen: null, sources: [...input.itemRefs], requiredInputs: [],
+      query: input.subjectId, checkProcedure: '', limits: null,
+    });
+  }
+  const id = newId('smc');
+  const at = nowIso();
+  const db = getDb();
+  await db.transaction(async () => {
+    await db.run(
+      `INSERT INTO search_method_comparisons
+         (id, scope, project_id, user_id, subject_id, items, item_refs, decided_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, input.scope, input.projectId ?? null, input.userId ?? null, input.subjectId, new Set(input.itemRefs).size,
+        toJson([...new Set(input.itemRefs)]), input.decidedBy, at],
+    );
+    let rank = 0;
+    for (const e of input.entries) {
+      rank += 1;
+      await db.run(
+        `INSERT INTO search_method_comparison_entries
+           (comparison_id, method_id, rank_order, examined, surfaced, confirmed, rejected, verified, precision_rate)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, e.methodId, rank, e.examined, e.surfaced, e.confirmed, e.rejected, e.verified, e.precision],
+      );
+    }
+  });
+  const row = await db.get<Row>(`SELECT * FROM search_method_comparisons WHERE id = ?`, [id]);
+  if (!row) throw new Error('A method comparison was not found after it was written.');
+  return (await withEntries([row]))[0]!;
+}
+
+/** Comparisons the reader can see, newest first; optionally for one subject or one method. */
+export async function listMethodComparisons(
+  reader: SearchReader,
+  filter: { subjectId?: string; methodId?: string; limit?: number } = {},
+): Promise<StoredMethodComparison[]> {
+  const vis = visibleSql(reader, 'c');
+  const where = [vis.sql];
+  const params: SqlParam[] = [...vis.params];
+  if (filter.subjectId) {
+    where.push('c.subject_id = ?');
+    params.push(filter.subjectId);
+  }
+  if (filter.methodId) {
+    where.push('EXISTS (SELECT 1 FROM search_method_comparison_entries e WHERE e.comparison_id = c.id AND e.method_id = ?)');
+    params.push(filter.methodId);
+  }
+  params.push(Math.max(1, Math.min(filter.limit ?? 50, 500)));
+  const rows = await getDb().all<Row>(
+    `SELECT c.* FROM search_method_comparisons c WHERE ${where.join(' AND ')} ORDER BY c.created_at DESC, c.id DESC LIMIT ?`,
+    params,
+  );
+  return withEntries(rows);
 }

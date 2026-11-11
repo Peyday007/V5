@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
-import { createSearchMethod, getSearchMethod, setMethodTrust } from '../server/repos/searchMethods.ts';
+import { createSearchMethod, getSearchMethod, listMethodComparisons, setMethodTrust } from '../server/repos/searchMethods.ts';
+import { getDb } from '../server/db/database.ts';
 import {
   compareMethods, methodMetrics, mayMove, provenMethods, rankByPrecision, recordRunAndSettle, retireMethod,
 } from '../server/services/research/searchMethods/index.ts';
@@ -90,5 +91,74 @@ describe('ranking and comparison', () => {
       results: { [a.id]: { surfaced: [], confirmed: [], rejected: [] }, [other.id]: { surfaced: [], confirmed: [], rejected: [] } },
     });
     expect(mixed.ok).toBe(false);
+  });
+
+  it('records an accepted comparison with each method\'s rank and metrics, and a refused one writes nothing', async () => {
+    const a = await make('RA');
+    const b = await make('RB');
+    const items = ['1', '2', '3', '4', '5', '6'];
+    const ok = await compareMethods(reader, {
+      subjectId: 'sub1',
+      items,
+      results: {
+        [a.id]: { surfaced: items, confirmed: ['1'], rejected: ['2', '3', '4', '5', '6'] },
+        [b.id]: { surfaced: ['1', '2'], confirmed: ['1', '2'], rejected: [] },
+      },
+    });
+    expect(ok.ok).toBe(true);
+    if (!ok.ok) return;
+
+    const stored = await listMethodComparisons(reader, { subjectId: 'sub1' });
+    expect(stored).toHaveLength(1);
+    const c = stored[0]!;
+    expect(c.id).toBe(ok.comparison.id);
+    expect(c.scope).toBe('GENERAL');
+    expect(c.items).toBe(6);
+    expect(c.itemRefs.sort()).toEqual(items);
+    expect(c.decidedBy).toBe(ok.comparison.decidedBy);
+    expect(c.entries).toEqual([
+      { methodId: b.id, rank: 1, examined: 6, surfaced: 2, confirmed: 2, rejected: 0, verified: 2, precision: 1 },
+      { methodId: a.id, rank: 2, examined: 6, surfaced: 6, confirmed: 1, rejected: 5, verified: 6, precision: 1 / 6 },
+    ]);
+    expect((await listMethodComparisons(reader, { methodId: a.id })).map((x) => x.id)).toEqual([c.id]);
+
+    // The rows are on disk, not only in the returned value.
+    const rows = await getDb().all<{ method_id: string; rank_order: number }>(
+      'SELECT method_id, rank_order FROM search_method_comparison_entries WHERE comparison_id = ? ORDER BY rank_order',
+      [c.id],
+    );
+    expect(rows.map((r) => [r.method_id, Number(r.rank_order)])).toEqual([[b.id, 1], [a.id, 2]]);
+
+    const refused = await compareMethods(reader, {
+      subjectId: 'sub1', items,
+      results: { [a.id]: { surfaced: ['9'], confirmed: [], rejected: [] }, [b.id]: { surfaced: [], confirmed: [], rejected: [] } },
+    });
+    expect(refused.ok).toBe(false);
+    expect(await listMethodComparisons(reader, { subjectId: 'sub1' })).toHaveLength(1);
+  });
+
+  it('records a project\'s comparison in that project, invisible to another project', async () => {
+    const a = await make('PA');
+    const b = await make('PB');
+    const mine: SearchReader = { projectIds: ['prj_mine'], userId: null };
+    const ok = await compareMethods(mine, {
+      subjectId: 'sub1',
+      items: ['x', 'y'],
+      results: {
+        [a.id]: { surfaced: ['x'], confirmed: ['x'], rejected: [] },
+        [b.id]: { surfaced: ['x', 'y'], confirmed: ['x'], rejected: ['y'] },
+      },
+    });
+    expect(ok.ok && ok.comparison.scope).toEqual({ scope: 'PROJECT', projectId: 'prj_mine', userId: null });
+    expect(await listMethodComparisons(mine)).toHaveLength(1);
+    expect(await listMethodComparisons({ projectIds: ['prj_other'], userId: null })).toHaveLength(0);
+    expect(await listMethodComparisons(reader)).toHaveLength(0);
+
+    const elsewhere = await compareMethods(mine, {
+      subjectId: 'sub1', items: ['x'], scope: { scope: 'PROJECT', projectId: 'prj_other' },
+      results: { [a.id]: { surfaced: [], confirmed: [], rejected: [] }, [b.id]: { surfaced: [], confirmed: [], rejected: [] } },
+    });
+    expect(elsewhere.ok).toBe(false);
+    expect(await listMethodComparisons({ projectIds: ['prj_other'], userId: null })).toHaveLength(0);
   });
 });

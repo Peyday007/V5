@@ -15,17 +15,20 @@
  * `decideMethod`, so a paused or revise-flagged method says so and why, and
  * `metrics` from `discoveryMethodMetrics`, which reads only the project's own
  * and GENERAL methods whoever asks.
- * Nothing here writes.
+ * `report`, `methods` and `metrics` write nothing.
  *
  * `compare` reads `{ "items": [...], "results": { "<methodId>": { "surfaced":
- * [...], "confirmed": [...], "rejected": [...] } } }` and prints the ranking
- * `compareMethods` derives, or its refusal.
+ * [...], "confirmed": [...], "rejected": [...] } } }`, and `compareMethods`
+ * ranks the methods and records the comparison with each method's metrics in
+ * the project (`search_method_comparisons` and
+ * `search_method_comparison_entries`); it prints the stored comparison's id and
+ * ranking, or the refusal, which records nothing.
  */
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { closeDatabase, initDatabase } from '../../../db/database.ts';
 import { listMethodRuns, listSearchMethods } from '../../../repos/searchMethods.ts';
-import type { SearchReader } from '../../../domain/searchIntelligence.ts';
+import type { ScopeRef, SearchReader } from '../../../domain/searchIntelligence.ts';
 import { discoveryMethodMetrics, methodDownstream } from '../../cash/discoveryYield.ts';
 import { readerForProject } from '../searchMethods/bucketMethods.ts';
 import type { MethodReading } from '../searchMetrics/read.ts';
@@ -45,7 +48,7 @@ export interface SearchCliDeps {
   downstream?: (projectId: string) => Promise<Map<string, { useful: number; qualified: number; duplicates: number }>>;
   decisions?: (reader: SearchReader, now: string) => Promise<{ methodKey: string; trustState: string; decision: MethodDecision }[]>;
   metrics?: (projectId: string) => Promise<MethodReading[]>;
-  compare?: (reader: SearchReader, input: { subjectId: string; items: string[]; results: Record<string, MethodResult> }) => Promise<CompareResult>;
+  compare?: (reader: SearchReader, input: { subjectId: string; items: string[]; results: Record<string, MethodResult>; scope: ScopeRef }) => Promise<CompareResult>;
   readFile?: (path: string) => string;
   now?: () => string;
 }
@@ -125,14 +128,14 @@ export async function runSearchCli(argv: readonly string[], deps: SearchCliDeps 
   }
   const items = Array.isArray(parsed.items) ? parsed.items.filter((x): x is string => typeof x === 'string') : [];
   const results = (parsed.results && typeof parsed.results === 'object' ? parsed.results : {}) as Record<string, MethodResult>;
-  const compared = await (deps.compare ?? compareMethods)(reader, { subjectId: subject, items, results });
+  const compared = await (deps.compare ?? compareMethods)(reader, { subjectId: subject, items, results, scope: { scope: 'PROJECT', projectId: project } });
   if (!compared.ok) return { code: 1, out: `not compared: ${compared.reason}` };
   const c = compared.comparison;
   return {
     code: 0,
     out: [
-      `subject ${c.subjectId}, ${c.items} shared item(s): ${c.decidedBy}`,
-      ...c.ranking.map((r, i) => `  ${i + 1}. ${r.methodId} precision ${r.metrics.precision === null ? 'not yet' : r.metrics.precision.toFixed(2)}`),
+      `comparison ${c.id} recorded — subject ${c.subjectId}, ${c.items} shared item(s): ${c.decidedBy}`,
+      ...c.ranking.map((r, i) => `  ${i + 1}. ${r.methodId} precision ${r.metrics.precision === null ? 'not yet' : r.metrics.precision.toFixed(2)} (${r.metrics.confirmed} confirmed, ${r.metrics.rejected} rejected, ${r.metrics.surfaced} surfaced)`),
     ].join('\n'),
   };
 }
