@@ -157,9 +157,13 @@ export interface GoalPortfolio {
 const BEHAVIOURAL: ReadonlySet<keyof ModelledOpportunity> = new Set(['respond', 'close', 'volume']);
 export function sampleSizeOf(one: ModelledOpportunity): number | undefined {
   if (one.agreedValue > 0) {
-    // Money a buyer already agreed draws nothing but whether it settles in time.
+    // Money a buyer already agreed still draws whether, and when, it settles:
+    // a signed contract is not settled cash. A fixed days-to-cash is the
+    // agreement's term, not a measurement of the counterparty paying on it,
+    // so it states no sample; only settlements actually observed (the
+    // observations an inferred days-to-cash was reconstructed from) do.
     const days = one.daysToCash;
-    return days.inferred ? days.inferred.observations : days.value !== null ? Number.POSITIVE_INFINITY : undefined;
+    return days.inferred ? days.inferred.observations : undefined;
   }
   const drawn: Array<keyof ModelledOpportunity> = one.repeatable ? INPUT_NAMES.map(([key]) => key) : ['price', 'daysToCash', 'close', 'directCost'];
   let n = Number.POSITIVE_INFINITY;

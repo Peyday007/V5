@@ -207,9 +207,11 @@ export interface Assurance {
  * the figure rests on and are the sample. An absent sample is never read as a large one.
  */
 export function effectiveSample(one: Activity): { size: number | undefined; from: 'STATED' | 'HISTORY' | 'NONE' } {
-  if (one.evidence?.sampleSize !== undefined) return { size: one.evidence.sampleSize, from: 'STATED' };
+  // A sample is a finite count of observations; Infinity or NaN is a claim of certainty, not a sample.
+  const stated = one.evidence?.sampleSize;
+  if (stated !== undefined && Number.isFinite(stated)) return { size: stated, from: 'STATED' };
   const fromHistory = one.evidence?.history?.sampleSize;
-  if (fromHistory !== undefined && fromHistory > 0) return { size: fromHistory, from: 'HISTORY' };
+  if (fromHistory !== undefined && Number.isFinite(fromHistory) && fromHistory > 0) return { size: fromHistory, from: 'HISTORY' };
   return { size: undefined, from: 'NONE' };
 }
 
