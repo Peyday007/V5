@@ -10,9 +10,13 @@ import { freshProject } from './helpers.ts';
 import {
   COSTLY_EFFORT,
   PREPARED_OPTION_KIND,
+  PREPARED_RESUMED_KIND,
   PreparedOptionError,
+  advancePreparedOptions,
   countsAsIntegration,
   handOffToFactory,
+  handoffCausedResumption,
+  resumeOf,
   preparedOptions,
   recordPreparedOption,
   resolveNeed,
@@ -21,6 +25,9 @@ import {
   type PreparedOption,
 } from '../server/services/capability/prepared.ts';
 import { listEvents } from '../server/repos/events.ts';
+import { ensureCampaign, patchCampaign } from '../server/repos/factory.ts';
+import { enqueueWork } from '../server/repos/workQueue.ts';
+import { getDb } from '../server/db/database.ts';
 
 const method = (over: Record<string, unknown> = {}) => ({ name: 'tool-a', kind: 'OPEN_SOURCE_TOOL', gates: [], effort: 2, sources: ['https://example.test/a'], ...over });
 const valid = (over: Record<string, unknown> = {}) => ({
@@ -170,6 +177,99 @@ describe('a prepared option is never an integration', () => {
         mutationScope: ['server/**'], verificationCommands: ['npm run typecheck'], rollbackRequirement: 'revert',
       });
       expect(out).toBeNull();
+    });
+  });
+
+  describe('resumption is caused by the handoff, not by any later success (finding F4)', () => {
+    const at = (base: string, hours: number): string => new Date(Date.parse(base) + hours * 3_600_000).toISOString();
+    const pure = (over: Partial<Parameters<typeof handoffCausedResumption>[0]> = {}) => handoffCausedResumption({
+      handedOffAt: '2026-01-01T00:00:00.000Z', changeRequestWithdrawn: false, implementedAt: '2026-01-01T02:00:00.000Z',
+      capability: 'WORKING', unitRunTimes: ['2026-01-01T03:00:00.000Z'], ...over,
+    });
+
+    it('needs the change implemented, the capability working, and the work run after the implementation', () => {
+      expect(pure()).toBe(true);
+      expect(pure({ implementedAt: null })).toBe(false);
+      expect(pure({ changeRequestWithdrawn: true })).toBe(false);
+      expect(pure({ capability: 'UNPROVEN' })).toBe(false);
+      expect(pure({ capability: 'BROKEN' })).toBe(false);
+      expect(pure({ unitRunTimes: ['2026-01-01T01:00:00.000Z'] })).toBe(false);
+      expect(pure({ implementedAt: '2025-12-31T23:00:00.000Z', unitRunTimes: ['2026-01-01T03:00:00.000Z'] })).toBe(false);
+      expect(pure({ capability: null })).toBe(true);
+    });
+
+    let projectId: string;
+    beforeEach(async () => {
+      projectId = (await freshProject()).project.id;
+    });
+
+    const handOff = async (requirementId: string, blocked: string[]) => {
+      const r = resolveNeed(opt([method()]), { requirementId, goal: 'goal-x' });
+      const out = await handOffToFactory(projectId, r, {
+        goal: 'goal-x', repository: 'o/r', baseBranch: 'production', baseSha: 'a'.repeat(40),
+        mutationScope: ['server/**'], verificationCommands: ['npm run typecheck'], rollbackRequirement: 'revert',
+        blockedWorkItemIds: blocked,
+      });
+      return out!.changeRequest.id;
+    };
+    const blockedItem = async (): Promise<string> =>
+      (await enqueueWork({ projectId, workType: 'RESEARCH_AUDIT', payload: { role: 'PRIMARY' }, createdByType: 'SYSTEM' })).id;
+    const succeed = async (id: string, completedAt: string): Promise<void> => {
+      await getDb().run(`UPDATE work_items SET state = 'SUCCEEDED', completed_at = ? WHERE id = ?`, [completedAt, id]);
+    };
+    const complete = async (changeRequestId: string, finishedAt: string): Promise<void> => {
+      const { campaign } = await ensureCampaign({ changeRequestId, projectId, baseSha: 'a'.repeat(40), laneTarget: 1, laneTargetReason: 'test' });
+      await patchCampaign(campaign.id, { state: 'COMPLETE', finishedAt });
+    };
+    const handedOffAt = async (requirementId: string): Promise<string> => (await resumeOf(projectId, requirementId, ['none'])).handedOffAt!;
+
+    it('a blocked item that succeeds after the handoff, with nothing implemented, is not a resumption and records nothing', async () => {
+      const item = await blockedItem();
+      await handOff('req-1', [item]);
+      await succeed(item, at(await handedOffAt('req-1'), 1));
+      const r = await resumeOf(projectId, 'req-1', [item]);
+      expect(r.resumed).toBe(false);
+      expect(r.implementedAt).toBeNull();
+      expect(await advancePreparedOptions()).toMatchObject({ resumed: 0 });
+      expect((await listEvents(projectId, 100)).filter((e) => e.payload.kind === PREPARED_RESUMED_KIND)).toHaveLength(0);
+    });
+
+    it('work that finished before the campaign completed was not caused by it', async () => {
+      const item = await blockedItem();
+      const cr = await handOff('req-1', [item]);
+      const t0 = await handedOffAt('req-1');
+      await succeed(item, at(t0, 1));
+      await complete(cr, at(t0, 2));
+      expect((await resumeOf(projectId, 'req-1', [item])).resumed).toBe(false);
+      await succeed(item, at(t0, 3));
+      const r = await resumeOf(projectId, 'req-1', [item]);
+      expect(r).toMatchObject({ resumed: true, changeRequestId: cr, implementedAt: at(t0, 2), capability: null, completedAfter: [item] });
+      expect(await advancePreparedOptions()).toMatchObject({ resumed: 1 });
+      const resumedEvents = (await listEvents(projectId, 100)).filter((e) => e.payload.kind === PREPARED_RESUMED_KIND);
+      expect(resumedEvents).toHaveLength(1);
+      expect(resumedEvents[0]!.payload.implementedAt).toBe(at(t0, 2));
+    });
+
+    it('a withdrawn change request is never a resumption, even with a complete campaign', async () => {
+      const item = await blockedItem();
+      const cr = await handOff('req-1', [item]);
+      const t0 = await handedOffAt('req-1');
+      await complete(cr, at(t0, 1));
+      await succeed(item, at(t0, 2));
+      await getDb().run(`UPDATE factory_change_requests SET state = 'WITHDRAWN' WHERE id = ?`, [cr]);
+      expect((await resumeOf(projectId, 'req-1', [item])).resumed).toBe(false);
+    });
+
+    it('a mapped requirement must read WORKING over attempts since the implementation', async () => {
+      const item = await blockedItem();
+      const cr = await handOff('INTAKE.PLAN', [item]);
+      const t0 = await handedOffAt('INTAKE.PLAN');
+      await complete(cr, at(t0, 0.001));
+      await succeed(item, at(t0, 0.01));
+      const r = await resumeOf(projectId, 'INTAKE.PLAN', [item], { now: new Date(at(t0, 1)) });
+      expect(r.capability?.status).not.toBe('WORKING');
+      expect(r.resumed).toBe(false);
+      expect(r.completedAfter).toEqual([]);
     });
   });
 });

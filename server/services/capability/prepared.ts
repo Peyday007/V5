@@ -15,7 +15,9 @@
  *  - it holds no lease and fires no worker: keeping an option warm costs a row;
  *  - a need is turned into an exact requirement that the *existing* Factory
  *    receives through `ensureChangeRequest`, and the originating goal's
- *    blocked work is judged resumed only by rows that show it ran afterwards.
+ *    blocked work is judged resumed only when rows show the handoff itself was
+ *    implemented (its campaign COMPLETE), the capability then reads WORKING
+ *    over real attempts, and the blocked work ran after that.
  *
  * `handOffToFactory` is the one place the handoff is made, and `resumeOf` is the
  * one place resumption is judged, from `work_items` rows.
@@ -26,7 +28,9 @@
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { recordEvent, listEvents, listEventsByEntity } from '../../repos/events.ts';
-import { ensureChangeRequest } from '../../repos/factory.ts';
+import { ensureChangeRequest, getCampaignByChangeRequest, getChangeRequest } from '../../repos/factory.ts';
+import { CAPABILITY_MAPS, classify, type CapabilityStatus } from '../../domain/capabilityMap.ts';
+import { ownerExists, readProbe } from '../selfmodel/capabilities.ts';
 import type { ProjectEvent } from '../../domain/types.ts';
 import type { FactoryChangeRequest } from '../../domain/factory.ts';
 
@@ -263,28 +267,117 @@ export async function handOffToFactory(
 }
 
 /**
- * Did the originating goal's blocked work resume? Read from `work_items`: the
- * named items must have completed successfully after the handoff event was
- * written. Nothing is asserted by the caller but which items were blocked.
+ * The causal chain a resumption must show, every link read from rows:
+ * the handoff's change request was implemented, the capability then works, and
+ * the blocked work ran after that. `implementedAt` is when the campaign the
+ * handoff created reached COMPLETE; `capability` is the proof reading over
+ * attempts since then (null when the requirement is on no capability map, so
+ * there is no probe to read and the implemented campaign is the only evidence).
+ * Pure: `resumeOf` supplies every value.
+ */
+export function handoffCausedResumption(input: {
+  handedOffAt: string;
+  changeRequestWithdrawn: boolean;
+  implementedAt: string | null;
+  capability: CapabilityStatus | null;
+  unitRunTimes: readonly string[];
+}): boolean {
+  if (input.changeRequestWithdrawn || !input.implementedAt) return false;
+  if (input.implementedAt < input.handedOffAt) return false;
+  if (input.capability !== null && input.capability !== 'WORKING') return false;
+  return blockedWorkResumed({ handedOffAt: input.implementedAt, unitRunTimes: input.unitRunTimes });
+}
+
+export interface Resumption {
+  handedOffAt: string | null;
+  changeRequestId: string | null;
+  /** When the handoff's campaign reached COMPLETE, or null while it has not. */
+  implementedAt: string | null;
+  /** The requirement's proof reading since `implementedAt`; null when no map holds the requirement. */
+  capability: { status: CapabilityStatus; why: string } | null;
+  resumed: boolean;
+  /** Blocked items that completed after the capability was implemented and working. */
+  completedAfter: string[];
+}
+
+/**
+ * Did the originating goal's blocked work resume *because of the handoff*?
+ *
+ * A named work item reaching SUCCEEDED after the handoff is not enough: it may
+ * have been completed by other means, or retried and succeeded for an unrelated
+ * reason. So three things are read, and all must hold:
+ *  1. the handoff's change request was not withdrawn and the campaign Factory
+ *     ran for it is COMPLETE (the change was implemented), after the handoff;
+ *  2. where the requirement is on a capability map, its own proof probe read
+ *     over attempts since that completion classifies WORKING;
+ *  3. a named blocked item completed after the implementation.
+ * Nothing is asserted by the caller but which items were blocked.
  */
 export async function resumeOf(
   projectId: string,
   requirementId: string,
   blockedWorkItemIds: readonly string[],
-): Promise<{ handedOffAt: string | null; resumed: boolean; completedAfter: string[] }> {
+  options: { changeRequestId?: string; now?: Date; root?: string } = {},
+): Promise<Resumption> {
   const events = await listEventsByEntity('capability_requirement', requirementId);
-  const handoff = events
+  const handoffs = events
     .filter((e) => e.projectId === projectId && e.payload.kind === PREPARED_HANDOFF_KIND)
-    .map((e) => e.createdAt)
-    .sort()[0];
-  if (!handoff || blockedWorkItemIds.length === 0) return { handedOffAt: handoff ?? null, resumed: false, completedAfter: [] };
+    .filter((e) => !options.changeRequestId || e.payload.changeRequestId === options.changeRequestId)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const handoff = handoffs[0];
+  const none: Resumption = {
+    handedOffAt: handoff?.createdAt ?? null,
+    changeRequestId: typeof handoff?.payload.changeRequestId === 'string' ? handoff.payload.changeRequestId : null,
+    implementedAt: null,
+    capability: null,
+    resumed: false,
+    completedAfter: [],
+  };
+  if (!handoff || !none.changeRequestId || blockedWorkItemIds.length === 0) return none;
+  const handedOffAt = handoff.createdAt;
+
+  const changeRequest = await getChangeRequest(none.changeRequestId);
+  const withdrawn = !changeRequest || changeRequest.state === 'WITHDRAWN';
+  const campaign = withdrawn ? null : await getCampaignByChangeRequest(none.changeRequestId);
+  const implementedAt = campaign && campaign.state === 'COMPLETE' ? (campaign.finishedAt ?? campaign.updatedAt) : null;
+  if (withdrawn || !implementedAt || implementedAt < handedOffAt) return { ...none, implementedAt };
+
+  const requirements = Object.values(CAPABILITY_MAPS).flatMap((m) => m.requirements.filter((r) => r.id === requirementId));
+  let capability: Resumption['capability'] = null;
+  if (requirements.length > 0) {
+    const to = (options.now ?? new Date()).toISOString();
+    for (const requirement of requirements) {
+      let assessed: { status: CapabilityStatus; why: string };
+      try {
+        const reading = await readProbe(requirement.proof.probe, implementedAt, to);
+        assessed = classify(requirement, ownerExists(requirement.owner[0]!, options.root), reading);
+      } catch {
+        assessed = { status: 'UNPROVEN', why: 'the probe could not be read' };
+      }
+      capability = { status: assessed.status, why: assessed.why };
+      if (assessed.status !== 'WORKING') break;
+    }
+  }
+
   const rows = await getDb().all<{ id: string; completed_at: string | null }>(
     `SELECT id, completed_at FROM work_items WHERE project_id = ? AND state = 'SUCCEEDED' AND id IN (${blockedWorkItemIds.map(() => '?').join(',')})`,
     [projectId, ...blockedWorkItemIds],
   );
   const times = rows.filter((r) => r.completed_at !== null);
-  const resumed = blockedWorkResumed({ handedOffAt: handoff, unitRunTimes: times.map((r) => r.completed_at!) });
-  return { handedOffAt: handoff, resumed, completedAfter: times.filter((r) => r.completed_at! > handoff).map((r) => r.id) };
+  const resumed = handoffCausedResumption({
+    handedOffAt,
+    changeRequestWithdrawn: withdrawn,
+    implementedAt,
+    capability: capability?.status ?? null,
+    unitRunTimes: times.map((r) => r.completed_at!),
+  });
+  return {
+    ...none,
+    implementedAt,
+    capability,
+    resumed,
+    completedAfter: resumed ? times.filter((r) => r.completed_at! > implementedAt).map((r) => r.id) : [],
+  };
 }
 
 export const PREPARED_RESUMED_KIND = 'PREPARED_OPTION_RESUMED';
@@ -294,7 +387,8 @@ export const PREPARED_RESUMED_KIND = 'PREPARED_OPTION_RESUMED';
  * as resumed. Called from `advanceSources` on the Russell tick, so nobody has to
  * remember an old option: a handoff that names blocked work items is re-read
  * each pass and, the first time `resumeOf` finds one of them completed after
- * the handoff, a single RESUMED event is appended. It creates no work, holds no
+ * the handoff was implemented and the capability reads WORKING, a single
+ * RESUMED event is appended. It creates no work, holds no
  * lease and spends nothing; a handoff that names no work items is never judged.
  */
 export async function advancePreparedOptions(): Promise<{ judged: number; resumed: number }> {
@@ -322,14 +416,17 @@ export async function advancePreparedOptions(): Promise<{ judged: number; resume
   for (const h of pending) {
     if (done.has(h.changeRequestId)) continue;
     judged += 1;
-    const r = await resumeOf(h.projectId, h.requirementId, h.blocked);
+    const r = await resumeOf(h.projectId, h.requirementId, h.blocked, h.changeRequestId ? { changeRequestId: h.changeRequestId } : {});
     if (!r.resumed) continue;
     await recordEvent({
       projectId: h.projectId,
       entityType: 'capability_requirement',
       entityId: h.requirementId,
       eventType: 'CAPABILITY_ASSESSED',
-      payload: { kind: PREPARED_RESUMED_KIND, integration: false, changeRequestId: h.changeRequestId, completedAfter: r.completedAfter },
+      payload: {
+        kind: PREPARED_RESUMED_KIND, integration: false, changeRequestId: h.changeRequestId, completedAfter: r.completedAfter,
+        implementedAt: r.implementedAt, capability: r.capability,
+      },
     });
     resumed += 1;
   }
