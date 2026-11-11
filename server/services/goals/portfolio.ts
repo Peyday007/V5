@@ -149,9 +149,13 @@ export interface GoalPortfolio {
 const BEHAVIOURAL: ReadonlySet<keyof ModelledOpportunity> = new Set(['respond', 'close', 'volume']);
 export function sampleSizeOf(one: ModelledOpportunity): number | undefined {
   if (one.agreedValue > 0) {
-    // Money a buyer already agreed draws nothing but whether it settles in time.
+    // A signed agreement is not settled cash: whether and when the buyer pays
+    // is a counterparty behaviour, drawn like any other. Only observed
+    // settlements (an inferred days-to-cash carries the deals it was measured
+    // on) calibrate it; a fixed term states no sample of payment or default,
+    // so it never stands for an infinite one.
     const days = one.daysToCash;
-    return days.inferred ? days.inferred.observations : days.value !== null ? Number.POSITIVE_INFINITY : undefined;
+    return days.inferred ? finiteSample(days.inferred.observations) : undefined;
   }
   const drawn: Array<keyof ModelledOpportunity> = one.repeatable ? INPUT_NAMES.map(([key]) => key) : ['price', 'daysToCash', 'close', 'directCost'];
   let n = Number.POSITIVE_INFINITY;
@@ -160,7 +164,13 @@ export function sampleSizeOf(one: ModelledOpportunity): number | undefined {
     if (input.inferred) n = Math.min(n, input.inferred.observations);
     else if (input.value === null || BEHAVIOURAL.has(key)) return undefined;
   }
-  return n;
+  // No drawn input carried a real observation count: nothing calibrates it.
+  return finiteSample(n);
+}
+
+/** A sample is a count of real observations; anything else states none. */
+function finiteSample(n: number): number | undefined {
+  return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 /**
