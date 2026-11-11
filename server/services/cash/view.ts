@@ -396,7 +396,7 @@ export async function cashView(input: {
      * to this payload safe while the sprint is running.
      */
     roadmap: await cashRoadmap(input.projectId),
-    forecast: await cashForecast({ projectId: input.projectId, currency }),
+    forecast: await cashForecast({ projectId: input.projectId, currency, tiers }),
     /*
      * The same function every member's read calls, on the same rows. Reading
      * them twice on this one path is the deliberate cost of the two roles'
