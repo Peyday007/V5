@@ -63,6 +63,32 @@ export interface PreparedOption {
   /** A tested interface sketch, or a source inventory; at least one. */
   interfaceSketch?: { text: string; tested: boolean };
   sourceInventory?: string[];
+  /**
+   * The production capability keys this option stands behind, besides its own
+   * requirement id: the key spaces real work is blocked in (finding F2) — a
+   * cash capability id (`SEND_A_MESSAGE`, what `cash_needs.blocker_key` names
+   * as `CAPABILITY:<id>`), a capability-map id (`RESEARCH.ACCESS.READ`), or a
+   * routing capability a bin requires. `identifyDependencies` matches open
+   * work by these, so an option keyed by a program requirement is found when a
+   * commercial or research objective is blocked on what it provides.
+   */
+  capabilities?: string[];
+}
+
+/**
+ * One spelling per capability key: the `CAPABILITY:` prefix a blocker key
+ * carries is dropped and case is folded, so `CAPABILITY:send_a_message`,
+ * `SEND_A_MESSAGE` and `send_a_message` are one key. Nothing else is folded:
+ * a key that is a prefix of another is still a different key.
+ */
+export function capabilityKeyOf(raw: string): string {
+  const t = raw.trim();
+  return (/^capability:/i.test(t) ? t.slice('capability:'.length) : t).trim().toUpperCase();
+}
+
+/** Every key an option answers to: its requirement id and the capabilities it declares, folded. */
+export function optionKeys(option: Pick<PreparedOption, 'requirementId' | 'capabilities'>): string[] {
+  return [...new Set([option.requirementId, ...(option.capabilities ?? [])].map(capabilityKeyOf).filter(Boolean))];
 }
 
 /** Effort at or above this is the "costly browser automation" the spec refuses to keep warm. */
@@ -101,12 +127,15 @@ export function validatePreparedOption(input: unknown): PreparedOption {
   if (!(sketch && text(sketch.text)) && inventory.length === 0) {
     throw new PreparedOptionError('an interface sketch or a source inventory is required');
   }
+  if (o.capabilities !== undefined && !Array.isArray(o.capabilities)) throw new PreparedOptionError('capabilities must be a list of capability keys');
+  const capabilities = [...new Set((Array.isArray(o.capabilities) ? o.capabilities : []).map(text).filter(Boolean))];
   return {
     requirementId,
     feasibility: { verdict, note: text(f.note) },
     methods,
     ...(sketch && text(sketch.text) ? { interfaceSketch: { text: text(sketch.text), tested: sketch.tested === true } } : {}),
     ...(inventory.length ? { sourceInventory: inventory } : {}),
+    ...(capabilities.length ? { capabilities } : {}),
   };
 }
 
@@ -615,26 +644,61 @@ export interface IdentifiedDependency {
   /** For a program dependency: the program, and the live requirements whose campaigns wait on it (the blocked work). */
   programId?: string;
   dependentRequirements?: string[];
+  /** The declared capability the work was blocked on, when it is not the requirement id itself. */
+  via?: string;
 }
 
-/** Which recorded prepared options a project's open work now depends on. Reads only. */
-export async function identifyDependencies(projectId: string, requirementIds: readonly string[]): Promise<IdentifiedDependency[]> {
-  if (requirementIds.length === 0) return [];
+/**
+ * Which recorded prepared options a project's open work now depends on. Reads only.
+ *
+ * `options` is either the recorded options by requirement id — each matched by
+ * every key it answers to (`optionKeys`), so an option keyed by a program
+ * requirement is found by the cash capability, capability-map id or routing
+ * capability it declares — or bare requirement ids, each its own only key.
+ * A dependency found through a declared capability names it in `via`.
+ */
+export async function identifyDependencies(
+  projectId: string,
+  options: readonly string[] | ReadonlyMap<string, Pick<PreparedOption, 'requirementId' | 'capabilities'>>,
+): Promise<IdentifiedDependency[]> {
+  // folded key -> the requirement ids that answer to it
+  const byKey = new Map<string, string[]>();
+  const entries: Array<Pick<PreparedOption, 'requirementId' | 'capabilities'>> = Array.isArray(options)
+    ? (options as readonly string[]).map((requirementId) => ({ requirementId }))
+    : [...(options as ReadonlyMap<string, Pick<PreparedOption, 'requirementId' | 'capabilities'>>).values()];
+  for (const o of entries) {
+    for (const k of optionKeys(o)) {
+      const ids = byKey.get(k) ?? [];
+      if (!ids.includes(o.requirementId)) ids.push(o.requirementId);
+      byKey.set(k, ids);
+    }
+  }
+  if (byKey.size === 0) return [];
   const db = getDb();
   const out: IdentifiedDependency[] = [];
-  const wanted = new Set(requirementIds);
+  const seen = new Set<string>();
+  const push = (dep: IdentifiedDependency, key: string): void => {
+    const id = `${dep.sourceRef}\u0000${dep.requirementId}`;
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push(capabilityKeyOf(dep.requirementId) === key ? dep : { ...dep, via: key });
+  };
+  const keys = [...byKey.keys()];
 
   const bins = await db.all<{ id: string; title: string; objective: string; manifest: string; required_capabilities: string | null }>(
     `SELECT id, title, objective, manifest, required_capabilities FROM bins
       WHERE project_id = ? AND state IN (${OPEN_BIN_STATES.map(() => '?').join(', ')})
-        AND (${requirementIds.map(() => 'required_capabilities LIKE ?').join(' OR ')})
+        AND (${keys.map(() => 'LOWER(required_capabilities) LIKE ?').join(' OR ')})
       ORDER BY created_at, id`,
-    [projectId, ...OPEN_BIN_STATES, ...requirementIds.map((id) => `%"${id}"%`)],
+    [projectId, ...OPEN_BIN_STATES, ...keys.map((k) => `%"${k.toLowerCase()}"%`)],
   );
   for (const bin of bins) {
     let caps: unknown;
     try { caps = JSON.parse(bin.required_capabilities ?? '[]'); } catch { caps = []; }
-    const named = (Array.isArray(caps) ? caps : []).filter((c): c is string => typeof c === 'string' && wanted.has(c));
+    const named = (Array.isArray(caps) ? caps : [])
+      .filter((c): c is string => typeof c === 'string')
+      .map(capabilityKeyOf)
+      .filter((k) => byKey.has(k));
     if (named.length === 0) continue;
     let goal = '';
     try {
@@ -645,27 +709,32 @@ export async function identifyDependencies(projectId: string, requirementIds: re
       `SELECT id FROM work_items WHERE project_id = ? AND bin_id = ? AND state <> 'SUCCEEDED' ORDER BY created_at, id`,
       [projectId, bin.id],
     );
-    for (const requirementId of [...new Set(named)]) {
-      out.push({
-        projectId, requirementId, sourceRef: `bin:${bin.id}`,
-        goal: goal || `bin ${bin.id}: ${bin.title || bin.objective}`,
-        blockedWorkItemIds: items.map((i) => i.id),
-      });
+    for (const key of [...new Set(named)]) {
+      for (const requirementId of byKey.get(key)!) {
+        push({
+          projectId, requirementId, sourceRef: `bin:${bin.id}`,
+          goal: goal || `bin ${bin.id}: ${bin.title || bin.objective}`,
+          blockedWorkItemIds: items.map((i) => i.id),
+        }, key);
+      }
     }
   }
 
   const { listNeeds } = await import('../../repos/cashPortfolio.ts');
   for (const need of await listNeeds({ projectId, states: ['OPEN'] })) {
     // The typed blocker key names the fact; the request key is the older rows' only record of it.
-    const typed = need.blockerKey?.startsWith('CAPABILITY:') ? need.blockerKey.slice('CAPABILITY:'.length) : null;
-    const keyed = /^capability:.+:([^:]+)$/.exec(need.requestKey ?? '')?.[1] ?? null;
-    const requirementId = typed ?? keyed;
-    if (!requirementId || !wanted.has(requirementId)) continue;
-    out.push({
-      projectId, requirementId, sourceRef: `need:${need.id}`,
-      goal: need.opportunityId ? `opportunity ${need.opportunityId}: ${need.blockedAction}` : need.blockedAction,
-      blockedWorkItemIds: [],
-    });
+    const typed = need.blockerKey && /^capability:/i.test(need.blockerKey) ? capabilityKeyOf(need.blockerKey) : null;
+    const keyedRaw = /^capability:.+:([^:]+)$/.exec(need.requestKey ?? '')?.[1] ?? null;
+    const keyed = keyedRaw ? capabilityKeyOf(keyedRaw) : null;
+    const key = typed && byKey.has(typed) ? typed : keyed && byKey.has(keyed) ? keyed : null;
+    if (!key) continue;
+    for (const requirementId of byKey.get(key)!) {
+      push({
+        projectId, requirementId, sourceRef: `need:${need.id}`,
+        goal: need.opportunityId ? `opportunity ${need.opportunityId}: ${need.blockedAction}` : need.blockedAction,
+        blockedWorkItemIds: [],
+      }, key);
+    }
   }
   return out;
 }
@@ -740,7 +809,7 @@ export async function identifyPreparedDependencies(): Promise<{ identified: numb
   const programDeps = await identifyProgramDependencies();
   for (const [projectId, byReq] of options) {
     const deps: IdentifiedDependency[] = [
-      ...(await identifyDependencies(projectId, [...byReq.keys()])),
+      ...(await identifyDependencies(projectId, byReq)),
       ...programDeps.filter((d) => d.projectId === projectId && byReq.has(d.requirementId)),
     ];
     for (const dep of deps) {
@@ -756,6 +825,7 @@ export async function identifyPreparedDependencies(): Promise<{ identified: numb
           payload: {
             kind: PREPARED_DEPENDENCY_KIND, integration: false, sourceRef: dep.sourceRef, goal: dep.goal,
             blockedWorkItemIds: dep.blockedWorkItemIds,
+            ...(dep.via ? { via: dep.via } : {}),
             permitted: resolution.permitted.map((m) => m.name),
             gated: resolution.gated.map((g) => ({ method: g.method.name, gates: g.gates })),
             minimum: resolution.minimum?.name ?? null,
@@ -830,6 +900,65 @@ export function gatesOfRequirement(r: Pick<ProgramRequirement, 'title' | 'behavi
   return { gates, declared: [...new Set(declared)], detected };
 }
 
+/** A production capability key the producer can recognise in a requirement's words. */
+export interface CapabilityTerm {
+  /** The key real work is blocked on: a cash capability id or a capability-map id. */
+  id: string;
+}
+
+/** Every capability-map id (`<MAP>.<requirement>`), the key space `CAPABILITY:<map>.<id>` blocker keys use. */
+export function capabilityMapTerms(): CapabilityTerm[] {
+  return Object.values(CAPABILITY_MAPS).flatMap((m) => m.requirements.map((r) => ({ id: `${m.key}.${r.id}` })));
+}
+
+/**
+ * The capability vocabulary production work is blocked in, read from its
+ * owners rather than listed here: the cash capabilities and deliverable
+ * capabilities (`cash_needs.blocker_key` = `CAPABILITY:<id>`) and every
+ * capability-map id. Async because the cash vocabulary loads its own owners.
+ */
+export async function productionCapabilityTerms(): Promise<CapabilityTerm[]> {
+  const { CAPABILITIES, DELIVERABLE_CAPABILITIES } = await import('../cash/capabilities.ts');
+  return [...CAPABILITIES, ...DELIVERABLE_CAPABILITIES].map((c) => ({ id: c.id })).concat(capabilityMapTerms());
+}
+
+const DECLARED_CAPABILITY = /^\s*capability\s+((?:capability:)?[A-Za-z0-9_.-]+)\s*(?::|$)/i;
+
+/**
+ * The production capability keys a program requirement provides (finding F2),
+ * from its own fields, so the option recorded for it is found when real work
+ * is blocked on one of them:
+ *  - declared: a constraint `Capability <KEY>: <why>` (the map writes these; a
+ *    person adds one by amendment) — any key, in the vocabulary or not, since
+ *    an opportunity may require a capability nobody has described yet;
+ *  - named: a term of `vocabulary` the requirement's words name, either as the
+ *    key itself (`RESEARCH.ACCESS.READ`, `SEND_A_MESSAGE`) or as its words
+ *    (`send a message`), whole words only.
+ * Pure. The vocabulary is data from the capability owners, never a whitelist:
+ * a declared key outside it is kept.
+ */
+export function capabilitiesOfRequirement(
+  r: Pick<ProgramRequirement, 'title' | 'behavior' | 'missingWork' | 'constraints'>,
+  vocabulary: readonly CapabilityTerm[] = capabilityMapTerms(),
+): { capabilities: string[]; declared: string[]; named: string[] } {
+  const declared: string[] = [];
+  const rest: string[] = [];
+  for (const c of r.constraints ?? []) {
+    const m = DECLARED_CAPABILITY.exec(c);
+    if (m) declared.push(capabilityKeyOf(m[1]!.replace(/[.]+$/, '')));
+    else rest.push(c);
+  }
+  const words = [r.title, r.behavior, r.missingWork, ...rest].join('\n');
+  const escape = (t: string): string => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const named = [...new Set(vocabulary.map((t) => capabilityKeyOf(t.id)).filter(Boolean))].filter((id) => {
+    const asKey = new RegExp(`(^|[^A-Za-z0-9_.])${escape(id)}(?![A-Za-z0-9_]|\\.[A-Za-z0-9_])`, 'i');
+    const phrase = id.includes('.') ? null : id.toLowerCase().split('_').filter(Boolean).join(' ');
+    const asWords = phrase && phrase.includes(' ') ? new RegExp(`\\b${escape(phrase).replace(/ /g, '\\s+')}\\b`, 'i') : null;
+    return asKey.test(words) || (asWords !== null && asWords.test(words));
+  });
+  return { capabilities: [...new Set([...declared, ...named])], declared: [...new Set(declared)], named };
+}
+
 /**
  * A program requirement marked `prepared` is the approved specification's own
  * record of a dormant capability: specified and kept ready, not yet needed
@@ -849,13 +978,14 @@ export function gatesOfRequirement(r: Pick<ProgramRequirement, 'title' | 'behavi
  *  - the source inventory is the source items and the existing evidence paths.
  * Pure. The option is a record, and never an integration.
  */
-export function preparedOptionFromRequirement(r: ProgramRequirement): PreparedOption {
+export function preparedOptionFromRequirement(r: ProgramRequirement, vocabulary?: readonly CapabilityTerm[]): PreparedOption {
   const workPaths = r.paths;
   const existingPaths = r.existing?.paths ?? [];
   const reused = r.existing !== null && existingPaths.length > 0;
   const over = (paths: readonly string[]) => (paths.length ? paths.join(', ') : `the ${r.subsystem} subsystem`);
   const note = (r.missingWork || r.behavior || r.title).trim() || r.key;
   const { gates } = gatesOfRequirement(r);
+  const { capabilities } = capabilitiesOfRequirement(r, vocabulary);
   const sketch = [
     r.behavior.trim(),
     r.inputs.length ? `inputs: ${r.inputs.join('; ')}` : '',
@@ -885,11 +1015,12 @@ export function preparedOptionFromRequirement(r: ProgramRequirement): PreparedOp
     methods,
     ...(sketch ? { interfaceSketch: { text: sketch, tested: false } } : {}),
     sourceInventory: [...r.source.map((s) => `source item ${s}`), ...existingPaths],
+    ...(capabilities.length ? { capabilities } : {}),
   });
 }
 
 /** Bumped when the producer reads a requirement differently, so options recorded by an older reading are recorded again. */
-export const PROGRAM_OPTION_PRODUCER_VERSION = 2;
+export const PROGRAM_OPTION_PRODUCER_VERSION = 3;
 
 /**
  * Record every prepared requirement of every approved program as a prepared
@@ -900,6 +1031,7 @@ export const PROGRAM_OPTION_PRODUCER_VERSION = 2;
 export async function recordProgramPreparedOptions(): Promise<{ recorded: number }> {
   const { listPrograms, getMap } = await import('../../repos/factoryProgram.ts');
   let recorded = 0;
+  let vocabulary: CapabilityTerm[] | null = null;
   for (const program of await listPrograms(['APPROVED'])) {
     const installed = await getMap(program.id);
     if (!installed) continue;
@@ -921,7 +1053,8 @@ export async function recordProgramPreparedOptions(): Promise<{ recorded: number
     for (const requirement of prepared) {
       if (seen.has(`${requirement.key}\u0000${String(installed.version)}`)) continue;
       let option: PreparedOption;
-      try { option = preparedOptionFromRequirement(requirement); } catch { continue; }
+      vocabulary ??= await productionCapabilityTerms();
+      try { option = preparedOptionFromRequirement(requirement, vocabulary); } catch { continue; }
       await recordPreparedOption(program.projectId, option, { source: PROGRAM_MAP_ORIGIN, programId: program.id, mapVersion: installed.version, producerVersion: PROGRAM_OPTION_PRODUCER_VERSION });
       recorded += 1;
     }
