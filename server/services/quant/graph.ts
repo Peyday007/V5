@@ -9,7 +9,7 @@
  * Everything here is pure. Nothing reads a clock, a table or the network, and
  * no scheduler, queue or store is created: callers keep a graph where they
  * already keep state. Randomness comes from the seeded generator the scenario
- * engine already owns.
+ * engine already owns, through the portfolio evaluator.
  *
  *   * Actions carry prerequisites, actor, permissions, effect, timing, external
  *     dependencies, evidence and an observable completion condition, or they
@@ -30,7 +30,7 @@
  *     a resource fail together rather than being summed at their best case.
  *   * A claim replaced by new information keeps its history.
  */
-import { makeRng } from '../scenario/random.ts';
+import { evaluateCombination } from './portfolio.ts';
 
 /* ------------------------------------------------------------------------- */
 /* Open vocabulary                                                           */
@@ -431,6 +431,12 @@ export interface PortfolioReading {
  * probability for the period; a stream earns nothing when any resource it
  * needs has failed. Seeded, so the same inputs give the same answer. A resource
  * with no stated failure probability is refused rather than assumed reliable.
+ *
+ * This is a view, not a second evaluator: each stream becomes an activity
+ * that `needs` its resources and the combination is evaluated by
+ * `evaluateCombination` in `quant/portfolio.ts`, over the same world drawing
+ * the portfolio optimizer uses — so shared-resource and correlated failure
+ * (CAUSAL-14-3) have one owner and cannot drift.
  */
 export function evaluatePortfolio(
   streams: readonly Stream[],
@@ -438,29 +444,34 @@ export function evaluatePortfolio(
   seed: number,
   trials = 4000,
 ): PortfolioReading | { missing: string[] } {
-  const needed = [...new Set(streams.flatMap((one) => one.resources))];
-  const missing = needed.filter((id) => !(id in failureProbability) || !(failureProbability[id]! >= 0 && failureProbability[id]! <= 1));
-  if (missing.length > 0) return { missing };
-  const rng = makeRng(seed);
   const naiveSumCents = streams.reduce((sum, one) => sum + one.bestCaseCents, 0);
-  let total = 0;
-  let allUp = 0;
-  let halfLoss = 0;
-  for (let t = 0; t < trials; t++) {
-    const down = new Set(needed.filter((id) => rng() < (failureProbability[id] as number)));
-    const earned = streams.reduce((sum, one) => sum + (one.resources.some((id) => down.has(id)) ? 0 : one.bestCaseCents), 0);
-    total += earned;
-    if (down.size === 0) allUp++;
-    if (earned <= naiveSumCents / 2) halfLoss++;
-  }
+  const reading = evaluateCombination(
+    {
+      activities: streams.map((one) => ({
+        key: one.id,
+        label: one.id,
+        cash: [one.bestCaseCents],
+        days: [0],
+        justified: true,
+        needs: [...new Set(one.resources)],
+      })),
+      target: naiveSumCents,
+      deadlineDays: 0,
+      resourceFailure: failureProbability,
+      worlds: trials,
+      seed,
+    },
+    naiveSumCents / 2,
+  );
+  if ('missing' in reading) return reading;
   const uses = new Map<string, number>();
   for (const one of streams) for (const id of new Set(one.resources)) uses.set(id, (uses.get(id) ?? 0) + 1);
   return {
     naiveSumCents,
-    expectedCents: Math.round(total / trials),
-    allUpProbability: allUp / trials,
-    halfLossProbability: halfLoss / trials,
-    trials,
+    expectedCents: Math.round(reading.settledMean),
+    allUpProbability: reading.allNeedsUp,
+    halfLossProbability: reading.shareAtOrBelow ?? 0,
+    trials: reading.worlds,
     shared: [...uses].filter(([, n]) => n > 1).map(([id]) => id).sort(),
   };
 }

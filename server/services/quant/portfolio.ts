@@ -17,6 +17,11 @@
  *     starting capital plus cash already settled by its start day covers what
  *     it ties up, otherwise it does not run in that world;
  *   * only cash that settles by the deadline counts toward the target.
+ *   * a resource an activity needs (a platform, a supplier) is drawn up or down
+ *     once per world, so every activity that needs it fails in the same
+ *     worlds; streams sharing a resource are never summed at their best case.
+ *     `quant/graph.ts` reads shared-resource streams through this evaluator,
+ *     so there is one treatment of shared capacity, risk and failure.
  *
  * Search is exhaustive over subsets up to `EXHAUSTIVE_LIMIT` activities and
  * greedy beyond it. The answer is a share of worlds; it is a probability only
@@ -44,6 +49,14 @@ export interface Activity {
   riskGroup?: string;
   /** Keys it cannot run alongside (one market, one buyer, one slot). */
   excludes?: string[];
+  /**
+   * Resources it cannot run without (a platform, a supplier, a licence). In a
+   * world where any of them has failed it settles nothing and the capital it
+   * tied up does not come back. Each needs a failure probability in the
+   * problem's `resourceFailure`; one without is refused, never assumed reliable.
+   * Activities needing the same resource fail together in the same worlds.
+   */
+  needs?: string[];
   /**
    * Money it pays out in each world, paired with `cash` by index (what it buys
    * to fulfil, what it pays a subcontractor, what it spends to reach buyers).
@@ -88,6 +101,8 @@ export interface PortfolioProblem {
   riskCorrelation?: Record<string, number>;
   /** Total money the combination may pay out in one world. A world over it does not reach the target. */
   spendCeiling?: number;
+  /** Probability, for the period, that a resource some activity `needs` fails. */
+  resourceFailure?: Record<string, number>;
   /** Controls to quantify against the best combination, over the same worlds. */
   safeguards?: Safeguard[];
   worlds?: number;
@@ -168,8 +183,46 @@ function seedOf(text: string): number {
   return h >>> 0;
 }
 
-/** Each activity's sample index per world, drawn once so every combination sees the same worlds. */
-function drawWorlds(problem: PortfolioProblem, worlds: number): number[][] {
+/**
+ * Every world, drawn once so every combination sees the same worlds: each
+ * activity's sample index, and which needed resources are down. A resource is
+ * drawn once per world, so every activity needing it fails in the same world.
+ */
+interface Worlds {
+  picks: number[][];
+  /** Resource → 1 in the worlds where it has failed. */
+  down: Map<string, Uint8Array>;
+}
+
+/** Resources some activity needs whose failure probability is absent or impossible. */
+export function missingResourceFailure(problem: PortfolioProblem): string[] {
+  const needed = [...new Set(problem.activities.flatMap((one) => one.needs ?? []))];
+  return needed.filter((id) => {
+    const p = problem.resourceFailure?.[id];
+    return p === undefined || !(p >= 0 && p <= 1);
+  });
+}
+
+function drawOutages(problem: PortfolioProblem, worlds: number): Map<string, Uint8Array> {
+  const seed = problem.seed ?? 20261031;
+  const missing = missingResourceFailure(problem);
+  if (missing.length > 0) throw new Error(`No failure probability is stated for ${missing.join(', ')}.`);
+  const down = new Map<string, Uint8Array>();
+  for (const id of [...new Set(problem.activities.flatMap((one) => one.needs ?? []))].sort()) {
+    const p = problem.resourceFailure![id]!;
+    const rng = makeRng(seed, seedOf(`resource:${id}`));
+    const out = new Uint8Array(worlds);
+    for (let i = 0; i < worlds; i++) out[i] = rng() < p ? 1 : 0;
+    down.set(id, out);
+  }
+  return down;
+}
+
+function drawWorlds(problem: PortfolioProblem, worlds: number): Worlds {
+  return { picks: drawPicks(problem, worlds), down: drawOutages(problem, worlds) };
+}
+
+function drawPicks(problem: PortfolioProblem, worlds: number): number[][] {
   const seed = problem.seed ?? 20261031;
   const groups = new Map<string, Float64Array>();
   const factor = (group: string) => {
@@ -221,11 +274,26 @@ function round(x: number): number {
   return Math.round(x * 100) / 100;
 }
 
-function evaluate(problem: PortfolioProblem, members: number[], picks: number[][], worlds: number): PortfolioReading {
+function evaluate(problem: PortfolioProblem, members: number[], drawn: Worlds, worlds: number): PortfolioReading {
+  return evaluateWorlds(problem, members, drawn, worlds).reading;
+}
+
+interface WorldsReading {
+  reading: PortfolioReading;
+  /** Settled cash per world, ascending. Empty when the combination cannot run. */
+  settled: number[];
+  /** Share of worlds in which no resource any member needs has failed. */
+  allNeedsUp: number;
+}
+
+function evaluateWorlds(problem: PortfolioProblem, members: number[], drawn: Worlds, worlds: number): WorldsReading {
+  const { picks, down } = drawn;
   const keys = members.map((m) => problem.activities[m]!.key);
   const refusal = refuse(problem, members);
   const justified = members.every((m) => problem.activities[m]!.justified);
-  if (refusal) return { keys, reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, capitalShort: 0, overSpend: 0, feasible: false, infeasibleBecause: refusal, basis: justified ? 'PROBABILITY' : 'COVERAGE' };
+  if (refusal) return { reading: { keys, reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, capitalShort: 0, overSpend: 0, feasible: false, infeasibleBecause: refusal, basis: justified ? 'PROBABILITY' : 'COVERAGE' }, settled: [], allNeedsUp: 0 };
+  const memberNeeds = [...new Set(members.flatMap((m) => problem.activities[m]!.needs ?? []))];
+  let allUp = 0;
   const ordered = [...members].sort((a, b) => (problem.activities[a]!.startDay ?? 0) - (problem.activities[b]!.startDay ?? 0));
   const settled = new Float64Array(worlds);
   let reached = 0;
@@ -238,6 +306,7 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
     let wasShort = false;
     let spent = 0;
     pending.length = 0;
+    if (memberNeeds.every((id) => down.get(id)![i] === 0)) allUp += 1;
     for (const m of ordered) {
       const act = problem.activities[m]!;
       const s = picks[m]![i]!;
@@ -255,6 +324,8 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
         continue;
       }
       capital -= need;
+      // A needed resource is down in this world: nothing settles, and the capital tied up is not recovered.
+      if ((act.needs ?? []).some((id) => down.get(id)![i] === 1)) continue;
       const day = start + act.days[s]!;
       // Capital comes back with the cash it earned.
       const cash = act.cash[s]!;
@@ -270,7 +341,38 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
   }
   const sorted = Array.from(settled).sort((a, b) => a - b);
   const q = (p: number) => sorted[Math.min(worlds - 1, Math.floor(p * worlds))]!;
-  return { keys, reach: reached / worlds, settledP10: q(0.1), settledP50: q(0.5), settledP90: q(0.9), capitalShort: short / worlds, overSpend: over / worlds, feasible: true, infeasibleBecause: null, basis: justified ? 'PROBABILITY' : 'COVERAGE' };
+  return {
+    reading: { keys, reach: reached / worlds, settledP10: q(0.1), settledP50: q(0.5), settledP90: q(0.9), capitalShort: short / worlds, overSpend: over / worlds, feasible: true, infeasibleBecause: null, basis: justified ? 'PROBABILITY' : 'COVERAGE' },
+    settled: sorted,
+    allNeedsUp: allUp / worlds,
+  };
+}
+
+export interface CombinationReading extends PortfolioReading {
+  /** Mean settled cash across worlds. */
+  settledMean: number;
+  /** Share of worlds in which every resource some member needs is up. */
+  allNeedsUp: number;
+  /** Share of worlds settling at or below `atOrBelow`, when it was asked for. */
+  shareAtOrBelow: number | null;
+  worlds: number;
+}
+
+/**
+ * Evaluate every activity of the problem running together, over the same
+ * drawn worlds the optimizer uses — the one evaluator for shared capacity,
+ * shared risk and shared resource failure. Refuses a needed resource with no
+ * stated failure probability rather than assuming it reliable.
+ */
+export function evaluateCombination(problem: PortfolioProblem, atOrBelow?: number): CombinationReading | { missing: string[] } {
+  const missing = missingResourceFailure(problem);
+  if (missing.length > 0) return { missing };
+  const worlds = problem.worlds ?? DEFAULT_WORLDS;
+  const members = problem.activities.map((_, i) => i);
+  const { reading, settled, allNeedsUp } = evaluateWorlds(problem, members, drawWorlds(problem, worlds), worlds);
+  const settledMean = settled.length ? settled.reduce((sum, x) => sum + x, 0) / settled.length : 0;
+  const shareAtOrBelow = atOrBelow === undefined || !settled.length ? null : settled.filter((x) => x <= atOrBelow + 1e-9).length / settled.length;
+  return { ...reading, settledMean, allNeedsUp, shareAtOrBelow, worlds };
 }
 
 function better(a: PortfolioReading, b: PortfolioReading): number {
@@ -282,6 +384,8 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
   const worlds = problem.worlds ?? DEFAULT_WORLDS;
   const n = problem.activities.length;
   if (n === 0) return { best: null, ranked: [], singles: [], refused: [], searched: 0 };
+  const missing = missingResourceFailure(problem);
+  if (missing.length > 0) throw new Error(`No failure probability is stated for ${missing.join(', ')}.`);
   const picks = drawWorlds(problem, worlds);
   const readings: PortfolioReading[] = [];
   const refused: PortfolioResult['refused'] = [];
@@ -380,7 +484,7 @@ export function assess(problem: PortfolioProblem, best: PortfolioReading | null)
 }
 
 /** Re-evaluates `members` with a safeguard applied, over the very same drawn worlds. */
-function withSafeguard(problem: PortfolioProblem, guard: Safeguard, members: number[], worlds: number, picks: number[][]): PortfolioReading {
+function withSafeguard(problem: PortfolioProblem, guard: Safeguard, members: number[], worlds: number, picks: Worlds): PortfolioReading {
   const activities = problem.activities.map((one) => {
     let next = one;
     if (guard.decorrelate?.includes(one.key) && one.riskGroup) next = { ...next, riskGroup: undefined };
@@ -392,6 +496,6 @@ function withSafeguard(problem: PortfolioProblem, guard: Safeguard, members: num
   const startingCapital = problem.startingCapital === undefined ? undefined : problem.startingCapital + (guard.capitalBonus ?? 0);
   const adjusted: PortfolioProblem = { ...problem, activities, capacity, startingCapital };
   // Decorrelating changes how worlds are drawn, so redraw only then; every other safeguard reuses the same picks.
-  const usePicks = guard.decorrelate?.length ? drawWorlds(adjusted, worlds) : picks;
+  const usePicks = guard.decorrelate?.length ? { picks: drawPicks(adjusted, worlds), down: picks.down } : picks;
   return evaluate(adjusted, members, usePicks, worlds);
 }
