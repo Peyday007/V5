@@ -1365,17 +1365,40 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   if (result.status === 'AWAITING_REPAIR') {
     const fragments = await currentFragments(orchestrationId);
-    const waiting = fragments.some((fragment) => fragment.nextRetryAt !== null);
+    /*
+     * A retry time is a wait only while it is still ahead. One that has passed
+     * is a repair that is due: reading it as a wait left the packet live, idle
+     * and holding its slot until the progress deadline wrote its research off
+     * as FAILED — a due, still-allowed repair lost instead of run.
+     */
+    const now = queueNow();
+    const waiting = fragments.some((fragment) => fragment.nextRetryAt !== null && fragment.nextRetryAt > now);
     if (waiting) return result;
     /*
-     * Reachable now only through a race — the verdict branch asks
-     * `assessRepairs` before it writes AWAITING_REPAIR — so when it does happen
-     * it names the refusals rather than only that nothing is pending.
+     * Nothing is scheduled to return, so the one repair answer decides: a
+     * repair it would still mint is minted here and the packet moves on; one
+     * it refuses parks the packet with those refusals in its words.
      */
     const orchestration = await getOrchestration(orchestrationId);
     const repairs = orchestration
       ? await assessRepairs({ orchestration, fragments })
       : { mintable: [], refused: [] };
+    if (orchestration && repairs.mintable.length > 0) {
+      let minted = 0;
+      try {
+        minted = await mintRepairs({ orchestration, fragments, items: live });
+      } catch (error) {
+        if (!(error instanceof RepairRefusedByGrant)) throw error;
+        const reason =
+          `A repair attempt for ${error.fragmentKey} was refused by the permission this packet ` +
+          `runs under: ${error.detail}. Nothing was researched or spent on it, and every earlier ` +
+          'attempt and accepted claim is kept. Renewing or extending that permission lets the ' +
+          'repair run on the next tick; stopping the work is the other answer.';
+        await parkOrchestration(orchestrationId, reason, { stampCompleted: true });
+        return { ...result, status: 'NEEDS_HUMAN', waitingOn: `a person: ${reason}` };
+      }
+      if (minted > 0) return await advancePacket(orchestrationId);
+    }
     const detail = repairs.refused.map((entry) => entry.reason).join('; ');
     await parkOrchestration(orchestrationId,
         'The packet was left awaiting a repair that has no claimable work and no scheduled ' +
@@ -2801,9 +2824,11 @@ export async function advanceIdlePackets(
  * and a `RESEARCH_BLOCKED` event. So does a packet behind a mission, by the same
  * rule `advancePacket` applies when no fragment clears its gate: only a goal
  * round with no mission ends FAILED, and a packet behind a mission parks,
- * because a mission's park has a person and a card. The stall this was built for is
- * AWAITING_REPAIR with a fragment whose `nextRetryAt` has already passed:
- * `advancePacket` reads any retry time as a wait.
+ * because a mission's park has a person and a card. A repair whose `nextRetryAt`
+ * has already passed is not such a packet: `advancePacket` treats it as due and
+ * mints it or parks with the repair answer's refusals, so this deadline is the
+ * backstop only for a packet whose advance genuinely cannot move it (an advance
+ * that fails every time, or a state nothing else resolves).
  *
  * Everything else is concluded through the transition a packet that cannot go
  * on already takes, FAILED with its reason, plus a `RESEARCH_FAILED` event.
