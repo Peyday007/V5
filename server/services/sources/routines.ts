@@ -23,6 +23,12 @@
  * routine is never authorization to sign in, solve a challenge or ignore
  * robots.txt. The read path still checks the destination and robots before it
  * runs a routine, exactly as it does for any other route.
+ *
+ * A routine here is a *read* route. Operating a site, meaning a bounded workflow
+ * of navigation, search, filtering, form entry and download handling under a
+ * granted account, with reliable locators and explicit success checks, is
+ * `browserWorkflow.ts`. Its reusable routines are recorded workflows. A
+ * model-assisted draft becomes a tested script there after running unchanged.
  */
 import type { AccessAttempt, AccessMethod } from './access.ts';
 import type { MethodClass } from './accessMethods.ts';
