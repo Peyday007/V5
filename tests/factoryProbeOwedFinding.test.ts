@@ -16,7 +16,7 @@ import {
 } from '../server/repos/factory.ts';
 import { listFindings, recordReview } from '../server/repos/factoryFleet.ts';
 import { getDb } from '../server/db/database.ts';
-import { queueRepairs } from '../server/services/factory/repair.ts';
+import { isProtectedVerificationPath, queueRepairs } from '../server/services/factory/repair.ts';
 
 const REPO = 'https://github.com/Peyday007/oakwood-junk-removal';
 const BASE = 'a'.repeat(40);
@@ -149,5 +149,18 @@ describe('a finding only the protected probes module can answer', () => {
     const [finding] = await listFindings(campaign.id);
     expect(finding?.state).toBe('ACCEPTED_LIMITATION');
     expect(finding?.resolution).toMatch(/owed by the platform/);
+  });
+});
+
+describe('a protected path named short of the repository root', () => {
+  it('is still the protected verification path (capacity-d0-p0 named "factory/program/probes.ts")', () => {
+    expect(isProtectedVerificationPath('server/services/factory/program/probes.ts')).toBe(true);
+    expect(isProtectedVerificationPath('factory/program/probes.ts')).toBe(true);
+    expect(isProtectedVerificationPath('program/probes.ts')).toBe(true);
+    expect(isProtectedVerificationPath('domain/factoryProgram.ts')).toBe(true);
+    expect(isProtectedVerificationPath('./factory/program/release01/capacityProbe.ts')).toBe(true);
+    expect(isProtectedVerificationPath('freeLane/worker.ts')).toBe(false);
+    expect(isProtectedVerificationPath('factory/repair.ts')).toBe(false);
+    expect(isProtectedVerificationPath('probes.ts')).toBe(false);
   });
 });

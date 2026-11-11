@@ -726,9 +726,22 @@ export async function gatingFindings(campaignId: string): Promise<FactoryFinding
   return findings.filter((finding) => GATING_SEVERITIES.has(finding.severity));
 }
 
-/** A file only the program's protected verification module may change. */
+/**
+ * A file only the program's protected verification module may change. A finding
+ * often names a path short of the repository root ("factory/program/probes.ts"
+ * on production, 2026-11-11, capacity-d0-p0), so the path is also read as the
+ * tail of a protected one: completed by each leading part of a protected glob.
+ */
 export function isProtectedVerificationPath(path: string): boolean {
-  return PROTECTED_VERIFICATION_PATHS.some((glob) => glob === path || matchesGlob(path, glob));
+  const clean = path.replace(/^\.?\//, '');
+  return PROTECTED_VERIFICATION_PATHS.some((glob) => {
+    if (glob === clean || matchesGlob(clean, glob) || glob.endsWith(`/${clean}`)) return true;
+    const parts = glob.replace(/\/\*\*$/, '').split('/');
+    for (let i = 1; i < parts.length; i += 1) {
+      if (matchesGlob(`${parts.slice(0, i).join('/')}/${clean}`, glob)) return true;
+    }
+    return false;
+  });
 }
 
 /**
