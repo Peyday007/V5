@@ -438,3 +438,323 @@ export function aftercareEvidence(reading: AftercareReading): { partyId: string;
     })
     .sort((a, b) => a.partyId.localeCompare(b.partyId));
 }
+
+/* ---------------------------------------------------------------------------
+ * The running Brain: realization read from rows, on the journey tick
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Everything above is a derivation; this is where the running Brain consumes it.
+ *
+ *   * `realizationInputsFromRows` turns one deal's rows into the derivation's
+ *     inputs. The scope is each live agreement's stated deliverable; the
+ *     fulfiller is the obligation's declared performer (`journey/fulfillment.ts`
+ *     `declare`) — a Brain capability for SOFTWARE and RESEARCH, read live from
+ *     `capabilities.ts`, the named supplier for SUPPLIER, the named person for
+ *     PERSON, whose responsibility stays with them. A performer whose name is the
+ *     deal's payer is the buyer named as fulfiller, and is refused. Deliveries and
+ *     acceptances are the obligation's own `DELIVERED` / `ACCEPTED` / `REJECTED`
+ *     events with their evidence and times; the accounting is the deal's position
+ *     (`journey/position.ts`), the same figures every surface reads.
+ *   * `recordRealization` (called by the journey tick) appends the reading to
+ *     `cash_events` as `realization.read` whenever it differs from the last one on
+ *     record, and appends each repeat-business signal the rows show as
+ *     `aftercare.recorded` once, keyed by the rows that show it.
+ *   * `recordAftercareEvent` is the write path for a relationship a person or an
+ *     adapter states (a satisfaction rating, a renewal, a referral), validated by
+ *     `recordAftercare` and appended to the same event kind.
+ *   * `repeatBusinessObservations` is what deal construction (`construct.ts`)
+ *     reads: every stated value of repeat business, as an `Observation` about the
+ *     payer it was with, so a buyer who came back is evidence about what that
+ *     buyer pays — never an assumption that any other buyer will.
+ *
+ * No new table, scheduler or authority: the rows are the obligation, the ledger
+ * and `cash_events`, and the tick that writes them is the existing journey tick.
+ */
+
+export const REALIZATION_EVENT = 'realization.read';
+export const AFTERCARE_EVENT = 'aftercare.recorded';
+
+/** The capability a declared fulfilment kind asks Brain to hold; none for a person or a supplier. */
+export const KIND_CAPABILITY: Readonly<Record<string, string | null>> = {
+  SOFTWARE: 'BUILD_SOFTWARE',
+  RESEARCH: 'RESEARCH_A_QUESTION',
+  PERSON: null,
+  SUPPLIER: null,
+};
+
+const normName = (text: string | null | undefined) => (text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** One live agreement and what its obligation's rows say, as the derivation reads it. Pure. */
+export interface RowObligation {
+  agreementId: string;
+  deliverable: string;
+  agreementState: string;
+  fulfillment: { kind: string; performer: string; supplierName: string | null } | null;
+  events: { kind: string; evidenceRef: string | null; detail: string; createdAt: string }[];
+}
+
+export interface RealizationInputs {
+  scope: ScopeItem[];
+  parties: Party[];
+  deliveries: DeliveryRecord[];
+  acceptances: AcceptanceRecord[];
+  redos: RedoObligation[];
+  buyerId: string;
+}
+
+/** Build the derivation's inputs from one deal's rows. Pure, so it is tested without a database. */
+export function realizationInputsFromRows(input: { opportunityId: string; payer: string | null; obligations: RowObligation[] }): RealizationInputs {
+  const buyerId = `buyer:${input.opportunityId}`;
+  const buyer: Party = { id: buyerId, name: input.payer?.trim() || 'the buyer', role: 'BUYER', canPerform: [] };
+  const parties: Party[] = [buyer];
+  const scope: ScopeItem[] = [];
+  const deliveries: DeliveryRecord[] = [];
+  const acceptances: AcceptanceRecord[] = [];
+  for (const o of input.obligations) {
+    if (o.agreementState !== 'AGREED') continue; // a released agreement promises nothing any more
+    const item: ScopeItem = { key: o.agreementId, promise: o.deliverable };
+    const f = o.fulfillment;
+    if (f) {
+      const capability = KIND_CAPABILITY[f.kind] ?? null;
+      if (capability) item.capabilityId = capability;
+      const performer = (f.kind === 'SUPPLIER' ? f.supplierName || f.performer : f.performer).trim();
+      const isBuyer = !!input.payer && normName(performer) !== '' && normName(performer) === normName(input.payer);
+      if (isBuyer) buyer.canPerform!.push(o.agreementId);
+      else if (f.kind === 'SUPPLIER') parties.push({ id: `supplier:${o.agreementId}`, name: performer, role: 'SUPPLIER', canPerform: [o.agreementId] });
+      else if (f.kind === 'PERSON') {
+        // A person was stated as performing it: the responsibility is theirs and stays theirs.
+        item.accountable = true;
+        parties.push({ id: `person:${o.agreementId}`, name: performer, role: 'PERSON', canPerform: [o.agreementId] });
+      }
+    }
+    scope.push(item);
+    for (const e of o.events) {
+      if (e.kind === 'DELIVERED') deliveries.push({ stepKey: o.agreementId, deliveredAt: e.createdAt, evidence: e.evidenceRef ?? '' });
+      else if (e.kind === 'ACCEPTED' || e.kind === 'REJECTED') {
+        acceptances.push({ stepKey: o.agreementId, outcome: e.kind, at: e.createdAt, evidence: e.evidenceRef ?? (e.kind === 'REJECTED' ? e.detail : ''), reason: e.kind === 'REJECTED' ? e.detail : undefined });
+      }
+    }
+  }
+  return { scope, parties, deliveries, acceptances, redos: [], buyerId };
+}
+
+/** What `realization.read` stores, and what the probe recomputes and compares. */
+export interface StoredRealization {
+  fingerprint: string;
+  buyerId: string;
+  scopeKeys: string[];
+  plan: DeliveryPlan;
+  reading: RealizationReading;
+  /** The position's own contribution: the truthful accounting result every surface reads. */
+  positionContributionCents: number | null;
+  aftercare: { evidence: number; repeatPartyIds: string[]; statedRepeatValueCents: number | null };
+}
+
+async function fingerprintOf(value: unknown): Promise<string> {
+  const { createHash } = await import('node:crypto');
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 24);
+}
+
+/** Read one deal's realization from its rows, now. Writes nothing. */
+export async function readDealRealization(input: { projectId: string; opportunityId: string; currency: string }): Promise<StoredRealization | null> {
+  const { getOpportunity } = await import('../../../repos/cashPortfolio.ts');
+  const { agreementsFor } = await import('../../../repos/cashJourney.ts');
+  const { fulfillmentForAgreement, fulfillmentEvents } = await import('../../../repos/cashFulfillment.ts');
+  const { dealPosition } = await import('../journey/position.ts');
+  const opportunity = await getOpportunity(input.opportunityId);
+  if (!opportunity || opportunity.projectId !== input.projectId) return null;
+  const obligations: RowObligation[] = [];
+  for (const agreement of await agreementsFor(opportunity.id)) {
+    if (agreement.currency !== input.currency) continue;
+    const fulfillment = await fulfillmentForAgreement(agreement.id);
+    const events = fulfillment ? await fulfillmentEvents(fulfillment.id) : [];
+    obligations.push({
+      agreementId: agreement.id,
+      deliverable: agreement.deliverable,
+      agreementState: agreement.state,
+      fulfillment: fulfillment ? { kind: fulfillment.kind, performer: fulfillment.performer, supplierName: fulfillment.supplierName } : null,
+      events: events.map((e) => ({ kind: e.kind, evidenceRef: e.evidenceRef, detail: e.detail, createdAt: e.createdAt })),
+    });
+  }
+  const inputs = realizationInputsFromRows({ opportunityId: opportunity.id, payer: opportunity.payer, obligations });
+  const plan = deriveDeliveryPlan({ scope: inputs.scope, parties: inputs.parties, readings: await readScopeCapabilities(inputs.scope) });
+  const position = await dealPosition({ opportunity, currency: input.currency });
+  const reading = readRealization({
+    plan,
+    deliveries: inputs.deliveries,
+    acceptances: inputs.acceptances,
+    redos: inputs.redos,
+    accounting: {
+      billedCents: position.pnl.invoicedCents,
+      receivedCents: position.pnl.customerPaymentsCents,
+      refundedCents: position.pnl.refundsCents,
+      costCents: position.pnl.incrementalCostsCents + position.pnl.unpaidCommitmentsCents,
+    },
+  });
+  const aftercare = recordAftercare(await aftercareRecordsFor(input.projectId, opportunity.id));
+  const body = {
+    buyerId: inputs.buyerId,
+    scopeKeys: inputs.scope.map((s) => s.key),
+    plan,
+    reading,
+    positionContributionCents: position.pnl.contributionCents,
+    aftercare: { evidence: aftercare.evidence.length, repeatPartyIds: aftercare.repeatPartyIds, statedRepeatValueCents: aftercare.statedRepeatValueCents },
+  };
+  return { fingerprint: await fingerprintOf(body), ...body };
+}
+
+interface StoredAftercare extends AftercareRecord {
+  recordKey: string;
+  payer: string | null;
+}
+
+/** The aftercare records on file for one deal, as `recordAftercare` reads them. */
+async function aftercareRecordsFor(projectId: string, opportunityId: string): Promise<AftercareRecord[]> {
+  const { cashEventsOfKind } = await import('../../../repos/cashMode.ts');
+  return (await cashEventsOfKind(opportunityId, AFTERCARE_EVENT))
+    .filter((e) => e.projectId === projectId)
+    .map((e) => e.detail as unknown as StoredAftercare)
+    .filter((d) => d && typeof d.kind === 'string');
+}
+
+/**
+ * Repeat business the rows themselves show: a later agreement with the payer of
+ * a deal whose delivery that payer accepted. The new agreement's amount is the
+ * stated value, and its own evidence is the evidence. Nothing else is inferred —
+ * satisfaction, referrals and the rest are stated through `recordAftercareEvent`.
+ */
+export function repeatSignalsFromRows(input: {
+  deal: { opportunityId: string; payer: string | null; acceptedAt: string | null };
+  laterAgreements: { id: string; opportunityId: string; payer: string | null; amountCents: number; evidenceRef: string; createdAt: string; state: string }[];
+}): StoredAftercare[] {
+  const { deal } = input;
+  if (!deal.acceptedAt || !normName(deal.payer)) return [];
+  return input.laterAgreements
+    .filter((a) => a.opportunityId !== deal.opportunityId && a.state === 'AGREED' && normName(a.payer) === normName(deal.payer) && a.createdAt > deal.acceptedAt!)
+    .map((a) => ({
+      recordKey: `repeat:${deal.opportunityId}:${a.id}`,
+      kind: 'FOLLOW_UP_REQUEST' as const,
+      partyId: `payer:${normName(deal.payer)}`,
+      payer: deal.payer,
+      at: a.createdAt,
+      evidence: `agreement ${a.id} (${a.evidenceRef}) with the same payer after delivery was accepted`,
+      valueCents: a.amountCents,
+      detail: `a further agreement on opportunity ${a.opportunityId}`,
+    }));
+}
+
+/**
+ * Record an aftercare relationship a person or an adapter states. Validated by
+ * `recordAftercare`; a refused record is returned as refused and nothing is
+ * written. Idempotent by `recordKey`.
+ */
+export async function recordAftercareEvent(input: {
+  projectId: string;
+  opportunityId: string;
+  record: AftercareRecord;
+  recordKey: string;
+  actorRef: string;
+}): Promise<{ ok: true; created: boolean } | { ok: false; reason: string }> {
+  const { getOpportunity } = await import('../../../repos/cashPortfolio.ts');
+  const { cashEventsOfKind, recordCashEvent } = await import('../../../repos/cashMode.ts');
+  const opportunity = await getOpportunity(input.opportunityId);
+  if (!opportunity || opportunity.projectId !== input.projectId) return { ok: false, reason: 'No opportunity with that id.' };
+  if (!input.recordKey.trim()) return { ok: false, reason: 'An aftercare record needs a key, so a retry is the same record.' };
+  const checked = recordAftercare([input.record]);
+  if (checked.refused.length > 0) return { ok: false, reason: checked.refused.join('; ') };
+  const existing = await cashEventsOfKind(opportunity.id, AFTERCARE_EVENT);
+  if (existing.some((e) => (e.detail as { recordKey?: unknown } | null)?.recordKey === input.recordKey)) return { ok: true, created: false };
+  const stored: StoredAftercare = { ...input.record, recordKey: input.recordKey, payer: opportunity.payer };
+  await recordCashEvent({
+    projectId: input.projectId,
+    opportunityId: opportunity.id,
+    kind: AFTERCARE_EVENT,
+    actorRef: input.actorRef,
+    summary: `${input.record.kind.toLowerCase().replace(/_/g, ' ')}: ${input.record.evidence}`.slice(0, 300),
+    detail: stored as unknown as Record<string, unknown>,
+  });
+  return { ok: true, created: true };
+}
+
+/**
+ * The journey tick's consumer of LIFE-29-2, for one deal with an agreement:
+ * record repeat-business signals the rows show (once each), then append the
+ * realization reading when it differs from the last one on record.
+ */
+export async function recordRealization(input: { projectId: string; opportunityId: string; currency: string }): Promise<{ recorded: boolean; aftercare: number }> {
+  const { getOpportunity } = await import('../../../repos/cashPortfolio.ts');
+  const { agreementsInProject } = await import('../../../repos/cashJourney.ts');
+  const { fulfillmentForAgreement, fulfillmentEvents } = await import('../../../repos/cashFulfillment.ts');
+  const { cashEventsOfKind, recordCashEvent } = await import('../../../repos/cashMode.ts');
+  const opportunity = await getOpportunity(input.opportunityId);
+  if (!opportunity || opportunity.projectId !== input.projectId) return { recorded: false, aftercare: 0 };
+
+  // When this deal's buyer accepted a delivery: the earliest ACCEPTED event on any of its obligations.
+  const all = await agreementsInProject(input.projectId);
+  let acceptedAt: string | null = null;
+  for (const agreement of all.filter((a) => a.opportunityId === opportunity.id)) {
+    const f = await fulfillmentForAgreement(agreement.id);
+    for (const e of f ? await fulfillmentEvents(f.id) : []) {
+      if (e.kind === 'ACCEPTED' && (!acceptedAt || e.createdAt < acceptedAt)) acceptedAt = e.createdAt;
+    }
+  }
+  let aftercare = 0;
+  if (acceptedAt) {
+    const payers = new Map<string, string | null>();
+    for (const a of all) if (!payers.has(a.opportunityId)) payers.set(a.opportunityId, (await getOpportunity(a.opportunityId))?.payer ?? null);
+    const signals = repeatSignalsFromRows({
+      deal: { opportunityId: opportunity.id, payer: opportunity.payer, acceptedAt },
+      laterAgreements: all.map((a) => ({ id: a.id, opportunityId: a.opportunityId, payer: payers.get(a.opportunityId) ?? null, amountCents: a.amountCents, evidenceRef: a.evidenceRef, createdAt: a.createdAt, state: a.state })),
+    });
+    for (const s of signals) {
+      const { recordKey, payer: _payer, ...record } = s;
+      const done = await recordAftercareEvent({ projectId: input.projectId, opportunityId: opportunity.id, record, recordKey, actorRef: 'BRAIN' });
+      if (done.ok && done.created) aftercare += 1;
+    }
+  }
+
+  const reading = await readDealRealization(input);
+  if (!reading) return { recorded: false, aftercare };
+  const last = (await cashEventsOfKind(opportunity.id, REALIZATION_EVENT)).at(-1);
+  if ((last?.detail as { fingerprint?: unknown } | null)?.fingerprint === reading.fingerprint) return { recorded: false, aftercare };
+  const r = reading.reading;
+  await recordCashEvent({
+    projectId: input.projectId,
+    opportunityId: opportunity.id,
+    kind: REALIZATION_EVENT,
+    actorRef: 'BRAIN',
+    summary:
+      `${reading.plan.steps.length} delivery step(s) from the scope (${reading.plan.unassigned.length} unassigned, ${reading.plan.refused.length} refused); ` +
+      `${r.delivered.length} delivered, ${r.accepted.length} accepted, ${r.redoObligations.filter((x) => x.open).length} redo open; ` +
+      (r.realized ? 'realized.' : 'not realized.'),
+    detail: reading as unknown as Record<string, unknown>,
+  });
+  return { recorded: true, aftercare };
+}
+
+/**
+ * What deal construction reads: every aftercare record that states a value of
+ * repeat business, as an observation about the payer it was with. A payer with
+ * none is unknown, never a buyer who will not return.
+ */
+export async function repeatBusinessObservations(projectId: string, currency: string): Promise<import('../../../domain/quant.ts').Observation[]> {
+  const { cashEventsOfKindInProject } = await import('../../../repos/cashMode.ts');
+  const events = await cashEventsOfKindInProject(projectId, AFTERCARE_EVENT);
+  const out: import('../../../domain/quant.ts').Observation[] = [];
+  for (const e of events) {
+    const d = e.detail as unknown as StoredAftercare | null;
+    if (!d || !REPEAT_KINDS.has(d.kind) || !validCents(d.valueCents) || d.valueCents === 0 || !normName(d.payer)) continue;
+    if (recordAftercare([d]).refused.length > 0) continue;
+    out.push({
+      id: `aftercare:${e.id}`,
+      value: { kind: 'POINT', value: d.valueCents / 100 },
+      context: { payer: normName(d.payer), arrangement: 'repeat' },
+      lineage: [`cash_event:${e.id}`],
+      observedAt: e.createdAt,
+      source: { kind: 'CASH_OPPORTUNITY', ref: e.opportunityId ?? e.id },
+      measures: `repeat business (${d.kind.toLowerCase().replace(/_/g, ' ')}) stated with this payer${currency ? ` in ${currency}` : ''}`,
+    });
+  }
+  return out;
+}

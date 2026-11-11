@@ -1,5 +1,5 @@
 /**
- * Production probes for the transaction lifecycle (LIFE-29-1, LIFE-29-3).
+ * Production probes for the transaction lifecycle (LIFE-29-1, LIFE-29-2, LIFE-29-3).
  *
  * Both read rows, never a constructed case:
  *
@@ -18,9 +18,15 @@
  * the tick has not yet recorded, or no rehearsed case at all, is a failure: nothing
  * to look at is not a demonstration (§39).
  *
- * `r01.life-29-2` (delivery plans and aftercare) is not registered: nothing in the
- * running Brain reads `deriveDeliveryPlan` or `recordAftercare` yet, so no row could
- * demonstrate it, and a probe that passed on nothing would be a counterfeit.
+ * `r01.life-29-2` — for every opportunity with a live agreement, the journey tick
+ * has recorded a `realization.read` whose fingerprint equals the reading recomputed
+ * from the rows now (`readDealRealization`): delivery steps derived one per agreed
+ * scope item, no step fulfilled by the buyer, no licensed or accountable step absorbed
+ * by Brain's own capability, every accepted step delivered and accepted with evidence,
+ * "realized" only when every step is accepted and no redo is open, and accounting
+ * figures equal to the deal position's. Every aftercare record that states a value of
+ * repeat business is one deal construction reads (`repeatBusinessObservations`). No
+ * deal with a live agreement is a failure, never a pass on nothing (§39).
  *
  * Registered here because `probes.ts` is a protected path; `exceptions.ts` imports
  * this module so it is registered wherever the journey tick loads.
@@ -28,9 +34,11 @@
 import { getDb } from '../../../db/database.ts';
 import { registerProbe, type ProbeResult } from '../../factory/program/probes.ts';
 import type { CommitmentReading } from './commitments.ts';
+import type { StoredRealization } from './realization.ts';
 
 export const COMMITMENT_PROBE = 'r01.life-29-1';
 export const EXCEPTION_PROBE = 'r01.life-29-3';
+export const REALIZATION_PROBE = 'r01.life-29-2';
 
 interface DealRef {
   project_id: string;
@@ -120,5 +128,74 @@ export async function exceptionsHoldOnRows(): Promise<ProbeResult> {
   return { ok: true, detail: `${detected} exception(s) shown by the rows are all on record; ${demonstrated.length} sourced rehearsal(s) traced including a failure path` };
 }
 
+/** Why a realization reading breaks LIFE-29-2's rules, or null. Pure. */
+export function realizationProblem(r: StoredRealization): string | null {
+  const { plan, reading } = r;
+  if (plan.steps.length !== r.scopeKeys.length) return `derives ${plan.steps.length} delivery step(s) from ${r.scopeKeys.length} scope item(s)`;
+  const keys = new Set(r.scopeKeys);
+  for (const step of plan.steps) {
+    if (!keys.has(step.key)) return `has delivery step ${step.key}, which no agreed scope item states`;
+    if (step.fulfiller && step.fulfiller.ref === r.buyerId) return `names the buyer as fulfiller of ${step.key}`;
+    if (step.responsibility !== null && step.fulfiller?.kind === 'BRAIN_CAPABILITY') return `lets Brain absorb an accountable responsibility on ${step.key}`;
+    if (step.status === 'ASSIGNED' && !step.fulfiller) return `calls ${step.key} assigned with no fulfiller`;
+    if (step.status !== 'ASSIGNED' && step.reasons.length === 0) return `leaves ${step.key} unassigned without saying what is missing`;
+  }
+  for (const key of reading.accepted) if (!reading.delivered.includes(key)) return `accepts ${key}, which was never delivered with evidence`;
+  if (reading.realized && (plan.steps.length === 0 || plan.steps.some((s) => !reading.accepted.includes(s.key)))) return 'says realized with a step not accepted';
+  if (reading.realized && reading.redoObligations.some((o) => o.open)) return 'says realized with a redo obligation open';
+  for (const key of reading.rejected) if (!reading.redoObligations.some((o) => o.stepKey === key && o.open)) return `has rejected ${key} with no open redo obligation`;
+  return null;
+}
+
+export async function realizationHoldsOnRows(): Promise<ProbeResult> {
+  const { readDealRealization, repeatBusinessObservations, REALIZATION_EVENT, AFTERCARE_EVENT } = await import('./realization.ts');
+  const db = getDb();
+  const deals = await db.all<DealRef>(
+    `SELECT DISTINCT a.project_id AS project_id, a.opportunity_id AS opportunity_id, a.currency AS currency
+       FROM cash_agreements a WHERE a.state = 'AGREED' ORDER BY a.project_id, a.opportunity_id`,
+  );
+  if (deals.length === 0) return { ok: false, detail: 'no opportunity has a live agreement: no delivery to derive from a scope' };
+  let steps = 0;
+  let accepted = 0;
+  let realized = 0;
+  for (const deal of deals) {
+    const now = await readDealRealization({ projectId: deal.project_id, opportunityId: deal.opportunity_id, currency: deal.currency });
+    if (!now) return { ok: false, detail: `opportunity ${deal.opportunity_id}: its realization cannot be read from its rows` };
+    const problem = realizationProblem(now);
+    if (problem) return { ok: false, detail: `opportunity ${deal.opportunity_id} ${problem}` };
+    const last = await db.get<{ detail: string }>(
+      `SELECT detail FROM cash_events WHERE opportunity_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
+      [deal.opportunity_id, REALIZATION_EVENT],
+    );
+    if (!last) return { ok: false, detail: `opportunity ${deal.opportunity_id}: no realization is on record (the journey tick has not read it)` };
+    if ((JSON.parse(last.detail) as { fingerprint?: unknown }).fingerprint !== now.fingerprint) {
+      return { ok: false, detail: `opportunity ${deal.opportunity_id}: the realization on record is not what its rows say now` };
+    }
+    steps += now.plan.steps.length;
+    accepted += now.reading.accepted.length;
+    if (now.reading.realized) realized += 1;
+  }
+  // Every valued repeat-business record is evidence deal construction reads.
+  const projects = [...new Set(deals.map((d) => `${d.project_id}\u0000${d.currency}`))];
+  let repeat = 0;
+  for (const key of projects) {
+    const [projectId, currency] = key.split('\u0000') as [string, string];
+    const valued = await db.all<{ id: string; detail: string }>(`SELECT id, detail FROM cash_events WHERE project_id = ? AND kind = ?`, [projectId, AFTERCARE_EVENT]);
+    const expected = valued.filter((e) => {
+      const d = JSON.parse(e.detail) as { kind?: string; valueCents?: unknown; payer?: unknown };
+      return ['FOLLOW_UP_REQUEST', 'RENEWAL', 'UPSELL', 'CROSS_SELL', 'REFERRAL'].includes(String(d.kind)) && typeof d.valueCents === 'number' && d.valueCents > 0 && typeof d.payer === 'string' && d.payer.trim() !== '';
+    }).map((e) => `aftercare:${e.id}`);
+    const read = new Set((await repeatBusinessObservations(projectId, currency)).map((o) => o.id));
+    const unread = expected.find((id) => !read.has(id));
+    if (unread) return { ok: false, detail: `${unread} states repeat business that deal construction does not read` };
+    repeat += expected.length;
+  }
+  return {
+    ok: true,
+    detail: `${deals.length} deal(s): ${steps} delivery step(s) derived from agreed scope, ${accepted} accepted with evidence, ${realized} realized; each on record as read; ${repeat} repeat-business record(s) feeding deal construction`,
+  };
+}
+
 registerProbe(COMMITMENT_PROBE, commitmentsHoldOnRows);
+registerProbe(REALIZATION_PROBE, realizationHoldsOnRows);
 registerProbe(EXCEPTION_PROBE, exceptionsHoldOnRows);
