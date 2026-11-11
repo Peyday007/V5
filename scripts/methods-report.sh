@@ -26,4 +26,4 @@ export BRAIN_DATABASE_POOL_SIZE="${BRAIN_DATABASE_POOL_SIZE:-1}"
 # is serving.
 echo "SERVING_REVISION ${BRAIN_REVISION:-<unstamped>}"
 
-exec node --import tsx scripts/methods-report.ts "$@"
+exec nice -n 19 node --import tsx scripts/methods-report.ts "$@"

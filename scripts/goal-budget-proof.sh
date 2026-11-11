@@ -7,4 +7,4 @@ cd "$(dirname "$0")/.."
 # fifteen-client pooler, and it is sequential.
 export BRAIN_DATABASE_POOL_SIZE="${BRAIN_DATABASE_POOL_SIZE:-1}"
 
-exec node --import tsx scripts/goal-budget-proof.ts "$@"
+exec nice -n 19 node --import tsx scripts/goal-budget-proof.ts "$@"

@@ -25,4 +25,4 @@ export CHAIN_CONVERSATION
 # genuinely needs more may still say so, which is what the default form is for.
 export BRAIN_DATABASE_POOL_SIZE="${BRAIN_DATABASE_POOL_SIZE:-1}"
 
-exec node --import tsx scripts/chain-watch.ts
+exec nice -n 19 node --import tsx scripts/chain-watch.ts
