@@ -52,6 +52,7 @@ import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { forbiddenPathsFor, ownershipReachesForbidden } from './forbidden.ts';
 import { matchesGlob } from './glob.ts';
 import { MAX_UNIT_ATTEMPTS } from './regrant.ts';
+import { PROTECTED_VERIFICATION_PATHS } from '../../domain/factoryProgram.ts';
 import {
   graphFromRows,
   pathsNamedIn as namedIn,
@@ -245,6 +246,35 @@ export async function queueRepairs(
   for (const finding of findings) {
     const ownership = ownershipForRepair(finding, changeRequest, units, forbiddenPaths, dependsOn);
     if (!ownership.ok) {
+      if (
+        ownership.reason === 'REQUIRED_FILE_NOT_WRITABLE' &&
+        ownership.forbidden.length === 0 &&
+        ownership.outsideScope.length > 0 &&
+        ownership.outsideScope.every(isProtectedVerificationPath)
+      ) {
+        /*
+         * A program's acceptance probe is the judge of the campaign, and only
+         * the protected module defines it (§96, §97), so no grant could ever let
+         * a repair write it and the campaign would wait forever (production
+         * 2026-11-11: money-d0-p0 and transaction-lifecycle-d0-p1 parked on
+         * "probes.ts is outside the approved scope"). The finding is the program
+         * owner's, recorded as such; nothing is lost, because a requirement whose
+         * probe does not pass on production is never PRODUCTION_VERIFIED.
+         */
+        const note =
+          `owed by the program, not this campaign: ${ownership.outsideScope.join(', ')} is the protected ` +
+          'verification path; the requirement stays unverified until its probe passes on production';
+        if (await resolveFinding(finding.id, 'ACCEPTED_LIMITATION', note)) {
+          await recordFactoryEvent({
+            campaignId: campaign.id,
+            kind: FACTORY_EVENT_KINDS.repairOwnershipBlocked,
+            evidenceClass: 'DERIVED',
+            detail: { findingId: finding.id, findingKey: finding.findingKey, reason: 'PROBE_OWED_BY_PROGRAM', detail: note, outsideScope: ownership.outsideScope },
+          });
+        }
+        result.skipped.push({ findingId: finding.id, reason: 'PROBE_OWED_BY_PROGRAM' });
+        continue;
+      }
       if (ownership.reason === 'REQUIRED_FILE_NOT_WRITABLE') {
         result.needsAmendment.push({
           findingId: finding.id,
@@ -610,4 +640,9 @@ export async function nonGatingFailedRepairIds(campaignId: string): Promise<Set<
 export async function gatingFindings(campaignId: string): Promise<FactoryFinding[]> {
   const findings = await listOpenFindings(campaignId);
   return findings.filter((finding) => GATING_SEVERITIES.has(finding.severity));
+}
+
+/** A file only the program's protected verification module may change. */
+export function isProtectedVerificationPath(path: string): boolean {
+  return PROTECTED_VERIFICATION_PATHS.some((glob) => glob === path || matchesGlob(path, glob));
 }
