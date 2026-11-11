@@ -89,13 +89,18 @@ describe('a protected scope is routed to the maintainer', () => {
       'server/services/factory/release/outcome.ts',
     ]);
     expect(scopeOnlyForbidden(['.claude/hooks/**', '.github/workflows/deploy.yml'], forbidden)).not.toBeNull();
-    expect(scopeOnlyForbidden(['server/services/factory/release/outcome.ts', 'tests/**'], forbidden)).toBeNull();
+    // A program campaign's scope always carries a writable test path; that is no way in (fcp_17725629).
+    expect(
+      scopeOnlyForbidden(['server/services/factory/release/outcome.ts', 'tests/program-ea512f54-GOV-17-3*.test.ts'], forbidden),
+    ).toEqual(['server/services/factory/release/outcome.ts']);
+    expect(scopeOnlyForbidden(['tests/**'], forbidden)).toBeNull();
+    expect(scopeOnlyForbidden(['server/services/factory/release/outcome.ts', 'server/services/documents/**'], forbidden)).toBeNull();
     expect(scopeOnlyForbidden(['server/**'], forbidden)).toBeNull();
     expect(scopeOnlyForbidden([], forbidden)).toBeNull();
   });
 
   it('hands no worker the plan, parks it PROTECTED_SCOPE for the maintainer, and stays parked without churn', async () => {
-    const id = await campaignWithScope(['server/services/factory/release/outcome.ts']);
+    const id = await campaignWithScope(['server/services/factory/release/outcome.ts', 'tests/program-ea512f54-GOV-17-3*.test.ts']);
     const first = await tickRemoteCampaign(id);
     expect(first.state).toBe('BLOCKED');
     expect(await planBins(id)).toHaveLength(0);
@@ -119,7 +124,7 @@ describe('a protected scope is routed to the maintainer', () => {
   });
 
   it('a scope with a writable path is planned as before', async () => {
-    const id = await campaignWithScope(['server/services/factory/release/outcome.ts', 'tests/**']);
+    const id = await campaignWithScope(['server/services/factory/release/outcome.ts', 'server/services/documents/**']);
     const report = await tickRemoteCampaign(id);
     expect(report.state).toBe('PLANNING');
     expect(await planBins(id)).toHaveLength(1);

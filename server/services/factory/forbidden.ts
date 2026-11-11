@@ -70,10 +70,20 @@ function sampleOf(glob: string): string {
  * handed to worker after worker — 38 attempts, each one reading the grant and
  * reporting "the only mutation-scope path is forbidden" — until it parked on the
  * owner. Work no worker may ever do is not dispatched; it is routed to the
- * maintainer (`PROTECTED_SCOPE`). A scope with one writable glob is planned as
- * before, and the plan's own ownership check keeps units off the rest.
+ * maintainer (`PROTECTED_SCOPE`). A scope with one writable implementation glob
+ * is planned as before, and the plan's own ownership check keeps units off the rest.
+ *
+ * Test paths do not count as a way in. A program's campaigns always carry a
+ * writable `tests/program-…*.test.ts` beside their scope, so fcp_17725629's scope
+ * was not *entirely* forbidden — only every file a test could test. A scope of
+ * nothing but tests is a test objective, and is planned.
  */
 export function scopeOnlyForbidden(scope: string[], forbidden: string[]): string[] | null {
-  if (scope.length === 0) return null;
-  return scope.every((glob) => forbiddenIn([sampleOf(glob)], forbidden).length > 0) ? [...scope] : null;
+  const implementation = scope.filter((glob) => !isTestGlob(glob));
+  if (implementation.length === 0) return null;
+  return implementation.every((glob) => forbiddenIn([sampleOf(glob)], forbidden).length > 0) ? implementation : null;
+}
+
+function isTestGlob(glob: string): boolean {
+  return /(^|\/)(tests?|__tests__)\//.test(glob) || /\.(test|spec)\.[^/]*$/.test(glob);
 }
