@@ -24,7 +24,7 @@ import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { ACCESS_METHODS } from './access.ts';
 import { METHOD_CLASSES, selectAccessMethod, type AccessEvidence, type MethodClass } from './accessMethods.ts';
-import { webSearch } from './discover.ts';
+import { isSearchAnomaly, webSearch } from './discover.ts';
 
 export const ACQUISITION_CAPABILITIES = ['OPERATE', 'ACQUIRE'] as const;
 export type AcquisitionCapability = (typeof ACQUISITION_CAPABILITIES)[number];
@@ -473,6 +473,66 @@ export interface SourceDiscovery {
   candidates: string[];
   /** Those whose address is shaped like a corpus, export, catalog, feed, index or API. */
   bulkCandidates: string[];
+  /**
+   * False when no search actually answered: it was skipped (no endpoint open, queue full),
+   * refused by the endpoint, timed out or failed. An unanswered search is an unknown, never
+   * "searched and found nothing" (invariant 39, cf. §26): it is not recorded as a
+   * SOURCE_DISCOVERY, it never sets `bulkSearchDone`, and the host stays eligible for a later
+   * search. Absent means a search that answered (a discovery read back from its row, or one a
+   * caller made itself).
+   */
+  searched?: boolean;
+  /** Why the search did not answer, when `searched` is false. */
+  unanswered?: string;
+}
+
+/** The outcome of one search: the addresses it returned, and whether any endpoint actually answered it. */
+export interface SearchOutcome {
+  urls: string[];
+  searched: boolean;
+  unanswered?: string;
+}
+
+/**
+ * `webSearch` with its answer observed. `webSearch` returns an empty list both for a
+ * search that answered with nothing and for one that was skipped, refused, timed out or
+ * failed, so the empty list alone cannot say which. This watches the requests it makes:
+ * a search answered only if an endpoint returned a non-anomalous success page. A cached
+ * answer that returned addresses is answered; an empty list with no answered request is not.
+ */
+export async function observedWebSearch(
+  query: string,
+  deps: { fetchImpl?: typeof fetch; nowMs?: () => number; search?: typeof webSearch } = {},
+): Promise<SearchOutcome> {
+  const base = deps.fetchImpl ?? fetch;
+  let answered = false;
+  let unanswered = 'no search endpoint was open or the search queue was full; the search was not made';
+  const fetchImpl = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    let response: Response;
+    try {
+      response = await base(input, init);
+    } catch (err) {
+      unanswered = `the search request failed or timed out (${err instanceof Error ? err.name : 'error'})`;
+      throw err;
+    }
+    try {
+      const html = await response.clone().text();
+      if (isSearchAnomaly(response.status, html)) unanswered = 'the search endpoint refused the query';
+      else if (!response.ok) unanswered = `the search endpoint answered HTTP ${response.status}`;
+      else answered = true;
+    } catch {
+      unanswered = 'the search response could not be read';
+    }
+    return response;
+  }) as typeof fetch;
+  let urls: string[];
+  try {
+    urls = await (deps.search ?? webSearch)(query, { priority: 'LOW', fetchImpl, ...(deps.nowMs ? { nowMs: deps.nowMs } : {}) });
+  } catch (err) {
+    return { urls: [], searched: false, unanswered: `the search failed (${err instanceof Error ? err.name : 'error'})` };
+  }
+  if (urls.length > 0 || answered) return { urls, searched: true };
+  return { urls: [], searched: false, unanswered };
 }
 
 /** The address of a corpus, a bulk export, a catalog, a feed, an index or an API — judged by shape, for any site. */
@@ -509,20 +569,34 @@ export function discoveryQuery(need: Pick<AcquisitionNeed, 'purpose' | 'host'>):
   return `${need.host ? `${need.host.toLowerCase()} ` : ''}${words} dataset OR "bulk download" OR export OR catalog OR API OR feed`.replace(/\s+/g, ' ').trim();
 }
 
-/** Look for existing corpora for a need: one polite, low-priority search (`discover.ts`). Never throws. */
+/**
+ * Look for existing corpora for a need: one polite, low-priority search (`discover.ts`). Never throws.
+ *
+ * A search that did not answer — skipped, refused, timed out, failed, or a `search` that threw —
+ * comes back `searched: false` with the reason, never as an empty answer. An injected `search`
+ * that returns a plain list is a search that answered; one that returns a `SearchOutcome` says so itself.
+ */
 export async function discoverExistingSources(
   need: Pick<AcquisitionNeed, 'purpose' | 'host'>,
-  deps: { search?: (query: string) => Promise<string[]> } = {},
+  deps: { search?: (query: string) => Promise<string[] | SearchOutcome> } = {},
 ): Promise<SourceDiscovery> {
   const query = discoveryQuery(need);
-  let candidates: string[] = [];
+  let outcome: SearchOutcome;
   try {
-    candidates = (await (deps.search ?? ((q: string) => webSearch(q, { priority: 'LOW' })))(query)).slice(0, 8);
-  } catch {
-    candidates = [];
+    const got = await (deps.search ?? ((q: string) => observedWebSearch(q)))(query);
+    outcome = Array.isArray(got) ? { urls: got, searched: true } : got;
+  } catch (err) {
+    outcome = { urls: [], searched: false, unanswered: `the search failed (${err instanceof Error ? err.name : 'error'})` };
   }
-  return { query, candidates, bulkCandidates: bulkCandidatesOf(candidates) };
+  if (!outcome.searched) {
+    return { query, candidates: [], bulkCandidates: [], searched: false, unanswered: outcome.unanswered ?? 'the search did not answer' };
+  }
+  const candidates = outcome.urls.slice(0, 8);
+  return { query, candidates, bulkCandidates: bulkCandidatesOf(candidates), searched: true };
 }
+
+/** Recorded when a discovery was attempted and no search answered: an unknown, kept apart from SOURCE_DISCOVERY. */
+export const SOURCE_DISCOVERY_UNANSWERED_EVENT = 'SOURCE_DISCOVERY_UNANSWERED';
 
 interface EventRow {
   event_type?: string | null;
@@ -855,7 +929,32 @@ export async function recordAcquisitionJudgment(
   if (judgment.outcome === 'SEARCH_FIRST' && deps.discover !== null) {
     const discover = deps.discover ?? ((n: AcquisitionNeed) => discoverExistingSources(n));
     const run = async (): Promise<AcquisitionJudgment> => {
-      const found = await discover(need);
+      let found: SourceDiscovery;
+      try {
+        found = await discover(need);
+      } catch (err) {
+        found = { query: discoveryQuery(need), candidates: [], bulkCandidates: [], searched: false, unanswered: `the discovery failed (${err instanceof Error ? err.name : 'error'})` };
+      }
+      // A search that did not answer is an unknown, not "none found": it is recorded under its own
+      // event type (which no reader takes as a discovery), `bulkSearchDone` stays false, no bespoke
+      // crawler becomes proposable, and the host stays eligible for a later search (invariant 39).
+      if (found.searched === false) {
+        await record({
+          eventType: SOURCE_DISCOVERY_UNANSWERED_EVENT,
+          provider: 'BULK',
+          workloadClass,
+          outcome: 'NOT_SEARCHED',
+          reason: `The search for existing corpora, exports and catalogs for ${host ?? 'the need'} did not answer: ${found.unanswered ?? 'unknown'}. Not recorded as searched; the host stays eligible for a later search.`.slice(0, 480),
+          evidenceClass: 'MEASURED',
+          measures: {
+            host,
+            purpose: need.purpose.slice(0, 300),
+            query: found.query.slice(0, 300),
+            unanswered: (found.unanswered ?? 'unknown').slice(0, 300),
+          },
+        });
+        return judgment;
+      }
       await record({
         eventType: SOURCE_DISCOVERY_EVENT,
         provider: 'BULK',
