@@ -25,6 +25,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { BlockType } from '../../domain/types.ts';
 import { probeOcrRuntime, type OcrRuntime } from './ocrRuntime.ts';
+import { collapseBlockWhitespace, joinBlockLines } from './pdf.ts';
 
 /** One recognised passage, with the geometry and certainty behind it. */
 export interface OcrBlock {
@@ -71,7 +72,7 @@ export const LOW_CONFIDENCE = 0.6;
 // Reading tesseract's TSV
 // ---------------------------------------------------------------------------
 
-interface TsvRow {
+export interface TsvRow {
   level: number;
   block: number;
   paragraph: number;
@@ -123,7 +124,7 @@ function classify(text: string, lineHeight: number, medianHeight: number): Block
  * so a mixed document's blocks are comparable page to page, and it keeps a
  * bounding box tight enough to be worth storing.
  */
-function blocksFromTsv(rows: TsvRow[], pageHeightPx: number, dpi: number): OcrBlock[] {
+export function blocksFromTsv(rows: TsvRow[], pageHeightPx: number, dpi: number): OcrBlock[] {
   const scale = 72 / dpi;
   const lineHeights = rows.filter((row) => row.level === 4).map((row) => row.height).sort((a, b) => a - b);
   const medianHeight = lineHeights[Math.floor(lineHeights.length / 2)] ?? 0;
@@ -143,7 +144,18 @@ function blocksFromTsv(rows: TsvRow[], pageHeightPx: number, dpi: number): OcrBl
   for (const entry of paragraphs.values()) {
     const words = entry.rows.filter((row) => row.text.trim().length > 0);
     if (words.length === 0) continue;
-    const text = words.map((row) => row.text).join(' ').replace(/\s+/g, ' ').trim();
+    // Words of one tesseract line join with a space; the lines then join as every
+    // extractor joins them, so a word wrapped by a hyphen reaches normalisation whole.
+    const lines: string[][] = [];
+    let lineKey: number | null = null;
+    for (const row of words) {
+      if (row.line !== lineKey || lines.length === 0) {
+        lines.push([]);
+        lineKey = row.line;
+      }
+      lines[lines.length - 1]!.push(row.text);
+    }
+    const text = collapseBlockWhitespace(joinBlockLines(lines.map((line) => line.join(' ')))).trim();
     if (text.length === 0) continue;
 
     const scored = words.filter((row) => row.confidence >= 0);
