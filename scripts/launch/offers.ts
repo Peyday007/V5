@@ -28,7 +28,8 @@ export function readOffers(root: string): Offer[] {
     const list = (Array.isArray(raw) ? raw : (raw as { products?: unknown[] }).products ?? []) as Array<Record<string, unknown>>;
     for (const p of list) {
       const price = Number(p.price_usd);
-      if (!p.key || !p.name || !Number.isFinite(price) || price <= 0) throw new Error(`${business}/offer.json: product needs key, name and a positive price_usd`);
+      if (!p.key || !p.name || !Number.isFinite(price) || price < 0) throw new Error(`${business}/offer.json: product needs key, name and a price_usd of 0 or more`);
+      if (price === 0) continue; // a free sample is sent, not sold: it needs no payment link
       out.push({
         business, key: String(p.key), name: String(p.name), priceUsd: price,
         description: String(p.description ?? ''), recurring: p.recurring === 'month' ? 'month' : null,

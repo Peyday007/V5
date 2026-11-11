@@ -50,11 +50,13 @@ function rootWithOffers(): string {
 }
 
 describe('launch: expansion offers', () => {
-  it('reads every business offer, and refuses one without a price', () => {
+  it('reads every business offer, skips a free sample, and refuses one without a price', () => {
     const root = rootWithOffers();
     expect(readOffers(root).map((o) => `${o.business}:${o.key}:${o.recurring}`)).toEqual(['example-biz:report:null', 'example-biz:monthly:month']);
+    fs.writeFileSync(path.join(root, 'businesses', 'example-biz', 'offer.json'), JSON.stringify({ products: [{ key: 'free', name: 'Free sample', price_usd: 0 }, { key: 'paid', name: 'Paid', price_usd: 9 }] }));
+    expect(readOffers(root).map((o) => o.key)).toEqual(['paid']);
     fs.writeFileSync(path.join(root, 'businesses', 'example-biz', 'offer.json'), JSON.stringify([{ key: 'x', name: 'X' }]));
-    expect(() => readOffers(root)).toThrow(/positive price_usd/);
+    expect(() => readOffers(root)).toThrow(/price_usd of 0 or more/);
   });
 
   it('waits for the owner\'s key and calls nothing', async () => {
