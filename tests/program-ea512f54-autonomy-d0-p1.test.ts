@@ -346,8 +346,50 @@ describe('readGapMeasures: gaps identified and closed, counted from improvement 
     expect(m.deliveredNotProven).toBe(1);
     expect(m.hoursToUseMedian).toBe(10);
     expect(m.regressions).toEqual({ reverted: 1, keptNoEffect: 1 });
-    expect(m.productiveWorkResumed.status).toBe('NOT_MEASURED');
-    expect(m.cost.status).toBe('NOT_MEASURED');
+    // Measured, not declared unmeasured: no row in this case gives a before/after window or a campaign, and the figures say so.
+    expect(m.productiveWorkResumed).toMatchObject({ status: 'MEASURED', gaps: 3, continued: 0, attributed: 0, unitsPerDayGained: 0 });
+    expect(m.cost).toMatchObject({ status: 'MEASURED', gaps: 5, attributed: 0, bins: 0, leases: 0, workerMs: 0 });
+  });
+
+  it('measures the productive work a kept gap released and the worker time its Factory campaign cost', async () => {
+    const { project } = await freshProject();
+    const kept = await candidate('PW', { created: '2026-10-02T00:00:00.000Z', decision: 'KEPT', decided: '2026-10-04T00:00:00.000Z' });
+    const reverted = await candidate('RV2', { created: '2026-10-02T00:00:00.000Z', decision: 'REVERTED', decided: '2026-10-05T00:00:00.000Z' });
+    // As measureAndDecide writes it: the metric before delivery (2 days, 10 submitted) and after (1 day, 20 submitted).
+    const result = {
+      before: { key: 'FREE_LANE_FRAGMENT_PASS_RATE', from: '2026-10-01T00:00:00.000Z', to: '2026-10-03T00:00:00.000Z', numerator: 10, denominator: 40 },
+      after: { key: 'FREE_LANE_FRAGMENT_PASS_RATE', from: '2026-10-03T00:00:00.000Z', to: '2026-10-04T00:00:00.000Z', numerator: 20, denominator: 25 },
+    };
+    await getDb().run('UPDATE improvement_candidates SET result = ?, campaign_id = ? WHERE id = ?', [JSON.stringify(result), 'fcp_pw', kept]);
+    await getDb().run('UPDATE improvement_candidates SET campaign_id = ? WHERE id = ?', ['fcp_rv', reverted]);
+    // The gap loop recorded CONTINUE for the kept gap: it resumed other work.
+    await recordBinEvent({ eventType: 'CAPABILITY_GAP_STEP', provider: 'CONTINUE', workloadClass: 'PW', outcome: 'RECORDED', evidenceClass: 'MEASURED' });
+    // Factory bins of both campaigns, and the leases that ended on them.
+    const bin = async (id: string, campaign: string) =>
+      getDb().run(
+        `INSERT INTO bins (id, project_id, kind, title, objective, completion_contract, state, created_by_type, created_at, updated_at, factory_campaign_id)
+         VALUES (?, ?, 'FACTORY_UNITS', ?, 'o', 'FACTORY_UNITS_V1', 'COMPLETE', 'SYSTEM', ?, ?, ?)`,
+        [id, project.id, id, FROM, FROM, campaign],
+      );
+    await bin('bin_pw', 'fcp_pw');
+    await bin('bin_rv', 'fcp_rv');
+    await bin('bin_other', 'fcp_unrelated');
+    await recordBinEvent({ eventType: 'BIN_TERMINAL', binId: 'bin_pw', leaseId: 'l1', leaseGeneration: 1, durationMs: 60_000, outcome: 'COMPLETE' });
+    await recordBinEvent({ eventType: 'BIN_RELEASED', binId: 'bin_rv', leaseId: 'l2', leaseGeneration: 1, outcome: 'RELEASED' });
+    await recordBinEvent({ eventType: 'BIN_TERMINAL', binId: 'bin_rv', leaseId: 'l3', leaseGeneration: 2, durationMs: 30_000, outcome: 'COMPLETE' });
+    await recordBinEvent({ eventType: 'BIN_TERMINAL', binId: 'bin_other', leaseId: 'l4', leaseGeneration: 1, durationMs: 999_000, outcome: 'COMPLETE' });
+
+    const m = await readGapMeasures(FROM, TO);
+    expect(m.productiveWorkResumed).toEqual({
+      status: 'MEASURED',
+      gaps: 1,
+      continued: 1,
+      attributed: 1,
+      unitsPerDayGained: 15,
+      perGap: [{ weaknessKey: 'PW', metric: 'FREE_LANE_FRAGMENT_PASS_RATE', beforePerDay: 5, afterPerDay: 20, continued: true }],
+    });
+    // Both attempts were paid for; the unrelated campaign's bin is not.
+    expect(m.cost).toEqual({ status: 'MEASURED', gaps: 2, attributed: 2, bins: 2, leases: 3, leasesUntimed: 1, workerMs: 90_000 });
   });
 
   it('averages the middle two for an even count, and says unmeasured when nothing closed', async () => {
