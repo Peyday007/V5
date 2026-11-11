@@ -20,11 +20,17 @@ import { SEAL_KEY_ENV, SIGNING_KEY_ENV } from './registry.ts';
 function privateKey(name: string, env: NodeJS.ProcessEnv): KeyObject | null {
   const raw = (env[name] ?? '').trim();
   if (!raw) return null;
-  try {
-    return createPrivateKey({ key: Buffer.from(raw, 'base64'), format: 'der', type: 'pkcs8' });
-  } catch {
-    return null;
+  const der = Buffer.from(raw, 'base64');
+  // OpenSSL 3's `genpkey -outform DER` writes Ed25519 as PKCS#8 but RSA as
+  // PKCS#1, so both are read (the first live pass read the seal key as absent).
+  for (const type of ['pkcs8', 'pkcs1'] as const) {
+    try {
+      return createPrivateKey({ key: der, format: 'der', type });
+    } catch {
+      /* the other encoding */
+    }
   }
+  return null;
 }
 
 export function keyId(spkiDer: Buffer): string {
