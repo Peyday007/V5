@@ -17,7 +17,7 @@ import { getDb } from '../../db/database.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
-import type { CashCardFact } from '../../domain/types.ts';
+import type { CashCardFact, CashOpportunity } from '../../domain/types.ts';
 import { cashTier, tierRank } from './tier.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
@@ -160,6 +160,30 @@ export function yieldGuidance(reading: DiscoveryYield): string {
     );
   }
   return parts.join(' ');
+}
+
+/**
+ * Which of these openings have reached CANDIDATE or above — the same tier rule
+ * `discoveryYield` counts as useful — for a caller that settles one round's
+ * outcome (a search-method run) at the moment the round closes. A duplicate is
+ * never useful. Reads the project's card facts once.
+ */
+export async function usefulOpeningIds(projectId: string, opportunities: readonly CashOpportunity[]): Promise<Set<string>> {
+  const facts = new Map<string, CashCardFact[]>();
+  for (const fact of await cardFactsForProject(projectId)) {
+    facts.set(fact.opportunityId, [...(facts.get(fact.opportunityId) ?? []), fact]);
+  }
+  const out = new Set<string>();
+  for (const opportunity of opportunities) {
+    if (opportunity.duplicateOfId) continue;
+    const tier = cashTier({
+      opportunity,
+      card: cashEngineCard({ opportunity, facts: facts.get(opportunity.id) ?? [] }),
+      readiness: evidenceCard(opportunity).readiness,
+    }).tier;
+    if (tierRank(tier) >= tierRank('CANDIDATE')) out.add(opportunity.id);
+  }
+  return out;
 }
 
 /**
