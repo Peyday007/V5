@@ -19,8 +19,9 @@
  * and funds reconciliation — including its failure path (`rehearsal.traced`, valid,
  * with a source, exceptions and every part of its span; `rehearsalDemonstrates`).
  * A deal's exception
- * the tick has not yet recorded, or no rehearsed case at all, is a failure: nothing
- * to look at is not a demonstration (§39).
+ * the tick has not yet recorded, or no rehearsed case at all, is a failure. With no
+ * agreement on production at all the answer is UNKNOWN: nothing to look at is not a
+ * demonstration (§39), and it is not a defect a code repair could fix either.
  *
  * `r01.life-29-2` — for every opportunity with a live agreement, the journey tick
  * has recorded a `realization.read` whose fingerprint equals the reading recomputed
@@ -29,8 +30,9 @@
  * by Brain's own capability, every accepted step delivered and accepted with evidence,
  * "realized" only when every step is accepted and no redo is open, and accounting
  * figures equal to the deal position's. Every aftercare record that states a value of
- * repeat business is one deal construction reads (`repeatBusinessObservations`). No
- * deal with a live agreement is a failure, never a pass on nothing (§39).
+ * repeat business is one deal construction reads (`repeatBusinessObservations`). With no
+ * deal holding a live agreement the answer is UNKNOWN — never a pass on nothing (§39),
+ * and not a failure that opens a repair no code change can satisfy.
  *
  * The judgments live here, beside the model they read; they are registered in
  * the protected `probes.ts`, which is the only place a release probe may be
@@ -92,7 +94,7 @@ async function ledgerOf(deal: DealRef): Promise<{ payments: number; settlements:
 export async function commitmentsHoldOnRows(): Promise<ProbeResult> {
   const { readCommitments } = await import('./commitments.ts');
   const deals = await dealsWithAgreements();
-  if (deals.length === 0) return { ok: false, detail: 'no opportunity has an agreement: no transaction to read as commitments' };
+  if (deals.length === 0) return { ok: null, detail: 'no opportunity has an agreement: no transaction to read as commitments' };
   let transitions = 0;
   let reached = 0;
   for (const deal of deals) {
@@ -141,7 +143,7 @@ export async function exceptionsHoldOnRows(): Promise<ProbeResult> {
   const { detectFromRows } = await import('./exceptions.ts');
   const db = getDb();
   const deals = await dealsWithAgreements();
-  if (deals.length === 0) return { ok: false, detail: 'no opportunity has an agreement: no transaction whose exceptions can be read' };
+  if (deals.length === 0) return { ok: null, detail: 'no opportunity has an agreement: no transaction whose exceptions can be read' };
   let detected = 0;
   for (const deal of deals) {
     // The commitment rows and the buyer's recorded answers: a scope change or a dispute is checked like any other.
@@ -190,7 +192,7 @@ export async function realizationHoldsOnRows(): Promise<ProbeResult> {
     `SELECT DISTINCT a.project_id AS project_id, a.opportunity_id AS opportunity_id, a.currency AS currency
        FROM cash_agreements a WHERE a.state = 'AGREED' ORDER BY a.project_id, a.opportunity_id`,
   );
-  if (deals.length === 0) return { ok: false, detail: 'no opportunity has a live agreement: no delivery to derive from a scope' };
+  if (deals.length === 0) return { ok: null, detail: 'no opportunity has a live agreement: no delivery to derive from a scope' };
   let steps = 0;
   let accepted = 0;
   let realized = 0;

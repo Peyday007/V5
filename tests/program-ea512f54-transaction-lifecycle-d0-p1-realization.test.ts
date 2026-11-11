@@ -130,9 +130,9 @@ async function supplierDelivers(agreement: CashAgreement, accept: 'ACCEPTED' | '
 }
 
 describe('r01.life-29-2 is registered and never passes on nothing', () => {
-  it('fails with no live agreement to read', async () => {
+  it('is UNKNOWN, not a pass, with no live agreement to read', async () => {
     const r = await probe('r01.life-29-2');
-    expect(r.ok).toBe(false);
+    expect(r.ok).toBeNull();
     expect(r.detail).toMatch(/no opportunity has a live agreement/);
   });
 });

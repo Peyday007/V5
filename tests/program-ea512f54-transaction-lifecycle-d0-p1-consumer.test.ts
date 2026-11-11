@@ -112,11 +112,11 @@ async function settled(opportunityId: string): Promise<void> {
 
 const probe = (name: string) => getProbe(name)!({});
 
-describe('probes are registered, and fail with no transaction to read', () => {
+describe('probes are registered, and answer UNKNOWN with no transaction to read', () => {
   it('registers r01.life-29-1 and r01.life-29-3 and passes neither on nothing', async () => {
     for (const name of ['r01.life-29-1', 'r01.life-29-3']) {
       const r = await probe(name);
-      expect(r.ok).toBe(false);
+      expect(r.ok).toBeNull();
       expect(r.detail).toMatch(/no opportunity has an agreement/);
     }
   });
