@@ -51,6 +51,7 @@ import { composeArrangement, type Part } from '../quant/mechanism.ts';
 import { reconstruct } from '../quant/reconstruct.ts';
 import type { CashOpportunity, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
+import { repeatBusinessObservations } from './deliverables/realization.ts';
 
 import {
   allDesigns,
@@ -125,6 +126,12 @@ export interface ConstructedArrangement {
   /** Openings sharing this buyer, for the novelty check and the value evidence. */
   relatedOpenings: string[];
   question: string;
+  /**
+   * Repeat business this buyer population has already given Brain, read from
+   * aftercare records (`deliverables/realization.ts`): how many stated values,
+   * and their sum. Absent or zero is unknown, never "will not return" (LIFE-29-2).
+   */
+  repeatBusiness?: { observations: number; statedValueCents: number };
 }
 
 /** At most this many arrangements are composed per goal pass (they are ranked and few are asked). */
@@ -275,6 +282,9 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
       source: one.sourceClaimId ? { kind: 'CLAIM', ref: one.sourceClaimId } : { kind: 'CASH_OPPORTUNITY', ref: one.id },
       measures: `the price on "${one.title.slice(0, 60)}"`,
     }));
+  // Repeat business a delivered, accepted deal's buyer gave afterwards: new economic evidence about what that payer pays (LIFE-29-2).
+  const repeat = await repeatBusinessObservations(input.projectId, input.currency);
+  priced.push(...repeat);
   // What deals for these buyers tied up before money came in: evidence for a run's or a deal's exposure.
   const tiedUp = opportunities
     .filter((one) => one.payer && one.peakFundingCents !== null && one.peakFundingCents > 0 && one.currency === input.currency && allowed(one.title))
@@ -395,6 +405,8 @@ function rank(out: ConstructedArrangement[], limits: GoalLimits, targets: Econom
       Number(!!b.precedent) - Number(!!a.precedent) ||
       // More of it rests on gated claims.
       b.evidenced - a.evidenced ||
+      // These buyers already came back for more (aftercare evidence).
+      (b.repeatBusiness?.observations ?? 0) - (a.repeatBusiness?.observations ?? 0) ||
       // Its value is better established.
       TIER_ORDER.indexOf(a.value.tier) - TIER_ORDER.indexOf(b.value.tier) ||
       // Fewer parts left to establish.
@@ -518,6 +530,11 @@ function compose(args: {
   const targetsMet = properties.filter((p) => args.targets.includes(p));
   const emergent = properties.filter((p) => !args.targets.includes(p));
   const evidenced = [demand, need, supply].filter((one) => one?.claimId).length;
+  const repeatObs = args.priced.filter((one) => one.context['arrangement'] === 'repeat' && one.context['payer'] === norm(demand.name));
+  const repeatBusiness = {
+    observations: repeatObs.length,
+    statedValueCents: repeatObs.reduce((t, one) => t + (one.value.kind === 'POINT' ? Math.round(one.value.value * 100) : 0), 0),
+  };
   const facts = designFacts(design);
   const shape = describeDesign(design);
   const label = (args.origin === 'REVERSE'
@@ -574,6 +591,7 @@ function compose(args: {
     unknownParts,
     relatedOpenings: args.related.map((one) => one.id),
     question,
+    repeatBusiness,
   };
 }
 
