@@ -702,10 +702,26 @@ function readProcess(): ProcessReading {
 }
 
 /**
- * The constrained stage, named from measurements only. A stage with work waiting
- * and a poor accepted rate is the one that limits accepted facts; a stage with
- * nothing waiting is not constrained, however slow. A gain is projected only
- * where it can be measured, and never as a reason to scale the web process.
+ * How long a stage's waiting work takes to become accepted facts at the rate it
+ * is accepting them now: waiting / accepted-per-hour. This is where throughput
+ * of accepted facts is limited. A long queue the stage clears well still takes
+ * hours, so a healthy, backlogged lane can be the constraint. A stage that
+ * accepts nothing never clears, so its time is infinite. Pure.
+ */
+export function hoursToClear(waiting: number, acceptedPerHour: number): number {
+  if (waiting <= 0) return 0;
+  return acceptedPerHour > 0 ? waiting / acceptedPerHour : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * The constrained stage, named from measurements only: the measured stage with
+ * work waiting that needs the longest to turn it into accepted facts
+ * (`hoursToClear`). Rejection alone does not decide it: a stage that accepts
+ * all its work but cannot keep up with its queue limits accepted facts as much
+ * as one that rejects them, and a stage that clears its small queue in minutes
+ * does not. Ties go to the larger backlog, then to the stage order. A stage
+ * with nothing waiting is not constrained, however slow. A gain is projected
+ * only where it can be measured, and never as a reason to scale the web process.
  */
 export function chooseConstraint(
   stages: StageReading[],
@@ -719,15 +735,15 @@ export function chooseConstraint(
     first +
     'Restore the failing provider, credential, route or verification path first and watch whether queued work advances; ' +
     'scale independent workers only after a measured gain. Do not enlarge the web process because a queue is long.';
-  let worst: { stage: StageReading; waiting: number; rate: number } | null = null;
+  let worst: { stage: StageReading; waiting: number; rate: number; hours: number } | null = null;
   for (const stage of stages) {
     if (!stage.queueSize.measured || !stage.itemsProcessedPerHour.measured) continue;
     const waiting = stage.queueSize.value;
     if (waiting <= 0) continue;
     const processed = stage.itemsProcessedPerHour.value;
     const rate = processed > 0 ? stage.acceptedPerHour / processed : 0;
-    const score = waiting * (1 - rate);
-    if (!worst || score > worst.waiting * (1 - worst.rate)) worst = { stage, waiting, rate };
+    const hours = hoursToClear(waiting, stage.acceptedPerHour);
+    if (!worst || hours > worst.hours || (hours === worst.hours && waiting > worst.waiting)) worst = { stage, waiting, rate, hours };
   }
   if (!worst) {
     return {
@@ -743,7 +759,10 @@ export function chooseConstraint(
   return {
     stage: stage.stage,
     basis:
-      `${stage.label}: ${worst.waiting} waiting, ${Math.round(worst.rate * 100)}% of processed items accepted.` +
+      `${stage.label}: ${worst.waiting} waiting, ${Math.round(worst.rate * 100)}% of processed items accepted, ` +
+      (Number.isFinite(worst.hours)
+        ? `${round2(worst.hours)} h to clear at ${round2(stage.acceptedPerHour)} accepted/h.`
+        : 'never cleared at its current accepted rate (0 accepted/h).') +
       (failing ? ` Failing route ${failing.route}: ${failing.cause}.` : ''),
     expectedGain: projectedGain(stage, worst.waiting, worst.rate, windowHours),
     recommendation,
