@@ -262,8 +262,15 @@ export interface MoneyRouteReading {
   collectedCents: number | null;
   outflowCents: number;
   heldAgainstCents: number | null;
-  /** What is genuinely free to use; null when the collection or the hold is unknown. */
+  /**
+   * What is genuinely free to use; null when the collection or the hold is
+   * unknown. Signed: when the hold and the outflows exceed what was collected
+   * the value is negative, never plugged to zero, so an under-water route does
+   * not read as break-even.
+   */
   freeCents: Figure;
+  /** How far the hold and the outflows exceed what was collected; 0 when they do not, null when free cash is unknown. */
+  shortfallCents: number | null;
   /** Parts of the route nobody has stated. */
   gaps: string[];
 }
@@ -276,10 +283,11 @@ export function readMoneyRoute(route: MoneyRoute): MoneyRouteReading {
   for (const one of route.outflows) if (!one.at) gaps.push(`when ${one.to} is paid`);
   const outflowCents = route.outflows.reduce((sum, one) => sum + one.amountCents, 0);
   const outflow = { ...unknownFigure('', 'cents'), meaning: 'outflows', unit: 'cents', status: 'CONTRACTED' as FigureStatus, value: outflowCents, source: 'route outflows' };
-  const free = derive('free to use', 'cents', [route.collectedCents, route.heldAgainstCents, outflow], ([collected, held, out]) => Math.max(0, (collected ?? 0) - (held ?? 0) - (out ?? 0)));
+  const free = derive('free to use', 'cents', [route.collectedCents, route.heldAgainstCents, outflow], ([collected, held, out]) => (collected ?? 0) - (held ?? 0) - (out ?? 0));
+  const shortfallCents = free.value === null ? null : Math.max(0, -free.value);
   if (route.collectedCents.value === null) gaps.push('collected amount');
   if (route.heldAgainstCents.value === null) gaps.push('amount held against refund or fulfilment');
-  return { route: route.id, collectedCents: route.collectedCents.value, outflowCents, heldAgainstCents: route.heldAgainstCents.value, freeCents: free, gaps };
+  return { route: route.id, collectedCents: route.collectedCents.value, outflowCents, heldAgainstCents: route.heldAgainstCents.value, freeCents: free, shortfallCents, gaps };
 }
 
 /* ------------------------------------------------------------------------- */

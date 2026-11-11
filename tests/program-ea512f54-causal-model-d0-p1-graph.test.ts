@@ -207,13 +207,25 @@ describe('the money route says what is genuinely free', () => {
     expect(reading.freeCents.derivedFrom).toHaveLength(3);
   });
 
-  it('never reports a negative free amount', () => {
-    expect(readMoneyRoute(route({ collectedCents: observed(10_000) })).freeCents.value).toBe(0);
+  it('reports a shortfall as a negative free amount instead of plugging it to zero', () => {
+    // Collected 10,000, held 20,000, outflows 35,000: the route is 45,000 under water.
+    const r = readMoneyRoute(route({ collectedCents: observed(10_000) }));
+    expect(r.freeCents.value).toBe(-45_000);
+    expect(r.shortfallCents).toBe(45_000);
+    const under = readMoneyRoute(route({ collectedCents: observed(1_000), heldAgainstCents: observed(0), outflows: [{ to: 'supplier', reason: 'cost', amountCents: 5_000, at: '2026-11-15' }] }));
+    expect(under.freeCents.value).toBe(-4_000);
+    expect(under.shortfallCents).toBe(4_000);
+  });
+
+  it('a route with money left over has no shortfall, and an unknown one has an unknown shortfall', () => {
+    expect(readMoneyRoute(route()).shortfallCents).toBe(0);
+    expect(readMoneyRoute(route({ collectedCents: unknownFigure('c', 'cents') })).shortfallCents).toBeNull();
   });
 
   it('collected money still held is not free', () => {
     const r = readMoneyRoute(route({ heldAgainstCents: observed(100_000), outflows: [] }));
     expect(r.freeCents.value).toBe(0);
+    expect(r.shortfallCents).toBe(0);
   });
 
   it('an unknown collection or hold makes free cash unknown and names the gap', () => {
