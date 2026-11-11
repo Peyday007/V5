@@ -308,6 +308,16 @@ describe('a figure with no lineage is refused at the door', () => {
     expect((await call('POST', `${CAUSAL()}/account`, { cookie: adminCookie, body: { graph: odd } })).status).toBe(400);
   });
 
+  it('a route under water is a discrepancy and a need, never a zero', async () => {
+    const graph = GRAPH();
+    graph.routes[0]!.collectedCents = fig(10_000, 'OBSERVED') as never;
+    const r = await call('POST', `${CAUSAL()}/account`, { cookie: adminCookie, body: { graph } });
+    expect(r.status).toBe(200);
+    expect(r.body.account.routes[0].freeCents.value).toBe(-45_000);
+    expect(r.body.account.routes[0].discrepancies).toHaveLength(1);
+    expect(r.body.needs.map((n: { subject: string }) => n.subject)).toContain('route rt: shortfall of 45000 cents');
+  });
+
   it('an absent figure is unknown, never zero', async () => {
     const graph = GRAPH();
     delete (graph.routes[0] as Record<string, unknown>).heldAgainstCents;
@@ -359,6 +369,18 @@ describe('money path and what-if', () => {
     expect(r.body.before.routes[0].freeCents.value).toBe(45_000);
     expect(r.body.after.routes[0].freeCents.value).toBe(5_000);
     expect(r.body.changed.routes[0]).toMatchObject({ freeCentsBefore: 45_000, freeCentsAfter: 5_000, freeCentsDelta: -40_000 });
+  });
+
+  it('a change that puts the route under water shows the true delta across zero and names the shortfall', async () => {
+    const r = await call('POST', `${CAUSAL()}/what-if`, {
+      cookie: adminCookie,
+      body: { graph: GRAPH(), changes: [{ kind: 'route', routeId: 'rt', set: { collectedCents: fig(10_000, 'OBSERVED') } }] },
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.after.routes[0].freeCents.value).toBe(-45_000);
+    expect(r.body.after.routes[0].shortfallCents).toBe(45_000);
+    expect(r.body.after.routes[0].discrepancies).toHaveLength(1);
+    expect(r.body.changed.routes[0]).toMatchObject({ freeCentsBefore: 45_000, freeCentsAfter: -45_000, freeCentsDelta: -90_000 });
   });
 
   it('a change that opens a different route is a branch beside the original', async () => {

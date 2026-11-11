@@ -219,6 +219,15 @@ function needsOf(graph: CausalGraph, readings: MoneyRouteReading[], chain: Chain
     for (const gap of reading.gaps) {
       needs.push({ subject: `route ${reading.route}: ${gap}`, question: `What is the ${gap} for route ${reading.route}, and what evidences it?`, route: 'RESEARCH', permissions: [] });
     }
+    // A route under water is decision-critical: what covers the shortfall is an unknown, not a zero.
+    if (reading.shortfallCents !== null && reading.shortfallCents > 0) {
+      needs.push({
+        subject: `route ${reading.route}: shortfall of ${reading.shortfallCents} cents`,
+        question: `Holds and outflows on route ${reading.route} exceed collections by ${reading.shortfallCents} cents: what covers it, or which term changes?`,
+        route: 'RESEARCH',
+        permissions: [],
+      });
+    }
   }
   if (chain) {
     for (const stage of chain.stages) {
