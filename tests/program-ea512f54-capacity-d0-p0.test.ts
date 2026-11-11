@@ -5,7 +5,8 @@
  * never leaks a credential into a recorded reason.
  *
  * Covers stageCapacity, chooseConstraint, recordStageCapacity (stageCapacity.ts)
- * and classifyRouteFailure, redactSecrets, routeHold and recordRouteOutcome
+ * and classifyRouteFailure, redactSecrets, routeHold, takeRouteProbe and
+ * recordRouteOutcome
  * (worker.ts).
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -29,6 +30,7 @@ import {
   resetRouteHealth,
   ROUTE_FAILURE_LIMIT,
   routeHold,
+  takeRouteProbe,
 } from '../server/services/freeLane/worker.ts';
 
 /* ------------------------------------------------------------------------- */
@@ -274,10 +276,25 @@ describe('routeHold / recordRouteOutcome', () => {
     for (let i = 0; i < ROUTE_FAILURE_LIMIT; i += 1) recordRouteOutcome('m', { ok: false, why: 'model call failed: timeout' }, now);
     expect(routeHold('m', now)).not.toBeNull();
     const later = now + 5 * 60_000;
-    expect(routeHold('m', later)).toBeNull(); // the single re-probe
+    expect(routeHold('m', later)).toBeNull(); // the single re-probe is due
+    expect(takeRouteProbe('m', later)).toBe(true); // an admitted item takes it
     expect(routeHold('m', later)).not.toBeNull(); // the next item waits for it
+    expect(takeRouteProbe('m', later)).toBe(false); // and cannot take it a second time
     recordRouteOutcome('m', { ok: true }, later);
     expect(routeHold('m', later)).toBeNull();
+    expect(takeRouteProbe('m', later)).toBe(true); // a healthy route has nothing to spend
+  });
+
+  it('does not spend the re-probe slot on an item a later admission filter refuses', () => {
+    const now = 1_000_000;
+    for (let i = 0; i < ROUTE_FAILURE_LIMIT; i += 1) recordRouteOutcome('m', { ok: false, why: 'model call failed: timeout' }, now);
+    const later = now + 5 * 60_000;
+    // takeOne's admit asks routeHold first, then the unfit and freeLaneAdmits
+    // filters. Items those filters refuse only ever read the standing, so the
+    // slot is still free for the first item that is admitted.
+    for (let refused = 0; refused < 5; refused += 1) expect(routeHold('m', later)).toBeNull();
+    expect(takeRouteProbe('m', later + 1)).toBe(true);
+    expect(routeHold('m', later + 1)).not.toBeNull();
   });
 
   it('does not count Brain database pressure or non-model failures against a route', () => {
