@@ -50,6 +50,7 @@ import {
 } from '../../repos/goals.ts';
 import { assembleGoals, type GoalView } from './model.ts';
 import { rankGoals } from './priority.ts';
+import './capabilityProbe.ts'; // registers probe r01.gov-22-1 in this process (GOV-22-1)
 
 export interface GoalTickReport {
   goals: number;
