@@ -45,7 +45,7 @@ jobs:
   integrations:
     name: Generate, sync, unseal, check
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 80
     steps:
       - uses: actions/checkout@v4
 
@@ -60,6 +60,11 @@ jobs:
 
       # Never against a machine mid-release; see .github/actions/await-release.
       - uses: ./.github/actions/await-release
+        with:
+          # This workflow restarts the Brain, so it waits out the hosted
+          # verification too, not only the machine replacement.
+          whole-job: 'true'
+          timeout-seconds: '2700'
 
       - name: Generate, sync and unseal
         id: repair
