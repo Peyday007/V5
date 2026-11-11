@@ -14,7 +14,7 @@ import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { checkIn } from '../server/services/bins/service.ts';
-import { asksByPriority, claimAsks, ensureFreeWorkers, firstJson, freeLaneTick, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
+import { asksByPriority, claimAsks, ensureFreeWorkers, firstJson, freeLaneSkips, freeLaneTick, NO_MEMBERSHIP, quotedIn, resetFreeLaneMemberships, retryNotReached, startFreeLaneLoop, stopFreeLaneLoop, takeWave } from '../server/services/freeLane/worker.ts';
 import { freeLaneMayTakeImprovement, resetActivationCache } from '../server/services/improvement/activation.ts';
 import { createLayer } from '../server/repos/layers.ts';
 import { IMPROVEMENT_RESEARCH_SLOT_CAP } from '../server/domain/improvement.ts';
@@ -931,5 +931,47 @@ describe('a model keeps only the kinds of work Brain accepts from it', () => {
     expect([...unfitPairs(viaFallback, ['a', 'b', 'gpu'])]).toEqual(['a|RESEARCH_AUDIT']);
     expect([...unfitPairs(viaFallback, ['a', 'gpu'], { gpu: 'a' })]).toEqual([]);
     expect([...unfitPairs(viaFallback, ['a', 'b', 'gpu'], { gpu: 'a' })].sort()).toEqual(['a|RESEARCH_AUDIT', 'gpu|RESEARCH_AUDIT']);
+  });
+});
+
+describe('the lane recovers idle capacity by itself (rule 9)', () => {
+  it('retries a pool start that threw until the pool runs, without a process restart (lane pool stopped)', async () => {
+    let attempts = 0;
+    let up = false;
+    stopFreeLaneLoop();
+    startFreeLaneLoop(0, 1, {
+      start: () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('import failed');
+        up = true;
+      },
+      running: () => up,
+      retryMs: 5,
+      maxRetryMs: 20,
+    });
+    try {
+      const deadline = Date.now() + 2_000;
+      while (!up && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(up).toBe(true);
+      expect(attempts).toBe(2);
+    } finally {
+      stopFreeLaneLoop();
+    }
+  });
+
+  it('does not wait out a cached empty membership, and names it as the reason the lane is idle (membership lost)', async () => {
+    const { takeOne } = await import('../server/services/freeLane/worker.ts');
+    resetFreeLaneMemberships();
+    const workers = await ensureFreeWorkers(CONFIG);
+    const base = { workers, completer: model().completer, fetchSource, search: async () => [], config: CONFIG };
+    const before = freeLaneSkips()[NO_MEMBERSHIP] ?? 0;
+    // No free-lane work anywhere yet: no project to be a member of.
+    expect((await takeOne({ ...base, worker: workers[0]!, index: 0 })).claimed).toBeNull();
+    expect(freeLaneSkips()[NO_MEMBERSHIP]).toBe(before + 1);
+    // Work arrives a moment later: the next ask re-reads membership and claims it.
+    const { orchestration, fragment } = await packet(play.project.id);
+    const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const taken = await takeOne({ ...base, worker: workers[0]!, index: 0, spillover: true });
+    expect(taken.claimed?.workItemId).toBe(itemId);
   });
 });
