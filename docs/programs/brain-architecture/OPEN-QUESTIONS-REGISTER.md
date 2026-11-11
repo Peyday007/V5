@@ -16,6 +16,14 @@ project state; the program, its map and its plan live in the database.
 - Figures, categories and examples are data, never a whitelist (R01-A1, §18.1).
 - The owner will continue adding and refining the architecture. A new release appends
   new entries here; it never removes one.
+- Code reads this register. `server/services/goals/openQuestions.ts` holds the same
+  entries for the running Brain (the deployed image carries no `docs/`), answers `null`
+  for an `OPEN` question, refuses a re-map that removes an entry, rewrites a clause or
+  withdraws an answer, and checks every clause verbatim against S-0097/S-0098 of the
+  program source stored on production (`checkOpenQuestionsRegister`).
+  `tests/program-ea512f54-factory-program-d0-p1-register.test.ts` refuses this document
+  and the code disagreeing, and checks both against the real source. Re-mapping an
+  answer is a change to both, in one commit.
 - Vocabulary is the program owner's (§96/§97): no new status set. `OPEN` and `ANSWERED`
   describe a question, not a requirement, and do not appear in the program's own status.
 
