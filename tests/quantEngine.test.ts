@@ -11,7 +11,7 @@ import { collapseLineage, classify, onScale, pool } from '../server/services/qua
 import { composeArrangement } from '../server/services/quant/mechanism.ts';
 import { optimizePortfolio, type Activity } from '../server/services/quant/portfolio.ts';
 import { informationValue } from '../server/services/quant/value.ts';
-import { attributeFunding, decideResearch, observedCollectionRate, quantifyRouteMoney, routeInputsFromEntries, scoreRoutes, CASH_IDENTITIES } from '../server/services/quant/deadline.ts';
+import { attributeFunding, capitalTurnover, decideResearch, observedCollectionRate, quantifyRouteMoney, routeInputsFromEntries, scoreRoutes, CASH_IDENTITIES } from '../server/services/quant/deadline.ts';
 import { toScenarioInput } from '../server/services/quant/export.ts';
 import { solveProblem, type QuantProblem } from '../server/services/quant/problem.ts';
 import { runScenarioModel } from '../server/services/scenario/run.ts';
@@ -789,3 +789,67 @@ describe('MONEY-13-4. who funded an outlay is read from the order money moved (r
 function sumOutlays(m: { supplierOutlays: { amount: number }[] }): number {
   return m.supplierOutlays.reduce((t, o) => t + o.amount, 0);
 }
+
+describe('MONEY-13-4: the goal planner chooses by risk-adjusted contribution and capital turnover, not by gross cash', () => {
+  const ex = (keys: string[], key: string) => keys.filter((k) => k !== key);
+  it('between combinations that reach the target equally, picks the larger collectible margin over the larger gross', () => {
+    // Both reach 10,000 by day 30 in every world. "gross" settles more but pays out almost all of it.
+    const keys = ['gross', 'margin'];
+    const r = optimizePortfolio({
+      target: 10_000,
+      deadlineDays: 30,
+      worlds: 300,
+      activities: [
+        { key: 'gross', label: 'g', justified: true, excludes: ex(keys, 'gross'), spend: new Array<number>(100).fill(18_000), ...fixed(100, 20_000, 10) },
+        { key: 'margin', label: 'm', justified: true, excludes: ex(keys, 'margin'), spend: new Array<number>(100).fill(2_000), ...fixed(100, 12_000, 10) },
+      ],
+    });
+    expect(r.best!.keys).toEqual(['margin']);
+    expect(r.best!.reach).toBe(1);
+    expect(r.best!.riskAdjustedContribution).toBeCloseTo(10_000, 6);
+    const gross = r.singles.find((one) => one.keys[0] === 'gross')!;
+    expect(gross.settledP50).toBeGreaterThan(r.best!.settledP50);
+    expect(gross.riskAdjustedContribution).toBeCloseTo(2_000, 6);
+  });
+
+  it('counts collection risk: cash that settles after the deadline in some worlds lowers contribution', () => {
+    const late = { key: 'late', label: 'l', justified: true, cash: [5_000, 5_000], days: [10, 40] };
+    const r = optimizePortfolio({ target: 1, deadlineDays: 30, worlds: 2_000, activities: [late] });
+    const c = r.singles[0]!.riskAdjustedContribution;
+    expect(c).toBeGreaterThan(1_000);
+    expect(c).toBeLessThan(4_000);
+  });
+
+  it('with equal reach and margin, picks the route that turns its capital faster', () => {
+    const keys = ['slow', 'fast'];
+    const r = optimizePortfolio({
+      target: 1_000,
+      deadlineDays: 60,
+      worlds: 200,
+      activities: [
+        { key: 'slow', label: 's', justified: true, capital: 1_000, excludes: ex(keys, 'slow'), ...fixed(50, 3_000, 40) },
+        { key: 'fast', label: 'f', justified: true, capital: 1_000, excludes: ex(keys, 'fast'), ...fixed(50, 3_000, 5) },
+      ],
+    });
+    expect(r.best!.keys).toEqual(['fast']);
+    expect(r.best!.capitalTurnover).toBeCloseTo(capitalTurnover(3_000, 1_000, 5)!, 9);
+    expect(r.singles.find((one) => one.keys[0] === 'slow')!.capitalTurnover).toBeCloseTo(3_000 / (1_000 * 40), 9);
+  });
+
+  it('a stated TURNOVER objective leads with turnover, and nothing ranks by retained cash', () => {
+    const keys = ['big_slow', 'small_fast'];
+    const activities: Activity[] = [
+      { key: 'big_slow', label: 'b', justified: true, capital: 5_000, excludes: ex(keys, 'big_slow'), ...fixed(50, 9_000, 50) },
+      { key: 'small_fast', label: 's', justified: true, capital: 500, excludes: ex(keys, 'small_fast'), ...fixed(50, 2_000, 5) },
+    ];
+    expect(optimizePortfolio({ target: 1_000, deadlineDays: 60, worlds: 200, activities }).best!.keys).toEqual(['big_slow']);
+    expect(optimizePortfolio({ target: 1_000, deadlineDays: 60, worlds: 200, activities, objective: 'TURNOVER' }).best!.keys).toEqual(['small_fast']);
+  });
+
+  it('the ledger ranking and the planner share one turnover definition', () => {
+    expect(capitalTurnover(1_500, 1_000, 41)).toBeCloseTo(1_500 / (1_000 * 41), 12);
+    expect(capitalTurnover(100, 0, 0)).toBe(100);
+    expect(capitalTurnover(null, 1, 1)).toBeNull();
+    expect(capitalTurnover(1, null, 1)).toBeNull();
+  });
+});

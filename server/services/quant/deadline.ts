@@ -425,6 +425,21 @@ export function observedCollectionRate(money: RouteMoneyVelocity): number | null
 }
 
 /**
+ * Collectible contribution per unit of capital held per day of the cycle: what
+ * one unit of tied-up money earns for each day it is tied up. Capital and cycle
+ * are floored at one so a route that ties up nothing, or turns in under a day,
+ * scores its contribution rather than infinity. Null when any input is unknown —
+ * never zero. Both the ledger's route ranking (`scoreRoutes`) and the goal
+ * planner's combination choice (`quant/portfolio.ts`) read turnover from here,
+ * so there is one definition of it.
+ */
+export function capitalTurnover(contribution: number | null, capital: number | null, cycleDays: number | null): number | null {
+  if (contribution === null || capital === null || cycleDays === null) return null;
+  if (!Number.isFinite(contribution) || !Number.isFinite(capital) || !Number.isFinite(cycleDays)) return null;
+  return contribution / (Math.max(capital, 1) * Math.max(cycleDays, 1));
+}
+
+/**
  * Rank routes for an objective. Contribution is the gross margin times the
  * probability it is collected (stated by the caller, else measured from the rows);
  * turnover divides by the capital held for the cycle.
@@ -444,7 +459,7 @@ export function scoreRoutes(
         ? money.daysLeadToCommitment + money.daysCommitmentToFunds + money.daysFundsToUsableCash
         : null;
     const capital = money.peakWorkingCapital;
-    const turnover = contribution === null || cycle === null || capital === null ? null : contribution / (Math.max(capital, 1) * Math.max(cycle, 1));
+    const turnover = capitalTurnover(contribution, capital, cycle);
     return { routeKey: money.routeKey, capitalTurnover: turnover, riskAdjustedContribution: contribution };
   });
   const key = (s: RouteScore) => (objective === 'TURNOVER' ? s.capitalTurnover : s.riskAdjustedContribution);
@@ -574,19 +589,4 @@ export async function readRouteMoney(input: {
   // The opportunity row is the lead, and its creation instant is when the lead was recorded.
   const leadAt = new Map(opportunities.map((o) => [o.id, o.createdAt] as const));
   return routeInputsFromEntries(entries, leadAt).map(quantifyRouteMoney);
-}
-
-/** The same routes ranked for an objective; unknown inputs score null and sort last. */
-export async function rankRoutesFromLedger(input: {
-  projectId: string;
-  currency: string;
-  objective: 'TURNOVER' | 'CONTRIBUTION';
-  collectionProbability?: Record<string, number>;
-}): Promise<{ money: RouteMoneyVelocity[]; ranking: RouteScore[] }> {
-  const money = await readRouteMoney(input);
-  const ranking = scoreRoutes(
-    money.map((m) => ({ money: m, collectionProbability: input.collectionProbability?.[m.routeKey] })),
-    input.objective,
-  );
-  return { money, ranking };
 }

@@ -24,6 +24,7 @@
  * says which.
  */
 import { inverseNormal, makeRng, normalCdf } from '../scenario/random.ts';
+import { capitalTurnover } from './deadline.ts';
 
 export interface Activity {
   key: string;
@@ -66,6 +67,8 @@ export interface PortfolioProblem {
   spendCeiling?: number;
   worlds?: number;
   seed?: number;
+  /** What the combination is chosen for; REACH when unstated. */
+  objective?: PortfolioObjective;
 }
 
 export interface PortfolioReading {
@@ -79,6 +82,19 @@ export interface PortfolioReading {
   capitalShort: number;
   /** Share of worlds whose combined spending broke the spending ceiling (0 when there is none). */
   overSpend: number;
+  /**
+   * Risk-adjusted collectible contribution (MONEY-13-4): the mean, over every
+   * world, of cash settled by the deadline less what the combination paid out
+   * in that world. A world where a member never started or its cash settled
+   * late contributes nothing for it, so the collection risk is in the mean.
+   */
+  riskAdjustedContribution: number;
+  /**
+   * That contribution per unit of capital tied up per day of the cycle
+   * (`capitalTurnover` in `deadline.ts`): the mean capital the members that
+   * started tied up, over the mean days until the last of them settled.
+   */
+  capitalTurnover: number | null;
   feasible: boolean;
   /** Why it cannot run at all, when it cannot. */
   infeasibleBecause: string | null;
@@ -161,18 +177,23 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
   const keys = members.map((m) => problem.activities[m]!.key);
   const refusal = refuse(problem, members);
   const justified = members.every((m) => problem.activities[m]!.justified);
-  if (refusal) return { keys, reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, capitalShort: 0, overSpend: 0, feasible: false, infeasibleBecause: refusal, basis: justified ? 'PROBABILITY' : 'COVERAGE' };
+  if (refusal) return { keys, reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, capitalShort: 0, overSpend: 0, riskAdjustedContribution: 0, capitalTurnover: null, feasible: false, infeasibleBecause: refusal, basis: justified ? 'PROBABILITY' : 'COVERAGE' };
   const ordered = [...members].sort((a, b) => (problem.activities[a]!.startDay ?? 0) - (problem.activities[b]!.startDay ?? 0));
   const settled = new Float64Array(worlds);
   let reached = 0;
   let short = 0;
   let over = 0;
+  let contributionSum = 0;
+  let capitalSum = 0;
+  let cycleSum = 0;
   const pending: Array<{ day: number; cash: number }> = [];
   for (let i = 0; i < worlds; i++) {
     let capital = problem.startingCapital ?? Infinity;
     let total = 0;
     let wasShort = false;
     let spent = 0;
+    let tiedUp = 0;
+    let lastDay = 0;
     pending.length = 0;
     for (const m of ordered) {
       const act = problem.activities[m]!;
@@ -191,7 +212,9 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
         continue;
       }
       capital -= need;
+      tiedUp += need;
       const day = start + act.days[s]!;
+      if (day > lastDay) lastDay = day;
       // Capital comes back with the cash it earned.
       const cash = act.cash[s]!;
       spent += act.spend?.[s] ?? 0;
@@ -199,6 +222,9 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
       if (day <= problem.deadlineDays) total += cash;
     }
     settled[i] = total;
+    contributionSum += total - spent;
+    capitalSum += tiedUp;
+    cycleSum += lastDay;
     const overCeiling = problem.spendCeiling !== undefined && spent > problem.spendCeiling + 1e-9;
     if (overCeiling) over += 1;
     if (total >= problem.target && !overCeiling) reached += 1;
@@ -206,16 +232,51 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
   }
   const sorted = Array.from(settled).sort((a, b) => a - b);
   const q = (p: number) => sorted[Math.min(worlds - 1, Math.floor(p * worlds))]!;
-  return { keys, reach: reached / worlds, settledP10: q(0.1), settledP50: q(0.5), settledP90: q(0.9), capitalShort: short / worlds, overSpend: over / worlds, feasible: true, infeasibleBecause: null, basis: justified ? 'PROBABILITY' : 'COVERAGE' };
+  return { keys, reach: reached / worlds, settledP10: q(0.1), settledP50: q(0.5), settledP90: q(0.9), capitalShort: short / worlds, overSpend: over / worlds, riskAdjustedContribution: contributionSum / worlds, capitalTurnover: capitalTurnover(contributionSum / worlds, capitalSum / worlds, cycleSum / worlds), feasible: true, infeasibleBecause: null, basis: justified ? 'PROBABILITY' : 'COVERAGE' };
 }
 
-function better(a: PortfolioReading, b: PortfolioReading): number {
-  return Number(b.feasible) - Number(a.feasible) || b.reach - a.reach || b.settledP50 - a.settledP50 || a.keys.length - b.keys.length;
+/**
+ * What a combination is chosen for. REACH is a goal's own objective — the share
+ * of worlds that settle the target by the deadline — and is the default; a
+ * caller optimizing money velocity or collectible margin names TURNOVER or
+ * CONTRIBUTION. Whatever leads, the other money measures break its ties in
+ * place of gross settled cash, so between combinations that reach the target
+ * equally the one leaving more collectible margin, then turning capital faster,
+ * is chosen (MONEY-13-4: "Optimize capital turnover and risk-adjusted
+ * collectible contribution for the particular objective, not an automatic
+ * requirement to retain all cash"). Nothing here ranks by retained cash.
+ */
+export type PortfolioObjective = 'REACH' | 'CONTRIBUTION' | 'TURNOVER';
+
+const EPS = 1e-9;
+const desc = (a: number, b: number) => (Math.abs(b - a) <= EPS * Math.max(1, Math.abs(a), Math.abs(b)) ? 0 : b - a);
+const turnoverOf = (r: PortfolioReading) => r.capitalTurnover ?? -Infinity;
+const byTurnover = (a: PortfolioReading, b: PortfolioReading) => {
+  const ta = turnoverOf(a);
+  const tb = turnoverOf(b);
+  return ta === tb ? 0 : desc(ta, tb);
+};
+
+export function comparer(objective: PortfolioObjective = 'REACH'): (a: PortfolioReading, b: PortfolioReading) => number {
+  const reach = (a: PortfolioReading, b: PortfolioReading) => desc(a.reach, b.reach);
+  const contribution = (a: PortfolioReading, b: PortfolioReading) => desc(a.riskAdjustedContribution, b.riskAdjustedContribution);
+  const order =
+    objective === 'TURNOVER' ? [byTurnover, contribution, reach] : objective === 'CONTRIBUTION' ? [contribution, byTurnover, reach] : [reach, contribution, byTurnover];
+  return (a, b) => {
+    const f = Number(b.feasible) - Number(a.feasible);
+    if (f) return f;
+    for (const one of order) {
+      const d = one(a, b);
+      if (d) return d;
+    }
+    return b.settledP50 - a.settledP50 || a.keys.length - b.keys.length;
+  };
 }
 
 /** Find the combination most likely to reach the target, with every alternative ranked. */
 export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
   const worlds = problem.worlds ?? DEFAULT_WORLDS;
+  const better = comparer(problem.objective);
   const n = problem.activities.length;
   if (n === 0) return { best: null, ranked: [], singles: [], refused: [], searched: 0 };
   const picks = drawWorlds(problem, worlds);
