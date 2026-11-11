@@ -3251,6 +3251,28 @@ describe('a reviewer Brain fired is identified by the fire, not by what it says'
     expect(verdict.ok).toBe(false);
     expect(verdict.reason ?? '').toContain('implemented part of this campaign');
   });
+
+  it('refuses a second review of the same commit to the session that already reviewed it', async () => {
+    const { recordReview } = await import('../server/repos/factoryFleet.ts');
+    const { getBin } = await import('../server/repos/bins.ts');
+    await recordReview({
+      campaignId,
+      round: 1,
+      scope: 'CAMPAIGN',
+      reviewerSessionId: 'cse_earlier_reviewer',
+      reviewedSha: BASE,
+      verdict: 'CHANGES_REQUIRED',
+      independence: 'SESSION_SEPARATED',
+      summary: 'asked for changes',
+      findings: [],
+    });
+    const same = await binAdmission({ workerId, principal: reviewerPrincipal(workerId), sessionRef: 'cse_earlier_reviewer' });
+    const refused = await same((await getBin(reviewBinId))!);
+    expect(refused.ok).toBe(false);
+    expect(refused.reason ?? '').toContain('another look at the same commit is a different reviewer');
+    const other = await binAdmission({ workerId, principal: reviewerPrincipal(workerId), sessionRef: 'cse_new_reviewer' });
+    expect((await other((await getBin(reviewBinId))!)).ok).toBe(true);
+  });
 });
 
 /* ========================================================================= */

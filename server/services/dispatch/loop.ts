@@ -318,8 +318,8 @@ export async function dispatchTick(
       console.warn('[dispatch] auto-scale failed:', (error as Error).message);
     }
     try {
-      const { unblockApprovedPrograms } = await import('../factory/program/unblock.ts');
-      const steps = await unblockApprovedPrograms();
+      const { unblockApprovedPrograms, reconcileBlockedScopes } = await import('../factory/program/unblock.ts');
+      const steps = [...(await unblockApprovedPrograms()), ...(await reconcileBlockedScopes())];
       const acted = steps.filter((step) => step.action !== 'SKIP');
       if (acted.length > 0) console.log(`[dispatch] program auto-unblock: ${acted.map((s) => `${s.action} ${s.campaign}`).join('; ')}`);
     } catch (error) {

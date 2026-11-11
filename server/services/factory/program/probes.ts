@@ -287,6 +287,9 @@ define('r01.opp-04', async (args) => (await releaseOne<typeof import('./release0
 define('r01.auth-20-3', async (args) => (await releaseOne<typeof import('./release01/authorityProbe.ts')>('./release01/authorityProbe.ts', (m) => m.graduatedAuthorityHoldsOnRows))(args));
 define('r01.auth-21-6', async (args) => (await releaseOne<typeof import('./release01/authorityProbe.ts')>('./release01/authorityProbe.ts', (m) => m.readOnlyNeverActsOnRows))(args));
 define('r01.auth-34', async (args) => (await releaseOne<typeof import('./release01/authorityProbe.ts')>('./release01/authorityProbe.ts', (m) => m.policyToActionHoldsOnRows))(args));
+define('r01.auto-20-1', async (args) => (await releaseOne<typeof import('./release01/autonomyProbe.ts')>('./release01/autonomyProbe.ts', (m) => m.originationHoldsOnRows))(args));
+define('r01.auto-20-2', async (args) => (await releaseOne<typeof import('./release01/autonomyProbe.ts')>('./release01/autonomyProbe.ts', (m) => m.gapLoopHoldsOnRows))(args));
+define('r01.auto-20-4', async (args) => (await releaseOne<typeof import('./release01/autonomyProbe.ts')>('./release01/autonomyProbe.ts', (m) => m.gapMeasuresHoldOnRows))(args));
 define('r01.gov-17-3', async () => {
   const { BRAIN_REVISION } = await import('../../../env.ts');
   return (await import('./releaseEvaluation.ts')).releaseEvaluationHoldsOnRows(BRAIN_REVISION);

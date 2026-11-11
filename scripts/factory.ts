@@ -1804,6 +1804,15 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'reconcile-scopes': {
+      // The hourly scope reconciliation, now (owner's authorization 2026-11-11).
+      const { reconcileBlockedScopes } = await import('../server/services/factory/program/unblock.ts');
+      const steps = await reconcileBlockedScopes(Date.now(), true);
+      for (const step of steps) process.stdout.write(`${step.action} ${step.campaign}: ${step.detail}\n`);
+      process.stdout.write(`reconcile: ${steps.filter((s) => s.action !== 'SKIP' && s.action !== 'REFUSED').length} step(s), ${steps.filter((s) => s.action === 'REFUSED').length} refused\n`);
+      break;
+    }
+
     case 'program-approve': {
       const { approveProgram } = await import('../server/services/factory/program/coordinator.ts');
       const programId = flagString(flags, 'program') ?? fail('--program is required');

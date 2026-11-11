@@ -513,7 +513,7 @@ async function printPlan(reading: PlanReading): Promise<void> {
     console.log(`  methods     ${yieldRows.reduce((n, x) => n + x.methods, 0)} way(s) of reasoning on record`);
     for (const y of yieldRows.slice(0, 12)) console.log(`    learned   ${y.stance.padEnd(24)} ${y.origin.toLowerCase().padEnd(10)} ${y.methods} method(s), ${y.tries} tri(es), ${y.improvements} improved, ${y.wins} won, mean lift ${(y.meanLift * 100).toFixed(1)}%`);
   }
-  for (const x of await recentExplorations(reading.goalId).catch(() => [])) console.log(`    explored  ${x.created_at} ${x.directions} direction(s), ${x.model_directions} from the model; best ${(x.best_reach * 100).toFixed(1)}% vs greedy ${(x.greedy_reach * 100).toFixed(1)}%${x.replaced ? ' (strategy replaced)' : ''}: ${x.best_method ?? 'greedy kept'}`);
+  for (const x of await recentExplorations(reading.goalId).catch(() => [])) console.log(`    explored  ${x.created_at} ${Number(x.variations).toLocaleString('en-US')} variation(s) of ${x.variables} variable(s), ${x.directions} direction(s), ${x.model_directions} from the model; best ${(x.best_reach * 100).toFixed(1)}% vs greedy ${(x.greedy_reach * 100).toFixed(1)}%${x.replaced ? ' (strategy replaced)' : ''}: ${x.best_method ?? 'greedy kept'}`);
   console.log(`  ladder      ${Object.entries(reading.ladder).map(([stage, n]) => `${stage} ${n}`).join(' · ')}`);
   console.log(`  policy      ${reading.executionPolicy}${reading.executionPolicy === 'SQUEEZE' ? ': a cash target with a deadline; no market-testing phase, sellable openings are sold now, several at once' : ''}`);
   for (const one of reading.sales) {

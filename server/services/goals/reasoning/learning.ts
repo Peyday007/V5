@@ -14,6 +14,33 @@
 import { getDb } from '../../../db/database.ts';
 import { newId, nowIso } from '../../../repos/util.ts';
 import { makeDirection, type Direction, type Exploration, type Origin, type Transform } from './directions.ts';
+import type { Strategy } from './variables.ts';
+
+/** What a plan read's variable sweep concluded, small enough for one row (§102). */
+export function sweepSummary(x: Exploration) {
+  const w = x.sweep!;
+  const engine = new Map(x.all.map((r) => [r.direction.signature, r]));
+  const strat = (s: Strategy | null) => (s ? { label: s.label.slice(0, 200), mean: Math.round(s.reading.mean), p10: Math.round(s.reading.p10), reach: s.reading.reach, challenged: s.challenged.reach, committed: Math.round(s.reading.committed), assumptions: s.assumptions.slice(0, 6) } : null);
+  return {
+    variations: w.variations,
+    equivalent: w.equivalent,
+    space: w.space,
+    counts: { screened: w.screened, factorial: w.factorial, local: w.local, conditions: w.conditionReads },
+    elapsedMs: w.elapsedMs,
+    variables: w.variables.map((v) => `${v.family}:${v.levels}${v.fixed ? ':fixed' : ''}`),
+    conditions: w.conditions.length,
+    approaches: w.approaches.map((a) => `${a.approach}:${a.evaluated}/${a.improved}`),
+    baseline: { mean: Math.round(w.baseline.mean), reach: w.baseline.reach },
+    supported: strat(w.bestSupported),
+    mathematical: strat(w.bestMathematical),
+    requirements: w.requirements.map((r) => ({ condition: r.condition, needed: r.needed, evidencedTop: r.evidencedTop, inEvidence: r.inEvidence })),
+    sensitive: w.sensitive.slice(0, 5),
+    engine: w.directions.map((d) => {
+      const r = engine.get(d.signature);
+      return { stance: d.stance, name: d.name.slice(0, 160), reach: r?.reading.reach ?? null, p50: r ? Math.round(r.reading.settledP50) : null, challenged: r?.challenged?.reach ?? null };
+    }),
+  };
+}
 import type { ReasoningMethodRow } from '../../../domain/types.ts';
 
 const MATERIAL = 0.02;
@@ -74,9 +101,9 @@ export async function recordExploration(goalId: string, x: Exploration): Promise
     );
   }
   await db.run(
-    `INSERT INTO reasoning_explorations (id, goal_id, directions, model_directions, stances, baseline_reach, greedy_reach, best_reach, best_method, replaced, summary, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [newId('rsx'), goalId, x.directions, x.byOrigin.MODEL, x.stances.length, base, x.greedy.reach, x.winner?.reading.reach ?? x.greedy.reach, x.winner?.direction.name.slice(0, 200) ?? null, x.replaced ? 1 : 0, x.sentence.slice(0, 1000), now],
+    `INSERT INTO reasoning_explorations (id, goal_id, directions, model_directions, stances, baseline_reach, greedy_reach, best_reach, best_method, replaced, summary, variations, variables, sweep, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [newId('rsx'), goalId, x.directions, x.byOrigin.MODEL, x.stances.length, base, x.greedy.reach, x.winner?.reading.reach ?? x.greedy.reach, x.winner?.direction.name.slice(0, 200) ?? null, x.replaced ? 1 : 0, x.sentence.slice(0, 1000), x.sweep?.variations ?? 0, x.sweep ? x.sweep.variables.length + x.sweep.conditions.length : 0, x.sweep ? JSON.stringify(sweepSummary(x)) : null, now],
   );
 }
 
@@ -90,6 +117,6 @@ export async function methodYield(): Promise<Array<{ stance: string; origin: str
   return rows.map((r) => ({ stance: r.stance, origin: r.origin, methods: Number(r.methods), tries: Number(r.tries), improvements: Number(r.improvements), wins: Number(r.wins), meanLift: Number(r.tries) > 0 ? Number(r.lift) / Number(r.tries) : 0 }));
 }
 
-export async function recentExplorations(goalId: string, limit = 5): Promise<Array<{ created_at: string; directions: number; model_directions: number; best_reach: number; greedy_reach: number; best_method: string | null; replaced: number }>> {
-  return getDb().all('SELECT created_at, directions, model_directions, best_reach, greedy_reach, best_method, replaced FROM reasoning_explorations WHERE goal_id = ? ORDER BY created_at DESC LIMIT ?', [goalId, limit]);
+export async function recentExplorations(goalId: string, limit = 5): Promise<Array<{ created_at: string; directions: number; model_directions: number; best_reach: number; greedy_reach: number; best_method: string | null; replaced: number; variations: number; variables: number }>> {
+  return getDb().all('SELECT created_at, directions, model_directions, best_reach, greedy_reach, best_method, replaced, variations, variables FROM reasoning_explorations WHERE goal_id = ? ORDER BY created_at DESC LIMIT ?', [goalId, limit]);
 }

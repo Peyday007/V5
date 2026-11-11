@@ -1,0 +1,6356 @@
+{
+ "profile": {
+  "ein": "341946987",
+  "name": "Salem Humane Society Inc",
+  "city": "Salem",
+  "state": "OH",
+  "ntee": "D20",
+  "zip3": "444",
+  "revenue": 253508,
+  "revenue_year": 2023,
+  "url": "https://projects.propublica.org/nonprofits/organizations/341946987"
+ },
+ "state": "OH",
+ "city": "Salem",
+ "causes": [
+  "animal"
+ ],
+ "generated": "2026-11-11",
+ "scanned": 338,
+ "top": 350,
+ "zip3": "444",
+ "scanned_grants": 18778,
+ "foundations": [
+  {
+   "ein": "834638862",
+   "name": "GLENN AND JEAN HARNETT PRIVATE CHARITABLE FOUNDATION",
+   "address": {
+    "line": "1625 NILES CORTLAND RD NE 2",
+    "city": "Warren",
+    "state": "OH",
+    "zip": "44484"
+   },
+   "phone": "3305267302",
+   "website": "HARNETTFOUNDATON.ORG",
+   "fmv_assets": 17516212,
+   "total_grants": 765100,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "SHERI HUFNAGEL",
+     "address": {
+      "line": "PO BOX 8621",
+      "city": "Warren",
+      "state": "OH",
+      "zip": "44484"
+     },
+     "phone": "3306516339",
+     "email": "ADMINISTRATOR@HARNETTFOUNDATION.ORG",
+     "how": "APPLICATIONS ARE ACCEPTED IN ANY REASONABLE FORMAT AND MUST STATE 501(C)(3) STATUS.",
+     "deadlines": "APPLICATIONS ARE ACCEPTED AT ANY TIME.",
+     "restrictions": "N/A"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202521339349101947",
+   "n_grants": 28,
+   "n_instate": 17,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "ANIMAL RESOURCE CENTER",
+     "city": "Warren",
+     "state": "OH",
+     "zip3": "444",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 184000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "HEALTHY HEARTS AND PAWS",
+     "city": "Brookfield",
+     "state": "OH",
+     "zip3": "444",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 42000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "VOICES OF THE TRUMBULL COUNTY POUND",
+     "city": "Warren",
+     "state": "OH",
+     "zip3": "444",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 42000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "TNR OF WARREN INC",
+     "city": "Warren",
+     "state": "OH",
+     "zip3": "444",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 40000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "NEVER MUZZLED INC",
+     "city": "Newton Falls",
+     "state": "OH",
+     "zip3": "444",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 32000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "STEEL VALLEY WOOFSTOCK",
+     "city": "Hubbard",
+     "state": "OH",
+     "zip3": "444",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 17000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "FRIENDS OF PAWS",
+     "city": "Warren",
+     "state": "OH",
+     "zip3": "444",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 11000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "NEWLIFE K9'S OF OHIO",
+     "city": "Cortland",
+     "state": "OH",
+     "zip3": "444",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 10000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "ST VINCENT DE PAUL SOCIETY",
+     "city": "Warren",
+     "state": "OH",
+     "zip3": "444",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 10000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "REBEL RESCUE RANCH",
+     "city": "Berlin Center",
+     "state": "OH",
+     "zip3": "444",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 6000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "ANIMAL WELFARE LEAUGE",
+     "city": "Vienna",
+     "state": "OH",
+     "zip3": "444",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 5093,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "ANIMAL PAWTECTORS INC",
+     "city": "Cortland",
+     "state": "OH",
+     "zip3": "444",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 1000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "RASCAL UNIT",
+     "city": "Dublin",
+     "state": "OH",
+     "zip3": "431",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 50007,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ALL ABOUT THE PAWS",
+     "city": "Youngstown",
+     "state": "OH",
+     "zip3": "445",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 37500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "WESTSIDE CATS",
+     "city": "Youngstown",
+     "state": "OH",
+     "zip3": "445",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 31500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HAPPY TRAILS FARM ANIMAL SANCTUARY",
+     "city": "Ravenna",
+     "state": "OH",
+     "zip3": "442",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 23000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "GEUGA COUNTY HUMANE SOCIETY",
+     "city": "Novelty",
+     "state": "OH",
+     "zip3": "440",
+     "status": "",
+     "purpose": "ANIMAL HEALTH AND PROTECTION",
+     "amount": 12000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 17,
+   "n_strong": 17,
+   "hit_total": 554100,
+   "median_hit": 23000,
+   "n_near": 12,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Warren",
+     5
+    ],
+    [
+     "Youngstown",
+     2
+    ],
+    [
+     "Cortland",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.94,
+   "funds_you": [],
+   "score": 65.51
+  },
+  {
+   "ein": "347034544",
+   "name": "SCOTT KENNETH A CHARITABLE TA",
+   "address": {
+    "line": "4900 TIEDEMAN ROAD OH-01-49-0381",
+    "city": "Brooklyn",
+    "state": "OH",
+    "zip": "44144"
+   },
+   "phone": "2164712594",
+   "website": "www.kennethscottcharitabletrust.org",
+   "fmv_assets": 24816054,
+   "total_grants": 1089303,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "CO KEY PRIVATE BANK",
+     "address": {
+      "line": "127 PUBLIC SQUARE 12TH FLOOR",
+      "city": "Cleveland",
+      "state": "OH",
+      "zip": "44114"
+     },
+     "phone": "2164712594",
+     "email": "",
+     "how": "COMPLETE LOI FORM AVAILABLE AT www.kennethscottcharitabletrust.org",
+     "deadlines": "COMMITTEE MEETS THREE TIMES PER YEAR TO DECIDE RECIPIENTS",
+     "restrictions": "DISTRIBUTIONS ARE LIMITED TO ORGANIZATIONS THAT SUPPORT THE CARE & PROTECTION OF ANIMALS."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202612649349100506",
+   "n_grants": 51,
+   "n_instate": 27,
+   "n_regions": 13,
+   "hits": [
+    {
+     "recipient": "NEIGHBORHOOD PETS",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 55000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HUMANE SOCIETY OF GREATER DAYTON",
+     "city": "Dayton",
+     "state": "OH",
+     "zip3": "454",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 55000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CLEVELAND ANIMAL PROTECTIVE LEAGUE",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "PC",
+     "purpose": "GENERAL OPERATING",
+     "amount": 30000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "BEREA ANIMAL RESCUE",
+     "city": "Columbia Township",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "GENERAL OPERATING",
+     "amount": 30000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CINCINNATI ANIMAL CARE HUMANE SOCIETY",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "PC",
+     "purpose": "GENERAL OPERATING",
+     "amount": 27495,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "LICKING COUNTY HUMANE SOCIETY",
+     "city": "Heath",
+     "state": "OH",
+     "zip3": "430",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OHIO FEDERATED HUMANE SOCIETIES",
+     "city": "Columbus",
+     "state": "OH",
+     "zip3": "432",
+     "status": "PC",
+     "purpose": "GENERAL OPERATING",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OHIO ANIMAL HEALTH FOUNDATION",
+     "city": "Powell",
+     "state": "OH",
+     "zip3": "430",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 24600,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OPEN DOOR VETERINARY COLLECTIVE",
+     "city": "Grand Rapids",
+     "state": "OH",
+     "zip3": "435",
+     "status": "PC",
+     "purpose": "GENERAL OPERATING",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FAYETTE REGIONAL HUMANE SOCIETY",
+     "city": "Washington Court House",
+     "state": "OH",
+     "zip3": "431",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 16000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SIERRAS HAVEN FOR NEW AND USED PETS",
+     "city": "Portsmouth",
+     "state": "OH",
+     "zip3": "456",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HAPPY TRAILS FARM ANIMAL SANCTUARY INC",
+     "city": "Ravenna",
+     "state": "OH",
+     "zip3": "442",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HUMANE SOCIETY OF DELAWARE COUNTY",
+     "city": "Delaware",
+     "state": "OH",
+     "zip3": "430",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 14400,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "WAYNE COUNTY HUMANE SOCIETY",
+     "city": "Wooster",
+     "state": "OH",
+     "zip3": "446",
+     "status": "PC",
+     "purpose": "GENERAL OPERATING",
+     "amount": 14189,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "LEAGUE FOR ANIMAL WELFARE",
+     "city": "Batavia",
+     "state": "OH",
+     "zip3": "451",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 12600,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "PARMA ANIMAL SHELTER INC",
+     "city": "Parma",
+     "state": "OH",
+     "zip3": "441",
+     "status": "PC",
+     "purpose": "GENERAL OPERATING",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OHIO ANIMAL ADVOCATES",
+     "city": "Columbus",
+     "state": "OH",
+     "zip3": "432",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 9928,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SAVING PETS ONE AT A TIME",
+     "city": "Chesterhill",
+     "state": "OH",
+     "zip3": "437",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 8000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OHIO ANIMAL WELFARE FEDERATION",
+     "city": "Columbus",
+     "state": "OH",
+     "zip3": "432",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 2000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 19,
+   "n_strong": 19,
+   "hit_total": 409212,
+   "median_hit": 16000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Columbus",
+     5
+    ],
+    [
+     "Cleveland",
+     4
+    ],
+    [
+     "Dayton",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.37,
+   "funds_you": [],
+   "score": 27.59
+  },
+  {
+   "ein": "311423392",
+   "name": "THE KAPLAN FOUNDATION",
+   "address": {
+    "line": "9435 WATERSTONE BLVD 390",
+    "city": "Cincinnati",
+    "state": "OH",
+    "zip": "452498227"
+   },
+   "phone": "5137215086",
+   "website": "N/A",
+   "fmv_assets": 23415681,
+   "total_grants": 966500,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "STEVEN KAPLAN",
+     "address": {
+      "line": "9435 WATERSTONE BLVD SUITE 390",
+      "city": "Cincinnati",
+      "state": "OH",
+      "zip": "45249"
+     },
+     "phone": "5137215086",
+     "email": "",
+     "how": "THE TRUST ACCEPTS WRITTEN APPLICATIONS FROM ORGANIZATIONS EXEMPT FROM TAX UNDER I.R.C. 509(A)(1), (2), OR (3). APPLICATIONS RECEIVED FROM OTHER ORGANIZATIONS OR FROM ANY INDIVIDUAL(S) WILL NOT BE CONSIDERED. THE APPLICATION MUST BE ACCOMPANIED BY A COPY OF THE EXEMPTED ORGANIZATION'S INTERNAL REVENUE SERVICE DETERMINATION LETTER REGARDING ITS CLASSIFICATION.",
+     "deadlines": "APPLICATIONS ACCEPTED AT ANY TIME.",
+     "restrictions": "IN AWARDING GRANTS, THE TRUST GIVES PREFERENCES TO ORGANIZATIONS WITH ACTIVITIES IN THE GREATER CINCINNATI AREA. GRANTS ARE GENERALLY RESTRICTED TO THE FIELDS OF RELIGION, EDUCATION, MEDICAL AND COMMUNITY PROJECTS. HOWEVER, TO THE EXTENT FUNDS ARE AVAILABLE, GRANTS MAY BE MADE FOR OTHER PROJECTS."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202621269349101712",
+   "n_grants": 67,
+   "n_instate": 53,
+   "n_regions": 11,
+   "hits": [
+    {
+     "recipient": "OHIO WILDLIFE CENTER",
+     "city": "Powell",
+     "state": "OH",
+     "zip3": "430",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OHIO PET FUND",
+     "city": "Columbus",
+     "state": "OH",
+     "zip3": "432",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SPCA CINCINNATI",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ANIMAL FRIENDS HUMANE SOCIETY",
+     "city": "Hamilton",
+     "state": "OH",
+     "zip3": "450",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 12000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "GEAUGA HUMANE SOCIETY - RESCUE VILLAGE",
+     "city": "Novelty",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 12000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "BROWN COUNTY HUMANE SOCIETY",
+     "city": "Georgetown",
+     "state": "OH",
+     "zip3": "451",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 11000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CINCINNATI ANIMAL CARE HUMANE SOCIETY",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ATHENS COUNTY HUMANE SOCIETY",
+     "city": "Athens",
+     "state": "OH",
+     "zip3": "457",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 7000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CLINTON COUNTY HUMANE SOCIETY",
+     "city": "Wilmington",
+     "state": "OH",
+     "zip3": "451",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 7000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FAYETTE HUMANE SOCIETY",
+     "city": "Washington Ch",
+     "state": "OH",
+     "zip3": "431",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 7000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HUMANE ASSOCIATION OF WARREN COUNTY",
+     "city": "Lebanon",
+     "state": "OH",
+     "zip3": "450",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 7000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CLEVELAND ANIMAL PROTECTIVE LEAGUE",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FRIENDSHIP ANIMAL PROTECTIVE LEAGUE",
+     "city": "Elyria",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 4000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "NEIGHBORHOOD PET OUTREACH AND RESOURCE CENTER",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "PC",
+     "purpose": "UNRESTRICTED CONTRIBUTION",
+     "amount": 2000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 14,
+   "n_strong": 14,
+   "hit_total": 139000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     13
+    ],
+    [
+     "Columbus",
+     12
+    ],
+    [
+     "Cleveland",
+     8
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.19,
+   "funds_you": [],
+   "score": 21.4
+  },
+  {
+   "ein": "311550874",
+   "name": "THE WM M & A CAFARO FAMILY FOUNDATION",
+   "address": {
+    "line": "5577 YOUNGSTOWN WARREN RD",
+    "city": "Niles",
+    "state": "OH",
+    "zip": "44446"
+   },
+   "phone": "3307472661",
+   "website": "N/A",
+   "fmv_assets": 32974354,
+   "total_grants": 1739831,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "AM FM CAFARO CS CAFARO",
+     "address": {
+      "line": "5577 YOUNGSTOWN WARREN RD",
+      "city": "Niles",
+      "state": "OH",
+      "zip": "44446"
+     },
+     "phone": "3307472661",
+     "email": "",
+     "how": "THE APPLICATION SHOULD INCLUDE: 1)THE NAME, ADDRESS & BRIEF HISTORY OF THE ORGANIZATION, 2)A COPY OF THE TAX EXEMPTION LETTER, 3)THE TAX ID NUMBER AND 4)THE REASON FOR THE GRANT AND THE AMOUNT.",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2026-03-31",
+   "object_id": "202602189349100210",
+   "n_grants": 377,
+   "n_instate": 223,
+   "n_regions": 20,
+   "hits": [
+    {
+     "recipient": "ANIMAL WELFARE LEAGUE OF TRUMBULL COUNTY",
+     "city": "Vienna",
+     "state": "OH",
+     "zip3": "444",
+     "status": "PC",
+     "purpose": "GENERAL PURPOSE",
+     "amount": 100,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "ANIMAL CHARITY OF OHIO INC",
+     "city": "Boardman",
+     "state": "OH",
+     "zip3": "445",
+     "status": "PC",
+     "purpose": "GENERAL PURPOSE",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "BELMONT COUNTY CAT STRAY SHUN PROGRAM",
+     "city": "Morristown",
+     "state": "OH",
+     "zip3": "437",
+     "status": "PC",
+     "purpose": "GENERAL PURPOSE",
+     "amount": 500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 3,
+   "hit_total": 5600,
+   "median_hit": 500,
+   "n_near": 1,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Youngstown",
+     49
+    ],
+    [
+     "Warren",
+     44
+    ],
+    [
+     "Niles",
+     19
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.9,
+   "funds_you": [],
+   "score": 17.84
+  },
+  {
+   "ein": "341695319",
+   "name": "PREMIER BANK FOUNDATION",
+   "address": {
+    "line": "4137 BOARDMAN-CANFIELD ROAD STE 101",
+    "city": "Canfield",
+    "state": "OH",
+    "zip": "44406"
+   },
+   "phone": "3302862882",
+   "website": "N/A",
+   "fmv_assets": 18596212,
+   "total_grants": 1353493,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "PREMIER BANK FOUNDATION",
+     "address": {
+      "line": "275 W FEDERAL STREET",
+      "city": "Youngstown",
+      "state": "OH",
+      "zip": "44503"
+     },
+     "phone": "3302862883",
+     "email": "",
+     "how": "NONE",
+     "deadlines": "NONE",
+     "restrictions": "AWARDS ARE GRANTED TO QUALIFIED RECIPIENTS AS DETERMINED BY THE DISTRIBUTION COMMITTEE."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202621329349104367",
+   "n_grants": 393,
+   "n_instate": 323,
+   "n_regions": 22,
+   "hits": [
+    {
+     "recipient": "ANIMAL WELFARE LEAGUE OF TRUMBULL",
+     "city": "Vienna",
+     "state": "OH",
+     "zip3": "444",
+     "status": "PC",
+     "purpose": "SPONSORSHIP",
+     "amount": 1000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "ANIMAL CHARITY OF OHIO INC",
+     "city": "Boardman",
+     "state": "OH",
+     "zip3": "445",
+     "status": "PC",
+     "purpose": "SPONSORSHIP",
+     "amount": 2500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HUMANE SOCIETY OF HANCOCK CO",
+     "city": "Findlay",
+     "state": "OH",
+     "zip3": "458",
+     "status": "PC",
+     "purpose": "SPONSORSHIP",
+     "amount": 600,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FORT DEFIANCE HUMANE SOCIETY",
+     "city": "Defiance",
+     "state": "OH",
+     "zip3": "435",
+     "status": "PC",
+     "purpose": "SPONSORSHIP",
+     "amount": 150,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 4,
+   "n_strong": 4,
+   "hit_total": 4250,
+   "median_hit": 1000,
+   "n_near": 1,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Youngstown",
+     49
+    ],
+    [
+     "Findlay",
+     30
+    ],
+    [
+     "Toledo",
+     27
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.53,
+   "funds_you": [],
+   "score": 17.23
+  },
+  {
+   "ein": "346516726",
+   "name": "I J VAN HUFFEL FOUNDATION",
+   "address": {
+    "line": "C/O FARMERS TRUST1625 NILES CORTLA",
+    "city": "Warren",
+    "state": "OH",
+    "zip": "44484"
+   },
+   "phone": "3306095057",
+   "website": "NONE",
+   "fmv_assets": 4747047,
+   "total_grants": 183900,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "FARMERS TRUST COMPANY",
+     "address": {
+      "line": "1625 NILES-CORTLAND RD NE SUITE 2",
+      "city": "Warren",
+      "state": "OH",
+      "zip": "44484"
+     },
+     "phone": "3306095057",
+     "email": "",
+     "how": "WRITTEN APPLICATION",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611279349102851",
+   "n_grants": 58,
+   "n_instate": 40,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "ANIMAL WELFARE LEAGUE",
+     "city": "Warren",
+     "state": "OH",
+     "zip3": "444",
+     "status": "PC",
+     "purpose": "PUBLIC SUPPORT",
+     "amount": 3000,
+     "w": 1.0,
+     "near": true
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 3000,
+   "median_hit": 3000,
+   "n_near": 1,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Warren",
+     21
+    ],
+    [
+     "Youngstown",
+     5
+    ],
+    [
+     "Stow",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.9,
+   "funds_you": [],
+   "score": 15.58
+  },
+  {
+   "ein": "347104554",
+   "name": "NANCY KAIGHIN VAN FOSSAN FAMILY FOUNDATION",
+   "address": {
+    "line": "1625 NILES CORTLAND RD SUITE 2",
+    "city": "Warren",
+    "state": "OH",
+    "zip": "44484"
+   },
+   "phone": "3306095057",
+   "website": "NONE",
+   "fmv_assets": 1551301,
+   "total_grants": 57500,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "FARMERS TRUST COMPANY",
+     "address": {
+      "line": "P O BOX 8803",
+      "city": "Warren",
+      "state": "OH",
+      "zip": "44484"
+     },
+     "phone": "3306095057",
+     "email": "",
+     "how": "WRITTEN WITH APPROPRIATE DOCUMENTATION NO FORMAL WRITTEN APPLICATION FORM",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611279349102096",
+   "n_grants": 18,
+   "n_instate": 13,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "ANIMAL WELFARE LEAGUE",
+     "city": "Warren",
+     "state": "OH",
+     "zip3": "444",
+     "status": "PC",
+     "purpose": "PUBLIC SUPPORT",
+     "amount": 2000,
+     "w": 1.0,
+     "near": true
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 2000,
+   "median_hit": 2000,
+   "n_near": 1,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Warren",
+     12
+    ],
+    [
+     "Macedonia",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 14.3
+  },
+  {
+   "ein": "341595929",
+   "name": "THE NORD FAMILY FOUNDATION",
+   "address": {
+    "line": "747 MILAN AVE",
+    "city": "Amherst",
+    "state": "OH",
+    "zip": "440011310"
+   },
+   "phone": "4409843939",
+   "website": "WWW.NORDFF.ORG",
+   "fmv_assets": 178258671,
+   "total_grants": 10116088,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "LATINA KIMBROUGH",
+     "address": {
+      "line": "747 MILAN AVENUE",
+      "city": "Amherst",
+      "state": "OH",
+      "zip": "44001"
+     },
+     "phone": "4409843939",
+     "email": "",
+     "how": "APPLICATIONS SHOULD BE SUBMITTED IN WRITTEN FORM AND SHOULD CONTAIN: 1) NAME OF THE APPLICANT AGENCY AND A STATEMENT OF THE AGENCY'S FUNCTION 2) A LIST OF CURRENT BOARD MEMBERS 3) A STATEMENT OF OBJECTIVES OF THE PROPOSED PROJECT 4) A BUDGET SHOWING EXPENDITURES AND INCOME FROM THE AGENCY AND SEPERATELY FOR THE PROPOSED PROJECT 5) A COPY OF THE ORGANIZATION'S LETTER OF DETERMINATION FROM THE INTERNAL REVENUE SERVICE GRANTING TAX-EXEMPT STATUS",
+     "deadlines": "TRUSTEES USUALLY MEET IN FEB, JUN AND OCT AND PROPOSALS SHOULD BE SUBMITTED 10 WEEKS PRIOR.",
+     "restrictions": "THE FOUNDATION AWARDS GRANTS TO NON-PROFIT AGENCIES AND ORGANIZATIONS THAT HAVE QUALIFIED WITH THE INTERNAL REVENUE SERVICE AS PUBLICLY SUPPORTED SEC 501(C)(3) ORGANIZATIONS AND TO GOVERNMENTAL UNITS DESCRIBED IN SEC 170(C)(1). THE FOUNDATION IS PRIMARILY CONCERNED WITH LORAIN COUNTY, OHIO AND COMMUNITIES IN WHICH NORD FAMILY MEMBERS RESIDE. THE FOUNDATION IS ESPECIALLY INTERESTED IN PROJECTS THAT BRING OPPORTUNITY TO UNDER-RESOURCED PEOPLE AND COMMUNITIES, STRENGTHEN THE BOND OF FAMILIES, AND IMPROVE THE QUALITY OF PEOPLE'S LIVES. LEADING PROGRAM AREAS OF INTEREST ARE HEALTH AND SOCIAL SERVICES, CIVIC AFFAIRS, EDUCATION, ARTS AND CULTURAL ACTIVITIES. THE FOUNDATION CONSIDERS BOTH PROGRAM AND CAPITAL GRANT REQUESTS. FUNDS ARE USUALLY GRANTED FOR A ONE YEAR PERIOD, BUT MULTI-YEAR PROPOSALS ARE ALSO CONSIDERED."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513019349101401",
+   "n_grants": 314,
+   "n_instate": 181,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "CLEVELAND ANIMAL PROTECTIVE LEAGUE",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "",
+     "purpose": "GRANT FOR MATCH",
+     "amount": 1800,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HUMANE SOCIETY OF ERIE COUNTY",
+     "city": "Sandusky",
+     "state": "OH",
+     "zip3": "448",
+     "status": "",
+     "purpose": "GRANT FOR MATCH",
+     "amount": 1800,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OASIS ANIMAL SHELTER",
+     "city": "Oberlin",
+     "state": "OH",
+     "zip3": "440",
+     "status": "",
+     "purpose": "GRANT FOR MATCH",
+     "amount": 1800,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SAINT FRANCIS ANIMAL SANCTUARY INC",
+     "city": "Vermillion",
+     "state": "OH",
+     "zip3": "440",
+     "status": "",
+     "purpose": "GRANT FOR MATCH",
+     "amount": 1500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 4,
+   "n_strong": 4,
+   "hit_total": 6900,
+   "median_hit": 1800,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     64
+    ],
+    [
+     "Lorain",
+     34
+    ],
+    [
+     "Oberlin",
+     26
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.93,
+   "funds_you": [],
+   "score": 13.05
+  },
+  {
+   "ein": "205380431",
+   "name": "THE SAM J FRANKINO FOUNDATION",
+   "address": {
+    "line": "PO BOX 241487",
+    "city": "Cleveland",
+    "state": "OH",
+    "zip": "441248487"
+   },
+   "phone": "4402481400",
+   "website": "WWW.SAMJFRANKINOFOUNDATION.COM",
+   "fmv_assets": 78252238,
+   "total_grants": 3445022,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "LORRAINE DODERO",
+     "address": {
+      "line": "PO BOX 241487",
+      "city": "Cleveland",
+      "state": "OH",
+      "zip": "44124"
+     },
+     "phone": "4402481400",
+     "email": "",
+     "how": "REASON FOR REQUEST AND PURPOSE",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202632439349101013",
+   "n_grants": 86,
+   "n_instate": 75,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "GEAUGA COUNTY HUMANE SOCIETY RESCUE VILLAGE",
+     "city": "Novelty",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "OPERATING",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CLEVELAND ANIMAL PROTECTION LEAGUE",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "443",
+     "status": "PC",
+     "purpose": "OPERATING",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HUMANE SOCIETY OF SUMMIT COUNTY",
+     "city": "Akron",
+     "state": "OH",
+     "zip3": "443",
+     "status": "PC",
+     "purpose": "OPERATING",
+     "amount": 3000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 3,
+   "hit_total": 18000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     35
+    ],
+    [
+     "Independence",
+     5
+    ],
+    [
+     "Akron",
+     4
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.99,
+   "funds_you": [],
+   "score": 12.7
+  },
+  {
+   "ein": "346538130",
+   "name": "THE ASHTABULA FOUNDATION INC",
+   "address": {
+    "line": "4510 COLLINS BLVD",
+    "city": "Ashtabula",
+    "state": "OH",
+    "zip": "44004"
+   },
+   "phone": "4409926818",
+   "website": "WWW.ASHTABULAFOUNDATION.ORG",
+   "fmv_assets": 24997357,
+   "total_grants": 915948,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "ONLINE FORM",
+     "address": {
+      "line": "4510 COLLINS BLVD",
+      "city": "Ashtabula",
+      "state": "OH",
+      "zip": "44004"
+     },
+     "phone": "4409926818",
+     "email": "ASHTABULAFDN@GMAIL.COM",
+     "how": "AMOUNT AND PURPOSE OF REQUEST AND PROOF THAT ORGANIZATION IS A QUALIFYING ORGANIZATION. THESE ARE STANDARD FORMS FOR SCHOLARSHIP PROGRAMS THAT MAY BE OBTAINED FROM FOUNDATION OFFICES.",
+     "deadlines": "NONE",
+     "restrictions": "RELIGIOUS AND CHARITABLE PURPOSES PRIMARILY TO BENEFIT THE ASHTABULA OHIO AREA."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601349349103160",
+   "n_grants": 83,
+   "n_instate": 81,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "DR DOLITTLE'S HOUSE OF WILDLIFE REHAB",
+     "city": "Pierpont",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "PROJECT AVIAN INTRODUCTION AND DISEASE PREVENTION",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "KOINONIA DEVELOPMENT CENTER",
+     "city": "Geneva",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "EQUIPMENT FOR EQUINE",
+     "amount": 4980,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "MADDOX & FRIENDS CAT RESCUE",
+     "city": "Conneaut",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "GENERAL DONATION",
+     "amount": 1850,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 3,
+   "hit_total": 11830,
+   "median_hit": 4980,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Ashtabula",
+     35
+    ],
+    [
+     "Jefferson",
+     9
+    ],
+    [
+     "Conneaut",
+     8
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.99,
+   "funds_you": [],
+   "score": 12.52
+  },
+  {
+   "ein": "346574722",
+   "name": "THE ALBERT G & OLIVE H SCHLINK FOUNDATION",
+   "address": {
+    "line": "PO BOX 353",
+    "city": "Sandusky",
+    "state": "OH",
+    "zip": "44871"
+   },
+   "phone": "4195026198",
+   "website": "N/A",
+   "fmv_assets": 41670292,
+   "total_grants": 1696017,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "JANET KOCH",
+     "address": {
+      "line": "143 E WATER STREET THIRD FLOOR",
+      "city": "Sandusky",
+      "state": "OH",
+      "zip": "44870"
+     },
+     "phone": "4195026198",
+     "email": "",
+     "how": "ALBERT G & OLIVE H SCHLINK FOUNDATION GUIDELINES: 1. ALL ORGANIZATIONS MUST BE ABLE TO REPRESENT THAT THEY ARE EXEMPT FROM FEDERAL INCOME TAX UNDER SECTION 501(C)(3) AND ARE NOT PRIVATE FOUNDATIONS, AS OF THE DATE OF THE GRANT REQUEST OR AS OF ANY TIME DURING THE FUNDING PERIOD, WITHIN THE MEANING OF APPROPRIATE INTERNAL REVENUE LAWS. 2. NO MORE THAN ONE GRANT REQUEST MAY BE SUBMITTED BY ANY ORGANIZATION IN ANY 12 MONTH PERIOD. MULTI-YEAR GRANTS WILL CARRY STIPULATIONS THAT NO ADDITIONAL REQUEST WILL BE MADE OF THE FOUNDATION FOR A MINIMUM OF THREE YEARS FOLLOWING THE PAYMENT OF THE LAST INSTALLMENT OF A MULTI-YEAR GRANT. 3. THE FOLLOWING TYPES OF REQUESTS FOR MONEY WILL NOT BE MADE: (A) PURCHASE OF BLOCKS OF TICKETS; (B) INDIVIDUAL SCHOLARSHIPS; (C) GRANTS TO INDIVIDUALS FOR ANY PURPOSE; (D) GRANTS TO ORGANIZATIONS FOR TRAVEL TO CONFERENCES; (E) GRANTS FOR OR TO MEMBERSHIPS (F) GRANTS TO CONDUIT ORGANIZATIONS(GRANTS TO QUALIFIED GRANTEE WHICH, IN TURN PASSES FUNDS THROUGH TO ANOTHER O",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601879349100655",
+   "n_grants": 53,
+   "n_instate": 49,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "HURON COUNTY HUMANE SOCIETY",
+     "city": "Norwalk",
+     "state": "OH",
+     "zip3": "448",
+     "status": "PC",
+     "purpose": "CHARITABLE",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ERIE COUNTY HUMANE SOCIETY",
+     "city": "Sandusky",
+     "state": "OH",
+     "zip3": "448",
+     "status": "PC",
+     "purpose": "CHARITABLE",
+     "amount": 2500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 52500,
+   "median_hit": 50000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Sandusky",
+     19
+    ],
+    [
+     "Norwalk",
+     14
+    ],
+    [
+     "Cleveland",
+     5
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.9,
+   "funds_you": [],
+   "score": 11.81
+  },
+  {
+   "ein": "346927210",
+   "name": "LEHNER FAMILY FOUNDATION",
+   "address": {
+    "line": "PO BOX 6599",
+    "city": "Akron",
+    "state": "OH",
+    "zip": "44312"
+   },
+   "phone": "3305710571",
+   "website": "N/A",
+   "fmv_assets": 18131332,
+   "total_grants": 1198450,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "MS ROBIN COMPTON EXEC DIRECTOR",
+     "address": {
+      "line": "PO BOX 6599",
+      "city": "Akron",
+      "state": "OH",
+      "zip": "44312"
+     },
+     "phone": "3305710571",
+     "email": "LEHNERFAMILYFDN@GMAIL.COM",
+     "how": "ONE PAGE SUMMARY CONTAINING: PURPOSE OF THE ORGANIZATION PURPOSE OF THE GRANT REQUEST, TOTAL PROJECT COST, PROJECT TIMETABLE, AMOUNT REQUESTED FROM THIS AND OTHER FOUNDATIONS AND MAJOR SUPPORTERS. YOUR MOST RECENT YEAR- END FINANCIAL STATEMENTS AND MOST RECENT FORM 990, A LIST OF THE BOARD OF DIRECTORS, YOUR 501(C)(3) LETTER FROM THE IRS IF YOU HAVE NOT RECEIVED A GRANT IN THE PAST FROM THIS FOUNDATION, AND CONTACT INFORMATION FOR THE INDIVIDUAL MAKING THE GRANT REQUEST.",
+     "deadlines": "MARCH 31, JUNE 30, SEPTEMBER 30 AND DECEMBER 31.",
+     "restrictions": "501(C)(3) ORGANIZATIONS SERVING PRIMARILY SUMMIT COUNTY OHIO."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533219349103973",
+   "n_grants": 96,
+   "n_instate": 95,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "HUMANE SOCIETY OF SUMMIT COUNTY",
+     "city": "Twinsburg",
+     "state": "OH",
+     "zip3": "440",
+     "status": "",
+     "purpose": "CAPITAL CAMPAIGN",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HUMANE SOCIETY OF SUMMIT COUNTY",
+     "city": "Twinsburg",
+     "state": "OH",
+     "zip3": "440",
+     "status": "",
+     "purpose": "BEHAVIORAL TRAINING PROGRAM",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 15000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Akron",
+     68
+    ],
+    [
+     "Cleveland",
+     5
+    ],
+    [
+     "Warren",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.98,
+   "funds_you": [],
+   "score": 11.59
+  },
+  {
+   "ein": "311508706",
+   "name": "RALPH R AND GRACE B JONES FOUNDATION",
+   "address": {
+    "line": "419 S MARKET STREET",
+    "city": "Wooster",
+    "state": "OH",
+    "zip": "44691"
+   },
+   "phone": "3302644444",
+   "website": "N/A",
+   "fmv_assets": 7769143,
+   "total_grants": 460250,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "J DOUGLAS DRUSHAL ATTORNEY",
+     "address": {
+      "line": "225 N MARKET STREET",
+      "city": "Wooster",
+      "state": "OH",
+      "zip": "44691"
+     },
+     "phone": "3302644444",
+     "email": "",
+     "how": "NO FORMAL APPLICATION USED",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202522689349100927",
+   "n_grants": 30,
+   "n_instate": 29,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "WAYNE COUNTY COMMUNITY FOUNDATION",
+     "city": "Wooster",
+     "state": "OH",
+     "zip3": "446",
+     "status": "",
+     "purpose": "WALL OF FAME, HUMANE SOCIETY CAPITAL CAMPAIGN & MENTAL HEALTH RESIDENTAL CENTER",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "WAYNE COUNTY HUMANE SOCIETY",
+     "city": "Wooster",
+     "state": "OH",
+     "zip3": "446",
+     "status": "",
+     "purpose": "GENERAL PURPOSE",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 105000,
+   "median_hit": 100000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Wooster",
+     27
+    ],
+    [
+     "Canton",
+     1
+    ],
+    [
+     "Okron",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 11.02
+  },
+  {
+   "ein": "331609616",
+   "name": "THE MORRIS AND PHYLLIS FRIEDMAN FOUNDATION",
+   "address": {
+    "line": "8700 E MARKET ST SUITE 1",
+    "city": "Warren",
+    "state": "OH",
+    "zip": "44484"
+   },
+   "phone": "3308569222",
+   "website": "N/A",
+   "fmv_assets": 1370233,
+   "total_grants": 62000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "DAVID A HOSO CPA",
+     "address": {
+      "line": "8700 E MARKET ST SUITE 1",
+      "city": "Warren",
+      "state": "OH",
+      "zip": "44484"
+     },
+     "phone": "3308569222",
+     "email": "DHOSO@CPAOHIO.COM",
+     "how": "APPLICATIONS ARE ACCEPTED IN ANY REASONABLE FORMAT AND MUST STATE 501(C)(3) STATUS.",
+     "deadlines": "APPLICATIONS ARE ACCEPTED AT ANY TIME.",
+     "restrictions": "N/A"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601279349102220",
+   "n_grants": 8,
+   "n_instate": 7,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "VETERANS COMPANION ANIMAL SERVICE",
+     "city": "Delaware",
+     "state": "OH",
+     "zip3": "430",
+     "status": "PC",
+     "purpose": "TO PROVIDE ENRICHMENT TO THE LIVES OF VETERANS, MILITARY FAMILIES, AND DOGS THROUGH THE MANY BENEFITS OF THE HUMAN-ANIMAL BOND",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 10000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Warren",
+     3
+    ],
+    [
+     "Westerville",
+     1
+    ],
+    [
+     "Akron",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.71,
+   "funds_you": [],
+   "score": 10.86
+  },
+  {
+   "ein": "237052280",
+   "name": "MARY S & DAVID C CORBIN FOUNDATION",
+   "address": {
+    "line": "3421 RIDGEWOOD ROAD 100",
+    "city": "Fairlawn",
+    "state": "OH",
+    "zip": "44333"
+   },
+   "phone": "3307647263",
+   "website": "WWW.CORBINFDN.ORG",
+   "fmv_assets": 24234008,
+   "total_grants": 1032123,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "DONALD M MIKSCH HUNTINGTON NATIONAL",
+     "address": {
+      "line": "3421 RIDGEWOOD ROAD SUITE 100",
+      "city": "Fairlawn",
+      "state": "OH",
+      "zip": "44333"
+     },
+     "phone": "3307647263",
+     "email": "",
+     "how": "GRANT APPLICATION PROCEDURE IS AN ON-LINE PROPOSAL PROCESS ACCESSIBLE BY VISITING THE MARY S. & DAVID C. CORBIN FOUNDATION WEBSITE, CORBINFDN.ORG. THE PROPOSAL INCLUDES DESCRIPTIONS OF THE ORGANIZATION AND OF THE PROPOSED PROJECT INCLUDING OBJECTIVES, DURATION AND COST. OTHER REQUIRED INFORMATION: OTHER POSSIBLE FUNDING SOURCES; OTHER COMMITMENTS; A LIST OF BOARD MEMBERS AND OFFICERS; A COPY OF THE IRS DETERMINATION LETTER; MOST RECENT AUDITED FINANCIAL STATEMENT, IF AVAILABLE; COPY OF THE LATEST FORM 990; BUDGETS AND AN ORGANIZATIONAL CHART.",
+     "deadlines": "NO LATER THAN MARCH 1ST FOR CONSIDERATION IN MAY AND SEPTEMBER 1ST FOR CONSIDERATION IN NOVEMBER.",
+     "restrictions": "THE FOUNDATION DOES NOT FUND INDIVIDUALS, ANNUAL FUND RAISING CAMPAIGNS, ON-GOING REQUESTS FOR GENERAL OPERATING SUPPORT (ALTHOUGH SOME REPEAT GRANTS ARE MADE), OPERATING DEFICITS OR ORGANIZATIONS WHICH IN TURN MAKE GRANTS TO OTHERS. GRANTEES ARE LIMITED TO IRC SEC. 501(C)(3) NONPROFIT ORGANIZATION WITH A PUBLIC CHARITY STATUS UNDER IRC SEC. 509(A)(1) OR 509(A)(2). THE FOUNDATION DOES NOT PROVIDE GRANTS TO SUPPORTING ORGANIZATIONS OR PRIVATE FOUNDATIONS."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202622679349100602",
+   "n_grants": 76,
+   "n_instate": 75,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "HOPE MEADOWS FOUNDATION",
+     "city": "Wadsworth",
+     "state": "OH",
+     "zip3": "442",
+     "status": "PC",
+     "purpose": "FINANCIAL ASSISTANCE FOR PARTICIPATION IN EQUINE-ASSISTED THERAPY AND LIFE SKILLS PROGRAM",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 10000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Akron",
+     56
+    ],
+    [
+     "Cleveland",
+     3
+    ],
+    [
+     "Barberton",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.97,
+   "funds_you": [],
+   "score": 10.39
+  },
+  {
+   "ein": "346546418",
+   "name": "JACK JOSEPH & MORTON MANDEL FOUNDATION",
+   "address": {
+    "line": "1000 LAKESIDE AVE E",
+    "city": "Cleveland",
+    "state": "OH",
+    "zip": "441141117"
+   },
+   "phone": "2168756500",
+   "website": "WWW.MANDELFOUNDATION.ORG",
+   "fmv_assets": 2336811642,
+   "total_grants": 77003582,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "JEHUDA REINHARZ",
+     "address": {
+      "line": "1000 LAKESIDE AVENUE",
+      "city": "Cleveland",
+      "state": "OH",
+      "zip": "44114"
+     },
+     "phone": "2168756500",
+     "email": "",
+     "how": "NO FORMAL APPLICATION FORM IS USED. THE FOLLOWING INFORMATION SHOULD ACCOMPANY ANY REQUEST: 1) DESCRIPTION OF PROJECT AND JUSTIFICATION FOR GRANT. 2) AMOUNT OF GRANT REQUESTED AND TERM OF GRANT. 3) PERTINENT FINANCIAL INFORMATION. 4) IRS EXEMPTION STATUS INCLUDING COPY OF EXEMPTION LETTER.",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533179349102453",
+   "n_grants": 284,
+   "n_instate": 186,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "Neighborhood Pets",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "",
+     "purpose": "Program Related Expenses",
+     "amount": 11148,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "Neighborhood Pets",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "",
+     "purpose": "Program Related Expenses",
+     "amount": 8852,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 20000,
+   "median_hit": 11148,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     137
+    ],
+    [
+     "Beachwood",
+     13
+    ],
+    [
+     "Cleveland Heights",
+     9
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.99,
+   "funds_you": [],
+   "score": 10.26
+  },
+  {
+   "ein": "346598971",
+   "name": "BURTON D MORGAN FOUNDATION INC",
+   "address": {
+    "line": "22 AURORA ST",
+    "city": "Hudson",
+    "state": "OH",
+    "zip": "44236"
+   },
+   "phone": "3306551660",
+   "website": "WWW.BDMORGANFDN.ORG",
+   "fmv_assets": 202790094,
+   "total_grants": 5776500,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "FOUNDATION ONLY ACCEPTS ONLINE APPL",
+     "address": {
+      "line": "WWWBDMORGANFDNORG/GRANTS",
+      "city": "Hudson",
+      "state": "OH",
+      "zip": "44236"
+     },
+     "phone": "3306551660",
+     "email": "",
+     "how": "FORMS FOR APPLICATIONS AND MATERIALS THAT SHOULD BE INCLUDED ARE AVAILABLE AT WWW.BDMORGANFDN.ORG/GRANTS.",
+     "deadlines": "SUBMISSION DEADLINES ARE FEB 1, MAY 1, SEPT 1 UNLESS OTHERWISE AGREED UPON BY PROGRAM STAFF AND CEO.",
+     "restrictions": "RESTRICTIONS AND LIMITATIONS CAN BE SEEN AT WWW.BDMORGANFDN.ORG/GRANTS WITH ADDITIONAL INFORMATION AVAILABLE AT WWW.BDMORGANFDN.ORG/STRATEGIC-PLAN."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202503189349103915",
+   "n_grants": 166,
+   "n_instate": 146,
+   "n_regions": 13,
+   "hits": [
+    {
+     "recipient": "GEAUGA MAMA DOGS AND PUPS",
+     "city": "Burton",
+     "state": "OH",
+     "zip3": "440",
+     "status": "",
+     "purpose": "TO SUPPORT THE EXEMPT PURPOSE OF THE ORGANIZATION",
+     "amount": 500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "PURRFECT HAVEN CAT RESCUE AND TNR",
+     "city": "Akron",
+     "state": "OH",
+     "zip3": "443",
+     "status": "",
+     "purpose": "TO SUPPORT THE EXEMPT PURPOSE OF THE ORGANIZATION",
+     "amount": 500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 1000,
+   "median_hit": 500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     34
+    ],
+    [
+     "Akron",
+     25
+    ],
+    [
+     "Hudson",
+     21
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.92,
+   "funds_you": [],
+   "score": 10.2
+  },
+  {
+   "ein": "346508111",
+   "name": "SISLER MCFAWN FOUNDATION PFDN",
+   "address": {
+    "line": "4900 TIEDEMAN ROAD OH-01-49-0381",
+    "city": "Brooklyn",
+    "state": "OH",
+    "zip": "44144"
+   },
+   "phone": "8009999658",
+   "website": "N/A",
+   "fmv_assets": 25895132,
+   "total_grants": 1117163,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "MICHAEL AYERS",
+     "address": {
+      "line": "P O BOX 149",
+      "city": "Akron",
+      "state": "OH",
+      "zip": "443090149"
+     },
+     "phone": "3306681266",
+     "email": "",
+     "how": "LETTER FORM",
+     "deadlines": "PRIOR TO MEETINGS IN MAY, SEPTEMBER AND DECEMBER",
+     "restrictions": "GRANTS GIVEN PRIMARILY TO AKRON OHIO ORGANIZATIONS"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202621279349102612",
+   "n_grants": 124,
+   "n_instate": 116,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "HUMANE SOCIETY OF GREATER AKRON",
+     "city": "Twinsburgh",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "GENERAL OPERATING",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Akron",
+     68
+    ],
+    [
+     "Cleveland",
+     9
+    ],
+    [
+     "Stow",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.95,
+   "funds_you": [],
+   "score": 9.99
+  },
+  {
+   "ein": "203816760",
+   "name": "The Westfield Insurance Foundation",
+   "address": {
+    "line": "PO Box 5001",
+    "city": "Westfield",
+    "state": "OH",
+    "zip": "44251"
+   },
+   "phone": "3308878431",
+   "website": "N/A",
+   "fmv_assets": 35645305,
+   "total_grants": 2694357,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "The Westfield Insurance Foundation",
+     "address": {
+      "line": "PO Box 5001",
+      "city": "Westfield Center",
+      "state": "OH",
+      "zip": "44251"
+     },
+     "phone": "3308878431",
+     "email": "JulieWisneski@westfieldgrp.com",
+     "how": "Applicants should use the contact information provided and submit requests electronically. Necessary information provided should include prior open year filed 990 returns, and any applicable financial records relating to the request; such as program budgets or financial statements if requested.",
+     "deadlines": "Submissions are accepted at any time.",
+     "restrictions": "Funds are disbursed to organizations that are permissible within the Foundation's exempt purpose and existence under 501(c)(3), strategy, and eligible to receive contributinos according to applicable IRC Code sections and verification."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533219349104923",
+   "n_grants": 287,
+   "n_instate": 156,
+   "n_regions": 19,
+   "hits": [
+    {
+     "recipient": "Forever Amber Acres Animal Sanctuary",
+     "city": "Medina",
+     "state": "OH",
+     "zip3": "442",
+     "status": "",
+     "purpose": "General operating support",
+     "amount": 1000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "Promoting Animal Welfare Society for The Wayne County Dog Shelter",
+     "city": "Wooster",
+     "state": "OH",
+     "zip3": "446",
+     "status": "",
+     "purpose": "General operating support",
+     "amount": 1000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 2000,
+   "median_hit": 1000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     42
+    ],
+    [
+     "Medina",
+     29
+    ],
+    [
+     "Akron",
+     15
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.79,
+   "funds_you": [],
+   "score": 9.96
+  },
+  {
+   "ein": "276741642",
+   "name": "The Sylvia and Heath Oliver Foundation",
+   "address": {
+    "line": "25550 Chagrin Boulevard Suite 100",
+    "city": "Beachwood",
+    "state": "OH",
+    "zip": "44122"
+   },
+   "phone": "2164721500",
+   "website": "N/A",
+   "fmv_assets": 11205975,
+   "total_grants": 505000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "Michael J O'Brien",
+     "address": {
+      "line": "25550 Chagrin Boulevard Suite 100",
+      "city": "Beachwood",
+      "state": "OH",
+      "zip": "44122"
+     },
+     "phone": "2164721500",
+     "email": "",
+     "how": "Requests can be in the form of a letter detailing the charitable organization and its purpose of the request.",
+     "deadlines": "None",
+     "restrictions": "To the extent the Foundation has revenues beyond its needs, the Foundation intends to contribute such revenues to organizations that are described in Section 170(c) and/or Section 501(c)(3) and/or Section 2055(a) and/or Section 2522(a) of the Internal Revenue Code of 1986."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601549349101000",
+   "n_grants": 19,
+   "n_instate": 12,
+   "n_regions": 1,
+   "hits": [
+    {
+     "recipient": "Cleveland Animal Protective League",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "PC",
+     "purpose": "Educational",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 50000,
+   "median_hit": 50000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     7
+    ],
+    [
+     "Shaker Heights",
+     1
+    ],
+    [
+     "Cleveland Hts",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.7
+  },
+  {
+   "ein": "341945747",
+   "name": "THE MYLANDER FDN-2001",
+   "address": {
+    "line": "100 E WATER STREET",
+    "city": "Sandusky",
+    "state": "OH",
+    "zip": "44870"
+   },
+   "phone": "4196258324",
+   "website": "WWW.MYLANDERFOUNDATION.ORG",
+   "fmv_assets": 29275852,
+   "total_grants": 1372219,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "ERIC M MUEHLHAUSER",
+     "address": {
+      "line": "165 E WASHINGTON ROW",
+      "city": "Sandusky",
+      "state": "OH",
+      "zip": "44870"
+     },
+     "phone": "4196258324",
+     "email": "",
+     "how": "SEE ATTACHMENT",
+     "deadlines": "SEE ATTACHMENT",
+     "restrictions": "GRANTS ARE LIMITED TO 501 (C)(3) TAX EXEMPT ORGANIZATIONS WHICH CARRY ON THEIR ACTIVITIES IN SUBSTANTIAL PART WITHIN THE STATE OF OHIO."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202531359349105453",
+   "n_grants": 78,
+   "n_instate": 77,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "HUMANE SOCIETY OF ERIE COUNTY",
+     "city": "Sandusky",
+     "state": "OH",
+     "zip3": "448",
+     "status": "",
+     "purpose": "DRYER GROUND PROJECT",
+     "amount": 3000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "BACK TO THE WILD",
+     "city": "Castalia",
+     "state": "OH",
+     "zip3": "448",
+     "status": "",
+     "purpose": "ANIMAL ENCLOSURESWIRING UPGRADES",
+     "amount": 2209,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 5209,
+   "median_hit": 3000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Sandusky",
+     42
+    ],
+    [
+     "Huron",
+     12
+    ],
+    [
+     "Castalia",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.96,
+   "funds_you": [],
+   "score": 9.56
+  },
+  {
+   "ein": "341787952",
+   "name": "SAUERLAND FOUNDATION",
+   "address": {
+    "line": "PO BOX 985",
+    "city": "Milford",
+    "state": "OH",
+    "zip": "45150"
+   },
+   "phone": "2162123835",
+   "website": "N/A",
+   "fmv_assets": 47699285,
+   "total_grants": 2418000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "SAUERLAND FOUNDATION",
+     "address": {
+      "line": "PO BOX 30335",
+      "city": "Cincinnati",
+      "state": "OH",
+      "zip": "45230"
+     },
+     "phone": "4402472881",
+     "email": "ROBSAUERLAND@YAHOO.COM",
+     "how": "PCP",
+     "deadlines": "NONE",
+     "restrictions": "NO RESTRICTIONS ON LIMITATIONS ON AWARDS EXIST EXCEPT APPLICANT MUST BE A QUALIFIED CHARITY."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202621709349100902",
+   "n_grants": 48,
+   "n_instate": 31,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "CLEVELAND ANIMAL PROTECTIVE LEAGUE",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "PC",
+     "purpose": "DONATION",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 20000,
+   "median_hit": 20000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     15
+    ],
+    [
+     "Cincinnati",
+     5
+    ],
+    [
+     "Milford",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.68,
+   "funds_you": [],
+   "score": 9.51
+  },
+  {
+   "ein": "341622273",
+   "name": "Doris & Floyd Kimble Foundation",
+   "address": {
+    "line": "PO Box 67",
+    "city": "Dover",
+    "state": "OH",
+    "zip": "44622"
+   },
+   "phone": "3304072890",
+   "website": "N/A",
+   "fmv_assets": 272231278,
+   "total_grants": 1998724,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "Gregory Kimble Trustee",
+     "address": {
+      "line": "PO BOX 67",
+      "city": "Dover",
+      "state": "OH",
+      "zip": "44622"
+     },
+     "phone": "3304072890",
+     "email": "",
+     "how": "Written requests",
+     "deadlines": "None",
+     "restrictions": "None"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202511669349100151",
+   "n_grants": 86,
+   "n_instate": 83,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "Tuscarawas County Humane Society",
+     "city": "New Philadelphia",
+     "state": "OH",
+     "zip3": "446",
+     "status": "",
+     "purpose": "Sustaining Support",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "New Philadelphia",
+     25
+    ],
+    [
+     "Dover",
+     12
+    ],
+    [
+     "Canton",
+     10
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.81,
+   "funds_you": [],
+   "score": 9.43
+  },
+  {
+   "ein": "208467212",
+   "name": "THIRD FEDERAL FOUNDATION",
+   "address": {
+    "line": "7007 BROADWAY AVENUE",
+    "city": "Cleveland",
+    "state": "OH",
+    "zip": "441051441"
+   },
+   "phone": "2164295412",
+   "website": "WWW.GUIDESTAR.COM",
+   "fmv_assets": 35487575,
+   "total_grants": 2771421,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "THIRD FEDERAL FOUNDATION CO EMILY T",
+     "address": {
+      "line": "7007 BROADWAY AVENUE",
+      "city": "Cleveland",
+      "state": "OH",
+      "zip": "441051441"
+     },
+     "phone": "2166417270",
+     "email": "",
+     "how": "APPLICATIONS SHOULD BE SUBMITTED IN WRITTEN FORM AND INCLUDE INFORMATION CONCERNING THE NATURE OF THE REQUEST, THE CHARITABLE OR EDUCATIONAL PURPOSE FOR WHICH THE GRANT WILL BE UTILIZED, AND INFORMATIN CONCERNING THE REQUESTING ORGANIZATION'S CHARITABLE AND/OR EDUCATIONAL PROGRAMS.",
+     "deadlines": "THERE ARE NO SUBMISSION DEADLINES. THE FOUNDATION WILL EVALUATE REQUESTS IN A TIMELY MANNER.",
+     "restrictions": "GRANTS ARE RESTRICTED TO ORGANIZATIONS OPERATING CHARITABLE AND EDUCATIONAL PROGRAMS THAT QUALIFY AS SECTION 501(C)(3) ORGANIZATIONS. THE FOUNDATION GENERALLY WILL PROVIDE GRANTS WITH RESPECT TO COMMUNITY DEVELOPMENT, AND THE FOUNDATION SUPPORTS VARIOUS PROGRAMS FOR THE REDEVELOPMENT OF ECONOMICALLY DEPRESSED AREAS AND NEIGHBORHOODS, INCLUDING THE AREA NEAR THE OFFICES OF THIRD FEDERAL. THE SECOND SUCH AREA OF EMPHASIS IS EDUCATION WHERE THE FOUNDATION SUPPORTS VARIOUS INITIATIVES AT THE PRIMARY, SECONDARY AND POST SECONDARY LEVELS WHICH RAISE THE ASPRIATIONS OF STUDENTS IN THE COMMUNITY AND PROGRAMS THAT ENHANCE KNOWLEDGE IN SPECIFIC AREAS SUCH AS ECONOMICS, COMMUNICATIONS, BUSINESS, AND PUBLIC SPEAKING AS WELL AS INITIATIVES THAT ENHANCE THE DISSEMINATION OF INFORMATION NECESSARY TO SUPPORT EDUCATION."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202642049349100504",
+   "n_grants": 101,
+   "n_instate": 76,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "NEIGHBORHOOD PETS",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "PC",
+     "purpose": "CHARITABLE PURPOSE",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 10000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     58
+    ],
+    [
+     "Akron",
+     3
+    ],
+    [
+     "Lorain",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.0
+  },
+  {
+   "ein": "261428733",
+   "name": "THE COVIA FOUNDATION",
+   "address": {
+    "line": "3 SUMMIT PARK DRIVE 700",
+    "city": "Independence",
+    "state": "OH",
+    "zip": "44131"
+   },
+   "phone": "4402790262",
+   "website": "N/A",
+   "fmv_assets": 10778742,
+   "total_grants": 974231,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "KRISTIN L LEWIS - COVIA",
+     "address": {
+      "line": "3 SUMMIT PARK DRIVE SUITE 700",
+      "city": "Independence",
+      "state": "OH",
+      "zip": "44131"
+     },
+     "phone": "4402790258",
+     "email": "",
+     "how": "APPLICATIONS ARE TYPICALLY SUBMITTED BY COVIA EMPLOYEES.",
+     "deadlines": "N/A",
+     "restrictions": "CONTRIBUTIONS ARE GENERALLY GIVEN FOR HEALTH AND WELLNESS, EDUCATIONAL, ENVIRONMENTAL AND SOCIAL EQUALITY PROJECTS."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202523219349101987",
+   "n_grants": 271,
+   "n_instate": 59,
+   "n_regions": 12,
+   "hits": [
+    {
+     "recipient": "PROACTIVE ANIMAL WELFARE SOCIETY",
+     "city": "Monroe",
+     "state": "OH",
+     "zip3": "450",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT",
+     "amount": 1000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 1000,
+   "median_hit": 1000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Chardon",
+     8
+    ],
+    [
+     "Cleveland",
+     7
+    ],
+    [
+     "Chagrin Falls",
+     4
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.86,
+   "funds_you": [],
+   "score": 8.96
+  },
+  {
+   "ein": "316567000",
+   "name": "JAMES & CORALIE CENTOFANTI CHARITABLE FOUNDATION",
+   "address": {
+    "line": "42 MCCLURG ROAD",
+    "city": "Youngstown",
+    "state": "OH",
+    "zip": "44512"
+   },
+   "phone": "3307401226",
+   "website": "N/A",
+   "fmv_assets": 9765974,
+   "total_grants": 664000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "FARMERS TRUST CO TRUSTEE",
+     "address": {
+      "line": "42 MCCLURG ROAD",
+      "city": "Youngstown",
+      "state": "OH",
+      "zip": "44512"
+     },
+     "phone": "3307401226",
+     "email": "",
+     "how": "LETTER DESCRIBING PURPOSE OF REQUEST. PRINTED MATERIAL, BROCHURES AND ANY OTHER INFORMATION PERTINENT TO THE ORGANIZATION.",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611199349100106",
+   "n_grants": 27,
+   "n_instate": 27,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "ANIMAL CHARITY OF OHIO INC",
+     "city": "Boardman",
+     "state": "OH",
+     "zip3": "445",
+     "status": "PC",
+     "purpose": "CHARITABLE",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Youngstown",
+     13
+    ],
+    [
+     "Canfield",
+     5
+    ],
+    [
+     "Salem",
+     4
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 8.7
+  },
+  {
+   "ein": "873414143",
+   "name": "WWMR FOUNDATION",
+   "address": {
+    "line": "600 SUPERIOR AVE CO JCONSOLO 210",
+    "city": "Cleveland",
+    "state": "OH",
+    "zip": "44114"
+   },
+   "phone": "2163485805",
+   "website": "N/A",
+   "fmv_assets": 15628456,
+   "total_grants": 2287500,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "JEFFERY P CONSOLO",
+     "address": {
+      "line": "600 SUPERIOR AVENUE EAST SUITE 2100",
+      "city": "Cleveland",
+      "state": "OH",
+      "zip": "44114"
+     },
+     "phone": "2163485805",
+     "email": "JCONSOLO@MCDONALDHOPKINS.COM",
+     "how": "OPEN",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202642199349100509",
+   "n_grants": 17,
+   "n_instate": 15,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "CLEVELAND ANIMAL PROTECTIVE LEAGUE",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "PC",
+     "purpose": "OPERATING EXPENSES",
+     "amount": 7500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 7500,
+   "median_hit": 7500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     8
+    ],
+    [
+     "Cleveland Heights",
+     2
+    ],
+    [
+     "Lakewood",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.87,
+   "funds_you": [],
+   "score": 8.34
+  },
+  {
+   "ein": "341634929",
+   "name": "BY THE HAND FOUNDATION",
+   "address": {
+    "line": "20545 CENTER RIDGE ROAD SUITE 200",
+    "city": "Rocky River",
+    "state": "OH",
+    "zip": "44116"
+   },
+   "phone": "4402019441",
+   "website": "N/A",
+   "fmv_assets": 22841961,
+   "total_grants": 5186717,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "CATHY SOPRANO",
+     "address": {
+      "line": "20545 CENTER RIDGE RD SUITE 200",
+      "city": "Rocky River",
+      "state": "OH",
+      "zip": "44116"
+     },
+     "phone": "4402019441",
+     "email": "",
+     "how": "LETTER DESCRIBING ORGANIZATIONS'S CHARITABLE PURPOSE",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601949349100335",
+   "n_grants": 6,
+   "n_instate": 5,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "GEAUGA HUMANE SOCIETY",
+     "city": "Russell Twp",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "ANIMAL RESCUE",
+     "amount": 1800,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 1800,
+   "median_hit": 1800,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     3
+    ],
+    [
+     "Russell Twp",
+     1
+    ],
+    [
+     "Various",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 8.26
+  },
+  {
+   "ein": "346519863",
+   "name": "ELIZABETH RING MATHER WILLIAM GWINN MATHER FUND",
+   "address": {
+    "line": "1375 E NINTH ST SUITE 900",
+    "city": "Cleveland",
+    "state": "OH",
+    "zip": "44114"
+   },
+   "phone": "2166964200",
+   "website": "N/A",
+   "fmv_assets": 28534667,
+   "total_grants": 1093000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "GEORGE R IRELAND PRESIDENT",
+     "address": {
+      "line": "1375 E NINTH ST SUITE 900",
+      "city": "Cleveland",
+      "state": "OH",
+      "zip": "44114"
+     },
+     "phone": "2166964200",
+     "email": "",
+     "how": "APPLICATION CAN BE MADE IN LETTER FORM AND INCLUDE DETAIL OF ORGANIZATION, FINANCIAL INFORMATION, AND REQUEST. REQUEST SHOULD INCLUDE AN ANNUAL REPORT OR AUDITED FINANCIAL STATEMENTS AND INFORMATION REGARDING THE EXPECTED OUTCOMES FOR THE MONEY RECEIVED.",
+     "deadlines": "JANUARY 31 APRIL 30 JULY 31 OCTOBER 1",
+     "restrictions": "NO GRANTS ARE MADE TO INDIVIDUALS. NO LIMITATIONS TO GEOGRAPHICAL AREA; HOWEVER, GRANTS ARE GENERALLY MADE TO QUALIFYING ORGANIZATIONS IN THE CLEVELAND, OHIO AREA, AND OTHER LOCATIONS WHERE TRUSTEES RESIDE."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202503119349101925",
+   "n_grants": 105,
+   "n_instate": 35,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "CLEVELAND ANIMAL PROTECTIVE LEAGUE",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "",
+     "purpose": "UNRESTRICTED OPERATING SUPPORT",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 10000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     18
+    ],
+    [
+     "Mount Vernon",
+     5
+    ],
+    [
+     "Mt Vernon",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.63,
+   "funds_you": [],
+   "score": 7.51
+  },
+  {
+   "ein": "316025114",
+   "name": "The Scripps Howard Foundation",
+   "address": {
+    "line": "PO BOX 5380",
+    "city": "Cincinnati",
+    "state": "OH",
+    "zip": "452015380"
+   },
+   "phone": "5139773000",
+   "website": "WWW.SCRIPPS.COM/FOUNDATION",
+   "fmv_assets": 75440079,
+   "total_grants": 7313892,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "LIZ CARTER",
+     "address": {
+      "line": "PO BOX 5380",
+      "city": "Cincinnati",
+      "state": "OH",
+      "zip": "45201"
+     },
+     "phone": "5139773000",
+     "email": "",
+     "how": "NONE",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202503219349106450",
+   "n_grants": 820,
+   "n_instate": 157,
+   "n_regions": 14,
+   "hits": [
+    {
+     "recipient": "Homeless Animal Rescue Team of Cincinnati",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "",
+     "purpose": "Volunteer Gift",
+     "amount": 1250,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "Homeless Animal Rescue Team of Cincinnati",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "",
+     "purpose": "CEO discretionary grant",
+     "amount": 500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 1750,
+   "median_hit": 1250,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     99
+    ],
+    [
+     "Cleveland",
+     9
+    ],
+    [
+     "Blue Ash",
+     8
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.11,
+   "funds_you": [],
+   "score": 7.18
+  },
+  {
+   "ein": "311746458",
+   "name": "CARDINAL HEALTH FOUNDATION",
+   "address": {
+    "line": "7000 CARDINAL PLACE",
+    "city": "Dublin",
+    "state": "OH",
+    "zip": "43017"
+   },
+   "phone": "6147575000",
+   "website": "WWW.CARDINALHEALTH.COM/COMMUNITY",
+   "fmv_assets": 61787912,
+   "total_grants": 5981125,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "CARDINALHEALTHCOMCOMMUNITY",
+     "address": {
+      "line": "7000 CARDINAL PLACE",
+      "city": "Dublin",
+      "state": "OH",
+      "zip": "43017"
+     },
+     "phone": "6147577481",
+     "email": "",
+     "how": "ONLY ELECTRONIC SUBMISSIONS WILL BE ACCEPTED.",
+     "deadlines": "NONE NONE N/A",
+     "restrictions": "THE CARDINAL HEALTH FOUNDATION SUPPORTS REGIONAL AND NATIONAL HEALTH CARE INITIATIVES, VOLUNTEERISM, AND HEALTHY AND LIVABLE COMMUNITIES."
+    }
+   ],
+   "tax_period_end": "2025-06-30",
+   "object_id": "202533169349100848",
+   "n_grants": 212,
+   "n_instate": 133,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "COLUMBUS HUMANE",
+     "city": "Hilliard",
+     "state": "OH",
+     "zip3": "430",
+     "status": "",
+     "purpose": "EMPLOYEE ENGAGEMENT\\VOLUNTEER LEADERSHIP GRANT",
+     "amount": 3500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CITIZENS FOR HUMANE ACTION ANIMAL SHELTER",
+     "city": "Columbus",
+     "state": "OH",
+     "zip3": "432",
+     "status": "",
+     "purpose": "EMPLOYEE ENGAGEMENT\\VOLUNTEER LEADERSHIP GRANT",
+     "amount": 3500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CANINE COMPANIONS FOR INDEPENDENCE",
+     "city": "New Albany",
+     "state": "OH",
+     "zip3": "430",
+     "status": "",
+     "purpose": "EMPLOYEE ENGAGEMENT\\VOLUNTEER LEADERSHIP GRANT",
+     "amount": 3500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CANINE COMPANIONS FOR INDEPENDENCE",
+     "city": "New Albany",
+     "state": "OH",
+     "zip3": "430",
+     "status": "",
+     "purpose": "CARDINAL HEALTH COMMUNITIES\\CENTRAL OHIO",
+     "amount": 1000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 4,
+   "n_strong": 4,
+   "hit_total": 11500,
+   "median_hit": 3500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Columbus",
+     86
+    ],
+    [
+     "Dublin",
+     9
+    ],
+    [
+     "Hilliard",
+     5
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.04,
+   "funds_you": [],
+   "score": 3.4
+  },
+  {
+   "ein": "271665086",
+   "name": "ABRAMS FAMILY FOUNDATION MARLYON E ABRAMS",
+   "address": {
+    "line": "PO BOX 469",
+    "city": "Williamsburg",
+    "state": "OH",
+    "zip": "45176"
+   },
+   "phone": "5137214450",
+   "website": "N/A",
+   "fmv_assets": 42329835,
+   "total_grants": 2886718,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "THE ABRAMS FAMILY FOUNDATION",
+     "address": {
+      "line": "PO BOX 469",
+      "city": "Williamsburg",
+      "state": "OH",
+      "zip": "45176"
+     },
+     "phone": "5133173861",
+     "email": "",
+     "how": "NUMBER OF INDIVIDUALS SERVED IN PREVIOUS AND CURRENT YEAR TOTAL DOLLAR AMOUNT OF PROGRAM/PROJECT ONE COPY OF LETTER OF DETERMINATION FROM THE IRS",
+     "deadlines": "APRIL 1",
+     "restrictions": "GRANTS WILL ONLY BE MADE TO AN ORGANIZATION WHICH PROVIDES A LETTER OF DETERMINATION BY THE IRS SHOWING ITS STATUS AS A PUBLIC CHARITY UNDER SECTION 501(C)(3) NOT AS A PRIVATE FOUNDATION AS DEFINED IN SECTION 509(A). THE FOUNDATION INTENDS NOT TO PROVIDE CONTINUING SUPPORT TO ANY GRANTEE"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611889349100211",
+   "n_grants": 19,
+   "n_instate": 17,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "PETS FOR PATIENTS",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "PC",
+     "purpose": "PROVIDE COMPANION DOGS TO CHILDREN",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "LEAGUE FOR ANIMAL WELFARE",
+     "city": "Batavia",
+     "state": "OH",
+     "zip3": "451",
+     "status": "GOV",
+     "purpose": "CARE OF ANIMALS",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "BROWN COUNTY HUMANE SOCIETY",
+     "city": "Georgetown",
+     "state": "OH",
+     "zip3": "451",
+     "status": "PC",
+     "purpose": "NO KILLANIMAL SHELTERAND FOOD",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ANGEL'S WATCH",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "PC",
+     "purpose": "HELP SAY GOODBYE TO PET IN COMFORT",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 4,
+   "n_strong": 4,
+   "hit_total": 45000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     7
+    ],
+    [
+     "Williamsburg",
+     6
+    ],
+    [
+     "Batavia",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 3.03
+  },
+  {
+   "ein": "311396841",
+   "name": "J WILLIAM & MARY STRAKER CHARITABLE FDN",
+   "address": {
+    "line": "925 MILITARY ROAD",
+    "city": "Zanesville",
+    "state": "OH",
+    "zip": "43701"
+   },
+   "phone": "7404532220",
+   "website": "N/A",
+   "fmv_assets": 124691584,
+   "total_grants": 5943502,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "SUSAN S HOLDREN",
+     "address": {
+      "line": "925 MILITARY ROAD",
+      "city": "Zanesville",
+      "state": "OH",
+      "zip": "43702"
+     },
+     "phone": "7404532220",
+     "email": "",
+     "how": "NO SPECIFIC FORM REQUIRED",
+     "deadlines": "NONE",
+     "restrictions": "PRIMARILY MUSKINGUM COUNTY, OHIO AREA"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611349349103066",
+   "n_grants": 118,
+   "n_instate": 108,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "PAWS OF MUSKINGUM COUNTY",
+     "city": "Zanesville",
+     "state": "OH",
+     "zip3": "437",
+     "status": "PC",
+     "purpose": "SPAY AND NEUTER SERVICES FOR DOMESTIC AND FERAL CATS",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CHRIST'S TABLE",
+     "city": "Zanesville",
+     "state": "OH",
+     "zip3": "437",
+     "status": "PC",
+     "purpose": "FAIR ANIMAL PROCESSING/HUNGER NETWORK",
+     "amount": 7916,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 27916,
+   "median_hit": 20000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Zanesville",
+     79
+    ],
+    [
+     "Dresden",
+     7
+    ],
+    [
+     "New Concord",
+     5
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.01,
+   "funds_you": [],
+   "score": 2.79
+  },
+  {
+   "ein": "311150951",
+   "name": "Charles H Dater Foundation Inc",
+   "address": {
+    "line": "700 Walnut St Suite 301",
+    "city": "Cincinnati",
+    "state": "OH",
+    "zip": "45202"
+   },
+   "phone": "5132411234",
+   "website": "www.DaterFoundation.org",
+   "fmv_assets": 140118000,
+   "total_grants": 5375000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "BRUCE A KRONE SECRETARY CHARLES H D",
+     "address": {
+      "line": "700 Walnut St Suite 301",
+      "city": "Cincinnati",
+      "state": "OH",
+      "zip": "45202"
+     },
+     "phone": "5132411234",
+     "email": "",
+     "how": "Applications are submitted electronically www.daterfoundation.org",
+     "deadlines": "None",
+     "restrictions": "Grants are primarily for the benefit of children in the Greater Cincinnati Area."
+    }
+   ],
+   "tax_period_end": "2025-08-31",
+   "object_id": "202611909349100001",
+   "n_grants": 144,
+   "n_instate": 130,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "Circle Tail Inc",
+     "city": "Pleasant Plain",
+     "state": "OH",
+     "zip3": "451",
+     "status": "",
+     "purpose": "Circle Tail Facility Dog Program",
+     "amount": 30000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "Cincinnati Therapeutic Riding & Horsemanship",
+     "city": "Milford",
+     "state": "OH",
+     "zip3": "451",
+     "status": "",
+     "purpose": "Improving Lives Through Equine Assisted Services 2025",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 55000,
+   "median_hit": 30000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     117
+    ],
+    [
+     "Hamilton",
+     4
+    ],
+    [
+     "Milford",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.36
+  },
+  {
+   "ein": "316035344",
+   "name": "HARRY C MOORES FOUNDATION",
+   "address": {
+    "line": "100 SOUTH THIRD STREET",
+    "city": "Columbus",
+    "state": "OH",
+    "zip": "432154236"
+   },
+   "phone": "6142278884",
+   "website": "N/A",
+   "fmv_assets": 45303966,
+   "total_grants": 2121470,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "MS DONNA HARTLEY",
+     "address": {
+      "line": "100 SOUTH THIRD STREET",
+      "city": "Columbus",
+      "state": "OH",
+      "zip": "43215"
+     },
+     "phone": "6142278884",
+     "email": "",
+     "how": "DETAIL IS AVAILABLE THROUGH THE GRANT APPLICATION INSTRUCTIONS WHICH CAN BE OBTAINED UPON REQUEST.",
+     "deadlines": "JUNE 1 FOR GRANTS MADE IN AUGUST/SEPTEMBER",
+     "restrictions": "GRANTS ARE NOT MADE TO INDIVIDUALS OR PRIVATE FOUNDATIONS."
+    }
+   ],
+   "tax_period_end": "2025-09-30",
+   "object_id": "202602159349100415",
+   "n_grants": 161,
+   "n_instate": 158,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "CANINE COMPANIONS FOR INDEPENDENCE",
+     "city": "New Albany",
+     "state": "OH",
+     "zip3": "430",
+     "status": "",
+     "purpose": "GENERAL OPERATIONS",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 15000,
+   "median_hit": 15000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Columbus",
+     122
+    ],
+    [
+     "Dublin",
+     4
+    ],
+    [
+     "Hilliard",
+     4
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.01,
+   "funds_you": [],
+   "score": 2.35
+  },
+  {
+   "ein": "311138883",
+   "name": "THE DAYTON POWER AND LIGHT COMPANY FOUNDATION DBA AES OHIO FOUNDATION",
+   "address": {
+    "line": "1065 WOODMAN DR",
+    "city": "Dayton",
+    "state": "OH",
+    "zip": "454321423"
+   },
+   "phone": "9372597925",
+   "website": "HTTPS://WWW.AES-OHIO.COM/AES-OHIO-FOUNDATION",
+   "fmv_assets": 33477691,
+   "total_grants": 1634500,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "TOM RAGA EXECUTIVE DIRECTOR",
+     "address": {
+      "line": "1065 WOODMAN DRIVE",
+      "city": "Dayton",
+      "state": "OH",
+      "zip": "45432"
+     },
+     "phone": "9372597925",
+     "email": "",
+     "how": "THERE IS AN ON-LINE APPLICATION FORM THAT SHOULD BE COMPLETED WHICH INCLUDES: 1. A DESCRIPTION OF THE ORGANIZATION'S HISTORY, STRUCTURE, PURPOSE AND THE PROGRAM OR PROJECT FOR WHICH SUPPORT IS NEEDED. 2. STATUS AND RESULTS OF PROGRAMS PREVIOUSLY FUNDED BY THE DP&L FOUNDATION. 3. A LIST OF OTHER DONORS AND THE LEVEL OF SUPPORT RECEIVED OR REQUESTED. 4. A COPY OF THE IRS RULING CLASSIFYING THE ORGANIZATION AS TAX EXEMPT (SECTION 501(C)(3)) AND NOT A PRIVATE FOUNDATION (SECTION 509(A)) OF THE INTERNAL REVENUE CODE. 5. A COPY OF THE ORGANIZATION'S MOST RECENT FORM 990. 6. AN INDEPENDENT FINANCIAL AUDIT. 7. A FINANCIAL BUDGET. 8. SOURCES OF INCOME. 9. EXPENDITURES BY PROGRAM, ADMINISTRATION AND FUNDRAISING.",
+     "deadlines": "CONTRIBUTIONS ARE PLANNED ANNUALLY SO SUBMIT REQUESTS AS FAR IN ADVANCE AS POSSIBLE.",
+     "restrictions": "DP&L ESTABLISHED THE DAYTON POWER AND LIGHT COMPANY FOUNDATION AS A MEANS TO REINVEST IN THE COMMUNITIES IT SERVES AND CONTRIBUTE TO THE REGION'S OVERALL QUALITY OF LIFE. THE DP&L FOUNDATION SUPPORTS A VARIETY OF ARTS & CULTURAL, HEALTH AND HUMAN SERVICES, ECONOMIC DEVELOPMENT, AND EDUCATIONAL ORGANIZATIONS. IN REVIEWING EACH REQUEST, THE FOUNDATION IS GUIDED BY THE FOLLOWING CRITERIA: 1. VALUE AND BENEFIT TO THE COMMUNITY 2. OVERALL COMMUNITY SUPPORT 3. FINANCIAL VIABILITY AND HEALTH OF THE ORGANIZATION 4. PAST DP&L FOUNDATION SUPPORT. THE FOUNDATION DOES NOT GENERALLY FUND: 1. INDIVIDUALS 2. RELIGIOUS ORGANIZATIONS 3. NATIONAL ORGANIZATIONS OUTSIDE OF WEST CENTRAL OHIO 4. OTHER FOUNDATIONS 5. ORGANIZATIONS THAT ONLY BENEFIT A FEW PEOPLE 6. ORGANIZATIONS RAISING FUNDS FOR SECOND-PARTY GIVING 7. FRATERNAL, LABOR OR VETERANS ORGANIZATIONS 8. NATIONAL OR STATE HEALTH ORGANIZATIONS 9. SPORTS LEAGUES, SCHOOL YEARBOOK OR CALENDAR ADS 10. TRAVEL FUNDS FOR TOURS, EXPEDITIONS OR MISSION TRIPS"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202523149349101407",
+   "n_grants": 54,
+   "n_instate": 54,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "THERAPEUTIC RIDING INSTITUTE",
+     "city": "Spring Valley",
+     "state": "OH",
+     "zip3": "453",
+     "status": "",
+     "purpose": "EXPANDED EQUINE-ASSISTED SERVICES",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 10000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Dayton",
+     38
+    ],
+    [
+     "Springfield",
+     2
+    ],
+    [
+     "Columbus",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.28
+  },
+  {
+   "ein": "311351011",
+   "name": "L & L NIPPERT CHARITABLE FOUNDATION INC ATTN CARTER F RANDOLPH PHD",
+   "address": {
+    "line": "10653 TECHWOODS CIRCLE SUITE 101",
+    "city": "Blue Ash",
+    "state": "OH",
+    "zip": "45242"
+   },
+   "phone": "5138917144",
+   "website": "WWW.LNLCHARITABLE.ORG",
+   "fmv_assets": 126550542,
+   "total_grants": 5301526,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "CARTER F RANDOLPH PHD",
+     "address": {
+      "line": "10653 TECHWOODS CIRCLE SUITE 101",
+      "city": "Cincinnati",
+      "state": "OH",
+      "zip": "45242"
+     },
+     "phone": "5138917144",
+     "email": "",
+     "how": "APPLICATIONS SHOULD BE SUBMITTED THROUGH THE ONLINE GRANT APPLICATION SUBMISSION PORTALS. FULL DIRECTIONS FOR APPLICATIONS ARE AVAILABLE ON WWW.LNLCHARITABLE.ORG.",
+     "deadlines": "APPLICATIONS MUST BE RECEIVED BY AUGUST 1ST.",
+     "restrictions": "GRANTS ARE ONLY GRANTED TO LOCAL 501(C)(3) ORGANIZATIONS."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611329349103551",
+   "n_grants": 81,
+   "n_instate": 74,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "CANINE COMPANIONS FOR INDEPENDENCE",
+     "city": "New Albany",
+     "state": "OH",
+     "zip3": "430",
+     "status": "PC",
+     "purpose": "ORGANIZATION'S CHARITABLE PURPOSE",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 100000,
+   "median_hit": 100000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     64
+    ],
+    [
+     "Milford",
+     2
+    ],
+    [
+     "Hamilton",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.1
+  },
+  {
+   "ein": "352446722",
+   "name": "WALTER E TERHUNE MEMORIAL FUND",
+   "address": {
+    "line": "4900 TIEDEMAN ROAD OH-01-49-0381",
+    "city": "Brooklyn",
+    "state": "OH",
+    "zip": "44144"
+   },
+   "phone": "4192596197",
+   "website": "",
+   "fmv_assets": 18737411,
+   "total_grants": 640000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "Keybank N A Foundations and Endowm",
+     "address": {
+      "line": "P O Box 10099",
+      "city": "Toledo",
+      "state": "OH",
+      "zip": "436990099"
+     },
+     "phone": "4192596197",
+     "email": "",
+     "how": "Submit in writing:statement of purpose & history of organization, description of project and duration, amount requested, budget, current tax exempt status, list of board members, financial statements",
+     "deadlines": "March 31 and September 30",
+     "restrictions": "Awards are given based on educational, literary, scientific, and other charitable causes."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601279349101965",
+   "n_grants": 32,
+   "n_instate": 26,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "TOLEDO AREA HUMANE SOCIETY",
+     "city": "Maumee",
+     "state": "OH",
+     "zip3": "435",
+     "status": "PC",
+     "purpose": "GENERAL OPERATING",
+     "amount": 30000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 30000,
+   "median_hit": 30000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Toledo",
+     17
+    ],
+    [
+     "Maumee",
+     3
+    ],
+    [
+     "Cleveland",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.04,
+   "funds_you": [],
+   "score": 1.97
+  },
+  {
+   "ein": "311044475",
+   "name": "THE AUSTIN E KNOWLTON FOUNDATION INC",
+   "address": {
+    "line": "312 WALNUT STREET 3130",
+    "city": "Cincinnati",
+    "state": "OH",
+    "zip": "45202"
+   },
+   "phone": "5133812400",
+   "website": "HTTPS://WWW.AEKFOUNDATION.ORG/",
+   "fmv_assets": 266549523,
+   "total_grants": 11575000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "SHERRI L CALK",
+     "address": {
+      "line": "312 WALNUT STREET SUITE 3130",
+      "city": "Cincinnati",
+      "state": "OH",
+      "zip": "45202"
+     },
+     "phone": "5133812400",
+     "email": "SCALK@AEKFOUNDATION.ORG",
+     "how": "ANY FORM. ORGANIZATION IS REQUIRED TO SUBMIT PROOF OF TAX-EXEMPT STATUS",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533089349100843",
+   "n_grants": 46,
+   "n_instate": 24,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "OTTERBEIN UNIVERSITY",
+     "city": "Westerville",
+     "state": "OH",
+     "zip3": "430",
+     "status": "",
+     "purpose": "EQUINE SCIENCE PROGRAM",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 25000,
+   "median_hit": 25000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     14
+    ],
+    [
+     "Columbus",
+     3
+    ],
+    [
+     "Granville",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.04,
+   "funds_you": [],
+   "score": 1.95
+  },
+  {
+   "ein": "461512670",
+   "name": "THE HERCHE FAMILY FOUNDATION INC",
+   "address": {
+    "line": "4955 SPRING GROVE AVENUE",
+    "city": "Cincinnati",
+    "state": "OH",
+    "zip": "45232"
+   },
+   "phone": "5134827665",
+   "website": "N/A",
+   "fmv_assets": 9971233,
+   "total_grants": 2700000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "DAVID HERCHE",
+     "address": {
+      "line": "C/O 4955 SPRING GROVE AVENUE",
+      "city": "Cincinnati",
+      "state": "OH",
+      "zip": "45232"
+     },
+     "phone": "5134827665",
+     "email": "",
+     "how": "ALL APPLICATIONS MUST BE IN WRITING.",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533109349101668",
+   "n_grants": 5,
+   "n_instate": 3,
+   "n_regions": 1,
+   "hits": [
+    {
+     "recipient": "SPCA",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 25000,
+   "median_hit": 25000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 1.89
+  },
+  {
+   "ein": "311394291",
+   "name": "THE LINNEMANN FAMILY FOUNDATION",
+   "address": {
+    "line": "4960 WALNUT WOODS LANE",
+    "city": "Cincinnati",
+    "state": "OH",
+    "zip": "45243"
+   },
+   "phone": "5137856060",
+   "website": "N/A",
+   "fmv_assets": 10860679,
+   "total_grants": 411000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "CATHERINE LINNEMANN",
+     "address": {
+      "line": "4960 WALNUT WOODS DRIVE",
+      "city": "Cincinnati",
+      "state": "OH",
+      "zip": "45243"
+     },
+     "phone": "5137856060",
+     "email": "",
+     "how": "THE TRUST ACCEPTS WRITTEN APPLICATIONS FROM ORGANIZATIONS EXEMPT FROM TAX UNDER I.R.C. 509(A)(1), (2), OR (3). APPLICATIONS RECEIVED FROM OTHER ORGANIZATIONS OR FROM ANY INDIVIDUAL(S) WILL NOT BE CONSIDERED. THE APPLICATION MUST BE ACCOMPANIED BY A COPY OF THE EXEMPTED ORGANIZATION'S INTERNAL REVENUE SERVICE DETERMINATION LETTER REGARDING ITS CLASSIFICATION.",
+     "deadlines": "APPLICATIONS ACCEPTED AT ANY TIME.",
+     "restrictions": "IN AWARDING GRANTS, THE TRUST GIVES PREFERENCES TO ORGANIZATIONS WITH ACTIVITIES IN THE GREATER CINCINNATI AREA. GRANTS ARE GENERALLY RESTRICTED TO THE FIELDS OF RELIGION, EDUCATION, MEDICAL AND COMMUNITY PROJECTS. HOWEVER, TO THE EXTENT FUNDS ARE AVAILABLE, GRANTS MAY BE MADE FOR OTHER PROJECTS."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513179349100026",
+   "n_grants": 16,
+   "n_instate": 7,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "SPCA",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 15000,
+   "median_hit": 15000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     6
+    ],
+    [
+     "Oxford",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 1.81
+  },
+  {
+   "ein": "311493613",
+   "name": "The Ragland Family Foundation",
+   "address": {
+    "line": "1225 E McMillan St",
+    "city": "Cincinnati",
+    "state": "OH",
+    "zip": "45206"
+   },
+   "phone": "5136197614",
+   "website": "N/A",
+   "fmv_assets": 11691183,
+   "total_grants": 1545836,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "H NICHOLAS RAGLAND III TRUSTEE",
+     "address": {
+      "line": "1225 E McMillan St",
+      "city": "Cincinnati",
+      "state": "OH",
+      "zip": "45206"
+     },
+     "phone": "5136197614",
+     "email": "",
+     "how": "WRITTEN OR VERBAL REQUEST ACCEPTED. ORGANIZATION MUST PROVIDE A COPY OF THEIR IRS TAX EXEMPTION LETTER UNDER SECTION 501(C)(3) OF THE IRC.",
+     "deadlines": "NONE",
+     "restrictions": "AVAILABLE UPON REQUEST"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611339349103131",
+   "n_grants": 31,
+   "n_instate": 27,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "SPCA",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "PC",
+     "purpose": "FOR GENERAL OPERATING FUND",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     25
+    ],
+    [
+     "Oregonia",
+     1
+    ],
+    [
+     "Pepper Pike",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.04,
+   "funds_you": [],
+   "score": 1.7
+  },
+  {
+   "ein": "311590504",
+   "name": "THE ROCKWERN CHARITABLE FOUNDATION",
+   "address": {
+    "line": "6338 SNIDER ROAD",
+    "city": "Mason",
+    "state": "OH",
+    "zip": "45040"
+   },
+   "phone": "5132366799",
+   "website": "N/A",
+   "fmv_assets": 15613177,
+   "total_grants": 605025,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "STEPHANIE AMLUNG",
+     "address": {
+      "line": "6338 SNIDER ROAD PO BOX 688",
+      "city": "Mason",
+      "state": "OH",
+      "zip": "45040"
+     },
+     "phone": "5132366799",
+     "email": "ROCKWERNFOUNDATION@GMAIL.COM",
+     "how": "FORMAL GRANT REQUEST, NATURE OF ORGANIZATION, PURPOSE OF REQUEST",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2025-05-31",
+   "object_id": "202600449349100700",
+   "n_grants": 9,
+   "n_instate": 9,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "CIRCLE TAIL SUPPORT DOGS",
+     "city": "Pleasant Plain",
+     "state": "OH",
+     "zip3": "451",
+     "status": "",
+     "purpose": "GENERAL OPERATING",
+     "amount": 5025,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5025,
+   "median_hit": 5025,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     8
+    ],
+    [
+     "Pleasant Plain",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 1.65
+  },
+  {
+   "ein": "311533046",
+   "name": "HATTON FOUNDATION",
+   "address": {
+    "line": "308 E 8TH STREET 4TH FLOOR",
+    "city": "Cincinnati",
+    "state": "OH",
+    "zip": "45202"
+   },
+   "phone": "5133811848",
+   "website": "N/A",
+   "fmv_assets": 42510213,
+   "total_grants": 1880125,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "HATTON FOUNDATION",
+     "address": {
+      "line": "C/O IGNITE PHILANTHROPY",
+      "city": "Cincinnati",
+      "state": "OH",
+      "zip": "45202"
+     },
+     "phone": "5133811848",
+     "email": "KMORRIS@IGNITEPHILANTHROPY.COM",
+     "how": "PLEASE CONTACT THE FOUNDATION",
+     "deadlines": "NONE",
+     "restrictions": "FOUNDATION'S FOCUS IS ON CIVIC & ARTS PROGRAMS, FAITH- BASED PROGRAMS, HOMELESS/POVERTY PROGRAMS, MEDICAL & HEALTH ORGANIZATIONS, PROGRAMS FOR PEOPLE WITH SPECIAL NEEDS AND THEIR FAMILIES, SPORTS AND YOUTH DEVELOPMENT PROGRAMS, AND VETERANS."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611289349100026",
+   "n_grants": 69,
+   "n_instate": 53,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "HAMILTON COUNTY SPCA",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "PC",
+     "purpose": "MILITARY PET PARENT DOG TRAINING COU",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     32
+    ],
+    [
+     "Hamilton",
+     4
+    ],
+    [
+     "Lebanon",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 1.64
+  },
+  {
+   "ein": "341923618",
+   "name": "THE SWAGELOK FOUNDATION",
+   "address": {
+    "line": "29500 SOLON ROAD",
+    "city": "Solon",
+    "state": "OH",
+    "zip": "44139"
+   },
+   "phone": "4406492059",
+   "website": "N/A",
+   "fmv_assets": 10675025,
+   "total_grants": 1367680,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202630909349100723",
+   "n_grants": 222,
+   "n_instate": 174,
+   "n_regions": 11,
+   "hits": [
+    {
+     "recipient": "FRIENDS OF CITY DOGS CLEVELAND",
+     "city": "Lakewood",
+     "state": "OH",
+     "zip3": "441",
+     "status": "PC",
+     "purpose": "TO FURTHER THE ORGANIZATION'S TAX EXEMPT PURPOSE",
+     "amount": 1500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "MEDINA COUNTY SOCIETY FOR THE PREVENTION OF CRUELTY TO ANIMALS I",
+     "city": "Seville",
+     "state": "OH",
+     "zip3": "442",
+     "status": "PC",
+     "purpose": "TO FURTHER THE ORGANIZATION'S TAX EXEMPT PURPOSE",
+     "amount": 1010,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HUMANE SOCIETY OF SUMMIT COUNTY",
+     "city": "Akron",
+     "state": "OH",
+     "zip3": "443",
+     "status": "PC",
+     "purpose": "TO FURTHER THE ORGANIZATION'S TAX EXEMPT PURPOSE",
+     "amount": 827,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "WATERLOO ALLEY CAT PROJECT",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "PC",
+     "purpose": "TO FURTHER THE ORGANIZATION'S TAX EXEMPT PURPOSE",
+     "amount": 100,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ANIMAL PROTECTIVE LEAGUE",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "PC",
+     "purpose": "TO FURTHER THE ORGANIZATION'S TAX EXEMPT PURPOSE",
+     "amount": 50,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "PORTAGE ANIMAL PROTECTIVE LEAGUE",
+     "city": "Ravenna",
+     "state": "OH",
+     "zip3": "442",
+     "status": "PC",
+     "purpose": "TO FURTHER THE ORGANIZATION'S TAX EXEMPT PURPOSE",
+     "amount": 50,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 6,
+   "n_strong": 6,
+   "hit_total": 3537,
+   "median_hit": 827,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     70
+    ],
+    [
+     "Akron",
+     11
+    ],
+    [
+     "Mentor",
+     4
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.93,
+   "funds_you": [],
+   "score": 14.77
+  },
+  {
+   "ein": "341892083",
+   "name": "THE STANLEY L AND GRACE A WOOFTER FAMILY FOUNDATION",
+   "address": {
+    "line": "CO STANWADE PO BOX 10",
+    "city": "Hartford",
+    "state": "OH",
+    "zip": "44424"
+   },
+   "phone": "8008265243",
+   "website": "N/A",
+   "fmv_assets": 1124352,
+   "total_grants": 74000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601329349101200",
+   "n_grants": 18,
+   "n_instate": 15,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "ANIMAL WELFARE LEAGUE",
+     "city": "Warren",
+     "state": "OH",
+     "zip3": "444",
+     "status": "PC",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 4000,
+     "w": 1.0,
+     "near": true
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 4000,
+   "median_hit": 4000,
+   "n_near": 1,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Warren",
+     6
+    ],
+    [
+     "Kinsman",
+     4
+    ],
+    [
+     "Hartford",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 14.6
+  },
+  {
+   "ein": "341852806",
+   "name": "THE TWENTY FIRST CENTURY FOUNDATION",
+   "address": {
+    "line": "PO BOX 246",
+    "city": "Monroeville",
+    "state": "OH",
+    "zip": "44847"
+   },
+   "phone": "4194652587",
+   "website": "N/A",
+   "fmv_assets": 51240908,
+   "total_grants": 2204142,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202641599349100209",
+   "n_grants": 105,
+   "n_instate": 103,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "HURON COUNTY HUMANE SOCIETY",
+     "city": "Norwalk",
+     "state": "OH",
+     "zip3": "448",
+     "status": "PC",
+     "purpose": "ANIMAL ASSISTANCE/OPERATIONS",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ERIE COUNTY HUMANE SOCIETY",
+     "city": "Sandusky",
+     "state": "OH",
+     "zip3": "448",
+     "status": "PC",
+     "purpose": "ANIMAL ASSISTANCE/OPERATIONS",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HUMANE SOCIETY OF SANDUSKY",
+     "city": "Fremont",
+     "state": "OH",
+     "zip3": "434",
+     "status": "PC",
+     "purpose": "ANIMAL ASSISTANCE/OPERATIONS",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SENECA COUNTY HUMANE SOCIETY",
+     "city": "Tiffin",
+     "state": "OH",
+     "zip3": "448",
+     "status": "PC",
+     "purpose": "ANIMAL ASSISTANCE",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "BACK TO THE WILD",
+     "city": "Castalia",
+     "state": "OH",
+     "zip3": "448",
+     "status": "PC",
+     "purpose": "ANIMAL ASSITANCE/OPERATIONS",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 5,
+   "n_strong": 5,
+   "hit_total": 75000,
+   "median_hit": 15000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Norwalk",
+     30
+    ],
+    [
+     "Sandusky",
+     15
+    ],
+    [
+     "Bellevue",
+     11
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.91,
+   "funds_you": [],
+   "score": 13.53
+  },
+  {
+   "ein": "341811968",
+   "name": "TRIPLE T FOUNDATION",
+   "address": {
+    "line": "PO BOX 800",
+    "city": "Chardon",
+    "state": "OH",
+    "zip": "44024"
+   },
+   "phone": "2166894480",
+   "website": "N/A",
+   "fmv_assets": 42344354,
+   "total_grants": 1773178,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202542889349100509",
+   "n_grants": 194,
+   "n_instate": 57,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "GEAUGA HUMANE SOCIETY",
+     "city": "Novelty",
+     "state": "OH",
+     "zip3": "440",
+     "status": "",
+     "purpose": "GENERAL PURPOSES",
+     "amount": 12000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FRIENDS OF THE CUYAHOGA ANIMAL SHELTER",
+     "city": "Garfield Heights",
+     "state": "OH",
+     "zip3": "441",
+     "status": "",
+     "purpose": "GENERAL PURPOSES",
+     "amount": 1000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ASHTABULA COUNTY HUMANE SOCIETY",
+     "city": "Jefferson",
+     "state": "OH",
+     "zip3": "440",
+     "status": "",
+     "purpose": "GENERAL PURPOSES",
+     "amount": 500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 3,
+   "hit_total": 13500,
+   "median_hit": 1000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     24
+    ],
+    [
+     "Chardon",
+     4
+    ],
+    [
+     "Chagrin Falls",
+     4
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.96,
+   "funds_you": [],
+   "score": 12.49
+  },
+  {
+   "ein": "261624973",
+   "name": "THE ANDROSE FOUNDATION",
+   "address": {
+    "line": "PO BOX 122",
+    "city": "Jefferson",
+    "state": "OH",
+    "zip": "44047"
+   },
+   "phone": "3304160381",
+   "website": "N/A",
+   "fmv_assets": 19643795,
+   "total_grants": 926405,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202641959349100324",
+   "n_grants": 47,
+   "n_instate": 44,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "ASHTABULA COUNTY HUMANE SOCIETY",
+     "city": "Jefferson",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "CHARITABLE",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ASHTABULA ANIMAL PROTECTION",
+     "city": "Ashtabula",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "CHARITABLE",
+     "amount": 7000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 17000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Ashtabula",
+     18
+    ],
+    [
+     "Jefferson",
+     12
+    ],
+    [
+     "Andover",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.91,
+   "funds_you": [],
+   "score": 11.37
+  },
+  {
+   "ein": "341791494",
+   "name": "THE WILLIAM W AND MARGARET L BRESNAHAN FOUNDATION",
+   "address": {
+    "line": "4137 BOARDMAN-CANFIELD ROAD STE 10",
+    "city": "Canfield",
+    "state": "OH",
+    "zip": "44406"
+   },
+   "phone": "3302862872",
+   "website": "N/A",
+   "fmv_assets": 1550198,
+   "total_grants": 58750,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202610619349100906",
+   "n_grants": 35,
+   "n_instate": 25,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "ANIMAL CHARITY OF OHIO",
+     "city": "Youngstown",
+     "state": "OH",
+     "zip3": "445",
+     "status": "PC",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 3500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 3500,
+   "median_hit": 3500,
+   "n_near": 0,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Toledo",
+     10
+    ],
+    [
+     "Youngstown",
+     7
+    ],
+    [
+     "Akron",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.48,
+   "funds_you": [],
+   "score": 10.96
+  },
+  {
+   "ein": "456441049",
+   "name": "THE CYNTHIA PARKER MATTHEWS FAMILY FOUND FKA MATTHEWS FAMILY FOUNDATION",
+   "address": {
+    "line": "600 SUPERIOR AVE E 1701",
+    "city": "Cleveland",
+    "state": "OH",
+    "zip": "44114"
+   },
+   "phone": "2163822000",
+   "website": "N/A",
+   "fmv_assets": 52181537,
+   "total_grants": 2149000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611329349102121",
+   "n_grants": 14,
+   "n_instate": 6,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "HUMANE SOCIETY OF SUMMIT COUNTY",
+     "city": "Twinsburg",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "GENERAL",
+     "amount": 400000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 400000,
+   "median_hit": 400000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     3
+    ],
+    [
+     "Akron",
+     1
+    ],
+    [
+     "Gates Mills",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 10.6
+  },
+  {
+   "ein": "341908053",
+   "name": "THE WELTY FAMILY FOUNDATION",
+   "address": {
+    "line": "276 LAKE POINTE DRIVE",
+    "city": "Akron",
+    "state": "OH",
+    "zip": "44333"
+   },
+   "phone": "3305355711",
+   "website": "N/A",
+   "fmv_assets": 10062936,
+   "total_grants": 515000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601349349104860",
+   "n_grants": 77,
+   "n_instate": 77,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "HUMANE SOCIETY OF SUMMIT COUNTY",
+     "city": "Twinsburg",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "COMMUNITY",
+     "amount": 8000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 8000,
+   "median_hit": 8000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Akron",
+     57
+    ],
+    [
+     "Cuyahoga Falls",
+     5
+    ],
+    [
+     "Cleveland",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.99,
+   "funds_you": [],
+   "score": 10.35
+  },
+  {
+   "ein": "873807534",
+   "name": "EHH FOUNDATION",
+   "address": {
+    "line": "4900 TIEDEMAN ROAD OH-01-49-0381",
+    "city": "Brooklyn",
+    "state": "OH",
+    "zip": "44144"
+   },
+   "phone": "",
+   "website": "",
+   "fmv_assets": 10549640,
+   "total_grants": 459500,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202503129349100900",
+   "n_grants": 18,
+   "n_instate": 17,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "ANIMAL PROTECTIVE LEAGUE",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "",
+     "purpose": "GENERAL OPERATING",
+     "amount": 35000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "LAKE HUMANE SOCIETY",
+     "city": "Mentor",
+     "state": "OH",
+     "zip3": "440",
+     "status": "",
+     "purpose": "GENERAL OPERATING",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 60000,
+   "median_hit": 35000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     13
+    ],
+    [
+     "Lakeside",
+     1
+    ],
+    [
+     "Dayton",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.82,
+   "funds_you": [],
+   "score": 10.07
+  },
+  {
+   "ein": "346574879",
+   "name": "THE REINBERGER FOUNDATION",
+   "address": {
+    "line": "30000 CHAGRIN BLVD 300",
+    "city": "Cleveland",
+    "state": "OH",
+    "zip": "44124"
+   },
+   "phone": "2162922790",
+   "website": "WWW.REINBERGERFOUNDATION.ORG",
+   "fmv_assets": 82918561,
+   "total_grants": 3524909,
+   "preselected_only": true,
+   "apply": [
+    {
+     "contact": "THE REINBERGER FOUNDATION ONLINE AP",
+     "address": {
+      "line": "30000 CHAGRIN BLVD 300",
+      "city": "Cleveland",
+      "state": "OH",
+      "zip": "44124"
+     },
+     "phone": "2162922790",
+     "email": "REINBERGERFOUNDATION.ORG",
+     "how": "APPLICATION SHOULD BE MADE THROUGH REINBERGERFOUNDATION.ORG WEBSITE.",
+     "deadlines": "NOVEMBER 15TH",
+     "restrictions": "501(C)(3) ORGANIZATIONS ONLY"
+    },
+    {
+     "contact": "THE REINBERGER FOUNDATION ONLINE AP",
+     "address": {
+      "line": "30000 CHAGRIN BLVD 300",
+      "city": "Cleveland",
+      "state": "OH",
+      "zip": "44124"
+     },
+     "phone": "2162922790",
+     "email": "REINBERGERFOUNDATION.ORG",
+     "how": "APPLICATION SHOULD BE MADE THROUGH REINBERGERFOUNDATION.ORG WEBSITE.",
+     "deadlines": "MARCH 15TH",
+     "restrictions": "501(C)(3) ORGANIZATIONS ONLY"
+    },
+    {
+     "contact": "THE REINBERGER FOUNDATION ONLINE AP",
+     "address": {
+      "line": "30000 CHAGRIN BLVD 300",
+      "city": "Cleveland",
+      "state": "OH",
+      "zip": "44124"
+     },
+     "phone": "2162922790",
+     "email": "REINBERGERFOUNDATION.ORG",
+     "how": "APPLICATION SHOULD BE MADE THROUGH REINBERGERFOUNDATION.ORG WEBSITE.",
+     "deadlines": "JULY 15TH",
+     "restrictions": "501(C)(3) ORGANIZATIONS ONLY"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202503219349100015",
+   "n_grants": 140,
+   "n_instate": 137,
+   "n_regions": 11,
+   "hits": [
+    {
+     "recipient": "FIELDSTONE FARM THERAPEUTIC RIDING CENTER",
+     "city": "Chagrin Falls",
+     "state": "OH",
+     "zip3": "440",
+     "status": "",
+     "purpose": "GRANT 24-53 EQUINE THERAPY FOR DISADVANTAGED STUDENTS FROM CMSD AND INNER CITY SCHOOLS",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 25000,
+   "median_hit": 25000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     71
+    ],
+    [
+     "Columbus",
+     40
+    ],
+    [
+     "Toledo",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.64,
+   "funds_you": [],
+   "score": 9.44
+  },
+  {
+   "ein": "270609120",
+   "name": "THE GESSNER FAMILY FOUNDATION",
+   "address": {
+    "line": "4154 NOTTINGHILL GATE ROAD",
+    "city": "Columbus",
+    "state": "OH",
+    "zip": "43220"
+   },
+   "phone": "6146070204",
+   "website": "N/A",
+   "fmv_assets": 31502425,
+   "total_grants": 1420250,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202542979349100214",
+   "n_grants": 28,
+   "n_instate": 24,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "STARK COUNTY HUMANE SOCIETY",
+     "city": "Louisville",
+     "state": "OH",
+     "zip3": "446",
+     "status": "",
+     "purpose": "GENERAL OPERATIONS",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 10000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Massillon",
+     8
+    ],
+    [
+     "Canton",
+     5
+    ],
+    [
+     "Akron",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.0
+  },
+  {
+   "ein": "866314738",
+   "name": "OATEY FOUNDATION",
+   "address": {
+    "line": "20600 EMERALD PARKWAY",
+    "city": "Cleveland",
+    "state": "OH",
+    "zip": "44135"
+   },
+   "phone": "2162677100",
+   "website": "N/A",
+   "fmv_assets": 10352553,
+   "total_grants": 575000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601329349102735",
+   "n_grants": 24,
+   "n_instate": 21,
+   "n_regions": 1,
+   "hits": [
+    {
+     "recipient": "CLEVELAND ANIMAL PROTECTIVE LEAGUE",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "PC",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 2500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 2500,
+   "median_hit": 2500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     16
+    ],
+    [
+     "Westlake",
+     2
+    ],
+    [
+     "Beechwood",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 8.4
+  },
+  {
+   "ein": "451995732",
+   "name": "THE JAMES AND ANGELA HAMBRICK FOUNDATION",
+   "address": {
+    "line": "2000 AUBURN DR SUITE 400",
+    "city": "Beachwood",
+    "state": "OH",
+    "zip": "44122"
+   },
+   "phone": "2168314105",
+   "website": "N/A",
+   "fmv_assets": 40229329,
+   "total_grants": 2491134,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543169349100434",
+   "n_grants": 38,
+   "n_instate": 17,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "RESCUE VILLAGE GEAUGA HUMANE",
+     "city": "Russell Township",
+     "state": "OH",
+     "zip3": "440",
+     "status": "",
+     "purpose": "GENERAL FUND",
+     "amount": 2500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 2500,
+   "median_hit": 2500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     9
+    ],
+    [
+     "Castalia",
+     1
+    ],
+    [
+     "Beachwood",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.94,
+   "funds_you": [],
+   "score": 8.16
+  },
+  {
+   "ein": "311541621",
+   "name": "THE MILLIRON FOUNDATION",
+   "address": {
+    "line": "630 LEXINGTON AVENUE",
+    "city": "Mansfield",
+    "state": "OH",
+    "zip": "44907"
+   },
+   "phone": "4199828921",
+   "website": "N/A",
+   "fmv_assets": 118020653,
+   "total_grants": 3855749,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202523189349103697",
+   "n_grants": 50,
+   "n_instate": 49,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "HUMANE SOCIETY",
+     "city": "Mansfield",
+     "state": "OH",
+     "zip3": "449",
+     "status": "",
+     "purpose": "OPERATING SUPPORT",
+     "amount": 3000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 3000,
+   "median_hit": 3000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Mansfield",
+     30
+    ],
+    [
+     "Shelby",
+     4
+    ],
+    [
+     "Columbus",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.9,
+   "funds_you": [],
+   "score": 8.07
+  },
+  {
+   "ein": "341766081",
+   "name": "THE REUTER FOUNDATION",
+   "address": {
+    "line": "14430 INDIAN CREEK",
+    "city": "Middleburg Hts",
+    "state": "OH",
+    "zip": "441306862"
+   },
+   "phone": "4402391230",
+   "website": "WWW.REUTERFDN.ORG",
+   "fmv_assets": 12044201,
+   "total_grants": 634224,
+   "preselected_only": true,
+   "apply": [
+    {
+     "contact": "THE REUTER FOUNDATION",
+     "address": {
+      "line": "",
+      "city": "",
+      "state": "",
+      "zip": ""
+     },
+     "phone": "",
+     "email": "PROPOSAL@REUTERFDN.ORG",
+     "how": "PROPOSALS AND CORRESPONDENCE ARE ACCEPTED VIA EMAIL ONLY IN A WORD OR EXCEL DOCUMENT. A COVER LETTER SUMMARIZING THE REQUEST SHOULD ACCOMPANY A PROPOSAL WHICH SHOULD NOT EXCEED 4 PAGES. PROPOSALS SHOULD INCLUDE A PROJECT DESCRIPTION; JUSTIFICATION OF NEED; BUDGETING AND EXPENDITURE OF FUNDS; SPECIFIC GOALS AND OBJECTIVES; TIME FRAME TO COMPLETION; STATEMENT AS TO 509(A)(3) STATUS; COPY OF IRS DETERMINATION LETTER AND MOST RECENT FINANCIAL REPORT. PLEASE ALSO SEE WEBSITE FOR MORE DETAILS.",
+     "deadlines": "NONE. PROPOSALS ARE REVIEWED YEAR ROUND.",
+     "restrictions": "GRANTS ARE MADE TO SOCIAL SERVICE ORGANIZATIONS IN THE CLEVELAND OHIO AND COLLIN COUNTY TEXAS AREAS ONLY."
+    }
+   ],
+   "tax_period_end": "2024-11-30",
+   "object_id": "202542529349100214",
+   "n_grants": 29,
+   "n_instate": 23,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "NEIGHBORHOOD PETS",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "441",
+     "status": "",
+     "purpose": "CHARITABLE",
+     "amount": 1000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 1000,
+   "median_hit": 1000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     14
+    ],
+    [
+     "Brooklyn",
+     1
+    ],
+    [
+     "Painesville Twp",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 8.0
+  },
+  {
+   "ein": "882451668",
+   "name": "JOANIE C BERNARD FOUNDATION",
+   "address": {
+    "line": "PO BOX 630858",
+    "city": "Cincinnati",
+    "state": "OH",
+    "zip": "452630858"
+   },
+   "phone": "5135345310",
+   "website": "www.thejoaniebernardfoundation.org",
+   "fmv_assets": 108289429,
+   "total_grants": 3607500,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-09-30",
+   "object_id": "202632269349100308",
+   "n_grants": 25,
+   "n_instate": 17,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "UNITED COALITION FOR ANIMALS",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "",
+     "purpose": "PROJECT/PROGRAM SUPPORT",
+     "amount": 735000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OHIO ALLEYCAT RESOURCE & SPAY NEUTER CLINIC INC",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT",
+     "amount": 500000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CINCINNATI ANIMAL CARE",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT",
+     "amount": 500000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HUMANE SOCIETY OF GREATER DAYTON",
+     "city": "Dayton",
+     "state": "OH",
+     "zip3": "454",
+     "status": "",
+     "purpose": "PROJECT/PROGRAM FUNDS",
+     "amount": 200000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SOCIETY FOR THE IMPROVEMENT OF CONDITIONS FOR STRAY ANIMALS (SICSA)",
+     "city": "Dayton",
+     "state": "OH",
+     "zip3": "454",
+     "status": "",
+     "purpose": "PROJECT/PROGRAM SUPPORT",
+     "amount": 150000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HAMILTON COUNTY SOCIETY FOR THE PREVENTION OF CRUELTY TO ANIMALS",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "",
+     "purpose": "PROJECT/PROGRAM SUPPORT",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "LEAGUE FOR ANIMAL WELFARE",
+     "city": "Batavia",
+     "state": "OH",
+     "zip3": "451",
+     "status": "",
+     "purpose": "PROJECT/PROGRAM SUPPORT",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FAYETTE COUNTY HUMANE SOCIETY",
+     "city": "Washington",
+     "state": "OH",
+     "zip3": "431",
+     "status": "",
+     "purpose": "PROJECT/PROGRAM SUPPORT",
+     "amount": 60000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HUMANE ASSOCIATION OF WARREN COUNTY",
+     "city": "Lebanon",
+     "state": "OH",
+     "zip3": "450",
+     "status": "",
+     "purpose": "PROJECT/PROGAM FUNDS",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HOMELESS ANIMAL RESCUE TEAM OF CINCINNATI",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "",
+     "purpose": "PROJECT/PROGRAM SUPPORT",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "PETS IN NEED OF GREATER CINCINNATI",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "",
+     "purpose": "PROJECT/PROGRAM FUNDS",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "BROWN COUNTY HUMANE SOCIETY",
+     "city": "Georgetown",
+     "state": "OH",
+     "zip3": "451",
+     "status": "",
+     "purpose": "PROJECT/PROGRAM SUPPORT",
+     "amount": 40000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SAVE THE ANIMALS FOUNDATION",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OHIO ANIMAL ADVOCATES",
+     "city": "Columbus",
+     "state": "OH",
+     "zip3": "432",
+     "status": "",
+     "purpose": "PROJECT/PROGRAM FUNDS",
+     "amount": 2500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 14,
+   "n_strong": 14,
+   "hit_total": 2562500,
+   "median_hit": 100000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     9
+    ],
+    [
+     "Dayton",
+     2
+    ],
+    [
+     "Dublin",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 7.67
+  },
+  {
+   "ein": "311111955",
+   "name": "JAY AND JEAN SCHOTTENSTEIN FOUNDATION",
+   "address": {
+    "line": "CO TT ASSOC INC 4300 E FIFTH AV",
+    "city": "Columbus",
+    "state": "OH",
+    "zip": "43219"
+   },
+   "phone": "6144493559",
+   "website": "N/A",
+   "fmv_assets": 18799165,
+   "total_grants": 16996165,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513219349105401",
+   "n_grants": 67,
+   "n_instate": 16,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "STOP THE SUFFERING ANIMAL RESCUE",
+     "city": "Columbus",
+     "state": "OH",
+     "zip3": "432",
+     "status": "",
+     "purpose": "COMMUNITY",
+     "amount": 1000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 1000,
+   "median_hit": 1000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Columbus",
+     11
+    ],
+    [
+     "Beachwood",
+     2
+    ],
+    [
+     "Bexley",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.19,
+   "funds_you": [],
+   "score": 4.75
+  },
+  {
+   "ein": "205025483",
+   "name": "HUNTINGTON CHARITABLE FOUNDATION",
+   "address": {
+    "line": "SR SUSSKIND 312 WALNUT STREET",
+    "city": "Cincinnati",
+    "state": "OH",
+    "zip": "452024029"
+   },
+   "phone": "5136985044",
+   "website": "N/A",
+   "fmv_assets": 118115036,
+   "total_grants": 5006000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202631119349102518",
+   "n_grants": 28,
+   "n_instate": 25,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "ASPCA",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "PC",
+     "purpose": "GENERAL FUNDING",
+     "amount": 120000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CANINE COMPANIONS",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "440",
+     "status": "PC",
+     "purpose": "GENERAL FUNDING",
+     "amount": 60000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SAVE THE ANIMALS FOUNDATION",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "PC",
+     "purpose": "GENERAL FUNDING",
+     "amount": 60000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 3,
+   "hit_total": 240000,
+   "median_hit": 60000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     19
+    ],
+    [
+     "Columbus",
+     3
+    ],
+    [
+     "Cincinnai",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.04,
+   "funds_you": [],
+   "score": 2.99
+  },
+  {
+   "ein": "311318013",
+   "name": "THE WEXNER FAMILY CHARITABLE FUND",
+   "address": {
+    "line": "8000 WALTON PARKWAY 100",
+    "city": "New Albany",
+    "state": "OH",
+    "zip": "43054"
+   },
+   "phone": "6149396000",
+   "website": "N/A",
+   "fmv_assets": 157198948,
+   "total_grants": 72229022,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202632319349101108",
+   "n_grants": 33,
+   "n_instate": 14,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "PILOT DOGS",
+     "city": "Columbus",
+     "state": "OH",
+     "zip3": "432",
+     "status": "PC",
+     "purpose": "TO PROVIDE EXPERTLY-TRAINED GUIDE DOGS, ORIENTATION AND MOBILITY TRAINING, AND OTHER VALUABLE SERVICES FREE OF CHARGE TO THOSE IN NEED, INSPIRING AND EMPOWERING THEM TO NAVIGATE THE WORLD WITH GREATER INDEPENDENCE, SAFETY, AND DIGNITY.",
+     "amount": 1000000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "GIGI'S SHELTER FOR DOGS",
+     "city": "Columbus",
+     "state": "OH",
+     "zip3": "432",
+     "status": "PC",
+     "purpose": "PROVIDES HOMELESS DOGS WITH ACCESS TO QUALITY SHELTER, VETERINARY, BEHAVIOR, AND ADOPTION SERVICES AT OUR STATE-OF-THE-ART CAMPUS IN COLUMBUS, OHIO.",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 1100000,
+   "median_hit": 1000000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Columbus",
+     11
+    ],
+    [
+     "Dublin",
+     1
+    ],
+    [
+     "Pataskala",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.81
+  },
+  {
+   "ein": "876831610",
+   "name": "THE TROMPETER FAMILY FOUNDATION",
+   "address": {
+    "line": "4900 TIEDEMAN ROAD OH-01-49-0381",
+    "city": "Brooklyn",
+    "state": "OH",
+    "zip": "44144"
+   },
+   "phone": "4192596197",
+   "website": "",
+   "fmv_assets": 46584079,
+   "total_grants": 2292176,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202632029349100208",
+   "n_grants": 59,
+   "n_instate": 40,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "TOLEDO HUMANE SOCIETY",
+     "city": "Maumee",
+     "state": "OH",
+     "zip3": "435",
+     "status": "PC",
+     "purpose": "GENERAL OPERATING",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 100000,
+   "median_hit": 100000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Toledo",
+     27
+    ],
+    [
+     "Maumee",
+     3
+    ],
+    [
+     "Sylvania",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.03,
+   "funds_you": [],
+   "score": 2.66
+  },
+  {
+   "ein": "311736155",
+   "name": "THE MONTEI FOUNDATION",
+   "address": {
+    "line": "5910 VENTURE DR B",
+    "city": "Dublin",
+    "state": "OH",
+    "zip": "43017"
+   },
+   "phone": "6142246828",
+   "website": "N/A",
+   "fmv_assets": 27088397,
+   "total_grants": 1236743,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601349349103035",
+   "n_grants": 52,
+   "n_instate": 32,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "PILOT DOGS INC",
+     "city": "Columbus",
+     "state": "OH",
+     "zip3": "432",
+     "status": "PC",
+     "purpose": "DOG TRAINING SCHOLARSHIPS",
+     "amount": 18000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OHIO WILDLIFE CENTER",
+     "city": "Powell",
+     "state": "OH",
+     "zip3": "430",
+     "status": "PC",
+     "purpose": "GENERAL CHARITABLE PURPOSES",
+     "amount": 13343,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CAPITAL AREA HUMANE SOCIETY",
+     "city": "Hilliard",
+     "state": "OH",
+     "zip3": "430",
+     "status": "PC",
+     "purpose": "SECOND CHANCE FUND",
+     "amount": 3000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 3,
+   "hit_total": 34343,
+   "median_hit": 13343,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Columbus",
+     22
+    ],
+    [
+     "Dublin",
+     2
+    ],
+    [
+     "Hilliard",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.64
+  },
+  {
+   "ein": "316026144",
+   "name": "THE BERRY FAMILY FOUNDATION",
+   "address": {
+    "line": "3055 KETTERING BLVD SUITE 418",
+    "city": "Dayton",
+    "state": "OH",
+    "zip": "45439"
+   },
+   "phone": "9372930398",
+   "website": "N/A",
+   "fmv_assets": 32410520,
+   "total_grants": 1637700,
+   "preselected_only": true,
+   "apply": [
+    {
+     "contact": "DAVID RAY",
+     "address": {
+      "line": "3055 S KETTERING BLVD SUITE 418",
+      "city": "Dayton",
+      "state": "OH",
+      "zip": "45439"
+     },
+     "phone": "9372930398",
+     "email": "",
+     "how": "LETTER FORM",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543179349103164",
+   "n_grants": 92,
+   "n_instate": 68,
+   "n_regions": 10,
+   "hits": [
+    {
+     "recipient": "GIGI'S ANIMAL SHELTER",
+     "city": "Columbus",
+     "state": "OH",
+     "zip3": "432",
+     "status": "",
+     "purpose": "SOCIAL/HUMAN SERVICES",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OHIO WILDLIFE CENTER",
+     "city": "Powell",
+     "state": "OH",
+     "zip3": "430",
+     "status": "",
+     "purpose": "SOCIAL/HUMAN SERVICES",
+     "amount": 1500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 6500,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Dayton",
+     46
+    ],
+    [
+     "Columbus",
+     5
+    ],
+    [
+     "Cincinnati",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.01,
+   "funds_you": [],
+   "score": 2.58
+  },
+  {
+   "ein": "316249406",
+   "name": "PARK NATIONAL CORPORATION FOUNDATION",
+   "address": {
+    "line": "PO BOX 3500",
+    "city": "Newark",
+    "state": "OH",
+    "zip": "430583500"
+   },
+   "phone": "7403498451",
+   "website": "N/A",
+   "fmv_assets": 24467404,
+   "total_grants": 3197562,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601319349101995",
+   "n_grants": 297,
+   "n_instate": 225,
+   "n_regions": 20,
+   "hits": [
+    {
+     "recipient": "LICKING COUNTY HUMANE SOCIETY ATTN LORI CARLSON",
+     "city": "Heath",
+     "state": "OH",
+     "zip3": "430",
+     "status": "PC",
+     "purpose": "SUPPORT",
+     "amount": 7500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 7500,
+   "median_hit": 7500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Newark",
+     27
+    ],
+    [
+     "Columbus",
+     25
+    ],
+    [
+     "Cincinnati",
+     18
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.09,
+   "funds_you": [],
+   "score": 2.36
+  },
+  {
+   "ein": "311077222",
+   "name": "JOHN J & MARY R SCHIFF FOUNDATION",
+   "address": {
+    "line": "PO BOX 145496",
+    "city": "Cincinnati",
+    "state": "OH",
+    "zip": "452505496"
+   },
+   "phone": "5138702580",
+   "website": "N/A",
+   "fmv_assets": 871950391,
+   "total_grants": 47874000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-06-30",
+   "object_id": "202543189349103699",
+   "n_grants": 43,
+   "n_instate": 31,
+   "n_regions": 1,
+   "hits": [
+    {
+     "recipient": "SPCA - CINCINNATI",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 300000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 300000,
+   "median_hit": 300000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     30
+    ],
+    [
+     "Forest Park",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.27
+  },
+  {
+   "ein": "326474435",
+   "name": "Carolyn and Herbert Metzger Foundation",
+   "address": {
+    "line": "Four SeaGate 9th Floor",
+    "city": "Toledo",
+    "state": "OH",
+    "zip": "43604"
+   },
+   "phone": "4192497900",
+   "website": "N/A",
+   "fmv_assets": 30491253,
+   "total_grants": 1225000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202612669349100006",
+   "n_grants": 21,
+   "n_instate": 16,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "Ability Center of Greater Toledo",
+     "city": "Sylvania",
+     "state": "OH",
+     "zip3": "435",
+     "status": "PC",
+     "purpose": "Sponsor dog at Timberstone Jr High",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 100000,
+   "median_hit": 100000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Toledo",
+     12
+    ],
+    [
+     "Sylvania",
+     2
+    ],
+    [
+     "Findlay",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.1
+  },
+  {
+   "ein": "453987947",
+   "name": "JOHN HENRY ELDRED JR FOUNDATION",
+   "address": {
+    "line": "PO BOX 351959",
+    "city": "Toledo",
+    "state": "OH",
+    "zip": "43635"
+   },
+   "phone": "4198689370",
+   "website": "N/A",
+   "fmv_assets": 59985520,
+   "total_grants": 3614778,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601359349101100",
+   "n_grants": 147,
+   "n_instate": 105,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "NATURES NURSERY CENTER FOR WILDLIFE REHABILITATION AND CONSERVATION",
+     "city": "Whitehouse",
+     "state": "OH",
+     "zip3": "435",
+     "status": "PC",
+     "purpose": "TO SUPPORT THE CHARITABLE MISSION OF THE ORGANIZATION",
+     "amount": 2500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 2500,
+   "median_hit": 2500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Toledo",
+     57
+    ],
+    [
+     "Perrysburg",
+     6
+    ],
+    [
+     "Bowling Green",
+     5
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.01,
+   "funds_you": [],
+   "score": 2.08
+  },
+  {
+   "ein": "616554435",
+   "name": "THE LOZICK FAMILY FOUNDATION",
+   "address": {
+    "line": "29425 CHARGIN BOULEVARD 201",
+    "city": "Pepper Pike",
+    "state": "OH",
+    "zip": "44122"
+   },
+   "phone": "2168390400",
+   "website": "N/A",
+   "fmv_assets": 309238292,
+   "total_grants": 14974116,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513219349106406",
+   "n_grants": 334,
+   "n_instate": 203,
+   "n_regions": 1,
+   "hits": [
+    {
+     "recipient": "CLEVELAND ANIMAL PROTECTIVE LEAGUE",
+     "city": "Cleveland",
+     "state": "OH",
+     "zip3": "000",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 3000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "PORTAGE ANIMAL PROTECTIVE LEAGUE",
+     "city": "Ravenna",
+     "state": "OH",
+     "zip3": "000",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 100,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 3100,
+   "median_hit": 3000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cleveland",
+     101
+    ],
+    [
+     "Columbus",
+     10
+    ],
+    [
+     "Chagrin Falls",
+     8
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 1.92
+  },
+  {
+   "ein": "316366846",
+   "name": "JOHN HAUCK FOUNDATION FIFTH THIRD BANK NA",
+   "address": {
+    "line": "PO BOX 630858",
+    "city": "Cincinnati",
+    "state": "OH",
+    "zip": "452630858"
+   },
+   "phone": "5135345310",
+   "website": "",
+   "fmv_assets": 21760090,
+   "total_grants": 866317,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-09-30",
+   "object_id": "202630429349100308",
+   "n_grants": 23,
+   "n_instate": 20,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "Save The Animals Foundation",
+     "city": "Cincinnati",
+     "state": "OH",
+     "zip3": "452",
+     "status": "",
+     "purpose": "PROJECT/PROGRAM SUPPORT",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 25000,
+   "median_hit": 25000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cincinnati",
+     18
+    ],
+    [
+     "Clarksville",
+     1
+    ],
+    [
+     "Columbus",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 1.89
+  },
+  {
+   "ein": "341656718",
+   "name": "THE JESSE AND CARYL PHILIPS FOUNDATION",
+   "address": {
+    "line": "3870 HONEY HILL ROAD",
+    "city": "Dayton",
+    "state": "OH",
+    "zip": "45405"
+   },
+   "phone": "4803052028",
+   "website": "N/A",
+   "fmv_assets": 27991778,
+   "total_grants": 790140,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-06-30",
+   "object_id": "202512729349100301",
+   "n_grants": 29,
+   "n_instate": 21,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "HUMANE SOCIETY OF GREATER DAYTON",
+     "city": "Dayton",
+     "state": "OH",
+     "zip3": "454",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Dayton",
+     17
+    ],
+    [
+     "Columbus",
+     1
+    ],
+    [
+     "Beavercreek",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.05,
+   "funds_you": [],
+   "score": 1.71
+  },
+  {
+   "ein": "341756997",
+   "name": "The Wolfe Family Charitable Foundation",
+   "address": {
+    "line": "5800 Monroe St Bldg F",
+    "city": "Sylvania",
+    "state": "OH",
+    "zip": "43560"
+   },
+   "phone": "4198820081",
+   "website": "N/A",
+   "fmv_assets": 15678229,
+   "total_grants": 745000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611749349100801",
+   "n_grants": 54,
+   "n_instate": 7,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "FRIENDS OF OTTAWA NATIONAL WILDLIFE RESCUE",
+     "city": "Oak Harbor",
+     "state": "OH",
+     "zip3": "434",
+     "status": "PC",
+     "purpose": "INTERNSHIP PROGRAM",
+     "amount": 6000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 6000,
+   "median_hit": 6000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Toledo",
+     4
+    ],
+    [
+     "Granville",
+     1
+    ],
+    [
+     "Oak Harbor",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 1.67
+  },
+  {
+   "ein": "311111800",
+   "name": "THE GEORGE EDWARD DURELL FOUNDATION",
+   "address": {
+    "line": "598 OFFICE PARKWAY B",
+    "city": "Westerville",
+    "state": "OH",
+    "zip": "43082"
+   },
+   "phone": "6148991101",
+   "website": "N/A",
+   "fmv_assets": 30547122,
+   "total_grants": 1130000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202522939349100017",
+   "n_grants": 33,
+   "n_instate": 24,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "CANINE COMPANIONS - NORTH CENTRAL REGION",
+     "city": "New Albany",
+     "state": "OH",
+     "zip3": "430",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Columbus",
+     13
+    ],
+    [
+     "Hilliard",
+     4
+    ],
+    [
+     "Dublin",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 1.64
+  },
+  {
+   "ein": "316183600",
+   "name": "ROGGE CORA E MEMORIAL FOUNDATION",
+   "address": {
+    "line": "PO BOX 425",
+    "city": "Zanesville",
+    "state": "OH",
+    "zip": "43702"
+   },
+   "phone": "7406248338",
+   "website": "N/A",
+   "fmv_assets": 18018362,
+   "total_grants": 835916,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601309349100400",
+   "n_grants": 15,
+   "n_instate": 15,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "THE ANIMAL SHELTER SOCIETY INC",
+     "city": "Zanesville",
+     "state": "OH",
+     "zip3": "437",
+     "status": "POF",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 1000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 1000,
+   "median_hit": 1000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Zanesville",
+     13
+    ],
+    [
+     "Columbus",
+     1
+    ],
+    [
+     "Norwich",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 1.4
+  }
+ ],
+ "federal": [
+  {
+   "id": "364214",
+   "number": "USDA-APHIS-10025-VSSP0000-27-0001",
+   "title": "National Animal Disease Preparedness and Response Program (NADPRP) FY 2027 Industry Preparedness Funding Opportunity",
+   "agency": "Animal and Plant Health Inspection Service",
+   "status": "posted",
+   "open": "11/05/2026",
+   "close": "01/07/2027",
+   "close_date": "2027-01-07",
+   "ceiling": 4000000,
+   "floor": 500000,
+   "total": 40000000,
+   "eligibility": [
+    "Others (see text field entitled \"Additional Information on Eligibility\" for clarification)"
+   ],
+   "eligibility_note": "Eligible applicants are:\u2022 State or national livestock, poultry, or aquaculture producer organizations with direct and significant economic interest in livestock, poultry, or aquaculture production; \u2022 State, national, allied, or regional veterinary organizations or specialty boards recognized by the ",
+   "summary": "The USDA Animal and Plant Health Inspection Service (APHIS) Veterinary Services (VS) announces the availability of up to $40,000,000 in funding through the One Big Beautiful Bill Act (OBBBA) and the 2018 Farm Bill for the National Animal Disease Preparedness and Response Program FY 2027 Industry Preparedness Funding Opportunity. Through NADPRP, APHIS partners with eligible entities to provide financial support for hi",
+   "contact": "lucas.robertson@usda.gov",
+   "cfda": "10.025",
+   "url": "https://www.grants.gov/search-results-detail/364214",
+   "in_title": false,
+   "score": 2
+  }
+ ],
+ "federal_total": 0
+}

@@ -45,6 +45,7 @@ import { MATERIAL_SHARE, SHAPE_MULTIPLES } from './pathways.ts';
 import { createHash } from 'node:crypto';
 import { inlineEvaluator, type Evaluator } from './reasoning/evaluatorPool.ts';
 import { exploreDirections, renderExploration, type ExploreContext, type Exploration } from './reasoning/directions.ts';
+import { sweepVariables, type VariableSweep } from './reasoning/variables.ts';
 
 /** A change smaller than this, in reach and in median settled cash, is not an improvement. */
 export const MATERIAL_REACH = 0.02;
@@ -146,7 +147,7 @@ export interface ReconstructionInput {
   /** Where evaluations run (§101): a pool of threads, or inline when omitted. */
   evaluator?: Evaluator;
   /** The multidirectional exploration's inputs (library, model, time); null turns it off. */
-  explore?: Pick<ExploreContext, 'library' | 'invent' | 'maxMs'> | null;
+  explore?: (Pick<ExploreContext, 'library' | 'invent' | 'maxMs'> & { sweepMs?: number; maxVariations?: number }) | null;
 }
 
 /** A strategy state the operators transform. */
@@ -334,13 +335,36 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
   const ownEvaluations = evaluations;
   if (input.explore !== null) {
     const screenWorlds = Math.max(100, Math.round(worlds / 3));
+    const operatorsFor = (target: string) => buildOperators({ input, levers, base, target });
+    // §102: before the engine reads a direction, ordinary code sweeps the variables — tens to hundreds of thousands of combinations.
+    let sweep: VariableSweep | null = null;
+    // A plan is only past exploring when it reaches its requirement as a probability on no assumed move (§95); 99% coverage on assumptions is not.
+    const defensible = currentReading.reach >= input.required && currentReading.basis === 'PROBABILITY' && !currentReading.changes.some((c) => c.basis === 'ASSUMPTION');
+    if (!defensible) {
+      try {
+        // On a pool thread, never the server's loop: a request that waits on many queries must not queue behind the sweep's slices.
+        sweep = await evaluator.sweep({
+          openings: input.openings,
+          portfolio: limits,
+          baseline: input.baseline,
+          required: input.required,
+          ...(input.levers ? { levers: input.levers } : {}),
+          greedy: current,
+          ...(input.explore?.sweepMs !== undefined ? { maxMs: input.explore.sweepMs } : {}),
+          ...(input.explore?.maxVariations !== undefined ? { maxVariations: input.explore.maxVariations } : {}),
+        });
+      } catch (error) {
+        console.warn(`variable sweep failed: ${String((error as Error)?.message ?? error)}`);
+      }
+    }
     exploration = await exploreDirections({
       base,
       greedy: current,
       greedyReading: currentReading,
       baselineReading: baseline,
       operators,
-      operatorsFor: (target) => buildOperators({ input, levers, base, target }),
+      operatorsFor,
+      sweep,
       evaluate: (state, screen, tag = '') => evaluate(state, screen ? screenWorlds : worlds, false, tag),
       required: input.required,
       remaining: limits.remaining,
@@ -485,6 +509,38 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
     evaluations,
     exploration,
   };
+}
+
+/** What a variable sweep needs, as plain data a pool thread can receive (§102). */
+export interface SweepJob {
+  openings: ModelledOpportunity[];
+  portfolio: ReconstructionInput['portfolio'];
+  baseline: GoalPortfolio;
+  required: number;
+  levers?: readonly AcquisitionLever[];
+  greedy: StrategyState;
+  maxMs?: number;
+  maxVariations?: number;
+}
+
+/** The variable sweep over a plan, with its operators rebuilt from data: runs inline or on a pool thread. */
+export function sweepFor(job: SweepJob): Promise<VariableSweep> {
+  const input: ReconstructionInput = { openings: job.openings, portfolio: job.portfolio, baseline: job.baseline, required: job.required, ...(job.levers ? { levers: job.levers } : {}) };
+  const levers = job.levers ?? ACQUISITION_LEVERS;
+  const base: StrategyState = { openings: job.openings, committed: 0, changes: [] };
+  return sweepVariables({
+    base,
+    greedy: job.greedy,
+    operators: buildOperators({ input, levers, base }),
+    operatorsFor: (target) => buildOperators({ input, levers, base, target }),
+    remaining: job.portfolio.remaining,
+    daysLeft: job.portfolio.daysLeft,
+    required: job.required,
+    contactsPerDay: currentContacts(job.portfolio, job.baseline),
+    limits: job.portfolio,
+    ...(job.maxMs !== undefined ? { maxMs: job.maxMs } : {}),
+    ...(job.maxVariations !== undefined ? { maxVariations: job.maxVariations } : {}),
+  });
 }
 
 function allowedFor(limits: ReconstructionInput['portfolio']) {

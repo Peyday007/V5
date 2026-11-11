@@ -44,6 +44,7 @@
  */
 import type { ModelledOpportunity } from '../../cash/goalScenario.ts';
 import type { Dimension, StrategyChange, StrategyOperator, StrategyState, VariantReading } from '../reconstruction.ts';
+import { renderSweep, type VariableSweep } from './variables.ts';
 
 export const MAX_DIRECTIONS = 120;
 export const MIN_DIRECTIONS = 12;
@@ -141,6 +142,8 @@ export interface Exploration {
   asks: string[];
   /** The model's part: calls made, methods proposed, methods refused as off-shape or unexecutable. */
   model: { calls: number; proposed: number; refused: number; error: string | null };
+  /** The variable sweep (§102) whose strategies entered this exploration, when one ran. */
+  sweep?: VariableSweep | null;
   sentence: string;
 }
 
@@ -168,6 +171,12 @@ export interface ExploreContext {
   /** Wall-clock budget for the whole exploration. */
   maxMs?: number;
   now?: () => number;
+  /**
+   * The variable sweep that ran over this plan (§102): its strongest
+   * strategies enter the pool first, as directions the engine judges like
+   * any other.
+   */
+  sweep?: VariableSweep | null;
 }
 
 /** What the model is told about the problem. */
@@ -641,7 +650,9 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   evaluationCap = Math.min(MAX_EVALUATIONS, evaluations + EVALUATIONS_PER_DIRECTION * budget);
 
   // 1–2. Generate and screen: the library first (what worked), then the cheap seeds, kept distinct.
-  const pool = budget > 0 ? distinct([...(ctx.library ?? []), ...seedDirections(ctx)], budget) : [];
+  // The sweep's strategies first: each is the best of tens of thousands of combinations by its own objective (§102).
+  const swept = ctx.sweep?.directions ?? [];
+  const pool = budget > 0 ? distinct([...swept, ...(ctx.library ?? []), ...seedDirections(ctx)], budget + swept.length) : [];
   await run(pool, 1);
 
   // The model's directions join as soon as they arrive.
@@ -702,7 +713,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
     }
   const stanceYield = [...stanceMap.entries()].map(([stance, v]) => ({ stance, ...v })).sort((a, b) => b.improved - a.improved || b.bestLift - a.bestLift);
   const discoveries = rank(all.filter((r) => r.direction.origin === 'MODEL' && r.reading.reach - baseReach >= MATERIAL)).slice(0, 10);
-  const asks = [...new Set(all.map((r) => r.direction.ask).filter((a): a is string => !!a && a.length > 10))].slice(0, 5);
+  const asks = [...new Set([...(ctx.sweep?.asks ?? []), ...all.map((r) => r.direction.ask).filter((a): a is string => !!a && a.length > 10)])].slice(0, 6);
   const byOrigin: Record<Origin, number> = { ALGORITHM: 0, MODEL: 0, LIBRARY: 0, RECOMBINED: 0, MUTATED: 0 };
   for (const r of all) byOrigin[r.direction.origin]++;
   const replaced = !!winner && winner.direction.from === 'BASELINE';
@@ -735,7 +746,8 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
     discoveries,
     asks,
     model,
-    sentence,
+    sweep: ctx.sweep ?? null,
+    sentence: ctx.sweep ? `${sentence} Variable sweep: ${ctx.sweep.variations.toLocaleString('en-US')} variation(s) read, ${swept.length} strategy(ies) handed to the engine.` : sentence,
   };
 }
 
@@ -869,5 +881,9 @@ export function renderExploration(x: Exploration, limit = 10): string[] {
   for (const l of x.leaders.slice(0, limit)) lines.push(`    leader  ${(l === x.winner ? '*' : ' ')} [${l.direction.origin.toLowerCase()} · ${l.direction.stance}] ${l.direction.name.slice(0, 80)} → reach ${v(l.reading)}, challenged ${v(l.challenged)}`);
   for (const d of x.discoveries.slice(0, 5)) lines.push(`    found   [model] ${d.direction.name.slice(0, 80)} — ${d.direction.thinking.slice(0, 160)} → reach ${v(d.reading)}`);
   for (const a of x.asks) lines.push(`    ask     ${a}`);
+  if (x.sweep) {
+    const engine = new Map(x.all.map((r) => [r.direction.signature, { reach: r.reading.reach, settledP50: r.reading.settledP50 }]));
+    lines.push(...renderSweep(x.sweep, engine));
+  }
   return lines;
 }

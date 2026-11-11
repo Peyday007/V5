@@ -1,0 +1,318 @@
+{
+ "site": "https://samishbaydental.com/",
+ "date": "2026-11-11",
+ "axeVersion": "4.10.2",
+ "pages": [
+  "https://samishbaydental.com/"
+ ],
+ "totals": {
+  "issuesTotal": 8,
+  "criticalSerious": 8,
+  "byImpact": {
+   "critical": 0,
+   "serious": 8,
+   "moderate": 0,
+   "minor": 0
+  },
+  "rulesFailed": 4,
+  "bestPracticeInstances": 2,
+  "axeIssues": 5,
+  "axeCriticalSerious": 5
+ },
+ "teaser": "your homepage has 2 links with no readable name and 1 text element below the minimum contrast ratio",
+ "topIssue": "Keyboard focus is not visible (3x, serious, WCAG 2.4.7)",
+ "couldNotScan": [],
+ "findings": [
+  {
+   "rule": "focus-not-visible",
+   "title": "Keyboard focus is not visible",
+   "impact": "serious",
+   "bestPractice": false,
+   "wcag": [
+    "2.4.7"
+   ],
+   "level": "AA",
+   "instances": 3,
+   "pages": {
+    "https://samishbaydental.com/": 3
+   },
+   "viewports": [
+    "desktop"
+   ],
+   "fix": "Do not remove the browser outline. Add a clear focus style, e.g. a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #1a5fb4; outline-offset: 2px; }.",
+   "examples": [
+    {
+     "url": "https://samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "<div> Carousel",
+     "html": "",
+     "detail": "No change in outline, shadow, border, colour or underline when focused by Tab"
+    },
+    {
+     "url": "https://samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "<button> Previous",
+     "html": "",
+     "detail": "No change in outline, shadow, border, colour or underline when focused by Tab"
+    },
+    {
+     "url": "https://samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "<button> Next",
+     "html": "",
+     "detail": "No change in outline, shadow, border, colour or underline when focused by Tab"
+    }
+   ]
+  },
+  {
+   "rule": "link-name",
+   "title": "Links must have discernible text",
+   "impact": "serious",
+   "bestPractice": false,
+   "wcag": [
+    "2.4.4",
+    "4.1.2"
+   ],
+   "level": "A",
+   "instances": 2,
+   "pages": {
+    "https://samishbaydental.com/": 2
+   },
+   "viewports": [
+    "desktop"
+   ],
+   "fix": "Put visible text inside the link, or add an accessible name: <a href=\"https://facebook.com/…\" aria-label=\"Our Facebook page\"><svg aria-hidden=\"true\">…</svg></a>.",
+   "examples": [
+    {
+     "url": "https://samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "#yui_3_17_2_1_1794390112133_220 > .margin-wrapper > .image-slide-anchor.content-fill[aria-label=\"\"]",
+     "html": "<a href=\"https://www.instagram.com/p/DfcuN2iFLf4/\" target=\"_blank\" aria-label=\"\" class=\"\n                    image-slide-anchor\n                    \n                    content-fill\n                  \" style=\"overflow: hidden;\">",
+     "detail": "Element is in tab order and does not have accessible text; Element does not have text that is visible to screen readers"
+    },
+    {
+     "url": "https://samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "#yui_3_17_2_1_1794390112133_224 > .margin-wrapper > .image-slide-anchor.content-fill[aria-label=\"\"]",
+     "html": "<a href=\"https://www.instagram.com/p/DfNC0HaG-JP/\" target=\"_blank\" aria-label=\"\" class=\"\n                    image-slide-anchor\n                    \n                    content-fill\n                  \" style=\"overflow: hidden;\">",
+     "detail": "Element is in tab order and does not have accessible text; Element does not have text that is visible to screen readers"
+    }
+   ]
+  },
+  {
+   "rule": "target-size",
+   "title": "All touch targets must be 24px large, or leave sufficient space",
+   "impact": "serious",
+   "bestPractice": false,
+   "wcag": [
+    "2.5.8"
+   ],
+   "level": "AA",
+   "instances": 2,
+   "pages": {
+    "https://samishbaydental.com/": 2
+   },
+   "viewports": [
+    "desktop"
+   ],
+   "fix": "Make the clickable area at least 24×24px (padding counts), or add space around it.",
+   "examples": [
+    {
+     "url": "https://samishbaydental.com/",
+     "viewport": "desktop",
+     "target": ".sqsrte-small > a[href=\"tel:3605436808\"]",
+     "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>",
+     "detail": "Target has insufficient size (121.8px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    },
+    {
+     "url": "https://samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "a:nth-child(7)",
+     "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>",
+     "detail": "Target has insufficient size (223.2px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    }
+   ]
+  },
+  {
+   "rule": "color-contrast",
+   "title": "Elements must meet minimum color contrast ratio thresholds",
+   "impact": "serious",
+   "bestPractice": false,
+   "wcag": [
+    "1.4.3"
+   ],
+   "level": "AA",
+   "instances": 1,
+   "pages": {
+    "https://samishbaydental.com/": 1
+   },
+   "viewports": [
+    "desktop"
+   ],
+   "fix": "Darken the text or lighten the background until the ratio reaches 4.5:1 (3:1 for text 24px+ or 18.66px+ bold). The exact colours and measured ratio are listed per element below; a free checker such as WebAIM's contrast checker shows a passing shade.",
+   "examples": [
+    {
+     "url": "https://samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "#yui_3_17_2_1_1794390112133_69 > .sqs-block-button-element--medium.sqs-block-button-element[data-initialized=\"true\"]",
+     "html": "<a href=\"https://scheduling.simplifeye.co/#key=WFoY7k9YpyKwMO7ZWt6xWfYZDcwYydD&amp;gaID=null\" class=\"sqs-block-button-element--medium sqs-button-element--primary sqs-block-button-element\" data-sqsp-button=\"\" target=\"_blank\" data-initialized=\"true\">\n    Schedule your appointment\n  </a>",
+     "detail": "text #ffffff on #dba11c, ratio 2.3:1 (needs 4.5:1), font 12.0pt (16px)"
+    }
+   ]
+  },
+  {
+   "rule": "landmark-unique",
+   "title": "Landmarks should have a unique role or role/label/title (i.e. accessible name) combination",
+   "impact": "moderate",
+   "bestPractice": true,
+   "wcag": [],
+   "level": "best practice",
+   "instances": 1,
+   "pages": {
+    "https://samishbaydental.com/": 1
+   },
+   "viewports": [
+    "desktop"
+   ],
+   "fix": "Give each one a distinct aria-label (e.g. \"Main menu\", \"Footer menu\").",
+   "examples": [
+    {
+     "url": "https://samishbaydental.com/",
+     "viewport": "desktop",
+     "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+     "html": "<nav class=\"header-nav-list\">",
+     "detail": "The landmark must have a unique aria-label, aria-labelledby, or title to make landmarks distinguishable"
+    }
+   ]
+  },
+  {
+   "rule": "page-has-heading-one",
+   "title": "Page should contain a level-one heading",
+   "impact": "moderate",
+   "bestPractice": true,
+   "wcag": [],
+   "level": "best practice",
+   "instances": 1,
+   "pages": {
+    "https://samishbaydental.com/": 1
+   },
+   "viewports": [
+    "desktop"
+   ],
+   "fix": "Mark the page's main title as <h1>.",
+   "examples": [
+    {
+     "url": "https://samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "#yui_3_17_2_1_1794390112133_96",
+     "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…",
+     "detail": "Page must have a level-one heading"
+    }
+   ]
+  }
+ ],
+ "keyboard": [
+  {
+   "url": "https://samishbaydental.com/",
+   "tabStops": 30,
+   "uniqueStops": 30,
+   "reachedEnd": true,
+   "stoppedAt": null,
+   "firstStop": "<a> Skip to Content",
+   "firstIsSkipLink": true,
+   "noVisibleFocus": [
+    "<div> Carousel",
+    "<button> Previous",
+    "<button> Next"
+   ],
+   "focusOnHidden": [],
+   "trap": false,
+   "order": [
+    "<a> Skip to Content",
+    "<a>",
+    "<a> About",
+    "<a> New Patients",
+    "<a> Facial Aesthetics",
+    "<a> Contact",
+    "<a> On-Site Employer Dental",
+    "<a> Facebook",
+    "<a> Instagram",
+    "<a> Schedule now",
+    "<a> Schedule your appointment",
+    "<div> Play",
+    "<a>",
+    "<div> Play",
+    "<div> Play",
+    "<div> Play",
+    "<a>",
+    "<div> Play",
+    "<div> Play",
+    "<a> Our Team",
+    "<div> Carousel",
+    "<button> Previous",
+    "<button> Next",
+    "<a> (360) 543 - 6808",
+    "<div> Map"
+   ]
+  }
+ ],
+ "reflow": [],
+ "instances": [
+  {
+   "url": "https://samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#yui_3_17_2_1_1794390112133_69 > .sqs-block-button-element--medium.sqs-block-button-element[data-initialized=\"true\"]",
+   "html": "<a href=\"https://scheduling.simplifeye.co/#key=WFoY7k9YpyKwMO7ZWt6xWfYZDcwYydD&amp;gaID=null\" class=\"sqs-block-button-element--medium sqs-button-element--primary sqs-block-button-element\" data-sqsp-button=\"\" target=\"_blank\" data-initialized=\"true\">\n    Schedule your appointment\n  </a>"
+  },
+  {
+   "url": "https://samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "landmark-unique",
+   "impact": "moderate",
+   "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+   "html": "<nav class=\"header-nav-list\">"
+  },
+  {
+   "url": "https://samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "link-name",
+   "impact": "serious",
+   "target": "#yui_3_17_2_1_1794390112133_220 > .margin-wrapper > .image-slide-anchor.content-fill[aria-label=\"\"]",
+   "html": "<a href=\"https://www.instagram.com/p/DfcuN2iFLf4/\" target=\"_blank\" aria-label=\"\" class=\"\n                    image-slide-anchor\n                    \n                    content-fill\n                  \" style=\"overflow: hidden;\">"
+  },
+  {
+   "url": "https://samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "link-name",
+   "impact": "serious",
+   "target": "#yui_3_17_2_1_1794390112133_224 > .margin-wrapper > .image-slide-anchor.content-fill[aria-label=\"\"]",
+   "html": "<a href=\"https://www.instagram.com/p/DfNC0HaG-JP/\" target=\"_blank\" aria-label=\"\" class=\"\n                    image-slide-anchor\n                    \n                    content-fill\n                  \" style=\"overflow: hidden;\">"
+  },
+  {
+   "url": "https://samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "page-has-heading-one",
+   "impact": "moderate",
+   "target": "#yui_3_17_2_1_1794390112133_96",
+   "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…"
+  },
+  {
+   "url": "https://samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": ".sqsrte-small > a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  }
+ ]
+}

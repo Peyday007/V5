@@ -77,6 +77,26 @@ The mock-up's mailing panel follows the USPS rule. **Before the print order,**
 check the indicia against the EDDM tool's downloadable indicia and the
 printer's EDDM template; the printer may also place its small tag.
 
+## 4a. Email outreach: live in the owner's Instantly workspace (2026-11-11)
+
+- **Campaign:** `Neighbor Card · Camp Hill Jan 2027` (id `e4d48b2a-67f4-4f16-9c2b-8e34b0629fc1`),
+  **active since 2026-11-11** on the owner's authorization. 3 steps (day 0 / 3 / 8),
+  weekdays 9–4 ET, stop on reply and on any reply from the same company,
+  unsubscribe header, no open or link tracking.
+- **Publisher line in every email:** Peyton Rosser · 313-671-6425 ·
+  1326 Selden St, Detroit, MI 48201 (owner-supplied; ZIP from the Census geocoder).
+- **Senders:** every healthy account in the workspace (connected, warmup not
+  banned), each signing with its own first name "for The Neighbor Card"; the daily
+  limit is their combined limit, re-read each pass.
+- **Owner of all of it:** `server/services/cash/neighborCard.ts`, run hourly on
+  production by `.github/workflows/neighbor-card.yml` (`scripts/neighbor-card.ts`).
+  Each pass re-applies the configuration and reads it back, refills from the
+  Mechanicsburg Chamber directory and OpenStreetMap (addresses each business
+  published on its own site, MX-checked, de-duplicated against the workspace),
+  and prints Instantly's sent/bounced/replied counts.
+- **First 37 leads:** `prospect-emails.csv` (built by `build/emails.py`).
+- The 80 prospects with no published email remain phone and walk-in.
+
 ## 5. What is missing before an advertiser can pay (owner only)
 
 1. **A Stripe account** in the owner's name, with SSN and bank account for

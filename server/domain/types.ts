@@ -11232,5 +11232,11 @@ export interface ReasoningExplorationRow {
   best_method: string | null;
   replaced: number;
   summary: string;
+  /** Distinct variations the variable sweep read (§102); 0 when none ran. */
+  variations: number;
+  /** Decision variables plus conditions the sweep discovered. */
+  variables: number;
+  /** The sweep's compact summary as JSON, or null. */
+  sweep: string | null;
   created_at: string;
 }

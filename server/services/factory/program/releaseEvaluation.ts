@@ -131,18 +131,20 @@ export async function evaluateRelease(input: {
 
 /**
  * The r01.gov-17-3 probe: the running revision was evaluated, against an
- * earlier release, with both answers stated. Fails — with the reason — on a
- * process with no revision, before any comparison exists, or when the newest
- * release was never evaluated.
+ * earlier release, with both answers stated. Fails on a process with no
+ * revision or an evaluation missing its answers. A revision not evaluated yet,
+ * or the first one evaluated, is UNKNOWN: the evaluation is written at the end
+ * of the tick after a release, so every deploy would otherwise read as a
+ * regression and reopen the requirement until the next tick asked again.
  */
-export async function releaseEvaluationHoldsOnRows(revision: string | null): Promise<{ ok: boolean; detail: string }> {
+export async function releaseEvaluationHoldsOnRows(revision: string | null): Promise<{ ok: boolean | null; detail: string }> {
   if (revision === null) return { ok: false, detail: 'this process carries no BRAIN_REVISION, so no release can be named' };
   const events = await listFactoryEvents(null, { kinds: [RELEASE_EVALUATED], limit: 1000 });
   const all = events.map((event) => event.detail as unknown as ReleaseEvaluation);
   const current = all.filter((one) => one.revision === revision);
-  if (current.length === 0) return { ok: false, detail: `revision ${revision.slice(0, 12)} has no post-deploy evaluation yet` };
+  if (current.length === 0) return { ok: null, detail: `revision ${revision.slice(0, 12)} has no post-deploy evaluation yet` };
   const compared = current.filter((one) => one.previousRevision !== null);
-  if (compared.length === 0) return { ok: false, detail: `revision ${revision.slice(0, 12)} is the first evaluated release: there is no earlier one to compare with` };
+  if (compared.length === 0) return { ok: null, detail: `revision ${revision.slice(0, 12)} is the first evaluated release: there is no earlier one to compare with` };
   for (const one of compared) {
     if (typeof one.commercialOutputIncreased !== 'boolean' || typeof one.causalLinkUnlocked !== 'boolean') {
       return { ok: false, detail: `the evaluation of ${revision.slice(0, 12)} does not state both answers` };
