@@ -41,7 +41,14 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { browserMcpUrl, renderInBrowser } from './browserMcp.ts';
 import { connectorFor } from './connectors.ts';
 import { searchSuccessor } from './discover.ts';
-import { recordAcquisitionJudgment, REPEATED_USE_WINDOW_MS, type AcquisitionEvidence } from './acquisition.ts';
+import {
+  noteSourceAccess,
+  readRepeatedUse,
+  recordAcquisitionJudgment,
+  REPEATED_USE_WINDOW_MS,
+  resetAcquisitionHistory,
+  type AcquisitionEvidence,
+} from './acquisition.ts';
 import { activeRoutine, routinesFrom, type Routine, type RoutineUse } from './routines.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, type AccessEvidence } from './accessMethods.ts';
 import { checkDestination, fetchForWorker, systemResolver, type Resolver, type SourceFetch } from './fetchForWorker.ts';
@@ -501,6 +508,7 @@ export function resetSourceAccessMemory(): void {
   learnedMap = new Map();
   browserRecords = new Map();
   robotsCache.clear();
+  resetAcquisitionHistory();
 }
 
 /**
@@ -587,16 +595,20 @@ export function operateEvidenceOfRead(
   };
 }
 
+/** The host's repetition, counted once per read and handed to both judgments. */
+type Repetition = { repeatedUses: number; repeatedUsesNeedingFallback: number } | Record<string, never>;
+
 async function judgeReadAsOperation(
   read: SourceRead,
   host: string | null,
   boundary: AccessEvidence['boundary'] | null,
   evidence: AccessEvidence,
   caller: string,
+  repetition: Repetition,
 ): Promise<void> {
   const operated = operateEvidenceOfRead(read, boundary, evidence);
   if (!operated) return;
-  await recordAcquisitionJudgment({ kind: 'OPERATE', purpose: `operate the interface at ${read.requestedUrl}`, host }, operated, { caller });
+  await recordAcquisitionJudgment({ kind: 'OPERATE', purpose: `operate the interface at ${read.requestedUrl}`, host }, { ...operated, ...repetition }, { caller });
 }
 
 async function judgeReadAsAcquisition(
@@ -605,10 +617,11 @@ async function judgeReadAsAcquisition(
   boundary: AccessEvidence['boundary'] | null,
   evidence: AccessEvidence,
   caller: string,
+  repetition: Repetition,
 ): Promise<void> {
   await recordAcquisitionJudgment(
     { kind: 'ACQUIRE', purpose: `read ${read.requestedUrl}`, host },
-    acquisitionEvidenceOfRead(read, boundary, evidence),
+    { ...acquisitionEvidenceOfRead(read, boundary, evidence), ...repetition },
     { caller },
   );
 }
@@ -637,6 +650,21 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
           : `${used} was used; the attempts on this read support ${judged.method} (${judged.why}); no session was evidenced`
         : `${used} did not yield a readable source (${read.reason}); no boundary was met, so no human step is implied`
   ).slice(0, 300);
+  const accessMeasures = {
+    host,
+    url: read.requestedUrl.slice(0, 400),
+    finalUrl: read.finalUrl?.slice(0, 400) ?? null,
+    chars: read.readable ? read.totalChars : 0,
+    attempts: read.attempts,
+    ...(read.routine ? { routine: read.routine } : {}),
+    methodClass: boundary ? judged.method : used,
+    methodJudged: judged.method,
+    methodAgrees: boundary ? true : agrees,
+    methodReason,
+    convertToScript: judged.convertToScript,
+    methodConsidered: judged.considered,
+    methodConstraints: judged.constraints,
+  };
   await recordBinEvent({
     eventType: 'SOURCE_ACCESS',
     provider: read.method,
@@ -645,28 +673,18 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
     reason: `${read.readable ? read.method : read.reason} ${read.requestedUrl}`.slice(0, 480),
     durationMs: ms,
     evidenceClass: 'MEASURED',
-    measures: {
-      host,
-      url: read.requestedUrl.slice(0, 400),
-      finalUrl: read.finalUrl?.slice(0, 400) ?? null,
-      chars: read.readable ? read.totalChars : 0,
-      attempts: read.attempts,
-      ...(read.routine ? { routine: read.routine } : {}),
-      methodClass: boundary ? judged.method : used,
-      methodJudged: judged.method,
-      methodAgrees: boundary ? true : agrees,
-      methodReason,
-      convertToScript: judged.convertToScript,
-      methodConsidered: judged.considered,
-      methodConstraints: judged.constraints,
-    },
+    measures: accessMeasures,
   });
+  // The row just written counts toward the host's repetition without being read back, and the
+  // repetition is counted once here for both judgments rather than once per judgment (§61/§63).
+  noteSourceAccess({ provider: read.method, measures: accessMeasures });
+  const repetition: Repetition = host ? await readRepeatedUse(host) : {};
   // Reading a public source is the ACQUIRE capability: ask the acquisition judgment what
   // this read's own evidence supports (existing bulk sources first, a connector when the
   // host's SOURCE_ACCESS history justifies one) and record it beside the access row.
-  await judgeReadAsAcquisition(read, host, boundary ?? null, evidence, caller).catch(() => undefined);
+  await judgeReadAsAcquisition(read, host, boundary ?? null, evidence, caller, repetition).catch(() => undefined);
   // Driving a site's interface is the other capability: record its own judgment, never folded into the ACQUIRE row.
-  await judgeReadAsOperation(read, host, boundary ?? null, evidence, caller).catch(() => undefined);
+  await judgeReadAsOperation(read, host, boundary ?? null, evidence, caller, repetition).catch(() => undefined);
 }
 
 /* ------------------------------------------------------------------------- */
