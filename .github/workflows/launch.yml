@@ -113,7 +113,8 @@ jobs:
           ETSY_AUTH_REDIRECT_URL: ${{ inputs.etsy_redirect_url }}
           FOURTHWALL_API_USERNAME: ${{ secrets.FOURTHWALL_API_USERNAME }}
           FOURTHWALL_API_PASSWORD: ${{ secrets.FOURTHWALL_API_PASSWORD }}
-          INSTANTLY_API_KEY: ${{ secrets.INSTANTLY_API_KEY }}
+          # The Instantly key lives on the production machine (§94); that stage runs there below.
+          LAUNCH_SKIP: mailerReplies
           PINTEREST_APP_ID: ${{ secrets.PINTEREST_APP_ID }}
           PINTEREST_APP_SECRET: ${{ secrets.PINTEREST_APP_SECRET }}
           PINTEREST_REDIRECT_URI: ${{ secrets.PINTEREST_REDIRECT_URI }}
@@ -126,6 +127,25 @@ jobs:
           export PINTEREST_REFRESH_TOKEN="${PINTEREST_REFRESH_TOKEN_CARRIED:-}"
           export NODE_PATH="$(npm root -g)"
           npx tsx scripts/launch/run.ts "$MODE" $ONLY
+      # The Neighbor Card replies need INSTANTLY_API_KEY, which only the
+      # production machine holds, so the stage runs there, as neighbor-card.yml
+      # does. The Stripe links (public URLs) are handed over base64-encoded.
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        if: always() && (inputs.only == '' || inputs.only == null || inputs.only == 'mailerReplies')
+      - uses: ./.github/actions/await-release
+        if: always() && (inputs.only == '' || inputs.only == null || inputs.only == 'mailerReplies')
+      - name: Mailer replies, on the production machine
+        if: always() && (inputs.only == '' || inputs.only == null || inputs.only == 'mailerReplies')
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          MODE: ${{ inputs.mode || 'run' }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          links=""
+          if [ -f .launch-out/stripe-links.json ]; then links=$(base64 -w0 .launch-out/stripe-links.json); fi
+          flyctl ssh console --app "$app" -C "sh -c 'cd /app && LAUNCH_STRIPE_LINKS_B64=$links node --import tsx scripts/launch/run.ts $MODE mailerReplies'" 2>&1 | tee replies.txt
+          grep -E '^\| Mailer replies' replies.txt >> "$GITHUB_STEP_SUMMARY" || true
+          grep -qE '^\| Mailer replies \(Neighbor Card\) \| (✅ DONE|🟡 PARTIAL)' replies.txt
       - name: Etsy token for the next run
         if: always() && hashFiles('.launch-out/etsy-refresh-token') != ''
         env:
