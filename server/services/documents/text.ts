@@ -7,7 +7,7 @@
  * quality record, because the auditor should not care how the words arrived.
  */
 import type { BlockType } from '../../domain/types.ts';
-import type { ExtractedBlock, ExtractedPage } from './pdf.ts';
+import { joinBlockLines, type ExtractedBlock, type ExtractedPage } from './pdf.ts';
 
 const ATX_HEADING = /^(#{1,6})\s+(.*)$/;
 const SETEXT_UNDERLINE = /^(=+|-{2,})\s*$/;
@@ -30,7 +30,7 @@ export function textToBlocks(source: string, markdown: boolean): ExtractedBlock[
   let fenced: string[] | null = null;
 
   const flushParagraph = (): void => {
-    const text = paragraph.join(' ').replace(/[ \t]+/g, ' ').trim();
+    const text = joinBlockLines(paragraph).replace(/[ \t]+/g, ' ').trim();
     if (text.length > 0) blocks.push(blockOf('PARAGRAPH', text));
     paragraph = [];
   };
@@ -66,7 +66,7 @@ export function textToBlocks(source: string, markdown: boolean): ExtractedBlock[
       }
       // Setext: an underline turns the paragraph above it, of any length, into a heading.
       if (SETEXT_UNDERLINE.test(line) && paragraph.length > 0) {
-        const text = paragraph.join(' ').replace(/[ \t]+/g, ' ').trim();
+        const text = joinBlockLines(paragraph).replace(/[ \t]+/g, ' ').trim();
         paragraph = [];
         if (text.length > 0) blocks.push(blockOf('HEADING', text));
         continue;
