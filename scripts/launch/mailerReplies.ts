@@ -23,7 +23,8 @@
  * requires) is copied from the campaign's own first step, so no personal
  * detail lives in this repository. Nothing about the campaign is changed.
  *
- * Credential: INSTANTLY_API_KEY (the owner's Instantly API key, v2).
+ * Credential: INSTANTLY_API_KEY, which lives on the production machine (§94),
+ * so launch.yml runs this stage there over `flyctl ssh`, as neighbor-card.yml does.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -66,25 +67,57 @@ export function classify(text: string, subject = ''): Intent {
   return 'OTHER';
 }
 
-/** The fillable block of ORDER-FORM-EMAIL.md. */
+/**
+ * The fillable block of ORDER-FORM-EMAIL.md, embedded because the stage runs on
+ * the production machine, whose image carries scripts/ but not the kit
+ * (tests/launchMailerReplies.test.ts keeps the two identical).
+ */
+export const ORDER_FORM = `BUSINESS (legal name):
+NAME AS IT SHOULD APPEAR ON THE AD:
+CATEGORY (one line, e.g. "family dentistry"):
+CONTACT NAME / PHONE / EMAIL:
+BUSINESS ADDRESS:
+
+SPACE (pick one):
+  [ ] Standard 2.8" x 2.33"        Zone 1 $295   | Both zones $495
+  [ ] Double 5.7" x 2.33"          Zone 1 $525   | Both zones $895
+  [ ] Back Premium (by address)    Zone 1 $575   | Both zones $975
+  [ ] Front Feature (top of front) Zone 1 $625   | Both zones $1,050
+ZONE:  [ ] Zone 1 – Camp Hill & East Hampden (4,944 homes)
+       [ ] Both zones (+ Hampden Twp West, 9,894 homes)
+
+AD CONTENT (or attach):
+  Headline offer:
+  Expiry date of the offer (suggest Feb 28, 2027):
+  Phone / website / address to print:
+  Logo: attached [ ] / use the one on our website [ ]
+  Licence or registration number to print (if your trade requires one):
+
+PAY BY:  [ ] card   [ ] bank account (ACH)
+I have read the Advertiser Agreement and I agree:  (type your name)`;
+
 export function orderForm(root: string): string {
-  const md = fs.readFileSync(path.join(root, KIT, 'ORDER-FORM-EMAIL.md'), 'utf8');
-  const m = /```\n([\s\S]*?)```/.exec(md);
+  const file = path.join(root, KIT, 'ORDER-FORM-EMAIL.md');
+  if (!fs.existsSync(file)) return ORDER_FORM;
+  const m = /```\n([\s\S]*?)```/.exec(fs.readFileSync(file, 'utf8'));
   if (!m?.[1]) throw new Error('ORDER-FORM-EMAIL.md has no fenced order form');
   return m[1].trimEnd();
 }
 
 interface Link { name: string; amount: number; url: string }
-function paymentLinks(root: string): Link[] {
+/** The Stripe stage's links: from this checkout, or handed to the production machine base64-encoded. */
+function paymentLinks(root: string, env: StageContext['env']): Link[] {
   try {
-    const j = JSON.parse(fs.readFileSync(path.join(root, '.launch-out', 'stripe-links.json'), 'utf8')) as { links?: Link[] };
+    const b64 = env['LAUNCH_STRIPE_LINKS_B64'];
+    const raw = b64 ? Buffer.from(b64, 'base64').toString('utf8') : fs.readFileSync(path.join(root, '.launch-out', 'stripe-links.json'), 'utf8');
+    const j = JSON.parse(raw) as { links?: Link[] };
     return (j.links ?? []).filter((l) => l.url);
   } catch { return []; }
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-export function replyBody(intent: 'YES' | 'CARD', root: string, signature: string): { html: string; text: string } {
+export function replyBody(intent: 'YES' | 'CARD', root: string, signature: string, env: StageContext['env'] = {}): { html: string; text: string } {
   const sigText = signature.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
   if (intent === 'CARD') {
     const items = CARD_FILES.map(([label, f]) => [label, `${RAW}/${KIT}/${f}`] as const);
@@ -96,7 +129,7 @@ export function replyBody(intent: 'YES' | 'CARD', root: string, signature: strin
     return { html, text };
   }
   const form = orderForm(root);
-  const links = paymentLinks(root);
+  const links = paymentLinks(root, env);
   const pay = links.length
     ? { html: `<p>Or pay now to lock the category (secure Stripe checkout):</p><ul>${links.map((l) => `<li><a href="${l.url}">${esc(l.name)}: $${l.amount}</a></li>`).join('')}</ul>`,
         text: `Or pay now to lock the category (secure Stripe checkout):\n${links.map((l) => `- ${l.name}: $${l.amount} ${l.url}`).join('\n')}\n\n` }
@@ -136,14 +169,17 @@ class Instantly {
 export async function runMailerReplies(ctx: StageContext): Promise<StageResult> {
   // Local inputs first: a broken kit fails the dry run, not a live reply.
   orderForm(ctx.root);
-  for (const [, f] of CARD_FILES) if (!fs.existsSync(path.join(ctx.root, KIT, f))) throw new Error(`missing ${KIT}/${f}`);
+  // The links point at the public repository; the files are checked where the kit is checked out.
+  if (fs.existsSync(path.join(ctx.root, KIT))) {
+    for (const [, f] of CARD_FILES) if (!fs.existsSync(path.join(ctx.root, KIT, f))) throw new Error(`missing ${KIT}/${f}`);
+  }
   if (ctx.dryRun) return { stage: STAGE, status: 'DONE', detail: 'dry run: order form and 3 card files present; no network', items: [] };
 
   if (!ctx.env['INSTANTLY_API_KEY']) {
     return {
       stage: STAGE, status: 'NEEDS_OWNER', items: [],
       detail: 'no Instantly key: the campaign sends, but replies wait in the Instantly unibox',
-      ownerAction: 'In Instantly: Settings → Integrations → API Keys → Create API Key (scope: all). Save it as the GitHub Actions secret INSTANTLY_API_KEY (repo Peyday007/V5 → Settings → Secrets and variables → Actions). Brain then answers card requests and order replies every hour.',
+      ownerAction: 'The production machine has no INSTANTLY_API_KEY (§94). It is set there once with `flyctl secrets set INSTANTLY_API_KEY=…`; Brain then answers card requests and order replies every hour.',
     };
   }
 
@@ -196,7 +232,7 @@ export async function runMailerReplies(ctx: StageContext): Promise<StageResult> 
         eaccount: e['eaccount'],
         reply_to_uuid: e['id'],
         subject: /^re:/i.test(subject) ? subject : `Re: ${subject}`,
-        body: replyBody(intent, ctx.root, signature),
+        body: replyBody(intent, ctx.root, signature, ctx.env),
       });
       items.push({ key, state: 'CREATED' });
     } catch (err) {

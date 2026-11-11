@@ -50,6 +50,8 @@ export async function runAll(ctx: StageContext, only?: string): Promise<Array<St
   const results: Array<StageResult & { name: string }> = [];
   for (const s of STAGES) {
     if (only && !s.file.includes(only)) continue;
+    // A stage whose credential lives on the production machine runs there instead (launch.yml).
+    if ((ctx.env['LAUNCH_SKIP'] ?? '').split(',').some((k) => k && s.file.includes(k))) continue;
     let r: StageResult;
     try {
       const mod = (await import(s.file)) as Record<string, (c: StageContext) => Promise<StageResult>>;

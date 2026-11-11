@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { classify, NEIGHBOR_CARD_CAMPAIGN, ownWords, runMailerReplies } from '../scripts/launch/mailerReplies.ts';
+import { classify, NEIGHBOR_CARD_CAMPAIGN, ORDER_FORM, orderForm, ownWords, runMailerReplies } from '../scripts/launch/mailerReplies.ts';
 import type { StageContext } from '../scripts/launch/types.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -56,6 +56,11 @@ describe('mailer replies stage', () => {
     expect(classify('No problem, what does it cost?')).toBe('CARD');
     expect(classify('I am out of the office until Monday')).toBe('AUTO');
     expect(classify('Who is this')).toBe('OTHER');
+  });
+
+  it('the embedded order form is the kit\'s, so the production machine sends the same form', () => {
+    expect(ORDER_FORM).toBe(orderForm(ROOT));
+    expect(orderForm('/nonexistent')).toBe(ORDER_FORM);
   });
 
   it('dry run checks the kit and calls nothing', async () => {
