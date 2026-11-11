@@ -1,0 +1,23 @@
+{
+  "reason": "Two implementer attempts on fcp_b11abd00 refused: tests/documents.test.ts:703-707 feeds 'di- ation' (a hard hyphen followed by a space, not a line break) and expects 'intermediation'. That fixture asserts the defect this objective removes, so A03 as written contradicted A01. The fixture is a test of line-break rejoining; it is corrected to a real line break, which keeps what it was meant to prove.",
+  "value": [
+    {
+      "id": "A01",
+      "statement": "normalizeBlockText('pre- and post-closing inspections; short- or long-term leases') returns the text unchanged and no 'rejoined hyphenated line breaks' note.",
+      "verification": "npx vitest run tests/normalizeSuspendedHyphen.test.ts",
+      "mandatory": true
+    },
+    {
+      "id": "A02",
+      "statement": "'recog-\\nnition' becomes 'recognition' with the rejoin note, and 'co\\u00ad operate' (soft hyphen before a space) still becomes 'cooperate'.",
+      "verification": "npx vitest run tests/normalizeSuspendedHyphen.test.ts",
+      "mandatory": true
+    },
+    {
+      "id": "A03",
+      "statement": "tests/documents.test.ts passes and the repository typechecks. Its 'cleans extraction artifacts' fixture is corrected from 'di- ation' (hyphen then a space, which asserted the defect) to 'di-\\nation' (hyphen then a line break); its expected text and notes stay exactly as they are. No other existing assertion changes.",
+      "verification": "npx vitest run tests/documents.test.ts && npm run typecheck",
+      "mandatory": true
+    }
+  ]
+}
