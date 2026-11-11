@@ -8,8 +8,19 @@
  * distant passages never merged.
  */
 
-/** Words split across a line break by a hyphen, e.g. "intermedi- ation". */
-const SOFT_HYPHEN_BREAK = /([A-Za-z])[-\u00ad]\s+([a-z])/g;
+/**
+ * A word split across a line break by a hard hyphen, e.g. "intermedi-\nation".
+ * Only a real line break qualifies: a hyphen followed by an ordinary space is a
+ * suspended hyphen ("pre- and post-closing", "short- or long-term") and is part
+ * of what the author wrote, so removing it would change the evidence (§9).
+ */
+const HARD_HYPHEN_LINE_BREAK = /([A-Za-z])-[ \t]*\r?\n[ \t]*([a-z])/g;
+/**
+ * A soft hyphen (U+00AD) followed by whitespace. A soft hyphen is never
+ * authored text — it only marks where a word may break — so it may rejoin
+ * across any whitespace, e.g. "co<shy> operate".
+ */
+const SOFT_HYPHEN_BREAK = /([A-Za-z])\u00ad\s+([a-z])/g;
 /** Control characters that carry no meaning in extracted prose. */
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
 /** Zero-width and formatting characters some PDF producers emit between glyphs. */
@@ -48,7 +59,7 @@ export function normalizeBlockText(raw: string): NormalizationResult {
     notes.push('removed zero-width characters');
   }
 
-  const dehyphenated = text.replace(SOFT_HYPHEN_BREAK, '$1$2');
+  const dehyphenated = text.replace(HARD_HYPHEN_LINE_BREAK, '$1$2').replace(SOFT_HYPHEN_BREAK, '$1$2');
   if (dehyphenated !== text) {
     text = dehyphenated;
     notes.push('rejoined hyphenated line breaks');
