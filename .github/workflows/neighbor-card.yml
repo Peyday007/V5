@@ -1,7 +1,7 @@
 # The Neighbor Card outreach, every hour (owner's order, 2026-11-11).
 #
 # One pass of scripts/neighbor-card.ts on the deployed machine, where the
-# Instantly key already is (INSTANTLY_API_KEY, §94): keep the campaign's
+# Integrations workflow puts the Instantly key (INSTANTLY_API_KEY, §94, §103): keep the campaign's
 # senders, limit and sequence as written, add West Shore businesses whose own
 # website publishes an address, and print Instantly's delivery counts. The
 # pass rotates its sources by the hour, so a day of passes covers every chamber

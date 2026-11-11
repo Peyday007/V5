@@ -43,6 +43,7 @@
 import { promises as dns } from 'node:dns';
 import { secretValue } from './providers/config.ts';
 import { INSTANTLY_API } from './providers/instantly.ts';
+import type { V2Place } from '../integrations/v2Bridge.ts';
 
 export const CAMPAIGN_NAME = 'Neighbor Card · Camp Hill Jan 2027';
 export const PUBLISHER = 'Peyton Rosser';
@@ -135,6 +136,12 @@ export interface Deps {
   sleep: (ms: number) => Promise<void>;
   resolveMx: (domain: string) => Promise<boolean | null>;
   log: (line: string) => void;
+  /**
+   * Google Places through V2's signed bridge (§103), metered against the
+   * registry's daily ceiling. Absent when the pass has no metered source; the
+   * chamber and the map still run.
+   */
+  places?: (textQuery: string) => Promise<V2Place[]>;
 }
 
 export function defaultDeps(): Deps {
@@ -510,6 +517,38 @@ export async function discoverOsm(deps: Deps, tile: string): Promise<Candidate[]
   return [];
 }
 
+/**
+ * Google Places through V2 (§103): one Text Search a pass, rotating category ×
+ * town across the card's whole shopping area, so a day of hourly passes reads
+ * 24 different searches inside the registry's ceiling. Places answers chains
+ * and businesses without a site too; both are dropped here, the rest go through
+ * the same published-address, MX and dedupe gate as every other source.
+ */
+const PLACES_TOWNS = ['Camp Hill', 'Mechanicsburg', 'Lemoyne', 'New Cumberland', 'Enola', 'Wormleysburg', 'Shiremanstown', 'Hampden Township', 'Carlisle', 'Harrisburg', 'Hummelstown', 'Dillsburg'];
+const PLACES_KINDS: [string, keyof typeof CATEGORY][] = [
+  ['dentist', 'dental'], ['chiropractor', 'health'], ['veterinarian', 'pets'], ['restaurant', 'restaurant'], ['hair salon', 'personal'],
+  ['auto repair', 'auto'], ['gym', 'fitness'], ['HVAC contractor', 'contractor'], ['insurance agency', 'finance'], ['law firm', 'legal'],
+  ['florist', 'retail'], ['plumber', 'home'], ['real estate agency', 'realestate'], ['day spa', 'personal'], ['optometrist', 'health'],
+];
+export const PLACES_QUERIES: { query: string; key: keyof typeof CATEGORY; town: string }[] = PLACES_KINDS.flatMap(([kind, key]) =>
+  PLACES_TOWNS.map((town) => ({ query: `${kind} in ${town}, PA`, key, town })),
+);
+
+export async function discoverPlaces(deps: Deps, slot: number): Promise<{ found: Candidate[]; line: string }> {
+  if (!deps.places) return { found: [], line: 'Places not used this pass' };
+  // Interleave kinds and towns so consecutive passes differ in both.
+  const pick = PLACES_QUERIES[(slot * 7) % PLACES_QUERIES.length]!;
+  try {
+    const places = await deps.places(pick.query);
+    const found = places
+      .filter((p) => p.website && p.name && (p.businessStatus ?? 'OPERATIONAL') === 'OPERATIONAL')
+      .map((p) => ({ name: p.name!, website: p.website!.startsWith('http') ? p.website! : `http://${p.website!}`, category: pick.key, town: pick.town, sourceUrl: `Google Places via V2 ("${pick.query}")` }));
+    return { found, line: `Places "${pick.query}": ${places.length} businesses, ${found.length} with a website` };
+  } catch (error) {
+    return { found: [], line: `Places "${pick.query}" not read: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* One pass                                                           */
 /* ------------------------------------------------------------------ */
@@ -539,7 +578,13 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
   const known = await campaignLeads(deps, campaignId);
   const chamber = [CHAMBER_CATEGORIES[slot % CHAMBER_CATEGORIES.length]!, CHAMBER_CATEGORIES[(slot + 6) % CHAMBER_CATEGORIES.length]!];
   const tiles = [0, 1, 2].map((i) => OSM_TILES[(slot * 3 + i) % OSM_TILES.length]!);
-  const batches = await Promise.all([...chamber.map(([s, k]) => discoverChamber(deps, s, k)), ...tiles.map((t) => discoverOsm(deps, t))]);
+  const [places, ...batches] = await Promise.all([
+    discoverPlaces(deps, slot),
+    ...chamber.map(([s, k]) => discoverChamber(deps, s, k).then((found) => ({ found, line: '' }))),
+    ...tiles.map((t) => discoverOsm(deps, t).then((found) => ({ found, line: '' }))),
+  ]).then((all) => [all[0]!, ...all.slice(1).map((b) => b.found)] as const);
+  // Places first: its answers are the most complete, so a site it shares with the map is read once, as Places'.
+  batches.unshift(places.found);
   const seen = new Set<string>();
   const fresh = batches.flat().filter((c) => {
     const d = rootDomain(c.website);
@@ -577,7 +622,7 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
     }
   });
   const discovered = batches.reduce((n, b) => n + b.length, 0);
-  const sources = `${chamber.map(([s]) => s).join(', ')}; map tiles ${tiles.join(', ')} (${batches.slice(chamber.length).reduce((n, b) => n + b.length, 0)} on the map)`;
+  const sources = `${places.line}; ${chamber.map(([s]) => s).join(', ')}; map tiles ${tiles.join(', ')} (${batches.slice(1 + chamber.length).reduce((n, b) => n + b.length, 0)} on the map)`;
   const line = fresh.length === 0
     ? `refill: nothing new to read this pass (${discovered} discovered from ${sources}, all already in the campaign or not usable)`
     : `refill: ${discovered} discovered from ${sources}; ${fresh.length} new sites read; ${found} published an address; ${noMx} refused for no mail server; ${unverified} left for the next pass (no resolver answered); ${added} added`;

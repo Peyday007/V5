@@ -1,7 +1,7 @@
 # The expansion businesses' outreach, read every hour (businesses/README.md).
 #
 # One read-only pass of scripts/expansion-outreach.ts on the deployed machine,
-# where the Instantly key already is (INSTANTLY_API_KEY, §94): each campaign's
+# where the Integrations workflow puts the Instantly key (INSTANTLY_API_KEY, §94, §103): each campaign's
 # sent, replied, bounced and opted-out counts, and every reply nobody has
 # answered yet. ATTENTION (a stopped campaign, a bounce rate over 5%, or a reply
 # waiting) is published as annotations so the operating session reads it from

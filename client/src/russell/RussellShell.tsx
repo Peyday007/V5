@@ -45,6 +45,7 @@ import { MagicView } from './Magic.tsx';
 import { MemoryView } from './Memory.tsx';
 import { ResearchView } from './Research.tsx';
 import { ConnectionsPanel } from './Connections.tsx';
+import { IntegrationsView } from './Integrations.tsx';
 import { ClaudeConnectionCard } from './ClaudeConnection.tsx';
 import {
   FleetView,
@@ -103,6 +104,8 @@ export const SECTIONS = [
    * Their addresses are unchanged, so a deep link still works.
    */
   { name: 'SYSTEMS' as const, label: 'Business systems', primary: false },
+  /* Integrations (§103): every connected service and its health, Brain-wide. */
+  { name: 'INTEGRATIONS' as const, label: 'Integrations', primary: false },
   /* Magic Deck Lab: secondary, reached from More; never a primary destination. */
   { name: 'MAGIC' as const, label: 'Magic', primary: false },
 ];
@@ -646,6 +649,7 @@ export function RussellShell({
           </>
         ) : null}
         {route.name === 'SYSTEMS' ? <BusinessSystems go={go} /> : null}
+        {route.name === 'INTEGRATIONS' ? <IntegrationsView /> : null}
         {route.name === 'MACHINES' ? <MachinesView projectId={kernelProject(homes.data?.manufacturing)} /> : null}
         {route.name === 'LABOR' ? <LaborView projectId={kernelProject(homes.data?.labor)} /> : null}
         {route.name === 'PUZZLES' ? <PuzzlesView projectId={kernelProject(homes.data?.puzzles)} /> : null}
