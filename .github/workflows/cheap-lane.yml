@@ -67,11 +67,16 @@ jobs:
     # waiting on a dead session for the runner's six hours, holding this
     # workflow's concurrency group the whole time (2026-11-06: a runpod-report
     # and a connection report hung 66 and 25 minutes, queueing every later one).
-    timeout-minutes: 75
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - uses: ./.github/actions/await-release
+        with:
+          # This workflow restarts the Brain, so it waits out the hosted
+          # verification too, not only the machine replacement.
+          whole-job: 'true'
+          timeout-seconds: '2700'
       # Only the RunPod actions run Brain's own code here (the probe).
       - uses: actions/setup-node@v4
         if: startsWith(inputs.action || 'runpod-auto', 'runpod-')
