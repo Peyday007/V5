@@ -163,8 +163,9 @@ export interface AdvanceResult {
  * — not something to try again with a fresh key.
  *
  * One exception, and `mayReplace` below is the whole of it: an item whose
- * attempts the queue spent, on a target where a second item cannot duplicate
- * anything, gets a bounded replacement instead of a park.
+ * attempts the queue spent (or, for a synthesis, that its worker failed on a
+ * transient cause), on a target where a second item cannot duplicate anything,
+ * gets a bounded replacement instead of a park.
  */
 function alreadyCreated(items: WorkItem[], predicate: (item: WorkItem) => boolean): boolean {
   return items.some(predicate);
@@ -299,9 +300,11 @@ async function mayReplace(
    * items cancelled for any other reason (a round reopened, a packet ended).
    */
   /*
-   * FAILED counts only when the queue spent the attempts — a retryable failure
-   * or a lapsed lease on the last one. A worker that failed the item as not
-   * retryable said not to try again, and the repair ladder answers that.
+   * For every type, FAILED counts as spent when the queue spent the attempts —
+   * a retryable failure or a lapsed lease on the last one. Otherwise a worker
+   * that failed the item as not retryable said not to try again, and the repair
+   * ladder answers that — with one exception, `transient` below: a synthesis
+   * failed on a transient cause is replaceable too, for the reason given there.
    */
   const exhausted = (item: WorkItem): boolean =>
     (item.state === 'FAILED' &&
