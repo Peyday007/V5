@@ -134,3 +134,17 @@ export function evidenceProblem(input: {
   }
   return null;
 }
+
+/**
+ * A goal's recorded policy: the latest row of `goal_policies`. The kinds and
+ * what each one means live in `services/goals/policy.ts`; this is only the row.
+ */
+export interface GoalPolicyRecord {
+  id: string;
+  goalId: string;
+  kind: string;
+  reliabilityNormal: number | null;
+  reliabilityAdverse: number | null;
+  setBy: string;
+  setAt: string;
+}

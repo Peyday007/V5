@@ -19,7 +19,7 @@ import { evidenceProblem } from '../domain/economy.ts';
 import type {
   ActivityVariable, EconomicEdge, EconomicRelation, EndpointKind, EvidenceStatus, OperatorKind,
   Possibility, PossibilityCondition, PossibilityEdge, PossibilityKind, PossibilityRelation,
-  PossibilityRequirements, Stage, StageMeasurement,
+  PossibilityRequirements, Stage, StageMeasurement, GoalPolicyRecord,
 } from '../domain/economy.ts';
 import { STAGES } from '../domain/economy.ts';
 
@@ -439,4 +439,39 @@ export function compareBenchmarks(before: GoalBenchmark, after: GoalBenchmark): 
     out.push({ stage: null, field, before: before[field], after: after[field], delta: diff(before[field], after[field]) });
   }
   return out;
+}
+
+function mapGoalPolicy(r: Row): GoalPolicyRecord {
+  const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+  return {
+    id: s(r['id']), goalId: s(r['goal_id']), kind: s(r['kind']),
+    reliabilityNormal: num(r['reliability_normal']), reliabilityAdverse: num(r['reliability_adverse']),
+    setBy: s(r['set_by']), setAt: s(r['set_at']),
+  };
+}
+
+/**
+ * Record a goal's policy. Append-only: the newest row is the goal's policy and
+ * the older ones are its history. The kind is checked by the table, and a
+ * reliability standard is refused on any kind but SQUEEZE.
+ */
+export async function recordGoalPolicy(input: {
+  goalId: string; kind: string; reliabilityNormal?: number | null; reliabilityAdverse?: number | null; setBy: string;
+}): Promise<GoalPolicyRecord> {
+  const id = newId('gpl');
+  await getDb().run(
+    `INSERT INTO goal_policies (id, goal_id, kind, reliability_normal, reliability_adverse, set_by, set_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, input.goalId, input.kind, input.reliabilityNormal ?? null, input.reliabilityAdverse ?? null, input.setBy, nowIso()],
+  );
+  return mapGoalPolicy((await getDb().get<Row>('SELECT * FROM goal_policies WHERE id = ?', [id]))!);
+}
+
+/** The goal's current recorded policy, or null when none was ever recorded. */
+export async function currentGoalPolicy(goalId: string): Promise<GoalPolicyRecord | null> {
+  const row = await getDb().get<Row>(
+    'SELECT * FROM goal_policies WHERE goal_id = ? ORDER BY set_at DESC, id DESC LIMIT 1',
+    [goalId],
+  );
+  return row ? mapGoalPolicy(row) : null;
 }
