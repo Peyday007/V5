@@ -28,6 +28,7 @@
  * answerable from its inputs.
  */
 import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { narrowsOrEqual } from './contract.ts';
 import { ownershipReachesForbidden, forbiddenIn } from './forbidden.ts';
 import { matchesGlob } from './glob.ts';
@@ -693,10 +694,19 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
         }),
     ),
   ];
+  /** Whether a repository-relative path is a file, read from the repository root rather than the process's directory. */
+  const onDisk = (path: string): boolean => existsSync(fileURLToPath(new URL(`../../../${path}`, import.meta.url)));
   const canonical = (path: string): string => {
     if (knownPaths.includes(path)) return path;
     if (input.mutationScope.some((glob) => matchesGlob(path, glob))) return path;
-    const candidates = new Set(knownPaths.filter((known) => known.endsWith(`/${path}`)));
+    // A path that is already a file from the repository root is not a short path
+    // (production 2026-11-11, authority-d0-p0: objectives/programs/…/release-01.map.json
+    // was rewritten under server/services/cash/ and no repair could anchor it).
+    if (onDisk(path)) return path;
+    const exact = knownPaths.filter((known) => known.endsWith(`/${path}`));
+    // A file a unit owns or a person named exactly beats any reading a glob could compose.
+    if (new Set(exact).size === 1) return exact[0]!;
+    const candidates = new Set(exact);
     for (const dir of globDirs) {
       const candidate = `${dir}${path}`;
       if (input.mutationScope.some((glob) => matchesGlob(candidate, glob))) candidates.add(candidate);
@@ -706,7 +716,7 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
     // could compose (production 2026-11-10: "goals/portfolio.ts" read as both
     // server/services/goals/portfolio.ts and server/services/quant/goals/portfolio.ts, so the
     // repair was never created and the campaign stayed blocked after its scope was amended).
-    const existing = [...candidates].filter((candidate) => existsSync(candidate));
+    const existing = [...candidates].filter(onDisk);
     return existing.length === 1 ? existing[0]! : path;
   };
   const evidenceFiles = [...new Set(named.filter(isConcrete).map(canonical))];
