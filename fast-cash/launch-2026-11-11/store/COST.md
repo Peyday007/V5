@@ -31,7 +31,7 @@ Example: the 11 oz mug at $18.99.
 | **Your profit** | **$12.00** |
 | Shipping ($6.69) | paid by the buyer |
 
-Across the 10 products, profit is **$6.75 to $19.50 per unit, about $13 on average**. Margins are 40–63%. The full table is in `CATALOG.md`.
+Across the 10 products (as priced in `CATALOG.md`; product 10 is now the JournalBook notebook at $12.71 base, so its profit is about $16 rather than $13), profit is **$6.75 to $19.50 per unit, about $13 on average**. Margins are 40–63%. The full table is in `CATALOG.md`.
 
 Free-shipping promos come out of your profit ([shipping costs](https://help.fourthwall.com/frequently-asked-questions/shipping-and-orders/shipping-costs)). Do not run them at launch.
 
@@ -66,7 +66,7 @@ That date is 5 business days of production plus 9 days of transit, counted back 
 
 | Option | Cash to launch | Checkout + payments | Supplier auto-fulfils, US production | Payout | Sales tax | Verdict |
 |---|---|---|---|---|---|---|
-| **Fourthwall Free** | **$0** ([pricing](https://fourthwall.com/pricing)) | Built in. 2.9% + 30¢. | Yes. Catalog made by Printful/Spoke, ships from the US (catalog pages). | Monthly via Stripe, $25 minimum | **Fourthwall is merchant of record**: it registers, collects and remits | **PRIMARY.** $0, nothing to register, real checkout, US printing. |
+| **Fourthwall Free** | **$0** ([pricing](https://fourthwall.com/pricing)) | Built in. 2.9% + 30¢. | Yes. Catalog made by Printful/Spoke, ships from the US (catalog pages). | Monthly via Stripe, $25 minimum | **Fourthwall is merchant of record**: it registers, collects and remits | **PRIMARY.** $0, nothing to register, real checkout, US printing, and an official API that creates and publishes design products from our print files ([guide](https://docs.fourthwall.com/guides/create-design-products)). Brain publishes; the owner uploads nothing. |
 | Printful Quick Stores | $0 (Free plan includes "10 Quick Stores", [pricing](https://www.printful.com/pricing)) | Printful collects payment via Stripe | Yes (Printful US) | Monthly if over $25 ([billing](https://help.printful.com/hc/en-us/articles/15045715768604-How-is-Quick-Stores-billing-different-from-usual-Printful-billing-e-g-Shopify-billing)) | Printful is seller of record ([tax](https://help.printful.com/hc/en-us/articles/15045922586780-Why-is-the-sales-tax-collected-on-my-Quick-Stores-orders-and-who-pays-it)) | **BACKUP.** Same maker, same $0, same tax relief, so these exact design files work unchanged. Thinner storefront. Third-party reviews say US sellers and buyers only. |
 | Shopify + Printify | 3-day free trial, then **$1/month for 3 months**, then Basic **$39/mo** ($29/mo yearly) ([shopify.com/pricing](https://www.shopify.com/pricing)). The Starter plan is no longer listed. | Shopify Payments 2.9% + 30¢. 2% extra if you use a third-party gateway. | Printify Free $0. Premium from $24.99/mo yearly ([printify.com/pricing](https://printify.com/pricing/)). Choose US providers. | Shopify payouts | **You** are the seller: register for a PA sales-tax licence and file returns yourself | Best for scaling later. Not for a 24-hour launch: it means more setup, a card on file, and tax registration. |
 | Printify Pop-Up Store | $0 | Built in | Yes | 15th of the following month ([Printify help](https://help.printify.com/hc/en-us/articles/12051908094993)) | **Seller is now merchant of record** after the 2025 changes, so you handle the tax | No. You would carry tax compliance for a free storefront. |
