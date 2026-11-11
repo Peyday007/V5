@@ -22,6 +22,7 @@
  * one person's goals cannot be seen to affect another's allocation.
  */
 import type { WorkstreamPurpose } from '../../domain/register.ts';
+import { binPriorityForRank } from '../../domain/goals.ts';
 import type { GoalCommitment, PriorityCriterion } from '../../domain/goals.ts';
 
 export interface PriorityFacts {
@@ -153,4 +154,99 @@ export function rankGoals(goals: PriorityFacts[]): RankedGoal[] {
     });
   }
   return out;
+}
+
+/**
+ * One piece of research waiting for capacity, and the goal it serves.
+ *
+ * Research is ordered *by the goal ranking above*, never by a second one: a
+ * demand inherits its goal's position from `rankGoals`, which is the same rank
+ * `tick.ts` maps to its bins' priority through `binPriorityForRank`. So the
+ * order printed here and the order the dispatcher's `ORDER BY priority DESC`
+ * hands capacity out in cannot disagree.
+ */
+export interface ResearchDemand {
+  id: string;
+  ownerKey: string;
+  /** The goal this research serves, or null for unattached/long-term work. */
+  goalId: string | null;
+  createdAt: string;
+}
+
+export interface OrderedResearch {
+  id: string;
+  ownerKey: string;
+  goalId: string | null;
+  /** 0-based within the owner. */
+  rank: number;
+  /** Position in the interleaved fleet order. */
+  position: number;
+  /** True only for research serving one of its owner's workable goals. */
+  premium: boolean;
+  /** The bin priority its goal's rank maps to, or null for background work. */
+  binPriority: number | null;
+  reason: string;
+}
+
+const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * Order research for premium capacity. A demand serving a workable goal of the
+ * *same owner* takes that goal's rank; anything else — no goal, a paused or
+ * waiting goal, or a goal id belonging to somebody else — is background work
+ * that code organises and that takes no premium job. There is no reserved
+ * share for either side. Ordered within an owner and interleaved across owners
+ * exactly as `rankGoals` is, so one person's goals cannot move another's work.
+ */
+export function orderResearch(demands: ResearchDemand[], goals: PriorityFacts[]): OrderedResearch[] {
+  const facts = new Map<string, PriorityFacts>();
+  for (const goal of goals) facts.set(`${goal.ownerKey}\u0000${goal.id}`, goal);
+  const ranks = new Map<string, RankedGoal>();
+  for (const one of rankGoals(goals)) ranks.set(`${one.ownerKey}\u0000${one.id}`, one);
+
+  type Resolved = { d: ResearchDemand; goal: RankedGoal | null };
+  const byOwner = new Map<string, Resolved[]>();
+  for (const d of demands) {
+    const key = d.goalId === null ? null : `${d.ownerKey}\u0000${d.goalId}`;
+    const workable = key !== null && facts.get(key)?.workable === true;
+    const resolved: Resolved = { d, goal: workable ? (ranks.get(key) ?? null) : null };
+    const list = byOwner.get(d.ownerKey);
+    if (list) list.push(resolved);
+    else byOwner.set(d.ownerKey, [resolved]);
+  }
+
+  const compareDemands = (a: Resolved, b: Resolved): number => {
+    if ((a.goal === null) !== (b.goal === null)) return a.goal ? -1 : 1;
+    if (a.goal && b.goal && a.goal.rank !== b.goal.rank) return a.goal.rank - b.goal.rank;
+    if (a.d.createdAt !== b.d.createdAt) return byText(a.d.createdAt, b.d.createdAt);
+    return byText(a.d.id, b.d.id);
+  };
+
+  const flat = [...byOwner.entries()]
+    .sort(([a], [b]) => byText(a, b))
+    .flatMap(([ownerKey, list]) =>
+      [...list].sort(compareDemands).map((entry, rank) => ({ ...entry, ownerKey, rank })),
+    );
+  // Goal work ahead of background at every rank, so premium capacity never
+  // waits behind another owner's background; then by in-owner rank.
+  flat.sort((x, y) => {
+    if ((x.goal === null) !== (y.goal === null)) return x.goal ? -1 : 1;
+    if (x.rank !== y.rank) return x.rank - y.rank;
+    return byText(x.ownerKey, y.ownerKey);
+  });
+
+  return flat.map((entry, position) => ({
+    id: entry.d.id,
+    ownerKey: entry.ownerKey,
+    goalId: entry.d.goalId,
+    rank: entry.rank,
+    position,
+    premium: entry.goal !== null,
+    binPriority: entry.goal ? binPriorityForRank(entry.goal.rank) : null,
+    reason: entry.goal
+      ? entry.goal.belowPrevious
+        ? `its goal is position ${entry.goal.rank + 1} among the owner's goals: ${entry.goal.belowPrevious.reason}`
+        : "its goal is first among the owner's goals"
+      : 'serves no workable goal of its owner, so code organises it and it takes no premium job',
+  }));
 }
