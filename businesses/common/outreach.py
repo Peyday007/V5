@@ -102,7 +102,8 @@ def prepare(business):
         call('PATCH', f"/campaigns/{c['id']}", d)
         print('updated running campaign', c['id'])
     else:
-        d = definition(cfg); d.pop('name')
+        # A draft carries the finished copy (the address too, when given), so starting it is one click.
+        d = definition(cfg, os.environ.get('BUSINESS_MAILING_ADDRESS') or ADDRESS_SLOT); d.pop('name')
         call('PATCH', f"/campaigns/{c['id']}", d)
         print('updated draft campaign', c['id'])
     added = 0
