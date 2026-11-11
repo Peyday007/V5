@@ -6,6 +6,7 @@
 import { getDb } from '../db/database.ts';
 import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
+import { refusePrivateGeneral } from '../services/knowledge/scope/privacy.ts';
 import {
   scopeProblem,
   type DetectorExample,
@@ -128,6 +129,13 @@ export async function upsertLearnedSubject(
   input: ScopeRef & { subjectKey: string; label: string; description?: string | null; origin: string; sourceRef?: string | null },
 ): Promise<LearnedSubject> {
   requireScope(input);
+  // A GENERAL subject is a lens every project searches with: nothing private may be in what it says.
+  if (input.scope === 'GENERAL') {
+    refusePrivateGeneral({
+      finds: input.label, usefulWhen: input.description ?? null, sources: [], requiredInputs: [],
+      query: input.subjectKey, checkProcedure: '', limits: null,
+    });
+  }
   const db = getDb();
   const at = nowIso();
   const project = input.projectId ?? null;
@@ -183,6 +191,15 @@ export async function createSearchMethod(
   },
 ): Promise<SearchMethod> {
   requireScope(input);
+  // A GENERAL method is readable by every project and user, so its definition is checked here, on every
+  // write, rather than only by callers that remember to (`knowledge/scope/share.ts` checks first too).
+  if (input.scope === 'GENERAL') {
+    refusePrivateGeneral({
+      finds: input.finds, usefulWhen: input.usefulWhen ?? null, sources: input.sources,
+      requiredInputs: input.requiredInputs ?? [], query: input.query ?? null,
+      checkProcedure: input.checkProcedure, limits: input.limits ?? null,
+    });
+  }
   const db = getDb();
   const at = nowIso();
   const project = input.projectId ?? null;

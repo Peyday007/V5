@@ -4,6 +4,7 @@
  *
  *   npx tsx server/services/research/searchReport/cli.ts report  --project P [--since ISO] [--json]
  *   npx tsx server/services/research/searchReport/cli.ts methods --project P
+ *   npx tsx server/services/research/searchReport/cli.ts metrics --project P [--json]
  *   npx tsx server/services/research/searchReport/cli.ts compare --project P --subject S --file results.json
  *
  * Invariant 35: there is no administration page; reaching the shell is the
@@ -11,7 +12,9 @@
  * asked — the report from `search_methods` and `search_method_runs` (with the
  * cash buckets' downstream outcomes from `discoveryYield` attached under the
  * same method keys), `methods` from each method's runs through
- * `decideMethod`, so a paused or revise-flagged method says so and why.
+ * `decideMethod`, so a paused or revise-flagged method says so and why, and
+ * `metrics` from `discoveryMethodMetrics`, which reads only the project's own
+ * and GENERAL methods whoever asks.
  * Nothing here writes.
  *
  * `compare` reads `{ "items": [...], "results": { "<methodId>": { "surfaced":
@@ -23,7 +26,9 @@ import { pathToFileURL } from 'node:url';
 import { closeDatabase, initDatabase } from '../../../db/database.ts';
 import { listMethodRuns, listSearchMethods } from '../../../repos/searchMethods.ts';
 import type { SearchReader } from '../../../domain/searchIntelligence.ts';
-import { discoveryYield } from '../../cash/discoveryYield.ts';
+import { discoveryMethodMetrics, methodDownstream } from '../../cash/discoveryYield.ts';
+import { readerForProject } from '../searchMethods/bucketMethods.ts';
+import type { MethodReading } from '../searchMetrics/read.ts';
 import { decideMethod, type MethodDecision } from '../searchFailures/classify.ts';
 import { compareMethods, type CompareResult, type MethodResult } from '../searchMethods/compare.ts';
 import { buildSearchReport, renderSearchReport, type SearchReport } from './report.ts';
@@ -31,6 +36,7 @@ import { buildSearchReport, renderSearchReport, type SearchReport } from './repo
 const USAGE = [
   'usage: cli.ts report  --project P [--since ISO] [--json]',
   '       cli.ts methods --project P',
+  '       cli.ts metrics --project P [--json]',
   '       cli.ts compare --project P --subject S --file results.json',
 ].join('\n');
 
@@ -38,6 +44,7 @@ export interface SearchCliDeps {
   report?: (reader: SearchReader, opts: { since: string | null; downstream: Map<string, { useful: number; qualified: number; duplicates: number }> }) => Promise<SearchReport>;
   downstream?: (projectId: string) => Promise<Map<string, { useful: number; qualified: number; duplicates: number }>>;
   decisions?: (reader: SearchReader, now: string) => Promise<{ methodKey: string; trustState: string; decision: MethodDecision }[]>;
+  metrics?: (projectId: string) => Promise<MethodReading[]>;
   compare?: (reader: SearchReader, input: { subjectId: string; items: string[]; results: Record<string, MethodResult> }) => Promise<CompareResult>;
   readFile?: (path: string) => string;
   now?: () => string;
@@ -49,9 +56,15 @@ function flag(argv: readonly string[], name: string): string | null {
   return value && !value.startsWith('--') ? value : null;
 }
 
-async function cashDownstream(projectId: string): Promise<Map<string, { useful: number; qualified: number; duplicates: number }>> {
-  const reading = await discoveryYield(projectId);
-  return new Map(reading.byMethod.map((one) => [one.key, { useful: one.useful, qualified: one.qualified, duplicates: one.duplicates }] as const));
+/** Per-method metrics as lines: runs, verified/false positives and the cash downstream where a bucket shares the key. */
+export function renderMetrics(rows: readonly MethodReading[]): string {
+  if (rows.length === 0) return 'no search methods recorded for this project yet';
+  return rows
+    .map(({ method, metrics: m }) => {
+      const down = m.downstream;
+      return `${method.methodKey} ${method.scope} ${method.trustState}: ${m.runs} run(s), ${m.verified} verified, ${m.falsePositives} false positive(s); downstream ${down ? `${down.useful} useful, ${down.qualified} qualified` : 'unknown (no cash bucket shares this key)'}`;
+    })
+    .join('\n');
 }
 
 /** Every method the reader can see, and what its runs say it may do now. */
@@ -78,12 +91,12 @@ export function renderDecisions(rows: readonly { methodKey: string; trustState: 
 export async function runSearchCli(argv: readonly string[], deps: SearchCliDeps = {}): Promise<{ code: number; out: string }> {
   const [command] = argv;
   const project = flag(argv, 'project');
-  if (!command || !['report', 'methods', 'compare'].includes(command) || !project) return { code: 2, out: USAGE };
-  const reader: SearchReader = { projectIds: [project], userId: null };
+  if (!command || !['report', 'methods', 'metrics', 'compare'].includes(command) || !project) return { code: 2, out: USAGE };
+  const reader: SearchReader = readerForProject(project);
   const now = (deps.now ?? (() => new Date().toISOString()))();
 
   if (command === 'report') {
-    const downstream = await (deps.downstream ?? cashDownstream)(project);
+    const downstream = await (deps.downstream ?? methodDownstream)(project);
     const report = await (deps.report ?? ((r, o) => buildSearchReport(r, { now, since: o.since, downstream: o.downstream })))(reader, {
       since: flag(argv, 'since'),
       downstream,
@@ -93,6 +106,12 @@ export async function runSearchCli(argv: readonly string[], deps: SearchCliDeps 
 
   if (command === 'methods') {
     return { code: 0, out: renderDecisions(await (deps.decisions ?? methodDecisions)(reader, now)) };
+  }
+
+  if (command === 'metrics') {
+    // The reader is the project's own, built inside discoveryMethodMetrics: nothing typed here widens it.
+    const rows = await (deps.metrics ?? ((p: string) => discoveryMethodMetrics(p)))(project);
+    return { code: 0, out: argv.includes('--json') ? JSON.stringify(rows, null, 2) : renderMetrics(rows) };
   }
 
   const subject = flag(argv, 'subject');

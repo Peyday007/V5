@@ -47,3 +47,24 @@ export function privateDataIn(
   }
   return [...found];
 }
+
+/** A GENERAL write refused because its definition holds something private. */
+export class PrivateDataRefused extends Error {
+  constructor(readonly found: string[]) {
+    super(`A GENERAL record is readable by every project and user, and this definition holds ${found.join(', ')}; it is kept private instead.`);
+    this.name = 'PrivateDataRefused';
+  }
+}
+
+/**
+ * Refuse a definition about to be written as GENERAL when it holds anything
+ * private. The repository calls this on every GENERAL write, so sharing is
+ * enforced where the row is made rather than by each caller remembering to ask.
+ */
+export function refusePrivateGeneral(
+  definition: Definition,
+  known: { projectIds?: readonly string[]; userIds?: readonly string[]; terms?: readonly string[] } = {},
+): void {
+  const found = privateDataIn(definition, known);
+  if (found.length > 0) throw new PrivateDataRefused(found);
+}

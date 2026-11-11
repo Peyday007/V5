@@ -24,6 +24,7 @@ import { evidenceCard } from './card.ts';
 import { hostOf } from '../research/gate.ts';
 import type { SearchReader } from '../../domain/searchIntelligence.ts';
 import { readMethodMetrics, type MethodReading } from '../research/searchMetrics/read.ts';
+import { readerForProject } from '../research/searchMethods/bucketMethods.ts';
 
 export interface YieldRow {
   /** The bucket id, or a source host. */
@@ -186,15 +187,29 @@ export async function usefulOpeningIds(projectId: string, opportunities: readonl
   return out;
 }
 
-/**
- * Per-method metrics beyond cash: every search method the reader can see, with
- * the cash bucket outcomes attached where a method shares a bucket's key. A
- * method with no cash counterpart reports no downstream reading (null).
- */
-export async function discoveryMethodMetrics(projectId: string, reader: SearchReader): Promise<MethodReading[]> {
+/** The cash buckets' downstream outcomes, keyed by the method key that shares the bucket's id. */
+export async function methodDownstream(projectId: string): Promise<Map<string, { useful: number; qualified: number; duplicates: number }>> {
   const reading = await discoveryYield(projectId);
-  const downstream = new Map(
+  return new Map(
     reading.byMethod.map((one) => [one.key, { useful: one.useful, qualified: one.qualified, duplicates: one.duplicates }] as const),
   );
-  return readMethodMetrics(reader, { downstream });
+}
+
+/**
+ * Per-method metrics beyond cash: every search method the project may see, with
+ * the cash bucket outcomes attached where a method shares a bucket's key. A
+ * method with no cash counterpart reports no downstream reading (null).
+ *
+ * The reader is derived from the project rather than trusted from the caller:
+ * by default it is the project's own (its PROJECT methods plus GENERAL ones),
+ * and a reader the caller passes may only be narrower — one that names any
+ * other project is refused, so this read can never return another project's
+ * private methods whoever calls it.
+ */
+export async function discoveryMethodMetrics(projectId: string, reader: SearchReader = readerForProject(projectId)): Promise<MethodReading[]> {
+  const foreign = reader.projectIds.filter((id) => id !== projectId);
+  if (foreign.length > 0) {
+    throw new Error(`discoveryMethodMetrics for ${projectId} may read only that project's methods; the reader also names ${foreign.length} other project(s).`);
+  }
+  return readMethodMetrics(reader, { downstream: await methodDownstream(projectId) });
 }
