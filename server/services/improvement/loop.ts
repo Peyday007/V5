@@ -62,6 +62,7 @@ import { BRAIN_PROJECT_SLUG, BRAIN_REPOSITORY_ID } from '../../domain/binPurpose
 import { RELEASE_EXCLUDED_PATHS } from '../../domain/factoryRelease.ts';
 import { claimRejections, freeLaneFailures, ownerInterventions, packetOutcomes, readMetric } from './scoreboard.ts';
 import { improvementPerson, improvementSwitch } from './authority.ts';
+import type { ExistingMatch } from '../selfmodel/gapLoop.ts';
 
 export const IMPROVEMENT_TICK_MS = 10 * 60_000;
 const HOUR = 3_600_000;
@@ -391,7 +392,26 @@ async function brainProject(): Promise<{ id: string; layerId: string | null } | 
  * Open method research for a weakness: a research goal in brain-architecture, worked by Claude
  * routines and, once the activation gate is ACTIVE, by the free lane beside them (`activation.ts`).
  */
-async function openResearch(candidate: ImprovementCandidate, now: Date): Promise<string> {
+/**
+ * Search existing capabilities before acquiring anything, and record it (AUTO-20-2 step 3).
+ * The archive count is the one the stage decision read (`link.archive`). A search that cannot be
+ * run or recorded throws, so the caller hands nothing to an owner this pass.
+ */
+async function searchFirst(candidate: ImprovementCandidate, link: Linked): Promise<{ archiveClaims: number; existing: ExistingMatch[] }> {
+  const { searchBeforeAcquire } = await import('../selfmodel/gapLoopSync.ts');
+  return searchBeforeAcquire(candidate, { archiveClaims: link.archive.length });
+}
+
+/** What the search found, as a sentence an assignment or objective carries. Pure. */
+export function existingSentence(existing: readonly ExistingMatch[]): string {
+  if (existing.length === 0) return 'A search of the system scan and the owner path found nothing that already does this. ';
+  return `Already in Brain, found by searching before building (read these first and extend them rather than adding a second mechanism): ${existing
+    .slice(0, 8)
+    .map((e) => `${e.name} (${e.detail})`)
+    .join('; ')}. `;
+}
+
+async function openResearch(candidate: ImprovementCandidate, now: Date, existing: readonly ExistingMatch[] = []): Promise<string> {
   const project = await brainProject();
   if (!project || !project.layerId) throw new Error('The brain-architecture project or its layer is missing.');
   const person = await improvementPerson();
@@ -402,6 +422,8 @@ async function openResearch(candidate: ImprovementCandidate, now: Date): Promise
     `Brain improvement research (not a commercial question). ${String(candidate.evidence['researchQuestion'] ?? candidate.title)}\n\n` +
     `The weakness, from Brain's own production rows: ${candidate.problem} It occurred ${candidate.frequency} time(s) ` +
     `out of ${candidate.denominator}. Recorded reasons:\n${samples}\n\n` +
+    existingSentence(existing) +
+    '\n\n' +
     'Find established, sourced methods (papers, standards, documented engineering practice) that would remove this ' +
     'class of failure for every future job, the evidence of how well each works, and the conditions under which it ' +
     'does not. Name what to measure to know it worked.';
@@ -420,7 +442,13 @@ async function openResearch(candidate: ImprovementCandidate, now: Date): Promise
 }
 
 /** The engineering objective Factory receives: complete, evidenced, with acceptance conditions. */
-export function composeObjective(candidate: ImprovementCandidate, link: Linked, history: ImprovementCandidate[], baseline: MetricReading) {
+export function composeObjective(
+  candidate: ImprovementCandidate,
+  link: Linked,
+  history: ImprovementCandidate[],
+  baseline: MetricReading,
+  existing: readonly ExistingMatch[] | null = null,
+) {
   const samples = ((candidate.evidence['samples'] as string[] | undefined) ?? []).slice(0, 5);
   const combined = (candidate.evidence['combined'] as string[] | undefined) ?? [];
   const methods = [...(link.research?.claims ?? []), ...link.archive].slice(0, 8);
@@ -436,6 +464,7 @@ export function composeObjective(candidate: ImprovementCandidate, link: Linked, 
     `${baseline.value === null ? 'not measured' : baseline.value} over ${baseline.numerator}/${baseline.denominator}). ` +
     (combined.length ? `It also covers ${combined.join(', ')} (same owner). ` : '') +
     `The owner of this behaviour is ${candidate.ownerComponent}; extend it, do not add a second mechanism. ` +
+    (existing ? existingSentence(existing) : '') +
     (candidate.evidence['origination']
       ? `Brain originated this from its own observation of the rows (${String((candidate.evidence['origination'] as { family?: string }).family ?? '')}): ${String((candidate.evidence['origination'] as { judgment?: string }).judgment ?? '')} `
       : '') +
@@ -490,7 +519,7 @@ async function brainFactoryProject(): Promise<string | null> {
 }
 
 /** Send the engineering to Factory: submit, approve on the standing order, start, and grant a LOW-risk release. */
-async function engineer(candidate: ImprovementCandidate, link: Linked, now: Date): Promise<string> {
+async function engineer(candidate: ImprovementCandidate, link: Linked, now: Date, existing: readonly ExistingMatch[]): Promise<string> {
   const projectId = await brainFactoryProject();
   if (!projectId) throw new Error('No project holds the Brain repository grant for Factory.');
   const baseline = await readMetric(candidate.metric, new Date(now.getTime() - BASELINE_HOURS * HOUR).toISOString(), now.toISOString());
@@ -506,7 +535,7 @@ async function engineer(candidate: ImprovementCandidate, link: Linked, now: Date
   const verdict = checkDependencies(dependency);
   if (!verdict.complete) throw new Error(`The dependency check is incomplete: ${verdict.missing.join(' ')}`);
   const history = await family(candidate.weaknessKey.split('#')[0]!);
-  const spec = composeObjective(candidate, link, history, baseline);
+  const spec = composeObjective(candidate, link, history, baseline, existing);
   const { submitObjective } = await import('../factory/contract.ts');
   const submitted = await submitObjective({
     projectId,
@@ -617,7 +646,9 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
   }
   switch (stage as Stage) {
     case 'DIAGNOSE': {
-      const goalId = await openResearch(candidate, now);
+      // Reuse comes first (AUTO-20-2 step 3): what exists is searched and recorded before research is opened.
+      const found = await searchFirst(candidate, link);
+      const goalId = await openResearch(candidate, now, found.existing);
       await patchCandidate(candidate.id, { researchGoalId: goalId });
       await recordImprovementEvent({ candidateId: candidate.id, kind: 'RESEARCH_OPENED', detail: { goalId, archiveClaims: link.archive.length } });
       return `research goal ${goalId} (Claude routines)`;
@@ -633,8 +664,10 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
         return 'rejected: research found nothing to build';
       }
       if (busyOwners.has(candidate.ownerComponent)) return null;
+      // Nothing is built before what exists has been searched; what it found goes into the objective.
+      const found = await searchFirst(candidate, link);
       busyOwners.add(candidate.ownerComponent);
-      return engineer(candidate, link, now);
+      return engineer(candidate, link, now, found.existing);
     }
     case 'ENGINEERING': {
       const factory = link.factory!;
