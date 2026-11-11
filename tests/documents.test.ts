@@ -716,6 +716,19 @@ describe('normalization', () => {
     );
   });
 
+  it('rejoins a word hyphenated across PDF lines on the real import path, and keeps real hyphens', async () => {
+    // The extractor keeps the line break, so the hyphen at the end of a line can be told
+    // from "pre- and post-closing"; the raw text keeps the break as evidence.
+    const pdf = buildPdf([
+      prosePage('Custody', [['Pre- and post-closing custody follows the interme-', 'diation rule, not notice.']]),
+    ]);
+    const { runId } = await importAndRead('World Model v1.pdf', pdf);
+    const body = (await listBlocks(runId)).find((block) => block.normalizedText.includes('custody'))!;
+    expect(body.rawText).toBe('Pre- and post-closing custody follows the interme-\ndiation rule, not notice.');
+    expect(body.normalizedText).toBe('Pre- and post-closing custody follows the intermediation rule, not notice.');
+    expect(body.warnings.join(' ')).toMatch(/normalized: .*rejoined hyphenated line breaks/);
+  });
+
   it('never rewrites a claim, only whitespace and glyphs', () => {
     const claim = 'Priority may be recorded; it is not always inferred, and never assumed.';
     expect(normalizeBlockText(claim).text).toBe(claim);

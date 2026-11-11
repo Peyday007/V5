@@ -143,7 +143,14 @@ function blocksFromTsv(rows: TsvRow[], pageHeightPx: number, dpi: number): OcrBl
   for (const entry of paragraphs.values()) {
     const words = entry.rows.filter((row) => row.text.trim().length > 0);
     if (words.length === 0) continue;
-    const text = words.map((row) => row.text).join(' ').replace(/\s+/g, ' ').trim();
+    // Words of one recognised line are joined by spaces, lines by a newline, so a
+    // hyphen ending a line stays distinguishable from a hyphen before a space.
+    const byLine = new Map<number, string[]>();
+    for (const row of words) byLine.set(row.line, [...(byLine.get(row.line) ?? []), row.text]);
+    const text = [...byLine.values()]
+      .map((line) => line.join(' ').replace(/\s+/g, ' ').trim())
+      .filter((line) => line.length > 0)
+      .join('\n');
     if (text.length === 0) continue;
 
     const scored = words.filter((row) => row.confidence >= 0);

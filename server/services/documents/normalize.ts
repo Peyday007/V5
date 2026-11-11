@@ -44,7 +44,16 @@ const LIGATURES: [RegExp, string][] = [
   [/ﬄ/g, 'ffl'],
 ];
 
-export function normalizeBlockText(raw: string): NormalizationResult {
+export interface NormalizeOptions {
+  /**
+   * Keep line breaks as content (code, table rows). Otherwise the block's lines
+   * are wrapping that extraction kept only so a hyphenated line break could be
+   * told from a real hyphen; once that is decided they are joined with a space.
+   */
+  preserveLineBreaks?: boolean;
+}
+
+export function normalizeBlockText(raw: string, options: NormalizeOptions = {}): NormalizationResult {
   const notes: string[] = [];
   let text = raw;
 
@@ -78,7 +87,8 @@ export function normalizeBlockText(raw: string): NormalizationResult {
     }
   }
 
-  const collapsed = text.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').trim();
+  let collapsed = text.replace(/[ \t]+/g, ' ').replace(/ *\r?\n */g, '\n').trim();
+  if (!options.preserveLineBreaks) collapsed = collapsed.replace(/\n+/g, ' ');
   if (collapsed !== text) notes.push('collapsed whitespace');
 
   return { text: collapsed, notes };
