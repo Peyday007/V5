@@ -333,7 +333,7 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
   // The exploration reports its own evaluations; `evaluations` stays §99's own.
   const ownEvaluations = evaluations;
   if (input.explore !== null) {
-    const screenWorlds = Math.max(100, Math.round(worlds / 2));
+    const screenWorlds = Math.max(100, Math.round(worlds / 3));
     exploration = await exploreDirections({
       base,
       greedy: current,
