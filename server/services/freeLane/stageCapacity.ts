@@ -16,6 +16,7 @@
 import { getDb } from '../../db/database.ts';
 import { databasePoolReadings } from '../../db/database.ts';
 import { waitingNow } from './capacity.ts';
+import { classifyLaneEvent } from './worker.ts';
 
 export type Measured<T> = { measured: true; value: T } | { measured: false; reason: string };
 
@@ -45,9 +46,13 @@ export interface StageReading {
   oldestUsefulItemMinutes: Measured<number | null>;
   itemsProcessedPerHour: Measured<number>;
   uniqueUsableFacts: Measured<number>;
+  /** Answers the model returned that Brain refused. Never an outage: the work was not judged. */
   droppedOrDuplicate: Measured<number>;
   modelCallsAvoided: Measured<number>;
+  /** Model or provider failures: a release, a failed or empty model call. */
   providerFailures: Measured<number>;
+  /** Items handed back because Brain's own database was unavailable — neither dropped nor a provider's fault. */
+  brainUnavailable: Measured<number>;
   elapsedMs: Measured<number>;
   incrementalDollars: Measured<number>;
   accepted: number;
@@ -94,7 +99,37 @@ const NOT = (reason: string): { measured: false; reason: string } => ({ measured
 const ok = <T>(value: T): { measured: true; value: T } => ({ measured: true, value });
 const placeholders = (items: readonly unknown[]): string => items.map(() => '?').join(', ');
 
-/** Per-stage reading from the rows. Exported for tests. */
+export interface EventTally {
+  total: number;
+  accepted: number;
+  dropped: number;
+  providerFailures: number;
+  brainUnavailable: number;
+  ms: number;
+}
+
+/**
+ * Lane events counted into disjoint measures; `accepted + dropped +
+ * providerFailures + brainUnavailable === total` always. Pure, exported for tests.
+ */
+export function tallyEvents(
+  rows: readonly { outcome: string | null; reason: string | null; k: number | string; ms?: number | string | null }[],
+): EventTally {
+  const t: EventTally = { total: 0, accepted: 0, dropped: 0, providerFailures: 0, brainUnavailable: 0, ms: 0 };
+  for (const row of rows) {
+    const k = n(row.k);
+    t.total += k;
+    t.ms += n(row.ms);
+    const cls = classifyLaneEvent(row.outcome, row.reason);
+    if (cls === 'ACCEPTED') t.accepted += k;
+    else if (cls === 'PROVIDER_FAILURE') t.providerFailures += k;
+    else if (cls === 'BRAIN_UNAVAILABLE') t.brainUnavailable += k;
+    else t.dropped += k;
+  }
+  return t;
+}
+
+/** Per-stage reading from the rows. */
 async function readStage(def: StageDefinition, since: string, hours: number, nowMs: number): Promise<StageReading> {
   const blank = (reason: string): StageReading => ({
     stage: def.id,
@@ -106,6 +141,7 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     droppedOrDuplicate: NOT(reason),
     modelCallsAvoided: NOT('model calls avoided are not recorded'),
     providerFailures: NOT(reason),
+    brainUnavailable: NOT(reason),
     elapsedMs: NOT(reason),
     incrementalDollars: NOT('the lane records no dollar cost per job'),
     accepted: 0,
@@ -121,13 +157,11 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
         AND w.work_type IN (${placeholders(types)})`,
     [new Date(nowMs).toISOString(), ...types],
   );
-  const events = await db.all<{ outcome: string | null; failed: number | string; k: number | string; ms: number | string | null }>(
-    `SELECT outcome,
-            CASE WHEN reason LIKE '%model call failed%' THEN 1 ELSE 0 END AS failed,
-            COUNT(*) AS k, SUM(duration_ms) AS ms
+  const events = await db.all<{ outcome: string | null; reason: string | null; k: number | string; ms: number | string | null }>(
+    `SELECT outcome, reason, COUNT(*) AS k, SUM(duration_ms) AS ms
        FROM bin_events
       WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND workload_class IN (${placeholders(types)})
-      GROUP BY outcome, CASE WHEN reason LIKE '%model call failed%' THEN 1 ELSE 0 END`,
+      GROUP BY outcome, reason`,
     [since, ...types],
   );
   const facts = await db.get<{ n: number | string }>(
@@ -139,16 +173,8 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     [since, ...types],
   );
 
-  let total = 0;
-  let accepted = 0;
-  let providerFailures = 0;
-  let ms = 0;
-  for (const row of events) {
-    total += n(row.k);
-    ms += n(row.ms);
-    if (row.outcome === 'SUBMITTED') accepted += n(row.k);
-    if (n(row.failed) === 1) providerFailures += n(row.k);
-  }
+  const tally = tallyEvents(events);
+  const { total, accepted, ms } = tally;
   const oldest = queued?.oldest ? Math.max(0, Math.round((nowMs - Date.parse(queued.oldest)) / 60_000)) : null;
   return {
     stage: def.id,
@@ -157,10 +183,11 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     oldestUsefulItemMinutes: ok(oldest),
     itemsProcessedPerHour: ok(total / hours),
     uniqueUsableFacts: ok(n(facts?.n)),
-    // Outcomes that did not become an accepted submission: dropped or repeated work.
-    droppedOrDuplicate: ok(total - accepted),
+    // Only refused answers: an outage or a busy Brain is counted below, never here.
+    droppedOrDuplicate: ok(tally.dropped),
     modelCallsAvoided: NOT('model calls avoided are not recorded'),
-    providerFailures: ok(providerFailures),
+    providerFailures: ok(tally.providerFailures),
+    brainUnavailable: ok(tally.brainUnavailable),
     elapsedMs: ok(ms),
     incrementalDollars: NOT('the lane records no dollar cost per job'),
     accepted,

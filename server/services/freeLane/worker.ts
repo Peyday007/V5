@@ -1335,6 +1335,25 @@ export function unfitPairs(
   return marked;
 }
 
+/**
+ * What one recorded FREE_LANE_ITEM event means, for a measurement. Pure.
+ *
+ * The lane writes three outcomes (SUBMITTED, RELEASED_TRANSIENT, FAILED_RETRYABLE)
+ * and they are not three measures. A release, and a retryable failure whose
+ * reason says Brain or the provider was unavailable, is an outage: the work was
+ * never judged, so it is neither dropped nor a duplicate. Only an answer the
+ * model returned that Brain then refused is a dropped record (CAP-16-3 keeps
+ * "dropped/duplicate records" and "model/provider failures" apart).
+ */
+export type LaneEventClass = 'ACCEPTED' | 'PROVIDER_FAILURE' | 'BRAIN_UNAVAILABLE' | 'DROPPED';
+export function classifyLaneEvent(outcome: string | null, reason: string | null): LaneEventClass {
+  if (outcome === 'SUBMITTED') return 'ACCEPTED';
+  const why = String(reason ?? '').replace(/^model [^:]*: /, '');
+  if (BRAIN_UNAVAILABLE.test(why) && !/^model call failed/.test(why)) return 'BRAIN_UNAVAILABLE';
+  if (outcome === 'RELEASED_TRANSIENT' || /^(?:model call failed|no JSON)/.test(why) || notTheAnswer(why)) return 'PROVIDER_FAILURE';
+  return 'DROPPED';
+}
+
 /** A failure that says Brain or the provider was unavailable, not that the answer was wrong. */
 function notTheAnswer(reason: string): boolean {
   return /threw:|refused: .*(?:connection|timeout|not queryable)/i.test(reason) || BRAIN_UNAVAILABLE.test(reason) || PROVIDER_BUSY.test(reason);
