@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   STEPS, PUBLISHER_ADDRESS, bestEmail, hasMailServer, campaignDefinition, extractEmails, isLocationSubpage, isPlausibleEmail,
-  shapeProblems, syncCampaign, type Deps,
+  shapeProblems, syncCampaign, OSM_TILES, committedElsewhere, type Deps,
 } from '../server/services/cash/neighborCard.ts';
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -119,5 +119,36 @@ describe('mail-server check', () => {
     expect(await hasMailServer('rotherdental.com', doh({ Status: 0, Answer: [{ type: 15, data: '0 rotherdental-com.mail.protection.outlook.com.' }] }))).toBe(true);
     expect(await hasMailServer('gone.example', doh({ Status: 3 }))).toBe(false);
     expect(await hasMailServer('nomail.example', doh({ Status: 0, Answer: [{ type: 15, data: '0 .' }] }))).toBe(false);
+  });
+});
+
+describe('the area searched and the capacity used', () => {
+  it('covers the whole Harrisburg and West Shore area, Camp Hill first', () => {
+    const boxes = OSM_TILES.map((t) => t.split(',').map(Number) as [number, number, number, number]);
+    const inside = (lat: number, lon: number) => boxes.some(([s, w, n, e]) => lat >= s && lat < n && lon >= w && lon < e);
+    expect(new Set(OSM_TILES).size).toBe(OSM_TILES.length);
+    const [s, w, n, e] = boxes[0]!;
+    expect(40.239 >= s && 40.239 < n && -76.92 >= w && -76.92 < e, 'Camp Hill is in the first tile').toBe(true);
+    for (const [lat, lon, town] of [[40.214, -77.008, 'Mechanicsburg'], [40.263, -76.884, 'Harrisburg'], [40.201, -77.189, 'Carlisle'], [40.272, -76.684, 'Hummelstown'], [40.108, -77.035, 'Dillsburg']] as const) {
+      expect(inside(lat, lon), town).toBe(true);
+    }
+  });
+
+  it('subtracts what other active campaigns on the same senders send a day', async () => {
+    const d = deps((_m, path) => {
+      if (path.startsWith('/campaigns?')) {
+        return json({ items: [
+          { id: 'mine', status: 1, name: 'Neighbor Card', email_list: ['a@x.com'] },
+          { id: 'other', status: 1, name: 'AI Dispatch', email_list: ['a@x.com', 'z@y.com'] },
+          { id: 'paused', status: 2, name: 'Old', email_list: ['a@x.com'] },
+          { id: 'apart', status: 1, name: 'Elsewhere', email_list: ['q@q.com'] },
+        ] });
+      }
+      if (path.startsWith('/campaigns/analytics/daily?campaign_id=other')) return json([{ sent: 2 }, { sent: 7 }, { sent: 3 }]);
+      return json({}, 404);
+    });
+    const r = await committedElsewhere(d, 'mine', ['a@x.com']);
+    expect(r.committed).toBe(7);
+    expect(r.line).toBe('shared senders also carry: AI Dispatch 7/day');
   });
 });
