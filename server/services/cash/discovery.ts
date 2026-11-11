@@ -736,14 +736,27 @@ export const GOAL_OPENING_SENTENCE =
   'A claim with no opportunity_signal is kept as evidence and never becomes an opening, so a way reported without one is lost to the goal.';
 
 /**
- * A closed round that filed nothing. `ABANDONED` is a stopped mission (failed,
- * cancelled, expired unlaunched) and also one parked at a decision, and the
- * count taken at close (`closeEndedRounds`) is what separates them: research
- * that stopped before a packet finished and filed nothing is barren, and a
- * parked round that already filed openings is not.
+ * A closed round that filed nothing, however it closed. This is what makes the
+ * next asking start from how such openings are found (`methodFirst`): a search
+ * that came back empty or stopped short is not repeated as it was.
  */
 function roundFoundNothing(one: Pick<CashDiscoveryRound, 'state' | 'found'>): boolean {
   return (one.state === 'ABANDONED' || one.state === 'HARVESTED') && one.found === 0;
+}
+
+/**
+ * A round whose research actually finished and filed nothing: evidence that
+ * this angle, asked this way, has nothing to find. Only `HARVESTED` says the
+ * research finished (its mission is DONE). `ABANDONED` means a mission that
+ * failed, was cancelled, expired unlaunched, was answered by the archive or
+ * parked at a decision. A round can end that way because Brain's own lane,
+ * model route or database was down, and then the angle was never searched.
+ * Brain's outage is nobody's no-show (§53), and a dead end is a watch, not a
+ * verdict (§65), so an ABANDONED round is no evidence either way. It neither
+ * lengthens a lens's wait nor erases the barren harvests before it.
+ */
+function roundSearchedAndFoundNothing(one: Pick<CashDiscoveryRound, 'state' | 'found'>): boolean {
+  return one.state === 'HARVESTED' && one.found === 0;
 }
 
 /** A barren goal lens waits longer each time, up to this, and is never retired. */
@@ -763,7 +776,9 @@ export function nextGoalRoundFor(history: CashDiscoveryRound[], now: string): nu
   let barren = 0;
   for (let i = ordered.length - 1; i >= 0; i -= 1) {
     const one = ordered[i]!;
-    if (roundFoundNothing(one)) barren += 1;
+    // A round that stopped before its research finished says nothing about the angle: skip it.
+    if (one.state === 'ABANDONED' && one.found === 0) continue;
+    if (roundSearchedAndFoundNothing(one)) barren += 1;
     else break;
   }
   const wait = Math.min(ROUND_COOL_OFF_MS * 2 ** barren, GOAL_LENS_MAX_BACKOFF_MS);
