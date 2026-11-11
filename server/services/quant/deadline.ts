@@ -388,6 +388,24 @@ export function routeInputsFromEntries(entries: readonly CashMoneyEntry[]): Rout
   return inputs;
 }
 
+/**
+ * Every route's money, keyed by its opportunity, with each route held to its
+ * own opportunity's currency: an entry in another currency is a different
+ * amount of a different thing and is left out rather than summed beside it.
+ * An entry whose opportunity the caller does not know belongs to no route.
+ */
+export function routeMoneyByOpportunity(
+  entries: readonly CashMoneyEntry[],
+  currencyOf: (opportunityId: string) => string | null | undefined,
+): Map<string, RouteMoneyVelocity> {
+  const own = entries.filter((e) => {
+    if (!e.opportunityId) return false;
+    const currency = currencyOf(e.opportunityId);
+    return !!currency && currency === e.currency;
+  });
+  return new Map(routeInputsFromEntries(own).map((input) => [input.routeKey, quantifyRouteMoney(input)]));
+}
+
 /** Read one project's money ledger and quantify every route in it, in one currency. */
 export async function readRouteMoney(input: { projectId: string; currency: string }): Promise<RouteMoneyVelocity[]> {
   const entries = await listMoneyEntries({ projectId: input.projectId, currency: input.currency, limit: 2000 });

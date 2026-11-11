@@ -32,9 +32,11 @@ import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { claimSources } from '../../repos/research.ts';
 import { cashOutcomeLessons, type CashLesson } from '../cash/journey/learning.ts';
 import { readMoneyFigures } from '../cash/figures.ts';
+import { listMoneyEntries } from '../../repos/cashLedger.ts';
 import type { CashCardFact, CashOpportunity } from '../../domain/types.ts';
 import type { Estimate, Observation, QuantityNode } from '../../domain/quant.ts';
 import { reconstruct } from './reconstruct.ts';
+import { routeMoneyByOpportunity, type RouteMoneyVelocity } from './deadline.ts';
 
 /** The opportunity quantities this adapter can infer, and how each is measured. */
 export const CASH_QUANTITIES = {
@@ -65,6 +67,15 @@ export interface CashKnowledge {
   watermark: string;
   /** Estimates already made for one quantity in one context, reused across openings. */
   estimates: Map<string, Estimate | null>;
+  /**
+   * What each route's money actually did (MONEY-13-4), read from the
+   * append-only ledger and keyed by opportunity: funding split, lead →
+   * commitment → funds → usable timing, refunds, receivables, peak working
+   * capital and the distinct cash identities. Brain's own measured money is
+   * the strongest evidence of when cash lands and how much is tied up, so
+   * `observationsFor` offers it to `reconstruct` before any published figure.
+   */
+  routeMoney: Map<string, RouteMoneyVelocity>;
 }
 
 const cache = new Map<string, { at: number; value: CashKnowledge }>();
@@ -77,11 +88,18 @@ export function forgetKnowledge(): void {
 export async function loadCashKnowledge(projectId: string, now = Date.now()): Promise<CashKnowledge> {
   const hit = cache.get(projectId);
   if (hit && now - hit.at < KNOWLEDGE_TTL_MS) return hit.value;
-  const [opportunities, facts, lessons] = await Promise.all([listOpportunities({ projectId }), cardFactsForProject(projectId), cashOutcomeLessons(projectId)]);
+  const [opportunities, facts, lessons, entries] = await Promise.all([
+    listOpportunities({ projectId }),
+    cardFactsForProject(projectId),
+    cashOutcomeLessons(projectId),
+    listMoneyEntries({ projectId, limit: 2000 }),
+  ]);
   const evidence = facts.filter((one) => one.kind === 'EVIDENCE');
   const sources = await claimSources(evidence.map((one) => one.claimId).filter((one): one is string => !!one));
   const watermark = facts.reduce((max, one) => (one.updatedAt > max ? one.updatedAt : max), '');
-  const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, estimates: new Map() };
+  const byId = new Map(opportunities.map((one) => [one.id, one]));
+  const routeMoney = routeMoneyByOpportunity(entries, (id) => byId.get(id)?.currency);
+  const value: CashKnowledge = { projectId, opportunities: byId, facts: evidence, lessons, sources, watermark, estimates: new Map(), routeMoney };
   cache.set(projectId, { at: now, value });
   return value;
 }
@@ -163,10 +181,54 @@ function lineageOf(fact: CashCardFact, knowledge: CashKnowledge): string[] {
   return [`fact:${fact.id}`];
 }
 
+/**
+ * What one route's ledger measured for a quantity, or null when its rows do
+ * not state it. Every figure is from stated rows: days to cash is the measured
+ * stages from commitment (and from the lead, when a row dates it) to usable
+ * cash; cost and capital are shares of what was billed, so they travel to an
+ * opening at another price. A stage the rows leave unknown makes the figure
+ * unknown — it is never filled with zero.
+ */
+export function ledgerFigure(money: RouteMoneyVelocity, quantity: CashQuantity): { value: number; measures: string } | null {
+  const billed = money.identities.GROSS_BILLINGS;
+  if (quantity === 'daysToCash') {
+    if (money.daysCommitmentToFunds === null || money.daysFundsToUsableCash === null) return null;
+    const lead = money.daysLeadToCommitment ?? 0;
+    const days = lead + money.daysCommitmentToFunds + money.daysFundsToUsableCash;
+    return { value: days, measures: `${money.daysLeadToCommitment === null ? 'commitment' : 'lead'} to usable cash, measured on this Brain's ledger` };
+  }
+  if (quantity === 'costShare') {
+    if (billed === null || billed <= 0 || money.supplierOutlays.length === 0) return null;
+    const share = money.supplierOutlays.reduce((t, o) => t + o.amount, 0) / billed;
+    return share >= 0 && share <= 1 ? { value: share, measures: "supplier outlays as a share of billings, measured on this Brain's ledger" } : null;
+  }
+  if (quantity === 'capitalShare') {
+    if (billed === null || billed <= 0 || money.peakWorkingCapital === null) return null;
+    const share = money.peakWorkingCapital / billed;
+    return share >= 0 && share <= 1 ? { value: share, measures: "peak working capital as a share of billings, measured on this Brain's ledger" } : null;
+  }
+  return null;
+}
+
 /** The observations a project holds about one quantity. */
 export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity, target: CashOpportunity): Observation[] {
   const spec = CASH_QUANTITIES[quantity];
   const out: Observation[] = [];
+  for (const [opportunityId, money] of knowledge.routeMoney ?? []) {
+    const opportunity = knowledge.opportunities.get(opportunityId);
+    if (!opportunity || opportunity.duplicateOfId) continue;
+    const figure = ledgerFigure(money, quantity);
+    if (!figure) continue;
+    out.push({
+      id: `ledger:${opportunityId}:${quantity}`,
+      value: { kind: 'POINT', value: figure.value, exact: quantity !== 'daysToCash' },
+      context: contextOf(opportunity),
+      lineage: [`cash_money_entries:${knowledge.projectId}:${opportunityId}`],
+      source: { kind: 'LEDGER_ENTRY', ref: opportunityId, note: money.unknowns.length ? `unknown: ${money.unknowns.slice(0, 3).join('; ')}` : undefined },
+      broad: opportunity.mechanism !== target.mechanism,
+      measures: `${figure.measures} on "${opportunity.title.slice(0, 60)}"`,
+    });
+  }
   if (quantity === 'close') {
     for (const lesson of knowledge.lessons) {
       if (lesson.contacts <= 0) continue;
