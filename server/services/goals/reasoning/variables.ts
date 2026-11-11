@@ -49,7 +49,13 @@ import { clampPrice, inScope, makeDirection, PRICE_ELASTICITY, type Direction, t
 /** No sweep evaluates more combinations than this. */
 export const MAX_VARIATIONS = 250_000;
 /** Nor runs longer than this. */
-export const DEFAULT_SWEEP_MS = 45_000;
+export const DEFAULT_SWEEP_MS = 60_000;
+/**
+ * The share of the time bound each stage may use up to, cumulatively: the screen, the factorial, local search, then
+ * the conditions. Production, 2026-11-11 (Goals plan 43003547180): one bound for the whole sweep let the factorial take
+ * all 49 s, and local search and the conditions read nothing.
+ */
+export const STAGE_SHARES = { screen: 0.1, factorial: 0.55, local: 0.75, conditions: 1 } as const;
 /** Combinations screened to measure each variable's main effect. */
 export const SCREEN_SAMPLE = 4_000;
 /** A variable whose best level lifts the score by less than this is fixed at its first level. */
@@ -656,7 +662,14 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
   let variations = 0;
   let equivalent = 0;
   let conditionReads = 0;
-  const late = () => now() - started > maxMs || variations >= maxVar;
+  let stageEnd: number = STAGE_SHARES.screen;
+  let timeCut = false;
+  const late = () => {
+    if (variations >= maxVar) return true;
+    if (now() - started <= maxMs * stageEnd) return false;
+    timeCut = true;
+    return true;
+  };
   const challengeAdj: Adjust = { respond: 0.5, close: 0.5 };
   const labelOf = (levels: number[]) => variables.map((v, i) => (levels[i] ? v.levels[levels[i]!]!.label : '')).filter(Boolean).join(' + ') || 'as held';
   const assumptionsOf = (levels: number[]) => variables.flatMap((v, i) => (levels[i] && v.levels[levels[i]!]!.assumed ? [v.levels[levels[i]!]!.label] : []));
@@ -768,6 +781,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
     v.effect = seenMeans.length ? Math.max(0, Math.max(...seenMeans) - first) : 0;
   });
 
+  stageEnd = STAGE_SHARES.factorial;
   // 3. The factorial over what matters. While it is larger than the budget, the level that screened weakest against its
   // own variable's "as held" goes, across all variables; a variable left with only "as held" is fixed (it changed nothing).
   const live = variables.map((v) => v.levels.map((_, j) => j));
@@ -796,11 +810,13 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
   let factorial = 0;
   const idx = live.map(() => 0);
   const total = size();
+  // The cheap variables (price, composition) turn fastest, so one built operator state serves every combination of them.
+  const turn = [...restVars.map(({ i }) => i), ...opVars.map(({ i }) => i)];
   for (let c = 0; c < total && !late(); c++) {
     const before = variations;
     read(idx.map((x, j) => live[j]![x]!), 'FACTORIAL');
     if (variations > before) factorial++;
-    for (let j = 0; j < idx.length; j++) {
+    for (const j of turn) {
       idx[j]!++;
       if (idx[j]! < live[j]!.length) break;
       idx[j] = 0;
@@ -808,6 +824,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
     await breathe();
   }
 
+  stageEnd = STAGE_SHARES.local;
   // 4. Many directions over the same space: each approach is an objective, and some a constraint.
   const argmax = (rows: Strategy[], f: (s: Strategy) => number, keep: (s: Strategy) => boolean = () => true) => {
     let top: Strategy | null = null;
@@ -889,6 +906,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
   const bestSupported = supportedRow ? materialize(supportedRow) : null;
   const bestDecision = ranked[0] ? materialize(ranked[0]) : null;
   bottleneck = (bestDecision ?? baseline).reading.binding;
+  stageEnd = STAGE_SHARES.conditions;
   // 5a. Conditions: the strongest strategies read with the world more favourable than evidenced. Whatever only works then is
   // mathematically possible, not commercially supported. Each global condition is held, moved ×1.5 or moved ×2 (÷ for costs and delays).
   // The world is moved under the supported strategies: "what would have to be true for a plan Brain can defend today".
@@ -1040,7 +1058,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
     .slice(0, 3)
     .map((r) => `What evidence shows ${r.condition} at ×${r.needed!.toFixed(2)} of today's middle estimate (evidence reaches ×${r.evidencedTop.toFixed(2)})?`);
   const elapsedMs = now() - started;
-  const stopped: VariableSweep['stopped'] = variations >= maxVar ? 'VARIATIONS' : elapsedMs > maxMs ? 'TIME' : 'COMPLETE';
+  const stopped: VariableSweep['stopped'] = variations >= maxVar ? 'VARIATIONS' : timeCut ? 'TIME' : 'COMPLETE';
   const sentence =
     `${variations.toLocaleString('en-US')} variation(s) of ${variables.length} decision variable(s) (space ${space.toLocaleString('en-US')}) and ${conditions.length} condition(s), ${equivalent.toLocaleString('en-US')} equivalent combination(s) not re-read; ` +
     `fast reading: as held mean ${money(baseline.reading.mean)}, reach ${pct(baseline.reading.reach)}; §99's plan ${money(greedy.reading.mean)}, ${pct(greedy.reading.reach)}; ` +
