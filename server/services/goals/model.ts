@@ -122,6 +122,12 @@ export interface GoalEvidence {
 
 export interface GoalDependency {
   goalId: string;
+  /**
+   * The live WORKSTREAM/DEPENDS_ON link this dependency is read from. It is the
+   * caller's own goal's link, so it is present even when the target goal is not
+   * described, and it is what superseding the dependency names.
+   */
+  linkId: string;
   /** Null when the caller may not read that goal: it is not described. */
   title: string | null;
   lifecycle: GoalLifecycle | null;
@@ -786,10 +792,11 @@ export async function assembleGoals(options: {
     const dependencies: GoalDependency[] = dependsOn(goal.id).map((link) => {
       const target = base.get(link.ref);
       if (!target || !visible.has(link.ref)) {
-        return { goalId: link.ref, title: null, lifecycle: null, met: null };
+        return { goalId: link.ref, linkId: link.id, title: null, lifecycle: null, met: null };
       }
       return {
         goalId: link.ref,
+        linkId: link.id,
         title: target.goal.title,
         lifecycle: target.lifecycle,
         met: target.lifecycle === 'COMPLETE',
