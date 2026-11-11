@@ -29,7 +29,7 @@
  *     state after compaction or resume; the ledger is also printed into the
  *     transcript on every check, so a fresh container can rebuild it.
  *
- * Usage: `npm run finish -- <status|check|evidence|wait|block|clear|add|init|dismiss> …`
+ * Usage: `npm run finish -- <status|check|evidence|withdraw|wait|block|clear|add|init|dismiss> …`
  * Hook:  `node finish-job.mjs hook` (UserPromptSubmit, PreToolUse, SessionStart).
  */
 import { spawnSync } from 'node:child_process';
@@ -676,6 +676,17 @@ export function cli(argv) {
   } else if (cmd === 'block') {
     if (!RULE11.includes(flags.code) || typeof flags.detail !== 'string') return fail(`block needs --code one of ${RULE11.join(', ')} and --detail.`);
     mark.block = { code: flags.code, detail: flags.detail };
+  } else if (cmd === 'withdraw') {
+    // A proof attached by mistake (the wrong range, the wrong file) would hold the
+    // requirement open for ever. Only one that fails now may go: a passing proof
+    // is never withdrawn, so this cannot turn a requirement from done to anything.
+    if (!req) return fail(`${id} takes no evidence.`);
+    if (typeof flags.reason !== 'string') return fail('withdraw needs --reason.');
+    const g = gitInfo(false);
+    const failing = req.evidence.filter((ev) => !verify(ev, l, g, new Set()).ok);
+    if (!failing.length) return fail(`every proof on ${id} passes; nothing to withdraw.`);
+    req.evidence = req.evidence.filter((ev) => !failing.includes(ev));
+    (req.withdrawn ??= []).push(...failing.map((ev) => ({ ...ev, reason: flags.reason, at: new Date().toISOString() })));
   } else if (cmd === 'clear') {
     mark.wait = null;
     mark.block = null;

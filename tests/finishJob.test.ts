@@ -248,6 +248,18 @@ describe('waiting on the outside world without looping', () => {
     expect(fs.readFileSync(path.join(dir, 'count.txt'), 'utf8').trim().split('\n')).toHaveLength(1);
   });
 
+  it('a mistaken failing proof can be withdrawn with a reason; a passing one never can', () => {
+    assign('Two things:\n- first\n- second\n');
+    fs.writeFileSync(path.join(work, 'ok.txt'), 'yes');
+    cli('evidence', 'R1', '--cmd', 'grep -q yes ok.txt');
+    expect(cli('withdraw', 'R1', '--reason', 'try').code).toBe(1);
+    cli('evidence', 'R1', '--cmd', 'grep -q yes wrong-file.txt');
+    expect(cli('withdraw', 'R1').code).toBe(1);
+    expect(cli('withdraw', 'R1', '--reason', 'named the wrong file').code).toBe(0);
+    expect(ledger().requirements[0].evidence).toHaveLength(1);
+    expect(ledger().requirements[0].withdrawn[0].reason).toBe('named the wrong file');
+  });
+
   it('a wait must name an armed wake; everything blocked for a rule-11 reason is BLOCKED, not DONE', () => {
     assign('Open the account and take a payment:\n- open the Square account\n- take the first payment\n');
     expect(cli('wait', 'R1', '--on', 'the owner').code).toBe(1);
