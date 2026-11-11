@@ -14,6 +14,7 @@ import { OPAQUE, opaqueAdapter, registerSyntheticAdapters, resetSynthetic, setFa
 import type { OperationNamespace } from '../server/services/effects/engine.ts';
 import { getOperation, latestSentAttempt, listAttempts, reserveOperation } from '../server/repos/idempotency.ts';
 import { classifyOperation, effectContinuityAccount, type ContinuityEntry } from '../server/services/effects/continuity.ts';
+import type { EffectAttempt } from '../server/domain/types.ts';
 
 const NS: OperationNamespace = { name: opaqueAdapter.namespace, version: 1, principalScope: 'PRINCIPAL', retention: 'PERMANENT' };
 
@@ -141,6 +142,35 @@ describe('the effect continuity account', () => {
     const later = new Date(Date.now() + 24 * 3600_000).toISOString();
     const reading = classifyOperation(operation, attempts, later);
     expect(reading).toMatchObject({ class: 'MAY_HAVE_BEEN_ACCEPTED', executorLease: 'EXPIRED', retrySafe: false, needsReconciliation: true });
+  });
+
+  it('a reserved operation with sent attempts that ended without a definite refusal is never ATTEMPTED_NOT_SENT', async () => {
+    const operation = (await getOperation(await reserveOnly()))!;
+    expect(operation.failureCategory).toBeNull();
+    const at = new Date().toISOString();
+    const attempt = (n: number, outcome: 'SUCCEEDED' | 'FAILED', receiptRef: string | null = null): EffectAttempt => ({
+      id: `att-${n}`, operationId: operation.id, attemptNumber: n, executorType: 'HUMAN', executorId: null, workItemId: null,
+      leaseId: null, leaseGeneration: null, adapter: OPAQUE, providerKey: null,
+      phase: outcome === 'SUCCEEDED' ? 'CONFIRMED' : 'SENT', receiptRef, receiptMeta: {},
+      startedAt: at, endedAt: at, outcome, detail: null, requestId: null,
+    });
+
+    // Sent, and ended FAILED, but with no category saying the provider did nothing.
+    const refusedUncategorised = classifyOperation(operation, [attempt(1, 'FAILED')]);
+    expect(refusedUncategorised).toMatchObject({ class: 'MAY_HAVE_BEEN_ACCEPTED', sentAttempts: 1, retrySafe: false, needsReconciliation: true });
+
+    // Sent and confirmed, but the operation was never settled: the receipt is carried, never "not sent".
+    const confirmedUnsettled = classifyOperation(operation, [attempt(1, 'FAILED'), attempt(2, 'SUCCEEDED', 'rcpt-9')]);
+    expect(confirmedUnsettled).toMatchObject({ class: 'MAY_HAVE_BEEN_ACCEPTED', sentAttempts: 2, receiptRef: 'rcpt-9', retrySafe: false, needsReconciliation: true });
+
+    // The class and the account agree everywhere: ATTEMPTED_NOT_SENT only when nothing was sent.
+    for (const reading of [refusedUncategorised, confirmedUnsettled, classifyOperation(operation, [])]) {
+      if (reading.class === 'ATTEMPTED_NOT_SENT') {
+        expect(reading.sentAttempts).toBe(0);
+        expect(reading.needsReconciliation).toBe(false);
+      }
+    }
+    expect(classifyOperation(operation, [])).toMatchObject({ class: 'ATTEMPTED_NOT_SENT', sentAttempts: 0, retrySafe: true });
   });
 
   it('writes nothing', async () => {

@@ -19,7 +19,10 @@
  * - MAY_HAVE_BEEN_ACCEPTED: an attempt reached SENT and no definite outcome
  *   was recorded, while the operation is still RESERVED (its executor is
  *   working on it, or died and its recovery deadline has passed). The
- *   provider may have accepted it; only reconciliation can say.
+ *   provider may have accepted it; only reconciliation can say. Also any
+ *   still-reserved operation whose sent attempts all ended without a definite
+ *   refusal on record (a confirmed attempt never settled, or a FAILED one with
+ *   no failure category): something left Brain, so it is never "not sent".
  * - CONFIRMED: SUCCEEDED, with the provider's receipt.
  * - UNKNOWN: UNCERTAIN, with the reason recorded when it became so. Waits for
  *   reconciliation or a person; nothing automatic resends it.
@@ -166,19 +169,32 @@ export function classifyOperation(
           reason: `refused, retryably (${operation.failureCategory})${latest.detail ? `: ${latest.detail}` : ''}; the provider did nothing, so an equivalent request may run it again`,
         };
       }
+      if (sent.length === 0) {
+        return {
+          ...counts,
+          class: 'ATTEMPTED_NOT_SENT',
+          receiptRef: null,
+          executorLease: lease,
+          retrySafe: true,
+          needsReconciliation: false,
+          reason: attempts.length === 0 ? 'reserved, and no attempt was started' : 'an attempt was started and nothing was sent',
+        };
+      }
+      // Something left Brain, every sent attempt ended, and no definite refusal is on record:
+      // either an attempt was confirmed and the operation was never settled, or it ended
+      // FAILED without the category that says the provider did nothing. Neither is "not
+      // sent"; the outside world may hold the effect, so it is reconciled, never resent.
+      const confirmedAttempt = [...sent].reverse().find((a) => a.outcome === 'SUCCEEDED') ?? null;
       return {
         ...counts,
-        class: 'ATTEMPTED_NOT_SENT',
-        receiptRef: null,
+        class: 'MAY_HAVE_BEEN_ACCEPTED',
+        receiptRef: confirmedAttempt?.receiptRef ?? null,
         executorLease: lease,
-        retrySafe: sent.length === 0,
-        needsReconciliation: sent.length > 0,
-        reason:
-          sent.length === 0
-            ? attempts.length === 0
-              ? 'reserved, and no attempt was started'
-              : 'an attempt was started and nothing was sent'
-            : 'reserved, with earlier attempts that ended without a definite refusal on record',
+        retrySafe: false,
+        needsReconciliation: true,
+        reason: confirmedAttempt
+          ? `attempt ${confirmedAttempt.attemptNumber} was confirmed${confirmedAttempt.receiptRef ? ` (receipt ${confirmedAttempt.receiptRef})` : ''} but the operation was never settled; it is reconciled, never resent`
+          : `${sent.length} attempt(s) were sent and ended without a definite refusal on record; the provider may have accepted one, so it is reconciled, never resent`,
       };
     }
   }
