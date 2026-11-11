@@ -26,6 +26,8 @@ import type { RunOutcome, SearchMethod, SearchReader } from '../../../domain/sea
 import { decideMethod, type MethodDecision } from '../searchFailures/classify.ts';
 import { routeRequest, type Route } from '../searchRouting/route.ts';
 import { recordRunAndSettle } from './lifecycle.ts';
+import { currentFragments } from '../../../repos/research.ts';
+import { UNREADABLE_CAUSES, blockCauseOf } from '../gate.ts';
 
 /** The part of a discovery bucket its method record is made from. */
 export interface BucketShape {
@@ -46,6 +48,31 @@ export interface RoundEnding {
   useful: number;
   /** Of those, how many were duplicates of an opening already held. */
   duplicates: number;
+  /** The round's current research fragments, across every attempt. */
+  fragments?: number;
+  /** Of those, how many were blocked because their sources could not be read. */
+  sourceBlocked?: number;
+}
+
+/** Above this share of duplicated openings, what a round surfaced was mostly wrong. */
+export const FALSE_POSITIVE_SHARE = 0.5;
+
+/**
+ * How many of the rounds' research fragments there are, and how many were
+ * blocked because their sources could not be read (`SOURCE_ACCESS` or
+ * `SOURCES_UNREADABLE`, as the gate stored it). Read from the fragments the
+ * research runner already wrote; nothing here re-judges a fragment.
+ */
+export async function roundSourceAccess(orchestrationIds: readonly string[]): Promise<{ fragments: number; sourceBlocked: number }> {
+  let fragments = 0;
+  let sourceBlocked = 0;
+  for (const id of new Set(orchestrationIds)) {
+    for (const fragment of await currentFragments(id)) {
+      fragments += 1;
+      if (fragment.status === 'BLOCKED' && UNREADABLE_CAUSES.has(blockCauseOf(fragment))) sourceBlocked += 1;
+    }
+  }
+  return { fragments, sourceBlocked };
 }
 
 export function readerForProject(projectId: string): SearchReader {
@@ -56,15 +83,37 @@ export function readerForProject(projectId: string): SearchReader {
  * What a closed round says about its bucket as a method, or null when it says
  * nothing. Pure.
  *
- * A round that filed openings FOUND something. One that finished its research
- * and filed none searched and found NOTHING_SUITABLE. One whose research failed
- * is an ERROR of the method's execution. A round stopped for any other reason —
- * a mission parked for a person, cancelled, or a question the archive already
- * answered — is not evidence about the method either way, and records no run,
- * so it can neither earn trust nor count toward a failing streak.
+ * A round that filed openings FOUND something — unless most of what it filed
+ * duplicated openings already held, in which case what it surfaced was mostly
+ * wrong: FALSE_POSITIVES. A round that filed nothing while most of its research
+ * fragments were blocked because their sources could not be read did not
+ * search: SOURCE_UNAVAILABLE, which says nothing about whether anything is
+ * there. One that otherwise finished its research and filed none searched and
+ * found NOTHING_SUITABLE. One whose research failed is an ERROR of the method's
+ * execution. A round stopped for any other reason — a mission parked for a
+ * person, cancelled, or a question the archive already answered — is not
+ * evidence about the method either way, and records no run, so it can neither
+ * earn trust nor count toward a failing streak.
  */
 export function outcomeOfRound(ending: RoundEnding): { outcome: RunOutcome; failureCause: string | null } | null {
-  if (ending.found > 0) return { outcome: 'FOUND', failureCause: null };
+  if (ending.found > 0) {
+    if (ending.duplicates > ending.found * FALSE_POSITIVE_SHARE) {
+      return {
+        outcome: 'FALSE_POSITIVES',
+        failureCause: `${ending.duplicates} of the ${ending.found} opening(s) the round filed duplicated openings already held`,
+      };
+    }
+    return { outcome: 'FOUND', failureCause: null };
+  }
+  const judged = ending.to === 'HARVESTED' || ending.missionState === 'FAILED';
+  const fragments = ending.fragments ?? 0;
+  const blocked = ending.sourceBlocked ?? 0;
+  if (judged && blocked > 0 && blocked * 2 >= fragments) {
+    return {
+      outcome: 'SOURCE_UNAVAILABLE',
+      failureCause: `${blocked} of the round's ${fragments} research fragment(s) were blocked because their sources could not be read`,
+    };
+  }
   if (ending.to === 'HARVESTED') return { outcome: 'NOTHING_SUITABLE', failureCause: 'the round finished its research and filed no opening' };
   if (ending.missionState === 'FAILED') return { outcome: 'ERROR', failureCause: 'the round\'s research mission failed' };
   return null;
