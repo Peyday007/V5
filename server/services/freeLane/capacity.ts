@@ -50,6 +50,13 @@ const START_TARGET = 2;
 const WINDOW_MS = 3 * 60_000;
 const CONTROL_MS = 30_000;
 const IDLE_SLEEP_MS = 20_000;
+/**
+ * How long a slot that ended while still wanted waits before the pool restarts
+ * it itself. Short against CONTROL_MS, and independent of the control step: a
+ * step that throws (the database the slots just failed against) never reached
+ * `fill`, so the pool stayed short for as long as the step kept failing.
+ */
+const SLOT_RESTART_MS = 5_000;
 
 export interface Window {
   ok: number;
@@ -255,6 +262,8 @@ interface ModelPool {
   claimed: number;
   /** Slots that ended while the pool still wanted them (an exception, not a shrink or a stop) since the last step. */
   exited: number;
+  /** The pool's own pending refill after a slot exited, so one is scheduled at a time and a stop can cancel it. */
+  restart: NodeJS.Timeout | null;
 }
 
 const pools = new Map<string, ModelPool>();
@@ -321,14 +330,35 @@ async function slot(pool: ModelPool, k: number, config: LaneConfig): Promise<voi
     }
   } finally {
     pool.running -= 1;
-    // Ended while still wanted: not a shrink and not a stop. The next control step refills it and says so.
-    if (!stopped && k < pool.target) pool.exited += 1;
+    // Ended while still wanted: not a shrink and not a stop. The pool refills itself after
+    // SLOT_RESTART_MS without waiting on the control step, and the next step records it.
+    if (!stopped && k < pool.target) {
+      pool.exited += 1;
+      scheduleRefill(pool, config);
+    }
   }
+}
+
+/**
+ * Refill a pool whose slot exited, from the pool itself. Before this the only
+ * refill was `fill` inside controlStep, so a slot lost while the control step
+ * was failing (the same database fault that ended the slot makes readCapacity,
+ * waitingNow or writeCapacity throw before `fill`) stayed lost until a step got
+ * all the way through: the lane pool stopped beside waiting work (rule 9).
+ */
+function scheduleRefill(pool: ModelPool, config: LaneConfig): void {
+  if (pool.restart) return;
+  pool.restart = setTimeout(() => {
+    pool.restart = null;
+    // Only the live pool: a stopped lane, or a pool replaced by a restart, is not refilled.
+    if (!stopped && pools.get(pool.worker.model) === pool) fill(pool, config);
+  }, SLOT_RESTART_MS);
+  pool.restart.unref?.();
 }
 
 function fill(pool: ModelPool, config: LaneConfig): void {
   for (let k = pool.running; k < pool.target; k += 1) {
-    // A slot that throws ends; the next control step refills it (`exited`). It never becomes an unhandled rejection.
+    // A slot that throws ends and the pool refills it (scheduleRefill). It never becomes an unhandled rejection.
     void slot(pool, k, config).catch((error) => console.warn('[free-lane] slot ended:', (error as Error).message));
   }
 }
@@ -372,7 +402,7 @@ export async function controlStep(): Promise<ControlReading | null> {
       const saved = persisted.get(worker.model);
       // After a restart, resume at half of what was learned: fast to regain, gentle on a cold machine.
       const target = saved ? Math.max(START_TARGET, Math.floor(saved.target / 2)) : START_TARGET;
-      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0, claimed: 0, exited: 0 });
+      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0, claimed: 0, exited: 0, restart: null });
     }
   }
   const waiting = await waitingNow();
@@ -527,6 +557,10 @@ export function stopAdaptivePool(): void {
   stopped = true;
   if (controlTimer) clearInterval(controlTimer);
   controlTimer = null;
+  for (const pool of pools.values()) {
+    if (pool.restart) clearTimeout(pool.restart);
+    pool.restart = null;
+  }
   pools.clear();
   workersCache = [];
   wakeIdleSlots();
