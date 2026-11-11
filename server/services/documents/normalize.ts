@@ -11,14 +11,14 @@
 /**
  * Words split across a line break by a hyphen, e.g. "intermedi-\nation".
  *
- * A hard hyphen ('-') rejoins only across an actual newline (with optional
+ * A hard hyphen ('-') rejoins only across an actual newline (LF or CRLF, with optional
  * spaces or tabs either side): followed by an ordinary space it is a real
  * hyphen — "pre- and post-closing", "short- or long-term" — and removing it
  * would rewrite the source, not clean an artifact (section 9). A soft hyphen
  * (U+00AD) is invisible and only ever marks a break, so it may still join
  * across any whitespace.
  */
-const SOFT_HYPHEN_BREAK = /([A-Za-z])(?:-[ \t]*\n[ \t]*|\u00ad\s+)([a-z])/g;
+const SOFT_HYPHEN_BREAK = /([A-Za-z])(?:-[ \t]*\r?\n[ \t]*|\u00ad\s+)([a-z])/g;
 /** Control characters that carry no meaning in extracted prose. */
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
 /** Zero-width and formatting characters some PDF producers emit between glyphs. */

@@ -39,6 +39,17 @@ describe('line-break hyphenation is still rejoined', () => {
     expect(normalizeBlockText('recog- \t\n  nition').text).toBe('recognition');
   });
 
+  it('A02: rejoins a hard hyphen before a CRLF line break', () => {
+    const result = normalizeBlockText('recog-\r\nnition');
+    expect(result.text).toBe('recognition');
+    expect(result.notes).toContain(REJOIN);
+    expect(normalizeBlockText('recog- \t\r\n  nition').text).toBe('recognition');
+  });
+
+  it('keeps a hard hyphen before a bare carriage return followed by a space', () => {
+    expect(normalizeBlockText('pre-\r and post-').notes).not.toContain(REJOIN);
+  });
+
   it('A02: a soft hyphen still joins across any whitespace', () => {
     const result = normalizeBlockText('co­ operate');
     expect(result.text).toBe('cooperate');
