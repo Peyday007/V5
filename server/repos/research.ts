@@ -1512,6 +1512,14 @@ export const PATTERN_LANE = 'demand_pattern';
 export const PATTERN_BUYING_WORDS = ['pay', 'purchas', 'buy', 'bought', 'hire', 'hiring', 'outsourc', 'contract', 'spend', 'subscri', 'retain', 'fee', 'pric', 'cost', 'usd', 'dollar', 'per hour', 'per month', 'per project'] as const;
 const PATTERN_STATES_BUYING_SQL = `(${PATTERN_BUYING_WORDS.map((word) => `LOWER(c.claim) LIKE '%${word}%'`).join(' OR ')})`;
 
+/**
+ * A claim that carries a figure — a price, a count, a range. What a goal lens
+ * round's untagged pattern must state beside its buying words before the lane
+ * makes it an opening (`signalledClaims`). Ten `LIKE`s rather than a character
+ * class, because SQLite's `GLOB` and Postgres's `~` are not one statement.
+ */
+const PATTERN_STATES_FIGURE_SQL = `(${Array.from({ length: 10 }, (_, digit) => `c.claim LIKE '%${digit}%'`).join(' OR ')})`;
+
 /** The same rule, for a reader holding a claim's text. */
 export function patternStatesBuying(text: string): boolean {
   const lower = text.toLowerCase();
@@ -1538,10 +1546,24 @@ export async function signalledClaims(input: {
            * tagged by the worker — so the harvest filed nothing from any of
            * them. The lane says what the claim is; the worker need not repeat it.
            */
+          /*
+           * And the same pattern from a goal's own lens round, which asks the
+           * same profile (GOAL_MECHANISM, the same demand_pattern lane and its
+           * two-example floor) a broader question. Production read 0 of 18
+           * lens rounds filing an opening: the research ran, the pattern claims
+           * were gated, and the worker tagged none of them — the class above,
+           * which naming the field in the question (GOAL_OPENING_SENTENCE) did
+           * not fix for constructed rounds either. A lens question is not about
+           * one designed arrangement, so the lane alone does not say which
+           * thing the buyers pay for; the claim must also carry the figure the
+           * lens asked for ("the price buyers are shown paying"). "Dentists
+           * repeatedly pay for appointment reminders" stays context.
+           */
           OR (c.evidence_lane = ? AND ${PATTERN_STATES_BUYING_SQL} AND EXISTS (
                 SELECT 1 FROM russell_missions pm
                   JOIN cash_discovery_rounds pr ON pr.candidate_id = pm.candidate_id
-                 WHERE pm.orchestration_id = o.id AND pr.bucket_id LIKE ?))
+                 WHERE pm.orchestration_id = o.id
+                   AND (pr.bucket_id LIKE ? OR (pr.bucket_id LIKE ? AND ${PATTERN_STATES_FIGURE_SQL}))))
         )
         AND f.status IN ('ACCEPTED', 'BLOCKED')
         /*
@@ -1605,7 +1627,7 @@ export async function signalledClaims(input: {
         )
       ORDER BY c.created_at, c.rowid
       LIMIT ?`,
-    [input.projectId, PATTERN_LANE, 'goal-%-mx-%', Math.max(1, input.limit ?? 50)],
+    [input.projectId, PATTERN_LANE, 'goal-%-mx-%', 'goal-%', Math.max(1, input.limit ?? 50)],
   );
   return rows.map((row) => {
     const mapped = mapClaim(row);
