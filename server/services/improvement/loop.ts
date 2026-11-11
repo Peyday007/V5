@@ -716,8 +716,10 @@ async function valueNextStep(
     archiveClaims: link.archive.length,
     existingOther: found.existing.filter((e) => !(e.kind === 'PATH' && e.name === candidate.ownerComponent)).length,
     research: candidate.researchGoalId ? { opened: true, settled: Boolean(link.research?.settled), acceptedClaims: link.research?.acceptedClaims ?? 0 } : null,
+    // An attempt that was a hand-off to a non-software owner says nothing about how a Factory change or
+    // research would fare; its failure is recorded as the route set aside (recordRouteSetAside).
     failedAttempts: earlier
-      .filter((m) => m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED')
+      .filter((m) => (m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED') && !m.deliveredRef?.startsWith(OWNER_HANDOFF_PREFIX))
       .map((m) => ({ attempt: m.attempt, researched: Boolean(m.researchGoalId) })),
     history: await readRouteHistory(),
   });
@@ -799,10 +801,52 @@ async function handToOwner(
     report.decided.push(`${candidate.weaknessKey} HELD`);
     return 'held: only a person can settle it';
   }
-  const ref = `${OWNER_HANDOFF_PREFIX}${route.kind}:${route.owner}`;
+  const ref = ownerHandoffRef(route);
   await patchCandidate(candidate.id, { deliveredAt: at, deliveredRef: ref });
   await recordImprovementEvent({ candidateId: candidate.id, kind: 'DELIVERED', detail: { handedTo: route.owner, route: route.kind, handed, family: route.family } });
   return `handed ${handed} row(s) to ${route.owner} (${route.kind})`;
+}
+
+/** The ref a hand-off by one route is recorded under, so a later attempt can recognise the same route. */
+export function ownerHandoffRef(route: Pick<NonNullable<ReturnType<typeof executionRouteOf>>, 'kind' | 'owner'>): string {
+  return `${OWNER_HANDOFF_PREFIX}${route.kind}:${route.owner}`;
+}
+
+/**
+ * The earlier attempts of this weakness that were handed to the same owner by the same route and were
+ * then decided KEPT_NO_EFFECT or REVERTED: the record that this route was tried and did not work.
+ */
+export async function failedHandOffs(
+  candidate: Pick<ImprovementCandidate, 'weaknessKey' | 'attempt'>,
+  route: Pick<NonNullable<ReturnType<typeof executionRouteOf>>, 'kind' | 'owner'>,
+): Promise<ImprovementCandidate[]> {
+  const ref = ownerHandoffRef(route);
+  return (await family(candidate.weaknessKey.split('#')[0]!)).filter(
+    (m) => m.attempt < candidate.attempt && m.deliveredRef === ref && (m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED'),
+  );
+}
+
+/** Record, once per candidate, that its execution route was judged inadequate and set aside. */
+async function recordRouteSetAside(
+  candidate: ImprovementCandidate,
+  route: NonNullable<ReturnType<typeof executionRouteOf>>,
+  failed: readonly ImprovementCandidate[],
+): Promise<void> {
+  if (candidate.evidence['routeSetAside']) return;
+  const judgment =
+    `Handing this gap to ${route.owner} (${route.kind}) was already tried in attempt(s) ${failed.map((m) => m.attempt).join(', ')}, ` +
+    `which ended ${failed.map((m) => m.decision).join(', ')}, and the weakness still shows: that route is inadequate for this cause. ` +
+    'It is not re-run; the next step is valued among research, a Factory change to the owner of the behaviour (the routing included), a credential or abandoning.';
+  const setAside = { kind: route.kind, owner: route.owner, ref: ownerHandoffRef(route), failedAttempts: failed.map((m) => m.attempt), judgment };
+  const prior = candidate.evidence['methodInadequacy'] as { judgment?: string; failedAttempts?: number[] } | undefined;
+  const methodInadequacy = {
+    judgment: prior?.judgment ? `${prior.judgment} ${judgment}` : judgment,
+    failedAttempts: [...new Set([...(prior?.failedAttempts ?? []), ...setAside.failedAttempts])].sort((a, b) => a - b),
+  };
+  const evidence = { ...candidate.evidence, routeSetAside: setAside, methodInadequacy };
+  await patchCandidate(candidate.id, { evidence });
+  candidate.evidence = evidence;
+  await recordImprovementEvent({ candidateId: candidate.id, kind: 'ROUTE_SET_ASIDE', detail: setAside });
 }
 
 /** Advance one candidate by one step. Returns what it did, or null when it waited. */
@@ -820,8 +864,16 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
       const found = await searchFirst(candidate, link);
       // A missing connector, supplier, payer, piece of information or watched fact is acquired by the owner
       // that already does that (S-0249), never turned into an engineering objective or method research.
+      // Unless that very route already failed this weakness (S-0242): a hand-off that ended KEPT_NO_EFFECT or
+      // REVERTED and is still showing is a method judged inadequate, and re-running it is what S-0242 forbids.
+      // The route is set aside and the gap is valued like any other, so research or a Factory change to the
+      // owner of the behaviour (the routing itself included) competes for it (step 4).
       const route = executionRouteOf(candidate);
-      if (route) return handToOwner(candidate, route, now, report);
+      if (route) {
+        const failed = await failedHandOffs(candidate, route);
+        if (failed.length === 0) return handToOwner(candidate, route, now, report);
+        await recordRouteSetAside(candidate, route, failed);
+      }
       // Then the next step is valued (step 4): every option the existing owners can carry out, compared on
       // expected value, cost, latency, opportunity cost and dependencies, and the best one is taken.
       const judgment = await valueNextStep(candidate, link, stage as 'DIAGNOSE' | 'ENGINEER', found);
