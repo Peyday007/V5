@@ -610,6 +610,65 @@ describe('MONEY-13-4. route money velocity and distinct cash identities (equipme
     expect(m.identities.GROSS_MARGIN).toBe(1_100);
   });
 
+  it('maps every ledger kind: releases, reserves, supplier liabilities and owner capital are never dropped (F8)', () => {
+    const entry = (id: string, kind: CashMoneyEntry['kind'], cents: number, occurredAt: string, fundsAvailableAt: string | null = null): CashMoneyEntry => ({
+      id, projectId: 'p', opportunityId: 'opp-f8', commitmentId: null, idempotencyKey: null, payloadFingerprint: null, kind, amountCents: cents, currency: 'USD',
+      verifiedReference: null, fundsAvailableAt, occurredAt, note: null, recordedBy: 'test', createdAt: occurredAt,
+    });
+    const [input] = routeInputsFromEntries([
+      entry('a1', 'PIPELINE_AGREED', 200_000, '2026-08-01T00:00:00Z'),
+      entry('a2', 'PIPELINE_AGREED', 50_000, '2026-08-02T00:00:00Z'),
+      // The second agreement fell through: no longer billed, so no longer receivable.
+      entry('a3', 'PIPELINE_RELEASED', 50_000, '2026-08-03T00:00:00Z'),
+      entry('c1', 'CAPITAL_IN', 40_000, '2026-08-01T00:00:00Z'),
+      // Supplier commits 900, shrinks by 100, then 500 is paid (COST is the money; COMMITMENT_PAID closes the owing).
+      entry('s1', 'UNPAID_COMMITMENT', 90_000, '2026-08-04T00:00:00Z'),
+      entry('s2', 'COMMITMENT_RELEASED', 10_000, '2026-08-05T00:00:00Z'),
+      entry('s3', 'COMMITMENT_PAID', 50_000, '2026-08-06T00:00:00Z'),
+      entry('s4', 'COST', 50_000, '2026-08-06T00:00:00Z'),
+      entry('p1', 'CUSTOMER_PAYMENT', 150_000, '2026-08-07T00:00:00Z'),
+      entry('p2', 'SETTLEMENT', 150_000, '2026-08-08T00:00:00Z'),
+      // 400 reserved for delivery, 100 of it released: 300 stays restricted.
+      entry('r1', 'RESERVE', 40_000, '2026-08-08T00:00:00Z'),
+      entry('r2', 'RESERVE_RELEASE', 10_000, '2026-08-09T00:00:00Z'),
+      entry('o1', 'CAPITAL_OUT', 20_000, '2026-08-10T00:00:00Z'),
+    ]);
+    // Thirteen rows; SETTLEMENT dates usable cash rather than becoming an event, so twelve events.
+    expect(input!.events).toHaveLength(12);
+    expect(input!.usableCashAt).toBe('2026-08-08T00:00:00Z');
+    const m = quantifyRouteMoney(input!);
+    // Billings are net of the released agreement, and so are receivables.
+    expect(m.identities.GROSS_BILLINGS).toBe(2_000);
+    expect(m.receivables).toBe(500);
+    // The supplier payment is one outlay, not two; the rest of the liability is still owed, dated when incurred.
+    expect(m.supplierOutlays).toEqual([{ at: '2026-08-06T00:00:00Z', amount: 500 }]);
+    expect(m.supplierLiabilities).toEqual([{ at: '2026-08-04T00:00:00Z', amount: 900 }]);
+    expect(m.supplierLiabilityOutstanding).toBe(300);
+    // Margin: 2000 billed − 500 paid − 300 incurred and owed.
+    expect(m.identities.GROSS_MARGIN).toBe(1_200);
+    // Usable cash: 1500 received − 300 restricted − 300 owed to the supplier.
+    expect(m.restrictedCash).toBe(300);
+    expect(m.usableCash).toBe(900);
+    expect(m.excludedFromUsable).toBe(600);
+    expect(m.identities.USABLE_CASH).toBe(900);
+    // Owner capital is distinct from settled cash and from borrowing; distributions are row-derived.
+    expect(m.identities.SETTLED_CASH).toBe(1_500);
+    expect(m.ownerCapitalIn).toBe(400);
+    expect(m.identities.OWNER_DISTRIBUTIONS).toBe(200);
+    expect(m.identities.BORROWED_PROCEEDS).toBe(0);
+    expect(m.unknowns).not.toContain('owner_distributions not stated');
+    expect(m.unknowns).not.toContain('borrowed_proceeds not stated');
+  });
+
+  it('keeps distributions and borrowing unknown off the ledger when no row states them', () => {
+    const m = quantifyRouteMoney({ routeKey: 'hand', events: [{ at: '2026-01-01T00:00:00Z', kind: 'FUNDS_RECEIVED', amount: 10 }] });
+    expect(m.identities.OWNER_DISTRIBUTIONS).toBeNull();
+    expect(m.identities.BORROWED_PROCEEDS).toBeNull();
+    const borrowed = quantifyRouteMoney({ routeKey: 'loan', events: [{ at: '2026-01-01T00:00:00Z', kind: 'BORROWED_IN', amount: 75 }] });
+    expect(borrowed.identities.BORROWED_PROCEEDS).toBe(75);
+    expect(borrowed.identities.SETTLED_CASH).toBeNull();
+  });
+
   it('scores routes read only from ledger rows and lead rows, with no hand-stated identities (F7)', () => {
     const entry = (id: string, opportunityId: string, kind: CashMoneyEntry['kind'], cents: number, occurredAt: string, fundsAvailableAt: string | null = null): CashMoneyEntry => ({
       id, projectId: 'p', opportunityId, commitmentId: null, idempotencyKey: null, payloadFingerprint: null, kind, amountCents: cents, currency: 'USD',
