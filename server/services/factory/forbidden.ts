@@ -49,3 +49,31 @@ export function ownershipReachesForbidden(ownedGlob: string, forbidden: string[]
 export function forbiddenIn(files: string[], forbidden: string[]): string[] {
   return files.filter((file) => forbidden.some((glob) => matchesGlob(file, glob)));
 }
+
+/**
+ * A path standing for what a scope glob could produce: each wildcard segment
+ * replaced by a name nothing forbids by spelling. `server/x/**` → `server/x/f/f.ts`.
+ */
+function sampleOf(glob: string): string {
+  if (!/[*?[{]/.test(glob)) return glob;
+  const parts = glob.split('/').map((part) => (/[*?[{]/.test(part) ? 'f' : part));
+  if (glob.endsWith('/**')) parts.push('f.ts');
+  return parts.join('/');
+}
+
+/**
+ * The scope globs, when **every** one of them lies inside a forbidden path, or null.
+ *
+ * Production, 2026-11-09 → 11-11: fcp_17725629's whole mutation scope was
+ * `server/services/factory/release/outcome.ts`, which the V5 grant puts out of
+ * every worker's reach. Nothing asked before planning, so the plan bin was
+ * handed to worker after worker — 38 attempts, each one reading the grant and
+ * reporting "the only mutation-scope path is forbidden" — until it parked on the
+ * owner. Work no worker may ever do is not dispatched; it is routed to the
+ * maintainer (`PROTECTED_SCOPE`). A scope with one writable glob is planned as
+ * before, and the plan's own ownership check keeps units off the rest.
+ */
+export function scopeOnlyForbidden(scope: string[], forbidden: string[]): string[] | null {
+  if (scope.length === 0) return null;
+  return scope.every((glob) => forbiddenIn([sampleOf(glob)], forbidden).length > 0) ? [...scope] : null;
+}

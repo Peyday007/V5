@@ -268,7 +268,7 @@ function Line({ projectId }: { projectId: string }): JSX.Element {
             <li key={row.campaign.id}>
               <strong>{row.objective.slice(0, 140)}</strong>
               <p className="rs-item-meta">
-                {row.blocked!.wait === 'PERSON' ? 'Needs you' : 'Waiting automatically'} · {row.blocked!.kind}
+                {row.blocked!.wait === 'PERSON' ? 'Needs you' : row.blocked!.wait === 'MAINTAINER' ? 'With the maintainer session' : 'Waiting automatically'} · {row.blocked!.kind}
                 {row.blocked!.detail ? ` — ${row.blocked!.detail}` : ''}
               </p>
               <p className="rs-item-meta">{row.blocked!.remedy}</p>
