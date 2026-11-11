@@ -1,0 +1,26 @@
+{
+  "brand": "Tabstop Accessibility Reports",
+  "products": [
+    {
+      "key": "homepage-summary",
+      "name": "Free homepage accessibility summary",
+      "price_usd": 0,
+      "description": "Short summary (about 4 pages) of an automated WCAG 2.1/2.2 AA scan of the homepage (axe-core + scripted keyboard check): issue counts by severity and the top problems with their fixes. Sent to anyone who replies.",
+      "recurring": null
+    },
+    {
+      "key": "audit-report",
+      "name": "Accessibility Audit Report (up to 10 key pages)",
+      "price_usd": 149,
+      "description": "Automated axe-core scan of up to 10 key pages (home, product/service, contact, cart/booking, about) at desktop and mobile widths, plus scripted Tab-key traversal (focus order, visible focus, traps), 320px reflow, headings, alt text, labels and landmarks. Every issue in plain English with the exact element, WCAG criterion, severity and a concrete code fix; PDF + HTML + JSON of every failing element; explicit list of what automated testing cannot cover. Not legal advice and not a compliance certification.",
+      "recurring": null
+    },
+    {
+      "key": "monthly-rescan",
+      "name": "Monthly re-scan monitoring",
+      "price_usd": 29,
+      "description": "The same pages re-scanned every month with a short change report: what was fixed, what is new, what remains. Cancel any time.",
+      "recurring": "month"
+    }
+  ]
+}

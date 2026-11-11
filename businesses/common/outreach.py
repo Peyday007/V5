@@ -126,6 +126,18 @@ def activate(business):
     print('activated', business, c['id'], 'status', call('GET', f"/campaigns/{c['id']}").get('status'))
 
 
+def lead_count(cid):
+    # Instantly's analytics lead counter lags; the lead list is the record.
+    n, cur = 0, None
+    while True:
+        body = {'campaign': cid, 'limit': 100, **({'starting_after': cur} if cur else {})}
+        r = call('POST', '/leads/list', body)
+        n += len(r.get('items', []))
+        cur = r.get('next_starting_after')
+        if not cur or not r.get('items'):
+            return n
+
+
 def analytics(cid):
     rows = call('GET', f'/campaigns/analytics?id={cid}')
     return rows[0] if isinstance(rows, list) and rows else {}
@@ -151,7 +163,7 @@ def status(business):
         return {'business': business, 'name': cfg.NAME, 'status': 'no campaign'}
     a = analytics(c['id'])
     return {'business': business, 'name': cfg.NAME, 'id': c['id'], 'status': {0: 'draft', 1: 'active', 2: 'paused', 3: 'completed'}.get(c.get('status'), c.get('status')),
-            'leads': a.get('leads_count', 0), 'contacted': a.get('contacted_count', 0), 'sent': a.get('emails_sent_count', 0),
+            'leads': lead_count(c['id']), 'contacted': a.get('contacted_count', 0), 'sent': a.get('emails_sent_count', 0),
             'replies': a.get('reply_count_unique', 0), 'auto_replies': a.get('reply_count_automatic_unique', 0),
             'bounced': a.get('bounced_count', 0), 'unsubscribed': a.get('unsubscribed_count', 0),
             'opportunities': a.get('total_opportunities', 0)}
