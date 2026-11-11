@@ -5,14 +5,41 @@
  *   node --import tsx scripts/neighbor-card.ts [--no-refill] [--slot N] [--max-sites N]
  *
  * Prints `NEIGHBOR-CARD: OK` when the campaign is active, `NEIGHBOR-CARD: ATTENTION` otherwise.
+ *
+ * Discovery includes Google Places through V2's signed bridge when the
+ * deployment holds its signing key (§103); each search is recorded before it is
+ * sent and refused past the registry's daily ceiling.
  */
-import { runNeighborCard } from '../server/services/cash/neighborCard.ts';
+import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import { countIntegrationUsage, recordIntegrationEvent } from '../server/repos/integrationEvents.ts';
+import { defaultDeps, runNeighborCard } from '../server/services/cash/neighborCard.ts';
+import { signingKey } from '../server/services/integrations/keys.ts';
+import { searchPlacesViaV2 } from '../server/services/integrations/v2Bridge.ts';
 
 const argv = process.argv.slice(2);
 const flag = (name: string) => {
   const i = argv.indexOf(name);
   return i >= 0 ? Number(argv[i + 1]) : undefined;
 };
-const result = await runNeighborCard(undefined, { refill: !argv.includes('--no-refill'), slot: flag('--slot'), maxSites: flag('--max-sites') });
+
+const deps = defaultDeps();
+let database = false;
+if (signingKey()) {
+  try {
+    await initDatabase();
+    database = true;
+    const meter = {
+      used: () => countIntegrationUsage('google-places', `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`),
+      record: async (detail: string) => {
+        await recordIntegrationEvent({ integrationId: 'google-places', kind: 'USAGE', state: 'SENT', detail: `Text Search "${detail}"`, source: 'neighbor-card' });
+      },
+    };
+    deps.places = (query) => searchPlacesViaV2(query, meter);
+  } catch (error) {
+    console.log(`  Places not metered this pass, so not used: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+const result = await runNeighborCard(deps, { refill: !argv.includes('--no-refill'), slot: flag('--slot'), maxSites: flag('--max-sites') });
 for (const line of result.lines) console.log(`  ${line}`);
 console.log(result.ok ? 'NEIGHBOR-CARD: OK' : 'NEIGHBOR-CARD: ATTENTION');
+if (database) await closeDatabase().catch(() => undefined);

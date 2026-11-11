@@ -11240,3 +11240,14 @@ export interface ReasoningExplorationRow {
   sweep: string | null;
   created_at: string;
 }
+
+/** One reading, repair or metered call of a connected service (migration 145 / pg 136, §103). */
+export interface IntegrationEventRow {
+  id: string;
+  integration_id: string;
+  kind: 'CHECK' | 'REPAIR' | 'USAGE';
+  state: string;
+  detail: string;
+  source: string;
+  recorded_at: string;
+}

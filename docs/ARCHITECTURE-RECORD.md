@@ -15394,3 +15394,58 @@ stays coverage, never a probability.
 **First production reading (Goals plan 43003547180, 2026-11-11, serving 2396516).** 21 openings, 8 modelled. The sweep read 27,086 distinct variations of 8 decision variables (space 1,251,264) and 41 conditions (33 discovered on openings), with 10,932 equivalent combinations not re-read, in 49 s. A sweep strategy (VARIABLE:BACKWARD: pre-warmed capacity, marketplace leads and a referral partner on one constructed arrangement, a retainer, prepaid fulfilment) replaced §99's plan at 99.5% coverage against 75.0%, with 4.5% when its conversion is halved, against 4.5%. The engine read 14 sweep strategies, with medians from $30,663 to $658,741 against $649 for the plan as held. No commercially supported variation beat the plan as held (fast reading $217). Every gain rests on an assumed move, and no single condition up to ×20 carries the requirement inside evidence, so acceptance stays CANDIDATE_ONLY. Two defects: one bound for the whole sweep let the factorial take all 49 s (local search 0 reads, conditions 82), and the sweep yielded by read count. Both are fixed above.
 
 **Off the server's loop.** The next two releases (Deploys 42998216834 and 43007394331) passed hosted verification 261/261 before the restart. After it, `brain_propose_fragments` timed out, which no earlier release did. At boot the goal tick reads plans, and the sweep then ran on the main loop in 8 ms slices. A request that awaits hundreds of queries in sequence waits up to one slice per query. The sweep now runs on the evaluator pool's niced threads (`Evaluator.sweep`, `reconstruction.ts:sweepFor` rebuilds the operators from plain data), and inline only when no pool can start. Test: the threaded and inline sweeps read identically.
+
+## 103. An integration is declared once, and Brain supplies its credentials itself wherever it is authorized.
+
+**Owner's order, 2026-11-11.** "Every part of Brain must use the same reliable
+system for managing and accessing connected services. Stop fixing missing
+connections individually."
+
+**What was wrong.** Each integration was wired where it was first needed. The
+Neighbor Card workflow (and expansion outreach, and the launch replies stage)
+said the Instantly key was "already" on the production machine; it never had
+been — `flyctl secrets list` held no Instantly setting — so every hourly mailer
+pass failed with `INSTANTLY_API_KEY is not configured` while the owner's
+workspace was connected to every Claude session and to V2. Boot logged
+`messaging none selected` because the provider also needed a second word,
+`BRAIN_MESSAGING_PROVIDER`. V2's Google Places key lived only in V2's Vercel
+project, so Brain's discovery fell back to a chamber directory and the map.
+
+**The rule.** `server/services/integrations/registry.ts` declares every
+integration of Brain and its connected projects: where each credential lives
+(the deployment, a GitHub Actions secret, or a connected project), how it can
+arrive without a person (`GITHUB_SECRET`, `CONNECTOR_SEALED`, `GENERATED`,
+`WORKFLOW`, else `OWNER`), which components use it, its capabilities, its live
+probe, a daily ceiling for a service that bills per call, and the one sentence
+the owner sees when no automatic path is left. `tests/integrationRegistry.test.ts`
+refuses a credential read anywhere in `server/`, `scripts/` or the workflows
+that no entry declares, so a future integration cannot be wired around it.
+
+- **Health is one reading for all** (`health.ts`): each credential present and
+  well-formed where it lives, then the probe (none sends anything): CONNECTED,
+  CONFIGURED, REPAIRING (Brain supplies what is missing), NEEDS_OWNER, REFUSED
+  (malformed, expired, revoked or restricted — the owner's action), UNREACHABLE,
+  NOT_IN_USE. Readings and repairs are append-only rows in `integration_events`
+  (SQLite 145 / pg 136), never values.
+- **Repairs are `integrations.yml`, hourly.** It generates the deployment's own
+  keys, copies each `GITHUB_SECRET` credential from the same-named repository
+  secret when the machine lacks it or its fingerprint changed, opens a
+  credential a session sealed from an authorized connector, applies all of it
+  in one restart, records each repair, and records a full check. Values cross
+  only pipes into `flyctl secrets import`.
+- **A connector's credential is sealed, never pasted.** The deployment holds an
+  RSA seal key it generated; a session holding the owner's connector encrypts
+  the credential to its public half, and only the machine can open it, so the
+  ciphertext may pass through a workflow input. Nothing a person handles.
+- **A held key selects its provider.** An Instantly key with no selection is an
+  Instantly deployment, and a Stripe key a Stripe one (`derived: true`); an
+  explicit selection still wins. Grants still gate every effect.
+- **A connected project's service is reached through it, not copied.** V2 serves
+  `/api/brain/places`, which accepts only a request signed with the
+  deployment's generated Ed25519 key, whose public half V2 pins in
+  `src/lib/brainBridge.ts`; the Google key never leaves V2. Each search is
+  recorded before it is sent and refused past 24 a day, inside Places' free
+  monthly allowance at one search a Neighbor Card pass.
+- **One page.** `/integrations` (Brain administrators): every service, the
+  components that use it, its health, missing credentials, Brain's repairs and
+  the owner's actions, with "Check now".

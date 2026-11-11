@@ -16,6 +16,7 @@ import { healthRouter } from './health.ts';
 import { layersRouter } from './layers.ts';
 import { projectsRouter } from './projects.ts';
 import { providersRouter } from './providers.ts';
+import { integrationsRouter } from './integrations.ts';
 import { researchRouter } from './research.ts';
 import { runsRouter } from './runs.ts';
 import { russellRouter } from './russell.ts';
@@ -92,6 +93,12 @@ export function createApiRouter(): Router {
    * repository, so another person's deck and a missing one answer identically.
    */
   router.use(magicRouter);
+
+  /*
+   * Integrations (§103): the registry of connected services, their health and
+   * repairs. Brain-administrator only, guarded on its own path.
+   */
+  router.use(integrationsRouter);
 
   router.use(healthRouter);
   // Audit routes carry their own prefixes (/runs/:id/..., /layers/:id/...),

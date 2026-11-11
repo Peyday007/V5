@@ -1,0 +1,192 @@
+# The integration registry's hands (§103, server/services/integrations/registry.ts).
+#
+# Every hour, and on demand:
+#
+#   1. GENERATE  the deployment's own keys the registry marks GENERATED (the
+#                signing key V2's Places bridge trusts, the seal key a connector
+#                encrypts to), straight from openssl into Fly secrets.
+#   2. SYNC      every deployment credential the registry marks GITHUB_SECRET
+#                from the same-named repository secret, when it is missing on
+#                the machine or its fingerprint changed.
+#   3. UNSEAL    a credential a session sealed to the machine's seal key from an
+#                authorized connector (inputs `sealed_name`, `sealed_value`): the
+#                machine opens it and the value goes straight into Fly secrets.
+#   4. APPLY     staged secrets, once, and wait for the machine to answer.
+#   5. CHECK     every integration on the machine — credentials present, live
+#                probes (none sends anything) — recorded as rows the
+#                Integrations page reads, with each repair made above.
+#
+# No step prints a credential value. Names cross the log; values cross only
+# pipes into `flyctl secrets import`, and are masked besides.
+name: Integrations
+
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+    inputs:
+      sealed_name:
+        description: 'A credential the registry lets a connector deliver (e.g. INSTANTLY_API_KEY)'
+        required: false
+        default: ''
+      sealed_value:
+        description: "Its value sealed to the deployment's seal key (safe to publish)"
+        required: false
+        default: ''
+
+concurrency:
+  group: brain-integrations
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  integrations:
+    name: Generate, sync, unseal, check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Never against a machine mid-release; see .github/actions/await-release.
+      - uses: ./.github/actions/await-release
+
+      - name: Generate, sync and unseal
+        id: repair
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          ALL_SECRETS: ${{ toJSON(secrets) }}
+          SEALED_NAME: ${{ github.event.inputs.sealed_name }}
+          SEALED_VALUE: ${{ github.event.inputs.sealed_value }}
+        run: |
+          set -euo pipefail
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          umask 077
+          staged="$RUNNER_TEMP/staged.env"; : > "$staged"
+          repairs="$RUNNER_TEMP/repairs.txt"; : > "$repairs"
+          # Names only: `secrets list` prints NAME, DIGEST, CREATED AT.
+          present=" $(flyctl secrets list --app "$app" 2>/dev/null | awk 'NR>1 {print $1}' | tr '\n' ' ') "
+          has() { case "$present" in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
+          # 1. Keys the deployment owns.
+          for name in $(node --import tsx scripts/integrations.ts generated); do
+            has "$name" && continue
+            case "$name" in
+              BRAIN_INTEGRATION_SIGNING_KEY) key=$(openssl genpkey -algorithm ed25519 -outform DER | base64 -w0) ;;
+              BRAIN_INTEGRATION_SEAL_KEY)    key=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -outform DER | base64 -w0) ;;
+              *) echo "::warning::$name is declared GENERATED and this workflow has no generator for it."; continue ;;
+            esac
+            echo "::add-mask::$key"
+            printf '%s=%s\n' "$name" "$key" >> "$staged"
+            id=$([ "$name" = BRAIN_INTEGRATION_SEAL_KEY ] && echo credential-seal || echo v2)
+            echo "$id GENERATED $name" >> "$repairs"
+            echo "generated $name"
+          done
+
+          # 2. GitHub repository secrets the registry maps onto the deployment.
+          #    The machine reports a 16-hex sha256 prefix of each value it holds,
+          #    so a rotated GitHub secret is copied again; nothing else crosses.
+          export SYNCABLE="$(node --import tsx scripts/integrations.ts syncable)"
+          export HELD="$(flyctl ssh console --app "$app" -C "sh -c 'cd /app && node --import tsx scripts/integrations.ts fingerprints'" 2>/dev/null | grep -E '^[A-Z_]+ [0-9a-f]{16}' || true)"
+          python3 - "$staged" "$repairs" <<'PY'
+          import hashlib, json, os, sys
+          staged, repairs = sys.argv[1], sys.argv[2]
+          secrets = json.loads(os.environ['ALL_SECRETS'])
+          held = dict(line.split()[:2] for line in os.environ.get('HELD', '').splitlines() if line.strip())
+          names = os.environ['SYNCABLE'].split()
+          owners = {'INSTANTLY_API_KEY': 'instantly', 'STRIPE_SECRET_KEY': 'stripe', 'RESEND_API_KEY': 'resend'}
+          print('GitHub secrets the registry can use: ' + (', '.join(n for n in names if n in secrets) or 'none'))
+          for name in names:
+              value = (secrets.get(name) or '').strip()
+              if not value:
+                  continue
+              fp = hashlib.sha256(value.encode()).hexdigest()[:16]
+              if held.get(name) == fp:
+                  continue
+              print(f'::add-mask::{value}')
+              with open(staged, 'a') as f:
+                  f.write(f'{name}={value}\n')
+              with open(repairs, 'a') as f:
+                  f.write(f"{owners.get(name, 'instantly')} SYNCED {name}\n")
+              print(f'sync {name} from GitHub')
+          PY
+
+          # 3. A credential sealed by a session holding an authorized connector.
+          if [ -n "${SEALED_NAME:-}" ] && [ -n "${SEALED_VALUE:-}" ]; then
+            # Both are interpolated into a remote command: a name and base64, nothing else.
+            [[ "$SEALED_NAME" =~ ^[A-Z][A-Z0-9_]*$ ]] || { echo "::error::sealed_name is not a setting name."; exit 1; }
+            [[ "$SEALED_VALUE" =~ ^[A-Za-z0-9+/]+=*$ ]] || { echo "::error::sealed_value is not base64."; exit 1; }
+            out="$RUNNER_TEMP/unsealed.env"
+            if flyctl ssh console --app "$app" -C "sh -c 'cd /app && node --import tsx scripts/integrations.ts unseal $SEALED_NAME $SEALED_VALUE'" > "$out" 2>/dev/null \
+               && grep -q "^$SEALED_NAME=" "$out"; then
+              line=$(grep -m1 "^$SEALED_NAME=" "$out" | tr -d '\r')
+              echo "::add-mask::${line#*=}"
+              printf '%s\n' "$line" >> "$staged"
+              echo "instantly SEALED $SEALED_NAME" >> "$repairs"
+              echo "unsealed $SEALED_NAME"
+            else
+              echo "::error::The machine refused the sealed $SEALED_NAME (see scripts/integrations.ts unseal)."
+              rm -f "$out"
+              exit 1
+            fi
+            rm -f "$out"
+          fi
+
+          # 4. Apply everything staged in one restart.
+          if [ -s "$staged" ]; then
+            flyctl secrets import --app "$app" --stage < "$staged" > /dev/null
+            rm -f "$staged"
+            flyctl secrets deploy --app "$app"
+            url="https://$app.fly.dev/healthz"
+            for i in $(seq 1 60); do
+              if curl -fsS -m 10 "$url" > /dev/null 2>&1; then echo "machine answering after the restart ($i)"; break; fi
+              sleep 10
+            done
+          else
+            rm -f "$staged"
+            echo "Nothing to repair: every credential the registry can supply is in place."
+          fi
+          echo "repairs=$(wc -l < "$repairs")" >> "$GITHUB_OUTPUT"
+
+      - name: Record repairs and check every integration
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          ALL_SECRETS: ${{ toJSON(secrets) }}
+        run: |
+          set -euo pipefail
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          repairs="$RUNNER_TEMP/repairs.txt"
+          if [ -s "$repairs" ]; then
+            while read -r id state name; do
+              flyctl ssh console --app "$app" -C "sh -c 'cd /app && node --import tsx scripts/integrations.ts repaired $id $state $name'" 2>&1 | grep '^REPAIRED' || true
+            done < "$repairs"
+          fi
+          # Names of the repository secrets, so integrations that live in GitHub Actions read as present or missing.
+          names=$(python3 -c 'import json,os; print(",".join(sorted(k for k in json.loads(os.environ["ALL_SECRETS"]) if k.isupper())))')
+          set +e
+          flyctl ssh console --app "$app" -C "sh -c 'cd /app && node --import tsx scripts/integrations.ts public-keys && node --import tsx scripts/integrations.ts check --record integrations.yml --github-secrets $names'" 2>&1 | tee check.txt
+          set -e
+          grep -q '^INTEGRATIONS: \(OK\|ATTENTION\)' check.txt
+
+      # Readable through the checks API, where the log is not.
+      - name: Publish the check as annotations
+        if: always()
+        run: |
+          [ -f check.txt ] || exit 0
+          python3 - <<'PY'
+          text = open('check.txt', encoding='utf-8', errors='replace').read()
+          enc = lambda s: s.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)][-10:]
+          for n, chunk in enumerate(chunks, 1):
+              print(f'::notice title=integrations {n}/{len(chunks)}::{enc(chunk)}')
+          PY

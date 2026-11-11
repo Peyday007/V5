@@ -59,6 +59,13 @@ export interface ProviderConfigReading {
   problems: string[];
   /** For billing only: TEST or LIVE, from the key's documented prefix. */
   mode?: 'TEST' | 'LIVE' | null;
+  /**
+   * True when the provider was not selected but derived from the only key the
+   * deployment holds (§103): a deployment with an Instantly key and no
+   * selection is an Instantly deployment, and reading it as "none selected"
+   * left the owner's connected workspace unusable for want of a word.
+   */
+  derived?: boolean;
 }
 
 /** A single address, optionally with a display name: `Name <a@b.c>` or `a@b.c`. */
@@ -71,7 +78,10 @@ export function senderAddress(from: string): string | null {
 }
 
 export function messagingConfig(env: NodeJS.ProcessEnv = process.env): ProviderConfigReading {
-  const provider = read(MESSAGING_PROVIDER_ENV, env);
+  const selected = read(MESSAGING_PROVIDER_ENV, env);
+  // The owner's provider is Instantly (§94): its key alone selects it.
+  const derived = !selected && read(INSTANTLY_KEY_ENV, env) !== null;
+  const provider = selected ?? (derived ? 'instantly' : null);
   if (!provider) {
     return { provider: null, configured: false, problems: [MESSAGING_PROVIDER_ENV] };
   }
@@ -90,7 +100,7 @@ export function messagingConfig(env: NodeJS.ProcessEnv = process.env): ProviderC
     else if (key.length < 20 || /\s/.test(key)) problems.push(`${INSTANTLY_KEY_ENV} (not an Instantly API key)`);
     const campaign = read(INSTANTLY_CAMPAIGN_ENV, env);
     if (campaign && !/^[0-9a-f-]{36}$/i.test(campaign)) problems.push(`${INSTANTLY_CAMPAIGN_ENV} (not a campaign id)`);
-    return { provider, configured: problems.length === 0, problems };
+    return { provider, configured: problems.length === 0, problems, ...(derived ? { derived } : {}) };
   }
   const key = read(RESEND_KEY_ENV, env);
   if (!key) problems.push(RESEND_KEY_ENV);
@@ -102,7 +112,10 @@ export function messagingConfig(env: NodeJS.ProcessEnv = process.env): ProviderC
 }
 
 export function billingConfig(env: NodeJS.ProcessEnv = process.env): ProviderConfigReading {
-  const provider = read(BILLING_PROVIDER_ENV, env);
+  const selected = read(BILLING_PROVIDER_ENV, env);
+  // Billing is Stripe (§54, §94): its key alone selects it.
+  const derived = !selected && read(STRIPE_KEY_ENV, env) !== null;
+  const provider = selected ?? (derived ? 'stripe' : null);
   if (!provider) {
     return { provider: null, configured: false, problems: [BILLING_PROVIDER_ENV], mode: null };
   }
@@ -125,7 +138,7 @@ export function billingConfig(env: NodeJS.ProcessEnv = process.env): ProviderCon
       mode: null,
     };
   }
-  return { provider, configured: true, problems: [], mode };
+  return { provider, configured: true, problems: [], mode, ...(derived ? { derived } : {}) };
 }
 
 /** The value itself, for the one module that sends it in an Authorization header. */
