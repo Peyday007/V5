@@ -12,7 +12,7 @@ import type { GoalBriefing } from '../../../server/services/goals/briefing.ts';
 import type { GoalDecision, GoalView } from '../../../server/services/goals/model.ts';
 import type { DecisionResult } from '../../../server/services/goals/decide.ts';
 import type { WorkstreamEvent } from '../../../server/domain/register.ts';
-import type { GoalPrioritySnapshot } from '../../../server/domain/goals.ts';
+import type { GoalCommitment, GoalPrioritySnapshot } from '../../../server/domain/goals.ts';
 
 export type { DecisionResult, GoalBriefing, GoalDecision, GoalPrioritySnapshot, GoalView };
 
@@ -28,4 +28,32 @@ export const GoalsApi = {
   resume: (id: string): Promise<DecisionResult> => post(path(id, '/resume')),
   cancel: (id: string, reason: string): Promise<DecisionResult> => post(path(id, '/cancel'), { reason }),
   reinstate: (id: string): Promise<DecisionResult> => post(path(id, '/reinstate')),
+
+  /**
+   * What counts as finished, when it is due and who it is owed to. The owner is
+   * deliberately not sent from here: naming one is a separate decision.
+   */
+  terms: (
+    id: string,
+    terms: { outcome?: string | null; dueAt?: string | null; commitment?: GoalCommitment },
+  ): Promise<DecisionResult> =>
+    api(path(id, '/terms'), {
+      method: 'PATCH',
+      body: JSON.stringify({ outcome: terms.outcome, dueAt: terms.dueAt, commitment: terms.commitment }),
+    }),
+  objective: (id: string, objective: { intent?: string; outcome?: string | null }): Promise<DecisionResult> =>
+    post(path(id, '/objective'), objective),
+  dependsOn: (id: string, otherGoalId: string): Promise<DecisionResult> =>
+    post(path(id, '/depends-on'), { goalId: otherGoalId }),
+
+  /**
+   * Undo a dependency. A goal is a workstream and a dependency is one of its
+   * links, so this is the register's own correction — never a delete: the link
+   * stays, superseded, with its reason.
+   */
+  removeDependency: (goalId: string, linkId: string, reason: string): Promise<{ superseded: boolean; linkId: string }> =>
+    post(
+      `/api/register/workstreams/${encodeURIComponent(goalId)}/links/${encodeURIComponent(linkId)}/supersede`,
+      { reason },
+    ),
 };
