@@ -41,7 +41,8 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { browserMcpUrl, renderInBrowser } from './browserMcp.ts';
 import { connectorFor } from './connectors.ts';
 import { searchSuccessor } from './discover.ts';
-import { recordAcquisitionJudgment, type AcquisitionEvidence } from './acquisition.ts';
+import { recordAcquisitionJudgment, REPEATED_USE_WINDOW_MS, type AcquisitionEvidence } from './acquisition.ts';
+import { activeRoutine, routinesFrom, type Routine, type RoutineUse } from './routines.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, type AccessEvidence } from './accessMethods.ts';
 import { checkDestination, fetchForWorker, systemResolver, type Resolver, type SourceFetch } from './fetchForWorker.ts';
 
@@ -64,7 +65,13 @@ export interface ReadTerms {
   rateLimited?: boolean;
 }
 
-export type SourceRead = SourceFetch & { method: AccessMethod; attempts: AccessAttempt[]; terms?: ReadTerms };
+export type SourceRead = SourceFetch & {
+  method: AccessMethod;
+  attempts: AccessAttempt[];
+  terms?: ReadTerms;
+  /** The reusable routine (from a CONNECTOR_PROPOSED row, `routines.ts`) that led this read, when one did. */
+  routine?: RoutineUse;
+};
 
 export interface AccessDeps {
   direct?: (url: string) => Promise<SourceFetch>;
@@ -82,6 +89,8 @@ export interface AccessDeps {
    */
   search?: ((url: string) => Promise<SourceFetch | null>) | null;
   learned?: (host: string) => Promise<AccessMethod | null>;
+  /** The routine a CONNECTOR_PROPOSED row built for this host (`routines.ts`); defaults to the recorded rows. */
+  routine?: (host: string) => Promise<Routine | null>;
   record?: (read: SourceRead, caller: string, ms: number) => Promise<void>;
   /** Which part of Brain asked, for the event. */
   caller?: string;
@@ -451,7 +460,43 @@ async function defaultLearned(host: string): Promise<AccessMethod | null> {
   return learnedMap.get(host) ?? null;
 }
 
+/** Routines built from CONNECTOR_PROPOSED rows, refreshed on the same cadence as the learned leads. */
+let routinesAt = 0;
+let routineMap = new Map<string, Routine>();
+let routining: Promise<void> | null = null;
+
+async function defaultRoutine(host: string): Promise<Routine | null> {
+  if (Date.now() - routinesAt > LEARN_REFRESH_MS) {
+    routining ??= (async () => {
+      try {
+        const since = new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString();
+        const proposals = await getDb().all<{ measures: string | null; at: string | null }>(
+          `SELECT measures, at FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED' AND at >= ? ORDER BY at DESC LIMIT 500`,
+          [since],
+        );
+        const access =
+          proposals.length === 0
+            ? []
+            : await getDb().all<{ measures: string | null; at: string | null }>(
+                `SELECT measures, at FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? ORDER BY at DESC LIMIT 5000`,
+                [since],
+              );
+        routineMap = routinesFrom(proposals, access);
+      } catch {
+        // A record that cannot be read builds no routine; the ordinary routes run.
+      } finally {
+        routinesAt = Date.now();
+        routining = null;
+      }
+    })();
+    await routining;
+  }
+  return routineMap.get(host) ?? null;
+}
+
 export function resetSourceAccessMemory(): void {
+  routinesAt = 0;
+  routineMap = new Map();
   learnedAt = 0;
   learnedMap = new Map();
   browserRecords = new Map();
@@ -606,6 +651,7 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
       finalUrl: read.finalUrl?.slice(0, 400) ?? null,
       chars: read.readable ? read.totalChars : 0,
       attempts: read.attempts,
+      ...(read.routine ? { routine: read.routine } : {}),
       methodClass: boundary ? judged.method : used,
       methodJudged: judged.method,
       methodAgrees: boundary ? true : agrees,
@@ -640,7 +686,9 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
     deps.search !== undefined ? deps.search : deps.direct ? null : (u: string) => searchSuccessor(u, direct);
   const learned = deps.learned ?? defaultLearned;
   const record = deps.record ?? defaultRecord;
+  const routineOf = deps.routine ?? defaultRoutine;
   const attempts: AccessAttempt[] = [];
+  let routineUsed: RoutineUse | undefined;
   const terms: ReadTerms = {};
   /** Whether the site's robots.txt allows the browser route; a refusal is recorded as a term of this read. */
   const browserAllowed = async (): Promise<boolean> => {
@@ -682,7 +730,7 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
           detail: 'the site answered with a bot challenge, not the page',
         }
       : read;
-    const out: SourceRead = { ...honest, method, attempts, ...(terms.robotsDisallows || attempts.some((a) => a.status === 429) ? { terms: { ...terms, ...(attempts.some((a) => a.status === 429) ? { rateLimited: true } : {}) } } : {}) };
+    const out: SourceRead = { ...honest, method, attempts, ...(routineUsed ? { routine: routineUsed } : {}), ...(terms.robotsDisallows || attempts.some((a) => a.status === 429) ? { terms: { ...terms, ...(attempts.some((a) => a.status === 429) ? { rateLimited: true } : {}) } } : {}) };
     await record(out, deps.caller ?? 'unknown', Date.now() - started).catch(() => undefined);
     return out;
   };
@@ -703,9 +751,23 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
     if (viaApi?.readable) return done(viaApi, 'CONNECTOR');
   }
 
-  // A host whose own record says DIRECT never works there and the browser does.
-  const lead = await learned(host).catch(() => null);
+  // A reusable routine a CONNECTOR_PROPOSED row built for this host leads, so the
+  // route repetition justified is run rather than rediscovered on every read.
+  const routine = activeRoutine(await routineOf(host).catch(() => null));
+  if (routine && (routine.lead === 'SITEMAP' || routine.lead === 'ARCHIVE')) {
+    routineUsed = routine;
+    const run = routine.lead === 'SITEMAP' ? sitemap : archive;
+    const viaRoutine = await attempt(routine.lead, () => run(url));
+    if (viaRoutine?.readable && !wantsBrowser(viaRoutine)) return done(viaRoutine, routine.lead);
+  }
+
+  // A host whose own record says DIRECT never works there and the browser does,
+  // or whose browser routine was proposed from recorded repetition.
+  const learnedLead = await learned(host).catch(() => null);
+  const routineBrowser = routine?.lead === 'BROWSER';
+  const lead: AccessMethod | null = learnedLead ?? (routineBrowser ? 'BROWSER' : null);
   if (lead === 'BROWSER' && browser && (await browserAllowed())) {
+    if (routineBrowser) routineUsed = routine!;
     const rendered = await attempt('BROWSER', () => browser(url));
     if (rendered?.readable && !wantsBrowser(rendered)) return done(rendered, 'BROWSER');
   }
