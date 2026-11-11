@@ -122,4 +122,11 @@ What happened, in order (owner interventions: **0**):
 | 5 | **Interruption.** This session's context was compacted mid-run and its watcher was killed at its time limit. The Factory kept working on its own: campaign `fcp_ef7bb04a` planned in 35s, and a worker wrote the fix and test and integrated it (attempt 1/3). The resumed session read the state from production rows. | Factory, durable state |
 | 6 | **Failure found by Brain itself.** The independent review found a regression: a hyphen before CRLF (`'recog-\r\nnition'`) was no longer rejoined. Brain created `repair-F1` without being asked. | Factory review → repair unit |
 
-The rest is recorded when the campaign ends.
+| 7 | **Failure in Factory itself.** A scope amendment read "Stopped until a person acts", and the amended campaign was never re-ticked. | #747: contract blockers read as the submitting session's; `amend` ticks a parked campaign |
+| 8 | **A second review found a correct MAJOR defect.** Every extractor flattened line breaks to spaces, so after the fix a PDF line-wrap hyphen ("recog-" / "nition") would stay split. Factory asked for four more files. | session amended the scope (routine, not the owner's) |
+| 9 | **Failure in Factory itself.** Both reviews numbered their finding `F1`. The MAJOR one was attached to the first review's INTEGRATED `repair-F1` and marked REPAIRED on a commit that never touched it. The campaign then reported COMPLETE, so #748 alone would have shipped the regression. | #749: one repair unit per finding (`tests/factoryRepairKeyPerFinding.test.ts`). Session held #748 and submitted the follow-up `objectives/extractor-line-wrap-hyphen.json` on #748's branch. |
+| 10 | **Temporary outage.** The forge read budget again, then GitHub runners failed DNS for the Ubuntu mirrors in every Postgres shard. | waited for the reset; reran the failed shards |
+| 11 | Follow-up campaign `fcp_200e1076` built, reviewed and opened #750 (one shared line joiner in pdf/ocr/text/extraction). | session reviewed it, ran its tests, and merged #750 into #748, then #748 into `production` (1f8ad02) |
+
+Owner interventions: **0**. Every block was a routine contract correction, a
+merge the owner's standing order assigns to the session, or a temporary outage.
