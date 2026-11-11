@@ -95,7 +95,10 @@ describe('MONEY-13-4 figures reach the running Brain through the goal model', ()
     expect(route).toBeDefined();
     expect(route.identities.GROSS_BILLINGS).toBe(400);
     expect(route.identities.SETTLED_CASH).toBe(400);
-    expect(route.unattributedSpend).toBe(100);
+    // The $100 cost left before the customer's $400 arrived: the ledger rows say the route self-funded it.
+    expect(route.unattributedSpend).toBe(0);
+    expect(route.selfFundedSpend).toBe(100);
+    expect(route.customerFundedSpend).toBe(0);
     expect(route.peakWorkingCapital).toBe(100);
     expect(route.receivables).toBe(0);
     expect(route.daysCommitmentToFunds).toBeCloseTo(10, 5);
@@ -106,6 +109,17 @@ describe('MONEY-13-4 figures reach the running Brain through the goal model', ()
     const obs = ledgerObservations(knowledge, 'costShare', o);
     expect(obs).toHaveLength(1);
     expect(obs[0]!.source).toMatchObject({ kind: 'LEDGER_ENTRY', ref: o.id });
+  });
+
+  it("a customer's deposit funds the cost that follows it, read from production ledger rows alone", async () => {
+    const o = await opening('Deposit-funded route', 40_000);
+    await money(o.id, 'PIPELINE_AGREED', 40_000, inDays(-20));
+    await money(o.id, 'CUSTOMER_PAYMENT', 15_000, inDays(-19));
+    await money(o.id, 'COST', 25_000, inDays(-18));
+    const route = (await loadCashKnowledge(projectId)).routeMoney.get(o.id)!;
+    expect(route.customerFundedSpend).toBe(150);
+    expect(route.selfFundedSpend).toBe(100);
+    expect(route.unattributedSpend).toBe(0);
   });
 
   it('a route the ledger does not state contributes nothing, never a zero', async () => {

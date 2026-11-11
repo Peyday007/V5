@@ -11,7 +11,7 @@ import { collapseLineage, classify, onScale, pool } from '../server/services/qua
 import { composeArrangement } from '../server/services/quant/mechanism.ts';
 import { optimizePortfolio, type Activity } from '../server/services/quant/portfolio.ts';
 import { informationValue } from '../server/services/quant/value.ts';
-import { decideResearch, observedCollectionRate, quantifyRouteMoney, routeInputsFromEntries, scoreRoutes, CASH_IDENTITIES } from '../server/services/quant/deadline.ts';
+import { attributeFunding, decideResearch, observedCollectionRate, quantifyRouteMoney, routeInputsFromEntries, scoreRoutes, CASH_IDENTITIES } from '../server/services/quant/deadline.ts';
 import { toScenarioInput } from '../server/services/quant/export.ts';
 import { solveProblem, type QuantProblem } from '../server/services/quant/problem.ts';
 import { runScenarioModel } from '../server/services/scenario/run.ts';
@@ -600,8 +600,10 @@ describe('MONEY-13-4. route money velocity and distinct cash identities (equipme
     expect(m.identities.GROSS_BILLINGS).toBe(1_500);
     expect(m.identities.SETTLED_CASH).toBe(1_200);
     expect(m.receivables).toBe(300);
-    expect(m.unattributedSpend).toBe(300);
-    expect(m.selfFundedSpend).toBeNull();
+    // The $300 cost left before any customer money arrived, so the rows say it was self-funded.
+    expect(m.unattributedSpend).toBe(0);
+    expect(m.selfFundedSpend).toBe(300);
+    expect(m.customerFundedSpend).toBe(0);
     expect(m.daysCommitmentToFunds).toBe(4);
     expect(m.daysFundsToUsableCash).toBe(3);
     expect(m.daysLeadToCommitment).toBeNull();
@@ -716,3 +718,74 @@ describe('MONEY-13-4. route money velocity and distinct cash identities (equipme
     expect(scoreRoutes([{ money: by('large'), collectionProbability: 1 }], 'CONTRIBUTION')[0]!.riskAdjustedContribution).toBe(3_000);
   });
 });
+
+describe('MONEY-13-4. who funded an outlay is read from the order money moved (repair F1)', () => {
+  const at = (d: number) => `2026-09-${String(d).padStart(2, '0')}T00:00:00Z`;
+
+  it('an outlay covered by customer money already received is customer-funded; the rest is self-funded', () => {
+    expect(attributeFunding([
+      { at: at(1), kind: 'FUNDS_RECEIVED', amount: 500 },
+      { at: at(2), kind: 'SUPPLIER_OUTLAY', amount: 300 },
+      { at: at(3), kind: 'SUPPLIER_OUTLAY', amount: 400 },
+    ])).toEqual({ customer: 500, self: 200, derived: 700 });
+  });
+
+  it('a refund gives customer money back before it can fund anything, and owner capital is never customer money', () => {
+    expect(attributeFunding([
+      { at: at(1), kind: 'FUNDS_RECEIVED', amount: 500 },
+      { at: at(1), kind: 'OWNER_CAPITAL_IN', amount: 1_000 },
+      { at: at(2), kind: 'REFUND', amount: 400 },
+      { at: at(3), kind: 'SUPPLIER_OUTLAY', amount: 300 },
+    ])).toEqual({ customer: 100, self: 200, derived: 300 });
+  });
+
+  it('a receipt at the same instant as an outlay does not fund it (drain-first, as the peak is walked)', () => {
+    expect(attributeFunding([
+      { at: at(1), kind: 'FUNDS_RECEIVED', amount: 500 },
+      { at: at(1), kind: 'SUPPLIER_OUTLAY', amount: 200 },
+    ])).toEqual({ customer: 0, self: 200, derived: 200 });
+  });
+
+  it('a funder a row states is kept, and a stated customer-funded outlay draws on the pool', () => {
+    expect(attributeFunding([
+      { at: at(1), kind: 'FUNDS_RECEIVED', amount: 300 },
+      { at: at(2), kind: 'SUPPLIER_OUTLAY', amount: 200, fundedBy: 'CUSTOMER' },
+      { at: at(3), kind: 'SUPPLIER_OUTLAY', amount: 50, fundedBy: 'SELF' },
+      { at: at(4), kind: 'SUPPLIER_OUTLAY', amount: 250 },
+    ])).toEqual({ customer: 300, self: 200, derived: 250 });
+  });
+
+  it('a route built by hand without the ledger flag keeps an unstated funder unattributed', () => {
+    const m = quantifyRouteMoney({ routeKey: 'hand', events: [
+      { at: at(1), kind: 'FUNDS_RECEIVED', amount: 500 },
+      { at: at(2), kind: 'SUPPLIER_OUTLAY', amount: 300 },
+    ] });
+    expect(m.unattributedSpend).toBe(300);
+    expect(m.customerFundedSpend).toBeNull();
+    expect(m.selfFundedSpend).toBeNull();
+  });
+
+  it('ledger rows alone yield both figures: a customer deposit funds the first cost, the owner the overrun', () => {
+    const entry = (id: string, kind: CashMoneyEntry['kind'], cents: number, occurredAt: string): CashMoneyEntry => ({
+      id, projectId: 'p', opportunityId: 'opp-deposit', commitmentId: null, idempotencyKey: null, payloadFingerprint: null, kind, amountCents: cents,
+      currency: 'USD', verifiedReference: null, fundsAvailableAt: null, occurredAt, note: null, recordedBy: 'test', createdAt: occurredAt,
+    });
+    const [input] = routeInputsFromEntries([
+      entry('1', 'PIPELINE_AGREED', 100_000, at(1)),
+      entry('2', 'CUSTOMER_PAYMENT', 40_000, at(2)),
+      entry('3', 'COST', 30_000, at(3)),
+      entry('4', 'COST', 25_000, at(4)),
+      entry('5', 'CUSTOMER_PAYMENT', 60_000, at(9)),
+    ]);
+    const m = quantifyRouteMoney(input!);
+    expect(m.customerFundedSpend).toBe(400);
+    expect(m.selfFundedSpend).toBe(150);
+    expect(m.unattributedSpend).toBe(0);
+    expect(m.customerFundedSpend! + m.selfFundedSpend!).toBe(sumOutlays(m));
+    expect(m.unknowns).not.toContain('some supplier outlays do not say who funded them');
+  });
+});
+
+function sumOutlays(m: { supplierOutlays: { amount: number }[] }): number {
+  return m.supplierOutlays.reduce((t, o) => t + o.amount, 0);
+}
