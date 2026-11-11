@@ -407,6 +407,10 @@ jobs:
           for attempt in 1 2 3; do
             if timeout 300 sudo apt-get update -qq && timeout 300 sudo apt-get install -y -qq poppler-utils tesseract-ocr tesseract-ocr-eng >/dev/null; then ok=1; break; fi
             echo "::warning::OCR tooling install attempt $attempt did not finish; retrying."
+            # A runner whose Azure apt mirror stops resolving (2026-11-11: every
+            # suite shard from 13:32 to 16:26 failed here, so nothing released)
+            # takes the next attempt from Ubuntu's own archive.
+            sudo sed -i 's#mirror+file:/etc/apt/apt-mirrors.txt#http://archive.ubuntu.com/ubuntu/#g; s#http://azure.archive.ubuntu.com/ubuntu/#http://archive.ubuntu.com/ubuntu/#g' /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
           done
           [ "$ok" = 1 ] || { echo "::error::Could not install the OCR tooling."; exit 1; }
           npm ci --no-audit --no-fund
