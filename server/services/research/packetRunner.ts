@@ -2811,8 +2811,9 @@ export async function advanceIdlePackets(
  * a park would hand the owner a decision with nothing to decide. FAILED is also what lets a research
  * goal start its next round. The write is guarded in its own statement on the
  * status and `updated_at` it judged, and on there still being no outstanding
- * work, so a packet that moved in the meantime is not touched. Returns the
- * status it wrote, or null when it left the packet alone.
+ * work, so a packet that moved in the meantime is not touched. A transition it
+ * makes ends with `recomputeProject`, as every outcome transition does (§6).
+ * Returns the status it wrote, or null when it left the packet alone.
  */
 async function concludeStalledPacket(
   packet: ResearchOrchestration,
@@ -2864,6 +2865,10 @@ async function concludeStalledPacket(
       ...(failure ? { advanceError: failure.slice(0, 300) } : {}),
     },
   });
+  // The transition changed reality, so it re-derives state like every other
+  // outcome transition does (§6): the run, layer and runtime snapshot must not
+  // keep reading the packet as live until something unrelated recomputes.
+  await recomputeProject(packet.projectId);
   return to;
 }
 

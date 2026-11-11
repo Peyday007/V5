@@ -5,7 +5,17 @@
  * nothing calls `advancePacket` on it; if its last advance never happened it is
  * idle for ever. The tick sweep must reach it from rows.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+/*
+ * The real recompute runs; the wrapper only records that a transition asked
+ * for it, so a conclusion that leaves derived state stale is caught (§6).
+ */
+vi.mock('../server/services/stateEngine.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../server/services/stateEngine.ts')>();
+  return { ...actual, recomputeProject: vi.fn(actual.recomputeProject) };
+});
+import { recomputeProject } from '../server/services/stateEngine.ts';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createRun } from '../server/repos/runs.ts';
@@ -239,6 +249,23 @@ describe('the progress deadline', () => {
     // Once: a concluded packet is no longer selected.
     expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
     expect((await events(id)).filter((e) => e.event_type === 'RESEARCH_FAILED')).toHaveLength(1);
+  });
+
+  it('re-derives project state when it concludes a packet, and not when it leaves one alone (§6)', async () => {
+    const recompute = vi.mocked(recomputeProject);
+    const young = await stalled(UNDER);
+    recompute.mockClear();
+    expect(await advanceIdlePackets(10)).toEqual([]);
+    expect(recompute).not.toHaveBeenCalled();
+    expect((await getOrchestration(young))!.status).toBe('AWAITING_REPAIR');
+
+    const failed = await stalled(OVERDUE);
+    const parked = await stalled(OVERDUE, 'NEEDS_HUMAN');
+    recompute.mockClear();
+    const moved = await advanceIdlePackets(10);
+    expect(moved.map((e) => e.orchestrationId).sort()).toEqual([failed, parked].sort());
+    expect(recompute).toHaveBeenCalledTimes(2);
+    expect(recompute.mock.calls.every(([id]) => id === projectId)).toBe(true);
   });
 
   it('reads the judgment from rows, so a restart neither resets it nor brings it forward', async () => {
