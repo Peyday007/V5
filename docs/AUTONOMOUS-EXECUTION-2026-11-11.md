@@ -81,10 +81,45 @@ Left out on purpose: `gh api`/`curl` (a prefix rule cannot stop `-X DELETE`),
 `python3` (arbitrary execution), `delete_trigger` (it deletes sessions),
 `request_credential` and environment edits.
 
+## Verified on production, and what production then showed
+
+- **`fcp_17725629` is off the owner.** After #712 and #717 deployed, its outcome
+  reads *"Routed to the maintainer: no Factory worker may change this scope"*
+  with `MAINTAINER: … no owner action` (recorded 2026-11-11T08:22:46Z). It had
+  read *"Stopped until a person acts"* since 11-09. #717 was needed because
+  program campaigns always add a writable `tests/program-…*.test.ts` to their
+  scope. The first rule (every path forbidden) therefore never matched. Test
+  globs are now no way in.
+- **A contract could not be corrected from a session.** `factory.yml`'s
+  `extra` refuses quotes and splits on spaces, so `amend` could not carry an
+  acceptance condition. #723 adds `amend --value-file <path> [--ref <branch>]`.
+- **Deploy livelock.** Between 08:31 and 09:25, eleven Deploy runs ended
+  `success` with their `Deploy to Fly` job skipped. Each was superseded by a
+  newer canonical tip while its ~15-minute gate ran, because parallel sessions
+  merged faster than that. Nothing reached production after 08:20. The
+  finish-job checker read every one as a release. It now requires the Fly job's
+  own success (`tests/finishJob.test.ts`). The livelock itself is left as
+  §28/invariant 36 has it, because the fix is a policy change: a superseded run
+  could still release when its commit *descends from the running revision*.
+  That is forward progress and never a rollback, but it is not "the tip". It is
+  recorded here as the recommended change, not made.
+
 ## The demonstration
 
-One instruction: `objectives/normalize-suspended-hyphen-v2.json`, a live
-defect. An earlier Factory campaign on it (`fcp_4bc9ef45`) had run out of
-attempts and parked on the owner. Submitted with `--ref`, approved, then
-carried by the Factory as campaign `fcp_b11abd00`. The result is recorded
-below when the campaign ends.
+One instruction: a live defect in `server/services/documents/normalize.ts`.
+`SOFT_HYPHEN_BREAK` turned "pre- and post-closing" into "preand post-closing" in
+`normalized_text`, which retrieval and audits read. An earlier Factory campaign
+on it (`fcp_4bc9ef45`) had run out of attempts and parked on the owner.
+
+What happened, in order (owner interventions: **0**):
+
+| # | event | who resolved it |
+|---|---|---|
+| 1 | `objectives/normalize-suspended-hyphen-v2.json` submitted, approved, planned (`fcp_b11abd00`). | session → Factory |
+| 2 | **Failure.** Two implementer attempts refused: `tests/documents.test.ts:704` asserts the defect ('di- ation' → 'intermediation'), so A03 contradicted A01. | session amended the scope and regranted the unit (`regrant-unit --why ownership-widened`) |
+| 3 | **Failure.** The worker read A03 as forbidding the fixture edit. `amend` could not carry prose through `factory.yml` (`extra` refuses quotes). | #723 added `amend --value-file`. The Deploy livelock (above) kept it off production, so the session **changed strategy**: it retired `fcp_b11abd00` and resubmitted the corrected contract as v3. |
+| 4 | **Temporary outage.** The v3 submit hit the forge's hourly read budget. | waited for the window, resubmitted (`fcr_3f494a99`) |
+| 5 | **Interruption.** This session's context was compacted mid-run and its watcher was killed at its time limit. The Factory kept working on its own: campaign `fcp_ef7bb04a` planned in 35s, and a worker wrote the fix and test and integrated it (attempt 1/3). The resumed session read the state from production rows. | Factory, durable state |
+| 6 | **Failure found by Brain itself.** The independent review found a regression: a hyphen before CRLF (`'recog-\r\nnition'`) was no longer rejoined. Brain created `repair-F1` without being asked. | Factory review → repair unit |
+
+The rest is recorded when the campaign ends.

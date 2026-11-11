@@ -1,0 +1,40 @@
+{
+  "objective": "Text normalisation removes real hyphens that are not line breaks. In server/services/documents/normalize.ts, SOFT_HYPHEN_BREAK = /([A-Za-z])[-\\u00ad]\\s+([a-z])/g matches ordinary spaces, so normalizeBlockText('pre- and post-closing inspections; short- or long-term leases') returns 'preand post-closing inspections; shortor long-term leases' with the note 'rejoined hyphenated line breaks'. CLAUDE.md §9: normalisation may only remove extraction artifacts, and normalized_text is what retrieval and audits read. Fix it in that file: a hard hyphen ('-') rejoins only across a line break (letter, '-', optional spaces or tabs, a newline, optional spaces or tabs, a lowercase letter); a soft hyphen (U+00AD) may still join across any whitespace. Add tests/normalizeSuspendedHyphen.test.ts covering the acceptance conditions. An earlier campaign for this (fcp_4bc9ef45) ran out of attempts; keep the change to these two files. The existing fixture in tests/documents.test.ts ('normalization > cleans extraction artifacts', 'di- ation') asserts the defect: correct it to a real line break ('di-\\nation') and keep its expected text and notes. Campaign fcp_b11abd00 spent two attempts because its contract did not say so.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Suspended hyphens ('pre- and post-closing') survive normalisation unchanged with no rejoin note; genuine line-break hyphenation ('recog-\\nnition') is still rejoined.",
+  "nonGoals": [
+    "Changing any other normalisation rule",
+    "Re-normalising stored documents"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "normalizeBlockText('pre- and post-closing inspections; short- or long-term leases') returns the text unchanged and no 'rejoined hyphenated line breaks' note.",
+      "verification": "npx vitest run tests/normalizeSuspendedHyphen.test.ts",
+      "mandatory": true
+    },
+    {
+      "statement": "'recog-\\nnition' becomes 'recognition' with the rejoin note, and 'co\\u00ad operate' (soft hyphen before a space) still becomes 'cooperate'.",
+      "verification": "npx vitest run tests/normalizeSuspendedHyphen.test.ts",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/documents.test.ts passes and the repository typechecks. Its 'cleans extraction artifacts' fixture is corrected from 'di- ation' (hyphen then a space, which asserted the defect) to 'di-\\nation' (hyphen then a line break); its expected text and notes stay exactly as they are. No other existing assertion changes.",
+      "verification": "npx vitest run tests/documents.test.ts && npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/documents/normalize.ts",
+    "tests/normalizeSuspendedHyphen.test.ts",
+    "tests/documents.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npx vitest run tests/normalizeSuspendedHyphen.test.ts tests/documents.test.ts"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change.",
+  "submissionKey": "normalize-suspended-hyphen-2026-11-11-v3"
+}

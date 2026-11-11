@@ -70,7 +70,7 @@ beforeEach(() => {
   fs.mkdirSync(path.join(dir, 'home'));
   fs.writeFileSync(
     path.join(dir, 'bin/gh'),
-    `#!/bin/bash\ncase "$2" in\n *"/pulls?head="*) f=prs;;\n */pulls/*) f=pr;;\n *postgres-suite.yml/runs*) f=ci;;\n *deploy.yml/runs*) f=deploy;;\n */actions/runs/*) f=run;;\n *) exit 1;;\nesac\n[ -f "${fake}/$f" ] && cat "${fake}/$f" || exit 1\n`,
+    `#!/bin/bash\ncase "$2" in\n *"/pulls?head="*) f=prs;;\n */pulls/*) f=pr;;\n *postgres-suite.yml/runs*) f=ci;;\n *deploy.yml/runs*) f=deploy;;\n */actions/runs/*/jobs) f=jobs;;\n */actions/runs/*) f=run;;\n *) exit 1;;\nesac\n[ -f "${fake}/$f" ] && cat "${fake}/$f" || exit 1\n`,
     { mode: 0o755 },
   );
   env = {
@@ -188,6 +188,12 @@ describe('completion is decided by evidence and the repository', () => {
 
     gh('ci', runs(merge, 'success'));
     gh('deploy', runs(merge, 'success'));
+    // 2026-11-11: a Deploy superseded by a newer canonical tip ends `success` with
+    // its release job skipped. That released nothing and is not DEPLOY.
+    gh('jobs', { jobs: [{ name: 'Typecheck and tests (1)', conclusion: 'skipped' }, { name: 'Deploy to Fly', conclusion: 'skipped' }] });
+    res = cli('check');
+    expect(res.out).toMatch(/\[OPEN\s*\] DEPLOY/);
+    gh('jobs', { jobs: [{ name: 'Deploy to Fly', conclusion: 'success' }] });
     res = cli('check');
     expect(res.out).toMatch(/^FINISH-JOB DONE/);
     expect(res.code).toBe(0);
