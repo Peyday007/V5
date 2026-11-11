@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  STEPS, PUBLISHER_ADDRESS, bestEmail, campaignDefinition, extractEmails, isLocationSubpage, isPlausibleEmail,
+  STEPS, PUBLISHER_ADDRESS, bestEmail, hasMailServer, campaignDefinition, extractEmails, isLocationSubpage, isPlausibleEmail,
   shapeProblems, syncCampaign, type Deps,
 } from '../server/services/cash/neighborCard.ts';
 
@@ -110,5 +110,14 @@ describe('sync', () => {
     expect(result.status).toBe(-2);
     expect(result.line).toMatch(/not resumed automatically/);
     expect(d.calls.some((c) => c.includes('/activate'))).toBe(false);
+  });
+});
+
+describe('mail-server check', () => {
+  const doh = (body: unknown) => (async () => json(body)) as unknown as typeof fetch;
+  it('accepts a domain with an MX answer and refuses NXDOMAIN or a null MX', async () => {
+    expect(await hasMailServer('rotherdental.com', doh({ Status: 0, Answer: [{ type: 15, data: '0 rotherdental-com.mail.protection.outlook.com.' }] }))).toBe(true);
+    expect(await hasMailServer('gone.example', doh({ Status: 3 }))).toBe(false);
+    expect(await hasMailServer('nomail.example', doh({ Status: 0, Answer: [{ type: 15, data: '0 .' }] }))).toBe(false);
   });
 });
