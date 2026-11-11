@@ -501,20 +501,53 @@ export function routeInputsFromEntries(
   return inputs;
 }
 
-/** Read one project's money ledger and quantify every route in it, in one currency. */
+/** The most rows one `listMoneyEntries` read returns; a read that fills it may have left older rows behind. */
+export const LEDGER_READ_LIMIT = 2000;
+
+/**
+ * Read one project's money ledger and quantify every route in it, in one currency.
+ *
+ * The ledger read is bounded and newest-first, so a project-wide read that comes
+ * back full has dropped the project's *oldest* rows — exactly a route's
+ * PIPELINE_AGREED billing or its first COST — while keeping later receipts. A
+ * route quantified from that would report a wrong commitment date, receivables,
+ * margin and peak working capital as measured. So a full project read is never
+ * quantified: every route (each opportunity row, plus any route seen in the
+ * newest rows) is read on its own, in full, through the opportunity index. A
+ * route whose own read still fills the bound is quantified with an explicit
+ * unknown saying its oldest rows were not read, never presented as complete.
+ */
 export async function readRouteMoney(input: {
   projectId: string;
   currency: string;
   /** The project's opportunity rows when the caller already read them, so they are not read twice. */
   opportunities?: readonly CashOpportunity[];
 }): Promise<RouteMoneyVelocity[]> {
-  const [entries, opportunities] = await Promise.all([
-    listMoneyEntries({ projectId: input.projectId, currency: input.currency, limit: 2000 }),
+  const [projectEntries, opportunities] = await Promise.all([
+    listMoneyEntries({ projectId: input.projectId, currency: input.currency, limit: LEDGER_READ_LIMIT }),
     input.opportunities ?? listOpportunities({ projectId: input.projectId }),
   ]);
   // The opportunity row is the lead, and its creation instant is when the lead was recorded.
   const leadAt = new Map(opportunities.map((o) => [o.id, o.createdAt] as const));
-  return routeInputsFromEntries(entries, leadAt).map(quantifyRouteMoney);
+  if (projectEntries.length < LEDGER_READ_LIMIT) {
+    return routeInputsFromEntries(projectEntries, leadAt).map(quantifyRouteMoney);
+  }
+  const routeIds = new Set<string>(opportunities.map((o) => o.id));
+  for (const e of projectEntries) if (e.opportunityId) routeIds.add(e.opportunityId);
+  const truncated = new Set<string>();
+  const entries: CashMoneyEntry[] = [];
+  for (const opportunityId of routeIds) {
+    const rows = await listMoneyEntries({ projectId: input.projectId, opportunityId, currency: input.currency, limit: LEDGER_READ_LIMIT });
+    if (rows.length >= LEDGER_READ_LIMIT) truncated.add(opportunityId);
+    entries.push(...rows);
+  }
+  return routeInputsFromEntries(entries, leadAt).map((route) => {
+    const money = quantifyRouteMoney(route);
+    if (truncated.has(route.routeKey)) {
+      money.unknowns.push(`ledger read stopped at ${LEDGER_READ_LIMIT} rows for this route: its oldest rows were not read, so every figure is incomplete`);
+    }
+    return money;
+  });
 }
 
 /** The same routes ranked for an objective; unknown inputs score null and sort last. */
