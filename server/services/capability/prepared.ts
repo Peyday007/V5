@@ -19,8 +19,14 @@
  *    implemented (its campaign COMPLETE), the capability then reads WORKING
  *    over real attempts, and the blocked work ran after that.
  *
- * `handOffToFactory` is the one place the handoff is made, and `resumeOf` is the
- * one place resumption is judged, from `work_items` rows.
+ * Nobody has to remember an option: `identifyDependencies` reads a goal's
+ * blocked work from rows (an open cash need keyed `CAPABILITY:<requirement>`)
+ * and matches it to the recorded option, and `advancePreparedOptions`, on the
+ * Russell tick, hands the identified dependency to the existing Factory
+ * (`submitObjective`) and later judges resumption from that same blocked need.
+ * `handOffToFactory` remains the entry for a caller that already holds the
+ * repository context, and `resumeOf` is the one place resumption is judged,
+ * from `work_items` and `cash_needs` rows.
  *
  * No category, provider or example here is a whitelist: every access method is
  * data the preparer supplied, and the comparison is over its declared traits.
@@ -230,7 +236,7 @@ export async function handOffToFactory(
   context: FactoryHandoffContext,
 ): Promise<{ changeRequest: FactoryChangeRequest; created: boolean } | null> {
   if (!resolution.handoff || !resolution.minimum) return null;
-  const submissionKey = `prepared-option:${createHash('sha256').update(`${projectId}\u0000${resolution.requirementId}\u0000${context.goal}`).digest('hex').slice(0, 24)}`;
+  const submissionKey = submissionKeyFor(projectId, resolution.requirementId, context.goal);
   const { changeRequest, created } = await ensureChangeRequest({
     projectId,
     submissionKey,
@@ -317,8 +323,9 @@ export async function resumeOf(
   projectId: string,
   requirementId: string,
   blockedWorkItemIds: readonly string[],
-  options: { changeRequestId?: string; now?: Date; root?: string } = {},
+  options: { changeRequestId?: string; now?: Date; root?: string; blockedNeedIds?: readonly string[] } = {},
 ): Promise<Resumption> {
+  const needIds = options.blockedNeedIds ?? [];
   const events = await listEventsByEntity('capability_requirement', requirementId);
   const handoffs = events
     .filter((e) => e.projectId === projectId && e.payload.kind === PREPARED_HANDOFF_KIND)
@@ -333,7 +340,7 @@ export async function resumeOf(
     resumed: false,
     completedAfter: [],
   };
-  if (!handoff || !none.changeRequestId || blockedWorkItemIds.length === 0) return none;
+  if (!handoff || !none.changeRequestId || (blockedWorkItemIds.length === 0 && needIds.length === 0)) return none;
   const handedOffAt = handoff.createdAt;
 
   const changeRequest = await getChangeRequest(none.changeRequestId);
@@ -359,11 +366,26 @@ export async function resumeOf(
     }
   }
 
-  const rows = await getDb().all<{ id: string; completed_at: string | null }>(
+  const rows = blockedWorkItemIds.length === 0 ? [] : await getDb().all<{ id: string; completed_at: string | null }>(
     `SELECT id, completed_at FROM work_items WHERE project_id = ? AND state = 'SUCCEEDED' AND id IN (${blockedWorkItemIds.map(() => '?').join(',')})`,
     [projectId, ...blockedWorkItemIds],
   );
-  const times = rows.filter((r) => r.completed_at !== null);
+  /*
+   * A goal's blocked cash work is a need keyed CAPABILITY:<id>. The cash
+   * operation resolves it only when the capability reads PRESENT from its own
+   * rows (cash/operate.ts), so a need RESOLVED by Brain after the
+   * implementation is the blocked work resuming. A person's manual
+   * substitute is a different fact and is not counted.
+   */
+  const needRows = needIds.length === 0 ? [] : await getDb().all<{ id: string; resolved_at: string | null }>(
+    `SELECT id, resolved_at FROM cash_needs WHERE project_id = ? AND state = 'RESOLVED'
+        AND (verified_by IS NULL OR verified_by = 'BRAIN_READ_THE_ROW') AND id IN (${needIds.map(() => '?').join(',')})`,
+    [projectId, ...needIds],
+  );
+  const times = [
+    ...rows.filter((r) => r.completed_at !== null),
+    ...needRows.filter((r) => r.resolved_at !== null).map((r) => ({ id: r.id, completed_at: r.resolved_at })),
+  ];
   const resumed = handoffCausedResumption({
     handedOffAt,
     changeRequestWithdrawn: withdrawn,
@@ -381,17 +403,193 @@ export async function resumeOf(
 }
 
 export const PREPARED_RESUMED_KIND = 'PREPARED_OPTION_RESUMED';
+/** A goal's blocked work was found to depend on a prepared option: identified from rows, never from a caller. */
+export const PREPARED_NEEDED_KIND = 'PREPARED_OPTION_NEEDED';
+
+/** The blocker keys under which a goal's blocked work names a requirement. */
+export function blockerKeysFor(requirementId: string): string[] {
+  const keys = [`CAPABILITY:${requirementId}`];
+  for (const map of Object.values(CAPABILITY_MAPS)) {
+    if (map.requirements.some((r) => r.id === requirementId)) keys.push(`CAPABILITY:${map.key}.${requirementId}`);
+  }
+  return keys;
+}
+
+export interface IdentifiedDependency {
+  projectId: string;
+  requirementId: string;
+  option: PreparedOption;
+  /** Stable for the requirement in the project, so a later pass reaches the same handoff. */
+  goal: string;
+  /** Open cash needs whose blocker key names the requirement: the goal's blocked work. */
+  blockedNeedIds: string[];
+  opportunityIds: string[];
+}
 
 /**
- * Judge, from rows, every handoff whose blocked work has not yet been recorded
- * as resumed. Called from `advanceSources` on the Russell tick, so nobody has to
- * remember an old option: a handoff that names blocked work items is re-read
- * each pass and, the first time `resumeOf` finds one of them completed after
- * the handoff was implemented and the capability reads WORKING, a single
- * RESUMED event is appended. It creates no work, holds no
- * lease and spends nothing; a handoff that names no work items is never judged.
+ * Which goals' blocked work now depends on a recorded prepared option, read
+ * from rows alone. The cash operation raises one need per blocked piece under
+ * the shared key `CAPABILITY:<id>` (cash/operate.ts); a prepared option names
+ * the requirement it stands behind. Where the two meet, the dependency is
+ * identified: nobody has to remember the option or name the blocked work.
  */
-export async function advancePreparedOptions(): Promise<{ judged: number; resumed: number }> {
+export async function identifyDependencies(projectId?: string): Promise<IdentifiedDependency[]> {
+  const projects = projectId
+    ? [projectId]
+    : (await getDb().all<{ project_id: string }>(
+        `SELECT DISTINCT project_id FROM project_events
+          WHERE entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED' AND payload LIKE ?`,
+        [`%"${PREPARED_OPTION_KIND}"%`],
+      )).map((r) => r.project_id);
+  const out: IdentifiedDependency[] = [];
+  for (const pid of projects) {
+    const options = await preparedOptions(pid);
+    for (const [requirementId, option] of options) {
+      const keys = blockerKeysFor(requirementId);
+      const needs = await getDb().all<{ id: string; opportunity_id: string | null }>(
+        `SELECT id, opportunity_id FROM cash_needs WHERE project_id = ? AND state = 'OPEN'
+            AND blocker_key IN (${keys.map(() => '?').join(',')}) ORDER BY created_at, id`,
+        [pid, ...keys],
+      );
+      if (needs.length === 0) continue;
+      out.push({
+        projectId: pid,
+        requirementId,
+        option,
+        goal: `the cash work blocked on CAPABILITY:${requirementId}`,
+        blockedNeedIds: needs.map((n) => n.id),
+        opportunityIds: [...new Set(needs.map((n) => n.opportunity_id).filter((x): x is string => !!x))],
+      });
+    }
+  }
+  return out;
+}
+
+/** What the automatic handoff gives the existing Factory; the Factory derives the rest (base, verification) itself. */
+export interface IdentifiedSubmission {
+  projectId: string;
+  requirementId: string;
+  goal: string;
+  objective: string;
+  expectedOutcome: string;
+  acceptanceConditions: Array<{ statement: string; verification: string; mandatory: boolean }>;
+  submissionKey: string;
+}
+export type Submitter = (submission: IdentifiedSubmission) => Promise<{ changeRequestId: string; created: boolean }>;
+
+/**
+ * The existing Factory's own entrance (`submitObjective`), aimed at Brain's
+ * repository the way the improvement loop aims it: the forge pins the base and
+ * the verification, so nothing here guesses either. It is submitted, never
+ * approved or started here — approval stays where the Factory puts it.
+ */
+export const factorySubmitter: Submitter = async (submission) => {
+  const { submitObjective } = await import('../factory/contract.ts');
+  const { BRAIN_REPOSITORY_REMOTE } = await import('../improvement/loop.ts');
+  const granted = await getDb().get<{ project_id: string }>(
+    "SELECT project_id FROM factory_project_repositories WHERE grant_id = 'brain' ORDER BY created_at LIMIT 1",
+    [],
+  );
+  const result = await submitObjective({
+    projectId: granted?.project_id ?? submission.projectId,
+    objective: submission.objective,
+    expectedOutcome: submission.expectedOutcome,
+    nonGoals: ['keeping the option warm', 'crossing a credential, contract, spend or permission gate'],
+    acceptanceConditions: submission.acceptanceConditions,
+    repositoryRemote: BRAIN_REPOSITORY_REMOTE,
+    baseBranch: 'production',
+    submissionKey: submission.submissionKey,
+  });
+  return { changeRequestId: result.changeRequest.id, created: result.created };
+};
+
+function submissionKeyFor(projectId: string, requirementId: string, goal: string): string {
+  return `prepared-option:${createHash('sha256').update(`${projectId}\u0000${requirementId}\u0000${goal}`).digest('hex').slice(0, 24)}`;
+}
+
+/**
+ * Turn identified dependencies into handoffs, once each. For a dependency with
+ * no handoff yet: compare the permitted access methods (`resolveNeed`, gates
+ * nobody opened stay closed), record that the dependency was identified, and
+ * hand the minimum missing capability to the existing Factory. A dependency
+ * whose every method is gated is recorded with the gates for the end report
+ * and handed nowhere. A refused submission is recorded and tried again on the
+ * next pass; it creates no work and spends nothing.
+ */
+export async function initiateIdentified(submit: Submitter = factorySubmitter, projectId?: string): Promise<{ identified: number; handedOff: number; gated: number; failed: number }> {
+  const found = await identifyDependencies(projectId);
+  let handedOff = 0;
+  let gated = 0;
+  let failed = 0;
+  for (const d of found) {
+    const events = (await listEventsByEntity('capability_requirement', d.requirementId)).filter((e) => e.projectId === d.projectId);
+    if (events.some((e) => e.payload.kind === PREPARED_HANDOFF_KIND)) continue;
+    const resolution = resolveNeed(d.option, { requirementId: d.requirementId, goal: d.goal });
+    const signature = `${d.blockedNeedIds.join(',')}|${resolution.minimum?.name ?? ''}`;
+    if (!events.some((e) => e.payload.kind === PREPARED_NEEDED_KIND && e.payload.signature === signature)) {
+      await recordEvent({
+        projectId: d.projectId,
+        entityType: 'capability_requirement',
+        entityId: d.requirementId,
+        eventType: 'CAPABILITY_ASSESSED',
+        payload: {
+          kind: PREPARED_NEEDED_KIND, integration: false, signature, goal: d.goal,
+          blockedNeedIds: d.blockedNeedIds, opportunityIds: d.opportunityIds,
+          permitted: resolution.permitted.map((m) => m.name), minimum: resolution.minimum?.name ?? null,
+          needsPerson: resolution.needsPerson,
+        },
+      });
+    }
+    if (!resolution.handoff || !resolution.minimum) {
+      gated += 1;
+      continue;
+    }
+    let submitted: { changeRequestId: string; created: boolean };
+    try {
+      submitted = await submit({
+        projectId: d.projectId,
+        requirementId: d.requirementId,
+        goal: d.goal,
+        objective: resolution.handoff.objective,
+        expectedOutcome: `${d.requirementId} works in production and the blocked work of ${d.goal} resumes`,
+        acceptanceConditions: resolution.handoff.acceptanceConditions.map((statement) => ({
+          statement,
+          verification: 'proof reading over real attempts, and rows showing the goal\'s blocked needs resolved afterwards',
+          mandatory: true,
+        })),
+        submissionKey: submissionKeyFor(d.projectId, d.requirementId, d.goal),
+      });
+    } catch {
+      failed += 1;
+      continue;
+    }
+    await recordEvent({
+      projectId: d.projectId,
+      entityType: 'capability_requirement',
+      entityId: d.requirementId,
+      eventType: 'CAPABILITY_ASSESSED',
+      payload: {
+        kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId: submitted.changeRequestId, goal: d.goal,
+        method: resolution.minimum.name, blockedWorkItemIds: [], blockedNeedIds: d.blockedNeedIds, identified: true,
+      },
+    });
+    handedOff += 1;
+  }
+  return { identified: found.length, handedOff, gated, failed };
+}
+
+/**
+ * Called from `advanceSources` on the Russell tick, so nobody has to remember
+ * an old option. First it initiates: every goal whose blocked work now names
+ * a prepared option's requirement is identified from rows and handed to the
+ * Factory (`initiateIdentified`). Then it judges: a handoff naming blocked work
+ * items or blocked needs is re-read each pass and, the first time `resumeOf`
+ * finds one of them completed after the handoff was implemented and the
+ * capability reads WORKING, a single RESUMED event is appended. It holds no
+ * lease and spends nothing.
+ */
+export async function advancePreparedOptions(options: { submit?: Submitter } = {}): Promise<{ judged: number; resumed: number; identified: number; handedOff: number }> {
+  const initiated = await initiateIdentified(options.submit ?? factorySubmitter).catch(() => ({ identified: 0, handedOff: 0 }));
   const rows = await getDb().all<{ project_id: string; entity_id: string; payload: string }>(
     `SELECT project_id, entity_id, payload FROM project_events
       WHERE entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED'
@@ -401,14 +599,17 @@ export async function advancePreparedOptions(): Promise<{ judged: number; resume
   const parse = (raw: string): Record<string, unknown> => {
     try { return JSON.parse(raw) as Record<string, unknown>; } catch { return {}; }
   };
+  const ids = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
   const done = new Set<string>();
-  const pending: Array<{ projectId: string; requirementId: string; changeRequestId: string; blocked: string[] }> = [];
+  const pending: Array<{ projectId: string; requirementId: string; changeRequestId: string; blocked: string[]; needs: string[] }> = [];
   for (const r of rows) {
     const p = parse(r.payload);
     const crId = typeof p.changeRequestId === 'string' ? p.changeRequestId : '';
     if (p.kind === PREPARED_RESUMED_KIND) done.add(crId);
-    else if (p.kind === PREPARED_HANDOFF_KIND && Array.isArray(p.blockedWorkItemIds) && p.blockedWorkItemIds.length > 0) {
-      pending.push({ projectId: r.project_id, requirementId: r.entity_id, changeRequestId: crId, blocked: p.blockedWorkItemIds.filter((x): x is string => typeof x === 'string') });
+    else if (p.kind === PREPARED_HANDOFF_KIND) {
+      const blocked = ids(p.blockedWorkItemIds);
+      const needs = ids(p.blockedNeedIds);
+      if (blocked.length > 0 || needs.length > 0) pending.push({ projectId: r.project_id, requirementId: r.entity_id, changeRequestId: crId, blocked, needs });
     }
   }
   let judged = 0;
@@ -416,7 +617,7 @@ export async function advancePreparedOptions(): Promise<{ judged: number; resume
   for (const h of pending) {
     if (done.has(h.changeRequestId)) continue;
     judged += 1;
-    const r = await resumeOf(h.projectId, h.requirementId, h.blocked, h.changeRequestId ? { changeRequestId: h.changeRequestId } : {});
+    const r = await resumeOf(h.projectId, h.requirementId, h.blocked, { ...(h.changeRequestId ? { changeRequestId: h.changeRequestId } : {}), blockedNeedIds: h.needs });
     if (!r.resumed) continue;
     await recordEvent({
       projectId: h.projectId,
@@ -430,5 +631,5 @@ export async function advancePreparedOptions(): Promise<{ judged: number; resume
     });
     resumed += 1;
   }
-  return { judged, resumed };
+  return { judged, resumed, identified: initiated.identified, handedOff: initiated.handedOff };
 }
