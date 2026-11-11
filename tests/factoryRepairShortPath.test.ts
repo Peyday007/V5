@@ -68,4 +68,19 @@ describe('a short path in a finding', () => {
     expect(after.ok).toBe(true);
     if (after.ok) expect(after.rootCauseFiles).toEqual(['server/services/sources/acquisition.ts']);
   });
+
+  it('keeps a root path the running image does not carry, such as a test', () => {
+    const scope = resolveRepairScope({
+      suggested: ['tests/someEngineThatIsNotOnDisk.test.ts'],
+      statement: 'tests/someEngineThatIsNotOnDisk.test.ts asserts nothing about the engine',
+      evidence: '',
+      category: 'TEST',
+      mutationScope: ['server/services/quant/**', 'tests/program-x-money*.test.ts'],
+      forbiddenPaths: [],
+      units: [{ unitKey: 'u1', ownedPaths: ['server/services/quant/engine.ts'] }],
+    });
+    expect(scope.ok).toBe(false);
+    if (!scope.ok && scope.reason === 'REQUIRED_FILE_NOT_WRITABLE') expect(scope.outsideScope).toEqual(['tests/someEngineThatIsNotOnDisk.test.ts']);
+    else throw new Error(`expected REQUIRED_FILE_NOT_WRITABLE, got ${JSON.stringify(scope)}`);
+  });
 });
