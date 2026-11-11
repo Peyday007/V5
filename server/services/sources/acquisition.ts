@@ -267,13 +267,34 @@ export function repeatedUseFromRows(
   return { repeatedUses: best.uses, repeatedUsesNeedingFallback: best.fallback };
 }
 
-/** Repeated-use counts for a host from existing SOURCE_ACCESS rows; zeros when unreadable. */
+/**
+ * The `LIKE` pattern that selects a host's rows by their `measures`. Every writer
+ * of a host-bearing row here (and `access.ts`) serializes `{ host, ... }` with
+ * `JSON.stringify`, lower-cased, so the pattern is exact for them; the pure
+ * readers still check the parsed host, so a pattern that matches more never
+ * decides anything. `%`, `_` and `\\` are escaped, so a host is never a wildcard.
+ */
+export function hostMeasuresPattern(host: string): string {
+  const escaped = host.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`);
+  return `%"host":"${escaped}"%`;
+}
+
+/** How many rows of one host a reader takes; a host's own history, never the whole table's. */
+const HOST_ROWS_MAX = 500;
+
+/**
+ * Repeated-use counts for a host from existing SOURCE_ACCESS rows; zeros when unreadable.
+ *
+ * The read path does not call this: `access.ts` counts repetition from the
+ * SOURCE_ACCESS rows its learner already holds (one load per refresh, §61/§63).
+ * This is for a caller off that path, and it reads that host's rows only.
+ */
 export async function readRepeatedUse(host: string): Promise<{ repeatedUses: number; repeatedUsesNeedingFallback: number }> {
   try {
     const since = new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString();
     const rows = await getDb().all<{ provider: string | null; measures: string | null; at: string | null }>(
-      `SELECT provider, measures, at FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? ORDER BY at DESC LIMIT 5000`,
-      [since],
+      `SELECT provider, measures, at FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? AND measures LIKE ? ESCAPE '\\' ORDER BY at DESC LIMIT ${HOST_ROWS_MAX}`,
+      [since, hostMeasuresPattern(host)],
     );
     return repeatedUseFromRows(rows, host);
   } catch {
@@ -342,12 +363,19 @@ export function operatePermissionFromRows(
   return best?.row ?? NO_PERMISSION;
 }
 
-/** The standing operate permission for a host, read from the rows; none when unreadable. */
+/**
+ * The standing operate permission for a host, read from the rows; none when unreadable.
+ *
+ * Only that host's rows are read, newest first, and only a few: the newest dated
+ * row decides, and a host has a handful of grants and revocations, not thousands.
+ * It is read fresh on every OPERATE judgment rather than held, because a
+ * revocation is an authority decision and must apply to the very next read.
+ */
 export async function readOperatePermission(host: string): Promise<OperatePermission> {
   try {
     const rows = await getDb().all<{ outcome: string | null; measures: string | null; at: string | null }>(
-      `SELECT outcome, measures, at FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 2000`,
-      [OPERATE_PERMISSION_EVENT],
+      `SELECT outcome, measures, at FROM bin_events WHERE event_type = ? AND measures LIKE ? ESCAPE '\\' ORDER BY at DESC LIMIT 20`,
+      [OPERATE_PERMISSION_EVENT, hostMeasuresPattern(host)],
     );
     return operatePermissionFromRows(rows, host);
   } catch {
@@ -402,8 +430,8 @@ async function readProposalOnRecord(host: string, route: string): Promise<boolea
   try {
     const since = new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString();
     const rows = await getDb().all<{ measures: string | null }>(
-      `SELECT measures FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED' AND at >= ? ORDER BY at DESC LIMIT 500`,
-      [since],
+      `SELECT measures FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED' AND at >= ? AND measures LIKE ? ESCAPE '\\' ORDER BY at DESC LIMIT 50`,
+      [since, hostMeasuresPattern(host)],
     );
     return rows.some((r) => {
       try {

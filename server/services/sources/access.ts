@@ -41,7 +41,14 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { browserMcpUrl, renderInBrowser } from './browserMcp.ts';
 import { connectorFor } from './connectors.ts';
 import { searchSuccessor } from './discover.ts';
-import { recordAcquisitionJudgment, REPEATED_USE_WINDOW_MS, type AcquisitionEvidence } from './acquisition.ts';
+import {
+  readOperatePermission,
+  recordAcquisitionJudgment,
+  repeatedUseFromRows,
+  REPEATED_USE_WINDOW_MS,
+  type AcquisitionEvidence,
+  type RecordAcquisitionDeps,
+} from './acquisition.ts';
 import { activeRoutine, routinesFrom, type Routine, type RoutineUse } from './routines.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, type AccessEvidence } from './accessMethods.ts';
 import { checkDestination, fetchForWorker, systemResolver, type Resolver, type SourceFetch } from './fetchForWorker.ts';
@@ -355,9 +362,7 @@ export async function sitemapSuccessor(
 
 const LEARN_WINDOW_MS = 7 * 24 * 60 * 60_000;
 const LEARN_REFRESH_MS = 5 * 60_000;
-let learnedAt = 0;
 let learnedMap = new Map<string, AccessMethod>();
-let learning: Promise<void> | null = null;
 
 interface HostTally {
   directOk: number;
@@ -437,70 +442,157 @@ export function browserRecordFrom(rows: { measures: string | null }[]): Map<stri
 
 let browserRecords = new Map<string, BrowserRecord>();
 
-async function defaultLearned(host: string): Promise<AccessMethod | null> {
-  if (Date.now() - learnedAt > LEARN_REFRESH_MS) {
-    learning ??= (async () => {
-      try {
-        const since = new Date(Date.now() - LEARN_WINDOW_MS).toISOString();
-        const rows = await getDb().all<{ provider: string | null; outcome: string | null; measures: string | null }>(
-          `SELECT provider, outcome, measures FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? ORDER BY at DESC LIMIT 5000`,
-          [since],
-        );
-        learnedMap = learnFrom(rows);
-        browserRecords = browserRecordFrom(rows);
-      } catch {
-        // A record that cannot be read teaches nothing; DIRECT leads.
-      } finally {
-        learnedAt = Date.now();
-        learning = null;
-      }
-    })();
-    await learning;
+/*
+ * The access history, loaded once per refresh and shared.
+ *
+ * Every public read records itself and two judgments, so anything read per read
+ * runs on the research hot path against the shared database (§61/§63). The
+ * learner, the routines, the acquisition judgment's repetition count and its
+ * "already proposed" check all want the same two sets of rows — recent
+ * SOURCE_ACCESS and CONNECTOR_PROPOSED — so they are read together, at most once
+ * per `LEARN_REFRESH_MS`, single-flight, and every consumer derives from them.
+ * What this process writes is added as it is written (`noteHistory`), so a read
+ * counts itself and this process's earlier reads at once, and other processes'
+ * rows within one refresh. Nothing is held that a reload cannot rebuild (§45).
+ *
+ * The operate permission is deliberately not held: it is an authority decision,
+ * read fresh for its one host (`readOperatePermission`), so a revocation applies
+ * to the next read.
+ */
+interface HistoryAccessRow {
+  provider: string | null;
+  outcome: string | null;
+  measures: string | null;
+  at: string | null;
+}
+interface HistoryProposalRow {
+  measures: string | null;
+  at: string | null;
+}
+const HISTORY_ACCESS_MAX = 5000;
+let historyAt = 0;
+let historyLoading: Promise<void> | null = null;
+/** Newest first. */
+let historyAccess: HistoryAccessRow[] = [];
+/** `host|route` of each CONNECTOR_PROPOSED row inside the window, held or written here. */
+let historyProposals = new Set<string>();
+let routineMap = new Map<string, Routine>();
+
+/** What the history reads and writes cost the database since the last reset: the load this module adds, measured. */
+const dbLoad = { historyLoads: 0, queries: 0, writes: 0, judgmentsSkipped: 0 };
+export function sourceAccessDbLoad(): Readonly<typeof dbLoad> {
+  return { ...dbLoad };
+}
+
+const proposalKey = (host: string, route: string) => `${host.toLowerCase()}|${route}`;
+
+async function loadHistory(): Promise<void> {
+  dbLoad.historyLoads += 1;
+  // One window covers every consumer: repetition and routines look back
+  // REPEATED_USE_WINDOW_MS; the learner keeps only its own LEARN_WINDOW_MS of it.
+  const since = new Date(Date.now() - Math.max(REPEATED_USE_WINDOW_MS, LEARN_WINDOW_MS)).toISOString();
+  let access: HistoryAccessRow[] = [];
+  let proposals: HistoryProposalRow[] = [];
+  try {
+    dbLoad.queries += 1;
+    access = await getDb().all<HistoryAccessRow>(
+      `SELECT provider, outcome, measures, at FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? ORDER BY at DESC LIMIT ${HISTORY_ACCESS_MAX}`,
+      [since],
+    );
+  } catch {
+    // A record that cannot be read teaches nothing; DIRECT leads and nothing is repeated.
   }
+  try {
+    dbLoad.queries += 1;
+    proposals = await getDb().all<HistoryProposalRow>(
+      `SELECT measures, at FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED' AND at >= ? ORDER BY at DESC LIMIT 500`,
+      [new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString()],
+    );
+  } catch {
+    // A record that cannot be read builds no routine; the ordinary routes run.
+  }
+  const learnSince = Date.now() - LEARN_WINDOW_MS;
+  const learnRows = access.filter((r) => (r.at ? Date.parse(r.at) >= learnSince : false));
+  learnedMap = learnFrom(learnRows);
+  browserRecords = browserRecordFrom(learnRows);
+  routineMap = routinesFrom(proposals, access);
+  historyAccess = access;
+  historyProposals = new Set();
+  for (const p of proposals) {
+    try {
+      const m = JSON.parse(p.measures ?? '{}') as { host?: unknown; route?: unknown };
+      if (typeof m.host === 'string' && typeof m.route === 'string') historyProposals.add(proposalKey(m.host, m.route));
+    } catch {
+      /* an unparseable row proposes nothing */
+    }
+  }
+}
+
+async function freshHistory(): Promise<void> {
+  if (Date.now() - historyAt > LEARN_REFRESH_MS) {
+    historyLoading ??= loadHistory().finally(() => {
+      historyAt = Date.now();
+      historyLoading = null;
+    });
+    await historyLoading;
+  }
+}
+
+/** Add a row this process just wrote to the held history, so the next judgment counts it without reading it back. */
+function noteHistory(eventType: string, provider: string | null, measures: Record<string, unknown>): void {
+  if (eventType === 'SOURCE_ACCESS') {
+    historyAccess.unshift({ provider, outcome: null, measures: JSON.stringify(measures), at: new Date().toISOString() });
+    if (historyAccess.length > HISTORY_ACCESS_MAX) historyAccess.length = HISTORY_ACCESS_MAX;
+  } else if (eventType === 'CONNECTOR_PROPOSED' && typeof measures.host === 'string' && typeof measures.route === 'string') {
+    historyProposals.add(proposalKey(measures.host, measures.route));
+  }
+}
+
+async function defaultLearned(host: string): Promise<AccessMethod | null> {
+  await freshHistory();
   return learnedMap.get(host) ?? null;
 }
 
-/** Routines built from CONNECTOR_PROPOSED rows, refreshed on the same cadence as the learned leads. */
-let routinesAt = 0;
-let routineMap = new Map<string, Routine>();
-let routining: Promise<void> | null = null;
-
 async function defaultRoutine(host: string): Promise<Routine | null> {
-  if (Date.now() - routinesAt > LEARN_REFRESH_MS) {
-    routining ??= (async () => {
-      try {
-        const since = new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString();
-        const proposals = await getDb().all<{ measures: string | null; at: string | null }>(
-          `SELECT measures, at FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED' AND at >= ? ORDER BY at DESC LIMIT 500`,
-          [since],
-        );
-        const access =
-          proposals.length === 0
-            ? []
-            : await getDb().all<{ measures: string | null; at: string | null }>(
-                `SELECT measures, at FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? ORDER BY at DESC LIMIT 5000`,
-                [since],
-              );
-        routineMap = routinesFrom(proposals, access);
-      } catch {
-        // A record that cannot be read builds no routine; the ordinary routes run.
-      } finally {
-        routinesAt = Date.now();
-        routining = null;
-      }
-    })();
-    await routining;
-  }
+  await freshHistory();
   return routineMap.get(host) ?? null;
 }
 
+/** A host's repetition, counted from the held SOURCE_ACCESS rows (this read's own row included). */
+async function heldRepeatedUse(host: string): Promise<{ repeatedUses: number; repeatedUsesNeedingFallback: number }> {
+  await freshHistory();
+  return repeatedUseFromRows(historyAccess, host);
+}
+
+async function heldProposalOnRecord(host: string, route: string): Promise<boolean> {
+  await freshHistory();
+  return historyProposals.has(proposalKey(host, route));
+}
+
+/*
+ * A judgment that has not changed is not written again. The SOURCE_ACCESS row is
+ * the record of every read; the ACQUISITION_JUDGMENT row records a decision, and a
+ * decision repeated unchanged for the same caller, host and capability within one
+ * refresh adds a write and no information. A changed route, outcome, boundary or
+ * connector/script flag is written at once, so every change of decision is a row.
+ */
+const lastJudgment = new Map<string, { signature: string; at: number }>();
+
+
 export function resetSourceAccessMemory(): void {
-  routinesAt = 0;
+  historyAt = 0;
+  historyLoading = null;
+  historyAccess = [];
+  historyProposals = new Set();
   routineMap = new Map();
-  learnedAt = 0;
   learnedMap = new Map();
   browserRecords = new Map();
   robotsCache.clear();
+  lastJudgment.clear();
+  dbLoad.historyLoads = 0;
+  dbLoad.queries = 0;
+  dbLoad.writes = 0;
+  dbLoad.judgmentsSkipped = 0;
 }
 
 /**
@@ -587,6 +679,40 @@ export function operateEvidenceOfRead(
   };
 }
 
+/**
+ * What a read-path judgment reads and writes through: repetition and prior
+ * proposals from the held history (no query of their own), the operate
+ * permission fresh for its one host, and a writer that counts every write, adds
+ * it to the held history, and leaves out a judgment that has not changed.
+ */
+function judgmentDeps(caller: string): RecordAcquisitionDeps {
+  return {
+    caller,
+    repeatedUse: heldRepeatedUse,
+    proposalOnRecord: heldProposalOnRecord,
+    operatePermission: (host) => {
+      dbLoad.queries += 1;
+      return readOperatePermission(host);
+    },
+    record: async (event) => {
+      const measures = (event.measures ?? {}) as Record<string, unknown>;
+      if (event.eventType === 'ACQUISITION_JUDGMENT') {
+        const key = `${caller}|${String(measures.host)}|${String(measures.capability)}`;
+        const signature = JSON.stringify([event.outcome, event.provider, measures.reusableConnectorJustified, measures.convertToScript, measures.bespokeCrawlerMayBeProposed, measures.boundaries]);
+        const prior = lastJudgment.get(key);
+        if (prior && prior.signature === signature && Date.now() - prior.at <= LEARN_REFRESH_MS) {
+          dbLoad.judgmentsSkipped += 1;
+          return;
+        }
+        lastJudgment.set(key, { signature, at: Date.now() });
+      }
+      dbLoad.writes += 1;
+      await recordBinEvent(event);
+      noteHistory(event.eventType, event.provider ?? null, measures);
+    },
+  };
+}
+
 async function judgeReadAsOperation(
   read: SourceRead,
   host: string | null,
@@ -596,7 +722,7 @@ async function judgeReadAsOperation(
 ): Promise<void> {
   const operated = operateEvidenceOfRead(read, boundary, evidence);
   if (!operated) return;
-  await recordAcquisitionJudgment({ kind: 'OPERATE', purpose: `operate the interface at ${read.requestedUrl}`, host }, operated, { caller });
+  await recordAcquisitionJudgment({ kind: 'OPERATE', purpose: `operate the interface at ${read.requestedUrl}`, host }, operated, judgmentDeps(caller));
 }
 
 async function judgeReadAsAcquisition(
@@ -609,7 +735,7 @@ async function judgeReadAsAcquisition(
   await recordAcquisitionJudgment(
     { kind: 'ACQUIRE', purpose: `read ${read.requestedUrl}`, host },
     acquisitionEvidenceOfRead(read, boundary, evidence),
-    { caller },
+    judgmentDeps(caller),
   );
 }
 
@@ -622,6 +748,9 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
     status: read.status,
     robotsBlocked: read.terms?.robotsDisallows === true,
   });
+  // The held history is brought up to date before this read's row is added to it, so
+  // a refresh already in flight cannot drop the row, and the browser record is current.
+  await freshHistory().catch(() => undefined);
   const attemptEvidence = accessEvidenceOfAttempts(read.attempts, { terms: read.terms, browserRecord: host ? browserRecords.get(host) : null });
   const evidence: AccessEvidence = boundary ? { boundary, ...(attemptEvidence.terms ? { terms: attemptEvidence.terms } : {}) } : attemptEvidence;
   const judged = selectAccessMethod(evidence);
@@ -637,6 +766,22 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
           : `${used} was used; the attempts on this read support ${judged.method} (${judged.why}); no session was evidenced`
         : `${used} did not yield a readable source (${read.reason}); no boundary was met, so no human step is implied`
   ).slice(0, 300);
+  const accessMeasures = {
+    host,
+    url: read.requestedUrl.slice(0, 400),
+    finalUrl: read.finalUrl?.slice(0, 400) ?? null,
+    chars: read.readable ? read.totalChars : 0,
+    attempts: read.attempts,
+    ...(read.routine ? { routine: read.routine } : {}),
+    methodClass: boundary ? judged.method : used,
+    methodJudged: judged.method,
+    methodAgrees: boundary ? true : agrees,
+    methodReason,
+    convertToScript: judged.convertToScript,
+    methodConsidered: judged.considered,
+    methodConstraints: judged.constraints,
+  };
+  dbLoad.writes += 1;
   await recordBinEvent({
     eventType: 'SOURCE_ACCESS',
     provider: read.method,
@@ -645,22 +790,9 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
     reason: `${read.readable ? read.method : read.reason} ${read.requestedUrl}`.slice(0, 480),
     durationMs: ms,
     evidenceClass: 'MEASURED',
-    measures: {
-      host,
-      url: read.requestedUrl.slice(0, 400),
-      finalUrl: read.finalUrl?.slice(0, 400) ?? null,
-      chars: read.readable ? read.totalChars : 0,
-      attempts: read.attempts,
-      ...(read.routine ? { routine: read.routine } : {}),
-      methodClass: boundary ? judged.method : used,
-      methodJudged: judged.method,
-      methodAgrees: boundary ? true : agrees,
-      methodReason,
-      convertToScript: judged.convertToScript,
-      methodConsidered: judged.considered,
-      methodConstraints: judged.constraints,
-    },
+    measures: accessMeasures,
   });
+  noteHistory('SOURCE_ACCESS', read.method, accessMeasures);
   // Reading a public source is the ACQUIRE capability: ask the acquisition judgment what
   // this read's own evidence supports (existing bulk sources first, a connector when the
   // host's SOURCE_ACCESS history justifies one) and record it beside the access row.
