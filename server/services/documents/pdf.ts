@@ -12,6 +12,7 @@
  * whether what we read is trustworthy.
  */
 import type { BlockType } from '../../domain/types.ts';
+import { joinExtractedLines } from './normalize.ts';
 
 export interface PdfTextItem {
   text: string;
@@ -225,7 +226,7 @@ function buildBlocks(lines: Line[], pageNumber: number, bodyHeight: number): Ext
 
   const flush = (): void => {
     if (!current || current.lines.length === 0) return;
-    const text = current.lines.map((line) => line.text).join(' ').replace(/\s+/g, ' ').trim();
+    const text = joinExtractedLines(current.lines.map((line) => line.text));
     if (text.length > 0) {
       const x0 = Math.min(...current.lines.map((line) => line.x0));
       const x1 = Math.max(...current.lines.map((line) => line.x1));

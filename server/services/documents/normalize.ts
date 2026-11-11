@@ -29,6 +29,30 @@ const INVISIBLES = /[\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060\ufeff]/g;
  * text, so "interme<shy>diation" would never match a query for "intermediation".
  */
 const STRAY_SOFT_HYPHEN = /\u00ad/g;
+/** A line that ends a word with a hard hyphen, and a line that continues it. */
+const ENDS_IN_HYPHENATED_WORD = /[A-Za-z]-$/;
+const STARTS_LOWERCASE = /^[a-z]/;
+
+/**
+ * Join the lines of one block for its raw text, keeping the one line boundary
+ * normalization needs: where a line ends in a letter and a hard hyphen and the
+ * next begins in lowercase, the break stays a newline so
+ * `HARD_HYPHEN_LINE_BREAK` can tell a word split by layout ("recog-\nnition")
+ * from a real hyphen before a space ("pre- and post-closing"). Every other
+ * boundary becomes a single space, as before. Each line has `whitespace`
+ * collapsed to one space and is trimmed; empty lines are dropped.
+ */
+export function joinExtractedLines(lines: readonly string[], whitespace: RegExp = /\s+/g): string {
+  let joined = '';
+  for (const raw of lines) {
+    const line = raw.replace(whitespace, ' ').trim();
+    if (line.length === 0) continue;
+    if (joined.length === 0) joined = line;
+    else if (ENDS_IN_HYPHENATED_WORD.test(joined) && STARTS_LOWERCASE.test(line)) joined += `\n${line}`;
+    else joined += ` ${line}`;
+  }
+  return joined;
+}
 
 export interface NormalizationResult {
   text: string;

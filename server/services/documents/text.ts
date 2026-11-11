@@ -7,6 +7,7 @@
  * quality record, because the auditor should not care how the words arrived.
  */
 import type { BlockType } from '../../domain/types.ts';
+import { joinExtractedLines } from './normalize.ts';
 import type { ExtractedBlock, ExtractedPage } from './pdf.ts';
 
 const ATX_HEADING = /^(#{1,6})\s+(.*)$/;
@@ -29,7 +30,7 @@ export function textToBlocks(source: string, markdown: boolean): ExtractedBlock[
   let fenced: string[] | null = null;
 
   const flushParagraph = (): void => {
-    const text = paragraph.join(' ').replace(/[ \t]+/g, ' ').trim();
+    const text = joinExtractedLines(paragraph, /[ \t]+/g);
     if (text.length > 0) blocks.push(blockOf('PARAGRAPH', text));
     paragraph = [];
   };

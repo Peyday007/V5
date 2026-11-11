@@ -24,6 +24,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { BlockType } from '../../domain/types.ts';
+import { joinExtractedLines } from './normalize.ts';
 import { probeOcrRuntime, type OcrRuntime } from './ocrRuntime.ts';
 
 /** One recognised passage, with the geometry and certainty behind it. */
@@ -143,7 +144,16 @@ function blocksFromTsv(rows: TsvRow[], pageHeightPx: number, dpi: number): OcrBl
   for (const entry of paragraphs.values()) {
     const words = entry.rows.filter((row) => row.text.trim().length > 0);
     if (words.length === 0) continue;
-    const text = words.map((row) => row.text).join(' ').replace(/\s+/g, ' ').trim();
+    // Words of one OCR line join with spaces; the lines then join through
+    // joinExtractedLines, so a word hyphenated across lines can still be rejoined.
+    const lines: string[] = [];
+    let lineKey: number | null = null;
+    for (const row of words) {
+      if (lineKey === row.line && lines.length > 0) lines[lines.length - 1] += ` ${row.text}`;
+      else lines.push(row.text);
+      lineKey = row.line;
+    }
+    const text = joinExtractedLines(lines);
     if (text.length === 0) continue;
 
     const scored = words.filter((row) => row.confidence >= 0);
