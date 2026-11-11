@@ -508,7 +508,8 @@ describe('four operations, four walls', () => {
     // not the reason she passed.
     expect(theirs.text).not.toContain('Not the kind of work');
     expect(theirs.text).not.toContain('The manager who signs');
-    expect(theirs.text).not.toContain('60000');
+    // The price as a number of its own: '3600000', an hour of telemetry window, is not it.
+    expect(theirs.text).not.toMatch(/(?<![0-9])60000(?![0-9])/);
   });
 
   it('does not close an opening for one account because another is working it', async () => {
