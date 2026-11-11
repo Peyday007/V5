@@ -50,6 +50,7 @@ import { collectable, dealPosition } from './position.ts';
 import { recordOutcomes } from './learning.ts';
 import { recordDetectedExceptions, rehearseCaseOnTick } from '../deliverables/exceptions.ts';
 import { recordRealization } from '../deliverables/realization.ts';
+import { recordRowDependencies } from '../deliverables/commitments.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -168,6 +169,8 @@ export async function advanceJourney(
     }
     report.outcomes += await recordOutcomes((await getOpportunity(listed.id))!, mode.currency);
     if ((await agreementsFor(listed.id)).length > 0) {
+      // Brain records the external dependencies the rows imply, once each time they change (LIFE-29-1).
+      await recordRowDependencies({ projectId, opportunityId: listed.id, currency: mode.currency });
       const found = await recordDetectedExceptions({ projectId, opportunityId: listed.id, currency: mode.currency, now: now.toISOString() });
       report.exceptions.detected += found.detected;
       report.exceptions.recorded += found.recorded;
