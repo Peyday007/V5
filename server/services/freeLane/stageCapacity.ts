@@ -17,6 +17,7 @@ import { getDb } from '../../db/database.ts';
 import { databasePoolReadings } from '../../db/database.ts';
 import { waitingNow } from './capacity.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
+import { classifyRouteFailure, routeHealthReadings, type RouteFailureCause, type RouteHealthReading } from './worker.ts';
 
 export type Measured<T> = { measured: true; value: T } | { measured: false; reason: string };
 
@@ -79,9 +80,47 @@ export interface Constraint {
   recommendation: string;
 }
 
+/** One model route's outcomes in the window, with each failure's cause read from its own recorded error. */
+export interface RouteReading {
+  model: string;
+  submitted: number;
+  failed: number;
+  failuresByCause: Partial<Record<RouteFailureCause, number>>;
+}
+
+/**
+ * Why model / verification throughput is failing, read from the lane's own
+ * failure rows rather than assumed (provider availability, credentials, task
+ * routing, broken GPU, database, or unclassified).
+ */
+export interface Diagnosis {
+  /** The cause behind most model-call failures in the window, or null when none failed. */
+  cause: RouteFailureCause | null;
+  /** The model route that failure is concentrated on, when one carries most of it. */
+  model: string | null;
+  failures: number;
+  failuresByCause: Partial<Record<RouteFailureCause, number>>;
+  routes: RouteReading[];
+  /** Routes this process is holding off work right now, and why. */
+  heldRoutes: RouteHealthReading[];
+  /** True when the failure rows were more than the reader reads, so the split is a sample. */
+  sampled: boolean;
+}
+
+/** Whether queued work moved between this reading and the one before it. */
+export interface Advance {
+  verdict: 'ADVANCING' | 'STALLED' | 'IDLE' | 'NO_PRIOR_READING';
+  previousAt: string | null;
+  previousQueued: number | null;
+  queuedNow: number;
+  acceptedSincePrevious: number | null;
+  basis: string;
+}
+
 export interface StageCapacityReport {
   windowHours: number;
   since: string;
+  diagnosis: Diagnosis;
   stages: StageReading[];
   purposes: PurposeAttribution[];
   totalProductiveJobs: number;
@@ -207,10 +246,8 @@ function readProcess(): ProcessReading {
  * nothing waiting is not constrained, however slow. A gain is projected only
  * where it can be measured, and never as a reason to scale the web process.
  */
-export function chooseConstraint(stages: StageReading[]): Constraint {
-  const recommendation =
-    'Restore the failing provider, credential, route or verification path first and watch whether queued work advances; ' +
-    'scale independent workers only after a measured gain. Do not enlarge the web process because a queue is long.';
+export function chooseConstraint(stages: StageReading[], diagnosis: Diagnosis | null = null): Constraint {
+  const recommendation = restoreFirst(diagnosis);
   let worst: { stage: StageReading; waiting: number; rate: number } | null = null;
   for (const stage of stages) {
     if (!stage.queueSize.measured || !stage.itemsProcessedPerHour.measured) continue;
@@ -232,10 +269,141 @@ export function chooseConstraint(stages: StageReading[]): Constraint {
   const { stage } = worst;
   return {
     stage: stage.stage,
-    basis: `${stage.label}: ${worst.waiting} waiting, ${Math.round(worst.rate * 100)}% of processed items accepted.`,
+    basis:
+      `${stage.label}: ${worst.waiting} waiting, ${Math.round(worst.rate * 100)}% of processed items accepted` +
+      (diagnosis?.cause ? `; model-call failures are mostly ${diagnosis.cause}${diagnosis.model ? ` on ${diagnosis.model}` : ''}.` : '.'),
     // Dollars per job are not recorded, so a gain per dollar cannot be claimed.
     expectedGain: NOT('accepted facts per hour per dollar needs a recorded dollar cost, which the lane does not keep'),
     recommendation,
+  };
+}
+
+const FAILURE_SAMPLE = 5000;
+const SCALE_LATER = 'Scale independent workers only after a measured gain. Do not enlarge the web process because a queue is long.';
+
+/** What restoring throughput means for the cause the rows name: the first remedial action, never a scale-up. */
+export function restoreFirst(diagnosis: Diagnosis | null): string {
+  const where = diagnosis?.model ? ` on ${diagnosis.model}` : '';
+  switch (diagnosis?.cause ?? null) {
+    case 'credentials':
+      return `Model calls${where} are refused for credentials: replace the provider key or GPU endpoint secret, then watch whether queued work advances. ${SCALE_LATER}`;
+    case 'task routing':
+      return `Model calls${where} name a model the endpoint does not serve: correct the routed model, then watch whether queued work advances. ${SCALE_LATER}`;
+    case 'broken GPU':
+      return `The GPU route${where} is failing: restart or replace the pod and re-probe it while the fallback model takes its work, then watch whether queued work advances. ${SCALE_LATER}`;
+    case 'provider availability':
+      return `The provider${where} is busy or unreachable: the route is held and re-probed while another model takes the work; watch whether queued work advances. ${SCALE_LATER}`;
+    case 'database':
+      return `Brain's own database is refusing the lane: relieve database pressure before any model change, then watch whether queued work advances. ${SCALE_LATER}`;
+    case 'unclassified':
+      return `Model calls${where} fail for a reason the error does not name: read the recorded reasons and restore that route first, then watch whether queued work advances. ${SCALE_LATER}`;
+    default:
+      return `Restore the failing provider, credential, route or verification path first and watch whether queued work advances; ${SCALE_LATER.charAt(0).toLowerCase()}${SCALE_LATER.slice(1)}`;
+  }
+}
+
+/** The model a free-lane row names: its reason starts `model <name>` (worker.ts writes it so). */
+export function modelOf(reason: string | null): string | null {
+  const match = /^model (\S+?)(?::|$|\s)/.exec(reason ?? '');
+  return match?.[1] ?? null;
+}
+
+/**
+ * Split the window's model-call failures by the cause each one's own error
+ * names, per model route. Older rows that predate the bracketed cause are
+ * classified from the same message, by the same function the worker uses.
+ */
+export async function diagnose(since: string, now = Date.now()): Promise<Diagnosis> {
+  const db = getDb();
+  const failures = await db.all<{ reason: string | null }>(
+    `SELECT reason FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND outcome <> 'SUBMITTED'
+        AND reason LIKE '%model call failed%'
+      ORDER BY at DESC LIMIT ?`,
+    [since, FAILURE_SAMPLE + 1],
+  );
+  const submitted = await db.all<{ reason: string | null; k: number | string }>(
+    `SELECT reason, COUNT(*) AS k FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND outcome = 'SUBMITTED'
+      GROUP BY reason`,
+    [since],
+  );
+  const sampled = failures.length > FAILURE_SAMPLE;
+  const routes = new Map<string, RouteReading>();
+  const route = (model: string): RouteReading => {
+    let r = routes.get(model);
+    if (!r) routes.set(model, (r = { model, submitted: 0, failed: 0, failuresByCause: {} }));
+    return r;
+  };
+  for (const row of submitted) route(modelOf(row.reason) ?? 'unknown').submitted += n(row.k);
+  const byCause: Partial<Record<RouteFailureCause, number>> = {};
+  for (const row of failures.slice(0, FAILURE_SAMPLE)) {
+    const reason = row.reason ?? '';
+    const bracket = /model call failed \[([^\]]+)\]/.exec(reason)?.[1] as RouteFailureCause | undefined;
+    const cause = bracket ?? classifyRouteFailure(reason);
+    byCause[cause] = (byCause[cause] ?? 0) + 1;
+    const r = route(modelOf(reason) ?? 'unknown');
+    r.failed += 1;
+    r.failuresByCause[cause] = (r.failuresByCause[cause] ?? 0) + 1;
+  }
+  const total = Object.values(byCause).reduce((sum, k) => sum + (k ?? 0), 0);
+  const top = (Object.entries(byCause) as [RouteFailureCause, number][]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+  const cause = top ? top[0] : null;
+  let model: string | null = null;
+  if (cause) {
+    const carriers = [...routes.values()]
+      .map((r) => ({ model: r.model, k: r.failuresByCause[cause] ?? 0 }))
+      .sort((a, b) => b.k - a.k || a.model.localeCompare(b.model));
+    // A route is named only when it carries most of that cause's failures.
+    if (carriers[0] && carriers[0].k * 2 > (byCause[cause] ?? 0)) model = carriers[0].model;
+  }
+  return {
+    cause,
+    model,
+    failures: total,
+    failuresByCause: byCause,
+    routes: [...routes.values()].sort((a, b) => b.failed - a.failed || a.model.localeCompare(b.model)),
+    heldRoutes: routeHealthReadings(now),
+    sampled,
+  };
+}
+
+/**
+ * Compare queued work and accepted submissions with the previous recorded
+ * reading: the observation that restoring a route actually moved the queue.
+ */
+export async function readAdvance(queued: number, nowMs = Date.now()): Promise<Advance> {
+  const db = getDb();
+  const previous = await db.get<{ at: string; measures: unknown }>(
+    `SELECT at, measures FROM bin_events
+      WHERE event_type = ? AND outcome = 'MEASURED' AND at < ?
+      ORDER BY at DESC LIMIT 1`,
+    [STAGE_CAPACITY_EVENT, new Date(nowMs).toISOString()],
+  );
+  if (!previous) {
+    return { verdict: 'NO_PRIOR_READING', previousAt: null, previousQueued: null, queuedNow: queued, acceptedSincePrevious: null, basis: 'first recorded reading; the next one says whether queued work advanced' };
+  }
+  let measures: Record<string, unknown> = {};
+  try {
+    measures = (typeof previous.measures === 'string' ? JSON.parse(previous.measures) : previous.measures ?? {}) as Record<string, unknown>;
+  } catch {
+    measures = {};
+  }
+  const previousQueued = typeof measures.queuedNow === 'number' ? measures.queuedNow : null;
+  const since = await db.get<{ k: number | string }>(
+    "SELECT COUNT(*) AS k FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'SUBMITTED' AND at >= ? AND at < ?",
+    [previous.at, new Date(nowMs).toISOString()],
+  );
+  const accepted = n(since?.k);
+  const verdict: Advance['verdict'] = accepted > 0 ? 'ADVANCING' : queued > 0 || (previousQueued ?? 0) > 0 ? 'STALLED' : 'IDLE';
+  const moved = previousQueued === null ? '' : `, queue ${previousQueued} → ${queued}`;
+  return {
+    verdict,
+    previousAt: previous.at,
+    previousQueued,
+    queuedNow: queued,
+    acceptedSincePrevious: accepted,
+    basis: `${accepted} accepted since ${previous.at}${moved}`,
   };
 }
 
@@ -246,6 +414,7 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
   const since = new Date(nowMs - hours * 3_600_000).toISOString();
   const stages: StageReading[] = [];
   for (const def of STAGES) stages.push(await readStage(def, since, hours, nowMs));
+  const diagnosis = await diagnose(since, nowMs);
   const purposes = await readPurposes(since);
   const totalProductiveJobs = purposes.reduce((sum, p) => sum + p.productiveJobs, 0);
   const total = await getDb().get<{ k: number | string }>(
@@ -255,12 +424,13 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
   return {
     windowHours: hours,
     since,
+    diagnosis,
     stages,
     purposes,
     totalProductiveJobs,
     purposesSumToTotal: totalProductiveJobs === n(total?.k),
     process: readProcess(),
-    constrained: chooseConstraint(stages),
+    constrained: chooseConstraint(stages, diagnosis),
   };
 }
 
@@ -279,20 +449,24 @@ export const STAGE_CAPACITY_EVENT = 'FREE_LANE_STAGE_CAPACITY';
  * a web request. A measurement that fails is recorded as failed, with its reason,
  * rather than skipped silently.
  */
-export async function recordStageCapacity(options: { hours?: number; now?: number } = {}): Promise<StageCapacityReport | null> {
+export async function recordStageCapacity(options: { hours?: number; now?: number } = {}): Promise<(StageCapacityReport & { advance: Advance }) | null> {
   const started = Date.now();
   try {
     const report = await stageCapacity(options);
     const waiting = await queuedNow();
+    const advance = await readAdvance(waiting, options.now ?? Date.now());
+    const cause = report.diagnosis.cause
+      ? `cause ${report.diagnosis.cause}${report.diagnosis.model ? ` on ${report.diagnosis.model}` : ''} (${report.diagnosis.failures} model-call failures)`
+      : 'no model-call failures';
     await recordBinEvent({
       eventType: STAGE_CAPACITY_EVENT,
       outcome: 'MEASURED',
-      reason: report.constrained.basis,
+      reason: `${advance.verdict}: ${advance.basis}; ${cause}; ${report.constrained.basis}`,
       durationMs: Date.now() - started,
       evidenceClass: 'MEASURED',
-      measures: { ...report, queuedNow: waiting } as unknown as Record<string, unknown>,
+      measures: { ...report, queuedNow: waiting, advance } as unknown as Record<string, unknown>,
     });
-    return report;
+    return { ...report, advance };
   } catch (error) {
     await recordBinEvent({
       eventType: STAGE_CAPACITY_EVENT,

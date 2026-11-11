@@ -1524,7 +1524,49 @@ export function redactSecrets(text: string): string {
 /** Consecutive provider failures after which a route stops being offered items. */
 export const ROUTE_FAILURE_LIMIT = 3;
 const ROUTE_REPROBE_MS = 5 * 60_000;
+/**
+ * How long a held route waits before its single re-probe item, by cause. A busy
+ * provider or a GPU that is restarting recovers on its own, so it is re-probed
+ * soon; a refused credential or a model the endpoint does not serve does not
+ * recover until somebody changes a secret or a route, so re-probing it every
+ * five minutes spends items on a failure that is already known (run 42577770227:
+ * hundreds of not-accepted results beside a failed GPU probe).
+ */
+export const ROUTE_REPROBE_BY_CAUSE_MS: Readonly<Record<RouteFailureCause, number>> = {
+  'provider availability': ROUTE_REPROBE_MS,
+  'broken GPU': 10 * 60_000,
+  unclassified: ROUTE_REPROBE_MS,
+  database: ROUTE_REPROBE_MS,
+  credentials: 30 * 60_000,
+  'task routing': 30 * 60_000,
+};
+const reprobeAfter = (cause: RouteFailureCause): number => ROUTE_REPROBE_BY_CAUSE_MS[cause] ?? ROUTE_REPROBE_MS;
 const routeHealth = new Map<string, { failures: number; cause: RouteFailureCause; nextProbeAt: number }>();
+
+/** One model route's standing as this process holds it, for the stage-capacity record. */
+export interface RouteHealthReading {
+  model: string;
+  consecutiveFailures: number;
+  cause: RouteFailureCause;
+  held: boolean;
+  nextProbeAt: string | null;
+}
+
+/** Every route this process has seen fail since it last answered (CAP-16-3). */
+export function routeHealthReadings(now = Date.now()): RouteHealthReading[] {
+  return [...routeHealth.entries()]
+    .map(([model, state]) => {
+      const held = state.failures >= ROUTE_FAILURE_LIMIT && now < state.nextProbeAt;
+      return {
+        model,
+        consecutiveFailures: state.failures,
+        cause: state.cause,
+        held,
+        nextProbeAt: state.failures >= ROUTE_FAILURE_LIMIT ? new Date(state.nextProbeAt).toISOString() : null,
+      };
+    })
+    .sort((a, b) => b.consecutiveFailures - a.consecutiveFailures || a.model.localeCompare(b.model));
+}
 
 /** Tests: forget every route's health. */
 export function resetRouteHealth(): void {
@@ -1537,7 +1579,7 @@ export function routeHold(model: string, now = Date.now()): string | null {
   if (!state || state.failures < ROUTE_FAILURE_LIMIT) return null;
   if (now >= state.nextProbeAt) {
     // One item re-probes the route; the next is held until it answers.
-    state.nextProbeAt = now + ROUTE_REPROBE_MS;
+    state.nextProbeAt = now + reprobeAfter(state.cause);
     return null;
   }
   return `model route failing (${state.cause}); another model takes the work until it is re-probed`;
@@ -1554,10 +1596,11 @@ export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: 
   const cause = classifyRouteFailure(why);
   // Brain's own database being busy says nothing about the model route.
   if (cause === 'database') return;
-  const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now + ROUTE_REPROBE_MS };
+  const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now + reprobeAfter(cause) };
   state.failures += 1;
   state.cause = cause;
-  if (state.failures === ROUTE_FAILURE_LIMIT) state.nextProbeAt = now + ROUTE_REPROBE_MS;
+  // Held at the limit, and again after each failed re-probe, for as long as its cause takes to recover.
+  if (state.failures >= ROUTE_FAILURE_LIMIT) state.nextProbeAt = now + reprobeAfter(cause);
   routeHealth.set(model, state);
 }
 
