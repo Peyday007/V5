@@ -312,3 +312,161 @@ export function improvePlan(plan: CandidatePlan, catalogue: EvidenceCatalogue, p
   return { before: testSetbacks(plan, plausible), after: testSetbacks(rebuilt, plausible), rebuilt, applied: protections, unprotected };
 }
 
+
+/*
+ * The plan's use of all of the above (F3: the rebuild was never called).
+ *
+ * `readGoalPlan` hands each serious candidate strategy here as plain facts it
+ * already holds — its members, what each brings, who fulfils it, when it pays,
+ * what it ties up — together with the other openings it judged. Failure paths
+ * are derived from those facts, protections are proposed only from openings
+ * whose own rows establish them, every evidenced protection is accepted and the
+ * plan is rebuilt, and single and combined setbacks are tested on the plan
+ * before and after. The result is stored on the strategy in the plan reading,
+ * so an accepted improvement is part of the stored reading and of its evidence,
+ * and a changed improvement is a changed reading. Pure: no rows, no model, no
+ * research.
+ */
+
+/** One member of a strategy, as the plan holds it. Money in cents. */
+export interface StrategyMemberFacts {
+  opportunityId: string;
+  /** What it is counted to bring toward the goal. */
+  revenueCents: number;
+  /** A named fulfiller other than Brain, when a source or a person says so. */
+  fulfilledBy: string | null;
+  /** Established days until its money is usable; null when not established. */
+  daysToCash: number | null;
+  /** The claim the opening rests on, when one. */
+  claimId: string | null;
+}
+
+export interface StrategyFacts {
+  key: string;
+  targetCents: number;
+  daysLeft: number;
+  members: StrategyMemberFacts[];
+  directCostsCents: number;
+  upfrontCents: number;
+  capitalCeilingCents: number | null;
+  capacityHours: number | null;
+  neededHours: number | null;
+  /**
+   * Whether every figure above rests on established numbers. When it does not,
+   * the setback counts are still reported, and say on what they were computed.
+   */
+  basis: 'CONSERVATIVE' | 'BEST_CASE_AT_SUPPORTED_PRICE';
+}
+
+/** Another opening the plan judged, whose own rows establish a buyer, a dated need and a price buyers pay. */
+export interface CompatibleOpening {
+  opportunityId: string;
+  /** What one sale of it brings, at a price buyers are shown to pay (or what a buyer agreed). */
+  revenueCents: number;
+}
+
+export interface ReliabilityReading {
+  basis: StrategyFacts['basis'];
+  failurePaths: { kind: FailureKind; because: string; subject: string | null; revenueAtRiskCents: number }[];
+  /** Every evidenced protection, accepted into the rebuilt plan. */
+  applied: { kind: ProtectionKind; answers: FailureKind; subject: string | null; evidenceId: string; detail: Record<string, string | number> }[];
+  /** Paths no evidence protects yet, with the question that would settle each. */
+  unprotected: { kind: FailureKind; subject: string | null; question: string }[];
+  before: { tested: number; meetingTarget: number; worst: SetbackResult | null; note: string };
+  after: { tested: number; meetingTarget: number; worst: SetbackResult | null; note: string };
+  /** Openings the rebuild combined into the plan. */
+  addedOpportunityIds: string[];
+  /** The evidence the rebuilt plan rests on, including what each protection added. */
+  evidence: string[];
+  rebuilt: Pick<CandidatePlan, 'expectedRevenueCents' | 'upfrontCents' | 'paymentDays' | 'capacityUnits' | 'neededUnits'> & {
+    customers: PlanCustomer[];
+    suppliers: PlanSupplier[];
+  };
+}
+
+/** The candidate plan a strategy's facts describe. */
+export function candidateFromStrategy(f: StrategyFacts): CandidatePlan {
+  const total = f.members.reduce((sum, m) => sum + Math.max(0, m.revenueCents), 0);
+  const share = (m: StrategyMemberFacts) => (total > 0 ? Math.max(0, m.revenueCents) / total : 1 / Math.max(1, f.members.length));
+  const days = f.members.map((m) => m.daysToCash);
+  const evidence: string[] = [];
+  for (const m of f.members) {
+    if (!evidence.includes(m.opportunityId)) evidence.push(m.opportunityId);
+    if (m.claimId && !evidence.includes(m.claimId)) evidence.push(m.claimId);
+  }
+  const suppliers = new Map<string, number>();
+  for (const m of f.members) if (m.fulfilledBy) suppliers.set(m.fulfilledBy, (suppliers.get(m.fulfilledBy) ?? 0) + share(m));
+  return {
+    id: f.key,
+    targetCents: f.targetCents,
+    daysLeft: f.daysLeft,
+    expectedRevenueCents: round(total),
+    directCostsCents: round(f.directCostsCents),
+    customers: f.members.map((m) => ({ id: m.opportunityId, shareOfRevenue: share(m), evidenceId: m.opportunityId })),
+    suppliers: [...suppliers].map(([id, s]) => ({ id, shareOfDelivery: s, alternativeIds: [] })),
+    upfrontCents: round(f.upfrontCents),
+    capitalCeilingCents: f.capitalCeilingCents,
+    // The slowest member decides, and one unknown makes the whole unknown.
+    paymentDays: days.length > 0 && days.every((d): d is number => d !== null) ? Math.max(...days) : null,
+    capacityUnits: f.capacityHours,
+    neededUnits: f.neededHours,
+    evidence,
+  };
+}
+
+/** How many other openings a rebuild considers combining; the best-supported first. */
+export const MAX_COMPATIBLE_PATHS = 3;
+
+/** The protections the plan's own rows establish. Deposits and backup capacity need a row that states them; none is invented. */
+export function catalogueFromOpenings(plan: CandidatePlan, openings: readonly CompatibleOpening[]): EvidenceCatalogue {
+  const members = new Set(plan.customers.map((c) => c.id));
+  const compatiblePaths = openings
+    .filter((o) => !members.has(o.opportunityId) && o.revenueCents > 0)
+    .sort((a, b) => b.revenueCents - a.revenueCents || a.opportunityId.localeCompare(b.opportunityId))
+    .slice(0, MAX_COMPATIBLE_PATHS)
+    .map((o) => ({ id: o.opportunityId, revenueCents: o.revenueCents, evidenceId: o.opportunityId }));
+  return { alternativeSuppliers: [], customerSources: [], deposit: null, backupCapacity: null, compatiblePaths };
+}
+
+/** The ordinary setbacks a plan's own facts make plausible: each customer lost, each fulfiller failing, payment a week late, a quarter of capacity short, the money out lost. */
+export function plausibleSetbacks(plan: CandidatePlan): Setback[] {
+  const out: Setback[] = plan.customers.map((c) => ({ kind: 'LOSE_CUSTOMER', customerId: c.id }));
+  for (const s of plan.suppliers) out.push({ kind: 'SUPPLIER_FAILS', supplierId: s.id });
+  if (plan.paymentDays !== null) out.push({ kind: 'PAYMENT_LATE', extraDays: 7 });
+  if (plan.capacityUnits !== null && plan.neededUnits !== null) out.push({ kind: 'CAPACITY_SHORT', fraction: 0.25 });
+  if (plan.upfrontCents > 0) out.push({ kind: 'UPFRONT_LOST' });
+  return out;
+}
+
+const summaryOf = (t: SetbackTest) => ({ tested: t.tested, meetingTarget: t.meetingTarget, worst: t.worst, note: t.note });
+
+/** Engineer one strategy's reliability: paths, evidenced protections, the rebuilt plan, and setbacks before and after. */
+export function assessReliability(facts: StrategyFacts, openings: readonly CompatibleOpening[]): ReliabilityReading {
+  const plan = candidateFromStrategy(facts);
+  const catalogue = catalogueFromOpenings(plan, openings);
+  // The setbacks are those of the plan as it stands; the rebuilt plan is held to the same ones,
+  // so an improvement is measured against the risks it was meant to answer.
+  const plausible = plausibleSetbacks(plan);
+  const result = improvePlan(plan, catalogue, plausible);
+  const original = new Set(plan.customers.map((c) => c.id));
+  const basisNote = facts.basis === 'CONSERVATIVE' ? '' : ' Computed on the best case at supported prices, because a cautious figure is not yet established.';
+  return {
+    basis: facts.basis,
+    failurePaths: deriveFailurePaths(plan).map((p) => ({ kind: p.kind, because: p.because, subject: p.subject, revenueAtRiskCents: p.revenueAtRiskCents })),
+    applied: result.applied.map((p) => ({ kind: p.kind, answers: p.answers.kind, subject: p.answers.subject, evidenceId: p.evidenceId, detail: p.detail })),
+    unprotected: result.unprotected.map((u) => ({ kind: u.path.kind, subject: u.path.subject, question: u.question })),
+    before: { ...summaryOf(result.before), note: `${result.before.note}${basisNote}` },
+    after: { ...summaryOf(result.after), note: `${result.after.note}${basisNote}` },
+    addedOpportunityIds: result.rebuilt.customers.map((c) => c.id).filter((id) => !original.has(id)),
+    evidence: result.rebuilt.evidence,
+    rebuilt: {
+      expectedRevenueCents: result.rebuilt.expectedRevenueCents,
+      upfrontCents: result.rebuilt.upfrontCents,
+      paymentDays: result.rebuilt.paymentDays,
+      capacityUnits: result.rebuilt.capacityUnits,
+      neededUnits: result.rebuilt.neededUnits,
+      customers: result.rebuilt.customers,
+      suppliers: result.rebuilt.suppliers,
+    },
+  };
+}
