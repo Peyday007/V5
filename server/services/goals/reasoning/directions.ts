@@ -56,6 +56,10 @@ export const PRICE_ELASTICITY = 1.2;
 export const CHALLENGE_FACTOR = 0.5;
 /** Evaluations an exploration may spend per direction its budget allows: screening, challenges and generations together. */
 export const EVALUATIONS_PER_DIRECTION = 4;
+/** No exploration spends more evaluations than this, whatever its budget. */
+export const MAX_EVALUATIONS = 400;
+/** Nor more time than this (production evaluations cost about a second each). */
+export const DEFAULT_MAX_MS = 3 * 60_000;
 
 export type Field = 'price' | 'close' | 'respond' | 'volume' | 'daysToCash' | 'directCost';
 /** Which openings a transform touches. `id:<opportunityId>` names one. */
@@ -116,6 +120,9 @@ export interface Exploration {
   generations: number;
   threads: number;
   evaluations: number;
+  elapsedMs: number;
+  /** What ended it: nothing left improving, or one of its bounds. */
+  stopped: 'CONVERGED' | 'EVALUATIONS' | 'TIME';
   baseline: { reach: number; settledP50: number };
   greedy: { reach: number; settledP50: number; score: number; challengedReach: number };
   /** The strongest robust direction, or null when none beat §99's plan. */
@@ -538,11 +545,20 @@ export function scoreOf(reading: VariantReading, challenged: VariantReading | nu
 export async function exploreDirections(ctx: ExploreContext): Promise<Exploration> {
   const now = ctx.now ?? Date.now;
   const started = now();
-  // Depth is bounded by evaluations, so the same inputs explore the same way on a busy or an idle machine;
-  // the clock is only a far safety stop.
-  const maxMs = ctx.maxMs ?? 10 * 60_000;
-  let evaluationCap = Infinity;
-  const late = () => now() - started > maxMs || evaluations > evaluationCap;
+  // Depth is bounded by evaluations, so the same inputs explore the same way on a busy or an idle machine,
+  // and by the clock, because an evaluation on production's data costs about a second (Goals plan
+  // 42938331961, 2026-11-11: an exploration bounded only between generations ran past 20 minutes).
+  // Both are checked before every evaluation, in chunks no wider than the threads can run at once.
+  const maxMs = ctx.maxMs ?? DEFAULT_MAX_MS;
+  let evaluationCap = MAX_EVALUATIONS;
+  const late = () => now() - started > maxMs || evaluations >= evaluationCap;
+  const chunk = Math.max(2, ctx.threads * 2);
+  /** Run `fn` over `rows` in chunks, stopping before a chunk once the exploration is out of evaluations or time. */
+  const inChunks = async <T, R>(rows: T[], fn: (row: T) => Promise<R>): Promise<R[]> => {
+    const out: R[] = [];
+    for (let i = 0; i < rows.length && !late(); i += chunk) out.push(...(await Promise.all(rows.slice(i, i + chunk).map(fn))));
+    return out;
+  };
   const seen = new Map<string, DirectionReading>();
   const all: DirectionReading[] = [];
   let evaluations = 0;
@@ -558,9 +574,10 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   const start = (_d: Direction) => ctx.base;
   const run = async (batch: Direction[], generation: number): Promise<DirectionReading[]> => {
     const fresh = batch.filter((d) => !seen.has(d.signature));
-    const results = await Promise.all(
-      fresh.map(async (d) => {
-        if (seen.has(d.signature)) return null;
+    const results = await inChunks(
+      fresh,
+      async (d) => {
+        if (seen.has(d.signature) || late()) return null;
         const placeholder = { direction: d } as DirectionReading;
         seen.set(d.signature, placeholder);
         const { state, skipped } = applyProgram(start(d), full(d), ctx);
@@ -574,20 +591,22 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
         const out: DirectionReading = { direction: d, reading, challenged: null, score: scoreOf(reading, null), generation, applied, state };
         seen.set(d.signature, out);
         return out;
-      }),
+      },
     );
     // In the batch's own order, never the order threads finished in: ties must break the same way every read.
     const kept = results.filter((x): x is DirectionReading => !!x);
     all.push(...kept);
     return kept;
   };
+  // Strongest first, so a budget that runs out leaves the weakest unchallenged (an unchallenged direction scores as if it held nothing).
   const challenge = async (rows: DirectionReading[]) => {
-    await Promise.all(
-      rows.map(async (r) => {
-        if (r.challenged || !r.reading.feasible) return;
+    await inChunks(
+      [...rows].sort((a, b) => b.reading.reach - a.reading.reach),
+      async (r) => {
+        if (r.challenged || !r.reading.feasible || late()) return;
         r.challenged = await challengeOf(full(r.direction));
         r.score = scoreOf(r.reading, r.challenged);
-      }),
+      },
     );
   };
 
@@ -612,7 +631,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   greedyRow.challenged = await challengeOf(greedyProgram);
   greedyRow.score = scoreOf(ctx.greedyReading, greedyRow.challenged);
   const budget = explorationBudget({ openings: ctx.base.openings.length, operators: ctx.operators.length, binding: ctx.binding.filter((b) => b.liftReach > 0).length, reach: Math.min(ctx.greedyReading.reach, greedyRow.challenged?.reach ?? 0), required: ctx.required, structural: ctx.structural });
-  evaluationCap = EVALUATIONS_PER_DIRECTION * budget;
+  evaluationCap = Math.min(MAX_EVALUATIONS, evaluations + EVALUATIONS_PER_DIRECTION * budget);
 
   // 1–2. Generate and screen: the library first (what worked), then the cheap seeds, kept distinct.
   const pool = budget > 0 ? distinct([...(ctx.library ?? []), ...seedDirections(ctx)], budget) : [];
@@ -681,11 +700,14 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   for (const r of all) byOrigin[r.direction.origin]++;
   const replaced = !!winner && winner.direction.from === 'BASELINE';
   const stances = [...stanceMap.keys()];
+  const elapsedMs = now() - started;
+  const stopped: Exploration['stopped'] = evaluations >= evaluationCap ? 'EVALUATIONS' : elapsedMs > maxMs ? 'TIME' : 'CONVERGED';
   const sentence =
     `${all.length} distinct direction(s) across ${stances.length} stance(s) (${byOrigin.MODEL} from Brain's model, ${byOrigin.LIBRARY} from what worked before, ${byOrigin.RECOMBINED + byOrigin.MUTATED} by combining and modifying leaders) over ${generations} generation(s); ` +
     (winner
       ? `"${winner.direction.name}" (${winner.direction.stance}) ${replaced ? 'replaced' : 'improved'} §99's plan: reach ${pct(winner.reading.reach)} and ${pct(winner.challenged?.reach ?? 0)} with its conversion halved, against ${pct(ctx.greedyReading.reach)} and ${pct(greedyRow.challenged?.reach ?? 0)}.`
-      : `none beat §99's plan once challenged (${pct(ctx.greedyReading.reach)}, ${pct(greedyRow.challenged?.reach ?? 0)} with its conversion halved).`);
+      : `none beat §99's plan once challenged (${pct(ctx.greedyReading.reach)}, ${pct(greedyRow.challenged?.reach ?? 0)} with its conversion halved).`) +
+    ` ${evaluations} evaluation(s) in ${Math.round(elapsedMs / 1000)} s; stopped ${stopped === 'CONVERGED' ? 'when nothing improved' : stopped === 'TIME' ? 'at its time bound' : 'at its evaluation bound'}.`;
   return {
     budget,
     directions: all.length,
@@ -694,6 +716,8 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
     generations,
     threads: ctx.threads,
     evaluations,
+    elapsedMs,
+    stopped,
     baseline: { reach: ctx.baselineReading.reach, settledP50: ctx.baselineReading.settledP50 },
     greedy: { reach: ctx.greedyReading.reach, settledP50: ctx.greedyReading.settledP50, score: greedyRow.score, challengedReach: greedyRow.challenged?.reach ?? 0 },
     winner,

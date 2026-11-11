@@ -19,16 +19,18 @@ import type { ReasoningMethodRow } from '../../../domain/types.ts';
 const MATERIAL = 0.02;
 export const LIBRARY_SIZE = 24;
 
-export function ucb(row: Pick<ReasoningMethodRow, 'tries' | 'total_lift' | 'improvements'>, totalTries: number): number {
+export function ucb(row: Pick<ReasoningMethodRow, 'tries' | 'total_lift' | 'improvements' | 'wins'>, totalTries: number): number {
   const tries = Math.max(1, Number(row.tries));
   const mean = Number(row.total_lift) / tries;
   const hit = Number(row.improvements) / tries;
-  return mean + 0.25 * hit + 0.15 * Math.sqrt(Math.log(Math.max(2, totalTries)) / tries);
+  // A method that won — the strongest plan once challenged, which may trade reach for robustness — is the strongest signal.
+  const won = Number(row.wins ?? 0) / tries;
+  return mean + 0.25 * hit + 0.5 * won + 0.15 * Math.sqrt(Math.log(Math.max(2, totalTries)) / tries);
 }
 
 /** The methods to start the next exploration from: those that worked best, as directions. */
 export async function loadLibrary(limit = LIBRARY_SIZE): Promise<Direction[]> {
-  const rows = await getDb().all<ReasoningMethodRow>('SELECT * FROM reasoning_methods WHERE improvements > 0 ORDER BY best_lift DESC, signature LIMIT 400', []);
+  const rows = await getDb().all<ReasoningMethodRow>('SELECT * FROM reasoning_methods WHERE improvements > 0 OR wins > 0 ORDER BY wins DESC, best_lift DESC, signature LIMIT 400', []);
   if (rows.length === 0) return [];
   const total = rows.reduce((n, r) => n + Number(r.tries), 0);
   return rows
