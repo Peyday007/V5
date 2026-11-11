@@ -1546,16 +1546,28 @@ export function resetRouteHealth(): void {
   routeHealth.clear();
 }
 
-/** A failing route's standing: null when it is healthy or due its single re-probe item. */
+/**
+ * A failing route's standing: null when it is healthy or due its single re-probe item.
+ * It only reads: asking does not spend the re-probe slot, because the item being
+ * asked about may still be declined by a later filter (unfit, not free-lane work,
+ * the admission audit). The slot is spent by `takeRouteProbe`, once an item is
+ * actually admitted onto the route.
+ */
 export function routeHold(model: string, now = Date.now()): string | null {
   const state = routeHealth.get(model);
   if (!state || state.failures < ROUTE_FAILURE_LIMIT) return null;
-  if (now >= state.nextProbeAt) {
-    // One item re-probes the route; the next is held until it answers.
-    state.nextProbeAt = now + ROUTE_REPROBE_MS;
-    return null;
-  }
+  if (now >= state.nextProbeAt) return null;
   return `model route failing (${state.cause}); another model takes the work until it is re-probed`;
+}
+
+/**
+ * An item was admitted onto a held route that was due its re-probe: that item is
+ * the probe, and the next is held until it answers. A healthy route is untouched.
+ */
+export function takeRouteProbe(model: string, now = Date.now()): void {
+  const state = routeHealth.get(model);
+  if (!state || state.failures < ROUTE_FAILURE_LIMIT) return;
+  if (now >= state.nextProbeAt) state.nextProbeAt = now + ROUTE_REPROBE_MS;
 }
 
 /** A route that answered is healthy again; a route that did not is counted, with its cause. */
@@ -1598,7 +1610,10 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     const owner = await owningBin(item);
     if (owner) owners.set(item.id, owner.binId);
     session = sessionFor(worker, item);
-    return auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
+    const admitted = await auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
+    // Only an item that passed every filter spends a held route's re-probe slot.
+    if (admitted.ok) takeRouteProbe(worker.model);
+    return admitted;
   };
   const ask = async (types: FreeLaneWorkType[], orchestrationId: string | null): Promise<ClaimedWork | undefined> => {
     let declined = 0;

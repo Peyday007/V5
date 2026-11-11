@@ -29,6 +29,7 @@ import {
   resetRouteHealth,
   ROUTE_FAILURE_LIMIT,
   routeHold,
+  takeRouteProbe,
 } from '../server/services/freeLane/worker.ts';
 
 /* ------------------------------------------------------------------------- */
@@ -274,10 +275,34 @@ describe('routeHold / recordRouteOutcome', () => {
     for (let i = 0; i < ROUTE_FAILURE_LIMIT; i += 1) recordRouteOutcome('m', { ok: false, why: 'model call failed: timeout' }, now);
     expect(routeHold('m', now)).not.toBeNull();
     const later = now + 5 * 60_000;
-    expect(routeHold('m', later)).toBeNull(); // the single re-probe
+    expect(routeHold('m', later)).toBeNull(); // the single re-probe is due
+    takeRouteProbe('m', later); // an item was admitted as that probe
     expect(routeHold('m', later)).not.toBeNull(); // the next item waits for it
     recordRouteOutcome('m', { ok: true }, later);
     expect(routeHold('m', later)).toBeNull();
+  });
+
+  it('does not spend the re-probe slot on an item a later filter declines', () => {
+    const now = 1_000_000;
+    for (let i = 0; i < ROUTE_FAILURE_LIMIT; i += 1) recordRouteOutcome('m', { ok: false, why: 'model call failed: timeout' }, now);
+    const later = now + 5 * 60_000;
+    // takeOne asks routeHold before the unfit / freeLaneAdmits / audit filters;
+    // items those filters decline must leave the probe due for the next item.
+    expect(routeHold('m', later)).toBeNull();
+    expect(routeHold('m', later)).toBeNull();
+    expect(routeHold('m', later + 1)).toBeNull();
+    takeRouteProbe('m', later + 1);
+    expect(routeHold('m', later + 1)).not.toBeNull();
+    expect(routeHold('m', later + 1 + 5 * 60_000)).toBeNull();
+  });
+
+  it('takeRouteProbe leaves a healthy or not-yet-due route as it was', () => {
+    const now = 1_000_000;
+    takeRouteProbe('healthy', now);
+    expect(routeHold('healthy', now)).toBeNull();
+    for (let i = 0; i < ROUTE_FAILURE_LIMIT; i += 1) recordRouteOutcome('m', { ok: false, why: 'model call failed: timeout' }, now);
+    takeRouteProbe('m', now + 60_000); // not due: must not push the probe later
+    expect(routeHold('m', now + 5 * 60_000)).toBeNull();
   });
 
   it('does not count Brain database pressure or non-model failures against a route', () => {
