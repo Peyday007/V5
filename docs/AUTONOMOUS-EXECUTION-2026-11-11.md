@@ -128,5 +128,9 @@ What happened, in order (owner interventions: **0**):
 | 10 | **Temporary outage.** The forge read budget again, then GitHub runners failed DNS for the Ubuntu mirrors in every Postgres shard. | waited for the reset; reran the failed shards |
 | 11 | Follow-up campaign `fcp_200e1076` built, reviewed and opened #750 (one shared line joiner in pdf/ocr/text/extraction). | session reviewed it, ran its tests, and merged #750 into #748, then #748 into `production` (1f8ad02) |
 
+| 12 | **Outage, and a strategy change.** Every Postgres suite from 13:32 failed DNS for `azure.archive.ubuntu.com`, and reruns repeated it. | #753: the install retries fall back to `archive.ubuntu.com`. The suite then passed 10/10 on aa06483. |
+| 13 | **Released.** Deploy 43065787279 released aa06483, which contains the demo merge 1f8ad02. The hosted verification passed before the restart. After it, one MCP call timed out (`could-not-complete`), and the workflow mislabelled that BEHAVIOUR DEFECTIVE. | labelled correctly in deploy.yml; the next Deploy re-verifies |
+| 14 | **Verified on production.** `factory release-revision` on the live machine: `aa064839…`. The demo's acceptance tests pass at that revision (`normalizeSuspendedHyphen`, `extractorLineWrapHyphen`, `documents`: 67/67), as did Deploy's own test job on the same commit. | session |
+
 Owner interventions: **0**. Every block was a routine contract correction, a
 merge the owner's standing order assigns to the session, or a temporary outage.
