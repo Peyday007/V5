@@ -186,3 +186,45 @@ describe('dead deep links on a live host', () => {
     }
   });
 });
+
+describe('unreachable hosts the model keeps naming', () => {
+  const readableAt = (url: string): SourceFetch => {
+    const text = 'The median hourly wage of receptionists in the United States was 17.50 dollars in 2024. '.repeat(6);
+    return { readable: true, requestedUrl: url, finalUrl: url, status: 200, contentType: 'text/html', retrievedAt: new Date().toISOString(), sha256: 'x', text, truncated: false, totalChars: text.length };
+  };
+
+  async function runScripted(replies: string[][], answer: (url: string) => SourceFetch, title: string, search: string[] = []): Promise<{ fetched: string[]; prompts: string[] }> {
+    const fetched: string[] = [];
+    const prompts: string[] = [];
+    let n = 0;
+    const completer: Completer = async (_config, _model, _system, prompt) => {
+      prompts.push(String(prompt));
+      const urls = replies[Math.min(n, replies.length - 1)] ?? [];
+      n += 1;
+      return JSON.stringify({ urls, search: 'q' });
+    };
+    const p = await packet(play.project.id, title);
+    await enqueue(play.project.id, p.orchestration, p.fragment);
+    await freeLaneTick({ config: CONFIG, completer, fetchSource: async (u) => (fetched.push(u), answer(u)), search: async () => search });
+    return { fetched, prompts };
+  }
+
+  it('asks again, naming the skipped pages, when every candidate was on a host known shut', async () => {
+    const shut = 'https://shut.example/a';
+    const good = 'https://good.example/wages';
+    // First fragment teaches Brain that shut.example does not resolve.
+    await runScripted([[shut]], (u) => (u === shut ? refused(u, 'DNS_FAILED') : readableAt(u)), 'teach shut host');
+    // Second fragment: the model names only the shut host first, then a live one.
+    const { fetched, prompts } = await runScripted([[shut], [good]], (u) => (u === shut ? refused(u, 'DNS_FAILED') : readableAt(u)), 'recall after shut');
+    expect(fetched).not.toContain(shut);
+    expect(fetched).toContain(good);
+    expect(prompts.some((p) => p.includes(shut) && p.includes('unreachable'))).toBe(true);
+  });
+
+  it('still opens a search-returned page on a host remembered as shut', async () => {
+    const page = 'https://flaky.example/stats';
+    await runScripted([[page]], (u) => refused(u, 'DNS_FAILED'), 'teach flaky host');
+    const { fetched } = await runScripted([[]], readableAt, 'search result on shut host', [page]);
+    expect(fetched).toContain(page);
+  });
+});
