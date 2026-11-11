@@ -16,7 +16,7 @@ import { toScenarioInput } from '../server/services/quant/export.ts';
 import { solveProblem, type QuantProblem } from '../server/services/quant/problem.ts';
 import { runScenarioModel } from '../server/services/scenario/run.ts';
 import type { Observation, QuantityNode } from '../server/domain/quant.ts';
-import type { CashMoneyEntry } from '../server/domain/types.ts';
+import { CASH_MONEY_KINDS, type CashMoneyEntry } from '../server/domain/types.ts';
 
 const now = new Date('2026-10-31T00:00:00Z');
 const src = (ref: string) => ({ kind: 'URL' as const, ref });
@@ -606,5 +606,96 @@ describe('MONEY-13-4. route money velocity and distinct cash identities (equipme
     expect(m.daysFundsToUsableCash).toBe(3);
     expect(m.daysLeadToCommitment).toBeNull();
     expect(m.usableCash).toBe(1_100);
+  });
+
+  it('maps every ledger kind: releases, reserves, supplier liabilities and capital are never dropped', () => {
+    const entry = (id: string, kind: CashMoneyEntry['kind'], cents: number, occurredAt: string): CashMoneyEntry => ({
+      id, projectId: 'p', opportunityId: 'opp-b', commitmentId: null, idempotencyKey: null, payloadFingerprint: null, kind, amountCents: cents, currency: 'USD',
+      verifiedReference: null, fundsAvailableAt: null, occurredAt, note: null, recordedBy: 'test', createdAt: occurredAt,
+    });
+    const rows = [
+      entry('1', 'PIPELINE_AGREED', 200_000, '2026-08-01T00:00:00Z'),
+      entry('2', 'PIPELINE_RELEASED', 50_000, '2026-08-02T00:00:00Z'),
+      entry('3', 'CUSTOMER_PAYMENT', 100_000, '2026-08-03T00:00:00Z'),
+      entry('4', 'UNPAID_COMMITMENT', 40_000, '2026-08-04T00:00:00Z'),
+      // A supplier payment is a COST plus the COMMITMENT_PAID that closes what was owed: one dollar, spent once.
+      entry('5', 'COST', 15_000, '2026-08-06T00:00:00Z'),
+      entry('6', 'COMMITMENT_PAID', 15_000, '2026-08-06T00:00:00Z'),
+      entry('7', 'COMMITMENT_RELEASED', 5_000, '2026-08-07T00:00:00Z'),
+      entry('8', 'RESERVE', 30_000, '2026-08-05T00:00:00Z'),
+      entry('9', 'RESERVE_RELEASE', 10_000, '2026-08-08T00:00:00Z'),
+      entry('10', 'CAPITAL_IN', 70_000, '2026-07-30T00:00:00Z'),
+      entry('11', 'CAPITAL_OUT', 20_000, '2026-08-10T00:00:00Z'),
+    ];
+    // Every ledger kind but the two the earlier test covers appears above, so a new kind shows up here.
+    expect(new Set(rows.map((r) => r.kind)).size + ['SETTLEMENT', 'REFUND'].length).toBe(CASH_MONEY_KINDS.length);
+    const [input] = routeInputsFromEntries(rows);
+    const m = quantifyRouteMoney({ ...input!, identities: { BORROWED_PROCEEDS: 900, OWNER_DISTRIBUTIONS: 150 } });
+
+    // Released work is billed no longer, so receivables fall with it.
+    expect(m.identities.GROSS_BILLINGS).toBe(1_500);
+    expect(m.receivables).toBe(500);
+    // The paid part of a liability is one outlay, not two.
+    expect(m.supplierOutlays).toEqual([{ at: '2026-08-06T00:00:00Z', amount: 150 }]);
+    expect(m.unattributedSpend).toBe(150);
+    // Liabilities keep their timing; outstanding = incurred - paid - released.
+    expect(m.supplierLiabilities).toEqual([{ at: '2026-08-04T00:00:00Z', amount: 400 }]);
+    expect(m.supplierLiabilitiesOutstanding).toBe(200);
+    // Restricted money is excluded from usable cash.
+    expect(m.restrictedCash).toBe(200);
+    // Capital is kept distinct: never a receipt, never billings, never an outlay.
+    expect(m.capitalIn).toBe(700);
+    expect(m.capitalOut).toBe(200);
+    expect(m.identities.SETTLED_CASH).toBe(1_000);
+    // Usable = received - restricted - outstanding liabilities, each dollar once.
+    expect(m.usableCash).toBe(1_000 - 200 - 200);
+    expect(m.usableCash! + m.excludedFromUsable).toBe(m.identities.SETTLED_CASH);
+    // Borrowed proceeds arrive only as capital in: a stated figure above the rows contradicts them.
+    expect(m.identities.BORROWED_PROCEEDS).toBeNull();
+    expect(m.unknowns).toContain('borrowed_proceeds stated value exceeds the capital-in rows (700), ignored');
+    // Within the capital-out rows, a stated distribution stands, and stays distinct from every operating figure.
+    expect(m.identities.OWNER_DISTRIBUTIONS).toBe(150);
+  });
+
+  it('money received on a released agreement is owed back, never usable cash', () => {
+    const at = (d: number) => `2026-09-0${d}T00:00:00Z`;
+    const m = quantifyRouteMoney({
+      routeKey: 'released',
+      events: [
+        { at: at(1), kind: 'BILLING', amount: 1_000 },
+        { at: at(2), kind: 'FUNDS_RECEIVED', amount: 1_000 },
+        { at: at(3), kind: 'BILLING_RELEASED', amount: 400 },
+      ],
+    });
+    expect(m.identities.GROSS_BILLINGS).toBe(600);
+    expect(m.receivables).toBe(0);
+    expect(m.owedBack).toBe(400);
+    expect(m.usableCash).toBe(600);
+    // Refunding it discharges the debt; it is not subtracted a second time.
+    const refunded = quantifyRouteMoney({
+      routeKey: 'released',
+      events: [
+        { at: at(1), kind: 'BILLING', amount: 1_000 },
+        { at: at(2), kind: 'FUNDS_RECEIVED', amount: 1_000 },
+        { at: at(3), kind: 'BILLING_RELEASED', amount: 400 },
+        { at: at(4), kind: 'REFUND', amount: 400 },
+      ],
+    });
+    expect(refunded.usableCash).toBe(600);
+    // An advance on live work is not owed back.
+    const advance = quantifyRouteMoney({
+      routeKey: 'advance',
+      events: [
+        { at: at(1), kind: 'BILLING', amount: 1_000 },
+        { at: at(2), kind: 'FUNDS_RECEIVED', amount: 1_200 },
+      ],
+    });
+    expect(advance.owedBack).toBe(0);
+    expect(advance.usableCash).toBe(1_200);
+  });
+
+  it('reports a ledger kind it has no mapping for instead of dropping it', () => {
+    const m = quantifyRouteMoney({ routeKey: 'x', events: [], unmappedKinds: ['SOMETHING_NEW'] });
+    expect(m.unknowns).toContain('ledger kind SOMETHING_NEW has no mapping, its rows are not counted');
   });
 });
