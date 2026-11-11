@@ -134,7 +134,8 @@ describe('the forecast counts work, not evidence', () => {
       tiers: { cop_q: reading('QUALIFIED'), cop_eur: reading('QUALIFIED') },
     });
     expect(forecast.qualified).toBe(1);
-    expect(forecast.considered).toBe(2);
+    // considered is every opportunity in the project, the EUR one included.
+    expect(forecast.considered).toBe(3);
     expect(forecast.revenue.valueCents).toBe(40_000);
   });
 
@@ -145,5 +146,22 @@ describe('the forecast counts work, not evidence', () => {
     expect(forecast.qualified).toBe(0);
     expect(forecast.considered).toBe(1);
     expect(forecast.revenue.valueCents).toBeNull();
+  });
+
+  it('considered keeps its meaning: every opportunity in the project, all states and all currencies', async () => {
+    rows.length = 0;
+    rows.push(
+      opportunity({ id: 'cop_r', state: 'READY', priceCents: 75_000 }),
+      opportunity({ id: 'cop_eur', state: 'READY', currency: 'EUR', priceCents: 50_000 }),
+      opportunity({ id: 'cop_gone', state: 'ARCHIVED', priceCents: 30_000 }),
+    );
+    const forecast = await cashForecast({
+      projectId: 'prj_1',
+      currency: 'USD',
+      tiers: { cop_r: reading('QUALIFIED'), cop_eur: reading('QUALIFIED'), cop_gone: reading('QUALIFIED') },
+    });
+    expect(forecast.qualified).toBe(1);
+    expect(forecast.considered).toBe(3);
+    expect(forecast.revenue.valueCents).toBe(75_000);
   });
 });

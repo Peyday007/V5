@@ -72,8 +72,9 @@ export interface DurationEstimate {
 
 export interface CashForecast {
   currency: string;
-  /** How many opportunities are qualified enough to forecast from, and of how many. */
+  /** How many opportunities are qualified enough to forecast from (workable, live, in this currency). */
   qualified: number;
+  /** Of how many: every opportunity in the project, whatever its state or currency. Unchanged by the §47 filter. */
   considered: number;
   upfrontCash: Estimate;
   ongoingCosts: Estimate;
@@ -293,7 +294,7 @@ export async function cashForecast(input: {
   return {
     currency: input.currency,
     qualified: opportunities.length,
-    considered: inCurrency.length,
+    considered: all.length,
     upfrontCash,
     ongoingCosts: withheld({
       basis: 'Recurring cost of running a qualified opportunity.',
