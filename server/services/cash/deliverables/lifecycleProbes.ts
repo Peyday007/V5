@@ -13,8 +13,10 @@
  *
  * `r01.life-29-3` — every exception the rows show for such a deal is on record as
  * `exception.detected` (written by the journey tick), and at least one real, sourced
- * case has been traced from request to accepted fulfilment including its failure
- * path (`rehearsal.traced`, valid, with a source and exceptions). A deal's exception
+ * case has been traced end to end — from its request through accepted fulfilment
+ * and funds reconciliation — including its failure path (`rehearsal.traced`, valid,
+ * with a source, exceptions and every part of its span; `rehearsalDemonstrates`).
+ * A deal's exception
  * the tick has not yet recorded, or no rehearsed case at all, is a failure: nothing
  * to look at is not a demonstration (§39).
  *
@@ -100,6 +102,38 @@ export async function commitmentsHoldOnRows(): Promise<ProbeResult> {
   return { ok: true, detail: `${deals.length} transaction(s) read as commitments: ${transitions} transition(s), ${reached} stage(s) reached, each checked against the ledger; no single sale flag` };
 }
 
+/** The persisted `rehearsal.traced` detail, as far as the probe reads it. */
+export interface StoredTraceDetail {
+  valid?: boolean;
+  sourceRef?: string | null;
+  exceptions?: unknown[];
+  request?: { at?: unknown; ref?: unknown } | null;
+  endToEnd?: { requestTraced?: unknown; fulfilmentAccepted?: unknown; fundsSettled?: unknown; reconciled?: unknown } | null;
+  reached?: unknown[];
+  steps?: { kind?: unknown; ref?: unknown }[];
+}
+
+/**
+ * Whether one stored trace demonstrates S-0460: valid, sourced, with a failure
+ * path, and end to end — its request on record and traced as a step, work
+ * accepted, funds settled and reconciled. The stage claims are read a second
+ * way from `reached`, so a trace that says "end to end" without the stages to
+ * show for it does not count. A trace written before the trace recorded its
+ * span has none of this and does not count either. Pure.
+ */
+export function rehearsalDemonstrates(d: StoredTraceDetail): boolean {
+  if (d.valid !== true) return false;
+  if (typeof d.sourceRef !== 'string' || d.sourceRef.trim() === '') return false;
+  if (!Array.isArray(d.exceptions) || d.exceptions.length === 0) return false;
+  const span = d.endToEnd;
+  if (!span || span.requestTraced !== true || span.fulfilmentAccepted !== true || span.fundsSettled !== true || span.reconciled !== true) return false;
+  const reached = Array.isArray(d.reached) ? d.reached.map(String) : [];
+  if (!['PAYMENT_AUTHORIZED', 'FUNDS_SETTLED', 'WORK_ACCEPTED'].every((stage) => reached.includes(stage))) return false;
+  const requestRef = typeof d.request?.ref === 'string' ? d.request.ref : '';
+  if (!requestRef || !Array.isArray(d.steps) || !d.steps.some((s) => s.ref === requestRef && s.kind === 'STATE_CHANGE')) return false;
+  return true;
+}
+
 export async function exceptionsHoldOnRows(): Promise<ProbeResult> {
   const { readCommitments } = await import('./commitments.ts');
   const { detectExceptions } = await import('./exceptions.ts');
@@ -118,14 +152,14 @@ export async function exceptionsHoldOnRows(): Promise<ProbeResult> {
     detected += rows.length;
   }
   const traces = await db.all<{ id: string; detail: string }>(`SELECT id, detail FROM cash_events WHERE kind = 'rehearsal.traced' ORDER BY created_at, id`);
-  const demonstrated = traces.filter((t) => {
-    const d = JSON.parse(t.detail) as { valid?: boolean; sourceRef?: string | null; exceptions?: unknown[] };
-    return d.valid === true && typeof d.sourceRef === 'string' && d.sourceRef.trim() !== '' && Array.isArray(d.exceptions) && d.exceptions.length > 0;
-  });
+  const demonstrated = traces.filter((t) => rehearsalDemonstrates(JSON.parse(t.detail) as StoredTraceDetail));
   if (demonstrated.length === 0) {
-    return { ok: false, detail: `${detected} exception(s) detected and on record, but no valid, sourced rehearsal with a failure path has been traced yet (${traces.length} rehearsal trace(s) in all)` };
+    return {
+      ok: false,
+      detail: `${detected} exception(s) detected and on record, but no valid, sourced rehearsal with a failure path has been traced end to end yet — from the request through accepted fulfilment and funds reconciliation (${traces.length} rehearsal trace(s) in all)`,
+    };
   }
-  return { ok: true, detail: `${detected} exception(s) shown by the rows are all on record; ${demonstrated.length} sourced rehearsal(s) traced including a failure path` };
+  return { ok: true, detail: `${detected} exception(s) shown by the rows are all on record; ${demonstrated.length} sourced rehearsal(s) traced end to end, from the request through accepted fulfilment and funds reconciliation, including a failure path` };
 }
 
 /** Why a realization reading breaks LIFE-29-2's rules, or null. Pure. */

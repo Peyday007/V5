@@ -20,7 +20,7 @@ import { ALWAYS_PROHIBITED_COMMERCIAL, COMMERCIAL_ACTIONS } from '../server/serv
 import { actionKey, beginExecution, capture, fillCard, markReady, recordMoneyEvent } from '../server/services/cash/opportunities.ts';
 import { CAPTURE_KEY, qualificationKeys } from '../server/services/cash/tier.ts';
 import { recordAgreement, releaseAgreement } from '../server/services/cash/journey/deal.ts';
-import { declare, readObligations } from '../server/services/cash/journey/fulfillment.ts';
+import { declare, readObligations, recordEvent } from '../server/services/cash/journey/fulfillment.ts';
 import { advanceJourney } from '../server/services/cash/journey/tick.ts';
 import { closeNeed } from '../server/services/cash/needs.ts';
 import { runNeedContinuations } from '../server/services/cash/operate.ts';
@@ -138,6 +138,29 @@ async function paidThenCancelled(source: string | null = SOURCE): Promise<{ id: 
   return { id, agreement };
 }
 
+/**
+ * One real case end to end (S-0460): requested, agreed in two parts, one part
+ * cancelled by the buyer (the failure path), the other delivered, accepted,
+ * paid and settled, with nothing left open on the money.
+ */
+async function endToEndWithCancelledPart(source: string | null = SOURCE): Promise<{ id: string; kept: CashAgreement; cancelled: CashAgreement }> {
+  const id = await executing('A paid intake repair', 75_000, 'EXPLICIT_PAID_REQUEST', source);
+  const kept = await agree(id, 75_000, 'Repair the intake form');
+  const cancelled = await agree(id, 25_000, 'Add a spam filter');
+  expect((await releaseAgreement({ agreementId: cancelled.id, reason: 'The buyer cancelled the spam filter.', actorRef: userId })).ok).toBe(true);
+  expect((await declare({ projectId, agreementId: kept.id, kind: 'PERSON', performer: 'The owner', actorRef: userId })).ok).toBe(true);
+  for (const [kind, detail, evidence] of [
+    ['WORK_COMPLETE', 'The owner finished the repair.', `done-${kept.id}`],
+    ['DELIVERED', 'The repaired form is live.', `delivered-${kept.id}`],
+    ['ACCEPTED', 'The buyer confirmed a test enquiry arrived.', `accepted-${kept.id}`],
+  ] as const) {
+    const done = await recordEvent({ projectId, agreementId: kept.id, kind, detail, evidenceRef: evidence, actorRef: userId });
+    if (!done.ok) throw new Error(`${kind}: ${done.reason}`);
+  }
+  await settled(id);
+  return { id, kept, cancelled };
+}
+
 async function approvalNeed(opportunityId: string): Promise<CashNeed | undefined> {
   return (await listNeeds({ projectId })).find((n) => n.opportunityId === opportunityId && n.requestKey?.startsWith(REMEDY_APPROVAL_PREFIX));
 }
@@ -153,25 +176,50 @@ describe('the approval key', () => {
 });
 
 describe('the journey tick rehearses a sourced case and carries out an approved remedy', () => {
-  it('traces a sourced case with a failure path on the tick, so r01.life-29-3 passes on production rows, and only again when it changed', async () => {
-    const { id } = await paidThenCancelled();
+  it('traces a sourced case end to end with a failure path on the tick, so r01.life-29-3 passes on production rows, and only again when it changed', async () => {
+    const { id } = await endToEndWithCancelledPart();
     expect((await probe('r01.life-29-3')).ok).toBe(false);
     const first = await advanceJourney(projectId);
     expect(first.exceptions.rehearsed).toBe(1);
+    expect(await cashEventsOfKind(id, 'rehearsal.refused')).toHaveLength(0);
     const traced = await cashEventsOfKind(id, 'rehearsal.traced');
     expect(traced).toHaveLength(1);
-    const detail = traced[0]!.detail as { sourceRef: string; valid: boolean; exceptions: { kind: string }[]; steps: { kind: string }[] };
+    const detail = traced[0]!.detail as {
+      sourceRef: string; valid: boolean; exceptions: { kind: string }[]; steps: { kind: string; ref: string | null }[];
+      request: { ref: string }; endToEnd: Record<string, boolean>; reached: string[];
+    };
     expect(detail.sourceRef).toBe(SOURCE);
     expect(detail.valid).toBe(true);
     expect(detail.exceptions.map((e) => e.kind)).toContain('CANCELLATION');
     expect(detail.steps.some((s) => s.kind === 'EXCEPTION')).toBe(true);
+    // From the request, through accepted fulfilment, to settled and reconciled funds.
+    expect(detail.request.ref).toBe(id);
+    expect(detail.steps.some((s) => s.kind === 'STATE_CHANGE' && s.ref === id)).toBe(true);
+    expect(detail.endToEnd).toEqual({ requestTraced: true, fulfilmentAccepted: true, fundsSettled: true, reconciled: true });
+    expect(detail.reached).toEqual(expect.arrayContaining(['WORK_ACCEPTED', 'PAYMENT_AUTHORIZED', 'FUNDS_SETTLED']));
     expect(traced[0]!.actorRef).toBe('BRAIN');
     const verdict = await probe('r01.life-29-3');
-    expect(verdict.detail).toMatch(/sourced rehearsal/);
+    expect(verdict.detail).toMatch(/traced end to end/);
     expect(verdict.ok).toBe(true);
     const again = await advanceJourney(projectId);
     expect(again.exceptions.rehearsed).toBe(0);
     expect(await cashEventsOfKind(id, 'rehearsal.traced')).toHaveLength(1);
+  });
+
+  it('a cancelled deal that was never delivered is refused as a demonstration, and r01.life-29-3 does not pass on it', async () => {
+    const { id } = await paidThenCancelled();
+    const report = await advanceJourney(projectId);
+    expect(report.exceptions.rehearsed).toBe(1);
+    expect(await cashEventsOfKind(id, 'rehearsal.traced')).toHaveLength(0);
+    const refused = await cashEventsOfKind(id, 'rehearsal.refused');
+    expect(refused).toHaveLength(1);
+    const detail = refused[0]!.detail as { valid: boolean; refusals: string[]; endToEnd: Record<string, boolean> };
+    expect(detail.valid).toBe(false);
+    expect(detail.endToEnd.fulfilmentAccepted).toBe(false);
+    expect(detail.refusals.join(' ')).toContain('fulfilment was not accepted');
+    const verdict = await probe('r01.life-29-3');
+    expect(verdict.ok).toBe(false);
+    expect(verdict.detail).toMatch(/end to end/);
   });
 
   it('does not trace a case that names no source', async () => {
@@ -215,11 +263,14 @@ describe('the journey tick rehearses a sourced case and carries out an approved 
     expect((await readObligations(id))[0]!.refunds).toHaveLength(1);
 
     // The case changed (a remedy was carried out), so the tick traces it again, with the recovery.
+    // The recovery is on the trace even though this case — cancelled, never delivered — is no end-to-end demonstration.
     await advanceJourney(projectId);
-    const traces = await cashEventsOfKind(id, 'rehearsal.traced');
-    const last = traces[traces.length - 1]!.detail as { steps: { kind: string; detail: string }[]; recovered: { remedy: string }[] };
+    const traces = await cashEventsOfKind(id, 'rehearsal.refused');
+    const last = traces[traces.length - 1]!.detail as { valid: boolean; steps: { kind: string; detail: string }[]; recovered: { remedy: string }[] };
+    expect(last.valid).toBe(false);
     expect(last.recovered.map((r) => r.remedy)).toContain('APPROVED_REFUND');
     expect(last.steps.some((s) => s.kind === 'RECOVERY' && s.detail.includes('APPROVED_REFUND'))).toBe(true);
+    expect(await cashEventsOfKind(id, 'rehearsal.traced')).toHaveLength(0);
   });
 
   it('carries nothing out when the approval is withdrawn', async () => {

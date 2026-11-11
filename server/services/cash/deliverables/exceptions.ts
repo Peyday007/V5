@@ -477,19 +477,88 @@ export interface RehearsalStep {
   ref: string | null;
 }
 
+/** Where the case began: the buyer's request, as the opportunity row records it. */
+export interface CaseRequest {
+  /** When the request was recorded. */
+  at: string;
+  /** The opportunity (or other row) that holds the request. */
+  ref: string;
+  detail: string;
+}
+
+/**
+ * What S-0460 asks a demonstration to span, each read from the rows: the case
+ * is traced from its request, through accepted fulfilment, to funds that
+ * settled and reconcile. A trace missing any of these is not end to end.
+ */
+export interface EndToEnd {
+  /** The request is on record and precedes the first agreement. */
+  requestTraced: boolean;
+  /** Every live agreement was delivered and accepted (WORK_ACCEPTED reached). */
+  fulfilmentAccepted: boolean;
+  /** The buyer paid in full and the payment settled (PAYMENT_AUTHORIZED and FUNDS_SETTLED reached). */
+  fundsSettled: boolean;
+  /** Nothing is left open on the money: no unconfirmed refund, nothing received beyond what was agreed, no supplier owed or overpaid, one currency. */
+  reconciled: boolean;
+}
+
 export interface Rehearsal {
-  /** A rehearsal is a trace only of a real, sourced case with a recorded failure. */
+  /**
+   * A rehearsal is a trace only of a real, sourced case with a recorded
+   * failure, traced end to end: from the request through accepted fulfilment
+   * and funds reconciliation (S-0460).
+   */
   valid: boolean;
   refusals: string[];
   sourceRef: string | null;
+  request: CaseRequest | null;
+  endToEnd: EndToEnd;
   steps: RehearsalStep[];
   /** Stages reached by the end of the trace. */
   reached: string[];
 }
 
+/** Which parts of an end-to-end case the reading shows, and what is missing, in words. Pure. */
+export function endToEndOf(reading: CommitmentReading, request: CaseRequest | null): { endToEnd: EndToEnd; missing: string[] } {
+  const firstAgreement = reading.transitions
+    .filter((t) => t.stage === 'CONTRACT_SIGNED' && t.at)
+    .map((t) => t.at as string)
+    .sort()[0];
+  const requestTraced = Boolean(request && request.at.trim() && request.ref.trim() && (!firstAgreement || request.at <= firstAgreement));
+  const fulfilmentAccepted = reading.stages.WORK_ACCEPTED.state === 'REACHED';
+  const fundsSettled = reading.stages.PAYMENT_AUTHORIZED.state === 'REACHED' && reading.stages.FUNDS_SETTLED.state === 'REACHED';
+  const reconciled =
+    fundsSettled &&
+    reading.otherCurrencies.length === 0 &&
+    reading.owedToCustomers.totalCents === 0 &&
+    reading.owedToSuppliers.every((o) => o.owedCents === 0 && o.overpaidCents === 0);
+  const missing: string[] = [];
+  if (!requestTraced) {
+    missing.push(request ? 'the request is recorded after the agreement it led to, so the trace does not begin at the request' : 'the case has no request on record; the trace must begin at the request');
+  }
+  if (!fulfilmentAccepted) missing.push(`fulfilment was not accepted (${reading.stages.WORK_ACCEPTED.missing.join('; ') || reading.stages.WORK_ACCEPTED.state.toLowerCase()})`);
+  if (!fundsSettled) {
+    const why = [...reading.stages.PAYMENT_AUTHORIZED.missing, ...reading.stages.FUNDS_SETTLED.missing].join('; ');
+    missing.push(`funds did not settle (${why || 'no settlement on the ledger'})`);
+  } else if (!reconciled) {
+    const open: string[] = [];
+    if (reading.otherCurrencies.length > 0) open.push(`entries in ${reading.otherCurrencies.join(', ')} are not read`);
+    if (reading.owedToCustomers.unconfirmedRefundCents > 0) open.push(`${reading.owedToCustomers.unconfirmedRefundCents} in refunds is unconfirmed`);
+    if (reading.owedToCustomers.receivedBeyondAgreedCents > 0) open.push(`${reading.owedToCustomers.receivedBeyondAgreedCents} was received beyond what was agreed`);
+    for (const o of reading.owedToSuppliers) {
+      if (o.owedCents > 0) open.push(`${o.owedCents} is still owed to ${o.party.ref}`);
+      if (o.overpaidCents > 0) open.push(`${o.party.ref} was overpaid by ${o.overpaidCents}`);
+    }
+    missing.push(`funds do not reconcile (${open.join('; ')})`);
+  }
+  return { endToEnd: { requestTraced, fulfilmentAccepted, fundsSettled, reconciled }, missing };
+}
+
 /** Traces one real case from the rows: state changes, obligations, identities, money, authority and recovery. Pure. */
 export function traceCase(input: {
   sourceRef: string | null;
+  /** The request the case began with; null when none is on record, which is refused. */
+  request: CaseRequest | null;
   reading: CommitmentReading;
   entries: readonly CashMoneyEntry[];
   selections: readonly RemedySelection[];
@@ -501,7 +570,11 @@ export function traceCase(input: {
   if (!input.sourceRef?.trim()) refusals.push('the case names no source; a rehearsal is of a real, sourced case');
   if (reading.transitions.length === 0) refusals.push('the commitment model has no transitions to trace');
   if (selections.length === 0) refusals.push('no failure path was recorded; a trace without one does not establish the recovery');
+  // S-0460: from request through accepted fulfilment and funds reconciliation.
+  const span = endToEndOf(reading, input.request);
+  for (const why of span.missing) refusals.push(`not end to end: ${why}`);
   const steps: RehearsalStep[] = [];
+  if (input.request) steps.push({ at: input.request.at, kind: 'STATE_CHANGE', detail: `request: ${input.request.detail}`, ref: input.request.ref });
   for (const t of reading.transitions) {
     steps.push({ at: t.at, kind: 'STATE_CHANGE', detail: `${t.kind}: ${t.outcome}${t.outcomeDetail ? ` (${t.outcomeDetail})` : ''}`, ref: t.id });
     if (t.duty.holder) steps.push({ at: t.deadline, kind: 'OBLIGATION', detail: `${t.duty.holder.role} to ${t.duty.action || t.kind}${t.deadline ? ` by ${t.deadline}` : ''}`, ref: t.id });
@@ -524,6 +597,8 @@ export function traceCase(input: {
     valid: refusals.length === 0,
     refusals,
     sourceRef: input.sourceRef?.trim() || null,
+    request: input.request,
+    endToEnd: span.endToEnd,
     steps,
     reached: Object.values(reading.stages).filter((s) => s.state === 'REACHED').map((s) => s.stage),
   };
@@ -580,7 +655,11 @@ export async function rehearseStoredCase(input: {
     input.authority ?? (await remedyAuthorityFor({ projectId: input.projectId, currency: input.currency, at: input.now }));
   const facts = factsFromReading(reading, input.facts);
   const selections = detected.map((exception) => selectRemedy({ reading, exception, facts, authority }));
-  const rehearsal = traceCase({ sourceRef: input.sourceRef, reading, entries, selections, recovered: input.recovered });
+  const opportunity = await getOpportunity(input.opportunityId);
+  const request: CaseRequest | null = opportunity
+    ? { at: opportunity.createdAt, ref: opportunity.id, detail: opportunity.title }
+    : null;
+  const rehearsal = traceCase({ sourceRef: input.sourceRef, request, reading, entries, selections, recovered: input.recovered });
   const eventKind = rehearsal.valid ? 'rehearsal.traced' : 'rehearsal.refused';
   const event = await recordCashEvent({
     projectId: input.projectId,
@@ -596,6 +675,8 @@ export async function rehearseStoredCase(input: {
       recovered: input.recovered ?? [],
       valid: rehearsal.valid,
       refusals: rehearsal.refusals,
+      request: rehearsal.request,
+      endToEnd: rehearsal.endToEnd,
       reached: rehearsal.reached,
       steps: rehearsal.steps,
       exceptions: detected.map((d) => ({ id: d.id, kind: d.kind, source: d.source })),

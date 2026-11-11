@@ -34,6 +34,7 @@ import {
   type ExceptionSignal,
   type RemedyAuthority,
 } from '../server/services/cash/deliverables/exceptions.ts';
+import { rehearsalDemonstrates } from '../server/services/cash/deliverables/lifecycleProbes.ts';
 import type { CapabilityState } from '../server/services/cash/capabilities.ts';
 
 const NOW = '2026-06-10T00:00:00.000Z';
@@ -651,16 +652,24 @@ describe('LIFE-29-3: remedy selection stays inside authority', () => {
 });
 
 describe('LIFE-29-3: the rehearsed failure-path trace', () => {
+  // One real case end to end: requested, agreed, delivered and accepted, a card
+  // declined (the failure path), then paid through another channel, settled and reconciled.
   const failedPayment = [{ id: 'pay1', kind: 'payment', action: 'Pay', stage: 'PAYMENT_AUTHORIZED' as const, outcome: 'FAILED' as const, outcomeDetail: 'card declined', holder: { role: 'buyer', ref: 'buyer-A' }, at: '2026-06-04T00:00:00.000Z' }];
+  const request = { at: '2026-05-30T00:00:00.000Z', ref: OPP, detail: 'The buyer asked for a quote by email' };
   const entries = [entry('PIPELINE_AGREED', 10_000), entry('CUSTOMER_PAYMENT', 10_000), entry('SETTLEMENT', 10_000)];
-  const r = derive([obligation('a1', 10_000)], entries, { declared: failedPayment });
+  const r = derive([accepted('a1', 10_000)], entries, { declared: failedPayment });
   const selections = detectExceptions(r).map((exception) => selectRemedy({ reading: r, exception, facts: { alternateCollectionChannel: true }, authority: { standing: ['ALTERNATE_COLLECTION'], approved: [] } }));
 
-  it('is a valid trace of a sourced case with a failure and a recovery decision', () => {
+  it('is a valid trace of a sourced case, from its request through accepted fulfilment and reconciled funds, with a failure and a recovery decision', () => {
     const exceptionId = selections[0]!.exception.id;
-    const t = traceCase({ sourceRef: 'order-77', reading: r, entries, selections, recovered: [{ exceptionId, remedy: 'ALTERNATE_COLLECTION', at: '2026-06-05T00:00:00.000Z', by: 'brain' }] });
+    const t = traceCase({ sourceRef: 'order-77', request, reading: r, entries, selections, recovered: [{ exceptionId, remedy: 'ALTERNATE_COLLECTION', at: '2026-06-05T00:00:00.000Z', by: 'brain' }] });
+    expect(t.refusals).toEqual([]);
     expect(t.valid).toBe(true);
     expect(t.sourceRef).toBe('order-77');
+    expect(t.endToEnd).toEqual({ requestTraced: true, fulfilmentAccepted: true, fundsSettled: true, reconciled: true });
+    expect(t.reached).toEqual(expect.arrayContaining(['WORK_ACCEPTED', 'PAYMENT_AUTHORIZED', 'FUNDS_SETTLED']));
+    // The trace begins at the request.
+    expect(t.steps[0]).toMatchObject({ kind: 'STATE_CHANGE', ref: OPP, at: request.at });
     const kinds = new Set(t.steps.map((s) => s.kind));
     for (const k of ['STATE_CHANGE', 'OBLIGATION', 'IDENTITY', 'MONEY', 'EXCEPTION', 'AUTHORITY', 'RECOVERY']) expect(kinds.has(k as never)).toBe(true);
     expect(t.steps.some((s) => s.kind === 'IDENTITY' && s.ref === 'buyer-A')).toBe(true);
@@ -672,19 +681,95 @@ describe('LIFE-29-3: the rehearsed failure-path trace', () => {
 
   it('records which authority was missing when no remedy was allowed', () => {
     const none = detectExceptions(r).map((exception) => selectRemedy({ reading: r, exception, facts: { alternateCollectionChannel: true }, authority: NO_AUTH }));
-    const t = traceCase({ sourceRef: 'order-77', reading: r, entries, selections: none });
+    const t = traceCase({ sourceRef: 'order-77', request, reading: r, entries, selections: none });
     expect(t.valid).toBe(true);
     expect(t.steps.find((s) => s.kind === 'AUTHORITY')!.detail).toContain('no remedy within authority');
     expect(t.steps.some((s) => s.kind === 'RECOVERY')).toBe(false);
   });
 
   it('refuses to call itself a trace without a source, without transitions, or without a failure path', () => {
-    expect(traceCase({ sourceRef: null, reading: r, entries, selections }).valid).toBe(false);
-    expect(traceCase({ sourceRef: '   ', reading: r, entries, selections }).refusals.join(' ')).toContain('no source');
-    const noFailure = traceCase({ sourceRef: 'order-77', reading: r, entries, selections: [] });
+    expect(traceCase({ sourceRef: null, request, reading: r, entries, selections }).valid).toBe(false);
+    expect(traceCase({ sourceRef: '   ', request, reading: r, entries, selections }).refusals.join(' ')).toContain('no source');
+    const noFailure = traceCase({ sourceRef: 'order-77', request, reading: r, entries, selections: [] });
     expect(noFailure.valid).toBe(false);
     expect(noFailure.refusals.join(' ')).toContain('no failure path');
-    const empty = traceCase({ sourceRef: 'x', reading: derive([], []), entries: [], selections });
+    const empty = traceCase({ sourceRef: 'x', request, reading: derive([], []), entries: [], selections });
     expect(empty.refusals.join(' ')).toContain('no transitions');
+  });
+
+  it('refuses a case that only missed a date and was never delivered or paid (S-0460: request through accepted fulfilment and funds reconciliation)', () => {
+    const missedOnly = derive([obligation('a1', 10_000)], [entry('PIPELINE_AGREED', 10_000)], {
+      declared: [{ id: 'd1', kind: 'delivery', action: 'Deliver the form', deadline: '2026-06-05T00:00:00.000Z', holder: { role: 'provider', ref: 'prov-1' } }],
+    });
+    const failure = detectExceptions(missedOnly);
+    expect(failure.map((e) => e.kind)).toContain('MISSED_DATE');
+    const picks = failure.map((exception) => selectRemedy({ reading: missedOnly, exception, facts: {}, authority: NO_AUTH }));
+    const t = traceCase({ sourceRef: 'order-77', request, reading: missedOnly, entries: [], selections: picks });
+    expect(t.valid).toBe(false);
+    expect(t.endToEnd).toMatchObject({ requestTraced: true, fulfilmentAccepted: false, fundsSettled: false, reconciled: false });
+    const why = t.refusals.join(' ');
+    expect(why).toContain('fulfilment was not accepted');
+    expect(why).toContain('funds did not settle');
+  });
+
+  it('refuses an accepted case whose payment never settled', () => {
+    const unsettledEntries = [entry('PIPELINE_AGREED', 10_000), entry('CUSTOMER_PAYMENT', 10_000)];
+    const unsettled = derive([accepted('a1', 10_000)], unsettledEntries, { declared: failedPayment });
+    const picks = detectExceptions(unsettled).map((exception) => selectRemedy({ reading: unsettled, exception, facts: {}, authority: NO_AUTH }));
+    const t = traceCase({ sourceRef: 'order-77', request, reading: unsettled, entries: unsettledEntries, selections: picks });
+    expect(t.valid).toBe(false);
+    expect(t.endToEnd.fundsSettled).toBe(false);
+    expect(t.refusals.join(' ')).toContain('funds did not settle');
+  });
+
+  it('refuses a settled case whose money does not reconcile', () => {
+    const owing = [entry('PIPELINE_AGREED', 10_000), entry('CUSTOMER_PAYMENT', 10_000), entry('SETTLEMENT', 10_000), entry('UNPAID_COMMITMENT', 2_500, { commitmentId: 'sup-1' })];
+    const open = derive([accepted('a1', 10_000)], owing, { declared: failedPayment });
+    const picks = detectExceptions(open).map((exception) => selectRemedy({ reading: open, exception, facts: {}, authority: NO_AUTH }));
+    const t = traceCase({ sourceRef: 'order-77', request, reading: open, entries: owing, selections: picks });
+    expect(t.valid).toBe(false);
+    expect(t.endToEnd).toMatchObject({ fundsSettled: true, reconciled: false });
+    expect(t.refusals.join(' ')).toContain('still owed to sup-1');
+  });
+
+  it('refuses a trace that does not begin at the request', () => {
+    const exceptionId = selections[0]!.exception.id;
+    const recovered = [{ exceptionId, remedy: 'ALTERNATE_COLLECTION' as const, at: '2026-06-05T00:00:00.000Z', by: 'brain' }];
+    const none = traceCase({ sourceRef: 'order-77', request: null, reading: r, entries, selections, recovered });
+    expect(none.valid).toBe(false);
+    expect(none.refusals.join(' ')).toContain('no request on record');
+    const late = traceCase({ sourceRef: 'order-77', request: { ...request, at: '2026-06-02T00:00:00.000Z' }, reading: r, entries, selections, recovered });
+    expect(late.valid).toBe(false);
+    expect(late.refusals.join(' ')).toContain('does not begin at the request');
+  });
+});
+
+describe('LIFE-29-3: the probe counts only an end-to-end trace', () => {
+  const whole = {
+    valid: true,
+    sourceRef: 'order-77',
+    exceptions: [{ id: 'payment-failure:pay1' }],
+    request: { at: '2026-05-30T00:00:00.000Z', ref: OPP },
+    endToEnd: { requestTraced: true, fulfilmentAccepted: true, fundsSettled: true, reconciled: true },
+    reached: ['CONTRACT_SIGNED', 'PAYMENT_AUTHORIZED', 'FUNDS_SETTLED', 'WORK_ACCEPTED'],
+    steps: [{ kind: 'STATE_CHANGE', ref: OPP }],
+  };
+
+  it('accepts a valid, sourced, end-to-end trace with a failure path', () => {
+    expect(rehearsalDemonstrates(whole)).toBe(true);
+  });
+
+  it('refuses a trace stored before the span was recorded, or one missing any part of it', () => {
+    const { endToEnd: _omit, request: _r, ...legacy } = whole;
+    expect(rehearsalDemonstrates(legacy)).toBe(false);
+    for (const part of ['requestTraced', 'fulfilmentAccepted', 'fundsSettled', 'reconciled'] as const) {
+      expect(rehearsalDemonstrates({ ...whole, endToEnd: { ...whole.endToEnd, [part]: false } })).toBe(false);
+    }
+  });
+
+  it('reads the stages a second way: a trace that claims the span without reaching the stages does not count', () => {
+    expect(rehearsalDemonstrates({ ...whole, reached: ['CONTRACT_SIGNED'] })).toBe(false);
+    expect(rehearsalDemonstrates({ ...whole, steps: [] })).toBe(false);
+    expect(rehearsalDemonstrates({ ...whole, exceptions: [] })).toBe(false);
   });
 });
