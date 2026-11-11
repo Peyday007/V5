@@ -43,6 +43,7 @@ import {
 import {
   attachRepair,
   listFactoryEvents,
+  listFindings,
   listOpenFindings,
   listUnqueuedFindings,
   recordFactoryEvent,
@@ -622,12 +623,48 @@ export async function reconcileRepairs(campaignId: string): Promise<{
  * as before.
  */
 export async function nonGatingFailedRepairIds(campaignId: string): Promise<Set<string>> {
-  const findings = await listOpenFindings(campaignId);
+  await settleProgramOwedRepairs(campaignId);
+  const findings = await listFindings(campaignId);
   return new Set(
     findings
-      .filter((finding) => finding.repairUnitId !== null && !GATING_SEVERITIES.has(finding.severity))
+      .filter(
+        (finding) =>
+          finding.repairUnitId !== null &&
+          (finding.state === 'ACCEPTED_LIMITATION' ||
+            (['OPEN', 'REPAIR_QUEUED'].includes(finding.state) && !GATING_SEVERITIES.has(finding.severity))),
+      )
       .map((finding) => finding.repairUnitId as string),
   );
+}
+
+/** What a repair worker writes when the fix it was given lives on the program's protected verification path. */
+const PROGRAM_OWED_FAILURE = /protected (probes module|verification path)|server\/services\/factory\/program\/probes\.ts/i;
+
+/**
+ * A repair that spent every attempt because its fix is the program's own probe
+ * (production 2026-11-11: factory-program-d0, telemetry-d0-p1 — twelve attempts
+ * each, every worker reporting the probe lives on the protected path) is the
+ * program's finding, settled as `queueRepairs` settles one before a repair
+ * exists. The requirement stays unverified until its probe passes.
+ */
+export async function settleProgramOwedRepairs(campaignId: string): Promise<string[]> {
+  const settled: string[] = [];
+  for (const finding of await gatingFindings(campaignId)) {
+    if (!finding.repairUnitId) continue;
+    const unit = await getUnit(finding.repairUnitId);
+    if (!unit || unit.state !== 'FAILED' || unit.attempt < unit.maxAttempts) continue;
+    if (!PROGRAM_OWED_FAILURE.test(unit.failureDetail ?? '')) continue;
+    const note = `owed by the program, not this campaign: ${unit.unitKey} spent every attempt because the fix is the protected verification path; the requirement stays unverified until its probe passes on production`;
+    if (!(await resolveFinding(finding.id, 'ACCEPTED_LIMITATION', note))) continue;
+    await recordFactoryEvent({
+      campaignId,
+      kind: FACTORY_EVENT_KINDS.repairOwnershipBlocked,
+      evidenceClass: 'DERIVED',
+      detail: { findingId: finding.id, findingKey: finding.findingKey, reason: 'PROBE_OWED_BY_PROGRAM', detail: note, unitKey: unit.unitKey },
+    });
+    settled.push(finding.id);
+  }
+  return settled;
 }
 
 /**
