@@ -19,6 +19,11 @@
  * reusable connector is worth building. No scheduler, queue, store or
  * authority path is added, and no category, industry or site is listed: every
  * judgment is made from the evidence handed in.
+ *
+ * OPERATE runs under the legitimate account available to it: a person's grant,
+ * recorded once as a `SITE_ACCOUNT_GRANT` row and read on every OPERATE judgment,
+ * so nobody logs in and clicks through again to say it is permitted. Without a
+ * grant the judgment stops at NO_AUTHORIZED_ACCOUNT, as it must.
  */
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
@@ -53,6 +58,8 @@ export interface AcquisitionNeed {
   purpose: string;
   /** The host or resource, when one is named. */
   host?: string | null;
+  /** The address the need is about, when one is known; scopes a path-limited account grant. */
+  url?: string | null;
   /** The need would, as asked, message/solicit people who have not dealt with Brain. */
   contactsStrangers?: boolean;
   /** The need would, as asked, get past a CAPTCHA, login wall, bot block or rate limit. */
@@ -87,6 +94,14 @@ export interface AcquisitionEvidence {
   repeatedUses?: number;
   /** Of those, how many needed a route beyond a plain direct read. */
   repeatedUsesNeedingFallback?: number;
+  /**
+   * How often the interface workflow has been driven, and how many of those runs
+   * worked unchanged — read from SOURCE_ACCESS rows (see `interfaceRecurrenceFromRows`).
+   * The selector turns a stable recurring model-assisted pattern into a script from it.
+   */
+  interfaceRecurrence?: { runs: number; stable: number };
+  /** Measured reliability (0..1) of each route for this need, when measured; handed to the one selector unchanged. */
+  routeReliability?: AccessEvidence['reliability'];
 }
 
 export interface AcquisitionJudgment {
@@ -102,6 +117,143 @@ export interface AcquisitionJudgment {
   boundaries: AcquisitionBoundary[];
   /** A stable recurring model-assisted pattern should become a tested script (from the one selector). */
   convertToScript: boolean;
+}
+
+/* ------------------------------------------------------------------------- */
+/* The account an OPERATE need runs under                                     */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * An account Brain may operate a site under is a person's grant, never Brain's
+ * inference. It is a `bin_events` row (`SITE_ACCOUNT_GRANT`, evidence class
+ * OPERATOR_POLICY) written by `recordSiteAccountGrant`, naming the host, the
+ * account by label, who granted it, and optionally which paths it covers and
+ * when it lapses. A later row for the same host replaces it, and a REVOKED row
+ * withdraws it, so the latest row is the answer and history is never rewritten.
+ *
+ * No credential is ever part of it: the label names the account, and the
+ * secret stays in the session that signs in (§22). A grant is permission to
+ * operate the interface; it is not permission to contact strangers, evade a
+ * site's defenses or make a business commitment, and a boundary met while
+ * operating still stops at a person (the selector checks boundaries first).
+ */
+export const SITE_ACCOUNT_GRANT_EVENT = 'SITE_ACCOUNT_GRANT';
+
+export interface SiteAccountGrantInput {
+  host: string;
+  /** How the account is known (e.g. "research team login"). Never a password, token or key. */
+  accountLabel: string;
+  /** The person who granted it: a user id or address resolved by the surface that records it. */
+  grantedBy: string;
+  /** Path prefixes the grant covers; empty or absent means the whole host. */
+  paths?: string[];
+  /** What the grant is for, in words. */
+  purpose?: string;
+  /** When the grant lapses; absent means until revoked. */
+  expiresAt?: string | null;
+  /** Withdraw the grant for this host. */
+  revoke?: boolean;
+}
+
+export interface SiteAccountOnRecord {
+  host: string;
+  accountLabel: string;
+  grantedBy: string;
+  grantedAt: string;
+  paths: string[];
+  expiresAt: string | null;
+}
+
+const CREDENTIAL_SHAPE = /(pass(word)?|secret|token|api[_-]?key|bearer)\s*[:=]|\b(sk|pk|ghp|gho|xox[abp])[-_][A-Za-z0-9]{8,}/i;
+
+/** Record a person's grant (or withdrawal) of an account for a host. Refuses an input that would store a credential. */
+export async function recordSiteAccountGrant(input: SiteAccountGrantInput, deps: { record?: typeof recordBinEvent } = {}): Promise<SiteAccountOnRecord | null> {
+  const host = input.host.trim().toLowerCase();
+  const label = input.accountLabel.trim();
+  const grantedBy = input.grantedBy.trim();
+  if (!host || !grantedBy || (!input.revoke && !label)) throw new Error('A site account grant names the host, the account and the person who granted it.');
+  if (CREDENTIAL_SHAPE.test(label) || CREDENTIAL_SHAPE.test(input.purpose ?? '')) {
+    throw new Error('A site account grant names the account; it never carries a credential. Keep the secret in the session that signs in.');
+  }
+  const paths = (input.paths ?? []).map((p) => (p.startsWith('/') ? p : `/${p}`).replace(/\/+$/, '') || '/').slice(0, 50);
+  const expiresAt = input.expiresAt && Number.isFinite(Date.parse(input.expiresAt)) ? new Date(input.expiresAt).toISOString() : null;
+  await (deps.record ?? recordBinEvent)({
+    eventType: SITE_ACCOUNT_GRANT_EVENT,
+    provider: null,
+    workloadClass: 'acquisition',
+    outcome: input.revoke ? 'REVOKED' : 'GRANTED',
+    reason: (input.revoke
+      ? `${grantedBy} withdrew the account for ${host}`
+      : `${grantedBy} granted the account "${label}" for operating ${host}${paths.length ? ` (${paths.join(', ')})` : ''}${input.purpose ? `: ${input.purpose}` : ''}`
+    ).slice(0, 480),
+    evidenceClass: 'OPERATOR_POLICY',
+    measures: { host, accountLabel: label.slice(0, 120), grantedBy: grantedBy.slice(0, 200), paths, purpose: (input.purpose ?? '').slice(0, 300), expiresAt },
+  });
+  return input.revoke ? null : { host, accountLabel: label, grantedBy, grantedAt: new Date().toISOString(), paths, expiresAt };
+}
+
+/**
+ * The grant in force for a host (and path, when one is known), from grant rows. Pure.
+ * The latest row for the host decides; a revoked, lapsed or out-of-scope grant is none.
+ * With no path known, only a whole-host grant applies.
+ */
+export function siteAccountFromRows(
+  rows: { outcome: string | null; measures: string | null; at: string | null }[],
+  host: string,
+  opts: { path?: string | null; now?: number } = {},
+): SiteAccountOnRecord | null {
+  const want = host.trim().toLowerCase();
+  const now = opts.now ?? Date.now();
+  let latest: { at: number; atText: string; outcome: string; m: Record<string, unknown> } | null = null;
+  for (const row of rows) {
+    const at = row.at ? Date.parse(row.at) : Number.NaN;
+    if (!Number.isFinite(at) || at > now) continue;
+    let m: Record<string, unknown>;
+    try {
+      m = JSON.parse(row.measures ?? '{}') as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (typeof m.host !== 'string' || m.host.toLowerCase() !== want) continue;
+    if (!latest || at >= latest.at) latest = { at, atText: row.at!, outcome: row.outcome ?? '', m };
+  }
+  if (!latest || latest.outcome !== 'GRANTED') return null;
+  const { m } = latest;
+  const label = typeof m.accountLabel === 'string' ? m.accountLabel : '';
+  const grantedBy = typeof m.grantedBy === 'string' ? m.grantedBy : '';
+  if (!label || !grantedBy) return null;
+  const expiresAt = typeof m.expiresAt === 'string' ? m.expiresAt : null;
+  if (expiresAt && Date.parse(expiresAt) <= now) return null;
+  const paths = Array.isArray(m.paths) ? (m.paths as unknown[]).filter((p): p is string => typeof p === 'string') : [];
+  if (paths.length > 0) {
+    const path = opts.path ? opts.path.replace(/\/+$/, '') || '/' : null;
+    if (!path || !paths.some((p) => p === '/' || path === p || path.startsWith(`${p}/`))) return null;
+  }
+  return { host: want, accountLabel: label, grantedBy, grantedAt: latest.atText, paths, expiresAt };
+}
+
+/** The grant in force for a host from `bin_events`; null when none or unreadable. */
+export async function readSiteAccount(host: string, path?: string | null): Promise<SiteAccountOnRecord | null> {
+  try {
+    const rows = await getDb().all<{ outcome: string | null; measures: string | null; at: string | null }>(
+      `SELECT outcome, measures, at FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 2000`,
+      [SITE_ACCOUNT_GRANT_EVENT],
+    );
+    return siteAccountFromRows(rows, host, { path });
+  } catch {
+    return null;
+  }
+}
+
+/** The path a need is about, when its purpose or host names a URL. */
+function pathOfNeed(need: AcquisitionNeed): string | null {
+  const url = need.url ?? /https?:\/\/\S+/.exec(need.purpose)?.[0];
+  if (!url) return null;
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -174,6 +326,8 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
     interfaceUnfamiliar: evidence.interfaceUnfamiliarOrChanged,
     boundary: evidence.blockedAtBoundary ? (evidence.boundary ?? 'AUTHENTICATION') : undefined,
     needsLicence: evidence.requiresLicence,
+    ...(operate && evidence.interfaceRecurrence ? { recurrence: evidence.interfaceRecurrence } : {}),
+    ...(evidence.routeReliability ? { reliability: evidence.routeReliability } : {}),
   });
   const route = selection.method;
   const boundaries: AcquisitionBoundary[] = [];
@@ -267,6 +421,58 @@ export function repeatedUseFromRows(
   return { repeatedUses: best.uses, repeatedUsesNeedingFallback: best.fallback };
 }
 
+/**
+ * How often a host's interface workflow was driven, and how many of those runs worked,
+ * from `SOURCE_ACCESS` rows. Pure over rows. Grouped by workflow key like
+ * `repeatedUseFromRows`; a run is a read whose attempts include BROWSER, and it is
+ * stable when that BROWSER attempt was readable. The most-run workflow decides.
+ */
+export function interfaceRecurrenceFromRows(
+  rows: { measures: string | null; at?: string | null }[],
+  host: string,
+  opts: { now?: number; windowMs?: number } = {},
+): { runs: number; stable: number } {
+  const want = host.toLowerCase();
+  const now = opts.now ?? Date.now();
+  const since = now - (opts.windowMs ?? REPEATED_USE_WINDOW_MS);
+  const groups = new Map<string, { runs: number; stable: number }>();
+  for (const row of rows) {
+    const at = row.at ? Date.parse(row.at) : Number.NaN;
+    if (!Number.isFinite(at) || at < since || at > now) continue;
+    let measures: { host?: unknown; url?: unknown; attempts?: unknown } = {};
+    try {
+      measures = row.measures ? (JSON.parse(row.measures) as typeof measures) : {};
+    } catch {
+      continue;
+    }
+    if (typeof measures.host !== 'string' || measures.host.toLowerCase() !== want || !Array.isArray(measures.attempts)) continue;
+    const browser = (measures.attempts as { method?: unknown; readable?: unknown }[]).filter((a) => a?.method === 'BROWSER');
+    if (browser.length === 0) continue;
+    const key = workflowKeyOf(measures, want);
+    const g = groups.get(key) ?? { runs: 0, stable: 0 };
+    g.runs += 1;
+    if (browser.some((a) => a.readable === true)) g.stable += 1;
+    groups.set(key, g);
+  }
+  let best = { runs: 0, stable: 0 };
+  for (const g of groups.values()) if (g.runs > best.runs || (g.runs === best.runs && g.stable > best.stable)) best = g;
+  return best;
+}
+
+/** Interface recurrence for a host from existing SOURCE_ACCESS rows; zeros when unreadable. */
+export async function readInterfaceRecurrence(host: string): Promise<{ runs: number; stable: number }> {
+  try {
+    const since = new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString();
+    const rows = await getDb().all<{ measures: string | null; at: string | null }>(
+      `SELECT measures, at FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? ORDER BY at DESC LIMIT 5000`,
+      [since],
+    );
+    return interfaceRecurrenceFromRows(rows, host);
+  } catch {
+    return { runs: 0, stable: 0 };
+  }
+}
+
 /** Repeated-use counts for a host from existing SOURCE_ACCESS rows; zeros when unreadable. */
 export async function readRepeatedUse(host: string): Promise<{ repeatedUses: number; repeatedUsesNeedingFallback: number }> {
   try {
@@ -286,6 +492,10 @@ export interface RecordAcquisitionDeps {
   record?: typeof recordBinEvent;
   /** Whether a proposal for this host and route is already on record inside the window. */
   proposalOnRecord?: (host: string, route: string) => Promise<boolean>;
+  /** The account grant in force for an OPERATE need's host (and path); defaults to the grant rows. */
+  accountOnRecord?: (host: string, path: string | null) => Promise<SiteAccountOnRecord | null>;
+  /** How often the host's interface workflow ran and held; defaults to the SOURCE_ACCESS rows. */
+  interfaceRecurrence?: (host: string) => Promise<{ runs: number; stable: number }>;
   caller?: string;
 }
 
@@ -325,7 +535,23 @@ export async function recordAcquisitionJudgment(
     const counted = await (deps.repeatedUse ?? readRepeatedUse)(need.host);
     used = { ...evidence, ...counted };
   }
-  const judgment = judgeAcquisitionNeed(need, used);
+  // OPERATE runs under an account a person granted, read from the grant record. A caller's
+  // `false` means its own read evidenced no session, not that none was granted, so the
+  // record decides; a caller that already holds one (true) is kept.
+  let account: SiteAccountOnRecord | null = null;
+  if (need.kind === 'OPERATE' && need.host && used.authorizedAccountOnRecord !== true) {
+    account = await (deps.accountOnRecord ?? readSiteAccount)(need.host.toLowerCase(), pathOfNeed(need)).catch(() => null);
+    if (account) used = { ...used, authorizedAccountOnRecord: true };
+  }
+  if (need.kind === 'OPERATE' && need.host && used.interfaceRecurrence === undefined) {
+    const recurrence = await (deps.interfaceRecurrence ?? readInterfaceRecurrence)(need.host.toLowerCase()).catch(() => null);
+    if (recurrence && recurrence.runs > 0) used = { ...used, interfaceRecurrence: recurrence };
+  }
+  const judged = judgeAcquisitionNeed(need, used);
+  const judgment: AcquisitionJudgment =
+    account && judged.outcome === 'ROUTE_SELECTED' && (judged.route === 'BROWSER' || judged.route === 'MODEL_ASSISTED')
+      ? { ...judged, reason: `${judged.reason} Operated under the account "${account.accountLabel}" granted by ${account.grantedBy} at ${account.grantedAt}.` }
+      : judged;
   await (deps.record ?? recordBinEvent)({
     eventType: 'ACQUISITION_JUDGMENT',
     provider: judgment.route,
@@ -346,6 +572,16 @@ export async function recordAcquisitionJudgment(
       repeatedUsesNeedingFallback: used.repeatedUsesNeedingFallback ?? null,
       existingBulkSources: (used.existingBulkSources ?? []).length,
       bulkSearchDone: Boolean(used.bulkSearchDone),
+      ...(need.kind === 'OPERATE'
+        ? {
+            authorizedAccount: account
+              ? { label: account.accountLabel, grantedBy: account.grantedBy, grantedAt: account.grantedAt, source: 'GRANT_RECORD' }
+              : used.authorizedAccountOnRecord
+                ? { source: 'CALLER' }
+                : null,
+            interfaceRecurrence: used.interfaceRecurrence ?? null,
+          }
+        : {}),
     },
   });
   // The consumer of both flags: a justified connector or script is written down as a proposal
@@ -360,7 +596,7 @@ export async function recordAcquisitionJudgment(
         workloadClass: deps.caller ?? 'acquisition',
         outcome: judgment.convertToScript ? 'SCRIPT' : 'CONNECTOR',
         reason: (judgment.convertToScript
-          ? `A model-assisted routine on ${host} has run unchanged ${used.repeatedUses ?? 'repeatedly'} times: convert it to a tested script.`
+          ? `A model-assisted routine on ${host} has run unchanged ${used.interfaceRecurrence?.stable ?? used.repeatedUses ?? 'repeatedly'} times: convert it to a tested script.`
           : `${need.kind === 'OPERATE' ? 'The workflow' : 'Reads'} on ${host} repeated ${used.repeatedUses} times on record: build a reusable ${judgment.route} connector.`
         ).slice(0, 480),
         evidenceClass: 'MEASURED',
