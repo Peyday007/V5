@@ -60,6 +60,7 @@ import { cashOutcomeLessons, measuredByMechanism } from './journey/learning.ts';
 import { goalCompareFor, goalRankingFor } from './rankGoal.ts';
 import { candidateSet, type CandidateSet } from './candidateSet.ts';
 import { screenMetrics, type ScreenMetrics } from './screenMetrics.ts';
+import './telemetryProbe.ts';
 
 /** The states a piece has been decided on, so it has a record worth reading. */
 const RECORD_STATES = new Set(['READY', 'EXECUTING', 'DELIVERING', 'COLLECTED']);
