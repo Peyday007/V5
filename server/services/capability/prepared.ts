@@ -14,25 +14,28 @@
  *    requirement WORKING — only the proof probe over real attempts does that;
  *  - it holds no lease and fires no worker: keeping an option warm costs a row;
  *  - a need is turned into an exact requirement that the *existing* Factory
- *    receives through `ensureChangeRequest`, and the originating goal's
+ *    receives through its own entrance, `submitObjective`, and the originating goal's
  *    blocked work is judged resumed only when rows show the handoff itself was
  *    implemented (its campaign COMPLETE), the capability then reads WORKING
  *    over real attempts, and the blocked work ran after that.
  *
- * `handOffToFactory` is the one place the handoff is made, and `resumeOf` is the
- * one place resumption is judged, from `work_items` rows.
+ * `submitIdentified` (driven by `identifyPreparedDependencies` on the tick) is
+ * the one place a handoff is made, through the Factory's own `submitObjective`
+ * entrance; this module never creates a change request itself. `resumeOf` is
+ * the one place resumption is judged, from `work_items` rows. Every event this
+ * module writes takes its `integration` flag from `countsAsIntegration` and
+ * every recorded option carries its `warmCost`, so both rules hold on the
+ * production record and not only in a test.
  *
  * No category, provider or example here is a whitelist: every access method is
  * data the preparer supplied, and the comparison is over its declared traits.
  */
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
-import { recordEvent, listEvents, listEventsByEntity } from '../../repos/events.ts';
-import { ensureChangeRequest, getCampaignByChangeRequest, getChangeRequest } from '../../repos/factory.ts';
+import { recordEvent, listEventsByEntity } from '../../repos/events.ts';
+import { getCampaignByChangeRequest, getChangeRequest } from '../../repos/factory.ts';
 import { CAPABILITY_MAPS, classify, type CapabilityStatus } from '../../domain/capabilityMap.ts';
 import { ownerExists, readProbe } from '../selfmodel/capabilities.ts';
-import type { ProjectEvent } from '../../domain/types.ts';
-import type { FactoryChangeRequest } from '../../domain/factory.ts';
 import type { ProgramRequirement } from '../../domain/factoryProgram.ts';
 
 export class PreparedOptionError extends Error {}
@@ -145,23 +148,42 @@ export function validatePreparedOption(input: unknown): PreparedOption {
  */
 export async function recordPreparedOption(projectId: string, input: unknown, origin?: Record<string, unknown>): Promise<PreparedOption> {
   const option = validatePreparedOption(input);
+  const warm = warmCost(option);
   await recordEvent({
     projectId,
     entityType: 'capability_requirement',
     entityId: option.requirementId,
     eventType: 'CAPABILITY_ASSESSED',
-    payload: { kind: PREPARED_OPTION_KIND, integration: false, option: option as unknown as Record<string, unknown>, ...(origin ? { origin } : {}) },
+    payload: {
+      kind: PREPARED_OPTION_KIND,
+      integration: countsAsIntegration(option),
+      warm: { workers: warm.workers, refused: warm.refused },
+      option: option as unknown as Record<string, unknown>,
+      ...(origin ? { origin } : {}),
+    },
   });
   return option;
 }
 
-/** The latest prepared option per requirement (history stays; a newer note supersedes for reading only). */
+/**
+ * The latest prepared option per requirement (history stays; a newer note
+ * supersedes for reading only). Read straight from `project_events` with no
+ * window, so an option recorded long ago is still found: this is the one reader
+ * the tick uses (`identifyPreparedDependencies`), and nobody has to remember it.
+ */
 export async function preparedOptions(projectId: string): Promise<Map<string, PreparedOption>> {
-  const events: ProjectEvent[] = await listEvents(projectId, 1000);
+  const rows = await getDb().all<{ payload: string }>(
+    `SELECT payload FROM project_events
+      WHERE project_id = ? AND entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED' AND payload LIKE ?
+      ORDER BY created_at, rowid`,
+    [projectId, `%"${PREPARED_OPTION_KIND}"%`],
+  );
   const out = new Map<string, PreparedOption>();
-  for (const e of [...events].reverse()) {
-    if (e.payload.kind !== PREPARED_OPTION_KIND) continue;
-    const o = e.payload.option as PreparedOption | undefined;
+  for (const r of rows) {
+    let p: Record<string, unknown>;
+    try { p = JSON.parse(r.payload) as Record<string, unknown>; } catch { continue; }
+    if (p.kind !== PREPARED_OPTION_KIND) continue;
+    const o = p.option as PreparedOption | undefined;
     if (o?.requirementId) out.set(o.requirementId, o);
   }
   return out;
@@ -188,7 +210,7 @@ export interface NeedResolution {
   gated: Array<{ method: AccessMethod; gates: Gate[] }>;
   /** The minimum missing capability: the cheapest permitted method, if any. */
   minimum: AccessMethod | null;
-  /** The exact requirement `handOffToFactory` gives the existing Factory. */
+  /** The exact requirement `submitIdentified` gives the existing Factory through `submitObjective`. */
   handoff: { objective: string; acceptanceConditions: string[] } | null;
   /** Gate-crossing steps are listed for the end report; they never block the permitted work. */
   needsPerson: Gate[];
@@ -234,74 +256,9 @@ export function blockedWorkResumed(input: { handedOffAt: string; unitRunTimes: r
 
 export const PREPARED_HANDOFF_KIND = 'PREPARED_OPTION_HANDOFF';
 
-/** What the Factory needs that a need does not carry: where the code lives and how it is verified. */
-export interface FactoryHandoffContext {
-  goal: string;
-  repository: string;
-  baseBranch: string;
-  baseSha: string;
-  mutationScope: string[];
-  verificationCommands: string[];
-  rollbackRequirement: string;
-  repositoryRoot?: string | null;
-  /** The originating goal's work items that waited on this capability; `advancePreparedOptions` judges their resumption. */
-  blockedWorkItemIds?: string[];
-}
-
-/** One handoff per requirement and goal, whichever entrance made it. */
+/** One handoff per requirement and goal: a second pass returns the same change request instead of a duplicate. */
 function handoffSubmissionKey(projectId: string, requirementId: string, goal: string): string {
   return `prepared-option:${createHash('sha256').update(`${projectId}\u0000${requirementId}\u0000${goal}`).digest('hex').slice(0, 24)}`;
-}
-
-/**
- * Hand the minimum missing capability to the existing Factory as a change
- * request, once. The submission key is derived from the requirement and the
- * goal, so a second call returns the same request instead of a duplicate, and
- * the handoff is written to `project_events` so `resumeOf` can find its time.
- * Nothing is handed over when no permitted method exists: gated work is for a
- * person and is reported, not forced. The request is created as a draft with
- * external spend prohibited; approval stays where the Factory puts it.
- */
-export async function handOffToFactory(
-  projectId: string,
-  resolution: NeedResolution,
-  context: FactoryHandoffContext,
-): Promise<{ changeRequest: FactoryChangeRequest; created: boolean } | null> {
-  if (!resolution.handoff || !resolution.minimum) return null;
-  const submissionKey = handoffSubmissionKey(projectId, resolution.requirementId, context.goal);
-  const { changeRequest, created } = await ensureChangeRequest({
-    projectId,
-    submissionKey,
-    objective: resolution.handoff.objective,
-    expectedOutcome: `${resolution.requirementId} works in production and the blocked work of ${context.goal} resumes`,
-    nonGoals: ['keeping the option warm', 'crossing a credential, contract, spend or permission gate'],
-    acceptanceConditions: resolution.handoff.acceptanceConditions.map((statement, i) => ({
-      id: `A${String(i + 1).padStart(2, '0')}`,
-      statement,
-      verification: 'proof reading over real attempts, and rows showing the goal\'s work ran afterwards',
-      mandatory: true,
-    })),
-    repository: context.repository,
-    repositoryRoot: context.repositoryRoot ?? null,
-    baseBranch: context.baseBranch,
-    baseSha: context.baseSha,
-    environment: 'LOCAL',
-    riskClass: 'MEDIUM',
-    mutationScope: context.mutationScope,
-    deploymentPolicy: 'NONE',
-    rollbackRequirement: context.rollbackRequirement,
-    verificationCommands: context.verificationCommands,
-  });
-  if (created) {
-    await recordEvent({
-      projectId,
-      entityType: 'capability_requirement',
-      entityId: resolution.requirementId,
-      eventType: 'CAPABILITY_ASSESSED',
-      payload: { kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId: changeRequest.id, goal: context.goal, method: resolution.minimum.name, blockedWorkItemIds: context.blockedWorkItemIds ?? [] },
-    });
-  }
-  return { changeRequest, created };
 }
 
 /**
@@ -786,22 +743,16 @@ async function submitIdentified(dep: IdentifiedDependency, resolution: NeedResol
  * then judges resumption with no caller supplying anything.
  */
 export async function identifyPreparedDependencies(): Promise<{ identified: number; handedOff: number }> {
-  const rows = await getDb().all<{ project_id: string; entity_id: string; payload: string; created_at: string }>(
-    `SELECT project_id, entity_id, payload, created_at FROM project_events
+  const projects = await getDb().all<{ project_id: string }>(
+    `SELECT DISTINCT project_id FROM project_events
       WHERE entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED' AND payload LIKE ?
-      ORDER BY created_at, id`,
+      ORDER BY project_id`,
     [`%"${PREPARED_OPTION_KIND}"%`],
   );
   const options = new Map<string, Map<string, PreparedOption>>();
-  for (const r of rows) {
-    let p: Record<string, unknown>;
-    try { p = JSON.parse(r.payload) as Record<string, unknown>; } catch { continue; }
-    if (p.kind !== PREPARED_OPTION_KIND) continue;
-    const o = p.option as PreparedOption | undefined;
-    if (!o?.requirementId) continue;
-    const byReq = options.get(r.project_id) ?? new Map<string, PreparedOption>();
-    byReq.set(o.requirementId, o);
-    options.set(r.project_id, byReq);
+  for (const { project_id } of projects) {
+    const byReq = await preparedOptions(project_id);
+    if (byReq.size > 0) options.set(project_id, byReq);
   }
 
   let identified = 0;
@@ -823,7 +774,7 @@ export async function identifyPreparedDependencies(): Promise<{ identified: numb
           entityId: dep.requirementId,
           eventType: 'CAPABILITY_ASSESSED',
           payload: {
-            kind: PREPARED_DEPENDENCY_KIND, integration: false, sourceRef: dep.sourceRef, goal: dep.goal,
+            kind: PREPARED_DEPENDENCY_KIND, integration: countsAsIntegration(option), sourceRef: dep.sourceRef, goal: dep.goal,
             blockedWorkItemIds: dep.blockedWorkItemIds,
             ...(dep.via ? { via: dep.via } : {}),
             permitted: resolution.permitted.map((m) => m.name),
@@ -848,7 +799,7 @@ export async function identifyPreparedDependencies(): Promise<{ identified: numb
         entityId: dep.requirementId,
         eventType: 'CAPABILITY_ASSESSED',
         payload: {
-          kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId: submitted.changeRequestId, goal: dep.goal,
+          kind: PREPARED_HANDOFF_KIND, integration: countsAsIntegration(option), changeRequestId: submitted.changeRequestId, goal: dep.goal,
           method: resolution.minimum?.name ?? null, blockedWorkItemIds: dep.blockedWorkItemIds, identifiedFrom: dep.sourceRef,
           ...(dep.reuseChangeRequestId !== undefined ? { reused: true } : {}),
           ...(dep.programId ? { programId: dep.programId, dependentRequirements: dep.dependentRequirements ?? [] } : {}),
