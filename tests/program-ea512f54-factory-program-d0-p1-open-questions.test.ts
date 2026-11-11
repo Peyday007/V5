@@ -13,6 +13,11 @@ import {
   clausesOf,
   parseRegister,
   DECISIONS_LEAD,
+  reconcileRegister,
+  reconcileRegisterIfDue,
+  releasesMapped,
+  REGISTER_EVENT_KINDS,
+  type RegisterEvent,
 } from '../server/services/goals/openQuestions.ts';
 
 // The two source items exactly as Release 01 words them, line breaks and all
@@ -94,5 +99,67 @@ describe('GOV-11 open-questions register', () => {
     expect(unreadable).toMatchObject({ ok: false });
     const noProgram = await checkRegisterOnProduction({ loadItems: async () => null, readRegister: async () => ({ text: register, where: 'x' }) });
     expect(noProgram.ok).toBe(false);
+  });
+
+  it('states which appended releases it was re-mapped against', () => {
+    expect(releasesMapped(register)).toBe(0);
+    expect(checkRegister(register, items, { releases: [] }).errors).toEqual([]);
+  });
+
+  it('is behind a release appended after its marker, and current again once re-mapped', () => {
+    const releases = [{ number: 1, title: 'Release 02' }];
+    const behind = checkRegister(register, items, { releases });
+    expect(behind.ok).toBe(false);
+    expect(behind.errors.join('\n')).toMatch(/behind the program: release 1 "Release 02"/);
+    const remapped = register.replace('**Appended releases mapped: 0**', '**Appended releases mapped: 1**');
+    expect(checkRegister(remapped, items, { releases }).errors).toEqual([]);
+    expect(checkRegister(remapped, items, { releases: [] }).errors.join('\n')).toMatch(/claims 1 appended release\(s\) mapped but the program has 0/);
+    const unmarked = register.replace(/\*\*Appended releases mapped: 0\*\*/, 'Releases: see above');
+    expect(checkRegister(unmarked, items, { releases: [] }).errors.join('\n')).toMatch(/states no "Appended releases mapped: N" line/);
+  });
+
+  it('a release listing a further open question needs its entry, numbered after the existing ones', () => {
+    const release = `${SOURCE}\n# Release 02\n\nTo define as the user continues - Retention policy for superseded idea branches.\n`;
+    const amended = extractSourceItems(release);
+    const releases = [{ number: 1, title: 'Release 02' }];
+    const marked = register.replace('**Appended releases mapped: 0**', '**Appended releases mapped: 1**');
+    expect(checkRegister(marked, amended, { releases }).errors.join('\n')).toMatch(/GOV-11-Q8 .* is missing/);
+    const added = marked.replace('| GOV-11-Q7 |', '| GOV-11-Q8 | OPEN | Retention policy for superseded idea branches. | none recorded |\n| GOV-11-Q7 |');
+    expect(checkRegister(added, amended, { releases })).toMatchObject({ ok: true, open: 8 });
+  });
+
+  it('the goals tick records the outcome when it changes and stays silent when it does not', async () => {
+    const recorded: RegisterEvent[] = [];
+    let releases: { number: number; title: string }[] = [];
+    let text = register;
+    const ports = {
+      check: () => checkRegisterOnProduction({
+        loadItems: async () => ({ programId: 'fpg_test', items, releases, where: 'program fpg_test' }),
+        readRegister: async () => ({ text, where: 'register@rev' }),
+      }),
+      latest: async () => recorded.at(-1) ?? null,
+      record: async (kind: string, detail: Record<string, unknown>) => {
+        recorded.push({ kind, detail });
+      },
+    };
+    expect((await reconcileRegister(ports)).recorded).toBe(REGISTER_EVENT_KINDS.current);
+    expect((await reconcileRegister(ports)).recorded).toBeNull();
+    // A release appended through the amendment path: flagged on the next pass.
+    releases = [{ number: 1, title: 'Release 02' }];
+    const flagged = await reconcileRegister(ports);
+    expect(flagged).toMatchObject({ ok: false, recorded: REGISTER_EVENT_KINDS.behind });
+    expect(recorded.at(-1)!.detail.errors).toEqual([expect.stringMatching(/behind the program: release 1/)]);
+    expect((await reconcileRegister(ports)).recorded).toBeNull();
+    // The re-map reaches the running revision: recorded as current again.
+    text = register.replace('**Appended releases mapped: 0**', '**Appended releases mapped: 1**');
+    expect((await reconcileRegister(ports)).recorded).toBe(REGISTER_EVENT_KINDS.current);
+    expect(recorded.map((e) => e.kind)).toEqual([REGISTER_EVENT_KINDS.current, REGISTER_EVENT_KINDS.behind, REGISTER_EVENT_KINDS.current]);
+  });
+
+  it('the tick pass is throttled and never throws into the tick', async () => {
+    const failing = { check: async () => { throw new Error('forge down'); }, latest: async () => null, record: async () => {} };
+    const start = 10 ** 13;
+    expect(await reconcileRegisterIfDue(start, failing)).toEqual({ error: 'forge down' });
+    expect(await reconcileRegisterIfDue(start + 1000, failing)).toBeNull();
   });
 });

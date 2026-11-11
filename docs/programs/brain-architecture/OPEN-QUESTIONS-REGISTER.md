@@ -4,6 +4,10 @@ Requirement **GOV-11** (source items S-0097, S-0098). It sits beside `release-01
 the verbatim program source (§96/§97). It records rules and open questions, not
 project state; the program, its map and its plan live in the database.
 
+**Appended releases mapped: 0** — the base source (`release-01.pdf`) only. This
+number is the count of releases appended to the program (§97) that this register has
+been re-mapped against.
+
 ## How this register is kept
 
 These rules are checked, not trusted: `checkRegister` in
@@ -13,6 +17,16 @@ against the program's stored source on production and this file at the revision
 production runs. A paraphrase, a removed entry, a default in an `OPEN` row or an
 answer without its pointer and appended wording fails it
 (`tests/program-ea512f54-factory-program-d0-p1-open-questions.test.ts`).
+
+The check also runs on the live Brain, not only in that test. The goals tick
+(`server/services/goals/tick.ts`) runs `reconcileRegisterIfDue` every five minutes:
+it compares this file at the running revision with the program's stored source and
+its appended releases, and records a `PROGRAM_REGISTER_BEHIND` factory event when the
+outcome turns bad — including when a release has been appended since the number
+above — and `PROGRAM_REGISTER_CURRENT` when a re-map brings it back. It records only
+when the outcome changes. A release that lists further decisions or questions under
+the same lead-in adds numbered entries after the existing ones; each must be present
+and verbatim.
 
 - Every clause below is the owner's wording, copied verbatim from the source. Nothing is
   paraphrased, summarised or completed.
@@ -57,3 +71,7 @@ When the owner answers a question, in a new release or in a message: change that
 Status to `ANSWERED`, put the release number or requirement id in **Answer**, and append
 the owner's wording verbatim beneath the table under a `### GOV-11-Qn` heading. Leave the original
 question text as it is.
+
+When a release is appended to the program, whether or not it answers anything: read it,
+re-map every entry it answers or adds, and then set **Appended releases mapped** to the
+program's new release count. Until that number moves, the register is reported behind.

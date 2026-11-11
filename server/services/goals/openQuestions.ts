@@ -32,6 +32,31 @@ export const REGISTER_PATH = 'docs/programs/brain-architecture/OPEN-QUESTIONS-RE
 export const DECISIONS_LEAD = 'Decisions established by the owner';
 export const QUESTIONS_LEAD = 'To define as the user continues';
 
+/**
+ * The line by which the register says how many of the program's appended releases
+ * it has been re-mapped against. A release appended after that number leaves the
+ * register behind, and the check fails until somebody re-maps it and moves the
+ * number — so "re-map it when the owner answers" is a refusal, not a reminder.
+ */
+export const RELEASES_MARKER = 'Appended releases mapped:';
+
+/** The number the register's marker line states, or null when it states none. Pure. */
+export function releasesMapped(markdown: string): number | null {
+  for (const line of markdown.split('\n')) {
+    const text = line.replace(/[*_`]/g, '').trim();
+    if (!text.startsWith(RELEASES_MARKER)) continue;
+    const match = /^\s*(\d+)\b/.exec(text.slice(RELEASES_MARKER.length));
+    return match ? Number(match[1]) : null;
+  }
+  return null;
+}
+
+/** An appended release of the program, as the register is compared with it. */
+export interface RegisterRelease {
+  number: number;
+  title: string;
+}
+
 /** What an OPEN question's answer cell says. Anything else is a default somebody slipped in. */
 export const NO_ANSWER = 'none recorded';
 
@@ -99,6 +124,18 @@ export function itemLedBy(items: readonly Pick<SourceItem, 'id' | 'text'>[], lea
   return items.find((item) => normaliseClause(item.text).startsWith(lead)) ?? null;
 }
 
+/**
+ * Every clause the program lists under a lead-in, in source order, across every
+ * item that opens with it — the base source's and each appended release's. A
+ * release that lists further decisions or questions under the same lead-in
+ * extends the numbering; it never renumbers an earlier entry. Pure.
+ */
+export function listedClauses(items: readonly Pick<SourceItem, 'id' | 'text'>[], lead: string): Array<{ itemId: string; clause: string }> {
+  return items
+    .filter((item) => normaliseClause(item.text).startsWith(lead))
+    .flatMap((item) => clausesOf(item.text, lead).map((clause) => ({ itemId: item.id, clause })));
+}
+
 /** The owner's wording appended beneath the tables under a question's id, or null when there is none. */
 function appendedAnswer(markdown: string, id: string): string | null {
   const lines = markdown.split('\n');
@@ -118,8 +155,24 @@ function appendedAnswer(markdown: string, id: string): string | null {
  * the caller supplies both sides, so the same check runs on production rows and
  * in a test.
  */
-export function checkRegister(markdown: string, items: readonly Pick<SourceItem, 'id' | 'text'>[]): RegisterCheck {
+export function checkRegister(
+  markdown: string,
+  items: readonly Pick<SourceItem, 'id' | 'text'>[],
+  options: { releases?: readonly RegisterRelease[] } = {},
+): RegisterCheck {
   const errors: string[] = [];
+  if (options.releases) {
+    const mapped = releasesMapped(markdown);
+    const appended = options.releases.length;
+    if (mapped === null) {
+      errors.push(`the register states no "${RELEASES_MARKER} N" line, so nothing says which releases it was re-mapped against`);
+    } else if (mapped < appended) {
+      const behind = options.releases.slice(mapped).map((r) => `release ${r.number} "${r.title}"`);
+      errors.push(`the register is behind the program: ${behind.join(', ')} appended since it was last re-mapped (${mapped} of ${appended})`);
+    } else if (mapped > appended) {
+      errors.push(`the register claims ${mapped} appended release(s) mapped but the program has ${appended}`);
+    }
+  }
   const rows = parseRegister(markdown);
   const seen = new Map<string, number>();
   for (const row of rows) seen.set(row.id, (seen.get(row.id) ?? 0) + 1);
@@ -137,13 +190,13 @@ export function checkRegister(markdown: string, items: readonly Pick<SourceItem,
       errors.push(`the program source has no item opening "${side.lead}"`);
       continue;
     }
-    const expected = clausesOf(item.text, side.lead);
+    const expected = listedClauses(items, side.lead);
     if (expected.length === 0) errors.push(`${item.id} enumerates no clause after "${side.lead}"`);
-    for (const [index, clause] of expected.entries()) {
+    for (const [index, { itemId, clause }] of expected.entries()) {
       const id = `${side.prefix}${index + 1}`;
       const row = byId.get(id);
       if (!row) {
-        errors.push(`${id} (${item.id}) is missing: an entry is retained, never removed`);
+        errors.push(`${id} (${itemId}) is missing: every listed clause has an entry, and an entry is retained, never removed`);
         continue;
       }
       if (row.table !== side.table) errors.push(`${id} sits in the wrong table`);
@@ -155,8 +208,7 @@ export function checkRegister(markdown: string, items: readonly Pick<SourceItem,
   for (const row of rows) {
     const index = Number(row.id.replace(/^GOV-11-[DQ]/, '')) - 1;
     const lead = row.table === 'DECISIONS' ? DECISIONS_LEAD : QUESTIONS_LEAD;
-    const item = itemLedBy(items, lead);
-    const listed = item ? clausesOf(item.text, lead).length : 0;
+    const listed = listedClauses(items, lead).length;
     if (index >= listed && !wholeSource.includes(normaliseClause(row.clause))) {
       errors.push(`${row.id} is not wording the program source contains`);
     }
@@ -189,8 +241,12 @@ export function checkRegister(markdown: string, items: readonly Pick<SourceItem,
 export interface RegisterSources {
   /** The register's text at the revision production runs, or null when it is not there. */
   readRegister: () => Promise<{ text: string | null; where: string }>;
-  /** The program's source items, from production rows, or null when no approved program is filed. */
-  loadItems: () => Promise<{ items: SourceItem[]; where: string } | null>;
+  /**
+   * The program's source items and its appended releases, from production rows,
+   * or null when no program is filed. `releases` absent means the caller does not
+   * know them, and the register's release marker is not compared.
+   */
+  loadItems: () => Promise<{ programId?: string; items: SourceItem[]; releases?: RegisterRelease[]; where: string } | null>;
 }
 
 /** The register at the revision production runs, read through the forge. */
@@ -205,7 +261,7 @@ async function registerAtRevision(): Promise<{ text: string | null; where: strin
 }
 
 /** The architecture program's source items, from production rows. */
-async function architectureItems(): Promise<{ items: SourceItem[]; where: string } | null> {
+async function architectureItems(): Promise<{ programId: string; items: SourceItem[]; releases: RegisterRelease[]; where: string } | null> {
   const { getDb } = await import('../../db/database.ts');
   const { getProgram } = await import('../../repos/factoryProgram.ts');
   const { extractSourceItems, programSource } = await import('../factory/program/spec.ts');
@@ -216,7 +272,12 @@ async function architectureItems(): Promise<{ items: SourceItem[]; where: string
   );
   const program = row ? await getProgram(row.id) : null;
   if (!program) return null;
-  return { items: extractSourceItems(programSource(program)), where: `program ${program.id} (${program.amendments.length} release(s))` };
+  return {
+    programId: program.id,
+    items: extractSourceItems(programSource(program)),
+    releases: program.amendments.map((a) => ({ number: a.number, title: a.title })),
+    where: `program ${program.id} (${program.amendments.length} release(s))`,
+  };
 }
 
 /**
@@ -224,18 +285,115 @@ async function architectureItems(): Promise<{ items: SourceItem[]; where: string
  * the register at the running revision. A side that cannot be read is a
  * failure that says which side, never a pass.
  */
-export async function checkRegisterOnProduction(sources: Partial<RegisterSources> = {}): Promise<{ ok: boolean; detail: string; check: RegisterCheck | null }> {
+export async function checkRegisterOnProduction(
+  sources: Partial<RegisterSources> = {},
+): Promise<{ ok: boolean; detail: string; check: RegisterCheck | null; programId: string | null; releases: number | null; registerAt: string | null }> {
   const loadItems = sources.loadItems ?? architectureItems;
   const readRegister = sources.readRegister ?? registerAtRevision;
   const program = await loadItems();
-  if (!program) return { ok: false, detail: 'no architecture program is filed on production', check: null };
+  if (!program) return { ok: false, detail: 'no architecture program is filed on production', check: null, programId: null, releases: null, registerAt: null };
+  const ids = { programId: program.programId ?? null, releases: program.releases ? program.releases.length : null };
   const register = await readRegister();
-  if (register.text === null) return { ok: false, detail: `the register is not readable: ${register.where}`, check: null };
-  const check = checkRegister(register.text, program.items);
-  if (!check.ok) return { ok: false, detail: `${register.where} against ${program.where}: ${check.errors[0]}${check.errors.length > 1 ? ` (+${check.errors.length - 1} more)` : ''}`, check };
+  if (register.text === null) return { ok: false, detail: `the register is not readable: ${register.where}`, check: null, ...ids, registerAt: register.where };
+  const check = checkRegister(register.text, program.items, program.releases ? { releases: program.releases } : {});
+  if (!check.ok) {
+    return { ok: false, detail: `${register.where} against ${program.where}: ${check.errors[0]}${check.errors.length > 1 ? ` (+${check.errors.length - 1} more)` : ''}`, check, ...ids, registerAt: register.where };
+  }
   return {
     ok: true,
     detail: `${register.where} against ${program.where}: ${check.decisions} decisions verbatim, ${check.open} open question(s) without a default, ${check.answered} answered and re-mapped`,
     check,
+    ...ids,
+    registerAt: register.where,
   };
+}
+
+/**
+ * The register kept current on the running Brain, not only in a unit test.
+ *
+ * From the goals tick, the production check runs against the program's stored
+ * source and appended releases and the register at the running revision. The
+ * outcome is recorded as a factory event whenever it changes — a release
+ * appended through the §97 amendment path, a new revision of the register, or a
+ * different first failure — so a register that fell behind a release is flagged
+ * on the first pass after the release lands, and the re-map that answers it is
+ * recorded when it reaches production. An unchanged outcome records nothing.
+ */
+export const REGISTER_EVENT_KINDS = {
+  current: 'PROGRAM_REGISTER_CURRENT',
+  behind: 'PROGRAM_REGISTER_BEHIND',
+} as const;
+
+export interface RegisterEvent {
+  kind: string;
+  detail: Record<string, unknown>;
+}
+
+export interface RegisterPassPorts {
+  check: () => ReturnType<typeof checkRegisterOnProduction>;
+  /** The newest register event, or null when none is recorded. */
+  latest: () => Promise<RegisterEvent | null>;
+  record: (kind: string, detail: Record<string, unknown>) => Promise<void>;
+}
+
+export interface RegisterPassReport {
+  ok: boolean;
+  recorded: string | null;
+  detail: string;
+}
+
+/** What makes two outcomes the same outcome: nothing a clock or a retry changes. */
+export function registerFingerprint(outcome: { ok: boolean; programId: string | null; releases: number | null; registerAt: string | null; detail: string; check: RegisterCheck | null }): string {
+  const first = outcome.ok ? '' : (outcome.check?.errors[0] ?? outcome.detail);
+  return [outcome.ok ? 'CURRENT' : 'BEHIND', outcome.programId ?? '-', outcome.releases ?? '-', outcome.registerAt ?? '-', first].join('|');
+}
+
+/** One pass: check, and record the outcome when it differs from the last one recorded. */
+export async function reconcileRegister(ports: RegisterPassPorts): Promise<RegisterPassReport> {
+  const outcome = await ports.check();
+  const fingerprint = registerFingerprint(outcome);
+  const last = await ports.latest();
+  if (last && last.detail.fingerprint === fingerprint) return { ok: outcome.ok, recorded: null, detail: outcome.detail };
+  const kind = outcome.ok ? REGISTER_EVENT_KINDS.current : REGISTER_EVENT_KINDS.behind;
+  await ports.record(kind, {
+    fingerprint,
+    programId: outcome.programId,
+    appendedReleases: outcome.releases,
+    register: outcome.registerAt,
+    detail: outcome.detail,
+    errors: outcome.check?.errors.slice(0, 20) ?? [],
+    decisions: outcome.check?.decisions ?? null,
+    open: outcome.check?.open ?? null,
+    answered: outcome.check?.answered ?? null,
+  });
+  return { ok: outcome.ok, recorded: kind, detail: outcome.detail };
+}
+
+/** The ports production runs on, imported lazily so the goals tick does not load the factory at module load. */
+export async function productionRegisterPorts(): Promise<RegisterPassPorts> {
+  const { listFactoryEvents, recordFactoryEvent } = await import('../../repos/factoryFleet.ts');
+  return {
+    check: () => checkRegisterOnProduction(),
+    async latest() {
+      const [newest] = await listFactoryEvents(null, { kinds: [REGISTER_EVENT_KINDS.current, REGISTER_EVENT_KINDS.behind], limit: 1 });
+      return newest ? { kind: newest.kind, detail: newest.detail } : null;
+    },
+    async record(kind, detail) {
+      await recordFactoryEvent({ kind, evidenceClass: 'MEASURED', detail });
+    },
+  };
+}
+
+export const REGISTER_PASS_EVERY_MS = 5 * 60_000;
+let lastRegisterPass = 0;
+
+/** At most once every five minutes, from the goals tick. A failure is reported, never thrown into the tick. */
+export async function reconcileRegisterIfDue(now = Date.now(), ports?: RegisterPassPorts): Promise<RegisterPassReport | { error: string } | null> {
+  if (now - lastRegisterPass < REGISTER_PASS_EVERY_MS) return null;
+  lastRegisterPass = now;
+  try {
+    return await reconcileRegister(ports ?? (await productionRegisterPorts()));
+  } catch (error) {
+    return { error: error instanceof Error ? error.message.slice(0, 300) : String(error) };
+  }
 }
