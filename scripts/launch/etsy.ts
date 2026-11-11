@@ -279,7 +279,7 @@ class Etsy {
     this.spacing = Number(ctx.env['ETSY_CALL_SPACING_MS'] ?? 250);
   }
 
-  async call(method: 'GET' | 'POST' | 'PATCH', p: string, body?: URLSearchParams | FormData): Promise<Json> {
+  async call(method: 'GET' | 'POST' | 'PATCH' | 'PUT', p: string, body?: URLSearchParams | FormData): Promise<Json> {
     const headers: Record<string, string> = { 'x-api-key': apiKeyHeader(this.ctx.env), Authorization: `Bearer ${this.access}` };
     if (body instanceof URLSearchParams) headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=utf-8';
     for (let attempt = 0; ; attempt++) {
@@ -460,6 +460,12 @@ export async function runEtsy(ctx: StageContext): Promise<StageResult> {
     }
   }
 
+  // ── shop-level text: what a buyer reads on the shop page and after paying ──
+  try {
+    const changed = await applyShopText(api, shopId);
+    if (changed.length) notes.push(`shop text set: ${changed.join(', ')}`);
+  } catch (e) { notes.push(`shop text not set (${(e as Error).message})`); }
+
   const failed = items.filter((i) => i.state === 'FAILED').length;
   const ok = items.length - failed;
   const status: StageResult['status'] = failed === 0 && refused.length === 0 ? 'DONE' : ok === 0 && refused.length === 0 ? 'FAILED' : 'PARTIAL';
@@ -474,6 +480,31 @@ export async function runEtsy(ctx: StageContext): Promise<StageResult> {
     result.ownerAction = `Etsy kept the listings as drafts because: ${[...new Set(refused)].join(' | ')}. Fix that in Shop Manager (usually: finish shop opening / billing card / identity check), then re-run the launch workflow — it publishes the drafts without re-uploading.`;
   }
   return result;
+}
+
+/**
+ * The shop's own words, set through updateShop (PUT /shops/{id}). Only fields
+ * that differ are sent, so a second run changes nothing. A digital buyer reads
+ * `digital_sale_message` on the receipt, beside the download link.
+ */
+export const SHOP_TEXT: Record<string, string> = {
+  announcement:
+    'Printable puzzles in big, easy-to-read print: sudoku, word search and mazes. Every sudoku has exactly one solution, and every book includes the answers. Instant download: print at home as many times as you like for your own household.',
+  sale_message:
+    'Thank you for your order! If anything about it is not right, send me a message and I will fix it.',
+  digital_sale_message:
+    'Thank you for your order! Your PDF is ready now: open Etsy → You → Purchases and reviews → Download files (or use the link in your receipt email). Print on US Letter at 100% / "actual size". Answers are at the back. If a file will not open or print, send me a message and I will send it directly.',
+  policy_additional:
+    'Digital downloads are delivered instantly by Etsy. Because files cannot be returned, I do not accept returns, but if a file is damaged, unreadable or not what the listing describes, message me and I will fix it or refund you. Files are for personal and household use; please do not resell or share them.',
+};
+
+async function applyShopText(api: Etsy, shopId: number): Promise<string[]> {
+  const shop = await api.call('GET', `/application/shops/${shopId}`);
+  const body = new URLSearchParams();
+  for (const [k, v] of Object.entries(SHOP_TEXT)) if (String(shop[k] ?? '') !== v) body.set(k, v);
+  if ([...body.keys()].length === 0) return [];
+  await api.call('PUT', `/application/shops/${shopId}`, body);
+  return [...body.keys()];
 }
 
 const listingUrl = (j: Json) => String(j['url'] ?? `https://www.etsy.com/listing/${j['listing_id']}`);
