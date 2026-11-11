@@ -51,6 +51,54 @@ export interface RegisterCheck {
   decisions: number;
   open: number;
   answered: number;
+  /**
+   * Releases of the program the register has not been re-mapped against, by
+   * number (0 is the original source). Empty when no releases were supplied.
+   */
+  behind: number[];
+}
+
+/** One release of the program as production stores it: 0 is the original source, then every appended release. */
+export interface ProgramRelease {
+  number: number;
+  title: string;
+}
+
+/** What the ledger row for the original source names it. */
+export const ORIGINAL_RELEASE = 'original source';
+
+/** One row of the "Releases re-mapped" ledger: which release the register was re-mapped against, and what it answered. */
+export interface ReleaseRow {
+  id: string;
+  number: number;
+  release: string;
+  answers: string[];
+}
+
+/**
+ * The release ledger: `| GOV-11-Rn | <release title> | <question ids, or none> |`.
+ * A row says the register was re-mapped against release n — every question it
+ * answers moved to ANSWERED — so a release with no row is one nobody has
+ * re-mapped the register against yet. Pure.
+ */
+export function parseReleaseLedger(markdown: string): ReleaseRow[] {
+  const rows: ReleaseRow[] = [];
+  for (const line of markdown.split('\n')) {
+    const cells = line.trim();
+    if (!cells.startsWith('|') || !cells.endsWith('|')) continue;
+    const parts = cells.slice(1, -1).split('|').map((cell) => cell.trim());
+    const id = parts[0] ?? '';
+    const match = /^GOV-11-R(\d+)$/.exec(id);
+    if (!match) continue;
+    const answers = (parts[2] ?? '').trim();
+    rows.push({
+      id,
+      number: Number(match[1]),
+      release: parts[1] ?? '',
+      answers: answers === '' || answers === 'none' ? [] : answers.split(',').map((one) => one.trim()).filter((one) => one.length > 0),
+    });
+  }
+  return rows;
 }
 
 /** Whitespace is layout, not wording. Nothing else is normalised. */
@@ -118,7 +166,11 @@ function appendedAnswer(markdown: string, id: string): string | null {
  * the caller supplies both sides, so the same check runs on production rows and
  * in a test.
  */
-export function checkRegister(markdown: string, items: readonly Pick<SourceItem, 'id' | 'text'>[]): RegisterCheck {
+export function checkRegister(
+  markdown: string,
+  items: readonly Pick<SourceItem, 'id' | 'text'>[],
+  releases?: readonly ProgramRelease[],
+): RegisterCheck {
   const errors: string[] = [];
   const rows = parseRegister(markdown);
   const seen = new Map<string, number>();
@@ -183,14 +235,47 @@ export function checkRegister(markdown: string, items: readonly Pick<SourceItem,
       errors.push(`${row.id} has status "${row.status}": a question is OPEN or ANSWERED`);
     }
   }
-  return { ok: errors.length === 0, errors, decisions, open, answered };
+
+  // The re-map half: every release the program has must be one the register
+  // was re-mapped against, so a release appended after the register was last
+  // kept is a failure that names it — not something only a reader would notice.
+  const ledger = parseReleaseLedger(markdown);
+  const ledgerSeen = new Map<string, number>();
+  for (const entry of ledger) ledgerSeen.set(entry.id, (ledgerSeen.get(entry.id) ?? 0) + 1);
+  for (const [id, count] of ledgerSeen) if (count > 1) errors.push(`${id} appears ${count} times`);
+  for (const entry of ledger) {
+    for (const answer of entry.answers) {
+      const question = byId.get(answer);
+      if (!question || question.table !== 'QUESTIONS') errors.push(`${entry.id} says it answered ${answer}, which is not a question in this register`);
+      else if (question.status !== 'ANSWERED') errors.push(`${entry.id} says it answered ${answer}, but ${answer} is still ${question.status}`);
+    }
+  }
+  const behind: number[] = [];
+  if (releases) {
+    const byNumber = new Map(ledger.map((entry) => [entry.number, entry]));
+    const known = new Set<number>();
+    for (const release of [{ number: 0, title: ORIGINAL_RELEASE }, ...releases.filter((one) => one.number !== 0)]) {
+      known.add(release.number);
+      const entry = byNumber.get(release.number);
+      if (!entry) {
+        behind.push(release.number);
+        errors.push(`release ${release.number} ("${release.title}") is not re-mapped: the register has fallen behind the program — re-map it and append GOV-11-R${release.number}`);
+        continue;
+      }
+      if (normaliseClause(entry.release) !== normaliseClause(release.title)) {
+        errors.push(`${entry.id} names "${entry.release}", but release ${release.number} is "${release.title}"`);
+      }
+    }
+    for (const entry of ledger) if (!known.has(entry.number)) errors.push(`${entry.id} names a release the program does not have`);
+  }
+  return { ok: errors.length === 0, errors, decisions, open, answered, behind };
 }
 
 export interface RegisterSources {
   /** The register's text at the revision production runs, or null when it is not there. */
   readRegister: () => Promise<{ text: string | null; where: string }>;
   /** The program's source items, from production rows, or null when no approved program is filed. */
-  loadItems: () => Promise<{ items: SourceItem[]; where: string } | null>;
+  loadItems: () => Promise<{ items: SourceItem[]; where: string; releases?: ProgramRelease[] } | null>;
 }
 
 /** The register at the revision production runs, read through the forge. */
@@ -205,7 +290,7 @@ async function registerAtRevision(): Promise<{ text: string | null; where: strin
 }
 
 /** The architecture program's source items, from production rows. */
-async function architectureItems(): Promise<{ items: SourceItem[]; where: string } | null> {
+async function architectureItems(): Promise<{ items: SourceItem[]; where: string; releases: ProgramRelease[] } | null> {
   const { getDb } = await import('../../db/database.ts');
   const { getProgram } = await import('../../repos/factoryProgram.ts');
   const { extractSourceItems, programSource } = await import('../factory/program/spec.ts');
@@ -216,7 +301,11 @@ async function architectureItems(): Promise<{ items: SourceItem[]; where: string
   );
   const program = row ? await getProgram(row.id) : null;
   if (!program) return null;
-  return { items: extractSourceItems(programSource(program)), where: `program ${program.id} (${program.amendments.length} release(s))` };
+  return {
+    items: extractSourceItems(programSource(program)),
+    where: `program ${program.id} (${program.amendments.length} release(s))`,
+    releases: program.amendments.map((amendment) => ({ number: amendment.number, title: amendment.title })),
+  };
 }
 
 /**
@@ -231,11 +320,11 @@ export async function checkRegisterOnProduction(sources: Partial<RegisterSources
   if (!program) return { ok: false, detail: 'no architecture program is filed on production', check: null };
   const register = await readRegister();
   if (register.text === null) return { ok: false, detail: `the register is not readable: ${register.where}`, check: null };
-  const check = checkRegister(register.text, program.items);
+  const check = checkRegister(register.text, program.items, program.releases ?? []);
   if (!check.ok) return { ok: false, detail: `${register.where} against ${program.where}: ${check.errors[0]}${check.errors.length > 1 ? ` (+${check.errors.length - 1} more)` : ''}`, check };
   return {
     ok: true,
-    detail: `${register.where} against ${program.where}: ${check.decisions} decisions verbatim, ${check.open} open question(s) without a default, ${check.answered} answered and re-mapped`,
+    detail: `${register.where} against ${program.where}: ${check.decisions} decisions verbatim, ${check.open} open question(s) without a default, ${check.answered} answered and re-mapped, re-mapped through release ${(program.releases ?? []).reduce((max, one) => Math.max(max, one.number), 0)}`,
     check,
   };
 }

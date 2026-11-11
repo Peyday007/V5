@@ -50,6 +50,7 @@ import {
 } from '../../repos/goals.ts';
 import { assembleGoals, type GoalView } from './model.ts';
 import { rankGoals } from './priority.ts';
+import { watchRegisterIfDue, type RegisterWatchResult } from './registerWatch.ts';
 
 export interface GoalTickReport {
   goals: number;
@@ -57,6 +58,12 @@ export interface GoalTickReport {
   released: { binId: string; goalId: string; why: string }[];
   reprioritized: { binId: string; goalId: string; priority: number }[];
   moved: { goalId: string; from: number | null; to: number; reason: string }[];
+  /**
+   * The open-questions register re-checked against the architecture program
+   * (GOV-11), when a release was appended or a new revision is running. Null on
+   * a pass that did not look — at most one look per interval.
+   */
+  register?: RegisterWatchResult | null;
 }
 
 const LIVE = new Set(['DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN']);
@@ -210,6 +217,12 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
     });
     report.moved.push({ goalId: rank.id, from: last ? last.rank : null, to: rank.rank, reason: why.reason });
   }
+
+  // GOV-11: a release appended to the architecture program re-checks the
+  // open-questions register, so a register left behind a release is recorded
+  // as such rather than noticed by whoever next runs a test.
+  const tickAt = options?.now ? Date.parse(options.now) : Number.NaN;
+  report.register = await watchRegisterIfDue(Number.isFinite(tickAt) ? tickAt : Date.now());
 
   return report;
 }

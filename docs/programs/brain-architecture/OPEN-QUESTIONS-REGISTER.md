@@ -14,6 +14,13 @@ production runs. A paraphrase, a removed entry, a default in an `OPEN` row or an
 answer without its pointer and appended wording fails it
 (`tests/program-ea512f54-factory-program-d0-p1-open-questions.test.ts`).
 
+The re-map is watched, not remembered: on the goals tick
+(`server/services/goals/registerWatch.ts`), whenever the program gains a release or
+production runs a new revision, Brain re-runs `checkRegisterOnProduction` and appends
+one `PROGRAM_REGISTER_CHECKED` factory event when the verdict changes. A release with
+no `GOV-11-Rn` row below is reported there as the register having fallen behind it,
+naming the release, until somebody re-maps the register against it.
+
 - Every clause below is the owner's wording, copied verbatim from the source. Nothing is
   paraphrased, summarised or completed.
 - An entry's **Status** is the only field that changes. Answering a question is a
@@ -51,9 +58,23 @@ answer without its pointer and appended wording fails it
 | GOV-11-Q6 | OPEN | Full product interaction and visualization requirements. | none recorded |
 | GOV-11-Q7 | OPEN | Calibration/decision rules for optional or mandatory confidence thresholds in future goals. | none recorded |
 
+## Releases re-mapped
+
+One row per release of the program this register has been re-mapped against: `R0` is the
+original source, `Rn` is appended release *n* under its title exactly as production stores
+it. **Answers** lists the questions that release answered (each must now be `ANSWERED`),
+or `none`. A release the program has and this table does not is a register that has fallen
+behind, and the check fails naming it.
+
+| ID | Release | Answers |
+|---|---|---|
+| GOV-11-R0 | original source | none |
+
 ## Re-mapping an answer
 
-When the owner answers a question, in a new release or in a message: change that row's
-Status to `ANSWERED`, put the release number or requirement id in **Answer**, and append
-the owner's wording verbatim beneath the table under a `### GOV-11-Qn` heading. Leave the original
-question text as it is.
+When a release is appended: read it against every `OPEN` question above, re-map each one
+it answers, and append its `GOV-11-Rn` row to the ledger (with `none` if it answered
+nothing). When the owner answers a question, in a new release or in a message: change that
+row's Status to `ANSWERED`, put the release number or requirement id in **Answer**, and
+append the owner's wording verbatim beneath the table under a `### GOV-11-Qn` heading. Leave
+the original question text as it is.
