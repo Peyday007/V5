@@ -101,6 +101,7 @@ import { getClaim, signalledClaims } from '../../repos/research.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
 import { mechanismForSignal } from '../../domain/opportunitySignals.ts';
+import { OPPORTUNITY_SIGNALS } from '../../domain/types.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { cashPosition } from './money.ts';
 import { proveCapabilities } from './deliverables/capabilities.ts';
@@ -713,6 +714,28 @@ export const REMOTE_AI_FOCUS =
   'For each such opening give: the kind of buyer and where they are found, a dated sign that buyers want it now, the price buyers are shown paying for it, how the work would be produced and delivered, the cost per sale, and how quickly the money is collected.';
 
 /**
+ * How a goal lens's answer becomes an opening, said in the question.
+ *
+ * The harvest files only a claim whose reader set `opportunity_signal`
+ * (`signalledClaims`). A goal lens asks "which ways could bring this goal
+ * money" — an arrangement question, not "find a published request" — and the
+ * profile asks for a signal only on "a concrete opening", so workers answered
+ * with buyer, price and settlement claims and tagged none of them. Production
+ * read 0 of 18 goal rounds filing an opening, recorded as "round abandoned
+ * with nothing found": the research ran, the claims were gated, and nothing
+ * could be harvested. Constructed rounds met the same cause on 2026-11-02 and
+ * were fixed by naming the field (`construct.ts`, `OPENING_SENTENCE`); this is
+ * that fix for the lens rounds. The worker still decides whether a claim is
+ * an opening and which signal it is, from the whole closed set; a signalled
+ * claim passes the same gate, and the harvested piece is qualified like any
+ * other. No bar is lowered.
+ */
+export const GOAL_OPENING_SENTENCE =
+  'Report each way that a source shows a payer for as an opening, by setting opportunity_signal on the claim that names those buyers ' +
+  `to whichever of ${OPPORTUNITY_SIGNALS.join(', ')} the source shows. ` +
+  'A claim with no opportunity_signal is kept as evidence and never becomes an opening, so a way reported without one is lost to the goal.';
+
+/**
  * A closed round that filed nothing. `ABANDONED` is a stopped mission (failed,
  * cancelled, expired unlaunched) and also one parked at a decision, and the
  * count taken at close (`closeEndedRounds`) is what separates them: research
@@ -893,6 +916,7 @@ export async function openGoalDiscovery(input: {
       'For each, name who pays, what buyers are published as actually paying, when the money would settle, ' +
       'what it needs up front, and what it would need that the operation does not have yet?' +
       ` ${REMOTE_AI_FOCUS}` +
+      ` ${GOAL_OPENING_SENTENCE}` +
       (input.diagnosis ? ` ${input.diagnosis}` : '') +
       (learned ? ` ${learned}` : '') +
       ' For each opening, say how it was found: the source and the search that led to it.',

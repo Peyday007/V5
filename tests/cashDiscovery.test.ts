@@ -1340,4 +1340,54 @@ describe('the wider economy (2026-10-28)', () => {
     // Not barren: it is asked again after one cool-off.
     expect(nextGoalRoundFor(parkedHistory, new Date(Date.now() + 1.5 * day).toISOString())).toBe(2);
   });
+
+  it('asks a goal lens to tag its openings, because an untagged answer files nothing (0 of 18 goal rounds, 2026-11-11)', async () => {
+    const { openGoalDiscovery, GOAL_OPENING_SENTENCE } = await import('../server/services/cash/discovery.ts');
+    const { OPPORTUNITY_SIGNALS } = await import('../server/domain/types.ts');
+    const { createWorkstream, getWorkstream } = await import('../server/repos/register.ts');
+    const { setTerms } = await import('../server/services/goals/decide.ts');
+    const { setTarget } = await import('../server/services/goals/target.ts');
+    const { forgetGoalReadings, readGoalPlan } = await import('../server/services/goals/plan.ts');
+    const day = 24 * 60 * 60 * 1000;
+    forgetGoalReadings();
+    await activated();
+    const g = await createWorkstream({ projectId, title: 'Collect cash fast', intent: 'Collect settled cash.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: new Date(Date.now() + 25 * day).toISOString(), ownerUserId: userId }, `person:${userId}`);
+    expect(
+      (await setTarget({
+        goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId,
+        capitalCeilingCents: 300_000, hoursCeiling: 200, now: new Date(Date.now() - 60_000),
+      } as Parameters<typeof setTarget>[0])).ok,
+    ).toBe(true);
+    const w = (await getWorkstream(g.id))!;
+    const target = (await readGoalPlan({ goalId: g.id, evaluations: 200 }))!.target;
+    const bucketRounds = async (bucketId: string) => (await listRounds(projectId)).filter((one) => one.bucketId === bucketId);
+
+    // The recorded failure class: a lens round whose worker answered the arrangement
+    // question with accepted, sourced claims and no signal ends DONE having filed nothing.
+    const untagged = await openGoalDiscovery({ goal: w, target, bestReach: null });
+    expect(untagged).not.toBeNull();
+    const asked = (await getCandidate(untagged!.candidateId))!.statement;
+    // The question now names the field the harvest reads, and the whole closed set — not a subset.
+    expect(asked).toContain(GOAL_OPENING_SENTENCE);
+    expect(asked).toContain('opportunity_signal');
+    for (const signal of OPPORTUNITY_SIGNALS) expect(asked).toContain(signal);
+    await finishedMission({
+      candidateId: untagged!.candidateId,
+      claims: [{ claim: 'Property managers pay bookkeeping firms 400 dollars a month for rent-roll reconciliation.', lane: SIGNAL_LANE, sourceUrl: 'https://example.test/goal-lens/untagged' }],
+    });
+    await harvest({ projectId });
+    expect((await bucketRounds(untagged!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 0]]);
+
+    // The same answer, tagged as the question now asks, is filed and counted on its round.
+    const tagged = await openGoalDiscovery({ goal: w, target, bestReach: null });
+    expect(tagged).not.toBeNull();
+    expect((await getCandidate(tagged!.candidateId))!.statement).toContain(GOAL_OPENING_SENTENCE);
+    await finishedMission({
+      candidateId: tagged!.candidateId,
+      claims: [{ claim: 'Property managers repeatedly pay outside firms for monthly rent-roll reconciliation.', lane: SIGNAL_LANE, signal: 'RECURRING_OUTSOURCED_WORK', sourceUrl: 'https://example.test/goal-lens/tagged' }],
+    });
+    await harvest({ projectId });
+    expect((await bucketRounds(tagged!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 1]]);
+  });
 });
