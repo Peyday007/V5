@@ -207,8 +207,24 @@ describe('the money route says what is genuinely free', () => {
     expect(reading.freeCents.derivedFrom).toHaveLength(3);
   });
 
-  it('never reports a negative free amount', () => {
-    expect(readMoneyRoute(route({ collectedCents: observed(10_000) })).freeCents.value).toBe(0);
+  it('reports a shortfall as negative free cash and a discrepancy, never plugging it to zero', () => {
+    const r = readMoneyRoute(route({ collectedCents: observed(10_000) }));
+    expect(r.freeCents.value).toBe(-45_000);
+    expect(r.shortfallCents).toBe(45_000);
+    expect(r.discrepancies).toHaveLength(1);
+    expect(r.discrepancies[0]).toContain('short 45000 cents');
+  });
+
+  it('the reviewer\'s case: 1000c collected, nothing held, 5000c out is 4000c under water', () => {
+    const under = readMoneyRoute(route({ collectedCents: observed(1_000), heldAgainstCents: observed(0), outflows: [{ to: 'supplier', reason: 'cost', amountCents: 5_000, at: '2026-11-15' }] }));
+    expect(under.freeCents.value).toBe(-4_000);
+    expect(under.shortfallCents).toBe(4_000);
+    expect(under.discrepancies).not.toEqual([]);
+    // A change across the zero line moves free cash by the full amount, not by the clamped part.
+    const better = readMoneyRoute(route({ collectedCents: observed(9_000), heldAgainstCents: observed(0), outflows: [{ to: 'supplier', reason: 'cost', amountCents: 5_000, at: '2026-11-15' }] }));
+    expect((better.freeCents.value as number) - (under.freeCents.value as number)).toBe(8_000);
+    expect(better.shortfallCents).toBe(0);
+    expect(better.discrepancies).toEqual([]);
   });
 
   it('collected money still held is not free', () => {
@@ -219,6 +235,7 @@ describe('the money route says what is genuinely free', () => {
   it('an unknown collection or hold makes free cash unknown and names the gap', () => {
     const noCollect = readMoneyRoute(route({ collectedCents: unknownFigure('c', 'cents') }));
     expect(noCollect.freeCents.value).toBeNull();
+    expect(noCollect.shortfallCents).toBeNull();
     expect(noCollect.gaps).toContain('collected amount');
     const noHold = readMoneyRoute(route({ heldAgainstCents: unknownFigure('h', 'cents') }));
     expect(noHold.freeCents.value).toBeNull();

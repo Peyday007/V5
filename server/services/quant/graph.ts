@@ -257,10 +257,18 @@ export interface MoneyRouteReading {
   collectedCents: number | null;
   outflowCents: number;
   heldAgainstCents: number | null;
-  /** What is genuinely free to use; null when the collection or the hold is unknown. */
+  /**
+   * What is genuinely free to use: collected − held − outflows, signed. A negative
+   * value is a shortfall the route owes beyond what it collected; it is never
+   * plugged to zero (§14.2). Null when the collection or the hold is unknown.
+   */
   freeCents: Figure;
+  /** How far outflows and holds exceed collections; 0 when they do not, null when unknown. */
+  shortfallCents: number | null;
   /** Parts of the route nobody has stated. */
   gaps: string[];
+  /** Arithmetic the route's own figures expose, stated rather than silently resolved. */
+  discrepancies: string[];
 }
 
 export function readMoneyRoute(route: MoneyRoute): MoneyRouteReading {
@@ -271,10 +279,20 @@ export function readMoneyRoute(route: MoneyRoute): MoneyRouteReading {
   for (const one of route.outflows) if (!one.at) gaps.push(`when ${one.to} is paid`);
   const outflowCents = route.outflows.reduce((sum, one) => sum + one.amountCents, 0);
   const outflow = { ...unknownFigure('', 'cents'), meaning: 'outflows', unit: 'cents', status: 'CONTRACTED' as FigureStatus, value: outflowCents, source: 'route outflows' };
-  const free = derive('free to use', 'cents', [route.collectedCents, route.heldAgainstCents, outflow], ([collected, held, out]) => Math.max(0, (collected ?? 0) - (held ?? 0) - (out ?? 0)));
+  const free = derive('free to use', 'cents', [route.collectedCents, route.heldAgainstCents, outflow], ([collected, held, out]) => (collected ?? 0) - (held ?? 0) - (out ?? 0));
   if (route.collectedCents.value === null) gaps.push('collected amount');
   if (route.heldAgainstCents.value === null) gaps.push('amount held against refund or fulfilment');
-  return { route: route.id, collectedCents: route.collectedCents.value, outflowCents, heldAgainstCents: route.heldAgainstCents.value, freeCents: free, gaps };
+  const shortfallCents = free.value === null ? null : Math.max(0, -free.value);
+  const discrepancies: string[] = [];
+  if (shortfallCents !== null && shortfallCents > 0) {
+    discrepancies.push(
+      `route ${route.id} is short ${shortfallCents} cents: collected ${route.collectedCents.value} − held ${route.heldAgainstCents.value} − outflows ${outflowCents} < 0`,
+    );
+  }
+  return {
+    route: route.id, collectedCents: route.collectedCents.value, outflowCents, heldAgainstCents: route.heldAgainstCents.value,
+    freeCents: free, shortfallCents, gaps, discrepancies,
+  };
 }
 
 /* ------------------------------------------------------------------------- */
