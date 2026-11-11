@@ -88,6 +88,30 @@ export async function lastPullAt(source: string): Promise<string | null> {
   return row?.at ?? null;
 }
 
+/**
+ * The pulls of these sources recorded after a time (every pull when `since` is
+ * null): how many succeeded, how many failed, and the newest failure's error.
+ */
+export async function pullsSince(
+  sources: readonly string[],
+  since: string | null,
+): Promise<{ ok: number; failed: number; lastError: string | null }> {
+  if (sources.length === 0) return { ok: 0, failed: 0, lastError: null };
+  const db = getDb();
+  const marks = sources.map(() => '?').join(',');
+  const counts = await db.get<{ ok: number | string | null; failed: number | string | null }>(
+    `SELECT SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END) AS ok, SUM(CASE WHEN ok = 0 THEN 1 ELSE 0 END) AS failed
+       FROM feed_pulls WHERE source IN (${marks}) AND created_at > ?`,
+    [...sources, since ?? ''],
+  );
+  const last = await db.get<{ error: string | null }>(
+    `SELECT error FROM feed_pulls WHERE source IN (${marks}) AND ok = 0 AND created_at > ?
+      ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [...sources, since ?? ''],
+  );
+  return { ok: Number(counts?.ok ?? 0), failed: Number(counts?.failed ?? 0), lastError: last?.error ?? null };
+}
+
 /** The last success, and the failures since it, for one source. */
 export async function pullState(source: string): Promise<{ lastSuccessAt: string | null; failuresSince: number; lastFailureAt: string | null }> {
   const db = getDb();

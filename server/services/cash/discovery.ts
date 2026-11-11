@@ -92,7 +92,7 @@ import {
 } from '../../repos/cashDiscovery.ts';
 import { listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
 import { discoveryYield, usefulOpeningIds, yieldGuidance } from './discoveryYield.ts';
-import { bucketGates, recordRoundAsRun } from '../research/searchMethods/bucketMethods.ts';
+import { bucketGates, recordRoundAsRun, roundSourceAccess } from '../research/searchMethods/bucketMethods.ts';
 import { getClaim, signalledClaims } from '../../repos/research.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
@@ -1539,6 +1539,7 @@ async function closeEndedRounds(input: {
         found,
         useful,
         duplicates: mine.filter((one) => one.duplicateOfId).length,
+        ...(await roundSourceAccess(missions?.orchestrationIds ?? [])),
       });
     } catch { /* the round is closed; its run is an addition */ }
     if (to === 'HARVESTED') continue;
