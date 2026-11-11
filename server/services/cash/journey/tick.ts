@@ -22,7 +22,9 @@
  *   9. an exception its commitments show — a missed date, a failed payment, a rejected
  *      delivery, a released commitment — is detected, its consequence quantified and its
  *      remedy worked out inside the authority held, and recorded once
- *      (`deliverables/exceptions.ts`). Detecting is all it does;
+ *      (`deliverables/exceptions.ts`); a refund that would remedy it is asked
+ *      for as a person's approval, and a sourced case is traced as a rehearsal
+ *      whenever it changed. Nothing is carried out here;
  *  10. the deal's realization is read from its rows — delivery steps derived from
  *      the agreed scope, delivery and acceptance evidence, open redo obligations,
  *      the accounting result — and recorded when it changed, with each repeat-
@@ -46,7 +48,7 @@ import { agreementAnswering } from '../../../domain/cashJourney.ts';
 import { advanceFulfillment, moveToDelivering, type FulfillmentPass } from './fulfillment.ts';
 import { collectable, dealPosition } from './position.ts';
 import { recordOutcomes } from './learning.ts';
-import { recordDetectedExceptions } from '../deliverables/exceptions.ts';
+import { recordDetectedExceptions, rehearseCaseOnTick } from '../deliverables/exceptions.ts';
 import { recordRealization } from '../deliverables/realization.ts';
 
 const BRAIN = 'BRAIN';
@@ -64,7 +66,7 @@ export interface JourneyTickReport {
   collected: number;
   outcomes: number;
   /** Exceptions the commitment rows show, and the new ones recorded this pass. */
-  exceptions: { detected: number; recorded: number };
+  exceptions: { detected: number; recorded: number; rehearsed: number };
   /** Realization readings recorded this pass, and repeat-business signals newly on record. */
   realization: { recorded: number; aftercare: number };
 }
@@ -81,7 +83,7 @@ export async function advanceJourney(
     delivering: 0,
     collected: 0,
     outcomes: 0,
-    exceptions: { detected: 0, recorded: 0 },
+    exceptions: { detected: 0, recorded: 0, rehearsed: 0 },
     realization: { recorded: 0, aftercare: 0 },
   };
   const mode = await getCashMode(projectId);
@@ -169,6 +171,8 @@ export async function advanceJourney(
       const found = await recordDetectedExceptions({ projectId, opportunityId: listed.id, currency: mode.currency, now: now.toISOString() });
       report.exceptions.detected += found.detected;
       report.exceptions.recorded += found.recorded;
+      const rehearsed = await rehearseCaseOnTick({ projectId, opportunityId: listed.id, currency: mode.currency, now: now.toISOString() });
+      if (rehearsed.rehearsed) report.exceptions.rehearsed += 1;
       const realized = await recordRealization({ projectId, opportunityId: listed.id, currency: mode.currency });
       if (realized.recorded) report.realization.recorded += 1;
       report.realization.aftercare += realized.aftercare;
