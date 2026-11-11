@@ -793,6 +793,7 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
         knownSources,
         input.units,
         (path) => allowed(path) && (unitOwned(path) || namedInScope(path)),
+        input.mutationScope.filter((path) => isConcrete(path) && !isTestPath(path)),
       );
       if (found.length === 0) unresolved.push(test);
       for (const path of found) if (!subjects.includes(path)) subjects.push(path);
@@ -831,6 +832,7 @@ function subjectsOf(
   knownSources: string[],
   units: RepairScopeInput['units'],
   accept: (path: string) => boolean,
+  granted: string[] = [],
 ): string[] {
   const byName: string[] = [];
   const sibling = siblingSubjectOf(test);
@@ -852,5 +854,13 @@ function subjectsOf(
       for (const path of unit.ownedPaths) if (isConcrete(path) && !isTestPath(path)) context.add(path);
     }
   }
-  return context.size === 1 ? [...context].filter(accept) : [];
+  if (context.size === 1) return [...context].filter(accept);
+  /*
+   * Otherwise the answer the refusal asks a person for: the one source file
+   * named exactly in the scope (production 2026-11-11, acquisition-d0: the
+   * test's unit owned three source files and nothing read the grant, so naming
+   * the file — the remedy the refusal itself gives — could not unblock it).
+   */
+  const chosen = granted.filter((path) => context.size === 0 || context.has(path));
+  return chosen.length === 1 ? chosen.filter(accept) : [];
 }
