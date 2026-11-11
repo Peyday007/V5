@@ -342,16 +342,14 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
     const defensible = currentReading.reach >= input.required && currentReading.basis === 'PROBABILITY' && !currentReading.changes.some((c) => c.basis === 'ASSUMPTION');
     if (!defensible) {
       try {
-        sweep = await sweepVariables({
-          base,
-          greedy: current,
-          operators,
-          operatorsFor,
-          remaining: limits.remaining,
-          daysLeft,
+        // On a pool thread, never the server's loop: a request that waits on many queries must not queue behind the sweep's slices.
+        sweep = await evaluator.sweep({
+          openings: input.openings,
+          portfolio: limits,
+          baseline: input.baseline,
           required: input.required,
-          contactsPerDay: currentContacts(limits, input.baseline),
-          limits,
+          ...(input.levers ? { levers: input.levers } : {}),
+          greedy: current,
           ...(input.explore?.sweepMs !== undefined ? { maxMs: input.explore.sweepMs } : {}),
           ...(input.explore?.maxVariations !== undefined ? { maxVariations: input.explore.maxVariations } : {}),
         });
@@ -511,6 +509,38 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
     evaluations,
     exploration,
   };
+}
+
+/** What a variable sweep needs, as plain data a pool thread can receive (§102). */
+export interface SweepJob {
+  openings: ModelledOpportunity[];
+  portfolio: ReconstructionInput['portfolio'];
+  baseline: GoalPortfolio;
+  required: number;
+  levers?: readonly AcquisitionLever[];
+  greedy: StrategyState;
+  maxMs?: number;
+  maxVariations?: number;
+}
+
+/** The variable sweep over a plan, with its operators rebuilt from data: runs inline or on a pool thread. */
+export function sweepFor(job: SweepJob): Promise<VariableSweep> {
+  const input: ReconstructionInput = { openings: job.openings, portfolio: job.portfolio, baseline: job.baseline, required: job.required, ...(job.levers ? { levers: job.levers } : {}) };
+  const levers = job.levers ?? ACQUISITION_LEVERS;
+  const base: StrategyState = { openings: job.openings, committed: 0, changes: [] };
+  return sweepVariables({
+    base,
+    greedy: job.greedy,
+    operators: buildOperators({ input, levers, base }),
+    operatorsFor: (target) => buildOperators({ input, levers, base, target }),
+    remaining: job.portfolio.remaining,
+    daysLeft: job.portfolio.daysLeft,
+    required: job.required,
+    contactsPerDay: currentContacts(job.portfolio, job.baseline),
+    limits: job.portfolio,
+    ...(job.maxMs !== undefined ? { maxMs: job.maxMs } : {}),
+    ...(job.maxVariations !== undefined ? { maxVariations: job.maxVariations } : {}),
+  });
 }
 
 function allowedFor(limits: ReconstructionInput['portfolio']) {
