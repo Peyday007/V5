@@ -30,6 +30,10 @@ on:
         description: 'optional: stripe | mailer | etsy | store'
         required: false
         default: ''
+      etsy_redirect_url:
+        description: 'Etsy, once: the address-bar URL after "Grant access" (localhost…?code=…)'
+        required: false
+        default: ''
 
 concurrency:
   group: launch-businesses
@@ -37,6 +41,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   launch:
@@ -54,6 +59,24 @@ jobs:
         run: |
           npm i -g playwright@1.49.1
           npx -y playwright@1.49.1 install --with-deps chromium
+      # Etsy's refresh token changes on every use and an Actions job cannot
+      # write a repository secret, so the newest one rides from run to run as
+      # an artifact encrypted with the app's shared secret (90 days, the
+      # token's own lifetime).
+      - name: Etsy token from the previous run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ETSY_SHARED_SECRET: ${{ secrets.ETSY_SHARED_SECRET }}
+        run: |
+          if [ -z "$ETSY_SHARED_SECRET" ]; then echo "no Etsy app yet"; exit 0; fi
+          for id in $(gh run list --workflow launch.yml --limit 30 --json databaseId --jq '.[].databaseId'); do
+            [ "$id" = "${{ github.run_id }}" ] && continue
+            if gh run download "$id" -n etsy-token -D etsy-carry 2>/dev/null; then
+              tok=$(openssl enc -d -aes-256-cbc -pbkdf2 -pass env:ETSY_SHARED_SECRET -in etsy-carry/token.enc 2>/dev/null || true)
+              if [ -n "$tok" ]; then echo "::add-mask::$tok"; echo "ETSY_REFRESH_TOKEN_CARRIED=$tok" >> "$GITHUB_ENV"; echo "carried from run $id"; fi
+              break
+            fi
+          done
       - name: Run
         env:
           MODE: ${{ inputs.mode || 'run' }}
@@ -61,12 +84,27 @@ jobs:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           ETSY_API_KEY: ${{ secrets.ETSY_API_KEY }}
           ETSY_SHARED_SECRET: ${{ secrets.ETSY_SHARED_SECRET }}
-          ETSY_REFRESH_TOKEN: ${{ secrets.ETSY_REFRESH_TOKEN }}
-          ETSY_AUTH_REDIRECT_URL: ${{ secrets.ETSY_AUTH_REDIRECT_URL }}
           ETSY_REDIRECT_URI: ${{ secrets.ETSY_REDIRECT_URI }}
+          ETSY_AUTH_REDIRECT_URL: ${{ inputs.etsy_redirect_url }}
         run: |
+          if [ -n "$ETSY_AUTH_REDIRECT_URL" ]; then echo "::add-mask::$ETSY_AUTH_REDIRECT_URL"; fi
+          export ETSY_REFRESH_TOKEN="${ETSY_REFRESH_TOKEN_CARRIED:-}"
           export NODE_PATH="$(npm root -g)"
           npx tsx scripts/launch/run.ts "$MODE" $ONLY
+      - name: Etsy token for the next run
+        if: always() && hashFiles('.launch-out/etsy-refresh-token') != ''
+        env:
+          ETSY_SHARED_SECRET: ${{ secrets.ETSY_SHARED_SECRET }}
+        run: |
+          mkdir -p etsy-carry-out
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:ETSY_SHARED_SECRET -in .launch-out/etsy-refresh-token -out etsy-carry-out/token.enc
+          rm -f .launch-out/etsy-refresh-token
+      - uses: actions/upload-artifact@v4
+        if: always() && hashFiles('etsy-carry-out/token.enc') != ''
+        with:
+          name: etsy-token
+          path: etsy-carry-out/token.enc
+          retention-days: 90
       - name: Finished materials
         if: always()
         uses: actions/upload-artifact@v4
