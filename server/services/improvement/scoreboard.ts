@@ -13,6 +13,7 @@ import {
   compare,
   type Comparison,
   METRIC_KEYS,
+  METRICS,
   reading,
   type FailureCount,
   type MetricKey,
@@ -250,14 +251,67 @@ export interface GapMeasures {
   regressions: { reverted: number; keptNoEffect: number };
   /** The constructed-round yield, this window against the one before it, through the existing comparison. */
   goalQuality: Comparison;
-  productiveWorkResumed: Unmeasured;
-  cost: Unmeasured;
+  productiveWorkResumed: ProductiveWorkResumed;
+  cost: GapCost;
+}
+
+/**
+ * The work closing a gap released, read from rows. For each gap kept in the
+ * window, the candidate's own metric was measured in the window after delivery
+ * and the window before (`result.after`, `result.before`, written by
+ * `measureAndDecide`). When that metric counts successful work (higher is
+ * better, and its numerator is a count of units: a RATE or PER_DAY shape), the
+ * difference in successful units per day is the productive work the change
+ * released. A metric whose numerator is not successful work (hours, failures)
+ * cannot say how much work resumed and is counted as such, never guessed.
+ * `continued` counts the closed gaps whose capability-gap loop recorded its
+ * CONTINUE step: the loop resumed other work rather than stopping at the gap.
+ */
+export interface ProductiveWorkResumed {
+  status: 'MEASURED';
+  /** Gaps kept in the window. */
+  gaps: number;
+  /** Of those, the ones whose gap loop recorded CONTINUE (resumed other work). */
+  continued: number;
+  /** Of those, the ones whose metric counts successful units and was read before and after delivery. */
+  attributed: number;
+  /** Successful units per day after delivery minus before, summed over the attributed gaps. */
+  unitsPerDayGained: number;
+  perGap: { weaknessKey: string; metric: string; beforePerDay: number; afterPerDay: number; continued: boolean }[];
+}
+
+/**
+ * What closing gaps cost, read from the append-only `bin_events` rows of the
+ * Factory work each gap was handed to (`bins.factory_campaign_id` = the
+ * candidate's campaign). Every measured attempt counts — kept, kept without
+ * effect and reverted alike — because a failed attempt was paid for too. Worker
+ * time is the sum of `duration_ms` the lease recorded when it ended; a lease
+ * that ended without a duration (released, expired) is counted in
+ * `leasesUntimed` rather than timed from a guess. A gap worked by research
+ * rather than a campaign has no bin link and is counted as unattributed. Brain
+ * workers run on subscription capacity; paid model spend is not attributed to a
+ * bin by any row, so it is not reported here.
+ */
+export interface GapCost {
+  status: 'MEASURED';
+  /** Measured decisions (KEPT, KEPT_NO_EFFECT, REVERTED) in the window. */
+  gaps: number;
+  /** Of those, the ones whose Factory campaign links them to bins. */
+  attributed: number;
+  bins: number;
+  leases: number;
+  leasesUntimed: number;
+  workerMs: number;
 }
 
 const MEASURED_DECISIONS = new Set(['KEPT', 'KEPT_NO_EFFECT', 'REVERTED']);
 
 interface DecidedGap {
   id: string;
+  weaknessKey: string;
+  campaignId: string | null;
+  metric: string;
+  result: string | null;
   decision: string;
   createdAt: string;
   /** When the measured decision was made: the append-only DECIDED event, never the row's updated_at. */
@@ -293,17 +347,134 @@ async function readDecisions(from: string, to: string): Promise<DecidedGap[]> {
     first.set(event.candidate_id, list);
   }
   if (first.size === 0) return [];
-  const rows = await db.all<{ id: string; decision: string; created_at: string }>(
-    `SELECT id, decision, created_at FROM improvement_candidates WHERE decision IN ('KEPT', 'KEPT_NO_EFFECT', 'REVERTED')`,
+  const rows = await db.all<{ id: string; weakness_key: string; campaign_id: string | null; metric_key: string; result: string | null; decision: string; created_at: string }>(
+    `SELECT id, weakness_key, campaign_id, metric_key, result, decision, created_at FROM improvement_candidates WHERE decision IN ('KEPT', 'KEPT_NO_EFFECT', 'REVERTED')`,
     [],
   );
   const out: DecidedGap[] = [];
   for (const row of rows) {
     const decidedAt = first.get(row.id)?.find((e) => e.decision === row.decision)?.at;
     if (!decidedAt || decidedAt < from || decidedAt >= to) continue;
-    out.push({ id: row.id, decision: row.decision, createdAt: row.created_at, decidedAt });
+    out.push({
+      id: row.id,
+      weaknessKey: row.weakness_key,
+      campaignId: row.campaign_id,
+      metric: row.metric_key,
+      result: row.result,
+      decision: row.decision,
+      createdAt: row.created_at,
+      decidedAt,
+    });
   }
   return out;
+}
+
+interface Window {
+  from?: string;
+  to?: string;
+  numerator?: number;
+}
+
+const DAY_MS = 86_400_000;
+
+/** Successful units per day in one reading, or null when the reading has no usable window. */
+function perDay(w: Window | undefined): number | null {
+  if (!w || typeof w.numerator !== 'number' || !w.from || !w.to) return null;
+  const days = (Date.parse(w.to) - Date.parse(w.from)) / DAY_MS;
+  return Number.isFinite(days) && days > 0 ? w.numerator / days : null;
+}
+
+/** True when a metric's numerator counts successful work, so its change is work released. */
+function countsSuccessfulUnits(metric: string): boolean {
+  const def = (METRICS as Record<string, { shape: string; higherIsBetter: boolean } | undefined>)[metric];
+  return Boolean(def && def.higherIsBetter && (def.shape === 'RATE' || def.shape === 'PER_DAY'));
+}
+
+/** The productive work the gaps kept in the window released. Reads each gap's CONTINUE step from its loop rows. */
+async function readProductiveWorkResumed(kept: readonly DecidedGap[]): Promise<ProductiveWorkResumed> {
+  const continuedKeys = new Set<string>();
+  if (kept.length > 0) {
+    const rows = await getDb().all<{ workload_class: string }>(
+      `SELECT DISTINCT workload_class FROM bin_events WHERE event_type = 'CAPABILITY_GAP_STEP' AND provider = 'CONTINUE'
+          AND workload_class IN (${kept.map(() => '?').join(', ')})`,
+      kept.map((g) => g.weaknessKey),
+    );
+    for (const row of rows) continuedKeys.add(row.workload_class);
+  }
+  const perGap: ProductiveWorkResumed['perGap'] = [];
+  for (const gap of kept) {
+    if (!countsSuccessfulUnits(gap.metric)) continue;
+    let result: { before?: Window; after?: Window } | null = null;
+    try {
+      result = gap.result ? (JSON.parse(gap.result) as { before?: Window; after?: Window }) : null;
+    } catch {
+      result = null;
+    }
+    const before = perDay(result?.before);
+    const after = perDay(result?.after);
+    if (before === null || after === null) continue;
+    perGap.push({
+      weaknessKey: gap.weaknessKey,
+      metric: gap.metric,
+      beforePerDay: Number(before.toFixed(3)),
+      afterPerDay: Number(after.toFixed(3)),
+      continued: continuedKeys.has(gap.weaknessKey),
+    });
+  }
+  const gained = perGap.reduce((sum, g) => sum + (g.afterPerDay - g.beforePerDay), 0);
+  return {
+    status: 'MEASURED',
+    gaps: kept.length,
+    continued: kept.filter((g) => continuedKeys.has(g.weaknessKey)).length,
+    attributed: perGap.length,
+    unitsPerDayGained: Number(gained.toFixed(3)),
+    perGap,
+  };
+}
+
+/** What the measured attempts in the window cost, from the bin rows of the Factory campaigns they were handed to. */
+async function readGapCost(decided: readonly DecidedGap[]): Promise<GapCost> {
+  const campaigns = [...new Set(decided.map((g) => g.campaignId).filter((id): id is string => typeof id === 'string' && id.length > 0))];
+  let bins = 0;
+  let leases = 0;
+  let leasesUntimed = 0;
+  let workerMs = 0;
+  const linked = new Set<string>();
+  if (campaigns.length > 0) {
+    const marks = campaigns.map(() => '?').join(', ');
+    const binRows = await getDb().all<{ id: string; factory_campaign_id: string }>(
+      `SELECT id, factory_campaign_id FROM bins WHERE factory_campaign_id IN (${marks})`,
+      campaigns,
+    );
+    bins = binRows.length;
+    for (const row of binRows) linked.add(row.factory_campaign_id);
+    if (binRows.length > 0) {
+      const ended = await getDb().all<{ bin_id: string; lease_generation: number | null; duration_ms: number | null }>(
+        `SELECT bin_id, lease_generation, duration_ms FROM bin_events
+          WHERE event_type IN ('BIN_TERMINAL', 'BIN_RELEASED', 'BIN_LEASE_EXPIRED') AND lease_id IS NOT NULL
+            AND bin_id IN (${binRows.map(() => '?').join(', ')})`,
+        binRows.map((r) => r.id),
+      );
+      const seen = new Set<string>();
+      for (const event of ended) {
+        const lease = `${event.bin_id}#${event.lease_generation ?? ''}`;
+        if (seen.has(lease)) continue;
+        seen.add(lease);
+        leases += 1;
+        if (typeof event.duration_ms === 'number' && event.duration_ms >= 0) workerMs += Number(event.duration_ms);
+        else leasesUntimed += 1;
+      }
+    }
+  }
+  return {
+    status: 'MEASURED',
+    gaps: decided.length,
+    attributed: decided.filter((g) => g.campaignId && linked.has(g.campaignId)).length,
+    bins,
+    leases,
+    leasesUntimed,
+    workerMs,
+  };
 }
 
 /** Gaps identified and closed over [from, to), counted from improvement rows. */
@@ -344,7 +515,7 @@ export async function readGapMeasures(from: string, to: string): Promise<GapMeas
       keptNoEffect: decided.filter((r) => r.decision === 'KEPT_NO_EFFECT').length,
     },
     goalQuality,
-    productiveWorkResumed: { status: 'NOT_MEASURED', reason: 'no row links a closed gap to the work it released' },
-    cost: { status: 'NOT_MEASURED', reason: 'no append-only entry attributes spend to a gap' },
+    productiveWorkResumed: await readProductiveWorkResumed(kept),
+    cost: await readGapCost(decided),
   };
 }
