@@ -9,9 +9,9 @@ import { describe, expect, it } from 'vitest';
 import { reconstruct } from '../server/services/quant/reconstruct.ts';
 import { collapseLineage, classify, onScale, pool } from '../server/services/quant/pool.ts';
 import { composeArrangement } from '../server/services/quant/mechanism.ts';
-import { optimizePortfolio, type Activity } from '../server/services/quant/portfolio.ts';
+import { compareReadings, optimizePortfolio, tieObjective, type Activity, type PortfolioReading } from '../server/services/quant/portfolio.ts';
 import { informationValue } from '../server/services/quant/value.ts';
-import { attributeFunding, decideResearch, observedCollectionRate, quantifyRouteMoney, routeInputsFromEntries, scoreRoutes, CASH_IDENTITIES } from '../server/services/quant/deadline.ts';
+import { attributeFunding, capitalTurnover, decideResearch, observedCollectionRate, quantifyRouteMoney, rankByObjective, routeInputsFromEntries, scoreRoutes, CASH_IDENTITIES } from '../server/services/quant/deadline.ts';
 import { toScenarioInput } from '../server/services/quant/export.ts';
 import { solveProblem, type QuantProblem } from '../server/services/quant/problem.ts';
 import { runScenarioModel } from '../server/services/scenario/run.ts';
@@ -789,3 +789,51 @@ describe('MONEY-13-4. who funded an outlay is read from the order money moved (r
 function sumOutlays(m: { supplierOutlays: { amount: number }[] }): number {
   return m.supplierOutlays.reduce((t, o) => t + o.amount, 0);
 }
+
+describe('MONEY-13-4: the production chooser ranks by turnover and risk-adjusted collectible contribution', () => {
+  // optimizePortfolio is what evaluateGoalPortfolio (goalScenario, every goal tick) uses to choose routes.
+  const withSpend = (key: string, cash: number, spend: number, days: number, capital: number): Activity => ({
+    key, label: key, justified: true, capital, ...fixed(200, cash, days), spend: new Array<number>(200).fill(spend),
+  });
+
+  it('when no combination reaches the objective, chooses the larger collectible contribution, not the larger gross settled cash', () => {
+    const r = optimizePortfolio({
+      target: 1_000_000, deadlineDays: 60, worlds: 500,
+      activities: [withSpend('gross_heavy', 9_000, 8_500, 10, 0), withSpend('net_heavy', 6_000, 1_000, 10, 0)],
+    });
+    const singles = Object.fromEntries(r.singles.map((one) => [one.keys[0], one]));
+    expect(singles.gross_heavy!.settledP50).toBeGreaterThan(singles.net_heavy!.settledP50);
+    expect(singles.net_heavy!.contribution).toBe(5_000);
+    expect(singles.gross_heavy!.contribution).toBe(500);
+    const alone = optimizePortfolio({ target: 1_000_000, deadlineDays: 60, worlds: 500, activities: [withSpend('gross_heavy', 9_000, 8_500, 10, 0), { ...withSpend('net_heavy', 6_000, 1_000, 10, 0), excludes: ['gross_heavy'] }] });
+    expect(alone.best!.keys).toEqual(['net_heavy']);
+    expect(tieObjective(0)).toBe('CONTRIBUTION');
+  });
+
+  it('when combinations reach the objective equally, chooses the one turning its capital fastest', () => {
+    const slow = withSpend('slow_capital_heavy', 12_000, 0, 25, 5_000);
+    const fast = { ...withSpend('fast_capital_light', 11_000, 0, 5, 500), excludes: ['slow_capital_heavy'] };
+    const r = optimizePortfolio({ target: 10_000, deadlineDays: 30, worlds: 500, activities: [slow, fast] });
+    const singles = Object.fromEntries(r.singles.map((one) => [one.keys[0], one]));
+    expect(singles.slow_capital_heavy!.reach).toBe(1);
+    expect(singles.fast_capital_light!.reach).toBe(1);
+    // The old tie-break (gross settled cash) would have chosen the slow route.
+    expect(singles.slow_capital_heavy!.settledP50).toBeGreaterThan(singles.fast_capital_light!.settledP50);
+    expect(r.best!.keys).toEqual(['fast_capital_light']);
+    expect(singles.fast_capital_light!.capitalTurnover).toBeCloseTo(capitalTurnover(11_000, 500, 5)!, 9);
+    expect(tieObjective(1)).toBe('TURNOVER');
+  });
+
+  it('the portfolio and the ledger ranking share one turnover formula and one objective ordering', () => {
+    expect(capitalTurnover(1_000, 0, 0)).toBe(1_000);
+    expect(capitalTurnover(null, 10, 10)).toBeNull();
+    const a = { capitalTurnover: 2, riskAdjustedContribution: 10 };
+    const b = { capitalTurnover: 1, riskAdjustedContribution: 20 };
+    const c = { capitalTurnover: null, riskAdjustedContribution: null };
+    expect(rankByObjective([c, b, a], 'TURNOVER')).toEqual([a, b, c]);
+    expect(rankByObjective([c, a, b], 'CONTRIBUTION')).toEqual([b, a, c]);
+    const reading = (over: Partial<PortfolioReading>): PortfolioReading => ({ keys: ['x'], reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, capitalShort: 0, overSpend: 0, contribution: 0, capitalTurnover: 0, feasible: true, infeasibleBecause: null, basis: 'PROBABILITY', ...over });
+    expect(compareReadings(reading({ contribution: 10, settledP50: 1 }), reading({ contribution: 5, settledP50: 100 }))).toBeLessThan(0);
+    expect(compareReadings(reading({ reach: 1, capitalTurnover: 1, contribution: 100 }), reading({ reach: 1, capitalTurnover: 3, contribution: 1 }))).toBeGreaterThan(0);
+  });
+});

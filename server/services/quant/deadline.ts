@@ -431,9 +431,40 @@ export function observedCollectionRate(money: RouteMoneyVelocity): number | null
  * A route with an unknown input is scored null and sorted last, never as zero, and
  * retaining all cash is not a requirement: nothing here reads RETAINED_CASH.
  */
+export type RouteObjective = 'TURNOVER' | 'CONTRIBUTION';
+
+/**
+ * Collectible contribution per unit of capital held per day of cycle — the one
+ * turnover formula, shared by the ledger's route ranking and by the portfolio
+ * search that chooses which combination of routes the goal runs. A capital or
+ * cycle below one is read as one, so a route that ties up nothing is not
+ * infinitely fast.
+ */
+export function capitalTurnover(contribution: number | null, capital: number | null, cycleDays: number | null): number | null {
+  if (contribution === null || capital === null || cycleDays === null) return null;
+  if (!Number.isFinite(contribution) || !Number.isFinite(capital) || !Number.isFinite(cycleDays)) return null;
+  return contribution / (Math.max(capital, 1) * Math.max(cycleDays, 1));
+}
+
+/**
+ * Which score decides between candidates that serve the objective equally
+ * well. When they reach the objective, the one returning its capital fastest
+ * is better (more turnover from the same money); when neither reaches it, the
+ * one collecting more risk-adjusted contribution is closer. Retaining cash is
+ * never the objective.
+ */
+export function objectiveScore(score: Pick<RouteScore, 'capitalTurnover' | 'riskAdjustedContribution'>, objective: RouteObjective): number | null {
+  return objective === 'TURNOVER' ? score.capitalTurnover : score.riskAdjustedContribution;
+}
+
+/** Order candidates by an objective; an unknown score sorts last, never as zero. */
+export function rankByObjective<T extends Pick<RouteScore, 'capitalTurnover' | 'riskAdjustedContribution'>>(scores: T[], objective: RouteObjective): T[] {
+  return [...scores].sort((a, b) => (objectiveScore(b, objective) ?? -Infinity) - (objectiveScore(a, objective) ?? -Infinity));
+}
+
 export function scoreRoutes(
   routes: { money: RouteMoneyVelocity; collectionProbability?: number }[],
-  objective: 'TURNOVER' | 'CONTRIBUTION',
+  objective: RouteObjective,
 ): RouteScore[] {
   const scored = routes.map(({ money, collectionProbability }) => {
     const margin = money.identities.GROSS_MARGIN;
@@ -443,12 +474,9 @@ export function scoreRoutes(
       money.daysLeadToCommitment !== null && money.daysCommitmentToFunds !== null && money.daysFundsToUsableCash !== null
         ? money.daysLeadToCommitment + money.daysCommitmentToFunds + money.daysFundsToUsableCash
         : null;
-    const capital = money.peakWorkingCapital;
-    const turnover = contribution === null || cycle === null || capital === null ? null : contribution / (Math.max(capital, 1) * Math.max(cycle, 1));
-    return { routeKey: money.routeKey, capitalTurnover: turnover, riskAdjustedContribution: contribution };
+    return { routeKey: money.routeKey, capitalTurnover: capitalTurnover(contribution, money.peakWorkingCapital, cycle), riskAdjustedContribution: contribution };
   });
-  const key = (s: RouteScore) => (objective === 'TURNOVER' ? s.capitalTurnover : s.riskAdjustedContribution);
-  return scored.sort((a, b) => (key(b) ?? -Infinity) - (key(a) ?? -Infinity));
+  return rankByObjective(scored, objective);
 }
 
 /**
@@ -580,7 +608,7 @@ export async function readRouteMoney(input: {
 export async function rankRoutesFromLedger(input: {
   projectId: string;
   currency: string;
-  objective: 'TURNOVER' | 'CONTRIBUTION';
+  objective: RouteObjective;
   collectionProbability?: Record<string, number>;
 }): Promise<{ money: RouteMoneyVelocity[]; ranking: RouteScore[] }> {
   const money = await readRouteMoney(input);
