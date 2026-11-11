@@ -106,7 +106,7 @@ jobs:
           #    The machine reports a 16-hex sha256 prefix of each value it holds,
           #    so a rotated GitHub secret is copied again; nothing else crosses.
           export SYNCABLE="$(node --import tsx scripts/integrations.ts syncable)"
-          export HELD="$(flyctl ssh console --app "$app" -C "sh -c 'cd /app && node --import tsx scripts/integrations.ts fingerprints'" 2>/dev/null | grep -E '^[A-Z_]+ [0-9a-f]{16}' || true)"
+          export HELD="$(timeout 300 flyctl ssh console --app "$app" -C "sh -c 'cd /app && nice -n 19 node --import tsx scripts/integrations.ts fingerprints'" < /dev/null 2>/dev/null | grep -E '^[A-Z_]+ [0-9a-f]{16}' || true)"
           python3 - "$staged" "$repairs" <<'PY'
           import hashlib, json, os, sys
           staged, repairs = sys.argv[1], sys.argv[2]
@@ -114,7 +114,7 @@ jobs:
           held = dict(line.split()[:2] for line in os.environ.get('HELD', '').splitlines() if line.strip())
           names = os.environ['SYNCABLE'].split()
           owners = {'INSTANTLY_API_KEY': 'instantly', 'STRIPE_SECRET_KEY': 'stripe', 'RESEND_API_KEY': 'resend'}
-          print('GitHub secrets the registry can use: ' + (', '.join(n for n in names if n in secrets) or 'none'))
+          print('GitHub secrets the registry can use: ' + (', '.join(n for n in names if (secrets.get(n) or '').strip()) or 'none set'))
           for name in names:
               value = (secrets.get(name) or '').strip()
               if not value:
@@ -136,7 +136,7 @@ jobs:
             [[ "$SEALED_NAME" =~ ^[A-Z][A-Z0-9_]*$ ]] || { echo "::error::sealed_name is not a setting name."; exit 1; }
             [[ "$SEALED_VALUE" =~ ^[A-Za-z0-9+/]+=*$ ]] || { echo "::error::sealed_value is not base64."; exit 1; }
             out="$RUNNER_TEMP/unsealed.env"
-            if flyctl ssh console --app "$app" -C "sh -c 'cd /app && node --import tsx scripts/integrations.ts unseal $SEALED_NAME $SEALED_VALUE'" > "$out" 2>/dev/null \
+            if timeout 300 flyctl ssh console --app "$app" -C "sh -c 'cd /app && nice -n 19 node --import tsx scripts/integrations.ts unseal $SEALED_NAME $SEALED_VALUE'" < /dev/null > "$out" 2>/dev/null \
                && grep -q "^$SEALED_NAME=" "$out"; then
               line=$(grep -m1 "^$SEALED_NAME=" "$out" | tr -d '\r')
               echo "::add-mask::${line#*=}"
@@ -194,13 +194,13 @@ jobs:
           repairs="$RUNNER_TEMP/repairs.txt"
           if [ -s "$repairs" ]; then
             while read -r id state name; do
-              flyctl ssh console --app "$app" -C "sh -c 'cd /app && node --import tsx scripts/integrations.ts repaired $id $state $name'" 2>&1 | grep '^REPAIRED' || true
+              timeout 300 flyctl ssh console --app "$app" -C "sh -c 'cd /app && nice -n 19 node --import tsx scripts/integrations.ts repaired $id $state $name'" < /dev/null 2>&1 | grep -E '^(REPAIRED|INTEGRATIONS)' || true
             done < "$repairs"
           fi
           # Names of the repository secrets, so integrations that live in GitHub Actions read as present or missing.
           names=$(python3 -c 'import os; print(",".join(sorted(k[4:] for k, v in os.environ.items() if k.startswith("HAS_") and v == "true")))')
           set +e
-          flyctl ssh console --app "$app" -C "sh -c 'cd /app && node --import tsx scripts/integrations.ts public-keys && node --import tsx scripts/integrations.ts check --record integrations.yml --github-secrets $names'" 2>&1 | tee check.txt
+          timeout 600 flyctl ssh console --app "$app" -C "sh -c 'cd /app && nice -n 19 node --import tsx scripts/integrations.ts public-keys && nice -n 19 node --import tsx scripts/integrations.ts check --record integrations.yml --github-secrets $names'" < /dev/null 2>&1 | tee check.txt
           set -e
           grep -q '^INTEGRATIONS: \(OK\|ATTENTION\)' check.txt
 

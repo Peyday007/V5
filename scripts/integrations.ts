@@ -23,6 +23,19 @@ import { checkAndRecord, readIntegrations } from '../server/services/integration
 import { seal, sealPublicKey, signingPublicKey, unseal } from '../server/services/integrations/keys.ts';
 import { INTEGRATIONS, githubSyncable, sealable } from '../server/services/integrations/registry.ts';
 
+// One pooler client, like every operator script beside the running app: the
+// pooler's limit is shared, and a default-size pool waited on it forever (§39).
+process.env.BRAIN_DATABASE_POOL_SIZE ??= '1';
+
+/** Open the database, or fail in bounded time rather than hang a workflow. */
+async function openDatabase(): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  await Promise.race([
+    initDatabase(),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('the database did not open within 90 seconds')), 90_000); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 const [command, ...rest] = process.argv.slice(2);
 const option = (name: string): string | undefined => {
   const i = rest.indexOf(name);
@@ -100,7 +113,7 @@ async function main(): Promise<number> {
         console.error('REPAIRED: usage repaired INTEGRATION_ID GENERATED|SYNCED|SEALED NAME');
         return 2;
       }
-      await initDatabase();
+      await openDatabase();
       await recordIntegrationEvent({ integrationId: id, kind: 'REPAIR', state, detail: `${name} ${how[state]}.`, source: 'integrations.yml' });
       console.log(`REPAIRED: ${id} ${state}`);
       return 0;
@@ -111,7 +124,7 @@ async function main(): Promise<number> {
       const source = option('--record');
       let readings;
       if (source) {
-        await initDatabase();
+        await openDatabase();
         readings = await checkAndRecord({ githubSecrets, source });
       } else {
         readings = await readIntegrations({ githubSecrets, probe: true });
