@@ -267,15 +267,135 @@ export function repeatedUseFromRows(
   return { repeatedUses: best.uses, repeatedUsesNeedingFallback: best.fallback };
 }
 
-/** Repeated-use counts for a host from existing SOURCE_ACCESS rows; zeros when unreadable. */
-export async function readRepeatedUse(host: string): Promise<{ repeatedUses: number; repeatedUsesNeedingFallback: number }> {
+/*
+ * The acquisition history: the SOURCE_ACCESS, OPERATE_PERMISSION and
+ * CONNECTOR_PROPOSED rows the judgments read, held once per process.
+ *
+ * Every public read records a judgment, so these reads run on the research hot
+ * path. Reading the rows per read (5,000 access rows twice for a browser read,
+ * 2,000 permission rows unfiltered, 500 proposals) put an unmeasured load on
+ * the shared database (§61/§63). Instead the rows are loaded in one pass at
+ * most every `ACQUISITION_HISTORY_REFRESH_MS`, single-flight, the cadence the
+ * access learner already uses (`access.ts` LEARN_REFRESH_MS), and what this
+ * process writes is added as it is written (`noteSourceAccess`, the permission
+ * and proposal writers below). So a read sees its own and this process's
+ * earlier reads at once, and other processes' rows within one refresh.
+ *
+ * The rows stay the record (§45): nothing is stored here that a reload cannot
+ * rebuild. A read path's OPERATE judgment is a recorded judgment about a public
+ * read — the research browser signs into nothing — so a revocation recorded by
+ * another process reaching it within one refresh performs no effect meanwhile;
+ * one recorded in this process applies to the next read.
+ */
+export const ACQUISITION_HISTORY_REFRESH_MS = 5 * 60_000;
+/** The most rows of each kind held, the same bounds the per-read queries used. */
+const ACCESS_ROWS_MAX = 5000;
+const PERMISSION_ROWS_MAX = 2000;
+
+interface AccessRow {
+  provider: string | null;
+  measures: string | null;
+  at: string | null;
+}
+interface PermissionRow {
+  outcome: string | null;
+  measures: string | null;
+  at: string | null;
+}
+interface AcquisitionHistory {
+  loadedAt: number;
+  /** Newest first. */
+  access: AccessRow[];
+  /** Newest first. */
+  permissions: PermissionRow[];
+  /** `host|route` of every proposal inside the window. */
+  proposals: Set<string>;
+}
+
+let history: AcquisitionHistory | null = null;
+let historyLoading: Promise<void> | null = null;
+let historyLoads = 0;
+
+const proposalKey = (host: string, route: string) => `${host.toLowerCase()}|${route}`;
+
+async function loadHistory(): Promise<void> {
+  historyLoads += 1;
+  const since = new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString();
+  const next: AcquisitionHistory = { loadedAt: Date.now(), access: [], permissions: [], proposals: new Set() };
+  const db = getDb();
+  // Each kind is read on its own, so one unreadable kind leaves the others' rows (and zeros, never guesses, for it).
   try {
-    const since = new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString();
-    const rows = await getDb().all<{ provider: string | null; measures: string | null; at: string | null }>(
-      `SELECT provider, measures, at FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? ORDER BY at DESC LIMIT 5000`,
+    next.access = await db.all<AccessRow>(
+      `SELECT provider, measures, at FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? ORDER BY at DESC LIMIT ${ACCESS_ROWS_MAX}`,
       [since],
     );
-    return repeatedUseFromRows(rows, host);
+  } catch {
+    /* no repetition is evidenced */
+  }
+  try {
+    next.permissions = await db.all<PermissionRow>(
+      `SELECT outcome, measures, at FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT ${PERMISSION_ROWS_MAX}`,
+      [OPERATE_PERMISSION_EVENT],
+    );
+  } catch {
+    /* no permission is evidenced */
+  }
+  try {
+    const rows = await db.all<{ measures: string | null }>(
+      `SELECT measures FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED' AND at >= ? ORDER BY at DESC LIMIT 500`,
+      [since],
+    );
+    for (const r of rows) {
+      try {
+        const m = JSON.parse(r.measures ?? '{}') as { host?: unknown; route?: unknown };
+        if (typeof m.host === 'string' && typeof m.route === 'string') next.proposals.add(proposalKey(m.host, m.route));
+      } catch {
+        /* an unparseable row proposes nothing */
+      }
+    }
+  } catch {
+    /* no proposal is on record */
+  }
+  history = next;
+}
+
+async function currentHistory(): Promise<AcquisitionHistory> {
+  if (!history || Date.now() - history.loadedAt > ACQUISITION_HISTORY_REFRESH_MS) {
+    historyLoading ??= loadHistory().finally(() => {
+      historyLoading = null;
+    });
+    await historyLoading;
+  }
+  return history ?? { loadedAt: Date.now(), access: [], permissions: [], proposals: new Set() };
+}
+
+/** Forget the held rows, so the next judgment reads them again (tests, and `resetSourceAccessMemory`). */
+export function resetAcquisitionHistory(): void {
+  history = null;
+  historyLoading = null;
+  historyLoads = 0;
+}
+
+/** How many times the rows were loaded since the last reset: the load this module puts on the database. */
+export function acquisitionHistoryLoads(): number {
+  return historyLoads;
+}
+
+/** Add a SOURCE_ACCESS row this process just wrote, so the next judgment counts it without reading it back. */
+export function noteSourceAccess(row: { provider: string | null; measures: Record<string, unknown> | string | null; at?: string | null }): void {
+  if (!history) return;
+  history.access.unshift({
+    provider: row.provider,
+    measures: typeof row.measures === 'string' || row.measures === null ? row.measures : JSON.stringify(row.measures),
+    at: row.at ?? new Date().toISOString(),
+  });
+  if (history.access.length > ACCESS_ROWS_MAX) history.access.length = ACCESS_ROWS_MAX;
+}
+
+/** Repeated-use counts for a host from the SOURCE_ACCESS rows; zeros when unreadable. */
+export async function readRepeatedUse(host: string): Promise<{ repeatedUses: number; repeatedUsesNeedingFallback: number }> {
+  try {
+    return repeatedUseFromRows((await currentHistory()).access, host);
   } catch {
     return { repeatedUses: 0, repeatedUsesNeedingFallback: 0 };
   }
@@ -345,11 +465,7 @@ export function operatePermissionFromRows(
 /** The standing operate permission for a host, read from the rows; none when unreadable. */
 export async function readOperatePermission(host: string): Promise<OperatePermission> {
   try {
-    const rows = await getDb().all<{ outcome: string | null; measures: string | null; at: string | null }>(
-      `SELECT outcome, measures, at FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 2000`,
-      [OPERATE_PERMISSION_EVENT],
-    );
-    return operatePermissionFromRows(rows, host);
+    return operatePermissionFromRows((await currentHistory()).permissions, host);
   } catch {
     return NO_PERMISSION;
   }
@@ -374,14 +490,19 @@ export async function recordOperatePermission(
   const accountRef = input.accountRef?.trim() || null;
   if (input.granted && !accountRef) throw new Error('A grant names the account Brain may operate under, by reference.');
   if (accountRef && looksLikeSecret(accountRef)) throw new Error('An account reference is a label, never a credential.');
+  const measures = { host, accountRef: input.granted ? accountRef : null, grantedBy: input.grantedBy.trim() };
   await (deps.record ?? recordBinEvent)({
     eventType: OPERATE_PERMISSION_EVENT,
     workloadClass: 'acquisition',
     outcome: input.granted ? 'GRANTED' : 'REVOKED',
     reason: `${input.granted ? 'Granted' : 'Revoked'} operating ${host}${accountRef ? ` under ${accountRef}` : ''}${input.note ? `: ${input.note}` : ''}`.slice(0, 480),
     evidenceClass: 'MEASURED',
-    measures: { host, accountRef: input.granted ? accountRef : null, grantedBy: input.grantedBy.trim() },
+    measures,
   });
+  // The next judgment in this process honours the grant or revocation at once, without reading it back.
+  if (!deps.record && history) {
+    history.permissions.unshift({ outcome: input.granted ? 'GRANTED' : 'REVOKED', measures: JSON.stringify(measures), at: new Date().toISOString() });
+  }
   return input.granted
     ? { permitted: true, accountRef, grantedBy: input.grantedBy.trim(), at: null }
     : { ...NO_PERMISSION, grantedBy: input.grantedBy.trim() };
@@ -400,19 +521,7 @@ export interface RecordAcquisitionDeps {
 /** A connector or script is proposed once per host and route per window, not once per read. */
 async function readProposalOnRecord(host: string, route: string): Promise<boolean> {
   try {
-    const since = new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString();
-    const rows = await getDb().all<{ measures: string | null }>(
-      `SELECT measures FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED' AND at >= ? ORDER BY at DESC LIMIT 500`,
-      [since],
-    );
-    return rows.some((r) => {
-      try {
-        const m = JSON.parse(r.measures ?? '{}') as { host?: unknown; route?: unknown };
-        return m.host === host && m.route === route;
-      } catch {
-        return false;
-      }
-    });
+    return (await currentHistory()).proposals.has(proposalKey(host, route));
   } catch {
     return false;
   }
@@ -495,6 +604,7 @@ export async function recordAcquisitionJudgment(
           repeatedUsesNeedingFallback: used.repeatedUsesNeedingFallback ?? null,
         },
       });
+      if (!deps.record && history) history.proposals.add(proposalKey(host, judgment.route));
     }
   }
   return judgment;
