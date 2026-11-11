@@ -1473,7 +1473,10 @@ async function projectsFor(worker: FreeWorker): Promise<string[]> {
   const cached = membershipCache.get(worker.workerId);
   if (cached && Date.now() - cached.at < 60_000) return cached.projects;
   const projects = await ensureMemberships(worker);
-  membershipCache.set(worker.workerId, { at: Date.now(), projects });
+  // An empty answer is not cached: work that arrives a second later must not
+  // wait out a minute of "no membership" ('membership lost', rule 9).
+  if (projects.length > 0) membershipCache.set(worker.workerId, { at: Date.now(), projects });
+  else membershipCache.delete(worker.workerId);
   return projects;
 }
 
@@ -1505,6 +1508,8 @@ export const PROVIDER_BUSY = /\b(?:HTTP (?:408|409|425|429|5\d\d)|timed? ?out|ti
  * A lane that claims nothing while work waits must say why (2026-11-04: three silent hours).
  */
 const skipTally = new Map<string, number>();
+/** The skip reason recorded when the worker holds no project membership to claim from. */
+export const NO_MEMBERSHIP = 'no project membership';
 export function freeLaneSkips(): Record<string, number> {
   return Object.fromEntries([...skipTally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10));
 }
@@ -1512,7 +1517,11 @@ export function freeLaneSkips(): Record<string, number> {
 export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
   const { workers, worker, index, config } = input;
   const projectIds = await projectsFor(worker);
-  if (projectIds.length === 0) return { claimed: null, ok: false, ms: 0 };
+  if (projectIds.length === 0) {
+    // Say why the lane is idle rather than returning silently (FREE_LANE_IDLE names it).
+    skipTally.set(NO_MEMBERSHIP, (skipTally.get(NO_MEMBERSHIP) ?? 0) + 1);
+    return { claimed: null, ok: false, ms: 0 };
+  }
   let session = '';
   let one: ClaimedWork | undefined;
   const unfit = await unfitNow(workers.map((w) => w.model), Date.now(), config.fallbackModel ?? null);
@@ -1728,23 +1737,54 @@ let timer: NodeJS.Timeout | null = null;
  * own restart verification runs, and four model-driven slots competing with it
  * made that verification slow enough not to finish (Deploy 41601470270).
  */
-export function startFreeLaneLoop(_intervalMs = 30_000, delayMs = 3 * 60_000): void {
+export interface FreeLaneLoopOptions {
+  /** Start the pool (default: capacity.ts's startAdaptivePool). */
+  start?: () => Promise<void> | void;
+  /** Whether the pool is running (default: capacity.ts's adaptivePoolRunning). */
+  running?: () => Promise<boolean> | boolean;
+  /** First retry delay after a failed start, doubled each time up to maxRetryMs. */
+  retryMs?: number;
+  maxRetryMs?: number;
+}
+
+export function startFreeLaneLoop(_intervalMs = 30_000, delayMs = 3 * 60_000, options: FreeLaneLoopOptions = {}): void {
   if (timer) return;
   /*
    * §86: the lane is an adaptive pool now, not a fixed tick. Its controller
    * sizes each model's slots from measurements (`capacity.ts`).
+   *
+   * A start that throws is retried with bounded backoff until the pool runs:
+   * one failed import at boot used to leave the lane stopped for the life of
+   * the process ('lane pool stopped'). The retry reuses this same timer.
    */
-  const begin = (): void => {
-    void import('./capacity.ts')
-      .then(({ startAdaptivePool }) => startAdaptivePool())
-      .catch((error) => console.warn('[free-lane] pool did not start:', (error as Error).message));
+  const start = options.start ?? (async () => (await import('./capacity.ts')).startAdaptivePool());
+  const running = options.running ?? (async () => (await import('./capacity.ts')).adaptivePoolRunning());
+  const maxRetryMs = options.maxRetryMs ?? 10 * 60_000;
+  let retryMs = options.retryMs ?? 30_000;
+  const schedule = (ms: number): void => {
+    const wait = setTimeout(begin, ms);
+    wait.unref?.();
+    timer = wait as unknown as NodeJS.Timeout;
   };
-  const wait = setTimeout(begin, delayMs);
-  wait.unref?.();
-  timer = wait as unknown as NodeJS.Timeout;
+  const begin = (): void => {
+    void (async () => {
+      try {
+        await start();
+        if (await running()) return;
+        throw new Error('the pool reported it is not running');
+      } catch (error) {
+        if (timer === null) return; // stopped while starting
+        console.warn(`[free-lane] pool did not start, retrying in ${Math.round(retryMs / 1000)}s:`, (error as Error).message);
+        const next = retryMs;
+        retryMs = Math.min(retryMs * 2, maxRetryMs);
+        schedule(next);
+      }
+    })();
+  };
+  schedule(delayMs);
 }
 
 export function stopFreeLaneLoop(): void {
-  if (timer) clearInterval(timer);
+  if (timer) clearTimeout(timer);
   timer = null;
 }
