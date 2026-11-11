@@ -122,6 +122,13 @@ export interface GoalEvidence {
 
 export interface GoalDependency {
   goalId: string;
+  /**
+   * The live WORKSTREAM/DEPENDS_ON link this dependency was read from. The link
+   * belongs to this goal, so it is set even when the target is not described,
+   * and it is what a person supersedes to undo the dependency
+   * (POST /api/register/workstreams/:workstreamId/links/:linkId/supersede).
+   */
+  linkId: string;
   /** Null when the caller may not read that goal: it is not described. */
   title: string | null;
   lifecycle: GoalLifecycle | null;
@@ -786,10 +793,11 @@ export async function assembleGoals(options: {
     const dependencies: GoalDependency[] = dependsOn(goal.id).map((link) => {
       const target = base.get(link.ref);
       if (!target || !visible.has(link.ref)) {
-        return { goalId: link.ref, title: null, lifecycle: null, met: null };
+        return { goalId: link.ref, linkId: link.id, title: null, lifecycle: null, met: null };
       }
       return {
         goalId: link.ref,
+        linkId: link.id,
         title: target.goal.title,
         lifecycle: target.lifecycle,
         met: target.lifecycle === 'COMPLETE',

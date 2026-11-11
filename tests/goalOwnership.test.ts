@@ -227,13 +227,15 @@ describe('a goal that waits on another starts by itself when the other completes
       recordedBy: 'PERSON',
     });
     const { goal: second, bin } = await goalWithWork({ title: 'Use the thing' });
-    await linkWorkstream({ workstreamId: second.id, kind: 'WORKSTREAM', ref: first.id, relation: 'DEPENDS_ON', recordedBy: 'PERSON' });
+    const dependency = await linkWorkstream({ workstreamId: second.id, kind: 'WORKSTREAM', ref: first.id, relation: 'DEPENDS_ON', recordedBy: 'PERSON' });
 
     await advanceGoals();
     expect((await getBin(bin.id))?.heldReason).toBe('WAITING_ON_DEPENDENCY');
     let view = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === second.id)!;
     expect(view.waiting.kind).toBe('DEPENDENCY');
     expect(view.dependencies[0]).toMatchObject({ goalId: first.id, met: false });
+    // The dependency names the live link it was read from, so a person can supersede it.
+    expect(view.dependencies[0]?.linkId).toBe(dependency.id);
 
     // The dependency delivers: an attested, verified deployment.
     await supersedeLink(pending.id, 'the deployment is now attested');
@@ -366,12 +368,12 @@ describe('one operation’s goals stay in that operation', () => {
   it('reads nothing from a project the caller cannot see', async () => {
     const mine = await goalWithWork({ title: 'Mine' });
     const theirs = await goalWithWork({ title: 'Theirs', project: otherProjectId });
-    await linkWorkstream({ workstreamId: mine.goal.id, kind: 'WORKSTREAM', ref: theirs.goal.id, relation: 'DEPENDS_ON', recordedBy: 'PERSON' });
+    const link = await linkWorkstream({ workstreamId: mine.goal.id, kind: 'WORKSTREAM', ref: theirs.goal.id, relation: 'DEPENDS_ON', recordedBy: 'PERSON' });
     const snapshot = await assembleGoals({ projectIds: [projectId] });
     expect(snapshot.goals.map((one) => one.id)).not.toContain(theirs.goal.id);
     const view = snapshot.goals.find((one) => one.id === mine.goal.id)!;
-    // The dependency is reported as unreadable, never described.
-    expect(view.dependencies[0]).toEqual({ goalId: theirs.goal.id, title: null, lifecycle: null, met: null });
+    // The dependency is reported as unreadable, never described — but the link is this goal's own, so its id is carried.
+    expect(view.dependencies[0]).toEqual({ goalId: theirs.goal.id, linkId: link.id, title: null, lifecycle: null, met: null });
     expect(JSON.stringify(snapshot.goals)).not.toContain('Theirs');
   });
 });
