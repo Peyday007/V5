@@ -19,8 +19,18 @@
  *    implemented (its campaign COMPLETE), the capability then reads WORKING
  *    over real attempts, and the blocked work ran after that.
  *
- * `handOffToFactory` is the one place the handoff is made, and `resumeOf` is the
+ * `handOffToFactory` is the one place a handoff is recorded, and `resumeOf` is the
  * one place resumption is judged, from `work_items` rows.
+ *
+ * The producer is the Russell tick: `advancePreparedOptions` first runs
+ * `prepareForLiveGoals`, which reads each live goal's own `CAPABILITY_ASSESSED`
+ * row (written by `assessLiveObjectives`), so the dependency comes from the
+ * goal's record and nobody has to remember the old option. For each requirement
+ * that row says blocks the goal it records a map-derived prepared option once,
+ * records the need with its permitted/gated comparison once per goal, and —
+ * only for a requirement the improvement loop does not already route — hands
+ * the minimum missing capability to the existing Factory through its own
+ * contract (`submitObjective` on the Brain repository grant), as a draft.
  *
  * No category, provider or example here is a whitelist: every access method is
  * data the preparer supplied, and the comparison is over its declared traits.
@@ -31,6 +41,7 @@ import { recordEvent, listEvents, listEventsByEntity } from '../../repos/events.
 import { ensureChangeRequest, getCampaignByChangeRequest, getChangeRequest } from '../../repos/factory.ts';
 import { CAPABILITY_MAPS, classify, type CapabilityStatus } from '../../domain/capabilityMap.ts';
 import { ownerExists, readProbe } from '../selfmodel/capabilities.ts';
+import type { CapabilityRequirement } from '../../domain/capabilityMap.ts';
 import type { ProjectEvent } from '../../domain/types.ts';
 import type { FactoryChangeRequest } from '../../domain/factory.ts';
 
@@ -230,7 +241,7 @@ export async function handOffToFactory(
   context: FactoryHandoffContext,
 ): Promise<{ changeRequest: FactoryChangeRequest; created: boolean } | null> {
   if (!resolution.handoff || !resolution.minimum) return null;
-  const submissionKey = `prepared-option:${createHash('sha256').update(`${projectId}\u0000${resolution.requirementId}\u0000${context.goal}`).digest('hex').slice(0, 24)}`;
+  const submissionKey = handoffSubmissionKey(projectId, resolution.requirementId, context.goal);
   const { changeRequest, created } = await ensureChangeRequest({
     projectId,
     submissionKey,
@@ -254,16 +265,22 @@ export async function handOffToFactory(
     rollbackRequirement: context.rollbackRequirement,
     verificationCommands: context.verificationCommands,
   });
-  if (created) {
-    await recordEvent({
-      projectId,
-      entityType: 'capability_requirement',
-      entityId: resolution.requirementId,
-      eventType: 'CAPABILITY_ASSESSED',
-      payload: { kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId: changeRequest.id, goal: context.goal, method: resolution.minimum.name, blockedWorkItemIds: context.blockedWorkItemIds ?? [] },
-    });
-  }
+  if (created) await recordHandoff(projectId, resolution, changeRequest.id, context.goal, context.blockedWorkItemIds ?? []);
   return { changeRequest, created };
+}
+
+function handoffSubmissionKey(projectId: string, requirementId: string, goal: string): string {
+  return `prepared-option:${createHash('sha256').update(`${projectId}\u0000${requirementId}\u0000${goal}`).digest('hex').slice(0, 24)}`;
+}
+
+async function recordHandoff(projectId: string, resolution: NeedResolution, changeRequestId: string, goal: string, blockedWorkItemIds: readonly string[]): Promise<void> {
+  await recordEvent({
+    projectId,
+    entityType: 'capability_requirement',
+    entityId: resolution.requirementId,
+    eventType: 'CAPABILITY_ASSESSED',
+    payload: { kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId, goal, method: resolution.minimum?.name ?? null, blockedWorkItemIds: [...blockedWorkItemIds] },
+  });
 }
 
 /**
@@ -391,7 +408,14 @@ export const PREPARED_RESUMED_KIND = 'PREPARED_OPTION_RESUMED';
  * RESUMED event is appended. It creates no work, holds no
  * lease and spends nothing; a handoff that names no work items is never judged.
  */
-export async function advancePreparedOptions(): Promise<{ judged: number; resumed: number }> {
+export async function advancePreparedOptions(
+  input: { submit?: FactorySubmit; now?: Date } = {},
+): Promise<{ judged: number; resumed: number; prepared: number; needs: number; handedOff: number }> {
+  // Produce first, so the rows judged below are ones the running Brain wrote.
+  const produced = await prepareForLiveGoals(input).catch((error: unknown) => {
+    console.warn(`[prepared] producing prepared options failed: ${String((error as Error)?.message ?? error).slice(0, 300)}`);
+    return { prepared: 0, needs: 0, handedOff: 0 };
+  });
   const rows = await getDb().all<{ project_id: string; entity_id: string; payload: string }>(
     `SELECT project_id, entity_id, payload FROM project_events
       WHERE entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED'
@@ -430,5 +454,177 @@ export async function advancePreparedOptions(): Promise<{ judged: number; resume
     });
     resumed += 1;
   }
-  return { judged, resumed };
+  return { judged, resumed, ...produced };
+}
+
+/* --------------------------------------------------------------------------
+ * The production producer: a live goal's own capability record drives it.
+ * ------------------------------------------------------------------------ */
+
+export const PREPARED_NEED_KIND = 'PREPARED_OPTION_NEED';
+
+/** At most this many Factory submissions a tick: keeping options warm stays a row, not a burst. */
+export const HANDOFFS_PER_TICK = 2;
+
+/**
+ * The cheapest honest preparation Brain can make without a worker: what the
+ * capability map already states about the requirement. The existing owner is
+ * the reuse method (no gate, small effort when it is in the image); a stated
+ * external limit is a method only a person can open. The sketch is untested and
+ * says so; the inventory is the owner's own paths and the probe that proves it.
+ */
+export function optionFromRequirement(requirement: CapabilityRequirement, ownerInImage: boolean): PreparedOption {
+  const owner = requirement.owner[0] ?? requirement.id;
+  const methods: AccessMethod[] = [
+    { name: `extend the existing owner ${owner}`, kind: 'OTHER', gates: [], effort: ownerInImage ? 2 : 3, sources: [...requirement.owner] },
+  ];
+  if (requirement.externalLimit) {
+    methods.push({ name: `outside Brain: ${requirement.externalLimit}`.slice(0, 300), kind: 'OTHER', gates: ['PERMISSION'], effort: 3, sources: [] });
+  }
+  const note = [
+    ownerInImage ? `The existing owner ${owner} is in the image; the gap is in what production reads, not in a missing module.` : `The owner ${owner} is not in the image yet.`,
+    requirement.externalLimit ? `Part of it is outside Brain: ${requirement.externalLimit}` : '',
+    'Map-derived; no integration was built and none is implied.',
+  ].filter(Boolean).join(' ');
+  return validatePreparedOption({
+    requirementId: requirement.id,
+    feasibility: { verdict: ownerInImage && !requirement.externalLimit ? 'FEASIBLE' : 'UNCERTAIN', note },
+    methods,
+    interfaceSketch: {
+      text: `${requirement.ability}. Inputs: ${requirement.inputs.join('; ') || 'none stated'}. Outputs: ${requirement.outputs.join('; ') || 'none stated'}. Proven by the ${requirement.proof.probe} probe.`,
+      tested: false,
+    },
+    sourceInventory: [...requirement.owner, `probe:${requirement.proof.probe}`],
+  });
+}
+
+/** What the existing Factory contract is asked; a unit can satisfy every acceptance condition with a commit. */
+export interface PreparedFactoryAsk {
+  submissionKey: string;
+  objective: string;
+  expectedOutcome: string;
+  nonGoals: string[];
+  acceptanceConditions: Array<{ statement: string; verification: string; mandatory: boolean }>;
+  mutationScope: string[];
+}
+
+/** Submits an ask to the existing Factory; null when no project holds the Brain repository grant. */
+export type FactorySubmit = (ask: PreparedFactoryAsk) => Promise<{ changeRequestId: string; created: boolean } | null>;
+
+/** The existing Factory contract on the Brain repository grant, as the improvement loop submits — left a draft. */
+const submitToFactory: FactorySubmit = async (ask) => {
+  const grant = await getDb().get<{ project_id: string }>(
+    "SELECT project_id FROM factory_project_repositories WHERE grant_id = 'brain' ORDER BY created_at LIMIT 1",
+    [],
+  );
+  if (!grant) return null;
+  const [{ submitObjective }, { BRAIN_REPOSITORY_REMOTE }] = await Promise.all([
+    import('../factory/contract.ts'),
+    import('../improvement/loop.ts'),
+  ]);
+  const out = await submitObjective({
+    projectId: grant.project_id,
+    ...ask,
+    repositoryRemote: BRAIN_REPOSITORY_REMOTE,
+    baseBranch: 'production',
+  });
+  return { changeRequestId: out.changeRequest.id, created: out.created };
+};
+
+const requirementById = (id: string): CapabilityRequirement | null => {
+  for (const map of Object.values(CAPABILITY_MAPS)) {
+    const found = map.requirements.find((r) => r.id === id);
+    if (found) return found;
+  }
+  return null;
+};
+
+/**
+ * Read every live goal's latest capability record and act on what blocks it:
+ * record a prepared option where none exists, record the need and its
+ * permitted/gated comparison once per goal, and hand the minimum missing
+ * capability to the existing Factory once per goal where no other path owns it.
+ * A requirement with an improvement route is the improvement loop's
+ * (`capabilityWeaknesses`), so it is never submitted twice. Holds no lease and
+ * starts no worker; the Factory request is a draft, so approval stays with it.
+ */
+export async function prepareForLiveGoals(
+  input: { submit?: FactorySubmit; limit?: number } = {},
+): Promise<{ prepared: number; needs: number; handedOff: number }> {
+  const submit = input.submit ?? submitToFactory;
+  const goals = await getDb().all<{ id: string; project_id: string; intent: string }>(
+    `SELECT id, project_id, intent FROM workstreams
+      WHERE archived_at IS NULL AND cancelled_at IS NULL AND project_id IS NOT NULL
+      ORDER BY created_at DESC LIMIT ?`,
+    [Math.max(1, input.limit ?? 20)],
+  );
+  let prepared = 0;
+  let needs = 0;
+  let handedOff = 0;
+  for (const goal of goals) {
+    const last = await getDb().get<{ payload: string }>(
+      `SELECT payload FROM project_events WHERE entity_type = 'WORKSTREAM' AND entity_id = ? AND event_type = 'CAPABILITY_ASSESSED'
+        ORDER BY created_at DESC LIMIT 1`,
+      [goal.id],
+    );
+    if (!last) continue;
+    let blocking: string[] = [];
+    try {
+      const raw = (JSON.parse(last.payload) as { blocking?: unknown }).blocking;
+      blocking = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [];
+    } catch {
+      continue;
+    }
+    if (blocking.length === 0) continue;
+    const options = await preparedOptions(goal.project_id);
+    for (const entry of blocking) {
+      const requirement = requirementById(entry.slice(entry.indexOf(':') + 1));
+      if (!requirement) continue;
+      let option = options.get(requirement.id);
+      if (!option) {
+        option = await recordPreparedOption(goal.project_id, optionFromRequirement(requirement, ownerExists(requirement.owner[0]!)));
+        options.set(requirement.id, option);
+        prepared += 1;
+      }
+      const history = (await listEventsByEntity('capability_requirement', requirement.id)).filter((e) => e.projectId === goal.project_id);
+      const resolution = resolveNeed(option, { requirementId: requirement.id, goal: `goal ${goal.id} (${goal.intent.slice(0, 120)})` });
+      const routedByImprovement = Boolean(requirement.improvement);
+      if (!history.some((e) => e.payload.kind === PREPARED_NEED_KIND && e.payload.goalId === goal.id)) {
+        await recordEvent({
+          projectId: goal.project_id,
+          entityType: 'capability_requirement',
+          entityId: requirement.id,
+          eventType: 'CAPABILITY_ASSESSED',
+          payload: {
+            kind: PREPARED_NEED_KIND, integration: false, goalId: goal.id, blocking: entry,
+            permitted: resolution.permitted.map((m) => m.name), gated: resolution.gated.map((g) => ({ method: g.method.name, gates: g.gates })),
+            minimum: resolution.minimum?.name ?? null, needsPerson: resolution.needsPerson,
+            route: routedByImprovement ? 'IMPROVEMENT_LOOP' : resolution.handoff ? 'PREPARED_HANDOFF' : 'PERSON',
+          },
+        });
+        needs += 1;
+      }
+      if (routedByImprovement || !resolution.handoff || !resolution.minimum || handedOff >= HANDOFFS_PER_TICK) continue;
+      if (history.some((e) => e.payload.kind === PREPARED_HANDOFF_KIND && e.payload.goal === goal.id)) continue;
+      const blocked = await getDb().all<{ id: string }>(
+        `SELECT id FROM work_items WHERE project_id = ? AND state IN ('QUEUED', 'LEASED') ORDER BY created_at LIMIT 20`,
+        [goal.project_id],
+      );
+      const submitted = await submit({
+        submissionKey: handoffSubmissionKey(goal.project_id, requirement.id, goal.id),
+        objective: `${resolution.handoff.objective} The capability-map requirement ${requirement.id} reads ${entry.slice(0, entry.indexOf(':'))} and blocks goal ${goal.id}.`,
+        expectedOutcome: `${requirement.id} reads WORKING over real attempts and the goal's blocked work resumes; Brain measures both from rows.`,
+        nonGoals: ['keeping the option warm', 'crossing a credential, contract, spend or permission gate'],
+        acceptanceConditions: [
+          { statement: `A test exercises "${requirement.ability}" through ${requirement.owner[0]} and passes.`, verification: 'npm test', mandatory: true },
+          { statement: 'The repository typechecks and the impacted tests pass.', verification: 'npm run typecheck && npm run test:impacted', mandatory: true },
+        ],
+        mutationScope: [...requirement.owner, 'tests/**'],
+      });
+      if (!submitted) continue;
+      await recordHandoff(goal.project_id, resolution, submitted.changeRequestId, goal.id, blocked.map((b) => b.id));
+      handedOff += 1;
+    }
+  }
+  return { prepared, needs, handedOff };
 }

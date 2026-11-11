@@ -20,14 +20,21 @@ import {
   preparedOptions,
   recordPreparedOption,
   resolveNeed,
+  optionFromRequirement,
+  PREPARED_HANDOFF_KIND,
+  PREPARED_NEED_KIND,
+  type FactorySubmit,
+  type PreparedFactoryAsk,
   validatePreparedOption,
   warmCost,
   type PreparedOption,
 } from '../server/services/capability/prepared.ts';
 import { listEvents } from '../server/repos/events.ts';
-import { ensureCampaign, patchCampaign } from '../server/repos/factory.ts';
+import { ensureCampaign, ensureChangeRequest, patchCampaign } from '../server/repos/factory.ts';
 import { enqueueWork } from '../server/repos/workQueue.ts';
 import { getDb } from '../server/db/database.ts';
+import { recordEvent } from '../server/repos/events.ts';
+import { CAPABILITY_MAPS } from '../server/domain/capabilityMap.ts';
 
 const method = (over: Record<string, unknown> = {}) => ({ name: 'tool-a', kind: 'OPEN_SOURCE_TOOL', gates: [], effort: 2, sources: ['https://example.test/a'], ...over });
 const valid = (over: Record<string, unknown> = {}) => ({
@@ -270,6 +277,109 @@ describe('a prepared option is never an integration', () => {
       expect(r.capability?.status).not.toBe('WORKING');
       expect(r.resumed).toBe(false);
       expect(r.completedAfter).toEqual([]);
+    });
+  });
+
+  describe('the running Brain produces prepared options and handoffs from a goal\'s own record (finding F1)', () => {
+    let projectId: string;
+    beforeEach(async () => {
+      projectId = (await freshProject()).project.id;
+    });
+
+    const goal = async (id: string, blocking: string[] | null): Promise<void> => {
+      const now = new Date().toISOString();
+      await getDb().run(
+        `INSERT INTO workstreams (id, project_id, title, intent, purpose, created_at, updated_at, capital_ceiling_cents)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, projectId, 'goal', 'Validate buyers for a $10K plan', 'REVENUE_DIRECT', now, now, 300000],
+      );
+      if (blocking) {
+        await recordEvent({ projectId, entityType: 'WORKSTREAM', entityId: id, eventType: 'CAPABILITY_ASSESSED', payload: { blocking, gaps: [] } });
+      }
+    };
+    const fakeFactory = (): { submit: FactorySubmit; asks: PreparedFactoryAsk[] } => {
+      const asks: PreparedFactoryAsk[] = [];
+      return {
+        asks,
+        submit: async (ask) => {
+          asks.push(ask);
+          const { changeRequest, created } = await ensureChangeRequest({
+            projectId, submissionKey: ask.submissionKey, objective: ask.objective, expectedOutcome: ask.expectedOutcome,
+            nonGoals: ask.nonGoals,
+            acceptanceConditions: ask.acceptanceConditions.map((c, i) => ({ id: `A0${i + 1}`, ...c })),
+            repository: 'o/r', repositoryRoot: null, baseBranch: 'production', baseSha: 'a'.repeat(40), environment: 'LOCAL',
+            riskClass: 'MEDIUM', mutationScope: ask.mutationScope, deploymentPolicy: 'NONE', rollbackRequirement: 'revert',
+            verificationCommands: ['npm run typecheck'],
+          });
+          return { changeRequestId: changeRequest.id, created };
+        },
+      };
+    };
+    const kinds = async (kind: string) => (await listEvents(projectId, 500)).filter((e) => e.payload.kind === kind);
+
+    it('a requirement blocking a live goal is recorded as a prepared option, compared, and handed to the Factory once', async () => {
+      await goal('wst_prep', ['BROKEN:ACCESS.READ']);
+      const waiting = (await enqueueWork({ projectId, workType: 'RESEARCH_AUDIT', payload: { role: 'PRIMARY' }, createdByType: 'SYSTEM' })).id;
+      const factory = fakeFactory();
+
+      const first = await advancePreparedOptions({ submit: factory.submit });
+      expect(first).toMatchObject({ prepared: 1, needs: 1, handedOff: 1 });
+
+      const option = (await preparedOptions(projectId)).get('ACCESS.READ')!;
+      expect(countsAsIntegration(option)).toBe(false);
+      expect(option.methods.find((m) => m.gates.length === 0)?.name).toContain('server/services/sources/access.ts');
+      // The map states an external limit: that part is a person's, never forced.
+      expect(option.methods.some((m) => m.gates.includes('PERMISSION'))).toBe(true);
+      expect((await kinds(PREPARED_OPTION_KIND)).every((e) => e.payload.integration === false)).toBe(true);
+
+      const [need] = await kinds(PREPARED_NEED_KIND);
+      expect(need!.payload).toMatchObject({ goalId: 'wst_prep', route: 'PREPARED_HANDOFF', needsPerson: ['PERMISSION'] });
+
+      expect(factory.asks).toHaveLength(1);
+      expect(factory.asks[0]!.mutationScope).toContain('server/services/sources/access.ts');
+      const [handoff] = await kinds(PREPARED_HANDOFF_KIND);
+      expect(handoff!.payload).toMatchObject({ goal: 'wst_prep', integration: false, blockedWorkItemIds: [waiting] });
+
+      // The judge on the same tick now reads a row the running Brain wrote.
+      expect((await resumeOf(projectId, 'ACCESS.READ', [waiting])).changeRequestId).toBe(handoff!.payload.changeRequestId);
+
+      const second = await advancePreparedOptions({ submit: factory.submit });
+      expect(second).toMatchObject({ prepared: 0, needs: 0, handedOff: 0, judged: 1 });
+      expect(factory.asks).toHaveLength(1);
+      expect(await kinds(PREPARED_HANDOFF_KIND)).toHaveLength(1);
+    });
+
+    it('a requirement the improvement loop routes is prepared and compared but never submitted a second way', async () => {
+      await goal('wst_routed', ['BROKEN:DISCOVERY.SEARCH']);
+      const factory = fakeFactory();
+      expect(await advancePreparedOptions({ submit: factory.submit })).toMatchObject({ prepared: 1, needs: 1, handedOff: 0 });
+      expect(factory.asks).toHaveLength(0);
+      expect((await kinds(PREPARED_NEED_KIND))[0]!.payload.route).toBe('IMPROVEMENT_LOOP');
+    });
+
+    it('a goal with no capability record, or one that names no map requirement, produces nothing', async () => {
+      await goal('wst_none', null);
+      await goal('wst_unknown', ['MISSING:NOT.A.REQUIREMENT']);
+      const factory = fakeFactory();
+      expect(await advancePreparedOptions({ submit: factory.submit })).toMatchObject({ prepared: 0, needs: 0, handedOff: 0 });
+      expect(factory.asks).toHaveLength(0);
+    });
+
+    it('without the Brain repository grant the default path records the option and the need, and hands nothing off', async () => {
+      await goal('wst_nogrant', ['BROKEN:ACCESS.READ']);
+      expect(await advancePreparedOptions()).toMatchObject({ prepared: 1, needs: 1, handedOff: 0 });
+      expect(await kinds(PREPARED_HANDOFF_KIND)).toHaveLength(0);
+    });
+
+    it('a map-derived option is a valid option for every requirement on every map', () => {
+      for (const map of Object.values(CAPABILITY_MAPS)) {
+        for (const requirement of map.requirements) {
+          const o = optionFromRequirement(requirement, true);
+          expect(o.requirementId).toBe(requirement.id);
+          expect(o.interfaceSketch?.tested).toBe(false);
+          expect(warmCost(o).workers).toBe(0);
+        }
+      }
     });
   });
 });
