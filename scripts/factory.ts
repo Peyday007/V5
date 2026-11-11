@@ -15,8 +15,11 @@
  *   npm run factory -- run --campaign <id> --max-ticks 40
  *   npm run factory -- status --campaign <id>
  *   npm run factory -- release --campaign <id> --decision APPROVED
+ *   npm run factory -- routing-report --project <id> [--baseline <label>]
+ *   npm run factory -- routing-verify
  */
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { listProjects } from '../server/repos/projects.ts';
 import { listUsers } from '../server/repos/identity.ts';
@@ -96,6 +99,68 @@ function flagString(flags: Args['flags'], key: string): string | undefined {
 function fail(message: string): never {
   process.stderr.write(`${message}\n`);
   process.exit(1);
+}
+
+/**
+ * The routing work's own gate, runnable by whoever is asked to confirm it.
+ *
+ * A reviewer once could not confirm the routing units because the surface it
+ * ran on had no installed dependencies: `tsc` failed on a missing
+ * `vite/client` type definition and vitest on `ERR_MODULE_NOT_FOUND`. Those are
+ * statements about the checkout, not about the code, and reading them as a
+ * verdict on the code is the mistake. So the dependency check runs first and
+ * names the cause (`npm ci`) instead of a module error, and then the real
+ * commands run with every exit code printed.
+ */
+const ROUTING_TEST_FILES = [
+  'tests/routingBaseline.test.ts',
+  'tests/routingBoundary.test.ts',
+  'tests/routingClassify.test.ts',
+  'tests/routingClassifyWired.test.ts',
+  'tests/routingFailures.test.ts',
+  'tests/routingPriority.test.ts',
+  'tests/routingProviders.test.ts',
+  'tests/routingRepeats.test.ts',
+  'tests/routingReport.test.ts',
+  'tests/routingReuse.test.ts',
+  'tests/routingRouterLastResort.test.ts',
+  'tests/routingSchema.test.ts',
+] as const;
+
+const REQUIRED_DEPENDENCY_FILES = [
+  'node_modules/vite/client.d.ts',
+  'node_modules/vitest/package.json',
+  'node_modules/typescript/package.json',
+] as const;
+
+function missingDependencies(root: string = process.cwd()): string[] {
+  return REQUIRED_DEPENDENCY_FILES.filter((file) => !fs.existsSync(`${root}/${file}`));
+}
+
+function routingVerify(): boolean {
+  const missing = missingDependencies();
+  if (missing.length > 0) {
+    process.stdout.write(
+      `ROUTING-VERIFY: NOT RUN — dependencies are not installed (${missing.join(', ')} missing).\n` +
+        '  This is the checkout, not the code: run `npm ci` and try again.\n',
+    );
+    return false;
+  }
+  const absent = ROUTING_TEST_FILES.filter((file) => !fs.existsSync(file));
+  const commands: Array<{ command: string; args: string[] }> = [
+    { command: 'npx', args: ['tsc', '--noEmit'] },
+    { command: 'npx', args: ['vitest', 'run', ...ROUTING_TEST_FILES.filter((file) => fs.existsSync(file))] },
+  ];
+  let ok = absent.length === 0;
+  if (absent.length > 0) process.stdout.write(`  missing routing test files: ${absent.join(', ')}\n`);
+  for (const one of commands) {
+    const result = spawnSync(one.command, one.args, { stdio: 'inherit' });
+    const exitCode = result.status ?? 1;
+    process.stdout.write(`  ${[one.command, ...one.args].join(' ')} -> exit ${exitCode}\n`);
+    if (exitCode !== 0) ok = false;
+  }
+  process.stdout.write(`ROUTING-VERIFY: ${ok ? 'PASS' : 'FAIL'}\n`);
+  return ok;
 }
 
 async function main(): Promise<void> {
@@ -792,6 +857,11 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'routing-verify': {
+      if (!routingVerify()) process.exitCode = 1;
+      break;
+    }
+
     case 'throughput': {
       const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
       const report = await throughputReport(campaignId);
@@ -1457,7 +1527,7 @@ async function main(): Promise<void> {
         'commands: fleet, allocation, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
           '  remote-tick, campaigns, bins, status, events, throughput, pull-request,\n' +
           '  set-state, queue, withdraw, admission, line, burnin,\n' +
-          '  answer-bin, routing-report,\n' +
+          '  answer-bin, routing-report, routing-verify,\n' +
           '  reauthorize, regrant-unit, retire, release,\n' +
           '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-status\n',
       );
