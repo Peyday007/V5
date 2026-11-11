@@ -91,6 +91,8 @@ export interface ImprovementTickReport {
   activation?: string;
   /** Goals whose capability assessment changed this pass (§88). */
   objectives?: string[];
+  /** Capability-gap loop steps recorded this pass, `KEY:STEP` (AUTO-20-2, `selfmodel/gapLoopSync.ts`). */
+  gapSteps?: string[];
 }
 
 const OBJECTIVE_CHECK_MS = 60 * 60_000;
@@ -687,6 +689,50 @@ async function raiseAlerts(now: Date, open: ImprovementCandidate[], actionable: 
 }
 
 /* ------------------------------------------------------------------------- */
+/* The capability-gap record (AUTO-20-2)                                      */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Write down, as capability-gap loop steps, what this pass and earlier ones did:
+ * every candidate this pass ranked or opened, and every gap whose recorded loop
+ * has not yet continued — so a pass after a restart or a lost worker resumes
+ * the record from the rows rather than from anybody's memory.
+ */
+async function recordGapLoops(rankedIds: readonly string[], report: ImprovementTickReport): Promise<void> {
+  try {
+    const { syncCandidateGap, unfinishedGapKeys } = await import('../selfmodel/gapLoopSync.ts');
+    const { getCandidateByKey } = await import('../../repos/improvement.ts');
+    const { methodClaimsAnswering } = await import('../research/methodRules.ts');
+    const seen = new Set<string>();
+    const targets: ImprovementCandidate[] = [];
+    const add = (c: ImprovementCandidate | null | undefined) => {
+      if (c && !seen.has(c.id)) {
+        seen.add(c.id);
+        targets.push(c);
+      }
+    };
+    for (const id of rankedIds) add(await getCandidate(id));
+    for (const key of report.opened) add(await getCandidateByKey(key));
+    for (const key of await unfinishedGapKeys()) add(await getCandidateByKey(key));
+    const written: string[] = [];
+    for (const candidate of targets) {
+      try {
+        const question = String(candidate.evidence['researchQuestion'] ?? candidate.title);
+        const steps = await syncCandidateGap(candidate, {
+          archive: async () => (await methodClaimsAnswering(question, ARCHIVE_OVERLAP_SHARE).catch(() => [])).length,
+        });
+        written.push(...steps.map((step) => `${candidate.weaknessKey}:${step}`));
+      } catch (error) {
+        report.errors.push(`gap ${candidate.weaknessKey}: ${String((error as Error).message ?? error).slice(0, 200)}`);
+      }
+    }
+    report.gapSteps = written;
+  } catch (error) {
+    report.errors.push(`gap loops: ${String((error as Error).message ?? error).slice(0, 200)}`);
+  }
+}
+
+/* ------------------------------------------------------------------------- */
 /* The tick                                                                   */
 /* ------------------------------------------------------------------------- */
 
@@ -759,6 +805,7 @@ export async function improvementTick(now = new Date()): Promise<ImprovementTick
       }
     }
   }
+  await recordGapLoops(ranked.map((c) => c.id), report);
   try {
     await raiseAlerts(now, await listCandidates({ open: true }), actionable, report);
   } catch (error) {

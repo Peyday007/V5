@@ -1,0 +1,211 @@
+/**
+ * The improvement loop's candidates, worked as capability-gap loops (AUTO-20-2, §87/§88).
+ *
+ * `gapLoop.ts` gives the steps a vocabulary and a durable record; this is the
+ * caller. Every pass of the improvement tick reads each candidate it touched
+ * — and every gap whose recorded loop has not yet continued — and appends the
+ * steps the candidate's own rows now justify but the gap's record lacks. The
+ * record is never the source of the decision: the improvement candidate is,
+ * and this only writes down, step by step, what the existing owner did.
+ *
+ *   NOTICE           the candidate exists: the rows showed a weakness
+ *   HYPOTHESIS       what closing it enables, the metric that moves, how the
+ *                    decision could fail, and the cause judged from the record
+ *   SEARCH_EXISTING  the method archive, the system scan's components and the
+ *                    owner path in the running image — always before ACQUIRE
+ *   VALUE            the option the loop took (research, a Factory change,
+ *                    combining, abandoning) and the ones it was weighed against
+ *   ACQUIRE          the existing execution owner the work went to
+ *   VERIFY           the metric before and after delivery, on production rows
+ *   INTEGRATE        kept as a versioned capability, or retired
+ *   CONTINUE         what the loop resumes, and when it reconsiders the gap
+ *
+ * Because the steps due are derived from the candidate and the gap's rows
+ * alone, a worker that dies or a deploy that restarts the process loses
+ * nothing: the next tick reads both and records what is missing. Every step is
+ * recorded at most once per value, so re-running a pass changes nothing.
+ */
+import { getDb } from '../../db/database.ts';
+import type { ImprovementCandidate } from '../../repos/improvement.ts';
+import { GAP_EVENT, readGapLoop, recordGapStep, searchExisting, type ExistingMatch, type GapCause, type GapLoopState, type GapLoopStep } from './gapLoop.ts';
+
+export interface DueStep {
+  step: GapLoopStep;
+  summary: string;
+  detail: Record<string, unknown>;
+}
+
+/** The cause, judged from what the candidate's own record says, with the basis written down. Pure. */
+export function judgeCause(candidate: Pick<ImprovementCandidate, 'kind' | 'problem' | 'evidence'>): { cause: GapCause; basis: string } {
+  if (candidate.evidence['methodInadequacy']) {
+    return { cause: 'METHOD_INADEQUATE', basis: 'an earlier attempt was kept without effect or reverted and the weakness persists' };
+  }
+  const known = typeof candidate.evidence['knownCause'] === 'string' ? (candidate.evidence['knownCause'] as string) : '';
+  const text = `${candidate.problem} ${known}`;
+  if (/\b(permission|forbidden|unauthori[sz]ed|not authori[sz]ed|401|403|credential)\b/i.test(text)) {
+    return { cause: 'PERMISSION_GAP', basis: 'the record names an authorization refusal' };
+  }
+  if (/\b(provider|timed? ?out|timeout|unreachable|rate.?limit|quota|gpu|model call|5\d\d)\b/i.test(text)) {
+    return { cause: 'UNAVAILABLE_PROVIDER', basis: 'the record names a provider or route that did not answer' };
+  }
+  if (/\b(no data|missing data|dataset|no source|unreadable source|coverage)\b/i.test(text)) {
+    return { cause: 'MISSING_DATASET', basis: 'the record names information that was not available' };
+  }
+  if (candidate.kind === 'CLAIM_REJECTION') {
+    return { cause: 'REASONING_DEFECT', basis: 'workers produced claims the gate rejected' };
+  }
+  return { cause: 'OTHER', basis: known ? `known cause: ${known}` : `not yet distinguishable from the ${candidate.kind} record; research or measurement settles it` };
+}
+
+function chosenOption(c: ImprovementCandidate): { chosen: string; ref: string } | null {
+  if (c.decision === 'COMBINED') return { chosen: `combine into the candidate already owning ${c.ownerComponent}`, ref: `COMBINED:${c.combinedIntoId ?? ''}` };
+  if (c.changeRequestId) return { chosen: `a Factory change to ${c.ownerComponent}`, ref: `FACTORY:${c.changeRequestId}` };
+  if (c.decision === 'REJECTED') return { chosen: 'abandon the direction: no evidence justified a change', ref: 'ABANDON' };
+  if (c.researchGoalId) return { chosen: 'commission method research before changing anything', ref: `RESEARCH:${c.researchGoalId}` };
+  return null;
+}
+
+const ALTERNATIVES =
+  'reuse an accepted method from the archive; commission method research; a Factory change to the owner; ' +
+  'combine with a candidate already owning the component; ask a person for one credential; abandon the direction';
+
+function acquisition(c: ImprovementCandidate): { owner: string; ref: string } | null {
+  if (c.changeRequestId) return { owner: `Factory (change request ${c.changeRequestId}${c.campaignId ? `, campaign ${c.campaignId}` : ''})`, ref: `FACTORY:${c.changeRequestId}` };
+  if (c.researchGoalId) return { owner: `research goal ${c.researchGoalId} worked by the free lane and Claude routines`, ref: `RESEARCH:${c.researchGoalId}` };
+  return null;
+}
+
+const MEASURED: readonly string[] = ['KEPT', 'KEPT_NO_EFFECT', 'REVERTED'];
+
+/**
+ * The steps a candidate's rows justify that its gap's record lacks, in loop
+ * order. Pure over the candidate, the gap state and what the search found.
+ */
+export function gapStepsDue(c: ImprovementCandidate, state: GapLoopState, found: { archiveClaims: number; existing: readonly ExistingMatch[] } | null): DueStep[] {
+  const due: DueStep[] = [];
+  const has = (step: GapLoopStep) => Boolean(state.latest[step]);
+  if (!has('NOTICE')) {
+    due.push({
+      step: 'NOTICE',
+      summary: c.title.slice(0, 200),
+      detail: { observation: c.problem, kind: c.kind, frequency: c.frequency, denominator: c.denominator, owner: c.ownerComponent, attempt: c.attempt },
+    });
+  }
+  if (!has('HYPOTHESIS')) {
+    const { cause, basis } = judgeCause(c);
+    due.push({
+      step: 'HYPOTHESIS',
+      summary: `cause ${cause}: ${basis}`.slice(0, 200),
+      detail: {
+        cause,
+        basis,
+        enables: `${c.ownerComponent} stops producing: ${c.title}`,
+        measure: c.downstreamMetric ? `${c.metric}, then ${c.downstreamMetric}` : c.metric,
+        failureMode: 'the metric does not move after delivery, or the downstream metric regresses; then the method was inadequate and a different one is tried',
+      },
+    });
+  }
+  if (!has('SEARCH_EXISTING') && found) {
+    due.push({
+      step: 'SEARCH_EXISTING',
+      summary: `${found.archiveClaims} archive claim(s), ${found.existing.length} existing match(es)`,
+      detail: {
+        searched: ['method archive (accepted claims)', 'system scan components', `owner path ${c.ownerComponent}`],
+        archiveClaims: found.archiveClaims,
+        existing: found.existing.slice(0, 10),
+      },
+    });
+  }
+  const option = chosenOption(c);
+  if (option && state.latest.VALUE?.detail['ref'] !== option.ref) {
+    due.push({
+      step: 'VALUE',
+      summary: option.chosen.slice(0, 200),
+      detail: {
+        chosen: option.chosen,
+        ref: option.ref,
+        alternatives: ALTERNATIVES,
+        severity: c.severity,
+        frequency: c.frequency,
+        denominator: c.denominator,
+        cost: 'subscription capacity only; no paid model API',
+      },
+    });
+  }
+  const acquired = acquisition(c);
+  if (acquired && (has('SEARCH_EXISTING') || found) && state.latest.ACQUIRE?.detail['ref'] !== acquired.ref) {
+    due.push({ step: 'ACQUIRE', summary: `handed to ${acquired.owner}`.slice(0, 200), detail: { owner: acquired.owner, ref: acquired.ref } });
+  }
+  const result = c.result as { before?: { value?: number | null }; after?: { value?: number | null }; primary?: { verdict?: string } } | null;
+  if (c.decision && MEASURED.includes(c.decision) && !has('VERIFY')) {
+    due.push({
+      step: 'VERIFY',
+      summary: `${c.metric}: ${result?.before?.value ?? 'unknown'} → ${result?.after?.value ?? 'unknown'} (${result?.primary?.verdict ?? 'unknown'})`,
+      detail: {
+        baseline: `${c.metric} = ${result?.before?.value ?? 'unknown'} in the window before delivery`,
+        comparison: `${c.metric} = ${result?.after?.value ?? 'unknown'} after ${c.deliveredRef ?? 'delivery'} on production rows; verdict ${result?.primary?.verdict ?? 'unknown'}`,
+      },
+    });
+  }
+  if (c.decision && MEASURED.includes(c.decision) && !has('INTEGRATE')) {
+    const kept = c.decision === 'KEPT';
+    due.push({
+      step: 'INTEGRATE',
+      summary: kept ? `kept ${c.ownerComponent} @ ${c.deliveredRef ?? 'unknown'}` : `retired: ${c.decision}`,
+      detail: {
+        capability: kept ? c.title : `retired attempt ${c.attempt}: ${c.title}`,
+        version: c.deliveredRef ?? 'unknown',
+        provenance: `improvement candidate ${c.id} (${c.weaknessKey}), ${c.changeRequestId ?? 'no change request'}`,
+        owner: c.ownerComponent,
+        status: kept ? 'ACTIVE' : 'RETIRED',
+        knownFailureModes: kept ? [] : [c.decisionReason ?? c.decision],
+      },
+    });
+  }
+  if (c.decision && !has('CONTINUE')) {
+    due.push({
+      step: 'CONTINUE',
+      summary: `${c.decision}; the loop resumed its ranked candidates`,
+      detail: {
+        resumed: 'the improvement tick advances the next ranked open candidate on its next pass',
+        reconsider:
+          c.decision === 'KEPT'
+            ? 'the detector keeps reading the metric; a recurrence opens a new attempt'
+            : 'a weakness still present after the recurrence window opens a new attempt with a different method',
+        decision: c.decision,
+      },
+    });
+  }
+  return due;
+}
+
+/** Record the steps one candidate's rows justify. Returns the steps written. */
+export async function syncCandidateGap(c: ImprovementCandidate, input: { archive?: () => Promise<number>; root?: string } = {}): Promise<GapLoopStep[]> {
+  const state = await readGapLoop(c.weaknessKey);
+  const needsSearch = !state.latest.SEARCH_EXISTING;
+  const found = needsSearch
+    ? {
+        archiveClaims: input.archive ? await input.archive() : 0,
+        existing: await searchExisting({ terms: [c.ownerComponent.split('/').pop()?.replace(/\.[a-z]+$/, '') ?? '', c.kind.toLowerCase()], paths: [c.ownerComponent], root: input.root }),
+      }
+    : null;
+  const written: GapLoopStep[] = [];
+  for (const step of gapStepsDue(c, state, found)) {
+    await recordGapStep({ gapKey: c.weaknessKey, step: step.step, summary: step.summary, detail: step.detail });
+    written.push(step.step);
+  }
+  return written;
+}
+
+/** Gap keys whose recorded loop has not continued: what a restarted process resumes. */
+export async function unfinishedGapKeys(limit = 50): Promise<string[]> {
+  const rows = await getDb().all<{ workload_class: string; last_at: string }>(
+    `SELECT workload_class, MAX(at) AS last_at FROM bin_events
+      WHERE event_type = ? AND workload_class IS NOT NULL
+      GROUP BY workload_class
+     HAVING SUM(CASE WHEN provider = 'CONTINUE' THEN 1 ELSE 0 END) = 0
+      ORDER BY last_at DESC LIMIT ?`,
+    [GAP_EVENT, Math.max(1, limit)],
+  );
+  return rows.map((row) => row.workload_class);
+}
