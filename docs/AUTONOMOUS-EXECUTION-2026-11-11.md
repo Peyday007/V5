@@ -81,6 +81,29 @@ Left out on purpose: `gh api`/`curl` (a prefix rule cannot stop `-X DELETE`),
 `python3` (arbitrary execution), `delete_trigger` (it deletes sessions),
 `request_credential` and environment edits.
 
+## Verified on production, and what production then showed
+
+- **`fcp_17725629` is off the owner.** After #712 and #717 deployed, its outcome
+  reads *"Routed to the maintainer: no Factory worker may change this scope"*
+  with `MAINTAINER: … no owner action` (recorded 2026-11-11T08:22:46Z). It had
+  read *"Stopped until a person acts"* since 11-09. #717 was needed because
+  program campaigns always add a writable `tests/program-…*.test.ts` to their
+  scope. The first rule (every path forbidden) therefore never matched. Test
+  globs are now no way in.
+- **A contract could not be corrected from a session.** `factory.yml`'s
+  `extra` refuses quotes and splits on spaces, so `amend` could not carry an
+  acceptance condition. #723 adds `amend --value-file <path> [--ref <branch>]`.
+- **Deploy livelock.** Between 08:31 and 09:25, eleven Deploy runs ended
+  `success` with their `Deploy to Fly` job skipped. Each was superseded by a
+  newer canonical tip while its ~15-minute gate ran, because parallel sessions
+  merged faster than that. Nothing reached production after 08:20. The
+  finish-job checker read every one as a release. It now requires the Fly job's
+  own success (`tests/finishJob.test.ts`). The livelock itself is left as
+  §28/invariant 36 has it, because the fix is a policy change: a superseded run
+  could still release when its commit *descends from the running revision*.
+  That is forward progress and never a rollback, but it is not "the tip". It is
+  recorded here as the recommended change, not made.
+
 ## The demonstration
 
 One instruction: `objectives/normalize-suspended-hyphen-v2.json`, a live
