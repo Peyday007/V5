@@ -5,7 +5,8 @@
  *   npx tsx scripts/launch/run.ts dry-run   validate every local input, no network writes
  *   npx tsx scripts/launch/run.ts run       do everything the present credentials allow
  *
- * Stages: stripe → mailer (needs Stripe's links), etsy, store. Each is
+ * Stages: stripe → mailer (needs Stripe's links), etsy, store → pinterest
+ * (pins every product the etsy and store stages report live). Each is
  * idempotent against the platform itself (it lists what exists before it
  * creates anything), so `launch.yml` runs this hourly and a stage with nothing
  * left to do costs a few reads. A stage without its credential returns
@@ -20,13 +21,15 @@ type Stage = { name: string; file: string; fn: string };
 const STAGES: Stage[] = [
   { name: 'Stripe payment links (mailer)', file: './stripe.ts', fn: 'runStripe' },
   { name: 'Mailer materials', file: './mailer.ts', fn: 'runMailer' },
+  { name: 'Mailer replies (Neighbor Card)', file: './mailerReplies.ts', fn: 'runMailerReplies' },
   { name: 'Expansion offers (payment links)', file: './offers.ts', fn: 'runOffers' },
   { name: 'Etsy listings', file: './etsy.ts', fn: 'runEtsy' },
   { name: 'Print-on-demand store', file: './store.ts', fn: 'runStore' },
+  { name: 'Pinterest pins (customer acquisition)', file: './pinterest.ts', fn: 'runPinterest' },
 ];
 
 export function summarize(results: Array<StageResult & { name: string }>): string {
-  const icon = { DONE: '✅', PARTIAL: '🟡', NEEDS_OWNER: '👤', FAILED: '❌' } as const;
+  const icon = { DONE: '✅', PARTIAL: '🟡', WAITING: '⏳', NEEDS_OWNER: '👤', FAILED: '❌' } as const;
   const lines = ['# Launch status', '', '| Stage | Status | Detail |', '|---|---|---|'];
   for (const r of results) lines.push(`| ${r.name} | ${icon[r.status]} ${r.status} | ${r.detail.replace(/\|/g, '/')} |`);
   const owner = results.filter((r) => r.ownerAction);
@@ -52,7 +55,7 @@ export async function runAll(ctx: StageContext, only?: string): Promise<Array<St
       const mod = (await import(s.file)) as Record<string, (c: StageContext) => Promise<StageResult>>;
       const fn = mod[s.fn];
       if (!fn) throw new Error(`${s.file} has no ${s.fn}`);
-      r = await fn(ctx);
+      r = await fn({ ...ctx, results: [...(ctx.results ?? []), ...results] });
     } catch (e) {
       r = { stage: s.fn, status: 'FAILED', detail: (e as Error).message.split('\n')[0] ?? 'failed', items: [] };
     }

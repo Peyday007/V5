@@ -10,8 +10,12 @@
 #   Mailer  — order form, sales kit, card and rate card filled with the links
 #             and the owner's details read from Stripe (artifact `launch-mailer`)
 #   Etsy    — 8 digital listings created, files and photos uploaded, published
-#   Store   — 10 print-on-demand products created and published
+#   Store   — 10 print-on-demand products created and published, plus the
+#             launch discount code PUZZLE10
 #   Offers  — payment links for the expansion businesses (businesses/*/offer.json)
+#   Pinterest — one pin per live store product and live Etsy listing, linked
+#             to its product page ($0 customer acquisition; no ads)
+#   Replies — answers the Neighbor Card campaign's card and order replies
 #
 # The owner's only part is creating and verifying the accounts and saving each
 # platform's key as a repository secret; nothing here asks him for anything
@@ -28,11 +32,15 @@ on:
         required: true
         default: run
       only:
-        description: 'optional: stripe | mailer | offers | etsy | store'
+        description: 'optional: stripe | mailer | offers | etsy | store | pinterest | mailerReplies'
         required: false
         default: ''
       etsy_redirect_url:
         description: 'Etsy, once: the address-bar URL after "Grant access" (localhost…?code=…)'
+        required: false
+        default: ''
+      pinterest_redirect_url:
+        description: 'Pinterest, once: the address-bar URL after "Give access" (localhost…?code=…)'
         required: false
         default: ''
 
@@ -78,6 +86,22 @@ jobs:
               break
             fi
           done
+      # Pinterest's refresh token is continuous (a new one on every refresh), so
+      # it rides from run to run the same way, encrypted with the app secret.
+      - name: Pinterest token from the previous run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PINTEREST_APP_SECRET: ${{ secrets.PINTEREST_APP_SECRET }}
+        run: |
+          if [ -z "$PINTEREST_APP_SECRET" ]; then echo "no Pinterest app yet"; exit 0; fi
+          for id in $(gh run list --workflow launch.yml --limit 30 --json databaseId --jq '.[].databaseId'); do
+            [ "$id" = "${{ github.run_id }}" ] && continue
+            if gh run download "$id" -n pinterest-token -D pinterest-carry 2>/dev/null; then
+              tok=$(openssl enc -d -aes-256-cbc -pbkdf2 -pass env:PINTEREST_APP_SECRET -in pinterest-carry/token.enc 2>/dev/null || true)
+              if [ -n "$tok" ]; then echo "::add-mask::$tok"; echo "PINTEREST_REFRESH_TOKEN_CARRIED=$tok" >> "$GITHUB_ENV"; echo "carried from run $id"; fi
+              break
+            fi
+          done
       - name: Run
         env:
           MODE: ${{ inputs.mode || 'run' }}
@@ -89,9 +113,17 @@ jobs:
           ETSY_AUTH_REDIRECT_URL: ${{ inputs.etsy_redirect_url }}
           FOURTHWALL_API_USERNAME: ${{ secrets.FOURTHWALL_API_USERNAME }}
           FOURTHWALL_API_PASSWORD: ${{ secrets.FOURTHWALL_API_PASSWORD }}
+          INSTANTLY_API_KEY: ${{ secrets.INSTANTLY_API_KEY }}
+          PINTEREST_APP_ID: ${{ secrets.PINTEREST_APP_ID }}
+          PINTEREST_APP_SECRET: ${{ secrets.PINTEREST_APP_SECRET }}
+          PINTEREST_REDIRECT_URI: ${{ secrets.PINTEREST_REDIRECT_URI }}
+          PINTEREST_STANDARD_ACCESS: ${{ secrets.PINTEREST_STANDARD_ACCESS }}
+          PINTEREST_AUTH_REDIRECT_URL: ${{ inputs.pinterest_redirect_url }}
         run: |
           if [ -n "$ETSY_AUTH_REDIRECT_URL" ]; then echo "::add-mask::$ETSY_AUTH_REDIRECT_URL"; fi
+          if [ -n "$PINTEREST_AUTH_REDIRECT_URL" ]; then echo "::add-mask::$PINTEREST_AUTH_REDIRECT_URL"; fi
           export ETSY_REFRESH_TOKEN="${ETSY_REFRESH_TOKEN_CARRIED:-}"
+          export PINTEREST_REFRESH_TOKEN="${PINTEREST_REFRESH_TOKEN_CARRIED:-}"
           export NODE_PATH="$(npm root -g)"
           npx tsx scripts/launch/run.ts "$MODE" $ONLY
       - name: Etsy token for the next run
@@ -108,6 +140,20 @@ jobs:
           name: etsy-token
           path: etsy-carry-out/token.enc
           retention-days: 90
+      - name: Pinterest token for the next run
+        if: always() && hashFiles('.launch-out/pinterest-refresh-token') != ''
+        env:
+          PINTEREST_APP_SECRET: ${{ secrets.PINTEREST_APP_SECRET }}
+        run: |
+          mkdir -p pinterest-carry-out
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:PINTEREST_APP_SECRET -in .launch-out/pinterest-refresh-token -out pinterest-carry-out/token.enc
+          rm -f .launch-out/pinterest-refresh-token
+      - uses: actions/upload-artifact@v4
+        if: always() && hashFiles('pinterest-carry-out/token.enc') != ''
+        with:
+          name: pinterest-token
+          path: pinterest-carry-out/token.enc
+          retention-days: 60
       - name: Finished materials
         if: always()
         uses: actions/upload-artifact@v4
