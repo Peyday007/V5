@@ -104,6 +104,8 @@ describe('§101 mechanics', () => {
     const b = makeDirection({ name: 'b', stance: 'X', origin: 'MODEL', thinking: '', from: 'GREEDY', program: [{ op: 'PRICE', factor: 1.55, scope: 'TOP' }] });
     expect(a.signature).toBe(b.signature);
     expect(distinct([a, b], 10)).toHaveLength(1);
+    // A price past the clamp is the same move (production, 2026-11-11: "price ×6.07" was price ×4 renamed).
+    expect(signatureOf('GREEDY', [{ op: 'PRICE', factor: 6.07, scope: 'TOP' }])).toBe(signatureOf('GREEDY', [{ op: 'PRICE', factor: 4, scope: 'TOP' }]));
     expect(signatureOf('GREEDY', [{ op: 'FOCUS', count: 3 }])).not.toBe(signatureOf('BASELINE', [{ op: 'FOCUS', count: 3 }]));
     const small = explorationBudget({ openings: 3, operators: 4, binding: 1, reach: 0.8, required: 0.9, structural: false });
     const large = explorationBudget({ openings: 40, operators: 20, binding: 6, reach: 0.05, required: 0.9, structural: true });
