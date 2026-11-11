@@ -178,6 +178,28 @@ export function amendmentNeededDetail(
   );
 }
 
+/**
+ * The repair unit's key, unique to this finding. Finding keys are numbered per
+ * review, so a second review's `F1` is not the first review's `F1`. Keyed only by
+ * `findingKey`, the second finding was attached to the first finding's
+ * INTEGRATED unit and marked REPAIRED on a commit that never touched it
+ * (production 2026-11-11, fcp_ef7bb04a: a MAJOR entry-point finding closed by
+ * the CRLF repair). A key another finding's repair already holds gets a suffix.
+ */
+export function repairUnitKey(
+  finding: Pick<FactoryFinding, 'id' | 'findingKey'>,
+  units: Pick<FactoryWorkUnit, 'unitKey' | 'repairsFindingId'>[],
+): string {
+  const full = `repair-${finding.findingKey}`;
+  const takenByOther = (key: string) =>
+    units.some((unit) => unit.unitKey === key && unit.repairsFindingId !== finding.id);
+  if (!takenByOther(full.slice(0, 60))) return full.slice(0, 60);
+  for (let n = 2; ; n += 1) {
+    const key = `${full.slice(0, 55)}-${n}`;
+    if (!takenByOther(key)) return key;
+  }
+}
+
 function riskForSeverity(severity: FactoryFinding['severity']): FactoryRiskClass {
   if (severity === 'BLOCKER') return 'HIGH';
   if (severity === 'MAJOR') return 'MEDIUM';
@@ -312,7 +334,7 @@ export async function queueRepairs(
       }
       continue;
     }
-    const unitKey = `repair-${finding.findingKey}`.slice(0, 60);
+    const unitKey = repairUnitKey(finding, units);
 
     /*
      * The same validator the planner uses, over the campaign as installed plus
