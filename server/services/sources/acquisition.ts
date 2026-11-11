@@ -473,6 +473,22 @@ export interface SourceDiscovery {
   candidates: string[];
   /** Those whose address is shaped like a corpus, export, catalog, feed, index or API. */
   bulkCandidates: string[];
+  /**
+   * Whether a search was actually made and answered (F-DISCOVERY-UNKNOWN-AS-NONE).
+   * False when it was skipped, refused, paused, timed out or failed: that is not
+   * knowing, and it never stands for "searched and none found" (invariant 39).
+   * Absent (a value or row from before this field) is read by `discoverySearched`.
+   */
+  searched?: boolean;
+}
+
+/**
+ * Whether a discovery is knowledge. An explicit `searched` decides; without one,
+ * a discovery that returned no address at all (neither a page nor a bulk source) cannot be told apart from a search
+ * that never ran, so it is not one — the unknown is never the favourable answer.
+ */
+export function discoverySearched(d: Pick<SourceDiscovery, 'candidates' | 'bulkCandidates' | 'searched'>): boolean {
+  return d.searched ?? (d.candidates.length > 0 || d.bulkCandidates.length > 0);
 }
 
 /** The address of a corpus, a bulk export, a catalog, a feed, an index or an API — judged by shape, for any site. */
@@ -509,19 +525,30 @@ export function discoveryQuery(need: Pick<AcquisitionNeed, 'purpose' | 'host'>):
   return `${need.host ? `${need.host.toLowerCase()} ` : ''}${words} dataset OR "bulk download" OR export OR catalog OR API OR feed`.replace(/\s+/g, ' ').trim();
 }
 
-/** Look for existing corpora for a need: one polite, low-priority search (`discover.ts`). Never throws. */
+/**
+ * Look for existing corpora for a need: one polite, low-priority search (`discover.ts`). Never throws.
+ *
+ * `webSearch` answers `[]` alike when it skipped the search (queue full, every
+ * endpoint paused after an anomaly), when the fetch failed or timed out, and when
+ * an answered search returned nothing, so an empty answer is not evidence that a
+ * search ran. Only a search that returned addresses is `searched: true`; a thrown
+ * or empty one is `searched: false`, and the caller records it as not searched.
+ */
 export async function discoverExistingSources(
   need: Pick<AcquisitionNeed, 'purpose' | 'host'>,
   deps: { search?: (query: string) => Promise<string[]> } = {},
 ): Promise<SourceDiscovery> {
   const query = discoveryQuery(need);
   let candidates: string[] = [];
+  let searched = false;
   try {
     candidates = (await (deps.search ?? ((q: string) => webSearch(q, { priority: 'LOW' })))(query)).slice(0, 8);
+    searched = candidates.length > 0;
   } catch {
     candidates = [];
+    searched = false;
   }
-  return { query, candidates, bulkCandidates: bulkCandidatesOf(candidates) };
+  return { query, candidates, bulkCandidates: bulkCandidatesOf(candidates), searched };
 }
 
 interface EventRow {
@@ -554,7 +581,13 @@ export function discoveryFromRows(rows: readonly EventRow[], host: string, opts:
     if (!m || typeof m.host !== 'string' || m.host.toLowerCase() !== want) continue;
     if (best && Date.parse(best.at) >= at) continue;
     const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
-    best = { query: typeof m.query === 'string' ? m.query : '', candidates: list(m.candidates), bulkCandidates: list(m.bulkCandidates), at: row.at! };
+    const candidates = list(m.candidates);
+    const bulkCandidates = list(m.bulkCandidates);
+    // A row that records no answered search (an explicit `searched: false`, or an older
+    // NONE_FOUND with no address returned) says nobody knows; it never answers "already searched".
+    const searched = typeof m.searched === 'boolean' ? m.searched : undefined;
+    if (!discoverySearched({ candidates, bulkCandidates, searched })) continue;
+    best = { query: typeof m.query === 'string' ? m.query : '', candidates, bulkCandidates, searched: true, at: row.at! };
   }
   return best;
 }
@@ -746,7 +779,8 @@ export async function recordAcquisitionJudgment(
   let discoveryOnRecord = false;
   if (need.kind === 'ACQUIRE' && host && used.bulkSearchDone !== true && (used.existingBulkSources ?? []).length === 0) {
     const prior = await (deps.discoveryOnRecord ?? readDiscoveryOnRecord)(host).catch(() => null);
-    if (prior) {
+    // Only a search that was made and answered is "already looked"; an unknown leaves SEARCH_FIRST standing.
+    if (prior && discoverySearched(prior)) {
       used = { ...used, bulkSearchDone: true, existingBulkSources: prior.bulkCandidates };
       discoveryOnRecord = true;
     }
@@ -856,6 +890,10 @@ export async function recordAcquisitionJudgment(
     const discover = deps.discover ?? ((n: AcquisitionNeed) => discoverExistingSources(n));
     const run = async (): Promise<AcquisitionJudgment> => {
       const found = await discover(need);
+      // A search that was skipped, refused, timed out or failed found nothing because it did not look.
+      // It is not recorded as a discovery, the need is not judged again as searched, and the host stays
+      // eligible for a later search: the SEARCH_FIRST judgment already written is what is known.
+      if (!discoverySearched(found)) return judgment;
       await record({
         eventType: SOURCE_DISCOVERY_EVENT,
         provider: 'BULK',
@@ -872,6 +910,7 @@ export async function recordAcquisitionJudgment(
           query: found.query.slice(0, 300),
           candidates: found.candidates.slice(0, 8).map((u) => u.slice(0, 300)),
           bulkCandidates: found.bulkCandidates.slice(0, 8).map((u) => u.slice(0, 300)),
+          searched: true,
         },
       });
       const after: AcquisitionEvidence = { ...used, bulkSearchDone: true, existingBulkSources: found.bulkCandidates };
