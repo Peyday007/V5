@@ -34,7 +34,7 @@
  * evidence; otherwise it is coverage of the tested conditions and says so —
  * and says which inputs keep it from being one.
  */
-import { optimizePortfolio, type Activity, type PortfolioReading } from '../quant/portfolio.ts';
+import { optimizePortfolio, type Activity, type Assurance, type PortfolioReading, type Safeguard, type SafeguardEffect } from '../quant/portfolio.ts';
 import { makeRng } from '../scenario/random.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 
@@ -120,9 +120,70 @@ export interface GoalPortfolio {
     contactsPerDay: { value: number | null; low: number; high: number; source: string };
     correlation: number;
   };
+  /**
+   * What the best combination's reach may be called, from the quant engine's
+   * one judgment of it (`quant/portfolio.ts` `assess`): at least 90% only when
+   * the lower bound over the smallest real sample behind any member clears it,
+   * a defensible range when it does not, and "calibration unavailable" when an
+   * input is unvalidated or states no sample. `basis` says whether the inputs
+   * are evidence; this says what the number may claim (§95). Null when nothing
+   * was searched.
+   */
+  assurance?: Assurance | null;
+  /** The measured change to the downside of each candidate control, over the same worlds as the best combination. */
+  safeguards?: SafeguardEffect[];
   /** What keeps the reading from being a probability, or the target from being reached. */
   missing: string[];
   searched: number;
+}
+
+/**
+ * The independent real observations behind one opening's samples, or
+ * undefined when any input that is drawn states none (invariant 39: an
+ * unstated sample is never read as a large one). An inferred input carries the
+ * observations it was reconstructed from; a fixed term (a price, a cost, days
+ * to cash) is a fact rather than a draw and does not bound the sample; a fixed
+ * behavioural rate (reply, close, the deals a market takes) is a rate somebody
+ * measured on a sample nobody stated, so it does.
+ */
+const BEHAVIOURAL: ReadonlySet<keyof ModelledOpportunity> = new Set(['respond', 'close', 'volume']);
+export function sampleSizeOf(one: ModelledOpportunity): number | undefined {
+  if (one.agreedValue > 0) {
+    // Money a buyer already agreed draws nothing but whether it settles in time.
+    const days = one.daysToCash;
+    return days.inferred ? days.inferred.observations : days.value !== null ? Number.POSITIVE_INFINITY : undefined;
+  }
+  const drawn: Array<keyof ModelledOpportunity> = one.repeatable ? INPUT_NAMES.map(([key]) => key) : ['price', 'daysToCash', 'close', 'directCost'];
+  let n = Number.POSITIVE_INFINITY;
+  for (const key of drawn) {
+    const input = one[key] as ModelInput;
+    if (input.inferred) n = Math.min(n, input.inferred.observations);
+    else if (input.value === null || BEHAVIOURAL.has(key)) return undefined;
+  }
+  return n;
+}
+
+/**
+ * The controls whose effect on the downside is measured against the best
+ * combination, derived from the goal's own structure rather than from a list
+ * of businesses: openings that share one outreach could be split onto
+ * independent channels; money the ceiling allows beyond what may be tied up
+ * before proof could be held back for contingency; and cash collected up front
+ * (prepayment) halves the days to usable cash. Each is a question the engine
+ * answers over identical worlds — none is assumed to help.
+ */
+export function candidateSafeguards(activities: readonly Activity[], startingCapital: number | null, capitalCeiling: number | null): Safeguard[] {
+  const out: Safeguard[] = [];
+  const shared = activities.filter((a) => a.riskGroup === 'shared-outreach').map((a) => a.key);
+  if (new Set(shared.map((k) => k.split('@')[0])).size >= 2) {
+    out.push({ key: 'independent-outreach-channels', kind: 'INDEPENDENT_CHANNEL', decorrelate: shared });
+  }
+  if (startingCapital !== null && capitalCeiling !== null && capitalCeiling > startingCapital) {
+    out.push({ key: 'contingency-reserve', kind: 'CONTINGENCY', capitalBonus: capitalCeiling - startingCapital });
+  }
+  const slow = activities.filter((a) => a.days.some((d) => d > 0)).map((a) => a.key);
+  if (slow.length > 0) out.push({ key: 'prepayment-terms', kind: 'FASTER_CASH_CYCLE', daysFactor: { activities: slow, factor: 0.5 } });
+  return out;
 }
 
 /** Whether an input may be read as a distribution of the world rather than a range swept. */
@@ -380,6 +441,8 @@ export function evaluateGoalPortfolio(input: {
     });
     if (refused) continue;
     const shares: number[] = one.repeatable && one.agreedValue === 0 ? [...OUTREACH_SHARES] : [0];
+    // The outreach a day is drawn too: unless the owner stated it, it states no sample.
+    const sampleSize = one.repeatable && one.agreedValue === 0 && stated === null ? undefined : sampleSizeOf(one);
     const keys = shares.map((share) => `${id}@${share}`);
     for (const share of shares) {
       const w = share === 1 ? full : demandWorlds(one, share, input.daysLeft, contactsPerDay, worlds, seed);
@@ -392,6 +455,7 @@ export function evaluateGoalPortfolio(input: {
         days: w.days,
         spend: w.spend,
         justified: unestablished.length === 0,
+        evidence: { ...(sampleSize !== undefined ? { sampleSize } : {}) },
         capital: capital.amount,
         startDay: 0,
         ...(share > 0 ? { uses: { outreach: share }, riskGroup: 'shared-outreach' } : {}),
@@ -407,6 +471,7 @@ export function evaluateGoalPortfolio(input: {
     ...(startingCapital !== null ? { startingCapital } : {}),
     ...(input.capitalCeiling !== null ? { spendCeiling: input.capitalCeiling } : {}),
     riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
+    safeguards: candidateSafeguards(activities, startingCapital, input.capitalCeiling),
     worlds,
     seed,
   });
@@ -436,8 +501,10 @@ export function evaluateGoalPortfolio(input: {
   const basis: GoalPortfolio['basis'] = members.length > 0 && members.every((one) => one.justified) ? 'PROBABILITY' : 'COVERAGE';
   const missing: string[] = [];
   for (const one of members) if (!one.justified) missing.push(`${one.title.slice(0, 60)}: ${one.unestablished.join(', ')} not established`);
-  if (best && best.reach < 0.9) {
-    missing.push(`the best combination reaches the target in ${(best.reach * 100).toFixed(0)}% of worlds; more openings, or better-evidenced ones, are needed for 90%`);
+  // Whether the plan may claim 90% is the engine's one judgment, read over the evidence behind it — never the point reading.
+  const assurance = result.assurance ?? null;
+  if (best && assurance && !assurance.claimsAtLeast90) {
+    missing.push(`the best combination reaches the target in ${(best.reach * 100).toFixed(0)}% of worlds, which is not a defensible 90%: ${assurance.reason}`);
   }
   if (!best) missing.push('no combination of the openings held can run inside the limits');
   return {
@@ -455,6 +522,8 @@ export function evaluateGoalPortfolio(input: {
       contactsPerDay: { value: stated, low: contactsPerDay.low ?? 0, high: contactsPerDay.high ?? 0, source: stated !== null ? 'stated by the owner on the goal' : input.measuredCapacity && input.measuredCapacity.perDay > CONTACTS_PER_DAY_BOUNDS.low ? `measured: up to ${input.measuredCapacity.perDay}/day on ${input.measuredCapacity.accounts} healthy Instantly accounts (shared); swept` : 'not stated; swept' },
       correlation: SHARED_OUTREACH_CORRELATION,
     },
+    assurance,
+    safeguards: result.safeguardEffects ?? [],
     missing,
     searched: result.searched,
   };
