@@ -1036,3 +1036,117 @@ export async function recordStageCapacity(options: { hours?: number; now?: numbe
     return null;
   }
 }
+
+/* ------------------------------------------------------------------------- */
+/* Reading the recorded measurement back                                      */
+/* ------------------------------------------------------------------------- */
+
+/** A recorded reading older than this (two measurement intervals) is reported as stale, not as current. */
+export const STAGE_CAPACITY_STALE_MS = 2 * 60 * 60_000;
+
+/** The latest `FREE_LANE_STAGE_CAPACITY` row, parsed: what every reader of the measurement shares. */
+export interface RecordedStageCapacity {
+  at: string;
+  outcome: 'MEASURED' | 'NOT_MEASURED';
+  reason: string;
+  ageMinutes: number;
+  /** Older than `STAGE_CAPACITY_STALE_MS`: the hourly measurement has stopped, which is itself a finding. */
+  stale: boolean;
+  /** Null when the measurement failed (`NOT_MEASURED`) or its measures could not be read. */
+  report: StageCapacityReport | null;
+  queuedNow: number | null;
+  queueAdvance: QueueAdvance | null;
+}
+
+/**
+ * The most recent stage-capacity measurement, read from its production row, so
+ * the per-stage figures, the diagnosed failing route and `chooseConstraint`'s
+ * recommendation reach the lane's own readers (`coverage.ts`: `admin free-lane
+ * show`, the Brain-only switch and the displaced-work watchdog) and the report
+ * CLI (`stageCapacityReport.ts`) rather than only a hand-written query. Null
+ * when nothing has been recorded yet.
+ */
+export async function readStageCapacity(now = Date.now()): Promise<RecordedStageCapacity | null> {
+  const row = await getDb().get<{ at: string; outcome: string; reason: string | null; measures: string | null }>(
+    'SELECT at, outcome, reason, measures FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 1',
+    [STAGE_CAPACITY_EVENT],
+  );
+  if (!row) return null;
+  let measures: Record<string, unknown> | null = null;
+  try {
+    measures = row.measures ? (JSON.parse(row.measures) as Record<string, unknown>) : null;
+  } catch {
+    measures = null;
+  }
+  const report = measures && Array.isArray(measures['stages']) ? (measures as unknown as StageCapacityReport) : null;
+  const ageMs = Math.max(0, now - Date.parse(row.at));
+  return {
+    at: row.at,
+    outcome: row.outcome === 'MEASURED' ? 'MEASURED' : 'NOT_MEASURED',
+    reason: row.reason ?? '',
+    ageMinutes: Math.round(ageMs / 60_000),
+    stale: ageMs > STAGE_CAPACITY_STALE_MS,
+    report,
+    queuedNow: measures && typeof measures['queuedNow'] === 'number' ? measures['queuedNow'] : null,
+    queueAdvance: (measures?.['queueAdvance'] as QueueAdvance | undefined) ?? null,
+  };
+}
+
+const shown = <T>(m: Measured<T> | undefined, fmt: (v: T) => string = String): string =>
+  !m ? '—' : m.measured ? fmt(m.value) : 'not measured';
+
+/**
+ * The recorded measurement as the lines an operator reads: freshness, the
+ * failing or restored route, whether queued work advanced, the constrained
+ * stage with its recommendation, then one line per stage and the attribution.
+ */
+export function stageCapacityLines(recorded: RecordedStageCapacity | null): string[] {
+  if (!recorded) return ['stage capacity    not recorded yet (the free lane records it hourly once its loop starts)'];
+  const lines = [
+    `stage capacity    ${recorded.outcome} ${recorded.at} (${recorded.ageMinutes} min ago${recorded.stale ? ', STALE: the hourly measurement has stopped' : ''})`,
+    `  reading         ${recorded.reason}`,
+  ];
+  const report = recorded.report;
+  if (!report) return lines;
+  const { primary, restored, gpu } = report.diagnosis;
+  if (primary) lines.push(`  failing route   ${primary.route}: ${primary.cause}, ${primary.failures} failure(s) — ${primary.evidence}`);
+  for (const r of restored) lines.push(`  restored route  ${r.route} (${r.cause ?? 'unclassified'}) at ${r.at}`);
+  if (gpu.notRunning) lines.push(`  gpu pod         not running in any supervisor sample ${JSON.stringify(gpu.samples)}`);
+  if (recorded.queueAdvance) {
+    const a = recorded.queueAdvance;
+    lines.push(
+      `  queued work     ${a.verdict} (queued now ${a.queuedNow}` +
+        `${a.acceptedSincePrevious === null ? '' : `, ${a.acceptedSincePrevious} accepted since ${a.previousAt ?? '—'}`})`,
+    );
+  }
+  const c = report.constrained;
+  lines.push(`  constrained     ${c.stage ?? 'none'} — ${c.basis}`);
+  lines.push(
+    `  expected gain   ${shown(c.expectedGain, (g) => `${g.acceptedFactsPerHour} accepted facts/h for $${g.dollars}/h per added replica`)}`,
+  );
+  lines.push(`  recommendation  ${c.recommendation}`);
+  for (const s of report.stages) {
+    lines.push(
+      `  stage ${s.stage} queue=${shown(s.queueSize)} oldest=${shown(s.oldestUsefulItemMinutes, (v) => (v === null ? '—' : `${v}min`))}` +
+        ` processed/h=${shown(s.itemsProcessedPerHour)} accepted/h=${s.acceptedPerHour} facts=${shown(s.uniqueUsableFacts)}` +
+        ` dropped=${shown(s.droppedOrDuplicate)} avoided=${shown(s.modelCallsAvoided)} providerFailures=${shown(s.providerFailures)}` +
+        ` $=${shown(s.incrementalDollars)}`,
+    );
+  }
+  lines.push(
+    `  attribution     ${report.attribution.map((a) => `${a.category}=${a.productiveJobs}`).join(' ')} (total ${report.totalProductiveJobs})`,
+  );
+  return lines;
+}
+
+/**
+ * The failing route the latest fresh reading names, as one sentence a coverage
+ * reason or an intervention can carry; null when there is none or the reading
+ * is stale (a stale cause is not a current signal).
+ */
+export function recordedCause(recorded: RecordedStageCapacity | null): string | null {
+  const primary = recorded && !recorded.stale ? recorded.report?.diagnosis.primary : null;
+  if (!recorded || !primary) return null;
+  const advance = recorded.queueAdvance ? `; queued work ${recorded.queueAdvance.verdict.toLowerCase().replace('_', ' ')}` : '';
+  return `Stage capacity (${recorded.at}) names the cause: model route ${primary.route} failing (${primary.cause}, ${primary.failures} failure(s))${advance}.`;
+}
