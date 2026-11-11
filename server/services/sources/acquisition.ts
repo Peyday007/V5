@@ -281,8 +281,113 @@ export async function readRepeatedUse(host: string): Promise<{ repeatedUses: num
   }
 }
 
+/**
+ * Whether Brain may operate a host's interface under an account is a person's
+ * permission, and it is a row: an append-only `OPERATE_PERMISSION` bin event
+ * whose outcome is GRANTED or REVOKED, naming the host and the account by a
+ * reference (a label a person recognizes — never a credential, token or
+ * password). The newest row for the host decides, so a revocation is a later
+ * row rather than an edit, and history is kept (§5, §17).
+ *
+ * This is the record the OPERATE judgment reads. A read path (`access.ts`) can
+ * only say a browser rendered a public page — it cannot know about an account,
+ * and says `false` — so the judgment consults this record whenever the caller
+ * has not itself established an account, and an operation becomes BROWSER or
+ * MODEL_ASSISTED exactly when a person granted it. A permission is never
+ * authorization to contact strangers, evade defenses or commit the business:
+ * those boundaries are judged first and refuse regardless of any grant.
+ */
+export const OPERATE_PERMISSION_EVENT = 'OPERATE_PERMISSION';
+
+export interface OperatePermission {
+  permitted: boolean;
+  /** The account a person named for the host, by reference; null when none is granted. */
+  accountRef: string | null;
+  grantedBy: string | null;
+  at: string | null;
+}
+
+const NO_PERMISSION: OperatePermission = { permitted: false, accountRef: null, grantedBy: null, at: null };
+
+/** The standing permission for a host from OPERATE_PERMISSION rows. Pure: the newest dated row for the host decides. */
+export function operatePermissionFromRows(
+  rows: { outcome: string | null; measures: string | null; at?: string | null }[],
+  host: string,
+): OperatePermission {
+  const want = host.toLowerCase();
+  let best: { at: number; row: OperatePermission } | null = null;
+  for (const row of rows) {
+    const at = row.at ? Date.parse(row.at) : Number.NaN;
+    if (!Number.isFinite(at)) continue;
+    let m: { host?: unknown; accountRef?: unknown; grantedBy?: unknown } = {};
+    try {
+      m = row.measures ? (JSON.parse(row.measures) as typeof m) : {};
+    } catch {
+      continue;
+    }
+    if (typeof m.host !== 'string' || m.host.toLowerCase() !== want) continue;
+    if (row.outcome !== 'GRANTED' && row.outcome !== 'REVOKED') continue;
+    if (best && best.at >= at) continue;
+    const granted = row.outcome === 'GRANTED' && typeof m.accountRef === 'string' && m.accountRef.trim() !== '';
+    best = {
+      at,
+      row: granted
+        ? { permitted: true, accountRef: (m.accountRef as string).trim(), grantedBy: typeof m.grantedBy === 'string' ? m.grantedBy : null, at: row.at ?? null }
+        : { ...NO_PERMISSION, grantedBy: typeof m.grantedBy === 'string' ? m.grantedBy : null, at: row.at ?? null },
+    };
+  }
+  return best?.row ?? NO_PERMISSION;
+}
+
+/** The standing operate permission for a host, read from the rows; none when unreadable. */
+export async function readOperatePermission(host: string): Promise<OperatePermission> {
+  try {
+    const rows = await getDb().all<{ outcome: string | null; measures: string | null; at: string | null }>(
+      `SELECT outcome, measures, at FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 2000`,
+      [OPERATE_PERMISSION_EVENT],
+    );
+    return operatePermissionFromRows(rows, host);
+  } catch {
+    return NO_PERMISSION;
+  }
+}
+
+/** A credential-shaped string is never an account reference: the record names an account, it does not hold one. */
+function looksLikeSecret(value: string): boolean {
+  return /[:@].*[:@]|^(sk|pk|ghp|gho|xox[abp]|brn[a-z])[-_]|^[A-Za-z0-9+/_-]{32,}={0,2}$/.test(value);
+}
+
+/**
+ * Record a person's grant or revocation of permission to operate a host's
+ * interface under a named account. Append-only; the newest row decides.
+ */
+export async function recordOperatePermission(
+  input: { host: string; granted: boolean; accountRef?: string | null; grantedBy: string; note?: string | null },
+  deps: { record?: typeof recordBinEvent } = {},
+): Promise<OperatePermission> {
+  const host = input.host.trim().toLowerCase();
+  if (!host) throw new Error('An operate permission names the host it covers.');
+  if (!input.grantedBy.trim()) throw new Error('An operate permission names the person who gave it.');
+  const accountRef = input.accountRef?.trim() || null;
+  if (input.granted && !accountRef) throw new Error('A grant names the account Brain may operate under, by reference.');
+  if (accountRef && looksLikeSecret(accountRef)) throw new Error('An account reference is a label, never a credential.');
+  await (deps.record ?? recordBinEvent)({
+    eventType: OPERATE_PERMISSION_EVENT,
+    workloadClass: 'acquisition',
+    outcome: input.granted ? 'GRANTED' : 'REVOKED',
+    reason: `${input.granted ? 'Granted' : 'Revoked'} operating ${host}${accountRef ? ` under ${accountRef}` : ''}${input.note ? `: ${input.note}` : ''}`.slice(0, 480),
+    evidenceClass: 'MEASURED',
+    measures: { host, accountRef: input.granted ? accountRef : null, grantedBy: input.grantedBy.trim() },
+  });
+  return input.granted
+    ? { permitted: true, accountRef, grantedBy: input.grantedBy.trim(), at: null }
+    : { ...NO_PERMISSION, grantedBy: input.grantedBy.trim() };
+}
+
 export interface RecordAcquisitionDeps {
   repeatedUse?: (host: string) => Promise<{ repeatedUses: number; repeatedUsesNeedingFallback: number }>;
+  /** The standing operate permission for a host; defaults to the OPERATE_PERMISSION rows. */
+  operatePermission?: (host: string) => Promise<OperatePermission>;
   record?: typeof recordBinEvent;
   /** Whether a proposal for this host and route is already on record inside the window. */
   proposalOnRecord?: (host: string, route: string) => Promise<boolean>;
@@ -325,6 +430,17 @@ export async function recordAcquisitionJudgment(
     const counted = await (deps.repeatedUse ?? readRepeatedUse)(need.host);
     used = { ...evidence, ...counted };
   }
+  // An account the caller could not establish is looked up in the permission record:
+  // a read path never knows about accounts, and a person's grant is what makes operation possible.
+  let accountSource: 'CALLER' | 'PERMISSION_RECORD' | 'NONE' = used.authorizedAccountOnRecord === true ? 'CALLER' : 'NONE';
+  let permission: OperatePermission | null = null;
+  if (need.kind === 'OPERATE' && need.host && used.authorizedAccountOnRecord !== true) {
+    permission = await (deps.operatePermission ?? readOperatePermission)(need.host);
+    if (permission.permitted) {
+      used = { ...used, authorizedAccountOnRecord: true };
+      accountSource = 'PERMISSION_RECORD';
+    }
+  }
   const judgment = judgeAcquisitionNeed(need, used);
   await (deps.record ?? recordBinEvent)({
     eventType: 'ACQUISITION_JUDGMENT',
@@ -346,6 +462,9 @@ export async function recordAcquisitionJudgment(
       repeatedUsesNeedingFallback: used.repeatedUsesNeedingFallback ?? null,
       existingBulkSources: (used.existingBulkSources ?? []).length,
       bulkSearchDone: Boolean(used.bulkSearchDone),
+      ...(need.kind === 'OPERATE'
+        ? { authorizedAccount: accountSource, accountRef: permission?.permitted ? permission.accountRef : null }
+        : {}),
     },
   });
   // The consumer of both flags: a justified connector or script is written down as a proposal
