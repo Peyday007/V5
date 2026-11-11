@@ -594,3 +594,22 @@ describe('Brain constructs the graph and links graphs across businesses (CAUSAL-
     expect(dangling.status).toBe(422);
   });
 });
+
+describe('market history (CAUSAL-14-7)', () => {
+  it('is behind the gate, and an opening that is not in the project is the same 404 as one that does not exist', async () => {
+    expect((await call('GET', `${CAUSAL()}/market-history/cop_missing`)).status).toBe(401);
+    const missing = await call('GET', `${CAUSAL()}/market-history/cop_missing`, { cookie: adminCookie });
+    expect(missing.status).toBe(404);
+    const outsider = await call('GET', `${CAUSAL()}/market-history/cop_missing`, { cookie: outsiderCookie });
+    expect(outsider.status).toBe(404);
+    expect(outsider.text).not.toContain('market');
+  });
+
+  it('acquiring is behind the same gate and the same indistinguishable 404', async () => {
+    expect((await call('POST', `${CAUSAL()}/market-history/cop_missing/acquire`, { body: {} })).status).toBe(401);
+    expect((await call('POST', `${CAUSAL()}/market-history/cop_missing/acquire`, { cookie: adminCookie, body: {} })).status).toBe(404);
+    const outsider = await call('POST', `${CAUSAL()}/market-history/cop_missing/acquire`, { cookie: outsiderCookie, body: {} });
+    expect(outsider.status).toBe(404);
+    expect(outsider.text).not.toContain('market');
+  });
+});
