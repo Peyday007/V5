@@ -217,6 +217,9 @@ function needsOf(graph: CausalGraph, readings: MoneyRouteReading[], chain: Chain
     for (const gap of reading.gaps) {
       needs.push({ subject: `route ${reading.route}: ${gap}`, question: `What is the ${gap} for route ${reading.route}, and what evidences it?`, route: 'RESEARCH', permissions: [] });
     }
+    for (const discrepancy of reading.discrepancies) {
+      needs.push({ subject: `route ${reading.route}: shortfall`, question: `Route ${reading.route} is under water: ${discrepancy}. What funds the shortfall, or which term changes to close it?`, route: 'RESEARCH', permissions: [] });
+    }
   }
   if (chain) {
     for (const stage of chain.stages) {
