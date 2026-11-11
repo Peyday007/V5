@@ -42,6 +42,7 @@ import { bestCaseReach, composeGoalModel, dealsForGoal, OUTREACH_MULTIPLE, price
 import { readTarget, type TargetReading } from './target.ts';
 import { openGoalDiscovery } from '../cash/discovery.ts';
 import { researchGoalPaths } from './pathResearch.ts';
+import { assessReliability, type CompatibleOpening, type ReliabilityReading, type StrategyMemberFacts } from './reliability.ts';
 import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
 import { getScenarioModel } from '../../repos/scenario.ts';
 import { runModel, saveModel } from '../scenario/service.ts';
@@ -109,6 +110,14 @@ export interface StrategyReading {
   /** The conservative settled figure, when every input it needs is established. */
   conservativeSettled: number | null;
   nextTest: NextTest | null;
+  /**
+   * Reliability engineering for a serious candidate (any strategy not already
+   * NOT_VIABLE): its failure paths, the protections its rows establish, the
+   * plan rebuilt with them, and single and combined setbacks before and after.
+   * Counts of tested cases, never a probability. Null for a strategy that is
+   * not a candidate.
+   */
+  reliability: ReliabilityReading | null;
 }
 
 export interface PlanReading {
@@ -309,6 +318,54 @@ function sweepOf(result: ScenarioResult | null, key: string): StrategyReading['s
   };
 }
 
+/**
+ * A strategy's members as the reliability rebuild reads them, in cents. Cautious
+ * figures where every input is established; otherwise the best case at a price
+ * buyers are shown to pay, and the reading says which.
+ */
+function strategyFacts(
+  key: string,
+  members: { one: ModelledOpportunity; deals: number }[],
+  target: TargetReading,
+  capabilities: Map<string, string>,
+): Parameters<typeof assessReliability>[0] {
+  const cons = conservative(members, target);
+  const established = (input: { provenance: string }) => input.provenance === 'EVIDENCE' || input.provenance === 'HISTORICAL';
+  let costs = 0;
+  let upfront = 0;
+  let hours: number | null = 0;
+  const facts: StrategyMemberFacts[] = members.map(({ one, deals }) => {
+    const close = deals === 0 ? 0 : one.close.provenance === 'HISTORICAL' ? one.close.low : null;
+    const price = one.price.value ?? one.price.low;
+    const won = close === null ? (one.repeatable ? Math.ceil(deals / OUTREACH_MULTIPLE) : deals) : deals * close;
+    const revenue = cons.settled !== null ? one.agreedValue + won * (price ?? 0) : one.agreedValue + (priceSupported(one) ? won * (price ?? 0) : 0);
+    costs += won * (one.directCost.value ?? 0);
+    upfront += (won + one.agreedDeals) * (one.capital.value ?? 0);
+    if (hours !== null) hours = one.hours.value === null ? null : hours + won * one.hours.value;
+    const caps = one.opportunity.requiredCapabilities;
+    const brainDoesIt = caps.length > 0 && caps.every((id) => capabilities.get(id) === 'PRESENT');
+    return {
+      opportunityId: one.opportunity.id,
+      revenueCents: Math.round(revenue * 100),
+      fulfilledBy: !brainDoesIt && one.fulfilledBy ? one.fulfilledBy.value.slice(0, 80) : null,
+      daysToCash: one.daysToCash.value !== null && established(one.daysToCash) ? one.daysToCash.value : null,
+      claimId: one.opportunity.sourceClaimId,
+    };
+  });
+  return {
+    key,
+    targetCents: target.remainingCents,
+    daysLeft: target.daysLeft ?? 0,
+    members: facts,
+    directCostsCents: Math.round(costs * 100),
+    upfrontCents: Math.round((cons.exposure ?? upfront) * 100),
+    capitalCeilingCents: target.capitalCeilingCents,
+    capacityHours: target.hoursCeiling,
+    neededHours: cons.labour ?? hours,
+    basis: cons.settled !== null ? 'CONSERVATIVE' : 'BEST_CASE_AT_SUPPORTED_PRICE',
+  };
+}
+
 /** This Brain's record of earlier recommended goal plans: achieved in time, out of all that ended. */
 export async function measuredPlanChance(): Promise<PlanReading['measuredChance']> {
   const rows = await getDb().all<{ kind: string }>(
@@ -403,6 +460,17 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     competitiveAward: one.competitiveAward,
   }));
   considered.sort((a, b) => a.missing.length - b.missing.length || b.supportedReach - a.supportedReach);
+  // Openings whose own rows establish a reachable buyer, a dated need and a price buyers pay:
+  // the evidence a strategy's rebuild may combine in as a further path to the money.
+  const compatible: CompatibleOpening[] = [];
+  for (const one of model.considered) {
+    const checks = linkChecks(one, dealsForGoal(one, target.remainingCents / 100), target, capabilities, now);
+    const ok = (link: ChainLink) => checks.find((check) => check.link === link)?.ok === true;
+    if (!ok('REACHABLE_BUYER') || !ok('CURRENT_DEMAND') || !ok('OFFER_AND_PRICE')) continue;
+    const late = one.daysToCash.value !== null && target.daysLeft !== null && one.daysToCash.value > target.daysLeft;
+    const sale = one.agreed ? one.agreedValue : priceSupported(one) ? (one.price.value ?? one.price.low ?? 0) : 0;
+    if (!late && sale > 0) compatible.push({ opportunityId: one.opportunity.id, revenueCents: Math.round(sale * 100) });
+  }
   const strategies: StrategyReading[] = [];
   for (const spec of model.definition.strategies) {
     const members = model.included
@@ -518,6 +586,7 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       sweep,
       conservativeSettled: cons.settled,
       nextTest,
+      reliability: verdict !== 'NOT_VIABLE' && members.length > 0 ? assessReliability(strategyFacts(spec.key, members, target, capabilities), compatible) : null,
     });
   }
 
@@ -591,7 +660,16 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
   const summary = {
     verdict: reading.verdict,
     chosen: reading.chosen,
-    strategies: reading.strategies.map((one) => ({ key: one.key, verdict: one.verdict, missing: one.links.filter((link) => !link.ok).map((link) => link.link), failed: one.constraintsFailed })),
+    strategies: reading.strategies.map((one) => ({
+      key: one.key,
+      verdict: one.verdict,
+      missing: one.links.filter((link) => !link.ok).map((link) => link.link),
+      failed: one.constraintsFailed,
+      // An accepted improvement, or a path it leaves open, is part of the conclusion: a changed one is a new reading.
+      ...(one.reliability
+        ? { reliability: { applied: one.reliability.applied.map((p) => `${p.kind}:${p.evidenceId}`), unprotected: one.reliability.unprotected.map((u) => `${u.kind}:${u.subject ?? ''}`) } }
+        : {}),
+    })),
     next: reading.nextTest,
     refusal: reading.refusal,
   };
@@ -599,7 +677,7 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
   const last = await latestReading(goal.id);
   if (last && last.digest === digest) return;
   const forecast = chosen
-    ? { conservativeSettled: chosen.conservativeSettled, sweep: chosen.sweep, remainingCents: reading.target.remainingCents, daysLeft: reading.target.daysLeft }
+    ? { conservativeSettled: chosen.conservativeSettled, sweep: chosen.sweep, remainingCents: reading.target.remainingCents, daysLeft: reading.target.daysLeft, reliability: chosen.reliability }
     : null;
   await getDb().run(
     `INSERT INTO goal_plan_readings (id, workstream_id, digest, scenario_model_id, scenario_run_id, verdict, chosen_strategy, strategies, next_test, forecast, created_at)
