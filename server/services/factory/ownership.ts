@@ -641,6 +641,15 @@ export type RepairScope =
  * same way. A test whose subject cannot be established is a repair that could
  * only weaken the test, so it is refused: `REPAIR_SCOPE_INSUFFICIENT`, and no bin.
  */
+/**
+ * The repository's top-level directories. A path that starts with one is already
+ * written from the root, whether or not the running image carries it — the image
+ * leaves out tests/ and docs/ (production 2026-11-11, money-d0-p0:
+ * tests/quantEngine.test.ts was rewritten under server/services/quant/ and the
+ * repair could never anchor).
+ */
+const ROOT_DIRECTORIES = ['server/', 'client/', 'scripts/', 'tests/', 'docs/', 'objectives/', 'specs/', 'plans/', 'blueprints/', '.github/', '.claude/'];
+
 /** A path that records or documents the work rather than doing it. */
 export function isReferenceRecord(path: string): boolean {
   return path.startsWith('objectives/') || path.startsWith('docs/') || (path.endsWith('.md') && !path.includes('/'));
@@ -707,7 +716,7 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
     // A path that is already a file from the repository root is not a short path
     // (production 2026-11-11, authority-d0-p0: objectives/programs/…/release-01.map.json
     // was rewritten under server/services/cash/ and no repair could anchor it).
-    if (onDisk(path)) return path;
+    if (onDisk(path) || ROOT_DIRECTORIES.some((dir) => path.startsWith(dir))) return path;
     const exact = knownPaths.filter((known) => known.endsWith(`/${path}`));
     // A file a unit owns or a person named exactly beats any reading a glob could compose.
     if (new Set(exact).size === 1) return exact[0]!;
