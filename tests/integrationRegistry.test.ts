@@ -63,6 +63,17 @@ describe('the registry is the only way in', () => {
     }
   });
 
+  it('keeps the Integrations workflow naming exactly the secrets the registry declares', () => {
+    const yml = fs.readFileSync(path.join(ROOT, '.github/workflows/integrations.yml'), 'utf8');
+    // GitHub refuses a run that reads every secret at once; each is named instead.
+    expect(yml).not.toContain('toJSON(secrets)');
+    const synced = [...yml.matchAll(/SYNC_([A-Z0-9_]+): \$\{\{ secrets\.([A-Z0-9_]+) \}\}/g)].map((m) => { expect(m[1]).toBe(m[2]); return m[1]!; });
+    expect(synced.sort()).toEqual(githubSyncable());
+    const present = [...yml.matchAll(/HAS_([A-Z0-9_]+): \$\{\{ secrets\.([A-Z0-9_]+) != '' \}\}/g)].map((m) => { expect(m[1]).toBe(m[2]); return m[1]!; });
+    const actionsCredentials = [...new Set(INTEGRATIONS.flatMap((i) => i.credentials).filter((c) => c.where === 'GITHUB_ACTIONS').map((c) => c.name))].sort();
+    expect(present.sort()).toEqual(actionsCredentials);
+  });
+
   it('lets a connector deliver Instantly, and a GitHub secret supply Instantly and Stripe', () => {
     expect(sealable()).toContain('INSTANTLY_API_KEY');
     expect(githubSyncable()).toEqual(expect.arrayContaining(['INSTANTLY_API_KEY', 'STRIPE_SECRET_KEY']));
