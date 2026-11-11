@@ -701,7 +701,7 @@ describe('provenance', () => {
 
 describe('normalization', () => {
   it('cleans extraction artifacts and reports what it changed', () => {
-    const raw = 'The interme­di- ation ﻿layer deﬁnes  custody rules.';
+    const raw = 'The interme­di-\nation ﻿layer deﬁnes  custody rules.';
     const result = normalizeBlockText(raw);
 
     expect(result.text).toBe('The intermediation layer defines custody rules.');
