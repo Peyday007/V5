@@ -9,7 +9,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import {
   COSTLY_EFFORT,
+  PREPARED_HANDOFF_KIND,
   PREPARED_OPTION_KIND,
+  PREPARED_RESUMED_KIND,
+  advancePreparedOptions,
+  optionFromMap,
+  requirementOf,
+  type HandoffSubmit,
   PreparedOptionError,
   countsAsIntegration,
   handOffToFactory,
@@ -20,7 +26,10 @@ import {
   warmCost,
   type PreparedOption,
 } from '../server/services/capability/prepared.ts';
-import { listEvents } from '../server/repos/events.ts';
+import { listEvents, recordEvent } from '../server/repos/events.ts';
+import { getDb } from '../server/db/database.ts';
+import { enqueueWork } from '../server/repos/workQueue.ts';
+import { advanceSources } from '../server/services/capability/extraction.ts';
 
 const method = (over: Record<string, unknown> = {}) => ({ name: 'tool-a', kind: 'OPEN_SOURCE_TOOL', gates: [], effort: 2, sources: ['https://example.test/a'], ...over });
 const valid = (over: Record<string, unknown> = {}) => ({
@@ -171,5 +180,98 @@ describe('a prepared option is never an integration', () => {
       });
       expect(out).toBeNull();
     });
+  });
+});
+
+/*
+ * The finding this pins: nothing in the running Brain recorded a prepared
+ * option or made a handoff, so every later clause was unreachable. The producer
+ * is the Russell tick (`advanceSources` → `advancePreparedOptions` →
+ * `prepareFromObjectives`), reading the CAPABILITY_ASSESSED row
+ * `assessLiveObjectives` writes on a live goal.
+ */
+describe('a live goal that needs a dormant capability records, hands off and resumes on the tick', () => {
+  // A requirement no improvement route owns, so the loop never routes it itself.
+  const DORMANT = 'ACCESS.ROUTINE_FETCH';
+  // One the improvement loop owns: never handed off a second time from here.
+  const ROUTED = 'DISCOVERY.SEARCH';
+  let projectId: string;
+  const goalId = 'wst_prepared_goal';
+
+  const assess = async (blocking: string[]) => {
+    const now = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO workstreams (id, project_id, title, intent, purpose, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+      [goalId, projectId, 'goal', 'Research demand for a plan', 'REVENUE_DIRECT', now, now],
+    );
+    await recordEvent({ projectId, entityType: 'WORKSTREAM', entityId: goalId, eventType: 'CAPABILITY_ASSESSED', payload: { blocking } });
+  };
+  const kinds = async (kind: string) => (await listEvents(projectId, 500)).filter((e) => e.payload.kind === kind);
+
+  beforeEach(async () => {
+    projectId = (await freshProject()).project.id;
+  });
+
+  it('the map-derived option is a source inventory, UNCERTAIN, and not an integration', () => {
+    const found = requirementOf(DORMANT)!;
+    expect(found.requirement.improvement).toBeUndefined();
+    const option = optionFromMap(found.mapKey, found.requirement);
+    expect(option.feasibility.verdict).toBe('UNCERTAIN');
+    expect(option.sourceInventory).toEqual(expect.arrayContaining(found.requirement.owner));
+    expect(option.methods.every((m) => m.effort < COSTLY_EFFORT && m.gates.length === 0)).toBe(true);
+    expect(countsAsIntegration(option)).toBe(false);
+    expect(requirementOf('NO.SUCH')).toBeNull();
+  });
+
+  it('records the option and hands the minimum capability to the Factory once, then judges resumption from rows', async () => {
+    const item = await enqueueWork({ projectId, workType: 'RESEARCH_AUDIT', payload: { role: 'PRIMARY' }, requiredScopes: ['queue:claim', 'research:write'], createdByType: 'SYSTEM' });
+    await assess([`MISSING:${DORMANT}`, `BROKEN:${ROUTED}`]);
+    const asks: Parameters<HandoffSubmit>[0][] = [];
+    const submit: HandoffSubmit = async (ask) => { asks.push(ask); return { changeRequestId: 'fcr_test_prepared' }; };
+
+    const first = await advancePreparedOptions({ submit });
+    expect(first.prepared).toMatchObject({ goals: 1, recorded: 1, handedOff: 1, routedElsewhere: 1, errors: [] });
+    const options = await kinds(PREPARED_OPTION_KIND);
+    expect(options).toHaveLength(1);
+    expect(options[0]!.entityId).toBe(DORMANT);
+    expect(options[0]!.payload.integration).toBe(false);
+    expect(asks).toHaveLength(1);
+    expect(asks[0]!.requirement.id).toBe(DORMANT);
+    expect(asks[0]!.goalId).toBe(goalId);
+    expect(asks[0]!.resolution.handoff?.objective).toContain(DORMANT);
+    const handoffs = await kinds(PREPARED_HANDOFF_KIND);
+    expect(handoffs).toHaveLength(1);
+    expect(handoffs[0]!.payload).toMatchObject({ integration: false, changeRequestId: 'fcr_test_prepared', goal: goalId, blockedWorkItemIds: [item.id] });
+    expect(first.resumed).toBe(0);
+
+    // A second pass re-records nothing and hands off nothing: the rows say it is done.
+    const second = await advancePreparedOptions({ submit });
+    expect(second.prepared).toMatchObject({ recorded: 0, handedOff: 0 });
+    expect(asks).toHaveLength(1);
+    expect(second.resumed).toBe(0);
+
+    // The goal's blocked work runs after the handoff: one RESUMED row, once.
+    await getDb().run("UPDATE work_items SET state = 'SUCCEEDED', completed_at = ? WHERE id = ?", [new Date(Date.now() + 60_000).toISOString(), item.id]);
+    const third = await advancePreparedOptions({ submit });
+    expect(third.resumed).toBe(1);
+    const resumed = await kinds(PREPARED_RESUMED_KIND);
+    expect(resumed).toHaveLength(1);
+    expect(resumed[0]!.payload).toMatchObject({ changeRequestId: 'fcr_test_prepared', completedAfter: [item.id] });
+    expect((await advancePreparedOptions({ submit })).resumed).toBe(0);
+  });
+
+  it('a BROKEN requirement with a limit outside Brain is recorded but not engineered', async () => {
+    await assess(['BROKEN:ACCESS.READ']);
+    const submit: HandoffSubmit = async () => { throw new Error('must not be called'); };
+    const out = await advancePreparedOptions({ submit });
+    expect(out.prepared).toMatchObject({ recorded: 1, handedOff: 0, errors: [] });
+  });
+
+  it('the production tick reaches the producer; with no Brain repository grant nothing is handed off', async () => {
+    await assess([`MISSING:${DORMANT}`]);
+    await advanceSources();
+    expect(await kinds(PREPARED_OPTION_KIND)).toHaveLength(1);
+    expect(await kinds(PREPARED_HANDOFF_KIND)).toHaveLength(0);
   });
 });
