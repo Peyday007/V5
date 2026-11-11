@@ -1703,7 +1703,13 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
     durationMs: ms,
     evidenceClass: 'MEASURED',
-    ...(ctx.discovery ? { measures: { discovery: ctx.discovery } } : {}),
+    // The route's answer as a structured fact, not only prose: which model, and
+    // when it failed at the model call, which cause its own error names. This is
+    // what stageCapacity's route reading counts to say whether a route is restored.
+    measures: {
+      ...(ctx.discovery ? { discovery: ctx.discovery } : {}),
+      route: { model: worker.model, ok, cause: !ok && /^model call failed/.test(ctx.why) ? classifyRouteFailure(ctx.why) : null },
+    },
   });
   return { claimed: one, ok, ms };
 }
