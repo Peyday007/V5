@@ -8,7 +8,7 @@ import { getDb } from '../db/database.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
 import { evidenceProblem } from '../domain/economy.ts';
 import type {
-  ActivityVariable, EconomicEdge, EconomicRelation, EndpointKind, EvidenceStatus, OperatorKind,
+  ActivityVariable, EconomicEdge, EconomicRelation, EndpointKind, EvidenceStatus, GoalPolicyRecord, OperatorKind, PolicyKind,
   Possibility, PossibilityCondition, PossibilityEdge, PossibilityKind, PossibilityRelation,
   PossibilityRequirements, Stage, StageMeasurement,
 } from '../domain/economy.ts';
@@ -234,4 +234,43 @@ export async function stageMeasurements(
     researchJobs: Number(r['research_jobs']), premiumAiJobs: Number(r['premium_ai_jobs']),
     note: sn(r['note']), measuredAt: s(r['measured_at']),
   }));
+}
+
+function mapGoalPolicy(r: Row): GoalPolicyRecord {
+  const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+  return {
+    workstreamId: s(r['workstream_id']), kind: s(r['kind']) as PolicyKind,
+    reliabilityNormal: num(r['reliability_normal']), reliabilityAdverse: num(r['reliability_adverse']),
+    setBy: s(r['set_by']), setAt: s(r['set_at']),
+  };
+}
+
+/**
+ * Record a goal's current policy. One row per goal: a later decision replaces
+ * the current one, and the caller records the change as a workstream event so
+ * history is kept where every other goal decision is kept.
+ */
+export async function setGoalPolicyRow(input: {
+  workstreamId: string;
+  kind: PolicyKind;
+  reliabilityNormal: number | null;
+  reliabilityAdverse: number | null;
+  setBy: string;
+}): Promise<GoalPolicyRecord> {
+  const at = nowIso();
+  await getDb().run(
+    `INSERT INTO goal_policies (workstream_id, kind, reliability_normal, reliability_adverse, set_by, set_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT (workstream_id) DO UPDATE SET kind = excluded.kind,
+       reliability_normal = excluded.reliability_normal, reliability_adverse = excluded.reliability_adverse,
+       set_by = excluded.set_by, set_at = excluded.set_at`,
+    [input.workstreamId, input.kind, input.reliabilityNormal, input.reliabilityAdverse, input.setBy, at],
+  );
+  return { ...input, setAt: at };
+}
+
+/** A goal's recorded policy, or null when nobody has set one (read as SQUEEZE). */
+export async function getGoalPolicyRow(workstreamId: string): Promise<GoalPolicyRecord | null> {
+  const rows = await getDb().all<Row>('SELECT * FROM goal_policies WHERE workstream_id = ?', [workstreamId]);
+  return rows[0] ? mapGoalPolicy(rows[0]) : null;
 }

@@ -134,3 +134,20 @@ export function evidenceProblem(input: {
   }
   return null;
 }
+
+/**
+ * The policy a goal is held to. SQUEEZE is one of these, not the definition of
+ * a goal; a goal with no recorded policy is read as SQUEEZE.
+ */
+export const POLICY_KINDS = ['SQUEEZE', 'LONG_TERM_VENTURE', 'CREATIVE', 'RESEARCH', 'RECURRING_INCOME'] as const;
+export type PolicyKind = (typeof POLICY_KINDS)[number];
+
+/** A goal's recorded policy (`goal_policies`). Reliability overrides exist only on SQUEEZE. */
+export interface GoalPolicyRecord {
+  workstreamId: string;
+  kind: PolicyKind;
+  reliabilityNormal: number | null;
+  reliabilityAdverse: number | null;
+  setBy: string;
+  setAt: string;
+}

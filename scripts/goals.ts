@@ -23,7 +23,13 @@
  *   npm run goals -- terms <wst_…> [--outcome "…"] [--due 2026-10-01] [--commitment CUSTOMER] --admin a@b
  *   npm run goals -- create --reason "Collect 10000 dollars in 30 days" --project prj_… --due 2026-11-27 SETTLED_CASH-1000000-USD-50000-120 --admin a@b
  *   npm run goals -- target <wst_…> SETTLED_CASH-1000000-USD-50000-120 --project prj_… --admin a@b
+ *   npm run goals -- policy <wst_…> LONG_TERM_VENTURE --admin a@b
+ *   npm run goals -- policy <wst_…> SQUEEZE [--normal 0.9] [--adverse 0.8] --admin a@b
  *   npm run goals -- plan <wst_…>            (reads and prints; writes nothing)
+ *
+ * A policy is what the goal is held to: SQUEEZE (the default for a goal nobody
+ * has set one on), LONG_TERM_VENTURE, CREATIVE, RESEARCH or RECURRING_INCOME.
+ * Only SQUEEZE carries a reliability standard.
  *
  * A target spec is METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS]], dashes
  * only, so it passes the workflow's id check: the figure, how much, in which
@@ -57,6 +63,7 @@ import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { measurePlan, measurementLines } from '../server/services/economy/measure/index.ts';
+import { POLICY_KINDS, gateRecommendation, readGoalPolicy, setGoalPolicy } from '../server/services/goals/policy.ts';
 import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 
 class Halt extends Error {}
@@ -437,12 +444,54 @@ function printPlan(reading: PlanReading): void {
   if (reading.excluded.length > 15) console.log(`  left out    … and ${reading.excluded.length - 15} more`);
 }
 
+async function policyCommand(): Promise<void> {
+  const adminId = await administrator();
+  const [, goalId, kind] = words();
+  if (!goalId || !kind) fail(`policy needs a goal id and one of ${POLICY_KINDS.join(', ')}.`);
+  const ratio = (name: string): number | undefined => {
+    const raw = flag(name);
+    if (raw === undefined) return undefined;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) fail(`--${name} must be a number between 0 and 1.`);
+    return n;
+  };
+  const reliability: { normal?: number; adverse?: number } = {};
+  const normal = ratio('normal');
+  const adverse = ratio('adverse');
+  if (normal !== undefined) reliability.normal = normal;
+  if (adverse !== undefined) reliability.adverse = adverse;
+  const result = await setGoalPolicy({ goalId, kind, reliability, actorRef: `person:${adminId}` });
+  if (!result.ok) fail(`The policy was not set: ${result.reason}`);
+  const r = result.policy.reliability;
+  console.log(`policy ${goalId}: ${result.policy.kind}${r ? ` (reliability ${r.normal} normal, ${r.adverse} adverse)` : ', not held to squeeze rules'}`);
+  console.log('GOALS: OK');
+}
+
+/** The goal's recorded policy, and whether the plan may be recommended under it. */
+function printPolicy(reading: PlanReading, policy: Awaited<ReturnType<typeof readGoalPolicy>>): void {
+  const sweep = reading.strategies.map((one) => one.sweep).find((one) => one.goalMetShare !== null && !one.probabilistic);
+  const gate = gateRecommendation({
+    policy,
+    probability: {
+      measured: reading.measuredChance ? { lowerBound: reading.measuredChance.lowerBound, sampleSize: reading.measuredChance.sampleSize } : null,
+      modelled: null,
+      sweepCoverage: sweep?.goalMetShare ?? null,
+    },
+    combinedSetbacks: [],
+  });
+  const r = policy.reliability;
+  console.log(`  policy      ${policy.kind}${r ? ` (reliability ${Math.round(r.normal * 100)}% normal, ${Math.round(r.adverse * 100)}% adverse)` : ', not held to squeeze rules'}`);
+  console.log(`  recommend   ${gate.notSqueeze ? 'not gated: this policy has no squeeze reliability gate' : gate.recommendable ? 'yes' : 'no'}`);
+  for (const reason of gate.reasons) console.log(`    because   ${reason}`);
+}
+
 async function plan(): Promise<void> {
   const [, goalId] = words();
   if (!goalId) fail('plan needs a goal id.');
   const reading = await readGoalPlan({ goalId, persist: false });
   if (!reading) fail(`No targeted goal ${goalId}.`);
   printPlan(reading);
+  printPolicy(reading, await readGoalPolicy({ goalId, target: (await getWorkstream(goalId))?.target ?? null, daysLeft: reading.target.daysLeft }));
   for (const line of measurementLines(await measurePlan(reading))) console.log(line);
   await printSearching(reading);
   const history = await listReadings(goalId);
@@ -469,10 +518,12 @@ async function main(): Promise<void> {
     case 'create':
     case 'target':
       return await targetCommand(command);
+    case 'policy':
+      return await policyCommand();
     case 'plan':
       return await plan();
     default:
-      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, plan');
+      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, policy, plan');
       process.exitCode = 1;
       console.log('GOALS: FAIL');
   }

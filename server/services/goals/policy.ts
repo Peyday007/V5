@@ -6,9 +6,11 @@
  * long-term venture, a creative goal, a research goal or a recurring-income
  * goal does not inherit its rules, and is never judged as though it did.
  *
- * Pure: it reads nothing and writes nothing. The plan calls `gateRecommendation`
- * with what it already holds, and gets back whether the plan may be
- * recommended and every reason it may not.
+ * `policyFor` and `gateRecommendation` are pure. A goal's policy kind is a
+ * person's decision recorded in `goal_policies`: `setGoalPolicy` is its one
+ * writer and `readGoalPolicy` the one function the plan reads it through, so a
+ * long-term or creative goal reaches its own policy in production rather than
+ * only in a test. A goal nobody has set a policy on is SQUEEZE.
  *
  *   * A probability is *supported* only when it comes from comparable finished
  *     outcomes (a measured rate with a sample and a lower bound) or from an
@@ -21,9 +23,11 @@
  *   * A plan must also survive combined ordinary setbacks, not only single ones.
  */
 import type { GoalTarget } from '../../domain/register.ts';
+import { POLICY_KINDS, type PolicyKind } from '../../domain/economy.ts';
+import { getGoalPolicyRow, setGoalPolicyRow } from '../../repos/economy.ts';
+import { getWorkstream, recordWorkstreamEvent } from '../../repos/register.ts';
 
-export const POLICY_KINDS = ['SQUEEZE', 'LONG_TERM_VENTURE', 'CREATIVE', 'RESEARCH', 'RECURRING_INCOME'] as const;
-export type PolicyKind = (typeof POLICY_KINDS)[number];
+export { POLICY_KINDS, type PolicyKind };
 
 /** The stages of a complete goal; reliability is judged across all of them. */
 export const GOAL_STAGES = ['ACQUISITION', 'FULFILMENT', 'PAYMENT', 'CAPACITY', 'TIMING', 'CONTINGENCIES'] as const;
@@ -198,4 +202,65 @@ export function gateRecommendation(input: GateInput): GateResult {
 
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
+}
+
+export type SetGoalPolicyResult = { ok: true; policy: GoalPolicy } | { ok: false; reason: string };
+
+/**
+ * Record a person's decision about which policy a goal is held to. Refuses an
+ * unknown goal, an unknown kind, a reliability override on a policy that has
+ * no reliability standard, and an override that is out of range or puts the
+ * adverse bar above the normal one. The change is a workstream event, so a
+ * goal moved off or onto SQUEEZE is visible rather than silent.
+ */
+export async function setGoalPolicy(input: {
+  goalId: string;
+  kind: string;
+  reliability?: Partial<ReliabilityStandard>;
+  actorRef: string;
+}): Promise<SetGoalPolicyResult> {
+  const goal = await getWorkstream(input.goalId);
+  if (!goal) return { ok: false, reason: `No goal ${input.goalId}.` };
+  if (!(POLICY_KINDS as readonly string[]).includes(input.kind)) {
+    return { ok: false, reason: `The policy must be one of ${POLICY_KINDS.join(', ')}.` };
+  }
+  const kind = input.kind as PolicyKind;
+  const normal = input.reliability?.normal ?? null;
+  const adverse = input.reliability?.adverse ?? null;
+  if (kind !== 'SQUEEZE' && (normal !== null || adverse !== null)) {
+    return { ok: false, reason: `A ${kind} goal is not held to a reliability standard, so it cannot carry one.` };
+  }
+  if (normal !== null || adverse !== null) {
+    const merged = { normal: normal ?? DEFAULT_RELIABILITY.normal, adverse: adverse ?? DEFAULT_RELIABILITY.adverse };
+    if (!validStandard(merged)) {
+      return { ok: false, reason: 'A reliability standard must be above 0 and at most 1, with the adverse bar no higher than the normal one.' };
+    }
+  }
+  await setGoalPolicyRow({ workstreamId: goal.id, kind, reliabilityNormal: normal, reliabilityAdverse: adverse, setBy: input.actorRef });
+  const standard = kind === 'SQUEEZE' ? ` (reliability ${pct(normal ?? DEFAULT_RELIABILITY.normal)} normal, ${pct(adverse ?? DEFAULT_RELIABILITY.adverse)} adverse)` : '';
+  await recordWorkstreamEvent({
+    workstreamId: goal.id,
+    kind: 'GOAL_POLICY_SET',
+    summary: `Policy: ${kind}${standard}.`,
+    detail: { kind, reliabilityNormal: normal, reliabilityAdverse: adverse },
+    actorRef: input.actorRef,
+  });
+  return { ok: true, policy: await readGoalPolicy({ goalId: goal.id, target: goal.target, daysLeft: null }) };
+}
+
+/**
+ * The policy a goal is held to, read from its recorded decision. This is the
+ * one function the plan reads a policy through. No row means SQUEEZE with the
+ * default standard, exactly as before a policy could be recorded.
+ */
+export async function readGoalPolicy(input: {
+  goalId: string;
+  target?: GoalTarget | null;
+  daysLeft?: number | null;
+}): Promise<GoalPolicy> {
+  const row = await getGoalPolicyRow(input.goalId);
+  const reliability: Partial<ReliabilityStandard> = {};
+  if (row?.reliabilityNormal != null) reliability.normal = row.reliabilityNormal;
+  if (row?.reliabilityAdverse != null) reliability.adverse = row.reliabilityAdverse;
+  return policyFor({ kind: row?.kind ?? null, target: input.target ?? null, daysLeft: input.daysLeft ?? null, overrides: { reliability } });
 }
