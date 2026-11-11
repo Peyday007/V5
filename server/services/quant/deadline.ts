@@ -22,6 +22,7 @@
  */
 
 import { listMoneyEntries } from '../../repos/cashLedger.ts';
+import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import type { CashMoneyEntry } from '../../domain/types.ts';
 
 export const RESEARCH_DECISIONS = ['IGNORE', 'RESEARCH_FIRST', 'LEARN_WHILE_EXECUTING', 'ACT_ON_RECONSTRUCTION'] as const;
@@ -263,8 +264,11 @@ export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
       unknowns.push(`${k.toLowerCase()} stated value is not a valid amount, ignored`);
     } else identities[k] = stated;
   }
+  // Gross margin is row-stated when both of its sides are: billings net of refunds and chargebacks,
+  // minus supplier outlays. With no outlay row the cost side is unknown, never zero (invariant 39).
+  const margin = billed !== null && outlays.length > 0 ? billed - refundTotal - sum(outlays.map((o) => o.amount)) : null;
   // Identities the rows themselves state are derived from the rows; a caller-supplied figure never overrides them.
-  const derived: Partial<Record<CashIdentity, number | null>> = { GROSS_BILLINGS: billed, SETTLED_CASH: received, USABLE_CASH: usable };
+  const derived: Partial<Record<CashIdentity, number | null>> = { GROSS_BILLINGS: billed, GROSS_MARGIN: margin, SETTLED_CASH: received, USABLE_CASH: usable };
   for (const k of Object.keys(derived) as CashIdentity[]) {
     const fromRows = derived[k] ?? null;
     if (fromRows === null) continue;
@@ -301,8 +305,21 @@ export interface RouteScore {
 }
 
 /**
- * Rank routes for an objective. Contribution is the stated gross margin times the
- * probability it is collected; turnover divides by the capital held for the cycle.
+ * The share of billings the rows show collected, in [0, 1]; null when either side
+ * is unstated. Used as the collection probability when the caller states none, so
+ * a route on production rows is scored from what was measured, not left unscored.
+ */
+export function observedCollectionRate(money: RouteMoneyVelocity): number | null {
+  const billed = money.identities.GROSS_BILLINGS;
+  const received = money.identities.SETTLED_CASH;
+  if (billed === null || received === null || billed <= 0) return null;
+  return Math.min(1, Math.max(0, received / billed));
+}
+
+/**
+ * Rank routes for an objective. Contribution is the gross margin times the
+ * probability it is collected (stated by the caller, else measured from the rows);
+ * turnover divides by the capital held for the cycle.
  * A route with an unknown input is scored null and sorted last, never as zero, and
  * retaining all cash is not a requirement: nothing here reads RETAINED_CASH.
  */
@@ -312,8 +329,8 @@ export function scoreRoutes(
 ): RouteScore[] {
   const scored = routes.map(({ money, collectionProbability }) => {
     const margin = money.identities.GROSS_MARGIN;
-    const p = collectionProbability;
-    const contribution = margin === null || p === undefined || p < 0 || p > 1 ? null : margin * p;
+    const p = collectionProbability ?? observedCollectionRate(money) ?? undefined;
+    const contribution = margin === null || p === undefined || !Number.isFinite(p) || p < 0 || p > 1 ? null : margin * p;
     const cycle =
       money.daysLeadToCommitment !== null && money.daysCommitmentToFunds !== null && money.daysFundsToUsableCash !== null
         ? money.daysLeadToCommitment + money.daysCommitmentToFunds + money.daysFundsToUsableCash
@@ -338,10 +355,16 @@ export function scoreRoutes(
  *    usable, so it dates usable cash and is never counted as a second receipt;
  *  - COST and COMMITMENT_PAID are supplier outlays whose funder no row states
  *    (so spend stays unattributed rather than assumed self-funded);
- *  - REFUND is a refund. Lead time has no ledger row and stays unknown.
+ *  - REFUND is a refund.
+ * Lead time has no ledger row: it is the instant the opportunity (the lead) was
+ * recorded, passed in `leadAtByRoute` from the opportunity row itself; a route
+ * whose lead row is not supplied keeps lead time unknown.
  * Entries with no opportunity belong to no route and are left out.
  */
-export function routeInputsFromEntries(entries: readonly CashMoneyEntry[]): RouteMoneyInput[] {
+export function routeInputsFromEntries(
+  entries: readonly CashMoneyEntry[],
+  leadAtByRoute: ReadonlyMap<string, string> = new Map(),
+): RouteMoneyInput[] {
   const byRoute = new Map<string, CashMoneyEntry[]>();
   for (const e of entries) {
     if (!e.opportunityId) continue;
@@ -380,6 +403,7 @@ export function routeInputsFromEntries(entries: readonly CashMoneyEntry[]): Rout
     }
     inputs.push({
       routeKey,
+      leadAt: leadAtByRoute.get(routeKey),
       commitmentAt: agreed.sort()[0],
       usableCashAt: settled.sort()[0],
       events,
@@ -390,8 +414,13 @@ export function routeInputsFromEntries(entries: readonly CashMoneyEntry[]): Rout
 
 /** Read one project's money ledger and quantify every route in it, in one currency. */
 export async function readRouteMoney(input: { projectId: string; currency: string }): Promise<RouteMoneyVelocity[]> {
-  const entries = await listMoneyEntries({ projectId: input.projectId, currency: input.currency, limit: 2000 });
-  return routeInputsFromEntries(entries).map(quantifyRouteMoney);
+  const [entries, opportunities] = await Promise.all([
+    listMoneyEntries({ projectId: input.projectId, currency: input.currency, limit: 2000 }),
+    listOpportunities({ projectId: input.projectId }),
+  ]);
+  // The opportunity row is the lead, and its creation instant is when the lead was recorded.
+  const leadAt = new Map(opportunities.map((o) => [o.id, o.createdAt] as const));
+  return routeInputsFromEntries(entries, leadAt).map(quantifyRouteMoney);
 }
 
 /** The same routes ranked for an objective; unknown inputs score null and sort last. */

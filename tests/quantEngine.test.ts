@@ -11,7 +11,7 @@ import { collapseLineage, classify, onScale, pool } from '../server/services/qua
 import { composeArrangement } from '../server/services/quant/mechanism.ts';
 import { optimizePortfolio, type Activity } from '../server/services/quant/portfolio.ts';
 import { informationValue } from '../server/services/quant/value.ts';
-import { decideResearch, quantifyRouteMoney, routeInputsFromEntries, scoreRoutes, CASH_IDENTITIES } from '../server/services/quant/deadline.ts';
+import { decideResearch, observedCollectionRate, quantifyRouteMoney, routeInputsFromEntries, scoreRoutes, CASH_IDENTITIES } from '../server/services/quant/deadline.ts';
 import { toScenarioInput } from '../server/services/quant/export.ts';
 import { solveProblem, type QuantProblem } from '../server/services/quant/problem.ts';
 import { runScenarioModel } from '../server/services/scenario/run.ts';
@@ -606,5 +606,54 @@ describe('MONEY-13-4. route money velocity and distinct cash identities (equipme
     expect(m.daysFundsToUsableCash).toBe(3);
     expect(m.daysLeadToCommitment).toBeNull();
     expect(m.usableCash).toBe(1_100);
+    // Gross margin is row-stated: 1500 billed − 100 refunded − 300 outlays.
+    expect(m.identities.GROSS_MARGIN).toBe(1_100);
+  });
+
+  it('scores routes read only from ledger rows and lead rows, with no hand-stated identities (F7)', () => {
+    const entry = (id: string, opportunityId: string, kind: CashMoneyEntry['kind'], cents: number, occurredAt: string, fundsAvailableAt: string | null = null): CashMoneyEntry => ({
+      id, projectId: 'p', opportunityId, commitmentId: null, idempotencyKey: null, payloadFingerprint: null, kind, amountCents: cents, currency: 'USD',
+      verifiedReference: null, fundsAvailableAt, occurredAt, note: null, recordedBy: 'test', createdAt: occurredAt,
+    });
+    const rows = [
+      // Quick route: small, fully collected, short cycle.
+      entry('q1', 'quick', 'PIPELINE_AGREED', 50_000, '2026-09-03T00:00:00Z'),
+      entry('q2', 'quick', 'COST', 10_000, '2026-09-04T00:00:00Z'),
+      entry('q3', 'quick', 'CUSTOMER_PAYMENT', 50_000, '2026-09-05T00:00:00Z'),
+      entry('q4', 'quick', 'SETTLEMENT', 50_000, '2026-09-06T00:00:00Z'),
+      // Large route: bigger margin, half collected so far, long cycle.
+      entry('l1', 'large', 'PIPELINE_AGREED', 400_000, '2026-09-20T00:00:00Z'),
+      entry('l2', 'large', 'COST', 100_000, '2026-09-21T00:00:00Z'),
+      entry('l3', 'large', 'CUSTOMER_PAYMENT', 200_000, '2026-10-10T00:00:00Z'),
+      entry('l4', 'large', 'SETTLEMENT', 200_000, '2026-10-12T00:00:00Z'),
+      // No outlay row: the cost side is unknown, so margin and both scores stay unknown.
+      entry('n1', 'no-cost', 'PIPELINE_AGREED', 90_000, '2026-09-02T00:00:00Z'),
+      entry('n2', 'no-cost', 'CUSTOMER_PAYMENT', 90_000, '2026-09-03T00:00:00Z'),
+      entry('n3', 'no-cost', 'SETTLEMENT', 90_000, '2026-09-04T00:00:00Z'),
+    ];
+    const leads = new Map([['quick', '2026-09-01T00:00:00Z'], ['large', '2026-09-01T00:00:00Z'], ['no-cost', '2026-09-01T00:00:00Z']]);
+    const money = routeInputsFromEntries(rows, leads).map(quantifyRouteMoney);
+    const by = (k: string) => money.find((m) => m.routeKey === k)!;
+    expect(by('quick').identities.GROSS_MARGIN).toBe(400);
+    expect(by('quick').daysLeadToCommitment).toBe(2);
+    expect(by('large').identities.GROSS_MARGIN).toBe(3_000);
+    expect(by('large').daysLeadToCommitment).toBe(19);
+    expect(by('no-cost').identities.GROSS_MARGIN).toBeNull();
+    expect(observedCollectionRate(by('large'))).toBe(0.5);
+
+    const contribution = scoreRoutes(money.map((m) => ({ money: m })), 'CONTRIBUTION');
+    expect(contribution.map((s) => s.routeKey)).toEqual(['large', 'quick', 'no-cost']);
+    expect(contribution[0]!.riskAdjustedContribution).toBe(1_500);
+    expect(contribution[1]!.riskAdjustedContribution).toBe(400);
+    expect(contribution[2]!.riskAdjustedContribution).toBeNull();
+
+    const turnover = scoreRoutes(money.map((m) => ({ money: m })), 'TURNOVER');
+    // quick: 400 / (100 peak × 5 days) = 0.8; large: 1500 / (1000 peak × 41 days) ≈ 0.037.
+    expect(turnover.map((s) => s.routeKey)).toEqual(['quick', 'large', 'no-cost']);
+    expect(turnover[0]!.capitalTurnover).toBeCloseTo(0.8, 9);
+    expect(turnover[1]!.capitalTurnover).toBeCloseTo(1_500 / (1_000 * 41), 9);
+    expect(turnover[2]!.capitalTurnover).toBeNull();
+    // A stated probability still governs over the measured one.
+    expect(scoreRoutes([{ money: by('large'), collectionProbability: 1 }], 'CONTRIBUTION')[0]!.riskAdjustedContribution).toBe(3_000);
   });
 });
