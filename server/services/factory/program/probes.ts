@@ -258,7 +258,8 @@ define('r01.com-13-5', async () => {
   const openings = await getDb().all<{ project_id: string; opportunity_id: string }>(
     `SELECT DISTINCT project_id, opportunity_id FROM capital_structures ORDER BY project_id, opportunity_id`,
   );
-  if (openings.length === 0) return { ok: false, detail: 'no capital_structures rows: no role to assess on production records' };
+  // No opening yet is not a defect a repair can fix: UNKNOWN, asked again (§39: never a pass on nothing).
+  if (openings.length === 0) return { ok: null, detail: 'no capital_structures rows: no role to assess on production records' };
   let regulated = 0;
   for (const o of openings) {
     const a = await assess({ projectId: o.project_id, opportunityId: o.opportunity_id });
