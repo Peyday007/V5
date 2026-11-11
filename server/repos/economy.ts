@@ -3,6 +3,15 @@
  * measurements. Every read is scoped by project, and the stores a person's
  * goals touch are scoped by owner as well. Writes are idempotent by a unique
  * index: a loser reads back the winner's row.
+ *
+ * Stage measurements are benchmarks: `services/economy/measure` derives a
+ * goal's per-stage reading on the read path and stores nothing, and
+ * `recordGoalBenchmark` is how a reading is kept — five rows, one per stage,
+ * sharing one benchmark id and one timestamp — so a later reading can be set
+ * against it (`npm run goals -- benchmark`). The table's columns are NOT NULL,
+ * so a figure the reading could not state is written as 0 and named in the
+ * row's note; `goalBenchmarks` restores it to null. An unknown is never read
+ * back as a zero.
  */
 import { getDb } from '../db/database.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
@@ -12,6 +21,7 @@ import type {
   Possibility, PossibilityCondition, PossibilityEdge, PossibilityKind, PossibilityRelation,
   PossibilityRequirements, Stage, StageMeasurement,
 } from '../domain/economy.ts';
+import { STAGES } from '../domain/economy.ts';
 
 interface Row { [key: string]: unknown }
 const s = (v: unknown): string => v as string;
@@ -234,4 +244,176 @@ export async function stageMeasurements(
     researchJobs: Number(r['research_jobs']), premiumAiJobs: Number(r['premium_ai_jobs']),
     note: sn(r['note']), measuredAt: s(r['measured_at']),
   }));
+}
+
+// ── Benchmarks: a goal's stage reading, kept so a later one can be compared ──
+
+/** One stage of a benchmark. A null is a figure the reading could not state. */
+export interface BenchmarkStage {
+  stage: Stage;
+  timeMs: number | null;
+  screened: number | null;
+  rejected: number | null;
+  advanced: number | null;
+  researchJobs: number | null;
+  aiPasses: number | null;
+}
+
+export interface GoalBenchmark {
+  benchmarkId: string;
+  goalId: string;
+  label: string | null;
+  measuredAt: string;
+  stages: BenchmarkStage[];
+  relevantOpenings: number | null;
+  supportedPlans: number | null;
+}
+
+export const BENCHMARK_FIELDS = ['timeMs', 'screened', 'rejected', 'advanced', 'researchJobs', 'aiPasses'] as const;
+export type BenchmarkField = (typeof BENCHMARK_FIELDS)[number];
+
+interface BenchmarkNote {
+  benchmark: string;
+  label: string | null;
+  unknown: BenchmarkField[];
+  relevantOpenings: number | null;
+  supportedPlans: number | null;
+}
+
+function nonNegative(value: number | null, what: string): number {
+  if (value === null) return 0;
+  if (!Number.isFinite(value) || value < 0) throw new Error(`A benchmark figure must be a non-negative number: ${what} was ${value}.`);
+  return Math.round(value);
+}
+
+/**
+ * Keeps one reading of a goal as a benchmark: a row per stage it names, all
+ * written in one transaction under one id and one timestamp, so a benchmark is
+ * either whole or absent.
+ */
+export async function recordGoalBenchmark(input: {
+  projectId: string;
+  ownerUserId: string;
+  goalId: string;
+  label?: string | null;
+  stages: BenchmarkStage[];
+  relevantOpenings: number | null;
+  supportedPlans: number | null;
+}): Promise<GoalBenchmark> {
+  if (input.stages.length === 0) throw new Error('A benchmark needs at least one stage.');
+  const seen = new Set<string>();
+  for (const one of input.stages) {
+    if (!(STAGES as readonly string[]).includes(one.stage)) throw new Error(`Unknown stage ${one.stage}.`);
+    if (seen.has(one.stage)) throw new Error(`Stage ${one.stage} appears twice in one benchmark.`);
+    seen.add(one.stage);
+  }
+  const benchmarkId = newId('smb');
+  const at = nowIso();
+  const label = input.label?.trim() ? input.label.trim().slice(0, 120) : null;
+  const db = getDb();
+  await db.transaction(async () => {
+    for (const one of input.stages) {
+      const note: BenchmarkNote = {
+        benchmark: benchmarkId,
+        label,
+        unknown: BENCHMARK_FIELDS.filter((field) => one[field] === null),
+        relevantOpenings: input.relevantOpenings,
+        supportedPlans: input.supportedPlans,
+      };
+      await db.run(
+        `INSERT INTO stage_measurements (id, project_id, owner_user_id, goal_id, stage, duration_ms,
+           screened, rejected, advanced, research_jobs, premium_ai_jobs, note, measured_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [newId('smm'), input.projectId, input.ownerUserId, input.goalId, one.stage,
+          nonNegative(one.timeMs, `${one.stage} time`), nonNegative(one.screened, `${one.stage} screened`),
+          nonNegative(one.rejected, `${one.stage} rejected`), nonNegative(one.advanced, `${one.stage} advanced`),
+          nonNegative(one.researchJobs, `${one.stage} research jobs`), nonNegative(one.aiPasses, `${one.stage} AI passes`),
+          toJson(note), at],
+      );
+    }
+  });
+  return {
+    benchmarkId, goalId: input.goalId, label, measuredAt: at,
+    stages: input.stages.map((one) => ({ ...one })),
+    relevantOpenings: input.relevantOpenings, supportedPlans: input.supportedPlans,
+  };
+}
+
+function readNote(note: string | null): BenchmarkNote | null {
+  if (!note) return null;
+  const parsed = parseJson<Partial<BenchmarkNote> | null>(note, null);
+  if (!parsed || typeof parsed !== 'object' || typeof parsed.benchmark !== 'string') return null;
+  return {
+    benchmark: parsed.benchmark,
+    label: typeof parsed.label === 'string' ? parsed.label : null,
+    unknown: Array.isArray(parsed.unknown) ? parsed.unknown.filter((f): f is BenchmarkField => (BENCHMARK_FIELDS as readonly string[]).includes(f)) : [],
+    relevantOpenings: typeof parsed.relevantOpenings === 'number' ? parsed.relevantOpenings : null,
+    supportedPlans: typeof parsed.supportedPlans === 'number' ? parsed.supportedPlans : null,
+  };
+}
+
+/**
+ * Every benchmark kept for a goal, oldest first, scoped to its owner. A row
+ * recorded singly by `recordStageMeasurement` is a benchmark of one stage.
+ */
+export async function goalBenchmarks(projectId: string, ownerUserId: string, goalId: string): Promise<GoalBenchmark[]> {
+  const rows = await stageMeasurements(projectId, ownerUserId, goalId);
+  const byId = new Map<string, GoalBenchmark>();
+  for (const row of rows) {
+    const note = readNote(row.note);
+    const id = note?.benchmark ?? row.id;
+    const unknown = new Set(note?.unknown ?? []);
+    const value = (field: BenchmarkField, n: number): number | null => (unknown.has(field) ? null : n);
+    const stage: BenchmarkStage = {
+      stage: row.stage,
+      timeMs: value('timeMs', row.durationMs),
+      screened: value('screened', row.screened),
+      rejected: value('rejected', row.rejected),
+      advanced: value('advanced', row.advanced),
+      researchJobs: value('researchJobs', row.researchJobs),
+      aiPasses: value('aiPasses', row.premiumAiJobs),
+    };
+    const held = byId.get(id);
+    if (held) held.stages.push(stage);
+    else {
+      byId.set(id, {
+        benchmarkId: id, goalId: row.goalId, label: note?.label ?? null, measuredAt: row.measuredAt,
+        stages: [stage], relevantOpenings: note?.relevantOpenings ?? null, supportedPlans: note?.supportedPlans ?? null,
+      });
+    }
+  }
+  const out = [...byId.values()];
+  for (const one of out) one.stages.sort((a, b) => STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage));
+  return out.sort((a, b) => (a.measuredAt === b.measuredAt ? a.benchmarkId.localeCompare(b.benchmarkId) : a.measuredAt.localeCompare(b.measuredAt)));
+}
+
+export interface BenchmarkChange {
+  stage: Stage | null;
+  field: BenchmarkField | 'relevantOpenings' | 'supportedPlans';
+  before: number | null;
+  after: number | null;
+  /** after − before, or null when either side is unknown: no change is claimed from an unknown. */
+  delta: number | null;
+}
+
+/** Field by field, what moved between two benchmarks of one goal. Pure. */
+export function compareBenchmarks(before: GoalBenchmark, after: GoalBenchmark): BenchmarkChange[] {
+  const diff = (b: number | null, a: number | null): number | null => (b === null || a === null ? null : a - b);
+  const out: BenchmarkChange[] = [];
+  for (const stage of STAGES) {
+    const b = before.stages.find((one) => one.stage === stage);
+    const a = after.stages.find((one) => one.stage === stage);
+    if (!b && !a) continue;
+    for (const field of BENCHMARK_FIELDS) {
+      const bv = b ? b[field] : null;
+      const av = a ? a[field] : null;
+      if (bv === null && av === null) continue;
+      out.push({ stage, field, before: bv, after: av, delta: diff(bv, av) });
+    }
+  }
+  for (const field of ['relevantOpenings', 'supportedPlans'] as const) {
+    if (before[field] === null && after[field] === null) continue;
+    out.push({ stage: null, field, before: before[field], after: after[field], delta: diff(before[field], after[field]) });
+  }
+  return out;
 }

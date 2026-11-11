@@ -24,6 +24,13 @@
  *   npm run goals -- create --reason "Collect 10000 dollars in 30 days" --project prj_… --due 2026-11-27 SETTLED_CASH-1000000-USD-50000-120 --admin a@b
  *   npm run goals -- target <wst_…> SETTLED_CASH-1000000-USD-50000-120 --project prj_… --admin a@b
  *   npm run goals -- plan <wst_…>            (reads and prints; writes nothing)
+ *   npm run goals -- benchmark <wst_…> [--label before] [--project prj_…] --admin a@b
+ *
+ * `benchmark` keeps the goal's current stage measurement as rows in
+ * stage_measurements and prints it against the first and the previous kept
+ * benchmark, field by field — the before/after a speed claim needs. A figure
+ * either side could not state is printed as unknown and no change is claimed
+ * from it.
  *
  * A target spec is METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS]], dashes
  * only, so it passes the workflow's id check: the figure, how much, in which
@@ -56,7 +63,8 @@ import { discoveryYield, type YieldRow } from '../server/services/cash/discovery
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { measurePlan, measurementLines } from '../server/services/economy/measure/index.ts';
+import { measurePlan, measurementLines, STAGE_LABEL, type GoalMeasurement } from '../server/services/economy/measure/index.ts';
+import { compareBenchmarks, goalBenchmarks, recordGoalBenchmark, type BenchmarkChange, type GoalBenchmark } from '../server/repos/economy.ts';
 import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 
 class Halt extends Error {}
@@ -444,9 +452,81 @@ async function plan(): Promise<void> {
   if (!reading) fail(`No targeted goal ${goalId}.`);
   printPlan(reading);
   for (const line of measurementLines(await measurePlan(reading))) console.log(line);
+  const goal = await getWorkstream(goalId);
+  if (goal?.projectId) {
+    const kept = await goalBenchmarks(goal.projectId, goal.ownerUserId ?? '', goalId);
+    const first = kept[0];
+    const last = kept.at(-1);
+    if (!first || !last) console.log('  benchmark   none kept yet: `npm run goals -- benchmark <goal> --admin …` keeps one');
+    else if (first.benchmarkId === last.benchmarkId) console.log(`  benchmark   one kept, ${first.benchmarkId} at ${first.measuredAt}; nothing to compare it with yet`);
+    else printComparison('benchmark  ', first, last);
+  }
   await printSearching(reading);
   const history = await listReadings(goalId);
   for (const row of history.slice(-10)) console.log(`  history     ${row.created_at} ${row.verdict} chosen=${row.chosen_strategy ?? '—'}${row.scenario_run_id ? ` run=${row.scenario_run_id}` : ''}`);
+  console.log('GOALS: OK');
+}
+
+const FIELD_LABEL: Record<BenchmarkChange['field'], string> = {
+  timeMs: 'time', screened: 'screened', rejected: 'rejected', advanced: 'advanced',
+  researchJobs: 'research jobs', aiPasses: 'AI passes', relevantOpenings: 'relevant openings', supportedPlans: 'supported plans',
+};
+
+function figure(field: BenchmarkChange['field'], value: number | null): string {
+  if (value === null) return 'unknown';
+  return field === 'timeMs' ? `${Math.round(value / 60_000)}m` : String(value);
+}
+
+function printComparison(title: string, before: GoalBenchmark, after: GoalBenchmark): void {
+  console.log(`  ${title}  ${before.benchmarkId}${before.label ? ` (${before.label})` : ''} ${before.measuredAt} → ${after.benchmarkId}${after.label ? ` (${after.label})` : ''} ${after.measuredAt}`);
+  for (const change of compareBenchmarks(before, after)) {
+    const where = change.stage ? STAGE_LABEL[change.stage] : 'goal';
+    const moved = change.delta === null ? 'no change claimed: a side is unknown' : change.delta === 0 ? 'unchanged' : `${change.delta > 0 ? '+' : ''}${change.field === 'timeMs' ? `${Math.round(change.delta / 60_000)}m` : change.delta}`;
+    console.log(`    ${where} ${FIELD_LABEL[change.field]}: ${figure(change.field, change.before)} → ${figure(change.field, change.after)} (${moved})`);
+  }
+}
+
+/** The benchmark rows a measurement becomes: one per stage, nulls kept as nulls. */
+function benchmarkStages(measurement: GoalMeasurement): Parameters<typeof recordGoalBenchmark>[0]['stages'] {
+  return measurement.stages.map((one) => ({
+    stage: one.stage,
+    timeMs: one.timeMs,
+    screened: one.candidatesScreened,
+    rejected: one.candidatesRejected,
+    advanced: one.candidatesAdvanced,
+    researchJobs: one.researchJobs,
+    aiPasses: one.aiPasses,
+  }));
+}
+
+async function benchmark(): Promise<void> {
+  const adminId = await administrator();
+  const [, goalId] = words();
+  if (!goalId) fail('benchmark needs a goal id.');
+  const goal = await getWorkstream(goalId);
+  if (!goal) fail(`No goal ${goalId}.`);
+  const projectId = goal.projectId ?? flag('project') ?? fail('This goal names no project, so benchmark needs --project.');
+  const ownerUserId = goal.ownerUserId ?? adminId;
+  const reading = await readGoalPlan({ goalId, persist: false });
+  if (!reading) fail(`No targeted goal ${goalId}.`);
+  const measurement = await measurePlan(reading);
+  const earlier = await goalBenchmarks(projectId, ownerUserId, goalId);
+  const kept = await recordGoalBenchmark({
+    projectId, ownerUserId, goalId, label: flag('label') ?? null,
+    stages: benchmarkStages(measurement),
+    relevantOpenings: measurement.relevantOpenings,
+    supportedPlans: measurement.supportedPlans,
+  });
+  for (const line of measurementLines(measurement)) console.log(line);
+  console.log(`  benchmark   kept ${kept.benchmarkId}${kept.label ? ` (${kept.label})` : ''} at ${kept.measuredAt}: ${kept.stages.length} stage row(s) in stage_measurements`);
+  const first = earlier[0];
+  const previous = earlier.at(-1);
+  if (!first || !previous) console.log('  baseline    this is the first benchmark of this goal; the next one is compared against it');
+  else {
+    printComparison('vs first   ', first, kept);
+    if (previous.benchmarkId !== first.benchmarkId) printComparison('vs previous', previous, kept);
+  }
+  await recordWorkstreamEvent({ workstreamId: goalId, kind: 'GOAL_BENCHMARK_KEPT', summary: `Stage benchmark ${kept.benchmarkId}${kept.label ? ` (${kept.label})` : ''} kept: ${kept.stages.length} stage(s), ${earlier.length} earlier.`, actorRef: `person:${adminId}` });
   console.log('GOALS: OK');
 }
 
@@ -471,8 +551,10 @@ async function main(): Promise<void> {
       return await targetCommand(command);
     case 'plan':
       return await plan();
+    case 'benchmark':
+      return await benchmark();
     default:
-      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, plan');
+      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, plan, benchmark');
       process.exitCode = 1;
       console.log('GOALS: FAIL');
   }
