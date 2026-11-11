@@ -1,0 +1,82 @@
+# The three businesses' launch, finished by Brain as soon as the owner's
+# accounts exist (fast-cash/launch-2026-11-11/README.md).
+#
+# Every hour it runs `scripts/launch/run.ts run`. Each stage is idempotent
+# against the platform itself, so a stage with nothing left to do costs a few
+# reads, and a stage whose credential is not saved yet reports the exact
+# personal action and does nothing else:
+#
+#   Stripe  — the mailer's 8 payment links          STRIPE_SECRET_KEY
+#   Mailer  — order form, sales kit, card and rate card filled with the links
+#             and the owner's details read from Stripe (artifact `launch-mailer`)
+#   Etsy    — 8 digital listings created, files and photos uploaded, published
+#   Store   — 10 print-on-demand products created and published
+#
+# The owner's only part is creating and verifying the accounts and saving each
+# platform's key as a repository secret; nothing here asks him for anything
+# else. The status is the job summary of the latest run.
+name: Launch
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'run | dry-run'
+        required: true
+        default: run
+      only:
+        description: 'optional: stripe | mailer | etsy | store'
+        required: false
+        default: ''
+
+concurrency:
+  group: launch-businesses
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  launch:
+    name: Finish the launch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Browser for the mailer's renders
+        run: |
+          npm i -g playwright@1.49.1
+          npx -y playwright@1.49.1 install --with-deps chromium
+      - name: Run
+        env:
+          MODE: ${{ inputs.mode || 'run' }}
+          ONLY: ${{ inputs.only }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          ETSY_API_KEY: ${{ secrets.ETSY_API_KEY }}
+          ETSY_SHARED_SECRET: ${{ secrets.ETSY_SHARED_SECRET }}
+          ETSY_REFRESH_TOKEN: ${{ secrets.ETSY_REFRESH_TOKEN }}
+          ETSY_AUTH_REDIRECT_URL: ${{ secrets.ETSY_AUTH_REDIRECT_URL }}
+          ETSY_REDIRECT_URI: ${{ secrets.ETSY_REDIRECT_URI }}
+        run: |
+          export NODE_PATH="$(npm root -g)"
+          npx tsx scripts/launch/run.ts "$MODE" $ONLY
+      - name: Finished materials
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-out
+          path: |
+            .launch-out/summary.md
+            .launch-out/results.json
+            .launch-out/stripe-links.json
+            .launch-out/mailer/*.md
+            .launch-out/mailer/mockup/
+          if-no-files-found: ignore
+          retention-days: 90

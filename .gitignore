@@ -26,3 +26,4 @@ _server.mjs
 # Finish the Job: per-session ledger and the Ralph Loop state it drives
 .claude/finish-job/
 .claude/ralph-loop.local.md
+.launch-out/
