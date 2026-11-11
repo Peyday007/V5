@@ -262,9 +262,13 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
   });
   // Combine: one owner, one objective. A weakness on a component whose candidate
   // has not yet been sent to Factory joins it rather than racing it.
-  const open = (await listCandidates({ open: true })).filter(
-    (c) => c.id !== candidate.id && c.ownerComponent === candidate.ownerComponent && !c.changeRequestId && c.createdAt <= candidate.createdAt,
-  );
+  // A gap handed to a non-software owner carries its own rows (needs, openings) to that owner: folding it
+  // into another candidate would leave those rows with nobody (S-0249).
+  const open = executionRouteOf(candidate)
+    ? []
+    : (await listCandidates({ open: true })).filter(
+        (c) => c.id !== candidate.id && c.ownerComponent === candidate.ownerComponent && !c.changeRequestId && !executionRouteOf(c) && c.createdAt <= candidate.createdAt,
+      );
   const host = open[0];
   if (host) {
     const joined = [...((host.evidence['combined'] as string[] | undefined) ?? []), candidate.weaknessKey];
@@ -276,6 +280,45 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
     report.decided.push(`${candidate.weaknessKey} COMBINED`);
   }
 }
+
+/** The origination an originated weakness carries, read without importing the originator. */
+function originationOf(weakness: Weakness): Record<string, unknown> | null {
+  const origination = (weakness as { origination?: unknown }).origination;
+  return origination && typeof origination === 'object' ? (origination as Record<string, unknown>) : null;
+}
+
+/**
+ * The non-software owner a candidate's gap belongs to (S-0249), from the route its originator
+ * recorded: a connector, a commercial interaction, information, a watched fact or a person.
+ * Null for every gap the Factory or method research may own.
+ */
+export function executionRouteOf(candidate: Pick<ImprovementCandidate, 'evidence'>): {
+  kind: 'INTEGRATION' | 'COMMERCIAL' | 'RESEARCH' | 'WATCH' | 'PERSON';
+  owner: string;
+  why: string;
+  family: string;
+  observed: string[];
+} | null {
+  const origination = candidate.evidence['origination'] as
+    | { family?: unknown; observed?: unknown; handTo?: unknown; route?: { kind?: unknown; owner?: unknown; why?: unknown } }
+    | undefined;
+  const route = origination?.route;
+  if (!route || typeof route.kind !== 'string' || typeof route.owner !== 'string') return null;
+  if (!['INTEGRATION', 'COMMERCIAL', 'RESEARCH', 'WATCH', 'PERSON'].includes(route.kind)) return null;
+  return {
+    kind: route.kind as 'INTEGRATION' | 'COMMERCIAL' | 'RESEARCH' | 'WATCH' | 'PERSON',
+    owner: route.owner,
+    why: typeof route.why === 'string' ? route.why : '',
+    family: typeof origination?.family === 'string' ? origination.family : '',
+    // The rows the owner is handed: those the originator named for it, else those it observed.
+    observed: (Array.isArray(origination?.handTo) ? origination.handTo : Array.isArray(origination?.observed) ? origination.observed : []).filter(
+      (o): o is string => typeof o === 'string',
+    ),
+  };
+}
+
+/** The ref a hand-off to a non-software owner is recorded under (`deliveredRef`). */
+export const OWNER_HANDOFF_PREFIX = 'OWNER:';
 
 function toInput(weakness: Weakness, attempt: number, parentId: string | null, key: string) {
   return {
@@ -296,6 +339,8 @@ function toInput(weakness: Weakness, attempt: number, parentId: string | null, k
       researchQuestion: weakness.researchQuestion,
       knownCause: weakness.knownCause,
       observedAt: new Date().toISOString(),
+      // The origination (and its execution route, S-0249) survives a re-registration of the same weakness.
+      ...(originationOf(weakness) ? { origination: originationOf(weakness) } : {}),
     },
     attempt,
     parentId,
@@ -611,7 +656,8 @@ async function measureAndDecide(candidate: ImprovementCandidate, now: Date, repo
   const result = { before, beforeDownstream: beforeDown, after, afterDownstream: afterDown, primary, downstream, at: now.toISOString() };
   await patchCandidate(candidate.id, { result });
   if (!decision.decision) return;
-  if (decision.revert) {
+  // A hand-off to a non-software owner merged nothing, so there is nothing to revert: the decision retires it.
+  if (decision.revert && !candidate.deliveredRef?.startsWith(OWNER_HANDOFF_PREFIX)) {
     await submitRevert(candidate, decision.reason, now).catch(async (error: unknown) => {
       await recordImprovementEvent({ candidateId: candidate.id, kind: 'REVERT_NOT_SUBMITTED', detail: { error: String((error as Error).message ?? error).slice(0, 300) } });
     });
@@ -686,6 +732,79 @@ async function recordValue(candidate: ImprovementCandidate, judgment: ValueJudgm
   await recordGapStep({ gapKey: candidate.weaknessKey, step: 'VALUE', summary: `${judgment.chosen}: ${judgment.basis}`.slice(0, 400), detail: valueDetail(judgment) });
 }
 
+/**
+ * Hand a gap to the non-software owner that acquires it (AUTO-20-2 step 5, S-0249).
+ *
+ * UNMET_NEED: the open needs go to the owner their typed cause names (`cash/needs.ts`
+ * handNeedsToOwners): reconsideration reads the fact now and each blocked piece is re-decided.
+ * MISSED_OPPORTUNITY: the openings still inside their window go back to the cash lifecycle,
+ * which re-decides them. The hand-off is recorded as the delivery, so the loop measures the
+ * candidate's metric before and after it like any other repair (step 6). A gap whose every
+ * piece waits on a person is held for that person; a gap whose rows all settled closes.
+ */
+async function handToOwner(
+  candidate: ImprovementCandidate,
+  route: NonNullable<ReturnType<typeof executionRouteOf>>,
+  now: Date,
+  report: ImprovementTickReport,
+): Promise<string | null> {
+  const { recordGapStep } = await import('../selfmodel/gapLoop.ts');
+  const at = now.toISOString();
+  let handed = 0;
+  let personOnly = false;
+  if (route.family === 'UNMET_NEED') {
+    const { handNeedsToOwners } = await import('../cash/needs.ts');
+    const result = await handNeedsToOwners({ needIds: route.observed, gapKey: candidate.weaknessKey, actorRef: 'improvement loop', now: at });
+    handed = result.handed.length;
+    personOnly = handed > 0 && result.handed.every((h) => h.route === 'PERSON');
+  } else {
+    const { getOpportunity } = await import('../../repos/cashPortfolio.ts');
+    const { requestDecisionRecompute } = await import('../../repos/cashDecisions.ts');
+    for (const id of new Set(route.observed)) {
+      const opening = await getOpportunity(id);
+      if (!opening || (opening.expiresAt && opening.expiresAt <= at)) continue;
+      await requestDecisionRecompute(id, `GAP_ROUTED:${candidate.weaknessKey}`, at);
+      handed += 1;
+    }
+  }
+  const basis = `${route.why}. Acquired by the existing owner ${route.owner} (${route.kind}), not by a Factory change or method research.`;
+  await recordGapStep({
+    gapKey: candidate.weaknessKey,
+    step: 'VALUE',
+    summary: `HAND_TO_OWNER: ${basis}`.slice(0, 400),
+    detail: {
+      evaluated: true,
+      decision: 'HAND_TO_OWNER',
+      chosen: `hand to ${route.owner} (${route.kind})`,
+      alternatives:
+        'a Factory change to the need or opening module and method research in brain-architecture: neither acquires a connector, a supplier, a payer, information or a watched fact, which is what the typed cause names',
+      stage: 'ROUTE',
+      route: route.kind,
+      owner: route.owner,
+      basis,
+      handed,
+    },
+  });
+  if (handed === 0) {
+    const reason = `Every row this gap was noticed from (${route.observed.length}) has settled or its window has closed; there is nothing left for ${route.owner} to acquire.`;
+    await decideCandidate(candidate.id, 'REJECTED', reason);
+    await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'REJECTED', route: route.kind, owner: route.owner, reason } });
+    report.decided.push(`${candidate.weaknessKey} REJECTED`);
+    return 'rejected: the rows settled on their own';
+  }
+  if (personOnly) {
+    const ask = `a person settles what ${route.owner} cannot grant itself: ${candidate.title}`;
+    await decideCandidate(candidate.id, 'HELD', `${basis} Every piece waits on a person (${route.kind}).`.slice(0, 1000), { heldOn: ask.slice(0, 300) });
+    await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'HELD', needsPerson: true, personAction: ask, route: route.kind, owner: route.owner } });
+    report.decided.push(`${candidate.weaknessKey} HELD`);
+    return 'held: only a person can settle it';
+  }
+  const ref = `${OWNER_HANDOFF_PREFIX}${route.kind}:${route.owner}`;
+  await patchCandidate(candidate.id, { deliveredAt: at, deliveredRef: ref });
+  await recordImprovementEvent({ candidateId: candidate.id, kind: 'DELIVERED', detail: { handedTo: route.owner, route: route.kind, handed, family: route.family } });
+  return `handed ${handed} row(s) to ${route.owner} (${route.kind})`;
+}
+
 /** Advance one candidate by one step. Returns what it did, or null when it waited. */
 async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>, now: Date, report: ImprovementTickReport): Promise<string | null> {
   const link = await linked(candidate);
@@ -699,6 +818,10 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
     case 'ENGINEER': {
       // Reuse comes first (AUTO-20-2 step 3): what exists is searched and recorded before anything is valued or acquired.
       const found = await searchFirst(candidate, link);
+      // A missing connector, supplier, payer, piece of information or watched fact is acquired by the owner
+      // that already does that (S-0249), never turned into an engineering objective or method research.
+      const route = executionRouteOf(candidate);
+      if (route) return handToOwner(candidate, route, now, report);
       // Then the next step is valued (step 4): every option the existing owners can carry out, compared on
       // expected value, cost, latency, opportunity cost and dependencies, and the best one is taken.
       const judgment = await valueNextStep(candidate, link, stage as 'DIAGNOSE' | 'ENGINEER', found);

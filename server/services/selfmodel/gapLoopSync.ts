@@ -69,12 +69,29 @@ function chosenOption(c: ImprovementCandidate): { chosen: string; ref: string } 
   if (c.changeRequestId) return { chosen: `a Factory change to ${c.ownerComponent}`, ref: `FACTORY:${c.changeRequestId}` };
   if (c.decision === 'REJECTED') return { chosen: 'abandon the direction: no evidence justified a change', ref: 'ABANDON' };
   if (c.researchGoalId) return { chosen: 'commission method research before changing anything', ref: `RESEARCH:${c.researchGoalId}` };
+  const handoff = ownerHandoff(c);
+  if (handoff) return { chosen: `hand to the existing owner ${handoff.owner} (${handoff.route})`, ref: c.deliveredRef! };
   return null;
+}
+
+/**
+ * A gap the loop handed to a non-software owner (S-0249: integration manager, commercial workflow,
+ * research/ingestion, a watched fact): `deliveredRef` is `OWNER:<route>:<owner>` (loop.ts handToOwner).
+ */
+function ownerHandoff(c: ImprovementCandidate): { route: string; owner: string } | null {
+  const ref = c.deliveredRef;
+  if (!ref || !ref.startsWith('OWNER:')) return null;
+  const rest = ref.slice('OWNER:'.length);
+  const colon = rest.indexOf(':');
+  if (colon <= 0) return null;
+  return { route: rest.slice(0, colon), owner: rest.slice(colon + 1) };
 }
 
 function acquisition(c: ImprovementCandidate): { owner: string; ref: string } | null {
   if (c.changeRequestId) return { owner: `Factory (change request ${c.changeRequestId}${c.campaignId ? `, campaign ${c.campaignId}` : ''})`, ref: `FACTORY:${c.changeRequestId}` };
   if (c.researchGoalId) return { owner: `research goal ${c.researchGoalId} worked by the free lane and Claude routines`, ref: `RESEARCH:${c.researchGoalId}` };
+  const handoff = ownerHandoff(c);
+  if (handoff) return { owner: `${handoff.owner} (${handoff.route})`, ref: c.deliveredRef! };
   return null;
 }
 
@@ -111,7 +128,7 @@ export function gapStepsDue(c: ImprovementCandidate, state: GapLoopState, found:
   if (!has('SEARCH_EXISTING') && found) {
     // A candidate handed to an owner before the search ran (rows from before the loop searched first)
     // is recorded as searched afterwards, never as if the search had preceded the work.
-    const after = Boolean(c.changeRequestId || c.researchGoalId);
+    const after = Boolean(c.changeRequestId || c.researchGoalId || ownerHandoff(c));
     due.push({
       step: 'SEARCH_EXISTING',
       summary: `${found.archiveClaims} archive claim(s), ${found.existing.length} existing match(es)${after ? ' (recorded after the work was handed off)' : ''}`,

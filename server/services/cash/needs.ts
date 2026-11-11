@@ -33,7 +33,7 @@ import {
 import { recordCashEvent } from '../../repos/cashMode.ts';
 import { readNeedCondition } from './conditions.ts';
 import { parseBlockerKey } from '../../domain/types.ts';
-import type { BlockerKey, CashNeed, CashOpportunityState } from '../../domain/types.ts';
+import type { BlockerKey, BlockerKind, CashNeed, CashOpportunityState } from '../../domain/types.ts';
 import type { Outcome } from './opportunities.ts';
 
 function refuse(reason: string): { ok: false; reason: string } {
@@ -300,4 +300,165 @@ export async function closeNeed(input: {
 
 export async function openNeeds(projectId: string): Promise<CashNeed[]> {
   return listNeeds({ projectId, states: ['OPEN'] });
+}
+
+/* ------------------------------------------------------------------------- */
+/* Who acquires what a need names (AUTO-20-2 step 5, S-0249)                  */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The execution owner that already acquires what a need is blocked on.
+ *
+ * S-0249: "Factory for software changes; research/ingestion for information;
+ * existing integration managers for connectors; commercial workflows for
+ * independently authorized interactions." A need is none of those by default:
+ * it is the cash need path's own row, and a missing supplier is not a code
+ * change. The typed blocker key already says which fact the need waits on, so
+ * the owner is read from it rather than guessed from prose — and an untyped
+ * need stays with the path that owns it (reconsider watches it, operate resumes
+ * the piece once it is settled) rather than becoming an engineering objective.
+ */
+export type NeedRoute = 'INTEGRATION' | 'COMMERCIAL' | 'RESEARCH' | 'WATCH' | 'PERSON';
+
+export interface NeedExecutionOwner {
+  route: NeedRoute;
+  /** The existing module that owns acquiring it. */
+  owner: string;
+  why: string;
+}
+
+const NEED_OWNER: Readonly<Record<BlockerKind, NeedExecutionOwner>> = Object.freeze({
+  CAPABILITY: {
+    route: 'INTEGRATION',
+    owner: 'server/services/cash/capabilities.ts',
+    why: 'a missing cash capability is a connector or integration; the capability registry reads it PRESENT once it is connected',
+  },
+  SOURCE_HOST: {
+    route: 'RESEARCH',
+    owner: 'server/services/cash/reconsider.ts',
+    why: 'an unreadable source host is an ingestion gap; a RETRIEVED reading after the block settles it',
+  },
+  EVIDENCE: {
+    route: 'RESEARCH',
+    owner: 'server/services/goals/pathResearch.ts',
+    why: 'missing evidence is information; the path research owner raises and closes these needs',
+  },
+  FIELD: {
+    route: 'RESEARCH',
+    owner: 'server/services/goals/pathResearch.ts',
+    why: 'an unanswered card field is information the research path answers',
+  },
+  AUTHORITY: {
+    route: 'PERSON',
+    owner: 'server/services/cash/authority.ts',
+    why: 'a commercial grant is made by a person first (invariant 38); Brain cannot grant itself one',
+  },
+  MANUFACTURING: {
+    route: 'PERSON',
+    owner: 'server/services/cash/capabilities.ts',
+    why: 'a capability this company holds is attested by a person (invariant 42)',
+  },
+  PERSON: {
+    route: 'PERSON',
+    owner: 'server/services/cash/needs.ts',
+    why: 'only a person can say; the need stays in their review with its recommended path',
+  },
+  SUPPLIER: {
+    route: 'COMMERCIAL',
+    owner: 'server/services/cash/operate.ts',
+    why: 'a supplier relationship is an independently authorized commercial interaction, not a code change',
+  },
+  CUSTOMER: {
+    route: 'COMMERCIAL',
+    owner: 'server/services/cash/operate.ts',
+    why: 'a payer is established through the commercial workflow, not through software',
+  },
+  DEPENDENCY: {
+    route: 'WATCH',
+    owner: 'server/services/cash/reconsider.ts',
+    why: 'it waits on another piece reaching a state; reconsider watches the transition',
+  },
+  DATE: {
+    route: 'WATCH',
+    owner: 'server/services/cash/reconsider.ts',
+    why: "it waits on a date; reconsider compares it to Brain's clock",
+  },
+  COST: {
+    route: 'WATCH',
+    owner: 'server/services/cash/reconsider.ts',
+    why: 'it waits on a cost falling; reconsider watches the named cost',
+  },
+  REGULATION: {
+    route: 'WATCH',
+    owner: 'server/services/cash/reconsider.ts',
+    why: 'it waits on a rule changing; reconsider watches it',
+  },
+} as Record<BlockerKind, NeedExecutionOwner>);
+
+const UNTYPED_NEED_OWNER: NeedExecutionOwner = {
+  route: 'WATCH',
+  owner: 'server/services/cash/operate.ts',
+  why: 'the need names no typed cause; its own recommended path and completion condition are the remedy, and the need continuation resumes the piece once it is settled',
+};
+
+/** The owner that acquires what a need waits on, from its typed blocker key. Pure. */
+export function needExecutionOwner(blockerKey: string | null | undefined): NeedExecutionOwner {
+  const parsed = blockerKey ? parseBlockerKey(blockerKey) : null;
+  if (!parsed) return UNTYPED_NEED_OWNER;
+  const kind = (parsed === 'PERSON' ? 'PERSON' : parsed.slice(0, parsed.indexOf(':'))) as BlockerKind;
+  return NEED_OWNER[kind] ?? UNTYPED_NEED_OWNER;
+}
+
+export interface NeedHandoff {
+  needId: string;
+  projectId: string;
+  opportunityId: string | null;
+  route: NeedRoute;
+  owner: string;
+}
+
+/**
+ * Hand a gap's open needs to the owners that acquire them, instead of to the
+ * Factory.
+ *
+ * Each still-open need gets one `CASH_NEED_ROUTED` event naming its owner and
+ * the gap that noticed it. Each project then gets one reconsideration pass, so
+ * the fact each need waits on is read now rather than at the next tick. Every
+ * blocked piece not waiting on a person has its decision recompute requested,
+ * so the commercial owner re-plans it with the need in view. A need already
+ * settled is skipped: the gap it was part of has closed that far on its own.
+ */
+export async function handNeedsToOwners(input: {
+  needIds: readonly string[];
+  gapKey: string;
+  actorRef: string;
+  now?: string;
+}): Promise<{ handed: NeedHandoff[]; skipped: number }> {
+  const at = input.now ?? new Date().toISOString();
+  const handed: NeedHandoff[] = [];
+  let skipped = 0;
+  for (const id of [...new Set(input.needIds)]) {
+    const need = await getNeed(id);
+    if (!need || need.state !== 'OPEN') {
+      skipped += 1;
+      continue;
+    }
+    const owner = needExecutionOwner(need.blockerKey);
+    await recordCashEvent({
+      projectId: need.projectId,
+      opportunityId: need.opportunityId,
+      kind: 'CASH_NEED_ROUTED',
+      actorRef: input.actorRef,
+      summary: `Handed to ${owner.owner} (${owner.route}): ${need.blockedAction}`.slice(0, 400),
+      detail: { needId: need.id, gapKey: input.gapKey, route: owner.route, owner: owner.owner, why: owner.why, blockerKey: need.blockerKey },
+    });
+    handed.push({ needId: need.id, projectId: need.projectId, opportunityId: need.opportunityId, route: owner.route, owner: owner.owner });
+  }
+  const { reconsiderAffected } = await import('./reconsider.ts');
+  const { requestDecisionRecompute } = await import('../../repos/cashDecisions.ts');
+  for (const projectId of new Set(handed.map((h) => h.projectId))) await reconsiderAffected(projectId, { now: at });
+  for (const one of handed) {
+    if (one.opportunityId && one.route !== 'PERSON') await requestDecisionRecompute(one.opportunityId, `NEED_ROUTED:${input.gapKey}`, at);
+  }
+  return { handed, skipped };
 }

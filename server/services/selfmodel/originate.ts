@@ -42,6 +42,7 @@ import { getDb } from '../../db/database.ts';
 import { CAPABILITY_MAPS, type CapabilityRequirement } from '../../domain/capabilityMap.ts';
 import type { Weakness } from '../../domain/improvement.ts';
 import { ownerExists } from './capabilities.ts';
+import { needExecutionOwner } from '../cash/needs.ts';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -77,6 +78,14 @@ export interface Origination {
   observed: string[];
   /** Set when the observation says an earlier method did not work, not that work is missing. */
   methodInadequate?: string;
+  /**
+   * The execution owner that acquires the missing piece, when it is not a software change
+   * (S-0249): a connector, a commercial interaction, information, a watched fact or a person.
+   * Absent means the Factory or method research may own it, as for every other weakness.
+   */
+  route?: { kind: 'INTEGRATION' | 'COMMERCIAL' | 'RESEARCH' | 'WATCH' | 'PERSON'; owner: string; why: string };
+  /** The rows that owner is handed, when they are not the ones observed (openings still inside their window). */
+  handTo?: string[];
 }
 
 export interface OriginatedWeakness extends Weakness {
@@ -342,6 +351,8 @@ export interface OpeningRow {
 }
 
 const UNPURSUED = new Set(['DISCOVERED', 'EVIDENCE_CARD', 'READY']);
+/** An unpursued opening is moved by the cash lifecycle that owns it, not by a code change (S-0249). */
+const OPENING_ROUTE_WHY = 'an opening is moved to execution by the cash lifecycle and its decisions; the openings are handed back to it to be re-decided while their window is open';
 
 /** Openings whose window ended unpursued (per stage they stalled at), and openings closing now. Pure. */
 export function opportunityWeaknesses(rows: readonly OpeningRow[], now: Date): OriginatedWeakness[] {
@@ -373,6 +384,9 @@ export function opportunityWeaknesses(rows: readonly OpeningRow[], now: Date): O
       knownCause: null,
       origination: {
         family: 'MISSED_OPPORTUNITY',
+        route: { kind: 'COMMERCIAL', owner, why: OPENING_ROUTE_WHY },
+        // The ones that expired cannot be pursued; the ones stalled at the same stage and still open can.
+        handTo: rows.filter((r) => r.state === state && Date.parse(r.expiresAt) > now.getTime()).slice(0, 50).map((r) => r.id),
         judgment: `${list.length} missed of ${closed.length} closed (${Math.round(share * 100)}%) is at least ${MISSED_MIN_COUNT} and ${Math.round(MISSED_MIN_SHARE * 100)}%.`,
         observed: list.slice(0, 20).map((r) => r.id),
       },
@@ -400,6 +414,8 @@ export function opportunityWeaknesses(rows: readonly OpeningRow[], now: Date): O
       knownCause: null,
       origination: {
         family: 'MISSED_OPPORTUNITY',
+        route: { kind: 'COMMERCIAL', owner, why: OPENING_ROUTE_WHY },
+        handTo: closing.slice(0, 50).map((r) => r.id),
         judgment: `${closing.length} unpursued openings closing within ${CLOSING_WINDOW_DAYS} days is at least ${CLOSING_MIN_COUNT}.`,
         observed: closing.slice(0, 20).map((r) => r.id),
       },
@@ -432,12 +448,16 @@ export function unmetNeedWeaknesses(needs: readonly NeedRow[]): OriginatedWeakne
     const key = need.blockerKey?.trim() || normalizeReason(need.blockedAction).toLowerCase();
     groups.set(key, [...(groups.get(key) ?? []), need]);
   }
-  const owner = existingOwner(['server/services/cash/needs.ts'], 'server/services/cash/needs.ts');
   const out: OriginatedWeakness[] = [];
   for (const [key, list] of groups) {
     const opportunities = new Set(list.map((n) => n.opportunityId).filter(Boolean));
     if (opportunities.size < NEED_MIN_OPPORTUNITIES) continue;
     const newest = list.at(-1)!;
+    // A missing resource is acquired by the owner its typed cause names (S-0249): a connector by the
+    // capability registry, a supplier or payer by the commercial workflow, information by research,
+    // a watched fact by reconsideration. It is never a code change to the need module.
+    const route = needExecutionOwner(newest.blockerKey);
+    const owner = existingOwner([route.owner], route.owner);
     const costs = list.map((n) => n.expectedCostCents).filter((c): c is number => c !== null);
     out.push({
       key: `ORIGINATED:UNMET_NEED:${slugOf(key)}`,
@@ -451,7 +471,7 @@ export function unmetNeedWeaknesses(needs: readonly NeedRow[]): OriginatedWeakne
       metric: 'READY_OPPORTUNITIES_PER_DAY',
       downstreamMetric: 'OWNER_INTERVENTIONS_PER_DAY',
       ownerComponent: owner,
-      mutationScope: ['server/services/cash/**', 'tests/**'],
+      mutationScope: [owner, 'tests/**'],
       frequency: opportunities.size,
       denominator: Math.max(new Set(needs.map((n) => n.opportunityId).filter(Boolean)).size, opportunities.size),
       scope: 'GENERAL',
@@ -461,8 +481,9 @@ export function unmetNeedWeaknesses(needs: readonly NeedRow[]): OriginatedWeakne
       knownCause: null,
       origination: {
         family: 'UNMET_NEED',
-        judgment: `${opportunities.size} distinct opportunities name it (at least ${NEED_MIN_OPPORTUNITIES}); one acquisition serves all of them.`,
+        judgment: `${opportunities.size} distinct opportunities name it (at least ${NEED_MIN_OPPORTUNITIES}); one acquisition serves all of them. Acquired by ${route.owner} (${route.route}): ${route.why}.`,
         observed: list.slice(0, 20).map((n) => n.id),
+        route: { kind: route.route, owner, why: route.why },
       },
     });
   }
