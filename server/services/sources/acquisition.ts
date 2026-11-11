@@ -42,6 +42,8 @@ export type AcquisitionBoundary =
   | 'EVADE_SITE_DEFENSES'
   | 'BUSINESS_COMMITMENT'
   | 'NO_AUTHORIZED_ACCOUNT'
+  /** A person granted an account, but the operation being recorded did not sign in under it. */
+  | 'NO_SIGNED_IN_SESSION'
   | 'ACCESS_BARRIER'
   | 'TERMS_OR_LICENSE';
 
@@ -83,6 +85,16 @@ export interface AcquisitionEvidence {
   requiresLicence?: boolean;
   /** The boundary the last attempt met, when known; defaults to AUTHENTICATION when only `blockedAtBoundary` is stated. */
   boundary?: AccessEvidence['boundary'];
+  /**
+   * Present when the judgment records an operation that already ran, rather than
+   * planning one: `accountUsed` is the account that operation actually signed in
+   * under (null when it signed in under none). An observed operation is credited
+   * with an account only when it used one — a person's grant on record is never
+   * read as an account an anonymous session operated under (§18, invariant 45).
+   */
+  observedOperation?: { accountUsed: string | null };
+  /** A grant is on record for the host but the observed operation did not use it (set by `recordAcquisitionJudgment`). */
+  grantedAccountUnused?: boolean;
   /** Times this workflow/host has been used, read from SOURCE_ACCESS rows (see `repeatedUseFromRows`). */
   repeatedUses?: number;
   /** Of those, how many needed a route beyond a plain direct read. */
@@ -180,8 +192,11 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
   if (route === 'HUMAN_HANDOFF') {
     if (evidence.requiresLicence) boundaries.push('TERMS_OR_LICENSE');
     else if (evidence.blockedAtBoundary) boundaries.push('ACCESS_BARRIER');
-    else if (operate && !evidence.authorizedAccountOnRecord) boundaries.push('NO_AUTHORIZED_ACCOUNT');
+    else if (operate && !evidence.authorizedAccountOnRecord) boundaries.push(evidence.grantedAccountUnused ? 'NO_SIGNED_IN_SESSION' : 'NO_AUTHORIZED_ACCOUNT');
   }
+  const unsigned = boundaries.includes('NO_SIGNED_IN_SESSION')
+    ? ' A person granted an account for this site, but this session did not sign in under it, so no operation under that account took place.'
+    : '';
   const handoff = route === 'HUMAN_HANDOFF';
   const bespoke = !operate && (route === 'HTTP' || route === 'BROWSER' || route === 'MODEL_ASSISTED');
   const repeat =
@@ -194,7 +209,7 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
     capability,
     outcome: 'ROUTE_SELECTED',
     route,
-    reason: `${selection.why}.${repeat}`,
+    reason: `${selection.why}.${repeat}${unsigned}`,
     reusableConnectorJustified: handoff ? false : justified,
     bespokeCrawlerMayBeProposed: bespoke,
     boundaries,
@@ -313,11 +328,14 @@ export async function readRepeatedUse(host: string): Promise<{ repeatedUses: num
  * A person makes the row from a terminal (`operatePermissionCli.ts grant|revoke|show`,
  * invariant 35); `recordOperatePermission` is the one writer behind it.
  *
- * This is the record the OPERATE judgment reads. A read path (`access.ts`) can
- * only say a browser rendered a public page — it cannot know about an account,
- * and says `false` — so the judgment consults this record whenever the caller
- * has not itself established an account, and an operation becomes BROWSER or
- * MODEL_ASSISTED exactly when a person granted it. A permission is never
+ * This is the record a planning OPERATE judgment reads: a judgment about an
+ * operation not yet run consults it whenever the caller has not itself
+ * established an account, and the plan becomes BROWSER or MODEL_ASSISTED exactly
+ * when a person granted it. A judgment that records an operation which already
+ * ran (`observedOperation`, e.g. the read path's anonymous browser render) is
+ * credited only with the account that operation actually signed in under; a
+ * grant it did not use is recorded as unused (NO_SIGNED_IN_SESSION), never as the
+ * account it operated under. A permission is never
  * authorization to contact strangers, evade defenses or commit the business:
  * those boundaries are judged first and refuse regardless of any grant.
  */
@@ -461,15 +479,33 @@ export async function recordAcquisitionJudgment(
     const counted = await (deps.repeatedUse ?? readRepeatedUse)(need.host);
     used = { ...evidence, ...counted };
   }
-  // An account the caller could not establish is looked up in the permission record:
-  // a read path never knows about accounts, and a person's grant is what makes operation possible.
-  let accountSource: 'CALLER' | 'PERMISSION_RECORD' | 'NONE' = used.authorizedAccountOnRecord === true ? 'CALLER' : 'NONE';
+  // The account an OPERATE judgment credits depends on what it records.
+  //  - Planning (no `observedOperation`): an account the caller could not establish is
+  //    looked up in the permission record, because a person's grant is what makes a
+  //    future operation possible.
+  //  - Observed (an operation already ran): only the account that operation actually
+  //    signed in under counts, and only when a person granted it. A grant the session
+  //    never used is recorded as unused, never as the account Brain operated under.
+  const observed = used.observedOperation;
+  let accountSource: 'CALLER' | 'PERMISSION_RECORD' | 'OPERATION' | 'NONE' =
+    !observed && used.authorizedAccountOnRecord === true ? 'CALLER' : 'NONE';
   let permission: OperatePermission | null = null;
-  if (need.kind === 'OPERATE' && need.host && used.authorizedAccountOnRecord !== true) {
+  let accountRef: string | null = null;
+  if (observed) used = { ...used, authorizedAccountOnRecord: false };
+  if (need.kind === 'OPERATE' && need.host && (observed || used.authorizedAccountOnRecord !== true)) {
     permission = await (deps.operatePermission ?? readOperatePermission)(need.host);
-    if (permission.permitted) {
+    if (!observed) {
+      if (permission.permitted) {
+        used = { ...used, authorizedAccountOnRecord: true };
+        accountSource = 'PERMISSION_RECORD';
+        accountRef = permission.accountRef;
+      }
+    } else if (permission.permitted && observed.accountUsed !== null && observed.accountUsed === permission.accountRef) {
       used = { ...used, authorizedAccountOnRecord: true };
-      accountSource = 'PERMISSION_RECORD';
+      accountSource = 'OPERATION';
+      accountRef = observed.accountUsed;
+    } else if (permission.permitted) {
+      used = { ...used, grantedAccountUnused: true };
     }
   }
   const judgment = judgeAcquisitionNeed(need, used);
@@ -494,7 +530,15 @@ export async function recordAcquisitionJudgment(
       existingBulkSources: (used.existingBulkSources ?? []).length,
       bulkSearchDone: Boolean(used.bulkSearchDone),
       ...(need.kind === 'OPERATE'
-        ? { authorizedAccount: accountSource, accountRef: permission?.permitted ? permission.accountRef : null }
+        ? {
+            basis: observed ? 'OBSERVED' : 'PLANNED',
+            authorizedAccount: accountSource,
+            accountRef,
+            // What a person granted, kept apart from what was used, so the row never
+            // reads as an operation under an account the session did not sign in to.
+            grantedAccountRef: permission?.permitted ? permission.accountRef : null,
+            ...(observed ? { accountUsed: observed.accountUsed } : {}),
+          }
         : {}),
     },
   });

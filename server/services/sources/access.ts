@@ -659,9 +659,11 @@ export function acquisitionEvidenceOfRead(
  * that never opened the browser says nothing about it and yields null.
  *
  * No account is ever asserted: the research browser does not sign in
- * (`browserMcp.ts`), so `authorizedAccountOnRecord` is false and the judgment
- * records the stop honestly (NO_AUTHORIZED_ACCOUNT) instead of claiming an
- * operation under a permission nobody evidenced.
+ * (`browserMcp.ts`), so the evidence is an observed operation under no account
+ * (`observedOperation.accountUsed: null`). The judgment then records the stop
+ * honestly — NO_AUTHORIZED_ACCOUNT, or NO_SIGNED_IN_SESSION when a person did
+ * grant an account this session never used — instead of claiming an operation
+ * under a permission the render did not exercise.
  */
 export function operateEvidenceOfRead(
   read: Pick<SourceRead, 'attempts'>,
@@ -673,6 +675,7 @@ export function operateEvidenceOfRead(
     interactiveInterfaceOnly: evidence.interfaceOnly === true,
     interfaceUnfamiliarOrChanged: evidence.interfaceUnfamiliar === true,
     authorizedAccountOnRecord: false,
+    observedOperation: { accountUsed: null },
     blockedAtBoundary: boundary !== null && boundary !== 'PAYMENT' && boundary !== 'LEGAL',
     requiresLicence: boundary === 'PAYMENT' || boundary === 'LEGAL',
     ...(boundary ? { boundary } : {}),

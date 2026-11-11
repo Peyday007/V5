@@ -28,10 +28,12 @@ const browserRead = (url: string, caller: string) =>
     caller,
   });
 
+const failed = (url: string) => ({ readable: false as const, requestedUrl: url, finalUrl: url, status: 404, retrievedAt: 'now', reason: 'EMPTY' as never, detail: 'no sitemap entry' });
+
 const rowsOf = async (eventType: string, caller: string) =>
   (await getDb().all<{ provider: string | null; measures: string }>(`SELECT provider, measures FROM bin_events WHERE event_type = ? AND workload_class = ?`, [eventType, caller])).map((r) => ({
     provider: r.provider,
-    m: JSON.parse(r.measures) as { capability?: string; repeatedUses?: number; host?: string },
+    m: JSON.parse(r.measures) as { capability?: string; repeatedUses?: number; host?: string; boundaries?: string[]; grantedAccountRef?: string | null },
   }));
 
 describe('the read path loads its history once per refresh, not per read', () => {
@@ -59,17 +61,31 @@ describe('the read path loads its history once per refresh, not per read', () =>
     await freshProject();
     resetSourceAccessMemory();
     const caller = 'per-read-repeat-test';
-    await recordOperatePermission({ host: 'repeat.example', granted: true, accountRef: 'owner login for repeat', grantedBy: 'owner' });
-    await browserRead('https://repeat.example/flow', caller);
-    await browserRead('https://repeat.example/flow', caller);
-    const operate = (await rowsOf('ACQUISITION_JUDGMENT', caller)).filter((r) => r.m.capability === 'OPERATE');
+    // A page only an archived copy serves: every read needs a route beyond a direct read,
+    // so the ACQUIRE judgment changes (a connector becomes justified) when the read repeats.
+    const read = () =>
+      readSource('https://repeat.example/flow', {
+        resolve: async () => ['93.184.216.34'],
+        robotsAllow: async () => true,
+        archive: async (u) => ok(u),
+        sitemap: async (u) => failed(u),
+        search: null,
+        connector: async () => null,
+        direct: async (u) => empty(u),
+        browser: async (u) => failed(u),
+        caller,
+      });
+    await read();
+    await read();
+    const acquire = (await rowsOf('ACQUISITION_JUDGMENT', caller)).filter((r) => r.m.capability === 'ACQUIRE');
     // The first read counted itself (1); the second changed the decision (a connector is now justified) and counted 2.
-    expect(operate.map((r) => r.m.repeatedUses)).toEqual([1, 2]);
-    expect(operate.map((r) => r.provider)).toEqual(['BROWSER', 'BROWSER']);
+    expect(acquire.map((r) => r.m.repeatedUses)).toEqual([1, 2]);
+    expect(acquire.map((r) => r.provider)).toEqual(['BULK', 'BULK']);
     const proposals = await rowsOf('CONNECTOR_PROPOSED', caller);
     expect(proposals.map((p) => p.m.host)).toEqual(['repeat.example']);
+    expect(proposals.map((p) => p.m.capability)).toEqual(['ACQUIRE']);
     // A third read proposes nothing new: the held proposal answers, no proposal query is made.
-    await browserRead('https://repeat.example/flow', caller);
+    await read();
     expect((await rowsOf('CONNECTOR_PROPOSED', caller)).length).toBe(1);
     expect(sourceAccessDbLoad().historyLoads).toBe(1);
   });
@@ -82,8 +98,12 @@ describe('the read path loads its history once per refresh, not per read', () =>
     await recordOperatePermission({ host: 'revoke.example', granted: false, grantedBy: 'owner' });
     await browserRead('https://revoke.example/flow', 'revoke-after');
     const provider = async (caller: string) => (await rowsOf('ACQUISITION_JUDGMENT', caller)).filter((r) => r.m.capability === 'OPERATE').map((r) => r.provider);
-    expect(await provider('revoke-before')).toEqual(['BROWSER']);
+    const operate = async (caller: string) => (await rowsOf('ACQUISITION_JUDGMENT', caller)).filter((r) => r.m.capability === 'OPERATE').map((r) => r.m);
+    // The anonymous render is a handoff either way; what changes on the very next read is the grant it reports.
+    expect(await provider('revoke-before')).toEqual(['HUMAN_HANDOFF']);
     expect(await provider('revoke-after')).toEqual(['HUMAN_HANDOFF']);
+    expect(await operate('revoke-before')).toMatchObject([{ boundaries: ['NO_SIGNED_IN_SESSION'], grantedAccountRef: 'owner login for revoke' }]);
+    expect(await operate('revoke-after')).toMatchObject([{ boundaries: ['NO_AUTHORIZED_ACCOUNT'], grantedAccountRef: null }]);
   });
 });
 

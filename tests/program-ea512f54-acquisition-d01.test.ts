@@ -7,6 +7,7 @@ import {
   recordOperatePermission,
   repeatedUseFromRows,
 } from '../server/services/sources/acquisition.ts';
+import type { OperatePermission } from '../server/services/sources/acquisition.ts';
 import { operateEvidenceOfRead, readSource, resetSourceAccessMemory } from '../server/services/sources/access.ts';
 import { runOperatePermissionCommand } from '../server/services/sources/operatePermissionCli.ts';
 import { getDb } from '../server/db/database.ts';
@@ -88,9 +89,61 @@ describe('OPERATE is reachable on production records through a person\'s permiss
     expect(r.events[0]!.measures).toMatchObject({ authorizedAccount: 'NONE', accountRef: null });
   });
 
-  it('a granted permission turns the same producer evidence into a BROWSER route and a connector proposal', async () => {
+  // A plan: the same facts about the interface, but no operation has run yet.
+  const plannedEvidence = () => {
+    const { observedOperation: _observed, ...planned } = producerEvidence();
+    return planned;
+  };
+
+  it('a granted permission never credits an anonymous render with the account: the observed read is NO_SIGNED_IN_SESSION and proposes nothing', async () => {
+    expect(producerEvidence().observedOperation).toEqual({ accountUsed: null });
     const r = recorder();
     const j = await recordAcquisitionJudgment({ kind: 'OPERATE', purpose: 'p', host: 'app.example' }, producerEvidence(), {
+      record: r.record as never,
+      repeatedUse: async () => ({ repeatedUses: 4, repeatedUsesNeedingFallback: 4 }),
+      operatePermission: granted,
+      proposalOnRecord: async () => false,
+    });
+    expect(j.route).toBe('HUMAN_HANDOFF');
+    expect(j.boundaries).toEqual(['NO_SIGNED_IN_SESSION']);
+    expect(j.reusableConnectorJustified).toBe(false);
+    expect(j.reason).toMatch(/did not sign in/);
+    expect(r.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT']);
+    expect(r.events[0]!.provider).not.toBe('BROWSER');
+    expect(r.events[0]!.measures).toMatchObject({
+      basis: 'OBSERVED',
+      authorizedAccount: 'NONE',
+      accountRef: null,
+      accountUsed: null,
+      grantedAccountRef: 'owner account on app.example',
+    });
+  });
+
+  it('an observed operation is credited with an account only when it signed in under the granted one', async () => {
+    const run = async (accountUsed: string | null, permission: () => Promise<OperatePermission> = granted) => {
+      const r = recorder();
+      const j = await recordAcquisitionJudgment(
+        { kind: 'OPERATE', purpose: 'p', host: 'app.example' },
+        // A caller cannot smuggle an account in: an observed operation's own account is what counts.
+        { ...producerEvidence(), authorizedAccountOnRecord: true, observedOperation: { accountUsed } },
+        { record: r.record as never, repeatedUse: async () => ({ repeatedUses: 0, repeatedUsesNeedingFallback: 0 }), operatePermission: permission },
+      );
+      return { j, m: r.events[0]!.measures };
+    };
+    const signedIn = await run('owner account on app.example');
+    expect(signedIn.j.route).toBe('BROWSER');
+    expect(signedIn.m).toMatchObject({ basis: 'OBSERVED', authorizedAccount: 'OPERATION', accountRef: 'owner account on app.example' });
+    const otherAccount = await run('someone else');
+    expect(otherAccount.j.route).toBe('HUMAN_HANDOFF');
+    expect(otherAccount.m).toMatchObject({ authorizedAccount: 'NONE', accountRef: null });
+    const ungranted = await run('owner account on app.example', none);
+    expect(ungranted.j.boundaries).toEqual(['NO_AUTHORIZED_ACCOUNT']);
+    expect(ungranted.m).toMatchObject({ authorizedAccount: 'NONE', accountRef: null, grantedAccountRef: null });
+  });
+
+  it('a granted permission turns a planned operation into a BROWSER route and a connector proposal', async () => {
+    const r = recorder();
+    const j = await recordAcquisitionJudgment({ kind: 'OPERATE', purpose: 'p', host: 'app.example' }, plannedEvidence(), {
       record: r.record as never,
       repeatedUse: async () => ({ repeatedUses: 4, repeatedUsesNeedingFallback: 4 }),
       operatePermission: granted,
@@ -101,12 +154,12 @@ describe('OPERATE is reachable on production records through a person\'s permiss
     expect(j.boundaries).toEqual([]);
     expect(j.reusableConnectorJustified).toBe(true);
     expect(r.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT', 'CONNECTOR_PROPOSED']);
-    expect(r.events[0]!.measures).toMatchObject({ authorizedAccount: 'PERMISSION_RECORD', accountRef: 'owner account on app.example' });
+    expect(r.events[0]!.measures).toMatchObject({ basis: 'PLANNED', authorizedAccount: 'PERMISSION_RECORD', accountRef: 'owner account on app.example' });
     expect(r.events[1]).toMatchObject({ provider: 'BROWSER', outcome: 'CONNECTOR' });
   });
 
-  it('an unfamiliar interface under a grant is operated, not handed off', async () => {
-    const ev = operateEvidenceOfRead({ attempts: [attempt('BROWSER', true)] }, null, { interfaceOnly: true, interfaceUnfamiliar: true })!;
+  it('an unfamiliar interface under a grant is planned for operation, not handed off', async () => {
+    const { observedOperation: _observed, ...ev } = operateEvidenceOfRead({ attempts: [attempt('BROWSER', true)] }, null, { interfaceOnly: true, interfaceUnfamiliar: true })!;
     const r = recorder();
     const j = await recordAcquisitionJudgment({ kind: 'OPERATE', purpose: 'p', host: 'app.example' }, ev, {
       record: r.record as never,
@@ -151,7 +204,7 @@ describe('OPERATE is reachable on production records through a person\'s permiss
     expect(r.events).toEqual([]);
   });
 
-  it('end to end: a recorded grant makes readSource write an OPERATE BROWSER judgment and a connector proposal', async () => {
+  it('end to end: a recorded grant does not make an anonymous browser render read as an operation under that account', async () => {
     await freshProject();
     resetSourceAccessMemory();
     const PAGE = 'The dashboard lists 41,000 records for the account in 2025. '.repeat(10);
@@ -172,25 +225,30 @@ describe('OPERATE is reachable on production records through a person\'s permiss
       });
     const operateRows = async (caller: string) =>
       (await getDb().all<{ provider: string | null; measures: string }>(`SELECT provider, measures FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT' AND workload_class = ?`, [caller]))
-        .map((r) => ({ provider: r.provider, m: JSON.parse(r.measures) as { capability: string; authorizedAccount?: string } }))
+        .map((r) => ({ provider: r.provider, m: JSON.parse(r.measures) as { capability: string; authorizedAccount?: string; accountRef?: string | null; grantedAccountRef?: string | null; boundaries?: string[] } }))
         .filter((r) => r.m.capability === 'OPERATE');
 
     await read('operate-ungranted');
     expect((await operateRows('operate-ungranted')).map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
+    expect((await operateRows('operate-ungranted'))[0]!.m.boundaries).toEqual(['NO_AUTHORIZED_ACCOUNT']);
 
     await recordOperatePermission({ host: 'granted-app.example', granted: true, accountRef: 'owner login for granted-app', grantedBy: 'owner' });
     expect((await readOperatePermission('granted-app.example')).permitted).toBe(true);
     await read('operate-granted-1');
     await read('operate-granted-2');
-    const granted = await operateRows('operate-granted-2');
-    expect(granted.map((r) => r.provider)).toEqual(['BROWSER']);
-    expect(granted[0]!.m.authorizedAccount).toBe('PERMISSION_RECORD');
-    const proposals = await getDb().all<{ provider: string }>(`SELECT provider FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED'`);
-    expect(proposals.map((p) => p.provider)).toContain('BROWSER');
+    const granted = await operateRows('operate-granted-1');
+    // The browser does not sign in, so the grant is recorded as granted and unused — never as the account operated under.
+    expect(granted.map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
+    expect(granted[0]!.m).toMatchObject({ authorizedAccount: 'NONE', accountRef: null, grantedAccountRef: 'owner login for granted-app', boundaries: ['NO_SIGNED_IN_SESSION'] });
+    const all = await getDb().all<{ measures: string }>(`SELECT measures FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT'`);
+    expect(all.some((r) => (JSON.parse(r.measures) as { authorizedAccount?: string }).authorizedAccount === 'PERMISSION_RECORD')).toBe(false);
+    const proposals = await getDb().all<{ measures: string }>(`SELECT measures FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED'`);
+    expect(proposals.some((p) => (JSON.parse(p.measures) as { capability?: string }).capability === 'OPERATE')).toBe(false);
 
     await recordOperatePermission({ host: 'granted-app.example', granted: false, grantedBy: 'owner' });
     await read('operate-revoked');
     expect((await operateRows('operate-revoked')).map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
+    expect((await operateRows('operate-revoked'))[0]!.m).toMatchObject({ grantedAccountRef: null, boundaries: ['NO_AUTHORIZED_ACCOUNT'] });
   });
 });
 
@@ -212,7 +270,7 @@ describe('a person grants an operate permission from the terminal, and the read 
     expect(refused.out).not.toContain('ghp_');
   });
 
-  it('end to end: grant from the terminal, the next read is operated by BROWSER and proposes a connector; revoke returns it to a handoff', async () => {
+  it('end to end: a grant from the terminal is read fresh by the next read and recorded as unused by an anonymous render; revoke clears it', async () => {
     await freshProject();
     resetSourceAccessMemory();
     const PAGE = 'The account dashboard lists 312 open orders for the week. '.repeat(10);
@@ -233,7 +291,7 @@ describe('a person grants an operate permission from the terminal, and the read 
       });
     const operated = async (caller: string) =>
       (await getDb().all<{ provider: string | null; measures: string }>(`SELECT provider, measures FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT' AND workload_class = ?`, [caller]))
-        .map((r) => ({ provider: r.provider, m: JSON.parse(r.measures) as { capability: string; authorizedAccount?: string } }))
+        .map((r) => ({ provider: r.provider, m: JSON.parse(r.measures) as { capability: string; authorizedAccount?: string; accountRef?: string | null; grantedAccountRef?: string | null; boundaries?: string[] } }))
         .filter((r) => r.m.capability === 'OPERATE');
 
     expect((await runOperatePermissionCommand(['show', '--host', 'cli-granted.example'])).out).toMatch(/no standing permission/);
@@ -245,14 +303,15 @@ describe('a person grants an operate permission from the terminal, and the read 
     expect(granted.out).toMatch(/may operate this site under "ops login for cli-granted"/);
     await read('cli-granted-1');
     await read('cli-granted-2');
-    const after = await operated('cli-granted-2');
-    expect(after.map((r) => r.provider)).toEqual(['BROWSER']);
-    expect(after[0]!.m.authorizedAccount).toBe('PERMISSION_RECORD');
+    const after = await operated('cli-granted-1');
+    expect(after.map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
+    expect(after[0]!.m).toMatchObject({ authorizedAccount: 'NONE', accountRef: null, grantedAccountRef: 'ops login for cli-granted', boundaries: ['NO_SIGNED_IN_SESSION'] });
     const proposals = await getDb().all<{ provider: string; measures: string }>(`SELECT provider, measures FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED'`);
-    expect(proposals.some((p) => p.provider === 'BROWSER' && (JSON.parse(p.measures) as { host: string; capability: string }).host === 'cli-granted.example' && (JSON.parse(p.measures) as { capability: string }).capability === 'OPERATE')).toBe(true);
+    expect(proposals.some((p) => (JSON.parse(p.measures) as { host: string; capability: string }).host === 'cli-granted.example' && (JSON.parse(p.measures) as { capability: string }).capability === 'OPERATE')).toBe(false);
 
     expect((await runOperatePermissionCommand(['revoke', '--host', 'cli-granted.example', '--by', 'owner'])).code).toBe(0);
     await read('cli-revoked');
     expect((await operated('cli-revoked')).map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
+    expect((await operated('cli-revoked'))[0]!.m).toMatchObject({ grantedAccountRef: null, boundaries: ['NO_AUTHORIZED_ACCOUNT'] });
   });
 });
