@@ -21,6 +21,9 @@
 import { Router } from 'express';
 import { badRequest, bodyOf, handler, notFound, pathId, requirePerson, requireProject, unprocessable } from './helpers.ts';
 import { listEvents, recordEvent } from '../repos/events.ts';
+import { getOpportunity } from '../repos/cashPortfolio.ts';
+import { loadCashKnowledge } from '../services/quant/knowledge.ts';
+import { acquireMarketHistory, requestMarketHistory } from '../services/quant/history.ts';
 import {
   FIGURE_STATUSES,
   addAction,
@@ -753,5 +756,44 @@ causalRouter.get(
       account: fullAccount(graphFrom(found.graph)),
       versions: versions.map((one) => ({ version: one.version, at: one.at, reason: one.reason })),
     };
+  }),
+);
+
+/**
+ * The historical record of one opening's market (CAUSAL-14-7): bid/win counts,
+ * transaction counts, actual prices and spreads, acquired from the project's
+ * research and this Brain's outcomes, with each record's source, and the
+ * historical data still to research. An opening in another project is the same
+ * 404 as one that does not exist.
+ */
+causalRouter.get(
+  '/projects/:projectId/causal/market-history/:opportunityId',
+  handler(async (req) => {
+    requirePerson();
+    const projectId = (await requireProject(pathId(req, 'projectId'))).id;
+    const opportunity = await getOpportunity(pathId(req, 'opportunityId'));
+    if (!opportunity || opportunity.projectId !== projectId) throw notFound('No such opening.');
+    const knowledge = await loadCashKnowledge(projectId);
+    return { history: acquireMarketHistory(knowledge, opportunity) };
+  }),
+);
+
+/**
+ * Actively acquire the history an opening's market still lacks (CAUSAL-14-7):
+ * every missing kind of record is handed to research through the owners that
+ * already exist for that (`raiseNeed` and the research entrance), idempotently
+ * per opening and kind. Nothing is spent here; the standing grant decides that.
+ */
+causalRouter.post(
+  '/projects/:projectId/causal/market-history/:opportunityId/acquire',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const projectId = (await requireProject(pathId(req, 'projectId'))).id;
+    const opportunity = await getOpportunity(pathId(req, 'opportunityId'));
+    if (!opportunity || opportunity.projectId !== projectId) throw notFound('No such opening.');
+    const knowledge = await loadCashKnowledge(projectId);
+    const history = acquireMarketHistory(knowledge, opportunity);
+    const sent = await requestMarketHistory({ projectId, actorRef: principal.id, opportunity, history });
+    return { history, ...sent };
   }),
 );

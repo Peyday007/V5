@@ -73,6 +73,21 @@ export interface Activity {
     sampleSize?: number;
     /** True when conditions have changed since the observations, so they may not transfer. */
     conditionsChanged?: boolean;
+    /**
+     * The market's own historical record, acquired from research and outcomes
+     * (`quant/history.ts`, CAUSAL-14-7): bid/win counts, transaction counts,
+     * actual prices. Its bids are real outcomes of the behavioural rate, so
+     * when no sample is otherwise stated they are the sample; what it lacks is
+     * a research need, never a favourable assumption.
+     */
+    history?: {
+      sampleSize?: number;
+      winRate?: { wins: number; bids: number };
+      marketTransactions?: number;
+      priceObservations: number;
+      sources: string[];
+      researchNeeds: string[];
+    };
   };
 }
 
@@ -166,7 +181,36 @@ export interface Assurance {
   validationProblems: string[];
   /** Tail: what the tenth-percentile world settles, against the target. */
   tailSettledP10: number | null;
+  /**
+   * The historical market data each member's figure used (CAUSAL-14-7): where
+   * its sample came from, the bid/win record and transaction counts acquired,
+   * and the sources. Empty when no member carried any history.
+   */
+  history?: Array<{
+    key: string;
+    sampleFrom: 'STATED' | 'HISTORY' | 'NONE';
+    sampleSize: number | null;
+    winRate: { wins: number; bids: number; rate: number } | null;
+    marketTransactions: number | null;
+    priceObservations: number;
+    sources: string[];
+  }>;
+  /** Historical data a member still needs before its figure is calibrated: targeted research, not an assumption. */
+  researchNeeds?: string[];
   reason: string;
+}
+
+/**
+ * The sample behind one activity's figure. A stated sample (the observations
+ * its inputs were reconstructed from) stands; where none is stated, the bids
+ * of the market's acquired bid/win history are real outcomes of the very rate
+ * the figure rests on and are the sample. An absent sample is never read as a large one.
+ */
+export function effectiveSample(one: Activity): { size: number | undefined; from: 'STATED' | 'HISTORY' | 'NONE' } {
+  if (one.evidence?.sampleSize !== undefined) return { size: one.evidence.sampleSize, from: 'STATED' };
+  const fromHistory = one.evidence?.history?.sampleSize;
+  if (fromHistory !== undefined && fromHistory > 0) return { size: fromHistory, from: 'HISTORY' };
+  return { size: undefined, from: 'NONE' };
 }
 
 export const MIN_EVIDENCE_SAMPLE = 20;
@@ -451,20 +495,48 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
  */
 export function assess(problem: PortfolioProblem, best: PortfolioReading | null): Assurance {
   if (!best) {
-    return { status: 'CALIBRATION_UNAVAILABLE', range: null, claimsAtLeast90: false, coverage: null, validationProblems: ['no feasible combination'], tailSettledP10: null, reason: 'no feasible combination exists, so there is nothing to calibrate' };
+    return { status: 'CALIBRATION_UNAVAILABLE', range: null, claimsAtLeast90: false, coverage: null, validationProblems: ['no feasible combination'], tailSettledP10: null, history: [], researchNeeds: [], reason: 'no feasible combination exists, so there is nothing to calibrate' };
   }
   const members = problem.activities.filter((one) => best.keys.includes(one.key));
   const problems: string[] = [];
+  const samples = new Map(members.map((one) => [one.key, effectiveSample(one)]));
   for (const one of members) {
+    const sample = samples.get(one.key)!;
     if (!one.justified) problems.push(`"${one.key}": samples are not evidence-backed (invented or unvalidated inputs)`);
-    else if (one.evidence?.sampleSize === undefined || !(one.evidence.sampleSize >= MIN_EVIDENCE_SAMPLE)) problems.push(`"${one.key}": sample size ${one.evidence?.sampleSize === undefined ? 'is not stated' : `${one.evidence.sampleSize} is under ${MIN_EVIDENCE_SAMPLE}`}`);
+    else if (sample.size === undefined || !(sample.size >= MIN_EVIDENCE_SAMPLE)) {
+      problems.push(`"${one.key}": sample size ${sample.size === undefined ? 'is not stated and no bid/win history was acquired' : `${sample.size} is under ${MIN_EVIDENCE_SAMPLE}${sample.from === 'HISTORY' ? ' (from acquired bid/win history)' : ''}`}`);
+    }
     if (one.evidence?.conditionsChanged) problems.push(`"${one.key}": conditions changed since its observations, so they may not transfer`);
   }
-  const base = { coverage: best.reach, tailSettledP10: best.settledP10, validationProblems: problems };
+  const history = members
+    .filter((one) => one.evidence?.history)
+    .map((one) => {
+      const h = one.evidence!.history!;
+      const sample = samples.get(one.key)!;
+      return {
+        key: one.key,
+        sampleFrom: sample.from,
+        sampleSize: sample.size ?? null,
+        winRate: h.winRate && h.winRate.bids > 0 ? { ...h.winRate, rate: h.winRate.wins / h.winRate.bids } : null,
+        marketTransactions: h.marketTransactions ?? null,
+        priceObservations: h.priceObservations,
+        sources: h.sources,
+      };
+    });
+  const researchNeeds = [
+    ...new Set(
+      members.flatMap((one) => {
+        if (samples.get(one.key)!.from === 'STATED' && one.justified) return [];
+        const needs = one.evidence?.history?.researchNeeds ?? [];
+        return needs.length > 0 || one.evidence?.history ? needs : [`"${one.key}": acquire the market's historical record (transaction counts, actual prices and spreads, bid/win rates)`];
+      }),
+    ),
+  ];
+  const base = { coverage: best.reach, tailSettledP10: best.settledP10, validationProblems: problems, history, researchNeeds };
   if (problems.length > 0) {
     return { ...base, status: 'CALIBRATION_UNAVAILABLE', range: null, claimsAtLeast90: false, reason: `calibration is unavailable: ${problems.length} input(s) fail validation; the ${round(best.reach * 100)}% is share of scenarios covered, not a probability` };
   }
-  const nMin = Math.min(...members.map((one) => one.evidence!.sampleSize!));
+  const nMin = Math.min(...members.map((one) => samples.get(one.key)!.size!));
   // Wilson interval on the weakest sample: unlike the normal interval it never collapses to zero width at 0% or 100%.
   const z2 = Z95 * Z95;
   const centre = (best.reach + z2 / (2 * nMin)) / (1 + z2 / nMin);

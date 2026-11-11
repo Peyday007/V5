@@ -73,6 +73,17 @@ export function forgetKnowledge(): void {
   cache.clear();
 }
 
+/**
+ * The knowledge a project already loaded, while it is still fresh, without a
+ * read. A synchronous consumer in the same goal tick (the portfolio engine
+ * acquiring market history) uses what `loadCashKnowledge` just read rather
+ * than a second copy; null when nothing fresh is held.
+ */
+export function cachedCashKnowledge(projectId: string, now = Date.now()): CashKnowledge | null {
+  const hit = cache.get(projectId);
+  return hit && now - hit.at < KNOWLEDGE_TTL_MS ? hit.value : null;
+}
+
 /** The evidence a project holds, read once and reused while fresh. */
 export async function loadCashKnowledge(projectId: string, now = Date.now()): Promise<CashKnowledge> {
   const hit = cache.get(projectId);
