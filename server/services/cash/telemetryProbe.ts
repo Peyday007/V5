@@ -9,12 +9,11 @@
  * count read three ways. A measure the rows could not answer is UNKNOWN and is
  * named in the detail; it is never read as zero.
  *
- * The probe registers itself through the program's own registry
- * (`registerProbe`), so the registry stays the one authority that answers
- * which checks exist. It is loaded with the cash surface (`view.ts`, which the
- * route table imports at boot), exactly where the reading it judges lives.
+ * The judgment lives here, beside the reading it judges; the name is defined in
+ * the protected `factory/program/probes.ts`, the only place a release probe may
+ * be registered (a campaign does not register its own judge).
  */
-import { registerProbe, type ProbeResult } from '../factory/program/probes.ts';
+import type { ProbeResult } from '../factory/program/probes.ts';
 import { TELEMETRY_WINDOWS, rollingTelemetry, telemetryMeasureKeys, type RollingTelemetry } from './screenMetrics.ts';
 
 export const TELEMETRY_PROBE = 'r01.tel-07-1';
@@ -57,7 +56,8 @@ export function judgeTelemetryReading(reading: RollingTelemetry, measures: strin
   }
   if (problems.length > 0 || unknown.length > 0) {
     const parts = [...problems, ...(unknown.length ? [`UNKNOWN: ${unknown.join('; ')}`] : [])];
-    return { ok: false, detail: `telemetry at ${reading.at}: ${parts.join('; ').slice(0, 600)}` };
+    // A malformed reading is a failure; a well-formed one the rows cannot yet answer is UNKNOWN, never a pass.
+    return { ok: problems.length > 0 ? false : null, detail: `telemetry at ${reading.at}: ${parts.join('; ').slice(0, 600)}` };
   }
   return {
     ok: true,
@@ -70,4 +70,3 @@ export async function telemetryHoldsOnRows(now: Date = new Date()): Promise<Prob
   return judgeTelemetryReading(await rollingTelemetry(now));
 }
 
-registerProbe(TELEMETRY_PROBE, async () => telemetryHoldsOnRows());

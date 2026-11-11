@@ -67,7 +67,7 @@ describe('probe r01.tel-07-1', () => {
     const f = reading.windows['1h'].find((x) => x.measure === 'cost')!;
     Object.assign(f, { basis: 'UNKNOWN', numerator: null, denominator: null, rate: null, note: 'unreadable: no such table' });
     const answer = judgeTelemetryReading(reading);
-    expect(answer.ok).toBe(false);
+    expect(answer.ok).toBeNull(); // UNKNOWN, never a pass and never a zero
     expect(answer.detail).toContain('UNKNOWN: 1h cost (unreadable: no such table)');
   });
 

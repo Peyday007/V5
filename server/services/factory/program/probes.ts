@@ -308,6 +308,7 @@ define('r01.cap-16-3', async (args) => {
 define('r01.life-29-1', async (args) => (await releaseOne<typeof import('../../cash/deliverables/lifecycleProbes.ts')>('../../cash/deliverables/lifecycleProbes.ts', (m) => m.commitmentsHoldOnRows))(args));
 define('r01.life-29-2', async (args) => (await releaseOne<typeof import('../../cash/deliverables/lifecycleProbes.ts')>('../../cash/deliverables/lifecycleProbes.ts', (m) => m.realizationHoldsOnRows))(args));
 define('r01.life-29-3', async (args) => (await releaseOne<typeof import('../../cash/deliverables/lifecycleProbes.ts')>('../../cash/deliverables/lifecycleProbes.ts', (m) => m.exceptionsHoldOnRows))(args));
+define('r01.tel-07-1', async () => (await import('../../cash/telemetryProbe.ts')).telemetryHoldsOnRows());
 define('r01.gov-17-3', async () => {
   const { BRAIN_REVISION } = await import('../../../env.ts');
   return (await import('./releaseEvaluation.ts')).releaseEvaluationHoldsOnRows(BRAIN_REVISION);
