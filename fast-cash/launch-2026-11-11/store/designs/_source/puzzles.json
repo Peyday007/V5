@@ -1,0 +1,470 @@
+{
+ "mug": {
+  "seed": "store-2026-11-11-mug-0",
+  "intended": "EASY",
+  "measured": "EASY",
+  "hash": "440956f4de8fd2dad91204ae7382de485e1b793c6f158ea86e54dbf4681251a6",
+  "grid": [
+   "3...589..",
+   ".4...9852",
+   "9582....4",
+   "41....538",
+   ".6..1..4.",
+   "573....21",
+   "7....1295",
+   "2947...8.",
+   "..589...7"
+  ],
+  "solution": [
+   "321458976",
+   "647139852",
+   "958276314",
+   "419627538",
+   "862513749",
+   "573984621",
+   "786341295",
+   "294765183",
+   "135892467"
+  ],
+  "prompts": [
+   "41 givens."
+  ],
+  "checks": [
+   "grid is a nine-by-nine of digits and blanks: true",
+   "the givens do not contradict each other: true",
+   "at least seventeen givens: true",
+   "exactly one solution: true",
+   "the printed solution is that solution: true",
+   "the answer key is the solution: true"
+  ]
+ },
+ "tee": {
+  "seed": "store-2026-11-11-tee-0",
+  "intended": "MEDIUM",
+  "measured": "EASY",
+  "hash": "23bd46afacf6295bc44d5ca7796486ca643ca4d180eb03a377156cced002827c",
+  "grid": [
+   "..8.6.45.",
+   ".46......",
+   "1.52.7...",
+   "..4.5237.",
+   "...714...",
+   ".7268.9..",
+   "...5.87.4",
+   "......28.",
+   ".81.7.6.."
+  ],
+  "solution": [
+   "928361457",
+   "746895123",
+   "135247896",
+   "614952378",
+   "893714562",
+   "572683941",
+   "369528714",
+   "457136289",
+   "281479635"
+  ],
+  "prompts": [
+   "33 givens."
+  ],
+  "checks": [
+   "grid is a nine-by-nine of digits and blanks: true",
+   "the givens do not contradict each other: true",
+   "at least seventeen givens: true",
+   "exactly one solution: true",
+   "the printed solution is that solution: true",
+   "the answer key is the solution: true"
+  ]
+ },
+ "tote": {
+  "seed": "store-2026-11-11-tote-0",
+  "intended": "MEDIUM",
+  "measured": "MEDIUM",
+  "hash": "d892c143e8a3241014ef0bcb45180d40e675bba184d95a7a2afbbdd629812340",
+  "grid": [
+   "9.2..7...",
+   "7...5.1..",
+   "54..6.27.",
+   ".2.93.8..",
+   ".7..2..4.",
+   "..9.41.5.",
+   ".53.9..28",
+   "..7.8...4",
+   "...4..5.1"
+  ],
+  "solution": [
+   "962317485",
+   "738254196",
+   "541869273",
+   "624935817",
+   "175628349",
+   "389741652",
+   "453196728",
+   "217583964",
+   "896472531"
+  ],
+  "prompts": [
+   "33 givens."
+  ],
+  "checks": [
+   "grid is a nine-by-nine of digits and blanks: true",
+   "the givens do not contradict each other: true",
+   "at least seventeen givens: true",
+   "exactly one solution: true",
+   "the printed solution is that solution: true",
+   "the answer key is the solution: true"
+  ]
+ },
+ "poster": {
+  "seed": "store-2026-11-11-poster-0",
+  "intended": "HARD",
+  "measured": "MEDIUM",
+  "hash": "1c3c2d5b1a5ce17ff25d0af259b3f47741e072a13007575f2c9ddc0ad7243e9f",
+  "grid": [
+   "8..95..34",
+   "..17.4...",
+   "4......6.",
+   ".....1..5",
+   "7.8...6.9",
+   "9..6.....",
+   ".9......6",
+   "...1.52..",
+   "68..29..3"
+  ],
+  "solution": [
+   "827956134",
+   "561734982",
+   "439218567",
+   "246891375",
+   "718543629",
+   "953672841",
+   "192387456",
+   "374165298",
+   "685429713"
+  ],
+  "prompts": [
+   "28 givens."
+  ],
+  "checks": [
+   "grid is a nine-by-nine of digits and blanks: true",
+   "the givens do not contradict each other: true",
+   "at least seventeen givens: true",
+   "exactly one solution: true",
+   "the printed solution is that solution: true",
+   "the answer key is the solution: true"
+  ]
+ },
+ "sweatshirt": {
+  "seed": "store-2026-11-11-sweatshirt-0",
+  "intended": "MEDIUM",
+  "measured": "EASY",
+  "hash": "50c885bc5ad1c4f6f93cea37f7569f21c8528292efb15ef9ac41081d83cb78a3",
+  "grid": [
+   ".638..51.",
+   "4..7153.9",
+   ".........",
+   ".4...72..",
+   "7..249..3",
+   "..86...7.",
+   ".........",
+   "2.5468..1",
+   ".37..284."
+  ],
+  "solution": [
+   "963824517",
+   "482715369",
+   "571936428",
+   "149387256",
+   "756249183",
+   "328651974",
+   "814573692",
+   "295468731",
+   "637192845"
+  ],
+  "prompts": [
+   "33 givens."
+  ],
+  "checks": [
+   "grid is a nine-by-nine of digits and blanks: true",
+   "the givens do not contradict each other: true",
+   "at least seventeen givens: true",
+   "exactly one solution: true",
+   "the printed solution is that solution: true",
+   "the answer key is the solution: true"
+  ]
+ },
+ "journal": {
+  "seed": "store-2026-11-11-journal-0",
+  "intended": "EASY",
+  "measured": "EASY",
+  "hash": "f7f8e04d7e98251a1490d34fa2377825b55bcc68c7e9c28630a994caaa9e46e8",
+  "grid": [
+   "3..81.526",
+   ".61.458..",
+   "....7...1",
+   ".9..36.85",
+   ".35.8.27.",
+   "84.59..6.",
+   "7...6....",
+   "..372.61.",
+   "416.58..2"
+  ],
+  "solution": [
+   "374819526",
+   "261345897",
+   "589672341",
+   "197236485",
+   "635481279",
+   "842597163",
+   "728163954",
+   "953724618",
+   "416958732"
+  ],
+  "prompts": [
+   "41 givens."
+  ],
+  "checks": [
+   "grid is a nine-by-nine of digits and blanks: true",
+   "the givens do not contradict each other: true",
+   "at least seventeen givens: true",
+   "exactly one solution: true",
+   "the printed solution is that solution: true",
+   "the answer key is the solution: true"
+  ]
+ },
+ "okayest": {
+  "seed": "store-2026-11-11-okayest-0",
+  "intended": "EASY",
+  "measured": "MEDIUM",
+  "hash": "22f7fff9526b204a84243ddab159677e06aa8c91668d517da1a75b3f446d79f1",
+  "grid": [
+   "....9...4",
+   ".2...3..1",
+   "7.84.13..",
+   "2..16897.",
+   "639275148",
+   ".87349..5",
+   "..15.64.2",
+   "5..8...3.",
+   "8...2...."
+  ],
+  "solution": [
+   "316792854",
+   "425683791",
+   "798451326",
+   "254168973",
+   "639275148",
+   "187349265",
+   "971536482",
+   "542817639",
+   "863924517"
+  ],
+  "prompts": [
+   "41 givens."
+  ],
+  "checks": [
+   "grid is a nine-by-nine of digits and blanks: true",
+   "the givens do not contradict each other: true",
+   "at least seventeen givens: true",
+   "exactly one solution: true",
+   "the printed solution is that solution: true",
+   "the answer key is the solution: true"
+  ]
+ },
+ "largeprint": {
+  "seed": "store-2026-11-11-largeprint-0",
+  "intended": "EASY",
+  "measured": "EASY",
+  "hash": "c0126cd292d2c6b986d9bcc2a7eece5d6b1d6bdf7856bf4a2cb04ac9fee50e96",
+  "grid": [
+   "16.8574..",
+   "4.512..9.",
+   "..3469.5.",
+   "....9651.",
+   "..6...7..",
+   ".2731....",
+   ".5.2483..",
+   ".3..751.6",
+   "..4631.85"
+  ],
+  "solution": [
+   "169857423",
+   "485123697",
+   "273469851",
+   "348796512",
+   "916582734",
+   "527314968",
+   "651248379",
+   "832975146",
+   "794631285"
+  ],
+  "prompts": [
+   "42 givens."
+  ],
+  "checks": [
+   "grid is a nine-by-nine of digits and blanks: true",
+   "the givens do not contradict each other: true",
+   "at least seventeen givens: true",
+   "exactly one solution: true",
+   "the printed solution is that solution: true",
+   "the answer key is the solution: true"
+  ]
+ },
+ "coaster": {
+  "seed": "store-2026-11-11-coaster-0",
+  "intended": "EASY",
+  "measured": "EASY",
+  "hash": "4f9873a7e85cb3a94cf1ee95bce4d3ec54d5fe7734b8987faa9725957f1d71e8",
+  "grid": [
+   "2.9...143",
+   "4163..8.7",
+   ".75.4..6.",
+   "5472.6..8",
+   ".........",
+   "1..9.3476",
+   ".5..6.73.",
+   "6.4..7521",
+   "732...6.4"
+  ],
+  "solution": [
+   "289675143",
+   "416329857",
+   "375148962",
+   "547216398",
+   "963784215",
+   "128953476",
+   "851462739",
+   "694837521",
+   "732591684"
+  ],
+  "prompts": [
+   "42 givens."
+  ],
+  "checks": [
+   "grid is a nine-by-nine of digits and blanks: true",
+   "the givens do not contradict each other: true",
+   "at least seventeen givens: true",
+   "exactly one solution: true",
+   "the printed solution is that solution: true",
+   "the answer key is the solution: true"
+  ]
+ },
+ "sticker": {
+  "seed": "store-2026-11-11-sticker-0",
+  "intended": "EASY",
+  "measured": "EASY",
+  "hash": "f736c8eafda8ba4a1e5bcb1a1af203a13185a9cf3ce972c1f9e22c86029baa8e",
+  "grid": [
+   "..5..6.94",
+   "..2937...",
+   "1.7.....2",
+   "726.4.5.9",
+   ".4976132.",
+   "3.1.2.476",
+   "6.....2.3",
+   "...6859..",
+   "95.3..8.."
+  ],
+  "solution": [
+   "835216794",
+   "462937185",
+   "197458632",
+   "726843519",
+   "549761328",
+   "381529476",
+   "678194253",
+   "213685947",
+   "954372861"
+  ],
+  "prompts": [
+   "41 givens."
+  ],
+  "checks": [
+   "grid is a nine-by-nine of digits and blanks: true",
+   "the givens do not contradict each other: true",
+   "at least seventeen givens: true",
+   "exactly one solution: true",
+   "the printed solution is that solution: true",
+   "the answer key is the solution: true"
+  ]
+ },
+ "blackmug": {
+  "seed": "store-2026-11-11-blackmug-0",
+  "intended": "HARD",
+  "measured": "MEDIUM",
+  "hash": "b8b3e51f48bd805e5d6b6d57b1e6f986564bf7a5fa5893c74d0694041f4d10ff",
+  "grid": [
+   "7.....8..",
+   ".....293.",
+   "...3615.4",
+   "......428",
+   "..1...7..",
+   "869......",
+   "6.5843...",
+   ".981.....",
+   "..3.....5"
+  ],
+  "solution": [
+   "736495812",
+   "514782936",
+   "982361574",
+   "357619428",
+   "421538769",
+   "869274153",
+   "675843291",
+   "298156347",
+   "143927685"
+  ],
+  "prompts": [
+   "28 givens."
+  ],
+  "checks": [
+   "grid is a nine-by-nine of digits and blanks: true",
+   "the givens do not contradict each other: true",
+   "at least seventeen givens: true",
+   "exactly one solution: true",
+   "the printed solution is that solution: true",
+   "the answer key is the solution: true"
+  ]
+ },
+ "expert": {
+  "seed": "store-2026-11-11-expert-0",
+  "intended": "HARD",
+  "measured": "MEDIUM",
+  "hash": "4198f5c4bf444eb2c58cbf7e9d89d767f4cd7fb17bed88fc072e3b92c7137bbd",
+  "grid": [
+   "..9.51...",
+   ".62..4...",
+   "15.7.....",
+   "5...3....",
+   "37.1.2.45",
+   "....4...1",
+   ".....3.62",
+   "...2..37.",
+   "...47.9.."
+  ],
+  "solution": [
+   "839651427",
+   "762384159",
+   "154729683",
+   "541837296",
+   "376192845",
+   "298546731",
+   "487913562",
+   "915268374",
+   "623475918"
+  ],
+  "prompts": [
+   "28 givens."
+  ],
+  "checks": [
+   "grid is a nine-by-nine of digits and blanks: true",
+   "the givens do not contradict each other: true",
+   "at least seventeen givens: true",
+   "exactly one solution: true",
+   "the printed solution is that solution: true",
+   "the answer key is the solution: true"
+  ]
+ }
+}
