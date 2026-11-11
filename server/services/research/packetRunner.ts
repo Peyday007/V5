@@ -2798,7 +2798,10 @@ export async function advanceIdlePackets(
  *
  * A packet one of whose fragments is itself NEEDS_HUMAN already needs a person
  * by its own rows, so that packet parks at NEEDS_HUMAN with the same sentence
- * and a `RESEARCH_BLOCKED` event. The stall this was built for is
+ * and a `RESEARCH_BLOCKED` event. So does a packet behind a mission, by the same
+ * rule `advancePacket` applies when no fragment clears its gate: only a goal
+ * round with no mission ends FAILED, and a packet behind a mission parks,
+ * because a mission's park has a person and a card. The stall this was built for is
  * AWAITING_REPAIR with a fragment whose `nextRetryAt` has already passed:
  * `advancePacket` reads any retry time as a wait.
  *
@@ -2827,15 +2830,20 @@ async function concludeStalledPacket(
   const now = new Date(nowMs).toISOString();
   if (fragments.some((fragment) => fragment.nextRetryAt !== null && fragment.nextRetryAt > now)) return null;
 
-  const needsPerson = fragments.some((fragment) => fragment.status === 'NEEDS_HUMAN');
+  const fragmentAsks = fragments.some((fragment) => fragment.status === 'NEEDS_HUMAN');
+  const mission = fragmentAsks ? null : await getMissionByOrchestration(packet.id);
+  const needsPerson = fragmentAsks || mission !== null;
   const hours = Math.floor(idleMs / 3_600_000);
   const reason =
     `This packet sat ${packet.status} for ${hours} hour${hours === 1 ? '' : 's'} with no work queued ` +
     `or leased, and advancing it ${failure ? `failed (${failure.slice(0, 300)})` : 'changed nothing'}. ` +
     `That is past the ${PACKET_PROGRESS_DEADLINE_MS / 3_600_000}-hour progress deadline, so it is ` +
-    (needsPerson
+    (fragmentAsks
       ? 'parked for the person one of its fragments already asks for, and it no longer holds a ' +
         'slot as live work. '
+      : mission
+      ? `parked for the person behind mission ${mission.id}, whose card carries it, and it no ` +
+        'longer holds a slot as live work. '
       : 'concluded here and no longer holds a slot for movement that will not come. ') +
     'Nothing was synthesized, and every fragment, claim and attempt keeps its row.';
   const to: 'FAILED' | 'NEEDS_HUMAN' = needsPerson ? 'NEEDS_HUMAN' : 'FAILED';

@@ -27,6 +27,7 @@ import {
   updateOrchestration,
 } from '../server/repos/research.ts';
 import { enqueueWork } from '../server/repos/workQueue.ts';
+import { launchMission, linkMission } from '../server/repos/russellMissions.ts';
 import { createWorker } from '../server/repos/identity.ts';
 import {
   advanceIdlePackets,
@@ -284,7 +285,7 @@ describe('the progress deadline', () => {
     expect((await getOrchestration(young))!.status).toBe('AWAITING_REPAIR');
   });
 
-  it('parks at NEEDS_HUMAN only when a fragment already asks for a person', async () => {
+  it('parks at NEEDS_HUMAN when a fragment already asks for a person', async () => {
     const id = await stalled(OVERDUE, 'NEEDS_HUMAN');
     const moved = await advanceIdlePackets(10);
     expect(moved).toEqual([{ orchestrationId: id, from: 'AWAITING_REPAIR', to: 'NEEDS_HUMAN' }]);
@@ -292,6 +293,30 @@ describe('the progress deadline', () => {
     expect(after.status).toBe('NEEDS_HUMAN');
     expect(after.failureReason).toMatch(/one of its fragments already asks for/);
     expect((await events(id)).map((e) => e.event_type)).toContain('RESEARCH_BLOCKED');
+  });
+
+  it('parks a stalled packet behind a mission at NEEDS_HUMAN instead of failing it, as a no-gate packet does', async () => {
+    const id = await stalled(OVERDUE);
+    const { mission } = await launchMission({
+      projectId, layerId, visibility: 'PRIVATE', objective: 'o', whyNow: 'w', idempotencyKey: `m-${id}`,
+    });
+    await linkMission({ missionId: mission.id, orchestrationId: id });
+    await age(id, OVERDUE);
+    const moved = await advanceIdlePackets(10);
+    expect(moved).toEqual([{ orchestrationId: id, from: 'AWAITING_REPAIR', to: 'NEEDS_HUMAN' }]);
+    const after = (await getOrchestration(id))!;
+    expect(after.status).toBe('NEEDS_HUMAN');
+    expect(after.failedAt).toBeNull();
+    expect(after.failureReason).toMatch(new RegExp(`behind mission ${mission.id}`));
+    expect(after.failureReason).toMatch(/progress deadline/);
+    const kinds = (await events(id)).map((e) => e.event_type);
+    expect(kinds).toContain('RESEARCH_BLOCKED');
+    expect(kinds).not.toContain('RESEARCH_FAILED');
+
+    // The same stall with no mission still ends FAILED: only the mission changes it.
+    const lone = await stalled(OVERDUE);
+    await advanceIdlePackets(10);
+    expect((await getOrchestration(lone))!.status).toBe('FAILED');
   });
 
   it('never concludes a plan waiting for a person to approve it: that is the §16 gate, not a stall', async () => {
