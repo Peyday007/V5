@@ -20,6 +20,7 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { isRunpodSlot } from '../cheap/runpod.ts';
 import { readPodSpend, type PodSpend } from '../cheap/runpodPod.ts';
 import { causeOfReason, type RouteFailureCause } from './worker.ts';
+import type { ItemUsage } from './itemMeter.ts';
 
 export type Measured<T> = { measured: true; value: T } | { measured: false; reason: string };
 
@@ -46,6 +47,29 @@ export const STAGES: readonly StageDefinition[] = [
   { id: 'commercial-execution', label: 'human / authorized commercial execution', workTypes: [], rows: ['cash_actions', 'cash_needs'] },
 ];
 
+/**
+ * What one stage's items used in the window, summed from the usage each lane item
+ * recorded while it ran (`itemMeter.ts`). `cpuSeconds` is the process's CPU
+ * apportioned equally among the lane items in flight, so it is an upper bound on
+ * the stage's own (`cpuBound: 'UPPER'`); network is application payload bytes.
+ * `itemsMetered` of `itemsInWindow` carried a reading — rows written before the
+ * meter existed carry none and are not guessed.
+ */
+export interface StageResources {
+  scope: 'stage';
+  itemsMetered: number;
+  itemsInWindow: number;
+  modelCalls: number;
+  cpuSeconds: number;
+  cpuBound: 'UPPER';
+  peakRssBytes: number;
+  meanRssShareBytes: number;
+  dbCalls: number;
+  dbMs: number;
+  networkBytesOut: number;
+  networkBytesIn: number;
+}
+
 export interface StageReading {
   stage: string;
   label: string;
@@ -59,6 +83,8 @@ export interface StageReading {
   providerFailures: Measured<number>;
   elapsedMs: Measured<number>;
   incrementalDollars: Measured<number>;
+  /** The stage's own CPU / RAM / DB / network use, where its items recorded it. */
+  resources: Measured<StageResources>;
   accepted: number;
   acceptedPerHour: number;
   /** The tables the reading came from. */
@@ -194,6 +220,9 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     providerFailures: NOT(reason),
     elapsedMs: NOT(reason),
     incrementalDollars: NOT('the lane records no dollar cost per job'),
+    resources: NOT(def.workTypes.length > 0
+      ? reason
+      : 'this stage runs outside the free lane, in code that records no per-run CPU, memory or network reading'),
     accepted: 0,
     acceptedPerHour: 0,
   });
@@ -228,6 +257,12 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
         AND c.sourced = 1 AND e.workload_class IN (${placeholders(types)})`,
     [since, ...types],
   );
+  const metered = await db.all<{ measures: string | Record<string, unknown> | null }>(
+    `SELECT measures FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND workload_class IN (${placeholders(types)})
+        AND measures LIKE '%"usage"%'`,
+    [since, ...types],
+  );
 
   let total = 0;
   let accepted = 0;
@@ -243,6 +278,7 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     if (isDroppedOutcome(row.outcome, providerFailed)) dropped += n(row.k);
   }
   const oldest = queued?.oldest ? Math.max(0, Math.round((nowMs - Date.parse(queued.oldest)) / 60_000)) : null;
+  const usage = sumUsage(metered.map((row) => usageOf(row.measures)), total);
   return {
     stage: def.id,
     label: def.label,
@@ -253,16 +289,77 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     // Only work the lane gave up on without an accepted answer; a provider
     // failure or a handed-back item is counted under its own measure, not here.
     droppedOrDuplicate: ok(dropped),
-    modelCallsAvoided: NOT('model calls avoided are not recorded'),
+    modelCallsAvoided: usage.measured
+      ? ok(usage.avoided)
+      : NOT('no lane item in the window recorded its model calls (items record them since the item meter was added)'),
     providerFailures: ok(providerFailures),
     elapsedMs: ok(ms),
     incrementalDollars: NOT('the lane records no dollar cost per job'),
+    resources: usage.measured
+      ? ok(usage.resources)
+      : NOT('no lane item in the window recorded its CPU, memory, database or network use'),
     accepted,
     acceptedPerHour: accepted / hours,
   };
 }
 
-type RowStageReading = Omit<StageReading, 'stage' | 'label' | 'measuredFrom'>;
+/** The `usage` a `FREE_LANE_ITEM` row's measures carry, or null. Exported for tests. */
+export function usageOf(measures: string | Record<string, unknown> | null | undefined): ItemUsage | null {
+  let parsed: unknown = measures;
+  if (typeof measures === 'string') {
+    try {
+      parsed = JSON.parse(measures);
+    } catch {
+      return null;
+    }
+  }
+  const usage = (parsed as { usage?: unknown } | null)?.usage;
+  if (!usage || typeof usage !== 'object') return null;
+  const u = usage as Record<string, unknown>;
+  const num = (k: string): number => (typeof u[k] === 'number' && Number.isFinite(u[k]) ? (u[k] as number) : 0);
+  return {
+    modelCalls: num('modelCalls'),
+    modelCallsAvoided: num('modelCallsAvoided'),
+    cpuMicros: num('cpuMicros'),
+    peakRssBytes: num('peakRssBytes'),
+    rssShareBytes: num('rssShareBytes'),
+    dbCalls: num('dbCalls'),
+    dbMs: num('dbMs'),
+    networkBytesOut: num('networkBytesOut'),
+    networkBytesIn: num('networkBytesIn'),
+  };
+}
+
+/** One stage's items' usage, summed. Unmeasured when no item carried a reading. Pure; exported for tests. */
+export function sumUsage(
+  usages: readonly (ItemUsage | null)[],
+  itemsInWindow: number,
+): { measured: true; avoided: number; resources: StageResources } | { measured: false } {
+  const present = usages.filter((u): u is ItemUsage => u !== null);
+  if (present.length === 0) return { measured: false };
+  const resources: StageResources = {
+    scope: 'stage', itemsMetered: present.length, itemsInWindow: Math.max(itemsInWindow, present.length),
+    modelCalls: 0, cpuSeconds: 0, cpuBound: 'UPPER', peakRssBytes: 0, meanRssShareBytes: 0,
+    dbCalls: 0, dbMs: 0, networkBytesOut: 0, networkBytesIn: 0,
+  };
+  let avoided = 0;
+  let share = 0;
+  for (const u of present) {
+    avoided += u.modelCallsAvoided;
+    resources.modelCalls += u.modelCalls;
+    resources.cpuSeconds += u.cpuMicros / 1e6;
+    resources.peakRssBytes = Math.max(resources.peakRssBytes, u.peakRssBytes);
+    share += u.rssShareBytes;
+    resources.dbCalls += u.dbCalls;
+    resources.dbMs += u.dbMs;
+    resources.networkBytesOut += u.networkBytesOut;
+    resources.networkBytesIn += u.networkBytesIn;
+  }
+  resources.meanRssShareBytes = Math.round(share / present.length);
+  return { measured: true, avoided, resources };
+}
+
+type RowStageReading = Omit<StageReading, 'stage' | 'label' | 'measuredFrom' | 'resources'>;
 type RowStageReader = (since: string, hours: number, nowMs: number) => Promise<RowStageReading>;
 
 const minutesSince = (iso: string | null | undefined, nowMs: number): number | null =>
@@ -476,7 +573,7 @@ function readProcess(): ProcessReading {
     rssBytes: memory.rss,
     heapUsedBytes: memory.heapUsed,
     dbPool: pools ? ok({ workloadWaiting: pools.workload.waiting }) : NOT('the SQLite adapter has no connection pool to read'),
-    network: NOT('no per-stage network counter is recorded'),
+    network: NOT('the process keeps no network counter of its own; each lane stage\'s network bytes are in its resources'),
   };
 }
 

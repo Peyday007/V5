@@ -36,6 +36,7 @@ import { findingTakesQualifier, isStructuralFinding } from '../../domain/industr
 import { createWorker, getWorkerByName, grantMembership, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import { CLAIMABLE_SQL, claimWork, queueNow } from '../../repos/workQueue.ts';
 import { completeUnleasedBin, getBin, recordBinEvent } from '../../repos/bins.ts';
+import { itemMeters, utf8Bytes, type ItemUsage } from './itemMeter.ts';
 import { evaluateContract } from '../bins/contracts.ts';
 import { findTool } from '../../mcp/tools.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
@@ -632,6 +633,39 @@ interface Ctx {
   why: string;
   /** How sources were found for a fragment: search results, and which of the read pages came from them. */
   discovery?: { searched: number; readFromSearch: number; readFromModel: number };
+  /** What the item used while it ran (itemMeter.ts); recorded on its `FREE_LANE_ITEM` row. */
+  usage?: ItemUsage;
+}
+
+/**
+ * The item's model route, page reader and search, each counting what crossed the
+ * network into the item's meter. The behaviour of each is unchanged.
+ */
+export function meteredIo(
+  usage: ItemUsage,
+  io: { completer: Completer; fetchSource: (url: string) => Promise<SourceFetch>; search: (query: string) => Promise<string[]> },
+): { completer: Completer; fetchSource: (url: string) => Promise<SourceFetch>; search: (query: string) => Promise<string[]> } {
+  return {
+    completer: (async (config, model, system, prompt, options) => {
+      usage.modelCalls += 1;
+      usage.networkBytesOut += utf8Bytes(system) + utf8Bytes(prompt);
+      const text = await io.completer(config, model, system, prompt, options);
+      usage.networkBytesIn += utf8Bytes(text);
+      return text;
+    }) as Completer,
+    fetchSource: async (url) => {
+      usage.networkBytesOut += utf8Bytes(url);
+      const page = await io.fetchSource(url);
+      usage.networkBytesIn += utf8Bytes(page?.readable ? page.text : '');
+      return page;
+    },
+    search: async (query) => {
+      usage.networkBytesOut += utf8Bytes(query);
+      const found = await io.search(query);
+      usage.networkBytesIn += utf8Bytes(found);
+      return found;
+    },
+  };
 }
 
 /** `ask` for one item, recording why on the item when the model gives nothing usable. */
@@ -665,8 +699,14 @@ export const NOT_REACHED_BACKOFF_MS = [1_000, 3_000, 9_000];
 async function call(ctx: Ctx, tool: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
   const found = findTool(tool);
   if (!found) throw new Error(`no tool ${tool}`);
-  const outcome = await retryNotReached(() => found.run(args, { principal: ctx.principal, requestId: `req_${Math.random().toString(36).slice(2)}` }));
-  return outcome.value;
+  const started = Date.now();
+  if (ctx.usage) ctx.usage.dbCalls += 1;
+  try {
+    const outcome = await retryNotReached(() => found.run(args, { principal: ctx.principal, requestId: `req_${Math.random().toString(36).slice(2)}` }));
+    return outcome.value;
+  } finally {
+    if (ctx.usage) ctx.usage.dbMs += Date.now() - started;
+  }
 }
 
 /** Run `fn`, waiting and running it again while Brain's database was not reached. Exported for tests. */
@@ -714,6 +754,8 @@ export async function submitDroppingRefusedClaims(ctx: Ctx, tool: string, args: 
       const at = index ? Number(index[1]) : -1;
       if (tool !== 'brain_submit_claims' || !claims || claims.length < 2 || at < 0 || at >= claims.length || dropped >= 5) throw error;
       current = { ...current, claims: claims.filter((_, i) => i !== at) };
+      // Dropping the refused claim stands in for the repair call that would otherwise have been asked.
+      if (ctx.usage) ctx.usage.modelCallsAvoided += 1;
     }
   }
 }
@@ -926,6 +968,9 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
         'sites over deep links. Reply as {"urls":["https://..."]}.',
     );
     await open(urlsOf(retry));
+  } else if (ctx.usage) {
+    // Enough pages were read on the first round, so the second round's model call was not needed.
+    ctx.usage.modelCallsAvoided += 1;
   }
   const readFromSearch = readable.filter((one) => fromSearch.has(one.url)).length;
   ctx.discovery = { searched: fromSearch.size, readFromSearch, readFromModel: readable.length - readFromSearch };
@@ -1146,6 +1191,8 @@ async function audit(ctx: Ctx, role: string): Promise<boolean> {
    */
   const struck = (transientStrikes.get(ctx.claimed.workItemId) ?? 0) > 0;
   let raw = struck ? null : await askFor(ctx, prompt);
+  // A struck audit is not asked the long way again: that call is avoided.
+  if (struck && ctx.usage) ctx.usage.modelCallsAvoided += 1;
   /*
    * A long brief is where free models stop answering in JSON. Production,
    * 2026-11-05 09:18–10:18Z: ANALYSIS.AUDIT 5/25 and six packets parked "an audit
@@ -1702,15 +1749,19 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   }
   if (!one) return { claimed: null, ok: false, ms: 0 };
   const started = Date.now();
+  const meterKey = `${one.workItemId}:${one.leaseId}`;
+  const usage = itemMeters.open(meterKey);
+  const io = meteredIo(usage, { completer: input.completer, fetchSource: input.fetchSource, search: input.search });
   const ctx: Ctx = {
     worker,
     principal: principalFor(worker, projectIds, session),
     claimed: one,
-    completer: input.completer,
-    fetchSource: input.fetchSource,
-    search: input.search,
+    completer: io.completer,
+    fetchSource: io.fetchSource,
+    search: io.search,
     config,
     why: 'the model returned no usable JSON',
+    usage,
   };
   let ok = false;
   try {
@@ -1776,6 +1827,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   }
   recordRouteOutcome(worker.model, { ok, why: ctx.why });
   const ms = Date.now() - started;
+  const used = itemMeters.close(meterKey) ?? usage;
   await recordBinEvent({
     eventType: 'FREE_LANE_ITEM',
     binId: owners.get(one.workItemId) ?? null,
@@ -1788,7 +1840,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
     durationMs: ms,
     evidenceClass: 'MEASURED',
-    ...(ctx.discovery ? { measures: { discovery: ctx.discovery } } : {}),
+    measures: { usage: used, ...(ctx.discovery ? { discovery: ctx.discovery } : {}) },
   });
   return { claimed: one, ok, ms };
 }

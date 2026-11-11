@@ -51,6 +51,7 @@ function reading(stage: string, waiting: number | null, processedPerHour: number
     providerFailures: measured(0),
     elapsedMs: measured(0),
     incrementalDollars: not,
+    resources: not,
     accepted: 0,
     acceptedPerHour,
   };
