@@ -65,6 +65,8 @@ export const FREE_LANE_PURPOSES = ['PLAY_RESEARCH', 'GRUNT'] as const;
 const WORKER_NAMES = ['free-lane-a', 'free-lane-b'] as const;
 const LEASE_MS = 20 * 60_000;
 const MAX_SOURCES = 6;
+/** Rounds in which the model is asked for other pages after the first candidates failed. */
+const MAX_RETRY_ROUNDS = 2;
 
 /**
  * The next pages to open at once: up to `limit`, at most one per host, in the
@@ -114,6 +116,23 @@ const timeoutStrikes = new Map<string, number>();
 function hostOf(url: string): string | null {
   try {
     return new URL(url).hostname.toLowerCase() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The origin page to read in place of a deep link the site says is gone (404 or 410).
+ * Only those two statuses on a non-root path qualify: a 403 or 429 is a refusal Brain does
+ * not work around, and a host-level failure (DNS, network, timeout) says the origin is no
+ * better. Null means no fallback.
+ */
+export function deadDeepLinkOrigin(url: string, reason: string, status: number | null): string | null {
+  if (reason !== 'HTTP_ERROR' || (status !== 404 && status !== 410)) return null;
+  try {
+    const parsed = new URL(url);
+    if (!/^https?:$/.test(parsed.protocol) || parsed.pathname === '/' || parsed.pathname === '') return null;
+    return `${parsed.protocol}//${parsed.host}/`;
   } catch {
     return null;
   }
@@ -847,7 +866,11 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   const queries = searchQueries(question, plan?.['searches'] ?? plan?.['search']);
   const searched = (await Promise.all(queries.map((q) => ctx.search(q)))).flat();
   const tried = new Set<string>();
+  /** Hosts whose origin page was already queued after a dead deep link, so each host is tried once per fragment. */
+  const originFallbacks = new Set<string>();
   const skipped = new Set<string>();
+  /** Pages a search engine returned: they exist, so a remembered-shut host is retried for them rather than skipped. */
+  const fromSearch = new Set(searched);
   const failedUrls: string[] = [];
   const fetchReasons: string[] = [];
   const fetchDetails: string[] = [];
@@ -869,7 +892,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       const results = await Promise.all(
         wave.map(async (url) => {
           tried.add(url);
-          if (isRememberedUnreachable(url)) return { url, fetched: null };
+          if (!fromSearch.has(url) && isRememberedUnreachable(url)) return { url, fetched: null };
           return { url, fetched: await ctx.fetchSource(url) };
         }),
       );
@@ -882,6 +905,12 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
         const host = hostOf(url);
         if (fetched.readable && host) forgiveHost(url);
         if (!fetched.readable) rememberUnreachable(url, String(fetched.reason));
+        const origin = !fetched.readable ? deadDeepLinkOrigin(url, fetched.reason, fetched.status) : null;
+        if (origin && host && !originFallbacks.has(host) && !tried.has(origin) && !queue.includes(origin)) {
+          // A dead deep link on a live host: read the host's own front page once, as any other candidate.
+          originFallbacks.add(host);
+          queue.push(origin);
+        }
         if (fetched.readable && fetched.text.trim().length > 200 && readable.length < MAX_SOURCES) {
           readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, SOURCE_CHARS) });
         } else if (!(fetched.readable && fetched.text.trim().length > 200)) {
@@ -893,18 +922,22 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     }
   };
   // Search results first: they are pages that exist. A remembered URL is a guess.
-  const fromSearch = new Set(searched);
   await open([...searched, ...urlsOf(plan)]);
-  // A second round: show the model what Brain could not open and ask for other pages.
-  if (readable.length < 2) {
+  // Further rounds: show the model what Brain could not open — including pages skipped because their
+  // host is known shut, which the first round's list used to leave out, so the model re-named them —
+  // and ask for other pages. A round that opened no new page (every name was already tried or on a
+  // shut host) earns one more, bounded, so a fragment is not failed on a model's repeated recall.
+  for (let round = 0; round < MAX_RETRY_ROUNDS && readable.length < 2; round++) {
+    const before = tried.size;
     const retry = await askFor(
       ctx,
-      `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nBrain could not open these pages (missing, blocked or ` +
-        `empty): ${JSON.stringify(failedUrls)}. ${unreachableNote()}Name up to ${MAX_SOURCES} OTHER public pages likely to hold primary ` +
-        'evidence — prefer stable top-level pages of official bodies, regulators, statistics offices and company ' +
-        'sites over deep links. Reply as {"urls":["https://..."]}.',
+      `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nBrain could not open these pages (missing, blocked, unreachable or ` +
+        `empty): ${JSON.stringify([...new Set([...failedUrls, ...skipped])])}. ${unreachableNote()}Name up to ${MAX_SOURCES} OTHER public pages ` +
+        'on hosts not named above, likely to hold primary evidence — prefer stable top-level pages of official bodies, ' +
+        'regulators, statistics offices and company sites over deep links. Reply as {"urls":["https://..."]}.',
     );
     await open(urlsOf(retry));
+    if (tried.size > before && readable.length > 0) break;
   }
   const readFromSearch = readable.filter((one) => fromSearch.has(one.url)).length;
   ctx.discovery = { searched: fromSearch.size, readFromSearch, readFromModel: readable.length - readFromSearch };
