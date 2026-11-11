@@ -366,6 +366,8 @@ async function runTask<I, O>(
     // and nothing is written, so a deferral never reads as a failed answer.
     const capacity = options.capacity ?? providerCapacity;
     const key = providerKey(config.url, model);
+    // A cooldown recorded by another process or before a restart counts here too.
+    await capacity.sync(key);
     if (!capacity.reserve(key, now).allowed) {
       seen.deferred += 1;
       continue;
@@ -389,14 +391,14 @@ async function runTask<I, O>(
         text = await (options.completer ?? httpCompleter)(config, model, TASKS[kind].system, asked);
       } catch (caught) {
         error = caught instanceof Error ? caught.message.slice(0, 300) : 'failed';
-        capacity.failure(key, caught, now);
+        await capacity.fail(key, caught, now);
         const evidence = evidenceOfError(caught);
         seen.decisions.push(
           decideFailure({ evidence, lane: 'CHEAP', attempts: attempt, retryAfterMs: evidence.retryAfterMs, alternativeWorker: remaining.length > 0 }),
         );
         break;
       }
-      capacity.success(key);
+      await capacity.succeed(key);
       parsed = parse(text);
       if (parsed) break;
       const decision = decideFailure({ evidence: { outputInvalid: true }, lane: 'CHEAP', attempts: attempt, repairAvailable: true });

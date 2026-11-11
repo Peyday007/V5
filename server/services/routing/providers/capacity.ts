@@ -11,9 +11,11 @@
  *     window, never sent. With none stored there is no limit: Brain does not
  *     invent allowance numbers for a provider that has not stated them.
  *
- * State is per process and lost on restart, which errs towards asking the
- * provider again — it cannot hide a recovered provider. A deferral is not a
- * failure and writes nothing to the lane's health rows.
+ * The cooldown is also written to `provider_capacity` and read back before
+ * every call (`CapacityStore`), so a restart, a deploy or another machine does
+ * not call a provider that is known to be down; a success clears it. The
+ * per-minute window stays per process. A deferral is not a failure and writes
+ * nothing to the lane's health rows.
  */
 export type Deferral = { allowed: true } | { allowed: false; reason: 'COOLDOWN' | 'RATE_LIMIT_DEFERRED'; retryAt: Date };
 
@@ -53,16 +55,93 @@ export function storedRateLimit(env: NodeJS.ProcessEnv = process.env): number | 
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
 }
 
-interface State { failures: number; until: number; calls: number[] }
+interface State { failures: number; until: number; calls: number[]; stored: boolean }
+
+/**
+ * Where a cooldown outlives this process: the `provider_capacity` row
+ * (`repos/workRouting.ts`). Read before every call, so a cooldown another
+ * machine or an earlier process recorded is honoured; written on every
+ * provider fault, so a restart or a deploy does not call a known-down provider
+ * again. Only the cooldown is shared — the per-minute window stays per process,
+ * because a burst count is not a fact any row states.
+ */
+export interface CapacityStore {
+  cooldownUntil(provider: string, model: string): Promise<string | null>;
+  recordFault(provider: string, model: string, failure: string, cooldownUntil: string): Promise<void>;
+  clearCooldown(provider: string, model: string): Promise<void>;
+}
+
+/** The provider (host) and model a key names. */
+export function keyParts(key: string): { provider: string; model: string } {
+  const at = key.indexOf('|');
+  return at < 0 ? { provider: key, model: '' } : { provider: key.slice(0, at), model: key.slice(at + 1) };
+}
 
 export class ProviderCapacity {
   private readonly state = new Map<string, State>();
 
-  constructor(private readonly limitPerMinute: () => number | null = () => storedRateLimit()) {}
+  constructor(
+    private readonly limitPerMinute: () => number | null = () => storedRateLimit(),
+    private readonly store: CapacityStore | null = null,
+  ) {}
+
+  /**
+   * Adopt the durable cooldown for `key` before asking `reserve`. A store that
+   * cannot be read leaves this process's own state in charge, which errs towards
+   * asking the provider again rather than inventing an outage.
+   */
+  async sync(key: string): Promise<void> {
+    if (!this.store) return;
+    const { provider, model } = keyParts(key);
+    let until: string | null = null;
+    try {
+      until = await this.store.cooldownUntil(provider, model);
+    } catch {
+      return;
+    }
+    const at = until ? Date.parse(until) : Number.NaN;
+    const s = this.get(key);
+    if (Number.isFinite(at) && at > s.until) {
+      s.until = at;
+      s.stored = true;
+    }
+  }
+
+  /** `failure`, and the cooldown it set written where every process reads it. */
+  async fail(key: string, error: unknown, now: Date = new Date()): Promise<Date | null> {
+    const until = this.failure(key, error, now);
+    if (until && this.store) {
+      const { provider, model } = keyParts(key);
+      const message = error instanceof Error ? error.message : String(error);
+      try {
+        await this.store.recordFault(provider, model, message, until.toISOString());
+        this.get(key).stored = true;
+      } catch {
+        // The in-process cooldown still holds; the row is written on the next fault.
+      }
+    }
+    return until;
+  }
+
+  /** `success`, and a stored cooldown cleared so other processes ask again too. */
+  async succeed(key: string): Promise<void> {
+    const s = this.get(key);
+    const hadStored = s.stored;
+    this.success(key);
+    if (hadStored && this.store) {
+      const { provider, model } = keyParts(key);
+      try {
+        await this.store.clearCooldown(provider, model);
+        s.stored = false;
+      } catch {
+        // A stale row expires at its own time; it never outlasts the provider's stated retry.
+      }
+    }
+  }
 
   private get(key: string): State {
     let s = this.state.get(key);
-    if (!s) { s = { failures: 0, until: 0, calls: [] }; this.state.set(key, s); }
+    if (!s) { s = { failures: 0, until: 0, calls: [], stored: false }; this.state.set(key, s); }
     return s;
   }
 
@@ -107,7 +186,24 @@ export class ProviderCapacity {
   }
 }
 
-export const providerCapacity = new ProviderCapacity();
+/** The `provider_capacity` table as the store (`repos/workRouting.ts`). */
+export const providerCapacityStore: CapacityStore = {
+  async cooldownUntil(provider, model) {
+    const { getProviderCapacity } = await import('../../../repos/workRouting.ts');
+    return (await getProviderCapacity(provider, model))?.cooldownUntil ?? null;
+  },
+  async recordFault(provider, model, failure, cooldownUntil) {
+    const { recordProviderFailure } = await import('../../../repos/workRouting.ts');
+    await recordProviderFailure({ provider, model, failure, cooldownUntil });
+  },
+  async clearCooldown(provider, model) {
+    const { clearProviderCooldown } = await import('../../../repos/workRouting.ts');
+    await clearProviderCooldown(provider, model);
+  },
+};
+
+/** The lane's capacity: cooldowns persist in `provider_capacity`, so they survive restarts and span machines. */
+export const providerCapacity = new ProviderCapacity(() => storedRateLimit(), providerCapacityStore);
 
 export function providerKey(url: string, model: string): string {
   try { return `${new URL(url).host}|${model}`; } catch { return `${url}|${model}`; }

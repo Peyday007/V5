@@ -179,6 +179,14 @@ export async function getProviderCapacity(provider: string, model: string): Prom
   return r ? { provider: r.provider, model: r.model, limitValue: r.limit_value, windowSeconds: r.window_seconds, cooldownUntil: r.cooldown_until, lastFailure: r.last_failure, lastFailureAt: r.last_failure_at, updatedAt: r.updated_at } : null;
 }
 
+/** The provider answered again: its cooldown ends now. The last failure stays on the row as history. */
+export async function clearProviderCooldown(provider: string, model: string): Promise<void> {
+  await getDb().run(
+    'UPDATE provider_capacity SET cooldown_until = NULL, updated_at = ? WHERE provider = ? AND model = ? AND cooldown_until IS NOT NULL',
+    [nowIso(), provider, model],
+  );
+}
+
 /** Whether a provider/model is cooling down at `now`. A provider Brain has no row for is not. */
 export async function isCoolingDown(provider: string, model: string, now: Date = new Date()): Promise<boolean> {
   const c = await getProviderCapacity(provider, model);
