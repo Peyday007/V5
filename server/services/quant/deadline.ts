@@ -217,9 +217,11 @@ export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
   stage('commitment-to-funds', toFunds, route.commitmentAt, firstFunds);
   stage('funds-to-usable-cash', toUsable, firstFunds, route.usableCashAt);
 
-  // Receivables are only knowable when billings are; received can exceed billed (advances), floor at 0.
-  const receivables = billed === null ? null : Math.max(0, billed - (received ?? 0));
+  // Receivables need both sides stated: a missing funds row is an unknown, never zero received
+  // (invariant 39). Received can exceed billed (advances), so floor at 0.
+  const receivables = billed === null || received === null ? null : Math.max(0, billed - received);
   if (billed === null) unknowns.push('no billing row, receivables unknown');
+  else if (received === null) unknowns.push('no funds-received row, receivables unknown');
 
   // Peak working capital: walk movements in time order; outlays and refunds drain, receipts refill.
   let peak: number | null = null;
