@@ -462,6 +462,53 @@ describe('decompose', () => {
   });
 });
 
+describe('decision-critical unknowns are sent to their owners, not only named (CAUSAL-14-4)', () => {
+  const candidates = async (): Promise<{ id: string; statement: string }[]> =>
+    (await call<{ candidates: { id: string; statement: string }[] }>('GET', `/api/russell/projects/${project}/candidates?limit=200`, { cookie: adminCookie })).body.candidates;
+
+  it('storing a graph raises each research need and captures its question for the research entrance', async () => {
+    const graph = GRAPH();
+    graph.actions[0]!.permissions = ['billing:write'];
+    const r = await call('POST', `${CAUSAL()}/graphs/sent1`, { cookie: adminCookie, body: { graph } });
+    expect(r.status).toBe(200);
+    expect(r.body.sent).toBe(true);
+    const research = r.body.needs.find((n: { route: string }) => n.route === 'RESEARCH');
+    const action = r.body.needs.find((n: { route: string }) => n.route === 'AUTHORIZED_ACTION');
+    expect(research.needId).toMatch(/\S/);
+    expect(research.candidateId).toMatch(/\S/);
+    expect(action.needId).toMatch(/\S/);
+    expect(action.candidateId).toBeNull();
+    const idea = (await candidates()).find((c) => c.id === research.candidateId);
+    expect(idea?.statement).toContain('when tax is paid');
+  });
+
+  it('asking about a stored graph again returns the same needs rather than raising new ones', async () => {
+    const before = (await candidates()).length;
+    const again = await call('POST', `${CAUSAL()}/account`, { cookie: adminCookie, body: { graphKey: 'sent1' } });
+    expect(again.body.sent).toBe(true);
+    const stored = await call('POST', `${CAUSAL()}/money-path`, { cookie: adminCookie, body: { graphKey: 'sent1' } });
+    const ids = (body: { needs: { needId: string }[] }) => body.needs.map((n) => n.needId).sort();
+    expect(ids(again.body)).toEqual(ids(stored.body));
+    expect((await candidates()).length).toBe(before);
+  });
+
+  it('an inline graph sends only when asked, and a chain’s unknown stage is sent as research', async () => {
+    const quiet = await call('POST', `${CAUSAL()}/account`, { cookie: adminCookie, body: { graph: { ...GRAPH(), subject: 'quiet' } } });
+    expect(quiet.body.sent).toBe(false);
+    expect(quiet.body.needs[0].needId).toBeUndefined();
+    const asked = await call('POST', `${CAUSAL()}/account`, { cookie: adminCookie, body: { graph: { ...GRAPH(), subject: 'asked' }, send: true } });
+    expect(asked.body.sent).toBe(true);
+    expect(asked.body.needs[0].candidateId).toMatch(/\S/);
+    const chain = CHAIN();
+    chain.stages[0]!.yield = { value: null, status: 'UNKNOWN' } as never;
+    const sent = await call('POST', `${CAUSAL()}/chain`, { cookie: adminCookie, body: { chain, subject: 'a chain', send: true } });
+    expect(sent.status).toBe(200);
+    expect(sent.body.sent).toBe(true);
+    expect(sent.body.needs[0]).toMatchObject({ subject: 'stage reach', route: 'RESEARCH' });
+    expect(sent.body.needs[0].candidateId).toMatch(/\S/);
+  });
+});
+
 describe('stored graphs keep every version', () => {
   const claim = (value: number, reason?: string) => ({ key: 'price', figure: fig(value, 'OBSERVED'), ...(reason ? { reason } : {}) });
 

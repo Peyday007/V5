@@ -8,7 +8,7 @@
  * principal type. Levels come from `services/identity/policy.ts`'s defaults: a
  * POST is WRITE and nothing here widens that.
  *
- * Nothing here acts on the world. A graph may travel in the request, or be named
+ * Nothing here acts on the world beyond Brain's own records. A graph may travel in the request, or be named
  * by `graphKey` and read back from what an earlier request stored. Storing is an
  * append to `project_events` (the existing append-only history), one row per
  * version of a named graph, so there is no second store and no migration; the
@@ -20,7 +20,11 @@
  */
 import { Router } from 'express';
 import { badRequest, bodyOf, handler, notFound, pathId, requirePerson, requireProject, unprocessable } from './helpers.ts';
+import { createHash } from 'node:crypto';
 import { listEvents, recordEvent } from '../repos/events.ts';
+import { setNeedCandidate } from '../repos/cashPortfolio.ts';
+import { createCandidate } from '../repos/russellCandidates.ts';
+import { raiseNeed } from '../services/cash/needs.ts';
 import {
   FIGURE_STATUSES,
   addAction,
@@ -204,12 +208,10 @@ export interface Need {
 
 /**
  * The decision-critical unknowns: figures nobody has, route gaps, a chain stage
- * with an unknown input, and the actions whose permissions are not yet held. They
- * are named, not enqueued: the route has no scheduler of its own (§10.3), so
- * handing a need to the research planner or to a person's approval is that owner's
- * job, and `sent` says so rather than implying it happened.
+ * with an unknown input, and the actions whose permissions are not yet held.
+ * `needsOf` only names them; `sendNeeds` below hands them to their owners.
  */
-function needsOf(graph: CausalGraph, readings: MoneyRouteReading[], chain: ChainReading | null): { sent: false; needs: Need[] } {
+function needsOf(graph: CausalGraph, readings: MoneyRouteReading[], chain: ChainReading | null): Need[] {
   const needs: Need[] = [];
   for (const reading of readings) {
     for (const gap of reading.gaps) {
@@ -235,7 +237,100 @@ function needsOf(graph: CausalGraph, readings: MoneyRouteReading[], chain: Chain
       });
     }
   }
-  return { sent: false, needs };
+  return needs;
+}
+
+/** A need once it has been handed to its owner. */
+export interface SentNeed extends Need {
+  /** The `cash_needs` row it is recorded as: the review a person already reads. */
+  needId: string;
+  /** For research: the idea the research entrance judges, asks the archive about and, under the standing grant, researches. */
+  candidateId: string | null;
+}
+
+/** At most this many needs are handed on per request, so one graph cannot flood the review. */
+const MAX_SENT_PER_REQUEST = 50;
+
+/**
+ * Hand the needs to the owners that already exist for them (§10.3, no second
+ * queue): every need becomes a `raiseNeed` row under a key stable for this graph
+ * and subject, so asking again returns the row already open rather than adding
+ * one; a RESEARCH need's question is captured as an idea through
+ * `createCandidate`, the entrance research already runs through (archive first,
+ * judgment, the standing grant deciding whether anything is spent); an
+ * AUTHORIZED_ACTION need is a `PERSON` need on the surface the person who holds
+ * the permission already uses, never performed here.
+ */
+async function sendNeeds(
+  projectId: string,
+  actorRef: string,
+  scope: string,
+  subject: string,
+  needs: Need[],
+): Promise<{ sent: boolean; needs: (Need | SentNeed)[]; unsent: { subject: string; reason: string }[] }> {
+  const out: (Need | SentNeed)[] = [];
+  const unsent: { subject: string; reason: string }[] = [];
+  for (const [index, need] of needs.entries()) {
+    if (index >= MAX_SENT_PER_REQUEST) {
+      out.push(need);
+      unsent.push({ subject: need.subject, reason: `more than ${MAX_SENT_PER_REQUEST} needs in one request; send again once these are answered` });
+      continue;
+    }
+    const digest = createHash('sha256').update(`${need.route}\u0000${need.subject}`).digest('hex').slice(0, 24);
+    const research = need.route === 'RESEARCH';
+    const raised = await raiseNeed({
+      projectId,
+      actorRef,
+      blockedAction: `${research ? 'Settle' : 'Authorize'} ${need.subject} in the causal model of ${subject}`.slice(0, 500),
+      whyItMatters: `The causal model of ${subject} cannot answer this from what it holds, and every answer that rests on it stays unknown until it is settled.`.slice(0, 1000),
+      recommendedPath: research ? need.question : `${need.question} Permissions needed: ${need.permissions.join(', ')}.`,
+      setupEffort: research ? 'One bounded look.' : 'A decision by whoever holds the permission.',
+      nextStep: need.question,
+      completionCondition: research
+        ? `The ${need.subject} is stated in the stored graph with its source.`
+        : `The permissions ${need.permissions.join(', ')} are held for ${need.subject}, or the action is withdrawn.`,
+      requestKey: `causal:${scope}:${digest}`,
+      blockerKey: research ? null : 'PERSON',
+    });
+    if (!raised.ok) {
+      out.push(need);
+      unsent.push({ subject: need.subject, reason: raised.reason });
+      continue;
+    }
+    let candidateId = raised.value.candidateId;
+    if (research && !candidateId) {
+      const candidate = await createCandidate({
+        projectId,
+        visibility: 'SHARED',
+        title: `${need.subject} (${subject})`.slice(0, 200),
+        statement: `For the causal model of "${subject}", establish one thing from published or recorded sources: ${need.question}`,
+      });
+      // Another request may have pointed the need first; its idea stands and this one is not attached.
+      candidateId = (await setNeedCandidate(raised.value.id, candidate.id)) ? candidate.id : null;
+    }
+    out.push({ ...need, needId: raised.value.id, candidateId });
+  }
+  return { sent: unsent.length === 0 && needs.length > 0, needs: out, unsent };
+}
+
+/**
+ * What a request answers with about its needs. A stored graph's needs, or any
+ * request that sets `"send": true`, are handed to their owners; an inline graph
+ * explored without asking to send is answered with `sent: false` and the needs
+ * named, so exploring an alternative never fills the review.
+ */
+async function answerNeeds(
+  projectId: string,
+  body: Json,
+  graph: CausalGraph,
+  needs: Need[],
+): Promise<{ sent: boolean; needs: (Need | SentNeed)[]; unsent?: { subject: string; reason: string }[] }> {
+  const named = body.graph === undefined && body.graphKey !== undefined;
+  if (needs.length === 0 || (!named && body.send !== true)) return { sent: false, needs };
+  const principal = requirePerson();
+  const scope = named ? `graph:${graphKeyOf(body.graphKey)}` : `subject:${graph.subject}`;
+  const subject = named ? `${graph.subject} (graph ${graphKeyOf(body.graphKey)})` : graph.subject;
+  return sendNeeds(projectId, principal.id, scope, subject, needs);
 }
 
 function readingsOf(graph: CausalGraph): MoneyRouteReading[] {
@@ -309,8 +404,9 @@ causalRouter.post(
   handler(async (req) => {
     requirePerson();
     const projectId = (await requireProject(pathId(req, 'projectId'))).id;
-    const graph = await graphOf(projectId, bodyOf(req));
-    return { account: fullAccount(graph), ...needsOf(graph, readingsOf(graph), null) };
+    const body = bodyOf(req);
+    const graph = await graphOf(projectId, body);
+    return { account: fullAccount(graph), ...(await answerNeeds(projectId, body, graph, needsOf(graph, readingsOf(graph), null))) };
   }),
 );
 
@@ -376,7 +472,7 @@ causalRouter.post(
         owedAfterward: route.outflows,
         reading: readings[index],
       })),
-      ...needsOf(graph, readings, null),
+      ...(await answerNeeds(projectId, body, graph, needsOf(graph, readings, null))),
     };
   }),
 );
@@ -491,7 +587,8 @@ causalRouter.post(
         bindingConstraintAfter: chainAfter?.bindingConstraint ?? null,
       },
       branches,
-      ...needsOf(afterGraph, afterRoutes, chainAfter),
+      // A what-if is hypothetical: its unknowns are handed on only when the caller asks, never because the base graph is stored.
+      ...(await answerNeeds(projectId, { send: body.send }, afterGraph, needsOf(afterGraph, afterRoutes, chainAfter))),
     };
   }),
 );
@@ -505,11 +602,13 @@ causalRouter.post(
   '/projects/:projectId/causal/chain',
   handler(async (req) => {
     requirePerson();
-    await requireProject(pathId(req, 'projectId'));
-    const chain = chainFrom(bodyOf(req).chain);
+    const projectId = (await requireProject(pathId(req, 'projectId'))).id;
+    const body = bodyOf(req);
+    const chain = chainFrom(body.chain);
     if (!chain) throw badRequest('"chain" is required.');
     const reading = passVolume(chain.startUnits, chain.stages);
-    return { reading, ...needsOf(createGraph('chain'), [], reading) };
+    const subject = textOrNull(body.subject) ?? 'a dependency chain';
+    return { reading, ...(await answerNeeds(projectId, { send: body.send }, createGraph(subject), needsOf(createGraph(subject), [], reading))) };
   }),
 );
 
@@ -622,7 +721,9 @@ causalRouter.post(
       eventType: 'CAPABILITY_ASSESSED',
       payload: { kind: GRAPH_VERSION_KIND, reason, graph: merged },
     });
-    return { key, version: earlier.length + 1, subject: graph.subject, claims: graph.claims.size };
+    // A stored graph is Brain's record of the arrangement: what it cannot answer is handed on as it is stored.
+    const handed = await answerNeeds(projectId, { graphKey: key }, graph, needsOf(graph, readingsOf(graph), null));
+    return { key, version: earlier.length + 1, subject: graph.subject, claims: graph.claims.size, ...handed };
   }),
 );
 
