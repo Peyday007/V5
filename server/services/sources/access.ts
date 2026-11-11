@@ -654,20 +654,30 @@ export function acquisitionEvidenceOfRead(
 
 /**
  * Whether a read operated a site's interface, and what that says in the OPERATE
- * capability's terms. Pure. A BROWSER attempt is Brain driving an interface rather
- * than fetching a document, so it is the OPERATE capability's evidence; a read
- * that never opened the browser says nothing about it and yields null.
+ * capability's terms. Pure.
  *
- * No account is ever asserted: the research browser does not sign in
+ * Operating a system and acquiring information are two capabilities, and a read
+ * is the second. A browser render of a public page is a read that needed
+ * JavaScript: it is recorded as ACQUIRE (with the BROWSER route its evidence
+ * supports) and says nothing about operating anything. A browser read is OPERATE
+ * evidence only on a host a person has placed under the operate-permission
+ * record (`OPERATE_PERMISSION` rows, granted or since revoked): that row is the
+ * statement that this site's interface is a system Brain works in rather than a
+ * page it reads, so its workflow is judged as an operation — routed by BROWSER
+ * under the grant, or handed to a person once it is revoked. Any other read,
+ * however it was rendered, yields null.
+ *
+ * No account is ever asserted here: the research browser does not sign in
  * (`browserMcp.ts`), so `authorizedAccountOnRecord` is false and the judgment
- * records the stop honestly (NO_AUTHORIZED_ACCOUNT) instead of claiming an
- * operation under a permission nobody evidenced.
+ * reads the grant from the permission record itself, never from the read.
  */
 export function operateEvidenceOfRead(
   read: Pick<SourceRead, 'attempts'>,
   boundary: AccessEvidence['boundary'] | null,
   evidence: AccessEvidence,
+  context: { hostUnderOperateRecord: boolean },
 ): AcquisitionEvidence | null {
+  if (!context.hostUnderOperateRecord) return null;
   if (!read.attempts.some((a) => a.method === 'BROWSER')) return null;
   return {
     interactiveInterfaceOnly: evidence.interfaceOnly === true,
@@ -720,9 +730,19 @@ async function judgeReadAsOperation(
   evidence: AccessEvidence,
   caller: string,
 ): Promise<void> {
-  const operated = operateEvidenceOfRead(read, boundary, evidence);
+  if (!host || !read.attempts.some((a) => a.method === 'BROWSER')) return;
+  // Read fresh for its one host on every browser read: a revocation must apply to the very next one.
+  dbLoad.queries += 1;
+  const permission = await readOperatePermission(host);
+  // A host with no permission row was never declared a system to operate: this was a public read, ACQUIRE only.
+  const operated = operateEvidenceOfRead(read, boundary, evidence, { hostUnderOperateRecord: permission.at !== null });
   if (!operated) return;
-  await recordAcquisitionJudgment({ kind: 'OPERATE', purpose: `operate the interface at ${read.requestedUrl}`, host }, operated, judgmentDeps(caller));
+  const deps = judgmentDeps(caller);
+  await recordAcquisitionJudgment(
+    { kind: 'OPERATE', purpose: `operate the interface at ${read.requestedUrl}`, host },
+    operated,
+    { ...deps, operatePermission: async () => permission },
+  );
 }
 
 async function judgeReadAsAcquisition(
@@ -797,7 +817,8 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
   // this read's own evidence supports (existing bulk sources first, a connector when the
   // host's SOURCE_ACCESS history justifies one) and record it beside the access row.
   await judgeReadAsAcquisition(read, host, boundary ?? null, evidence, caller).catch(() => undefined);
-  // Driving a site's interface is the other capability: record its own judgment, never folded into the ACQUIRE row.
+  // Operating a site's interface is the other capability, judged only on a host a person placed under the
+  // operate-permission record; a public read is never also recorded as an operation.
   await judgeReadAsOperation(read, host, boundary ?? null, evidence, caller).catch(() => undefined);
 }
 

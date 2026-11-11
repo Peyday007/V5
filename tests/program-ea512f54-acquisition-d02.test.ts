@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   judgeAcquisitionNeed,
   recordAcquisitionJudgment,
+  recordOperatePermission,
   repeatedUseFromRows,
 } from '../server/services/sources/acquisition.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, SCRIPT_CONVERSION_RUNS } from '../server/services/sources/accessMethods.ts';
@@ -251,11 +252,17 @@ describe('OPERATE has a production producer, separate from ACQUIRE', () => {
   };
 
   it('a read that never opened the browser says nothing about operating an interface', () => {
-    expect(operateEvidenceOfRead({ attempts: [attempt('DIRECT', true)] }, null, {})).toBeNull();
+    expect(operateEvidenceOfRead({ attempts: [attempt('DIRECT', true)] }, null, {}, { hostUnderOperateRecord: true })).toBeNull();
   });
 
-  it('a browser attempt is OPERATE evidence, and no account is ever asserted', () => {
-    const ev = operateEvidenceOfRead({ attempts: [attempt('DIRECT', false), attempt('BROWSER', true)] }, null, { interfaceOnly: true, interfaceUnfamiliar: true });
+  it('a browser render of a public page is a read, not an operation', () => {
+    const attempts = [attempt('DIRECT', false), attempt('BROWSER', true)];
+    expect(operateEvidenceOfRead({ attempts }, null, { interfaceOnly: true, interfaceUnfamiliar: true }, { hostUnderOperateRecord: false })).toBeNull();
+    expect(operateEvidenceOfRead({ attempts: [attempt('BROWSER', false)] }, 'CAPTCHA', {}, { hostUnderOperateRecord: false })).toBeNull();
+  });
+
+  it('a browser attempt on a host under the operate record is OPERATE evidence, and no account is ever asserted', () => {
+    const ev = operateEvidenceOfRead({ attempts: [attempt('DIRECT', false), attempt('BROWSER', true)] }, null, { interfaceOnly: true, interfaceUnfamiliar: true }, { hostUnderOperateRecord: true });
     expect(ev).toMatchObject({ interactiveInterfaceOnly: true, interfaceUnfamiliarOrChanged: true, authorizedAccountOnRecord: false });
     const j = judgeAcquisitionNeed({ kind: 'OPERATE', purpose: 'p' }, ev!);
     expect(j.capability).toBe('OPERATE');
@@ -264,15 +271,13 @@ describe('OPERATE has a production producer, separate from ACQUIRE', () => {
   });
 
   it('a boundary met after the browser is carried into the OPERATE judgment', () => {
-    const ev = operateEvidenceOfRead({ attempts: [attempt('BROWSER', false)] }, 'CAPTCHA', {})!;
+    const ev = operateEvidenceOfRead({ attempts: [attempt('BROWSER', false)] }, 'CAPTCHA', {}, { hostUnderOperateRecord: true })!;
     expect(ev.blockedAtBoundary).toBe(true);
     expect(judgeAcquisitionNeed({ kind: 'OPERATE', purpose: 'p' }, ev).boundaries).toEqual(['ACCESS_BARRIER']);
   });
 
-  it('readSource writes one OPERATE and one ACQUIRE ACQUISITION_JUDGMENT row when the browser ran', async () => {
-    await freshProject();
-    resetSourceAccessMemory();
-    await readSource('https://operate-producer.example/app', {
+  const browserRead = (url: string, caller: string) =>
+    readSource(url, {
       resolve: async () => ['93.184.216.34'],
       robotsAllow: async () => true,
       learned: async () => null,
@@ -282,8 +287,30 @@ describe('OPERATE has a production producer, separate from ACQUIRE', () => {
       connector: async () => null,
       direct: async (u) => emptyFetch(u),
       browser: async (u) => okFetch(u),
-      caller: 'operate-producer-test',
+      caller,
     });
+
+  it('a public page read through the browser writes only an ACQUIRE judgment', async () => {
+    await freshProject();
+    resetSourceAccessMemory();
+    await browserRead('https://public-render.example/page', 'public-render-test');
+    expect(await capabilitiesOf('public-render-test')).toEqual(['ACQUIRE']);
+  });
+
+  it('many public browser reads across many hosts never produce an OPERATE row', async () => {
+    await freshProject();
+    resetSourceAccessMemory();
+    for (let i = 0; i < 12; i++) await browserRead(`https://research-${i}.example/article`, 'public-render-many');
+    expect((await capabilitiesOf('public-render-many')).filter((c) => c === 'OPERATE')).toEqual([]);
+    const operateRows = await getDb().all(`SELECT 1 FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT' AND measures LIKE '%"capability":"OPERATE"%'`);
+    expect(operateRows).toEqual([]);
+  });
+
+  it('readSource writes one OPERATE and one ACQUIRE row when the browser ran on a host under the operate record', async () => {
+    await freshProject();
+    resetSourceAccessMemory();
+    await recordOperatePermission({ host: 'operate-producer.example', granted: true, accountRef: 'owner login for operate-producer', grantedBy: 'owner' });
+    await browserRead('https://operate-producer.example/app', 'operate-producer-test');
     expect(await capabilitiesOf('operate-producer-test')).toEqual(['ACQUIRE', 'OPERATE']);
   });
 

@@ -64,9 +64,10 @@ describe('repeatedUseFromRows counts repeated work, not host traffic', () => {
 
 describe('OPERATE is reachable on production records through a person\'s permission', () => {
   const attempt = (method: string, readable: boolean) => ({ method: method as never, readable, reason: readable ? null : 'EMPTY', status: null, ms: 1 });
-  // Exactly what the production read path hands the judgment: a browser ran, no account is known to it.
+  // Exactly what the production read path hands the judgment on a host under the operate record:
+  // a browser ran, no account is known to the read itself.
   const producerEvidence = () =>
-    operateEvidenceOfRead({ attempts: [attempt('DIRECT', false), attempt('BROWSER', true)] }, null, { interfaceOnly: true })!;
+    operateEvidenceOfRead({ attempts: [attempt('DIRECT', false), attempt('BROWSER', true)] }, null, { interfaceOnly: true }, { hostUnderOperateRecord: true })!;
   const recorder = () => {
     const events: { eventType: string; outcome?: string | null; provider?: string | null; measures?: Record<string, unknown> }[] = [];
     return { events, record: async (e: (typeof events)[number]) => void events.push(e) };
@@ -106,7 +107,7 @@ describe('OPERATE is reachable on production records through a person\'s permiss
   });
 
   it('an unfamiliar interface under a grant is operated, not handed off', async () => {
-    const ev = operateEvidenceOfRead({ attempts: [attempt('BROWSER', true)] }, null, { interfaceOnly: true, interfaceUnfamiliar: true })!;
+    const ev = operateEvidenceOfRead({ attempts: [attempt('BROWSER', true)] }, null, { interfaceOnly: true, interfaceUnfamiliar: true }, { hostUnderOperateRecord: true })!;
     const r = recorder();
     const j = await recordAcquisitionJudgment({ kind: 'OPERATE', purpose: 'p', host: 'app.example' }, ev, {
       record: r.record as never,
@@ -175,8 +176,9 @@ describe('OPERATE is reachable on production records through a person\'s permiss
         .map((r) => ({ provider: r.provider, m: JSON.parse(r.measures) as { capability: string; authorizedAccount?: string } }))
         .filter((r) => r.m.capability === 'OPERATE');
 
+    // Before any person placed the host under the operate record, a browser read is a public read: no OPERATE row.
     await read('operate-ungranted');
-    expect((await operateRows('operate-ungranted')).map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
+    expect((await operateRows('operate-ungranted')).map((r) => r.provider)).toEqual([]);
 
     await recordOperatePermission({ host: 'granted-app.example', granted: true, accountRef: 'owner login for granted-app', grantedBy: 'owner' });
     expect((await readOperatePermission('granted-app.example')).permitted).toBe(true);
@@ -238,7 +240,7 @@ describe('a person grants an operate permission from the terminal, and the read 
 
     expect((await runOperatePermissionCommand(['show', '--host', 'cli-granted.example'])).out).toMatch(/no standing permission/);
     await read('cli-before');
-    expect((await operated('cli-before')).map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
+    expect((await operated('cli-before')).map((r) => r.provider)).toEqual([]);
 
     const granted = await runOperatePermissionCommand(['grant', '--host', 'CLI-Granted.example', '--account', 'ops login for cli-granted', '--by', 'owner']);
     expect(granted.code).toBe(0);
