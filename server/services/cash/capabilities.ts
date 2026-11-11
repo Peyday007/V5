@@ -83,6 +83,15 @@ export interface CapabilityDefinition {
    * and "the reader said no" is what keeps the report a reading.
    */
   read: (() => Promise<boolean>) | null;
+  /**
+   * Who can make it present when it is missing (AUTO-20-2 step 5, S-0249).
+   *
+   * `PERSON`: what it requires is a secret, a registration or an authority only
+   * a person holds (invariants 22, 38): Brain cannot acquire it and the gap is
+   * held for that person. `FACTORY`: what it requires is code in this
+   * repository, so the Software Factory is the owner that builds it.
+   */
+  acquiredBy: 'PERSON' | 'FACTORY';
 }
 
 const RESEARCH: CapabilityDefinition = {
@@ -93,6 +102,7 @@ const RESEARCH: CapabilityDefinition = {
     'Register or re-enable a Routine with `npm run fleet`, then check that a fire arrives and ' +
     'finishes something.',
   read: async () => (await separationCapacity()).surfaces >= 1,
+  acquiredBy: 'PERSON',
 };
 
 /**
@@ -119,6 +129,7 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
     // and its configuration reads usable now — never a boolean somebody
     // flipped.
     read: async () => usableAdapter(CONTACT_BUYER_NAMESPACE) !== null,
+    acquiredBy: 'PERSON',
   },
   {
     id: 'ISSUE_AN_INVOICE',
@@ -130,6 +141,7 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
       'Set the two billing secrets on the deployment and restart. Until then, the invoice is ' +
       'issued outside Brain and the settlement is recorded against its own reference.',
     read: async () => usableAdapter(ISSUE_INVOICE_NAMESPACE) !== null,
+    acquiredBy: 'PERSON',
   },
   {
     id: 'TAKE_A_PAYMENT',
@@ -149,6 +161,7 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
     read: async () =>
       usablePaymentReader() !== null ||
       usableAdapter(COMMERCIAL_EFFECTS.ACCEPT_PAYMENT.namespace) !== null,
+    acquiredBy: 'PERSON',
   },
   {
     id: 'ISSUE_A_REFUND',
@@ -160,6 +173,8 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
     // `PRESENT` only when a real, healthy adapter is registered — the same
     // reading `journey/fulfillment.ts` uses to decide whether to send one.
     read: async () => refundAdapter() !== null,
+    // The adapter is code: a refund effect registered for "cash.refund".
+    acquiredBy: 'FACTORY',
   },
   {
     id: 'BUILD_SOFTWARE',
@@ -178,6 +193,7 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
       (await listRoutines()).some(
         (routine) => routine.state === 'ENABLED' && routine.capabilities.includes('repository-write'),
       ),
+    acquiredBy: 'PERSON',
   },
   {
     id: 'PUBLISH_A_LISTING',
@@ -187,6 +203,7 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
       'Until one exists, the listing is published by a person. Note that publishing is an ' +
       'ALWAYS_PROHIBITED_COMMERCIAL action for Brain itself whatever integration exists.',
     read: null,
+    acquiredBy: 'PERSON',
   },
   {
     id: 'SIGN_AN_AGREEMENT',
@@ -194,6 +211,7 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
     requires: 'A signature integration, and somebody with authority to bind the account.',
     nextStep: 'Until one exists, the agreement is signed by a person and recorded as an action.',
     read: null,
+    acquiredBy: 'PERSON',
   },
 ]);
 
@@ -238,6 +256,8 @@ export const DELIVERABLE_CAPABILITIES: readonly CapabilityDefinition[] = Object.
       if (!proof) throw new Error('the deliverable proof has not finished in this process yet');
       return proof[kind]?.available === true;
     },
+    // The renderer is code in this repository.
+    acquiredBy: 'FACTORY',
   })),
 );
 
@@ -373,4 +393,33 @@ export function readingFrom(
 ): CapabilityReading {
   const key = id.trim();
   return readings.get(key) ?? { id: key, state: 'UNKNOWN', definition: BY_ID.get(key) ?? null };
+}
+
+/**
+ * Who acquires a capability a need waits on, read now (AUTO-20-2 step 5, S-0249).
+ *
+ * - `PRESENT`: nothing to acquire; the need settles on its next reconsideration.
+ * - `UNREAD`: Brain has a word for it and could not read it just now; read again.
+ * - `PERSON`: a secret, registration or authority only a person holds.
+ * - `FACTORY`: code in this repository — including a capability Brain has no
+ *   word for, which is a vocabulary entry and its reader to write.
+ */
+export type CapabilityAcquisition =
+  | { by: 'PRESENT' | 'UNREAD'; id: string; why: string }
+  | { by: 'PERSON' | 'FACTORY'; id: string; why: string };
+
+export async function capabilityAcquisition(id: string): Promise<CapabilityAcquisition> {
+  const reading = await readCapability(id);
+  if (reading.state === 'PRESENT') return { by: 'PRESENT', id: reading.id, why: `${reading.id} reads PRESENT now.` };
+  if (reading.state === 'UNKNOWN' && reading.definition) {
+    return { by: 'UNREAD', id: reading.id, why: `${reading.id} could not be read just now; it is read again on the next pass.` };
+  }
+  if (!reading.definition) {
+    return {
+      by: 'FACTORY',
+      id: reading.id,
+      why: `Brain has no word for "${reading.id}": adding it to the capability vocabulary with a reader is a code change.`,
+    };
+  }
+  return { by: reading.definition.acquiredBy, id: reading.id, why: `${reading.definition.id} is missing; it requires ${reading.definition.requires}` };
 }
