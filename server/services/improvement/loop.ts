@@ -695,7 +695,7 @@ async function raiseAlerts(now: Date, open: ImprovementCandidate[], actionable: 
 /**
  * Write down, as capability-gap loop steps, what this pass and earlier ones did:
  * every candidate this pass ranked or opened, and every gap whose recorded loop
- * has not integrated (`openGapLoops`) — so a pass after a restart or a lost
+ * has not concluded — not integrated, not abandoned (`openGapLoops`) — so a pass after a restart or a lost
  * worker resumes the record from the rows rather than from anybody's memory.
  */
 async function recordGapLoops(rankedIds: readonly string[], report: ImprovementTickReport): Promise<void> {
