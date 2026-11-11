@@ -254,16 +254,64 @@ export interface GapMeasures {
   cost: Unmeasured;
 }
 
+const MEASURED_DECISIONS = new Set(['KEPT', 'KEPT_NO_EFFECT', 'REVERTED']);
+
+interface DecidedGap {
+  id: string;
+  decision: string;
+  createdAt: string;
+  /** When the measured decision was made: the append-only DECIDED event, never the row's updated_at. */
+  decidedAt: string;
+}
+
+/**
+ * Candidates whose measured decision (KEPT, KEPT_NO_EFFECT, REVERTED) was made in
+ * [from, to). The time of a decision is read from the first `DECIDED` event that
+ * records the candidate's current decision: `improvement_events` is append-only,
+ * whereas `updated_at` moves on every re-detection (`upsertCandidate`) and on any
+ * later patch, so it says when the row was last touched, not when the gap closed.
+ * A decided row with no such event has no known decision time and is not counted
+ * rather than being timed from whatever touched it last.
+ */
+async function readDecisions(from: string, to: string): Promise<DecidedGap[]> {
+  const db = getDb();
+  const events = await db.all<{ candidate_id: string; detail: string; at: string }>(
+    "SELECT candidate_id, detail, at FROM improvement_events WHERE kind = 'DECIDED' AND candidate_id IS NOT NULL AND at < ? ORDER BY at ASC",
+    [to],
+  );
+  const first = new Map<string, { decision: string; at: string }[]>();
+  for (const event of events) {
+    let decision: unknown;
+    try {
+      decision = (JSON.parse(event.detail) as Record<string, unknown>)['decision'];
+    } catch {
+      continue;
+    }
+    if (typeof decision !== 'string' || !MEASURED_DECISIONS.has(decision)) continue;
+    const list = first.get(event.candidate_id) ?? [];
+    list.push({ decision, at: event.at });
+    first.set(event.candidate_id, list);
+  }
+  if (first.size === 0) return [];
+  const rows = await db.all<{ id: string; decision: string; created_at: string }>(
+    `SELECT id, decision, created_at FROM improvement_candidates WHERE decision IN ('KEPT', 'KEPT_NO_EFFECT', 'REVERTED')`,
+    [],
+  );
+  const out: DecidedGap[] = [];
+  for (const row of rows) {
+    const decidedAt = first.get(row.id)?.find((e) => e.decision === row.decision)?.at;
+    if (!decidedAt || decidedAt < from || decidedAt >= to) continue;
+    out.push({ id: row.id, decision: row.decision, createdAt: row.created_at, decidedAt });
+  }
+  return out;
+}
+
 /** Gaps identified and closed over [from, to), counted from improvement rows. */
 export async function readGapMeasures(from: string, to: string): Promise<GapMeasures> {
   const db = getDb();
   const [opened, decided, delivered, owner] = await Promise.all([
     db.get<{ n: number | string }>('SELECT COUNT(*) AS n FROM improvement_candidates WHERE created_at >= ? AND created_at < ?', [from, to]),
-    db.all<{ id: string; decision: string; created_at: string; updated_at: string }>(
-      `SELECT id, decision, created_at, updated_at FROM improvement_candidates
-        WHERE decision IN ('KEPT', 'KEPT_NO_EFFECT', 'REVERTED') AND updated_at >= ? AND updated_at < ?`,
-      [from, to],
-    ),
+    readDecisions(from, to),
     db.get<{ n: number | string }>(
       "SELECT COUNT(*) AS n FROM improvement_candidates WHERE delivered_at >= ? AND delivered_at < ? AND (decision IS NULL OR decision <> 'KEPT')",
       [from, to],
@@ -276,7 +324,7 @@ export async function readGapMeasures(from: string, to: string): Promise<GapMeas
   const kept = decided.filter((r) => r.decision === 'KEPT');
   const touched = new Set(owner.map((r) => r.candidate_id));
   const hours = kept
-    .map((r) => (Date.parse(r.updated_at) - Date.parse(r.created_at)) / 3_600_000)
+    .map((r) => (Date.parse(r.decidedAt) - Date.parse(r.createdAt)) / 3_600_000)
     .filter((h) => Number.isFinite(h) && h >= 0)
     .sort((a, b) => a - b);
   const median = hours.length === 0 ? null : hours.length % 2 ? hours[(hours.length - 1) / 2]! : (hours[hours.length / 2 - 1]! + hours[hours.length / 2]!) / 2;
