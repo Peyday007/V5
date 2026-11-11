@@ -11,7 +11,9 @@
  * lane does not run each stage in its own process.
  *
  * Stage names and purposes are data. A stage is a row of `STAGES` and a purpose
- * is whatever `bins.purpose` says; neither is a list of what Brain may do.
+ * is whatever `bins.purpose` says; neither is a list of what Brain may do. The
+ * five S-0170 categories are a reporting partition of productive jobs, read
+ * from the rows that consume each job's research, and never a filter on work.
  */
 import { getDb } from '../../db/database.ts';
 import { databasePoolReadings } from '../../db/database.ts';
@@ -97,6 +99,61 @@ export interface PurposeAttribution {
   productiveJobs: number;
 }
 
+/**
+ * The five kinds of productive work S-0170 names. `bins.purpose` cannot tell
+ * four of them apart (commercial discovery, deal completion, broader research
+ * and future-goal preparation are all PLAY_RESEARCH or GRUNT there), so each is
+ * read from the rows that tie a job's research to what consumes it.
+ */
+export const ATTRIBUTION_CATEGORIES = [
+  'IMMEDIATE_COMMERCIAL_DISCOVERY',
+  'DEAL_COMPLETION',
+  'BROADER_WORLD_RESEARCH',
+  'SELF_IMPROVEMENT',
+  'FUTURE_GOAL_PREPARATION',
+] as const;
+export type AttributionCategory = (typeof ATTRIBUTION_CATEGORIES)[number];
+
+/** The row facts one productive job carries; every flag is read, never inferred from text. */
+export interface AttributionFacts {
+  /** `bins.purpose` of the owning bin, or null. */
+  binPurpose: string | null;
+  /** The project is Brain's own (`brain-architecture`, or purpose TECHNICAL). */
+  brainProject: boolean;
+  /** The orchestration is the bounded validation of a recorded opening (`cash_opportunities.validation_orchestration_id`). */
+  validatesOpening: boolean;
+  /** The orchestration's mission answers a deal round about a named deal, its parties, costs, compliance or structure. */
+  dealRound: boolean;
+  /** The orchestration serves a goal whose `starts_at` was still ahead when the job ran. */
+  futureGoal: boolean;
+  /** The orchestration produced an opening, answers a cash discovery or seed/adjacent deal round, or runs in a cash-mode project. */
+  commercialDiscovery: boolean;
+}
+
+/**
+ * Exactly one category per job, so no job is counted twice. Precedence is
+ * most-specific consumer first: Brain's own work, then work on a deal that
+ * already exists, then preparation for a goal not yet started, then discovery
+ * of new openings; research no commercial row consumes is broader-world.
+ * Returns the rule that decided it, so the attribution is auditable.
+ */
+export function attributeJob(facts: AttributionFacts): { category: AttributionCategory; basis: string } {
+  if (facts.binPurpose === 'BRAIN_IMPROVEMENT') return { category: 'SELF_IMPROVEMENT', basis: 'BIN_PURPOSE:BRAIN_IMPROVEMENT' };
+  if (facts.brainProject) return { category: 'SELF_IMPROVEMENT', basis: 'PROJECT:BRAIN' };
+  if (facts.validatesOpening) return { category: 'DEAL_COMPLETION', basis: 'OPENING_VALIDATION' };
+  if (facts.dealRound) return { category: 'DEAL_COMPLETION', basis: 'DEAL_ROUND' };
+  if (facts.futureGoal) return { category: 'FUTURE_GOAL_PREPARATION', basis: 'GOAL_NOT_STARTED' };
+  if (facts.commercialDiscovery) return { category: 'IMMEDIATE_COMMERCIAL_DISCOVERY', basis: 'COMMERCIAL_DISCOVERY' };
+  return { category: 'BROADER_WORLD_RESEARCH', basis: 'NO_COMMERCIAL_CONSUMER' };
+}
+
+export interface CategoryAttribution {
+  category: AttributionCategory;
+  productiveJobs: number;
+  /** How many of those jobs each rule decided. */
+  bases: Record<string, number>;
+}
+
 export interface ProcessReading {
   scope: 'process';
   cpuSecondsSinceStart: number;
@@ -127,6 +184,9 @@ export interface StageCapacityReport {
   purposes: PurposeAttribution[];
   totalProductiveJobs: number;
   purposesSumToTotal: boolean;
+  /** Productive jobs across S-0170's five categories, each job in exactly one. */
+  attribution: CategoryAttribution[];
+  attributionSumsToTotal: boolean;
   process: ProcessReading;
   /** The GPU pod's spend in the window, from the supervisor's `RUNPOD_POD` samples; the free providers cost $0. */
   gpuSpend: Measured<PodSpend>;
@@ -563,6 +623,70 @@ async function readPurposes(since: string): Promise<PurposeAttribution[]> {
     .sort((a, b) => b.productiveJobs - a.productiveJobs || a.purpose.localeCompare(b.purpose));
 }
 
+const DISCOVERY_DEAL_ROUNDS = "('SEED_EQUIPMENT', 'ADJACENT')";
+
+/**
+ * Each productive (SUBMITTED) job, with the row facts `attributeJob` decides
+ * on. The job's orchestration is the one its event row names, else its bin's,
+ * else its work item's; every fact is
+ * an EXISTS over the rows that consume that orchestration, so a job is one row
+ * here however many consumers match, and is attributed once.
+ */
+async function readCategories(since: string): Promise<CategoryAttribution[]> {
+  const rows = await getDb().all<{
+    bin_purpose: string | null; brain_project: number | string | null; validates_opening: number | string;
+    deal_round: number | string; future_goal: number | string; commercial: number | string;
+  }>(
+    `SELECT j.bin_purpose,
+            CASE WHEN p.slug = 'brain-architecture' OR p.purpose = 'TECHNICAL' THEN 1 ELSE 0 END AS brain_project,
+            CASE WHEN j.orch IS NOT NULL AND EXISTS (
+              SELECT 1 FROM cash_opportunities o WHERE o.validation_orchestration_id = j.orch) THEN 1 ELSE 0 END AS validates_opening,
+            CASE WHEN j.orch IS NOT NULL AND EXISTS (
+              SELECT 1 FROM russell_missions m JOIN deal_rounds d ON d.candidate_id = m.candidate_id
+               WHERE m.orchestration_id = j.orch AND d.purpose NOT IN ${DISCOVERY_DEAL_ROUNDS}) THEN 1 ELSE 0 END AS deal_round,
+            CASE WHEN j.orch IS NOT NULL AND EXISTS (
+              SELECT 1 FROM research_orchestrations ro JOIN russell_goals g ON g.id = ro.goal_id
+               WHERE ro.id = j.orch AND g.starts_at > j.at
+              UNION ALL
+              SELECT 1 FROM russell_missions m JOIN russell_goals g ON g.id = m.goal_id
+               WHERE m.orchestration_id = j.orch AND g.starts_at > j.at) THEN 1 ELSE 0 END AS future_goal,
+            CASE WHEN EXISTS (SELECT 1 FROM cash_modes c WHERE c.project_id = j.project_id)
+                   OR (j.orch IS NOT NULL AND (
+                        EXISTS (SELECT 1 FROM cash_opportunities o WHERE o.orchestration_id = j.orch)
+                     OR EXISTS (SELECT 1 FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id
+                                 WHERE m.orchestration_id = j.orch)
+                     OR EXISTS (SELECT 1 FROM russell_missions m JOIN deal_rounds d ON d.candidate_id = m.candidate_id
+                                 WHERE m.orchestration_id = j.orch AND d.purpose IN ${DISCOVERY_DEAL_ROUNDS})))
+                 THEN 1 ELSE 0 END AS commercial
+       FROM (SELECT e.id, e.at, b.purpose AS bin_purpose,
+                    COALESCE(e.project_id, b.project_id, w.project_id) AS project_id,
+                    COALESCE(e.orchestration_id, b.orchestration_id, w.orchestration_id) AS orch
+               FROM bin_events e
+               LEFT JOIN bins b ON b.id = e.bin_id
+               LEFT JOIN work_items w ON w.id = e.work_item_id
+              WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?) j
+       LEFT JOIN projects p ON p.id = j.project_id`,
+    [since],
+  );
+  const byCategory = new Map<AttributionCategory, CategoryAttribution>(
+    ATTRIBUTION_CATEGORIES.map((category) => [category, { category, productiveJobs: 0, bases: {} }]),
+  );
+  for (const row of rows) {
+    const { category, basis } = attributeJob({
+      binPurpose: row.bin_purpose,
+      brainProject: n(row.brain_project) === 1,
+      validatesOpening: n(row.validates_opening) === 1,
+      dealRound: n(row.deal_round) === 1,
+      futureGoal: n(row.future_goal) === 1,
+      commercialDiscovery: n(row.commercial) === 1,
+    });
+    const entry = byCategory.get(category)!;
+    entry.productiveJobs += 1;
+    entry.bases[basis] = (entry.bases[basis] ?? 0) + 1;
+  }
+  return [...byCategory.values()];
+}
+
 function readProcess(): ProcessReading {
   const cpu = process.cpuUsage();
   const memory = process.memoryUsage();
@@ -846,6 +970,7 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
     "SELECT COUNT(*) AS k FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'SUBMITTED' AND at >= ?",
     [since],
   );
+  const attribution = await readCategories(since);
   const diagnosis = await diagnoseThroughput(since);
   return {
     windowHours: hours,
@@ -854,6 +979,8 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
     purposes,
     totalProductiveJobs,
     purposesSumToTotal: totalProductiveJobs === n(total?.k),
+    attribution,
+    attributionSumsToTotal: attribution.reduce((sum, c) => sum + c.productiveJobs, 0) === n(total?.k),
     process: readProcess(),
     gpuSpend,
     diagnosis,
