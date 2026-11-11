@@ -34,13 +34,16 @@ describe('the post-deploy evaluation', () => {
     expect((await releaseEvaluations('fpg_x')).map((e) => e.revision)).toEqual(['a'.repeat(40), 'b'.repeat(40)]);
   });
 
-  it('the probe passes only for a revision compared with an earlier release', async () => {
+  it('the probe passes only for a revision compared with an earlier release, and waits on one not yet evaluated', async () => {
     expect((await releaseEvaluationHoldsOnRows(null)).ok).toBe(false);
     await evaluateRelease({ programId: 'fpg_x', revision: 'a'.repeat(40), verifiedRequirements: [] });
     const baseline = await releaseEvaluationHoldsOnRows('a'.repeat(40));
-    expect(baseline.ok).toBe(false);
+    expect(baseline.ok).toBeNull();
     expect(baseline.detail).toMatch(/first evaluated release/);
-    expect((await releaseEvaluationHoldsOnRows('c'.repeat(40))).detail).toMatch(/no post-deploy evaluation/);
+    // A release the tick has not evaluated yet is not a regression.
+    const pending = await releaseEvaluationHoldsOnRows('c'.repeat(40));
+    expect(pending.ok).toBeNull();
+    expect(pending.detail).toMatch(/no post-deploy evaluation/);
     await evaluateRelease({ programId: 'fpg_x', revision: 'b'.repeat(40), verifiedRequirements: ['R-1'] });
     const result = await releaseEvaluationHoldsOnRows('b'.repeat(40));
     expect(result.ok, result.detail).toBe(true);
