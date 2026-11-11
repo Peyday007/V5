@@ -711,6 +711,107 @@ const MEASURES: readonly Measure[] = [
       note: 'numerator is minor units and denominator is an entry count, so no rate is computed; model and compute run on subscriptions and record no per-job cost, so their cost is not included and not claimed to be zero',
     }),
   },
+  /*
+   * Resource limits (S-0082: "cost and resource limits"). Cost is money paid;
+   * these are the other limits Brain runs against: its own capacity holding a
+   * dispatch back, database pressure shedding optional work (§63), the
+   * subscription allowance each account has left (§16), and how much storage
+   * Brain holds (§33 — a reading, never a threshold that stops work). Each is
+   * counted from the rows that record it; a limit with no row in the window
+   * reads 0 of 0, never a guessed level.
+   */
+  {
+    measure: 'resourceDeferrals',
+    label: 'dispatches Brain held back because its own capacity rows said wait (DISPATCH_DEFERRED), by refusal',
+    denominatorIs: 'dispatch decisions in the window: bins sent to a surface plus dispatches deferred',
+    read: async (since, until) => {
+      const groups = await grouped(
+        `SELECT COALESCE(outcome, '(none)') AS k, COUNT(*) AS n FROM bin_events
+          WHERE event_type = 'DISPATCH_DEFERRED' AND at >= ? AND at < ? GROUP BY k`,
+        [since, until],
+      );
+      const deferred = groups.reduce((sum, g) => sum + g.count, 0);
+      const sent = await one(`SELECT COUNT(*) AS n FROM bin_events WHERE event_type = 'DISPATCH_SENT' AND at >= ? AND at < ?`, [since, until]);
+      return { numerator: deferred, denominator: deferred + sent, groups };
+    },
+  },
+  {
+    measure: 'databasePressure',
+    label: 'Brain processes whose database-pressure reading said SHEDDING (optional work deferred, §63)',
+    denominatorIs: 'Brain processes that wrote a liveness reading in the window',
+    read: async (since, until) => {
+      const rows = await getDb().all<{ instance_id: string; readings: string | null }>(
+        'SELECT instance_id, readings FROM runtime_liveness WHERE alive_at >= ? AND alive_at < ?',
+        [since, until],
+      );
+      let shedding = 0;
+      let unread = 0;
+      const reasons: string[] = [];
+      for (const row of rows) {
+        let state: unknown = null;
+        let reason: unknown = null;
+        try {
+          const pressure = (JSON.parse(row.readings ?? 'null') as { pressure?: { state?: unknown; reason?: unknown } } | null)?.pressure;
+          state = pressure?.state ?? null;
+          reason = pressure?.reason ?? null;
+        } catch {
+          state = null;
+        }
+        if (state === 'SHEDDING') {
+          shedding += 1;
+          if (typeof reason === 'string' && reason) reasons.push(reason.slice(0, 120));
+        } else if (state !== 'NORMAL') unread += 1;
+      }
+      const parts = ['each process keeps only its newest reading, so this is the state each was last seen in, not a count of shedding episodes'];
+      if (unread > 0) parts.push(`${unread} reading(s) carried no pressure state and are not counted as shedding`);
+      if (reasons.length > 0) parts.push(`why: ${reasons.slice(0, 3).join(' | ')}`);
+      return { numerator: shedding, denominator: rows.length, note: parts.join('; ') };
+    },
+  },
+  {
+    measure: 'allowanceExhausted',
+    label: 'subscription accounts whose newest allowance report in the window says none remains',
+    denominatorIs: 'accounts with an allowance report in the window',
+    read: async (since, until) => {
+      const rows = await getDb().all<{ account_id: string; remaining_percent: number | string }>(
+        `SELECT r.account_id, r.remaining_percent FROM fleet_allowance_reports r
+          WHERE r.reported_at >= ? AND r.reported_at < ?
+            AND r.id = (SELECT newest.id FROM fleet_allowance_reports newest
+                         WHERE newest.account_id = r.account_id AND newest.reported_at >= ? AND newest.reported_at < ?
+                         ORDER BY newest.reported_at DESC, newest.id DESC LIMIT 1)`,
+        [since, until, since, until],
+      );
+      const remaining = rows.map((row) => ({ account: row.account_id, percent: n(row.remaining_percent) })).sort((a, b) => a.percent - b.percent);
+      return {
+        numerator: remaining.filter((r) => r.percent === 0).length,
+        denominator: remaining.length,
+        note: remaining.length
+          ? `remaining by account (newest report in the window): ${remaining.slice(0, 8).map((r) => `${r.account} ${r.percent}%`).join(', ')}`
+          : 'no account reported its allowance in this window; nothing is assumed about what remains',
+      };
+    },
+  },
+  {
+    measure: 'storage',
+    label: 'storage readings taken, with the newest reading’s database and object bytes',
+    denominatorIs: 'storage readings in the window',
+    read: async (since, until) => {
+      const count = await one('SELECT COUNT(*) AS n FROM storage_readings WHERE observed_at >= ? AND observed_at < ?', [since, until]);
+      const newest = await getDb().get<{ provider: string; database_bytes: number | string | null; object_bytes: number | string | null; object_count: number | string | null }>(
+        `SELECT provider, database_bytes, object_bytes, object_count FROM storage_readings
+          WHERE observed_at >= ? AND observed_at < ? ORDER BY observed_at DESC, id DESC LIMIT 1`,
+        [since, until],
+      );
+      const bytes = (value: number | string | null): string => (value === null ? 'unmeasured' : `${n(value)} bytes`);
+      return {
+        numerator: count,
+        denominator: count,
+        note: newest
+          ? `newest (${newest.provider}): database ${bytes(newest.database_bytes)}, objects ${bytes(newest.object_bytes)} in ${newest.object_count === null ? 'an unmeasured number of' : n(newest.object_count)} object(s); a reading, never a threshold that stops work (§33)`
+          : 'no storage reading in this window; no size is reported because none was measured',
+      };
+    },
+  },
   {
     measure: 'improvementPrOutcomes',
     label: 'improvement changes delivered and decided',
