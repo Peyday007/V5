@@ -45,6 +45,7 @@ import { MATERIAL_SHARE, SHAPE_MULTIPLES } from './pathways.ts';
 import { createHash } from 'node:crypto';
 import { inlineEvaluator, type Evaluator } from './reasoning/evaluatorPool.ts';
 import { exploreDirections, renderExploration, type ExploreContext, type Exploration } from './reasoning/directions.ts';
+import { sweepVariables, type VariableSweep } from './reasoning/variables.ts';
 
 /** A change smaller than this, in reach and in median settled cash, is not an improvement. */
 export const MATERIAL_REACH = 0.02;
@@ -146,7 +147,7 @@ export interface ReconstructionInput {
   /** Where evaluations run (§101): a pool of threads, or inline when omitted. */
   evaluator?: Evaluator;
   /** The multidirectional exploration's inputs (library, model, time); null turns it off. */
-  explore?: Pick<ExploreContext, 'library' | 'invent' | 'maxMs'> | null;
+  explore?: (Pick<ExploreContext, 'library' | 'invent' | 'maxMs'> & { sweepMs?: number; maxVariations?: number }) | null;
 }
 
 /** A strategy state the operators transform. */
@@ -334,13 +335,38 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
   const ownEvaluations = evaluations;
   if (input.explore !== null) {
     const screenWorlds = Math.max(100, Math.round(worlds / 3));
+    const operatorsFor = (target: string) => buildOperators({ input, levers, base, target });
+    // §102: before the engine reads a direction, ordinary code sweeps the variables — tens to hundreds of thousands of combinations.
+    let sweep: VariableSweep | null = null;
+    // A plan is only past exploring when it reaches its requirement as a probability on no assumed move (§95); 99% coverage on assumptions is not.
+    const defensible = currentReading.reach >= input.required && currentReading.basis === 'PROBABILITY' && !currentReading.changes.some((c) => c.basis === 'ASSUMPTION');
+    if (!defensible) {
+      try {
+        sweep = await sweepVariables({
+          base,
+          greedy: current,
+          operators,
+          operatorsFor,
+          remaining: limits.remaining,
+          daysLeft,
+          required: input.required,
+          contactsPerDay: currentContacts(limits, input.baseline),
+          limits,
+          ...(input.explore?.sweepMs !== undefined ? { maxMs: input.explore.sweepMs } : {}),
+          ...(input.explore?.maxVariations !== undefined ? { maxVariations: input.explore.maxVariations } : {}),
+        });
+      } catch (error) {
+        console.warn(`variable sweep failed: ${String((error as Error)?.message ?? error)}`);
+      }
+    }
     exploration = await exploreDirections({
       base,
       greedy: current,
       greedyReading: currentReading,
       baselineReading: baseline,
       operators,
-      operatorsFor: (target) => buildOperators({ input, levers, base, target }),
+      operatorsFor,
+      sweep,
       evaluate: (state, screen, tag = '') => evaluate(state, screen ? screenWorlds : worlds, false, tag),
       required: input.required,
       remaining: limits.remaining,
