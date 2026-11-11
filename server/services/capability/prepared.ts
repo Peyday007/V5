@@ -297,6 +297,38 @@ export function handoffCausedResumption(input: {
   return blockedWorkResumed({ handedOffAt: input.implementedAt, unitRunTimes: input.unitRunTimes });
 }
 
+/** Link 1, from rows: was the handoff's change request withdrawn, and when did its campaign reach COMPLETE? */
+async function implementationOf(changeRequestId: string): Promise<{ withdrawn: boolean; implementedAt: string | null; requestedAt: string | null }> {
+  const changeRequest = await getChangeRequest(changeRequestId);
+  const withdrawn = !changeRequest || changeRequest.state === 'WITHDRAWN';
+  const campaign = withdrawn ? null : await getCampaignByChangeRequest(changeRequestId);
+  const implementedAt = campaign && campaign.state === 'COMPLETE' ? (campaign.finishedAt ?? campaign.updatedAt) : null;
+  return { withdrawn, implementedAt, requestedAt: changeRequest?.createdAt ?? null };
+}
+
+/** Link 2: the requirement's own proof reading since `implementedAt`; null when no capability map holds it. */
+async function capabilitySince(
+  requirementId: string,
+  implementedAt: string,
+  options: { now?: Date; root?: string },
+): Promise<{ status: CapabilityStatus; why: string } | null> {
+  const requirements = Object.values(CAPABILITY_MAPS).flatMap((m) => m.requirements.filter((r) => r.id === requirementId));
+  let capability: { status: CapabilityStatus; why: string } | null = null;
+  const to = (options.now ?? new Date()).toISOString();
+  for (const requirement of requirements) {
+    let assessed: { status: CapabilityStatus; why: string };
+    try {
+      const reading = await readProbe(requirement.proof.probe, implementedAt, to);
+      assessed = classify(requirement, ownerExists(requirement.owner[0]!, options.root), reading);
+    } catch {
+      assessed = { status: 'UNPROVEN', why: 'the probe could not be read' };
+    }
+    capability = { status: assessed.status, why: assessed.why };
+    if (assessed.status !== 'WORKING') break;
+  }
+  return capability;
+}
+
 export interface Resumption {
   handedOffAt: string | null;
   changeRequestId: string | null;
@@ -345,28 +377,9 @@ export async function resumeOf(
   if (!handoff || !none.changeRequestId || blockedWorkItemIds.length === 0) return none;
   const handedOffAt = handoff.createdAt;
 
-  const changeRequest = await getChangeRequest(none.changeRequestId);
-  const withdrawn = !changeRequest || changeRequest.state === 'WITHDRAWN';
-  const campaign = withdrawn ? null : await getCampaignByChangeRequest(none.changeRequestId);
-  const implementedAt = campaign && campaign.state === 'COMPLETE' ? (campaign.finishedAt ?? campaign.updatedAt) : null;
+  const { withdrawn, implementedAt } = await implementationOf(none.changeRequestId);
   if (withdrawn || !implementedAt || implementedAt < handedOffAt) return { ...none, implementedAt };
-
-  const requirements = Object.values(CAPABILITY_MAPS).flatMap((m) => m.requirements.filter((r) => r.id === requirementId));
-  let capability: Resumption['capability'] = null;
-  if (requirements.length > 0) {
-    const to = (options.now ?? new Date()).toISOString();
-    for (const requirement of requirements) {
-      let assessed: { status: CapabilityStatus; why: string };
-      try {
-        const reading = await readProbe(requirement.proof.probe, implementedAt, to);
-        assessed = classify(requirement, ownerExists(requirement.owner[0]!, options.root), reading);
-      } catch {
-        assessed = { status: 'UNPROVEN', why: 'the probe could not be read' };
-      }
-      capability = { status: assessed.status, why: assessed.why };
-      if (assessed.status !== 'WORKING') break;
-    }
-  }
+  const capability = await capabilitySince(requirementId, implementedAt, options);
 
   const rows = await getDb().all<{ id: string; completed_at: string | null }>(
     `SELECT id, completed_at FROM work_items WHERE project_id = ? AND state = 'SUCCEEDED' AND id IN (${blockedWorkItemIds.map(() => '?').join(',')})`,
@@ -389,6 +402,88 @@ export async function resumeOf(
   };
 }
 
+/** A dependent live requirement's campaign, as rows record it, for `programDependentsResumed`. */
+export interface DependentCampaignRun {
+  requirementKey: string;
+  campaignId: string;
+  state: string;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+/**
+ * The program path's comparison (finding F5). For a program dependency the
+ * blocked work is the dependent live requirements' campaigns: they wait on the
+ * prepared requirement's campaign through the plan's dependency order. A
+ * dependent campaign resumed when, after the prepared campaign reached
+ * COMPLETE (and, where a capability map holds the requirement, its proof
+ * reads WORKING), it started (and was not cancelled) or it completed. Pure.
+ */
+export function programDependentsResumed(input: {
+  changeRequestWithdrawn: boolean;
+  implementedAt: string | null;
+  capability: CapabilityStatus | null;
+  dependents: readonly DependentCampaignRun[];
+}): DependentCampaignRun[] {
+  if (input.changeRequestWithdrawn || !input.implementedAt) return [];
+  if (input.capability !== null && input.capability !== 'WORKING') return [];
+  const at = input.implementedAt;
+  return input.dependents.filter((d) =>
+    (d.state !== 'CANCELLED' && d.startedAt > at)
+    || (d.state === 'COMPLETE' && d.finishedAt !== null && d.finishedAt > at));
+}
+
+export interface ProgramResumption {
+  changeRequestId: string;
+  implementedAt: string | null;
+  capability: { status: CapabilityStatus; why: string } | null;
+  /** Every dependent campaign the program has linked so far, read from rows. */
+  dependents: DependentCampaignRun[];
+  /** Those that started or completed after the prepared campaign completed. */
+  resumedCampaigns: DependentCampaignRun[];
+  resumed: boolean;
+}
+
+/**
+ * Did the originating goal's blocked work resume, for a program dependency?
+ * Every value is read from rows: the prepared requirement's campaign (the
+ * handoff the coordinator linked) and its completion; the dependent live
+ * requirements' campaigns, found through the program's current plan
+ * (`implements`) and its campaign links. Nothing is supplied by a caller but
+ * which program and which live requirements depend on the prepared one, both
+ * recorded on the handoff when it was identified.
+ */
+export async function resumeOfProgram(
+  requirementId: string,
+  changeRequestId: string,
+  programId: string,
+  dependentRequirements: readonly string[],
+  options: { now?: Date; root?: string } = {},
+): Promise<ProgramResumption> {
+  const { withdrawn, implementedAt } = await implementationOf(changeRequestId);
+  const base: ProgramResumption = { changeRequestId, implementedAt, capability: null, dependents: [], resumedCampaigns: [], resumed: false };
+  if (withdrawn || !implementedAt || dependentRequirements.length === 0) return base;
+  const capability = await capabilitySince(requirementId, implementedAt, options);
+
+  const { getPlan, listCampaignLinks } = await import('../../repos/factoryProgram.ts');
+  const plan = await getPlan(programId);
+  const links = new Map((await listCampaignLinks(programId)).map((l) => [l.campaignKey, l.changeRequestId]));
+  const dependents: DependentCampaignRun[] = [];
+  const seen = new Set<string>();
+  for (const key of dependentRequirements) {
+    for (const planned of plan?.plan.campaigns.filter((c) => c.implements.includes(key)) ?? []) {
+      const crId = links.get(planned.key);
+      if (!crId || crId === changeRequestId) continue;
+      const campaign = await getCampaignByChangeRequest(crId);
+      if (!campaign || seen.has(campaign.id)) continue;
+      seen.add(campaign.id);
+      dependents.push({ requirementKey: key, campaignId: campaign.id, state: campaign.state, startedAt: campaign.startedAt, finishedAt: campaign.finishedAt });
+    }
+  }
+  const resumedCampaigns = programDependentsResumed({ changeRequestWithdrawn: withdrawn, implementedAt, capability: capability?.status ?? null, dependents });
+  return { ...base, capability, dependents, resumedCampaigns, resumed: resumedCampaigns.length > 0 };
+}
+
 export const PREPARED_RESUMED_KIND = 'PREPARED_OPTION_RESUMED';
 
 /**
@@ -398,8 +493,12 @@ export const PREPARED_RESUMED_KIND = 'PREPARED_OPTION_RESUMED';
  * remember an old option: a handoff that names blocked work items is re-read
  * each pass and, the first time `resumeOf` finds one of them completed after
  * the handoff was implemented and the capability reads WORKING, a single
- * RESUMED event is appended. It creates no work, holds no
- * lease and spends nothing; a handoff that names no work items is never judged.
+ * RESUMED event is appended. A program handoff (the campaign the program's
+ * coordinator linked for a prepared requirement) is judged by `resumeOfProgram`
+ * instead: its blocked work is the dependent live requirements' campaigns, read
+ * from the plan and the campaign links. It creates no work, holds no lease and
+ * spends nothing; a handoff that names neither work items nor dependent
+ * requirements is never judged.
  */
 export async function advancePreparedOptions(): Promise<{ judged: number; resumed: number; identified: number; handedOff: number; recorded: number }> {
   // The producer (F1): every prepared requirement of an approved program is recorded as an option, from rows.
@@ -416,17 +515,52 @@ export async function advancePreparedOptions(): Promise<{ judged: number; resume
     try { return JSON.parse(raw) as Record<string, unknown>; } catch { return {}; }
   };
   const done = new Set<string>();
+  const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
   const pending: Array<{ projectId: string; requirementId: string; changeRequestId: string; blocked: string[] }> = [];
+  const programPending: Array<{ projectId: string; requirementId: string; changeRequestId: string; programId: string; dependents: string[] }> = [];
+  // A program handoff recorded before it carried its dependents is re-read from the program's rows.
+  let current: IdentifiedDependency[] | null = null;
+  const dependentsNow = async (programId: string, requirementId: string): Promise<string[]> => {
+    current ??= await identifyProgramDependencies();
+    return current.find((d) => d.programId === programId && d.requirementId === requirementId)?.dependentRequirements ?? [];
+  };
   for (const r of rows) {
     const p = parse(r.payload);
     const crId = typeof p.changeRequestId === 'string' ? p.changeRequestId : '';
+    const fromProgram = typeof p.programId === 'string' ? p.programId
+      : typeof p.identifiedFrom === 'string' && p.identifiedFrom.startsWith('program:') ? p.identifiedFrom.slice('program:'.length) : null;
     if (p.kind === PREPARED_RESUMED_KIND) done.add(crId);
-    else if (p.kind === PREPARED_HANDOFF_KIND && Array.isArray(p.blockedWorkItemIds) && p.blockedWorkItemIds.length > 0) {
-      pending.push({ projectId: r.project_id, requirementId: r.entity_id, changeRequestId: crId, blocked: p.blockedWorkItemIds.filter((x): x is string => typeof x === 'string') });
+    else if (p.kind === PREPARED_HANDOFF_KIND && crId && fromProgram) {
+      // A program dependency's blocked work is its dependent live requirements' campaigns (F5).
+      const recorded = strings(p.dependentRequirements);
+      const dependents = recorded.length > 0 ? recorded : await dependentsNow(fromProgram, r.entity_id);
+      if (dependents.length > 0) programPending.push({ projectId: r.project_id, requirementId: r.entity_id, changeRequestId: crId, programId: fromProgram, dependents });
+    } else if (p.kind === PREPARED_HANDOFF_KIND && strings(p.blockedWorkItemIds).length > 0) {
+      pending.push({ projectId: r.project_id, requirementId: r.entity_id, changeRequestId: crId, blocked: strings(p.blockedWorkItemIds) });
     }
   }
   let judged = 0;
   let resumed = 0;
+  for (const h of programPending) {
+    if (done.has(h.changeRequestId)) continue;
+    done.add(h.changeRequestId);
+    judged += 1;
+    const r = await resumeOfProgram(h.requirementId, h.changeRequestId, h.programId, h.dependents);
+    if (!r.resumed) continue;
+    await recordEvent({
+      projectId: h.projectId,
+      entityType: 'capability_requirement',
+      entityId: h.requirementId,
+      eventType: 'CAPABILITY_ASSESSED',
+      payload: {
+        kind: PREPARED_RESUMED_KIND, integration: false, changeRequestId: h.changeRequestId, programId: h.programId,
+        completedAfter: r.resumedCampaigns.map((c) => c.campaignId),
+        resumedCampaigns: r.resumedCampaigns as unknown as Record<string, unknown>[],
+        implementedAt: r.implementedAt, capability: r.capability,
+      },
+    });
+    resumed += 1;
+  }
   for (const h of pending) {
     if (done.has(h.changeRequestId)) continue;
     judged += 1;
@@ -478,6 +612,9 @@ export interface IdentifiedDependency {
    * while none is linked). Present only for program dependencies.
    */
   reuseChangeRequestId?: string | null;
+  /** For a program dependency: the program, and the live requirements whose campaigns wait on it (the blocked work). */
+  programId?: string;
+  dependentRequirements?: string[];
 }
 
 /** Which recorded prepared options a project's open work now depends on. Reads only. */
@@ -644,6 +781,7 @@ export async function identifyPreparedDependencies(): Promise<{ identified: numb
           kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId: submitted.changeRequestId, goal: dep.goal,
           method: resolution.minimum?.name ?? null, blockedWorkItemIds: dep.blockedWorkItemIds, identifiedFrom: dep.sourceRef,
           ...(dep.reuseChangeRequestId !== undefined ? { reused: true } : {}),
+          ...(dep.programId ? { programId: dep.programId, dependentRequirements: dep.dependentRequirements ?? [] } : {}),
         },
       });
       handedOff += 1;
@@ -772,6 +910,8 @@ export async function identifyProgramDependencies(): Promise<IdentifiedDependenc
         goal: `program ${program.id}: ${dependents.join(', ') || 'a live requirement'} depend(s) on ${key}`,
         blockedWorkItemIds: [],
         reuseChangeRequestId: campaign ? (links.get(campaign.key) ?? null) : null,
+        programId: program.id,
+        dependentRequirements: dependents,
       });
     }
   }

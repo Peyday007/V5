@@ -17,15 +17,19 @@ import {
   PREPARED_DEPENDENCY_KIND,
   PREPARED_HANDOFF_KIND,
   PREPARED_OPTION_KIND,
+  PREPARED_RESUMED_KIND,
   PROGRAM_MAP_ORIGIN,
   advancePreparedOptions,
   countsAsIntegration,
   preparedOptionFromRequirement,
   preparedOptions,
+  programDependentsResumed,
+  resumeOfProgram,
   warmCost,
+  type DependentCampaignRun,
 } from '../server/services/capability/prepared.ts';
-import { listEvents } from '../server/repos/events.ts';
-import { ensureChangeRequest, listChangeRequests } from '../server/repos/factory.ts';
+import { listEvents, recordEvent } from '../server/repos/events.ts';
+import { ensureCampaign, ensureChangeRequest, listChangeRequests, patchCampaign } from '../server/repos/factory.ts';
 import { ensureProgram, insertMapVersion, insertPlanVersion, linkCampaign, markProgramApproved } from '../server/repos/factoryProgram.ts';
 import { createUser } from '../server/repos/identity.ts';
 import type { ProgramRequirement, RequirementMap } from '../server/domain/factoryProgram.ts';
@@ -155,5 +159,117 @@ describe('the tick records every prepared requirement of an approved program', (
     expect(handoffs[0]!.payload).toMatchObject({ integration: false, changeRequestId: changeRequest.id, reused: true, identifiedFrom: `program:${programId}` });
     // Reused, not duplicated: the coordinator's request is the only one.
     expect(await listChangeRequests(projectId)).toHaveLength(1);
+  });
+});
+
+/*
+ * Finding F5: for a program dependency the chain used to stop at the handoff —
+ * it named no blocked work items, so resumption was never judged. The blocked
+ * work of a program dependency is the dependent live requirements' campaigns,
+ * read from the plan and the campaign links; it resumed when one of them starts
+ * or completes after the prepared requirement's campaign reaches COMPLETE.
+ * Nothing below names the blocked work: the tick reads it from rows.
+ */
+describe('a program dependency is judged resumed from the dependent campaigns', () => {
+  const changeRequest = async (key: string) => (await ensureChangeRequest({
+    projectId, submissionKey: key, objective: `implement ${key}`, expectedOutcome: 'it works',
+    nonGoals: [], acceptanceConditions: [{ id: 'A01', statement: 's', verification: 'v', mandatory: true }],
+    repository: 'https://github.com/o/r', repositoryRoot: null, baseBranch: 'main', baseSha: 'b'.repeat(40),
+    environment: 'LOCAL', riskClass: 'MEDIUM', mutationScope: ['server/**'], deploymentPolicy: 'NONE',
+    rollbackRequirement: 'revert', verificationCommands: ['npm run typecheck'],
+  })).changeRequest;
+  const campaignFor = async (crId: string) =>
+    (await ensureCampaign({ changeRequestId: crId, projectId, baseSha: 'b'.repeat(40), laneTarget: 1, laneTargetReason: 'test' })).campaign;
+  const at = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
+
+  const setup = async () => {
+    const programId = await program({
+      requirements: [requirement({ prepared: true }), requirement({ key: 'LIVE-1', dependsOn: ['CAP-1'] })],
+      context: [],
+    });
+    await insertPlanVersion({
+      programId, version: 1, mapVersion: 1, reason: 'test',
+      plan: {
+        campaigns: [
+          { key: 'research-d0-prep', kind: 'BUILD', title: 'prep', subsystem: 'research', implements: ['CAP-1'], dependsOn: [], mutationScope: ['server/**'], repairOf: null },
+          { key: 'research-d1-live', kind: 'BUILD', title: 'live', subsystem: 'research', implements: ['LIVE-1'], dependsOn: ['research-d0-prep'], mutationScope: ['server/**'], repairOf: null },
+        ],
+        verifyOnly: [], serialized: [],
+      },
+    });
+    const prep = await changeRequest('coordinator-prep');
+    await linkCampaign({ programId, campaignKey: 'research-d0-prep', changeRequestId: prep.id, planVersion: 1 });
+    const prepCampaign = await campaignFor(prep.id);
+    return { programId, prep, prepCampaign };
+  };
+
+  it('a dependent campaign completing after the prepared campaign completes is recorded as resumed, once', async () => {
+    const { programId, prep, prepCampaign } = await setup();
+
+    // Handed off and judged, but the prepared campaign has not completed: no resumption.
+    expect(await advancePreparedOptions()).toMatchObject({ handedOff: 1, judged: 1, resumed: 0 });
+    const handoff = (await kinds(PREPARED_HANDOFF_KIND))[0]!;
+    expect(handoff.payload).toMatchObject({ changeRequestId: prep.id, programId, dependentRequirements: ['LIVE-1'] });
+
+    // The dependent campaign started early (before the prepared one completed): starting alone does not count.
+    const live = await changeRequest('coordinator-live');
+    await linkCampaign({ programId, campaignKey: 'research-d1-live', changeRequestId: live.id, planVersion: 1 });
+    const liveCampaign = await campaignFor(live.id);
+    await patchCampaign(prepCampaign.id, { state: 'COMPLETE', finishedAt: at(1_000) });
+    expect(await advancePreparedOptions()).toMatchObject({ judged: 1, resumed: 0 });
+    expect(await kinds(PREPARED_RESUMED_KIND)).toHaveLength(0);
+    const waiting = await resumeOfProgram('CAP-1', prep.id, programId, ['LIVE-1']);
+    expect(waiting).toMatchObject({ resumed: false, dependents: [{ requirementKey: 'LIVE-1', campaignId: liveCampaign.id }] });
+
+    // It completes after the prepared campaign did: the blocked work resumed.
+    await patchCampaign(liveCampaign.id, { state: 'COMPLETE', finishedAt: at(2_000) });
+    expect(await advancePreparedOptions()).toMatchObject({ judged: 1, resumed: 1 });
+    const resumed = await kinds(PREPARED_RESUMED_KIND);
+    expect(resumed).toHaveLength(1);
+    expect(resumed[0]!.entityId).toBe('CAP-1');
+    expect(resumed[0]!.payload).toMatchObject({
+      integration: false, changeRequestId: prep.id, programId, completedAfter: [liveCampaign.id],
+      implementedAt: expect.any(String), capability: null,
+    });
+    // Judged once: the next pass finds it recorded.
+    expect(await advancePreparedOptions()).toMatchObject({ judged: 0, resumed: 0 });
+  });
+
+  it('a dependent campaign starting after completion counts, a cancelled one does not, and an older handoff without dependents is re-read', async () => {
+    const { programId, prep, prepCampaign } = await setup();
+    // A handoff recorded before handoffs carried their dependents: only `identifiedFrom` names the program.
+    await recordEvent({
+      projectId, entityType: 'capability_requirement', entityId: 'CAP-1', eventType: 'CAPABILITY_ASSESSED',
+      payload: {
+        kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId: prep.id,
+        goal: `program ${programId}: LIVE-1 depend(s) on CAP-1`, method: 'm', blockedWorkItemIds: [],
+        identifiedFrom: `program:${programId}`, reused: true,
+      },
+    });
+    await patchCampaign(prepCampaign.id, { state: 'COMPLETE', finishedAt: at(-60_000) });
+
+    // A cancelled dependent is not resumed work.
+    const live = await changeRequest('coordinator-live');
+    await linkCampaign({ programId, campaignKey: 'research-d1-live', changeRequestId: live.id, planVersion: 1 });
+    const liveCampaign = await campaignFor(live.id);
+    await patchCampaign(liveCampaign.id, { state: 'CANCELLED' });
+    expect(await advancePreparedOptions()).toMatchObject({ handedOff: 0, judged: 1, resumed: 0 });
+
+    // Started after the prepared campaign completed and still running: resumed.
+    await patchCampaign(liveCampaign.id, { state: 'EXECUTING' });
+    expect(await advancePreparedOptions()).toMatchObject({ judged: 1, resumed: 1 });
+    expect((await kinds(PREPARED_RESUMED_KIND))[0]!.payload).toMatchObject({ completedAfter: [liveCampaign.id], programId });
+  });
+
+  it('the comparison is the dependents against the completion, and refuses without one', () => {
+    const dep = (over: Partial<DependentCampaignRun>): DependentCampaignRun => ({ requirementKey: 'L', campaignId: 'c', state: 'EXECUTING', startedAt: '2026-01-02T00:00:00.000Z', finishedAt: null, ...over });
+    const base = { changeRequestWithdrawn: false, implementedAt: '2026-01-01T00:00:00.000Z', capability: null };
+    expect(programDependentsResumed({ ...base, dependents: [dep({})] })).toHaveLength(1);
+    expect(programDependentsResumed({ ...base, implementedAt: null, dependents: [dep({})] })).toHaveLength(0);
+    expect(programDependentsResumed({ ...base, changeRequestWithdrawn: true, dependents: [dep({})] })).toHaveLength(0);
+    expect(programDependentsResumed({ ...base, capability: 'BROKEN', dependents: [dep({})] })).toHaveLength(0);
+    expect(programDependentsResumed({ ...base, dependents: [dep({ startedAt: '2025-12-31T00:00:00.000Z' })] })).toHaveLength(0);
+    expect(programDependentsResumed({ ...base, dependents: [dep({ state: 'CANCELLED' })] })).toHaveLength(0);
+    expect(programDependentsResumed({ ...base, dependents: [dep({ startedAt: '2025-12-31T00:00:00.000Z', state: 'COMPLETE', finishedAt: '2026-01-03T00:00:00.000Z' })] })).toHaveLength(1);
   });
 });
