@@ -33,6 +33,7 @@ import { CAPABILITY_MAPS, classify, type CapabilityStatus } from '../../domain/c
 import { ownerExists, readProbe } from '../selfmodel/capabilities.ts';
 import type { ProjectEvent } from '../../domain/types.ts';
 import type { FactoryChangeRequest } from '../../domain/factory.ts';
+import type { ProgramRequirement } from '../../domain/factoryProgram.ts';
 
 export class PreparedOptionError extends Error {}
 
@@ -109,15 +110,18 @@ export function validatePreparedOption(input: unknown): PreparedOption {
   };
 }
 
-/** Record a prepared option. It is an event, never a reading: nothing it says can make a requirement WORKING. */
-export async function recordPreparedOption(projectId: string, input: unknown): Promise<PreparedOption> {
+/**
+ * Record a prepared option. It is an event, never a reading: nothing it says can make a requirement WORKING.
+ * `origin` says which production record the option was read from, so a reader can trace it.
+ */
+export async function recordPreparedOption(projectId: string, input: unknown, origin?: Record<string, unknown>): Promise<PreparedOption> {
   const option = validatePreparedOption(input);
   await recordEvent({
     projectId,
     entityType: 'capability_requirement',
     entityId: option.requirementId,
     eventType: 'CAPABILITY_ASSESSED',
-    payload: { kind: PREPARED_OPTION_KIND, integration: false, option: option as unknown as Record<string, unknown> },
+    payload: { kind: PREPARED_OPTION_KIND, integration: false, option: option as unknown as Record<string, unknown>, ...(origin ? { origin } : {}) },
   });
   return option;
 }
@@ -397,8 +401,10 @@ export const PREPARED_RESUMED_KIND = 'PREPARED_OPTION_RESUMED';
  * RESUMED event is appended. It creates no work, holds no
  * lease and spends nothing; a handoff that names no work items is never judged.
  */
-export async function advancePreparedOptions(): Promise<{ judged: number; resumed: number; identified: number; handedOff: number }> {
-  // First, from rows, which open work now needs a recorded option (F2): no caller names it.
+export async function advancePreparedOptions(): Promise<{ judged: number; resumed: number; identified: number; handedOff: number; recorded: number }> {
+  // The producer (F1): every prepared requirement of an approved program is recorded as an option, from rows.
+  const { recorded } = await recordProgramPreparedOptions();
+  // Then, from rows, which open work now needs a recorded option (F2): no caller names it.
   const { identified, handedOff } = await identifyPreparedDependencies();
   const rows = await getDb().all<{ project_id: string; entity_id: string; payload: string }>(
     `SELECT project_id, entity_id, payload FROM project_events
@@ -438,7 +444,7 @@ export async function advancePreparedOptions(): Promise<{ judged: number; resume
     });
     resumed += 1;
   }
-  return { judged, resumed, identified, handedOff };
+  return { judged, resumed, identified, handedOff, recorded };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -466,6 +472,12 @@ export interface IdentifiedDependency {
   sourceRef: string;
   goal: string;
   blockedWorkItemIds: string[];
+  /**
+   * For a dependency read from a program map: the change request the program's
+   * coordinator linked for the campaign that implements the requirement (null
+   * while none is linked). Present only for program dependencies.
+   */
+  reuseChangeRequestId?: string | null;
 }
 
 /** Which recorded prepared options a project's open work now depends on. Reads only. */
@@ -588,8 +600,12 @@ export async function identifyPreparedDependencies(): Promise<{ identified: numb
 
   let identified = 0;
   let handedOff = 0;
+  const programDeps = await identifyProgramDependencies();
   for (const [projectId, byReq] of options) {
-    const deps = await identifyDependencies(projectId, [...byReq.keys()]);
+    const deps: IdentifiedDependency[] = [
+      ...(await identifyDependencies(projectId, [...byReq.keys()])),
+      ...programDeps.filter((d) => d.projectId === projectId && byReq.has(d.requirementId)),
+    ];
     for (const dep of deps) {
       const option = byReq.get(dep.requirementId)!;
       const prior = (await listEventsByEntity('capability_requirement', dep.requirementId)).filter((e) => e.projectId === projectId);
@@ -613,7 +629,11 @@ export async function identifyPreparedDependencies(): Promise<{ identified: numb
       }
       const handedFor = prior.some((e) => e.payload.kind === PREPARED_HANDOFF_KIND && e.payload.goal === dep.goal);
       if (handedFor) continue;
-      const submitted = await submitIdentified(dep, resolution);
+      // A program's own coordinator already starts the campaign that implements a promoted
+      // requirement; that campaign is the handoff, reused rather than submitted a second time.
+      const submitted = dep.reuseChangeRequestId !== undefined
+        ? (dep.reuseChangeRequestId ? { changeRequestId: dep.reuseChangeRequestId, created: false } : { reason: 'the program has not linked a campaign for it yet' })
+        : await submitIdentified(dep, resolution);
       if ('reason' in submitted) continue;
       await recordEvent({
         projectId,
@@ -622,11 +642,138 @@ export async function identifyPreparedDependencies(): Promise<{ identified: numb
         eventType: 'CAPABILITY_ASSESSED',
         payload: {
           kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId: submitted.changeRequestId, goal: dep.goal,
-          method: resolution.minimum!.name, blockedWorkItemIds: dep.blockedWorkItemIds, identifiedFrom: dep.sourceRef,
+          method: resolution.minimum?.name ?? null, blockedWorkItemIds: dep.blockedWorkItemIds, identifiedFrom: dep.sourceRef,
+          ...(dep.reuseChangeRequestId !== undefined ? { reused: true } : {}),
         },
       });
       handedOff += 1;
     }
   }
   return { identified, handedOff };
+}
+
+/* -------------------------------------------------------------------------- */
+/* The production producer (finding F1)                                        */
+/* -------------------------------------------------------------------------- */
+
+/** The origin a program-derived option carries; one record per program, requirement and map version. */
+export const PROGRAM_MAP_ORIGIN = 'PROGRAM_MAP';
+
+/**
+ * A program requirement marked `prepared` is the approved specification's own
+ * record of a dormant capability: specified and kept ready, not yet needed
+ * (§97). Its preparation is read from the requirement's fields and nothing is
+ * invented beyond them:
+ *  - feasibility: FEASIBLE when the map names existing code as evidence,
+ *    UNCERTAIN otherwise, with the requirement's missing work as the note;
+ *  - the tool inventory is the one route Brain already owns — the existing
+ *    Factory, over the paths the map declares — with no gate, because the map
+ *    records none (a person adds one by amendment), and effort 1 when existing
+ *    code is reused, 2 when it must be written. It is never at COSTLY_EFFORT:
+ *    nothing is built to keep it warm;
+ *  - the interface sketch is the behavior, inputs and outputs, untested;
+ *  - the source inventory is the source items and the existing evidence paths.
+ * Pure. The option is a record, and never an integration.
+ */
+export function preparedOptionFromRequirement(r: ProgramRequirement): PreparedOption {
+  const paths = r.paths.length ? r.paths : (r.existing?.paths ?? []);
+  const reused = r.existing !== null && r.existing.paths.length > 0;
+  const note = (r.missingWork || r.behavior || r.title).trim() || r.key;
+  const sketch = [
+    r.behavior.trim(),
+    r.inputs.length ? `inputs: ${r.inputs.join('; ')}` : '',
+    r.outputs.length ? `outputs: ${r.outputs.join('; ')}` : '',
+  ].filter(Boolean).join('\n');
+  return validatePreparedOption({
+    requirementId: r.key,
+    feasibility: { verdict: reused ? 'FEASIBLE' : 'UNCERTAIN', note },
+    methods: [{
+      name: `existing Factory campaign over ${paths.length ? paths.join(', ') : `the ${r.subsystem} subsystem`}`,
+      kind: 'OTHER',
+      gates: [],
+      effort: reused ? 1 : 2,
+      sources: r.source,
+    }],
+    ...(sketch ? { interfaceSketch: { text: sketch, tested: false } } : {}),
+    sourceInventory: [...r.source.map((s) => `source item ${s}`), ...(r.existing?.paths ?? [])],
+  });
+}
+
+/**
+ * Record every prepared requirement of every approved program as a prepared
+ * option, once per map version. Called on the tick from `advancePreparedOptions`,
+ * so a deferred capability stays recorded with nobody remembering it. It writes
+ * events only: no lease, no worker, no bin, no change request.
+ */
+export async function recordProgramPreparedOptions(): Promise<{ recorded: number }> {
+  const { listPrograms, getMap } = await import('../../repos/factoryProgram.ts');
+  let recorded = 0;
+  for (const program of await listPrograms(['APPROVED'])) {
+    const installed = await getMap(program.id);
+    if (!installed) continue;
+    const prepared = installed.map.requirements.filter((r) => r.prepared === true);
+    if (prepared.length === 0) continue;
+    const seen = new Set<string>();
+    const rows = await getDb().all<{ entity_id: string; payload: string }>(
+      `SELECT entity_id, payload FROM project_events
+        WHERE project_id = ? AND entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED' AND payload LIKE ?`,
+      [program.projectId, `%"${PROGRAM_MAP_ORIGIN}"%`],
+    );
+    for (const row of rows) {
+      let origin: Record<string, unknown> | undefined;
+      try { origin = (JSON.parse(row.payload) as { origin?: Record<string, unknown> }).origin; } catch { continue; }
+      if (origin?.source === PROGRAM_MAP_ORIGIN && origin.programId === program.id) seen.add(`${row.entity_id}\u0000${String(origin.mapVersion)}`);
+    }
+    for (const requirement of prepared) {
+      if (seen.has(`${requirement.key}\u0000${String(installed.version)}`)) continue;
+      let option: PreparedOption;
+      try { option = preparedOptionFromRequirement(requirement); } catch { continue; }
+      await recordPreparedOption(program.projectId, option, { source: PROGRAM_MAP_ORIGIN, programId: program.id, mapVersion: installed.version });
+      recorded += 1;
+    }
+  }
+  return { recorded };
+}
+
+/**
+ * Which program-derived options a live requirement now needs, from rows: a
+ * prepared requirement reached from a requirement that is not prepared, through
+ * declared and discovered edges — the same reading the coordinator uses to start
+ * its campaign (`promotedRequirements`). The goal names the live requirements
+ * that depend on it; the handoff reuses the campaign the coordinator linked.
+ */
+export async function identifyProgramDependencies(): Promise<IdentifiedDependency[]> {
+  const { listPrograms, getMap, getPlan, listCampaignLinks, listDiscoveredDependencies } = await import('../../repos/factoryProgram.ts');
+  const { promotedRequirements } = await import('../factory/program/plan.ts');
+  const out: IdentifiedDependency[] = [];
+  for (const program of await listPrograms(['APPROVED'])) {
+    const installed = await getMap(program.id);
+    if (!installed) continue;
+    const map = installed.map;
+    if (!map.requirements.some((r) => r.prepared === true)) continue;
+    const extra = new Map<string, string[]>();
+    for (const d of await listDiscoveredDependencies(program.id)) extra.set(d.requirementKey, [...(extra.get(d.requirementKey) ?? []), d.dependsOn]);
+    const promoted = promotedRequirements(map, extra);
+    if (promoted.size === 0) continue;
+    const plan = await getPlan(program.id);
+    const links = new Map((await listCampaignLinks(program.id)).map((l) => [l.campaignKey, l.changeRequestId]));
+    for (const key of [...promoted].sort()) {
+      // Which live requirements reach it: each one alone as the only live root.
+      const dependents = map.requirements
+        .filter((r) => r.prepared !== true)
+        .filter((live) => promotedRequirements({ ...map, requirements: map.requirements.map((x) => ({ ...x, prepared: x.key !== live.key })) }, extra).has(key))
+        .map((r) => r.key)
+        .sort();
+      const campaign = plan?.plan.campaigns.find((c) => c.implements.includes(key));
+      out.push({
+        projectId: program.projectId,
+        requirementId: key,
+        sourceRef: `program:${program.id}`,
+        goal: `program ${program.id}: ${dependents.join(', ') || 'a live requirement'} depend(s) on ${key}`,
+        blockedWorkItemIds: [],
+        reuseChangeRequestId: campaign ? (links.get(campaign.key) ?? null) : null,
+      });
+    }
+  }
+  return out;
 }
