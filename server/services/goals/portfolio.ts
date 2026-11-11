@@ -33,8 +33,15 @@
  * deadline counts. Its answer is a probability only when every input rests on
  * evidence; otherwise it is coverage of the tested conditions and says so —
  * and says which inputs keep it from being one.
+ *
+ * Whether the best combination may be *claimed* at 90% is not decided here: it
+ * is the quant engine's one assessment (`assess` in `quant/portfolio.ts`),
+ * which this module feeds with the real observations behind each opening's
+ * buyer-behaviour rates and reads back as `assurance`. The same call measures
+ * what each candidate safeguard — an independent channel, faster cash terms, a
+ * reserve held back — would do to the downside, on the identical worlds.
  */
-import { optimizePortfolio, type Activity, type PortfolioReading } from '../quant/portfolio.ts';
+import { optimizePortfolio, type Activity, type Assurance, type PortfolioReading, type Safeguard, type SafeguardEffect } from '../quant/portfolio.ts';
 import { makeRng } from '../scenario/random.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 
@@ -123,6 +130,44 @@ export interface GoalPortfolio {
   /** What keeps the reading from being a probability, or the target from being reached. */
   missing: string[];
   searched: number;
+  /**
+   * What the best combination's reach may be called — at least 90%, a
+   * defensible range, or calibration unavailable — from the quant engine's one
+   * assessment over the observations behind each member's inputs. The claim of
+   * 90% is this, never the raw share of worlds.
+   */
+  assurance?: Assurance;
+  /** Measured change to the downside from each candidate safeguard, over the same worlds as the best combination. */
+  safeguardEffects?: SafeguardEffect[];
+}
+
+/** How many real observations an input rests on, when it says: a sample behind a reconstruction, or an observed distribution. */
+export function observationsBehind(input: ModelInput): number | undefined {
+  if (input.inferred && input.inferred.justified && input.inferred.observations > 0) return input.inferred.observations;
+  if (input.distribution?.kind === 'EMPIRICAL' && input.distribution.values.length > 0) return input.distribution.values.length;
+  return undefined;
+}
+
+/**
+ * The independent observations an opening's reach rests on: the smallest
+ * sample behind the buyer-behaviour rates it actually draws on (whether a
+ * prospect replies, whether a buyer agrees), and behind any other input that
+ * states one. A rate it draws on with no stated sample leaves it undefined —
+ * never read as favourable, so no probability is claimed (invariant 39).
+ */
+export function evidenceSample(one: ModelledOpportunity): number | undefined {
+  const required: ModelInput[] = one.agreedValue > 0 ? [] : one.repeatable ? [one.respond, one.close] : [one.close];
+  const counts: number[] = [];
+  for (const input of required) {
+    const n = observationsBehind(input);
+    if (n === undefined) return undefined;
+    counts.push(n);
+  }
+  for (const input of [one.price, one.daysToCash, one.directCost, one.volume]) {
+    const n = observationsBehind(input);
+    if (n !== undefined) counts.push(n);
+  }
+  return counts.length > 0 ? Math.min(...counts) : undefined;
 }
 
 /** Whether an input may be read as a distribution of the world rather than a range swept. */
@@ -379,6 +424,7 @@ export function evaluateGoalPortfolio(input: {
       refused,
     });
     if (refused) continue;
+    const sampleSize = evidenceSample(one);
     const shares: number[] = one.repeatable && one.agreedValue === 0 ? [...OUTREACH_SHARES] : [0];
     const keys = shares.map((share) => `${id}@${share}`);
     for (const share of shares) {
@@ -396,6 +442,7 @@ export function evaluateGoalPortfolio(input: {
         startDay: 0,
         ...(share > 0 ? { uses: { outreach: share }, riskGroup: 'shared-outreach' } : {}),
         excludes: keys.filter((other) => other !== key),
+        ...(sampleSize !== undefined ? { evidence: { sampleSize } } : {}),
       });
     }
   }
@@ -407,6 +454,7 @@ export function evaluateGoalPortfolio(input: {
     ...(startingCapital !== null ? { startingCapital } : {}),
     ...(input.capitalCeiling !== null ? { spendCeiling: input.capitalCeiling } : {}),
     riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
+    safeguards: candidateSafeguards(activities, startingCapital, input.beforeProof),
     worlds,
     seed,
   });
@@ -438,6 +486,9 @@ export function evaluateGoalPortfolio(input: {
   for (const one of members) if (!one.justified) missing.push(`${one.title.slice(0, 60)}: ${one.unestablished.join(', ')} not established`);
   if (best && best.reach < 0.9) {
     missing.push(`the best combination reaches the target in ${(best.reach * 100).toFixed(0)}% of worlds; more openings, or better-evidenced ones, are needed for 90%`);
+  } else if (best && result.assurance && !result.assurance.claimsAtLeast90) {
+    // Reaching 90% of worlds is not a claim of 90%: the assessment says what the evidence supports.
+    missing.push(`90% is not claimed: ${result.assurance.reason}`);
   }
   if (!best) missing.push('no combination of the openings held can run inside the limits');
   return {
@@ -457,5 +508,23 @@ export function evaluateGoalPortfolio(input: {
     },
     missing,
     searched: result.searched,
+    ...(result.assurance ? { assurance: result.assurance } : {}),
+    ...(result.safeguardEffects ? { safeguardEffects: result.safeguardEffects } : {}),
   };
+}
+
+/**
+ * The controls this plan could add, each measured against the best combination
+ * rather than asserted: a second, independent sending channel (the openings
+ * sharing outreach stop sharing its shock), buyer prepayment or deposits
+ * (cash arrives in half the time), and a contingency reserve the size of one
+ * arrangement's before-proof allowance. Only those that bear on this plan.
+ */
+export function candidateSafeguards(activities: Activity[], startingCapital: number | null, beforeProof: number | null): Safeguard[] {
+  const out: Safeguard[] = [];
+  const shared = activities.filter((one) => one.riskGroup === 'shared-outreach').map((one) => one.key);
+  if (shared.length > 0) out.push({ key: 'independent-outreach-channel', kind: 'INDEPENDENT_CHANNEL', decorrelate: shared });
+  if (activities.length > 0) out.push({ key: 'prepayment-terms', kind: 'FASTER_CASH_CYCLE', daysFactor: { activities: activities.map((one) => one.key), factor: 0.5 } });
+  if (startingCapital !== null && beforeProof !== null && beforeProof > 0) out.push({ key: 'contingency-reserve', kind: 'CONTINGENCY', capitalBonus: beforeProof });
+  return out;
 }
