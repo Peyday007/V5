@@ -12,7 +12,12 @@
  * The steps are a vocabulary, not a pipeline. They may be recorded in any order
  * a case needs, a loop may skip one it can say is not needed, several loops run
  * at once, and a later step may send a loop back (a failed verification reopens
- * acquisition). Two things only are refused, because they are the point:
+ * acquisition). Where a loop stands is therefore read by replaying its rows in
+ * order, never from "which steps were ever recorded": a step sent back is
+ * outstanding again however often it was recorded before, and a loop whose
+ * current VALUE judgment abandoned the direction is closed, not resumable, until
+ * a later record reopens that judgment. Two things only are refused, because
+ * they are the point:
  *
  *  - constructing before reuse was checked: ACQUIRE is refused until
  *    SEARCH_EXISTING is on the gap's record, and
@@ -66,13 +71,46 @@ export interface GapLoopState {
   steps: GapStepRecord[];
   /** Latest record per step, by step. */
   latest: Partial<Record<GapLoopStep, GapStepRecord>>;
-  /** Steps not yet recorded, in vocabulary order: what a resuming worker may do next. */
+  /**
+   * Steps not currently satisfied, in vocabulary order: never recorded, or sent
+   * back by a later record (a failed VERIFY, a new ACQUIRE, an explicit
+   * `reopens`). Empty when the loop is abandoned: nothing is owed on it.
+   */
   outstanding: GapLoopStep[];
-  /** The first outstanding step, or null when every step is recorded. */
+  /** The first outstanding step, or null when none is owed (complete or abandoned). */
   next: GapLoopStep | null;
-  /** True once the loop has recorded INTEGRATE after its last ACQUIRE. */
+  /** True once the loop has recorded INTEGRATE after its last ACQUIRE and nothing sent it back. */
   integrated: boolean;
+  /** True while the loop's current VALUE judgment is to abandon the direction. */
+  abandoned: boolean;
   cause: GapCause | null;
+}
+
+/** A VALUE judgment that chose to abandon the direction. Pure. */
+export function isAbandonDecision(detail: Record<string, unknown>): boolean {
+  if (detail['abandon'] === true) return true;
+  if (typeof detail['decision'] === 'string' && detail['decision'].trim().toUpperCase() === 'ABANDON') return true;
+  return typeof detail['chosen'] === 'string' && /^abandon/i.test(detail['chosen'].trim());
+}
+
+/** A VERIFY that found the piece does not work against its baseline. Pure. */
+export function isFailedVerification(detail: Record<string, unknown>): boolean {
+  if (detail['passed'] === false) return true;
+  const outcome = typeof detail['outcome'] === 'string' ? detail['outcome'].trim().toUpperCase() : '';
+  return outcome === 'FAILED' || outcome === 'FAIL' || outcome === 'REGRESSED';
+}
+
+/**
+ * The step a record sends its loop back to, or null. Explicit `reopens` wins;
+ * a failed VERIFY sends the loop back to ACQUIRE; a new ACQUIRE sends back the
+ * steps after it, because what they judged was an earlier acquisition.
+ */
+function sendsBackTo(step: GapLoopStep, detail: Record<string, unknown>): GapLoopStep | null {
+  const explicit = GAP_LOOP_STEPS.find((one) => one === detail['reopens']);
+  if (explicit) return explicit;
+  if (step === 'VERIFY' && isFailedVerification(detail)) return 'ACQUIRE';
+  if (step === 'ACQUIRE') return 'VERIFY';
+  return null;
 }
 
 export class GapStepRefused extends Error {}
@@ -80,6 +118,11 @@ export class GapStepRefused extends Error {}
 /** A step's mandatory content, checked before anything is written. Pure. */
 export function refusalFor(step: GapLoopStep, detail: Record<string, unknown>, state: GapLoopState): string | null {
   const text = (key: string): boolean => typeof detail[key] === 'string' && (detail[key] as string).trim().length > 0;
+  if (detail['reopens'] !== undefined) {
+    const target = GAP_LOOP_STEPS.find((one) => one === detail['reopens']);
+    if (!target) return `reopens names a step: one of ${GAP_LOOP_STEPS.join(', ')}`;
+    if (GAP_LOOP_STEPS.indexOf(target) > GAP_LOOP_STEPS.indexOf(step)) return 'a step can send its loop back, never forward';
+  }
   switch (step) {
     case 'HYPOTHESIS':
       if (!text('enables') || !text('measure') || !text('failureMode')) return 'a hypothesis names what the piece enables, which measure changes and how the decision could fail';
@@ -93,6 +136,7 @@ export function refusalFor(step: GapLoopStep, detail: Record<string, unknown>, s
       return text('chosen') && text('alternatives') ? null : 'a value judgment names the option chosen and the alternatives it was compared with';
     case 'ACQUIRE':
       if (!state.latest.SEARCH_EXISTING) return 'reuse comes first: record SEARCH_EXISTING before acquiring or constructing anything';
+      if (state.abandoned) return 'the current VALUE judgment abandoned this direction: record a new VALUE before acquiring anything';
       return text('owner') ? null : 'acquisition names the existing execution owner that does the work';
     case 'VERIFY':
       return text('baseline') && text('comparison') ? null : 'verification records the baseline and the real-world comparison, not tests alone';
@@ -127,9 +171,21 @@ export function gapStateFrom(gapKey: string, rows: readonly Row[]): GapLoopState
     steps.push({ gapKey, step, at: row.at, summary: row.reason ?? '', detail });
   }
   const latest: Partial<Record<GapLoopStep, GapStepRecord>> = {};
-  for (const record of steps) latest[record.step] = record;
-  const outstanding = GAP_LOOP_STEPS.filter((step) => !latest[step]);
-  const lastAcquire = latest.ACQUIRE?.at ?? null;
+  // Replay in order: a record satisfies its own step and, when it sends the
+  // loop back, unsatisfies the target step and every step after it.
+  const satisfied = new Set<GapLoopStep>();
+  for (const record of steps) {
+    latest[record.step] = record;
+    satisfied.add(record.step);
+    const back = sendsBackTo(record.step, record.detail);
+    if (!back) continue;
+    const from = GAP_LOOP_STEPS.indexOf(back);
+    // A failed VERIFY falls inside its own range on purpose: a new acquisition
+    // needs a new check.
+    for (const later of GAP_LOOP_STEPS.slice(from)) satisfied.delete(later);
+  }
+  const abandoned = Boolean(satisfied.has('VALUE') && latest.VALUE && isAbandonDecision(latest.VALUE.detail));
+  const outstanding = abandoned ? [] : GAP_LOOP_STEPS.filter((step) => !satisfied.has(step));
   const cause = latest.HYPOTHESIS?.detail['cause'];
   return {
     gapKey,
@@ -137,7 +193,8 @@ export function gapStateFrom(gapKey: string, rows: readonly Row[]): GapLoopState
     latest,
     outstanding,
     next: outstanding[0] ?? null,
-    integrated: Boolean(latest.INTEGRATE && (lastAcquire === null || latest.INTEGRATE.at >= lastAcquire)),
+    integrated: !abandoned && satisfied.has('INTEGRATE'),
+    abandoned,
     cause: GAP_CAUSES.includes(cause as GapCause) ? (cause as GapCause) : null,
   };
 }
@@ -152,7 +209,10 @@ export async function readGapLoop(gapKey: string): Promise<GapLoopState> {
   return gapStateFrom(gapKey, rows);
 }
 
-/** Gaps with a recorded loop that have not integrated, newest activity first: what to resume. */
+/**
+ * Gaps with a recorded loop that still owe a step, newest activity first: what
+ * to resume. An integrated loop and an abandoned one owe nothing.
+ */
 export async function openGapLoops(limit = 20): Promise<GapLoopState[]> {
   const keys = await getDb().all<{ workload_class: string }>(
     `SELECT workload_class FROM bin_events
@@ -161,7 +221,7 @@ export async function openGapLoops(limit = 20): Promise<GapLoopState[]> {
     [GAP_EVENT, Math.max(1, limit) * 3],
   );
   const states = await Promise.all(keys.map((row) => readGapLoop(row.workload_class)));
-  return states.filter((state) => !state.integrated).slice(0, limit);
+  return states.filter((state) => state.next !== null).slice(0, limit);
 }
 
 /** Record one step on a gap. Refused, and nothing written, when the step's mandatory content is missing. */
@@ -222,7 +282,7 @@ export async function searchExisting(input: { terms: readonly string[]; paths?: 
 /** The lines a status page prints for one loop. */
 export function formatGapLoop(state: GapLoopState): string[] {
   return [
-    `GAP ${state.gapKey} cause=${state.cause ?? 'unknown'} integrated=${state.integrated ? 'yes' : 'no'} next=${state.next ?? 'none'}`,
+    `GAP ${state.gapKey} cause=${state.cause ?? 'unknown'} integrated=${state.integrated ? 'yes' : 'no'}${state.abandoned ? ' abandoned=yes' : ''} next=${state.next ?? 'none'}`,
     ...state.steps.map((one) => `  ${one.at.slice(0, 19)}Z ${one.step.padEnd(15)} ${one.summary}`),
   ];
 }
