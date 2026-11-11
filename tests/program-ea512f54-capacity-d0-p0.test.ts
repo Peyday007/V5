@@ -154,10 +154,16 @@ describe('stageCapacity', () => {
     expect(verify.queueSize).toEqual({ measured: true, value: 1 });
     expect(verify.accepted).toBe(1);
 
+    // The stages the lane does not run are measured from their own rows
+    // (program-ea512f54-capacity-d0-p0-stages.test.ts); a measure those rows
+    // cannot give still says why.
     for (const id of ['source-ingestion', 'parsing-indexing', 'graph-quant', 'commercial-execution']) {
       const stage = report.stages.find((s) => s.stage === id)!;
-      expect(stage.queueSize.measured).toBe(false);
-      if (!stage.queueSize.measured) expect(stage.queueSize.reason.length).toBeGreaterThan(0);
+      expect(stage.itemsProcessedPerHour.measured).toBe(true);
+      expect(stage.measuredFrom?.length).toBeGreaterThan(0);
+      for (const measure of [stage.queueSize, stage.elapsedMs, stage.providerFailures]) {
+        if (!measure.measured) expect(measure.reason.length).toBeGreaterThan(0);
+      }
     }
 
     // Every productive job attributed to exactly one purpose.

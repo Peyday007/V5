@@ -27,17 +27,22 @@ export interface StageDefinition {
   label: string;
   /** Work types whose queue and outcomes belong to this stage, or none when the rows cannot see it. */
   workTypes: readonly string[];
-  /** Why the stage has no row-level measure, when `workTypes` is empty. */
+  /**
+   * For a stage the lane does not run: the tables its own rows are in, read by
+   * `ROW_STAGES`. A stage with neither work types nor rows has no measure.
+   */
+  rows?: readonly string[];
+  /** Why the stage has no row-level measure, when it has neither work types nor rows. */
   unseen?: string;
 }
 
 export const STAGES: readonly StageDefinition[] = [
-  { id: 'source-ingestion', label: 'source fetching / ingestion', workTypes: [], unseen: 'source reads are recorded per request in the access report, not per lane job' },
-  { id: 'parsing-indexing', label: 'parsing and indexing', workTypes: [], unseen: 'no per-job parse or index row is written' },
-  { id: 'graph-quant', label: 'graph / detection / quant computation', workTypes: [], unseen: 'computation runs outside the lane and writes no lane row' },
+  { id: 'source-ingestion', label: 'source fetching / ingestion', workTypes: [], rows: ['feed_pulls'] },
+  { id: 'parsing-indexing', label: 'parsing and indexing', workTypes: [], rows: ['extraction_runs'] },
+  { id: 'graph-quant', label: 'graph / detection / quant computation', workTypes: [], rows: ['feed_detections', 'feed_item_coverage', 'scenario_runs'] },
   { id: 'model-interpretation', label: 'model-based interpretation', workTypes: ['RESEARCH_PLAN', 'RESEARCH_FRAGMENT', 'RESEARCH_SYNTHESIZE'] },
   { id: 'evidence-verification', label: 'evidence verification', workTypes: ['RESEARCH_VERIFY', 'RESEARCH_AUDIT'] },
-  { id: 'commercial-execution', label: 'human / authorized commercial execution', workTypes: [], unseen: 'executed by a person or an authorized connector outside the lane' },
+  { id: 'commercial-execution', label: 'human / authorized commercial execution', workTypes: [], rows: ['cash_actions', 'cash_needs'] },
 ];
 
 export interface StageReading {
@@ -55,6 +60,8 @@ export interface StageReading {
   incrementalDollars: Measured<number>;
   accepted: number;
   acceptedPerHour: number;
+  /** The tables the reading came from. */
+  measuredFrom?: readonly string[];
 }
 
 export interface PurposeAttribution {
@@ -182,6 +189,10 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     accepted: 0,
     acceptedPerHour: 0,
   });
+  const rowReader = ROW_STAGES[def.id];
+  if (def.workTypes.length === 0 && rowReader) {
+    return { ...blank('not recorded for this stage'), ...(await rowReader(since, hours, nowMs)), stage: def.id, label: def.label, measuredFrom: def.rows ?? [] };
+  }
   if (def.workTypes.length === 0) return blank(def.unseen ?? 'no lane row sees this stage');
 
   const db = getDb();
@@ -242,6 +253,192 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     acceptedPerHour: accepted / hours,
   };
 }
+
+type RowStageReading = Omit<StageReading, 'stage' | 'label' | 'measuredFrom'>;
+type RowStageReader = (since: string, hours: number, nowMs: number) => Promise<RowStageReading>;
+
+const minutesSince = (iso: string | null | undefined, nowMs: number): number | null =>
+  iso ? Math.max(0, Math.round((nowMs - Date.parse(iso)) / 60_000)) : null;
+
+/**
+ * Source fetching / ingestion, from `feed_pulls`: one row per pull of a source,
+ * with what it fetched and how many of those were new (`feed_items` is unique
+ * by source and external id, so `fetched - inserted` are records already held).
+ * Pulls run on the feed tick's schedule, so nothing waits in a queue for one.
+ */
+async function readIngestion(since: string, hours: number): Promise<RowStageReading> {
+  const row = await getDb().get<{ pulls: number | string; ok: number | string; failed: number | string; inserted: number | string | null; repeated: number | string | null }>(
+    `SELECT COUNT(*) AS pulls,
+            SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END) AS ok,
+            SUM(CASE WHEN ok = 1 THEN 0 ELSE 1 END) AS failed,
+            SUM(CASE WHEN ok = 1 THEN inserted ELSE 0 END) AS inserted,
+            SUM(CASE WHEN ok = 1 AND fetched > inserted THEN fetched - inserted ELSE 0 END) AS repeated
+       FROM feed_pulls WHERE created_at >= ?`,
+    [since],
+  );
+  const accepted = n(row?.ok);
+  const noQueue = NOT('feeds are pulled on the feed tick\'s schedule; no fetch waits in a queue');
+  return {
+    queueSize: noQueue,
+    oldestUsefulItemMinutes: noQueue,
+    itemsProcessedPerHour: ok(n(row?.pulls) / hours),
+    uniqueUsableFacts: ok(n(row?.inserted)),
+    droppedOrDuplicate: ok(n(row?.repeated)),
+    modelCallsAvoided: NOT('a fetch calls no model'),
+    providerFailures: ok(n(row?.failed)),
+    elapsedMs: NOT('feed_pulls records no duration'),
+    incrementalDollars: NOT('the lane records no dollar cost per job'),
+    accepted,
+    acceptedPerHour: accepted / hours,
+  };
+}
+
+/**
+ * Parsing and indexing, from `extraction_runs`: the queue is runs still QUEUED;
+ * a run finished in the window is processed; READY / READY_WITH_WARNINGS is
+ * usable; FAILED or BLOCKED is dropped, and a run over bytes (document and
+ * source hash) an earlier run already read is a duplicate.
+ */
+async function readParsing(since: string, hours: number, nowMs: number): Promise<RowStageReading> {
+  const db = getDb();
+  const queued = await db.get<{ n: number | string; oldest: string | null }>(
+    "SELECT COUNT(*) AS n, MIN(created_at) AS oldest FROM extraction_runs WHERE status = 'QUEUED'",
+    [],
+  );
+  const done = await db.all<{ status: string; document_id: string; started_at: string | null; completed_at: string }>(
+    'SELECT status, document_id, started_at, completed_at FROM extraction_runs WHERE completed_at IS NOT NULL AND completed_at >= ?',
+    [since],
+  );
+  const repeated = await db.get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM extraction_runs r
+      WHERE r.completed_at IS NOT NULL AND r.completed_at >= ? AND r.source_hash IS NOT NULL
+        AND EXISTS (SELECT 1 FROM extraction_runs p
+                     WHERE p.document_id = r.document_id AND p.source_hash = r.source_hash
+                       AND p.id <> r.id AND p.created_at < r.created_at)`,
+    [since],
+  );
+  const usable = new Set<string>();
+  let accepted = 0;
+  let failed = 0;
+  let ms = 0;
+  for (const run of done) {
+    if (run.status === 'READY' || run.status === 'READY_WITH_WARNINGS') {
+      accepted += 1;
+      usable.add(run.document_id);
+    }
+    if (run.status === 'FAILED' || run.status === 'BLOCKED') failed += 1;
+    if (run.started_at) ms += Math.max(0, Date.parse(run.completed_at) - Date.parse(run.started_at)) || 0;
+  }
+  return {
+    queueSize: ok(n(queued?.n)),
+    oldestUsefulItemMinutes: ok(minutesSince(queued?.oldest, nowMs)),
+    itemsProcessedPerHour: ok(done.length / hours),
+    uniqueUsableFacts: ok(usable.size),
+    droppedOrDuplicate: ok(failed + n(repeated?.n)),
+    modelCallsAvoided: NOT('parsing calls no model'),
+    providerFailures: NOT('parsing runs in-process and calls no provider'),
+    elapsedMs: ok(ms),
+    incrementalDollars: NOT('the lane records no dollar cost per job'),
+    accepted,
+    acceptedPerHour: accepted / hours,
+  };
+}
+
+/**
+ * Graph / detection / quant computation, from `feed_detections` (detectors over
+ * stored records), `feed_item_coverage` (records an ACTIVE detection covered, so
+ * the free screen does not send them to a model one by one: model calls
+ * avoided, `detectors.ts`) and `scenario_runs` (simulations). Detectors run over
+ * each pull and a scenario runs when asked, so nothing waits in a queue.
+ */
+async function readComputation(since: string, hours: number): Promise<RowStageReading> {
+  const db = getDb();
+  const detections = await db.get<{ n: number | string; active: number | string | null }>(
+    "SELECT COUNT(*) AS n, SUM(CASE WHEN mode = 'ACTIVE' THEN 1 ELSE 0 END) AS active FROM feed_detections WHERE detected_at >= ?",
+    [since],
+  );
+  const runs = await db.get<{ n: number | string; complete: number | string | null; failed: number | string | null; digests: number | string; ms: number | string | null }>(
+    `SELECT COUNT(*) AS n,
+            SUM(CASE WHEN state = 'COMPLETE' THEN 1 ELSE 0 END) AS complete,
+            SUM(CASE WHEN state = 'FAILED' THEN 1 ELSE 0 END) AS failed,
+            COUNT(DISTINCT CASE WHEN state = 'COMPLETE' THEN result_digest END) AS digests,
+            SUM(elapsed_ms) AS ms
+       FROM scenario_runs WHERE finished_at IS NOT NULL AND finished_at >= ?`,
+    [since],
+  );
+  const recomputed = await db.get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM scenario_runs r
+      WHERE r.state = 'COMPLETE' AND r.finished_at IS NOT NULL AND r.finished_at >= ?
+        AND EXISTS (SELECT 1 FROM scenario_runs p
+                     WHERE p.config_hash = r.config_hash AND p.state = 'COMPLETE'
+                       AND p.id <> r.id AND p.started_at < r.started_at)`,
+    [since],
+  );
+  const covered = await db.get<{ n: number | string }>(
+    `SELECT COUNT(DISTINCT c.item_id) AS n FROM feed_item_coverage c
+      WHERE c.covered_at >= ?
+        AND NOT EXISTS (SELECT 1 FROM feed_item_coverage e WHERE e.item_id = c.item_id AND e.covered_at < ?)`,
+    [since, since],
+  );
+  const accepted = n(detections?.active) + n(runs?.complete);
+  const noQueue = NOT('detectors run over each pull and a scenario runs when asked; nothing waits in a queue');
+  return {
+    queueSize: noQueue,
+    oldestUsefulItemMinutes: noQueue,
+    itemsProcessedPerHour: ok((n(detections?.n) + n(runs?.n)) / hours),
+    uniqueUsableFacts: ok(n(detections?.active) + n(runs?.digests)),
+    droppedOrDuplicate: ok(n(runs?.failed) + n(recomputed?.n)),
+    modelCallsAvoided: ok(n(covered?.n)),
+    providerFailures: NOT('computation calls no provider'),
+    elapsedMs: ok(n(runs?.ms)),
+    incrementalDollars: NOT('the lane records no dollar cost per job'),
+    accepted,
+    acceptedPerHour: accepted / hours,
+  };
+}
+
+/**
+ * Human / authorized commercial execution, from `cash_actions` (each action a
+ * person or Brain performed under an authority) and `cash_needs` (an action
+ * blocked on a person: OPEN is the queue, WITHDRAWN is dropped).
+ */
+async function readCommercial(since: string, hours: number, nowMs: number): Promise<RowStageReading> {
+  const db = getDb();
+  const open = await db.get<{ n: number | string; oldest: string | null }>(
+    "SELECT COUNT(*) AS n, MIN(created_at) AS oldest FROM cash_needs WHERE state = 'OPEN'",
+    [],
+  );
+  const actions = await db.get<{ n: number | string; opportunities: number | string }>(
+    'SELECT COUNT(*) AS n, COUNT(DISTINCT opportunity_id) AS opportunities FROM cash_actions WHERE created_at >= ?',
+    [since],
+  );
+  const withdrawn = await db.get<{ n: number | string }>(
+    "SELECT COUNT(*) AS n FROM cash_needs WHERE state = 'WITHDRAWN' AND updated_at >= ?",
+    [since],
+  );
+  const accepted = n(actions?.n);
+  return {
+    queueSize: ok(n(open?.n)),
+    oldestUsefulItemMinutes: ok(minutesSince(open?.oldest, nowMs)),
+    itemsProcessedPerHour: ok(accepted / hours),
+    uniqueUsableFacts: ok(n(actions?.opportunities)),
+    droppedOrDuplicate: ok(n(withdrawn?.n)),
+    modelCallsAvoided: NOT('commercial execution calls no model'),
+    providerFailures: NOT('executed by a person or an authorized connector, not a model provider'),
+    elapsedMs: NOT('cash_actions records no duration'),
+    incrementalDollars: NOT('the lane records no dollar cost per job'),
+    accepted,
+    acceptedPerHour: accepted / hours,
+  };
+}
+
+/** Readers for the stages the lane does not run, keyed by stage id. */
+const ROW_STAGES: Record<string, RowStageReader> = {
+  'source-ingestion': readIngestion,
+  'parsing-indexing': readParsing,
+  'graph-quant': readComputation,
+  'commercial-execution': readCommercial,
+};
 
 /**
  * Each productive (SUBMITTED) job is attributed to exactly one purpose: the
