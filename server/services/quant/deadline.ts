@@ -23,7 +23,7 @@
 
 import { listMoneyEntries } from '../../repos/cashLedger.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
-import type { CashMoneyEntry } from '../../domain/types.ts';
+import type { CashMoneyEntry, CashOpportunity } from '../../domain/types.ts';
 
 export const RESEARCH_DECISIONS = ['IGNORE', 'RESEARCH_FIRST', 'LEARN_WHILE_EXECUTING', 'ACT_ON_RECONSTRUCTION'] as const;
 export type ResearchDecision = (typeof RESEARCH_DECISIONS)[number];
@@ -413,10 +413,15 @@ export function routeInputsFromEntries(
 }
 
 /** Read one project's money ledger and quantify every route in it, in one currency. */
-export async function readRouteMoney(input: { projectId: string; currency: string }): Promise<RouteMoneyVelocity[]> {
+export async function readRouteMoney(input: {
+  projectId: string;
+  currency: string;
+  /** The project's opportunity rows when the caller already read them, so they are not read twice. */
+  opportunities?: readonly CashOpportunity[];
+}): Promise<RouteMoneyVelocity[]> {
   const [entries, opportunities] = await Promise.all([
     listMoneyEntries({ projectId: input.projectId, currency: input.currency, limit: 2000 }),
-    listOpportunities({ projectId: input.projectId }),
+    input.opportunities ?? listOpportunities({ projectId: input.projectId }),
   ]);
   // The opportunity row is the lead, and its creation instant is when the lead was recorded.
   const leadAt = new Map(opportunities.map((o) => [o.id, o.createdAt] as const));
