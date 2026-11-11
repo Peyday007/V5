@@ -13,6 +13,11 @@
  * A routine is reliable or it stops. Each read it leads is recorded on its
  * `SOURCE_ACCESS` row (`measures.routine`) with the read path's own explicit
  * success checks (readable, not a challenge, not an empty shell), and a routine
+ * whose host has a recorded browser workflow (`browserWorkflow.ts`: steps over
+ * locators, form entry, downloads and explicit success checks, under a granted
+ * account or none) runs that workflow rather than a bare render — so a
+ * model-assisted pattern that became stable is a tested script, and a person who
+ * records a workflow once never clicks through it again. A routine
  * whose led attempts fail more often than they work, at least
  * `ROUTINE_RETIRE_FAILURES` times, is retired. Nothing is retired by a clock.
  *
@@ -26,6 +31,7 @@
  */
 import type { AccessAttempt, AccessMethod } from './access.ts';
 import type { MethodClass } from './accessMethods.ts';
+import { readsAddress, type BrowserWorkflow, type RecordedWorkflow } from './browserWorkflow.ts';
 
 /** Failed led attempts after which a routine that fails more than it works is retired. */
 export const ROUTINE_RETIRE_FAILURES = 2;
@@ -44,6 +50,8 @@ export interface Routine {
   ok: number;
   retired: boolean;
   why: string;
+  /** The recorded workflow a browser routine runs on this host, or null when it runs the plain render. */
+  workflow?: BrowserWorkflow | null;
 }
 
 /** What a read records about the routine that led it. */
@@ -52,6 +60,8 @@ export interface RoutineUse {
   kind: 'CONNECTOR' | 'SCRIPT';
   lead: AccessMethod;
   proposedAt: string;
+  /** The recorded workflow the routine ran, by name and session; absent for a plain render. */
+  workflow?: { name: string; session: BrowserWorkflow['session'] };
 }
 
 interface ProposalRow {
@@ -104,7 +114,11 @@ export function leadOfRoute(route: MethodClass, host: string, access: readonly A
  * Routines from CONNECTOR_PROPOSED rows and the SOURCE_ACCESS rows that record
  * their use. Pure over rows. The newest proposal for a host decides its route.
  */
-export function routinesFrom(proposals: readonly ProposalRow[], access: readonly AccessRow[]): Map<string, Routine> {
+export function routinesFrom(
+  proposals: readonly ProposalRow[],
+  access: readonly AccessRow[],
+  workflows: ReadonlyMap<string, readonly RecordedWorkflow[]> = new Map(),
+): Map<string, Routine> {
   const newest = new Map<string, { route: MethodClass; kind: 'CONNECTOR' | 'SCRIPT'; at: string; t: number }>();
   for (const row of proposals) {
     const t = row.at ? Date.parse(row.at) : Number.NaN;
@@ -116,15 +130,30 @@ export function routinesFrom(proposals: readonly ProposalRow[], access: readonly
     if (prior && prior.t >= t) continue;
     newest.set(host, { route: m.route as MethodClass, kind: m.kind === 'SCRIPT' ? 'SCRIPT' : 'CONNECTOR', at: row.at!, t });
   }
+  // A workflow a person recorded for reading a host's pages is itself a reusable browser routine:
+  // the decision to build it was made by recording it, so it needs no separate proposal.
+  const readWorkflow = new Map<string, RecordedWorkflow>();
+  for (const [host, list] of workflows) {
+    const reads = list.find((r) => readsAddress(r.workflow));
+    if (reads) readWorkflow.set(host.toLowerCase(), reads);
+  }
+  for (const [host, r] of readWorkflow) {
+    const t = Date.parse(r.recordedAt);
+    const prior = newest.get(host);
+    if (!Number.isFinite(t)) continue;
+    if (!prior) newest.set(host, { route: 'BROWSER', kind: 'SCRIPT', at: r.recordedAt, t });
+  }
   const out = new Map<string, Routine>();
   for (const [host, p] of newest) {
     const lead = leadOfRoute(p.route, host, access);
+    const workflow = lead === 'BROWSER' ? (readWorkflow.get(host)?.workflow ?? null) : null;
     let runs = 0;
     let ok = 0;
     if (lead) {
       for (const row of access) {
         const m = parse<{ host?: string; attempts?: AccessAttempt[]; routine?: { lead?: string; proposedAt?: string } }>(row.measures);
         if (m?.host?.toLowerCase() !== host || m.routine?.lead !== lead || m.routine.proposedAt !== p.at) continue;
+        if ((m.routine as { workflow?: { name?: string } }).workflow?.name !== (workflow?.name ?? undefined)) continue;
         const led = (m.attempts ?? []).find((a) => a.method === lead);
         if (!led) continue;
         runs += 1;
@@ -142,11 +171,12 @@ export function routinesFrom(proposals: readonly ProposalRow[], access: readonly
       runs,
       ok,
       retired,
+      workflow,
       why: lead === null
         ? `${p.route} is already the route the read path takes first on ${host}; nothing further to build`
         : retired
           ? `the ${lead} routine on ${host} failed ${failures} of ${runs} led reads; retired until a new proposal`
-          : `${p.kind === 'SCRIPT' ? 'scripted' : 'reusable'} ${lead} routine on ${host} from the proposal of ${p.at} (${ok}/${runs} led reads worked)`,
+          : `${p.kind === 'SCRIPT' ? 'scripted' : 'reusable'} ${lead} routine on ${host} from ${p.at}${workflow ? ` running the recorded workflow "${workflow.name}" (${workflow.session === 'ACCOUNT' ? 'under the granted account' : 'no account'})` : ''} (${ok}/${runs} led reads worked)`,
     });
   }
   return out;
@@ -155,5 +185,8 @@ export function routinesFrom(proposals: readonly ProposalRow[], access: readonly
 /** The routine a read on this host should run, or null when there is none, it leads nowhere new, or it was retired. */
 export function activeRoutine(routine: Routine | null | undefined): RoutineUse | null {
   if (!routine || routine.retired || !routine.lead) return null;
-  return { route: routine.route, kind: routine.kind, lead: routine.lead, proposedAt: routine.proposedAt };
+  return {
+    route: routine.route, kind: routine.kind, lead: routine.lead, proposedAt: routine.proposedAt,
+    ...(routine.workflow ? { workflow: { name: routine.workflow.name, session: routine.workflow.session } } : {}),
+  };
 }

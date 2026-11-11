@@ -38,7 +38,8 @@ export function browserMcpUrl(): string | null {
 
 let active = 0;
 const waiting: (() => void)[] = [];
-async function slot<T>(work: () => Promise<T>): Promise<T> {
+/** Run work inside one of the bounded browser slots; throws BrowserBusy when the queue is full. */
+export async function slot<T>(work: () => Promise<T>): Promise<T> {
   if (active >= MAX_CONCURRENT) {
     if (waiting.length >= MAX_WAITING) throw new BrowserBusy('the research browser is busy');
     await new Promise<void>((resolve) => waiting.push(resolve));
@@ -85,9 +86,9 @@ export function evaluateResult(payload: Record<string, unknown>): unknown {
   return value;
 }
 
-type Http = (url: string, init: RequestInit) => Promise<Response>;
+export type Http = (url: string, init: RequestInit) => Promise<Response>;
 
-class McpSession {
+export class McpSession {
   private session: string | null = null;
   private id = 0;
   constructor(
@@ -124,6 +125,22 @@ class McpSession {
       () => undefined,
     );
   }
+}
+
+/**
+ * Open one MCP session on a browser server and initialize it. The caller closes
+ * it in a `finally`. Shared by the one-page render here and the bounded
+ * workflows in `browserWorkflow.ts`, so there is one client of the browser.
+ */
+export async function openBrowserSession(endpoint: string, http: Http, signal: AbortSignal): Promise<McpSession> {
+  const mcp = new McpSession(endpoint, http, signal);
+  await mcp.request('initialize', {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'brain-source-reader', version: '1.0' },
+  });
+  await mcp.request('notifications/initialized', {}, true);
+  return mcp;
 }
 
 const PAGE_TEXT =

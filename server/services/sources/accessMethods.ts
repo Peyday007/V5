@@ -18,6 +18,16 @@ export const METHOD_CLASSES = ['NATIVE', 'BULK', 'HTTP', 'BROWSER', 'MODEL_ASSIS
 export type MethodClass = (typeof METHOD_CLASSES)[number];
 
 /** What each class covers. Illustrative of a space, not a closed list of means. */
+/*
+ * Where each class is executed: NATIVE by `connectors.ts`; BULK by the sitemap
+ * and archive routes of `access.ts`; HTTP by `fetchForWorker.ts`; BROWSER by
+ * `browserMcp.ts` (a one-page render) and `browserWorkflow.ts` (navigation,
+ * search, filtering, form entry, download handling and bounded workflows over
+ * readable locators with explicit success checks, under a granted account or
+ * none); MODEL_ASSISTED patterns become recorded workflows that routines run
+ * as scripts (`routines.ts`); HUMAN_HANDOFF is where a workflow stops at a
+ * sign-in wall or bot check (`HUMAN_HANDOFF` outcome) and is never automated.
+ */
 export const METHOD_CATALOG: Readonly<Record<MethodClass, readonly string[]>> = {
   NATIVE: ['official API', 'authenticated export', 'webhook', 'event subscription', 'CLI client', 'standard protocol', 'connected application'],
   BULK: ['public archive', 'downloadable dataset', 'periodic export', 'RSS/Atom feed', 'sitemap', 'published index', 'research repository', 'open-data catalog', 'file server', 'licensed data product'],

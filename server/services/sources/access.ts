@@ -43,6 +43,7 @@ import { connectorFor } from './connectors.ts';
 import { searchSuccessor } from './discover.ts';
 import { recordAcquisitionJudgment, REPEATED_USE_WINDOW_MS, type AcquisitionEvidence } from './acquisition.ts';
 import { activeRoutine, routinesFrom, type Routine, type RoutineUse } from './routines.ts';
+import { readBrowserWorkflows, runBrowserWorkflow, workflowAsRead, URL_PARAM, type BrowserWorkflow } from './browserWorkflow.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, type AccessEvidence } from './accessMethods.ts';
 import { checkDestination, fetchForWorker, systemResolver, type Resolver, type SourceFetch } from './fetchForWorker.ts';
 
@@ -91,6 +92,8 @@ export interface AccessDeps {
   learned?: (host: string) => Promise<AccessMethod | null>;
   /** The routine a CONNECTOR_PROPOSED row built for this host (`routines.ts`); defaults to the recorded rows. */
   routine?: (host: string) => Promise<Routine | null>;
+  /** Runs a routine's recorded workflow on the address being read; defaults to `runBrowserWorkflow` (`browserWorkflow.ts`). */
+  workflow?: (workflow: BrowserWorkflow, url: string) => Promise<SourceFetch>;
   record?: (read: SourceRead, caller: string, ms: number) => Promise<void>;
   /** Which part of Brain asked, for the event. */
   caller?: string;
@@ -230,6 +233,11 @@ export function robotsAllows(rules: { allow: boolean; path: string }[], pathAndQ
     }
   }
   return best ? best.allow : true;
+}
+
+/** Whether robots.txt allows a path, cached per origin; shared with the workflow terminal. */
+export async function robotsAllowFor(url: string): Promise<boolean> {
+  return defaultRobotsAllow(url);
 }
 
 async function defaultRobotsAllow(url: string): Promise<boolean> {
@@ -474,14 +482,15 @@ async function defaultRoutine(host: string): Promise<Routine | null> {
           `SELECT measures, at FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED' AND at >= ? ORDER BY at DESC LIMIT 500`,
           [since],
         );
+        const workflows = await readBrowserWorkflows();
         const access =
-          proposals.length === 0
+          proposals.length === 0 && workflows.size === 0
             ? []
             : await getDb().all<{ measures: string | null; at: string | null }>(
                 `SELECT measures, at FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? ORDER BY at DESC LIMIT 5000`,
                 [since],
               );
-        routineMap = routinesFrom(proposals, access);
+        routineMap = routinesFrom(proposals, access, workflows);
       } catch {
         // A record that cannot be read builds no routine; the ordinary routes run.
       } finally {
@@ -566,13 +575,14 @@ export function acquisitionEvidenceOfRead(
  * than fetching a document, so it is the OPERATE capability's evidence; a read
  * that never opened the browser says nothing about it and yields null.
  *
- * No account is ever asserted: the research browser does not sign in
- * (`browserMcp.ts`), so `authorizedAccountOnRecord` is false and the judgment
- * records the stop honestly (NO_AUTHORIZED_ACCOUNT) instead of claiming an
- * operation under a permission nobody evidenced.
+ * The research browser does not sign in (`browserMcp.ts`), so a plain render
+ * asserts no account and the judgment records the stop honestly
+ * (NO_AUTHORIZED_ACCOUNT). The one exception is a read a routine led with an
+ * ACCOUNT workflow (`browserWorkflow.ts`), which runs only under a standing
+ * OPERATE_PERMISSION grant: when that read worked, the account is on record.
  */
 export function operateEvidenceOfRead(
-  read: Pick<SourceRead, 'attempts'>,
+  read: Pick<SourceRead, 'attempts'> & Partial<Pick<SourceRead, 'routine' | 'readable' | 'method'>>,
   boundary: AccessEvidence['boundary'] | null,
   evidence: AccessEvidence,
 ): AcquisitionEvidence | null {
@@ -580,7 +590,7 @@ export function operateEvidenceOfRead(
   return {
     interactiveInterfaceOnly: evidence.interfaceOnly === true,
     interfaceUnfamiliarOrChanged: evidence.interfaceUnfamiliar === true,
-    authorizedAccountOnRecord: false,
+    authorizedAccountOnRecord: read.routine?.workflow?.session === 'ACCOUNT' && read.readable === true && read.method === 'BROWSER',
     blockedAtBoundary: boundary !== null && boundary !== 'PAYMENT' && boundary !== 'LEGAL',
     requiresLicence: boundary === 'PAYMENT' || boundary === 'LEGAL',
     ...(boundary ? { boundary } : {}),
@@ -687,6 +697,13 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   const learned = deps.learned ?? defaultLearned;
   const record = deps.record ?? defaultRecord;
   const routineOf = deps.routine ?? defaultRoutine;
+  const runWorkflow =
+    deps.workflow ??
+    (async (workflow: BrowserWorkflow, u: string) =>
+      workflowAsRead(
+        await runBrowserWorkflow(workflow, { [URL_PARAM]: u }, { robotsAllow, ...(deps.resolve ? { resolve: deps.resolve } : {}), caller: deps.caller ?? 'unknown' }),
+        u,
+      ));
   const attempts: AccessAttempt[] = [];
   let routineUsed: RoutineUse | undefined;
   const terms: ReadTerms = {};
@@ -753,7 +770,11 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
 
   // A reusable routine a CONNECTOR_PROPOSED row built for this host leads, so the
   // route repetition justified is run rather than rediscovered on every read.
-  const routine = activeRoutine(await routineOf(host).catch(() => null));
+  const routineRow = await routineOf(host).catch(() => null);
+  const routine = activeRoutine(routineRow);
+  // A browser routine with a recorded workflow runs the workflow (locators, form entry, downloads,
+  // success checks, under a granted account or none) instead of the bare render.
+  const routineWorkflow = routine?.lead === 'BROWSER' ? (routineRow?.workflow ?? null) : null;
   if (routine && (routine.lead === 'SITEMAP' || routine.lead === 'ARCHIVE')) {
     routineUsed = routine;
     const run = routine.lead === 'SITEMAP' ? sitemap : archive;
@@ -766,7 +787,11 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   const learnedLead = await learned(host).catch(() => null);
   const routineBrowser = routine?.lead === 'BROWSER';
   const lead: AccessMethod | null = learnedLead ?? (routineBrowser ? 'BROWSER' : null);
-  if (lead === 'BROWSER' && browser && (await browserAllowed())) {
+  if (routineWorkflow && (await browserAllowed())) {
+    routineUsed = routine!;
+    const operated = await attempt('BROWSER', () => runWorkflow(routineWorkflow, url));
+    if (operated?.readable) return done(operated, 'BROWSER');
+  } else if (lead === 'BROWSER' && browser && (await browserAllowed())) {
     if (routineBrowser) routineUsed = routine!;
     const rendered = await attempt('BROWSER', () => browser(url));
     if (rendered?.readable && !wantsBrowser(rendered)) return done(rendered, 'BROWSER');
@@ -779,7 +804,7 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   let bestRead: SourceFetch = first;
   let bestMethod: AccessMethod = 'DIRECT';
 
-  if (wantsBrowser(first) && browser && lead !== 'BROWSER' && (await browserAllowed())) {
+  if (wantsBrowser(first) && browser && lead !== 'BROWSER' && !routineWorkflow && (await browserAllowed())) {
     const rendered = await attempt('BROWSER', () => browser(url));
     if (rendered && better(rendered, bestRead)) {
       bestRead = rendered;
