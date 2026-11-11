@@ -8,13 +8,25 @@
  * The replay touches no feed_items row and opens no round. It writes the
  * cheap_results the lane always writes (keyed by the workload's own ids), and
  * one baseline row that later reports compare against.
+ *
+ * Production records it through `ensureBaseline`, run as a command against the
+ * live database before a routing change is released:
+ *
+ *   tsx --env-file-if-exists=.env server/services/routing/baseline/harness.ts --project <id>
+ *
+ * The workload is the feed items production has already stored (newest first),
+ * screened by the configured free lane. With no lane configured or nothing
+ * stored, nothing is recorded and the command says why: a baseline of invented
+ * answers would be worse than none.
  */
 import { createHash } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 import { recordBaseline, listBaselines } from '../../../repos/workRouting.ts';
+import { unlistedFeedItems } from '../../../repos/feeds.ts';
 import { CONCENTRATED_HIRING } from '../../feeds/detectors.ts';
 import type { Detector, DetectorRecord } from '../../feeds/detectors.ts';
 import { leadPassesRules } from '../../feeds/run.ts';
-import { screenLead } from '../../cheap/lane.ts';
+import { httpCompleter, laneConfig, screenLead } from '../../cheap/lane.ts';
 import type { Completer, LaneConfig, LeadOutput } from '../../cheap/lane.ts';
 import type { StoredFeedItem } from '../../../repos/feeds.ts';
 
@@ -109,4 +121,72 @@ export async function storeBaseline(input: Parameters<typeof replayWorkload>[0] 
 export async function readBaseline(projectId: string, label: string): Promise<{ id: string; readings: BaselineReadings; takenAt: string } | null> {
   const row = (await listBaselines(projectId)).find((b) => b.label === label);
   return row ? { id: row.id, readings: row.readings as unknown as BaselineReadings, takenAt: row.takenAt } : null;
+}
+
+/** The label a production baseline is stored under, and the one reports pass as `--baseline`. */
+export const BASELINE_LABEL = 'routing-baseline-v1';
+
+/** A stored feed item as a workload item: its age is measured from `now`, never assumed. */
+export function workloadFromStored(label: string, items: readonly StoredFeedItem[], now: Date): Workload {
+  return {
+    label,
+    items: items.map((s) => {
+      const t = Date.parse(s.publishedAt ?? s.fetchedAt);
+      return {
+        id: s.id, source: s.source, title: s.title, organization: s.organization,
+        daysAgo: Number.isFinite(t) ? Math.max(0, Math.floor((now.getTime() - t) / DAY)) : 0,
+        body: s.body ?? '',
+      };
+    }),
+  };
+}
+
+export type EnsureResult =
+  | { status: 'EXISTS'; id: string; takenAt: string; readings: BaselineReadings }
+  | { status: 'RECORDED'; id: string; readings: BaselineReadings }
+  | { status: 'NOT_RECORDED'; reason: string };
+
+/**
+ * Record the project's baseline once, from the stored workload, on the real lane.
+ * An existing baseline under the label is kept: the first one is the comparison point.
+ */
+export async function ensureBaseline(input: {
+  projectId: string; label?: string; now?: Date; limit?: number; sinceDays?: number;
+  env?: NodeJS.ProcessEnv; completer?: Completer;
+}): Promise<EnsureResult> {
+  const label = input.label ?? BASELINE_LABEL;
+  const existing = await readBaseline(input.projectId, label);
+  if (existing) return { status: 'EXISTS', ...existing };
+  const config = laneConfig(input.env ?? process.env);
+  if (!config) return { status: 'NOT_RECORDED', reason: 'the free cheap lane is not configured (BRAIN_CHEAP_LLM_URL unset), so no answer could be measured' };
+  const now = input.now ?? new Date();
+  const since = new Date(now.getTime() - (input.sinceDays ?? 30) * DAY).toISOString();
+  const stored = await unlistedFeedItems({ since, limit: Math.min(500, Math.max(1, input.limit ?? 100)) });
+  if (stored.length === 0) return { status: 'NOT_RECORDED', reason: `no stored feed items since ${since} to replay` };
+  const workload = workloadFromStored(label, stored, now);
+  const { id, readings } = await storeBaseline({ projectId: input.projectId, workload, now, config, completer: input.completer ?? httpCompleter });
+  return { status: 'RECORDED', id, readings };
+}
+
+/** The command: parse flags, ensure the baseline, print what happened. Returns the exit code. */
+export async function runBaselineCommand(argv: readonly string[], out: (line: string) => void, env: NodeJS.ProcessEnv = process.env): Promise<number> {
+  const flag = (name: string): string | undefined => {
+    const i = argv.indexOf(`--${name}`);
+    return i >= 0 ? argv[i + 1] : undefined;
+  };
+  const projectId = flag('project');
+  if (!projectId) { out('--project <id> is required'); return 2; }
+  const limit = flag('limit') ? Number(flag('limit')) : undefined;
+  const r = await ensureBaseline({ projectId, label: flag('label'), limit, env });
+  if (r.status === 'NOT_RECORDED') { out(`baseline NOT RECORDED: ${r.reason}`); return 1; }
+  out(`baseline ${r.status === 'EXISTS' ? 'already recorded' : 'recorded'}: ${r.id} (${r.readings.workload.items} items, digest ${r.readings.workload.digest})`);
+  out(JSON.stringify(r.readings));
+  return 0;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const { initDatabase, closeDatabase } = await import('../../../db/database.ts');
+  await initDatabase();
+  try { process.exitCode = await runBaselineCommand(process.argv.slice(2), (line) => process.stdout.write(`${line}\n`)); }
+  finally { await closeDatabase(); }
 }
