@@ -110,7 +110,14 @@ export interface MoneyEvent {
     | 'FUNDS_RECEIVED' // money reached the account
     | 'SUPPLIER_OUTLAY'
     | 'REFUND'
-    | 'CHARGEBACK';
+    | 'CHARGEBACK'
+    | 'BILLING_RELEASED' // agreed work that will no longer be billed (the append-only undo of a billing)
+    | 'SUPPLIER_LIABILITY' // a supplier outlay incurred and owed, not yet paid
+    | 'SUPPLIER_LIABILITY_CLOSED' // owed no longer: paid (the payment is its own SUPPLIER_OUTLAY) or released
+    | 'RESTRICTED' // money set aside: held, not usable
+    | 'RESTRICTION_RELEASED'
+    | 'CAPITAL_IN' // capital put in: never a billing, a receipt or revenue
+    | 'CAPITAL_OUT'; // capital taken out: never a supplier outlay
   amount: number;
   /** Who funded an outlay. Only meaningful for SUPPLIER_OUTLAY; unstated stays unknown. */
   fundedBy?: 'CUSTOMER' | 'SELF';
@@ -126,6 +133,8 @@ export interface RouteMoneyInput {
   events: MoneyEvent[];
   /** Cash identities, each stated by its own row or left undefined. Never derived from each other. */
   identities?: Partial<Record<CashIdentity, number>>;
+  /** Ledger kinds no mapping covers; each is reported as an unknown rather than dropped. */
+  unmappedKinds?: string[];
 }
 
 export const CASH_IDENTITIES = [
@@ -151,12 +160,27 @@ export interface RouteMoneyVelocity {
   daysCommitmentToFunds: number | null;
   daysFundsToUsableCash: number | null;
   supplierOutlays: { at: string; amount: number }[];
+  /** Supplier liabilities as incurred, dated: the timing of what is owed before it is paid. */
+  supplierLiabilities: { at: string; amount: number }[];
+  /** Incurred and not yet paid or released; null when no liability row exists. */
+  supplierLiabilitiesOutstanding: number | null;
+  /** Money set aside by a reserve row and not released; null when no reserve row exists. */
+  restrictedCash: number | null;
+  /** Received on an agreement since released and not yet refunded: refundable, never usable. */
+  owedBack: number;
+  /** Capital movements, kept apart from billings, receipts and outlays; null when no capital row exists. */
+  capitalIn: number | null;
+  capitalOut: number | null;
   refundsAndChargebacks: number | null;
   /** Billed but not yet received. */
   receivables: number | null;
   /** Largest cumulative cash shortfall while outlays and receipts overlap. */
   peakWorkingCapital: number | null;
-  /** Funds received minus what is still encumbered minus refunds, each dollar once; negative when refunds exceed receipts; null when no funds row exists. */
+  /**
+   * Funds received minus what is still encumbered (refundable or owed back), restricted, needed for
+   * outstanding supplier liabilities, and refunded — each dollar once; negative when those exceed
+   * receipts (a shortfall, not usable cash); null when no funds row exists.
+   */
   usableCash: number | null;
   excludedFromUsable: number;
   /** The nine identities: row-derived where rows state them (billings, settled, usable), else validated as stated, else null. */
@@ -183,6 +207,7 @@ function sum(xs: number[]): number {
 
 export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
   const unknowns: string[] = [];
+  for (const k of new Set(route.unmappedKinds ?? [])) unknowns.push(`ledger kind ${k} has no mapping, its rows are not counted`);
   const ev = route.events.filter((e) => Number.isFinite(e.amount) && e.amount >= 0 && ms(e.at) !== null);
   const of = (k: MoneyEvent['kind']) => ev.filter((e) => e.kind === k);
 
@@ -193,12 +218,38 @@ export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
   else if (unattributed.length > 0) unknowns.push('some supplier outlays do not say who funded them');
 
   const billings = of('BILLING');
+  const releasedBillings = of('BILLING_RELEASED');
   const funds = of('FUNDS_RECEIVED');
   const returned = [...of('REFUND'), ...of('CHARGEBACK')];
-  const billed = billings.length ? sum(billings.map((e) => e.amount)) : null;
+  const releasedTotal = sum(releasedBillings.map((e) => e.amount));
+  // A released agreement is billed no longer: billings are what was agreed less what was let go.
+  const billed = billings.length ? Math.max(0, sum(billings.map((e) => e.amount)) - releasedTotal) : null;
+  if (billings.length === 0 && releasedBillings.length > 0) unknowns.push('a billing release names no billing row, gross billings unknown');
   const received = funds.length ? sum(funds.map((e) => e.amount)) : null;
-  const encumbered = sum(funds.filter((e) => e.encumbered).map((e) => e.amount));
   const refunds = returned.length ? sum(returned.map((e) => e.amount)) : null;
+
+  // Money received on work since released is owed back to the buyer: refundable, so encumbered.
+  // Bounded by what was released, so an advance on live work is never mistaken for it.
+  const owedBack = billed !== null && received !== null && releasedTotal > 0 ? Math.min(releasedTotal, Math.max(0, received - billed)) : 0;
+  const encumbered = sum(funds.filter((e) => e.encumbered).map((e) => e.amount)) + owedBack;
+
+  // Supplier liabilities: incurred (dated, so their timing survives), closed when paid or released.
+  const liabilities = of('SUPPLIER_LIABILITY').sort((a, b) => ms(a.at)! - ms(b.at)!);
+  const closed = of('SUPPLIER_LIABILITY_CLOSED');
+  const outstanding = liabilities.length || closed.length ? Math.max(0, sum(liabilities.map((e) => e.amount)) - sum(closed.map((e) => e.amount))) : null;
+  if (liabilities.length === 0 && closed.length > 0) unknowns.push('a supplier liability is closed but no row incurred it');
+
+  // Restricted money: set aside by a reserve row until a release row frees it.
+  const restrictions = of('RESTRICTED');
+  const freed = of('RESTRICTION_RELEASED');
+  const restricted = restrictions.length || freed.length ? Math.max(0, sum(restrictions.map((e) => e.amount)) - sum(freed.map((e) => e.amount))) : null;
+
+  // Capital: kept apart from every operating figure. Whether capital in was borrowed, or capital out
+  // was an owner distribution, is something no ledger row states, so neither is assumed.
+  const capIn = of('CAPITAL_IN');
+  const capOut = of('CAPITAL_OUT');
+  const capitalIn = capIn.length ? sum(capIn.map((e) => e.amount)) : null;
+  const capitalOut = capOut.length ? sum(capOut.map((e) => e.amount)) : null;
 
   // Earliest receipt by parsed instant, never by string order: offsets and fractional-second
   // formats make ISO strings sort differently from the moments they name.
@@ -246,10 +297,17 @@ export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
   const refundTotal = refunds ?? 0;
   const refundedFromEncumbered = Math.min(refundTotal, encumbered);
   const stillEncumbered = encumbered - refundedFromEncumbered;
-  // Not clamped: refunds beyond what was received are a liability, and a negative figure says so.
-  const usable = received === null ? null : received - stillEncumbered - refundTotal;
+  const held = (restricted ?? 0) + (outstanding ?? 0);
+  // Not clamped: what must leave beyond what was received is a shortfall, and a negative figure says so.
+  const usable = received === null ? null : received - stillEncumbered - held - refundTotal;
   if (received === null) unknowns.push('no funds-received row, usable cash unknown');
-  else if (usable !== null && usable < 0) unknowns.push(`refunds and chargebacks exceed funds received by ${-usable}: a liability, not usable cash`);
+  else if (usable !== null && usable < 0) {
+    unknowns.push(
+      held > 0
+        ? `refunds, restricted money and supplier liabilities exceed funds received by ${-usable}: a shortfall, not usable cash`
+        : `refunds and chargebacks exceed funds received by ${-usable}: a liability, not usable cash`,
+    );
+  }
 
   const identities = {} as Record<CashIdentity, number | null>;
   // Only NET_PROFIT and GROSS_MARGIN can legitimately be negative; every other identity is a non-negative balance.
@@ -271,6 +329,20 @@ export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
     if (identities[k] !== null && identities[k] !== fromRows) unknowns.push(`${k.toLowerCase()} stated value disagrees with the rows, rows used`);
     identities[k] = fromRows;
   }
+  // Borrowed proceeds arrive only as capital in, and owner distributions leave only as capital out, so a
+  // stated figure larger than the route's own capital rows contradicts them. Rows bound; they never invent.
+  const bounds: [CashIdentity, number | null, string][] = [
+    ['BORROWED_PROCEEDS', capitalIn, 'capital-in'],
+    ['OWNER_DISTRIBUTIONS', capitalOut, 'capital-out'],
+  ];
+  for (const [k, rows, label] of bounds) {
+    if (rows === null) continue;
+    if (identities[k] !== null && identities[k]! > rows) {
+      unknowns.push(`${k.toLowerCase()} stated value exceeds the ${label} rows (${rows}), ignored`);
+      identities[k] = null;
+    }
+    if (identities[k] === null) unknowns.push(`${label} rows total ${rows}, but no row states how much of it is ${k.toLowerCase()}`);
+  }
   for (const k of CASH_IDENTITIES) if (identities[k] === null) unknowns.push(`${k.toLowerCase()} not stated`);
 
   return {
@@ -282,12 +354,18 @@ export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
     daysCommitmentToFunds: toFunds,
     daysFundsToUsableCash: toUsable,
     supplierOutlays: outlays.map((o) => ({ at: o.at, amount: o.amount })),
+    supplierLiabilities: liabilities.map((o) => ({ at: o.at, amount: o.amount })),
+    supplierLiabilitiesOutstanding: outstanding,
+    restrictedCash: restricted,
+    owedBack,
+    capitalIn,
+    capitalOut,
     refundsAndChargebacks: refunds,
     receivables,
     peakWorkingCapital: peak,
     usableCash: usable,
     // What leaves usable cash, each dollar once: usable cash plus this equals funds received.
-    excludedFromUsable: stillEncumbered + refundTotal,
+    excludedFromUsable: stillEncumbered + held + refundTotal,
     identities,
     unknowns,
   };
@@ -336,9 +414,17 @@ export function scoreRoutes(
  *  - PIPELINE_AGREED is a billing, and its earliest date the commitment;
  *  - CUSTOMER_PAYMENT is funds received; SETTLEMENT is the same money becoming
  *    usable, so it dates usable cash and is never counted as a second receipt;
- *  - COST and COMMITMENT_PAID are supplier outlays whose funder no row states
- *    (so spend stays unattributed rather than assumed self-funded);
+ *  - PIPELINE_RELEASED releases a billing, so billings and receivables fall;
+ *  - COST is a supplier outlay whose funder no row states (so spend stays
+ *    unattributed rather than assumed self-funded);
+ *  - UNPAID_COMMITMENT is a supplier liability, dated; COMMITMENT_PAID and
+ *    COMMITMENT_RELEASED close it. COMMITMENT_PAID is never an outlay: the
+ *    payment is written as its own COST row, and one dollar is spent once (§37);
+ *  - RESERVE restricts money and RESERVE_RELEASE frees it;
+ *  - CAPITAL_IN and CAPITAL_OUT are capital movements, kept apart from every
+ *    operating figure;
  *  - REFUND is a refund. Lead time has no ledger row and stays unknown.
+ * Every kind is mapped: an unmapped kind is a refusal, never a silent drop.
  * Entries with no opportunity belong to no route and are left out.
  */
 export function routeInputsFromEntries(entries: readonly CashMoneyEntry[]): RouteMoneyInput[] {
@@ -354,6 +440,7 @@ export function routeInputsFromEntries(entries: readonly CashMoneyEntry[]): Rout
     const events: MoneyEvent[] = [];
     const agreed: string[] = [];
     const settled: string[] = [];
+    const unmapped: string[] = [];
     for (const e of rows) {
       const amount = e.amountCents / 100;
       switch (e.kind) {
@@ -367,15 +454,40 @@ export function routeInputsFromEntries(entries: readonly CashMoneyEntry[]): Rout
         case 'SETTLEMENT':
           settled.push(e.fundsAvailableAt ?? e.occurredAt);
           break;
+        case 'PIPELINE_RELEASED':
+          events.push({ at: e.occurredAt, kind: 'BILLING_RELEASED', amount });
+          break;
         case 'COST':
-        case 'COMMITMENT_PAID':
           events.push({ at: e.occurredAt, kind: 'SUPPLIER_OUTLAY', amount });
+          break;
+        case 'UNPAID_COMMITMENT':
+          events.push({ at: e.occurredAt, kind: 'SUPPLIER_LIABILITY', amount });
+          break;
+        case 'COMMITMENT_PAID':
+        case 'COMMITMENT_RELEASED':
+          events.push({ at: e.occurredAt, kind: 'SUPPLIER_LIABILITY_CLOSED', amount });
+          break;
+        case 'RESERVE':
+          events.push({ at: e.occurredAt, kind: 'RESTRICTED', amount });
+          break;
+        case 'RESERVE_RELEASE':
+          events.push({ at: e.occurredAt, kind: 'RESTRICTION_RELEASED', amount });
+          break;
+        case 'CAPITAL_IN':
+          events.push({ at: e.occurredAt, kind: 'CAPITAL_IN', amount });
+          break;
+        case 'CAPITAL_OUT':
+          events.push({ at: e.occurredAt, kind: 'CAPITAL_OUT', amount });
           break;
         case 'REFUND':
           events.push({ at: e.occurredAt, kind: 'REFUND', amount });
           break;
-        default:
-          break;
+        default: {
+          // Exhaustive over CASH_MONEY_KINDS: a new ledger kind fails typecheck here until it is mapped,
+          // and a row whose kind the type does not know is reported as an unknown, never dropped silently.
+          const kind: never = e.kind;
+          unmapped.push(String(kind));
+        }
       }
     }
     inputs.push({
@@ -383,6 +495,7 @@ export function routeInputsFromEntries(entries: readonly CashMoneyEntry[]): Rout
       commitmentAt: agreed.sort()[0],
       usableCashAt: settled.sort()[0],
       events,
+      ...(unmapped.length ? { unmappedKinds: unmapped } : {}),
     });
   }
   return inputs;
