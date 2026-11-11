@@ -246,16 +246,130 @@ const CONSTRUCTED_BUCKET_LIKE = 'goal-%-mx-%';
 
 const LANE = `event_type = 'FREE_LANE_ITEM' AND at >= ? AND at < ?`;
 
-/**
- * The spans of the window during which a lane item was running, merged so that
- * overlapping items count once. An item's event is recorded when it ends, so it
- * spans `duration_ms` back from `at`; an event with no duration is a point.
- * Shared by two measures that report different facts about the same spans.
+/*
+ * Research and factory work runs on two paths, and every system-wide figure
+ * reads both (§85, §98). The free lane drains work items itself and writes one
+ * `FREE_LANE_ITEM` per item. Everything else is a bin dispatched to a worker:
+ * `DISPATCH_SENT` when Brain fires a provider, `BIN_ASSIGNED` when a worker
+ * takes the bin, a lease that runs until `BIN_TERMINAL`, `BIN_RELEASED`,
+ * `BIN_LEASE_EXPIRED` or a `BIN_TAKEOVER`, and a no-show row when a fired
+ * provider never produced a session. Counting only the first path described
+ * one lane while the labels said "the system".
  */
-async function laneBusyIntervals(
+
+/** A bin handed to a worker in the window: one dispatched job begun. Aliased `a`. */
+const BIN_JOB = `a.event_type = 'BIN_ASSIGNED' AND a.at >= ? AND a.at < ?`;
+
+/**
+ * Who ran a bin job. An assignment carries no provider of its own; the fire
+ * that started it does, so it is the latest `DISPATCH_SENT` for that bin at or
+ * before the event. A worker that arrived with no fire has no provider on
+ * record and reads `(none)`, never a guessed one.
+ */
+const BIN_PROVIDER = `COALESCE(a.provider,
+  (SELECT d.provider FROM bin_events d
+    WHERE d.event_type = 'DISPATCH_SENT' AND d.bin_id = a.bin_id AND d.at <= a.at
+    ORDER BY d.at DESC LIMIT 1),
+  '(none)')`;
+
+/** A fire whose provider never produced a session — the surface's failure, not Brain's (`DISPATCH_NO_SHOW`). */
+const PROVIDER_NO_SHOW = `a.event_type = 'DISPATCH_NO_SHOW' AND a.at >= ? AND a.at < ?`;
+
+/** Fired jobs no session ever took up, for any reason: provider, connector or Brain's own outage. */
+const UNSTARTED = `event_type IN ('DISPATCH_NO_SHOW', 'DISPATCH_AUTH_NO_SHOW', 'DISPATCH_INFRA_NO_SHOW') AND at >= ? AND at < ?`;
+
+/** Attempts that reached a provider: free-lane items plus fires Brain sent. The denominator of provider failure and quota. */
+async function providerAttempts(since: string, until: string): Promise<number> {
+  return (
+    (await one(`SELECT COUNT(*) AS n FROM bin_events WHERE ${LANE}`, [since, until])) +
+    (await one(`SELECT COUNT(*) AS n FROM bin_events WHERE event_type = 'DISPATCH_SENT' AND at >= ? AND at < ?`, [since, until]))
+  );
+}
+
+/** How far back a lease that is still open at the window's start is looked for. */
+const LEASE_LOOKBACK_MS = 24 * 3_600_000;
+const LEASE_OPEN = new Set(['BIN_ASSIGNED', 'BIN_TAKEOVER']);
+const LEASE_CLOSE = new Set(['BIN_TERMINAL', 'BIN_RELEASED', 'BIN_LEASE_EXPIRED']);
+
+/**
+ * The spans during which a worker held a bin's lease, clipped to the window.
+ *
+ * Read from the bin's own events in order: an assignment or takeover opens a
+ * lease, and a terminal, release, expiry or the next takeover closes it. A
+ * lease still open at the end of the rows ends at the window's end when the
+ * bin is LEASED at that generation now, and otherwise at its last heartbeat or
+ * checkpoint, because nothing says it ran past that. A close with no open
+ * before it in the rows spans its recorded duration back, or is a point.
+ */
+async function binLeaseSpans(startMs: number, endMs: number, until: string): Promise<{ spans: Array<[number, number]>; leases: number }> {
+  const lookback = new Date(startMs - LEASE_LOOKBACK_MS).toISOString();
+  const rows = await getDb().all<{ bin_id: string; event_type: string; at: string; lease_generation: number | string | null; duration_ms: number | string | null }>(
+    `SELECT bin_id, event_type, at, lease_generation, duration_ms FROM bin_events
+      WHERE bin_id IS NOT NULL AND at >= ? AND at < ?
+        AND event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER', 'BIN_TERMINAL', 'BIN_RELEASED', 'BIN_LEASE_EXPIRED')
+      ORDER BY bin_id, at LIMIT 50000`,
+    [lookback, until],
+  );
+  const seen = await getDb().all<{ bin_id: string; lease_generation: number | string | null; last: string }>(
+    `SELECT bin_id, lease_generation, MAX(at) AS last FROM bin_events
+      WHERE bin_id IS NOT NULL AND at >= ? AND at < ? AND event_type IN ('BIN_HEARTBEAT', 'BIN_CHECKPOINT')
+      GROUP BY bin_id, lease_generation`,
+    [lookback, until],
+  );
+  const lastSeen = new Map(seen.map((row) => [`${row.bin_id}#${n(row.lease_generation)}`, Date.parse(row.last)]));
+  const held = await getDb().all<{ id: string; lease_generation: number | string }>(`SELECT id, lease_generation FROM bins WHERE state = 'LEASED'`, []);
+  const leasedNow = new Set(held.map((row) => `${row.id}#${n(row.lease_generation)}`));
+
+  const spans: Array<[number, number]> = [];
+  let leases = 0;
+  const push = (a: number, b: number) => {
+    const from = Math.max(startMs, a);
+    const to = Math.min(endMs, b);
+    if (b >= startMs && a <= endMs && to >= from) {
+      spans.push([from, to]);
+      leases += 1;
+    }
+  };
+  let bin: string | null = null;
+  let open: { at: number; generation: number } | null = null;
+  const closeOpen = () => {
+    if (!open || bin === null) return;
+    const key = `${bin}#${open.generation}`;
+    const stop = leasedNow.has(key) ? endMs : Math.max(open.at, lastSeen.get(key) ?? open.at);
+    push(open.at, stop);
+    open = null;
+  };
+  for (const row of rows) {
+    if (row.bin_id !== bin) {
+      closeOpen();
+      bin = row.bin_id;
+    }
+    const at = Date.parse(row.at);
+    if (!Number.isFinite(at)) continue;
+    if (LEASE_OPEN.has(row.event_type)) {
+      if (open) push(open.at, at);
+      open = { at, generation: n(row.lease_generation) };
+    } else if (LEASE_CLOSE.has(row.event_type)) {
+      if (open) push(open.at, at);
+      else if (at >= startMs) push(at - Math.max(0, n(row.duration_ms)), at);
+      open = null;
+    }
+  }
+  closeOpen();
+  return { spans, leases };
+}
+
+/**
+ * The spans of the window during which any work was running — a free-lane item
+ * or a bin a worker held — merged so that overlapping work counts once. A lane
+ * item's event is recorded when it ends, so it spans `duration_ms` back from
+ * `at`; an event with no duration is a point. Shared by two measures that
+ * report different facts about the same spans.
+ */
+async function workBusyIntervals(
   since: string,
   until: string,
-): Promise<{ merged: Array<[number, number]>; windowMs: number; startMs: number; endMs: number; items: number }> {
+): Promise<{ merged: Array<[number, number]>; windowMs: number; startMs: number; endMs: number; items: number; leases: number }> {
   const startMs = Date.parse(since);
   const endMs = Date.parse(until);
   const rows = await getDb().all<{ at: string; duration_ms: number | string | null }>(
@@ -271,6 +385,8 @@ async function laneBusyIntervals(
     const b = Math.min(endMs, stop);
     if (b >= a) spans.push([a, b]);
   }
+  const bins = await binLeaseSpans(startMs, endMs, until);
+  spans.push(...bins.spans);
   spans.sort((x, y) => x[0] - y[0]);
   const merged: Array<[number, number]> = [];
   for (const span of spans) {
@@ -278,31 +394,57 @@ async function laneBusyIntervals(
     if (last && span[0] <= last[1]) last[1] = Math.max(last[1], span[1]);
     else merged.push([span[0], span[1]]);
   }
-  return { merged, windowMs: Math.max(0, endMs - startMs), startMs, endMs, items: rows.length };
+  return { merged, windowMs: Math.max(0, endMs - startMs), startMs, endMs, items: rows.length, leases: bins.leases };
 }
 
 const MEASURES: readonly Measure[] = [
   {
     measure: 'jobs',
-    label: 'research jobs submitted, by provider and purpose',
-    denominatorIs: 'research jobs the lane attempted (submitted or failed)',
+    label: 'research jobs submitted, by provider and purpose (free lane and dispatched bins)',
+    denominatorIs: 'research jobs attempted: free-lane items (submitted or failed), bins handed to a worker, and fired bins no session took up',
     read: async (since, until) => {
-      const rows = await getDb().all<{ provider: string | null; purpose: string | null; outcome: string | null; c: number | string }>(
+      const lane = await getDb().all<{ provider: string | null; purpose: string | null; outcome: string | null; c: number | string }>(
         `SELECT provider, workload_class AS purpose, outcome, COUNT(*) AS c FROM bin_events
           WHERE ${LANE} GROUP BY provider, workload_class, outcome`,
         [since, until],
       );
+      const dispatched = await getDb().all<{ provider: string | null; purpose: string | null; c: number | string }>(
+        `SELECT provider, purpose, COUNT(*) AS c FROM (
+           SELECT ${BIN_PROVIDER} AS provider, COALESCE(a.workload_class, b.kind) AS purpose
+             FROM bin_events a LEFT JOIN bins b ON b.id = a.bin_id
+            WHERE ${BIN_JOB}
+         ) jobs GROUP BY provider, purpose`,
+        [since, until],
+      );
+      const unstarted = await one(`SELECT COUNT(*) AS n FROM bin_events WHERE ${UNSTARTED}`, [since, until]);
       const groups = new Map<string, number>();
+      const add = (provider: string | null, purpose: string | null, count: number) => {
+        const key = `${provider ?? '(none)'} / ${purpose ?? '(none)'}`;
+        groups.set(key, (groups.get(key) ?? 0) + count);
+      };
       let submitted = 0;
-      let total = 0;
-      for (const row of rows) {
+      let total = unstarted;
+      let laneItems = 0;
+      let binJobs = 0;
+      for (const row of lane) {
         total += n(row.c);
         if (row.outcome !== 'SUBMITTED') continue;
         submitted += n(row.c);
-        const key = `${row.provider ?? '(none)'} / ${row.purpose ?? '(none)'}`;
-        groups.set(key, (groups.get(key) ?? 0) + n(row.c));
+        laneItems += n(row.c);
+        add(row.provider, row.purpose, n(row.c));
       }
-      return { numerator: submitted, denominator: total, groups: [...groups].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count) };
+      for (const row of dispatched) {
+        total += n(row.c);
+        submitted += n(row.c);
+        binJobs += n(row.c);
+        add(row.provider, row.purpose, n(row.c));
+      }
+      return {
+        numerator: submitted,
+        denominator: total,
+        groups: [...groups].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count || a.key.localeCompare(b.key)),
+        note: `${laneItems} free-lane item(s) submitted and ${binJobs} bin job(s) handed to a worker; ${unstarted} fired bin(s) no session took up count in the denominator only. A job count is not a count of useful claims (see usefulClaims) or of actionable findings (see actionableOpenings)`,
+      };
     },
   },
   {
@@ -493,15 +635,15 @@ const MEASURES: readonly Measure[] = [
   },
   {
     measure: 'utilization',
-    label: 'utilization: share of the window with lane work running',
+    label: 'utilization: share of the window with work running (free lane or a bin a worker held)',
     denominatorIs: 'milliseconds in the window',
     read: async (since, until) => {
-      const { merged, windowMs, items } = await laneBusyIntervals(since, until);
+      const { merged, windowMs, items, leases } = await workBusyIntervals(since, until);
       const busyMs = merged.reduce((sum, [a, b]) => sum + (b - a), 0);
       return {
         numerator: busyMs,
         denominator: windowMs,
-        note: `wall-clock covered by at least one lane item (each item spans its recorded duration back from its event, overlaps counted once), over ${items} item(s); work that began before the window and ended inside it counts only the part inside`,
+        note: `wall-clock covered by at least one free-lane item or held bin lease (a lane item spans its recorded duration back from its event, a lease spans assignment to its close; overlaps counted once), over ${items} lane item(s) and ${leases} lease(s); work that began before the window counts only the part inside`,
       };
     },
   },
@@ -510,10 +652,10 @@ const MEASURES: readonly Measure[] = [
     // capacity left idle in one piece. Busy coverage and longest gap are not complements: a window can be half
     // covered by many short gaps or by one long one, and only the second leaves a block of capacity unused.
     measure: 'idleTime',
-    label: 'idle time: the longest unbroken stretch of the window with no lane work',
+    label: 'idle time: the longest unbroken stretch of the window with no work running anywhere',
     denominatorIs: 'milliseconds in the window',
     read: async (since, until) => {
-      const { merged, windowMs, startMs, endMs, items } = await laneBusyIntervals(since, until);
+      const { merged, windowMs, startMs, endMs, items, leases } = await workBusyIntervals(since, until);
       let longest = 0;
       let cursor = startMs;
       for (const [a, b] of merged) {
@@ -521,7 +663,7 @@ const MEASURES: readonly Measure[] = [
         cursor = Math.max(cursor, b);
       }
       longest = Math.max(longest, endMs - cursor);
-      return { numerator: longest, denominator: windowMs, note: `gaps between merged lane items and at both edges of the window, over ${items} item(s)` };
+      return { numerator: longest, denominator: windowMs, note: `gaps between merged work spans and at both edges of the window, over ${items} lane item(s) and ${leases} lease(s)` };
     },
   },
   {
@@ -535,24 +677,34 @@ const MEASURES: readonly Measure[] = [
   },
   {
     measure: 'providerFailure',
-    label: 'provider failures: lane jobs whose model call failed',
-    denominatorIs: 'research jobs the lane attempted',
-    read: async (since, until) => ({
-      numerator: await one(`SELECT COUNT(*) AS n FROM bin_events WHERE ${LANE} AND reason LIKE '%model call failed%'`, [since, until]),
-      denominator: await one(`SELECT COUNT(*) AS n FROM bin_events WHERE ${LANE}`, [since, until]),
-      groups: await grouped(
+    label: 'provider failures: free-lane model calls that failed, and fired bins whose provider never produced a session',
+    denominatorIs: 'attempts that reached a provider: free-lane items plus bin dispatches sent',
+    read: async (since, until) => {
+      const laneFailed = await grouped(
         `SELECT COALESCE(provider, '(none)') AS k, COUNT(*) AS n FROM bin_events WHERE ${LANE} AND reason LIKE '%model call failed%' GROUP BY k`,
         [since, until],
-      ),
-    }),
+      );
+      const noShows = await grouped(
+        `SELECT k, COUNT(*) AS n FROM (SELECT ${BIN_PROVIDER} AS k FROM bin_events a WHERE ${PROVIDER_NO_SHOW}) f GROUP BY k`,
+        [since, until],
+      );
+      const groups = new Map<string, number>();
+      for (const g of [...laneFailed, ...noShows]) groups.set(g.key, (groups.get(g.key) ?? 0) + g.count);
+      return {
+        numerator: [...groups.values()].reduce((sum, c) => sum + c, 0),
+        denominator: await providerAttempts(since, until),
+        groups: [...groups].map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count || a.key.localeCompare(b.key)),
+        note: "a no-show charged to the connector's authentication or to Brain's own outage is not the provider's and is not counted",
+      };
+    },
   },
   {
     measure: 'providerQuota',
     label: 'provider quota pauses begun',
-    denominatorIs: 'research jobs the lane attempted',
+    denominatorIs: 'attempts that reached a provider: free-lane items plus bin dispatches sent',
     read: async (since, until) => ({
       numerator: await one(`SELECT COUNT(*) AS n FROM quota_pauses WHERE paused_at >= ? AND paused_at < ?`, [since, until]),
-      denominator: await one(`SELECT COUNT(*) AS n FROM bin_events WHERE ${LANE}`, [since, until]),
+      denominator: await providerAttempts(since, until),
       groups: await grouped(`SELECT provider AS k, COUNT(*) AS n FROM quota_pauses WHERE paused_at >= ? AND paused_at < ? GROUP BY provider`, [since, until]),
     }),
   },
@@ -745,7 +897,7 @@ export async function capacityChangeGate(
         ...base,
         allowed: false,
         code: 'CAPACITY_IDLE',
-        reason: `${proposal.resource} upgrade refused: in the last hour the lane sat idle for ${Math.round((idle.numerator ?? 0) / 60_000)} min in one piece (of ${Math.round((idle.denominator ?? 0) / 60_000)} min), so the capacity it has is not saturated`,
+        reason: `${proposal.resource} upgrade refused: in the last hour nothing ran anywhere for ${Math.round((idle.numerator ?? 0) / 60_000)} min in one piece (of ${Math.round((idle.denominator ?? 0) / 60_000)} min), so the capacity it has is not saturated`,
       };
     }
   }
