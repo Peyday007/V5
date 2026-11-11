@@ -396,7 +396,7 @@ describe('two objectives that would edit the same files are not run at once', ()
     expect((await admitQueued()).admitted.map((one) => one.changeRequestId)).toEqual([clash.id]);
   });
 
-  it('holds it while the owning campaign is BLOCKED, because a blocked campaign still owns its units', async () => {
+  it('admits it when the owning campaign is BLOCKED on a person, which holds nothing (as at the unit level)', async () => {
     const first = await objective('owner', true, ['server/services/owned/**']);
     const clash = await objective('waiter', true, ['server/services/owned/**']);
     await queueObjective({ changeRequestId: first.id, userId: adminId, priority: 1 });
@@ -409,6 +409,20 @@ describe('two objectives that would edit the same files are not run at once', ()
       blockerKind: 'UNIT_EXHAUSTED_ATTEMPTS',
       blockerDetail: 'waiting',
     });
+    // Production 2026-11-11: five Release 01 objectives waited days behind two
+    // campaigns parked for a person; the unit-level check already let such work run.
+    expect((await admitQueued()).admitted.map((one) => one.changeRequestId)).toEqual([clash.id]);
+  });
+
+  it('still holds it while the owning campaign is BLOCKED on something that resolves by itself', async () => {
+    const first = await objective('owner2', true, ['server/services/owned2/**']);
+    const clash = await objective('waiter2', true, ['server/services/owned2/**']);
+    await queueObjective({ changeRequestId: first.id, userId: adminId, priority: 1 });
+    await setAdmissionPolicy({ maxActive: 2, actor: 'test', reason: 'two' });
+    const started = (await admitQueued()).admitted[0]!;
+    await unit(started.campaignId, 'owned2', ['server/services/owned2/a.ts'], 'IMPLEMENTED');
+    await queueObjective({ changeRequestId: clash.id, userId: adminId, priority: 2 });
+    await patchCampaign(started.campaignId, { state: 'BLOCKED', blockerKind: 'STALE_BASE', blockerDetail: 'rebasing' });
     expect((await admitQueued()).admitted).toHaveLength(0);
   });
 });

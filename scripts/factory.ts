@@ -1854,7 +1854,9 @@ async function main(): Promise<void> {
 
     case 'capacity': {
       const { readCapacity } = await import('../server/services/factory/program/capacity.ts');
-      const reading = await readCapacity({ sinceHours: Number(flagString(flags, 'hours') ?? '168') });
+      // `--ago N` reads the same window ending N hours ago: the previous day, for a comparison.
+      const ago = Number(flagString(flags, 'ago') ?? '0');
+      const reading = await readCapacity({ sinceHours: Number(flagString(flags, 'hours') ?? '168'), now: new Date(Date.now() - ago * 3_600_000) });
       process.stdout.write(`${JSON.stringify(reading, null, 2)}\n`);
       process.stdout.write(`CAPACITY-BOTTLENECK: ${reading.bottleneck}\n`);
       break;
