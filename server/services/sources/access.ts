@@ -41,7 +41,13 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { browserMcpUrl, renderInBrowser } from './browserMcp.ts';
 import { connectorFor } from './connectors.ts';
 import { searchSuccessor } from './discover.ts';
-import { recordAcquisitionJudgment, REPEATED_USE_WINDOW_MS, type AcquisitionEvidence } from './acquisition.ts';
+import { recordAcquisitionJudgment, REPEATED_USE_WINDOW_MS, type AcquisitionEvidence, type SourceDiscovery } from './acquisition.ts';
+
+/** What the read hands its recorder beyond the read itself. */
+export interface RecordOptions {
+  /** The discovery a SEARCH_FIRST judgment starts; null means the read may not search. */
+  discover?: ((host: string, purpose: string) => Promise<SourceDiscovery | null>) | null;
+}
 import { activeRoutine, routinesFrom, type Routine, type RoutineUse } from './routines.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, type AccessEvidence } from './accessMethods.ts';
 import { checkDestination, fetchForWorker, systemResolver, type Resolver, type SourceFetch } from './fetchForWorker.ts';
@@ -91,7 +97,13 @@ export interface AccessDeps {
   learned?: (host: string) => Promise<AccessMethod | null>;
   /** The routine a CONNECTOR_PROPOSED row built for this host (`routines.ts`); defaults to the recorded rows. */
   routine?: (host: string) => Promise<Routine | null>;
-  record?: (read: SourceRead, caller: string, ms: number) => Promise<void>;
+  record?: (read: SourceRead, caller: string, ms: number, opts?: RecordOptions) => Promise<void>;
+  /**
+   * Source discovery a SEARCH_FIRST judgment starts. Defaults to the keyless search,
+   * except when `direct` is injected (a test, a comparison), where it defaults to none,
+   * exactly as `search` does: an injected reader never reaches the live web behind it.
+   */
+  discover?: ((host: string, purpose: string) => Promise<SourceDiscovery | null>) | null;
   /** Which part of Brain asked, for the event. */
   caller?: string;
 }
@@ -557,6 +569,8 @@ export function acquisitionEvidenceOfRead(
     interactiveInterfaceOnly: evidence.interfaceOnly === true,
     blockedAtBoundary: boundary !== null && boundary !== 'PAYMENT' && boundary !== 'LEGAL',
     requiresLicence: boundary === 'PAYMENT' || boundary === 'LEGAL',
+    // The boundary itself, so a handoff names the route for the boundary that was met (a 403 is not a login).
+    ...(boundary ? { boundary } : {}),
   };
 }
 
@@ -605,15 +619,20 @@ async function judgeReadAsAcquisition(
   boundary: AccessEvidence['boundary'] | null,
   evidence: AccessEvidence,
   caller: string,
+  opts: RecordOptions = {},
 ): Promise<void> {
   await recordAcquisitionJudgment(
     { kind: 'ACQUIRE', purpose: `read ${read.requestedUrl}`, host },
     acquisitionEvidenceOfRead(read, boundary, evidence),
-    { caller },
+    {
+      caller,
+      detachDiscovery: true,
+      ...(opts.discover === null ? { discover: async () => null } : opts.discover ? { discover: opts.discover } : {}),
+    },
   );
 }
 
-async function defaultRecord(read: SourceRead, caller: string, ms: number): Promise<void> {
+async function defaultRecord(read: SourceRead, caller: string, ms: number, opts: RecordOptions = {}): Promise<void> {
   const host = hostOf(read.requestedUrl);
   const used = classOfRoute(read.method);
   const boundary = boundaryOfRead({
@@ -664,7 +683,7 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
   // Reading a public source is the ACQUIRE capability: ask the acquisition judgment what
   // this read's own evidence supports (existing bulk sources first, a connector when the
   // host's SOURCE_ACCESS history justifies one) and record it beside the access row.
-  await judgeReadAsAcquisition(read, host, boundary ?? null, evidence, caller).catch(() => undefined);
+  await judgeReadAsAcquisition(read, host, boundary ?? null, evidence, caller, opts).catch(() => undefined);
   // Driving a site's interface is the other capability: record its own judgment, never folded into the ACQUIRE row.
   await judgeReadAsOperation(read, host, boundary ?? null, evidence, caller).catch(() => undefined);
 }
@@ -731,7 +750,8 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
         }
       : read;
     const out: SourceRead = { ...honest, method, attempts, ...(routineUsed ? { routine: routineUsed } : {}), ...(terms.robotsDisallows || attempts.some((a) => a.status === 429) ? { terms: { ...terms, ...(attempts.some((a) => a.status === 429) ? { rateLimited: true } : {}) } } : {}) };
-    await record(out, deps.caller ?? 'unknown', Date.now() - started).catch(() => undefined);
+    const discover = deps.discover !== undefined ? deps.discover : deps.direct ? null : undefined;
+    await record(out, deps.caller ?? 'unknown', Date.now() - started, discover === undefined ? {} : { discover }).catch(() => undefined);
     return out;
   };
 

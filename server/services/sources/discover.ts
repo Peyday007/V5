@@ -132,14 +132,25 @@ export function isSearchAnomaly(status: number, html: string): boolean {
  * the caller's other candidates still run.
  */
 export async function webSearch(query: string, deps: SearchDeps = {}): Promise<string[]> {
+  return (await searchWithOutcome(query, deps)).urls;
+}
+
+/**
+ * The same search, saying whether it was actually made. A query skipped because
+ * the queue was full or both endpoints were paused, or refused with an anomaly
+ * page, returns no URLs exactly as an answered search with no results does, and
+ * the difference matters to a caller that records "searched, nothing found":
+ * a search nobody made is not evidence that nothing exists (invariant 39).
+ */
+export async function searchWithOutcome(query: string, deps: SearchDeps = {}): Promise<{ urls: string[]; searched: boolean }> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const now = deps.nowMs ?? Date.now;
   const q = query.replace(/\s+/g, ' ').trim().slice(0, 240);
-  if (!q) return [];
+  if (!q) return { urls: [], searched: false };
   const known = remembered.get(q);
   if (known && now() - known.at < RESULT_TTL_MS) {
     searchStats.cached += 1;
-    return known.urls;
+    return { urls: known.urls, searched: true };
   }
   const open = (): (typeof ENDPOINTS)[number] | null => {
     for (let i = 0; i < ENDPOINTS.length; i += 1) {
@@ -150,10 +161,10 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
   };
   if (!open() || waiting >= MAX_WAITERS || (deps.priority === 'LOW' && waiting >= MAX_LOW_WAITERS)) {
     searchStats.skipped += 1;
-    return [];
+    return { urls: [], searched: false };
   }
   waiting += 1;
-  const run = chain.then(async () => {
+  const run = chain.then(async (): Promise<{ urls: string[]; searched: boolean }> => {
     const wait = lastAt + spacingMs - now();
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(wait, spacingMs)));
     for (let tries = 0; tries < ENDPOINTS.length; tries += 1) {
@@ -183,13 +194,13 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
         else searchStats.empty += 1;
         remembered.set(q, { at: now(), urls });
         if (remembered.size > 2000) remembered.clear();
-        return urls;
+        return { urls, searched: true };
       } catch {
         searchStats.empty += 1;
-        return [];
+        return { urls: [], searched: false };
       }
     }
-    return [];
+    return { urls: [], searched: false };
   });
   chain = run.catch(() => undefined);
   try {

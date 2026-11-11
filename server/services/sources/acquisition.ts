@@ -24,6 +24,7 @@ import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { ACCESS_METHODS } from './access.ts';
 import { METHOD_CLASSES, selectAccessMethod, type AccessEvidence, type MethodClass } from './accessMethods.ts';
+import { searchWithOutcome } from './discover.ts';
 
 export const ACQUISITION_CAPABILITIES = ['OPERATE', 'ACQUIRE'] as const;
 export type AcquisitionCapability = (typeof ACQUISITION_CAPABILITIES)[number];
@@ -102,6 +103,8 @@ export interface AcquisitionJudgment {
   boundaries: AcquisitionBoundary[];
   /** A stable recurring model-assisted pattern should become a tested script (from the one selector). */
   convertToScript: boolean;
+  /** For HUMAN_HANDOFF: the permitted route a person is asked to provide, named by the one selector. */
+  handoff: string | null;
 }
 
 /**
@@ -130,6 +133,7 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
     bespokeCrawlerMayBeProposed: false,
     boundaries,
     convertToScript: false,
+    handoff: null,
   });
 
   // Boundaries first: neither capability authorizes any of these.
@@ -161,6 +165,7 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
       bespokeCrawlerMayBeProposed: false,
       boundaries: [],
       convertToScript: false,
+      handoff: null,
     };
   }
 
@@ -183,7 +188,10 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
     else if (operate && !evidence.authorizedAccountOnRecord) boundaries.push('NO_AUTHORIZED_ACCOUNT');
   }
   const handoff = route === 'HUMAN_HANDOFF';
-  const bespoke = !operate && (route === 'HTTP' || route === 'BROWSER' || route === 'MODEL_ASSISTED');
+  // A bespoke crawler is proposable only once the search for existing corpora, exports and catalogs
+  // has actually run and found nothing that serves; a route that merely is bespoke is not that.
+  const bespoke =
+    !operate && (route === 'HTTP' || route === 'BROWSER' || route === 'MODEL_ASSISTED') && Boolean(evidence.bulkSearchDone) && existing.length === 0;
   const repeat =
     operate && (route === 'BROWSER' || route === 'MODEL_ASSISTED')
       ? justified
@@ -199,8 +207,12 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
     bespokeCrawlerMayBeProposed: bespoke,
     boundaries,
     convertToScript: handoff ? false : selection.convertToScript,
+    handoff: handoff ? (operate && boundaries.includes('NO_AUTHORIZED_ACCOUNT') ? NO_ACCOUNT_HANDOFF : selection.handoff) : null,
   };
 }
+
+/** The permitted route for an operation nobody has granted an account for: a person's grant, made at the terminal. */
+const NO_ACCOUNT_HANDOFF = 'a person to grant an account Brain may operate under (operatePermissionCli.ts grant --host H --account REF --by NAME)';
 
 /** Repetition is only evidence inside a recent window; older reads say nothing about today's work. */
 export const REPEATED_USE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
@@ -387,6 +399,274 @@ export async function recordOperatePermission(
     : { ...NO_PERMISSION, grantedBy: input.grantedBy.trim() };
 }
 
+/* ------------------------------------------------------------------------- */
+/* The consumers of a judgment: discovery before a crawler, a handoff a person sees */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * SEARCH_FIRST is an instruction, and this is the step it starts: source
+ * discovery for existing corpora, bulk exports, catalogs, feeds and sitemaps on
+ * the host, through the one keyless search `discover.ts` already owns. Its
+ * result is a `SOURCE_DISCOVERY` bin event, and the next judgment for the host
+ * reads it back (`discoveryFromRows`): the search is done, and what it found is
+ * the host's existing bulk sources. So the judgment that said "search first"
+ * is answered by a row, and only after that row says nothing was found may a
+ * bespoke crawler be proposed.
+ *
+ * A search that was never made (queue full, endpoint paused or refusing) is not
+ * recorded: "nobody looked" is not "nothing exists" (invariant 39), so the host
+ * stays SEARCH_FIRST and the next read asks again.
+ */
+export const SOURCE_DISCOVERY_EVENT = 'SOURCE_DISCOVERY';
+
+/** The query that looks for what already exists on a host before anything is built to read it. Pure. */
+export function discoveryQuery(host: string): string {
+  return `site:${host.toLowerCase().replace(/^www\./, '')} (dataset OR "bulk download" OR export OR catalog OR sitemap OR feed OR api OR "open data")`;
+}
+
+/**
+ * Whether a discovered URL is shaped like an existing corpus, export, feed,
+ * catalog or index rather than one more page. Pure. Judged from the address
+ * alone, because that is all a search result is; no host or category is listed.
+ */
+export function bulkShaped(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const path = u.pathname.toLowerCase();
+  if (/\.(csv|tsv|json|jsonl|ndjson|xml|rss|atom|zip|gz|tgz|parquet|xlsx?)$/.test(path)) return true;
+  return /(^|[/._-])(sitemap|feeds?|rss|atom|datasets?|data|downloads?|bulk|exports?|catalog(ue)?|archives?|api|opendata|open-data)([/._-]|$)/.test(path);
+}
+
+export interface SourceDiscovery {
+  /** The search was actually made and answered. */
+  searched: boolean;
+  /** Every same-site candidate the search returned. */
+  candidates: string[];
+  /** Those shaped like an existing corpus, export, feed or catalog. */
+  bulk: string[];
+  at: string | null;
+}
+
+/** The newest discovery for a host inside the window, from SOURCE_DISCOVERY rows. Pure; null when none is on record. */
+export function discoveryFromRows(
+  rows: { measures: string | null; at?: string | null }[],
+  host: string,
+  opts: { now?: number; windowMs?: number } = {},
+): SourceDiscovery | null {
+  const want = host.toLowerCase();
+  const now = opts.now ?? Date.now();
+  const since = now - (opts.windowMs ?? REPEATED_USE_WINDOW_MS);
+  let best: { t: number; d: SourceDiscovery } | null = null;
+  for (const row of rows) {
+    const t = row.at ? Date.parse(row.at) : Number.NaN;
+    if (!Number.isFinite(t) || t < since || t > now) continue;
+    let m: { host?: unknown; candidates?: unknown; bulk?: unknown } = {};
+    try {
+      m = row.measures ? (JSON.parse(row.measures) as typeof m) : {};
+    } catch {
+      continue;
+    }
+    if (typeof m.host !== 'string' || m.host.toLowerCase() !== want) continue;
+    if (best && best.t >= t) continue;
+    const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+    best = { t, d: { searched: true, candidates: strings(m.candidates), bulk: strings(m.bulk), at: row.at ?? null } };
+  }
+  return best?.d ?? null;
+}
+
+async function readDiscovery(host: string): Promise<SourceDiscovery | null> {
+  try {
+    const since = new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString();
+    const rows = await getDb().all<{ measures: string | null; at: string | null }>(
+      `SELECT measures, at FROM bin_events WHERE event_type = ? AND at >= ? ORDER BY at DESC LIMIT 2000`,
+      [SOURCE_DISCOVERY_EVENT, since],
+    );
+    return discoveryFromRows(rows, host);
+  } catch {
+    return null;
+  }
+}
+
+/** Hosts whose discovery is running in this process, so concurrent reads of one host search once. */
+const discovering = new Set<string>();
+
+/**
+ * Run source discovery for a host and record what it found. Returns null when no
+ * search was made (nothing is recorded then). Never throws.
+ */
+export async function discoverExistingSources(
+  host: string,
+  purpose: string,
+  deps: { search?: (query: string) => Promise<{ urls: string[]; searched: boolean }>; record?: typeof recordBinEvent; caller?: string } = {},
+): Promise<SourceDiscovery | null> {
+  const key = host.toLowerCase();
+  if (discovering.has(key)) return null;
+  discovering.add(key);
+  try {
+    const search = deps.search ?? ((q: string) => searchWithOutcome(q, { priority: 'LOW' }));
+    const outcome = await search(discoveryQuery(key)).catch(() => ({ urls: [] as string[], searched: false }));
+    if (!outcome.searched) return null;
+    const bare = key.replace(/^www\./, '');
+    const candidates = [...new Set(outcome.urls)].filter((u) => {
+      try {
+        const h = new URL(u).hostname.toLowerCase().replace(/^www\./, '');
+        return h === bare || h.endsWith(`.${bare}`);
+      } catch {
+        return false;
+      }
+    });
+    const bulk = candidates.filter(bulkShaped);
+    await (deps.record ?? recordBinEvent)({
+      eventType: SOURCE_DISCOVERY_EVENT,
+      provider: 'BULK',
+      workloadClass: deps.caller ?? 'acquisition',
+      outcome: bulk.length > 0 ? 'FOUND' : 'NONE_FOUND',
+      reason: (bulk.length > 0
+        ? `Source discovery found ${bulk.length} existing corpus/export/feed candidate(s) on ${key} for ${purpose}; read those before any bespoke crawler.`
+        : `Source discovery searched ${key} for existing corpora, exports and catalogs for ${purpose} and found none; a bespoke route may now be proposed.`
+      ).slice(0, 480),
+      evidenceClass: 'MEASURED',
+      measures: { host: key, query: discoveryQuery(key), purpose: purpose.slice(0, 300), candidates: candidates.slice(0, 8), bulk: bulk.slice(0, 8) },
+    });
+    return { searched: true, candidates, bulk, at: null };
+  } finally {
+    discovering.delete(key);
+  }
+}
+
+/**
+ * A HUMAN_HANDOFF at a genuine access boundary is a request to a person, and it
+ * is a row: an `ACCESS_HANDOFF` bin event, outcome OPEN, naming the host, the
+ * boundary met and the permitted route to seek (an official export, a licence,
+ * a partner integration, an account grant or a specific human step). Brain
+ * stops there; it never routes around the boundary.
+ *
+ * A person reads the open handoffs at the terminal (`operatePermissionCli.ts
+ * handoffs`, invariant 35) and closes one with `resolve`, or by granting an
+ * account for the host; both are later rows, so the history stays (§5). One
+ * handoff is opened per host and route per window, not one per read.
+ *
+ * Only a boundary is a handoff. An operation on a public page that no account
+ * was granted for read the page anyway; that is recorded on the judgment
+ * (NO_AUTHORIZED_ACCOUNT) and asks nobody for anything.
+ */
+export const ACCESS_HANDOFF_EVENT = 'ACCESS_HANDOFF';
+
+export interface AccessHandoff {
+  host: string;
+  capability: AcquisitionCapability | null;
+  boundary: string | null;
+  handoff: string;
+  purpose: string | null;
+  openedAt: string;
+}
+
+/**
+ * Open handoffs from ACCESS_HANDOFF rows and OPERATE_PERMISSION rows. Pure.
+ * The newest row per host and route decides; a later RESOLVED row closes it, and
+ * a later GRANTED permission for the host closes an authentication handoff.
+ */
+export function openHandoffsFromRows(
+  handoffRows: { outcome: string | null; measures: string | null; at?: string | null }[],
+  permissionRows: { outcome: string | null; measures: string | null; at?: string | null }[] = [],
+): AccessHandoff[] {
+  const newest = new Map<string, { t: number; open: AccessHandoff | null }>();
+  const parse = (raw: string | null) => {
+    try {
+      return raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  };
+  // Oldest first, so a host-wide resolution sees every handoff it closes whatever order the rows came in.
+  const dated = handoffRows
+    .map((row) => ({ row, t: row.at ? Date.parse(row.at) : Number.NaN }))
+    .filter((x) => Number.isFinite(x.t))
+    .sort((a, b) => a.t - b.t);
+  for (const { row, t } of dated) {
+    const m = parse(row.measures);
+    if (!m || typeof m.host !== 'string') continue;
+    const host = m.host.toLowerCase();
+    // A resolution without a named route closes every handoff on the host.
+    const keys = row.outcome === 'RESOLVED' && typeof m.handoff !== 'string'
+      ? [...newest.keys()].filter((k) => k.startsWith(`${host}\u0000`))
+      : [`${host}\u0000${typeof m.handoff === 'string' ? m.handoff : ''}`];
+    for (const key of keys) {
+      const prior = newest.get(key);
+      if (prior && prior.t > t) continue;
+      newest.set(key, {
+        t,
+        open:
+          row.outcome === 'OPEN' && typeof m.handoff === 'string'
+            ? {
+                host,
+                capability: m.capability === 'OPERATE' || m.capability === 'ACQUIRE' ? m.capability : null,
+                boundary: typeof m.boundary === 'string' ? m.boundary : null,
+                handoff: m.handoff,
+                purpose: typeof m.purpose === 'string' ? m.purpose : null,
+                openedAt: row.at!,
+              }
+            : null,
+      });
+    }
+  }
+  const out: AccessHandoff[] = [];
+  for (const { t, open } of newest.values()) {
+    if (!open) continue;
+    if (open.boundary === 'AUTHENTICATION' || open.boundary === 'OWNER_CONSENT') {
+      const permission = operatePermissionFromRows(permissionRows, open.host);
+      if (permission.permitted && permission.at && Date.parse(permission.at) > t) continue;
+    }
+    out.push(open);
+  }
+  return out.sort((a, b) => b.openedAt.localeCompare(a.openedAt));
+}
+
+/** The open handoffs on record; none when unreadable. */
+export async function readOpenHandoffs(): Promise<AccessHandoff[]> {
+  try {
+    const handoffs = await getDb().all<{ outcome: string | null; measures: string | null; at: string | null }>(
+      `SELECT outcome, measures, at FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 5000`,
+      [ACCESS_HANDOFF_EVENT],
+    );
+    const permissions = await getDb().all<{ outcome: string | null; measures: string | null; at: string | null }>(
+      `SELECT outcome, measures, at FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 2000`,
+      [OPERATE_PERMISSION_EVENT],
+    );
+    return openHandoffsFromRows(handoffs, permissions);
+  } catch {
+    return [];
+  }
+}
+
+/** Whether a handoff for this host and route was opened inside the window and is still open. */
+async function readHandoffOnRecord(host: string, handoff: string): Promise<boolean> {
+  const since = Date.now() - REPEATED_USE_WINDOW_MS;
+  return (await readOpenHandoffs()).some((h) => h.host === host && h.handoff === handoff && Date.parse(h.openedAt) >= since);
+}
+
+/** A person closes a handoff: they provided the route, or decided it is not worth having. Append-only. */
+export async function resolveAccessHandoff(
+  input: { host: string; resolvedBy: string; handoff?: string | null; note?: string | null },
+  deps: { record?: typeof recordBinEvent } = {},
+): Promise<void> {
+  const host = input.host.trim().toLowerCase();
+  if (!host) throw new Error('A resolution names the host it closes.');
+  if (!input.resolvedBy.trim()) throw new Error('A resolution names the person who closed it.');
+  await (deps.record ?? recordBinEvent)({
+    eventType: ACCESS_HANDOFF_EVENT,
+    workloadClass: 'acquisition',
+    outcome: 'RESOLVED',
+    reason: `Handoff on ${host} resolved by ${input.resolvedBy.trim()}${input.note ? `: ${input.note}` : ''}`.slice(0, 480),
+    evidenceClass: 'MEASURED',
+    measures: { host, resolvedBy: input.resolvedBy.trim(), ...(input.handoff ? { handoff: input.handoff } : {}) },
+  });
+}
+
 export interface RecordAcquisitionDeps {
   repeatedUse?: (host: string) => Promise<{ repeatedUses: number; repeatedUsesNeedingFallback: number }>;
   /** The standing operate permission for a host; defaults to the OPERATE_PERMISSION rows. */
@@ -394,6 +674,14 @@ export interface RecordAcquisitionDeps {
   record?: typeof recordBinEvent;
   /** Whether a proposal for this host and route is already on record inside the window. */
   proposalOnRecord?: (host: string, route: string) => Promise<boolean>;
+  /** The newest source discovery on record for a host; defaults to the SOURCE_DISCOVERY rows. */
+  discovery?: (host: string) => Promise<SourceDiscovery | null>;
+  /** Runs source discovery when a judgment says SEARCH_FIRST; defaults to `discoverExistingSources`. */
+  discover?: (host: string, purpose: string) => Promise<SourceDiscovery | null>;
+  /** Do not wait for discovery to finish (the read path: a search is paced and must not hold a read). */
+  detachDiscovery?: boolean;
+  /** Whether an open handoff for this host and route is already on record inside the window. */
+  handoffOnRecord?: (host: string, handoff: string) => Promise<boolean>;
   caller?: string;
 }
 
@@ -444,7 +732,19 @@ export async function recordAcquisitionJudgment(
       accountSource = 'PERMISSION_RECORD';
     }
   }
+  // The answer to an earlier SEARCH_FIRST: a discovery on record means the search was made,
+  // and what it found is the host's existing bulk sources. A caller's own statement stands.
+  let discoveryState: 'ON_RECORD' | 'STARTED' | 'NOT_SEARCHED' | 'NO_HOST' | null = null;
+  let onRecord: SourceDiscovery | null = null;
+  if (need.kind === 'ACQUIRE' && need.host && !used.bulkSearchDone && (used.existingBulkSources ?? []).length === 0) {
+    onRecord = await (deps.discovery ?? readDiscovery)(need.host).catch(() => null);
+    if (onRecord?.searched) {
+      used = { ...used, bulkSearchDone: true, existingBulkSources: onRecord.bulk };
+      discoveryState = 'ON_RECORD';
+    }
+  }
   const judgment = judgeAcquisitionNeed(need, used);
+  if (judgment.outcome === 'SEARCH_FIRST') discoveryState = need.host ? 'STARTED' : 'NO_HOST';
   await (deps.record ?? recordBinEvent)({
     eventType: 'ACQUISITION_JUDGMENT',
     provider: judgment.route,
@@ -461,6 +761,9 @@ export async function recordAcquisitionJudgment(
       convertToScript: judgment.convertToScript,
       bespokeCrawlerMayBeProposed: judgment.bespokeCrawlerMayBeProposed,
       boundaries: judgment.boundaries,
+      handoff: judgment.handoff,
+      discovery: discoveryState,
+      ...(onRecord?.searched ? { discoveredAt: onRecord.at, discoveredBulk: onRecord.bulk.slice(0, 8) } : {}),
       repeatedUses: used.repeatedUses ?? null,
       repeatedUsesNeedingFallback: used.repeatedUsesNeedingFallback ?? null,
       existingBulkSources: (used.existingBulkSources ?? []).length,
@@ -472,7 +775,35 @@ export async function recordAcquisitionJudgment(
   });
   // The consumer of both flags: a justified connector or script is written down as a proposal
   // for the host and route, once per window, so the decision to build it is a row someone can act on.
-  if ((judgment.reusableConnectorJustified || judgment.convertToScript) && need.host && judgment.route) {
+  // SEARCH_FIRST starts the search it names. On the read path it runs beside the read, never in front of it.
+  if (judgment.outcome === 'SEARCH_FIRST' && need.host) {
+    const host = need.host.toLowerCase();
+    const run = (deps.discover ?? ((h: string, p: string) => discoverExistingSources(h, p, { record: deps.record, caller: deps.caller })))(host, need.purpose)
+      .catch(() => null);
+    if (!deps.detachDiscovery) await run;
+  }
+  // A handoff at a genuine boundary is put in front of a person, once per host and route per window.
+  const genuineBoundary = judgment.boundaries.includes('ACCESS_BARRIER') || judgment.boundaries.includes('TERMS_OR_LICENSE');
+  if (judgment.route === 'HUMAN_HANDOFF' && judgment.handoff && genuineBoundary && need.host) {
+    const host = need.host.toLowerCase();
+    const open = await (deps.handoffOnRecord ?? readHandoffOnRecord)(host, judgment.handoff).catch(() => false);
+    if (!open) {
+      const boundary = used.boundary ?? (used.requiresLicence ? 'PAYMENT' : 'AUTHENTICATION');
+      await (deps.record ?? recordBinEvent)({
+        eventType: ACCESS_HANDOFF_EVENT,
+        provider: 'HUMAN_HANDOFF',
+        workloadClass: deps.caller ?? 'acquisition',
+        outcome: 'OPEN',
+        reason: `${judgment.capability} on ${host} stopped at ${boundary}: seek ${judgment.handoff}. Brain does not route around it.`.slice(0, 480),
+        evidenceClass: 'MEASURED',
+        measures: { host, capability: judgment.capability, boundary, boundaries: judgment.boundaries, handoff: judgment.handoff, purpose: need.purpose.slice(0, 300) },
+      });
+    }
+  }
+  // A bespoke ACQUIRE route is only ever proposed as a crawler once discovery found nothing existing to read.
+  const bespokeRoute = judgment.capability === 'ACQUIRE' && (judgment.route === 'HTTP' || judgment.route === 'BROWSER' || judgment.route === 'MODEL_ASSISTED');
+  const proposable = !bespokeRoute || judgment.bespokeCrawlerMayBeProposed;
+  if ((judgment.reusableConnectorJustified || judgment.convertToScript) && proposable && need.host && judgment.route) {
     const host = need.host.toLowerCase();
     const seen = await (deps.proposalOnRecord ?? readProposalOnRecord)(host, judgment.route);
     if (!seen) {
@@ -491,6 +822,7 @@ export async function recordAcquisitionJudgment(
           route: judgment.route,
           capability: judgment.capability,
           kind: judgment.convertToScript ? 'SCRIPT' : 'CONNECTOR',
+          bespokeCrawler: bespokeRoute,
           repeatedUses: used.repeatedUses ?? null,
           repeatedUsesNeedingFallback: used.repeatedUsesNeedingFallback ?? null,
         },

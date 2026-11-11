@@ -5,6 +5,14 @@
  *   npx tsx server/services/sources/operatePermissionCli.ts grant  --host app.example --account "owner login" --by peyton [--note "…"]
  *   npx tsx server/services/sources/operatePermissionCli.ts revoke --host app.example --by peyton [--note "…"]
  *   npx tsx server/services/sources/operatePermissionCli.ts show   --host app.example
+ *   npx tsx server/services/sources/operatePermissionCli.ts handoffs
+ *   npx tsx server/services/sources/operatePermissionCli.ts resolve --host app.example --by peyton [--note "…"]
+ *
+ * `handoffs` lists every open ACCESS_HANDOFF: where automation stopped at a
+ * genuine access boundary and which permitted route (an official export, a
+ * licence, a partner integration, an account grant or a specific human step)
+ * a person is asked to provide. `resolve` closes the host's handoffs; a grant
+ * closes an authentication handoff by itself.
  *
  * Invariant 35: a decision a person makes that has no surface they already use
  * is a terminal, and reaching the shell is the authentication. This is the only
@@ -19,11 +27,20 @@
  * are judged before any grant is read.
  */
 import { closeDatabase, initDatabase } from '../../db/database.ts';
-import { readOperatePermission, recordOperatePermission, type OperatePermission } from './acquisition.ts';
+import {
+  readOpenHandoffs,
+  readOperatePermission,
+  recordOperatePermission,
+  resolveAccessHandoff,
+  type AccessHandoff,
+  type OperatePermission,
+} from './acquisition.ts';
 
 export interface OperatePermissionCliDeps {
   record?: typeof recordOperatePermission;
   read?: typeof readOperatePermission;
+  handoffs?: () => Promise<AccessHandoff[]>;
+  resolve?: typeof resolveAccessHandoff;
 }
 
 function flag(argv: readonly string[], name: string): string | null {
@@ -36,7 +53,16 @@ function flag(argv: readonly string[], name: string): string | null {
 const USAGE =
   'usage: operatePermissionCli.ts grant --host H --account REF --by NAME [--note TEXT]\n' +
   '       operatePermissionCli.ts revoke --host H --by NAME [--note TEXT]\n' +
-  '       operatePermissionCli.ts show --host H';
+  '       operatePermissionCli.ts show --host H\n' +
+  '       operatePermissionCli.ts handoffs\n' +
+  '       operatePermissionCli.ts resolve --host H --by NAME [--note TEXT]';
+
+function describeHandoffs(open: readonly AccessHandoff[]): string {
+  if (open.length === 0) return 'no open handoffs: automation has not stopped at an access boundary that needs a person';
+  return open
+    .map((h) => `${h.host}  ${h.capability ?? '?'} stopped at ${h.boundary ?? 'a boundary'} (${h.openedAt}): seek ${h.handoff}${h.purpose ? ` — for ${h.purpose}` : ''}`)
+    .join('\n');
+}
 
 function describe(host: string, p: OperatePermission): string {
   return p.permitted
@@ -50,12 +76,21 @@ export async function runOperatePermissionCommand(
   deps: OperatePermissionCliDeps = {},
 ): Promise<{ code: number; out: string }> {
   const [command] = argv;
+  if (command === 'handoffs') return { code: 0, out: describeHandoffs(await (deps.handoffs ?? readOpenHandoffs)()) };
   const host = flag(argv, 'host')?.trim().toLowerCase() ?? '';
-  if (!host || (command !== 'grant' && command !== 'revoke' && command !== 'show')) return { code: 2, out: USAGE };
+  if (!host || (command !== 'grant' && command !== 'revoke' && command !== 'show' && command !== 'resolve')) return { code: 2, out: USAGE };
   const read = deps.read ?? readOperatePermission;
   if (command === 'show') return { code: 0, out: describe(host, await read(host)) };
   const by = flag(argv, 'by')?.trim() ?? '';
   if (!by) return { code: 2, out: `${command} names the person giving it with --by\n${USAGE}` };
+  if (command === 'resolve') {
+    try {
+      await (deps.resolve ?? resolveAccessHandoff)({ host, resolvedBy: by, note: flag(argv, 'note') });
+    } catch (error) {
+      return { code: 1, out: `refused: ${error instanceof Error ? error.message : String(error)}` };
+    }
+    return { code: 0, out: describeHandoffs((await (deps.handoffs ?? readOpenHandoffs)()).filter((h) => h.host === host)) };
+  }
   const account = flag(argv, 'account');
   if (command === 'grant' && !account?.trim()) return { code: 2, out: `grant names the account by reference with --account\n${USAGE}` };
   try {

@@ -48,6 +48,8 @@ describe('a justified connector or script is acted on, not just computed', () =>
       h.deps,
     );
     expect(j.route).toBe('HUMAN_HANDOFF');
-    expect(h.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT']);
+    // Never a connector or script; the boundary is put in front of a person instead (F-JUDGMENT-NO-CONSUMER).
+    expect(h.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT', 'ACCESS_HANDOFF']);
+    expect(h.events.some((e) => e.eventType === 'CONNECTOR_PROPOSED')).toBe(false);
   });
 });
