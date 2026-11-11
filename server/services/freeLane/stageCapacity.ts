@@ -1016,6 +1016,7 @@ export async function recordStageCapacity(options: { hours?: number; now?: numbe
       : restored.length > 0
         ? ` Restored: ${restored.map((r) => `${r.route} (${r.cause ?? 'unclassified'})`).join(', ')}.`
         : ' No model route failing.';
+    latest = { report, at: Date.now() };
     await recordBinEvent({
       eventType: STAGE_CAPACITY_EVENT,
       outcome: 'MEASURED',
@@ -1026,6 +1027,7 @@ export async function recordStageCapacity(options: { hours?: number; now?: numbe
     });
     return report;
   } catch (error) {
+    latest = { report: null, at: Date.now(), error: (error as Error).message };
     await recordBinEvent({
       eventType: STAGE_CAPACITY_EVENT,
       outcome: 'NOT_MEASURED',
@@ -1035,4 +1037,89 @@ export async function recordStageCapacity(options: { hours?: number; now?: numbe
     });
     return null;
   }
+}
+
+/* ------------------------------------------------------------------------- */
+/* The scaling gate: growth follows the measured constraint (S-0171)          */
+/* ------------------------------------------------------------------------- */
+
+export interface StageReadingHeld {
+  report: StageCapacityReport | null;
+  at: number;
+  error?: string;
+}
+
+/** The last measurement this process took, so the slot controller scales on it. */
+let latest: StageReadingHeld | null = null;
+let measuring: Promise<StageCapacityReport | null> | null = null;
+
+/** How old a measurement may be before growth stops trusting it: two recording intervals. */
+export const SCALING_READING_MAX_AGE_MS = 2 * 60 * 60_000;
+
+export interface ScalingGate {
+  allowGrowth: boolean;
+  reason: string;
+}
+
+/**
+ * Whether one model's slots may grow, from the stage measurement alone. Pure.
+ *
+ * S-0171: restore a failing model route before scaling it, and scale workers or
+ * model instances only after a measurement names the constrained stage with a
+ * measured expected gain in accepted facts per hour and dollars. Every other case
+ * holds growth and says why. Shrinking is never held, so a failing provider or a
+ * pressured Brain still sheds slots at once.
+ */
+export function scalingGate(reading: StageReadingHeld | null, model: string, nowMs: number): ScalingGate {
+  if (!reading) return { allowGrowth: false, reason: 'no stage-capacity measurement yet; growth waits for one' };
+  if (!reading.report) {
+    return { allowGrowth: false, reason: `the last stage-capacity measurement failed (${reading.error ?? 'no reason'}); growth waits for one that succeeds`.slice(0, 300) };
+  }
+  if (nowMs - reading.at > SCALING_READING_MAX_AGE_MS) {
+    return { allowGrowth: false, reason: `the stage-capacity measurement is ${Math.round((nowMs - reading.at) / 60_000)} minutes old; growth waits for a current one` };
+  }
+  const { diagnosis, constrained } = reading.report;
+  const failing = diagnosis.primary;
+  if (failing && failing.route === model) {
+    return { allowGrowth: false, reason: `restore model route ${model} first: ${failing.failures} failure(s) name ${failing.cause} (${failing.evidence})`.slice(0, 300) };
+  }
+  if (!constrained.stage) return { allowGrowth: false, reason: `no measured constraint: ${constrained.basis}`.slice(0, 300) };
+  if (!LANE_STAGES().some((s) => s.id === constrained.stage)) {
+    return { allowGrowth: false, reason: `the constrained stage is ${constrained.stage}, which more lane slots do not relieve` };
+  }
+  if (!constrained.expectedGain.measured) {
+    return { allowGrowth: false, reason: `no measured expected gain for ${constrained.stage}: ${constrained.expectedGain.reason}`.slice(0, 300) };
+  }
+  const gain = constrained.expectedGain.value;
+  if (!(gain.acceptedFactsPerHour > 0)) {
+    return { allowGrowth: false, reason: `${constrained.stage} is constrained but its measured gain is ${gain.acceptedFactsPerHour} accepted facts/hour` };
+  }
+  return {
+    allowGrowth: true,
+    reason: `${constrained.stage} is the measured constraint: +${gain.acceptedFactsPerHour.toFixed(2)} accepted facts/hour at $${gain.dollars.toFixed(2)}/hour`,
+  };
+}
+
+/** This process's last measurement, as the gate reads it. */
+export function latestStageReading(): StageReadingHeld | null {
+  return latest;
+}
+
+/**
+ * Start a measurement when this process has none and none is running, so a pool
+ * started without the lane's own loop (an activation's restart) still gets one.
+ * Never awaited by the controller: growth is held until it lands.
+ */
+export function ensureStageMeasurement(): void {
+  if (latest || measuring) return;
+  measuring = recordStageCapacity()
+    .catch(() => null)
+    .finally(() => {
+      measuring = null;
+    });
+}
+
+/** Test seam: set or forget this process's measurement. */
+export function resetStageReading(reading: StageReadingHeld | null = null): void {
+  latest = reading;
 }

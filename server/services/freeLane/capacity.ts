@@ -264,6 +264,21 @@ export interface PoolOptions {
   config?: LaneConfig;
   /** Test seam: the pressure reading, instead of this process's own. */
   pressure?: () => Pressure;
+  /**
+   * Whether a model's slots may grow. Defaults to the stage-capacity gate
+   * (`stageCapacity.ts scalingGate`): growth only on a measured constraint with a
+   * measured gain, never on a route that is failing. A harness that injects its own
+   * `pressure` is judging the controller on those readings alone, as the boot grace
+   * already treats it, so growth there is not gated unless this is given too.
+   */
+  scaling?: (model: string) => Promise<{ allowGrowth: boolean; reason: string }>;
+}
+
+/** The production gate: this process's last stage measurement, started if it has none. */
+export async function measuredScalingGate(model: string): Promise<{ allowGrowth: boolean; reason: string }> {
+  const { ensureStageMeasurement, latestStageReading, scalingGate } = await import('./stageCapacity.ts');
+  ensureStageMeasurement();
+  return scalingGate(latestStageReading(), model, Date.now());
 }
 let poolOptions: PoolOptions = {};
 
@@ -368,6 +383,15 @@ export async function controlStep(): Promise<ControlReading | null> {
     const share = slotShare(pools.size);
     if (share !== null && decision.target > share) {
       decision = { ...decision, target: share, reason: `held to its share of the database pool (${share} of ${share * pools.size} slots)`, stable: false };
+    }
+    // S-0171: slots grow only where the stage measurement names a constraint more
+    // slots relieve, with a measured gain, and never on a route still failing.
+    if (decision.target > pool.target) {
+      const gate = poolOptions.scaling ?? (poolOptions.pressure ? null : measuredScalingGate);
+      const verdict = gate ? await gate(pool.worker.model) : null;
+      if (verdict && !verdict.allowGrowth) {
+        decision = { ...decision, target: pool.target, reason: `growth held: ${verdict.reason}`.slice(0, 400), stable: false };
+      }
     }
     if (decision.stable) pool.stableHigh = Math.max(pool.stableHigh, peak);
     pool.peakBusy = pool.busy;
