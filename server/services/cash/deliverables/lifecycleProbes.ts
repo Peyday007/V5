@@ -11,7 +11,9 @@
  * "sale made" flag stands in for them. Every transition carries a holder, a deadline
  * field, an outcome and its evidence.
  *
- * `r01.life-29-3` — every exception the rows show for such a deal is on record as
+ * `r01.life-29-3` — every exception the rows show for such a deal (the commitment
+ * model's, and the scope changes, cancellations and disputes the buyer's recorded
+ * answers show) is on record as
  * `exception.detected` (written by the journey tick), and at least one real, sourced
  * case has been traced end to end — from its request through accepted fulfilment
  * and funds reconciliation — including its failure path (`rehearsal.traced`, valid,
@@ -135,15 +137,14 @@ export function rehearsalDemonstrates(d: StoredTraceDetail): boolean {
 }
 
 export async function exceptionsHoldOnRows(): Promise<ProbeResult> {
-  const { readCommitments } = await import('./commitments.ts');
-  const { detectExceptions } = await import('./exceptions.ts');
+  const { detectFromRows } = await import('./exceptions.ts');
   const db = getDb();
   const deals = await dealsWithAgreements();
   if (deals.length === 0) return { ok: false, detail: 'no opportunity has an agreement: no transaction whose exceptions can be read' };
   let detected = 0;
   for (const deal of deals) {
-    const reading = await readCommitments({ projectId: deal.project_id, opportunityId: deal.opportunity_id, currency: deal.currency });
-    const rows = detectExceptions(reading).filter((e) => e.source === 'ROWS');
+    // The commitment rows and the buyer's recorded answers: a scope change or a dispute is checked like any other.
+    const { detected: rows } = await detectFromRows({ projectId: deal.project_id, opportunityId: deal.opportunity_id, currency: deal.currency });
     if (rows.length === 0) continue;
     const recorded = await db.all<{ detail: string }>(`SELECT detail FROM cash_events WHERE opportunity_id = ? AND kind = 'exception.detected'`, [deal.opportunity_id]);
     const ids = new Set(recorded.map((r) => String((JSON.parse(r.detail) as { exceptionId?: unknown }).exceptionId ?? '')));

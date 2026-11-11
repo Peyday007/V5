@@ -10,8 +10,10 @@
  *
  * This file adds no store, scheduler or authority path:
  *
- *  - detection is a pure reading of a `CommitmentReading` (plus the signals a
- *    person or another subsystem has stated, which the rows do not carry);
+ *  - detection is a pure reading of a `CommitmentReading` and of the buyer's
+ *    own recorded observations (a counter-offer or a refusal after agreement is
+ *    a scope change, a cancellation or — once something was delivered — a
+ *    dispute), plus any signals a caller states that no row carries;
  *  - consequence is arithmetic over that reading, and an unstated figure is
  *    `null`, never a guess (§39);
  *  - a remedy is chosen only inside the authority the caller holds. A refund
@@ -32,6 +34,8 @@ import type { CashNeed } from '../../../domain/types.ts';
 import { cashEventsOfKind, getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
 import { listMoneyEntries } from '../../../repos/cashLedger.ts';
 import { getOpportunity } from '../../../repos/cashPortfolio.ts';
+import { observationsFor } from '../../../repos/cashJourney.ts';
+import type { CashObservation } from '../../../domain/cashJourney.ts';
 import { getMembership } from '../../../repos/identity.ts';
 import { raiseNeed } from '../needs.ts';
 import { readCommitments, type CommitmentReading, type CommitmentTransition, type DeclaredTransition, type ExternalDependency, type Party } from './commitments.ts';
@@ -147,21 +151,138 @@ export function detectExceptions(reading: CommitmentReading, signals: readonly E
       disputedCents: null,
     });
   }
-  signals.forEach((s, i) => {
-    found.push({
-      id: `stated:${s.kind.toLowerCase()}:${i}:${s.at}`,
-      kind: s.kind,
-      source: 'STATED',
-      at: s.at,
-      transitionId: null,
-      detail: s.detail,
-      evidence: s.evidence,
-      raisedBy: s.raisedBy ?? null,
-      valueDeltaCents: s.valueDeltaCents ?? null,
-      disputedCents: s.disputedCents ?? null,
-    });
-  });
+  found.push(...statedExceptions(signals));
   return found;
+}
+
+/** What a caller stated that no row carries, as exceptions. Pure. */
+export function statedExceptions(signals: readonly ExceptionSignal[]): DetectedException[] {
+  return signals.map((s, i) => ({
+    id: `stated:${s.kind.toLowerCase()}:${i}:${s.at}`,
+    kind: s.kind,
+    source: 'STATED' as const,
+    at: s.at,
+    transitionId: null,
+    detail: s.detail,
+    evidence: s.evidence,
+    raisedBy: s.raisedBy ?? null,
+    valueDeltaCents: s.valueDeltaCents ?? null,
+    disputedCents: s.disputedCents ?? null,
+  }));
+}
+
+/**
+ * What the buyer's own recorded observations say about an agreed deal. Pure.
+ *
+ * `cash_observations` is where every buyer answer lands — from the outreach
+ * provider or from a person — and an answer recorded after an agreement is a
+ * state change of that agreement, not a new negotiation:
+ *
+ *  - a counter-offer before anything was delivered is a SCOPE_CHANGE, whose
+ *    value change is the countered amount against the agreed one (null when
+ *    either is unstated or in another currency);
+ *  - a refusal before anything was delivered is a CANCELLATION the buyer asked
+ *    for, even though nobody has released the agreement yet;
+ *  - a counter-offer or a refusal after a delivery was recorded contests the
+ *    delivered result: a DISPUTE over the agreed amount, or over the difference
+ *    when the buyer stated what they would pay instead.
+ *
+ * An answer before any agreement is ordinary negotiation and is not an
+ * exception. A delivery already rejected on the acceptance row is that row's
+ * dispute, so an answer after it adds no second one.
+ */
+export function exceptionsFromObservations(reading: CommitmentReading, observations: readonly CashObservation[]): DetectedException[] {
+  const found: DetectedException[] = [];
+  const agreements = reading.transitions
+    .filter((t) => t.kind === 'agreement' && t.outcome === 'DONE' && t.at !== null)
+    .sort((a, b) => (a.at as string).localeCompare(b.at as string));
+  const rejected = new Set(
+    reading.transitions.filter((t) => t.stage === 'WORK_ACCEPTED' && t.outcome === 'REJECTED').map((t) => t.id.replace(/^acceptance:/, '')),
+  );
+  for (const o of observations) {
+    if (o.kind !== 'BUYER_COUNTERED' && o.kind !== 'BUYER_DECLINED') continue;
+    const agreement = [...agreements].reverse().find((t) => (t.at as string) <= o.observedAt);
+    if (!agreement) continue;
+    const agreementId = agreement.id.replace(/^agreement:/, '');
+    const delivered = reading.transitions.some(
+      (t) => t.kind === 'delivery' && t.id.startsWith(`delivery:${agreementId}:`) && t.at !== null && t.at <= o.observedAt,
+    );
+    const sameCurrency = o.amountCents !== null && (o.currency === null || o.currency === reading.currency);
+    const agreed = agreement.amountCents;
+    const evidence = [`observation:${o.id}`, o.evidenceRef].filter((e) => e.trim() !== '');
+    const raisedBy: Party = { role: 'buyer', ref: o.opportunityId };
+    const said = o.note?.trim() ? `: ${o.note.trim()}` : '';
+    if (delivered) {
+      if (rejected.has(agreementId)) continue;
+      const disputed = o.kind === 'BUYER_COUNTERED' && sameCurrency && agreed !== null ? Math.max(0, agreed - (o.amountCents as number)) : agreed;
+      found.push({
+        id: `dispute:observation:${o.id}`,
+        kind: 'DISPUTE',
+        source: 'ROWS',
+        at: o.observedAt,
+        transitionId: agreement.id,
+        detail: `the buyer ${o.kind === 'BUYER_COUNTERED' ? 'countered' : 'refused'} after delivery${said}`,
+        evidence,
+        raisedBy,
+        valueDeltaCents: null,
+        disputedCents: disputed,
+      });
+    } else if (o.kind === 'BUYER_COUNTERED') {
+      found.push({
+        id: `scope-change:observation:${o.id}`,
+        kind: 'SCOPE_CHANGE',
+        source: 'ROWS',
+        at: o.observedAt,
+        transitionId: agreement.id,
+        detail: `the buyer countered the agreed terms${o.amountCents !== null ? ` at ${o.amountCents} ${o.currency ?? reading.currency} cents` : ''}${said}`,
+        evidence,
+        raisedBy,
+        valueDeltaCents: sameCurrency && agreed !== null ? (o.amountCents as number) - agreed : null,
+        disputedCents: null,
+      });
+    } else {
+      found.push({
+        id: `cancellation:observation:${o.id}`,
+        kind: 'CANCELLATION',
+        source: 'ROWS',
+        at: o.observedAt,
+        transitionId: agreement.id,
+        detail: `the buyer withdrew from the agreement${said}`,
+        evidence,
+        raisedBy,
+        valueDeltaCents: null,
+        disputedCents: null,
+      });
+    }
+  }
+  return found;
+}
+
+/**
+ * Every exception one deal's rows show: the commitment model's own and the
+ * buyer's recorded answers. The one reader the journey tick, the rehearsal and
+ * the production probe share, so none of them can see less than another.
+ */
+export async function detectFromRows(input: {
+  projectId: string;
+  opportunityId: string;
+  currency: string;
+  now?: string;
+  declared?: DeclaredTransition[];
+  dependencies?: ExternalDependency[];
+}): Promise<{ reading: CommitmentReading; detected: DetectedException[] }> {
+  const [reading, observations] = await Promise.all([
+    readCommitments({
+      projectId: input.projectId,
+      opportunityId: input.opportunityId,
+      currency: input.currency,
+      declared: input.declared,
+      dependencies: input.dependencies,
+      now: input.now,
+    }),
+    observationsFor(input.opportunityId),
+  ]);
+  return { reading, detected: [...detectExceptions(reading), ...exceptionsFromObservations(reading, observations)] };
 }
 
 export interface Consequence {
@@ -641,7 +762,7 @@ export async function rehearseStoredCase(input: {
   /** What the case looked like when traced, so the tick traces a case again only when it changed. */
   fingerprint?: string | null;
 }): Promise<StoredRehearsal> {
-  const reading = await readCommitments({
+  const { reading, detected: fromRows } = await detectFromRows({
     projectId: input.projectId,
     opportunityId: input.opportunityId,
     currency: input.currency,
@@ -650,7 +771,7 @@ export async function rehearseStoredCase(input: {
     now: input.now,
   });
   const entries = await listMoneyEntries({ projectId: input.projectId, opportunityId: input.opportunityId, limit: 2000 });
-  const detected = detectExceptions(reading, input.signals ?? []);
+  const detected = [...fromRows, ...statedExceptions(input.signals ?? [])];
   const authority: RemedyAuthority =
     input.authority ?? (await remedyAuthorityFor({ projectId: input.projectId, currency: input.currency, at: input.now }));
   const facts = factsFromReading(reading, input.facts);
@@ -692,16 +813,17 @@ export async function rehearseStoredCase(input: {
  *
  * Reads one deal's commitments from the rows, detects the exceptions the rows
  * show (a missed date, a payment that failed, a rejected delivery, a released
- * commitment), quantifies each one's consequence and works out which remedy
+ * commitment, and the buyer's recorded counter-offer or refusal after agreement:
+ * a scope change, a cancellation or a dispute), quantifies each one's consequence and works out which remedy
  * each would take, strictly inside the authority the project holds — its live
  * commercial grant, read through `checkCommercialAuthority` — so a remedy the
  * grant covers is chosen and what each other one needs is stated. Nothing is
  * carried out here. A new exception is appended
  * once to `cash_events` as `exception.detected`; one already on record (by its
  * id, which is derived from the transition that shows it) is not recorded
- * again, so the tick can run as often as it likes. Stated exceptions (a scope
- * change, a dispute a person reports) come from signals and are not invented
- * here. Nothing is refunded, released or contacted: carrying a remedy out stays
+ * again, so the tick can run as often as it likes. A scope change or a dispute
+ * is read from the buyer's own recorded answer (`exceptionsFromObservations`),
+ * never invented from silence. Nothing is refunded, released or contacted: carrying a remedy out stays
  * with `carryOutApprovedRefund` and a person's approval.
  */
 export async function recordDetectedExceptions(input: {
@@ -710,8 +832,7 @@ export async function recordDetectedExceptions(input: {
   currency: string;
   now?: string;
 }): Promise<{ detected: number; recorded: number }> {
-  const reading = await readCommitments({ projectId: input.projectId, opportunityId: input.opportunityId, currency: input.currency, now: input.now });
-  const detected = detectExceptions(reading).filter((one) => one.source === 'ROWS');
+  const { reading, detected } = await detectFromRows({ projectId: input.projectId, opportunityId: input.opportunityId, currency: input.currency, now: input.now });
   if (detected.length === 0) return { detected: 0, recorded: 0 };
   const known = new Set(
     (await cashEventsOfKind(input.opportunityId, 'exception.detected')).map((event) => String((event.detail as { exceptionId?: unknown } | null)?.exceptionId ?? '')),
@@ -902,8 +1023,7 @@ export async function rehearseCaseOnTick(input: {
   if (!opportunity) return { rehearsed: false, eventKind: null };
   const sourceRef = caseSourceRef(opportunity);
   if (!sourceRef) return { rehearsed: false, eventKind: null };
-  const reading = await readCommitments({ projectId: input.projectId, opportunityId: input.opportunityId, currency: input.currency, now: input.now });
-  const detected = detectExceptions(reading).filter((one) => one.source === 'ROWS');
+  const { reading, detected } = await detectFromRows({ projectId: input.projectId, opportunityId: input.opportunityId, currency: input.currency, now: input.now });
   if (detected.length === 0) return { rehearsed: false, eventKind: null };
   const recovered = await recoveredRemedies(input.opportunityId);
   const fingerprint = createHash('sha256')
