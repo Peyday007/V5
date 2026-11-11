@@ -6,9 +6,13 @@
  * long-term venture, a creative goal, a research goal or a recurring-income
  * goal does not inherit its rules, and is never judged as though it did.
  *
- * Pure: it reads nothing and writes nothing. The plan calls `gateRecommendation`
- * with what it already holds, and gets back whether the plan may be
- * recommended and every reason it may not.
+ * A goal's kind and its reliability standard are recorded in `goal_policies`
+ * (`npm run goals -- policy <goal> KIND`). `goalPolicy` is the one exported
+ * reader: it reads that row and the goal's target, and returns the policy the
+ * goal is held to — SQUEEZE when nothing was ever recorded. Everything else
+ * here is pure: the plan calls `gateRecommendation` with what it already
+ * holds, and gets back whether the plan may be recommended and every reason
+ * it may not.
  *
  *   * A probability is *supported* only when it comes from comparable finished
  *     outcomes (a measured rate with a sample and a lower bound) or from an
@@ -21,6 +25,7 @@
  *   * A plan must also survive combined ordinary setbacks, not only single ones.
  */
 import type { GoalTarget } from '../../domain/register.ts';
+import { currentGoalPolicy, recordGoalPolicy } from '../../repos/economy.ts';
 
 export const POLICY_KINDS = ['SQUEEZE', 'LONG_TERM_VENTURE', 'CREATIVE', 'RESEARCH', 'RECURRING_INCOME'] as const;
 export type PolicyKind = (typeof POLICY_KINDS)[number];
@@ -98,6 +103,60 @@ export function policyFor(input: {
     },
     reliability: validStandard(merged) ? merged : { ...DEFAULT_RELIABILITY },
   };
+}
+
+export function isPolicyKind(value: unknown): value is PolicyKind {
+  return typeof value === 'string' && (POLICY_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * The policy a goal is held to, read from its record. The recorded kind decides
+ * whether squeeze rules apply at all; a recorded reliability standard is the
+ * goal's own override. A goal with no record is SQUEEZE with the defaults.
+ */
+export async function goalPolicy(input: {
+  goalId: string;
+  target?: GoalTarget | null;
+  daysLeft?: number | null;
+}): Promise<GoalPolicy & { recorded: boolean }> {
+  const record = await currentGoalPolicy(input.goalId);
+  const kind = record && isPolicyKind(record.kind) ? record.kind : 'SQUEEZE';
+  const reliability: Partial<ReliabilityStandard> = {};
+  if (record?.reliabilityNormal != null) reliability.normal = record.reliabilityNormal;
+  if (record?.reliabilityAdverse != null) reliability.adverse = record.reliabilityAdverse;
+  const policy = policyFor({ kind, target: input.target ?? null, daysLeft: input.daysLeft ?? null, overrides: { reliability } });
+  return { ...policy, recorded: record !== null };
+}
+
+/**
+ * Record what a goal is held to. A reliability standard belongs to SQUEEZE
+ * alone, and one that is out of range or puts the adverse bar above the normal
+ * one is refused rather than silently replaced.
+ */
+export async function setGoalPolicy(input: {
+  goalId: string;
+  kind: string;
+  reliability?: Partial<ReliabilityStandard>;
+  setBy: string;
+}): Promise<{ ok: true; kind: PolicyKind } | { ok: false; reason: string }> {
+  if (!isPolicyKind(input.kind)) return { ok: false, reason: `A policy is one of ${POLICY_KINDS.join(', ')}.` };
+  const r = input.reliability ?? {};
+  const hasStandard = r.normal != null || r.adverse != null;
+  if (hasStandard && input.kind !== 'SQUEEZE') {
+    return { ok: false, reason: `${input.kind} carries no reliability standard; only SQUEEZE does.` };
+  }
+  if (hasStandard) {
+    const merged = { normal: r.normal ?? DEFAULT_RELIABILITY.normal, adverse: r.adverse ?? DEFAULT_RELIABILITY.adverse };
+    if (!validStandard(merged)) return { ok: false, reason: 'A reliability standard is between 0 and 1, with the adverse bar no higher than the normal one.' };
+  }
+  await recordGoalPolicy({
+    goalId: input.goalId,
+    kind: input.kind,
+    reliabilityNormal: r.normal ?? null,
+    reliabilityAdverse: r.adverse ?? null,
+    setBy: input.setBy,
+  });
+  return { ok: true, kind: input.kind };
 }
 
 /** A probability and what it rests on. `basis` decides whether it is supported. */

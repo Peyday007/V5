@@ -23,8 +23,16 @@
  *   npm run goals -- terms <wst_…> [--outcome "…"] [--due 2026-10-01] [--commitment CUSTOMER] --admin a@b
  *   npm run goals -- create --reason "Collect 10000 dollars in 30 days" --project prj_… --due 2026-11-27 SETTLED_CASH-1000000-USD-50000-120 --admin a@b
  *   npm run goals -- target <wst_…> SETTLED_CASH-1000000-USD-50000-120 --project prj_… --admin a@b
+ *   npm run goals -- policy <wst_…> LONG_TERM_VENTURE --admin a@b
+ *   npm run goals -- policy <wst_…> SQUEEZE [--normal 0.95] [--adverse 0.85] --admin a@b
  *   npm run goals -- plan <wst_…>            (reads and prints; writes nothing)
  *   npm run goals -- benchmark <wst_…> [--label before] [--project prj_…] --admin a@b
+ *
+ * `policy` records what the goal is held to: SQUEEZE (the default for a goal
+ * with no record — a fixed target, deadline and capital limit, with a
+ * reliability standard of its own), LONG_TERM_VENTURE, CREATIVE, RESEARCH or
+ * RECURRING_INCOME, none of which inherits squeeze rules. `create --policy KIND`
+ * records it at creation. `plan` prints the policy the goal is held to.
  *
  * `benchmark` keeps the goal's current stage measurement as rows in
  * stage_measurements and prints it against the first and the previous kept
@@ -63,6 +71,7 @@ import { discoveryYield, type YieldRow } from '../server/services/cash/discovery
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
+import { goalPolicy, isPolicyKind, setGoalPolicy, POLICY_KINDS, type GoalPolicy } from '../server/services/goals/policy.ts';
 import { measurePlan, measurementLines, STAGE_LABEL, type GoalMeasurement } from '../server/services/economy/measure/index.ts';
 import { compareBenchmarks, goalBenchmarks, recordGoalBenchmark, type BenchmarkChange, type GoalBenchmark } from '../server/repos/economy.ts';
 import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
@@ -335,6 +344,8 @@ async function targetCommand(command: 'create' | 'target'): Promise<void> {
     goal = await createWorkstream({ projectId, title: title.slice(0, 160), intent: title, purpose: 'REVENUE_DIRECT', createdByUserId: adminId });
     await setTerms(goal.id, { outcome: `${spec.metric} of at least ${spec.amountCents / 100} ${spec.currency}, verified on the ledger`, dueAt: new Date(due).toISOString(), ownerUserId: adminId }, `person:${adminId}`);
     await recordWorkstreamEvent({ workstreamId: goal.id, kind: 'WORKSTREAM_OPENED', summary: `Created as a targeted goal: ${title.slice(0, 200)}`, actorRef: `person:${adminId}` });
+    const kind = flag('policy');
+    if (kind) await recordPolicy(goal.id, kind, adminId);
   } else {
     const [, goalId, word] = words();
     specWord = word;
@@ -348,6 +359,43 @@ async function targetCommand(command: 'create' | 'target'): Promise<void> {
   await recordWorkstreamEvent({ workstreamId: goal.id, kind: 'GOAL_TARGET_SET', summary: `Target: ${spec.metric} ${spec.amountCents / 100} ${spec.currency}${spec.capital !== null ? `, at most ${spec.capital / 100} tied up` : ''}${spec.hours !== null ? `, at most ${spec.hours} hours` : ''}. Counted from now.`, actorRef: `person:${adminId}` });
   console.log(`${command} ${goal.id}: target ${spec.metric} ${spec.amountCents / 100} ${spec.currency} counted from ${result.target.setAt}`);
   console.log('GOALS: OK');
+}
+
+function reliabilityFlag(name: string): number | undefined {
+  const value = flag(name);
+  if (value === undefined) return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n)) fail(`--${name} must be a number between 0 and 1.`);
+  return n;
+}
+
+async function recordPolicy(goalId: string, kind: string, adminId: string): Promise<void> {
+  if (!isPolicyKind(kind)) fail(`A policy is one of ${POLICY_KINDS.join(', ')}.`);
+  const result = await setGoalPolicy({
+    goalId,
+    kind,
+    reliability: { normal: reliabilityFlag('normal'), adverse: reliabilityFlag('adverse') },
+    setBy: `person:${adminId}`,
+  });
+  if (!result.ok) fail(`The policy was not recorded: ${result.reason}`);
+  await recordWorkstreamEvent({ workstreamId: goalId, kind: 'GOAL_POLICY_SET', summary: `Held to the ${result.kind} policy${result.kind === 'SQUEEZE' ? '' : '; squeeze rules do not apply'}.`, actorRef: `person:${adminId}` });
+  console.log(`policy ${goalId}: ${result.kind}`);
+}
+
+async function policyCommand(): Promise<void> {
+  const adminId = await administrator();
+  const [, goalId, kind] = words();
+  if (!goalId || !(await getWorkstream(goalId))) fail(`No goal ${goalId ?? '(none named)'}.`);
+  if (!kind) fail(`policy needs a kind, one of ${POLICY_KINDS.join(', ')}.`);
+  await recordPolicy(goalId, kind, adminId);
+  console.log('GOALS: OK');
+}
+
+/** One line saying what the goal is held to. */
+function policyLine(policy: GoalPolicy & { recorded: boolean }): string {
+  const origin = policy.recorded ? 'recorded' : 'no policy recorded, so SQUEEZE';
+  if (policy.kind !== 'SQUEEZE' || !policy.reliability) return `${policy.kind} (${origin}); not held to squeeze rules`;
+  return `SQUEEZE (${origin}); a plan needs a supported ${Math.round(policy.reliability.normal * 100)}% chance, ${Math.round(policy.reliability.adverse * 100)}% under combined setbacks`;
 }
 
 /** What the goal is doing about its own gap: its search rounds and its path research. */
@@ -451,6 +499,8 @@ async function plan(): Promise<void> {
   const reading = await readGoalPlan({ goalId, persist: false });
   if (!reading) fail(`No targeted goal ${goalId}.`);
   printPlan(reading);
+  const held = await getWorkstream(goalId);
+  console.log(`  policy      ${policyLine(await goalPolicy({ goalId, target: held?.target ?? null, daysLeft: reading.target.daysLeft }))}`);
   for (const line of measurementLines(await measurePlan(reading))) console.log(line);
   const goal = await getWorkstream(goalId);
   if (goal?.projectId) {
@@ -549,12 +599,14 @@ async function main(): Promise<void> {
     case 'create':
     case 'target':
       return await targetCommand(command);
+    case 'policy':
+      return await policyCommand();
     case 'plan':
       return await plan();
     case 'benchmark':
       return await benchmark();
     default:
-      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, plan, benchmark');
+      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, policy, plan, benchmark');
       process.exitCode = 1;
       console.log('GOALS: FAIL');
   }
