@@ -143,6 +143,16 @@ export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
     ...claimRejectionWeaknesses(claims.rejections, claims.claims),
     ...packetWeaknesses(packets.causes, packets.settled),
   ];
+  // AUTO-20-1: work Brain originates from its own observations — idle capacity beside waiting work,
+  // openings that closed unpursued, a resource several opportunities need, a goal whose constraints
+  // have not moved, an opening whose window is closing. Same unit, same loop; a failed read raises nothing.
+  const { originatedWeaknesses } = await import('./origination.ts');
+  detected.push(
+    ...(await originatedWeaknesses(now, detected.map((w) => w.key)).catch((error: unknown) => {
+      console.warn(`origination read failed: ${String((error as Error)?.message ?? error)}`);
+      return [];
+    })),
+  );
   // §88: a requirement the capability map reads BROKEN or MISSING, that no detector above
   // already raised and no open candidate already owns, is a weakness like any other.
   // At most hourly, and never in the first minutes after boot: the assessment is ~25
@@ -210,9 +220,22 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
       researchQuestion: `${String(evidence['researchQuestion'] ?? weakness.title)} Earlier methods did not work (attempt ${methodInadequacy.failedAttempts.join(', ')}); find a different class of method.`,
     });
   }
+  const { isOriginated } = await import('./origination.ts');
+  if (isOriginated(weakness)) {
+    // The judgment that made an observation into work is stored with it, so it can be inspected later.
+    Object.assign(evidence, { originated: weakness.kind, judgment: (weakness as { judgment?: string }).judgment ?? null });
+  }
   const { candidate, created } = await upsertCandidate({ ...input, evidence });
   if (!created) return;
   report.opened.push(candidate.weaknessKey);
+  if (isOriginated(weakness)) {
+    // AUTO-20-2: the gap loop's NOTICE is on the record from the moment the work exists, so a worker that
+    // resumes after a lost context or a deploy reads where the loop began.
+    const { recordOriginationNotice } = await import('./origination.ts');
+    await recordOriginationNotice(weakness as Parameters<typeof recordOriginationNotice>[0], candidate.weaknessKey).catch((error: unknown) => {
+      report.errors.push(`notice ${candidate.weaknessKey}: ${String((error as Error)?.message ?? error)}`);
+    });
+  }
   await recordImprovementEvent({
     candidateId: candidate.id,
     kind: 'WEAKNESS_DETECTED',
