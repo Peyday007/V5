@@ -36,21 +36,20 @@ describe('a short path in a finding', () => {
     if (scope.ok) expect(scope.evidenceFiles).toEqual(['server/services/widgets/ledger.ts']);
   });
 
-  it('keeps a path that is already a file from the repository root', () => {
+  it('does not make the program record a repair\'s file: the units\' own files carry the repair', () => {
     const scope = resolveRepairScope({
       suggested: ['objectives/programs/brain-architecture/release-01.map.json'],
-      statement: 'objectives/programs/brain-architecture/release-01.map.json maps AUTH-20-3 to the wrong file',
+      statement: 'The probes r01.auth-20-3 are not implemented; the only references are in objectives/programs/brain-architecture/release-01.map.json',
       evidence: '',
       category: 'BEHAVIOR',
       mutationScope: ['server/services/cash/**', 'tests/program-x-auth*.test.ts'],
       forbiddenPaths: [],
-      units: [{ unitKey: 'u1', ownedPaths: ['server/services/cash/**'] }],
+      units: [{ unitKey: 'u1', ownedPaths: ['server/services/cash/authority.ts', 'tests/program-x-auth*.test.ts'] }],
     });
-    expect(scope.ok).toBe(false);
-    if (!scope.ok && scope.reason === 'REQUIRED_FILE_NOT_WRITABLE') {
-      expect(scope.outsideScope).toEqual(['objectives/programs/brain-architecture/release-01.map.json']);
-    } else {
-      throw new Error(`expected REQUIRED_FILE_NOT_WRITABLE, got ${JSON.stringify(scope)}`);
+    expect(scope.ok).toBe(true);
+    if (scope.ok) {
+      expect(scope.derivedFrom).toBe('UNIT_OWNERSHIP');
+      expect(scope.ownedPaths).toEqual(['server/services/cash/authority.ts', 'tests/program-x-auth*.test.ts']);
     }
   });
 });
