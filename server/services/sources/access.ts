@@ -653,10 +653,11 @@ export function acquisitionEvidenceOfRead(
 }
 
 /**
- * Whether a read operated a site's interface, and what that says in the OPERATE
- * capability's terms. Pure. A BROWSER attempt is Brain driving an interface rather
- * than fetching a document, so it is the OPERATE capability's evidence; a read
- * that never opened the browser says nothing about it and yields null.
+ * What a read's browser attempt says in the OPERATE capability's terms. Pure. A
+ * read that never opened the browser says nothing about it and yields null. This
+ * is evidence, not a verdict that something was operated: the read path judges
+ * OPERATE only on a host a person granted (`judgeReadAsOperation`), so a public
+ * page rendered for research is acquisition and never an OPERATE row.
  *
  * No account is ever asserted: the research browser does not sign in
  * (`browserMcp.ts`), so `authorizedAccountOnRecord` is false and the judgment
@@ -713,6 +714,17 @@ function judgmentDeps(caller: string): RecordAcquisitionDeps {
   };
 }
 
+/**
+ * A read is judged as an OPERATE capability only on a host a person granted
+ * Brain permission to operate (`OPERATE_PERMISSION`, `acquisition.ts`). The
+ * spec keeps operating a system and acquiring information apart: a research
+ * read that happened to need the browser to render a public page acquired
+ * information and operated nothing, so on a host nobody granted it is judged
+ * as ACQUIRE alone and writes no OPERATE row. Where a grant stands, the
+ * browser is Brain using that site's interface under the permission, and the
+ * judgment records it with the grant it ran under. Revoking the grant ends the
+ * OPERATE judgments for the host; its reads go on being acquisition.
+ */
 async function judgeReadAsOperation(
   read: SourceRead,
   host: string | null,
@@ -721,8 +733,15 @@ async function judgeReadAsOperation(
   caller: string,
 ): Promise<void> {
   const operated = operateEvidenceOfRead(read, boundary, evidence);
-  if (!operated) return;
-  await recordAcquisitionJudgment({ kind: 'OPERATE', purpose: `operate the interface at ${read.requestedUrl}`, host }, operated, judgmentDeps(caller));
+  if (!operated || !host) return;
+  const deps = judgmentDeps(caller);
+  const permission = await deps.operatePermission!(host);
+  if (!permission.permitted) return;
+  await recordAcquisitionJudgment(
+    { kind: 'OPERATE', purpose: `operate the interface at ${read.requestedUrl}`, host },
+    operated,
+    { ...deps, operatePermission: async () => permission },
+  );
 }
 
 async function judgeReadAsAcquisition(

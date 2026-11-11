@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   judgeAcquisitionNeed,
   recordAcquisitionJudgment,
+  recordOperatePermission,
   repeatedUseFromRows,
 } from '../server/services/sources/acquisition.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, SCRIPT_CONVERSION_RUNS } from '../server/services/sources/accessMethods.ts';
@@ -269,7 +270,7 @@ describe('OPERATE has a production producer, separate from ACQUIRE', () => {
     expect(judgeAcquisitionNeed({ kind: 'OPERATE', purpose: 'p' }, ev).boundaries).toEqual(['ACCESS_BARRIER']);
   });
 
-  it('readSource writes one OPERATE and one ACQUIRE ACQUISITION_JUDGMENT row when the browser ran', async () => {
+  it('a browser read on a host nobody granted is ACQUIRE only; on a granted host it is also OPERATE', async () => {
     await freshProject();
     resetSourceAccessMemory();
     await readSource('https://operate-producer.example/app', {
@@ -284,7 +285,22 @@ describe('OPERATE has a production producer, separate from ACQUIRE', () => {
       browser: async (u) => okFetch(u),
       caller: 'operate-producer-test',
     });
-    expect(await capabilitiesOf('operate-producer-test')).toEqual(['ACQUIRE', 'OPERATE']);
+    // A public page rendered for research operated nothing: it is acquisition, never an OPERATE row.
+    expect(await capabilitiesOf('operate-producer-test')).toEqual(['ACQUIRE']);
+    await recordOperatePermission({ host: 'operate-producer.example', granted: true, accountRef: 'ops login for operate-producer', grantedBy: 'owner' });
+    await readSource('https://operate-producer.example/app', {
+      resolve: async () => ['93.184.216.34'],
+      robotsAllow: async () => true,
+      learned: async () => null,
+      archive: async () => null,
+      sitemap: async () => null,
+      search: null,
+      connector: async () => null,
+      direct: async (u) => emptyFetch(u),
+      browser: async (u) => okFetch(u),
+      caller: 'operate-producer-granted',
+    });
+    expect(await capabilitiesOf('operate-producer-granted')).toEqual(['ACQUIRE', 'OPERATE']);
   });
 
   it('a plain direct read produces no OPERATE row', async () => {

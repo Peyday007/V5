@@ -83,7 +83,9 @@ describe('the read path loads its history once per refresh, not per read', () =>
     await browserRead('https://revoke.example/flow', 'revoke-after');
     const provider = async (caller: string) => (await rowsOf('ACQUISITION_JUDGMENT', caller)).filter((r) => r.m.capability === 'OPERATE').map((r) => r.provider);
     expect(await provider('revoke-before')).toEqual(['BROWSER']);
-    expect(await provider('revoke-after')).toEqual(['HUMAN_HANDOFF']);
+    // Revoked: the next read is not judged as an operation at all, only as acquisition.
+    expect(await provider('revoke-after')).toEqual([]);
+    expect((await rowsOf('ACQUISITION_JUDGMENT', 'revoke-after')).map((r) => r.m.capability)).toEqual(['ACQUIRE']);
   });
 });
 

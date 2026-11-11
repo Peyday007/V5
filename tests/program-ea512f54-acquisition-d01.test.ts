@@ -176,7 +176,9 @@ describe('OPERATE is reachable on production records through a person\'s permiss
         .filter((r) => r.m.capability === 'OPERATE');
 
     await read('operate-ungranted');
-    expect((await operateRows('operate-ungranted')).map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
+    expect((await operateRows('operate-ungranted')).map((r) => r.provider)).toEqual([]);
+    // Not granted: the browser rendered a page for research, which is acquisition only (the spec keeps the two apart).
+    expect((await getDb().all<{ measures: string }>(`SELECT measures FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT' AND workload_class = ?`, ['operate-ungranted'])).map((r) => (JSON.parse(r.measures) as { capability: string }).capability)).toEqual(['ACQUIRE']);
 
     await recordOperatePermission({ host: 'granted-app.example', granted: true, accountRef: 'owner login for granted-app', grantedBy: 'owner' });
     expect((await readOperatePermission('granted-app.example')).permitted).toBe(true);
@@ -190,7 +192,9 @@ describe('OPERATE is reachable on production records through a person\'s permiss
 
     await recordOperatePermission({ host: 'granted-app.example', granted: false, grantedBy: 'owner' });
     await read('operate-revoked');
-    expect((await operateRows('operate-revoked')).map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
+    expect((await operateRows('operate-revoked')).map((r) => r.provider)).toEqual([]);
+    // Not granted: the browser rendered a page for research, which is acquisition only (the spec keeps the two apart).
+    expect((await getDb().all<{ measures: string }>(`SELECT measures FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT' AND workload_class = ?`, ['operate-revoked'])).map((r) => (JSON.parse(r.measures) as { capability: string }).capability)).toEqual(['ACQUIRE']);
   });
 });
 
@@ -212,7 +216,7 @@ describe('a person grants an operate permission from the terminal, and the read 
     expect(refused.out).not.toContain('ghp_');
   });
 
-  it('end to end: grant from the terminal, the next read is operated by BROWSER and proposes a connector; revoke returns it to a handoff', async () => {
+  it('end to end: grant from the terminal, the next read is operated by BROWSER and proposes a connector; revoke returns its reads to acquisition only', async () => {
     await freshProject();
     resetSourceAccessMemory();
     const PAGE = 'The account dashboard lists 312 open orders for the week. '.repeat(10);
@@ -238,7 +242,9 @@ describe('a person grants an operate permission from the terminal, and the read 
 
     expect((await runOperatePermissionCommand(['show', '--host', 'cli-granted.example'])).out).toMatch(/no standing permission/);
     await read('cli-before');
-    expect((await operated('cli-before')).map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
+    expect((await operated('cli-before')).map((r) => r.provider)).toEqual([]);
+    // Not granted: the browser rendered a page for research, which is acquisition only (the spec keeps the two apart).
+    expect((await getDb().all<{ measures: string }>(`SELECT measures FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT' AND workload_class = ?`, ['cli-before'])).map((r) => (JSON.parse(r.measures) as { capability: string }).capability)).toEqual(['ACQUIRE']);
 
     const granted = await runOperatePermissionCommand(['grant', '--host', 'CLI-Granted.example', '--account', 'ops login for cli-granted', '--by', 'owner']);
     expect(granted.code).toBe(0);
@@ -253,6 +259,8 @@ describe('a person grants an operate permission from the terminal, and the read 
 
     expect((await runOperatePermissionCommand(['revoke', '--host', 'cli-granted.example', '--by', 'owner'])).code).toBe(0);
     await read('cli-revoked');
-    expect((await operated('cli-revoked')).map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
+    expect((await operated('cli-revoked')).map((r) => r.provider)).toEqual([]);
+    // Not granted: the browser rendered a page for research, which is acquisition only (the spec keeps the two apart).
+    expect((await getDb().all<{ measures: string }>(`SELECT measures FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT' AND workload_class = ?`, ['cli-revoked'])).map((r) => (JSON.parse(r.measures) as { capability: string }).capability)).toEqual(['ACQUIRE']);
   });
 });
