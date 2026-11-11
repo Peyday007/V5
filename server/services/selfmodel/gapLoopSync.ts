@@ -13,8 +13,9 @@
  *                    decision could fail, and the cause judged from the record
  *   SEARCH_EXISTING  the method archive, the system scan's components and the
  *                    owner path in the running image — always before ACQUIRE
- *   VALUE            the option the loop took (research, a Factory change,
- *                    combining, abandoning) and the ones it was weighed against
+ *   VALUE            written by the loop before it acts, from `gapValue.ts`: every
+ *                    option costed and compared, the best one taken. Here only a
+ *                    choice made without that comparison is recorded, marked so
  *   ACQUIRE          the existing execution owner the work went to
  *   VERIFY           the metric before and after delivery, on production rows
  *   INTEGRATE        kept as a versioned capability, or retired
@@ -71,10 +72,6 @@ function chosenOption(c: ImprovementCandidate): { chosen: string; ref: string } 
   return null;
 }
 
-const ALTERNATIVES =
-  'reuse an accepted method from the archive; commission method research; a Factory change to the owner; ' +
-  'combine with a candidate already owning the component; ask a person for one credential; abandon the direction';
-
 function acquisition(c: ImprovementCandidate): { owner: string; ref: string } | null {
   if (c.changeRequestId) return { owner: `Factory (change request ${c.changeRequestId}${c.campaignId ? `, campaign ${c.campaignId}` : ''})`, ref: `FACTORY:${c.changeRequestId}` };
   if (c.researchGoalId) return { owner: `research goal ${c.researchGoalId} worked by the free lane and Claude routines`, ref: `RESEARCH:${c.researchGoalId}` };
@@ -126,19 +123,25 @@ export function gapStepsDue(c: ImprovementCandidate, state: GapLoopState, found:
       },
     });
   }
+  // VALUE is computed and recorded by the improvement loop before it acts (`gapValue.ts`, loop.ts
+  // valueNextStep). What is written here is only the record of a choice made without that comparison —
+  // a combination, a rejection or a hand-off from before the loop valued its steps — and it says so:
+  // it names the choice, and states that no alternative was weighed rather than listing any as if it had been.
   const option = chosenOption(c);
-  if (option && state.latest.VALUE?.detail['ref'] !== option.ref) {
+  const latestValue = state.latest.VALUE?.detail;
+  const evaluated = latestValue?.['evaluated'] === true;
+  if (option && !evaluated && latestValue?.['ref'] !== option.ref) {
     due.push({
       step: 'VALUE',
-      summary: option.chosen.slice(0, 200),
+      summary: `${option.chosen} (recorded from the candidate; not valued against alternatives)`.slice(0, 200),
       detail: {
+        evaluated: false,
         chosen: option.chosen,
         ref: option.ref,
-        alternatives: ALTERNATIVES,
+        alternatives: 'none weighed: this choice was made before the loop valued its next step, and is recorded as such',
         severity: c.severity,
         frequency: c.frequency,
         denominator: c.denominator,
-        cost: 'subscription capacity only; no paid model API',
       },
     });
   }

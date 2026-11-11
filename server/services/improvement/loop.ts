@@ -63,6 +63,7 @@ import { RELEASE_EXCLUDED_PATHS } from '../../domain/factoryRelease.ts';
 import { claimRejections, freeLaneFailures, ownerInterventions, packetOutcomes, readMetric } from './scoreboard.ts';
 import { improvementPerson, improvementSwitch } from './authority.ts';
 import type { ExistingMatch } from '../selfmodel/gapLoop.ts';
+import type { ValueJudgment } from '../selfmodel/gapValue.ts';
 
 export const IMPROVEMENT_TICK_MS = 10 * 60_000;
 const HOUR = 3_600_000;
@@ -644,6 +645,47 @@ async function submitRevert(candidate: ImprovementCandidate, why: string, now: D
   await recordImprovementEvent({ candidateId: candidate.id, kind: 'REVERT_SUBMITTED', detail: { changeRequestId: submitted.changeRequest.id, at: now.toISOString() } });
 }
 
+/**
+ * Value the next step for one candidate (AUTO-20-2 step 4, `selfmodel/gapValue.ts`): the options the
+ * existing owners can carry out, each costed from the loop's own rows and this candidate's evidence.
+ */
+async function valueNextStep(
+  candidate: ImprovementCandidate,
+  link: Linked,
+  stage: 'DIAGNOSE' | 'ENGINEER',
+  found: { archiveClaims: number; existing: readonly ExistingMatch[] },
+): Promise<ValueJudgment> {
+  const { evaluateNextStep, readRouteHistory } = await import('../selfmodel/gapValue.ts');
+  const { judgeCause } = await import('../selfmodel/gapLoopSync.ts');
+  const earlier = (await family(candidate.weaknessKey.split('#')[0]!)).filter((m) => m.attempt < candidate.attempt);
+  const knownCause = typeof candidate.evidence['knownCause'] === 'string' ? (candidate.evidence['knownCause'] as string) : null;
+  return evaluateNextStep({
+    stage,
+    severity: candidate.severity,
+    scope: candidate.scope,
+    frequency: candidate.frequency,
+    denominator: candidate.denominator,
+    cause: judgeCause(candidate).cause,
+    knownCause,
+    archiveClaims: link.archive.length,
+    existingOther: found.existing.filter((e) => !(e.kind === 'PATH' && e.name === candidate.ownerComponent)).length,
+    research: candidate.researchGoalId ? { opened: true, settled: Boolean(link.research?.settled), acceptedClaims: link.research?.acceptedClaims ?? 0 } : null,
+    failedAttempts: earlier
+      .filter((m) => m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED')
+      .map((m) => ({ attempt: m.attempt, researched: Boolean(m.researchGoalId) })),
+    history: await readRouteHistory(),
+  });
+}
+
+/** Write the judgment as the gap's VALUE step, once per decision: a pass that reaches the same choice adds nothing. */
+async function recordValue(candidate: ImprovementCandidate, judgment: ValueJudgment): Promise<void> {
+  const { readGapLoop, recordGapStep } = await import('../selfmodel/gapLoop.ts');
+  const { valueDetail } = await import('../selfmodel/gapValue.ts');
+  const prior = (await readGapLoop(candidate.weaknessKey)).latest.VALUE?.detail;
+  if (prior && prior['evaluated'] === true && prior['decision'] === judgment.chosen && prior['stage'] === judgment.stage) return;
+  await recordGapStep({ gapKey: candidate.weaknessKey, step: 'VALUE', summary: `${judgment.chosen}: ${judgment.basis}`.slice(0, 400), detail: valueDetail(judgment) });
+}
+
 /** Advance one candidate by one step. Returns what it did, or null when it waited. */
 async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>, now: Date, report: ImprovementTickReport): Promise<string | null> {
   const link = await linked(candidate);
@@ -653,30 +695,53 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
     await recordImprovementEvent({ candidateId: candidate.id, kind: 'STAGE', detail: { stage, from: last?.detail['stage'] ?? null } });
   }
   switch (stage as Stage) {
-    case 'DIAGNOSE': {
-      // Reuse comes first (AUTO-20-2 step 3): what exists is searched and recorded before research is opened.
+    case 'DIAGNOSE':
+    case 'ENGINEER': {
+      // Reuse comes first (AUTO-20-2 step 3): what exists is searched and recorded before anything is valued or acquired.
       const found = await searchFirst(candidate, link);
-      const goalId = await openResearch(candidate, now, found.existing);
-      await patchCandidate(candidate.id, { researchGoalId: goalId });
-      await recordImprovementEvent({ candidateId: candidate.id, kind: 'RESEARCH_OPENED', detail: { goalId, archiveClaims: link.archive.length } });
-      return `research goal ${goalId} (Claude routines)`;
+      // Then the next step is valued (step 4): every option the existing owners can carry out, compared on
+      // expected value, cost, latency, opportunity cost and dependencies, and the best one is taken.
+      const judgment = await valueNextStep(candidate, link, stage as 'DIAGNOSE' | 'ENGINEER', found);
+      const needsSlot = judgment.chosen === 'FACTORY_CHANGE' || judgment.chosen === 'REUSE_EXISTING';
+      // One live engineering objective per owner component: a chosen change waits while another holds it.
+      if (needsSlot && busyOwners.has(candidate.ownerComponent)) return null;
+      await recordValue(candidate, judgment);
+      switch (judgment.chosen) {
+        case 'COMMISSION_RESEARCH': {
+          const goalId = await openResearch(candidate, now, found.existing);
+          await patchCandidate(candidate.id, { researchGoalId: goalId });
+          await recordImprovementEvent({ candidateId: candidate.id, kind: 'RESEARCH_OPENED', detail: { goalId, archiveClaims: link.archive.length, value: judgment.basis } });
+          return `research goal ${goalId} (Claude routines)`;
+        }
+        case 'FACTORY_CHANGE':
+        case 'REUSE_EXISTING': {
+          // Nothing is built before what exists has been searched; what it found goes into the objective.
+          busyOwners.add(candidate.ownerComponent);
+          return engineer(candidate, link, now, found.existing);
+        }
+        case 'ASK_CREDENTIAL': {
+          const ask = `a person supplies the credential the rows say was refused: ${String(candidate.evidence['knownCause'] ?? '').slice(0, 200)}`;
+          await decideCandidate(candidate.id, 'HELD', `Valued: ${judgment.basis} Held for one credential only a person holds (MISSING_AUTHORITY).`, { heldOn: ask.slice(0, 300) });
+          await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'HELD', needsPerson: true, personAction: ask, value: judgment.basis } });
+          report.decided.push(`${candidate.weaknessKey} HELD`);
+          return 'held: one credential from a person';
+        }
+        case 'ABANDON': {
+          // Research that settled with nothing supported and no diagnosis concludes honestly: no change.
+          const reason =
+            link.research && link.research.settled && link.research.acceptedClaims === 0 && link.archive.length === 0 && !candidate.evidence['knownCause']
+              ? `Method research ended ${link.research.status ?? 'without a result'} with no accepted claim and the rows state no cause; no change is justified.`
+              : `No option is expected to return more than it costs; no change is justified. ${judgment.basis}`;
+          await decideCandidate(candidate.id, 'REJECTED', reason.slice(0, 1000));
+          await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'REJECTED', research: link.research?.status ?? null, value: judgment.basis } });
+          report.decided.push(`${candidate.weaknessKey} REJECTED`);
+          return link.research?.settled ? 'rejected: research found nothing to build' : 'rejected: no option is worth its cost';
+        }
+      }
+      return null;
     }
     case 'RESEARCHING':
       return null;
-    case 'ENGINEER': {
-      // Research that settled with nothing supported and no diagnosis concludes honestly: no change.
-      if (link.research && link.research.settled && link.research.acceptedClaims === 0 && link.archive.length === 0 && !candidate.evidence['knownCause']) {
-        await decideCandidate(candidate.id, 'REJECTED', `Method research ended ${link.research.status ?? 'without a result'} with no accepted claim and the rows state no cause; no change is justified.`);
-        await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'REJECTED', research: link.research.status } });
-        report.decided.push(`${candidate.weaknessKey} REJECTED`);
-        return 'rejected: research found nothing to build';
-      }
-      if (busyOwners.has(candidate.ownerComponent)) return null;
-      // Nothing is built before what exists has been searched; what it found goes into the objective.
-      const found = await searchFirst(candidate, link);
-      busyOwners.add(candidate.ownerComponent);
-      return engineer(candidate, link, now, found.existing);
-    }
     case 'ENGINEERING': {
       const factory = link.factory!;
       if (factory.state === 'LIVE') {
