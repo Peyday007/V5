@@ -1150,3 +1150,92 @@ export function recordedCause(recorded: RecordedStageCapacity | null): string | 
   const advance = recorded.queueAdvance ? `; queued work ${recorded.queueAdvance.verdict.toLowerCase().replace('_', ' ')}` : '';
   return `Stage capacity (${recorded.at}) names the cause: model route ${primary.route} failing (${primary.cause}, ${primary.failures} failure(s))${advance}.`;
 }
+
+/* ------------------------------------------------------------------------- */
+/* The scaling gate: restore first, then scale only the measured constraint   */
+/* ------------------------------------------------------------------------- */
+
+/** What the gate decided about one proposed growth of a model's slots. */
+export interface ScalingVerdict {
+  target: number;
+  /** True when the proposal was cut back; `reason` then says which measurement is missing. */
+  held: boolean;
+  reason: string | null;
+}
+
+/**
+ * Whether a model's slots may grow to `proposed` (S-0171: "Scale independent
+ * worker replicas … and model instances only after measurements identify the
+ * constrained stage, with a measured expected gain in accepted commercially
+ * decisive facts per hour and dollars spent"). This is what the adaptive pool
+ * (`capacity.ts` controlStep) consults before it raises a target. Pure.
+ *
+ *  - Shrinking, holding, and regaining capacity the model has already proven
+ *    (`stableHigh`) are never held: they restore throughput, they do not scale it.
+ *  - Growth past proven capacity needs a fresh recorded reading
+ *    (`readStageCapacity`), and that reading must show:
+ *      * no model route failing without having answered since — restore first;
+ *      * a constrained stage that lane slots actually serve (model
+ *        interpretation or evidence verification); a constraint in ingestion,
+ *        quant or commercial execution is not relieved by more model slots;
+ *      * a measured expected gain above zero. On a GPU slot that is the
+ *        reading's `expectedGain`, priced from the pod's own samples; a free
+ *        provider's slot costs $0, so its gain is the stage's measured
+ *        accepted rate bounded by the waiting work at its measured acceptance.
+ */
+export function gateGrowth(input: {
+  model: string;
+  gpu: boolean;
+  current: number;
+  proposed: number;
+  stableHigh: number;
+  recorded: RecordedStageCapacity | null;
+}): ScalingVerdict {
+  const { current, proposed, recorded } = input;
+  const proven = Math.max(current, input.stableHigh);
+  if (proposed <= proven) return { target: proposed, held: false, reason: null };
+  const hold = (why: string): ScalingVerdict => ({ target: proven, held: true, reason: `growth past proven capacity (${proven}) held: ${why}` });
+  /*
+   * Never measured at all: the lane records its first reading the moment its
+   * pool starts (worker.ts startFreeLaneLoop) and holds every model at its
+   * starting size for the boot grace, so on a running Brain a reading exists
+   * before any growth. Only a lane whose measurement has never run reaches
+   * here, and it is told so rather than frozen at its starting size.
+   */
+  if (!recorded) return { target: proposed, held: false, reason: 'no stage-capacity reading recorded yet; growth is not yet gated by a measured constraint' };
+  if (!recorded.report) return hold(`the latest stage-capacity reading could not measure (${recorded.reason.slice(0, 120)})`);
+  if (recorded.stale) return hold(`the latest stage-capacity reading is ${recorded.ageMinutes} min old`);
+  const report = recorded.report;
+  const failing = report.diagnosis.primary;
+  if (failing) return hold(`restore model route ${failing.route} first (${failing.cause}, ${failing.failures} failure(s))`);
+  const constrained = report.constrained;
+  const laneIds = LANE_STAGES().map((s) => s.id);
+  if (!constrained.stage) return hold('no measured stage has work waiting');
+  if (!laneIds.includes(constrained.stage)) return hold(`the constrained stage is ${constrained.stage}, which more model slots do not serve`);
+  const gain = input.gpu ? gpuGain(constrained) : freeGain(report.stages.find((s) => s.stage === constrained.stage));
+  if (!gain.measured) return hold(gain.reason);
+  if (!(gain.value.acceptedFactsPerHour > 0)) return hold(`the measured gain at ${constrained.stage} is 0 accepted facts/h`);
+  return {
+    target: proposed,
+    held: false,
+    reason: `constrained at ${constrained.stage}; measured gain ${round2(gain.value.acceptedFactsPerHour)} accepted facts/h for $${round2(gain.value.dollars)}/h`,
+  };
+}
+
+function gpuGain(constrained: Constraint): Measured<{ acceptedFactsPerHour: number; dollars: number }> {
+  return constrained.expectedGain.measured
+    ? constrained.expectedGain
+    : NOT(`the GPU's expected gain is not measured: ${constrained.expectedGain.reason}`);
+}
+
+function freeGain(stage: StageReading | undefined): Measured<{ acceptedFactsPerHour: number; dollars: number }> {
+  if (!stage) return NOT('the constrained stage has no reading');
+  if (!stage.queueSize.measured || !stage.itemsProcessedPerHour.measured) return NOT(`${stage.stage}'s queue or processed rate is not measured`);
+  const processed = stage.itemsProcessedPerHour.value;
+  const acceptance = processed > 0 ? stage.acceptedPerHour / processed : 0;
+  return { measured: true, value: { acceptedFactsPerHour: Math.min(stage.acceptedPerHour, stage.queueSize.value * acceptance), dollars: 0 } };
+}
+
+function round2(x: number): number {
+  return Math.round(x * 100) / 100;
+}

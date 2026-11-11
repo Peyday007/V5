@@ -31,6 +31,7 @@ import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../c
 import { isRunpodSlot, runpodCallWindow } from '../cheap/runpod.ts';
 import { superviseRunpodPod } from '../cheap/runpodPod.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
+import type { RecordedStageCapacity } from './stageCapacity.ts';
 import { readSource } from '../sources/access.ts';
 import { setSearchRefusalRecorder } from '../sources/discover.ts';
 import {
@@ -264,6 +265,8 @@ export interface PoolOptions {
   config?: LaneConfig;
   /** Test seam: the pressure reading, instead of this process's own. */
   pressure?: () => Pressure;
+  /** Test seam: the recorded stage-capacity reading the growth gate consults, instead of the latest row. */
+  stageReading?: () => Promise<RecordedStageCapacity | null>;
 }
 let poolOptions: PoolOptions = {};
 
@@ -352,6 +355,9 @@ export async function controlStep(): Promise<ControlReading | null> {
   const waiting = await waitingNow();
   const pressure = poolOptions.pressure ? poolOptions.pressure() : readPressure();
   const reading: ControlReading = { waiting, pressure, models: [] };
+  // One read of the recorded measurement per step, shared by every model's growth gate.
+  const { gateGrowth, readStageCapacity } = await import('./stageCapacity.ts');
+  const stages = await (poolOptions.stageReading ?? (() => readStageCapacity()))().catch(() => null);
   for (const pool of pools.values()) {
     const gpu = config.runpod && isRunpodSlot(pool.worker.model);
     const window = gpu ? gpuWindow(await windowFor(pool.worker.model)) : await windowFor(pool.worker.model);
@@ -361,6 +367,18 @@ export async function controlStep(): Promise<ControlReading | null> {
     // the lane stays at its starting size until it has been up BOOT_GRACE_MS.
     if (Date.now() - poolStartedAt < BOOT_GRACE_MS && decision.target > START_TARGET) {
       decision = { ...decision, target: START_TARGET, reason: 'starting up: held at its starting size for the first minutes', stable: false };
+    }
+    /*
+     * Restore first, then scale only the measured constraint (S-0171). Growth
+     * past what this model has already proven runs is allowed only when the
+     * latest recorded stage-capacity reading names no failing route, a
+     * constrained stage these slots serve, and a measured gain above zero
+     * (`gateGrowth`). Regaining proven capacity is restoring, never held.
+     */
+    if (decision.target > pool.target) {
+      const verdict = gateGrowth({ model: pool.worker.model, gpu: !!gpu, current: pool.target, proposed: decision.target, stableHigh: pool.stableHigh, recorded: stages });
+      if (verdict.held) decision = { ...decision, target: verdict.target, reason: verdict.reason!, stable: false };
+      else if (verdict.reason) decision = { ...decision, reason: `${decision.reason}; ${verdict.reason}` };
     }
     // Every slot reaches the same database pool. Production, 2026-11-05 11:29Z: three
     // models' slots left 593 callers waiting on 8 connections, and audits threw. The
