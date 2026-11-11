@@ -560,20 +560,64 @@ export function routeInputsFromEntries(
   return inputs;
 }
 
-/** Read one project's money ledger and quantify every route in it, in one currency. */
+/** The most rows `listMoneyEntries` returns in one read; it clamps any larger limit to this. */
+export const LEDGER_READ_LIMIT = 2000;
+
+/**
+ * A route whose ledger could not be read whole. Every figure is unknown rather
+ * than computed from the newest rows alone: a read cut at the limit drops the
+ * oldest rows (the agreement, the first cost) while keeping later receipts,
+ * which would date the commitment wrongly and misstate receivables, margin and
+ * peak working capital while presenting them as measured.
+ */
+export function partialRouteMoney(routeKey: string, rowsRead: number): RouteMoneyVelocity {
+  const blank = quantifyRouteMoney({ routeKey, events: [] });
+  return {
+    ...blank,
+    unknowns: [`ledger read stopped at ${rowsRead} rows for this route, older rows were not read, every figure unknown`, ...blank.unknowns],
+  };
+}
+
+/**
+ * Read one project's money ledger and quantify every route in it, in one currency.
+ *
+ * Each route is read on its own (`opportunityId`), so one busy route cannot push
+ * another route's older rows out of a project-wide read. A route whose own read
+ * reaches the limit may hold more rows than were returned, so it is reported as
+ * partial with every figure unknown (`partialRouteMoney`), never as measured.
+ */
 export async function readRouteMoney(input: {
   projectId: string;
   currency: string;
   /** The project's opportunity rows when the caller already read them, so they are not read twice. */
   opportunities?: readonly CashOpportunity[];
+  /** Rows read per route; clamped to `LEDGER_READ_LIMIT`. Smaller only to exercise the partial path. */
+  rowLimit?: number;
 }): Promise<RouteMoneyVelocity[]> {
-  const [entries, opportunities] = await Promise.all([
-    listMoneyEntries({ projectId: input.projectId, currency: input.currency, limit: 2000 }),
-    input.opportunities ?? listOpportunities({ projectId: input.projectId }),
-  ]);
+  const opportunities = input.opportunities ?? (await listOpportunities({ projectId: input.projectId }));
+  const limit = Math.max(1, Math.min(LEDGER_READ_LIMIT, Math.floor(input.rowLimit ?? LEDGER_READ_LIMIT)));
   // The opportunity row is the lead, and its creation instant is when the lead was recorded.
   const leadAt = new Map(opportunities.map((o) => [o.id, o.createdAt] as const));
-  return routeInputsFromEntries(entries, leadAt).map(quantifyRouteMoney);
+  const out: RouteMoneyVelocity[] = [];
+  const ids = [...new Set(opportunities.map((o) => o.id))];
+  const BATCH = 16;
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const reads = await Promise.all(
+      ids.slice(i, i + BATCH).map(async (opportunityId) => ({
+        opportunityId,
+        entries: await listMoneyEntries({ projectId: input.projectId, opportunityId, currency: input.currency, limit }),
+      })),
+    );
+    for (const { opportunityId, entries } of reads) {
+      if (entries.length === 0) continue;
+      if (entries.length >= limit) {
+        out.push(partialRouteMoney(opportunityId, entries.length));
+        continue;
+      }
+      out.push(...routeInputsFromEntries(entries, leadAt).map(quantifyRouteMoney));
+    }
+  }
+  return out;
 }
 
 /** The same routes ranked for an objective; unknown inputs score null and sort last. */
