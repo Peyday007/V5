@@ -23,6 +23,7 @@
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { newId, nowIso } from '../../repos/util.ts';
+import { recordRoutedWork } from '../../repos/workRouting.ts';
 import { ProviderHttpError, parseRetryAfter, providerCapacity, providerKey, type ProviderCapacity } from '../routing/providers/capacity.ts';
 import { DELIVERABLE_KINDS, type DeliverableKind } from '../cash/deliverables/spec.ts';
 
@@ -341,20 +342,32 @@ async function runTask<I, O>(
   const answers: (O | null)[] = [];
   const now = options.now ?? new Date();
   const health = options.health ?? (await modelHealth(kind, now));
+  const seen = { cached: 0, asked: 0, down: 0, deferred: 0, errors: 0, offShape: 0, budgetSpent: false };
   for (const model of config.models) {
     const hit = cached.find((row) => row.model === model);
     if (hit) {
+      seen.cached += 1;
       answers.push(hit.ok && hit.output ? parse(hit.output) : null);
       continue;
     }
     // A model that keeps failing is skipped, not asked: no answer, no spent call.
-    if (isDown(health.get(model))) continue;
+    if (isDown(health.get(model))) {
+      seen.down += 1;
+      continue;
+    }
     // A provider in cooldown, or over its stored rate limit, is deferred: not called,
     // and nothing is written, so a deferral never reads as a failed answer.
     const capacity = options.capacity ?? providerCapacity;
     const key = providerKey(config.url, model);
-    if (!capacity.reserve(key, now).allowed) continue;
-    if ((await usedToday(kind, now)) >= config.dailyBudget) return merge(answers);
+    if (!capacity.reserve(key, now).allowed) {
+      seen.deferred += 1;
+      continue;
+    }
+    if ((await usedToday(kind, now)) >= config.dailyBudget) {
+      seen.budgetSpent = true;
+      break;
+    }
+    seen.asked += 1;
     let text = '';
     let error: string | null = null;
     try {
@@ -365,6 +378,8 @@ async function runTask<I, O>(
     }
     if (!error) capacity.success(key);
     const parsed = error ? null : parse(text);
+    if (error) seen.errors += 1;
+    else if (!parsed) seen.offShape += 1;
     await db.run(
       `INSERT INTO cheap_results (id, kind, input_hash, subject_id, model, ok, output, error, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -383,11 +398,62 @@ async function runTask<I, O>(
     );
     answers.push(parsed);
   }
-  return merge(answers);
+  const merged = merge(answers);
+  if (options.route) await recordLaneDecision(kind, hash, options.route, seen, merged !== null);
+  return merged;
+}
+
+/**
+ * Write the cheap lane's routing decision for one task to the ledger: CHEAP,
+ * why, what was reused, what failed and whether the models agreed. The output
+ * stays a sorting signal; the validation recorded is the lane's own agreement
+ * check, never evidence. Advisory — a ledger failure never blocks the screen.
+ */
+async function recordLaneDecision(
+  kind: TaskKind,
+  hash: string,
+  route: LaneRoute,
+  seen: { cached: number; asked: number; down: number; deferred: number; errors: number; offShape: number; budgetSpent: boolean },
+  answered: boolean,
+): Promise<void> {
+  const failureClass =
+    seen.offShape > 0 ? 'MALFORMED_OUTPUT'
+    : seen.errors > 0 ? 'TRANSIENT_PROVIDER'
+    : seen.asked === 0 && seen.cached === 0 && seen.down > 0 ? 'PROVIDER_DOWN'
+    : seen.asked === 0 && seen.cached === 0 && (seen.deferred > 0 || seen.budgetSpent) ? 'RATE_LIMITED'
+    : null;
+  const reasons = [
+    `${kind} is a closed-answer task in the cheap lane's reviewed TASKS, validated by parsing and model agreement`,
+    `models: ${seen.cached} answered from cheap_results, ${seen.asked} asked, ${seen.down} skipped as down, ${seen.deferred} deferred by provider capacity`,
+  ];
+  if (seen.budgetSpent) reasons.push(`the ${kind} daily budget was spent before every model was asked`);
+  await recordRoutedWork({
+    projectId: route.projectId,
+    workKind: `CHEAP_${kind}`,
+    workRef: route.workRef ?? null,
+    resource: 'CHEAP',
+    reasons,
+    alternatives: [
+      'CODE: no ACTIVE detector or algorithm answered this item before it reached the lane',
+      'STRONG: a closed sorting task does not need Claude; Claude verifies only what is shortlisted',
+    ],
+    reusedResultId: seen.cached > 0 && seen.asked === 0 ? `cheap_results:${kind}:${hash}` : null,
+    failureClass,
+    outcome: answered ? 'ANSWERED' : 'NO_SIGNAL',
+    validationResult: answered ? 'validated answer, models agreed' : 'no validated agreement',
+  });
 }
 
 /** Screen one opening. Null means "no signal", never DROP. */
+/** The project a lane task serves, so its routing decision is written to that project's ledger. */
+export interface LaneRoute {
+  projectId: string;
+  workRef?: string | null;
+}
+
 export interface LaneOptions {
+  /** When given, the task's routing decision is recorded in the work-routing ledger. */
+  route?: LaneRoute;
   config?: LaneConfig | null;
   completer?: Completer;
   now?: Date;

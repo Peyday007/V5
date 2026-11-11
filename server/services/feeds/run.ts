@@ -19,6 +19,8 @@
 import { getDb } from '../../db/database.ts';
 import { insertFeedItems, markShortlisted, pullState, recordFeedPull, unlistedFeedItems, type StoredFeedItem } from '../../repos/feeds.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
+import { listProjects } from '../../repos/projects.ts';
+import { recordRoutedWork } from '../../repos/workRouting.ts';
 import { openingsWithSourceUrl } from '../../repos/cashPortfolio.ts';
 import { listRounds, openRound } from '../../repos/cashDiscovery.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
@@ -161,6 +163,12 @@ export async function screenFeedLeads(input: {
   now?: Date;
   config?: LaneConfig | null;
   completer?: Completer;
+  /**
+   * The project these screens serve, whose routing ledger records each one.
+   * Absent: the project the shortlist feeds (the oldest active sprint), and no
+   * ledger row when there is none — a screen serving nobody is not attributed.
+   */
+  projectId?: string | null;
 } = {}): Promise<number> {
   const now = input.now ?? new Date();
   const config = input.config === undefined ? laneConfig() : input.config;
@@ -179,6 +187,11 @@ export async function screenFeedLeads(input: {
       return !Number.isFinite(published) || now.getTime() - published <= LEAD_MAX_AGE_MS;
     })
     .slice(0, pace.perPass);
+  const projectId = todo.length === 0
+    ? null
+    : input.projectId !== undefined
+      ? input.projectId
+      : await shortlistProject((await listProjects()).map((one) => one.id));
   let screened = 0;
   let next = 0;
   const worker = async (): Promise<void> => {
@@ -194,7 +207,13 @@ export async function screenFeedLeads(input: {
           body: item.body,
           url: item.url,
         },
-        { config, completer: input.completer, now, health },
+        {
+          config,
+          completer: input.completer,
+          now,
+          health,
+          ...(projectId ? { route: { projectId, workRef: `feed_item:${item.id}` } } : {}),
+        },
       );
       screened += 1;
     }
@@ -332,6 +351,29 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date }
   });
   if (!round) return null;
   await markShortlisted(chosen.map(({ item }) => item.id), round.id);
+  // Each shortlisted lead now goes to the strong model, which verifies it
+  // against its page through the evidence gate. Write down why, and which
+  // resource sorted it first: a code rule (CODE) or the free models (CHEAP).
+  for (const { item } of chosen) {
+    const sortedBy = item.source === CODE_SIGNAL_SOURCE ? 'CODE' : 'CHEAP';
+    await recordRoutedWork({
+      projectId: input.projectId,
+      workKind: 'FEED_SHORTLIST_VERIFY',
+      workRef: `${round.id}:${item.id}`,
+      resource: 'STRONG',
+      escalatedFrom: sortedBy,
+      reasons: [
+        sortedBy === 'CODE'
+          ? 'an installed code detector recognised this lead; a detection is still only a lead'
+          : 'the free models kept this lead and it passed the shortlist rules; free-model output is a sorting signal, not evidence',
+        'verifying it means opening the page and quoting it through the evidence gate, which needs the internet, tools and a strong model',
+      ],
+      alternatives: [
+        'CODE: no rule can establish what a public page says about a buyer',
+        'CHEAP: a free model\'s answer can never become verified evidence',
+      ],
+    });
+  }
   await recordCashEvent({
     projectId: input.projectId,
     kind: 'CASH_DISCOVERY_OPENED',

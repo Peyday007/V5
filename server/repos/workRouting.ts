@@ -74,6 +74,29 @@ export async function recordDecision(input: {
   return (await getDecision(input.projectId, id))!;
 }
 
+/**
+ * Record a decision made at a live routing seam, settled with its outcome when
+ * the seam already knows it. Advisory: a ledger failure is swallowed and
+ * answers null, so writing down why work ran where it did never stops the work
+ * itself. Seams that route real work (research fragments, the cheap lane, the
+ * feed shortlist) call this, so production rows say which resource ran each unit.
+ */
+export async function recordRoutedWork(input: Parameters<typeof recordDecision>[0] & {
+  outcome?: string | null;
+  validationResult?: string | null;
+}): Promise<string | null> {
+  try {
+    const { outcome, validationResult, ...decision } = input;
+    const recorded = await recordDecision(decision);
+    if (outcome) {
+      await settleDecision({ projectId: input.projectId, id: recorded.id, outcome, validationResult: validationResult ?? null });
+    }
+    return recorded.id;
+  } catch {
+    return null;
+  }
+}
+
 export async function getDecision(projectId: string, id: string): Promise<RoutingDecision | null> {
   const row = await getDb().get<DecisionRow>(
     'SELECT * FROM work_routing_decisions WHERE id = ? AND project_id = ?', [id, projectId]);
