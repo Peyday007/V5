@@ -1531,16 +1531,29 @@ export function resetRouteHealth(): void {
   routeHealth.clear();
 }
 
-/** A failing route's standing: null when it is healthy or due its single re-probe item. */
+/**
+ * A failing route's standing: null when it is healthy or due its single re-probe
+ * item. It only reads: asking does not spend the re-probe. The claim filter asks
+ * before its later checks (unfit pairs, free-lane admission, audit admission),
+ * and an item one of those rejects never reached the route, so it must not cost
+ * the route its probe — `spendRouteProbe` is called once an item is claimed.
+ */
 export function routeHold(model: string, now = Date.now()): string | null {
   const state = routeHealth.get(model);
   if (!state || state.failures < ROUTE_FAILURE_LIMIT) return null;
-  if (now >= state.nextProbeAt) {
-    // One item re-probes the route; the next is held until it answers.
-    state.nextProbeAt = now + ROUTE_REPROBE_MS;
-    return null;
-  }
+  if (now >= state.nextProbeAt) return null;
   return `model route failing (${state.cause}); another model takes the work until it is re-probed`;
+}
+
+/**
+ * An item was actually claimed for this route: if the route is held and was due
+ * its re-probe, that item is the probe, and the next is held until it answers.
+ * A healthy route is untouched.
+ */
+export function spendRouteProbe(model: string, now = Date.now()): void {
+  const state = routeHealth.get(model);
+  if (!state || state.failures < ROUTE_FAILURE_LIMIT) return;
+  if (now >= state.nextProbeAt) state.nextProbeAt = now + ROUTE_REPROBE_MS;
 }
 
 /** A route that answered is healthy again; a route that did not is counted, with its cause. */
@@ -1617,6 +1630,8 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     if (one) break;
   }
   if (!one) return { claimed: null, ok: false, ms: 0 };
+  // Only now, with an item claimed, does a held route spend its single re-probe.
+  spendRouteProbe(worker.model);
   const started = Date.now();
   const ctx: Ctx = {
     worker,
