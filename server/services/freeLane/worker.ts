@@ -1795,12 +1795,34 @@ export function startFreeLaneLoop(_intervalMs = 30_000, delayMs = 3 * 60_000): v
       .then(({ startAdaptivePool }) => startAdaptivePool())
       .catch((error) => console.warn('[free-lane] pool did not start:', (error as Error).message));
   };
-  const wait = setTimeout(begin, delayMs);
+  const wait = setTimeout(() => {
+    begin();
+    measureStages();
+    const every = setInterval(measureStages, STAGE_CAPACITY_INTERVAL_MS);
+    every.unref?.();
+    stageTimer = every;
+  }, delayMs);
   wait.unref?.();
   timer = wait as unknown as NodeJS.Timeout;
 }
 
+/** How often the lane records its per-stage capacity reading (CAP-16-3). */
+export const STAGE_CAPACITY_INTERVAL_MS = 60 * 60_000;
+let stageTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Record the per-stage capacity measurement (`stageCapacity.ts`) as a
+ * `bin_events` row. Background only: the web process never waits on it.
+ */
+function measureStages(): void {
+  void import('./stageCapacity.ts')
+    .then(({ recordStageCapacity }) => recordStageCapacity())
+    .catch((error) => console.warn('[free-lane] stage capacity not recorded:', (error as Error).message));
+}
+
 export function stopFreeLaneLoop(): void {
-  if (timer) clearInterval(timer);
+  if (timer) clearTimeout(timer);
+  if (stageTimer) clearInterval(stageTimer);
   timer = null;
+  stageTimer = null;
 }
