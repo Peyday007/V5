@@ -291,7 +291,7 @@ There must be no workflow where the user has to remember "now go update the data
     and never the space, simplification happens in the presentation, and what
     is not in the top five is not thereby worthless.
 
-## 8–101. The architecture record
+## 8–102. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -394,6 +394,7 @@ resolves. Read the section for the area you are changing before you change it
 - §99. A plan short of its requirement is reconstructed, not re-read, and a result keeps the context it was measured in.
 - §100. A change is recognized where it happens, and the work it enables resumes without a person restating it.
 - §101. A goal is examined from many directions, and the ways of reasoning that work are learned.
+- §102. A plan's variables are swept by ordinary code, and only the strongest strategies cost an engine read.
 
 ## Conventions
 
