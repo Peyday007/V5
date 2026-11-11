@@ -167,10 +167,11 @@ export interface Constraint {
   stage: string | null;
   basis: string;
   /**
-   * Present only when a measurement supports it: what one more replica of the
-   * constrained stage would add at its measured rate, in accepted facts per hour
-   * (capped by what is waiting), and what it would cost in `dollars` per hour at
-   * the stage's measured spend.
+   * Present only when a measurement supports it: what ONE more replica of the
+   * constrained stage would add (`perReplicaGain`), in accepted facts per hour
+   * per replica-hour of measured busy time (capped by the facts its waiting work
+   * yields per hour), and what that replica costs in `dollars` per hour at the
+   * stage's measured spend per replica-hour.
    */
   expectedGain: Measured<{ acceptedFactsPerHour: number; dollars: number }>;
   /** Scaling the web process is never what this recommends. */
@@ -764,26 +765,66 @@ export function chooseConstraint(
         ? `${round2(worst.hours)} h to clear at ${round2(stage.acceptedPerHour)} accepted/h.`
         : 'never cleared at its current accepted rate (0 accepted/h).') +
       (failing ? ` Failing route ${failing.route}: ${failing.cause}.` : ''),
-    expectedGain: projectedGain(stage, worst.waiting, worst.rate, windowHours),
+    expectedGain: projectedGain(stage, windowHours),
     recommendation,
   };
 }
 
 /**
- * What one more replica of the constrained stage would add, from its own
- * measurements: its measured accepted rate (never more than the waiting work at
- * its measured acceptance can yield), at its measured dollars per hour. A stage
- * whose spend is not measured projects nothing.
+ * What ONE more replica of a stage would add, from the stage's own
+ * measurements (S-0171: "a measured expected gain in accepted commercially
+ * decisive facts per hour and dollars spent"). Pure; exported for tests.
+ *
+ *  - A replica is one slot doing one item at a time, so the stage's measured
+ *    replica-hours are its busy time: `elapsedMs` (the summed duration of the
+ *    items it processed) in hours. Dividing by them is what makes the figure
+ *    per replica; the stage's whole rate is the sum over every slot it ran.
+ *  - The gain is counted in accepted facts (`uniqueUsableFacts`), never in
+ *    submitted items: an item Brain took that carried no usable fact adds none.
+ *  - The waiting work bounds it as a rate, not as a count: the facts the
+ *    waiting items yield at the stage's measured facts per processed item,
+ *    spread over one measurement window.
+ *  - Its dollars are the stage's measured spend per replica-hour, or $0 where
+ *    the caller knows the slot is free (`dollarsPerReplicaHour: 0`).
+ *
+ * A stage whose busy time, facts, throughput or spend is not measured projects
+ * nothing rather than a guess.
  */
-export function projectedGain(stage: StageReading, waiting: number, acceptance: number, windowHours: number): Constraint['expectedGain'] {
-  if (!stage.incrementalDollars.measured) {
+export function perReplicaGain(
+  stage: StageReading,
+  windowHours: number,
+  options: { dollarsPerReplicaHour?: number } = {},
+): Constraint['expectedGain'] {
+  const hours = windowHours > 0 ? windowHours : 6;
+  if (!stage.queueSize.measured || !stage.itemsProcessedPerHour.measured) {
+    return NOT(`${stage.stage}'s queue or processed rate is not measured`);
+  }
+  if (!stage.uniqueUsableFacts.measured) return NOT(`${stage.stage}'s accepted facts are not measured: ${stage.uniqueUsableFacts.reason}`);
+  if (!stage.elapsedMs.measured) return NOT(`${stage.stage}'s busy time is not measured, so its rate per replica is not: ${stage.elapsedMs.reason}`);
+  const replicaHours = stage.elapsedMs.value / 3_600_000;
+  if (!(replicaHours > 0)) return NOT(`${stage.stage} recorded no busy time in the window, so its rate per replica is not measured`);
+  let dollarsPerReplicaHour: number;
+  if (options.dollarsPerReplicaHour !== undefined) {
+    dollarsPerReplicaHour = options.dollarsPerReplicaHour;
+  } else if (stage.incrementalDollars.measured) {
+    dollarsPerReplicaHour = stage.incrementalDollars.value / replicaHours;
+  } else {
     return NOT(`accepted facts per hour per dollar needs the stage's spend, which is not measured: ${stage.incrementalDollars.reason}`);
   }
-  const hours = windowHours > 0 ? windowHours : 6;
+  const facts = stage.uniqueUsableFacts.value;
+  const processedItems = stage.itemsProcessedPerHour.value * hours;
+  const factsPerItem = processedItems > 0 ? facts / processedItems : 0;
+  const perReplica = facts / replicaHours;
+  const waitingYieldPerHour = (stage.queueSize.value * factsPerItem) / hours;
   return ok({
-    acceptedFactsPerHour: Math.min(stage.acceptedPerHour, waiting * acceptance),
-    dollars: stage.incrementalDollars.value / hours,
+    acceptedFactsPerHour: Math.min(perReplica, waitingYieldPerHour),
+    dollars: dollarsPerReplicaHour,
   });
+}
+
+/** The constrained stage's expected gain per added replica, at its measured spend. */
+export function projectedGain(stage: StageReading, windowHours: number): Constraint['expectedGain'] {
+  return perReplicaGain(stage, windowHours);
 }
 
 /** The lane stages a model call serves, and so the stages the GPU's spend belongs to. */
@@ -1199,8 +1240,9 @@ export interface ScalingVerdict {
  *        quant or commercial execution is not relieved by more model slots;
  *      * a measured expected gain above zero. On a GPU slot that is the
  *        reading's `expectedGain`, priced from the pod's own samples; a free
- *        provider's slot costs $0, so its gain is the stage's measured
- *        accepted rate bounded by the waiting work at its measured acceptance.
+ *        provider's slot costs $0, so its gain is one replica's measured
+ *        accepted facts per hour (`perReplicaGain`), bounded by the facts
+ *        its waiting work yields per hour.
  */
 export function gateGrowth(input: {
   model: string;
@@ -1231,7 +1273,7 @@ export function gateGrowth(input: {
   const laneIds = LANE_STAGES().map((s) => s.id);
   if (!constrained.stage) return hold('no measured stage has work waiting');
   if (!laneIds.includes(constrained.stage)) return hold(`the constrained stage is ${constrained.stage}, which more model slots do not serve`);
-  const gain = input.gpu ? gpuGain(constrained) : freeGain(report.stages.find((s) => s.stage === constrained.stage));
+  const gain = input.gpu ? gpuGain(constrained) : freeGain(report.stages.find((s) => s.stage === constrained.stage), report.windowHours);
   if (!gain.measured) return hold(gain.reason);
   if (!(gain.value.acceptedFactsPerHour > 0)) return hold(`the measured gain at ${constrained.stage} is 0 accepted facts/h`);
   return {
@@ -1247,12 +1289,10 @@ function gpuGain(constrained: Constraint): Measured<{ acceptedFactsPerHour: numb
     : NOT(`the GPU's expected gain is not measured: ${constrained.expectedGain.reason}`);
 }
 
-function freeGain(stage: StageReading | undefined): Measured<{ acceptedFactsPerHour: number; dollars: number }> {
+function freeGain(stage: StageReading | undefined, windowHours: number): Measured<{ acceptedFactsPerHour: number; dollars: number }> {
   if (!stage) return NOT('the constrained stage has no reading');
-  if (!stage.queueSize.measured || !stage.itemsProcessedPerHour.measured) return NOT(`${stage.stage}'s queue or processed rate is not measured`);
-  const processed = stage.itemsProcessedPerHour.value;
-  const acceptance = processed > 0 ? stage.acceptedPerHour / processed : 0;
-  return { measured: true, value: { acceptedFactsPerHour: Math.min(stage.acceptedPerHour, stage.queueSize.value * acceptance), dollars: 0 } };
+  // A free provider's slot costs $0; its gain is still one replica's measured facts.
+  return perReplicaGain(stage, windowHours, { dollarsPerReplicaHour: 0 });
 }
 
 function round2(x: number): number {
