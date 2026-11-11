@@ -1,0 +1,77 @@
+{
+ "customer": "SRL Total Source",
+ "uei": "WCJGU4N8L8D5",
+ "trades": [
+  "janitorial"
+ ],
+ "naics": [
+  "561210"
+ ],
+ "setasides": [
+  "8(a)",
+  "SDVOSB",
+  "small business"
+ ],
+ "states": [
+  "MD"
+ ],
+ "include_neighbors": true,
+ "basis": {
+  "business_types_reported": [
+   "8a_program_participant",
+   "black_american_owned_business",
+   "category_business",
+   "dot_certified_disadvantaged_business_enterprise",
+   "limited_liability_corporation",
+   "minority_owned_business",
+   "self_certified_small_disadvanted_business",
+   "service_disabled_veteran_owned_business",
+   "small_business",
+   "sole_proprietorship",
+   "special_designations",
+   "us_owned_business",
+   "veteran_owned_business"
+  ],
+  "naics_paid_last_3y": [
+   {
+    "id": null,
+    "code": "561720",
+    "name": "Janitorial Services",
+    "amount": 1297210.91,
+    "total_outlays": null,
+    "year_retired": null
+   },
+   {
+    "id": null,
+    "code": "561210",
+    "name": "Facilities Support Services",
+    "amount": 1225238.17,
+    "total_outlays": null,
+    "year_retired": null
+   },
+   {
+    "id": null,
+    "code": "621330",
+    "name": "Offices of Mental Health Practitioners (except Physicians)",
+    "amount": -14600.98,
+    "total_outlays": null,
+    "year_retired": null
+   }
+  ],
+  "recipient_location": {
+   "address_line1": "83 HIGH ST STE B",
+   "address_line2": null,
+   "address_line3": null,
+   "foreign_province": null,
+   "city_name": "WALDORF",
+   "county_name": null,
+   "state_code": "MD",
+   "zip": "20602",
+   "zip4": null,
+   "foreign_postal_code": null,
+   "country_name": "UNITED STATES",
+   "country_code": "USA",
+   "congressional_code": "05"
+  }
+ }
+}

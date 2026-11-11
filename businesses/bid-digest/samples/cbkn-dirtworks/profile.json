@@ -1,0 +1,72 @@
+{
+ "customer": "CBKN Dirtworks",
+ "uei": "PQ6DMEAAHFJ7",
+ "trades": [
+  "sitework"
+ ],
+ "naics": [],
+ "setasides": [
+  "WOSB",
+  "small business"
+ ],
+ "states": [
+  "NM"
+ ],
+ "include_neighbors": true,
+ "basis": {
+  "business_types_reported": [
+   "category_business",
+   "corporate_entity_not_tax_exempt",
+   "dot_certified_disadvantaged_business_enterprise",
+   "hispanic_american_owned_business",
+   "minority_owned_business",
+   "small_business",
+   "special_designations",
+   "subchapter_s_corporation",
+   "us_owned_business",
+   "woman_owned_business",
+   "women_owned_small_business"
+  ],
+  "naics_paid_last_3y": [
+   {
+    "id": null,
+    "code": "115310",
+    "name": "Support Activities for Forestry",
+    "amount": 479718.7,
+    "total_outlays": null,
+    "year_retired": null
+   },
+   {
+    "id": null,
+    "code": "237310",
+    "name": "Highway, Street, and Bridge Construction",
+    "amount": 248178.96,
+    "total_outlays": null,
+    "year_retired": null
+   },
+   {
+    "id": null,
+    "code": "485999",
+    "name": "All Other Transit and Ground Passenger Transportation",
+    "amount": 27106.0,
+    "total_outlays": null,
+    "year_retired": null
+   }
+  ],
+  "recipient_location": {
+   "address_line1": "654 FRONTAGE RD",
+   "address_line2": null,
+   "address_line3": null,
+   "foreign_province": null,
+   "city_name": "ALGODONES",
+   "county_name": null,
+   "state_code": "NM",
+   "zip": "87001",
+   "zip4": "8058",
+   "foreign_postal_code": null,
+   "country_name": "UNITED STATES",
+   "country_code": "USA",
+   "congressional_code": "03"
+  }
+ }
+}
