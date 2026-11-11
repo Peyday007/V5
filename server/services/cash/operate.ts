@@ -794,6 +794,15 @@ export async function runNeedContinuations(
 async function continueOne(
   need: CashNeed,
 ): Promise<{ note: string; resumed: boolean; retry: boolean }> {
+  // A remedy a person was asked to approve (`deliverables/exceptions.ts`):
+  // resolving it is the approval, and this carries the remedy out — once, as
+  // the claim above guarantees, and never retried, because an effect whose
+  // outcome is unknown is not repeated (§26). A withdrawal is recorded as declined.
+  const { parseRemedyApprovalKey, carryOutApprovedRemedy } = await import('./deliverables/exceptions.ts');
+  if (parseRemedyApprovalKey(need.requestKey)) {
+    const done = await carryOutApprovedRemedy(need);
+    return { note: done.note, resumed: done.ok, retry: false };
+  }
   if (need.state === 'WITHDRAWN') {
     return {
       note: 'Withdrawn, so there was nothing waiting to resume.',
