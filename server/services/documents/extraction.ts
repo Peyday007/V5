@@ -40,6 +40,14 @@ import { extractPdf, PdfUnreadableError, type ExtractedBlock, type ExtractedPage
 import { extractText } from './text.ts';
 import { getOcrEngine, LOW_CONFIDENCE, type OcrPageResult } from './ocr.ts';
 import { normalizeBlockText } from './normalize.ts';
+import type { BlockType } from '../../domain/types.ts';
+
+/**
+ * Blocks whose line breaks are content (code, table rows). Every other block's
+ * lines are wrapping: the extractor keeps them so normalization can rejoin a
+ * word hyphenated across two lines, and normalization then joins the lines.
+ */
+const LINE_STRUCTURED: ReadonlySet<BlockType> = new Set<BlockType>(['CODE', 'TABLE']);
 import { assessExtraction, pagesNeedingOcr, PIPELINE_VERSION } from './quality.ts';
 import { planChunks } from './chunker.ts';
 
@@ -251,7 +259,13 @@ function ocrBlocksFor(result: OcrPageResult, note: string): ExtractedBlock[] {
   }
   return result.text
     .split(/\n{2,}/)
-    .map((paragraph) => paragraph.replace(/\s+/g, ' ').trim())
+    .map((paragraph) =>
+      paragraph
+        .split(/\r?\n/)
+        .map((line) => line.replace(/\s+/g, ' ').trim())
+        .filter((line) => line.length > 0)
+        .join('\n'),
+    )
     .filter((paragraph) => paragraph.length > 0)
     .map<ExtractedBlock>((paragraph) => ({
       pageNumber: result.pageNumber,
@@ -446,7 +460,7 @@ async function persistBlocks(
 
   for (const page of pages) {
     for (const block of page.blocks) {
-      const normalized = normalizeBlockText(block.text);
+      const normalized = normalizeBlockText(block.text, { preserveLineBreaks: LINE_STRUCTURED.has(block.blockType) });
       const warnings = [...block.warnings];
       if (normalized.notes.length > 0) warnings.push(`normalized: ${normalized.notes.join(', ')}`);
       const charStart = offset;

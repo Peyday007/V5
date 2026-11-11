@@ -8,8 +8,17 @@
  * distant passages never merged.
  */
 
-/** Words split across a line break by a hyphen, e.g. "intermedi- ation". */
-const SOFT_HYPHEN_BREAK = /([A-Za-z])[-\u00ad]\s+([a-z])/g;
+/**
+ * A word split across a line break by a hard hyphen, e.g. "intermedi-\nation".
+ * Only a newline marks a break: a hyphen before an ordinary space is real text
+ * ("pre- and post-closing", "short- or long-term") and must survive.
+ */
+const HARD_HYPHEN_LINE_BREAK = /([A-Za-z])-[ \t]*\r?\n[ \t]*([a-z])/g;
+/**
+ * A soft hyphen is never content, so a word it splits rejoins across any
+ * whitespace, e.g. "intermedi\u00ad ation".
+ */
+const SOFT_HYPHEN_BREAK = /([A-Za-z])\u00ad\s+([a-z])/g;
 /** Control characters that carry no meaning in extracted prose. */
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
 /** Zero-width and formatting characters some PDF producers emit between glyphs. */
@@ -35,7 +44,16 @@ const LIGATURES: [RegExp, string][] = [
   [/ﬄ/g, 'ffl'],
 ];
 
-export function normalizeBlockText(raw: string): NormalizationResult {
+export interface NormalizeOptions {
+  /**
+   * Keep line breaks as content (code, table rows). Otherwise the block's lines
+   * are wrapping that extraction kept only so a hyphenated line break could be
+   * told from a real hyphen; once that is decided they are joined with a space.
+   */
+  preserveLineBreaks?: boolean;
+}
+
+export function normalizeBlockText(raw: string, options: NormalizeOptions = {}): NormalizationResult {
   const notes: string[] = [];
   let text = raw;
 
@@ -48,7 +66,9 @@ export function normalizeBlockText(raw: string): NormalizationResult {
     notes.push('removed zero-width characters');
   }
 
-  const dehyphenated = text.replace(SOFT_HYPHEN_BREAK, '$1$2');
+  const dehyphenated = text
+    .replace(HARD_HYPHEN_LINE_BREAK, '$1$2')
+    .replace(SOFT_HYPHEN_BREAK, '$1$2');
   if (dehyphenated !== text) {
     text = dehyphenated;
     notes.push('rejoined hyphenated line breaks');
@@ -67,7 +87,8 @@ export function normalizeBlockText(raw: string): NormalizationResult {
     }
   }
 
-  const collapsed = text.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').trim();
+  let collapsed = text.replace(/[ \t]+/g, ' ').replace(/ *\r?\n */g, '\n').trim();
+  if (!options.preserveLineBreaks) collapsed = collapsed.replace(/\n+/g, ' ');
   if (collapsed !== text) notes.push('collapsed whitespace');
 
   return { text: collapsed, notes };

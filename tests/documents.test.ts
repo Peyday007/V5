@@ -701,7 +701,7 @@ describe('provenance', () => {
 
 describe('normalization', () => {
   it('cleans extraction artifacts and reports what it changed', () => {
-    const raw = 'The interme­di- ation ﻿layer deﬁnes  custody rules.';
+    const raw = 'The interme­di-\nation ﻿layer deﬁnes  custody rules.';
     const result = normalizeBlockText(raw);
 
     expect(result.text).toBe('The intermediation layer defines custody rules.');
@@ -714,6 +714,32 @@ describe('normalization', () => {
         'collapsed whitespace',
       ]),
     );
+  });
+
+  it('rejoins a word hyphenated across PDF lines on the real import path, and keeps real hyphens', async () => {
+    // The extractor keeps the line break, so the hyphen at the end of a line can be told
+    // from "pre- and post-closing"; the raw text keeps the break as evidence.
+    const pdf = buildPdf([
+      prosePage('Custody', [['Pre- and post-closing custody follows the interme-', 'diation rule, not notice.']]),
+    ]);
+    const { runId } = await importAndRead('World Model v1.pdf', pdf);
+    const body = (await listBlocks(runId)).find((block) => block.normalizedText.includes('custody'))!;
+    expect(body.rawText).toBe('Pre- and post-closing custody follows the interme-\ndiation rule, not notice.');
+    expect(body.normalizedText).toBe('Pre- and post-closing custody follows the intermediation rule, not notice.');
+    expect(body.warnings.join(' ')).toMatch(/normalized: .*rejoined hyphenated line breaks/);
+  });
+
+  it('rejoins a word hyphenated across text-file lines on the real import path, and keeps real hyphens', async () => {
+    // A review's probe: a text extractor that joined a paragraph's lines with a
+    // space handed normalization "recog- nition", which the newline-only rule
+    // could never rejoin. The stored normalized_text is what retrieval and audits
+    // read, so it is asserted on the rows the import wrote, not on a helper.
+    const source = 'The recog-\nnition of revenue is deferred for pre- and post-closing\nand short- or long-term leases.\n';
+    const { runId } = await importAndRead('World Model v1.txt', Buffer.from(source));
+    const body = (await listBlocks(runId)).find((block) => block.normalizedText.includes('revenue'))!;
+    expect(body.rawText).toBe('The recog-\nnition of revenue is deferred for pre- and post-closing\nand short- or long-term leases.');
+    expect(body.normalizedText).toBe('The recognition of revenue is deferred for pre- and post-closing and short- or long-term leases.');
+    expect(body.warnings.join(' ')).toMatch(/normalized: .*rejoined hyphenated line breaks/);
   });
 
   it('never rewrites a claim, only whitespace and glyphs', () => {

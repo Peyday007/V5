@@ -11,7 +11,14 @@
 import type { ExtractionQuality, ExtractionStatus, OcrPageRecord } from '../../domain/types.ts';
 import type { ExtractedPage } from './pdf.ts';
 
-export const PIPELINE_VERSION = 'doc-understanding-1';
+/**
+ * Bumped whenever extraction or normalisation changes what normalized_text
+ * contains, so a re-read of an unchanged source re-derives it instead of
+ * reusing the run (extraction.ts skips on same source hash + version).
+ * 2: hard hyphens followed by an ordinary space ("pre- and post-closing")
+ *    are no longer rejoined; only a newline is a line break (section 9).
+ */
+export const PIPELINE_VERSION = 'doc-understanding-2';
 
 export const THRESHOLDS = {
   /** Below this share of readable pages the document cannot be trusted. */
