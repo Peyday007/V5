@@ -309,7 +309,25 @@ async function mayReplace(
         item.failureCategory === 'LEASE_EXPIRED' ||
         item.failureCategory === 'TIMEOUT')) ||
     (item.state === 'CANCELLED' && item.attemptCount >= item.maxAttempts);
-  if (!earlier.every(exhausted)) return false;
+  /*
+   * A synthesis also counts as spent when its worker failed it on a transient
+   * cause — a provider or store that could not answer, a worker that crashed,
+   * a cause it could not name. Production, 2026-11: two of five recorded
+   * NEEDS_HUMAN reasons were exactly this, parked "nothing was recorded about
+   * why" while the item had recorded why. For a synthesis that is safe for the
+   * same reason a spent one is: the replacement is issued only when no earlier
+   * item reached the filing effect (the `idempotency_operations` check below),
+   * and the count is bounded by MAX_ITEMS_PER_TARGET. INVALID_INPUT stays a
+   * fault — the input will not change — as does every other type, whose
+   * not-retryable failures the repair ladder answers.
+   */
+  const transient = (item: WorkItem): boolean =>
+    type === 'RESEARCH_SYNTHESIZE' &&
+    item.state === 'FAILED' &&
+    (item.failureCategory === 'DEPENDENCY_UNAVAILABLE' ||
+      item.failureCategory === 'WORKER_ERROR' ||
+      item.failureCategory === 'UNKNOWN');
+  if (!earlier.every((item) => exhausted(item) || transient(item))) return false;
   if (type === 'RESEARCH_SYNTHESIZE') {
     const reached = await getDb().get<{ n: number }>(
       `SELECT COUNT(*) AS n FROM idempotency_operations
@@ -479,6 +497,23 @@ export function faultedOutReason(what: string): string {
 }
 
 /**
+ * The newest failed item's own reason for this target, naming its work type,
+ * or null when no failed item recorded one.
+ */
+function lastItemFailure(
+  items: WorkItem[] | undefined,
+  predicate: ((item: WorkItem) => boolean) | undefined,
+): string | null {
+  if (!items || !predicate) return null;
+  const failed = items
+    .filter((item) => predicate(item) && item.state === 'FAILED' && (item.resultSummary?.trim().length ?? 0) > 0)
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+  const last = failed[0];
+  if (!last) return null;
+  return `The last ${last.workType} work item failed (${last.failureCategory ?? 'UNKNOWN'}): ${last.resultSummary!.trim()}`;
+}
+
+/**
  * Stop the packet, and do not overwrite a diagnosis with a guess.
  *
  * This used to assert its own cause — "investigate why the worker completed
@@ -509,9 +544,19 @@ async function faultedOut(input: {
   orchestration: ResearchOrchestration;
   fragment?: ResearchFragment | null;
   what: string;
+  /**
+   * The target's items, when the caller has them. A failed item records its
+   * worker's own reason in `resultSummary`; that is a recorded reason, and
+   * saying "nothing was recorded about why" over it is §33's defect again.
+   */
+  items?: WorkItem[];
+  predicate?: (item: WorkItem) => boolean;
 }): Promise<AdvanceResult> {
   const recorded = input.orchestration.failureReason?.trim();
-  const reason = recorded && recorded.length > 0 ? recorded : faultedOutReason(input.what);
+  const reason =
+    recorded && recorded.length > 0
+      ? recorded
+      : (lastItemFailure(input.items, input.predicate) ?? faultedOutReason(input.what));
   if (input.fragment) {
     await updateFragment(input.fragment.id, {
       status: 'BLOCKED',
@@ -2212,7 +2257,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
       };
     }
     if (alreadyCreated(items, synthItem) && !(await mayReplace(items, synthItem, 'RESEARCH_SYNTHESIZE'))) {
-      return await faultedOut({ orchestration, what: 'synthesis' });
+      return await faultedOut({ orchestration, what: 'synthesis', items, predicate: synthItem });
     }
     const claims = await acceptedClaims(orchestration.id);
     if (claims.length === 0) {
