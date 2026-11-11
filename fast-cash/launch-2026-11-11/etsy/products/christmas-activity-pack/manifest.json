@@ -1,0 +1,527 @@
+{
+ "product": "christmas-activity-pack",
+ "title": "Christmas Activity Pack",
+ "pdf": "Christmas-Activity-Pack-32-Puzzles.pdf",
+ "sha256": "7c9442e2719ac739b3894bfaeeda30f38cba7b377c1bd651ff759fa94a056b56",
+ "bytes": 202007,
+ "pages": 43,
+ "trim": "8.5x11in US Letter",
+ "puzzles": 32,
+ "byFormat": {
+  "word search": 12,
+  "maze": 12,
+  "sudoku": 8
+ },
+ "byDifficulty": {
+  "MEDIUM": 20,
+  "HARD": 3,
+  "EASY": 9
+ },
+ "allValid": true,
+ "entries": [
+  {
+   "n": 1,
+   "format": "word search",
+   "seed": "etsy-2026-kidws-1",
+   "theme": "Santa",
+   "measured": "MEDIUM",
+   "canonicalHash": "7fdc501e051ba47f721926d945707a77975e78a5f45befd9acff15d8aa44c313",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 2,
+   "format": "word search",
+   "seed": "etsy-2026-kidws-2",
+   "theme": "Snow Day",
+   "measured": "HARD",
+   "canonicalHash": "4f30464b6ab1a0d396dd405dc6d5e122d9bd5d6925b2c1b5e38eeb934295fbcd",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 3,
+   "format": "word search",
+   "seed": "etsy-2026-kidws-3",
+   "theme": "The Tree",
+   "measured": "MEDIUM",
+   "canonicalHash": "7d866a3b296d4a77bcfc7c0a503524039c4640ca61f5aae1cab464356012f131",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 4,
+   "format": "word search",
+   "seed": "etsy-2026-kidws-5",
+   "theme": "Reindeer",
+   "measured": "MEDIUM",
+   "canonicalHash": "413b81b82973253e818121d85935032e41212ab915172d91b885952d098ea4df",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 5,
+   "format": "word search",
+   "seed": "etsy-2026-kidws-6",
+   "theme": "Cookies",
+   "measured": "MEDIUM",
+   "canonicalHash": "0bfe6e244332f634fcae29431141c39482a8a4ec16f541d1291e32f40c75b7d7",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 6,
+   "format": "word search",
+   "seed": "etsy-2026-kidws-7",
+   "theme": "Presents",
+   "measured": "MEDIUM",
+   "canonicalHash": "feb30141966a6d0cea1d9e5e978c693f7e8540003a0fab2f8e6f84381017ddc5",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 7,
+   "format": "word search",
+   "seed": "etsy-2026-kidws-8",
+   "theme": "Santa",
+   "measured": "MEDIUM",
+   "canonicalHash": "a5e9eb225cf721c08091612fc88208aa58702694b2088f49aad6b47f9b90c21d",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 8,
+   "format": "word search",
+   "seed": "etsy-2026-kidws-9",
+   "theme": "Snow Day",
+   "measured": "MEDIUM",
+   "canonicalHash": "c4350c01036ec3a2a355a4f4083560341449d8a779df8a1c7a4fa041add276a8",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 9,
+   "format": "word search",
+   "seed": "etsy-2026-kidws-11",
+   "theme": "The Tree",
+   "measured": "MEDIUM",
+   "canonicalHash": "e982129b07c071fb2a745bcd5172f3027f91344de358d933e686c8744e07ce08",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 10,
+   "format": "word search",
+   "seed": "etsy-2026-kidws-12",
+   "theme": "Reindeer",
+   "measured": "HARD",
+   "canonicalHash": "dd22b6e88f2e858a470ca23c725a4139f01f0f10203d29146ec8fef5df724bd0",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 11,
+   "format": "word search",
+   "seed": "etsy-2026-kidws-13",
+   "theme": "Cookies",
+   "measured": "MEDIUM",
+   "canonicalHash": "c97e9e7df2c79f25a4a14fba3e8f2bcf78ea8fe6f4f912bc2009f45593a8062e",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 12,
+   "format": "word search",
+   "seed": "etsy-2026-kidws-14",
+   "theme": "Presents",
+   "measured": "MEDIUM",
+   "canonicalHash": "88c30a656b9c305a07d6332e8fe4247a1bb2fc32469fbdbff2368fed046a88bb",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 13,
+   "format": "maze",
+   "seed": "etsy-2026-kidmaze-0",
+   "measured": "MEDIUM",
+   "canonicalHash": "e04ba89f05c4101e5f351e08453d0e9546f3c8ccd0d58b8fb970dc6eea7b6980",
+   "checks": [
+    "PASS the maze is a rectangle",
+    "PASS there is exactly one start and one end",
+    "PASS the end is reachable from the start",
+    "PASS every open square is part of the maze",
+    "PASS exactly one route through",
+    "PASS the drawn solution is the route",
+    "PASS the answer key reaches the end"
+   ]
+  },
+  {
+   "n": 14,
+   "format": "maze",
+   "seed": "etsy-2026-kidmaze-1",
+   "measured": "MEDIUM",
+   "canonicalHash": "d8f0e07bd2714c1248e242e5683eef71ced2a6aa1826da46cc3abb03be010fbf",
+   "checks": [
+    "PASS the maze is a rectangle",
+    "PASS there is exactly one start and one end",
+    "PASS the end is reachable from the start",
+    "PASS every open square is part of the maze",
+    "PASS exactly one route through",
+    "PASS the drawn solution is the route",
+    "PASS the answer key reaches the end"
+   ]
+  },
+  {
+   "n": 15,
+   "format": "maze",
+   "seed": "etsy-2026-kidmaze-2",
+   "measured": "MEDIUM",
+   "canonicalHash": "7a679fd88e7aa31c5ac27a724722198136ee44bb39c74f144050be7cac62344c",
+   "checks": [
+    "PASS the maze is a rectangle",
+    "PASS there is exactly one start and one end",
+    "PASS the end is reachable from the start",
+    "PASS every open square is part of the maze",
+    "PASS exactly one route through",
+    "PASS the drawn solution is the route",
+    "PASS the answer key reaches the end"
+   ]
+  },
+  {
+   "n": 16,
+   "format": "maze",
+   "seed": "etsy-2026-kidmaze-3",
+   "measured": "MEDIUM",
+   "canonicalHash": "6fe57b603bc3cb17c1ab33488a2a56869287b8149c3a61b6ae56d7a4d3f4e729",
+   "checks": [
+    "PASS the maze is a rectangle",
+    "PASS there is exactly one start and one end",
+    "PASS the end is reachable from the start",
+    "PASS every open square is part of the maze",
+    "PASS exactly one route through",
+    "PASS the drawn solution is the route",
+    "PASS the answer key reaches the end"
+   ]
+  },
+  {
+   "n": 17,
+   "format": "maze",
+   "seed": "etsy-2026-kidmaze-4",
+   "measured": "HARD",
+   "canonicalHash": "01665b80640eb156eb329d24ed553f0e0d57166097e60a715152062654b3725c",
+   "checks": [
+    "PASS the maze is a rectangle",
+    "PASS there is exactly one start and one end",
+    "PASS the end is reachable from the start",
+    "PASS every open square is part of the maze",
+    "PASS exactly one route through",
+    "PASS the drawn solution is the route",
+    "PASS the answer key reaches the end"
+   ]
+  },
+  {
+   "n": 18,
+   "format": "maze",
+   "seed": "etsy-2026-kidmaze-5",
+   "measured": "MEDIUM",
+   "canonicalHash": "bac3989ea294ffc211a075291e84fa70ae6fa80a30984c4057aebdacce07bdc3",
+   "checks": [
+    "PASS the maze is a rectangle",
+    "PASS there is exactly one start and one end",
+    "PASS the end is reachable from the start",
+    "PASS every open square is part of the maze",
+    "PASS exactly one route through",
+    "PASS the drawn solution is the route",
+    "PASS the answer key reaches the end"
+   ]
+  },
+  {
+   "n": 19,
+   "format": "maze",
+   "seed": "etsy-2026-kidmaze-6",
+   "measured": "EASY",
+   "canonicalHash": "3d5f9b8a0b5e3e5e986b7e148de7df0c147f7deacda7368a35628cf54e518b8a",
+   "checks": [
+    "PASS the maze is a rectangle",
+    "PASS there is exactly one start and one end",
+    "PASS the end is reachable from the start",
+    "PASS every open square is part of the maze",
+    "PASS exactly one route through",
+    "PASS the drawn solution is the route",
+    "PASS the answer key reaches the end"
+   ]
+  },
+  {
+   "n": 20,
+   "format": "maze",
+   "seed": "etsy-2026-kidmaze-7",
+   "measured": "MEDIUM",
+   "canonicalHash": "1fa38015a7993080ab796d3c3724b1780eef1ad0687066708b720a320b99a8a1",
+   "checks": [
+    "PASS the maze is a rectangle",
+    "PASS there is exactly one start and one end",
+    "PASS the end is reachable from the start",
+    "PASS every open square is part of the maze",
+    "PASS exactly one route through",
+    "PASS the drawn solution is the route",
+    "PASS the answer key reaches the end"
+   ]
+  },
+  {
+   "n": 21,
+   "format": "maze",
+   "seed": "etsy-2026-kidmaze-8",
+   "measured": "MEDIUM",
+   "canonicalHash": "a89d2c09230bb70599454daf8d07575435a08b8a0785fe041def8869ee778e84",
+   "checks": [
+    "PASS the maze is a rectangle",
+    "PASS there is exactly one start and one end",
+    "PASS the end is reachable from the start",
+    "PASS every open square is part of the maze",
+    "PASS exactly one route through",
+    "PASS the drawn solution is the route",
+    "PASS the answer key reaches the end"
+   ]
+  },
+  {
+   "n": 22,
+   "format": "maze",
+   "seed": "etsy-2026-kidmaze-9",
+   "measured": "MEDIUM",
+   "canonicalHash": "d5374dc2fb74d1462f349e5f1a61b00290d62d21c7da30fac1e631f5c31a68e3",
+   "checks": [
+    "PASS the maze is a rectangle",
+    "PASS there is exactly one start and one end",
+    "PASS the end is reachable from the start",
+    "PASS every open square is part of the maze",
+    "PASS exactly one route through",
+    "PASS the drawn solution is the route",
+    "PASS the answer key reaches the end"
+   ]
+  },
+  {
+   "n": 23,
+   "format": "maze",
+   "seed": "etsy-2026-kidmaze-10",
+   "measured": "MEDIUM",
+   "canonicalHash": "61cd726b73e7fe7c00129a0b195eea120b8a748b45531a0fabcdb93e161f1133",
+   "checks": [
+    "PASS the maze is a rectangle",
+    "PASS there is exactly one start and one end",
+    "PASS the end is reachable from the start",
+    "PASS every open square is part of the maze",
+    "PASS exactly one route through",
+    "PASS the drawn solution is the route",
+    "PASS the answer key reaches the end"
+   ]
+  },
+  {
+   "n": 24,
+   "format": "maze",
+   "seed": "etsy-2026-kidmaze-11",
+   "measured": "MEDIUM",
+   "canonicalHash": "17dbd583e82d9e412991598a9d5876031b654615ea86d6e795efa83328632a57",
+   "checks": [
+    "PASS the maze is a rectangle",
+    "PASS there is exactly one start and one end",
+    "PASS the end is reachable from the start",
+    "PASS every open square is part of the maze",
+    "PASS exactly one route through",
+    "PASS the drawn solution is the route",
+    "PASS the answer key reaches the end"
+   ]
+  },
+  {
+   "n": 25,
+   "format": "sudoku",
+   "seed": "etsy-2026-kidsudoku-0",
+   "measured": "EASY",
+   "canonicalHash": "587e54bd3dc5466de22912e935db5a63ed4b66e1fb552fea56fe825800cc0a3d",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 26,
+   "format": "sudoku",
+   "seed": "etsy-2026-kidsudoku-1",
+   "measured": "EASY",
+   "canonicalHash": "c125ef4f089b8d9941ae923f6818b223730608d32154ba18dea0686964c14099",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 27,
+   "format": "sudoku",
+   "seed": "etsy-2026-kidsudoku-2",
+   "measured": "EASY",
+   "canonicalHash": "771137dbb1dadeec89ea72f002f989cdfe4c7320907f367413f1bdbf860b955d",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 28,
+   "format": "sudoku",
+   "seed": "etsy-2026-kidsudoku-3",
+   "measured": "EASY",
+   "canonicalHash": "3f926416767984f2a99d26718334752cb87ef18a3c30ec116c16bfe03ee5d940",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 29,
+   "format": "sudoku",
+   "seed": "etsy-2026-kidsudoku-4",
+   "measured": "EASY",
+   "canonicalHash": "20faf90a2cb4c827f5557c752bd8d51d7a6bc63f859a885436e9183e7adcae30",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 30,
+   "format": "sudoku",
+   "seed": "etsy-2026-kidsudoku-5",
+   "measured": "EASY",
+   "canonicalHash": "aa0bfe734b7c865c91b0706568182b34a7072f817d3fff3460f4c63d0f3a6f0d",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 31,
+   "format": "sudoku",
+   "seed": "etsy-2026-kidsudoku-6",
+   "measured": "EASY",
+   "canonicalHash": "55b93fb18e1bcd8ae2d1a29e41aa0e673bb32bdd05a0c1042ef12ddeca05733c",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 32,
+   "format": "sudoku",
+   "seed": "etsy-2026-kidsudoku-7",
+   "measured": "EASY",
+   "canonicalHash": "2dabafe8c4a09aae697ee5ae0772fd17c18309b55e3b90c42061b50453cba7c1",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  }
+ ]
+}
