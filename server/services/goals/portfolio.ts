@@ -36,6 +36,8 @@
  */
 import { optimizePortfolio, type Activity, type Assurance, type PortfolioReading, type Safeguard, type SafeguardEffect } from '../quant/portfolio.ts';
 import { makeRng } from '../scenario/random.ts';
+import { cachedCashKnowledge, type CashKnowledge } from '../quant/knowledge.ts';
+import { acquireMarketHistory, historyEvidence, type MarketHistory } from '../quant/history.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 
 export const PORTFOLIO_WORLDS = 2_000;
@@ -132,6 +134,12 @@ export interface GoalPortfolio {
   assurance?: Assurance | null;
   /** The measured change to the downside of each candidate control, over the same worlds as the best combination. */
   safeguards?: SafeguardEffect[];
+  /**
+   * Each modelled opening's market history, acquired from the project's
+   * research and outcomes (CAUSAL-14-7): bid/win record, transaction counts,
+   * actual prices and spreads, their sources, and what is still to research.
+   */
+  marketHistory?: MarketHistory[];
   /** What keeps the reading from being a probability, or the target from being reached. */
   missing: string[];
   searched: number;
@@ -369,6 +377,13 @@ export function evaluateGoalPortfolio(input: {
    * figure; an owner's stated figure wins.
    */
   measuredCapacity?: { perDay: number; accounts: number } | null;
+  /**
+   * The project's research and outcomes, from which each opening's market
+   * history is acquired (CAUSAL-14-7). Absent, the knowledge the same goal
+   * tick already loaded is used; with neither, no history is acquired and
+   * every opening says so as a research need.
+   */
+  knowledge?: CashKnowledge | null;
   worlds?: number;
   seed?: number;
 }): GoalPortfolio {
@@ -389,6 +404,9 @@ export function evaluateGoalPortfolio(input: {
    * the before-proof limit ("about $375 initial individual outlay").
    */
   const startingCapital = input.perWeek ?? input.beforeProof ?? input.capitalCeiling;
+  const knowledgeFor = (projectId: string): CashKnowledge | null =>
+    input.knowledge !== undefined ? (input.knowledge && input.knowledge.projectId === projectId ? input.knowledge : null) : cachedCashKnowledge(projectId);
+  const histories = new Map<string, MarketHistory>();
   const activities: Activity[] = [];
   const memberOf = new Map<string, PortfolioMember>();
   const demand: DemandEstimate[] = [];
@@ -443,6 +461,10 @@ export function evaluateGoalPortfolio(input: {
     const shares: number[] = one.repeatable && one.agreedValue === 0 ? [...OUTREACH_SHARES] : [0];
     // The outreach a day is drawn too: unless the owner stated it, it states no sample.
     const sampleSize = one.repeatable && one.agreedValue === 0 && stated === null ? undefined : sampleSizeOf(one);
+    // The market's own historical record, acquired from the research and outcomes the project holds.
+    const knowledge = knowledgeFor(one.opportunity.projectId);
+    const history = knowledge ? acquireMarketHistory(knowledge, one.opportunity) : null;
+    if (history) histories.set(id, history);
     const keys = shares.map((share) => `${id}@${share}`);
     for (const share of shares) {
       const w = share === 1 ? full : demandWorlds(one, share, input.daysLeft, contactsPerDay, worlds, seed);
@@ -455,7 +477,7 @@ export function evaluateGoalPortfolio(input: {
         days: w.days,
         spend: w.spend,
         justified: unestablished.length === 0,
-        evidence: { ...(sampleSize !== undefined ? { sampleSize } : {}) },
+        evidence: { ...(sampleSize !== undefined ? { sampleSize } : {}), ...(history ? { history: historyEvidence(history) } : {}) },
         capital: capital.amount,
         startDay: 0,
         ...(share > 0 ? { uses: { outreach: share }, riskGroup: 'shared-outreach' } : {}),
@@ -507,6 +529,8 @@ export function evaluateGoalPortfolio(input: {
     missing.push(`the best combination reaches the target in ${(best.reach * 100).toFixed(0)}% of worlds, which is not a defensible 90%: ${assurance.reason}`);
   }
   if (!best) missing.push('no combination of the openings held can run inside the limits');
+  // Historical data the best combination still lacks is targeted research, named, never assumed.
+  for (const need of assurance?.researchNeeds ?? []) missing.push(`research: ${need}`);
   return {
     basis,
     worlds,
@@ -523,6 +547,7 @@ export function evaluateGoalPortfolio(input: {
       correlation: SHARED_OUTREACH_CORRELATION,
     },
     assurance,
+    marketHistory: [...histories.values()],
     safeguards: result.safeguardEffects ?? [],
     missing,
     searched: result.searched,

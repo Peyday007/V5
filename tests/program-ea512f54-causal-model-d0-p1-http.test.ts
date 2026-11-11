@@ -516,3 +516,14 @@ describe('stored graphs keep every version', () => {
     expect(r.text).not.toContain('price');
   });
 });
+
+describe('market history (CAUSAL-14-7)', () => {
+  it('is behind the gate, and an opening that is not in the project is the same 404 as one that does not exist', async () => {
+    expect((await call('GET', `${CAUSAL()}/market-history/cop_missing`)).status).toBe(401);
+    const missing = await call('GET', `${CAUSAL()}/market-history/cop_missing`, { cookie: adminCookie });
+    expect(missing.status).toBe(404);
+    const outsider = await call('GET', `${CAUSAL()}/market-history/cop_missing`, { cookie: outsiderCookie });
+    expect(outsider.status).toBe(404);
+    expect(outsider.text).not.toContain('market');
+  });
+});
