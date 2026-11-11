@@ -491,6 +491,23 @@ async function faultedFragment(input: {
  * Exported so the one reader that has to tell a preserved diagnosis from this
  * fallback can compare against it rather than against a copy.
  */
+/** What a goal round with nobody to ask says when it ends rather than parks. */
+export const GOAL_ROUND_ENDS =
+  'This round belongs to a research goal with no mission, so it ends here and the goal may start its next round.';
+
+/**
+ * A research goal's round with no mission behind it: a park would reach no
+ * person and would hold the goal's next round (`goalContinuation` treats a
+ * NEEDS_HUMAN packet as live), so the runner ends such a round FAILED instead.
+ */
+async function nobodyToAsk(orchestration: ResearchOrchestration): Promise<boolean> {
+  return (
+    orchestration.goalId !== null &&
+    orchestration.goalId !== undefined &&
+    !(await getMissionByOrchestration(orchestration.id))
+  );
+}
+
 export function faultedOutReason(what: string): string {
   return (
     `A ${what} work item finished without recording anything, and nothing was ` +
@@ -2211,19 +2228,14 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
      * row. A packet behind a mission still parks, because a mission's park has
      * a person and a card.
      */
-    const goalRoundWithNobodyToAsk =
-      orchestration.goalId !== null &&
-      orchestration.goalId !== undefined &&
-      repairs.mintable.length === 0 &&
-      !(await getMissionByOrchestration(orchestration.id));
+    const goalRoundWithNobodyToAsk = repairs.mintable.length === 0 && (await nobodyToAsk(orchestration));
     if (goalRoundWithNobodyToAsk) {
       await updateOrchestration(orchestration.id, {
         status: 'FAILED',
         failureReason:
           'No fragment cleared its evidence gate, so there is nothing to synthesize. ' +
           noFragmentClearedDetail(fragments, repairs) +
-          ' This round belongs to a research goal with no mission, so it ends here and the goal ' +
-          'may start its next round.',
+          ` ${GOAL_ROUND_ENDS}`,
         completedAt: new Date().toISOString(),
       });
       return {
@@ -2302,7 +2314,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     const failed = coverage.checks.filter((check) => !check.passed);
     const mandatoryGap = failed.find((check) => check.check === MANDATORY_COVERAGE_CHECK);
     if (mandatoryGap) {
-      await parkOrchestration(orchestration.id,
+      const gapReason =
           'The packet does not cover the goal\'s mandatory part, so it was not synthesized. ' +
           `${mandatoryGap.detail}` +
           (failed.length > 1
@@ -2310,7 +2322,26 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
                 .filter((check) => check !== mandatoryGap)
                 .map((check) => check.check)
                 .join(', ')}.`
-            : ''), { stampCompleted: true });
+            : '');
+      /*
+       * The same rule as a round where no fragment cleared its gate: a research
+       * goal's round with no mission has nobody to ask, and parked at
+       * NEEDS_HUMAN it is live to `goalContinuation`, so the goal never starts
+       * the round that could cover the gap. Nothing is synthesized either way
+       * (invariant 20 holds), the gap is still recorded below, and the goal's
+       * own packet ceiling asks a person when it is reached. A round behind a
+       * mission still parks: its person has a card.
+       */
+      const endRound = await nobodyToAsk(orchestration);
+      if (endRound) {
+        await updateOrchestration(orchestration.id, {
+          status: 'FAILED',
+          failureReason: `${gapReason} ${GOAL_ROUND_ENDS}`,
+          completedAt: new Date().toISOString(),
+        });
+      } else {
+        await parkOrchestration(orchestration.id, gapReason, { stampCompleted: true });
+      }
       await recordEvent({
         projectId: orchestration.projectId,
         layerId: orchestration.layerId,
@@ -2324,6 +2355,14 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
           failedChecks: failed.map((check) => check.check),
         },
       });
+      if (endRound) {
+        return {
+          orchestrationId,
+          status: 'FAILED',
+          enqueued: [],
+          waitingOn: 'nothing: the goal decides whether another round starts',
+        };
+      }
       return {
         orchestrationId,
         status: 'NEEDS_HUMAN',
