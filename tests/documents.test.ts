@@ -729,6 +729,19 @@ describe('normalization', () => {
     expect(body.warnings.join(' ')).toMatch(/normalized: .*rejoined hyphenated line breaks/);
   });
 
+  it('rejoins a word hyphenated across text-file lines on the real import path, and keeps real hyphens', async () => {
+    // A review's probe: a text extractor that joined a paragraph's lines with a
+    // space handed normalization "recog- nition", which the newline-only rule
+    // could never rejoin. The stored normalized_text is what retrieval and audits
+    // read, so it is asserted on the rows the import wrote, not on a helper.
+    const source = 'The recog-\nnition of revenue is deferred for pre- and post-closing\nand short- or long-term leases.\n';
+    const { runId } = await importAndRead('World Model v1.txt', Buffer.from(source));
+    const body = (await listBlocks(runId)).find((block) => block.normalizedText.includes('revenue'))!;
+    expect(body.rawText).toBe('The recog-\nnition of revenue is deferred for pre- and post-closing\nand short- or long-term leases.');
+    expect(body.normalizedText).toBe('The recognition of revenue is deferred for pre- and post-closing and short- or long-term leases.');
+    expect(body.warnings.join(' ')).toMatch(/normalized: .*rejoined hyphenated line breaks/);
+  });
+
   it('never rewrites a claim, only whitespace and glyphs', () => {
     const claim = 'Priority may be recorded; it is not always inferred, and never assumed.';
     expect(normalizeBlockText(claim).text).toBe(claim);
