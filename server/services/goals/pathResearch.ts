@@ -28,6 +28,7 @@ import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import { questionKey } from '../cash/conditions.ts';
 import { diveOwnsItsQuestions } from '../cash/operate.ts';
 import { parseBlockerKey } from '../../domain/types.ts';
+import { goalLimitsOf, screenOpening } from '../economy/possibilities/opening.ts';
 import type { ChainLink, PlanReading } from './plan.ts';
 
 /**
@@ -73,10 +74,13 @@ export async function researchGoalPaths(input: {
   trace?: string[];
   /** Decide only: raise and withdraw nothing. */
   dryRun?: boolean;
+  /** Filled with the openings the code screen rejected, so a caller can count them. */
+  screenedOut?: string[];
 }): Promise<string[]> {
   const note = (line: string) => input.trace?.push(line);
   const now = input.now ?? new Date();
   const raised: string[] = [];
+  const screenedOut = input.screenedOut ?? [];
   const considered = input.reading.considered;
   const ids = new Set(considered.map((one) => one.opportunityId));
   const open = await listNeeds({ projectId: input.projectId, states: ['OPEN'] });
@@ -111,6 +115,7 @@ export async function researchGoalPaths(input: {
       b.supportedReach - a.supportedReach ||
       a.missing.length - b.missing.length,
   );
+  const limits = goalLimitsOf(input.reading.target);
   let openings = 0;
   for (const one of order) {
     if (openings >= PATH_RESEARCH_OPENINGS || openHere >= MAX_OPEN_PATH_QUESTIONS) break;
@@ -137,6 +142,28 @@ export async function researchGoalPaths(input: {
     if (!opportunity) continue;
     if (diveOwnsItsQuestions(opportunity)) {
       note(`${one.title.slice(0, 60)}: its deep dive owns these questions (${opportunity.validationState})`);
+      continue;
+    }
+    /*
+     * The code screen runs before any research job is raised. An opening whose
+     * established capital or settlement time already breaks the goal's own
+     * limits is rejected here, in code, and no question is raised about it:
+     * no answer to its path could make it fit. An opening the screen cannot
+     * judge yet (a fact is not stated) is held, and its research continues,
+     * because the missing fact is exactly what path research asks.
+     */
+    const screen = screenOpening(
+      {
+        currency: input.reading.target.currency,
+        peakFundingCents: opportunity.peakFundingCents,
+        requiredCapital: await cardFact(opportunity.id, 'requiredCapital'),
+        timeToFirstCash: await cardFact(opportunity.id, 'timeToFirstCash'),
+      },
+      limits,
+    );
+    if (screen.verdict === 'REJECT') {
+      screenedOut.push(opportunity.id);
+      note(`${one.title.slice(0, 60)}: screened out in code — ${screen.reasons.join(' ')}`);
       continue;
     }
     // An opening counts toward the budget only when it gets live research:
