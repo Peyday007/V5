@@ -171,14 +171,27 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
 
 /**
  * Each productive (SUBMITTED) job is attributed to exactly one purpose: the
- * purpose of the bin the item is queued on. Joining on the item's own bin, never
- * on an orchestration, is what makes a job unable to match twice.
+ * purpose of the bin that owns it. The lane writes that bin on the event
+ * (`owningBin` in `worker.ts`); an event written before it did is resolved the
+ * same way the lane resolves admission — the item's own bin, else the newest bin
+ * driving its packet. One owner per event, chosen by COALESCE in a scalar
+ * subquery, is what makes a job unable to match twice.
  */
 async function readPurposes(since: string): Promise<PurposeAttribution[]> {
   const rows = await getDb().all<{ purpose: string | null; k: number | string }>(
     `SELECT b.purpose AS purpose, COUNT(*) AS k
-       FROM bin_events e LEFT JOIN bins b ON b.id = e.bin_id
-      WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?
+       FROM (
+         SELECT COALESCE(
+                  e.bin_id,
+                  w.bin_id,
+                  (SELECT ob.id FROM bins ob
+                    WHERE ob.orchestration_id = w.orchestration_id
+                    ORDER BY ob.created_at DESC LIMIT 1)
+                ) AS owner_bin_id
+           FROM bin_events e LEFT JOIN work_items w ON w.id = e.work_item_id
+          WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?
+       ) x
+       LEFT JOIN bins b ON b.id = x.owner_bin_id
       GROUP BY b.purpose`,
     [since],
   );
