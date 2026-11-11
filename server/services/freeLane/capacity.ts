@@ -50,6 +50,15 @@ const START_TARGET = 2;
 const WINDOW_MS = 3 * 60_000;
 const CONTROL_MS = 30_000;
 const IDLE_SLEEP_MS = 20_000;
+/**
+ * A take still running after this long has outlived the twenty-minute lease it
+ * claimed under, so its item is claimable by someone else and the slot is doing
+ * nothing for the lane. The control step stops counting it and starts another
+ * slot in its place ('lane pool stopped', rule 9). Without this, a take that never
+ * returned held its place forever: the pool read as full and busy, fill() added
+ * nothing, and claimable research waited for as long as the process lived.
+ */
+export const STALLED_TAKE_MS = 25 * 60_000;
 
 export interface Window {
   ok: number;
@@ -255,6 +264,13 @@ interface ModelPool {
   claimed: number;
   /** Slots that ended while the pool still wanted them (an exception, not a shrink or a stop) since the last step. */
   exited: number;
+  /** Takes in progress, keyed by slot, with when each began: how a take that never returns is seen. */
+  takes: Map<SlotHandle, number>;
+}
+
+/** One slot's identity. `abandoned` is set when the control step replaced it after its take stalled. */
+interface SlotHandle {
+  abandoned: boolean;
 }
 
 const pools = new Map<string, ModelPool>();
@@ -292,8 +308,9 @@ function wakeIdleSlots(): void {
 /** One slot: take jobs until the pool's target no longer includes it. */
 async function slot(pool: ModelPool, k: number, config: LaneConfig): Promise<void> {
   pool.running += 1;
+  const self: SlotHandle = { abandoned: false };
   try {
-    while (!stopped && k < pool.target) {
+    while (!stopped && !self.abandoned && k < pool.target) {
       const base = {
         workers: workersCache,
         worker: pool.worker,
@@ -306,6 +323,7 @@ async function slot(pool: ModelPool, k: number, config: LaneConfig): Promise<voi
       samplePools();
       pool.busy += 1;
       pool.peakBusy = Math.max(pool.peakBusy, pool.busy);
+      pool.takes.set(self, Date.now());
       let result: Awaited<ReturnType<typeof takeOne>> = { claimed: null, ok: false, ms: 0 };
       try {
         result = await takeOne(base);
@@ -314,16 +332,40 @@ async function slot(pool: ModelPool, k: number, config: LaneConfig): Promise<voi
       } catch (error) {
         console.warn('[free-lane] slot failed:', (error as Error).message);
       } finally {
-        pool.busy -= 1;
+        pool.takes.delete(self);
+        // A replaced slot's count was already given back when the step abandoned it.
+        if (!self.abandoned) pool.busy -= 1;
       }
+      if (self.abandoned) break;
       if (result.claimed) pool.claimed += 1;
       else await sleep(IDLE_SLEEP_MS);
     }
   } finally {
-    pool.running -= 1;
-    // Ended while still wanted: not a shrink and not a stop. The next control step refills it and says so.
-    if (!stopped && k < pool.target) pool.exited += 1;
+    if (!self.abandoned) {
+      pool.running -= 1;
+      // Ended while still wanted: not a shrink and not a stop. The next control step refills it and says so.
+      if (!stopped && k < pool.target) pool.exited += 1;
+    }
   }
+}
+
+/**
+ * Give back the places of takes that have run past `STALLED_TAKE_MS`, so fill()
+ * replaces them. The stalled call is not cancelled (nothing here can cancel it);
+ * if it ever returns, its slot sees it was abandoned and ends without touching
+ * the counts. Returns how many were abandoned.
+ */
+function abandonStalledTakes(pool: ModelPool, now: number): number {
+  let abandoned = 0;
+  for (const [handle, since] of [...pool.takes.entries()]) {
+    if (now - since < STALLED_TAKE_MS) continue;
+    handle.abandoned = true;
+    pool.takes.delete(handle);
+    pool.busy -= 1;
+    pool.running -= 1;
+    abandoned += 1;
+  }
+  return abandoned;
 }
 
 function fill(pool: ModelPool, config: LaneConfig): void {
@@ -372,7 +414,7 @@ export async function controlStep(): Promise<ControlReading | null> {
       const saved = persisted.get(worker.model);
       // After a restart, resume at half of what was learned: fast to regain, gentle on a cold machine.
       const target = saved ? Math.max(START_TARGET, Math.floor(saved.target / 2)) : START_TARGET;
-      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0, claimed: 0, exited: 0 });
+      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0, claimed: 0, exited: 0, takes: new Map() });
     }
   }
   const waiting = await waitingNow();
@@ -417,10 +459,14 @@ export async function controlStep(): Promise<ControlReading | null> {
     claimedSinceStep += pool.claimed;
     pool.claimed = 0;
     idleSlots += Math.max(0, pool.running - pool.busy);
+    const stalled = abandonStalledTakes(pool, Date.now());
     const runningBefore = pool.running;
     const exited = pool.exited;
     pool.exited = 0;
     fill(pool, config);
+    if (stalled > 0) {
+      healed.push(`${pool.worker.model}: ${stalled} take(s) stalled past ${STALLED_TAKE_MS / 60_000} min; replaced (${runningBefore} of ${pool.target} were taking work, now ${pool.running})`);
+    }
     // A slot that ended on an exception is not a decision: the pool is refilled now, and the repair recorded.
     if (exited > 0) healed.push(`${pool.worker.model}: ${exited} slot(s) had exited (${runningBefore} of ${pool.target} running); refilled to ${pool.running}`);
     reading.models.push({

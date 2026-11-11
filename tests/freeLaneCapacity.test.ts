@@ -1,7 +1,7 @@
 /**
  * The free lane's concurrency is a controller's output, not a constant (§86).
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createBin } from '../server/repos/bins.ts';
@@ -18,6 +18,7 @@ import {
   readCapacity,
   startAdaptivePool,
   stopAdaptivePool,
+  STALLED_TAKE_MS,
   waitingNow,
   freeLaneSpareSurfaces,
 } from '../server/services/freeLane/capacity.ts';
@@ -263,5 +264,52 @@ describe('the control step heals the pool it owns (rule 9: nothing claimable wai
     expect(rows[0]!.reason).toMatch(/brain-a: 2 slot\(s\) had exited \(0 of \d+ running\); refilled to \d+/);
     for (let i = 0; i < 40 && (await taken()) === 0; i += 1) await pause(100);
     expect(await taken()).toBeGreaterThan(0);
+  }, 30_000);
+
+  it('lane pool stopped: claimable research beside takes that never return is claimed once they outlive their lease, not never', async () => {
+    // Every slot's take hangs in the model call: the pool reads full and busy,
+    // fill() adds nothing, and nothing idle exists for a heal to wake. Before
+    // the stall bound this state lasted as long as the process: the waiting
+    // items below were still waiting an hour later, at any horizon.
+    let hang = true;
+    const hanging: Completer = (c, m, s2, prompt, o) => (hang ? new Promise<string>(() => undefined) : completer(c, m, s2, prompt, o));
+    const queued = async (): Promise<number> =>
+      Number((await getDb().get<{ n: number | string }>("SELECT COUNT(*) AS n FROM work_items WHERE work_type = 'RESEARCH_FRAGMENT' AND state = 'QUEUED'", []))?.n ?? 0);
+    // A cold pool: two slots per model, not what an earlier test taught it.
+    await getDb().run('DELETE FROM free_lane_capacity', []);
+    await queueFragments(12);
+    // Database connections contended: the controller holds its targets (it neither
+    // grows nor shrinks), as it does in production whenever the pool is busy, so
+    // no growth step hands the waiting work a fresh slot either.
+    const contended = { ...calm, dbContended: true };
+    startAdaptivePool({ config: CONFIG, completer: hanging, fetchSource, search: async () => [], pressure: () => contended }, 60_000);
+    await pause(400);
+    let reading = await controlStep();
+    for (let i = 0; i < 60 && !reading!.models.every((m) => m.running > 0 && m.busy === m.running); i += 1) {
+      await pause(100);
+      reading = await controlStep();
+    }
+    for (const model of reading!.models) expect(model.busy).toBe(model.running);
+    const left = await queued();
+    // Work is claimable and waiting, every slot is "busy", and nothing will ever take it.
+    expect(left).toBeGreaterThan(0);
+    await pause(500);
+    await controlStep();
+    expect(await queued()).toBe(left);
+    hang = false;
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      // An hour later, the probe's failure: claimable research that has waited an hour.
+      vi.setSystemTime(Date.now() + 61 * 60_000);
+      expect(61 * 60_000).toBeGreaterThan(STALLED_TAKE_MS);
+      await controlStep();
+      for (let i = 0; i < 40 && (await queued()) > 0; i += 1) await pause(100);
+      expect(await queued()).toBe(0);
+      const rows = await healed();
+      expect(rows.some((row) => /take\(s\) stalled past 25 min; replaced/.test(row.reason))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   }, 30_000);
 });
