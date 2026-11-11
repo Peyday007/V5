@@ -15,6 +15,7 @@ import { createBin, recordBinEvent } from '../server/repos/bins.ts';
 import { enqueueWork } from '../server/repos/workQueue.ts';
 import {
   chooseConstraint,
+  isDroppedOutcome,
   recordStageCapacity,
   STAGE_CAPACITY_EVENT,
   STAGES,
@@ -127,7 +128,9 @@ describe('stageCapacity', () => {
       recordBinEvent({ eventType: 'FREE_LANE_ITEM', workloadClass, outcome, reason, binId, durationMs });
     await lane('RESEARCH_FRAGMENT', 'SUBMITTED', null, improvement, 1000);
     await lane('RESEARCH_FRAGMENT', 'SUBMITTED', null, play, 2000);
-    await lane('RESEARCH_FRAGMENT', 'FAILED', 'model call failed: HTTP 503', null, 500);
+    // A provider failure handed back with its attempt refunded: a provider
+    // failure, never a dropped or duplicate record.
+    await lane('RESEARCH_FRAGMENT', 'RELEASED_TRANSIENT', 'model qwen: model call failed: HTTP 503', null, 500);
     await lane('RESEARCH_VERIFY', 'SUBMITTED', null, null, 300);
 
     const report = await stageCapacity({ hours: 2, now: Date.now() + 1000 });
@@ -140,7 +143,7 @@ describe('stageCapacity', () => {
     expect(model.accepted).toBe(2);
     expect(model.acceptedPerHour).toBe(1);
     expect(model.providerFailures).toEqual({ measured: true, value: 1 });
-    expect(model.droppedOrDuplicate).toEqual({ measured: true, value: 1 });
+    expect(model.droppedOrDuplicate).toEqual({ measured: true, value: 0 });
     expect(model.elapsedMs).toEqual({ measured: true, value: 3500 });
     // Not recorded by the lane: said so, never invented.
     expect(model.incrementalDollars.measured).toBe(false);
@@ -169,6 +172,27 @@ describe('stageCapacity', () => {
     expect(report.process.rssBytes).toBeGreaterThan(0);
     expect(report.process.network.measured).toBe(false);
     expect(report.constrained.stage).not.toBeNull();
+  });
+
+  it('keeps provider failures and handed-back items out of the dropped/duplicate count', async () => {
+    const lane = (outcome: string, reason: string | null) =>
+      recordBinEvent({ eventType: 'FREE_LANE_ITEM', workloadClass: 'RESEARCH_FRAGMENT', outcome, reason, binId: null, durationMs: 10 });
+    // The three outcomes worker.ts records, with the reasons it records them under.
+    await lane('SUBMITTED', 'model qwen');
+    await lane('RELEASED_TRANSIENT', 'model qwen: model call failed: HTTP 429 rate limited');
+    await lane('RELEASED_TRANSIENT', 'model qwen: The database pool had no free connection, 593 caller(s) waiting');
+    await lane('RELEASED_TRANSIENT', 'model qwen: no JSON in the answer');
+    await lane('FAILED_RETRYABLE', 'model qwen: model call failed: HTTP 400 bad request');
+    await lane('FAILED_RETRYABLE', "model qwen: the answer did not survive Brain's own checks: 3 claim(s) offered");
+
+    const report = await stageCapacity({ hours: 1, now: Date.now() + 1000 });
+    const model = report.stages.find((s) => s.stage === 'model-interpretation')!;
+    expect(model.itemsProcessedPerHour).toEqual({ measured: true, value: 6 });
+    expect(model.accepted).toBe(1);
+    expect(model.providerFailures).toEqual({ measured: true, value: 2 });
+    // Only the item the lane gave up on without an accepted answer, and not for a
+    // provider failure, is dropped: never total minus accepted (which would be 5).
+    expect(model.droppedOrDuplicate).toEqual({ measured: true, value: 1 });
   });
 
   it('excludes events outside the window', async () => {
@@ -263,5 +287,16 @@ describe('routeHold / recordRouteOutcome', () => {
       recordRouteOutcome('m', { ok: false, why: 'the answer cited no source' }, now);
     }
     expect(routeHold('m', now)).toBeNull();
+  });
+});
+
+describe('isDroppedOutcome', () => {
+  it('counts only a non-provider FAILED_RETRYABLE as dropped', () => {
+    expect(isDroppedOutcome('FAILED_RETRYABLE', false)).toBe(true);
+    expect(isDroppedOutcome('FAILED_RETRYABLE', true)).toBe(false);
+    expect(isDroppedOutcome('RELEASED_TRANSIENT', false)).toBe(false);
+    expect(isDroppedOutcome('RELEASED_TRANSIENT', true)).toBe(false);
+    expect(isDroppedOutcome('SUBMITTED', false)).toBe(false);
+    expect(isDroppedOutcome(null, false)).toBe(false);
   });
 });

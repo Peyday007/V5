@@ -95,6 +95,21 @@ const NOT = (reason: string): { measured: false; reason: string } => ({ measured
 const ok = <T>(value: T): { measured: true; value: T } => ({ measured: true, value });
 const placeholders = (items: readonly unknown[]): string => items.map(() => '?').join(', ');
 
+/**
+ * Whether a `FREE_LANE_ITEM` outcome is a dropped (or repeated) record, as the
+ * spec keeps it apart from model/provider failures. The worker records three
+ * outcomes (worker.ts): `SUBMITTED` (accepted), `RELEASED_TRANSIENT` (handed
+ * back with its attempt refunded because the provider or Brain itself was
+ * unavailable — the work was neither dropped nor repeated, it waits to be done)
+ * and `FAILED_RETRYABLE` (the lane produced no answer Brain accepted). Only the
+ * last is dropped, and only when its reason is not a model call failure, which
+ * is a provider failure and already counted under `providerFailures`. A total
+ * minus the accepted count would mix the two measures.
+ */
+export function isDroppedOutcome(outcome: string | null, providerFailed: boolean): boolean {
+  return outcome === 'FAILED_RETRYABLE' && !providerFailed;
+}
+
 /** Per-stage reading from the rows. Exported for tests. */
 async function readStage(def: StageDefinition, since: string, hours: number, nowMs: number): Promise<StageReading> {
   const blank = (reason: string): StageReading => ({
@@ -143,12 +158,15 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
   let total = 0;
   let accepted = 0;
   let providerFailures = 0;
+  let dropped = 0;
   let ms = 0;
   for (const row of events) {
     total += n(row.k);
     ms += n(row.ms);
+    const providerFailed = n(row.failed) === 1;
     if (row.outcome === 'SUBMITTED') accepted += n(row.k);
-    if (n(row.failed) === 1) providerFailures += n(row.k);
+    if (providerFailed) providerFailures += n(row.k);
+    if (isDroppedOutcome(row.outcome, providerFailed)) dropped += n(row.k);
   }
   const oldest = queued?.oldest ? Math.max(0, Math.round((nowMs - Date.parse(queued.oldest)) / 60_000)) : null;
   return {
@@ -158,8 +176,9 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     oldestUsefulItemMinutes: ok(oldest),
     itemsProcessedPerHour: ok(total / hours),
     uniqueUsableFacts: ok(n(facts?.n)),
-    // Outcomes that did not become an accepted submission: dropped or repeated work.
-    droppedOrDuplicate: ok(total - accepted),
+    // Only work the lane gave up on without an accepted answer; a provider
+    // failure or a handed-back item is counted under its own measure, not here.
+    droppedOrDuplicate: ok(dropped),
     modelCallsAvoided: NOT('model calls avoided are not recorded'),
     providerFailures: ok(providerFailures),
     elapsedMs: ok(ms),
