@@ -1,0 +1,4681 @@
+{
+ "profile": {
+  "ein": "232088132",
+  "name": "York County Literacy Council",
+  "city": "York",
+  "state": "PA",
+  "ntee": null,
+  "zip3": "174",
+  "revenue": 881045,
+  "revenue_year": 2024,
+  "url": "https://projects.propublica.org/nonprofits/organizations/232088132"
+ },
+ "state": "PA",
+ "city": "York",
+ "causes": [
+  "literacy"
+ ],
+ "generated": "2026-11-11",
+ "scanned": 320,
+ "top": 350,
+ "zip3": "174",
+ "scanned_grants": 29096,
+ "foundations": [
+  {
+   "ein": "236805421",
+   "name": "THE GRAHAM FOUNDATION",
+   "address": {
+    "line": "1420 SIXTH AVENUE",
+    "city": "York",
+    "state": "PA",
+    "zip": "17403"
+   },
+   "phone": "7178494001",
+   "website": "N/A",
+   "fmv_assets": 36159789,
+   "total_grants": 3200750,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "PAUL L RUDY III",
+     "address": {
+      "line": "1420 SIXTH AVENUE",
+      "city": "York",
+      "state": "PA",
+      "zip": "17403"
+     },
+     "phone": "7178494001",
+     "email": "PAUL_RUDY@GRCAP.COM",
+     "how": "NO SPECIFIC FORM",
+     "deadlines": "NONE",
+     "restrictions": "AS DIRECTED BY TRUSTEES TO ANY CHARITABLE ORGANIZATION IN THE UNITED STATES, NO INDIVIDUALS"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202532809349101203",
+   "n_grants": 43,
+   "n_instate": 37,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "YORK LITERACY INSTITUTE",
+     "city": "York",
+     "state": "PA",
+     "zip3": "174",
+     "status": "",
+     "purpose": "LITERACY EMPOWERMENT CAMPAIGN",
+     "amount": 1500,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "YORK COUNTY LIBRARIES",
+     "city": "York",
+     "state": "PA",
+     "zip3": "174",
+     "status": "",
+     "purpose": "GENERAL FUND",
+     "amount": 2000,
+     "w": 0.5,
+     "near": true
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 1,
+   "hit_total": 3500,
+   "median_hit": 2000,
+   "n_near": 2,
+   "f_near": true,
+   "top_cities": [
+    [
+     "York",
+     29
+    ],
+    [
+     "Philadelphia",
+     2
+    ],
+    [
+     "Mt Wolf",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.89,
+   "funds_you": [],
+   "score": 17.61
+  },
+  {
+   "ein": "461605118",
+   "name": "PPL FOUNDATION",
+   "address": {
+    "line": "645 HAMILTON STREET STE 900",
+    "city": "Allentown",
+    "state": "PA",
+    "zip": "18101"
+   },
+   "phone": "5026274582",
+   "website": "N/A",
+   "fmv_assets": 53897316,
+   "total_grants": 6461755,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "LISSETTE SANTANA",
+     "address": {
+      "line": "645 HAMILTON STREET SUITE 700",
+      "city": "Allentown",
+      "state": "PA",
+      "zip": "18101"
+     },
+     "phone": "6107743357",
+     "email": "WWW.PPLCARES.COM",
+     "how": "APPLICATIONS ARE PUBLICLY AVAILABLE ONLINE AT PPLCARES.COM",
+     "deadlines": "DEADLINES VARY FOR DIFFERENT PROGRAMS THROUGHOUT THE YEAR, WITH FINAL DEADLINE OCCURRING ON SEPT. 15",
+     "restrictions": "AWARDS ARE LIMITED TO ORGANIZATIONS OPERATING WITHIN THE COMPANY'S SERVICE TERRITORY."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202641139349101414",
+   "n_grants": 283,
+   "n_instate": 206,
+   "n_regions": 30,
+   "hits": [
+    {
+     "recipient": "THE LITERACY CENTER",
+     "city": "Laurys Station",
+     "state": "PA",
+     "zip3": "180",
+     "status": "PF",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "LITITZ PUBLIC LIBRARY",
+     "city": "Lititz",
+     "state": "PA",
+     "zip3": "175",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 6500,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "OSTERHOUT FREE LIBRARY",
+     "city": "Wilkes Barre",
+     "state": "PA",
+     "zip3": "187",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 5500,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "EPHRATA PUBLIC LIBRARY",
+     "city": "Ephrata",
+     "state": "PA",
+     "zip3": "175",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "JANE AND ANETTE M HERR MEMORIAL LIBRARY",
+     "city": "Mifflinburg",
+     "state": "PA",
+     "zip3": "178",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "JOHN R KAUFFMAN JR PUBLIC LIBRARY",
+     "city": "Sunbury",
+     "state": "PA",
+     "zip3": "178",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "SHAMOKIN COAL TOWNSHIP PUBLIC LIBRARY",
+     "city": "Shamokin",
+     "state": "PA",
+     "zip3": "178",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "LEHIGHTON AREA MEMORIAL LIBRARY",
+     "city": "Lehighton",
+     "state": "PA",
+     "zip3": "182",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 4000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "RICHLAND COMMUNITY LIBRARY",
+     "city": "Richland",
+     "state": "PA",
+     "zip3": "170",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 4000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "NORTHAMPTON AREA PUBLIC LIBRARY INC",
+     "city": "Northampton",
+     "state": "PA",
+     "zip3": "180",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 3000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "ORWIGSBURG AREA FREE PUBLIC LIBRARY",
+     "city": "Orwigsburg",
+     "state": "PA",
+     "zip3": "179",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 3000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "THE MEMORIAL LIBRARY OF NAZARETH AND VIC",
+     "city": "Nazareth",
+     "state": "PA",
+     "zip3": "180",
+     "status": "PC",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 900,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 12,
+   "n_strong": 1,
+   "hit_total": 47400,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Allentown",
+     26
+    ],
+    [
+     "Bethlehem",
+     16
+    ],
+    [
+     "Lancaster",
+     13
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.37,
+   "funds_you": [],
+   "score": 14.15
+  },
+  {
+   "ein": "231503488",
+   "name": "THE WILLIAM PENN FOUNDATION",
+   "address": {
+    "line": "TWO LOGAN SQUARE 1100",
+    "city": "Philadelphia",
+    "state": "PA",
+    "zip": "19103"
+   },
+   "phone": "2159881830",
+   "website": "WILLIAMPENNFOUNDATION.ORG",
+   "fmv_assets": 3435225624,
+   "total_grants": 148834689,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "GRANTS CO THE WILLIAM PENN FOUNDATI",
+     "address": {
+      "line": "TWO LOGAN SQUARE SUITE 1100",
+      "city": "Philadelphia",
+      "state": "PA",
+      "zip": "19103"
+     },
+     "phone": "2159881830",
+     "email": "",
+     "how": "THE FOUNDATION IS INTERESTED IN RECEIVING LETTERS OF INQUIRY FROM PUBLIC CHARITIES THAT MEET ITS FUNDING GUIDELINES. LETTERS OF INQUIRY SHOULD INCLUDE THE NATURE OF THE PROJECT, ANTICIPATED RESULTS AND FINANCIAL INFORMATION FOR THE APPLICANT. FOR ADDITIONAL INFORMATION PLEASE SEE OUR WEBSITE AT WWW.WILLIAMPENNFOUNDATION.ORG.",
+     "deadlines": "N/A",
+     "restrictions": "1.) GRANTS ARE MADE TO ORGANIZATIONS WHICH QUALIFY UNDER INTERNAL REVENUE CODE SECTION 501C3 AS PUBLIC CHARITIES UNDER 509(A) OF THE CODE WHO PROVIDE SUPPORT WITHIN THE FOUNDATION'S GRANTMAKING PRIORITES. 2.) GRANTS ARE NOT MADE TO INDIVIDUALS OR FOR SECTARIAN RELIGIOUS ACTIVITIES OR FOR POLITICAL LOBBYING. FOR ADDITIONAL INFORMATION PLEASE SEE OUR WEBSITE AT WWW.WILLIAMPENNFOUNDATION.ORG."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543189349102354",
+   "n_grants": 1027,
+   "n_instate": 708,
+   "n_regions": 19,
+   "hits": [
+    {
+     "recipient": "CONGRESO DE LATINOS UNIDOS INC",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "EXITO K-3 LITERACY STRATEGY",
+     "amount": 805000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CENTER FOR BLACK EDUCATOR DEVELOPMENT",
+     "city": "Elkins Park",
+     "state": "PA",
+     "zip3": "190",
+     "status": "",
+     "purpose": "PHILADELPHIA FREEDOM SCHOOLS LITERACY ACADEMY AND TEACHER APPRENTICES.",
+     "amount": 350000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HOPEPHL",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "CREATE LITERACY-RICH SPACES THAT PROMOTE EARLY LEARNING AND ADULT-CHILD INTERACTIONS IN FAMILY SHELTERS.",
+     "amount": 250000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "JOYFUL READERS",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "LITERACY TUTORING FOR K-3 STUDENTS",
+     "amount": 250000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "JEVS HUMAN SERVICES",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "SUPPORTING YOUNG ADULTS RECEIVE GED AND JOB PLACEMENT",
+     "amount": 172232,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "URBAN AFFAIRS COALITION",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "EARLY LITERACY PROGRAMMING THAT ENGAGES FATHERS IN THEIR ROLE AS THEIR CHILD'S FIRST TEACHER.",
+     "amount": 160000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "RESEARCH FOR ACTION INC",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "EVALUATING LITERACY INTERVENTION AND TUTORING INITIATIVES ACROSS THE CITY",
+     "amount": 158000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FUND FOR THE SCHOOL DISTRICT OF PHILADELPHIA",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "SUMMER LITERACY QUALITY ENHANCEMENT COHORT PHASE II",
+     "amount": 157000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OXFORD CIRCLE CHRISTIAN COMMUNITY DEVELOPMENT ASSOCIATION INC",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "COMMUNITY LITERACY ACTIVITIES PHASE II",
+     "amount": 149418,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "TEMPLE UNIVERSITY - COLLEGE OF EDUCATION AND HUMAN DEVELOPMENT",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "SUMMER LITERACY QUALITY ENHANCEMENT COHORT PHASE II EVALUATION",
+     "amount": 146671,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING ALLOWED",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "PROVIDE LITERACY TUTORING AND INTERVENTIONS TO K-2 STUDENTS",
+     "amount": 115455,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "BOYS AND GIRLS CLUBS OF PHILADELPHIA INC",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "AFTERSCHOOL LITERACY ENRICHMENTS AND TARGETED INTERVENTIONS FOR ELEMENTARY STUDENTS IN GERMANTOWN",
+     "amount": 102267,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ACHIEVE NOW",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "PROVIDE ADDITIONAL LITERACY INTERVENTIONS AND SUPPORT TO ELEMENTARY STUDENTS",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "PENNSYLVANIA STATE UNIVERSITY",
+     "city": "University Park",
+     "state": "PA",
+     "zip3": "168",
+     "status": "",
+     "purpose": "EVALUATION OF THE FAMILY LITERACY INITIATIVE",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "TEACH FOR AMERICA INC",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "SUPPORT THE IGNITE TUTORING PROGRAM IN LOCAL ELEMENTARY SCHOOLS",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "DREXEL UNIVERSITY",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "SUMMER LITERACY QUALITY ENHANCEMENT COHORT PHASE II",
+     "amount": 78000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "PENNSYLVANIA STATE UNIVERSITY",
+     "city": "University Park",
+     "state": "PA",
+     "zip3": "168",
+     "status": "",
+     "purpose": "CONTINUED EVALUATION OF FAMILY LITERACY INITIATIVE",
+     "amount": 74406,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "TREE HOUSE BOOKS",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "SUMMER LITERACY QUALITY ENHANCEMENT COHORT PHASE II",
+     "amount": 57600,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "HISTORIC FAIR HILL INC",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "FAMILY AND COMMUNITY LITERACY",
+     "amount": 54999,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "INDOCHINESE-AMERICAN COUNCIL",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "LITERACY-RICH NEIGHBORHOOD INITIATIVE",
+     "amount": 39500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "MT AIRY USA",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "SUMMER LITERACY QUALITY ENHANCEMENT COHORT PHASE II",
+     "amount": 19000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FREE LIBRARY OF PHILADELPHIA FOUNDATION",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "SUPPORT FOR READ BY 4TH BACKBONE FUNCTIONS AND READING CAPTAINS",
+     "amount": 550000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "FREE LIBRARY OF PHILADELPHIA FOUNDATION",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "MEMBERSHIP 2024 REGIONAL FOUNDATION CENTER 2024",
+     "amount": 15000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "LIBRARY COMPANY OF PHILADELPHIA",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "FRIENDS OF THE ABINGTON TOWNSHIP PUBLIC LIBRARY",
+     "city": "Abington",
+     "state": "PA",
+     "zip3": "190",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 2000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "FREE LIBRARY OF PHILADELPHIA FOUNDATION",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 1500,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "KENNETT LIBRARY",
+     "city": "Kennett Sq",
+     "state": "PA",
+     "zip3": "193",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 450,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 27,
+   "n_strong": 21,
+   "hit_total": 4013498,
+   "median_hit": 100000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Philadelphia",
+     535
+    ],
+    [
+     "Harrisburg",
+     17
+    ],
+    [
+     "Media",
+     9
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.03,
+   "funds_you": [],
+   "score": 11.27
+  },
+  {
+   "ein": "251309888",
+   "name": "THE GRABLE FOUNDATION",
+   "address": {
+    "line": "436 SEVENTH AVENUE 2400",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "15219"
+   },
+   "phone": "4124714550",
+   "website": "WWW.GRABLE.ORG",
+   "fmv_assets": 350392836,
+   "total_grants": 13310832,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "GREGG BEHR",
+     "address": {
+      "line": "436 SEVENTH AVENUE SUITE 2400",
+      "city": "Pittsburgh",
+      "state": "PA",
+      "zip": "15219"
+     },
+     "phone": "4124714550",
+     "email": "",
+     "how": "THERE ARE NO SPECIAL FORMS FOR APPLYING FOR A GRANT. APPLICATIONS MAY BE IN LETTER FORM AND SHOULD INCLUDE, SO FAR AS APPLICABLE, THE FOLLOWING: EACH PROPOSAL SUBMITTED MUST BE EXPRESSIVE OF A PROJECT OR PROGRAM CLEARLY IDENTIFIED WITH ONE OF THE FOUNDATION'S INDICATED FIELDS OF INTEREST. IT SHOULD INCLUDE: - A ONE OR TWO-PAGE SUMMARY OF THE PROPOSAL, - INFORMATION ABOUT THE APPLICANT ORGANIZATION, - STATEMENT OF NEED FOR THE PROPOSED PROJECT, - DESCRIPTION OF THE PROJECT AND RATIONALE FOR ITS APPROACH, - QUALIFICATIONS OF THE ORGANIZATION, THE PROJECT SUPERVISOR AND STAFF, - PROJECT BUDGET, SHOWING COMMITTED AND ANTICIPATED FUNDS, - ORGANIZATION'S CURRENT OPERATING BUDGET, - DESCRIPTION OF HOW THE PROJECT WILL BE SUSTAINED AFTER THE GRANT HAS ENDED, - LIST OF BOARD MEMBERS AND/OR ADVISORS, - LETTERS OF SUPPORT FROM THE APPLICANT'S BOARD AND COLLABORATING ORGANIZATIONS, AND, - COPY OF IRS TAX-EXEMPT CERTIFICATION",
+     "deadlines": "N/A",
+     "restrictions": "THE FOUNDATION DOES NOT CONSIDER REQUESTS ON BEHALF OF INDIVIDUALS OR REQUESTS TO CONDUIT ORGANIZATIONS, WHICH PASS ON FUNDS TO OTHER ORGANIZATIONS."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533079349101343",
+   "n_grants": 361,
+   "n_instate": 322,
+   "n_regions": 15,
+   "hits": [
+    {
+     "recipient": "LITERACY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SUPPORT PROGRAMMING THAT BUILDS YOUNG CHILDRENS SKILLS IN READING, FLUENCY, AND COMPREHENSION",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING IS FUNDAMENTAL PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SUPPORT EARLY LITERACY PROGRAMMING FOR YOUNG CHILDREN AND THEIR FAMILIES",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "UNIVERSITY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SUPPORT A COHORT-BASED EARLY LITERACY PROFESSIONAL DEVELOPMENT MODEL FOR PRESCHOOL EDUCATORS",
+     "amount": 30000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING READY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SUPPORT EFFORTS ENCOURAGING EARLY LITERACY AND FAMILY ENGAGEMENT",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "PRIME STAGE THEATRE",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SUPPORT THEATER-BASED LITERACY EDUCATION",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "UNITED METHODIST CHURCH UNION",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SUPPORT AFTERSCHOOL ACADEMIC TUTORING AND ENRICHMENT FOR STUDENTS IN ALLEGHENY COUNTY",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "LEARNING DISABILITIES ASSOCIATION OF PENNSYLVANIA",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SUPPORT THE EARLY LITERACY EFFORTS FOR UNDERSERVED STUDENTS THROUGH HIGH-QUALITY, MULTISENSORY INSTRUCTION AND COMMUNITY-BASED TUTOR TRAINING",
+     "amount": 18000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SUPPORT AN ORGANIZED COMMUNITY RESPONSE ADDRESSING LITERACY CHALLENGES IN THE REGION",
+     "amount": 15600,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING READY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SUPPORT PLANNING EFFORTS TO ENSURE READING READY PITTSBURGH'S FUTURE STRENGTH",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ALLEGHENY COUNTY LIBRARY ASSOCIATION",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SUPPORT PROGRAMMING TO ENGAGE CHILDREN AND FAMILIES WITH NEIGHBORHOOD LIBRARIES",
+     "amount": 28500,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "MONROEVILLE PUBLIC LIBRARY FUND",
+     "city": "Monroeville",
+     "state": "PA",
+     "zip3": "151",
+     "status": "",
+     "purpose": "TO SUPPORT PUBLIC SCHOOL/PUBLIC LIBRARY CONNECTIONS",
+     "amount": 20000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "ANDREW CARNEGIE FREE LIBRARY & MUSIC HALL",
+     "city": "Carnegie",
+     "state": "PA",
+     "zip3": "151",
+     "status": "",
+     "purpose": "TO SUPPORT THE EXPANSION OF TEEN-FOCUSED LIBRARY MATERIALS",
+     "amount": 15000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CC MELLOR MEMORIAL LIBRARY",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO EXPAND LIBRARY SERVICES TO A LOCAL SCHOOL DISTRICT",
+     "amount": 10000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SUPPORT CHILDREN, TEENS, AND FAMILIES ATTENDING THE 2024 GREATER PITTSBURGH FESTIVAL OF BOOKS",
+     "amount": 2500,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 14,
+   "n_strong": 9,
+   "hit_total": 319600,
+   "median_hit": 20000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     205
+    ],
+    [
+     "Homestead",
+     8
+    ],
+    [
+     "Greensburg",
+     6
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.01,
+   "funds_you": [],
+   "score": 6.49
+  },
+  {
+   "ein": "237366998",
+   "name": "THE JACK BUNCHER FOUNDATION",
+   "address": {
+    "line": "1251 WATERFRONT PLACE 201",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "15222"
+   },
+   "phone": "4124229900",
+   "website": "N/A",
+   "fmv_assets": 446462400,
+   "total_grants": 20972366,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "KAREN EMMERICH",
+     "address": {
+      "line": "1300 PENN AVENUE SUITE 300",
+      "city": "Pittsburgh",
+      "state": "PA",
+      "zip": "15222"
+     },
+     "phone": "4128513288",
+     "email": "",
+     "how": "APPLICATIONS SHOULD BE SUBMITTED IN LETTER FORM TO THE FOUNDATION STATING PURPOSE OF ORGANIZATION, AMOUNT OF REQUESTED CONTRIBUTION AND PURPOSE OF SAID CONTRIBUTION.",
+     "deadlines": "N/A",
+     "restrictions": "N/A"
+    }
+   ],
+   "tax_period_end": "2024-11-30",
+   "object_id": "202522879349100317",
+   "n_grants": 247,
+   "n_instate": 223,
+   "n_regions": 11,
+   "hits": [
+    {
+     "recipient": "READING IS FUNDAMENTAL PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "BOOKMOBILES & OPERATING SUPPORT",
+     "amount": 40000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CITY OF ASYLUM PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "FREE LITERACY PROGRAMS",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING READY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "PART A - SUMMER READING PROGRAM",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING READY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "PART B - OPERATIONS / REGULAR PROGRAMS",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "BUNCHER(JACK G) CHARITABLE FUND FOR THE CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "ANNUAL GIFT",
+     "amount": 500000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "JFED OF GR PGH-PJ LIBRARY ENDOWMENT",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "PJ LIBRARY ENDOWMENT-FINAL INSTLMT",
+     "amount": 250000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "ALLEGHENY COUNTY LIBRARY ASSOC",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "YEAR END GIFT-$5,000 PER ACLA MEMBER",
+     "amount": 235000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "ALLEGHENY COUNTY LIBRARY ASSOC",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "LOVE YOUR LIBRARY MATCH 2024",
+     "amount": 205009,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "QUARTERLY PROGRAM GUIDE-PART A",
+     "amount": 145000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GR PGH FESTIVAL OF BOOKS-PART B",
+     "amount": 125000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "VIVIAN D. HEWITT INITIATIVE-PART C",
+     "amount": 125000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "JFED OF GR PGH-PJ LIBRARY ENDOWMENT",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "\"MATCH\" PJ LIBRARY ENDOWMENT 2024",
+     "amount": 121000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "ENHANCE OUTDOOR LIBRARY SPACES-PART D",
+     "amount": 105000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "2024 LOVE LIBRARY PROMO/MRKTG",
+     "amount": 80000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "ALLEGHENY COUNTY LIBRARY ASSOC",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "AWARENESS CAMPAIGN/ CMMTY OUTREACH",
+     "amount": 35000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF MCKEESPORT",
+     "city": "Mckeesport",
+     "state": "PA",
+     "zip3": "151",
+     "status": "",
+     "purpose": "EMERGENCY CAPITAL-REPLACE OUTSIDE STAIRS",
+     "amount": 25000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 16,
+   "n_strong": 4,
+   "hit_total": 2041009,
+   "median_hit": 121000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     164
+    ],
+    [
+     "Greensburg",
+     7
+    ],
+    [
+     "Carnegie",
+     5
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 6.23
+  },
+  {
+   "ein": "256022634",
+   "name": "JOHN M HOPWOOD IRR",
+   "address": {
+    "line": "500 FIRST AVE P7-PFSC-03-Z",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "15219"
+   },
+   "phone": "4127627070",
+   "website": "SEE FOOTNOTE",
+   "fmv_assets": 37237304,
+   "total_grants": 1146000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "PNC Bank Charitable Trust Grant Rev",
+     "address": {
+      "line": "Tower at PNC Plaza 300 Fifth Ave M",
+      "city": "Pittsburgh",
+      "state": "PA",
+      "zip": "15222"
+     },
+     "phone": "4127627070",
+     "email": "",
+     "how": "SEE FOOTNOTES",
+     "deadlines": "SEE FOOTNOTES",
+     "restrictions": "SEE FOOTNOTES"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601289349103820",
+   "n_grants": 66,
+   "n_instate": 4,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "READING IS FUNDAMENTAL PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "PC",
+     "purpose": "CHILDREN'S LITERACY",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 10000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     1
+    ],
+    [
+     "Wexford",
+     1
+    ],
+    [
+     "Johnstown",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.25,
+   "funds_you": [],
+   "score": 6.0
+  },
+  {
+   "ein": "043747289",
+   "name": "EQT FOUNDATION",
+   "address": {
+    "line": "2200 ENERGY DRIVE",
+    "city": "Canonsburg",
+    "state": "PA",
+    "zip": "15317"
+   },
+   "phone": "4125535940",
+   "website": "HTTPS://WWW.EQT.COM/COMMUNITY/EQT-FOUNDATION",
+   "fmv_assets": 26237393,
+   "total_grants": 6257510,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "EQT FOUNDATION CO ELLEN ROSSI EQT F",
+     "address": {
+      "line": "2200 ENERGY DRIVE",
+      "city": "Canosburgh",
+      "state": "PA",
+      "zip": "15317"
+     },
+     "phone": "4125537703",
+     "email": "",
+     "how": "GRANT APPLICATIONS CAN BE FOUND ON THE FOUNDATION'S WEBSITE AT HTTPS://WWW.EQT.COM/COMMUNITY/EQT-FOUNDATION",
+     "deadlines": "ALL APPLICATIONS MUST BE RECEIVED BY THE 1ST OF THE MONTH PRIOR TO THE QUARTERLY BOARD MEETINGS.",
+     "restrictions": "NONPROFIT ORGANIZATIONS AND INSTITUTIONS WHOSE MISSION IS IN KEEPING WITH EQT FOUNDATION'S COMMUNITY RELATIONS GOALS AND PRIORITIES ARE INVITED TO APPLY FOR MONETARY, VOLUNTEER AND IN-KIND CONTRIBUTIONS. EQT CORPORATION HAS ENDOWED A COMMUNITY GIVING FOUNDATION TO FURTHER ENHANCE ITS TRADITION OF FINANCIAL AND VOLUNTEER SUPPORT FOR NON-PROFIT ORGANIZATIONS IN PITTSBURGH AND PORTIONS OF PENNSYLVANIA, WEST VIRGINIA, KENTUCKY AND OHIO. THE FOUNDATIONS COMMUNITY CONTRIBUTIONS WILL FOCUS ON THE EDUCATION COMMUNITY, THE ENVIRONMENT AND ARTS AND CULTURE."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513089349101041",
+   "n_grants": 367,
+   "n_instate": 218,
+   "n_regions": 26,
+   "hits": [
+    {
+     "recipient": "LITERACY COUNCIL OF SWPA",
+     "city": "Washington",
+     "state": "PA",
+     "zip3": "153",
+     "status": "",
+     "purpose": "EDUCATION & WORKFORCE",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "LITERACY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "EDUCATION & WORKFORCE",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "EDUCATION & WORKFORCE",
+     "amount": 30000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "SEWICKLEY TWSP PUBLIC LIBRARY",
+     "city": "Herminie",
+     "state": "PA",
+     "zip3": "156",
+     "status": "",
+     "purpose": "CAPACITY GRANT 2024",
+     "amount": 25000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "EVA K BOWLBY PUBLIC LIBRARY",
+     "city": "Waynesburg",
+     "state": "PA",
+     "zip3": "153",
+     "status": "",
+     "purpose": "COMMUNITY ENRICHMENT",
+     "amount": 24000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "FLENNIKEN PUBLIC LIBRARY",
+     "city": "Carmichaels",
+     "state": "PA",
+     "zip3": "153",
+     "status": "",
+     "purpose": "COMMUNITY ENRICHMENT",
+     "amount": 24000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "SEWICKLEY TWSP PUBLIC LIBRARY",
+     "city": "Herminie",
+     "state": "PA",
+     "zip3": "156",
+     "status": "",
+     "purpose": "COMMUNITY ENRICHMENT",
+     "amount": 10000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "DONORA PUBLIC LIBRARY ASSOC",
+     "city": "Donora",
+     "state": "PA",
+     "zip3": "150",
+     "status": "",
+     "purpose": "COMMUNITY ENRICHMENT",
+     "amount": 7000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "GERMAN-MASONTOWN PUBLIC LIBRARY",
+     "city": "Masontown",
+     "state": "PA",
+     "zip3": "154",
+     "status": "",
+     "purpose": "COMMUNITY ENRICHMENT",
+     "amount": 4986,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "EVA K BOWLBY PUBLIC LIBRARY",
+     "city": "Waynesburg",
+     "state": "PA",
+     "zip3": "153",
+     "status": "",
+     "purpose": "EDUCATION & WORKFORCE",
+     "amount": 4000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 10,
+   "n_strong": 2,
+   "hit_total": 173986,
+   "median_hit": 24000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     80
+    ],
+    [
+     "Washington",
+     18
+    ],
+    [
+     "Waynesburg",
+     15
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.08,
+   "funds_you": [],
+   "score": 4.57
+  },
+  {
+   "ein": "256065959",
+   "name": "HILLMAN FAMILY FOUNDATIONS",
+   "address": {
+    "line": "310 GRANT STREET SUITE 2020",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "15219"
+   },
+   "phone": "4123383466",
+   "website": "HTTP://HILLMANFAMILYFOUNDATIONS.ORG/",
+   "fmv_assets": 1902436850,
+   "total_grants": 88828151,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "DAVID K ROGER - DIRECTOR AND PRESID",
+     "address": {
+      "line": "310 GRANT STREET SUITE 2020",
+      "city": "Pittsburgh",
+      "state": "PA",
+      "zip": "15219"
+     },
+     "phone": "4123383466",
+     "email": "N/A",
+     "how": "REQUESTS SHOULD BE SUMBITTED VIA THE HILLMAN FAMILY FOUNDATION ONLINE PORTAL. THE APPLICATION PROCESS BEGINS WITH THE SUBMISSION OF A BRIEF LETTER OF INTENT (LOI) THROUGH THE FLUXX GRANT PORTAL SUMMARIZING THE PROJECT FOR WHICH THE ORGANIZATION IS SEEKING FUNDING. INCLUDED AS PART OF THE APPLICATION SHOULD BE AN ANNUAL BUDGET OF THE ORGANIZATION, A LISTING OF THE ORGANIZATION'S DIRECTORS/TRUSTEES, DETAILED INFORMATION CONCERNING COSTS OF THE PROJECT OR PROGRAM TO BE FUNDED, AND A TIME SCHEDULE (IF APPROPRIATE). ADDITIONAL INFORMATION DEEMED NECESSARY BY THE APPLICANT WILL BE WELCOMED.",
+     "deadlines": "NO DEADLINE.",
+     "restrictions": "EACH APPLICANT MUST PRESENT EVIDENCE OF A CHARITABLE, TAX-EXEMPT STATUS. FURTHER, EACH APPLICANT MUST PROVIDE INFORMATION CLEARLY INDICATING THAT ANY CONTRIBUTION MADE TO IT BY THE HILLMAN FAMILY FOUNDATIONS, WILL BE CONSIDERED A \"QUALIFYING DISTRIBUTION\" AS DEFINED IN THE INTERNAL REVENUE CODE SECTION 4942(G) AND WILL NOT BE CONSIDERED A \"TAXABLE EXPENDITURE\" AS DEFINED IN THE INTERNAL REVENUE CODE SECTION 4945(D). RECIPIENTS OF CONTRIBUTIONS ARE EXPECTED TO PROVIDE WRITTEN PERIODIC REPORTS CONCERNING THE FUNDING PROJECT OR PROGRAM. THE TIME TABLE AND CONTENT OF THE REPORTS WILL BE SPECIFIED BY THE FOUNDATIONS WHEN EACH CONTRIBUTION IS MADE. PREFERENCE IS GIVEN TO PROPOSALS SUBMITTED BY ORGANIZATIONS LOCATED IN THE PITTSBURGH/SOUTHWESTERN PENNSYLVANIA AREAS."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513189349104206",
+   "n_grants": 814,
+   "n_instate": 416,
+   "n_regions": 15,
+   "hits": [
+    {
+     "recipient": "LITERACY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "ORGANIZATIONAL CAPACITY AND OPERATIONS TO ADVANCE WORKFORCE DEVELOPMENT PROGRAMMING",
+     "amount": 300000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING READY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "DOLLY PARTON IMAGINATION LIBRARY MONTHLY BOOK GIFTING PROGRAM FOR PITTSBURGH CHILDREN",
+     "amount": 65000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING IS FUNDAMENTAL PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "STORYMOBILE PROGRAMMING",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "LITERACY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "EVENT SUPPORT",
+     "amount": 1500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "ANNUAL FUND",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 5,
+   "n_strong": 4,
+   "hit_total": 381500,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     349
+    ],
+    [
+     "Philadelphia",
+     7
+    ],
+    [
+     "Duquesne",
+     6
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.01,
+   "funds_you": [],
+   "score": 4.06
+  },
+  {
+   "ein": "251721100",
+   "name": "THE HEINZ ENDOWMENTS",
+   "address": {
+    "line": "625 LIBERTY AVENUE 30TH FLOOR",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "152223110"
+   },
+   "phone": "4122815777",
+   "website": "WWW.HEINZ.ORG",
+   "fmv_assets": 2215534338,
+   "total_grants": 85448661,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "THE HEINZ ENDOWMENTS ONLINE GRANT A",
+     "address": {
+      "line": "625 LIBERTY AVENUE 30TH FLOOR",
+      "city": "Pittsburgh",
+      "state": "PA",
+      "zip": "15222"
+     },
+     "phone": "4122815777",
+     "email": "GRANTS@HEINZ.ORG",
+     "how": "YOU CAN DETERMINE YOUR ELIGIBILITY AND SUBMIT YOUR ONLINE APPLICATION ONLINE AT: HTTPS://WWW.HEINZ.ORG/GRANTS.",
+     "deadlines": "FEBRUARY 15 - SPRING BOARD MEETING JULY 15 - FALL BOARD MEETING",
+     "restrictions": "THE HEINZ ENDOWMENTS CONCENTRATES ITS EFFORTS AND RESOURCES IN SOUTHWESTERN PENNSYLVANIA. GIVEN ITS PRIMARILY REGIONAL FOCUS, THE FOUNDATION IS GENERALLY UNABLE TO CONSIDER APPLICATIONS FOR FUNDING FOR PROJECTS OUTSIDE THE COMMONWEALTH OF PENNSYLVANIA UNLESS THEY HAVE BEEN SPECIFICALLY REQUESTED BY THE FOUNDATION."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543189349103019",
+   "n_grants": 550,
+   "n_instate": 426,
+   "n_regions": 15,
+   "hits": [
+    {
+     "recipient": "READING IS FUNDAMENTAL PITTSBURG",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SUPPORT EARLY LITERACY DEVELOPMENT THROUGH THE STORYMOBILE AND BOOK BABIES PROGRAMS, TO MITIGATE THE LITERACY AND OPPORTUNITY GAPS IN TARGET READING IS FUNDAMENTAL NEIGHBORHOODS INCLUDING HAZELWOOD",
+     "amount": 175000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "LITERACY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO DESIGN AN EDUCATIONAL PATHWAY THAT ACCELERATES STUDENT TRANSITIONS, ESPECIALLY STUDENTS WHO ARE PARENTS, TO POST-SECONDARY EDUCATION, JOB TRAINING, AND/OR WORK THAT LEADS TO FAMILY SUSTAINING CAREERS",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO PROVIDE EVERY STUDENT IN PITTSBURGH PUBLIC SCHOOLS (PPS) WITH A LIBRARY CARD WHILE INCREASING THE COMMUNITY'S AWARENESS OF THE LIBRARY'S EXTENSIVE RESOURCES TO SUPPORT STUDENTS ACADEMIC SUCCESS",
+     "amount": 60000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SPONSOR THE 2024 GREATER PITTSBURGH FESTIVAL OF BOOKS ON MAY 11, 2024",
+     "amount": 15000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO SPONSOR THE 2025 GREATER PITTSBURGH FESTIVAL OF BOOKS ON MAY 31, 2025",
+     "amount": 15000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE MELLON UNIVERSITY",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "FOR FURTHER REVISIONS AND UPDATES TO THE BOOK DEVASTATION AND RENEWAL: AN ENVIRONMENTAL HISTORY OF PITTSBURGH AND ITS REGION (UNIVERSITY OF PITTSBURGH PRESS, 2003)",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 6,
+   "n_strong": 2,
+   "hit_total": 320000,
+   "median_hit": 50000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     327
+    ],
+    [
+     "Johnstown",
+     23
+    ],
+    [
+     "Philadelphia",
+     18
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.04,
+   "funds_you": [],
+   "score": 3.9
+  },
+  {
+   "ein": "256055022",
+   "name": "POSNER FOUNDATION OF PITTSBURGH",
+   "address": {
+    "line": "535 SMITHFIELD STREET 960",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "15222"
+   },
+   "phone": "4129287701",
+   "website": "POSNERFOUNDATION.ORG",
+   "fmv_assets": 332481651,
+   "total_grants": 25443473,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "ANNE MARIE TOCCKET",
+     "address": {
+      "line": "535 SMITHFIELD STREET SUITE 960",
+      "city": "Pittsburgh",
+      "state": "PA",
+      "zip": "15222"
+     },
+     "phone": "4129287701",
+     "email": "INFO@POSNERFOUNDATION.ORG",
+     "how": "APPLICANTS SHOULD SUBMIT A BRIEF STATEMENT IN WRITING, DETAILING THE PURPOSE FOR WHICH FUNDS ARE TO BE UTILIZED AND THE ACTIVITIES ENGAGED IN BY THE APPLICANT. APPLICANT'S DETERMINATION LETTER AND FINANCIAL DATA SHOULD ACCOMPANY THE REQUEST.",
+     "deadlines": "NONE",
+     "restrictions": "OUR PRIORITY AREAS REFLECT BOTH THE FOUNDATION'S LEGACY OF GIVING AS WELL AS OUR EMERGING INTEREST IN AREAS OF PRESSING SOCIAL, ECONOMIC AND ENVIRONMENTAL CONCERN WITH A FOCUS ON ENVIRONMENT, HUMAN RIGHTS, EDUCATION, JEWISH LIFE AND CIVIL SOCIETY."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543219349102159",
+   "n_grants": 113,
+   "n_instate": 57,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "LITERACY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "UNRESTRICTED/ GENERAL USE",
+     "amount": 350000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING READY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "UNRESTRICTED/ GENERAL USE",
+     "amount": 75000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING IS FUNDAMENTAL",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "UNRESTRICTED/ GENERAL USE",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "UNRESTRICTED/ GENERAL USE",
+     "amount": 25000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 4,
+   "n_strong": 3,
+   "hit_total": 475000,
+   "median_hit": 75000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     46
+    ],
+    [
+     "Munhall",
+     1
+    ],
+    [
+     "Philadelphia",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.02,
+   "funds_you": [],
+   "score": 3.76
+  },
+  {
+   "ein": "231162215",
+   "name": "HARRY C TREXLER ESTATE",
+   "address": {
+    "line": "600 HAMILTON STREET 310",
+    "city": "Allentown",
+    "state": "PA",
+    "zip": "18101"
+   },
+   "phone": "6104349645",
+   "website": "HTTPS://TREXLERTRUST.ORG",
+   "fmv_assets": 154261767,
+   "total_grants": 5359288,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "JANET E ROTH",
+     "address": {
+      "line": "600 HAMILTON STREET SUITE 310",
+      "city": "Allentown",
+      "state": "PA",
+      "zip": "18101"
+     },
+     "phone": "6104349645",
+     "email": "JROTH@TREXLERTRUST.ORG",
+     "how": "LETTER REQUEST, COPIES OF FORMATION DOCUMENT, GOVERNING INSTRUMENT, IRS DETERMINATION LETTER, FINANCIALS, BUDGET,CLIENT STATISTICS.",
+     "deadlines": "DECEMBER 1",
+     "restrictions": "AWARDS ARE RESTRICTED TO ONLY ORGANIZATIONS DOMICILED IN LEHIGH COUNTY, PA, AND THAT SERVE LEHIGH COUNTY CLIENTS EXCLUSIVELY OR SUBSTANTIALLY SO."
+    }
+   ],
+   "tax_period_end": "2025-03-31",
+   "object_id": "202533219349103123",
+   "n_grants": 91,
+   "n_instate": 91,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "THE LITERACY CENTER",
+     "city": "Allentown",
+     "state": "PA",
+     "zip3": "181",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT.",
+     "amount": 70000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ALLENTOWN PUBLIC LIBRARY",
+     "city": "Allentown",
+     "state": "PA",
+     "zip3": "181",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT.",
+     "amount": 75000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "SLATINGTON PUBLIC LIBRARY",
+     "city": "Slatington",
+     "state": "PA",
+     "zip3": "180",
+     "status": "",
+     "purpose": "EQUIPMENT AND OPERATING EXPENSES.",
+     "amount": 20000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "COPLAY PUBLIC LIBRARY",
+     "city": "Coplay",
+     "state": "PA",
+     "zip3": "180",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT.",
+     "amount": 15000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "EMMAUS PUBLIC LIBRARY",
+     "city": "Emmaus",
+     "state": "PA",
+     "zip3": "180",
+     "status": "",
+     "purpose": "TECHNOLOGY COSTS AND SERVICES.",
+     "amount": 15000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "PUBLIC LIBRARY OF CATASAUQUA",
+     "city": "Catasauqua",
+     "state": "PA",
+     "zip3": "180",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT.",
+     "amount": 15000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "WHITEHALL TOWNSHIP PUBLIC LIBRARY",
+     "city": "Whitehall",
+     "state": "PA",
+     "zip3": "180",
+     "status": "",
+     "purpose": "BUILDING IMPROVEMENTS.",
+     "amount": 7500,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "MASONIC LODGES LIBRARY",
+     "city": "Allentown",
+     "state": "PA",
+     "zip3": "181",
+     "status": "",
+     "purpose": "TO EXTEND AND MAINTAIN THE LIBRARY.",
+     "amount": 2000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 8,
+   "n_strong": 1,
+   "hit_total": 219500,
+   "median_hit": 15000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Allentown",
+     72
+    ],
+    [
+     "Emmaus",
+     4
+    ],
+    [
+     "Whitehall",
+     4
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 3.44
+  },
+  {
+   "ein": "231980570",
+   "name": "THE WYOMISSING FOUNDATION INC",
+   "address": {
+    "line": "960 OLD MILL ROAD",
+    "city": "Wyomissing",
+    "state": "PA",
+    "zip": "19610"
+   },
+   "phone": "6103767494",
+   "website": "WWW.WYOFOUND.ORG",
+   "fmv_assets": 40721803,
+   "total_grants": 1291295,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "CO THE FOUNDATION",
+     "address": {
+      "line": "960 OLD MILL ROAD",
+      "city": "Wyomissing",
+      "state": "PA",
+      "zip": "19610"
+     },
+     "phone": "6103767494",
+     "email": "",
+     "how": "BY LETTER",
+     "deadlines": "N/A",
+     "restrictions": "N/A"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202512279349100801",
+   "n_grants": 44,
+   "n_instate": 40,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "LITERACY COUNCIL",
+     "city": "West Lawn",
+     "state": "PA",
+     "zip3": "196",
+     "status": "",
+     "purpose": "COMMUNITY DISCRETIONARY",
+     "amount": 4250,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING PUBLIC LIBRARY",
+     "city": "Reading",
+     "state": "PA",
+     "zip3": "196",
+     "status": "",
+     "purpose": "STRATEGIC INITIATIVES-COMMUNITY ENGAGEMENT MANAGER",
+     "amount": 56500,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "WYOMISSING PUBLIC LIBRARY",
+     "city": "Wyomissing",
+     "state": "PA",
+     "zip3": "196",
+     "status": "",
+     "purpose": "COMMUNITY GRANT PROGRAM-SENSORY SUPPORT FOR LIBRARY",
+     "amount": 13370,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "READING PUBLIC LIBRARY",
+     "city": "Reading",
+     "state": "PA",
+     "zip3": "196",
+     "status": "",
+     "purpose": "STRATEGIC INITIATIVES-SOUTH OF PENN SUMMER PROGRAM",
+     "amount": 7000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "READING PUBLIC LIBRARY",
+     "city": "Reading",
+     "state": "PA",
+     "zip3": "196",
+     "status": "",
+     "purpose": "COMMUNITY DEVELOPMENT GRANTS- NORTHEAST READING YOUTH DEVELOPMENT- NE READING SUMMER AT RPL",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 5,
+   "n_strong": 1,
+   "hit_total": 86120,
+   "median_hit": 7000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Reading",
+     26
+    ],
+    [
+     "Wyomissing",
+     4
+    ],
+    [
+     "Philadelphia",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.07,
+   "funds_you": [],
+   "score": 3.41
+  },
+  {
+   "ein": "251610780",
+   "name": "THE HAMER FOUNDATION",
+   "address": {
+    "line": "2470 FOX HILL ROAD",
+    "city": "State College Pa",
+    "state": "PA",
+    "zip": "16803"
+   },
+   "phone": "8146924616",
+   "website": "N/A",
+   "fmv_assets": 79270327,
+   "total_grants": 4785119,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "The Hamer Foundation",
+     "address": {
+      "line": "2470 Fox Hill Road",
+      "city": "State College",
+      "state": "PA",
+      "zip": "16803"
+     },
+     "phone": "8146924616",
+     "email": "pmoose100@gmail.com",
+     "how": "Format: Electronic Include: Short executive summary, budget, proposal",
+     "deadlines": "January 31",
+     "restrictions": "none"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202541259349101034",
+   "n_grants": 42,
+   "n_instate": 39,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "MID STATE LITERACY COUNCIL",
+     "city": "State College",
+     "state": "PA",
+     "zip3": "168",
+     "status": "",
+     "purpose": "PROGRAMMING",
+     "amount": 33537,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SCHLOW CENTRE REGION LIBRARY",
+     "city": "State College",
+     "state": "PA",
+     "zip3": "168",
+     "status": "",
+     "purpose": "OPERATING SUPPORT",
+     "amount": 443530,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CENTRE COUNTY LIBRARY",
+     "city": "Bellefonte",
+     "state": "PA",
+     "zip3": "168",
+     "status": "",
+     "purpose": "OPERATING SUPPORT",
+     "amount": 10000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 1,
+   "hit_total": 487067,
+   "median_hit": 33537,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "State College",
+     21
+    ],
+    [
+     "Bellefonte",
+     4
+    ],
+    [
+     "Pittsburgh",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.08,
+   "funds_you": [],
+   "score": 3.32
+  },
+  {
+   "ein": "251127705",
+   "name": "RICHARD KING MELLON FOUNDATION",
+   "address": {
+    "line": "PO BOX 945",
+    "city": "Ligonier",
+    "state": "PA",
+    "zip": "15658"
+   },
+   "phone": "4123922800",
+   "website": "WWW.RKMF.ORG",
+   "fmv_assets": 3464902651,
+   "total_grants": 116670323,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "RICHARD KING MELLON FOUNDATION",
+     "address": {
+      "line": "THE AUCTION HOUSE 42 21ST STREET",
+      "city": "Pittsburgh",
+      "state": "PA",
+      "zip": "15222"
+     },
+     "phone": "4123922800",
+     "email": "",
+     "how": "THE FOUNDATION GIVES PRIORTY TO PROJECTS AND PROGRAMS THAT HAVE CLEARLY DEFINED OUTPUTS, OUTCOMES, AND AN EVALUATION COMPONENT. APPLICANTS MAY APPLY VIA ONLINE APPLICATION AT RKMF.ORG.",
+     "deadlines": "THE FOUNDATION ACCEPTS APPLICATIONS THROUGHTOUT THE YEAR.",
+     "restrictions": "THE FOUNDATION DOES NOT CONSIDER REQUESTS ON BEHALF OF INDIVIDUALS OR FROM OUTSIDE THE UNITED STATES. THE FOUNDATION DOES NOT ENCOURAGE REQUESTS FROM OUTSIDE PENNSYLVANIA. APPLICANTS MUST BE A CHARITABLE, TAX-EXEMPT ORGANIZATION WITH A VALID IRS TAX ID NUMBER OR BE A GOVERNMENT ENTITY TO QUALIFY FOR FUNDING."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202503179349103185",
+   "n_grants": 296,
+   "n_instate": 227,
+   "n_regions": 19,
+   "hits": [
+    {
+     "recipient": "CARNEGIE MELLON UNIVERSITY",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "TO EXPAND THE PROVISION OF MATH TUTORING FOR MIDDLE SCHOOL STUDENTS IN ALLEGHENY COUNTY",
+     "amount": 300000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "LIGONIER VALLEY LIBRARY ASSOCIATION",
+     "city": "Ligonier",
+     "state": "PA",
+     "zip3": "156",
+     "status": "",
+     "purpose": "TOWARD SUPPORT OF OPERATIONS",
+     "amount": 231000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 1,
+   "hit_total": 531000,
+   "median_hit": 300000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     134
+    ],
+    [
+     "Greensburg",
+     17
+    ],
+    [
+     "Ligonier",
+     10
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.04,
+   "funds_you": [],
+   "score": 3.11
+  },
+  {
+   "ein": "237007897",
+   "name": "MASSEY CHARITABLE TRUST",
+   "address": {
+    "line": "1370 WASHINGTON PIKE 306",
+    "city": "Bridgeville",
+    "state": "PA",
+    "zip": "15017"
+   },
+   "phone": "4128380086",
+   "website": "N/A",
+   "fmv_assets": 45126468,
+   "total_grants": 1970000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "ROBERT M CONNOLLY TRUSTEE",
+     "address": {
+      "line": "1370 WASHINGTON PIKE SUITE 306",
+      "city": "Bridgeville",
+      "state": "PA",
+      "zip": "15017"
+     },
+     "phone": "4128380086",
+     "email": "",
+     "how": "- BRIEF DESCRIPTION OF THE ORGANIZATION AND THE PURPOSE FOR THE GRANT - COMMON GRANT APPLICATION COVER SHEET (PAGE 5 OF COMMON GRANT APPLICATION FORMAT) AVAILABLE AT WWW.GWPA.ORG - IRS DETERMINATION LETTER (501(C)(3) LETTER) - MOST RECENT ANNUAL REPORT (IF APPLICABLE) - MOST RECENT AUDITED FINANCIAL STATEMENTS - CURRENT BUDGET - LISTING OF BOARD MEMBERS - LISTING OF OTHER FOUNDATIONS SUPPORTING THE ORGANIZATION - IF THE ORGANIZATION IS A 509(A)(3) SUPPORTING ORGANIZATION, (DOCUMENTATION INDICATING TYPE I, TYPE II OR TYPE III) - ANY OTHER RELEVANT INFORMATION TO SUPPORT YOUR CASE FOR REQUESTING A GRANT",
+     "deadlines": "NONE",
+     "restrictions": "DOMESTIC UNITED STATES, HOWEVER, GRANTS ARE AWARDED PRIMARILY TO ORGANIZATIONS IN SOUTHWESTERN PENNSYLVANIA."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202503119349100920",
+   "n_grants": 113,
+   "n_instate": 83,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "LITERACY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "EDUCATION",
+     "amount": 30000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING IS FUNDAMENTAL",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "EDUCATION",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ANDREW CARNEGIE FREE LIBRARY & MUSIC HALL",
+     "city": "Carnegie",
+     "state": "PA",
+     "zip3": "151",
+     "status": "",
+     "purpose": "EDUCATION",
+     "amount": 6000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 2,
+   "hit_total": 51000,
+   "median_hit": 15000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     60
+    ],
+    [
+     "Sewickley",
+     2
+    ],
+    [
+     "Carnegie",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 3.05
+  },
+  {
+   "ein": "250965572",
+   "name": "THE BIRMINGHAM FOUNDATION",
+   "address": {
+    "line": "320 BROWNSVILLE ROAD",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "15210"
+   },
+   "phone": "4124812777",
+   "website": "WWW.BIRMINGHAMFOUNDATION.ORG",
+   "fmv_assets": 25028018,
+   "total_grants": 1210767,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "MICHELLE FIGLAR",
+     "address": {
+      "line": "320 BROWNSVILLE ROAD",
+      "city": "Pittsburgh",
+      "state": "PA",
+      "zip": "15210"
+     },
+     "phone": "4124812777",
+     "email": "",
+     "how": "THE BIRMINGHAM FOUNDATION HAS TWO ANNUAL GRANT CYCLES - SPRING AND FALL. VISIT OUR WEBSITE PERIODICALLY TO INQUIRE ABOUT IMPORTANT DATES PERTAINING TO THE GRANT CYCLES, OR CONTACT THE OFFICE DIRECTLY FOR MORE INFORMATION. THE BIRMINGHAM FOUNDATION CAN ONLY PROVIDE FUNDING FOR ORGANIZATIONS THAT OPERATE WITHIN OUR GEOGRAPHIC FOCUS AND MUST ALIGN TO OUR SINGULAR AREA OF FOCUS, EARLY CHILDHOOD EDUCATION AND DEVELOPMENT. THE BIRMINGHAM FOUNDATION SEEKS TO BE A CHANGE AGENT FOR CHILDREN AND PARTNERS WITH ORGANIZATIONS TO ACHIEVE POSITIVE OUTCOMES IN SOUTH PITTSBURGH NEIGHBORHOODS.",
+     "deadlines": "N/A",
+     "restrictions": "GRANTS ARE LIMITED TO ORGANIZATIONS, WHICH QUALIFY AS PUBLIC CHARITY FOR 501(C)(3) TAX EXEMPTION. GRANTS ARE NOT NORMALLY MADE FOR OPERATING BUDGETS, DEFICITS, FUND-RAISING CAMPAIGNS, GENERAL RESEARCH, SCHOLARSHIPS, POLITICAL CAMPAIGNS, OR LOANS. GRANTS ARE NOT MADE TO INDIVIDUALS, TO OTHER PRIVATE FOUNDATIONS, FOR SECTARIAN RELIGIOUS ACTIVITIES, OR FOR THE EFFORTS TO INFLUENCE LEGISLATION UNLESS GRANT-RELATED. GRANTS ARE AWARDED FOR A LIMITED PERIOD OF TIME, SUCH AS 1-3 YEARS. MOST GRANT AWARDS WILL BE IN THE RANGE OF $2,500 TO $50,000."
+    }
+   ],
+   "tax_period_end": "2025-06-30",
+   "object_id": "202503169349101595",
+   "n_grants": 37,
+   "n_instate": 36,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "LITERACY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "AN INVESTMENT IN S PGH HILLTOP FAMILIES",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING IS FUNDAMENTAL PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "FALL 2024 GRANT - CHILDREN'S LITERACY PROGRAMMING - SOUTH PGH",
+     "amount": 45000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING READY PITTSBURGH",
+     "city": "Homestead",
+     "state": "PA",
+     "zip3": "151",
+     "status": "",
+     "purpose": "FALL 2024 GRANT - RAISING READERS IN SOUTH PGH",
+     "amount": 30000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "UNITED WAY OF SOUTHWESTERN PA",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "BIG BOOK DROP ON THE HILLTOP",
+     "amount": 20000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 4,
+   "n_strong": 3,
+   "hit_total": 145000,
+   "median_hit": 45000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     32
+    ],
+    [
+     "Swissvale",
+     1
+    ],
+    [
+     "Sewickley",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 3.03
+  },
+  {
+   "ein": "231352110",
+   "name": "INDEPENDENCE FOUNDATION",
+   "address": {
+    "line": "200 SOUTH BROAD STREET 1101",
+    "city": "Philadelphia",
+    "state": "PA",
+    "zip": "19102"
+   },
+   "phone": "2159854009",
+   "website": "WWW.INDEPENDENCEFOUNDATION.ORG",
+   "fmv_assets": 85316374,
+   "total_grants": 3960806,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "REGINALD SHUFORD PRESIDENT INDEPEND",
+     "address": {
+      "line": "200 SOUTH BROAD STREET SUITE 1101",
+      "city": "Philadelphia",
+      "state": "PA",
+      "zip": "19102"
+     },
+     "phone": "2159854009",
+     "email": "",
+     "how": "INDEPENDENCE FOUNDATION DOES NOT ACCEPT UNSOLICITED PROPOSALS. EACH YEAR THE FOUNDATION SENDS OUT REQUEST FOR PROPOSALS (RFP) UNDER THE FOLLOWING CATEGORIES: CULTURE AND THE ARTS, HEALTH CARE INITIATIVE, HUMAN SERVICES, PUBLIC INTEREST LEGAL AID, REENTRY, RECIDIVISM & RESTORATIVE JUSTICE, PUBLIC INTEREST LAW FELLOWSHIP PROGRAM, AND FELLOWSHIPS IN THE ARTS PROGRAM. ORGANIZATIONS NOT PREVIOUSLY FUNDED BY THE FOUNDATION ARE ENCOURAGED TO SEND A TWO PAGE LETTER OF INQUIRY INCLUDING ORGANIZATIONAL BACKGROUND INFORMATION, AMOUNT BEING REQUESTED AND DESCRIPTION OF THE PROGRAM/SERVICES FOR WHICH THE FUNDS WILL BE USED. PLEASE NOTE THAT THE FOUNDATION'S FUNDING AREA IS RESTRICTED TO PHILADELPHIA AND ITS SURROUNDING PENNSYLVANIA COUNTIES: BUCKS, CHESTER, DELAWARE AND MONTGOMERY.",
+     "deadlines": "THE FOUNDATION ESTABLISHES A GRANT CYCLE ON A YEARLY BASIS AND ALL DECISIONS ARE MADE IN CYCLE.",
+     "restrictions": "LETTERS OF INQUIRY WILL BE REVIEWED FOR CONSISTENCY WITH CURRENT FUNDING PRIORITIES. SHOULD THE APPLICATION, AFTER REVIEW BY THE BOARD OF DIRECTORS, PROVE TO BE WITHIN THE SCOPE OF THE FOUNDATION'S INTERESTS, THE APPLICANT WILL BE ADVISED AND THE NECESSARY INTERVIEWS MAY BE ARRANGED PRIOR TO A FINAL DETERMINATION BY THE BOARD OF DIRECTORS."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202632019349100008",
+   "n_grants": 223,
+   "n_instate": 213,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "ROSENBACH MUSEUM AND LIBRARY",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "PC",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 20000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "THE FREE LIBRARY OF PHILADELPHIA",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "PC",
+     "purpose": "GENERAL SUPPORT / FIELD TEEN CENTER",
+     "amount": 7000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "ACADEMY OF NATURAL SCIENCES OF PHILADELPHIA",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "PC",
+     "purpose": "$2,500 UNRESTRICTED, $2,500 TOWARDS LIBRARY AND ARCHIVES DIVISION",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "BOOKS THROUGH BARS",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "PC",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "GERMAN SOCIETY OF PENNSYLVANIA",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "PC",
+     "purpose": "AS $1,000 TOWARDS LIBRARY OPERATIONS AND $1,000 TO LIBRARY ENDOWMENT",
+     "amount": 2000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 5,
+   "n_strong": 0,
+   "hit_total": 39000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Philadelphia",
+     159
+    ],
+    [
+     "Chester",
+     5
+    ],
+    [
+     "West Chester",
+     5
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.01,
+   "funds_you": [],
+   "score": 3.02
+  },
+  {
+   "ein": "256012303",
+   "name": "ALLEGHENY FOUNDATION",
+   "address": {
+    "line": "301 GRANT ST ONE OXFORD CTR STE3",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "152196401"
+   },
+   "phone": "4123922900",
+   "website": "WWW.SCAIFE.COM",
+   "fmv_assets": 595889485,
+   "total_grants": 24065500,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "MR MATTHEW A GROLL - ALLEGHENY FOUN",
+     "address": {
+      "line": "ONE OXFORD CENTRE - 301 GRANT",
+      "city": "Pittsburgh",
+      "state": "PA",
+      "zip": "152196401"
+     },
+     "phone": "4123922900",
+     "email": "",
+     "how": "SEE STATEMENT 15",
+     "deadlines": "SEE STATEMENT 15",
+     "restrictions": "SEE STATEMENT 15"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533189349101443",
+   "n_grants": 88,
+   "n_instate": 78,
+   "n_regions": 12,
+   "hits": [
+    {
+     "recipient": "READING IS FUNDAMENTAL PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "BF JONES MEMORIAL LIBRARY",
+     "city": "Aliquippa",
+     "state": "PA",
+     "zip3": "150",
+     "status": "",
+     "purpose": "CAPITAL SUPPORT",
+     "amount": 75000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 1,
+   "hit_total": 175000,
+   "median_hit": 100000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     44
+    ],
+    [
+     "Latrobe",
+     3
+    ],
+    [
+     "Greensburg",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.04,
+   "funds_you": [],
+   "score": 2.94
+  },
+  {
+   "ein": "251756557",
+   "name": "MCELHATTAN FOUNDATION",
+   "address": {
+    "line": "C/O HOLLAND 444 LIBERTY AVE 2100",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "15222"
+   },
+   "phone": "",
+   "website": "mcelhattan.org",
+   "fmv_assets": 317798399,
+   "total_grants": 7660838,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "STEPHANIE SWEAT",
+     "address": {
+      "line": "5840 ELLSWORTH AVENUE SUITE 200",
+      "city": "Pittsburgh",
+      "state": "PA",
+      "zip": "15232"
+     },
+     "phone": "4124300090",
+     "email": "stephanie.sweat@mcelhattan.org",
+     "how": "APPLICATIONS SHOULD BE SUBMITTED VIA THE FOUNDATION WEBSITE: MCELHATTAN.ORG",
+     "deadlines": "SEE MCELHATTAN.ORG FOR DEADLINES",
+     "restrictions": "NON-PROFITS BASED IN THE UNITED STATES MAY APPLY. AWARDS ARE RESTRICTED TO ENDING DEATH ON THE JOB, EDUCATION, END OF LIFE PLANNING AND CARE, AND ECONOMIC DEVELOPMENT IN KNOX AND FRANKLIN PA."
+    }
+   ],
+   "tax_period_end": "2025-06-30",
+   "object_id": "202503149349102140",
+   "n_grants": 105,
+   "n_instate": 100,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "KNOX PUBLIC LIBRARY",
+     "city": "Knox",
+     "state": "PA",
+     "zip3": "162",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 30000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "MONROEVILLE PUBLIC LIBRARY FUND",
+     "city": "Monroeville",
+     "state": "PA",
+     "zip3": "151",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 25000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "ANDREW CARNEGIE FREE LIBRARY",
+     "city": "Carnegie",
+     "state": "PA",
+     "zip3": "151",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 25000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 0,
+   "hit_total": 80000,
+   "median_hit": 25000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     53
+    ],
+    [
+     "Franklin",
+     10
+    ],
+    [
+     "Oil City",
+     7
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.01,
+   "funds_you": [],
+   "score": 2.78
+  },
+  {
+   "ein": "237914215",
+   "name": "R DALE & FRANCES M HUGHES FDN",
+   "address": {
+    "line": "PO BOX 3215",
+    "city": "Lancaster",
+    "state": "PA",
+    "zip": "176043215"
+   },
+   "phone": "7172557652",
+   "website": "www.dfhughesfoundation.org",
+   "fmv_assets": 58465240,
+   "total_grants": 2300000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "CO KEVIN HUGHES",
+     "address": {
+      "line": "PO BOX 728",
+      "city": "Stroudsburg",
+      "state": "PA",
+      "zip": "18360"
+     },
+     "phone": "6108988356",
+     "email": "grantapps@dfhughesfoundation.org",
+     "how": "ELECTRONIC ONLY - SEE WEBSITE FOR DETAILS",
+     "deadlines": "APRIL 1 - APRIL 30, EACH YEAR",
+     "restrictions": "1) REGISTERED NON-PROFIT GROUP UNDER SECTION 501(C)(3) OF THE IRC AND 2) BASED IN MONROE COUNTY, OR PROVIDE SUBSTANTIAL SERVICES TO THE RESIDENTS OF MONROE COUNTY"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202503219349108525",
+   "n_grants": 23,
+   "n_instate": 23,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "BARRETT PARADISE FRIENDLY LIBRARY",
+     "city": "Cresco",
+     "state": "PA",
+     "zip3": "183",
+     "status": "",
+     "purpose": "ARCHIVAL PROJECT &",
+     "amount": 319900,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "POCONO MOUNTAIN PUBLIC LIBRARY",
+     "city": "Tobyhanna",
+     "state": "PA",
+     "zip3": "184",
+     "status": "",
+     "purpose": "OPERATIONS",
+     "amount": 158955,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "EASTERN MONROE PUBLIC LIBRARY ATTN SUSAN LYONS DIRECTOR",
+     "city": "Stroudsburg",
+     "state": "PA",
+     "zip3": "183",
+     "status": "",
+     "purpose": "OPERATIONS",
+     "amount": 116000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "WESTERN POCONO PUBLIC LIBRARY",
+     "city": "Brodheadsville",
+     "state": "PA",
+     "zip3": "183",
+     "status": "",
+     "purpose": "OPERATIONS",
+     "amount": 34300,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 4,
+   "n_strong": 0,
+   "hit_total": 629155,
+   "median_hit": 158955,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "East Stroudsburg",
+     5
+    ],
+    [
+     "Stroudsburg",
+     5
+    ],
+    [
+     "Delaware Water Gap",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.73
+  },
+  {
+   "ein": "232791676",
+   "name": "MASLOW FAMILY FOUNDATION INC",
+   "address": {
+    "line": "240 SCHUYLER AVE",
+    "city": "Kingston",
+    "state": "PA",
+    "zip": "18704"
+   },
+   "phone": "5702887517",
+   "website": "N/A",
+   "fmv_assets": 24201599,
+   "total_grants": 1120600,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "COLLEEN MORDA",
+     "address": {
+      "line": "240 SCHUYLER AVE",
+      "city": "Kingston",
+      "state": "PA",
+      "zip": "18704"
+     },
+     "phone": "5702887517",
+     "email": "CMORDA@KOHANSKICO.COM",
+     "how": "REQUESTS FOR CONTRIBUTIONS SHOULD BE SUBMITTED IN WRITING AND INCLUDE PROOF OF 501(C)(3) STATUS. IN ADDITION, AN EXPLANATION OF THE PURPOSE FOR THE FUNDS AND A BUDGET OF THE PROJECT OR PROGRAM SHOULD BE INCLUDED.",
+     "deadlines": "REQUESTS SHOULD BE SUBMITTED BY AUGUST 1",
+     "restrictions": "GRANTS ARE PRIMARILY FOCUSED ON THE NEEDS OF THE WYOMING VALLEY. THE AREAS OF FOCUS ARE THE ART, SPECIAL NEEDS CHILDREN, EDUCATION AND SOCIAL NEEDS."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601359349102520",
+   "n_grants": 65,
+   "n_instate": 55,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "BACK MOUNTAIN LIBRARY",
+     "city": "Dallas",
+     "state": "PA",
+     "zip3": "186",
+     "status": "PC",
+     "purpose": "CHARITABLE",
+     "amount": 10000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "OSTERHOUT FREE LIBRARY",
+     "city": "Wilkesbarre",
+     "state": "PA",
+     "zip3": "187",
+     "status": "PC",
+     "purpose": "CHARITABLE",
+     "amount": 10000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "PITTSTON MEMORIAL LIBRARY",
+     "city": "Pittston",
+     "state": "PA",
+     "zip3": "186",
+     "status": "PC",
+     "purpose": "CHARITABLE",
+     "amount": 10000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 0,
+   "hit_total": 30000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Wilkesbarre",
+     13
+    ],
+    [
+     "Dallas",
+     8
+    ],
+    [
+     "Kingston",
+     6
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.02,
+   "funds_you": [],
+   "score": 2.64
+  },
+  {
+   "ein": "236296825",
+   "name": "CONNELLY FOUNDATION",
+   "address": {
+    "line": "100 FRONT STREET 1450",
+    "city": "West Conshohocken",
+    "state": "PA",
+    "zip": "19428"
+   },
+   "phone": "6108343222",
+   "website": "WWW.CONNELLYFDN.ORG",
+   "fmv_assets": 362122598,
+   "total_grants": 15400000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "TIMOTHY DURKIN CO CONNELLY FOUNDATI",
+     "address": {
+      "line": "100 FRONT STREET SUITE 1450",
+      "city": "West Conshohocken",
+      "state": "PA",
+      "zip": "19428"
+     },
+     "phone": "6108343222",
+     "email": "",
+     "how": "APPLICANTS MAY USE THE PHILANTHROPY NETWORK APPLICATION FORM. GUIDELINES MAY BE DOWNLOADED AT WWW.CONNELLYFDN.ORG.",
+     "deadlines": "NONE",
+     "restrictions": "GRANTS ARE PRIMARILY DIRECTED TO ORGANIZATIONS IN THE CITY OF PHILADELPHIA AND THE GREATER DELAWARE VALLEY REGION."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533179349101143",
+   "n_grants": 305,
+   "n_instate": 260,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "BOYS & GIRLS CLUBS OF PHILADELPHIA",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "LITERACY INITIATIVE",
+     "amount": 75000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 75000,
+   "median_hit": 75000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Philadelphia",
+     140
+    ],
+    [
+     "Norristown",
+     6
+    ],
+    [
+     "Malvern",
+     5
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.59
+  },
+  {
+   "ein": "251822243",
+   "name": "DOLLAR BANK FOUNDATION",
+   "address": {
+    "line": "20 STANWIX STREET",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "15222"
+   },
+   "phone": "4122617652",
+   "website": "WWW.GUIDESTAR.ORG",
+   "fmv_assets": 29433234,
+   "total_grants": 2303220,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "DOLLAR BANK FOUNDATION CO DOLLAR BA",
+     "address": {
+      "line": "20 STANWIX STREET 18TH FLOOR",
+      "city": "Pittsburgh",
+      "state": "PA",
+      "zip": "15222"
+     },
+     "phone": "4122617652",
+     "email": "",
+     "how": "Applicants should become familiar with the giving guidelines, which are subject to change without notice. Each request is analyzed on a case-by-case basis. Grants are made on an annual basis. All requests must be submitted in writing, and include proof of IRS 501 (c)(3) tax-exempt status, description of the organization and the specific program for which it seeks support, description of how the grant will benefit the community, the amount being requested, an itemized budget for any project, and past record of support, by the Foundation or Dollar Bank. The Foundation receives more funding request than it can grant in any year. If it is necessary to decline support of a worthwhile organization or program, the decision is not an adverse reflection on the value of the non-profit or its service. Contributions of grants do not establish entitlement for continuing support.",
+     "deadlines": "NO",
+     "restrictions": "As a general rule, the Foundation will not provide support to organizations outside the geographic boundaries served by Dollar Bank and its subsidiaries. In addition, the Foundation generally will not support organizations without IRS 501(c)(3) tax-exempt status, individuals, political organizations, candidates or lobbying efforts, labor or fraternal organizations, religious organizations, with respect to religiously oriented activities and/or programs, hospital or other health care delivery facilities that are not 501 (c)(3) non-profits, non-academic efforts at the elementary thru high school levels, sports teams except for youth sports programs in underserved communities where sports programs directly address social development, mentorship, and anti-violence initiatives. Note: IRS rules prohibit any contributions that would result in a direct benefit to Dollar Bank or its employees."
+    }
+   ],
+   "tax_period_end": "2025-11-30",
+   "object_id": "202642369349100554",
+   "n_grants": 118,
+   "n_instate": 43,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "READING IS FUNDAMENTAL PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "ASSISTANCE FOR EDUCATIONAL PROGRAMS",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ALLEGHENY COUNTY LIBRARY ASSOCIATION",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "ASSISTANCE FOR EDUCATIONAL PROGRAMS",
+     "amount": 20000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "BRADDOCK CARNEGIE LIBRARY ASSOCIATION",
+     "city": "Braddock",
+     "state": "PA",
+     "zip3": "151",
+     "status": "",
+     "purpose": "ASSISTANCE FOR EDUCATIONAL PROGRAMS",
+     "amount": 20000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 1,
+   "hit_total": 55000,
+   "median_hit": 20000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     37
+    ],
+    [
+     "Braddock",
+     2
+    ],
+    [
+     "Washington",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.36
+  },
+  {
+   "ein": "237423500",
+   "name": "BNY MELLON FOUNDATION OF SOUTHWESTERN PA",
+   "address": {
+    "line": "PO BOX 185",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "152300185"
+   },
+   "phone": "4122340023",
+   "website": "",
+   "fmv_assets": 107281856,
+   "total_grants": 5112055,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "KENDRA WOTKYNS",
+     "address": {
+      "line": "BNY MELLON CENTER 1 BOSTON PLACE",
+      "city": "Boston",
+      "state": "MA",
+      "zip": "02108"
+     },
+     "phone": "6177227377",
+     "email": "",
+     "how": "PROVIDED UPON INITIAL CONTACT",
+     "deadlines": "PROVIDED UPON INITIAL CONTACT",
+     "restrictions": "PROVIDED UPON INITIAL CONTACT"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533189349101698",
+   "n_grants": 19,
+   "n_instate": 12,
+   "n_regions": 1,
+   "hits": [
+    {
+     "recipient": "LITERACY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL OPERATING",
+     "amount": 200000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 200000,
+   "median_hit": 200000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     12
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.21
+  },
+  {
+   "ein": "233041300",
+   "name": "GENUARDI FAMILY FOUNDATION",
+   "address": {
+    "line": "460 NORRISTOWN ROAD 320",
+    "city": "Blue Bell",
+    "state": "PA",
+    "zip": "19422"
+   },
+   "phone": "6108342030",
+   "website": "WWW.GENUARDIFAMILYFOUNDATION.ORG",
+   "fmv_assets": 22060019,
+   "total_grants": 2755000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "MARISA C FERST",
+     "address": {
+      "line": "460 NORRISTOWN ROAD SUITE 320",
+      "city": "Blue Bell",
+      "state": "PA",
+      "zip": "19422"
+     },
+     "phone": "6108342030",
+     "email": "",
+     "how": "PLEASE VISIT WWW.GENUARDIFAMILYFOUNDATION.ORG FOR ADDITIONAL DETAILS",
+     "deadlines": "PLEASE VISIT WWW.GENUARDIFAMILYFOUNDATION.ORG FOR ADDITIONAL DETAILS",
+     "restrictions": "PLEASE VISIT WWW.GENUARDIFAMILYFOUNDATION.ORG FOR ADDITIONAL DETAILS"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202523149349101877",
+   "n_grants": 82,
+   "n_instate": 79,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "LITERACY COUNCIL OF NORRISTOWN",
+     "city": "Norristown",
+     "state": "PA",
+     "zip3": "194",
+     "status": "",
+     "purpose": "OPERATIONAL SUPPORT",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Norristown",
+     11
+    ],
+    [
+     "Philadelphia",
+     9
+    ],
+    [
+     "Phoenixville",
+     6
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.17
+  },
+  {
+   "ein": "236277885",
+   "name": "THE BARRA FOUNDATION INC",
+   "address": {
+    "line": "1617 JOHN F KENNEDY BLVD 2019",
+    "city": "Philadelphia",
+    "state": "PA",
+    "zip": "19103"
+   },
+   "phone": "6109647601",
+   "website": "WWW.BARRAFOUNDATION.ORG",
+   "fmv_assets": 94849803,
+   "total_grants": 4018848,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "THE BARRA FOUNDATION",
+     "address": {
+      "line": "WWWBARRAFOUNDATIONORG",
+      "city": "Philadelphia",
+      "state": "PA",
+      "zip": "19103"
+     },
+     "phone": "6109647601",
+     "email": "",
+     "how": "ALL LETTERS OF INQUIRY (LOI) MUST BE SUBMITTED THROUGH AN ONLINE SYSTEM AT WWW.BARRAFOUNDATION.ORG. THE LOI MUST INCLUDE INFORMATION ABOUT THE TYPE OF REQUEST, TIMEFRAME, TARGETED AUDIENCE, ETC.",
+     "deadlines": "NO FORMAL SUBMISSION DEADLINES.",
+     "restrictions": "GRANTS ARE RESTRICTED TO THE GREATER PHILADELPHIA REGION. THE PRIMARY FOCUS OF THE FOUNDATION IS ON INNOVATION IN AND ACROSS THE FIELDS OF ARTS AND CULTURE, EDUCATION, HEALTH AND HUMAN SERVICES. PLEASE SEE WWW.BARRAFOUNDATION.ORG FOR FURTHER INFORMATION."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533159349102788",
+   "n_grants": 85,
+   "n_instate": 73,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "CHILDREN'S LITERACY INITIATIVE",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "KNOWLEDGE AND NETWORKS GRANT - $5,000, RECOVERY AND RESPONSE GRANT - $35,000",
+     "amount": 40000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "TREE HOUSE BOOKS",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "KNOWLEDGE AND NETWORKS GRANT",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 1,
+   "hit_total": 45000,
+   "median_hit": 40000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Philadelphia",
+     58
+    ],
+    [
+     "Conshohocken",
+     2
+    ],
+    [
+     "Exton",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.15
+  },
+  {
+   "ein": "256264847",
+   "name": "JOHN NESBIT REES & SARAH HENNE REES CHARITABLE FOU",
+   "address": {
+    "line": "PO BOX 325",
+    "city": "Titusville",
+    "state": "PA",
+    "zip": "16354"
+   },
+   "phone": "8148271040",
+   "website": "",
+   "fmv_assets": 25620838,
+   "total_grants": 917265,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "APPLICATIONS TO BARBARA SMITH",
+     "address": {
+      "line": "PO BOX 325",
+      "city": "Titusville",
+      "state": "PA",
+      "zip": "16354"
+     },
+     "phone": "8148271040",
+     "email": "jroeder.nwas@zoominternet.net",
+     "how": "THE GRANT APPLICANT IS REQUIRED TO SUBMIT A LETTER STATING THE AMOUNT OF THEIR REQUEST AS WELL AS THE INTENDED PURPOSE OR USE OF THE FUNDS.ALONG WITH THE LETTER THEY ARE ASKED TO SUBMIT PROOF OF THEIR NON-PROFIT STATUS AS WELL AS THEIR FINANCIAL STATEMENTS.",
+     "deadlines": "NONE MONTHLY DECISIONS",
+     "restrictions": "MOST GRANTS ARE DIRECTED TOWARDS ENTITIES SERVING TITUSVILLE PA AND THE SURROUNDING AREA"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202620579349100217",
+   "n_grants": 27,
+   "n_instate": 27,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "TITUSVILLE REGIONAL LITERACY COUNCI",
+     "city": "Titusville",
+     "state": "PA",
+     "zip3": "163",
+     "status": "PC",
+     "purpose": "PROGRAMMING",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "BENSON MEMORIAL LIBRARY",
+     "city": "Titusville",
+     "state": "PA",
+     "zip3": "163",
+     "status": "PC",
+     "purpose": "CAPITAL IMPROVEMENTS",
+     "amount": 35000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 1,
+   "hit_total": 45000,
+   "median_hit": 35000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Titusville",
+     18
+    ],
+    [
+     "Erie",
+     3
+    ],
+    [
+     "Franklin",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.15
+  },
+  {
+   "ein": "251483674",
+   "name": "HANSEN FOUNDATION",
+   "address": {
+    "line": "432 GREEN STREET",
+    "city": "Sewickley",
+    "state": "PA",
+    "zip": "15143"
+   },
+   "phone": "4129159912",
+   "website": "N/A",
+   "fmv_assets": 29436506,
+   "total_grants": 1419500,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "HANSEN FOUNDATION",
+     "address": {
+      "line": "432 GREEN STREET",
+      "city": "Sewickley",
+      "state": "PA",
+      "zip": "15143"
+     },
+     "phone": "4124240562",
+     "email": "",
+     "how": "NONE",
+     "deadlines": "NONE",
+     "restrictions": "NO LIMITATIONS OR RESTRICTIONS ON AWARDS. GRANTS ARE DISTRIBUTED UPON REVIEW OF REQUESTS."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543189349100034",
+   "n_grants": 30,
+   "n_instate": 20,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "READING IS FUNDAMENTAL PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "EDUCATION",
+     "amount": 75000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 75000,
+   "median_hit": 75000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     14
+    ],
+    [
+     "Sewickley",
+     2
+    ],
+    [
+     "Swissvale",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.05,
+   "funds_you": [],
+   "score": 2.13
+  },
+  {
+   "ein": "237839035",
+   "name": "THE PATRICIA KIND FAMILY FOUNDATION",
+   "address": {
+    "line": "GLENMEDE TRUST CO NA 1650 MARKET",
+    "city": "Philadelphia",
+    "state": "PA",
+    "zip": "19103"
+   },
+   "phone": "2154196000",
+   "website": "pkindfamilyfoundation.org/",
+   "fmv_assets": 27615480,
+   "total_grants": 3631500,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "SEE SCHEDULE ATTACHED",
+     "address": {
+      "line": "714 N BETHLEHEM PIKE SUITE 304",
+      "city": "Lower Gwynedd",
+      "state": "PA",
+      "zip": "19002"
+     },
+     "phone": "2158369536",
+     "email": "",
+     "how": "SEE ATTACHED",
+     "deadlines": "SEE ATTACHED",
+     "restrictions": "SEE ATTACHED"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202503079349100535",
+   "n_grants": 176,
+   "n_instate": 153,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "Chapman Foundation",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "SUPPORT TUTORING PROGRAM",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "Tree House Books",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "TRUSTEE GRANT - CHRISTINA",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 1,
+   "hit_total": 20000,
+   "median_hit": 15000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Philadelphia",
+     131
+    ],
+    [
+     "Bryn Mawr",
+     2
+    ],
+    [
+     "Elkins Park",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.03
+  },
+  {
+   "ein": "232930670",
+   "name": "PTS FOUNDATION",
+   "address": {
+    "line": "450 PLYMOUTH ROAD 305",
+    "city": "Plymouth Meeting",
+    "state": "PA",
+    "zip": "19462"
+   },
+   "phone": "6108254300",
+   "website": "N/A",
+   "fmv_assets": 41596971,
+   "total_grants": 1317500,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "PTSF ADMINISTRATORS",
+     "address": {
+      "line": "450 PLYMOUTH ROAD SUITE 305",
+      "city": "Plymouth Meeting",
+      "state": "PA",
+      "zip": "19462"
+     },
+     "phone": "6108254300",
+     "email": "",
+     "how": "CHARITABLE REQUESTS: WRITTEN REQUEST OUTLINING SPECIFICS OF REQUEST, MAILED TO: 450 PLYMOUTH ROAD, SUITE 305, PLYMOUTH MEETING, PA 19462",
+     "deadlines": "NONE.",
+     "restrictions": "CHARITABLE REQUESTS: WRITTEN REQUESTS CONSIDERED SEPARATELY."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533219349100123",
+   "n_grants": 15,
+   "n_instate": 9,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "CHILDREN'S LITERACY INITIATIVE",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "TO SUPPORT THE ORGANIZATION AND ITS PROGRAMS",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 25000,
+   "median_hit": 25000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Philadelphia",
+     7
+    ],
+    [
+     "Plymouth Meeting",
+     1
+    ],
+    [
+     "Bryn Mawr",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 1.89
+  },
+  {
+   "ein": "271234570",
+   "name": "THE GORDON CHARTER FOUNDATION",
+   "address": {
+    "line": "640 NARCISI LANE",
+    "city": "Wayne",
+    "state": "PA",
+    "zip": "19087"
+   },
+   "phone": "6102209054",
+   "website": "GORDONCHARTERFOUNDATION.COM",
+   "fmv_assets": 28152283,
+   "total_grants": 1234000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "LEILA GORDON",
+     "address": {
+      "line": "640 NARCISI LANE",
+      "city": "Wayne",
+      "state": "PA",
+      "zip": "19087"
+     },
+     "phone": "6102209054",
+     "email": "GORDONCHARTERFOUNDATION.COM",
+     "how": "GRANT APPLICANTS MUST SUBMIT AN APPLICATION VIA THE FOUNDATION'S ONLINE GRANT APPLICATION LOCATED ON ITS WEBSITE \"GORDONCHARTERFOUNDATION.COM\". APPLICANTS MUST ALSO SUBMIT A LIST OF THEIR BOARD OF DIRECTORS/TRUSTEES, FINANCIAL STATEMENTS, A COPY OF THEIR IRS LETTER APPROVING IRC SECTION 501(C)(3) EXEMPT STATUS AND A LIST OF THE NAMES AND AMOUNTS OF THE LARGEST FUNDERS OF THE APPLICANTS.",
+     "deadlines": "GRANT APPLICATION DEADLINES OCCUR QUARTERLY AND MAY BE FOUND ON THE CHARTER FOUNDATION'S WEBSITE.",
+     "restrictions": "GRANTS ARE AWARDED TO EDUCATIONAL, HEALTH CARE, MEDICAL RESEARCH AND OTHER CHARITABLE ORGANIZATIONS THAT ARE PUBLIC CHARITIES EXEMPT UNDER IRC SECTION 501(C)(3) AND 509 (A)(2) AND ARE LOCATED IN THE GREATER PHILADELPHIA, PA AREA OR PROVIDED SIGNIFICANT SERVICES TO THIS AREA."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601329349100410",
+   "n_grants": 77,
+   "n_instate": 74,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "BEYOND LITERACY (COMMUNITY LEARNING CENTER)",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "PC",
+     "purpose": "FOR GENERAL OPERATING FUNDS",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 20000,
+   "median_hit": 20000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Philadelphia",
+     38
+    ],
+    [
+     "Phoenixville",
+     8
+    ],
+    [
+     "West Chester",
+     6
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 1.86
+  },
+  {
+   "ein": "232573295",
+   "name": "THE ARTHUR J AND LEE R GLATFELTER FOUNDATION",
+   "address": {
+    "line": "183 LEADER HEIGHTS ROAD",
+    "city": "York",
+    "state": "PA",
+    "zip": "17402"
+   },
+   "phone": "7177410911",
+   "website": "N/A",
+   "fmv_assets": 74991875,
+   "total_grants": 3235255,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601359349101870",
+   "n_grants": 103,
+   "n_instate": 90,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "YORK LITERACY INSTITUTE",
+     "city": "York",
+     "state": "PA",
+     "zip3": "174",
+     "status": "PC",
+     "purpose": "TO HELP FUND THE OPERATIONS OF THE VARIOUS 501(C)(3) CHARITABLE ORGANIZATIONS.",
+     "amount": 65000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "YORK COUNTY LIBRARIES",
+     "city": "York",
+     "state": "PA",
+     "zip3": "174",
+     "status": "PC",
+     "purpose": "TO HELP FUND THE OPERATIONS OF THE VARIOUS 501(C)(3) CHARITABLE ORGANIZATIONS.",
+     "amount": 35000,
+     "w": 0.5,
+     "near": true
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 1,
+   "hit_total": 100000,
+   "median_hit": 65000,
+   "n_near": 2,
+   "f_near": true,
+   "top_cities": [
+    [
+     "York",
+     56
+    ],
+    [
+     "Harrisburg",
+     10
+    ],
+    [
+     "Camp Hill",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.99,
+   "funds_you": [],
+   "score": 19.46
+  },
+  {
+   "ein": "272987061",
+   "name": "THE ALEXANDER GRASS FOUNDATION",
+   "address": {
+    "line": "PO BOX 1426",
+    "city": "Mechanicsburg",
+    "state": "PA",
+    "zip": "17055"
+   },
+   "phone": "",
+   "website": "N/A",
+   "fmv_assets": 47941114,
+   "total_grants": 7095000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543219349103629",
+   "n_grants": 13,
+   "n_instate": 3,
+   "n_regions": 1,
+   "hits": [
+    {
+     "recipient": "CAPITAL REGION LITERACY COUNCIL",
+     "city": "Harrisburg",
+     "state": "PA",
+     "zip3": "171",
+     "status": "",
+     "purpose": "GENERAL PURPOSE",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 25000,
+   "median_hit": 25000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Harrisburg",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.4
+  },
+  {
+   "ein": "843049720",
+   "name": "ARCONIC FOUNDATION",
+   "address": {
+    "line": "201 ISABELLA STREET",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "15212"
+   },
+   "phone": "7242723622",
+   "website": "WWW.ARCONIC.COM/FOUNDATION/",
+   "fmv_assets": 196165805,
+   "total_grants": 8249000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202642479349100519",
+   "n_grants": 169,
+   "n_instate": 49,
+   "n_regions": 10,
+   "hits": [
+    {
+     "recipient": "NORTH MUSEUM CORPORATION",
+     "city": "Lancaster",
+     "state": "PA",
+     "zip3": "176",
+     "status": "PC",
+     "purpose": "AI LITERACY PROGRAM",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 50000,
+   "median_hit": 50000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     19
+    ],
+    [
+     "Lancaster",
+     7
+    ],
+    [
+     "Bloomsburg",
+     4
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.27,
+   "funds_you": [],
+   "score": 8.26
+  },
+  {
+   "ein": "311583757",
+   "name": "THE BURKE FAMILY FOUNDATION",
+   "address": {
+    "line": "436 SEVENTH AVENUE 2450",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "15219"
+   },
+   "phone": "4124714660",
+   "website": "N/A",
+   "fmv_assets": 93452471,
+   "total_grants": 4327153,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202503089349100810",
+   "n_grants": 125,
+   "n_instate": 116,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "LITERACY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 2500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING IS FUNDAMENTAL",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "COOPER-SIEGEL COMMUNITY LIBRARY",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 125000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "COOPER-SIEGEL COMMUNITY LIBRARY",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 125000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 25000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "COOPER-SIEGEL COMMUNITY LIBRARY",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 7500,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "SHARPSBURG COMMUNITY LIBRARY",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 7,
+   "n_strong": 2,
+   "hit_total": 290500,
+   "median_hit": 7500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     105
+    ],
+    [
+     "New Kensington",
+     2
+    ],
+    [
+     "Braddock",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.01,
+   "funds_you": [],
+   "score": 3.5
+  },
+  {
+   "ein": "251407410",
+   "name": "THE BURKE FOUNDATION",
+   "address": {
+    "line": "436 SEVENTH AVENUE 2450",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "15219"
+   },
+   "phone": "4124714500",
+   "website": "N/A",
+   "fmv_assets": 93442059,
+   "total_grants": 4327153,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533089349100213",
+   "n_grants": 125,
+   "n_instate": 116,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "LITERACY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 2500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "READING IS FUNDAMENTAL",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "COOPER-SIEGEL COMMUNITY LIBRARY",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 125000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "COOPER-SIEGEL COMMUNITY LIBRARY",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 125000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 25000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "COOPER-SIEGEL COMMUNITY LIBRARY",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 7500,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "SHARPSBURG COMMUNITY LIBRARY",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "GENERAL",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 7,
+   "n_strong": 2,
+   "hit_total": 290500,
+   "median_hit": 7500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     105
+    ],
+    [
+     "New Kensington",
+     2
+    ],
+    [
+     "Braddock",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.01,
+   "funds_you": [],
+   "score": 3.5
+  },
+  {
+   "ein": "232785280",
+   "name": "THE JULIAN A AND LOIS G BRODSKY FOUNDATION",
+   "address": {
+    "line": "1701 JOHN F KENNEDY BLVD 52ND FL",
+    "city": "Philadelphia",
+    "state": "PA",
+    "zip": "19103"
+   },
+   "phone": "2156651700",
+   "website": "N/A",
+   "fmv_assets": 30791731,
+   "total_grants": 2412770,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611329349100921",
+   "n_grants": 105,
+   "n_instate": 51,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "TEMPLE UNIVERSITY LIBRARIES",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "PC",
+     "purpose": "TO HELP FUND THE OPERATING BUDGETS OF THE CHARITABLE ORGANIZATIONS.",
+     "amount": 20000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "LIBRARY COMPANY OF PHILADELPHIA",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "PC",
+     "purpose": "TO HELP FUND THE OPERATING BUDGETS OF THE CHARITABLE ORGANIZATIONS.",
+     "amount": 16000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "FREE LIBRARY OF PHILADELPHIA FOUNDATION",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "PC",
+     "purpose": "TO HELP FUND THE OPERATING BUDGETS OF THE CHARITABLE ORGANIZATIONS.",
+     "amount": 15000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 0,
+   "hit_total": 51000,
+   "median_hit": 16000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Philadelphia",
+     44
+    ],
+    [
+     "Kennett Square",
+     1
+    ],
+    [
+     "Pottstown",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.02,
+   "funds_you": [],
+   "score": 2.73
+  },
+  {
+   "ein": "256627704",
+   "name": "THE NEUBAUER FAMILY FOUNDATION",
+   "address": {
+    "line": "1717 ARCH ST 4050",
+    "city": "Philadelphia",
+    "state": "PA",
+    "zip": "191032793"
+   },
+   "phone": "2156061784",
+   "website": "N/A",
+   "fmv_assets": 420504258,
+   "total_grants": 17921584,
+   "preselected_only": true,
+   "apply": [
+    {
+     "contact": "GRANTS DEPARTMENT - NEUBAUER FAMILY",
+     "address": {
+      "line": "1717 ARCH STREET SUITE 4050",
+      "city": "Philadelphia",
+      "state": "PA",
+      "zip": "191032793"
+     },
+     "phone": "2156061792",
+     "email": "",
+     "how": "THE FOUNDATION DOES NOT ACCEPT UNSOLICITED REQUESTS FOR FUNDS. PROPOSALS ARE ACCEPTED BY INVITATION AND MUST INCLUDE THE PROJECT DESCRIPTION, TIMEFRAME, AUDIENCE SERVED, BUDGET, AND ANTICIPATED OUTCOMES.",
+     "deadlines": "NONE",
+     "restrictions": "GRANTS ARE MADE TO ORGANIZATIONS THAT QUALIFY UNDER INTERNAL REVENUE CODE SECTION 501C3 AS PUBLIC CHARITIES UNDER 509(A) OF THE CODE WHO PROVIDE SUPPORT WITHIN THE FOUNDATION'S GRANTMAKING PRIORITIES. GRANTS ARE NOT MADE TO INDIVIDUALS OR FOR SECTARIAN RELIGIOUS ACTIVITIES OR FOR POLITICAL LOBBYING."
+    }
+   ],
+   "tax_period_end": "2024-11-30",
+   "object_id": "202542889349100524",
+   "n_grants": 199,
+   "n_instate": 107,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "THE FREE LIBRARY OF PHILADELPHIA",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 25000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "LIBRARY COMPANY OF PHILADELPHIA",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "GLADWYNE FREE LIBRARY",
+     "city": "Gladwyne",
+     "state": "PA",
+     "zip3": "190",
+     "status": "",
+     "purpose": "PROGRAM SUPPORT",
+     "amount": 1200,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 0,
+   "hit_total": 31200,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Philadelphia",
+     77
+    ],
+    [
+     "Gladwyne",
+     5
+    ],
+    [
+     "Bryn Mawr",
+     4
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.62
+  },
+  {
+   "ein": "387016980",
+   "name": "The Vert Charitable Trust",
+   "address": {
+    "line": "8848 Montgomery Ave",
+    "city": "Wyndmoor",
+    "state": "PA",
+    "zip": "19038"
+   },
+   "phone": "2158360392",
+   "website": "None",
+   "fmv_assets": 34788287,
+   "total_grants": 1360000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202621269349100912",
+   "n_grants": 49,
+   "n_instate": 47,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "Children's Literacy Initiative",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "PC",
+     "purpose": "To promote and support the charitable purpose pursuant to Section 501(c)(3) of the recipient.",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "Tree House Books",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "PC",
+     "purpose": "To promote and support the educational purpose pursuant to Section 501(c)(3) of the recipient.",
+     "amount": 40000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "Free Library of Philadelphia Foundation",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "PC",
+     "purpose": "To promote and support the educational purpose pursuant to Section 501(c)(3) of the recipient.",
+     "amount": 25000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 1,
+   "hit_total": 85000,
+   "median_hit": 25000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Philadelphia",
+     45
+    ],
+    [
+     "Pittsburgh",
+     1
+    ],
+    [
+     "Blue Bell",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.43
+  },
+  {
+   "ein": "471108283",
+   "name": "FLEISCHNER FAMILY CHARITABLE FOUNDATION",
+   "address": {
+    "line": "6022 WEST CHESTER PIKE",
+    "city": "Newton Square",
+    "state": "PA",
+    "zip": "19073"
+   },
+   "phone": "4126823512",
+   "website": "NA",
+   "fmv_assets": 26922179,
+   "total_grants": 1324941,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611269349101536",
+   "n_grants": 87,
+   "n_instate": 57,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "LITERACY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "PC",
+     "purpose": "UNRESTRICTED PURPOSES",
+     "amount": 750,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "CARNEGIE LIBRARY OF PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "PC",
+     "purpose": "TEEN AND YOUNG ADULTS COLLECTION FUND",
+     "amount": 7500,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 1,
+   "hit_total": 8250,
+   "median_hit": 7500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     36
+    ],
+    [
+     "Philadelphia",
+     12
+    ],
+    [
+     "Greensburg",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.42
+  },
+  {
+   "ein": "843207370",
+   "name": "THE DAVIS & SMITH FAMILY FOUNDATION INC",
+   "address": {
+    "line": "2261 WOODLARK CIRCLE",
+    "city": "Bethlehem",
+    "state": "PA",
+    "zip": "18017"
+   },
+   "phone": "4843798230",
+   "website": "WWW.DSFAM.ORG",
+   "fmv_assets": 27595355,
+   "total_grants": 1637400,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601979349100420",
+   "n_grants": 26,
+   "n_instate": 22,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "THE LITERACY CENTER",
+     "city": "Allentown",
+     "state": "PA",
+     "zip3": "181",
+     "status": "PC",
+     "purpose": "UNRESTRICTED SUPPORT",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "BETHLEHEM AREA PUBLIC LIBRARY",
+     "city": "Bethlehem",
+     "state": "PA",
+     "zip3": "180",
+     "status": "PC",
+     "purpose": "UNRESTRICTED SUPPORT",
+     "amount": 20000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 1,
+   "hit_total": 70000,
+   "median_hit": 50000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Bethlehem",
+     7
+    ],
+    [
+     "Allentown",
+     6
+    ],
+    [
+     "Carbondale",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.22
+  },
+  {
+   "ein": "256447779",
+   "name": "THE MIRAMARE FOUNDATION",
+   "address": {
+    "line": "PO BOX 185",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "152300185"
+   },
+   "phone": "4125628879",
+   "website": "",
+   "fmv_assets": 30433122,
+   "total_grants": 1757500,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202621269349102607",
+   "n_grants": 20,
+   "n_instate": 12,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "LITERACY PITTSBURGH",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "PC",
+     "purpose": "GENERAL OPERATING",
+     "amount": 75000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 75000,
+   "median_hit": 75000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     9
+    ],
+    [
+     "Sharpsburg",
+     1
+    ],
+    [
+     "North Hills",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.06
+  },
+  {
+   "ein": "527142941",
+   "name": "THE COMIS FOUNDATION 2423-00-48",
+   "address": {
+    "line": "1650 MARKET STREET",
+    "city": "Philadelphia",
+    "state": "PA",
+    "zip": "19103"
+   },
+   "phone": "2154196000",
+   "website": "",
+   "fmv_assets": 22753030,
+   "total_grants": 2725500,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-11-30",
+   "object_id": "202630969349100418",
+   "n_grants": 52,
+   "n_instate": 3,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "Childrens Literacy Initiative",
+     "city": "Philadelphia",
+     "state": "PA",
+     "zip3": "191",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT",
+     "amount": 70000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 70000,
+   "median_hit": 70000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Philadelphia",
+     2
+    ],
+    [
+     "Pittsburgh",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 2.05
+  },
+  {
+   "ein": "843022317",
+   "name": "HOWMET AEROSPACE FOUNDATION",
+   "address": {
+    "line": "201 ISABELLA STREET",
+    "city": "Pittsburgh",
+    "state": "PA",
+    "zip": "15212"
+   },
+   "phone": "7242723622",
+   "website": "N/A",
+   "fmv_assets": 188060912,
+   "total_grants": 8359285,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513169349102671",
+   "n_grants": 209,
+   "n_instate": 27,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "FUND FOR THE ADVANCEMENT OF MINORITIES THROUGH EDUCATION",
+     "city": "Pittsburgh",
+     "state": "PA",
+     "zip3": "152",
+     "status": "",
+     "purpose": "STEM TRAINING AND TUTORING",
+     "amount": 30000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 30000,
+   "median_hit": 30000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Pittsburgh",
+     24
+    ],
+    [
+     "Wilkinsburg",
+     1
+    ],
+    [
+     "Indiana",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 1.92
+  },
+  {
+   "ein": "261462775",
+   "name": "THE 1830 FAMILY FOUNDATION 2138-00-42",
+   "address": {
+    "line": "GLENMEDE TRUST CO NA 1650 MARK",
+    "city": "Philadelphia",
+    "state": "PA",
+    "zip": "19103"
+   },
+   "phone": "2154196000",
+   "website": "N/A",
+   "fmv_assets": 20316136,
+   "total_grants": 1000500,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-06-30",
+   "object_id": "202502959349100320",
+   "n_grants": 91,
+   "n_instate": 50,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "RSVP Volunteers",
+     "city": "King Of Prussia",
+     "state": "PA",
+     "zip3": "194",
+     "status": "",
+     "purpose": "ELEMENTARY LITERACY",
+     "amount": 2000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 2000,
+   "median_hit": 2000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Philadelphia",
+     34
+    ],
+    [
+     "Wayne",
+     3
+    ],
+    [
+     "Malvern",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": true,
+   "region_share": 0.0,
+   "funds_you": [],
+   "score": 1.51
+  }
+ ],
+ "federal": [],
+ "federal_total": 0
+}

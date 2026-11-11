@@ -1,0 +1,5369 @@
+{
+ "profile": {
+  "ein": "582599399",
+  "name": "Gilmer Community Food Pantry",
+  "city": "Ellijay",
+  "state": "GA",
+  "ntee": "K31",
+  "zip3": "305",
+  "revenue": 316496,
+  "revenue_year": 2023,
+  "url": "https://projects.propublica.org/nonprofits/organizations/582599399"
+ },
+ "state": "GA",
+ "city": "Ellijay",
+ "causes": [
+  "food"
+ ],
+ "generated": "2026-11-11",
+ "scanned": 346,
+ "top": 350,
+ "zip3": "305",
+ "scanned_grants": 12551,
+ "foundations": [
+  {
+   "ein": "581709417",
+   "name": "GEORGIA POWER FOUNDATION INC",
+   "address": {
+    "line": "241 RALPH MCGILL BLVD NE BIN 10042",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30308"
+   },
+   "phone": "4045066784",
+   "website": "N/A",
+   "fmv_assets": 217001163,
+   "total_grants": 18638715,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "GEORGIA POWER FOUNDATION",
+     "address": {
+      "line": "241 RALPH MCGILL BLVD NE BIN 10042",
+      "city": "Atlanta",
+      "state": "GA",
+      "zip": "30308"
+     },
+     "phone": "4045066784",
+     "email": "",
+     "how": "BRIEF LETTER, COPY OF 501(C)(3) TAX EXEMPT LETTER,AUDITED FINANCIALS, BRIEF DESCRIPTION OF THE ORGANIZATION REQUESTING SUPPORT, LIST OF ITS OFFICERS BOARD MEMBERS, AMOUNT REQUESTED, PURPOSE FOR GRANT, AND SOURCES OF OTHER SUPPORT AND AMOUNTS. REQUEST SHOULD BE SUBMITTED ON LINE AT WWW.GEORGIAPOWER.COM/IN-YOUR-COMMUNITY/CHARITABLE-GIVING/APPLY-FOR-A-GRANT.",
+     "deadlines": "GRANT REQUESTS UP TO AND INCLUDING $25,000 ARE EVALUATED ON AN ONGOING BASIS.",
+     "restrictions": "RESTRICTIONS OR LIMITATIONS APPLY TO INDIVIDUALS, RELIGIOUS ORGANIZATIONS, PRIVATE SECONDARY SCHOOLS, AND NON-PUBLIC CHARITIES. PRIMARILY STATE OF GEORGIA."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513219349107656",
+   "n_grants": 517,
+   "n_instate": 491,
+   "n_regions": 22,
+   "hits": [
+    {
+     "recipient": "THE HOPE CENTER OF TOCCOA INC",
+     "city": "Toccoa",
+     "state": "GA",
+     "zip3": "305",
+     "status": "",
+     "purpose": "FEEDING AND PROVIDING ASSISTANCE TO THOSE IN NEED",
+     "amount": 1000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "THE CONSERVATION FUND",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "FARMS FUND: CONSERVING GEORGIA'S AT-RISK FARMLAND, EMPOWERING NEXT-GENERATION FARMERS, AND BUILDING A HEALTHIER, MORE EQUITABLE, AND MORE RESILIENT LOCAL FOOD SYSTEM",
+     "amount": 250000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "MEALS ON WHEELS ATLANTA",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "ENERGY EMPOWERMENT FOR VULNERABLE ATLANTA SENIORS",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "GOLDEN HARVEST FOOD BANK INC",
+     "city": "Augusta",
+     "state": "GA",
+     "zip3": "309",
+     "status": "",
+     "purpose": "PRODUCE RESCUE CENTER",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "AMERICA'S SECOND HARVEST OF COASTAL GEORGIA",
+     "city": "Savannah",
+     "state": "GA",
+     "zip3": "314",
+     "status": "",
+     "purpose": "2024 HURRICANE HELENE DISASTER RELIEF",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "APPLING COUNTY FOOD BANK",
+     "city": "Baxley",
+     "state": "GA",
+     "zip3": "315",
+     "status": "",
+     "purpose": "2024 HURRICANE HELENE DISASTER RELIEF",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FOOD BANK OF NORTHEAST GEORGIA",
+     "city": "Athens",
+     "state": "GA",
+     "zip3": "306",
+     "status": "",
+     "purpose": "2024 HURRICANE HELENE DISASTER RELIEF",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "LOUISVILLE COMMUNITY FOOD PANTRY",
+     "city": "Louisville",
+     "state": "GA",
+     "zip3": "304",
+     "status": "",
+     "purpose": "2024 HURRICANE HELENE DISASTER RELIEF",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "NORTHWEST GEORGIA HUNGER MINISTRIES",
+     "city": "Rome",
+     "state": "GA",
+     "zip3": "301",
+     "status": "",
+     "purpose": "2024 HURRICANE HELENE DISASTER RELIEF",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SECOND HARVEST OF SOUTH GEORGIA INC",
+     "city": "Valdosta",
+     "state": "GA",
+     "zip3": "316",
+     "status": "",
+     "purpose": "2024 HURRICANE HELENE DISASTER RELIEF",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "THE FOOD BANK INC",
+     "city": "Statesboro",
+     "state": "GA",
+     "zip3": "304",
+     "status": "",
+     "purpose": "2024 HURRICANE HELENE DISASTER RELIEF",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "UGROW INC DBA THE FOOD MILL",
+     "city": "Columbus",
+     "state": "GA",
+     "zip3": "319",
+     "status": "",
+     "purpose": "2024 HURRICANE HELENE DISASTER RELIEF",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "AMERICA'S SECOND HARVEST OF COASTAL GEORGIA",
+     "city": "Savannah",
+     "state": "GA",
+     "zip3": "314",
+     "status": "",
+     "purpose": "CHILDHOOD HUNGER INITIATIVE",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "NAVICENT HEALTH FOUNDATION",
+     "city": "Macon",
+     "state": "GA",
+     "zip3": "312",
+     "status": "",
+     "purpose": "BEVERLY KNIGHT OLSON CHILDREN'S HOSPITAL NEONATAL ICU AND HEALTHY COMMUNITIES FOOD AS MEDICINE MARKET",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OPERATION LUNCHBOX INC",
+     "city": "Mcdonough",
+     "state": "GA",
+     "zip3": "302",
+     "status": "",
+     "purpose": "OPERATION LUNCHBOX FEEDING",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "LATIN AMERICAN ASSOCIATION INC",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "ALIMENTANDO COMUNIDAD - FOOD DISTRIBUTION DAY ATLANTA HISPANIC/LATINO B/ERGS AND THE LAA FUND THE MISSION",
+     "amount": 6500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "DOWNTOWN MINISTRIES INC",
+     "city": "Athens",
+     "state": "GA",
+     "zip3": "306",
+     "status": "",
+     "purpose": "OUR DAILY BREAD COMMUNITY KITCHEN - FEEDING THE HOMELESS",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "JOSEPH E LOWERY INSTITUTE FOR JUSTICE AND HUMAN RIGHTS INC",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "SUPPORT FOR MIMI'S FOOD PANTRY",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FOOD BANK OF NORTHEAST GEORGIA",
+     "city": "Athens",
+     "state": "GA",
+     "zip3": "306",
+     "status": "",
+     "purpose": "FOOD ACCESS INITIATIVES",
+     "amount": 2500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FEEDING THE VALLEY INC",
+     "city": "Columbus",
+     "state": "GA",
+     "zip3": "319",
+     "status": "",
+     "purpose": "FUNDING FOR SENIOR MEALS",
+     "amount": 2000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "MIDWEST FOOD BANK NFP",
+     "city": "Peachtree City",
+     "state": "GA",
+     "zip3": "302",
+     "status": "",
+     "purpose": "EQUIPPING NON-PROFITS WITH ZERO COST FOOD TO SERVE THOSE IN NEED",
+     "amount": 2000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "NEIGHBORHOOD MEALS ON WHEELS",
+     "city": "Norcross",
+     "state": "GA",
+     "zip3": "300",
+     "status": "",
+     "purpose": "OVEN PROOFER FOR BREAD FOR HOMEBOUND SENIORS AND DISABLED ADULTS TO BE COOKED AND DELIVERED IN THE NEIGHBORHOOD MEALS ON WHEELS PROGRAM",
+     "amount": 1500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "GLADDEN MIDDLE SCHOOL",
+     "city": "Chatsworth",
+     "state": "GA",
+     "zip3": "307",
+     "status": "",
+     "purpose": "SATURDAY SACKS TO MURRAY COUNTY STUDENTS WHO ARE IDENTIFIED AS FOOD INSECURE",
+     "amount": 1000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SENIOR CITIZENS INC",
+     "city": "Savannah",
+     "state": "GA",
+     "zip3": "314",
+     "status": "",
+     "purpose": "PROVIDING NUTRITION TO OLDER ADULTS",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "THE CANCER FOUNDATION INC",
+     "city": "Athens",
+     "state": "GA",
+     "zip3": "306",
+     "status": "",
+     "purpose": "THE CANCER FOUNDATION - FINANCIAL AND NUTRITIONAL ASSISTANCE PROGRAMS",
+     "amount": 5000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 25,
+   "n_strong": 23,
+   "hit_total": 671500,
+   "median_hit": 10000,
+   "n_near": 1,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     143
+    ],
+    [
+     "Macon",
+     21
+    ],
+    [
+     "Valdosta",
+     19
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.73,
+   "funds_you": [],
+   "score": 37.24
+  },
+  {
+   "ein": "260158564",
+   "name": "HARBIN FAMILY FOUNDATION INC",
+   "address": {
+    "line": "1278 GERRARD ROAD",
+    "city": "Lavonia",
+    "state": "GA",
+    "zip": "30553"
+   },
+   "phone": "7063565041",
+   "website": "N/A",
+   "fmv_assets": 833887,
+   "total_grants": 335500,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "WESTLEY J HARBIN",
+     "address": {
+      "line": "460 PORTER ROAD",
+      "city": "Martin",
+      "state": "GA",
+      "zip": "30557"
+     },
+     "phone": "7063562862",
+     "email": "",
+     "how": "APPLICATIONS ARE OBTAINED FROM WESTLEY J. HARBIN, DIRECTOR",
+     "deadlines": "NONE",
+     "restrictions": "EDUCATIONAL SCHOLARSHIPS ARE AWARDED TO CHILDREN OF HARBIN LUMBER COMPANY, INC. EMPLOYEES WHO ARE HIGH SCHOOL SENIORS AND WHO PLAN TO ATTEND AN EDUCATIONAL INSTITUTION."
+    }
+   ],
+   "tax_period_end": "2026-04-30",
+   "object_id": "202621899349100802",
+   "n_grants": 53,
+   "n_instate": 47,
+   "n_regions": 8,
+   "hits": [
+    {
+     "recipient": "STEP OF FAITH OUTREACH INC",
+     "city": "Lavonia",
+     "state": "GA",
+     "zip3": "305",
+     "status": "PC",
+     "purpose": "PROVIDES FOOD, CLOTHING, SHELTER, LITERACY AND JOB PLACEMENT OPPORTUNITIES TO INDIVIDUALS.",
+     "amount": 10000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "FOOD BANK OF NORTHEAST GEORGIA",
+     "city": "Athens",
+     "state": "GA",
+     "zip3": "306",
+     "status": "PC",
+     "purpose": "PROVIDES FOOD TO FAMILIES IN NEED.",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 20000,
+   "median_hit": 10000,
+   "n_near": 1,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Royston",
+     5
+    ],
+    [
+     "Athens",
+     4
+    ],
+    [
+     "Lavonia",
+     4
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.91,
+   "funds_you": [],
+   "score": 17.46
+  },
+  {
+   "ein": "582513020",
+   "name": "THE SCOTT HUDGENS FAMILY FOUNDATION INC",
+   "address": {
+    "line": "3425 DULUTH PARK LANE",
+    "city": "Duluth",
+    "state": "GA",
+    "zip": "300963259"
+   },
+   "phone": "7708138817",
+   "website": "WWW.HUDGENSFOUNDATION.ORG",
+   "fmv_assets": 98913557,
+   "total_grants": 4997700,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "NA",
+     "address": {
+      "line": "3425 DULUTH PARK LANE",
+      "city": "Duluth",
+      "state": "GA",
+      "zip": "30096"
+     },
+     "phone": "7708138817",
+     "email": "",
+     "how": "SEE WEBSITE",
+     "deadlines": "SEE WEBSITE",
+     "restrictions": "SEE WEBSITE"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513089349101956",
+   "n_grants": 82,
+   "n_instate": 79,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "NORTH GWINNETT CO-OP",
+     "city": "Buford",
+     "state": "GA",
+     "zip3": "305",
+     "status": "",
+     "purpose": "DESIG FOR THE FOOD PROGRAM & FINANCIAL ASSISTANCE PROGRAM IN GWINNETT CO; DESIG FOR THE GENERAL OPERATING FUND",
+     "amount": 70000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK INC",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "DESIG FOR FUNDING THE COMMUNITYY FOOD CNTR INITIATIVE IN GWINNETT CO.",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "NEIGHBORHOOD MEALS ON WHEELS INC",
+     "city": "Norcross",
+     "state": "GA",
+     "zip3": "300",
+     "status": "",
+     "purpose": "DESIG AS GENERAL OPERATING SUPPORT FOR FOOD DELIVERY PROGRAM FOR SENIORS",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SECOND HELPINGS ATLANTA INC",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "DESIG TO SUPPORT FOOD RESCUE NETWORK",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 4,
+   "n_strong": 4,
+   "hit_total": 195000,
+   "median_hit": 50000,
+   "n_near": 1,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     31
+    ],
+    [
+     "Duluth",
+     8
+    ],
+    [
+     "Norcross",
+     7
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 16.29
+  },
+  {
+   "ein": "586032469",
+   "name": "JAMES M COX FOUNDATION OF GEORGIA INC",
+   "address": {
+    "line": "6205-A PEACHTREE DUNWOODY ROAD",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "303284524"
+   },
+   "phone": "6786454659",
+   "website": "WWW.COXFOUNDATION.COM",
+   "fmv_assets": 1147195965,
+   "total_grants": 42648000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "APPLICATIONS ARE ONLY ACCEPTED ONLI",
+     "address": {
+      "line": "6205-A PEACHTREE DUNWOODY ROAD",
+      "city": "Atlanta",
+      "state": "GA",
+      "zip": "30328"
+     },
+     "phone": "6786454659",
+     "email": "",
+     "how": "APPLICATIONS ARE ONLY ACCEPTED ONLINE. VISIT WWW.COXFOUNDATION.COM TO LEARN ABOUT APPLICATION CONTENT AND ACCESS LINK TO ON-LINE SUBMISSION FORM.",
+     "deadlines": "VISIT WWW.COXFOUNDATION.COM FOR SUBMISSION DEADLINES.",
+     "restrictions": "VISIT WWW.COXFOUNDATION.COM FOR RESTRICTIONS/LIMITATIONS ON ELIGIBILITY."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543159349101609",
+   "n_grants": 101,
+   "n_instate": 56,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "FOOD WELL ALLIANCE",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "SPECIAL PROJECT SUPPORT",
+     "amount": 1100000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FOOD WELL ALLIANCE",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "SPECIAL PROJECT SUPPORT",
+     "amount": 987500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "East Point",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "CAPITAL CAMPAIGN SUPPORT",
+     "amount": 500000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "GOLDEN HARVEST FOOD BANK INC",
+     "city": "Augusta",
+     "state": "GA",
+     "zip3": "309",
+     "status": "",
+     "purpose": "DISASTER RELIEF",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 4,
+   "n_strong": 4,
+   "hit_total": 2687500,
+   "median_hit": 987500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     38
+    ],
+    [
+     "Norcross",
+     3
+    ],
+    [
+     "Marietta",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.98,
+   "funds_you": [],
+   "score": 15.86
+  },
+  {
+   "ein": "223875267",
+   "name": "CREEL-HARISON FOUNDATION INC",
+   "address": {
+    "line": "PO BOX 669",
+    "city": "Augusta",
+    "state": "GA",
+    "zip": "30903"
+   },
+   "phone": "7067292001",
+   "website": "N/A",
+   "fmv_assets": 33224752,
+   "total_grants": 1371910,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "ROBBIE T WHITE DIRECTOR",
+     "address": {
+      "line": "PO BOX 669",
+      "city": "Augusta",
+      "state": "GA",
+      "zip": "30903"
+     },
+     "phone": "7067292001",
+     "email": "",
+     "how": "PROSPECTIVE GRANTEES MUST COMPLETE GRANT APPLICATION AFTER CONTACTING FOUNDATION TO CONFIRM ELIGIBILITY.",
+     "deadlines": "SUBMISSION DEADLINE IS OCTOBER 1ST EACH YEAR.",
+     "restrictions": "GEOGRAPHIC AND CHARITABLE RESTRICTIONS."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202642579349100214",
+   "n_grants": 53,
+   "n_instate": 45,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "GOLDEN HARVEST FOOD BANK",
+     "city": "Augusta",
+     "state": "GA",
+     "zip3": "309",
+     "status": "PC",
+     "purpose": "FOOD (ONLY) FOR THE KIDS' BACKPACK PROGRAM",
+     "amount": 67217,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "UNITED WAY OF THE CSRA",
+     "city": "Augusta",
+     "state": "GA",
+     "zip3": "309",
+     "status": "PC",
+     "purpose": "THE FIVE 9 PROGRAM ($12,505), THE REFERNET PROGRAM ($5,900), THE PREVENTION PAYS PROGRAM ($2,470) AND PROJECT DASH FOOD DELIVERY ($21,600)",
+     "amount": 42475,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "DOWNTOWN COOPERATIVE CHURCH MINISTRIES",
+     "city": "Augusta",
+     "state": "GA",
+     "zip3": "309",
+     "status": "PC",
+     "purpose": "THE PURCHASE AND DISTRIBUTION OF FOOD",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 3,
+   "hit_total": 114692,
+   "median_hit": 42475,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Augusta",
+     40
+    ],
+    [
+     "Evans",
+     3
+    ],
+    [
+     "Vidalia",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 12.06
+  },
+  {
+   "ein": "581352076",
+   "name": "GEORGIA HEALTH FOUNDATION INC",
+   "address": {
+    "line": "4401 NORTHSIDE PARKWAY 950",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30327"
+   },
+   "phone": "4046589066",
+   "website": "HTTP://GAHEALTHFDN.ORG",
+   "fmv_assets": 12489093,
+   "total_grants": 521100,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "ROLAND MATTHEWS",
+     "address": {
+      "line": "4401 NORTHSIDE PKWY SUITE 950",
+      "city": "Atlanta",
+      "state": "GA",
+      "zip": "30327"
+     },
+     "phone": "4043632525",
+     "email": "",
+     "how": "APPLICATION FORM COMPLETED AND AVAILABLE APPLICATION GUIDELINES FOLLOWED",
+     "deadlines": "AUGUST 1",
+     "restrictions": "PER APPLICATION GUIDELINES - PRIMARILY RESTRICTED TO GEORGIA HEALTH RELATED CHARITIES"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513219349101971",
+   "n_grants": 36,
+   "n_instate": 34,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "CONCRETE JUNGLE",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "PROGRAM EXPANSION OF ON-FARM FOOD WASTE RECOVERY AND FRESH PRODUCE ACCESS IN SOUTH GEORGIA",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "VOICE FOR GEORGIA'S CHILDREN",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "POLICY OPPORTUNITIES TO TRANSFORM NUTRITION ACCESS IN GEORGIA",
+     "amount": 25000,
+     "w": 0.5,
+     "near": false
+    },
+    {
+     "recipient": "VOICE FOR GEORGIA'S CHILDREN",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "POLICY OPPORTUNITIES TO TRANSFORM NUTRITION ACCESS IN GEORGIA",
+     "amount": 450,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 1,
+   "hit_total": 45450,
+   "median_hit": 20000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     18
+    ],
+    [
+     "Norcross",
+     2
+    ],
+    [
+     "Dahlonega",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.94,
+   "funds_you": [],
+   "score": 11.92
+  },
+  {
+   "ein": "582253490",
+   "name": "THE JINKS PRIVATE FOUNDATION",
+   "address": {
+    "line": "6457 SPINDRIFT COURT",
+    "city": "Gainesville",
+    "state": "GA",
+    "zip": "30506"
+   },
+   "phone": "7707126530",
+   "website": "N/A",
+   "fmv_assets": 2991139,
+   "total_grants": 181000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "JOHN JINKS III",
+     "address": {
+      "line": "6457 SPINDRIFT COURT",
+      "city": "Gainesville",
+      "state": "GA",
+      "zip": "30506"
+     },
+     "phone": "7704265160",
+     "email": "",
+     "how": "THE FOUNDATION ONLY GIVES TO CHARITABLE ORGANIZATIONS VIA LETTER REQUEST",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202523029349100527",
+   "n_grants": 12,
+   "n_instate": 8,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "THE SALVATION ARMY",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "FOOD & SHELTER",
+     "amount": 2500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 2500,
+   "median_hit": 2500,
+   "n_near": 0,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Atlanta",
+     4
+    ],
+    [
+     "Athens",
+     2
+    ],
+    [
+     "Chestnut Mountain",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 11.4
+  },
+  {
+   "ein": "586163728",
+   "name": "THE KNOX FOUNDATION",
+   "address": {
+    "line": "3133 WASHINGTON ROAD NW",
+    "city": "Thomson",
+    "state": "GA",
+    "zip": "30824"
+   },
+   "phone": "7065977907",
+   "website": "NONE",
+   "fmv_assets": 104680009,
+   "total_grants": 4368500,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "THE KNOX FOUNDATION",
+     "address": {
+      "line": "3133 WASHINGTON ROAD",
+      "city": "Thomson",
+      "state": "GA",
+      "zip": "30824"
+     },
+     "phone": "7065951907",
+     "email": "",
+     "how": "CONTACT KNOX FOUNDATION FOR FORMS TO SUBMIT WITH ANY APPLICATION FOR FUNDING. MUST BE A 501(C)3 ORGANIZATION TO APPLY.",
+     "deadlines": "CONTACT KNOX FOUNDATION FOR SUMBISSION DEADLINES FOR THE YEAR.",
+     "restrictions": "CONTRIBUTIONS ARE ONLY TO 501(C)3 ORGANIZATIONS."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543219349101404",
+   "n_grants": 83,
+   "n_instate": 79,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "GOLDEN HARVEST FOOD BANK",
+     "city": "Augusta",
+     "state": "GA",
+     "zip3": "309",
+     "status": "",
+     "purpose": "SOCIAL SERVICES",
+     "amount": 135000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 135000,
+   "median_hit": 135000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Augusta",
+     56
+    ],
+    [
+     "Thomson",
+     6
+    ],
+    [
+     "St Simons Island",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.92,
+   "funds_you": [],
+   "score": 11.33
+  },
+  {
+   "ein": "580566147",
+   "name": "CALLAWAY FOUNDATION INC",
+   "address": {
+    "line": "P O BOX 790",
+    "city": "Lagrange",
+    "state": "GA",
+    "zip": "302403101"
+   },
+   "phone": "7068847348",
+   "website": "WWW.CALLAWAYFOUNDATION.ORG",
+   "fmv_assets": 305293730,
+   "total_grants": 10194171,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "PAUL S TRIPP PENN III",
+     "address": {
+      "line": "209 BROOME STREET P O BOX 790",
+      "city": "Lagrange",
+      "state": "GA",
+      "zip": "30241"
+     },
+     "phone": "7068847348",
+     "email": "",
+     "how": "THE FOUNDATION HAS A GRANT APPLICATION WHICH SHOULD BE FOLLOWED. ACCESS TO THIS DOCUMENT CAN BE OBTAINED AT WWW.CALLAWAYFOUNDATION.ORG ON THE GRANT POLICIES PAGE. IF THE APPLICATION IS FROM A CHURCH LOCATED IN TROUP COUNTY, GEORGIA, FOR A PROJECT FOR MAJOR ADDITIONS AND MAJOR IMPROVEMENTS, A SEPARATE APPLICATION IS AVAILABLE ON THE SAME WEBPAGE. SUCH CHURCHES SHOULD FOLLOW THE STANDARD PROVISIONS OF GRANT PROGRAM FOR TROUP COUNTY CHURCHES AND APPLICATION FOR ASSISTANCE FORM.",
+     "deadlines": "GRANT REQUESTS SHOULD BE RECEIVED BY MAR. 15, JUL. 15, OCT. 15, OR DEC. 15 TO BE CONSIDERED.",
+     "restrictions": "GRANTS ARE USUALLY MADE FOR THE BENEFIT OF PROJECTS AND PEOPLE IN LAGRANGE AND TROUP COUNTY, GEORGIA. IN UNUSUAL CIRCUMSTANCES, CONTRIBUTIONS ARE SOMETIMES MADE TOWARDS DESERVING CAUSES ELSEWHERE IN GEORGIA WHERE SPECIAL CONSIDERATION SEEMS WARRANTED. SIGNIFICANT GRANTS ARE SELDOM MADE TO PROJECTS ELSEWHERE IN THE UNITED STATES. THE FOUNDATION PREFERS TO CONTRIBUTE ITS FUNDS FOR ENDURING CONSTRUCTION PROJECTS AND CAPITAL EQUIPMENT. GRANTS ARE USUALLY NOT MADE FOR LOANS, DEBT RETIREMENT, ENDOWMENT, OR OPERATING EXPENSES."
+    }
+   ],
+   "tax_period_end": "2025-09-30",
+   "object_id": "202602269349101105",
+   "n_grants": 95,
+   "n_instate": 89,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "FEEDING THE VALLEY",
+     "city": "Columbus",
+     "state": "GA",
+     "zip3": "319",
+     "status": "",
+     "purpose": "GENERAL SUPPORT - PERMANENT IMPROVEMENTS",
+     "amount": 73190,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 73190,
+   "median_hit": 73190,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Lagrange",
+     57
+    ],
+    [
+     "Atlanta",
+     15
+    ],
+    [
+     "Columbus",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.93,
+   "funds_you": [],
+   "score": 11.09
+  },
+  {
+   "ein": "586035441",
+   "name": "Frances Wood Wilson Foundation Inc",
+   "address": {
+    "line": "4045 Five Forks Trickum Rd B9305",
+    "city": "Lilburn",
+    "state": "GA",
+    "zip": "30047"
+   },
+   "phone": "7702709083",
+   "website": "WWW.FWWFOUNDATION.ORG",
+   "fmv_assets": 45172989,
+   "total_grants": 1916097,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "DONNA MOSELEY",
+     "address": {
+      "line": "4045 Five Forks Trickum Rd SW",
+      "city": "Lilburn",
+      "state": "GA",
+      "zip": "30047"
+     },
+     "phone": "7702709083",
+     "email": "FWWF@BELLSOUTH.NET",
+     "how": "ADDRESS REQUESTS FOR GRANTS TO THE FOLLOWING: MAILING DELIVERY: 4045 Five Forks Trickum Rd SW Ste B9 #305 Lilburn, GA 30047 PHYSICAL DELIVERY: 4045 Five Forks Trickum Rd SW Ste B9 #305 Lilburn, GA 30047 GRANT PROPOSALS SHOULD BE SUBMITTED IN WRITING (CANNOT BE SUBMITTED ELECTRONICALLY) AND INCLUDE A DEFINITIVE STATEMENT AS TO THE HISTORY OF THE PROPOSED GRANTEE ORGANIZATION, THE PURPOSE AND AMOUNT OF THE PROPOSED GRANT, CURRENT FINANCIAL STATEMENTS OF THE PROPOSED GRANTEE ORGANIZATION SHOWING INFORMATION REGARDING SUPPORT BY THE LOCAL PEOPLE AND MERCHANTS AS WELL AS ALL GOVERNMENTAL SUPPORT, WHETHER LOCAL, STATE OR FEDERAL AND A WRITTEN REPRESENTATION AS TO THE FEDERAL TAX EXEMPT STATUS OF THE PROPOSED GRANTEE ORGANIZATION (I.E. 501(C) (3)). THIS DOCUMENTATION MUST BE SUBMITTED WITH EACH GRANT PROPOSAL IN ORDER FOR THE GRANT TO BE PRESENTED TO THE FOUNDATION'S BOARD OF TRUSTEES. FAILURE TO DO SO WOULD DISQUALIFY THE PROPOSAL.",
+     "deadlines": "NO LATER THAN MARCH 1ST AND SEPTEMBER 1ST",
+     "restrictions": "THE FOUNDATION GENERALLY RESTRICTS ITS GRANTS TO PROGRAMS AND INSTITUTIONS INVOLVED IN CHILD WELFARE, RELIGIOUS, CIVIC, HEALTH OR EDUCATIONAL ACTIVITIES. GRANTS ARE RESTRICTED TO THE STATE OF GEORGIA, EXCEPT FOR PROGRAMS CARRIED ON BY CHESTNUT HILL BENEVOLENT ASSOCIATION IN BOSTON, MASSACHUSETTS. ALL GRANTS ARE MADE TO TAX EXEMPT ORGANIZATIONS. IN THE CASE OF SCHOLARSHIP AWARDS, GRANTS ARE MADE TO THE RESPECTIVE EDUCATIONAL INSTITUTION, RATHER THAN TO INDIVIDUAL STUDENTS."
+    }
+   ],
+   "tax_period_end": "2025-05-31",
+   "object_id": "202532769349100708",
+   "n_grants": 131,
+   "n_instate": 128,
+   "n_regions": 14,
+   "hits": [
+    {
+     "recipient": "Food Bank Of Northeast Georgia",
+     "city": "Athens",
+     "state": "GA",
+     "zip3": "306",
+     "status": "",
+     "purpose": "MISSION OF NONPROFIT ORGANIZATION",
+     "amount": 45000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 45000,
+   "median_hit": 45000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     50
+    ],
+    [
+     "Athens",
+     10
+    ],
+    [
+     "Watkinsville",
+     6
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.93,
+   "funds_you": [],
+   "score": 10.87
+  },
+  {
+   "ein": "582022885",
+   "name": "The Martha And Wilton Looney Foundation Inc",
+   "address": {
+    "line": "4470 Sentinel Post Road NW",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30327"
+   },
+   "phone": "4042610473",
+   "website": "N/A",
+   "fmv_assets": 31310065,
+   "total_grants": 1669000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "Bruce L Dick",
+     "address": {
+      "line": "4470 Sentinel Post Road NW",
+      "city": "Atlanta",
+      "state": "GA",
+      "zip": "30327"
+     },
+     "phone": "4042610473",
+     "email": "",
+     "how": "No Standard Form",
+     "deadlines": "None",
+     "restrictions": "None"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611199349100211",
+   "n_grants": 28,
+   "n_instate": 24,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "Meals On Wheels Atlanta",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "To Provide Financial Assistance For Exempt Activities",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "Atlanta Community Food Bank",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "To Provide Financial Assistance For Exempt Activities",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 50000,
+   "median_hit": 25000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     19
+    ],
+    [
+     "Milton",
+     1
+    ],
+    [
+     "Decatur",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.96,
+   "funds_you": [],
+   "score": 10.53
+  },
+  {
+   "ein": "581574705",
+   "name": "The Coca-Cola Foundation Inc",
+   "address": {
+    "line": "One Coca-Cola Plaza NW C/O Tax Dept",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30313"
+   },
+   "phone": "4046897363",
+   "website": "https://www.coca-colacompany.com/social/coca-",
+   "fmv_assets": 533903735,
+   "total_grants": 117155948,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "Carlos Pagoaga President",
+     "address": {
+      "line": "One Coca-Cola Plaza NW",
+      "city": "Atlanta",
+      "state": "GA",
+      "zip": "30313"
+     },
+     "phone": "",
+     "email": "cpagoaga@coca-cola.com",
+     "how": "https://www.coca-colacompany.com/social/coca-cola-foundation",
+     "deadlines": "None",
+     "restrictions": "Grants are made for education and youth development, environmental, e.g., water stewardship and community recycling programs, arts and culture, women's empowerment, and programs focused on community well-being. Funds are made available to organizations which the Internal Revenue Service has determined to be exempt from federal income taxation under Code Section 501(c)(3). NOTE TO THE READER: It is a guideline of The Coca-Cola Foundation to deny requests for contributions to individuals, religious organizations or religious endeavors, legislative or lobbying efforts, veterans organizations, charitable dinners, or fund raising events, and related advertising, magazines or articles in professional journals, and organizations which are not described in Section 501(c)(3) of the Internal Revenue Code."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202523049349100227",
+   "n_grants": 246,
+   "n_instate": 50,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK INC",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "Transforming the Neighbor Experience Campaign",
+     "amount": 250000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 250000,
+   "median_hit": 250000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     43
+    ],
+    [
+     "Decatur",
+     2
+    ],
+    [
+     "Morrow",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 10.4
+  },
+  {
+   "ein": "582483304",
+   "name": "NANCY FORSYTH NOBLIN FOUNDATION INC",
+   "address": {
+    "line": "PO BOX 889185",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "303561185"
+   },
+   "phone": "6784411045",
+   "website": "WWW.NOBLINFOUNDATION.COM",
+   "fmv_assets": 12082104,
+   "total_grants": 331000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "JONATHAN M SEIDEL",
+     "address": {
+      "line": "PO BOX 889185",
+      "city": "Atlanta",
+      "state": "GA",
+      "zip": "303561185"
+     },
+     "phone": "7707762881",
+     "email": "",
+     "how": "WRITTEN LETTER",
+     "deadlines": "NONE NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202523219349106617",
+   "n_grants": 36,
+   "n_instate": 34,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "MEALS BY GRACE",
+     "city": "Cumming",
+     "state": "GA",
+     "zip3": "300",
+     "status": "",
+     "purpose": "ASSISTANCE",
+     "amount": 7500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 7500,
+   "median_hit": 7500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     21
+    ],
+    [
+     "Roswell",
+     4
+    ],
+    [
+     "Dawsonville",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.97,
+   "funds_you": [],
+   "score": 10.26
+  },
+  {
+   "ein": "586038037",
+   "name": "THE RICH FOUNDATION INC",
+   "address": {
+    "line": "2870 PEACHTREE RD 1543",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30305"
+   },
+   "phone": "4042622266",
+   "website": "THERICHSFOUNDATION.ORG",
+   "fmv_assets": 58978230,
+   "total_grants": 2133995,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "JOHN L MONTAG THE RICH FOUNDATION",
+     "address": {
+      "line": "2870 PEACHTREE RD 1543",
+      "city": "Atlanta",
+      "state": "GA",
+      "zip": "30305"
+     },
+     "phone": "4042622266",
+     "email": "INFO@THERICHSFOUNDATION.ORG",
+     "how": "1) NORMAL APPLICATION 2) AUTOBIOGRAPHICAL SKETCH 3)LIST OF OTHER GRANTS RECEIVED 4) ESTIMATED EXPENSES",
+     "deadlines": "NONE",
+     "restrictions": "OUR ORGANIZATION'S CONTRIBUTIONS ARE DIRECTED TO INITIATIVES WITHIN THE METRO ATLANTA AREA."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202602309349100525",
+   "n_grants": 37,
+   "n_instate": 35,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "East Point",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "GENERAL OPERATIONS DUE TO SNAP CUTS",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 100000,
+   "median_hit": 100000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     32
+    ],
+    [
+     "East Point",
+     1
+    ],
+    [
+     "Clarkston",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 10.0
+  },
+  {
+   "ein": "586033190",
+   "name": "JAMES STARR MOORE MEMORIAL FOUNDATION",
+   "address": {
+    "line": "2675 PACES FERRY RD SE STE 150",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30339"
+   },
+   "phone": "4042330560",
+   "website": "N/A",
+   "fmv_assets": 14126803,
+   "total_grants": 512550,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "JAMES STARR MOORE FOUNDATION",
+     "address": {
+      "line": "2675 PACES FERRY RD SE STE 150",
+      "city": "Atlanta",
+      "state": "GA",
+      "zip": "30339"
+     },
+     "phone": "4042330560",
+     "email": "",
+     "how": "FORM OF APPLICATION: GRANT REQUEST LETTER REQUIRED APPLICATION MATERIALS: 501(C)(3) LETTER",
+     "deadlines": "SEPTEMBER 30TH",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611289349102251",
+   "n_grants": 44,
+   "n_instate": 28,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "MEALS ON WHEELS ATL",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "GENERAL OPERATIONS",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "GENERAL OPERATIONS",
+     "amount": 6000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 26000,
+   "median_hit": 20000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     25
+    ],
+    [
+     "Milledgeville",
+     1
+    ],
+    [
+     "Lagrange",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.89,
+   "funds_you": [],
+   "score": 9.99
+  },
+  {
+   "ein": "581410420",
+   "name": "THALIA & MICHAEL C CARLOS FOUNDATION INC",
+   "address": {
+    "line": "2002 SUMMIT BLVD NE 120",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30319"
+   },
+   "phone": "4048988209",
+   "website": "N/A",
+   "fmv_assets": 34321636,
+   "total_grants": 1950000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "ROBERT AROGETI TRUSTEE",
+     "address": {
+      "line": "2002 SUMMIT BLVD NE STE 120",
+      "city": "Atlanta",
+      "state": "GA",
+      "zip": "30319"
+     },
+     "phone": "4048988209",
+     "email": "",
+     "how": "LETTER DESCRIBING NEED",
+     "deadlines": "N/A",
+     "restrictions": "N/A"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202602239349100210",
+   "n_grants": 77,
+   "n_instate": 72,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 75000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 75000,
+   "median_hit": 75000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     63
+    ],
+    [
+     "Roswell",
+     2
+    ],
+    [
+     "Decatur",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.99,
+   "funds_you": [],
+   "score": 9.82
+  },
+  {
+   "ein": "581671255",
+   "name": "ROBERT & POLLY DUNN FOUNDATION INC",
+   "address": {
+    "line": "1116 BROOKHAVEN ROW NE",
+    "city": "Brookhaven",
+    "state": "GA",
+    "zip": "30319"
+   },
+   "phone": "4049326684",
+   "website": "N/A",
+   "fmv_assets": 18447237,
+   "total_grants": 630000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "ANDREW PERRY",
+     "address": {
+      "line": "932 BRAMBLE OAK CT",
+      "city": "Powder Springs",
+      "state": "GA",
+      "zip": "30127"
+     },
+     "phone": "4049326684",
+     "email": "",
+     "how": "LETTER OF REQUEST AND COPY OF IRS DETERMINATION LETTER OF TAX EXEMPT STATUS.",
+     "deadlines": "NONE",
+     "restrictions": "RESTRICTED TO THE SOUTHEASTERN UNITED STATES WITH AN EMPHASIS ON METROPOLITAN ATLANTA, GA"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611809349100306",
+   "n_grants": 38,
+   "n_instate": 30,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "FOOD BANK OF NORTHEAST GEORGIA",
+     "city": "Athens",
+     "state": "GA",
+     "zip3": "306",
+     "status": "PC",
+     "purpose": "OPERATIONS",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     13
+    ],
+    [
+     "Marietta",
+     4
+    ],
+    [
+     "Decatur",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.9,
+   "funds_you": [],
+   "score": 9.8
+  },
+  {
+   "ein": "586034766",
+   "name": "WALTON COUNTY FOUNDATION INC",
+   "address": {
+    "line": "PO BOX 945",
+    "city": "Monroe",
+    "state": "GA",
+    "zip": "30655"
+   },
+   "phone": "4042107326",
+   "website": "",
+   "fmv_assets": 9172411,
+   "total_grants": 496217,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "REBECCA DALLY",
+     "address": {
+      "line": "PO BOX 945",
+      "city": "Monroe",
+      "state": "GA",
+      "zip": "30655"
+     },
+     "phone": "7704643330",
+     "email": "REBECCA@RDALLYLAW.COM",
+     "how": "WRITTEN",
+     "deadlines": "NA",
+     "restrictions": "WALTON COUNTY GEORGIA ORGANIZATIONS"
+    }
+   ],
+   "tax_period_end": "2025-09-30",
+   "object_id": "202620899349100022",
+   "n_grants": 28,
+   "n_instate": 28,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "THE SHEPHERDS STAFF MINISTRIES",
+     "city": "Loganville",
+     "state": "GA",
+     "zip3": "300",
+     "status": "",
+     "purpose": "FOOD BANK",
+     "amount": 30000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 30000,
+   "median_hit": 30000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Monroe",
+     11
+    ],
+    [
+     "Loganville",
+     6
+    ],
+    [
+     "Social Circle",
+     6
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.48
+  },
+  {
+   "ein": "586065378",
+   "name": "BELOCO FOUNDATION INC",
+   "address": {
+    "line": "PO BOX 140",
+    "city": "Columbus",
+    "state": "GA",
+    "zip": "319020140"
+   },
+   "phone": "7065716040",
+   "website": "N/A",
+   "fmv_assets": 36670108,
+   "total_grants": 1458760,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "ELIZABETH C OGIE",
+     "address": {
+      "line": "PO BOX 23024",
+      "city": "Columbus",
+      "state": "GA",
+      "zip": "31902"
+     },
+     "phone": "7065716040",
+     "email": "",
+     "how": "WRITTEN TO INCLUDE THE PURPOSE OF UTILIZATION",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2025-06-30",
+   "object_id": "202533149349102188",
+   "n_grants": 23,
+   "n_instate": 16,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "FEEDING THE VALLEY",
+     "city": "Midland",
+     "state": "GA",
+     "zip3": "318",
+     "status": "",
+     "purpose": "GENERAL USE OF DONEE",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "THE FOOD MILL",
+     "city": "Columbus",
+     "state": "GA",
+     "zip3": "319",
+     "status": "",
+     "purpose": "GENERAL USE OF DONEE",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 100000,
+   "median_hit": 50000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Columbus",
+     11
+    ],
+    [
+     "Vienna",
+     1
+    ],
+    [
+     "Midland",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.12,
+   "funds_you": [],
+   "score": 9.0
+  },
+  {
+   "ein": "582115479",
+   "name": "LENORA AND ALFRED GLANCY FOUNDATION INC MARGARET SCOTT ALSTON & BIRD LLP",
+   "address": {
+    "line": "1201 WEST PEACHTREE STREET 4900",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "303093424"
+   },
+   "phone": "4048817962",
+   "website": "N/A",
+   "fmv_assets": 14370573,
+   "total_grants": 544000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "MARGARET SCOTT CO ALSTON BIRD",
+     "address": {
+      "line": "1201 WEST PEACHTREE STREET",
+      "city": "Atlanta",
+      "state": "GA",
+      "zip": "303093424"
+     },
+     "phone": "4048817962",
+     "email": "MARGARET.SCOTT@ALSTON.COM",
+     "how": "LETTER FORM. DESCRIBE PROJECT OR NEED FOR GRANT.",
+     "deadlines": "NONE.",
+     "restrictions": "GRANT APPLICANTS MUST BE PUBLIC CHARITIES."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202602099349100520",
+   "n_grants": 31,
+   "n_instate": 20,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "MADISON-MORGAN COMMUNITY FOOD PANTRY",
+     "city": "Madison",
+     "state": "GA",
+     "zip3": "306",
+     "status": "PC",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 10000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Madison",
+     12
+    ],
+    [
+     "Atlanta",
+     3
+    ],
+    [
+     "Alpharetta",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.0
+  },
+  {
+   "ein": "586032142",
+   "name": "BRADLEY-TURNER FOUNDATION INC",
+   "address": {
+    "line": "PO BOX 140",
+    "city": "Columbus",
+    "state": "GA",
+    "zip": "31902"
+   },
+   "phone": "7065716040",
+   "website": "N/A",
+   "fmv_assets": 218639775,
+   "total_grants": 10903637,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "PHYLLIS WAGNER EXECUTIVE SECRETARY",
+     "address": {
+      "line": "PO BOX 140",
+      "city": "Columbus",
+      "state": "GA",
+      "zip": "31902"
+     },
+     "phone": "7066443578",
+     "email": "PHYLLISWAGNER@SYNOVUS.COM",
+     "how": "APPLY IN LETTER FORM. INCLUDE COPY OF LATEST DETERMINATION LETTER. INCLUDE DETAILED DESCRIPTION OF FINANCIAL NEED AND EXEMPT FUNCTION TO BE PERFORMED.",
+     "deadlines": "NONE",
+     "restrictions": "NO RESTRICTIONS. HOWEVER, LOCAL AND REGIONAL CHARITIES PREFERRED."
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513049349100716",
+   "n_grants": 113,
+   "n_instate": 81,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "THE FOOD MILL",
+     "city": "Columbus",
+     "state": "GA",
+     "zip3": "319",
+     "status": "",
+     "purpose": "GENERAL AND OPERATING",
+     "amount": 35000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "NORTHWEST GEORGIA HUNGER MINISTRIES",
+     "city": "Rome",
+     "state": "GA",
+     "zip3": "301",
+     "status": "",
+     "purpose": "GENERAL AND OPERATING",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 45000,
+   "median_hit": 35000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Columbus",
+     61
+    ],
+    [
+     "Atlanta",
+     9
+    ],
+    [
+     "Macon",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.17,
+   "funds_you": [],
+   "score": 8.84
+  },
+  {
+   "ein": "581914058",
+   "name": "MCCLURE FAMILY FOUNDATION INC CO TRUIST FOUNDATIONS & ENDOWMENTS SPEC",
+   "address": {
+    "line": "303 PEACHTREE ST 33RD FLOOR",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30308"
+   },
+   "phone": "7065700033",
+   "website": "MCCLUREFAMILYFOUNDATION.ORG",
+   "fmv_assets": 17108408,
+   "total_grants": 701493,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "MR CHARLES MCCLURE",
+     "address": {
+      "line": "7200 LAYFIELD ROAD",
+      "city": "Upatoi",
+      "state": "GA",
+      "zip": "31829"
+     },
+     "phone": "7065700033",
+     "email": "",
+     "how": "ONE PAGE LETTER EXPLAINING THE ORGANIZATION , THE CHARITABLE PURPOSE AND HOW IT WILL UTILIZE THE FUNDS RECEIVED. ALSO, THE ORGANIZATION SHOULD SUBMIT A COPY OF THE DETERMINATION LETTER APPROVING IT AS A 501 (C) (3).",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202523199349100122",
+   "n_grants": 70,
+   "n_instate": 46,
+   "n_regions": 10,
+   "hits": [
+    {
+     "recipient": "FEEDING THE VALLEY",
+     "city": "Midland",
+     "state": "GA",
+     "zip3": "318",
+     "status": "",
+     "purpose": "CHARITY",
+     "amount": 2500,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "THE FOOD MILL",
+     "city": "Columbus",
+     "state": "GA",
+     "zip3": "319",
+     "status": "",
+     "purpose": "CHARITABLE",
+     "amount": 2000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 4500,
+   "median_hit": 2500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Columbus",
+     23
+    ],
+    [
+     "Canton",
+     7
+    ],
+    [
+     "Atlanta",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.41,
+   "funds_you": [],
+   "score": 8.81
+  },
+  {
+   "ein": "453167120",
+   "name": "THE TAYLOR FOUNDATION",
+   "address": {
+    "line": "PO BOX 569",
+    "city": "Mcdonough",
+    "state": "GA",
+    "zip": "30253"
+   },
+   "phone": "7709571866",
+   "website": "WWW.THETAYLORFOUNDATION.ORG",
+   "fmv_assets": 9630355,
+   "total_grants": 1230067,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "LYNETTE ALT MATHIS",
+     "address": {
+      "line": "1001 INDUSTRIAL PARKWAY",
+      "city": "Mcdonough",
+      "state": "GA",
+      "zip": "30253"
+     },
+     "phone": "7709571866",
+     "email": "",
+     "how": "ALL REQUESTS SHOULD BE SUBMITTED IN WRITING.",
+     "deadlines": "NONE.",
+     "restrictions": "NONE."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202622399349100612",
+   "n_grants": 84,
+   "n_instate": 40,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "JACKSON FOOD BANK",
+     "city": "Flovilla",
+     "state": "GA",
+     "zip3": "302",
+     "status": "PC",
+     "purpose": "GENERAL OPERATING FUNDS",
+     "amount": 7500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 7500,
+   "median_hit": 7500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Mcdonough",
+     12
+    ],
+    [
+     "Atlanta",
+     6
+    ],
+    [
+     "Stockbridge",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.93,
+   "funds_you": [],
+   "score": 8.58
+  },
+  {
+   "ein": "581693323",
+   "name": "COLONIAL FOUNDATION INC",
+   "address": {
+    "line": "PO BOX 576",
+    "city": "Savannah",
+    "state": "GA",
+    "zip": "314020576"
+   },
+   "phone": "9122361331",
+   "website": "N/A",
+   "fmv_assets": 22945457,
+   "total_grants": 2027562,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "CLAYTON D CHESHIRE",
+     "address": {
+      "line": "101 NORTH LATHROP AVENUE",
+      "city": "Savannah",
+      "state": "GA",
+      "zip": "31415"
+     },
+     "phone": "9122361331",
+     "email": "",
+     "how": "LETTER AND COPY OF IRS LETTER GRANTING TAX EXEMPT STATUS UNDER 501(C)(3)",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513199349100016",
+   "n_grants": 64,
+   "n_instate": 55,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "SECOND HARVEST OF COASTAL GEORGIA",
+     "city": "Savannah",
+     "state": "GA",
+     "zip3": "315",
+     "status": "",
+     "purpose": "CONTRIBUTION",
+     "amount": 141000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 141000,
+   "median_hit": 141000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Savannah",
+     43
+    ],
+    [
+     "Atlanta",
+     7
+    ],
+    [
+     "Lizella",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.16,
+   "funds_you": [],
+   "score": 8.3
+  },
+  {
+   "ein": "581674423",
+   "name": "FISHER-CRUM FOUNDATION",
+   "address": {
+    "line": "908 RIVER POINTE DRIVE",
+    "city": "Albany",
+    "state": "GA",
+    "zip": "31701"
+   },
+   "phone": "2298838395",
+   "website": "N/A",
+   "fmv_assets": 17326836,
+   "total_grants": 788500,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "SUZANNE CRUM HARPER",
+     "address": {
+      "line": "908 RIVER POINTE DRIVE",
+      "city": "Albany",
+      "state": "GA",
+      "zip": "31701"
+     },
+     "phone": "2298838395",
+     "email": "",
+     "how": "NONE",
+     "deadlines": "NONE",
+     "restrictions": "NONE"
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202642019349100214",
+   "n_grants": 77,
+   "n_instate": 56,
+   "n_regions": 12,
+   "hits": [
+    {
+     "recipient": "HELPING HANDS ENDING HUNGER",
+     "city": "Trion",
+     "state": "GA",
+     "zip3": "307",
+     "status": "PC",
+     "purpose": "CHARITABLE, EDUCATIONAL OR RELIGIOUS",
+     "amount": 1100,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 1100,
+   "median_hit": 1100,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Albany",
+     11
+    ],
+    [
+     "Atlanta",
+     8
+    ],
+    [
+     "Cartersville",
+     4
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.61,
+   "funds_you": [],
+   "score": 7.97
+  },
+  {
+   "ein": "581906094",
+   "name": "LEWIS HALL AND MILDRED SASSER SINGLETARY FOUNDATION INC",
+   "address": {
+    "line": "PO BOX 1177",
+    "city": "Thomasville",
+    "state": "GA",
+    "zip": "31799"
+   },
+   "phone": "2292261011",
+   "website": "N/A",
+   "fmv_assets": 41954853,
+   "total_grants": 1900000,
+   "preselected_only": false,
+   "apply": [
+    {
+     "contact": "LEWIS HALL AND MILDRED SASSER",
+     "address": {
+      "line": "PO BOX 1095 126 N BROAD ST",
+      "city": "Thomasville",
+      "state": "GA",
+      "zip": "31792"
+     },
+     "phone": "2292261011",
+     "email": "",
+     "how": "DETAILS AS TO USE AND PURPOSE OF GIFTS.",
+     "deadlines": "AUGUST 31, 2026",
+     "restrictions": "CONCENTRATION IN SOUTHWEST GEORGIA."
+    }
+   ],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601359349100135",
+   "n_grants": 37,
+   "n_instate": 34,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "SECOND HARVEST OF SOUTH GA",
+     "city": "Valdosta",
+     "state": "GA",
+     "zip3": "316",
+     "status": "PC",
+     "purpose": "GENERAL FUND",
+     "amount": 85000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "THOMAS COUNTY FOOD BANK",
+     "city": "Thomasville",
+     "state": "GA",
+     "zip3": "317",
+     "status": "PC",
+     "purpose": "GENERAL OPERATIONS",
+     "amount": 30000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 115000,
+   "median_hit": 85000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Thomasville",
+     25
+    ],
+    [
+     "Valdosta",
+     3
+    ],
+    [
+     "Lawrenceville",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.15,
+   "funds_you": [],
+   "score": 7.65
+  },
+  {
+   "ein": "582399946",
+   "name": "SOUTHERN COMPANY GAS CHARITABLE FOUNDATION INC",
+   "address": {
+    "line": "PO BOX 4569",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30302"
+   },
+   "phone": "4047834177",
+   "website": "WWW.SOUTHERNCOMPANYGAS.COM/WHO-WE-ARE/COMMUNITY-ENGAGEMENT.HTML",
+   "fmv_assets": 132886567,
+   "total_grants": 7696627,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202622529349101022",
+   "n_grants": 246,
+   "n_instate": 105,
+   "n_regions": 11,
+   "hits": [
+    {
+     "recipient": "GEORGIA MOUNTAIN FOOD BANK INC",
+     "city": "Gainesville",
+     "state": "GA",
+     "zip3": "305",
+     "status": "PC",
+     "purpose": "OPERATES A REGIONAL FOOD BANK DISTRIBUTING FOOD TO PARTNER AGENCIES",
+     "amount": 50000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "AMERICA'S SECOND HARVEST OF COASTAL GEORGIA INC",
+     "city": "Savannah",
+     "state": "GA",
+     "zip3": "314",
+     "status": "PC",
+     "purpose": "OPERATES A REGIONAL FOOD BANK DISTRIBUTING FOOD TO PARTNER AGENCIES",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "OPERATION LUNCHBOX INC",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "PROVIDES MEALS AND NUTRITION SUPPORT SERVICES",
+     "amount": 75000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "AMERICA'S SECOND HARVEST OF COASTAL GEORGIA INC",
+     "city": "Savannah",
+     "state": "GA",
+     "zip3": "314",
+     "status": "PC",
+     "purpose": "OPERATES A REGIONAL FOOD BANK DISTRIBUTING FOOD TO PARTNER AGENCIES",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK INC",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "OPERATES A FOOD BANK PROVIDING HUNGER RELIEF ACROSS THE REGION",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FOOD BANK OF NORTHEAST GEORGIA",
+     "city": "Athens",
+     "state": "GA",
+     "zip3": "306",
+     "status": "PC",
+     "purpose": "OPERATES A REGIONAL FOOD BANK DISTRIBUTING FOOD TO PARTNER AGENCIES",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "GOLDEN HARVEST FOOD BANK INC",
+     "city": "Augusta",
+     "state": "GA",
+     "zip3": "309",
+     "status": "PC",
+     "purpose": "OPERATES A REGIONAL FOOD BANK DISTRIBUTING FOOD TO PARTNER AGENCIES",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "GOLDEN HARVEST FOOD BANK INC",
+     "city": "Augusta",
+     "state": "GA",
+     "zip3": "309",
+     "status": "PC",
+     "purpose": "OPERATES A REGIONAL FOOD BANK DISTRIBUTING FOOD TO PARTNER AGENCIES",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "MIDDLE GEORGIA COMMUNITY FOOD BANK INC",
+     "city": "Macon",
+     "state": "GA",
+     "zip3": "312",
+     "status": "PC",
+     "purpose": "OPERATES A REGIONAL FOOD BANK DISTRIBUTING FOOD TO PARTNER AGENCIES",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SECOND HARVEST OF SOUTH GEORGIA INC",
+     "city": "Valdosta",
+     "state": "GA",
+     "zip3": "316",
+     "status": "PC",
+     "purpose": "OPERATES A REGIONAL FOOD BANK DISTRIBUTING FOOD TO PARTNER AGENCIES",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "SECOND HARVEST OF SOUTH GEORGIA INC",
+     "city": "Valdosta",
+     "state": "GA",
+     "zip3": "316",
+     "status": "PC",
+     "purpose": "OPERATES A REGIONAL FOOD BANK DISTRIBUTING FOOD TO PARTNER AGENCIES",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "THE GIVING KITCHEN",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "PROVIDES EMERGENCY ASSISTANCE TO FOOD SERVICE WORKERS IN CRISIS",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "BREAD BASKET MINISTERIES",
+     "city": "Fairburn",
+     "state": "GA",
+     "zip3": "302",
+     "status": "PC",
+     "purpose": "PROVIDES FOOD ASSISTANCE AND RELATED COMMUNITY SUPPORT SERVICES",
+     "amount": 1000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 13,
+   "n_strong": 13,
+   "hit_total": 651000,
+   "median_hit": 50000,
+   "n_near": 1,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     65
+    ],
+    [
+     "Athens",
+     4
+    ],
+    [
+     "Savannah",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.91,
+   "funds_you": [],
+   "score": 26.97
+  },
+  {
+   "ein": "821589307",
+   "name": "THE ROBERTS CHARITABLE FOUNDATION INC",
+   "address": {
+    "line": "821 DAWSONVILLE HWY STE 250 PMB 3",
+    "city": "Gainesville",
+    "state": "GA",
+    "zip": "30501"
+   },
+   "phone": "2128678000",
+   "website": "N/A",
+   "fmv_assets": 10508654,
+   "total_grants": 545535,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202640919349100114",
+   "n_grants": 38,
+   "n_instate": 22,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "FAMILY PROMISE OF HALL COUNTY",
+     "city": "Oakwood",
+     "state": "GA",
+     "zip3": "305",
+     "status": "PC",
+     "purpose": "FOOD & TOY OUTREACH FUND; GENERAL OPERATIONS",
+     "amount": 30000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "GEORGIA MOUNTAIN FOOD BANK",
+     "city": "Gainesville",
+     "state": "GA",
+     "zip3": "305",
+     "status": "PC",
+     "purpose": "FOOD BANK OPERATIONAL SUPPORT",
+     "amount": 5000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "GOOD SAMARITAN FOOD MINISTRY",
+     "city": "Gainesville",
+     "state": "GA",
+     "zip3": "305",
+     "status": "PC",
+     "purpose": "FOOD BANK OPERATIONAL SUPPORT",
+     "amount": 5000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "East Point",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "FOOD BANK OPERATIONS",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ST VINCENT DE PAUL SOCIETY",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "FOOD FOR THE POOR",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 5,
+   "n_strong": 5,
+   "hit_total": 50000,
+   "median_hit": 5000,
+   "n_near": 3,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Atlanta",
+     11
+    ],
+    [
+     "Gainesville",
+     6
+    ],
+    [
+     "East Point",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 25.7
+  },
+  {
+   "ein": "582359763",
+   "name": "THOMAS T AND BERNICE F IRVIN FOUNDATION INC",
+   "address": {
+    "line": "27 EAST TUGALO ST 101",
+    "city": "Toccoa",
+    "state": "GA",
+    "zip": "30577"
+   },
+   "phone": "7068866541",
+   "website": "N/A",
+   "fmv_assets": 4922100,
+   "total_grants": 190450,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202532409349101008",
+   "n_grants": 88,
+   "n_instate": 70,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "CLARKSVILLE SOUP KITCHEN",
+     "city": "Clarkesville",
+     "state": "GA",
+     "zip3": "305",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 1000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "GEORGIA MOUNTAIN FOOD BANK INC",
+     "city": "Gainesville",
+     "state": "GA",
+     "zip3": "305",
+     "status": "",
+     "purpose": "GENERAL OPERATING FUND",
+     "amount": 1000,
+     "w": 1.0,
+     "near": true
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 2000,
+   "median_hit": 1000,
+   "n_near": 2,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Toccoa",
+     20
+    ],
+    [
+     "Atlanta",
+     6
+    ],
+    [
+     "Mt Airy",
+     5
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.91,
+   "funds_you": [],
+   "score": 19.46
+  },
+  {
+   "ein": "383983213",
+   "name": "THE ARTHUR M BLANK FAMILY FOUNDATION",
+   "address": {
+    "line": "3223 HOWELL MILL ROAD NW",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30327"
+   },
+   "phone": "4703412110",
+   "website": "WWW.BLANKFOUNDATION.ORG",
+   "fmv_assets": 466260952,
+   "total_grants": 212098624,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202523189349102082",
+   "n_grants": 586,
+   "n_instate": 214,
+   "n_regions": 18,
+   "hits": [
+    {
+     "recipient": "GEORGIA MOUNTAIN FOOD BANK INC",
+     "city": "Gainesville",
+     "state": "GA",
+     "zip3": "305",
+     "status": "",
+     "purpose": "FEEDING KIDS",
+     "amount": 275000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "BOYS & GIRLS CLUB OF LANIER INC",
+     "city": "Gainesville",
+     "state": "GA",
+     "zip3": "305",
+     "status": "",
+     "purpose": "FALCONS FITNESS ZONE NUTRITIONAL AND FITNESS",
+     "amount": 200000,
+     "w": 0.5,
+     "near": true
+    },
+    {
+     "recipient": "MEALS ON WHEELS ATLANTA",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT",
+     "amount": 300000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FCS URBAN MINISTRIES INC",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "CARVER MARKET AND YOUTH NUTRITION EDUCATION SERIES",
+     "amount": 200000,
+     "w": 0.5,
+     "near": false
+    }
+   ],
+   "n_hits": 4,
+   "n_strong": 2,
+   "hit_total": 975000,
+   "median_hit": 275000,
+   "n_near": 2,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     129
+    ],
+    [
+     "Decatur",
+     6
+    ],
+    [
+     "Roswell",
+     5
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.91,
+   "funds_you": [],
+   "score": 18.63
+  },
+  {
+   "ein": "582611298",
+   "name": "HEATON MCBRAYER FOUNDATION INC",
+   "address": {
+    "line": "PO BOX 817",
+    "city": "Toccoa",
+    "state": "GA",
+    "zip": "30577"
+   },
+   "phone": "7062444646",
+   "website": "N/A",
+   "fmv_assets": 11134201,
+   "total_grants": 529800,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202642579349100404",
+   "n_grants": 35,
+   "n_instate": 29,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "FOOD BANK OF NE GEORGIA",
+     "city": "Clayton",
+     "state": "GA",
+     "zip3": "305",
+     "status": "PC",
+     "purpose": "GENERAL DONATION",
+     "amount": 10000,
+     "w": 1.0,
+     "near": true
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 10000,
+   "median_hit": 10000,
+   "n_near": 1,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Toccoa",
+     7
+    ],
+    [
+     "Atlanta",
+     4
+    ],
+    [
+     "Mt Airy",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.97,
+   "funds_you": [],
+   "score": 16.36
+  },
+  {
+   "ein": "202055555",
+   "name": "The Hughes Family Foundation Inc",
+   "address": {
+    "line": "5883 Union Church Rd",
+    "city": "Braselton",
+    "state": "GA",
+    "zip": "30517"
+   },
+   "phone": "4043759972",
+   "website": "N/A",
+   "fmv_assets": 1631338,
+   "total_grants": 287000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543219349102989",
+   "n_grants": 7,
+   "n_instate": 3,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "Georgia Mountain Food Bank",
+     "city": "Gainesville",
+     "state": "GA",
+     "zip3": "305",
+     "status": "",
+     "purpose": "Exempt Purpose Use",
+     "amount": 10000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "Barrow County Food Pantry",
+     "city": "Winder",
+     "state": "GA",
+     "zip3": "306",
+     "status": "",
+     "purpose": "Exempt Purpose Use",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 20000,
+   "median_hit": 10000,
+   "n_near": 1,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Winder",
+     2
+    ],
+    [
+     "Gainesville",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 16.3
+  },
+  {
+   "ein": "461571466",
+   "name": "EDWARD R FISHER CHARITABLE FNDN",
+   "address": {
+    "line": "2289 BROCKTON LOOP",
+    "city": "Jefferson",
+    "state": "GA",
+    "zip": "30549"
+   },
+   "phone": "4049139722",
+   "website": "NONE",
+   "fmv_assets": 25781608,
+   "total_grants": 817120,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533219349107133",
+   "n_grants": 69,
+   "n_instate": 34,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "MEALS ON WHEELS",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "UNRESTRICTED",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "UNRESTRICTED",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FOOD WELL ALLIANCE",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "UNRESTRICTED",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 3,
+   "hit_total": 20000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Atlanta",
+     22
+    ],
+    [
+     "Cumming",
+     2
+    ],
+    [
+     "Alpharetta",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.94,
+   "funds_you": [],
+   "score": 15.57
+  },
+  {
+   "ein": "261400615",
+   "name": "THE CATHERINE H AND JOHN H CRAWFORD III FAMILY FOUNDATION INC",
+   "address": {
+    "line": "229 PEACHTREE HILLS AVE 317",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30305"
+   },
+   "phone": "4042662237",
+   "website": "N/A",
+   "fmv_assets": 11681986,
+   "total_grants": 574840,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601949349100305",
+   "n_grants": 24,
+   "n_instate": 22,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "COMMUNITY PANTRY",
+     "city": "Clayton",
+     "state": "GA",
+     "zip3": "305",
+     "status": "PC",
+     "purpose": "UNRESTRICTED",
+     "amount": 15000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK INC",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "UNRESTRICTED",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 40000,
+   "median_hit": 25000,
+   "n_near": 1,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     13
+    ],
+    [
+     "Clayton",
+     3
+    ],
+    [
+     "Marietta",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 15.1
+  },
+  {
+   "ein": "237118609",
+   "name": "ST AND MARGARET D HARRIS FOUNDATION",
+   "address": {
+    "line": "4062 PEACHTREE RD A-213",
+    "city": "Brookhaven",
+    "state": "GA",
+    "zip": "30319"
+   },
+   "phone": "6787992975",
+   "website": "N/A",
+   "fmv_assets": 23948394,
+   "total_grants": 935725,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202600899349100505",
+   "n_grants": 45,
+   "n_instate": 33,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "GEORGIA MOUNTAIN FOOD BANK",
+     "city": "Gainesville",
+     "state": "GA",
+     "zip3": "305",
+     "status": "NC",
+     "purpose": "TO PROVIDE SUPPORT FOR OPERATIONS",
+     "amount": 25000,
+     "w": 1.0,
+     "near": true
+    },
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "East Point",
+     "state": "GA",
+     "zip3": "303",
+     "status": "NC",
+     "purpose": "TO PROVIDE FUNDING FOR OPERATIONS",
+     "amount": 1000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 26000,
+   "median_hit": 25000,
+   "n_near": 1,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     18
+    ],
+    [
+     "Gainesville",
+     4
+    ],
+    [
+     "Oakwood",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.97,
+   "funds_you": [],
+   "score": 14.79
+  },
+  {
+   "ein": "586252772",
+   "name": "RALPH & MARY CLEVELAND FOUNDATION",
+   "address": {
+    "line": "PO BOX 2958",
+    "city": "Gainesville",
+    "state": "GA",
+    "zip": "30503"
+   },
+   "phone": "7705345231",
+   "website": "N/A",
+   "fmv_assets": 4487986,
+   "total_grants": 202800,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611319349100136",
+   "n_grants": 46,
+   "n_instate": 30,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "GEORGIA MOUNTAIN FOOD BANK",
+     "city": "Gainesville",
+     "state": "GA",
+     "zip3": "305",
+     "status": "PC",
+     "purpose": "CHARITABLE",
+     "amount": 4300,
+     "w": 1.0,
+     "near": true
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 4300,
+   "median_hit": 4300,
+   "n_near": 1,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Gainesville",
+     21
+    ],
+    [
+     "Atlanta",
+     3
+    ],
+    [
+     "Oakwood",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 14.63
+  },
+  {
+   "ein": "862217839",
+   "name": "BEACH ROAD FOUNDATION INC",
+   "address": {
+    "line": "169 FOGGY BOTTOM FARM DRIVE",
+    "city": "Blairsville",
+    "state": "GA",
+    "zip": "30512"
+   },
+   "phone": "4703657893",
+   "website": "N/A",
+   "fmv_assets": 606027,
+   "total_grants": 1677500,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202523189349102232",
+   "n_grants": 30,
+   "n_instate": 9,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK INC",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "GENERAL FUND",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 100000,
+   "median_hit": 100000,
+   "n_near": 0,
+   "f_near": true,
+   "top_cities": [
+    [
+     "Atlanta",
+     2
+    ],
+    [
+     "Marietta",
+     2
+    ],
+    [
+     "Union City",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 13.0
+  },
+  {
+   "ein": "582413726",
+   "name": "BENJAMIN F BRADY CHARITABLE FOUNDAT",
+   "address": {
+    "line": "P O BOX 1200",
+    "city": "Cumming",
+    "state": "GA",
+    "zip": "30028"
+   },
+   "phone": "7708878529",
+   "website": "N/A",
+   "fmv_assets": 15189835,
+   "total_grants": 694830,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202601319349100615",
+   "n_grants": 34,
+   "n_instate": 30,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "UNSEEN HANDS MINISTRY",
+     "city": "Cumming",
+     "state": "GA",
+     "zip3": "300",
+     "status": "PC",
+     "purpose": "TO FUND FOOD BANK FOR NEEDY",
+     "amount": 75000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "MEALS BY GRACE",
+     "city": "Cumming",
+     "state": "GA",
+     "zip3": "300",
+     "status": "PC",
+     "purpose": "TO FUND OPERATIONS",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 85000,
+   "median_hit": 75000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Cumming",
+     17
+    ],
+    [
+     "Gainesville",
+     2
+    ],
+    [
+     "Rome",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 12.43
+  },
+  {
+   "ein": "200424251",
+   "name": "J C KENNEDY FOUNDATION INC",
+   "address": {
+    "line": "6205A PEACHTREE DUNWOODY RD",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30328"
+   },
+   "phone": "6786454659",
+   "website": "N/A",
+   "fmv_assets": 100851826,
+   "total_grants": 3848580,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543159349102389",
+   "n_grants": 77,
+   "n_instate": 36,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "East Point",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "MEALS ON WHEELS ATLANTA",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT",
+     "amount": 15000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "GOLDEN HARVEST FOOD BANK INC",
+     "city": "Augusta",
+     "state": "GA",
+     "zip3": "309",
+     "status": "",
+     "purpose": "GENERAL OPERATING SUPPORT",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 3,
+   "hit_total": 70000,
+   "median_hit": 15000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     24
+    ],
+    [
+     "Roswell",
+     3
+    ],
+    [
+     "Marietta",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 11.85
+  },
+  {
+   "ein": "133156497",
+   "name": "ASSURANT FOUNDATION",
+   "address": {
+    "line": "260 INTERSTATE N CIRCLE SE",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30339"
+   },
+   "phone": "7707631000",
+   "website": "N A",
+   "fmv_assets": 11606230,
+   "total_grants": 4007174,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202523039349100402",
+   "n_grants": 1719,
+   "n_instate": 160,
+   "n_regions": 11,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK INC",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "Financial Assistance",
+     "amount": 1300,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FEEDING GEORGIA INC",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "Financial Assistance",
+     "amount": 200,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "The Pantry at Hamilton Mill Inc",
+     "city": "Dacula",
+     "state": "GA",
+     "zip3": "300",
+     "status": "",
+     "purpose": "Financial Assistance",
+     "amount": 25,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 3,
+   "hit_total": 1525,
+   "median_hit": 200,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     57
+    ],
+    [
+     "Marietta",
+     14
+    ],
+    [
+     "Alpharetta",
+     6
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.96,
+   "funds_you": [],
+   "score": 11.53
+  },
+  {
+   "ein": "237122039",
+   "name": "J B FUQUA FOUNDATION INC",
+   "address": {
+    "line": "3350 RIVERWOOD PARKWAY 700",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30339"
+   },
+   "phone": "4048154515",
+   "website": "WWW.FUQUAFAMILYFOUNDATION.ORG",
+   "fmv_assets": 40738058,
+   "total_grants": 1816973,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533169349102723",
+   "n_grants": 33,
+   "n_instate": 30,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "OPEN HAND ATLANTA",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "THE HEALING POWER OF FOOD COMPREHENSIVE CAMPAIGN",
+     "amount": 150000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "East Point",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "TRANSFORMING THE NEIGHBOR EXPERIENCE CAMPAIGN",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 250000,
+   "median_hit": 150000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     23
+    ],
+    [
+     "East Point",
+     2
+    ],
+    [
+     "Decatur",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 11.4
+  },
+  {
+   "ein": "843298250",
+   "name": "LAKSHAN FOUNDATION INC",
+   "address": {
+    "line": "5990 NEELY CT",
+    "city": "Peachtree Corners",
+    "state": "GA",
+    "zip": "30092"
+   },
+   "phone": "7702468791",
+   "website": "N/A",
+   "fmv_assets": 59752676,
+   "total_grants": 2921718,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611349349101926",
+   "n_grants": 6,
+   "n_instate": 3,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "501(C)(3) SUPPORT",
+     "amount": 600000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 600000,
+   "median_hit": 600000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     2
+    ],
+    [
+     "Smyrna",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 10.78
+  },
+  {
+   "ein": "453956268",
+   "name": "THE GABY FAMILY FOUNDATION",
+   "address": {
+    "line": "3870 PEACHTREE INDUST BLVD 340-345",
+    "city": "Berkeley Lake",
+    "state": "GA",
+    "zip": "30096"
+   },
+   "phone": "7702329745",
+   "website": "N/A",
+   "fmv_assets": 90217672,
+   "total_grants": 3798461,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513219349107366",
+   "n_grants": 72,
+   "n_instate": 30,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "FOOD INSECURITY SUPPORT",
+     "amount": 25000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 25000,
+   "median_hit": 25000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     10
+    ],
+    [
+     "Alpharetta",
+     2
+    ],
+    [
+     "Clarkston",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.97,
+   "funds_you": [],
+   "score": 10.76
+  },
+  {
+   "ein": "822450365",
+   "name": "THE CHOATE FOUNDATION (FKA CHOATE BRIDGES FOUNDATION)",
+   "address": {
+    "line": "3438 PEACHTREE RD NE 800",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30326"
+   },
+   "phone": "7705590920",
+   "website": "N/A",
+   "fmv_assets": 64403047,
+   "total_grants": 2270500,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202533219349102078",
+   "n_grants": 75,
+   "n_instate": 42,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "MEALS ON WHEELS ATLANTA",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "HUMANITARIAN ASSISTANCE",
+     "amount": 35000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 35000,
+   "median_hit": 35000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     19
+    ],
+    [
+     "Cumming",
+     3
+    ],
+    [
+     "Gainesville",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.93,
+   "funds_you": [],
+   "score": 10.76
+  },
+  {
+   "ein": "832187779",
+   "name": "THE R HAROLD AND PATSY HARRISON FOUNDATION INC",
+   "address": {
+    "line": "4062 PEACHTREE RD NE PMB A-420",
+    "city": "Brookhaven",
+    "state": "GA",
+    "zip": "303193021"
+   },
+   "phone": "4049091215",
+   "website": "N/A",
+   "fmv_assets": 40881385,
+   "total_grants": 1950050,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543219349105764",
+   "n_grants": 8,
+   "n_instate": 8,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "East Point",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "UNRESTRICTED FOR FOOD SUPPORT",
+     "amount": 250000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 250000,
+   "median_hit": 250000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     4
+    ],
+    [
+     "East Point",
+     1
+    ],
+    [
+     "Statesboro",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 10.4
+  },
+  {
+   "ein": "821861105",
+   "name": "THE SKK FOUNDATION INC",
+   "address": {
+    "line": "6205 A-PEACHTREE DUNWOODY ROAD",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30328"
+   },
+   "phone": "6786454659",
+   "website": "N/A",
+   "fmv_assets": 48798632,
+   "total_grants": 2170000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202622339349100617",
+   "n_grants": 24,
+   "n_instate": 17,
+   "n_regions": 1,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "East Point",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "GENERAL OPERATING SUPPORT",
+     "amount": 140000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 140000,
+   "median_hit": 140000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     16
+    ],
+    [
+     "East Point",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 10.15
+  },
+  {
+   "ein": "581494832",
+   "name": "WATKINS CHRISTIAN FOUNDATION INC",
+   "address": {
+    "line": "3715 NORTHSIDE PKWY NW 300 500",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30327"
+   },
+   "phone": "4048728359",
+   "website": "N/A",
+   "fmv_assets": 279963135,
+   "total_grants": 6035000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202642369349100314",
+   "n_grants": 50,
+   "n_instate": 32,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "EPWORTH BY THE SEA",
+     "city": "St Simons Island",
+     "state": "GA",
+     "zip3": "315",
+     "status": "PC",
+     "purpose": "TO PURCHASE FOOD SERVICE EQUIPMENT AND REINFORCING CONCRETE PILINGS AT FISHING PIER.",
+     "amount": 60000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 60000,
+   "median_hit": 60000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Thomasville",
+     7
+    ],
+    [
+     "Atlanta",
+     5
+    ],
+    [
+     "Norcross",
+     3
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.69,
+   "funds_you": [],
+   "score": 10.03
+  },
+  {
+   "ein": "277044368",
+   "name": "MATTHEWS FAMILY FOUNDATION",
+   "address": {
+    "line": "1600 KENVIEW DRIVE",
+    "city": "Marietta",
+    "state": "GA",
+    "zip": "30060"
+   },
+   "phone": "7704227520",
+   "website": "N/A",
+   "fmv_assets": 12256774,
+   "total_grants": 517000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513219349104856",
+   "n_grants": 20,
+   "n_instate": 10,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "LIVE 2540",
+     "city": "Cartersville",
+     "state": "GA",
+     "zip3": "301",
+     "status": "",
+     "purpose": "RESTORE HEALTH AND RENEW HOPE FOR LIBERIA'S MOST VULNERABLE CHILDREN THROUGH MEDICAL CARE, FOOD, DISCIPLESHIP, AND EDUCATION",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 20000,
+   "median_hit": 20000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Macon",
+     1
+    ],
+    [
+     "Decatur",
+     1
+    ],
+    [
+     "Cartersville",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.8,
+   "funds_you": [],
+   "score": 10.0
+  },
+  {
+   "ein": "586212344",
+   "name": "FRASER-PARKER FOUNDATION",
+   "address": {
+    "line": "4401 NORTHSIDE PARKWAY SUITE 950",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30327"
+   },
+   "phone": "4046589066",
+   "website": "N/A",
+   "fmv_assets": 219060293,
+   "total_grants": 8344706,
+   "preselected_only": true,
+   "apply": [
+    {
+     "contact": "ERIN BOORN EXECUTIVE DIRECTOR",
+     "address": {
+      "line": "4401 NORTHSIDE PKWY STE 950",
+      "city": "Atlanta",
+      "state": "GA",
+      "zip": "30327"
+     },
+     "phone": "4046589066",
+     "email": "",
+     "how": "N/A",
+     "deadlines": "N/A",
+     "restrictions": "N/A"
+    }
+   ],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202503099349102100",
+   "n_grants": 40,
+   "n_instate": 37,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "East Point",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "TOWARD $19,300,000 CAPACITY EXPANSION CAMPAIGN",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 100000,
+   "median_hit": 100000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     26
+    ],
+    [
+     "Decatur",
+     2
+    ],
+    [
+     "East Point",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.97,
+   "funds_you": [],
+   "score": 9.89
+  },
+  {
+   "ein": "582140070",
+   "name": "THE RODERICK S FLOSSIE R& HELEN M GALLOWAY FOUNDATION",
+   "address": {
+    "line": "9040 ROSWELL RD 450",
+    "city": "Sandy Springs",
+    "state": "GA",
+    "zip": "30350"
+   },
+   "phone": "7708048044",
+   "website": "N/A",
+   "fmv_assets": 9226537,
+   "total_grants": 379000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-07-31",
+   "object_id": "202503469349100710",
+   "n_grants": 50,
+   "n_instate": 40,
+   "n_regions": 9,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "CHARITABLE CONTRIBUTION",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     26
+    ],
+    [
+     "Decatur",
+     2
+    ],
+    [
+     "Stonecrest",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.9,
+   "funds_you": [],
+   "score": 9.8
+  },
+  {
+   "ein": "582396542",
+   "name": "THE BILLI MARCUS FOUNDATION INC",
+   "address": {
+    "line": "1266 W PACES FERRY RD 615",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30327"
+   },
+   "phone": "4042407700",
+   "website": "N/A",
+   "fmv_assets": 35884132,
+   "total_grants": 2261125,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543169349101769",
+   "n_grants": 207,
+   "n_instate": 46,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "MEALS ON WHEELS",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "GENERAL OPERATIONS",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "GENERAL OPERATIONS",
+     "amount": 1000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 6000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     28
+    ],
+    [
+     "Sandy Springs",
+     3
+    ],
+    [
+     "Dunwoody",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.78
+  },
+  {
+   "ein": "474945600",
+   "name": "BLAKE FAMILY FOUNDATION INC",
+   "address": {
+    "line": "3406 OLD PLANTATION ROAD",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30327"
+   },
+   "phone": "6789814627",
+   "website": "N/A",
+   "fmv_assets": 102097182,
+   "total_grants": 5134159,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543039349101379",
+   "n_grants": 18,
+   "n_instate": 13,
+   "n_regions": 1,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "OPERATIONAL SUPPORT",
+     "amount": 51031,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 51031,
+   "median_hit": 51031,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     13
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.71
+  },
+  {
+   "ein": "452684840",
+   "name": "JOYCE FAMILY FOUNDATION INC",
+   "address": {
+    "line": "710 ATLANTA COUNTRY CLUB DRIVE SE",
+    "city": "Marietta",
+    "state": "GA",
+    "zip": "30067"
+   },
+   "phone": "4046426900",
+   "website": "N/A",
+   "fmv_assets": 15465807,
+   "total_grants": 290614,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202620339349100117",
+   "n_grants": 13,
+   "n_instate": 6,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "MUST MINISTRIES",
+     "city": "Smyrna",
+     "state": "GA",
+     "zip3": "300",
+     "status": "",
+     "purpose": "TO HELP HOMELESS AND STRUGGLING INDIVIDUALS AND FAMILIES WITH FOOD, CLOTHES, HOUSING AND EMPLOYMENT.",
+     "amount": 50000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 50000,
+   "median_hit": 50000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Tucker",
+     2
+    ],
+    [
+     "Atlanta",
+     2
+    ],
+    [
+     "Marietta",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.7
+  },
+  {
+   "ein": "266684203",
+   "name": "BEACON FOUNDATION CHARITABLE TRUST",
+   "address": {
+    "line": "P O BOX 2804",
+    "city": "Kennesaw",
+    "state": "GA",
+    "zip": "30156"
+   },
+   "phone": "2059148681",
+   "website": "N/A",
+   "fmv_assets": 19268975,
+   "total_grants": 915000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611319349101936",
+   "n_grants": 19,
+   "n_instate": 7,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "THE CENTER FOR CHILDREN & YOUNG ADULTS",
+     "city": "Marietta",
+     "state": "GA",
+     "zip3": "300",
+     "status": "PC",
+     "purpose": "SUPPORT FOR HOUSING, FOOD, AND PROGRAMS FOR AT RISK YOUTH.",
+     "amount": 40000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 40000,
+   "median_hit": 40000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Marietta",
+     3
+    ],
+    [
+     "Kennesaw",
+     2
+    ],
+    [
+     "Lawrenceville",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.6
+  },
+  {
+   "ein": "586263946",
+   "name": "THE GARY W ROLLINS FOUNDATION",
+   "address": {
+    "line": "1908 CLIFF VALLEY WAY",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30329"
+   },
+   "phone": "4044864668",
+   "website": "N/A",
+   "fmv_assets": 426749983,
+   "total_grants": 17655717,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513189349103006",
+   "n_grants": 30,
+   "n_instate": 18,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "MEALS ON WHEELS ATLANTA",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 100000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 100000,
+   "median_hit": 100000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     15
+    ],
+    [
+     "Decatur",
+     1
+    ],
+    [
+     "Smyrna",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.89,
+   "funds_you": [],
+   "score": 9.56
+  },
+  {
+   "ein": "586285853",
+   "name": "JIM COX JR FOUNDATION",
+   "address": {
+    "line": "3414 PEACHTREE RD NE STE 722",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30326"
+   },
+   "phone": "4048421870",
+   "website": "",
+   "fmv_assets": 30659547,
+   "total_grants": 1340500,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202622549349101007",
+   "n_grants": 36,
+   "n_instate": 13,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "SENIOR CITIZEN SERVICES",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "SUPPORT MEALS ON WHEELS",
+     "amount": 30000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 30000,
+   "median_hit": 30000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     8
+    ],
+    [
+     "Swainsboro",
+     2
+    ],
+    [
+     "Cumming",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.48
+  },
+  {
+   "ein": "650043921",
+   "name": "THE SCHOENBAUM FAMILY FOUNDATION INC",
+   "address": {
+    "line": "PO BOX 1349",
+    "city": "Alpharetta",
+    "state": "GA",
+    "zip": "30009"
+   },
+   "phone": "9413661708",
+   "website": "N/A",
+   "fmv_assets": 22092416,
+   "total_grants": 2029830,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543219349105039",
+   "n_grants": 31,
+   "n_instate": 4,
+   "n_regions": 1,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "SUPPORT FOR FAMILIES IN CRISIS",
+     "amount": 14000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 14000,
+   "median_hit": 14000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     4
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.15
+  },
+  {
+   "ein": "203149328",
+   "name": "THE ALICE AND NOAH N LANGDALE JR FOUNDATION INC",
+   "address": {
+    "line": "999 PEACHTREE ST NE",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30309"
+   },
+   "phone": "4042631724",
+   "website": "N/A",
+   "fmv_assets": 13331199,
+   "total_grants": 600000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202503219349101375",
+   "n_grants": 27,
+   "n_instate": 25,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "FOOD BANK OF NORTHEAST GEORGIA",
+     "city": "Athens",
+     "state": "GA",
+     "zip3": "306",
+     "status": "",
+     "purpose": "GENERAL WELFARE",
+     "amount": 20000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 20000,
+   "median_hit": 20000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Athens",
+     19
+    ],
+    [
+     "Atlanta",
+     3
+    ],
+    [
+     "Sandy Springs",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.96,
+   "funds_you": [],
+   "score": 9.14
+  },
+  {
+   "ein": "060956618",
+   "name": "THE WHITEHEAD CHARITABLE FOUNDATION",
+   "address": {
+    "line": "3330 CUMBERLAND BLVD SUITE 400",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30339"
+   },
+   "phone": "4044197117",
+   "website": "",
+   "fmv_assets": 6689522,
+   "total_grants": 262500,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-11-30",
+   "object_id": "202622139349100002",
+   "n_grants": 10,
+   "n_instate": 2,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "THE PLACE",
+     "city": "Cumming",
+     "state": "GA",
+     "zip3": "300",
+     "status": "",
+     "purpose": "TO FUND FOOD AND FINANCIAL ASSISTANCE IN THE COMMUNITY",
+     "amount": 12500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 12500,
+   "median_hit": 12500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     1
+    ],
+    [
+     "Cumming",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.1
+  },
+  {
+   "ein": "262792485",
+   "name": "HERTZ DOUGLAS J FAMILY FOUNDATION",
+   "address": {
+    "line": "5500 UNITED DR SE",
+    "city": "Smyrna",
+    "state": "GA",
+    "zip": "30082"
+   },
+   "phone": "6783052000",
+   "website": "N/A",
+   "fmv_assets": 27530874,
+   "total_grants": 2586067,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202523219349105662",
+   "n_grants": 74,
+   "n_instate": 60,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "East Point",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "GENERAL SUPPORT",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 10000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     49
+    ],
+    [
+     "Kennesaw",
+     1
+    ],
+    [
+     "Marietta",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.0
+  },
+  {
+   "ein": "581818739",
+   "name": "THE EDWARD COLSTON FOUNDATION INC",
+   "address": {
+    "line": "3747 PEACHTREE RD NE APT 2522",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30319"
+   },
+   "phone": "4045045416",
+   "website": "N/A",
+   "fmv_assets": 20806180,
+   "total_grants": 981280,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-12-31",
+   "object_id": "202611819349100321",
+   "n_grants": 55,
+   "n_instate": 26,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "East Point",
+     "state": "GA",
+     "zip3": "303",
+     "status": "PC",
+     "purpose": "GENERAL USE",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 10000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     17
+    ],
+    [
+     "Decatur",
+     2
+    ],
+    [
+     "Barnesville",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 9.0
+  },
+  {
+   "ein": "581705662",
+   "name": "GEORGIA REHABILITATION INSTITUTE INC",
+   "address": {
+    "line": "523 13TH ST",
+    "city": "Augusta",
+    "state": "GA",
+    "zip": "30901"
+   },
+   "phone": "7068238779",
+   "website": "GEORGIAREHABINSTITUTE.COM",
+   "fmv_assets": 31633162,
+   "total_grants": 851453,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-06-30",
+   "object_id": "202611339349102726",
+   "n_grants": 34,
+   "n_instate": 26,
+   "n_regions": 5,
+   "hits": [
+    {
+     "recipient": "GOLDEN HARVEST FOOD BANK",
+     "city": "Augusta",
+     "state": "GA",
+     "zip3": "309",
+     "status": "",
+     "purpose": "FOOD PANTRY CONTRIBUTION",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 10000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Augusta",
+     20
+    ],
+    [
+     "Evans",
+     1
+    ],
+    [
+     "Atlanta",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.96,
+   "funds_you": [],
+   "score": 8.85
+  },
+  {
+   "ein": "586044858",
+   "name": "LIVINGSTON FOUNDATION INC",
+   "address": {
+    "line": "171 17TH STREET 2100",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30363"
+   },
+   "phone": "4048738500",
+   "website": "N/A",
+   "fmv_assets": 11256989,
+   "total_grants": 572245,
+   "preselected_only": true,
+   "apply": [
+    {
+     "contact": "MR CHARLES L GREGORY LIVINGSTON FOU",
+     "address": {
+      "line": "171 17TH STREET SUITE 2100",
+      "city": "Atlanta",
+      "state": "GA",
+      "zip": "30363"
+     },
+     "phone": "4048738500",
+     "email": "",
+     "how": "THERE IS NO STANDARD FORM FOR MAKING AN APPLICATION.",
+     "deadlines": "APPLICATIONS FOR GRANTS MAY BE SUBMITTED AT ANY TIME.",
+     "restrictions": "THE FOUNDATION MAKES GRANTS ONLY TO EXEMPT CHARITABLE ORGANIZATIONS. IN AWARDING GRANTS, THE FOUNDATION GIVES PREFERENCE TO CHARITABLE ORGANIZATIONS IN GEORGIA, ESPECIALLY THOSE IN THE ATLANTA AREA."
+    }
+   ],
+   "tax_period_end": "2025-09-30",
+   "object_id": "202630439349100708",
+   "n_grants": 19,
+   "n_instate": 15,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "TO FIGHT HUNGER BY ENGAGING, EDUCATING AND EMPOWERING THE ATLANTA COMMUNITY.",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     10
+    ],
+    [
+     "Augusta",
+     1
+    ],
+    [
+     "Roswell",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 8.7
+  },
+  {
+   "ein": "582309103",
+   "name": "THE SHANNON FOUNDATION INC",
+   "address": {
+    "line": "102 COLONY PARK DR STE 200",
+    "city": "Cumming",
+    "state": "GA",
+    "zip": "300402772"
+   },
+   "phone": "7708860334",
+   "website": "N/A",
+   "fmv_assets": 8470624,
+   "total_grants": 241000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202511359349104711",
+   "n_grants": 31,
+   "n_instate": 11,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "FIGHT HUNGER",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     5
+    ],
+    [
+     "Decatur",
+     3
+    ],
+    [
+     "Chamblee",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 8.7
+  },
+  {
+   "ein": "581399036",
+   "name": "WILLIAM HOWARD FLOWERS JR FOUNDATION INC",
+   "address": {
+    "line": "PO BOX 6100",
+    "city": "Thomasville",
+    "state": "GA",
+    "zip": "317586100"
+   },
+   "phone": "2292255454",
+   "website": "N/A",
+   "fmv_assets": 95072004,
+   "total_grants": 5181400,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202512979349100901",
+   "n_grants": 204,
+   "n_instate": 86,
+   "n_regions": 6,
+   "hits": [
+    {
+     "recipient": "SECOND HARVEST OF SOUTH GEORGIA INC",
+     "city": "Valdosta",
+     "state": "GA",
+     "zip3": "316",
+     "status": "",
+     "purpose": "OPERATING EXPENSES",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "THOMAS COUNTY FOOD BANK",
+     "city": "Thomasville",
+     "state": "GA",
+     "zip3": "317",
+     "status": "",
+     "purpose": "OPERATING EXPENSES",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 2,
+   "n_strong": 2,
+   "hit_total": 20000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Thomasville",
+     54
+    ],
+    [
+     "Boston",
+     12
+    ],
+    [
+     "Atlanta",
+     9
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.14,
+   "funds_you": [],
+   "score": 8.36
+  },
+  {
+   "ein": "823593907",
+   "name": "D GAINES LANIER FAMILY FOUNDATION",
+   "address": {
+    "line": "3455 PEACHTREE ROAD NE 850",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "303263257"
+   },
+   "phone": "4049659300",
+   "website": "N/A",
+   "fmv_assets": 20939337,
+   "total_grants": 753137,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202513169349100211",
+   "n_grants": 19,
+   "n_instate": 6,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "NORTHWEST GA HUNGER MINISTRIES",
+     "city": "Rome",
+     "state": "GA",
+     "zip3": "301",
+     "status": "",
+     "purpose": "GENERAL PURPOSE",
+     "amount": 5000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 5000,
+   "median_hit": 5000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Rome",
+     4
+    ],
+    [
+     "Atlanta",
+     1
+    ],
+    [
+     "Manchester",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.83,
+   "funds_you": [],
+   "score": 8.03
+  },
+  {
+   "ein": "923527388",
+   "name": "EZBO Foundation Inc",
+   "address": {
+    "line": "765 Marlay Lane SW",
+    "city": "Powder Springs",
+    "state": "GA",
+    "zip": "30127"
+   },
+   "phone": "6126562828",
+   "website": "N/A",
+   "fmv_assets": 10243848,
+   "total_grants": 391000,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2025-10-31",
+   "object_id": "202630569349100513",
+   "n_grants": 12,
+   "n_instate": 7,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "Bagel Rescue",
+     "city": "Brookhaven",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "To fund ProjectDASH food deliveries to agencies providing food support.",
+     "amount": 4000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 4000,
+   "median_hit": 4000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     4
+    ],
+    [
+     "Brookhaven",
+     1
+    ],
+    [
+     "Peachtree Corners",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.86,
+   "funds_you": [],
+   "score": 8.03
+  },
+  {
+   "ein": "581451650",
+   "name": "BARBARA AND SANFORD H ORKIN FAMILY FOUNDATION INC",
+   "address": {
+    "line": "4865 OLDE TOWNE PARKWAY SUITE 100",
+    "city": "Marietta",
+    "state": "GA",
+    "zip": "30068"
+   },
+   "phone": "4042312333",
+   "website": "N/A",
+   "fmv_assets": 25863953,
+   "total_grants": 1918625,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202523219349101117",
+   "n_grants": 13,
+   "n_instate": 10,
+   "n_regions": 2,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK HUNGER WALK",
+     "city": "East Point",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "COMMUNITY WELLNESS",
+     "amount": 500,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 500,
+   "median_hit": 500,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     7
+    ],
+    [
+     "Buckhead",
+     1
+    ],
+    [
+     "East Point",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 1.0,
+   "funds_you": [],
+   "score": 7.7
+  },
+  {
+   "ein": "581890927",
+   "name": "THE ZEIST FOUNDATION INC",
+   "address": {
+    "line": "3715 NORTHSIDE PKWY NW 3-195",
+    "city": "Atlanta",
+    "state": "GA",
+    "zip": "30327"
+   },
+   "phone": "4049493160",
+   "website": "ZEISTFOUNDATION.ORG",
+   "fmv_assets": 252382526,
+   "total_grants": 129,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202541399349100039",
+   "n_grants": 89,
+   "n_instate": 87,
+   "n_regions": 4,
+   "hits": [
+    {
+     "recipient": "ATLANTA COMMUNITY FOOD BANK",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "HEALTH & HUMAN SERVICES",
+     "amount": 1,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "FOOD WELL ALLIANCE",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "HEALTH & HUMAN SERVICES",
+     "amount": 1,
+     "w": 1.0,
+     "near": false
+    },
+    {
+     "recipient": "GEORGIA FOODBANK ASSOCIATION",
+     "city": "Atlanta",
+     "state": "GA",
+     "zip3": "303",
+     "status": "",
+     "purpose": "HEALTH & HUMAN SERVICES",
+     "amount": 1,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 3,
+   "n_strong": 3,
+   "hit_total": 3,
+   "median_hit": 1,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Atlanta",
+     78
+    ],
+    [
+     "Decatur",
+     2
+    ],
+    [
+     "East Point",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.99,
+   "funds_you": [],
+   "score": 7.56
+  },
+  {
+   "ein": "582399470",
+   "name": "WL Amos Sr Foundation Inc co William L Amos III",
+   "address": {
+    "line": "7100 Stillwater Drive",
+    "city": "Columbus",
+    "state": "GA",
+    "zip": "31904"
+   },
+   "phone": "7064645103",
+   "website": "N/A",
+   "fmv_assets": 54800879,
+   "total_grants": 3159360,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202543219349102219",
+   "n_grants": 52,
+   "n_instate": 29,
+   "n_regions": 7,
+   "hits": [
+    {
+     "recipient": "Coastal Harvest",
+     "city": "Columbus",
+     "state": "GA",
+     "zip3": "319",
+     "status": "",
+     "purpose": "General Support",
+     "amount": 10000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 10000,
+   "median_hit": 10000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Columbus",
+     11
+    ],
+    [
+     "Macon",
+     10
+    ],
+    [
+     "Savannah",
+     2
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.14,
+   "funds_you": [],
+   "score": 7.05
+  },
+  {
+   "ein": "582398209",
+   "name": "COURTNEY KNIGHT GAINES FOUNDATION",
+   "address": {
+    "line": "15 LAKE STREET 210",
+    "city": "Savannah",
+    "state": "GA",
+    "zip": "31411"
+   },
+   "phone": "9125981771",
+   "website": "N/A",
+   "fmv_assets": 11225941,
+   "total_grants": 731800,
+   "preselected_only": true,
+   "apply": [],
+   "tax_period_end": "2024-12-31",
+   "object_id": "202522039349101102",
+   "n_grants": 28,
+   "n_instate": 20,
+   "n_regions": 3,
+   "hits": [
+    {
+     "recipient": "SECOND HARVEST OF COASTAL GA",
+     "city": "Savannah",
+     "state": "GA",
+     "zip3": "314",
+     "status": "",
+     "purpose": "UNRESTRICTED CHARITABLE GRANT",
+     "amount": 360000,
+     "w": 1.0,
+     "near": false
+    }
+   ],
+   "n_hits": 1,
+   "n_strong": 1,
+   "hit_total": 360000,
+   "median_hit": 360000,
+   "n_near": 0,
+   "f_near": false,
+   "top_cities": [
+    [
+     "Savannah",
+     17
+    ],
+    [
+     "Atlanta",
+     2
+    ],
+    [
+     "Pembroke",
+     1
+    ]
+   ],
+   "concentrated_elsewhere": false,
+   "region_share": 0.1,
+   "funds_you": [],
+   "score": 6.96
+  }
+ ],
+ "federal": [],
+ "federal_total": 0
+}
