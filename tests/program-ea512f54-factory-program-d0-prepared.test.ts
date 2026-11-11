@@ -14,8 +14,10 @@ import {
   PreparedOptionError,
   advancePreparedOptions,
   countsAsIntegration,
+  gatesOfRequirement,
   handOffToFactory,
   handoffCausedResumption,
+  preparedOptionFromRequirement,
   resumeOf,
   preparedOptions,
   recordPreparedOption,
@@ -28,6 +30,7 @@ import { listEvents } from '../server/repos/events.ts';
 import { ensureCampaign, patchCampaign } from '../server/repos/factory.ts';
 import { enqueueWork } from '../server/repos/workQueue.ts';
 import { getDb } from '../server/db/database.ts';
+import type { ProgramRequirement } from '../server/domain/factoryProgram.ts';
 
 const method = (over: Record<string, unknown> = {}) => ({ name: 'tool-a', kind: 'OPEN_SOURCE_TOOL', gates: [], effort: 2, sources: ['https://example.test/a'], ...over });
 const valid = (over: Record<string, unknown> = {}) => ({
@@ -271,5 +274,83 @@ describe('a prepared option is never an integration', () => {
       expect(r.resumed).toBe(false);
       expect(r.completedAfter).toEqual([]);
     });
+  });
+});
+
+/*
+ * Finding F-PROGRAM-OPTION-NO-COMPARISON-NO-GATES: on the production path every
+ * option comes from `preparedOptionFromRequirement`, so the comparison and the
+ * gates must hold on what that producer emits, not only on hand-built options.
+ */
+describe('the production producer compares access methods and holds gated routes', () => {
+  const requirement = (over: Partial<ProgramRequirement> = {}): ProgramRequirement => ({
+    key: 'ACQ-21-5', kind: 'CAPABILITY', title: 'Browser routines as versioned reusable capabilities', subsystem: 'browser-operator',
+    source: ['S-0300'], quote: null,
+    behavior: 'Browser routines as versioned reusable capabilities. Every quoted clause holds on production records.',
+    inputs: [], outputs: [],
+    constraints: ['Extend the existing owner; no duplicate scheduler, store or authority path (§10.3, §20.4).'],
+    dependsOn: [], interactsWith: [],
+    existing: { paths: ['.github/workflows/browser.yml'], evidence: 'browser workflow exists.' },
+    missingWork: 'Authorized bounded workflows with selectors, checks, secret-free logs and idempotency.',
+    paths: ['server/services/sources/browser/**'],
+    verification: [], ambiguities: [], prepared: true,
+    ...over,
+  });
+
+  it('a requirement with existing code and missing work compares reuse against writing it, cheapest first', () => {
+    const o = preparedOptionFromRequirement(requirement({ missingWork: 'Bounded workflows with selectors and checks.' }));
+    expect(o.methods).toHaveLength(2);
+    expect(o.methods.map((m) => m.effort)).toEqual([1, 2]);
+    const r = resolveNeed(o, { requirementId: 'ACQ-21-5', goal: 'g' });
+    expect(r.permitted).toHaveLength(2);
+    expect(r.minimum?.name).toContain('reusing the existing code');
+    expect(r.needsPerson).toEqual([]);
+    expect(o.methods.every((m) => m.effort < COSTLY_EFFORT)).toBe(true);
+  });
+
+  it('an authorized-account workflow is gated: production routes wait for a person, the internal preparation is handed off', () => {
+    const o = preparedOptionFromRequirement(requirement());
+    expect(gatesOfRequirement(requirement()).detected).toContain('PERMISSION');
+    const production = o.methods.filter((m) => m.gates.length > 0);
+    const internal = o.methods.filter((m) => m.gates.length === 0);
+    expect(production.length).toBeGreaterThanOrEqual(2);
+    expect(internal).toHaveLength(1);
+    expect(internal[0]!.name).toContain('internal preparation only');
+
+    const r = resolveNeed(o, { requirementId: 'ACQ-21-5', goal: 'g' });
+    expect(r.permitted.map((m) => m.name)).toEqual([internal[0]!.name]);
+    expect(r.minimum?.name).toBe(internal[0]!.name);
+    expect(r.gated.length).toBe(production.length);
+    expect(r.needsPerson).toContain('PERMISSION');
+    expect(r.handoff?.objective).toContain('internal preparation only');
+    expect(countsAsIntegration(o)).toBe(false);
+
+    // Once the owner opens every gate, the cheapest production route is the minimum again.
+    const opened = resolveNeed(o, { requirementId: 'ACQ-21-5', goal: 'g', openGates: r.needsPerson });
+    expect(opened.needsPerson).toEqual([]);
+    expect(opened.minimum?.name).toContain('reusing the existing code');
+  });
+
+  it('reads gates the map declares as `Gate <NAME>: why` constraints, even when the words name none', () => {
+    const plain = requirement({ title: 'Read listings', behavior: 'Read listings.', missingWork: 'An adapter.', existing: null, paths: ['server/a.ts'] });
+    expect(gatesOfRequirement(plain).gates).toEqual([]);
+    expect(preparedOptionFromRequirement(plain).methods).toHaveLength(1);
+
+    const declared = { ...plain, constraints: [...plain.constraints, 'Gate CREDENTIALS: an account only the owner holds', 'gate spend: a paid feed'] };
+    const g = gatesOfRequirement(declared);
+    expect(g.declared).toEqual(['CREDENTIALS', 'SPEND']);
+    expect(g.gates).toEqual(['CREDENTIALS', 'SPEND']);
+    const r = resolveNeed(preparedOptionFromRequirement(declared), { requirementId: 'ACQ-21-5', goal: 'g' });
+    expect([...r.needsPerson].sort()).toEqual(['CREDENTIALS', 'SPEND']);
+    expect(r.permitted).toHaveLength(1);
+    expect(r.gated).toHaveLength(1);
+  });
+
+  it('detects each gate from the requirement\'s own words', () => {
+    const words = (missingWork: string) => gatesOfRequirement({ title: 't', behavior: 'b', missingWork, constraints: [] }).detected;
+    expect(words('Sign in to the portal and read the queue.')).toContain('CREDENTIALS');
+    expect(words('Role specs; no unapproved hiring.')).toEqual(expect.arrayContaining(['PERMISSION', 'SPEND']));
+    expect(words('Draft the supplier agreement.')).toEqual(['CONTRACT']);
+    expect(words('Summarize public filings into rows.')).toEqual([]);
   });
 });

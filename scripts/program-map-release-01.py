@@ -19,9 +19,19 @@ items = json.load(open(sys.argv[1], encoding='utf-8'))
 # Section heading prefix -> requirement definition.
 #   key, subsystem, priority, prepared, existing paths (or []), evidence, work paths, missing work, depends
 S = {}
-def r(prefix, key, title, subsystem, priority, paths, missing, existing=None, evidence='', deps=(), prepared=False, behavior=None):
+#   gates: what crossing the requirement in production needs beyond Brain's own
+#   authority — {'CREDENTIALS'|'CONTRACT'|'SPEND'|'PERMISSION': why}. Written as
+#   `Gate <NAME>: <why>` constraints, which the prepared-option producer
+#   (server/services/capability/prepared.ts) reads so the option it records
+#   holds the production routes behind those gates and hands off only the
+#   internally authorized preparation (GOV-22-2).
+GATE_NAMES = ('CREDENTIALS', 'CONTRACT', 'SPEND', 'PERMISSION')
+def r(prefix, key, title, subsystem, priority, paths, missing, existing=None, evidence='', deps=(), prepared=False, behavior=None, gates=None):
+    for g in (gates or {}):
+        if g not in GATE_NAMES: raise SystemExit(f'{key}: unknown gate {g}')
     S[prefix] = dict(key=key, title=title, subsystem=subsystem, priority=priority, paths=list(paths), missing=missing,
-                     existing=list(existing or []), evidence=evidence, deps=list(deps), prepared=prepared, behavior=behavior)
+                     existing=list(existing or []), evidence=evidence, deps=list(deps), prepared=prepared, behavior=behavior,
+                     gates=dict(gates or {}))
 
 FP = ['server/services/factory/program/**', 'server/domain/factoryProgram.ts']
 PROGRAM_EVIDENCE = ('§96 programs (verbatim source, omission-refusing map, dependency-ordered campaigns, production-verified status) '
@@ -219,7 +229,9 @@ r('21.3', 'ACQ-21-3', 'Discover large existing corpora (Common Crawl, EDGAR, Dat
 r('21.4', 'ACQ-21-4', 'Discovery → access → code ingestion → parsing → provenance → relationships → ranking → maintenance', 'acquisition', 'P1', ['server/services/feeds/**'],
   'Checkpointed resumable ingestion with hashes; fine-grained provenance; connector health distinguishing outage, broken parser and revoked permission, routed to Factory.', deps=['ACQ-21-3', 'ALGO-16-1'])
 r('21.5', 'ACQ-21-5', 'Browser routines as versioned reusable capabilities', 'browser-operator', 'P3', ['server/services/sources/browser/**'],
-  'Authorized bounded workflows with selectors, checks, secret-free logs and idempotency.', prepared=True, existing=['.github/workflows/browser.yml'], evidence='browser workflow exists.')
+  'Authorized bounded workflows with selectors, checks, secret-free logs and idempotency.', prepared=True, existing=['.github/workflows/browser.yml'], evidence='browser workflow exists.',
+  gates={'CREDENTIALS': 'a browser workflow runs under an account only the owner can sign in to',
+         'PERMISSION': 'each site and workflow must be authorized before it runs in production'})
 r('21.6', 'AUTH-21-6', 'Read-only learning never authorizes consequential agency', 'authority', 'P0', ['server/services/cash/authority.ts'],
   'Enforce on the action path; routine research continues when a login or payment needs the owner.', deps=['AUTH-20-3'])
 r('21.7', 'CAP-21-7', 'Resource-aware acquisition measurement; scale only the constrained component', 'capacity', 'P1', ['server/services/feeds/**'],
@@ -233,7 +245,8 @@ r('24.', 'VENT-24', 'General enterprise formation, product creation and competit
   'Open-ended venture objectives via the same goal and possibility store.', prepared=True)
 r('24.1', 'VENT-24-1', 'Reconstruct the competitive system of an unfamiliar industry', 'ventures', 'P3', ['server/services/manufacturing/**'], 'Evidence-sourced mechanism map; profit pools; rent vs own.', prepared=True, deps=['VENT-24'])
 r('24.2', 'VENT-24-2', 'Construct a venture path and revisit it as capital changes', 'ventures', 'P3', ['server/services/manufacturing/**'], 'Dependency-ordered venture graph; automatic reconsideration.', prepared=True, deps=['VENT-24-1'])
-r('24.3', 'VENT-24-3', 'Workforce and organization formation (later-stage)', 'ventures', 'P3', ['server/services/labor/**'], 'Role specs, cost models, recruitment prep; no unapproved hiring.', prepared=True, deps=['VENT-24-2'])
+r('24.3', 'VENT-24-3', 'Workforce and organization formation (later-stage)', 'ventures', 'P3', ['server/services/labor/**'], 'Role specs, cost models, recruitment prep; no unapproved hiring.', prepared=True, deps=['VENT-24-2'],
+  gates={'SPEND': 'hiring commits money', 'CONTRACT': 'an engagement is a contract', 'PERMISSION': 'no hiring without the owner approving it'})
 r('24.4', 'ACC-24-4', 'Venture acceptance demonstrations', 'acceptance', 'P3', ['server/services/manufacturing/**'], 'Demonstrate all five.', prepared=True, deps=['VENT-24-3'])
 r('25.', 'KNOW-25', 'Knowledge velocity: time from unknown to usable decision', 'knowledge-velocity', 'P1', ['server/services/feeds/**'], 'Measure time-to-usable-knowledge per unknown.', deps=['ACQ-21-4'])
 r('25.1', 'KNOW-25-1', 'Expandable ingestion-and-understanding processing graph', 'knowledge-velocity', 'P1', ['server/services/feeds/**', 'server/services/knowledge/**'],
@@ -287,7 +300,9 @@ r('29.2', 'LIFE-29-2', 'Revenue realization, delivery evidence and aftercare rel
 r('29.3', 'LIFE-29-3', 'Exceptions as first-class processes with remedies and a rehearsed failure path', 'transaction-lifecycle', 'P1', ['server/services/cash/lifecycle.ts'],
   'Detect scope change, missed date, cancel, payment failure, dispute; quantify; select remedy within authority; demonstrate end to end.', deps=['LIFE-29-2'])
 r('30.', 'INST-30', 'Derive and manage institutional machinery for an enterprise', 'ventures', 'P3', ['server/services/manufacturing/**'],
-  'Represent entities, roles, authority, permits, accounts, taxes, IP, obligations; plan and cost formation without creating entities.', prepared=True)
+  'Represent entities, roles, authority, permits, accounts, taxes, IP, obligations; plan and cost formation without creating entities.', prepared=True,
+  gates={'SPEND': 'forming an entity or filing costs money', 'CONTRACT': 'formation documents bind the owner',
+         'PERMISSION': 'creating an entity, permit or account needs the owner'})
 r('31.', 'CP-31', 'Evidence-backed counterparty model: listing → willingness → capability → quote → reserved → contracted → performed', 'counterparties', 'P1', ['server/services/cash/providers/**', 'server/services/labor/**'],
   'Primary and alternative fulfillers with verified vs pending facts; no double-booking; transfer after failure.', existing=['server/services/cash/providers/**'], evidence='cash providers.', deps=['LIFE-29-1'])
 r('32.', 'MEM-32', 'Decision history with alternatives, evidence, predictions and versioned owner policy', 'memory', 'P2', ['server/services/goals/decide.ts'],
@@ -409,7 +424,8 @@ for d in reqs:
     out['requirements'].append({
         'key': key, 'kind': 'CAPABILITY', 'title': title[:160], 'subsystem': d['subsystem'], 'source': srcs, 'quote': None,
         'behavior': behavior, 'inputs': [], 'outputs': [], 'constraints': ['Extend the existing owner; no duplicate scheduler, store or authority path (§10.3, §20.4).',
-                                                                       'No category, industry or example is a whitelist (R01-A1, §18.1).'],
+                                                                       'No category, industry or example is a whitelist (R01-A1, §18.1).']
+                                                                      + [f'Gate {g}: {why}' for g, why in d.get('gates', {}).items()],
         'dependsOn': [x for x in deps], 'interactsWith': [], 'existing': existing, 'missingWork': missing,
         'paths': d['paths'], 'verification': [{'kind': 'PROBE', 'probe': f'r01.{key.lower()}', 'statement': f'{key} demonstrated on production rows'}],
         'ambiguities': amb, 'priority': d['priority'], **({'prepared': True} if d['prepared'] else {}),

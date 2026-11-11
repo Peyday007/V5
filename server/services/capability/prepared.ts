@@ -798,48 +798,102 @@ export async function identifyPreparedDependencies(): Promise<{ identified: numb
 export const PROGRAM_MAP_ORIGIN = 'PROGRAM_MAP';
 
 /**
+ * The gates a program requirement says crossing it needs. Two readings, both
+ * from the requirement's own fields and neither a whitelist of categories:
+ *  - declared: a constraint of the form `Gate CREDENTIALS: <why>` (the map
+ *    writes these; a person adds one by amendment);
+ *  - detected: the requirement's own words name a credential, a permission, a
+ *    contract or spending ("authorized account", "login", "payment", "hiring"…).
+ * A gate detected by mistake costs one line in the end report and never stops
+ * the internal work; a gate missed would let Brain cross one, so the reading
+ * errs toward naming it.
+ */
+const GATE_WORDS: Record<Gate, RegExp> = {
+  CREDENTIALS: /\b(credentials?|log-?ins?|log in|sign[- ]?ins?|passwords?|api keys?|access tokens?|authenticated|accounts?)\b/i,
+  PERMISSION: /\b(authori[sz](ed|ation|e)|unauthori[sz]ed|permissions?|permits?|approv(al|ed|e)|unapproved|consent)\b/i,
+  CONTRACT: /\b(contracts?|contracted|contractual|agreements?|terms of service|licen[cs](e|es|ing))\b/i,
+  SPEND: /\b(pay|payments?|paid|purchases?|spend(ing)?|hiring|hire|subscriptions?|fees?)\b/i,
+};
+const DECLARED_GATE = /^\s*gate\s+(CREDENTIALS|CONTRACT|SPEND|PERMISSION)\b/i;
+
+export function gatesOfRequirement(r: Pick<ProgramRequirement, 'title' | 'behavior' | 'missingWork' | 'constraints'>): { gates: Gate[]; declared: Gate[]; detected: Gate[] } {
+  const declared: Gate[] = [];
+  const rest: string[] = [];
+  for (const c of r.constraints ?? []) {
+    const m = DECLARED_GATE.exec(c);
+    if (m) declared.push(m[1]!.toUpperCase() as Gate);
+    else rest.push(c);
+  }
+  const words = [r.title, r.behavior, r.missingWork, ...rest].join('\n');
+  const detected = GATES.filter((g) => GATE_WORDS[g].test(words));
+  const gates = GATES.filter((g) => declared.includes(g) || detected.includes(g));
+  return { gates, declared: [...new Set(declared)], detected };
+}
+
+/**
  * A program requirement marked `prepared` is the approved specification's own
  * record of a dormant capability: specified and kept ready, not yet needed
  * (§97). Its preparation is read from the requirement's fields and nothing is
  * invented beyond them:
  *  - feasibility: FEASIBLE when the map names existing code as evidence,
  *    UNCERTAIN otherwise, with the requirement's missing work as the note;
- *  - the tool inventory is the one route Brain already owns — the existing
- *    Factory, over the paths the map declares — with no gate, because the map
- *    records none (a person adds one by amendment), and effort 1 when existing
- *    code is reused, 2 when it must be written. It is never at COSTLY_EFFORT:
- *    nothing is built to keep it warm;
+ *  - the tool inventory compares every route the requirement's own fields
+ *    support, all through the existing Factory: reusing the existing code it
+ *    names (effort 1), writing the missing work over its declared paths
+ *    (effort 2), and — when crossing it needs a credential, contract, spend or
+ *    permission (`gatesOfRequirement`) — the internally authorized preparation
+ *    alone, which crosses no gate. The production routes carry those gates, so
+ *    `resolveNeed` hands off only the internal preparation and lists the gates
+ *    for a person. No route is at COSTLY_EFFORT: nothing is built to keep it warm;
  *  - the interface sketch is the behavior, inputs and outputs, untested;
  *  - the source inventory is the source items and the existing evidence paths.
  * Pure. The option is a record, and never an integration.
  */
 export function preparedOptionFromRequirement(r: ProgramRequirement): PreparedOption {
-  const paths = r.paths.length ? r.paths : (r.existing?.paths ?? []);
-  const reused = r.existing !== null && r.existing.paths.length > 0;
+  const workPaths = r.paths;
+  const existingPaths = r.existing?.paths ?? [];
+  const reused = r.existing !== null && existingPaths.length > 0;
+  const over = (paths: readonly string[]) => (paths.length ? paths.join(', ') : `the ${r.subsystem} subsystem`);
   const note = (r.missingWork || r.behavior || r.title).trim() || r.key;
+  const { gates } = gatesOfRequirement(r);
   const sketch = [
     r.behavior.trim(),
     r.inputs.length ? `inputs: ${r.inputs.join('; ')}` : '',
     r.outputs.length ? `outputs: ${r.outputs.join('; ')}` : '',
   ].filter(Boolean).join('\n');
+  const methods: AccessMethod[] = [];
+  if (reused) {
+    methods.push({ name: `existing Factory campaign over ${over(existingPaths)}, reusing the existing code`, kind: 'OTHER', gates, effort: 1, sources: r.source });
+  }
+  const buildPaths = workPaths.length ? workPaths : existingPaths;
+  const writes = !reused || (workPaths.length > 0 && r.missingWork.trim().length > 0);
+  if (writes) {
+    methods.push({
+      name: reused ? `existing Factory campaign over ${over(buildPaths)}, writing the missing work` : `existing Factory campaign over ${over(buildPaths)}`,
+      kind: 'OTHER', gates, effort: 2, sources: r.source,
+    });
+  }
+  if (gates.length > 0) {
+    methods.push({
+      name: `existing Factory campaign over ${over(buildPaths)}, internal preparation only (crosses no ${gates.join(', ')} gate)`,
+      kind: 'OTHER', gates: [], effort: reused ? 1 : 2, sources: r.source,
+    });
+  }
   return validatePreparedOption({
     requirementId: r.key,
     feasibility: { verdict: reused ? 'FEASIBLE' : 'UNCERTAIN', note },
-    methods: [{
-      name: `existing Factory campaign over ${paths.length ? paths.join(', ') : `the ${r.subsystem} subsystem`}`,
-      kind: 'OTHER',
-      gates: [],
-      effort: reused ? 1 : 2,
-      sources: r.source,
-    }],
+    methods,
     ...(sketch ? { interfaceSketch: { text: sketch, tested: false } } : {}),
-    sourceInventory: [...r.source.map((s) => `source item ${s}`), ...(r.existing?.paths ?? [])],
+    sourceInventory: [...r.source.map((s) => `source item ${s}`), ...existingPaths],
   });
 }
 
+/** Bumped when the producer reads a requirement differently, so options recorded by an older reading are recorded again. */
+export const PROGRAM_OPTION_PRODUCER_VERSION = 2;
+
 /**
  * Record every prepared requirement of every approved program as a prepared
- * option, once per map version. Called on the tick from `advancePreparedOptions`,
+ * option, once per map version and producer version. Called on the tick from `advancePreparedOptions`,
  * so a deferred capability stays recorded with nobody remembering it. It writes
  * events only: no lease, no worker, no bin, no change request.
  */
@@ -860,13 +914,15 @@ export async function recordProgramPreparedOptions(): Promise<{ recorded: number
     for (const row of rows) {
       let origin: Record<string, unknown> | undefined;
       try { origin = (JSON.parse(row.payload) as { origin?: Record<string, unknown> }).origin; } catch { continue; }
-      if (origin?.source === PROGRAM_MAP_ORIGIN && origin.programId === program.id) seen.add(`${row.entity_id}\u0000${String(origin.mapVersion)}`);
+      if (origin?.source === PROGRAM_MAP_ORIGIN && origin.programId === program.id && origin.producerVersion === PROGRAM_OPTION_PRODUCER_VERSION) {
+        seen.add(`${row.entity_id}\u0000${String(origin.mapVersion)}`);
+      }
     }
     for (const requirement of prepared) {
       if (seen.has(`${requirement.key}\u0000${String(installed.version)}`)) continue;
       let option: PreparedOption;
       try { option = preparedOptionFromRequirement(requirement); } catch { continue; }
-      await recordPreparedOption(program.projectId, option, { source: PROGRAM_MAP_ORIGIN, programId: program.id, mapVersion: installed.version });
+      await recordPreparedOption(program.projectId, option, { source: PROGRAM_MAP_ORIGIN, programId: program.id, mapVersion: installed.version, producerVersion: PROGRAM_OPTION_PRODUCER_VERSION });
       recorded += 1;
     }
   }
