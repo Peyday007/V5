@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
@@ -6,7 +7,7 @@ import {
   chainsFrom, reachOf, researchNext, screenPossibility,
 } from '../server/services/economy/possibilities/screen.ts';
 import {
-  keepScreened, reconsiderOnChange, visiblePossibilities, type Actor,
+  keepScreened, reconsiderOnChange, researchOrder, visiblePossibilities, type Actor,
 } from '../server/services/economy/possibilities/store.ts';
 
 let projectId = '';
@@ -93,5 +94,45 @@ describe('graph reads', () => {
     expect(next).not.toContain(lone.id);
     expect(next[0]).toBe(op.id);
     expect(researchNext([lone], edges, new Set())).toEqual([lone.id]);
+  });
+});
+
+describe('research order from the stored graph', () => {
+  const easy = { capital: ['ownerCapitalCents:1'], time: ['paidAfterDays:1'] };
+
+  it('orders by reach read from the database and passes over zero reach while stronger remain', async () => {
+    const mk = async (t: string) => (await keep(alice, t, easy)).possibility;
+    const op = await mk('op'); const svc = await mk('service'); const venture = await mk('venture'); const lone = await mk('lone');
+    await linkPossibilities({ projectId, fromId: op.id, toId: svc.id, relation: 'ENABLES' });
+    await linkPossibilities({ projectId, fromId: svc.id, toId: venture.id, relation: 'UNLOCKS_AFTER' });
+
+    const order = await researchOrder({ actor: alice, projectId, ownerUserId: alice.userId });
+    expect(order.next.map((x) => [x.possibilityId, x.reach])).toEqual([[op.id, 2], [svc.id, 1]]);
+    expect(order.passedOver.map((x) => x.possibilityId).sort()).toEqual([lone.id, venture.id].sort());
+
+    // once the stronger ones are explored, zero reach becomes eligible
+    const later = await researchOrder({
+      actor: alice, projectId, ownerUserId: alice.userId, explored: new Set([op.id, svc.id]),
+    });
+    expect(later.next.map((x) => x.possibilityId).sort()).toEqual([lone.id, venture.id].sort());
+    expect(later.passedOver).toEqual([]);
+  });
+
+  it("never lets another owner's edge lift a possibility, and refuses anyone but the owner", async () => {
+    const mine = (await keep(alice, 'mine', easy)).possibility;
+    const theirs = (await keep(bob, 'theirs', easy)).possibility;
+    await linkPossibilities({ projectId, fromId: mine.id, toId: theirs.id, relation: 'ENABLES' });
+    const order = await researchOrder({ actor: alice, projectId, ownerUserId: alice.userId });
+    expect(order.next).toEqual([{ possibilityId: mine.id, title: 'mine', reach: 0 }]);
+    await expect(researchOrder({ actor: bob, projectId, ownerUserId: alice.userId })).rejects.toThrow(/nothing here/);
+    await expect(researchOrder({ actor: { type: 'WORKER', userId: alice.userId }, projectId, ownerUserId: alice.userId }))
+      .rejects.toThrow(/nothing here/);
+  });
+
+  it('is reached from the goals terminal door, so the ordering has a production caller', () => {
+    const script = readFileSync(new URL('../scripts/goals.ts', import.meta.url), 'utf8');
+    expect(script).toMatch(/import \{ researchOrder \} from '\.\.\/server\/services\/economy\/possibilities\/store\.ts'/);
+    expect(script).toMatch(/case 'possibilities':\s*return await possibilities\(\);/);
+    expect(script).toMatch(/await researchOrder\(/);
   });
 });

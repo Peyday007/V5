@@ -7,12 +7,14 @@
 import { getDb } from '../../../db/database.ts';
 import { parseJson } from '../../../repos/util.ts';
 import {
-  keepPossibility, listPossibilities, triggerCondition, watchCondition, watchersOf,
+  keepPossibility, listPossibilities, possibilityEdgesOf, triggerCondition, watchCondition, watchersOf,
 } from '../../../repos/economy.ts';
 import type {
   Possibility, PossibilityKind, PossibilityRequirements,
 } from '../../../domain/economy.ts';
-import { screenPossibility, type GoalLimits, type ScreenResult } from './screen.ts';
+import {
+  reachOf, researchNext, screenPossibility, type GoalLimits, type ScreenResult,
+} from './screen.ts';
 
 /** Machines never keep, reconsider or share a person's possibilities. */
 export interface Actor { type: 'PERSON' | 'WORKER'; userId: string }
@@ -87,4 +89,36 @@ export async function visiblePossibilities(
 ): Promise<Possibility[]> {
   requirePerson(actor, ownerUserId);
   return listPossibilities(projectId, ownerUserId);
+}
+
+export interface ResearchOrder {
+  /** Researchable now, strongest reach first. */
+  next: { possibilityId: string; title: string; reach: number }[];
+  /** Zero-reach candidates passed over because a stronger one is still open. */
+  passedOver: { possibilityId: string; title: string }[];
+}
+
+/**
+ * What one person should research next among their own kept possibilities,
+ * read from the stored graph rather than handed in: the reach ordering of
+ * `researchNext` over the owner's rows and the owner's edges only.
+ */
+export async function researchOrder(input: {
+  actor: Actor; projectId: string; ownerUserId: string; explored?: ReadonlySet<string>;
+}): Promise<ResearchOrder> {
+  requirePerson(input.actor, input.ownerUserId);
+  const [possibilities, edges] = await Promise.all([
+    listPossibilities(input.projectId, input.ownerUserId),
+    possibilityEdgesOf(input.projectId, input.ownerUserId),
+  ]);
+  const explored = input.explored ?? new Set<string>();
+  const byId = new Map(possibilities.map((p) => [p.id, p]));
+  const nextIds = researchNext(possibilities, edges, explored);
+  const chosen = new Set(nextIds);
+  return {
+    next: nextIds.map((id) => ({ possibilityId: id, title: byId.get(id)!.title, reach: reachOf(id, edges) })),
+    passedOver: possibilities
+      .filter((p) => !explored.has(p.id) && !chosen.has(p.id))
+      .map((p) => ({ possibilityId: p.id, title: p.title })),
+  };
 }

@@ -164,6 +164,25 @@ export async function linkPossibilities(input: {
   };
 }
 
+/**
+ * One owner's possibility edges: both ends must be that owner's possibilities,
+ * so an edge can never carry another person's row into the graph.
+ */
+export async function possibilityEdgesOf(projectId: string, ownerUserId: string): Promise<PossibilityEdge[]> {
+  const rows = await getDb().all<Row>(
+    `SELECT e.* FROM possibility_edges e
+       JOIN possibilities f ON f.id = e.from_id AND f.project_id = e.project_id AND f.owner_user_id = ?
+       JOIN possibilities t ON t.id = e.to_id AND t.project_id = e.project_id AND t.owner_user_id = ?
+      WHERE e.project_id = ?
+      ORDER BY e.created_at, e.id`,
+    [ownerUserId, ownerUserId, projectId],
+  );
+  return rows.map((r) => ({
+    id: s(r['id']), projectId: s(r['project_id']), fromId: s(r['from_id']), toId: s(r['to_id']),
+    relation: s(r['relation']) as PossibilityRelation, createdAt: s(r['created_at']),
+  }));
+}
+
 function mapCondition(r: Row): PossibilityCondition {
   return {
     id: s(r['id']), projectId: s(r['project_id']), possibilityId: s(r['possibility_id']),
