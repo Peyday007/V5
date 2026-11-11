@@ -215,6 +215,11 @@ export interface FactoryHandoffContext {
   blockedWorkItemIds?: string[];
 }
 
+/** One handoff per requirement and goal, whichever entrance made it. */
+function handoffSubmissionKey(projectId: string, requirementId: string, goal: string): string {
+  return `prepared-option:${createHash('sha256').update(`${projectId}\u0000${requirementId}\u0000${goal}`).digest('hex').slice(0, 24)}`;
+}
+
 /**
  * Hand the minimum missing capability to the existing Factory as a change
  * request, once. The submission key is derived from the requirement and the
@@ -230,7 +235,7 @@ export async function handOffToFactory(
   context: FactoryHandoffContext,
 ): Promise<{ changeRequest: FactoryChangeRequest; created: boolean } | null> {
   if (!resolution.handoff || !resolution.minimum) return null;
-  const submissionKey = `prepared-option:${createHash('sha256').update(`${projectId}\u0000${resolution.requirementId}\u0000${context.goal}`).digest('hex').slice(0, 24)}`;
+  const submissionKey = handoffSubmissionKey(projectId, resolution.requirementId, context.goal);
   const { changeRequest, created } = await ensureChangeRequest({
     projectId,
     submissionKey,
@@ -383,15 +388,18 @@ export async function resumeOf(
 export const PREPARED_RESUMED_KIND = 'PREPARED_OPTION_RESUMED';
 
 /**
- * Judge, from rows, every handoff whose blocked work has not yet been recorded
- * as resumed. Called from `advanceSources` on the Russell tick, so nobody has to
+ * Identify, from rows, open work that needs a recorded option and hand it off
+ * (`identifyPreparedDependencies`); then judge every handoff whose blocked work
+ * has not yet been recorded as resumed. Called from `advanceSources` on the Russell tick, so nobody has to
  * remember an old option: a handoff that names blocked work items is re-read
  * each pass and, the first time `resumeOf` finds one of them completed after
  * the handoff was implemented and the capability reads WORKING, a single
  * RESUMED event is appended. It creates no work, holds no
  * lease and spends nothing; a handoff that names no work items is never judged.
  */
-export async function advancePreparedOptions(): Promise<{ judged: number; resumed: number }> {
+export async function advancePreparedOptions(): Promise<{ judged: number; resumed: number; identified: number; handedOff: number }> {
+  // First, from rows, which open work now needs a recorded option (F2): no caller names it.
+  const { identified, handedOff } = await identifyPreparedDependencies();
   const rows = await getDb().all<{ project_id: string; entity_id: string; payload: string }>(
     `SELECT project_id, entity_id, payload FROM project_events
       WHERE entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED'
@@ -430,5 +438,195 @@ export async function advancePreparedOptions(): Promise<{ judged: number; resume
     });
     resumed += 1;
   }
-  return { judged, resumed };
+  return { judged, resumed, identified, handedOff };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Identifying the dependency from rows (finding F2)                           */
+/* -------------------------------------------------------------------------- */
+
+export const PREPARED_DEPENDENCY_KIND = 'PREPARED_OPTION_DEPENDENCY';
+
+/** Bins in these states are work that has not happened yet. */
+const OPEN_BIN_STATES = ['DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN'] as const;
+
+/**
+ * One piece of a real objective's blocked work that names a requirement a
+ * prepared option stands behind. Read from rows, never supplied by a caller:
+ *  - a bin not yet finished whose `required_capabilities` names it — its
+ *    unfinished work items are the blocked work `resumeOf` later judges;
+ *  - an OPEN cash need blocked on it (`CAPABILITY:<id>`, or the older request
+ *    key `capability:<opportunity>:<id>`), the commercial pipeline's own record
+ *    that an opening is waiting on it.
+ */
+export interface IdentifiedDependency {
+  projectId: string;
+  requirementId: string;
+  /** `bin:<id>` or `need:<id>` — what is waiting. */
+  sourceRef: string;
+  goal: string;
+  blockedWorkItemIds: string[];
+}
+
+/** Which recorded prepared options a project's open work now depends on. Reads only. */
+export async function identifyDependencies(projectId: string, requirementIds: readonly string[]): Promise<IdentifiedDependency[]> {
+  if (requirementIds.length === 0) return [];
+  const db = getDb();
+  const out: IdentifiedDependency[] = [];
+  const wanted = new Set(requirementIds);
+
+  const bins = await db.all<{ id: string; title: string; objective: string; manifest: string; required_capabilities: string | null }>(
+    `SELECT id, title, objective, manifest, required_capabilities FROM bins
+      WHERE project_id = ? AND state IN (${OPEN_BIN_STATES.map(() => '?').join(', ')})
+        AND (${requirementIds.map(() => 'required_capabilities LIKE ?').join(' OR ')})
+      ORDER BY created_at, id`,
+    [projectId, ...OPEN_BIN_STATES, ...requirementIds.map((id) => `%"${id}"%`)],
+  );
+  for (const bin of bins) {
+    let caps: unknown;
+    try { caps = JSON.parse(bin.required_capabilities ?? '[]'); } catch { caps = []; }
+    const named = (Array.isArray(caps) ? caps : []).filter((c): c is string => typeof c === 'string' && wanted.has(c));
+    if (named.length === 0) continue;
+    let goal = '';
+    try {
+      const lineage = (JSON.parse(bin.manifest) as { lineage?: { goal?: unknown } }).lineage;
+      goal = typeof lineage?.goal === 'string' ? lineage.goal.trim() : '';
+    } catch { /* an unreadable manifest still names its bin */ }
+    const items = await db.all<{ id: string }>(
+      `SELECT id FROM work_items WHERE project_id = ? AND bin_id = ? AND state <> 'SUCCEEDED' ORDER BY created_at, id`,
+      [projectId, bin.id],
+    );
+    for (const requirementId of [...new Set(named)]) {
+      out.push({
+        projectId, requirementId, sourceRef: `bin:${bin.id}`,
+        goal: goal || `bin ${bin.id}: ${bin.title || bin.objective}`,
+        blockedWorkItemIds: items.map((i) => i.id),
+      });
+    }
+  }
+
+  const { listNeeds } = await import('../../repos/cashPortfolio.ts');
+  for (const need of await listNeeds({ projectId, states: ['OPEN'] })) {
+    // The typed blocker key names the fact; the request key is the older rows' only record of it.
+    const typed = need.blockerKey?.startsWith('CAPABILITY:') ? need.blockerKey.slice('CAPABILITY:'.length) : null;
+    const keyed = /^capability:.+:([^:]+)$/.exec(need.requestKey ?? '')?.[1] ?? null;
+    const requirementId = typed ?? keyed;
+    if (!requirementId || !wanted.has(requirementId)) continue;
+    out.push({
+      projectId, requirementId, sourceRef: `need:${need.id}`,
+      goal: need.opportunityId ? `opportunity ${need.opportunityId}: ${need.blockedAction}` : need.blockedAction,
+      blockedWorkItemIds: [],
+    });
+  }
+  return out;
+}
+
+/**
+ * Hand an identified dependency to the existing Factory through its own
+ * entrance, `submitObjective`, against the one repository the project has
+ * onboarded. Anything that stops it (no repository, several, a refusal, a
+ * forge that did not answer) is returned as a reason rather than forced: the
+ * next pass asks again, and the dependency stays recorded meanwhile.
+ */
+async function submitIdentified(dep: IdentifiedDependency, resolution: NeedResolution): Promise<{ changeRequestId: string; created: boolean } | { reason: string }> {
+  if (!resolution.handoff || !resolution.minimum) {
+    return { reason: resolution.needsPerson.length ? `every access method is behind a closed gate: ${resolution.needsPerson.join(', ')}` : 'no access method is recorded' };
+  }
+  const { repositoryChoicesFor } = await import('../russell/software.ts');
+  const choices = await repositoryChoicesFor(dep.projectId);
+  if (choices.length !== 1) {
+    return { reason: choices.length === 0 ? 'this project has no repository onboarded for the Factory' : `this project has ${choices.length} repositories onboarded, and choosing one is a person's decision` };
+  }
+  const { submitObjective, ContractError } = await import('../factory/contract.ts');
+  try {
+    const submitted = await submitObjective({
+      projectId: dep.projectId,
+      objective: resolution.handoff.objective,
+      expectedOutcome: `${dep.requirementId} works in production and the blocked work of ${dep.goal} resumes`,
+      nonGoals: ['keeping the option warm', 'crossing a credential, contract, spend or permission gate'],
+      acceptanceConditions: resolution.handoff.acceptanceConditions.map((statement) => ({
+        statement,
+        verification: 'proof reading over real attempts, and rows showing the goal\'s work ran afterwards',
+        mandatory: true,
+      })),
+      repositoryRemote: choices[0]!.remote,
+      submissionKey: handoffSubmissionKey(dep.projectId, dep.requirementId, dep.goal),
+    });
+    return { changeRequestId: submitted.changeRequest.id, created: submitted.created };
+  } catch (error) {
+    if (error instanceof ContractError) return { reason: `the Factory refused the objective: ${error.message}` };
+    throw error;
+  }
+}
+
+/**
+ * Nobody has to remember an old option. Each pass reads every recorded
+ * prepared option, finds the open work that names its requirement, records
+ * that dependency once (with the access-method comparison and the minimum
+ * missing capability), and hands the minimum to the existing Factory. The
+ * handoff event carries the blocked work items, so `advancePreparedOptions`
+ * then judges resumption with no caller supplying anything.
+ */
+export async function identifyPreparedDependencies(): Promise<{ identified: number; handedOff: number }> {
+  const rows = await getDb().all<{ project_id: string; entity_id: string; payload: string; created_at: string }>(
+    `SELECT project_id, entity_id, payload, created_at FROM project_events
+      WHERE entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED' AND payload LIKE ?
+      ORDER BY created_at, id`,
+    [`%"${PREPARED_OPTION_KIND}"%`],
+  );
+  const options = new Map<string, Map<string, PreparedOption>>();
+  for (const r of rows) {
+    let p: Record<string, unknown>;
+    try { p = JSON.parse(r.payload) as Record<string, unknown>; } catch { continue; }
+    if (p.kind !== PREPARED_OPTION_KIND) continue;
+    const o = p.option as PreparedOption | undefined;
+    if (!o?.requirementId) continue;
+    const byReq = options.get(r.project_id) ?? new Map<string, PreparedOption>();
+    byReq.set(o.requirementId, o);
+    options.set(r.project_id, byReq);
+  }
+
+  let identified = 0;
+  let handedOff = 0;
+  for (const [projectId, byReq] of options) {
+    const deps = await identifyDependencies(projectId, [...byReq.keys()]);
+    for (const dep of deps) {
+      const option = byReq.get(dep.requirementId)!;
+      const prior = (await listEventsByEntity('capability_requirement', dep.requirementId)).filter((e) => e.projectId === projectId);
+      const resolution = resolveNeed(option, { requirementId: dep.requirementId, goal: dep.goal });
+      if (!prior.some((e) => e.payload.kind === PREPARED_DEPENDENCY_KIND && e.payload.sourceRef === dep.sourceRef)) {
+        await recordEvent({
+          projectId,
+          entityType: 'capability_requirement',
+          entityId: dep.requirementId,
+          eventType: 'CAPABILITY_ASSESSED',
+          payload: {
+            kind: PREPARED_DEPENDENCY_KIND, integration: false, sourceRef: dep.sourceRef, goal: dep.goal,
+            blockedWorkItemIds: dep.blockedWorkItemIds,
+            permitted: resolution.permitted.map((m) => m.name),
+            gated: resolution.gated.map((g) => ({ method: g.method.name, gates: g.gates })),
+            minimum: resolution.minimum?.name ?? null,
+            needsPerson: resolution.needsPerson,
+          },
+        });
+        identified += 1;
+      }
+      const handedFor = prior.some((e) => e.payload.kind === PREPARED_HANDOFF_KIND && e.payload.goal === dep.goal);
+      if (handedFor) continue;
+      const submitted = await submitIdentified(dep, resolution);
+      if ('reason' in submitted) continue;
+      await recordEvent({
+        projectId,
+        entityType: 'capability_requirement',
+        entityId: dep.requirementId,
+        eventType: 'CAPABILITY_ASSESSED',
+        payload: {
+          kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId: submitted.changeRequestId, goal: dep.goal,
+          method: resolution.minimum!.name, blockedWorkItemIds: dep.blockedWorkItemIds, identifiedFrom: dep.sourceRef,
+        },
+      });
+      handedOff += 1;
+    }
+  }
+  return { identified, handedOff };
 }
