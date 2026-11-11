@@ -29,6 +29,10 @@ import { authorizeRefund } from '../journey/fulfillment.ts';
 import { checkCommercialAuthority, type CommercialAction } from '../authority.ts';
 import { cashEventsOfKind, recordCashEvent } from '../../../repos/cashMode.ts';
 import { listMoneyEntries } from '../../../repos/cashLedger.ts';
+import { getOpportunity, needForKey } from '../../../repos/cashPortfolio.ts';
+import { agreementsFor } from '../../../repos/cashJourney.ts';
+import { getClaim } from '../../../repos/research.ts';
+import { raiseNeed } from '../needs.ts';
 import { readCommitments, type CommitmentReading, type CommitmentTransition, type DeclaredTransition, type ExternalDependency, type Party } from './commitments.ts';
 // Registers the production probes r01.life-29-1 and r01.life-29-3 wherever the journey tick loads; they reach this module only at call time.
 import './lifecycleProbes.ts';
@@ -647,7 +651,7 @@ export async function recordDetectedExceptions(input: {
         evidence: exception.evidence,
         consequence: selection.consequence,
         authority: { grant: authority.grant ?? null, standing: authority.standing },
-        remedies: selection.options.map((o) => ({ remedy: o.remedy, feasible: o.feasible, withinAuthority: o.withinAuthority, authorizedBy: o.authorizedBy, needsApproval: o.needsApproval })),
+        remedies: selection.options.map((o) => ({ remedy: o.remedy, feasible: o.feasible, withinAuthority: o.withinAuthority, authorizedBy: o.authorizedBy, needsApproval: o.needsApproval, costCents: o.costCents })),
         chosen: selection.chosen?.remedy ?? null,
         authorizedBy: selection.chosen?.authorizedBy ?? null,
         needs: selection.needs,
@@ -657,5 +661,228 @@ export async function recordDetectedExceptions(input: {
     known.add(exception.id);
     recorded += 1;
   }
+  // Every exception the rows show whose best feasible remedy needs a person is put in front of one, once.
+  for (const exception of detected) {
+    const selection = selectRemedy({ reading, exception, facts, authority });
+    if (selection.chosen) continue;
+    await askForRemedyApproval({ projectId: input.projectId, opportunityId: input.opportunityId, exception, selection });
+  }
   return { detected: detected.length, recorded };
+}
+
+/** The need that asks a person to approve one remedy for one exception. Brain writes the key, so it is read back by id. */
+export function remedyApprovalKey(opportunityId: string, exceptionId: string, remedy: Remedy): string {
+  return `remedy-approval:${opportunityId}:${exceptionId}:${remedy}`;
+}
+
+/** Remedies Brain can carry out itself once a person approved them, through an existing bounded path. */
+export const EXECUTABLE_REMEDIES: readonly Remedy[] = ['APPROVED_REFUND'];
+
+/**
+ * Raises, once per exception and remedy, the need that asks a person to approve
+ * the cheapest feasible remedy the authority held does not cover. The person's
+ * answer is the existing need surface: resolving it approves the remedy (their
+ * user id is the approver), withdrawing it declines it. Nothing is carried out
+ * here. A remedy already asked about (in any state) is not asked about again.
+ */
+async function askForRemedyApproval(input: {
+  projectId: string;
+  opportunityId: string;
+  exception: DetectedException;
+  selection: RemedySelection;
+}): Promise<boolean> {
+  const option = input.selection.options
+    .filter((o) => o.feasible && !o.withinAuthority && o.needsApproval)
+    .sort((a, b) => (a.costCents ?? Number.MAX_SAFE_INTEGER) - (b.costCents ?? Number.MAX_SAFE_INTEGER))[0];
+  if (!option) return false;
+  const key = remedyApprovalKey(input.opportunityId, input.exception.id, option.remedy);
+  if (await needForKey(input.projectId, key)) return false;
+  const executable = EXECUTABLE_REMEDIES.includes(option.remedy);
+  const raised = await raiseNeed({
+    projectId: input.projectId,
+    opportunityId: input.opportunityId,
+    actorRef: 'BRAIN',
+    blockedAction: `${option.remedy} for ${input.exception.kind.toLowerCase().replace(/_/g, ' ')} (${input.exception.id})`,
+    whyItMatters: `${input.exception.detail}. ${option.why}; it needs ${option.needsApproval}.`.slice(0, 600),
+    recommendedPath: executable
+      ? `Approve ${option.remedy}${option.costCents !== null ? ` for ${option.costCents} cents` : ''}; Brain then carries it out through the existing bounded path.`
+      : `Approve ${option.remedy}; Brain records the decision and the case's recovery, and carrying it out stays with the person who approved it.`,
+    expectedCostCents: option.costCents,
+    setupEffort: 'One decision.',
+    nextStep: 'Resolve this need to approve the remedy, or withdraw it to decline.',
+    completionCondition: `A person resolves this need, approving ${option.remedy} for exception ${input.exception.id}.`,
+    requestKey: key,
+  });
+  return raised.ok;
+}
+
+export interface RemedyExecutionPass {
+  /** Approved remedies carried out (or decided) this pass. */
+  carriedOut: number;
+  /** Approved remedies the bounded path refused, with why. */
+  refused: { exceptionId: string; remedy: Remedy; reason: string }[];
+}
+
+/**
+ * Carries out the remedies a person approved (LIFE-29-3).
+ *
+ * An approval is a `remedy-approval:` need a person resolved; the approver is
+ * whoever resolved it, and the approved ceiling is the cost the need stated. An
+ * approved refund goes through `carryOutApprovedRefund` — the existing refund
+ * path, bounded under the cash lock — and is recorded once as
+ * `remedy.carried_out`. An approved remedy Brain has no path to carry out
+ * itself is recorded as `remedy.decided`: the recovery decision is on record and
+ * carrying it out stays with the approver. A refusal is recorded once per
+ * approval as `remedy.refused` and never retried by itself. A withdrawn need is
+ * a decline and carries nothing out.
+ */
+export async function carryOutApprovedRemedies(input: { projectId: string; opportunityId: string }): Promise<RemedyExecutionPass> {
+  const pass: RemedyExecutionPass = { carriedOut: 0, refused: [] };
+  const events = await cashEventsOfKind(input.opportunityId, 'exception.detected');
+  if (events.length === 0) return pass;
+  const done = new Set<string>();
+  for (const kind of ['remedy.carried_out', 'remedy.decided', 'remedy.refused']) {
+    for (const event of await cashEventsOfKind(input.opportunityId, kind)) {
+      const d = event.detail as { needId?: unknown };
+      if (typeof d.needId === 'string') done.add(d.needId);
+    }
+  }
+  for (const event of events) {
+    const detail = event.detail as { exceptionId?: unknown; kind?: unknown };
+    const exceptionId = typeof detail.exceptionId === 'string' ? detail.exceptionId : null;
+    if (!exceptionId) continue;
+    for (const remedy of REMEDIES) {
+      const need = await needForKey(input.projectId, remedyApprovalKey(input.opportunityId, exceptionId, remedy));
+      if (!need || need.state !== 'RESOLVED' || !need.resolvedByUserId || need.resolvedByUserId === 'BRAIN') continue;
+      if (done.has(need.id)) continue;
+      done.add(need.id);
+      const approvedBy = need.resolvedByUserId;
+      const base = { needId: need.id, exceptionId, exceptionKind: detail.kind ?? null, remedy, approvedBy, approvedCents: need.expectedCostCents };
+      if (!EXECUTABLE_REMEDIES.includes(remedy)) {
+        await recordCashEvent({
+          projectId: input.projectId,
+          opportunityId: input.opportunityId,
+          kind: 'remedy.decided',
+          actorRef: approvedBy,
+          summary: `${remedy} approved by ${approvedBy} for ${exceptionId}; carrying it out stays with them.`,
+          detail: base,
+        });
+        pass.carriedOut += 1;
+        continue;
+      }
+      const refuseWith = async (reason: string) => {
+        await recordCashEvent({
+          projectId: input.projectId,
+          opportunityId: input.opportunityId,
+          kind: 'remedy.refused',
+          actorRef: 'BRAIN',
+          summary: `${remedy} approved by ${approvedBy} was not carried out: ${reason}`.slice(0, 300),
+          detail: { ...base, reason },
+        });
+        pass.refused.push({ exceptionId, remedy, reason });
+      };
+      const agreement = (await agreementsFor(input.opportunityId)).find((a) => a.projectId === input.projectId);
+      if (!agreement) {
+        await refuseWith('the deal has no agreement for a refund to belong to');
+        continue;
+      }
+      if (need.expectedCostCents === null || need.expectedCostCents <= 0) {
+        await refuseWith('the approval states no amount, and Brain does not compose one');
+        continue;
+      }
+      const outcome = await carryOutApprovedRefund({
+        projectId: input.projectId,
+        agreementId: agreement.id,
+        amountCents: need.expectedCostCents,
+        reason: `Approved remedy for ${String(detail.kind ?? 'exception').toLowerCase().replace(/_/g, ' ')} ${exceptionId}`,
+        approval: { approvedBy, ceilingCents: need.expectedCostCents },
+      });
+      if (!outcome.ok) {
+        await refuseWith(outcome.reason);
+        continue;
+      }
+      await recordCashEvent({
+        projectId: input.projectId,
+        opportunityId: input.opportunityId,
+        kind: 'remedy.carried_out',
+        actorRef: approvedBy,
+        summary: `${remedy} of ${need.expectedCostCents} cents approved by ${approvedBy} for ${exceptionId}: ${outcome.detail}.`,
+        detail: { ...base, outcome: outcome.detail, agreementId: agreement.id },
+      });
+      pass.carriedOut += 1;
+    }
+  }
+  return pass;
+}
+
+/** The case's source: its research claim's URL, or the source the opportunity names. Null when it names none. */
+export async function sourceOfCase(opportunityId: string): Promise<string | null> {
+  const opportunity = await getOpportunity(opportunityId);
+  if (!opportunity) return null;
+  if (opportunity.sourceClaimId) {
+    const claim = await getClaim(opportunity.sourceClaimId);
+    if (claim?.sourceUrl?.trim()) return claim.sourceUrl.trim();
+  }
+  return opportunity.source?.trim() || null;
+}
+
+/** Recovery decisions on record for a deal: carried-out and decided remedies, by exception. */
+async function recoveriesOnRecord(opportunityId: string): Promise<{ exceptionId: string; remedy: Remedy; at: string; by: string }[]> {
+  const out: { exceptionId: string; remedy: Remedy; at: string; by: string }[] = [];
+  for (const kind of ['remedy.carried_out', 'remedy.decided']) {
+    for (const event of await cashEventsOfKind(opportunityId, kind)) {
+      const d = event.detail as { exceptionId?: unknown; remedy?: unknown };
+      if (typeof d.exceptionId !== 'string' || !REMEDIES.includes(d.remedy as Remedy)) continue;
+      out.push({ exceptionId: d.exceptionId, remedy: d.remedy as Remedy, at: event.createdAt, by: event.actorRef });
+    }
+  }
+  return out;
+}
+
+/**
+ * The journey tick's entry to the acceptance demonstration (LIFE-29-3).
+ *
+ * A deal is rehearsed once, from its own rows, when it is a real case that went
+ * the whole way with a failure on it: it names a source, its work was accepted
+ * and its funds settled, the rows show at least one exception, every exception
+ * the rows show is on record, and no approval it asked a person for is still
+ * open (so the trace carries the recovery decision rather than a pending one).
+ * The trace is `rehearseStoredCase`'s, appended to `cash_events`. A deal that
+ * already has a valid trace is not traced again. Returns the event id, or why
+ * it was not rehearsed.
+ */
+export async function rehearseSettledCase(input: {
+  projectId: string;
+  opportunityId: string;
+  currency: string;
+  now?: string;
+}): Promise<{ rehearsed: true; eventId: string; valid: boolean } | { rehearsed: false; why: string }> {
+  if ((await cashEventsOfKind(input.opportunityId, 'rehearsal.traced')).length > 0) return { rehearsed: false, why: 'already traced' };
+  const reading = await readCommitments({ projectId: input.projectId, opportunityId: input.opportunityId, currency: input.currency, now: input.now });
+  if (reading.stages.WORK_ACCEPTED.state !== 'REACHED') return { rehearsed: false, why: 'the work is not accepted yet' };
+  if (reading.stages.FUNDS_SETTLED.state !== 'REACHED') return { rehearsed: false, why: 'the funds have not settled yet' };
+  const rows = detectExceptions(reading).filter((e) => e.source === 'ROWS');
+  if (rows.length === 0) return { rehearsed: false, why: 'the rows show no failure on this case' };
+  const recorded = new Set(
+    (await cashEventsOfKind(input.opportunityId, 'exception.detected')).map((e) => String((e.detail as { exceptionId?: unknown }).exceptionId ?? '')),
+  );
+  if (rows.some((e) => !recorded.has(e.id))) return { rehearsed: false, why: 'an exception the rows show is not on record yet' };
+  for (const exception of rows) {
+    for (const remedy of REMEDIES) {
+      const need = await needForKey(input.projectId, remedyApprovalKey(input.opportunityId, exception.id, remedy));
+      if (need?.state === 'OPEN') return { rehearsed: false, why: `the approval of ${remedy} for ${exception.id} is still open` };
+    }
+  }
+  const sourceRef = await sourceOfCase(input.opportunityId);
+  if (!sourceRef) return { rehearsed: false, why: 'the case names no source' };
+  const stored = await rehearseStoredCase({
+    projectId: input.projectId,
+    opportunityId: input.opportunityId,
+    currency: input.currency,
+    sourceRef,
+    actorRef: 'BRAIN',
+    recovered: await recoveriesOnRecord(input.opportunityId),
+    now: input.now,
+  });
+  return { rehearsed: true, eventId: stored.eventId, valid: stored.rehearsal.valid };
 }

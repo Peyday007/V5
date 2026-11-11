@@ -22,10 +22,14 @@
  *   9. an exception its commitments show — a missed date, a failed payment, a rejected
  *      delivery, a released commitment — is detected, its consequence quantified and its
  *      remedy worked out inside the authority held, and recorded once
- *      (`deliverables/exceptions.ts`). Detecting is all it does.
+ *      (`deliverables/exceptions.ts`); a remedy that needs a person is asked for
+ *      as a need, one a person approved is carried out through the existing
+ *      bounded path, and a settled, sourced case with a failure is traced once.
  *
- * It sends nothing. Every external effect is still a person's press or a
- * granted tick through `perform.ts`, and nothing here calls an adapter.
+ * It decides nothing outward by itself. Every external effect is still a
+ * person's press, a granted tick through `perform.ts`, or a refund a named
+ * person approved (by resolving the remedy need), which goes through the same
+ * bounded `authorizeRefund` a person's refund button uses.
  */
 import { getOpportunity, transitionOpportunity, listOpportunities } from '../../../repos/cashPortfolio.ts';
 import { getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
@@ -42,7 +46,7 @@ import { agreementAnswering } from '../../../domain/cashJourney.ts';
 import { advanceFulfillment, moveToDelivering, type FulfillmentPass } from './fulfillment.ts';
 import { collectable, dealPosition } from './position.ts';
 import { recordOutcomes } from './learning.ts';
-import { recordDetectedExceptions } from '../deliverables/exceptions.ts';
+import { carryOutApprovedRemedies, recordDetectedExceptions, rehearseSettledCase } from '../deliverables/exceptions.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -60,6 +64,10 @@ export interface JourneyTickReport {
   outcomes: number;
   /** Exceptions the commitment rows show, and the new ones recorded this pass. */
   exceptions: { detected: number; recorded: number };
+  /** Remedies a person approved that were carried out (or decided) this pass, and those the bounded path refused. */
+  remedies: { carriedOut: number; refused: number };
+  /** Settled, sourced cases with a failure path traced this pass (the LIFE-29-3 demonstration). */
+  rehearsals: number;
 }
 
 export async function advanceJourney(
@@ -75,6 +83,8 @@ export async function advanceJourney(
     collected: 0,
     outcomes: 0,
     exceptions: { detected: 0, recorded: 0 },
+    remedies: { carriedOut: 0, refused: 0 },
+    rehearsals: 0,
   };
   const mode = await getCashMode(projectId);
   if (!mode) return report;
@@ -161,6 +171,11 @@ export async function advanceJourney(
       const found = await recordDetectedExceptions({ projectId, opportunityId: listed.id, currency: mode.currency, now: now.toISOString() });
       report.exceptions.detected += found.detected;
       report.exceptions.recorded += found.recorded;
+      const remedies = await carryOutApprovedRemedies({ projectId, opportunityId: listed.id });
+      report.remedies.carriedOut += remedies.carriedOut;
+      report.remedies.refused += remedies.refused.length;
+      const rehearsal = await rehearseSettledCase({ projectId, opportunityId: listed.id, currency: mode.currency, now: now.toISOString() });
+      if (rehearsal.rehearsed) report.rehearsals += 1;
     }
   }
   return report;
