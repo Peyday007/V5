@@ -145,13 +145,21 @@ export interface GoalPortfolio {
  * to cash) is a fact rather than a draw and does not bound the sample; a fixed
  * behavioural rate (reply, close, the deals a market takes) is a rate somebody
  * measured on a sample nobody stated, so it does.
+ *
+ * Money a buyer agreed to is the same: a signed agreement is not settled cash,
+ * and whether that counterparty pays in full and on time — default, dispute,
+ * refund, late payment — is a draw like any reply rate. No row measures it (the
+ * model carries no settlement or default rate), so an agreement states no sample
+ * and its reach is "calibration unavailable", never a zero-width interval at the
+ * point reading. Observations behind an inferred days-to-cash measure *when*
+ * money that did arrive arrived, not *whether* agreed money arrives, so they do
+ * not stand in for one.
  */
 const BEHAVIOURAL: ReadonlySet<keyof ModelledOpportunity> = new Set(['respond', 'close', 'volume']);
 export function sampleSizeOf(one: ModelledOpportunity): number | undefined {
   if (one.agreedValue > 0) {
-    // Money a buyer already agreed draws nothing but whether it settles in time.
-    const days = one.daysToCash;
-    return days.inferred ? days.inferred.observations : days.value !== null ? Number.POSITIVE_INFINITY : undefined;
+    // Whether agreed money settles is drawn, and nothing measured how often it does.
+    return undefined;
   }
   const drawn: Array<keyof ModelledOpportunity> = one.repeatable ? INPUT_NAMES.map(([key]) => key) : ['price', 'daysToCash', 'close', 'directCost'];
   let n = Number.POSITIVE_INFINITY;
