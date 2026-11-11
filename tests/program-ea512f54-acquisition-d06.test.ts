@@ -256,8 +256,15 @@ describe('operateWorkflow on the database: judged, permitted, run and recorded',
     const completed = JSON.parse(rows[1]!.measures) as { downloads: { chars: number }[]; extracted: { name: string }[] };
     expect(completed.downloads[0]!.chars).toBe(4);
     expect(completed.extracted[0]!.name).toBe('results');
-    const judged = await getDb().all<{ outcome: string }>(`SELECT outcome FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT' AND workload_class = 'browser-workflow'`);
+    const judged = await getDb().all<{ outcome: string; measures: string }>(`SELECT outcome, measures FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT' AND workload_class = 'browser-workflow' ORDER BY at`);
     expect(judged).toHaveLength(3);
+    // The account is named on exactly the judgment whose run went through the signed-in session under it.
+    const accounts = judged.map((r) => JSON.parse(r.measures) as { authorizedAccount: string; accountRef: string | null });
+    expect(accounts.map((a) => [a.authorizedAccount, a.accountRef])).toEqual([
+      ['NONE', null],
+      ['PERMISSION_RECORD', 'records team login'],
+      ['NONE', null],
+    ]);
     expect((await readBrowserWorkflows(HOST)).size).toBe(1);
   });
 

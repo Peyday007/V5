@@ -648,7 +648,7 @@ export async function operateWorkflow(hostIn: string, name: string, deps: Operat
   if (!record) return { run: blank('REFUSED', `no workflow "${name}" is recorded for ${host}`), judgment: null, record: null };
 
   const judgment = await (deps.judge ?? recordAcquisitionJudgment)(
-    { kind: 'OPERATE', purpose: record.workflow.purpose, host },
+    { kind: 'OPERATE', purpose: record.workflow.purpose, host, runsUnderAccount: record.workflow.account },
     {
       interactiveInterfaceOnly: true,
       // An unauthenticated workflow needs no grant; an account workflow needs the person's grant, read by the judgment itself.

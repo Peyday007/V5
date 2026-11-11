@@ -6,9 +6,10 @@ import { freshProject } from './helpers.ts';
 
 /*
  * F-PER-READ-DB-LOAD: a read's acquisition judgments must not each re-read the
- * SOURCE_ACCESS / OPERATE_PERMISSION / CONNECTOR_PROPOSED history. The history is
- * loaded once per refresh and shared; the permission is read for its one host;
- * a judgment that has not changed is not written again.
+ * SOURCE_ACCESS / CONNECTOR_PROPOSED history. The history is loaded once per
+ * refresh and shared, and a judgment that has not changed is not written again.
+ * A read is never an operation (F-OPERATE-RECORD-UNTRUE), so it reads no operate
+ * permission at all: the permission belongs to `operateWorkflow`, which uses it.
  */
 
 const PAGE = 'The dashboard lists 41,000 records for the account in 2025. '.repeat(10);
@@ -35,7 +36,7 @@ const rowsOf = async (eventType: string, caller: string) =>
   }));
 
 describe('the read path loads its history once per refresh, not per read', () => {
-  it('twenty browser reads of one host cost one history load and one permission query each — never a history query per judgment', async () => {
+  it('twenty browser reads of one host cost one history load and no query per read', async () => {
     await freshProject();
     resetSourceAccessMemory();
     const caller = 'per-read-load-test';
@@ -44,8 +45,8 @@ describe('the read path loads its history once per refresh, not per read', () =>
     const load = sourceAccessDbLoad();
     // The SOURCE_ACCESS and CONNECTOR_PROPOSED rows: read together, once, for every consumer.
     expect(load.historyLoads).toBe(1);
-    // Two history queries, plus one host-filtered permission query per OPERATE judgment.
-    expect(load.queries).toBe(2 + N);
+    // Two history queries, and nothing per read: a read consults no operate permission.
+    expect(load.queries).toBe(2);
     // One SOURCE_ACCESS row per read, and judgments only when they change.
     expect((await rowsOf('SOURCE_ACCESS', caller)).length).toBe(N);
     const judgments = await rowsOf('ACQUISITION_JUDGMENT', caller);
@@ -58,32 +59,35 @@ describe('the read path loads its history once per refresh, not per read', () =>
   it('repetition is still counted from the record, including this process’s own reads, without reading it back', async () => {
     await freshProject();
     resetSourceAccessMemory();
-    const caller = 'per-read-repeat-test';
-    await recordOperatePermission({ host: 'repeat.example', granted: true, accountRef: 'owner login for repeat', grantedBy: 'owner' });
-    await browserRead('https://repeat.example/flow', caller);
-    await browserRead('https://repeat.example/flow', caller);
-    const operate = (await rowsOf('ACQUISITION_JUDGMENT', caller)).filter((r) => r.m.capability === 'OPERATE');
-    // The first read counted itself (1); the second changed the decision (a connector is now justified) and counted 2.
-    expect(operate.map((r) => r.m.repeatedUses)).toEqual([1, 2]);
-    expect(operate.map((r) => r.provider)).toEqual(['BROWSER', 'BROWSER']);
-    const proposals = await rowsOf('CONNECTOR_PROPOSED', caller);
-    expect(proposals.map((p) => p.m.host)).toEqual(['repeat.example']);
-    // A third read proposes nothing new: the held proposal answers, no proposal query is made.
-    await browserRead('https://repeat.example/flow', caller);
-    expect((await rowsOf('CONNECTOR_PROPOSED', caller)).length).toBe(1);
-    expect(sourceAccessDbLoad().historyLoads).toBe(1);
+    // A judgment that has not changed is not rewritten for one caller, so each read is made under its own
+    // caller: every row then shows the count the held history gave it, without reading the record back.
+    await browserRead('https://repeat.example/flow', 'per-read-repeat-1');
+    await browserRead('https://repeat.example/flow', 'per-read-repeat-2');
+    await browserRead('https://repeat.example/other', 'per-read-repeat-3');
+    await browserRead('https://repeat.example/flow', 'per-read-repeat-4');
+    const counted = async (caller: string) => (await rowsOf('ACQUISITION_JUDGMENT', caller)).map((r) => [r.m.capability, r.m.repeatedUses]);
+    // The first read counted itself; the second counted the first; a different workflow on the host is not repetition.
+    expect(await counted('per-read-repeat-1')).toEqual([['ACQUIRE', 1]]);
+    expect(await counted('per-read-repeat-2')).toEqual([['ACQUIRE', 2]]);
+    expect(await counted('per-read-repeat-3')).toEqual([['ACQUIRE', 2]]);
+    expect(await counted('per-read-repeat-4')).toEqual([['ACQUIRE', 3]]);
+    const load = sourceAccessDbLoad();
+    expect(load.historyLoads).toBe(1);
+    expect(load.queries).toBe(2);
   });
 
-  it('a revocation applies to the very next read: the permission is never held', async () => {
+  it('a grant or a revocation never changes how a read is recorded: a read is never an operation under an account', async () => {
     await freshProject();
     resetSourceAccessMemory();
     await recordOperatePermission({ host: 'revoke.example', granted: true, accountRef: 'owner login for revoke', grantedBy: 'owner' });
     await browserRead('https://revoke.example/flow', 'revoke-before');
     await recordOperatePermission({ host: 'revoke.example', granted: false, grantedBy: 'owner' });
     await browserRead('https://revoke.example/flow', 'revoke-after');
-    const provider = async (caller: string) => (await rowsOf('ACQUISITION_JUDGMENT', caller)).filter((r) => r.m.capability === 'OPERATE').map((r) => r.provider);
-    expect(await provider('revoke-before')).toEqual(['BROWSER']);
-    expect(await provider('revoke-after')).toEqual(['HUMAN_HANDOFF']);
+    const capabilities = async (caller: string) => (await rowsOf('ACQUISITION_JUDGMENT', caller)).map((r) => r.m.capability);
+    expect(await capabilities('revoke-before')).toEqual(['ACQUIRE']);
+    expect(await capabilities('revoke-after')).toEqual(['ACQUIRE']);
+    const named = await getDb().all(`SELECT 1 FROM bin_events WHERE event_type IN ('ACQUISITION_JUDGMENT', 'CONNECTOR_PROPOSED') AND (measures LIKE '%owner login for revoke%' OR measures LIKE '%PERMISSION_RECORD%')`);
+    expect(named).toEqual([]);
   });
 });
 

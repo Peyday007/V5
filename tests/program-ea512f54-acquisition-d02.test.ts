@@ -6,7 +6,7 @@ import {
   repeatedUseFromRows,
 } from '../server/services/sources/acquisition.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, SCRIPT_CONVERSION_RUNS } from '../server/services/sources/accessMethods.ts';
-import { operateEvidenceOfRead, readSource, resetSourceAccessMemory, robotsAllows, robotsRules } from '../server/services/sources/access.ts';
+import { readSource, resetSourceAccessMemory, robotsAllows, robotsRules } from '../server/services/sources/access.ts';
 import { getDb } from '../server/db/database.ts';
 import { freshProject } from './helpers.ts';
 
@@ -241,8 +241,7 @@ describe('repeatedUseFromRows is exercised alongside the judgment', () => {
   });
 });
 
-describe('OPERATE has a production producer, separate from ACQUIRE', () => {
-  const attempt = (method: string, readable: boolean) => ({ method: method as never, readable, reason: readable ? null : 'EMPTY', status: null, ms: 1 });
+describe('a read is ACQUIRE only: OPERATE is never recorded for a page that was only read', () => {
   const PAGE = 'Official statistics say the median wage was 41,000 dollars in 2025. '.repeat(10);
   const okFetch = (url: string) => ({ readable: true as const, requestedUrl: url, finalUrl: url, status: 200, contentType: 'text/html', retrievedAt: 'now', sha256: 'x', text: PAGE, truncated: false, totalChars: PAGE.length });
   const emptyFetch = (url: string) => ({ readable: false as const, requestedUrl: url, finalUrl: url, status: 200, retrievedAt: 'now', reason: 'EMPTY' as never, detail: 'needs a browser' });
@@ -250,31 +249,6 @@ describe('OPERATE has a production producer, separate from ACQUIRE', () => {
     const rows = await getDb().all<{ measures: string }>(`SELECT measures FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT' AND workload_class = ?`, [caller]);
     return rows.map((r) => (JSON.parse(r.measures) as { capability: string }).capability).sort();
   };
-
-  it('a read that never opened the browser says nothing about operating an interface', () => {
-    expect(operateEvidenceOfRead({ attempts: [attempt('DIRECT', true)] }, null, {}, { hostUnderOperateRecord: true })).toBeNull();
-  });
-
-  it('a browser render of a public page is a read, not an operation', () => {
-    const attempts = [attempt('DIRECT', false), attempt('BROWSER', true)];
-    expect(operateEvidenceOfRead({ attempts }, null, { interfaceOnly: true, interfaceUnfamiliar: true }, { hostUnderOperateRecord: false })).toBeNull();
-    expect(operateEvidenceOfRead({ attempts: [attempt('BROWSER', false)] }, 'CAPTCHA', {}, { hostUnderOperateRecord: false })).toBeNull();
-  });
-
-  it('a browser attempt on a host under the operate record is OPERATE evidence, and no account is ever asserted', () => {
-    const ev = operateEvidenceOfRead({ attempts: [attempt('DIRECT', false), attempt('BROWSER', true)] }, null, { interfaceOnly: true, interfaceUnfamiliar: true }, { hostUnderOperateRecord: true });
-    expect(ev).toMatchObject({ interactiveInterfaceOnly: true, interfaceUnfamiliarOrChanged: true, authorizedAccountOnRecord: false });
-    const j = judgeAcquisitionNeed({ kind: 'OPERATE', purpose: 'p' }, ev!);
-    expect(j.capability).toBe('OPERATE');
-    expect(j.route).toBe('HUMAN_HANDOFF');
-    expect(j.boundaries).toEqual(['NO_AUTHORIZED_ACCOUNT']);
-  });
-
-  it('a boundary met after the browser is carried into the OPERATE judgment', () => {
-    const ev = operateEvidenceOfRead({ attempts: [attempt('BROWSER', false)] }, 'CAPTCHA', {}, { hostUnderOperateRecord: true })!;
-    expect(ev.blockedAtBoundary).toBe(true);
-    expect(judgeAcquisitionNeed({ kind: 'OPERATE', purpose: 'p' }, ev).boundaries).toEqual(['ACCESS_BARRIER']);
-  });
 
   const browserRead = (url: string, caller: string) =>
     readSource(url, {
@@ -306,12 +280,14 @@ describe('OPERATE has a production producer, separate from ACQUIRE', () => {
     expect(operateRows).toEqual([]);
   });
 
-  it('readSource writes one OPERATE and one ACQUIRE row when the browser ran on a host under the operate record', async () => {
+  it('a browser read of a host under a standing grant is still only an ACQUIRE row, naming no account', async () => {
     await freshProject();
     resetSourceAccessMemory();
     await recordOperatePermission({ host: 'operate-producer.example', granted: true, accountRef: 'owner login for operate-producer', grantedBy: 'owner' });
     await browserRead('https://operate-producer.example/app', 'operate-producer-test');
-    expect(await capabilitiesOf('operate-producer-test')).toEqual(['ACQUIRE', 'OPERATE']);
+    expect(await capabilitiesOf('operate-producer-test')).toEqual(['ACQUIRE']);
+    const rows = await getDb().all<{ measures: string }>(`SELECT measures FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT' AND workload_class = ?`, ['operate-producer-test']);
+    for (const r of rows) expect(r.measures).not.toContain('owner login for operate-producer');
   });
 
   it('a plain direct read produces no OPERATE row', async () => {
