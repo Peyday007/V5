@@ -284,3 +284,6 @@ async function releaseOne<T>(file: string, pick: (m: T) => Probe): Promise<Probe
 define('r01.goal-02', async (args) => (await releaseOne<typeof import('./release01/metricProbe.ts')>('./release01/metricProbe.ts', (m) => m.goalTwoHoldsOnRows))(args));
 define('r01.goal-09', async (args) => (await releaseOne<typeof import('./release01/acceptanceProbe.ts')>('./release01/acceptanceProbe.ts', (m) => m.goalAcceptanceHoldsOnRows))(args));
 define('r01.opp-04', async (args) => (await releaseOne<typeof import('./release01/pathwaysProbe.ts')>('./release01/pathwaysProbe.ts', (m) => m.opportunityPathsMarkedOnRows))(args));
+define('r01.auth-20-3', async (args) => (await releaseOne<typeof import('./release01/authorityProbe.ts')>('./release01/authorityProbe.ts', (m) => m.graduatedAuthorityHoldsOnRows))(args));
+define('r01.auth-21-6', async (args) => (await releaseOne<typeof import('./release01/authorityProbe.ts')>('./release01/authorityProbe.ts', (m) => m.readOnlyNeverActsOnRows))(args));
+define('r01.auth-34', async (args) => (await releaseOne<typeof import('./release01/authorityProbe.ts')>('./release01/authorityProbe.ts', (m) => m.policyToActionHoldsOnRows))(args));

@@ -641,6 +641,11 @@ export type RepairScope =
  * same way. A test whose subject cannot be established is a repair that could
  * only weaken the test, so it is refused: `REPAIR_SCOPE_INSUFFICIENT`, and no bin.
  */
+/** A path that records or documents the work rather than doing it. */
+export function isReferenceRecord(path: string): boolean {
+  return path.startsWith('objectives/') || path.startsWith('docs/') || (path.endsWith('.md') && !path.includes('/'));
+}
+
 export function resolveRepairScope(input: RepairScopeInput): RepairScope {
   /*
    * The reviewer's suggestions, else the files its statement names, else the
@@ -719,7 +724,15 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
     const existing = [...candidates].filter(onDisk);
     return existing.length === 1 ? existing[0]! : path;
   };
-  const evidenceFiles = [...new Set(named.filter(isConcrete).map(canonical))];
+  /*
+   * The program's record and the docs are where a reviewer looks a name up,
+   * not where a campaign fixes anything: they change through a program
+   * amendment, never a repair (production 2026-11-11, authority-d0-p0: "the
+   * only references to these probes are in objectives/…/release-01.map.json"
+   * made the map the repair's file, and the campaign stayed blocked asking a
+   * person to let a repair edit the authoritative record).
+   */
+  const evidenceFiles = [...new Set(named.filter(isConcrete).map(canonical))].filter((path) => !isReferenceRecord(path));
 
   if (evidenceFiles.length === 0) {
     const union = [...new Set(input.units.flatMap((unit) => unit.ownedPaths))];
