@@ -409,24 +409,79 @@ export function needExecutionOwner(blockerKey: string | null | undefined): NeedE
   return NEED_OWNER[kind] ?? UNTYPED_NEED_OWNER;
 }
 
+/**
+ * The real work row that now carries a need: an idea the research owner
+ * captured for its question (`startDependentWork` → a Russell candidate whose
+ * missions run on the fleet), or the execution job the commercial owner holds
+ * for its opening (`reconcileCashJobs` → `cash_jobs`, dealt to a person).
+ */
+export interface NeedWork {
+  kind: 'RESEARCH_IDEA' | 'CASH_JOB';
+  ref: string;
+  /** True when this hand-off's own call of the owner's pass created it. */
+  created: boolean;
+}
+
+/**
+ * Why a need carries no work after the hand-off, when it does not.
+ *
+ * - `PERSON`: only a person can supply it (a secret, a grant, an attestation).
+ * - `FACTORY`: what it waits on is code; the Software Factory is the owner.
+ * - `FACT`: it waits on a watched fact (a date, a dependency, a cost, a rule,
+ *   a reading); no worker can make that happen sooner.
+ * - `DECLINED`: the owner's own pass ran and refused to take it (an opening not
+ *   eligible for a job, a question its rules do not launch); the reason says why.
+ */
+export type NeedWait = 'PERSON' | 'FACTORY' | 'FACT' | 'DECLINED';
+
 export interface NeedHandoff {
   needId: string;
   projectId: string;
   opportunityId: string | null;
   route: NeedRoute;
   owner: string;
+  /** The work row allocated for it, or null with `waitsOn` saying why. */
+  work: NeedWork | null;
+  waitsOn: NeedWait | null;
+  reason: string;
+}
+
+const LIVE_RESEARCH_DEAD = new Set(['REJECTED', 'PARKED', 'MERGED', 'DONE']);
+const LIVE_MISSION_DEAD = new Set(['FAILED', 'CANCELLED', 'DONE', 'NEEDS_HUMAN']);
+
+/** The research idea a need points at, when that idea's research is still alive. */
+async function liveResearchFor(candidateId: string | null): Promise<string | null> {
+  if (!candidateId) return null;
+  const { getCandidate } = await import('../../repos/russellCandidates.ts');
+  const { latestMissionForCandidate } = await import('../../repos/russellMissions.ts');
+  const candidate = await getCandidate(candidateId);
+  if (!candidate || LIVE_RESEARCH_DEAD.has(candidate.state)) return null;
+  const mission = await latestMissionForCandidate(candidateId);
+  if (mission && LIVE_MISSION_DEAD.has(mission.state)) return null;
+  return candidate.id;
 }
 
 /**
- * Hand a gap's open needs to the owners that acquire them, instead of to the
- * Factory.
+ * Hand a gap's open needs to the owners that acquire them, and have those
+ * owners allocate the work (AUTO-20-2 step 5, S-0249: "Allocate actual workers
+ * and time; do not stop at a recommendation or spec").
  *
- * Each still-open need gets one `CASH_NEED_ROUTED` event naming its owner and
- * the gap that noticed it. Each project then gets one reconsideration pass, so
- * the fact each need waits on is read now rather than at the next tick. Every
- * blocked piece not waiting on a person has its decision recompute requested,
- * so the commercial owner re-plans it with the need in view. A need already
- * settled is skipped: the gap it was part of has closed that far on its own.
+ * Nothing new is scheduled here: each owner's own allocation pass is run now,
+ * once per project, and the work row it leaves on the need is read back.
+ *
+ * - RESEARCH: `startDependentWork` captures an idea for each question need and
+ *   points the need at it; the Russell loop runs its missions on the fleet.
+ * - COMMERCIAL: `reconcileCashJobs` prepares and deals the execution job for
+ *   an eligible opening; the job's tasks are derived from its open needs.
+ * - INTEGRATION: a capability a person must supply waits on that person; one
+ *   that is code waits on the Factory, which the improvement loop engineers.
+ * - WATCH: a watched fact; reconsideration reads it, and nothing is allocated.
+ * - PERSON: waits on the person.
+ *
+ * Reconsideration runs first, so a need whose fact already changed settles
+ * before anything is allocated for it. Each still-open need gets one
+ * `CASH_NEED_ROUTED` event recording the work row (or why there is none), and
+ * a need already settled is skipped.
  */
 export async function handNeedsToOwners(input: {
   needIds: readonly string[];
@@ -437,28 +492,105 @@ export async function handNeedsToOwners(input: {
   const at = input.now ?? new Date().toISOString();
   const handed: NeedHandoff[] = [];
   let skipped = 0;
+  const open: CashNeed[] = [];
   for (const id of [...new Set(input.needIds)]) {
     const need = await getNeed(id);
+    if (!need || need.state !== 'OPEN') skipped += 1;
+    else open.push(need);
+  }
+  // The fact each need waits on, read now: one that changed settles here rather than being worked.
+  const { reconsiderAffected } = await import('./reconsider.ts');
+  for (const projectId of new Set(open.map((n) => n.projectId))) await reconsiderAffected(projectId, { now: at });
+
+  const researchRan = new Map<string, Set<string>>();
+  const jobsRan = new Set<string>();
+  for (const before of open) {
+    const need = await getNeed(before.id);
     if (!need || need.state !== 'OPEN') {
       skipped += 1;
       continue;
     }
     const owner = needExecutionOwner(need.blockerKey);
+    const base = { needId: need.id, projectId: need.projectId, opportunityId: need.opportunityId, route: owner.route, owner: owner.owner };
+    let one: NeedHandoff;
+    if (owner.route === 'RESEARCH') {
+      const existing = await liveResearchFor(need.candidateId);
+      if (existing) {
+        one = { ...base, work: { kind: 'RESEARCH_IDEA', ref: existing, created: false }, waitsOn: null, reason: `its question is being researched as idea ${existing}` };
+      } else {
+        if (!researchRan.has(need.projectId)) {
+          const { startDependentWork } = await import('./operate.ts');
+          researchRan.set(need.projectId, new Set((await startDependentWork(need.projectId)).map((w) => w.needId)));
+        }
+        const after = await getNeed(need.id);
+        const started = await liveResearchFor(after?.candidateId ?? null);
+        one = started
+          ? { ...base, work: { kind: 'RESEARCH_IDEA', ref: started, created: researchRan.get(need.projectId)!.has(need.id) }, waitsOn: null, reason: `research idea ${started} captured for its question` }
+          : {
+              ...base,
+              work: null,
+              waitsOn: 'DECLINED',
+              reason: need.requestKey?.startsWith('question:')
+                ? 'the research owner did not launch it: its opening is ruled out, its deep dive owns the question, or there is no Cash sprint'
+                : 'the research owner launches only card questions; this need is not one',
+            };
+      }
+    } else if (owner.route === 'COMMERCIAL') {
+      if (!need.opportunityId) {
+        one = { ...base, work: null, waitsOn: 'DECLINED', reason: 'it names no opening, and the commercial workflow allocates work per opening' };
+      } else {
+        const { liveJobFor } = await import('../../repos/cashJobs.ts');
+        let job = await liveJobFor(need.opportunityId);
+        let created = false;
+        if (!job && !jobsRan.has(need.projectId)) {
+          jobsRan.add(need.projectId);
+          const { reconcileCashJobs } = await import('./jobPipeline.ts');
+          await reconcileCashJobs(need.projectId);
+          job = await liveJobFor(need.opportunityId);
+          created = job !== null;
+        }
+        one = job
+          ? { ...base, work: { kind: 'CASH_JOB', ref: job.id, created }, waitsOn: null, reason: `execution job ${job.id} (${job.state}) carries it` }
+          : { ...base, work: null, waitsOn: 'DECLINED', reason: 'the commercial workflow holds no execution job for its opening: the opening is not eligible for one' };
+      }
+    } else if (owner.route === 'INTEGRATION') {
+      const parsed = need.blockerKey ? parseBlockerKey(need.blockerKey) : null;
+      const capability = parsed && parsed !== 'PERSON' ? parsed.slice(parsed.indexOf(':') + 1) : '';
+      const { capabilityAcquisition } = await import('./capabilities.ts');
+      const acquisition = await capabilityAcquisition(capability);
+      const waitsOn: NeedWait = acquisition.by === 'PERSON' ? 'PERSON' : acquisition.by === 'FACTORY' ? 'FACTORY' : 'FACT';
+      one = { ...base, work: null, waitsOn, reason: acquisition.why };
+    } else if (owner.route === 'WATCH') {
+      one = { ...base, work: null, waitsOn: 'FACT', reason: owner.why };
+    } else {
+      one = { ...base, work: null, waitsOn: 'PERSON', reason: owner.why };
+    }
     await recordCashEvent({
       projectId: need.projectId,
       opportunityId: need.opportunityId,
       kind: 'CASH_NEED_ROUTED',
       actorRef: input.actorRef,
-      summary: `Handed to ${owner.owner} (${owner.route}): ${need.blockedAction}`.slice(0, 400),
-      detail: { needId: need.id, gapKey: input.gapKey, route: owner.route, owner: owner.owner, why: owner.why, blockerKey: need.blockerKey },
+      summary: (one.work
+        ? `Handed to ${owner.owner} (${owner.route}) as ${one.work.kind} ${one.work.ref}: ${need.blockedAction}`
+        : `Not acquirable by ${owner.owner} (${owner.route}), waits on ${one.waitsOn}: ${need.blockedAction}`
+      ).slice(0, 400),
+      detail: {
+        needId: need.id,
+        gapKey: input.gapKey,
+        route: owner.route,
+        owner: owner.owner,
+        why: owner.why,
+        blockerKey: need.blockerKey,
+        work: one.work,
+        waitsOn: one.waitsOn,
+        reason: one.reason,
+      },
     });
-    handed.push({ needId: need.id, projectId: need.projectId, opportunityId: need.opportunityId, route: owner.route, owner: owner.owner });
+    handed.push(one);
   }
-  const { reconsiderAffected } = await import('./reconsider.ts');
   const { requestDecisionRecompute } = await import('../../repos/cashDecisions.ts');
-  for (const projectId of new Set(handed.map((h) => h.projectId))) await reconsiderAffected(projectId, { now: at });
   for (const one of handed) {
-    if (one.opportunityId && one.route !== 'PERSON') await requestDecisionRecompute(one.opportunityId, `NEED_ROUTED:${input.gapKey}`, at);
+    if (one.opportunityId && one.work) await requestDecisionRecompute(one.opportunityId, `NEED_ROUTED:${input.gapKey}`, at);
   }
   return { handed, skipped };
 }

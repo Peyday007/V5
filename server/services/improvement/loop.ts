@@ -738,38 +738,72 @@ async function recordValue(candidate: ImprovementCandidate, judgment: ValueJudgm
  * Hand a gap to the non-software owner that acquires it (AUTO-20-2 step 5, S-0249).
  *
  * UNMET_NEED: the open needs go to the owner their typed cause names (`cash/needs.ts`
- * handNeedsToOwners): reconsideration reads the fact now and each blocked piece is re-decided.
- * MISSED_OPPORTUNITY: the openings still inside their window go back to the cash lifecycle,
- * which re-decides them. The hand-off is recorded as the delivery, so the loop measures the
- * candidate's metric before and after it like any other repair (step 6). A gap whose every
- * piece waits on a person is held for that person; a gap whose rows all settled closes.
+ * handNeedsToOwners), whose own allocation pass runs now: a research idea for a question,
+ * an execution job for an opening. MISSED_OPPORTUNITY: the openings still inside their window
+ * get their decision recomputed and are carried by the execution job the commercial owner prepares.
+ *
+ * The hand-off is recorded as the delivery only when the owner actually allocated work: at
+ * least one need now carries a live research idea or execution job (S-0249: "Allocate actual
+ * workers and time; do not stop at a recommendation or spec"). Otherwise:
+ * - every row settled → REJECTED;
+ * - something waits on code → returns undefined, so the gap is valued like any other and a
+ *   Factory change competes for it (the route is set aside, not re-run);
+ * - everything waits on a person → HELD for that person;
+ * - everything waits on a watched fact or was declined by its owner → HELD on that fact,
+ *   with no person asked.
  */
 async function handToOwner(
   candidate: ImprovementCandidate,
   route: NonNullable<ReturnType<typeof executionRouteOf>>,
   now: Date,
   report: ImprovementTickReport,
-): Promise<string | null> {
+): Promise<string | null | undefined> {
   const { recordGapStep } = await import('../selfmodel/gapLoop.ts');
   const at = now.toISOString();
   let handed = 0;
-  let personOnly = false;
+  let allocated: { needId: string; kind: string; ref: string; created: boolean }[] = [];
+  let waiting: { needId: string; waitsOn: string; reason: string }[] = [];
   if (route.family === 'UNMET_NEED') {
     const { handNeedsToOwners } = await import('../cash/needs.ts');
     const result = await handNeedsToOwners({ needIds: route.observed, gapKey: candidate.weaknessKey, actorRef: 'improvement loop', now: at });
     handed = result.handed.length;
-    personOnly = handed > 0 && result.handed.every((h) => h.route === 'PERSON');
+    allocated = result.handed.filter((h) => h.work).map((h) => ({ needId: h.needId, kind: h.work!.kind, ref: h.work!.ref, created: h.work!.created }));
+    waiting = result.handed.filter((h) => !h.work).map((h) => ({ needId: h.needId, waitsOn: h.waitsOn ?? 'FACT', reason: h.reason }));
   } else {
     const { getOpportunity } = await import('../../repos/cashPortfolio.ts');
     const { requestDecisionRecompute } = await import('../../repos/cashDecisions.ts');
+    const { liveJobFor } = await import('../../repos/cashJobs.ts');
+    const { reconcileCashJobs } = await import('../cash/jobPipeline.ts');
+    const reconciled = new Set<string>();
     for (const id of new Set(route.observed)) {
       const opening = await getOpportunity(id);
       if (!opening || (opening.expiresAt && opening.expiresAt <= at)) continue;
-      await requestDecisionRecompute(id, `GAP_ROUTED:${candidate.weaknessKey}`, at);
       handed += 1;
+      await requestDecisionRecompute(id, `GAP_ROUTED:${candidate.weaknessKey}`, at);
+      // The work is the opening's execution job, prepared and dealt to a person by the commercial owner's own pass.
+      let job = await liveJobFor(id);
+      let created = false;
+      if (!job && !reconciled.has(opening.projectId)) {
+        reconciled.add(opening.projectId);
+        await reconcileCashJobs(opening.projectId);
+        job = await liveJobFor(id);
+        created = job !== null;
+      }
+      if (job) allocated.push({ needId: id, kind: 'CASH_JOB', ref: job.id, created });
+      else waiting.push({ needId: id, waitsOn: 'DECLINED', reason: 'the commercial workflow holds no execution job for it: the opening is not eligible for one' });
     }
   }
-  const basis = `${route.why}. Acquired by the existing owner ${route.owner} (${route.kind}), not by a Factory change or method research.`;
+  const waitsOnPerson = waiting.filter((w) => w.waitsOn === 'PERSON');
+  const waitsOnCode = waiting.filter((w) => w.waitsOn === 'FACTORY');
+  const basis =
+    allocated.length > 0
+      ? `${route.why}. Acquired by the existing owner ${route.owner} (${route.kind}): ${allocated.length} work row(s) allocated (${allocated
+          .slice(0, 5)
+          .map((w) => `${w.kind} ${w.ref}`)
+          .join(', ')}), not a Factory change or method research.`
+      : `${route.why}. The existing owner ${route.owner} (${route.kind}) allocated no work for it: ${
+          waiting.map((w) => `${w.waitsOn} — ${w.reason}`).slice(0, 3).join('; ') || 'every row settled'
+        }.`;
   await recordGapStep({
     gapKey: candidate.weaknessKey,
     step: 'VALUE',
@@ -785,6 +819,9 @@ async function handToOwner(
       owner: route.owner,
       basis,
       handed,
+      allocated: allocated.length,
+      work: allocated.slice(0, 20),
+      waiting: waiting.slice(0, 20),
     },
   });
   if (handed === 0) {
@@ -794,17 +831,46 @@ async function handToOwner(
     report.decided.push(`${candidate.weaknessKey} REJECTED`);
     return 'rejected: the rows settled on their own';
   }
-  if (personOnly) {
-    const ask = `a person settles what ${route.owner} cannot grant itself: ${candidate.title}`;
-    await decideCandidate(candidate.id, 'HELD', `${basis} Every piece waits on a person (${route.kind}).`.slice(0, 1000), { heldOn: ask.slice(0, 300) });
-    await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'HELD', needsPerson: true, personAction: ask, route: route.kind, owner: route.owner } });
+  if (allocated.length === 0) {
+    if (waitsOnCode.length > 0) {
+      // What it waits on is code: the owner cannot build it, so the gap is valued and a Factory change competes.
+      if (!candidate.evidence['ownerCannotAcquire']) {
+        const evidence = { ...candidate.evidence, ownerCannotAcquire: { route: route.kind, owner: route.owner, waiting: waitsOnCode.slice(0, 10), at } };
+        await patchCandidate(candidate.id, { evidence });
+        candidate.evidence = evidence;
+        await recordImprovementEvent({ candidateId: candidate.id, kind: 'OWNER_CANNOT_ACQUIRE', detail: { route: route.kind, owner: route.owner, waiting: waitsOnCode.slice(0, 10) } });
+      }
+      return undefined;
+    }
+    if (waitsOnPerson.length > 0) {
+      const ask = `a person settles what ${route.owner} cannot grant itself: ${candidate.title}`;
+      await decideCandidate(candidate.id, 'HELD', `${basis} It waits on a person (${route.kind}).`.slice(0, 1000), { heldOn: ask.slice(0, 300) });
+      await recordImprovementEvent({
+        candidateId: candidate.id,
+        kind: 'DECIDED',
+        detail: { decision: 'HELD', needsPerson: true, personAction: ask, route: route.kind, owner: route.owner, waiting: waitsOnPerson.slice(0, 10) },
+      });
+      report.decided.push(`${candidate.weaknessKey} HELD`);
+      return 'held: only a person can settle it';
+    }
+    const on = `the owner allocated nothing: ${waiting.map((w) => `${w.waitsOn} — ${w.reason}`).slice(0, 2).join('; ')}`;
+    await decideCandidate(candidate.id, 'HELD', `${basis}`.slice(0, 1000), { heldOn: on.slice(0, 300) });
+    await recordImprovementEvent({
+      candidateId: candidate.id,
+      kind: 'DECIDED',
+      detail: { decision: 'HELD', needsPerson: false, route: route.kind, owner: route.owner, waiting: waiting.slice(0, 10) },
+    });
     report.decided.push(`${candidate.weaknessKey} HELD`);
-    return 'held: only a person can settle it';
+    return 'held: waiting on a watched fact; no work could be allocated';
   }
   const ref = ownerHandoffRef(route);
   await patchCandidate(candidate.id, { deliveredAt: at, deliveredRef: ref });
-  await recordImprovementEvent({ candidateId: candidate.id, kind: 'DELIVERED', detail: { handedTo: route.owner, route: route.kind, handed, family: route.family } });
-  return `handed ${handed} row(s) to ${route.owner} (${route.kind})`;
+  await recordImprovementEvent({
+    candidateId: candidate.id,
+    kind: 'DELIVERED',
+    detail: { handedTo: route.owner, route: route.kind, handed, allocated: allocated.length, work: allocated.slice(0, 20), waiting: waiting.slice(0, 20), family: route.family },
+  });
+  return `handed ${handed} row(s) to ${route.owner} (${route.kind}), ${allocated.length} with work allocated`;
 }
 
 /** The ref a hand-off by one route is recorded under, so a later attempt can recognise the same route. */
@@ -871,8 +937,13 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
       const route = executionRouteOf(candidate);
       if (route) {
         const failed = await failedHandOffs(candidate, route);
-        if (failed.length === 0) return handToOwner(candidate, route, now, report);
-        await recordRouteSetAside(candidate, route, failed);
+        if (failed.length === 0) {
+          // undefined: the owner could allocate nothing because what is missing is code, so the gap is valued below.
+          const handedOff = await handToOwner(candidate, route, now, report);
+          if (handedOff !== undefined) return handedOff;
+        } else {
+          await recordRouteSetAside(candidate, route, failed);
+        }
       }
       // Then the next step is valued (step 4): every option the existing owners can carry out, compared on
       // expected value, cost, latency, opportunity cost and dependencies, and the best one is taken.
