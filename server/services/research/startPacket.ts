@@ -57,6 +57,7 @@ import { getApprovalEnvelope } from './approvalEnvelope.ts';
 import { decideReuse } from '../routing/reuse/reuse.ts';
 import { classifyAndRecord } from '../routing/classify/index.ts';
 import { sharedClaimsForProject } from '../knowledge/shared.ts';
+import { toDependencies } from '../../domain/dependencies.ts';
 
 /**
  * How much research this goal is authorized to consume.
@@ -551,6 +552,34 @@ async function existingGoalPacket(
 }
 
 /**
+ * The fragments marked for reuse that must still be created because a fragment
+ * that will be created waits on them (HARD or CONDITIONAL; SEQUENCING never
+ * blocks). Repeated to a fixed point, since keeping one fragment can make its
+ * own dependencies needed. Pure, so it is testable without a database.
+ */
+export function keptForDependents(
+  plan: readonly Pick<PlannedFragmentInput, 'fragmentKey' | 'dependsOn'>[],
+  reused: ReadonlySet<string>,
+): Set<string> {
+  const kept = new Set<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const fragment of plan) {
+      if (reused.has(fragment.fragmentKey) && !kept.has(fragment.fragmentKey)) continue;
+      for (const dependency of toDependencies(fragment.dependsOn)) {
+        if (dependency.kind === 'SEQUENCING') continue;
+        if (reused.has(dependency.key) && !kept.has(dependency.key)) {
+          kept.add(dependency.key);
+          changed = true;
+        }
+      }
+    }
+  }
+  return kept;
+}
+
+/**
  * Place a decomposition the caller compiled, with the rows a proposal produces.
  *
  * Deliberately not just `createFragments`. A worker's proposal goes through
@@ -621,6 +650,13 @@ export async function placePlan(
   } catch {
     reused.clear();
   }
+  // A fragment another created fragment waits on is researched, never reused
+  // away: `readyToResearch` starts a HARD dependent only once a fragment with
+  // that key is ACCEPTED, and a CONDITIONAL one only once it has finished, so a
+  // dependency key that was never created would hold its dependent QUEUED for
+  // ever. Researching the dependency is also how its answer reaches the
+  // dependent as a premise.
+  for (const key of keptForDependents(plan, reused)) reused.delete(key);
   if (!(reused.size > 0 && reused.size < plan.length)) {
     // Never reuse the whole plan away: a packet with no fragment has nothing to
     // audit, so an entirely answered plan keeps its fragments and the coverage
