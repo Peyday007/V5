@@ -43,6 +43,7 @@ import { advanceFulfillment, moveToDelivering, type FulfillmentPass } from './fu
 import { collectable, dealPosition } from './position.ts';
 import { recordOutcomes } from './learning.ts';
 import { recordDetectedExceptions } from '../deliverables/exceptions.ts';
+import { recordRealization } from '../deliverables/realization.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -60,6 +61,8 @@ export interface JourneyTickReport {
   outcomes: number;
   /** Exceptions the commitment rows show, and the new ones recorded this pass. */
   exceptions: { detected: number; recorded: number };
+  /** Obligations read for delivery and acceptance, plans or realizations appended, aftercare appended (LIFE-29-2). */
+  realization: { obligations: number; recorded: number; aftercare: number };
 }
 
 export async function advanceJourney(
@@ -75,6 +78,7 @@ export async function advanceJourney(
     collected: 0,
     outcomes: 0,
     exceptions: { detected: 0, recorded: 0 },
+    realization: { obligations: 0, recorded: 0, aftercare: 0 },
   };
   const mode = await getCashMode(projectId);
   if (!mode) return report;
@@ -161,6 +165,11 @@ export async function advanceJourney(
       const found = await recordDetectedExceptions({ projectId, opportunityId: listed.id, currency: mode.currency, now: now.toISOString() });
       report.exceptions.detected += found.detected;
       report.exceptions.recorded += found.recorded;
+      // LIFE-29-2: each declared obligation's delivery plan, from its agreed scope, and the aftercare its rows show.
+      const realized = await recordRealization({ projectId, opportunityId: listed.id, currency: mode.currency });
+      report.realization.obligations += realized.obligations;
+      report.realization.recorded += realized.recorded;
+      report.realization.aftercare += realized.aftercare;
     }
   }
   return report;

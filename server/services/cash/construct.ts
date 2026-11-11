@@ -120,6 +120,11 @@ export interface ConstructedArrangement {
   evidenced: number;
   /** The decomposition, resolved. */
   value: Pick<Estimate, 'tier' | 'p10' | 'p50' | 'p90'> & { observations: number };
+  /**
+   * The repeat rate a repeating design rests on, resolved, and how many of its
+   * observations are buyers' aftercare (LIFE-29-2). Null for a one-off design.
+   */
+  repeatRate: (Pick<Estimate, 'tier' | 'p10' | 'p50' | 'p90'> & { observations: number; aftercare: number; justified: boolean }) | null;
   /** Parts nothing establishes yet: what the research round asks. */
   unknownParts: string[];
   /** Openings sharing this buyer, for the novelty check and the value evidence. */
@@ -286,9 +291,29 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
       source: one.sourceClaimId ? { kind: 'CLAIM', ref: one.sourceClaimId } : { kind: 'CASH_OPPORTUNITY', ref: one.id },
       measures: `money tied up on "${one.title.slice(0, 60)}"`,
     }));
+  /*
+   * What buyers did after an accepted delivery (LIFE-29-2): the share of their
+   * accepted deliveries followed by more business, read from the aftercare the
+   * journey tick recorded. It is evidence about the repeat rate of an
+   * arrangement for that buyer, and only bounds it for any other buyer. A buyer
+   * with no accepted delivery has no reading, never a rate of zero.
+   */
+  const { aftercareByPayer } = await import('./deliverables/realization.ts');
+  const repeated: Observation[] = [...(await aftercareByPayer(input.projectId)).values()]
+    .filter((one) => one.accepted > 0 && allowed(one.payer))
+    .map((one): Observation => ({
+      id: `aftercare:${norm(one.payer)}`,
+      // A measured rate with its own sample: accepted deliveries, and how many of them more business followed.
+      value: { kind: 'COUNT', successes: Math.min(one.repeats, one.accepted), trials: one.accepted },
+      context: { payer: norm(one.payer), arrangement: 'held' },
+      lineage: one.eventIds.map((id) => `cash_event:${id}`),
+      source: { kind: 'OTHER', ref: 'cash_events:aftercare.recorded', note: `${one.repeats} repeat purchase(s) after ${one.accepted} accepted deliver${one.accepted === 1 ? 'y' : 'ies'}` },
+      observedAt: one.lastAt,
+      measures: `repeat business from ${one.payer.slice(0, 60)} after accepted deliveries`,
+    }));
   const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables' } : null;
   const designs = allDesigns(STRUCTURE_KEYS);
-  const ctx = { priced, tiedUp, input, limits, targets, exclusions, now };
+  const ctx = { priced, tiedUp, repeated, input, limits, targets, exclusions, now };
 
   const out: ConstructedArrangement[] = [];
   /*
@@ -349,6 +374,7 @@ function reverseArrangements(ctx: {
   capability: Primitive | null;
   priced: Observation[];
   tiedUp: Observation[];
+  repeated: Observation[];
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -448,6 +474,7 @@ function compose(args: {
   related: CashOpportunity[];
   priced: Observation[];
   tiedUp: Observation[];
+  repeated: Observation[];
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -471,6 +498,8 @@ function compose(args: {
   // evidence about another thing they buy, any other payer only bounds.
   const valueObs = args.priced.map((one) => ({ ...one, broad: one.context['payer'] !== norm(demand.name) }));
   const riskObs = args.tiedUp.map((one) => ({ ...one, broad: one.context['payer'] !== norm(demand.name) }));
+  // A buyer's own repeat purchases are direct evidence of its repeat rate; another buyer's only bound it.
+  const repeatObs = args.repeated.map((one) => ({ ...one, broad: one.context['payer'] !== norm(demand.name) }));
   const context = { payer: norm(demand.name), industry: norm(args.sector), arrangement: key };
   const captureFor = (): Parameters<typeof composeArrangement>[0]['capture'] =>
     def.capture === 'COMMISSION'
@@ -491,7 +520,7 @@ function compose(args: {
     cost: { min: 0, max: 100_000 },
     pooling: pooled ? { fixedCost: { min: 0, max: 1_000_000, context, material: [], observations: riskObs }, minParticipants: unknownCount(1, 10_000), threshold: design.funding === 'THRESHOLD_PRESALE' } : undefined,
     funding: design.funding !== 'ON_DELIVERY' ? { prepayShare: unknownShare } : undefined,
-    repeat: design.repeat !== 'ONE_OFF' ? { rate: unknownShare } : undefined,
+    repeat: design.repeat !== 'ONE_OFF' ? { rate: { ...unknownShare, context, material: [], observations: repeatObs } } : undefined,
   });
   let estimates: Record<string, Estimate> = {};
   try {
@@ -504,6 +533,7 @@ function compose(args: {
     estimates = {};
   }
   const value = estimates['a_value'];
+  const repeatRate = estimates['a_repeat_rate'];
   const core = ['buyers', 'need_rate', 'conversion', 'value', def.capture === 'COMMISSION' ? 'commission' : def.capture === 'FEE' ? 'fee' : 'supply_cost', ...(def.needsSupply ? ['supply_units'] : []), 'cost'];
   const leaves = [...core, ...designParts(design).filter((part) => !core.includes(part))];
   const unknownParts = leaves.filter((leaf) => {
@@ -571,6 +601,9 @@ function compose(args: {
     stress,
     evidenced,
     value: value ? { tier: value.tier, p10: value.p10, p50: value.p50, p90: value.p90, observations: value.used.length } : { tier: 'UNKNOWN', p10: 0, p50: 0, p90: 0, observations: 0 },
+    repeatRate: repeatRate
+      ? { tier: repeatRate.tier, p10: repeatRate.p10, p50: repeatRate.p50, p90: repeatRate.p90, observations: repeatRate.used.length, aftercare: repeatRate.used.filter((id) => id.startsWith('aftercare:')).length, justified: repeatRate.distributionJustified }
+      : null,
     unknownParts,
     relatedOpenings: args.related.map((one) => one.id),
     question,

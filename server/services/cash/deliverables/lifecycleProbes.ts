@@ -1,5 +1,5 @@
 /**
- * Production probes for the transaction lifecycle (LIFE-29-1, LIFE-29-3).
+ * Production probes for the transaction lifecycle (LIFE-29-1, LIFE-29-2, LIFE-29-3).
  *
  * Both read rows, never a constructed case:
  *
@@ -18,9 +18,14 @@
  * the tick has not yet recorded, or no rehearsed case at all, is a failure: nothing
  * to look at is not a demonstration (§39).
  *
- * `r01.life-29-2` (delivery plans and aftercare) is not registered: nothing in the
- * running Brain reads `deriveDeliveryPlan` or `recordAftercare` yet, so no row could
- * demonstrate it, and a probe that passed on nothing would be a counterfeit.
+ * `r01.life-29-2` — every declared obligation has a delivery plan on record
+ * (`delivery.realized`, written by the journey tick) whose steps are the agreement's
+ * own deliverable, never assigned to the buyer; its recorded delivery, acceptance and
+ * redo reading is re-derived from the fulfilment rows and must agree; at least one
+ * delivery has been accepted with evidence; and every accepted delivery's buyer has
+ * its aftercare on record (`aftercare.recorded`), which arrangement construction
+ * reads. No declared obligation, or none accepted, is a failure: nothing to look at
+ * is not a demonstration (§39).
  *
  * Registered here because `probes.ts` is a protected path; `exceptions.ts` imports
  * this module so it is registered wherever the journey tick loads.
@@ -31,6 +36,7 @@ import type { CommitmentReading } from './commitments.ts';
 
 export const COMMITMENT_PROBE = 'r01.life-29-1';
 export const EXCEPTION_PROBE = 'r01.life-29-3';
+export const REALIZATION_PROBE = 'r01.life-29-2';
 
 interface DealRef {
   project_id: string;
@@ -120,5 +126,77 @@ export async function exceptionsHoldOnRows(): Promise<ProbeResult> {
   return { ok: true, detail: `${detected} exception(s) shown by the rows are all on record; ${demonstrated.length} sourced rehearsal(s) traced including a failure path` };
 }
 
+interface RecordedRealization {
+  agreementId?: unknown;
+  plan?: { steps?: { promise?: unknown; fulfiller?: { ref?: unknown } | null }[] };
+  realization?: { delivered?: unknown; accepted?: unknown; rejected?: unknown; redoObligations?: { stepKey?: unknown; open?: unknown }[] };
+}
+
+const sameList = (a: unknown, b: readonly string[]): boolean =>
+  Array.isArray(a) && a.length === b.length && [...a].map(String).sort().join('\u0000') === [...b].sort().join('\u0000');
+
+export async function realizationHoldsOnRows(): Promise<ProbeResult> {
+  const { DELIVERY_REALIZED_EVENT, AFTERCARE_EVENT, readObligationRows, realizationOfObligation, partyKey } = await import('./realization.ts');
+  const db = getDb();
+  const declared = await db.all<{ project_id: string; opportunity_id: string; currency: string }>(
+    `SELECT DISTINCT f.project_id AS project_id, f.opportunity_id AS opportunity_id, a.currency AS currency
+       FROM cash_fulfillments f JOIN cash_agreements a ON a.id = f.agreement_id
+      WHERE a.released_at IS NULL ORDER BY f.project_id, f.opportunity_id`,
+  );
+  if (declared.length === 0) return { ok: false, detail: 'no obligation has been declared on a live agreement: no delivery to derive from a scope' };
+  let obligations = 0;
+  let accepted = 0;
+  let aftercare = 0;
+  for (const deal of declared) {
+    const recorded = await db.all<{ detail: string }>(
+      `SELECT detail FROM cash_events WHERE opportunity_id = ? AND kind = ? ORDER BY created_at, id`,
+      [deal.opportunity_id, DELIVERY_REALIZED_EVENT],
+    );
+    const latest = new Map<string, RecordedRealization>();
+    for (const row of recorded) {
+      const detail = JSON.parse(row.detail) as RecordedRealization;
+      if (typeof detail.agreementId === 'string') latest.set(detail.agreementId, detail);
+    }
+    const afterKeys = new Set(
+      (await db.all<{ detail: string }>(`SELECT detail FROM cash_events WHERE opportunity_id = ? AND kind = ?`, [deal.opportunity_id, AFTERCARE_EVENT]))
+        .map((row) => String((JSON.parse(row.detail) as { aftercareKey?: unknown }).aftercareKey ?? '')),
+    );
+    for (const rows of await readObligationRows(deal.project_id, deal.opportunity_id, deal.currency)) {
+      const id = rows.agreement.id;
+      const on = latest.get(id);
+      if (!on) return { ok: false, detail: `agreement ${id} has a declared obligation but no delivery plan on record` };
+      const steps = on.plan?.steps ?? [];
+      if (steps.length === 0 || steps.some((s) => s.promise !== rows.agreement.deliverable)) {
+        return { ok: false, detail: `agreement ${id}: the recorded plan is not derived from the agreed deliverable` };
+      }
+      if (steps.some((s) => typeof s.fulfiller?.ref === 'string' && partyKey(rows.payer) !== '' && s.fulfiller.ref === `buyer:${partyKey(rows.payer)}`)) {
+        return { ok: false, detail: `agreement ${id}: the buyer is recorded as its own fulfiller` };
+      }
+      // Re-derived a second way from the fulfilment rows; the capability readings do not enter these lists.
+      const now = realizationOfObligation(rows, new Map()).realization;
+      const was = on.realization ?? {};
+      if (!sameList(was.delivered, now.delivered) || !sameList(was.accepted, now.accepted) || !sameList(was.rejected, now.rejected)) {
+        return { ok: false, detail: `agreement ${id}: the recorded delivery and acceptance disagree with the fulfilment rows` };
+      }
+      const openNow = now.redoObligations.filter((r) => r.open).map((r) => r.stepKey);
+      const openWas = (was.redoObligations ?? []).filter((r) => r.open === true).map((r) => String(r.stepKey));
+      if (!sameList(openWas, openNow)) return { ok: false, detail: `agreement ${id}: the recorded redo obligations disagree with the fulfilment rows` };
+      obligations += 1;
+      if (now.accepted.includes(id)) {
+        accepted += 1;
+        if (partyKey(rows.payer) !== '') {
+          if (!afterKeys.has(`SATISFACTION:${id}`)) return { ok: false, detail: `agreement ${id} was accepted but its buyer's aftercare is not on record` };
+          aftercare += 1;
+        }
+      }
+    }
+  }
+  if (accepted === 0) {
+    return { ok: false, detail: `${obligations} obligation(s) planned from their agreed scope, but no delivery has been accepted with evidence yet` };
+  }
+  return { ok: true, detail: `${obligations} obligation(s) planned from their agreed scope and re-derived from their rows; ${accepted} accepted with evidence; ${aftercare} buyer aftercare record(s) on record for construction` };
+}
+
 registerProbe(COMMITMENT_PROBE, commitmentsHoldOnRows);
+registerProbe(REALIZATION_PROBE, realizationHoldsOnRows);
 registerProbe(EXCEPTION_PROBE, exceptionsHoldOnRows);

@@ -22,12 +22,29 @@
  *      returned as `Observation`-shaped economic evidence that deal
  *      construction reads through `aftercareEvidence`.
  *
- * Nothing here stores, schedules or authorizes: it is a pure derivation over
- * inputs the callers already hold, so it adds no store or authority path.
+ * The derivations are pure. The running Brain reaches them through
+ * `recordRealization`, which the journey tick calls for every deal with an
+ * agreement: it reads each declared obligation's own rows (the agreement's
+ * deliverable is the scope, the fulfilment declaration names the performer,
+ * the opportunity names the buyer, the fulfilment events are the delivery and
+ * acceptance evidence, the money ledger is the accounting) and appends what
+ * changed to the existing append-only `cash_events` log as `delivery.realized`
+ * and `aftercare.recorded`. No table, schedule or authority path is added.
+ * Arrangement construction (`construct.ts`) reads the aftercare back through
+ * `aftercareByPayer` as observations of a buyer's repeat rate.
+ *
  * Unknown stays unknown (invariant 39): an unstated fact is named, never
  * assumed favourably, and nothing here names an industry or a category.
  */
+import { createHash } from 'node:crypto';
 import { readCapabilities, type CapabilityState } from '../capabilities.ts';
+import { agreementsFor, agreementsInProject } from '../../../repos/cashJourney.ts';
+import { fulfillmentEvents, fulfillmentForAgreement } from '../../../repos/cashFulfillment.ts';
+import { getOpportunity } from '../../../repos/cashPortfolio.ts';
+import { totalsByKind } from '../../../repos/cashLedger.ts';
+import { cashEventsOfKind, cashEventsOfKindInProject, recordCashEvent } from '../../../repos/cashMode.ts';
+import type { CashAgreement } from '../../../domain/cashJourney.ts';
+import type { CashFulfillment, CashFulfillmentEvent } from '../../../domain/cashFulfillment.ts';
 
 /* ---------------------------------------------------------------------------
  * Scope and fulfillers
@@ -437,4 +454,259 @@ export function aftercareEvidence(reading: AftercareReading): { partyId: string;
       };
     })
     .sort((a, b) => a.partyId.localeCompare(b.partyId));
+}
+
+/* ---------------------------------------------------------------------------
+ * The running Brain: obligations read from their rows
+ * ------------------------------------------------------------------------ */
+
+/** A declared obligation's delivery plan and realization, appended when they change. */
+export const DELIVERY_REALIZED_EVENT = 'delivery.realized';
+/** One aftercare relationship a deal's rows show, appended once. */
+export const AFTERCARE_EVENT = 'aftercare.recorded';
+
+/** How a fulfilment kind would be produced by Brain itself; a person or supplier is a party instead. */
+const KIND_CAPABILITY: Readonly<Record<string, string>> = { SOFTWARE: 'BUILD_SOFTWARE', RESEARCH: 'RESEARCH_A_QUESTION' };
+
+/** One spelling of a counterparty, so the buyer named on two openings is one party. */
+export const partyKey = (name: string | null | undefined): string => (name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+export interface ObligationRows {
+  agreement: CashAgreement;
+  fulfillment: CashFulfillment;
+  /** The opportunity's payer: the buyer. Null when nobody established one. */
+  payer: string | null;
+  events: CashFulfillmentEvent[];
+  /** Stated only when the opportunity's ledger belongs to this one agreement. */
+  accounting?: AccountingInput;
+}
+
+/**
+ * The scope and parties of one declared obligation. The scope is the
+ * agreement's own deliverable, verbatim; the performer is who the declaration
+ * names; a performer who is the buyer is entered as the buyer, so the plan
+ * refuses it. Pure.
+ */
+export function scopeOfObligation(rows: ObligationRows): { scope: ScopeItem[]; parties: Party[] } {
+  const key = rows.agreement.id;
+  const capabilityId = KIND_CAPABILITY[rows.fulfillment.kind];
+  const scope: ScopeItem[] = [{ key, promise: rows.agreement.deliverable, ...(capabilityId ? { capabilityId } : {}) }];
+  const parties: Party[] = [];
+  const buyer = partyKey(rows.payer);
+  if (buyer) parties.push({ id: `buyer:${buyer}`, name: rows.payer!, role: 'BUYER' });
+  if (rows.fulfillment.kind === 'SUPPLIER' || rows.fulfillment.kind === 'PERSON') {
+    const name = rows.fulfillment.kind === 'SUPPLIER' ? rows.fulfillment.supplierName ?? rows.fulfillment.performer : rows.fulfillment.performer;
+    const isBuyer = buyer !== '' && partyKey(name) === buyer;
+    const role: Party['role'] = isBuyer ? 'BUYER' : rows.fulfillment.kind === 'SUPPLIER' ? 'SUPPLIER' : 'PERSON';
+    parties.push({ id: `${role.toLowerCase()}:${partyKey(name)}`, name, role, canPerform: [key] });
+  }
+  return { scope, parties };
+}
+
+/** The plan and the realization of one obligation, from its rows and the capability readings. Pure. */
+export function realizationOfObligation(
+  rows: ObligationRows,
+  readings: ReadonlyMap<string, CapabilityState>,
+): { plan: DeliveryPlan; realization: RealizationReading } {
+  const { scope, parties } = scopeOfObligation(rows);
+  const plan = deriveDeliveryPlan({ scope, parties, readings });
+  const stepKey = rows.agreement.id;
+  const said = (e: CashFulfillmentEvent) => (e.evidenceRef?.trim() || e.detail.trim());
+  const deliveries: DeliveryRecord[] = rows.events
+    .filter((e) => e.kind === 'DELIVERED')
+    .map((e) => ({ stepKey, deliveredAt: e.createdAt, evidence: said(e) }));
+  const acceptances: AcceptanceRecord[] = rows.events
+    .filter((e) => e.kind === 'ACCEPTED' || e.kind === 'REJECTED')
+    .map((e) => ({ stepKey, outcome: e.kind as 'ACCEPTED' | 'REJECTED', at: e.createdAt, evidence: said(e), reason: e.detail }));
+  const realization = readRealization({ plan, deliveries, acceptances, redos: [], accounting: rows.accounting });
+  return { plan, realization };
+}
+
+/** Every declared obligation on an opportunity, read from its rows. Released agreements are history, not obligations. */
+export async function readObligationRows(projectId: string, opportunityId: string, currency: string): Promise<ObligationRows[]> {
+  const opportunity = await getOpportunity(opportunityId);
+  const live = (await agreementsFor(opportunityId)).filter((a) => a.projectId === projectId && !a.releasedAt);
+  const out: ObligationRows[] = [];
+  for (const agreement of live) {
+    const fulfillment = await fulfillmentForAgreement(agreement.id);
+    if (!fulfillment) continue;
+    let accounting: AccountingInput | undefined;
+    if (live.length === 1 && agreement.currency === currency) {
+      const totals = await totalsByKind({ projectId, opportunityId, currency });
+      accounting = { billedCents: agreement.amountCents, receivedCents: totals.CUSTOMER_PAYMENT ?? 0, refundedCents: totals.REFUND ?? 0, costCents: totals.COST ?? 0 };
+    }
+    out.push({ agreement, fulfillment, payer: opportunity?.payer ?? null, events: await fulfillmentEvents(fulfillment.id), ...(accounting ? { accounting } : {}) });
+  }
+  return out;
+}
+
+const REPEAT_AFTER_ACCEPTANCE: Record<'SAME' | 'OTHER', AftercareKind> = { SAME: 'RENEWAL', OTHER: 'FOLLOW_UP_REQUEST' };
+
+/**
+ * The aftercare the rows show for one obligation. Pure. An accepted delivery is
+ * the buyer's stated satisfaction with its acceptance condition (no score is
+ * invented); a later agreement from the same buyer is repeat business — a
+ * renewal on the same opening, a follow-up request on another — carrying its
+ * own amount and evidence.
+ */
+export function aftercareFromRows(input: {
+  rows: ObligationRows;
+  realization: RealizationReading;
+  later: { agreement: CashAgreement; payer: string | null }[];
+}): (AftercareRecord & { key: string })[] {
+  const buyer = partyKey(input.rows.payer);
+  if (!buyer || !input.realization.accepted.includes(input.rows.agreement.id)) return [];
+  const acceptedAt = input.rows.events.filter((e) => e.kind === 'ACCEPTED').map((e) => e.createdAt).sort().at(-1);
+  const acceptance = input.rows.events.filter((e) => e.kind === 'ACCEPTED').at(-1);
+  if (!acceptedAt || !acceptance) return [];
+  const out: (AftercareRecord & { key: string })[] = [
+    {
+      key: `SATISFACTION:${input.rows.agreement.id}`,
+      kind: 'SATISFACTION',
+      partyId: buyer,
+      at: acceptedAt,
+      evidence: acceptance.evidenceRef?.trim() || acceptance.detail.trim(),
+      detail: `accepted the delivery of agreement ${input.rows.agreement.id} against "${input.rows.agreement.acceptanceCondition}"`,
+    },
+  ];
+  for (const next of input.later) {
+    if (next.agreement.id === input.rows.agreement.id || partyKey(next.payer) !== buyer || next.agreement.createdAt <= acceptedAt) continue;
+    const kind = REPEAT_AFTER_ACCEPTANCE[next.agreement.opportunityId === input.rows.agreement.opportunityId ? 'SAME' : 'OTHER'];
+    out.push({
+      key: `${kind}:${input.rows.agreement.id}->${next.agreement.id}`,
+      kind,
+      partyId: buyer,
+      at: next.agreement.createdAt,
+      evidence: next.agreement.evidenceRef,
+      ...(next.agreement.currency === input.rows.agreement.currency ? { valueCents: next.agreement.amountCents } : {}),
+      detail: `agreed "${next.agreement.deliverable}" after accepting agreement ${input.rows.agreement.id}`,
+    });
+  }
+  return out;
+}
+
+function digestOf(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16);
+}
+
+/**
+ * The journey tick's step for one deal: derive each declared obligation's
+ * delivery plan from its agreed scope, read its delivery, acceptance, redo and
+ * accounting from its rows, and append what changed; then append each aftercare
+ * relationship the rows show, once. Idempotent, so the tick may run as often as
+ * it likes. Writes nothing but `cash_events` rows.
+ */
+export async function recordRealization(input: {
+  projectId: string;
+  opportunityId: string;
+  currency: string;
+}): Promise<{ obligations: number; recorded: number; aftercare: number }> {
+  const all = await readObligationRows(input.projectId, input.opportunityId, input.currency);
+  if (all.length === 0) return { obligations: 0, recorded: 0, aftercare: 0 };
+  const prior = await cashEventsOfKind(input.opportunityId, DELIVERY_REALIZED_EVENT);
+  const knownAftercare = new Set(
+    (await cashEventsOfKindInProject(input.projectId, AFTERCARE_EVENT)).map((e) => String((e.detail as { aftercareKey?: unknown }).aftercareKey ?? '')),
+  );
+  let later: { agreement: CashAgreement; payer: string | null }[] | null = null;
+  let recorded = 0;
+  let aftercare = 0;
+  for (const rows of all) {
+    const { scope } = scopeOfObligation(rows);
+    const { plan, realization } = realizationOfObligation(rows, await readScopeCapabilities(scope));
+    const digest = digestOf({ plan, realization });
+    const last = prior.filter((e) => (e.detail as { agreementId?: unknown }).agreementId === rows.agreement.id).at(-1);
+    if ((last?.detail as { digest?: unknown } | undefined)?.digest !== digest) {
+      await recordCashEvent({
+        projectId: input.projectId,
+        opportunityId: input.opportunityId,
+        kind: DELIVERY_REALIZED_EVENT,
+        actorRef: 'BRAIN',
+        summary: (
+          `${plan.steps.length} delivery step(s) from the agreed scope; ` +
+          `${realization.delivered.length} delivered, ${realization.accepted.length} accepted, ${realization.rejected.length} rejected, ` +
+          `${realization.redoObligations.filter((r) => r.open).length} redo open${realization.realized ? '; realized' : ''}`
+        ).slice(0, 300),
+        detail: {
+          agreementId: rows.agreement.id,
+          fulfillmentId: rows.fulfillment.id,
+          scopeFrom: 'agreement.deliverable',
+          buyer: rows.payer,
+          digest,
+          plan,
+          realization,
+        },
+      });
+      recorded += 1;
+    }
+    if (realization.accepted.length === 0 || !partyKey(rows.payer)) continue;
+    if (later === null) {
+      const agreements = (await agreementsInProject(input.projectId)).filter((a) => !a.releasedAt);
+      const payers = new Map<string, string | null>();
+      for (const a of agreements) if (!payers.has(a.opportunityId)) payers.set(a.opportunityId, (await getOpportunity(a.opportunityId))?.payer ?? null);
+      later = agreements.map((agreement) => ({ agreement, payer: payers.get(agreement.opportunityId) ?? null }));
+    }
+    const found = aftercareFromRows({ rows, realization, later });
+    const valid = recordAftercare(found);
+    for (const record of found) {
+      if (knownAftercare.has(record.key)) continue;
+      const evidence = valid.evidence.find((e) => e.kind === record.kind && e.at === record.at && e.evidence === record.evidence);
+      if (!evidence) continue;
+      await recordCashEvent({
+        projectId: input.projectId,
+        opportunityId: input.opportunityId,
+        kind: AFTERCARE_EVENT,
+        actorRef: 'BRAIN',
+        summary: `${record.kind.toLowerCase().replace(/_/g, ' ')} from ${rows.payer}: ${record.detail ?? ''}`.slice(0, 300),
+        detail: { aftercareKey: record.key, agreementId: rows.agreement.id, payer: rows.payer, record: evidence },
+      });
+      knownAftercare.add(record.key);
+      aftercare += 1;
+    }
+  }
+  return { obligations: all.length, recorded, aftercare };
+}
+
+export interface PayerAftercare {
+  /** The buyer's name as the opening states it. */
+  payer: string;
+  /** Deliveries this buyer accepted. */
+  accepted: number;
+  /** Repeat business after an accepted delivery: renewals, follow-ups, upsells, cross-sells, referrals. */
+  repeats: number;
+  statedRepeatValueCents: number | null;
+  /** The `cash_events` rows it rests on. */
+  eventIds: string[];
+  lastAt: string;
+}
+
+/**
+ * The aftercare on record, by buyer, for deal construction to read. Records are
+ * re-validated through `recordAftercare`, so a malformed row is dropped rather
+ * than counted. A buyer with no record is absent — unknown, never "will not return".
+ */
+export async function aftercareByPayer(projectId: string): Promise<Map<string, PayerAftercare>> {
+  const events = await cashEventsOfKindInProject(projectId, AFTERCARE_EVENT);
+  const out = new Map<string, PayerAftercare>();
+  for (const event of events) {
+    const detail = event.detail as { payer?: unknown; record?: AftercareEvidence };
+    if (typeof detail.payer !== 'string' || !detail.record) continue;
+    // Stored evidence carries null for what it did not state; the validator reads absent as undefined.
+    const { valueCents, score, detail: said, ...rest } = detail.record;
+    const reading = recordAftercare([
+      { ...rest, ...(valueCents !== null && valueCents !== undefined ? { valueCents } : {}), ...(score !== null && score !== undefined ? { score } : {}), ...(said ? { detail: said } : {}) },
+    ]);
+    const one = reading.evidence[0];
+    if (!one) continue;
+    const key = partyKey(detail.payer);
+    const slot = out.get(key) ?? { payer: detail.payer, accepted: 0, repeats: 0, statedRepeatValueCents: null, eventIds: [], lastAt: one.at };
+    if (one.kind === 'SATISFACTION') slot.accepted += 1;
+    if (REPEAT_KINDS.has(one.kind)) {
+      slot.repeats += 1;
+      if (one.valueCents !== null) slot.statedRepeatValueCents = (slot.statedRepeatValueCents ?? 0) + one.valueCents;
+    }
+    slot.eventIds.push(event.id);
+    if (one.at > slot.lastAt) slot.lastAt = one.at;
+    out.set(key, slot);
+  }
+  return out;
 }
