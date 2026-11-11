@@ -66,12 +66,24 @@ export interface GapLoopState {
   steps: GapStepRecord[];
   /** Latest record per step, by step. */
   latest: Partial<Record<GapLoopStep, GapStepRecord>>;
-  /** Steps not yet recorded, in vocabulary order: what a resuming worker may do next. */
+  /**
+   * Steps whose work is not currently standing, in vocabulary order: never
+   * recorded, or recorded and since undone — a failed VERIFY reopens ACQUIRE,
+   * and redoing a step makes every later step's older record stale.
+   */
   outstanding: GapLoopStep[];
-  /** The first outstanding step, or null when every step is recorded. */
+  /**
+   * What a resuming worker does next: the step a later record sent the loop
+   * back to, else the first outstanding step; null when every step stands or
+   * the loop is abandoned.
+   */
   next: GapLoopStep | null;
-  /** True once the loop has recorded INTEGRATE after its last ACQUIRE. */
+  /** The step a later record reopened and that has not been redone since, or null. */
+  reopened: GapLoopStep | null;
+  /** True once INTEGRATE stands: recorded, and not undone by a later redo or reopening. */
   integrated: boolean;
+  /** True while the standing VALUE judgment chose to abandon the direction. */
+  abandoned: boolean;
   cause: GapCause | null;
 }
 
@@ -92,6 +104,7 @@ export function refusalFor(step: GapLoopStep, detail: Record<string, unknown>, s
     case 'VALUE':
       return text('chosen') && text('alternatives') ? null : 'a value judgment names the option chosen and the alternatives it was compared with';
     case 'ACQUIRE':
+      if (state.abandoned && detail['reopens'] === undefined) return 'the standing value judgment abandoned this direction: record a new VALUE before acquiring';
       if (!state.latest.SEARCH_EXISTING) return 'reuse comes first: record SEARCH_EXISTING before acquiring or constructing anything';
       return text('owner') ? null : 'acquisition names the existing execution owner that does the work';
     case 'VERIFY':
@@ -128,18 +141,75 @@ export function gapStateFrom(gapKey: string, rows: readonly Row[]): GapLoopState
   }
   const latest: Partial<Record<GapLoopStep, GapStepRecord>> = {};
   for (const record of steps) latest[record.step] = record;
-  const outstanding = GAP_LOOP_STEPS.filter((step) => !latest[step]);
-  const lastAcquire = latest.ACQUIRE?.at ?? null;
+
+  // Replay the records in order. A step stands once recorded; it stops
+  // standing when an earlier step is redone (its record now predates the work
+  // it rested on) or when a later record reopens it. First recordings in any
+  // order invalidate nothing: the steps are a vocabulary, not a pipeline.
+  const standing = new Set<GapLoopStep>();
+  const everRecorded = new Set<GapLoopStep>();
+  let reopened: GapLoopStep | null = null;
+  const unstandFrom = (from: GapLoopStep): void => {
+    for (const step of GAP_LOOP_STEPS.slice(GAP_LOOP_STEPS.indexOf(from))) standing.delete(step);
+  };
+  for (const record of steps) {
+    if (everRecorded.has(record.step)) unstandFrom(nextStepAfter(record.step) ?? record.step);
+    everRecorded.add(record.step);
+    standing.add(record.step);
+    if (reopened !== null && GAP_LOOP_STEPS.indexOf(record.step) <= GAP_LOOP_STEPS.indexOf(reopened)) reopened = null;
+    const target = reopenTarget(record);
+    if (target !== null && GAP_LOOP_STEPS.indexOf(target) <= GAP_LOOP_STEPS.indexOf(record.step)) {
+      unstandFrom(target);
+      reopened = target;
+    }
+  }
+
+  const abandoned = standing.has('VALUE') && latest.VALUE !== undefined && isAbandonDecision(latest.VALUE.detail);
+  const outstanding = GAP_LOOP_STEPS.filter((step) => !standing.has(step));
   const cause = latest.HYPOTHESIS?.detail['cause'];
   return {
     gapKey,
     steps,
     latest,
     outstanding,
-    next: outstanding[0] ?? null,
-    integrated: Boolean(latest.INTEGRATE && (lastAcquire === null || latest.INTEGRATE.at >= lastAcquire)),
+    next: abandoned ? null : (reopened ?? outstanding[0] ?? null),
+    reopened,
+    integrated: standing.has('INTEGRATE'),
+    abandoned,
     cause: GAP_CAUSES.includes(cause as GapCause) ? (cause as GapCause) : null,
   };
+}
+
+function nextStepAfter(step: GapLoopStep): GapLoopStep | null {
+  return GAP_LOOP_STEPS[GAP_LOOP_STEPS.indexOf(step) + 1] ?? null;
+}
+
+/**
+ * The step a record sends the loop back to, or null. A record may name it
+ * (`detail.reopens`); a verification whose real-world comparison did not hold
+ * sends the loop back to acquisition unless it names another step.
+ */
+export function reopenTarget(record: Pick<GapStepRecord, 'step' | 'detail'>): GapLoopStep | null {
+  const named = GAP_LOOP_STEPS.find((one) => one === record.detail['reopens']);
+  if (named) return named;
+  if (record.step === 'VERIFY' && verificationFailed(record.detail)) return 'ACQUIRE';
+  return null;
+}
+
+/** A verification that says, in a structured field, that the comparison did not hold. */
+export function verificationFailed(detail: Record<string, unknown>): boolean {
+  if (detail['passed'] === false || detail['holds'] === false) return true;
+  const verdict = typeof detail['verdict'] === 'string' ? detail['verdict'] : typeof detail['outcome'] === 'string' ? detail['outcome'] : '';
+  return /^(fail|failed|not[_ ]?verified|worse|regress(ed|ion)?|refuted)$/i.test(verdict.trim());
+}
+
+/** A VALUE judgment that chose to abandon the direction rather than pursue it. */
+export function isAbandonDecision(detail: Record<string, unknown>): boolean {
+  if (detail['abandon'] === true || detail['abandoned'] === true) return true;
+  const decision = typeof detail['decision'] === 'string' ? detail['decision'] : '';
+  if (/^abandon(ed)?$/i.test(decision.trim())) return true;
+  const chosen = typeof detail['chosen'] === 'string' ? detail['chosen'] : '';
+  return /^\s*abandon/i.test(chosen);
 }
 
 /** Read a gap's loop from the database. Works after any loss of context or restart. */
@@ -152,7 +222,12 @@ export async function readGapLoop(gapKey: string): Promise<GapLoopState> {
   return gapStateFrom(gapKey, rows);
 }
 
-/** Gaps with a recorded loop that have not integrated, newest activity first: what to resume. */
+/**
+ * Gaps with a recorded loop that still have work to resume, newest activity
+ * first: not integrated, and not abandoned by their standing VALUE judgment. A
+ * later record that reopens an abandoned loop (a new VALUE, or a redone earlier
+ * step) brings it back, because the abandonment no longer stands.
+ */
 export async function openGapLoops(limit = 20): Promise<GapLoopState[]> {
   const keys = await getDb().all<{ workload_class: string }>(
     `SELECT workload_class FROM bin_events
@@ -161,7 +236,7 @@ export async function openGapLoops(limit = 20): Promise<GapLoopState[]> {
     [GAP_EVENT, Math.max(1, limit) * 3],
   );
   const states = await Promise.all(keys.map((row) => readGapLoop(row.workload_class)));
-  return states.filter((state) => !state.integrated).slice(0, limit);
+  return states.filter((state) => !state.integrated && !state.abandoned).slice(0, limit);
 }
 
 /** Record one step on a gap. Refused, and nothing written, when the step's mandatory content is missing. */
@@ -222,7 +297,7 @@ export async function searchExisting(input: { terms: readonly string[]; paths?: 
 /** The lines a status page prints for one loop. */
 export function formatGapLoop(state: GapLoopState): string[] {
   return [
-    `GAP ${state.gapKey} cause=${state.cause ?? 'unknown'} integrated=${state.integrated ? 'yes' : 'no'} next=${state.next ?? 'none'}`,
+    `GAP ${state.gapKey} cause=${state.cause ?? 'unknown'} integrated=${state.integrated ? 'yes' : 'no'}${state.abandoned ? ' abandoned=yes' : ''}${state.reopened ? ` reopened=${state.reopened}` : ''} next=${state.next ?? 'none'}`,
     ...state.steps.map((one) => `  ${one.at.slice(0, 19)}Z ${one.step.padEnd(15)} ${one.summary}`),
   ];
 }
