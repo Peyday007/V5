@@ -26,6 +26,7 @@
  */
 import type { CashMoneyEntry } from '../../../domain/types.ts';
 import { authorizeRefund } from '../journey/fulfillment.ts';
+import { checkCommercialAuthority, type CommercialAction } from '../authority.ts';
 import { cashEventsOfKind, recordCashEvent } from '../../../repos/cashMode.ts';
 import { listMoneyEntries } from '../../../repos/cashLedger.ts';
 import { readCommitments, type CommitmentReading, type CommitmentTransition, type DeclaredTransition, type ExternalDependency, type Party } from './commitments.ts';
@@ -212,6 +213,92 @@ export interface RemedyAuthority {
   standing: readonly Remedy[];
   /** Remedies a named person has approved for this case. */
   approved: readonly { remedy: Remedy; approvedBy: string; ceilingCents?: number }[];
+  /**
+   * The grant's per-action ceiling, when the standing list came from a live
+   * commercial grant. A remedy that spends is standing only when its stated
+   * cost fits under it; an unstated cost never does (§39).
+   */
+  standingCeilingCents?: number | null;
+  /** Which grant the standing list was read from, for the record. Null: none is live. */
+  grant?: { id: string; name: string; policyVersion: number } | null;
+}
+
+/**
+ * Which commercial action each remedy is, under the grant a person wrote
+ * (`authority.ts`). A remedy that commits the company in law or in money maps
+ * to nothing: no standing grant covers it, and it needs a person's approval for
+ * the case. The grant is about effects, so the mapping is too — reaching the
+ * buyer to escalate or reschedule is CONTACT_BUYER, bringing in another
+ * provider is ENGAGE_CONTRACTOR, and so on.
+ */
+export const REMEDY_ACTION: Readonly<Record<Remedy, CommercialAction | null>> = {
+  SUBSTITUTE_PROVIDER: 'ENGAGE_CONTRACTOR',
+  RENEGOTIATE_SCOPE: null,
+  RESCHEDULE: 'CONTACT_BUYER',
+  PARTIAL_DELIVERY: 'QUOTE_AND_INVOICE',
+  APPROVED_REFUND: null,
+  ALTERNATE_COLLECTION: 'ACCEPT_PAYMENT',
+  ESCALATE: 'CONTACT_BUYER',
+  ORDERLY_CANCELLATION: null,
+};
+
+/** Remedies that spend the owner's money, so the grant's per-action ceiling and currency bind them. */
+const SPENDING_REMEDIES: readonly Remedy[] = ['SUBSTITUTE_PROVIDER'];
+
+/**
+ * The authority a project actually holds over remedies, read from its live
+ * commercial grant through `checkCommercialAuthority` — the one authority path,
+ * so a prohibition, an expiry or a revocation refuses here exactly as it does
+ * everywhere else. Standing covers only non-committing remedies; per-case
+ * approvals are not standing authority and are passed by the caller that holds
+ * them (`rehearseStoredCase`, `carryOutApprovedRefund`).
+ */
+export async function remedyAuthorityFor(input: { projectId: string; currency: string; at?: string }): Promise<RemedyAuthority> {
+  const standing: Remedy[] = [];
+  let grant: RemedyAuthority['grant'] = null;
+  let ceiling: number | null = null;
+  const decisions = new Map<CommercialAction, Awaited<ReturnType<typeof checkCommercialAuthority>>>();
+  for (const remedy of REMEDIES) {
+    const action = REMEDY_ACTION[remedy];
+    if (!action || COMMITTING_REMEDIES.includes(remedy)) continue;
+    let decision = decisions.get(action);
+    if (!decision) {
+      decision = await checkCommercialAuthority({ projectId: input.projectId, action, at: input.at });
+      decisions.set(action, decision);
+    }
+    if (decision.authority) {
+      grant = { id: decision.authority.id, name: decision.authority.name, policyVersion: decision.authority.policyVersion };
+      ceiling = decision.authority.maxPerActionCents;
+    }
+    if (!decision.ok) continue;
+    if (SPENDING_REMEDIES.includes(remedy) && decision.authority?.currency !== input.currency) continue;
+    standing.push(remedy);
+  }
+  return { standing, approved: [], standingCeilingCents: ceiling, grant };
+}
+
+/**
+ * Facts the reading itself states: a declared escalation path, scheduling
+ * window, substitute provider or alternate collection channel. A dependency
+ * recorded as unsatisfied is not a fact that the remedy is available. Explicit
+ * facts win over what is read.
+ */
+export function factsFromReading(reading: CommitmentReading, explicit: RemedyFacts = {}): RemedyFacts {
+  const has = (re: RegExp): boolean | undefined =>
+    reading.dependencies.some((d) => re.test(d.kind) && d.satisfied !== false) ? true : undefined;
+  const read: RemedyFacts = {
+    escalationPath: has(/escalat/i),
+    rescheduleWindowAvailable: has(/schedul/i),
+    substituteProviderAvailable: has(/substitut|alternate provider|backup provider/i),
+    alternateCollectionChannel: has(/collection channel|alternate (payment|collection)/i),
+    partialDeliveryPossible: has(/milestone|partial/i),
+  };
+  const merged: RemedyFacts = {};
+  for (const key of Object.keys(read) as (keyof RemedyFacts)[]) {
+    const value = explicit[key] ?? read[key];
+    if (value !== undefined) merged[key] = value;
+  }
+  return merged;
 }
 
 /** What exists to carry a remedy out. Unstated means unavailable. */
@@ -231,6 +318,8 @@ export interface RemedyOption {
   feasible: boolean;
   /** Feasible and inside authority: it may be carried out now. */
   withinAuthority: boolean;
+  /** What authority covers it, feasible or not: the standing grant, a named approval, or nothing. */
+  authorizedBy: string | null;
   /** The specific smallest approval missing, when feasible but not authorized. */
   needsApproval: string | null;
   why: string;
@@ -305,17 +394,29 @@ export function selectRemedy(input: {
     const f = feasibility(remedy, facts, consequence);
     const approval = authority.approved.find((a) => a.remedy === remedy);
     const committing = COMMITTING_REMEDIES.includes(remedy);
-    const standing = authority.standing.includes(remedy) && !committing;
+    const standingCeiling = authority.standingCeilingCents ?? null;
+    const overStandingCeiling =
+      SPENDING_REMEDIES.includes(remedy) && standingCeiling !== null && (f.costCents === null || f.costCents > standingCeiling);
+    const granted = authority.standing.includes(remedy) && !committing;
+    const standing = granted && !overStandingCeiling;
     const overCeiling = approval?.ceilingCents !== undefined && f.costCents !== null && f.costCents > approval.ceilingCents;
     const withinAuthority = f.feasible && (standing || (Boolean(approval) && !overCeiling));
+    const grantName = authority.grant ? `the standing commercial authority "${authority.grant.name}"` : 'standing authority';
     return {
       remedy,
       feasible: f.feasible,
       withinAuthority,
+      authorizedBy: standing
+        ? `${grantName} (${REMEDY_ACTION[remedy] ?? remedy})`
+        : approval && !overCeiling
+          ? `${approval.approvedBy}'s approval`
+          : null,
       needsApproval: f.feasible && !withinAuthority
         ? overCeiling
           ? `${approval!.approvedBy}'s approval of ${remedy} covers ${approval!.ceilingCents} cents; it would cost ${f.costCents}`
-          : committing
+          : granted && overStandingCeiling
+            ? `${grantName} covers ${standingCeiling} cents per action; ${remedy} would cost ${f.costCents ?? 'an unstated amount'}`
+            : committing
             ? `a person's approval of ${remedy} for this case (it commits the company)`
             : `standing authority for ${remedy}`
         : null,
@@ -468,8 +569,10 @@ export async function rehearseStoredCase(input: {
   });
   const entries = await listMoneyEntries({ projectId: input.projectId, opportunityId: input.opportunityId, limit: 2000 });
   const detected = detectExceptions(reading, input.signals ?? []);
-  const authority: RemedyAuthority = input.authority ?? { standing: [], approved: [] };
-  const selections = detected.map((exception) => selectRemedy({ reading, exception, facts: input.facts ?? {}, authority }));
+  const authority: RemedyAuthority =
+    input.authority ?? (await remedyAuthorityFor({ projectId: input.projectId, currency: input.currency, at: input.now }));
+  const facts = factsFromReading(reading, input.facts);
+  const selections = detected.map((exception) => selectRemedy({ reading, exception, facts, authority }));
   const rehearsal = traceCase({ sourceRef: input.sourceRef, reading, entries, selections, recovered: input.recovered });
   const eventKind = rehearsal.valid ? 'rehearsal.traced' : 'rehearsal.refused';
   const event = await recordCashEvent({
@@ -487,7 +590,8 @@ export async function rehearseStoredCase(input: {
       reached: rehearsal.reached,
       steps: rehearsal.steps,
       exceptions: detected.map((d) => ({ id: d.id, kind: d.kind, source: d.source })),
-      decisions: selections.map((s) => ({ exceptionId: s.exception.id, chosen: s.chosen?.remedy ?? null, needs: s.needs, consequence: s.consequence })),
+      authority: { grant: authority.grant ?? null, standing: authority.standing, approved: authority.approved.map((a) => ({ remedy: a.remedy, approvedBy: a.approvedBy })) },
+      decisions: selections.map((s) => ({ exceptionId: s.exception.id, chosen: s.chosen?.remedy ?? null, authorizedBy: s.chosen?.authorizedBy ?? null, needs: s.needs, consequence: s.consequence })),
     },
   });
   return { rehearsal, detected, selections, eventId: event.id, eventKind };
@@ -499,8 +603,10 @@ export async function rehearseStoredCase(input: {
  * Reads one deal's commitments from the rows, detects the exceptions the rows
  * show (a missed date, a payment that failed, a rejected delivery, a released
  * commitment), quantifies each one's consequence and works out which remedy
- * each would take, strictly inside the authority held — which is none, so what
- * each needs is stated and nothing is carried out. A new exception is appended
+ * each would take, strictly inside the authority the project holds — its live
+ * commercial grant, read through `checkCommercialAuthority` — so a remedy the
+ * grant covers is chosen and what each other one needs is stated. Nothing is
+ * carried out here. A new exception is appended
  * once to `cash_events` as `exception.detected`; one already on record (by its
  * id, which is derived from the transition that shows it) is not recorded
  * again, so the tick can run as often as it likes. Stated exceptions (a scope
@@ -520,10 +626,13 @@ export async function recordDetectedExceptions(input: {
   const known = new Set(
     (await cashEventsOfKind(input.opportunityId, 'exception.detected')).map((event) => String((event.detail as { exceptionId?: unknown } | null)?.exceptionId ?? '')),
   );
+  // The project's own limits: its live commercial grant, read through the one authority path.
+  const authority = await remedyAuthorityFor({ projectId: input.projectId, currency: input.currency, at: input.now });
+  const facts = factsFromReading(reading);
   let recorded = 0;
   for (const exception of detected) {
     if (known.has(exception.id)) continue;
-    const selection = selectRemedy({ reading, exception, facts: {}, authority: { standing: [], approved: [] } });
+    const selection = selectRemedy({ reading, exception, facts, authority });
     await recordCashEvent({
       projectId: input.projectId,
       opportunityId: input.opportunityId,
@@ -537,8 +646,10 @@ export async function recordDetectedExceptions(input: {
         transitionId: exception.transitionId,
         evidence: exception.evidence,
         consequence: selection.consequence,
-        remedies: selection.options.map((o) => ({ remedy: o.remedy, feasible: o.feasible, withinAuthority: o.withinAuthority, needsApproval: o.needsApproval })),
+        authority: { grant: authority.grant ?? null, standing: authority.standing },
+        remedies: selection.options.map((o) => ({ remedy: o.remedy, feasible: o.feasible, withinAuthority: o.withinAuthority, authorizedBy: o.authorizedBy, needsApproval: o.needsApproval })),
         chosen: selection.chosen?.remedy ?? null,
+        authorizedBy: selection.chosen?.authorizedBy ?? null,
         needs: selection.needs,
         safeWork: selection.safeWork,
       },

@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
-import { createAuthority } from '../server/repos/cashAuthority.ts';
+import { createAuthority, liveAuthority, revokeAuthority } from '../server/repos/cashAuthority.ts';
 import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { cashEventsOfKind } from '../server/repos/cashMode.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
@@ -15,7 +15,7 @@ import { actionKey, beginExecution, capture, fillCard, markReady, recordMoneyEve
 import { CAPTURE_KEY, qualificationKeys } from '../server/services/cash/tier.ts';
 import { recordAgreement, releaseAgreement } from '../server/services/cash/journey/deal.ts';
 import { advanceJourney } from '../server/services/cash/journey/tick.ts';
-import { rehearseStoredCase } from '../server/services/cash/deliverables/exceptions.ts';
+import { rehearseStoredCase, remedyAuthorityFor } from '../server/services/cash/deliverables/exceptions.ts';
 import { commitmentProblem } from '../server/services/cash/deliverables/lifecycleProbes.ts';
 import { readCommitments } from '../server/services/cash/deliverables/commitments.ts';
 import { getProbe } from '../server/services/factory/program/probes.ts';
@@ -144,9 +144,20 @@ describe('the journey tick consumes the commitment model', () => {
     expect(first.exceptions.recorded).toBeGreaterThan(0);
     const events = await cashEventsOfKind(id, 'exception.detected');
     expect(events.length).toBe(first.exceptions.recorded);
-    const detail = events[0]!.detail as { kind: string; chosen: unknown; needs: unknown; remedies: unknown[] };
+    const detail = events[0]!.detail as {
+      kind: string; chosen: unknown; needs: unknown;
+      authority: { grant: { name: string } | null; standing: string[] };
+      remedies: { remedy: string; feasible: boolean; authorizedBy: string | null; needsApproval: string | null }[];
+    };
     expect(detail.kind).toBe('CANCELLATION');
-    expect(detail.chosen).toBeNull(); // no authority is held, so nothing is taken
+    // The project's live grant is what the selection was judged against, not an empty authority.
+    expect(detail.authority.grant?.name).toBe('Cash Mode commercial authority');
+    expect(detail.authority.standing).toContain('ESCALATE');
+    expect(detail.remedies.find((r) => r.remedy === 'ESCALATE')!.authorizedBy).toContain('CONTACT_BUYER');
+    // Committing remedies still need a person's approval for the case; the grant never covers them.
+    expect(detail.remedies.find((r) => r.remedy === 'ORDERLY_CANCELLATION')!.needsApproval).toContain('commits the company');
+    // No escalation path is stated in the rows, so nothing feasible is inside authority and nothing is taken.
+    expect(detail.chosen).toBeNull();
     expect(detail.remedies.length).toBeGreaterThan(0);
     const second = await advanceJourney(projectId);
     expect(second.exceptions.recorded).toBe(0);
@@ -169,6 +180,41 @@ describe('the journey tick consumes the commitment model', () => {
       expect(traced.rehearsal.valid).toBe(false);
       expect((await probe('r01.life-29-3')).ok).toBe(false);
     }
+  });
+
+  it("selects a remedy inside the project's live commercial grant, and none once the grant is revoked", async () => {
+    const id = await executing();
+    const agreement = await agree(id);
+    expect((await releaseAgreement({ agreementId: agreement.id, reason: 'The buyer cancelled.', actorRef: userId })).ok).toBe(true);
+    const dependencies = [{ kind: 'escalation path', detail: 'The owner calls the buyer before any release.' }];
+    const granted = await rehearseStoredCase({ projectId, opportunityId: id, currency: 'USD', sourceRef: `email-${id}`, actorRef: userId, dependencies });
+    const decision = granted.selections.find((s) => s.exception.kind === 'CANCELLATION')!;
+    expect(decision.chosen?.remedy).toBe('ESCALATE');
+    expect(decision.chosen?.authorizedBy).toContain('Cash Mode commercial authority');
+
+    const grant = await liveAuthority(projectId);
+    expect(await revokeAuthority({ authorityId: grant!.id, actorUserId: userId, reason: 'test' })).toBe(true);
+    const none = await remedyAuthorityFor({ projectId, currency: 'USD' });
+    expect(none.standing).toEqual([]);
+    expect(none.grant).toBeNull();
+    const revoked = await rehearseStoredCase({ projectId, opportunityId: id, currency: 'USD', sourceRef: `email-${id}`, actorRef: userId, dependencies });
+    const after = revoked.selections.find((s) => s.exception.kind === 'CANCELLATION')!;
+    expect(after.chosen).toBeNull();
+    expect(after.needs).toBeTruthy();
+  });
+
+  it('reads a prohibition in the grant: a remedy whose action is prohibited is not standing', async () => {
+    const grant = await liveAuthority(projectId);
+    expect(await revokeAuthority({ authorityId: grant!.id, actorUserId: userId, reason: 'narrow' })).toBe(true);
+    await createAuthority({
+      projectId, ownerUserId: userId, createdByUserId: userId, name: 'Narrow grant',
+      allowedActions: ['ACCEPT_PAYMENT'], prohibitions: [...ALWAYS_PROHIBITED_COMMERCIAL],
+      maxCommittedCents: 10_000, maxPerActionCents: 5_000, maxConcurrent: 1, currency: 'USD',
+    });
+    const a = await remedyAuthorityFor({ projectId, currency: 'USD' });
+    expect(a.standing).toEqual(['ALTERNATE_COLLECTION']);
+    expect(a.standingCeilingCents).toBe(5_000);
+    expect(a.grant?.name).toBe('Narrow grant');
   });
 
   it('fails an exception the rows show that was never recorded', async () => {

@@ -629,6 +629,17 @@ describe('LIFE-29-3: remedy selection stays inside authority', () => {
     expect(s.safeWork.join(' ')).toContain('honour supplier commitments already made');
   });
 
+  it("a spending remedy is standing only when its stated cost fits under the grant's per-action ceiling", () => {
+    const grant = { id: 'g', name: 'grant', policyVersion: 1 };
+    const supplierOwed = reading(); // owes a supplier 2_500
+    const inside = selectRemedy({ reading: supplierOwed, exception: missed, facts: { substituteProviderAvailable: true }, authority: { standing: ['SUBSTITUTE_PROVIDER'], approved: [], standingCeilingCents: 5_000, grant } });
+    expect(inside.chosen?.remedy).toBe('SUBSTITUTE_PROVIDER');
+    expect(inside.chosen?.authorizedBy).toContain('ENGAGE_CONTRACTOR');
+    const over = selectRemedy({ reading: supplierOwed, exception: missed, facts: { substituteProviderAvailable: true }, authority: { standing: ['SUBSTITUTE_PROVIDER'], approved: [], standingCeilingCents: 1_000, grant } });
+    expect(over.chosen).toBeNull();
+    expect(over.needs).toContain('1000 cents per action');
+  });
+
   it('the refund executor refuses without a named approver and above the approved ceiling, before touching any store', async () => {
     const base = { projectId: 'p', agreementId: 'a1', amountCents: 500, reason: 'dispute' };
     await expect(carryOutApprovedRefund({ ...base, approval: null })).resolves.toMatchObject({ ok: false });
