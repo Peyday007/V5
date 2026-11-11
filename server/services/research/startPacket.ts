@@ -55,6 +55,7 @@ import { workType } from '../queue/workTypes.ts';
 import { advancePacket, refusedByBudget, type AdvanceResult } from './packetRunner.ts';
 import { getApprovalEnvelope } from './approvalEnvelope.ts';
 import { decideReuse } from '../routing/reuse/reuse.ts';
+import { toDependencies } from '../../domain/dependencies.ts';
 import { classifyAndRecord } from '../routing/classify/index.ts';
 import { sharedClaimsForProject } from '../knowledge/shared.ts';
 
@@ -326,6 +327,38 @@ export interface StartPacketInput {
    * must not have a packet running underneath it.
    */
   attach?: ((orchestrationId: string) => Promise<void>) | undefined;
+}
+
+/**
+ * The plan with its reused fragments taken out, and the fragments that remain
+ * rewired so none of them waits on a key that will never exist.
+ *
+ * A fragment the archive already answers is not created, so a dependency on
+ * its key would never be ACCEPTED: a HARD dependent would sit QUEUED forever
+ * (`readyToResearch`) or be declared short a foundation (`unmetDependencies`),
+ * and the packet would stall on exactly the part that was already answered.
+ * The dependency is therefore met by the reused claims themselves: it is
+ * dropped from `dependsOn`, and the current claims that answered it are added
+ * to the dependent's `existingClaimIds`, so the worker is handed them as the
+ * premise it would otherwise have waited for. Pure.
+ */
+export function withoutReusedFragments(
+  plan: readonly PlannedFragmentInput[],
+  reused: ReadonlyMap<string, readonly string[]>,
+): PlannedFragmentInput[] {
+  if (reused.size === 0) return [...plan];
+  return plan
+    .filter((fragment) => !reused.has(fragment.fragmentKey))
+    .map((fragment) => {
+      const declared = toDependencies(fragment.dependsOn);
+      if (!declared.some((d) => reused.has(d.key))) return fragment;
+      const premise = declared.filter((d) => reused.has(d.key)).flatMap((d) => reused.get(d.key) ?? []);
+      return {
+        ...fragment,
+        dependsOn: declared.filter((d) => !reused.has(d.key)),
+        existingClaimIds: [...new Set([...(fragment.existingClaimIds ?? []), ...premise])],
+      };
+    });
 }
 
 /**
@@ -601,7 +634,7 @@ export async function placePlan(
   // missing or old is exactly the part that is researched. Reads are scoped to
   // this project (plus the shared pool, which is validated findings only), and
   // a read that fails costs a duplicate fragment, never a wrongly skipped one.
-  const reused = new Set<string>();
+  const reused = new Map<string, string[]>();
   try {
     const claims = [
       ...(await inventoryProject(orchestration.projectId)).claims,
@@ -616,7 +649,7 @@ export async function placePlan(
         claims,
         now,
       });
-      if (verdict.verdict === 'REUSE') reused.add(decision.fragmentKey);
+      if (verdict.verdict === 'REUSE') reused.set(decision.fragmentKey, verdict.currentClaimIds);
     }
   } catch {
     reused.clear();
@@ -627,7 +660,7 @@ export async function placePlan(
     // record beside them says why they were not needed.
     reused.clear();
   }
-  const toCreate = plan.filter((fragment) => !reused.has(fragment.fragmentKey));
+  const toCreate = withoutReusedFragments(plan, reused);
 
   // Route every fragment that survives reuse through the classifier, so the
   // ledger records which resource runs it and why. A researched question reads
