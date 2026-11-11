@@ -22,7 +22,7 @@ import { readTarget, setTarget } from '../server/services/goals/target.ts';
 import { readGoalPlan } from '../server/services/goals/plan.ts';
 import { composeGoalModel } from '../server/services/cash/goalScenario.ts';
 import { forgetKnowledge, ledgerFigure, loadCashKnowledge, observationsFor } from '../server/services/quant/knowledge.ts';
-import { quantifyRouteMoney, routeMoneyByOpportunity } from '../server/services/quant/deadline.ts';
+import { quantifyRouteMoney, routeInputsFromEntries } from '../server/services/quant/deadline.ts';
 import { CAPTURE_KEY } from '../server/services/cash/tier.ts';
 import type { CashMoneyEntry, CashMoneyKind, CashOpportunity } from '../server/domain/types.ts';
 
@@ -124,7 +124,16 @@ describe('route money reaches the goal plan through cash knowledge (MONEY-13-4, 
     expect(reading.inferred.some((one) => one.opportunityId === target.id && one.field === 'daysToCash')).toBe(true);
   });
 
-  it('holds each route to its own currency and leaves unstated stages unknown', () => {
+  it('holds each route to its own currency through the loader the plan reads', async () => {
+    const o = await opening('Priced in dollars', 40_000);
+    await deal(o, -20, 7, 9);
+    // A row on the same route in another currency is a different amount of a different thing.
+    expect((await recordMoney({ projectId, opportunityId: o.id, kind: 'CUSTOMER_PAYMENT', amountCents: 99_999, currency: 'EUR', occurredAt: inDays(-15), recordedBy: userId, idempotencyKey: `${o.id}-eur`, verifiedReference: 'ref-eur' })).ok).toBe(true);
+    const money = (await loadCashKnowledge(projectId)).routeMoney.get(o.id)!;
+    expect(money.identities.SETTLED_CASH).toBe(400);
+  });
+
+  it('leaves unstated stages unknown', () => {
     const entry = (kind: CashMoneyKind, cents: number, day: number, currency = 'USD', fundsAvailableAt: string | null = null): CashMoneyEntry => ({
       id: `e-${kind}-${day}-${currency}`,
       projectId: 'p',
@@ -142,11 +151,7 @@ describe('route money reaches the goal plan through cash knowledge (MONEY-13-4, 
       recordedBy: 'u',
       createdAt: inDays(day),
     });
-    const routes = routeMoneyByOpportunity(
-      [entry('PIPELINE_AGREED', 10_000, 0), entry('CUSTOMER_PAYMENT', 10_000, 5), entry('CUSTOMER_PAYMENT', 99_999, 3, 'EUR')],
-      (id) => (id === 'o1' ? 'USD' : null),
-    );
-    const money = routes.get('o1')!;
+    const money = quantifyRouteMoney(routeInputsFromEntries([entry('PIPELINE_AGREED', 10_000, 0), entry('CUSTOMER_PAYMENT', 10_000, 5)])[0]!);
     expect(money.identities.SETTLED_CASH).toBe(100);
     // No settlement row: funds-to-usable is unknown, so days to cash is not stated — never zero.
     expect(money.daysFundsToUsableCash).toBeNull();
@@ -154,7 +159,7 @@ describe('route money reaches the goal plan through cash knowledge (MONEY-13-4, 
     // No outlay row: neither cost nor capital share is invented.
     expect(ledgerFigure(money, 'costShare')).toBeNull();
     expect(ledgerFigure(quantifyRouteMoney({ routeKey: 'x', events: [] }), 'capitalShare')).toBeNull();
-    // An opportunity the caller does not know belongs to no route.
-    expect(routeMoneyByOpportunity([entry('PIPELINE_AGREED', 1, 0)], () => null).size).toBe(0);
+    // A row with no opportunity belongs to no route.
+    expect(routeInputsFromEntries([{ ...entry('PIPELINE_AGREED', 1, 0), opportunityId: null }])).toHaveLength(0);
   });
 });

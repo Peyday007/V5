@@ -32,11 +32,10 @@ import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { claimSources } from '../../repos/research.ts';
 import { cashOutcomeLessons, type CashLesson } from '../cash/journey/learning.ts';
 import { readMoneyFigures } from '../cash/figures.ts';
-import { listMoneyEntries } from '../../repos/cashLedger.ts';
 import type { CashCardFact, CashOpportunity } from '../../domain/types.ts';
 import type { Estimate, Observation, QuantityNode } from '../../domain/quant.ts';
 import { reconstruct } from './reconstruct.ts';
-import { routeMoneyByOpportunity, type RouteMoneyVelocity } from './deadline.ts';
+import { readRouteMoney, type RouteMoneyVelocity } from './deadline.ts';
 
 /** The opportunity quantities this adapter can infer, and how each is measured. */
 export const CASH_QUANTITIES = {
@@ -80,6 +79,24 @@ export interface CashKnowledge {
 
 const cache = new Map<string, { at: number; value: CashKnowledge }>();
 
+/**
+ * Every route's money, keyed by its opportunity, read through `readRouteMoney`
+ * once per currency the project's openings are priced in. A route is held to
+ * its own opening's currency: rows in another currency are a different amount
+ * of a different thing and are left out rather than summed beside it, and a
+ * row whose opportunity the project does not know belongs to no route.
+ */
+async function routeMoneyByOpportunity(projectId: string, opportunities: Map<string, CashOpportunity>): Promise<Map<string, RouteMoneyVelocity>> {
+  const currencies = [...new Set([...opportunities.values()].map((one) => one.currency).filter((one): one is string => !!one))];
+  const out = new Map<string, RouteMoneyVelocity>();
+  for (const currency of currencies) {
+    for (const money of await readRouteMoney({ projectId, currency })) {
+      if (opportunities.get(money.routeKey)?.currency === currency) out.set(money.routeKey, money);
+    }
+  }
+  return out;
+}
+
 export function forgetKnowledge(): void {
   cache.clear();
 }
@@ -88,17 +105,12 @@ export function forgetKnowledge(): void {
 export async function loadCashKnowledge(projectId: string, now = Date.now()): Promise<CashKnowledge> {
   const hit = cache.get(projectId);
   if (hit && now - hit.at < KNOWLEDGE_TTL_MS) return hit.value;
-  const [opportunities, facts, lessons, entries] = await Promise.all([
-    listOpportunities({ projectId }),
-    cardFactsForProject(projectId),
-    cashOutcomeLessons(projectId),
-    listMoneyEntries({ projectId, limit: 2000 }),
-  ]);
+  const [opportunities, facts, lessons] = await Promise.all([listOpportunities({ projectId }), cardFactsForProject(projectId), cashOutcomeLessons(projectId)]);
   const evidence = facts.filter((one) => one.kind === 'EVIDENCE');
   const sources = await claimSources(evidence.map((one) => one.claimId).filter((one): one is string => !!one));
   const watermark = facts.reduce((max, one) => (one.updatedAt > max ? one.updatedAt : max), '');
   const byId = new Map(opportunities.map((one) => [one.id, one]));
-  const routeMoney = routeMoneyByOpportunity(entries, (id) => byId.get(id)?.currency);
+  const routeMoney = await routeMoneyByOpportunity(projectId, byId);
   const value: CashKnowledge = { projectId, opportunities: byId, facts: evidence, lessons, sources, watermark, estimates: new Map(), routeMoney };
   cache.set(projectId, { at: now, value });
   return value;
