@@ -796,7 +796,15 @@ export function narrowsOrEqual(next: string[], current: string[]): boolean {
     const star = glob.indexOf('*');
     return star === -1 ? glob : glob.slice(0, star);
   };
-  const allowed = current.map((glob) => ({ stem: stem(glob), wild: glob.includes('*') }));
+  // A wildcard-free entry written as a directory (`docs/`) means the same as `docs`:
+  // the trailing slashes are dropped so the boundary test below adds exactly one.
+  // An entry that is nothing but slashes is kept as written: it must never become
+  // the empty stem, which is the `**` allow-everything shortcut.
+  const allowed = current.map((glob) => {
+    const wild = glob.includes('*');
+    const trimmed = glob.replace(/\/+$/, '');
+    return { stem: wild ? stem(glob) : trimmed === '' ? glob : trimmed, wild };
+  });
   if (allowed.some((a) => a.stem === '')) return true; // '**' allows everything in the tree
   return next.every((glob) => {
     const n = stem(glob);

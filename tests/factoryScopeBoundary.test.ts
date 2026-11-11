@@ -13,6 +13,18 @@ describe('narrowsOrEqual scope boundary', () => {
     expect(narrowsOrEqual(['sites/v4/a.ts'], ['sites/v4'])).toBe(true);
     expect(narrowsOrEqual(['sites/v4/**'], ['sites/v4'])).toBe(true);
   });
+  it('a directory entry written with a trailing slash admits what is beneath it, and still no sibling', () => {
+    expect(narrowsOrEqual(['docs/x.md'], ['docs/'])).toBe(true);
+    expect(narrowsOrEqual(['docs/a/b.md'], ['docs/'])).toBe(true);
+    expect(narrowsOrEqual(['docs/**'], ['docs/'])).toBe(true);
+    expect(narrowsOrEqual(['docs'], ['docs/'])).toBe(true);
+    expect(narrowsOrEqual(['docs-private/x.md'], ['docs/'])).toBe(false);
+    expect(narrowsOrEqual(['docsx'], ['docs/'])).toBe(false);
+  });
+  it('an entry of only slashes is never read as the allow-everything shortcut', () => {
+    expect(narrowsOrEqual(['src/x.ts'], ['/'])).toBe(false);
+    expect(narrowsOrEqual(['src/x.ts'], ['//'])).toBe(false);
+  });
   it('keeps glob stems working', () => {
     expect(narrowsOrEqual(['src/x.ts'], ['src/**'])).toBe(true);
     expect(narrowsOrEqual(['src/a/**'], ['src/**'])).toBe(true);
