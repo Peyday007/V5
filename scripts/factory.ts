@@ -397,8 +397,24 @@ async function main(): Promise<void> {
       const changeRequestId =
         flagString(flags, 'change-request') ?? fail('--change-request is required');
       const field = flagString(flags, 'field') ?? fail('--field is required');
-      const reason = flagString(flags, 'reason') ?? fail('--reason is required');
-      const raw = flagString(flags, 'value') ?? fail('--value is required');
+      /*
+       * `--value-file <path> [--ref <branch>]`: the amendment as a committed JSON
+       * file, `{ "value": …, "reason": "…" }`, read the way `submit` reads an
+       * objective. Prose cannot pass through factory.yml's `extra`, which refuses
+       * quotes and splits on spaces, so a contradictory acceptance condition had
+       * no way to be corrected from a session: fcp_b11abd00 (2026-11-11) spent
+       * two attempts on a condition a worker read as forbidding the fix.
+       */
+      const valueFile = flagString(flags, 'value-file');
+      const fromFile = valueFile
+        ? (JSON.parse(await readObjectiveText(valueFile, flags)) as { value?: unknown; reason?: unknown })
+        : null;
+      if (fromFile && fromFile.value === undefined) fail(`${valueFile} has no "value"`);
+      const reason =
+        flagString(flags, 'reason') ??
+        (typeof fromFile?.reason === 'string' ? fromFile.reason : null) ??
+        fail('--reason is required');
+      const raw = fromFile ? JSON.stringify(fromFile.value) : (flagString(flags, 'value') ?? fail('--value is required'));
       // A list for the list-shaped fields, a plain string for the rest. Parsed
       // here rather than guessed inside the service.
       const listFields = new Set([
@@ -407,7 +423,9 @@ async function main(): Promise<void> {
         'mutation_scope',
         'verification_commands',
       ]);
-      const newValue: unknown = listFields.has(field)
+      const newValue: unknown = fromFile
+        ? listFields.has(field) ? fromFile.value : String(fromFile.value)
+        : listFields.has(field)
         ? raw.trim().startsWith('[')
           ? (JSON.parse(raw) as unknown)
           : raw.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0)
