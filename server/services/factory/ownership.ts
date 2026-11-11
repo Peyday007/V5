@@ -652,7 +652,13 @@ const ROOT_DIRECTORIES = ['server/', 'client/', 'scripts/', 'tests/', 'docs/', '
 
 /** A path that records or documents the work rather than doing it. */
 export function isReferenceRecord(path: string): boolean {
-  return path.startsWith('objectives/') || path.startsWith('docs/') || (path.endsWith('.md') && !path.includes('/'));
+  return (
+    path.startsWith('objectives/') ||
+    path.startsWith('docs/') ||
+    // The generator of a program's map is the record's source, changed only with an amendment.
+    path.startsWith('scripts/program-map-') ||
+    (path.endsWith('.md') && !path.includes('/'))
+  );
 }
 
 export function resolveRepairScope(input: RepairScopeInput): RepairScope {

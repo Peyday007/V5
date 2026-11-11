@@ -479,6 +479,34 @@ export async function binAdmission(input: {
         credentialId: input.principal.credentialId,
       });
       if (!lineage.ok) return { ok: false, reason: lineage.reason ?? 'not independent of the work' };
+      /*
+       * A second look at the same commit is a different reviewer. Production,
+       * 2026-11-11, authority-d0-p0: the same session was dealt the round-3
+       * review of 99d2e019 four times and answered CHANGES_REQUIRED each time,
+       * so no independent verdict could ever be gathered and its own finding
+       * ("one session receives repeated review bins") parked the campaign. A
+       * session that already reviewed the commit under review is refused here,
+       * before the lease, so the refusal costs the bin nothing.
+       */
+      if (reportedSession) {
+        const { getCampaign } = await import('../../repos/factory.ts');
+        const { listReviews } = await import('../../repos/factoryFleet.ts');
+        const campaign = await getCampaign(bin.factoryCampaignId);
+        const head = campaign ? campaign.integrationSha ?? campaign.baseSha : null;
+        const already = head
+          ? (await listReviews(bin.factoryCampaignId)).some(
+              (review) => review.reviewerSessionId === reportedSession && review.reviewedSha === head,
+            )
+          : false;
+        if (already) {
+          return {
+            ok: false,
+            reason:
+              `Session ${reportedSession} has already reviewed ${String(head).slice(0, 12)} for this ` +
+              'campaign; another look at the same commit is a different reviewer.',
+          };
+        }
+      }
     }
 
     /*

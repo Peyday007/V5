@@ -41,7 +41,7 @@ afterEach(async () => {
   await teardown();
 });
 
-async function campaignWithProbeFinding(statement: string) {
+async function campaignWithProbeFinding(statement: string, options: { key?: string; category?: string } = {}) {
   const approver = await createUser({
     email: `approver-${Math.random().toString(36).slice(2)}@example.test`,
     displayName: 'An approver',
@@ -100,7 +100,7 @@ async function campaignWithProbeFinding(statement: string) {
     verdict: 'CHANGES_REQUIRED',
     independence: 'SESSION_SEPARATED',
     summary: 'one finding',
-    findings: [{ key: 'F1', severity: 'BLOCKER', category: 'missing-probe', statement, evidence: '', acceptanceConditionId: 'A01' }],
+    findings: [{ key: options.key ?? 'F1', severity: 'BLOCKER', category: options.category ?? 'correctness', statement, evidence: '', acceptanceConditionId: 'A01' }],
   });
   return { campaign, changeRequest };
 }
@@ -126,5 +126,28 @@ describe('a finding only the protected probes module can answer', () => {
     expect(result.needsAmendment.map((need) => need.outsideScope)).toEqual([['server/services/goals/portfolio.ts']]);
     const [finding] = await listFindings(campaign.id);
     expect(finding?.state).toBe('OPEN');
+  });
+
+  it('settles a finding keyed as a missing probe, whichever file it names', async () => {
+    const { campaign, changeRequest } = await campaignWithProbeFinding(
+      'The probe r01.x-1 is missing; its name appears only in scripts/program-map-release-01.py.',
+      { key: 'F3-probe-missing' },
+    );
+    const result = await queueRepairs(campaign, changeRequest);
+    expect(result.needsAmendment).toEqual([]);
+    expect(result.queued).toEqual([]);
+    expect((await listFindings(campaign.id))[0]?.state).toBe('ACCEPTED_LIMITATION');
+  });
+
+  it('settles a finding about the factory\'s own process as the platform\'s', async () => {
+    const { campaign, changeRequest } = await campaignWithProbeFinding(
+      'Review dispatch loop: one session receives repeated round-3 review bins for the same SHA.',
+      { key: 'DISPATCH', category: 'process' },
+    );
+    const result = await queueRepairs(campaign, changeRequest);
+    expect(result.queued).toEqual([]);
+    const [finding] = await listFindings(campaign.id);
+    expect(finding?.state).toBe('ACCEPTED_LIMITATION');
+    expect(finding?.resolution).toMatch(/owed by the platform/);
   });
 });

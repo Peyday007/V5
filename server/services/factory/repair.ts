@@ -245,6 +245,27 @@ export async function queueRepairs(
   };
 
   for (const finding of findings) {
+    if (isPlatformProcessFinding(finding)) {
+      await settleAsPlatformOwed(campaign.id, finding, 'it is about how the factory ran this campaign, not about the work it built');
+      result.skipped.push({ findingId: finding.id, reason: 'PLATFORM_PROCESS' });
+      continue;
+    }
+    if (isProbeFinding(finding)) {
+      // The judge is the program's to write (§96, §97); the requirement stays unverified until it passes.
+      const note =
+        'owed by the program, not this campaign: the acceptance probe is defined only in the protected ' +
+        'verification module; the requirement stays unverified until its probe passes on production';
+      if (await resolveFinding(finding.id, 'ACCEPTED_LIMITATION', note)) {
+        await recordFactoryEvent({
+          campaignId: campaign.id,
+          kind: FACTORY_EVENT_KINDS.repairOwnershipBlocked,
+          evidenceClass: 'DERIVED',
+          detail: { findingId: finding.id, findingKey: finding.findingKey, reason: 'PROBE_OWED_BY_PROGRAM', detail: note },
+        });
+      }
+      result.skipped.push({ findingId: finding.id, reason: 'PROBE_OWED_BY_PROGRAM' });
+      continue;
+    }
     const ownership = ownershipForRepair(finding, changeRequest, units, forbiddenPaths, dependsOn);
     if (!ownership.ok) {
       if (
@@ -653,6 +674,10 @@ export async function settleProgramOwedRepairs(campaignId: string): Promise<stri
     if (!finding.repairUnitId) continue;
     const unit = await getUnit(finding.repairUnitId);
     if (!unit || unit.state !== 'FAILED' || unit.attempt < unit.maxAttempts) continue;
+    if (isPlatformProcessFinding(finding)) {
+      if (await settleAsPlatformOwed(campaignId, finding, `${unit.unitKey} spent every attempt on the factory's own machinery`)) settled.push(finding.id);
+      continue;
+    }
     if (!PROGRAM_OWED_FAILURE.test(unit.failureDetail ?? '')) continue;
     const note = `owed by the program, not this campaign: ${unit.unitKey} spent every attempt because the fix is the protected verification path; the requirement stays unverified until its probe passes on production`;
     if (!(await resolveFinding(finding.id, 'ACCEPTED_LIMITATION', note))) continue;
@@ -682,4 +707,33 @@ export async function gatingFindings(campaignId: string): Promise<FactoryFinding
 /** A file only the program's protected verification module may change. */
 export function isProtectedVerificationPath(path: string): boolean {
   return PROTECTED_VERIFICATION_PATHS.some((glob) => glob === path || matchesGlob(path, glob));
+}
+
+/**
+ * A finding about the factory's own process — how review bins were dealt, how
+ * sessions were routed — rather than about the work the campaign built
+ * (production 2026-11-11, authority-d0-p0: DISPATCH, "one session receives
+ * repeated review bins", repaired three times by a unit that could only touch
+ * cash/ and was told the fix was in the dispatcher). The platform owns it; the
+ * campaign's code is judged on its own findings.
+ */
+export function isPlatformProcessFinding(finding: Pick<FactoryFinding, 'category'>): boolean {
+  return /^(process|dispatch|platform|factory)$/i.test((finding.category ?? '').trim());
+}
+
+async function settleAsPlatformOwed(campaignId: string, finding: FactoryFinding, why: string): Promise<boolean> {
+  const note = `owed by the platform, not this campaign: ${why}; recorded for the factory's own improvement`;
+  if (!(await resolveFinding(finding.id, 'ACCEPTED_LIMITATION', note))) return false;
+  await recordFactoryEvent({
+    campaignId,
+    kind: FACTORY_EVENT_KINDS.repairOwnershipBlocked,
+    evidenceClass: 'DERIVED',
+    detail: { findingId: finding.id, findingKey: finding.findingKey, reason: 'PLATFORM_PROCESS', detail: note, statement: finding.statement.slice(0, 500) },
+  });
+  return true;
+}
+
+/** A finding that a program's acceptance probe is missing or unregistered, by its own key or category. */
+export function isProbeFinding(finding: Pick<FactoryFinding, 'findingKey' | 'category'>): boolean {
+  return /probe/i.test(finding.findingKey) || /probe/i.test(finding.category ?? '');
 }
