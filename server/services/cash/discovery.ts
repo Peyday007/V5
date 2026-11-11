@@ -91,7 +91,8 @@ import {
   openRoundsByCandidate,
 } from '../../repos/cashDiscovery.ts';
 import { listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
-import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
+import { discoveryYield, usefulOpeningIds, yieldGuidance } from './discoveryYield.ts';
+import { bucketGates, recordRoundAsRun } from '../research/searchMethods/bucketMethods.ts';
 import { getClaim, signalledClaims } from '../../repos/research.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
@@ -551,8 +552,18 @@ export async function openDiscovery(input: {
   let frame: ExecutionFrame | null | undefined;
   // Subjects Brain learned are offered beside the constants, merged at read time.
   const learned = await learnedLensesForProject(input.projectId);
-  for (const bucket of fairOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : []), ...learned], rounds)) {
+  const offered = [...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : []), ...learned];
+  /*
+   * Each bucket is a search method, and its closed rounds are the method's runs
+   * (`bucketMethods.ts`). A bucket whose recent rounds keep failing for one
+   * cause is not simply asked again: it waits until its retry time, or is held
+   * for revision, and the decision is read from its runs here. A read that
+   * fails gates nothing, so discovery never stops on its own bookkeeping.
+   */
+  const gates = await bucketGates(input.projectId, offered.map((one) => one.id), now).catch(() => new Map<string, { mayOpen: boolean }>());
+  for (const bucket of fairOrder(offered, rounds)) {
     if (out.length >= limit) break;
+    if (gates.get(bucket.id)?.mayOpen === false) continue;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);
     if (next === null) continue;
@@ -1513,6 +1524,23 @@ async function closeEndedRounds(input: {
     const found = opportunities.filter((one) => one.discoveryRoundId === entry.round.id).length;
     if (!(await closeRound({ id: entry.round.id, to, found }))) continue;
     closed.push(entry.round.id);
+    /*
+     * The round is one run of its bucket's search method: what it found, how
+     * much of that reached CANDIDATE, and how much duplicated an opening already
+     * held. Recorded once, after `closeRound` won, so a second tick records no
+     * second run. A failure here never undoes the close.
+     */
+    try {
+      const mine = opportunities.filter((one) => one.discoveryRoundId === entry.round.id);
+      const useful = mine.length > 0 ? (await usefulOpeningIds(input.projectId, mine)).size : 0;
+      await recordRoundAsRun(input.projectId, entry.bucket, {
+        to,
+        missionState: mission?.state ?? null,
+        found,
+        useful,
+        duplicates: mine.filter((one) => one.duplicateOfId).length,
+      });
+    } catch { /* the round is closed; its run is an addition */ }
     if (to === 'HARVESTED') continue;
     const why = mission
       ? `its research is ${mission.state.toLowerCase()}`
