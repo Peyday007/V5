@@ -101,6 +101,7 @@ export const CAPABILITY_BOOT_GRACE_MS = 15 * 60_000;
 const CAPABILITY_EVERY_MS = 60 * 60_000;
 let lastCapabilityAt = 0;
 let lastCapabilityGaps: Weakness[] = [];
+let lastOriginated: Weakness[] = [];
 let processStartedAt = Date.now();
 
 function capabilityDue(now: Date): boolean {
@@ -120,6 +121,7 @@ export function resetImprovementTick(): void {
   lastObjectiveCheck = 0;
   lastCapabilityAt = 0;
   lastCapabilityGaps = [];
+  lastOriginated = [];
   processStartedAt = Date.now() - CAPABILITY_BOOT_GRACE_MS;
 }
 
@@ -148,7 +150,7 @@ export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
   // At most hourly, and never in the first minutes after boot: the assessment is ~25
   // reads, and a restart is when the database is busiest (Deploy 41940346030 and
   // 41945448533 timed out verifying right after the restart).
-  if (!capabilityDue(now)) return [...detected, ...lastCapabilityGaps];
+  if (!capabilityDue(now)) return [...detected, ...lastCapabilityGaps, ...lastOriginated];
   lastCapabilityAt = now.getTime();
   const open = (await listCandidates({ open: true })).map((c) => c.weaknessKey);
   const { capabilityWeaknesses } = await import('../selfmodel/capabilities.ts');
@@ -157,7 +159,17 @@ export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
     console.warn(`capability assessment failed: ${String((error as Error)?.message ?? error)}`);
     return [];
   });
-  return [...detected, ...lastCapabilityGaps];
+  // AUTO-20-1: work Brain originates from its own observations — goals held by an unnamed constraint,
+  // failure patterns no detector owns, idle capacity beside incomplete goals, openings lost to time,
+  // and changed conditions nobody reconsidered. Same cadence and same loop as the capability pass.
+  const { originatedWeaknesses } = await import('../selfmodel/originate.ts');
+  lastOriginated = await originatedWeaknesses(now, [...detected.map((w) => w.key), ...lastCapabilityGaps.map((w) => w.key), ...open]).catch(
+    (error: unknown) => {
+      console.warn(`origination pass failed: ${String((error as Error)?.message ?? error)}`);
+      return [];
+    },
+  );
+  return [...detected, ...lastCapabilityGaps, ...lastOriginated];
 }
 
 /** The candidates of one weakness family (`KEY`, `KEY#2`, …), newest attempt last. */
@@ -223,6 +235,7 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
       samples: weakness.samples,
       attempt,
       ...(methodInadequacy ? { methodInadequacy } : {}),
+      ...(candidate.evidence['origination'] ? { origination: candidate.evidence['origination'] } : {}),
     },
   });
   // Combine: one owner, one objective. A weakness on a component whose candidate
@@ -261,6 +274,8 @@ function toInput(weakness: Weakness, attempt: number, parentId: string | null, k
       researchQuestion: weakness.researchQuestion,
       knownCause: weakness.knownCause,
       observedAt: new Date().toISOString(),
+      // AUTO-20-1: what Brain observed, judged and why it judged the work worthwhile, kept on the candidate.
+      ...((weakness as { origination?: unknown }).origination ? { origination: (weakness as { origination?: unknown }).origination } : {}),
     },
     attempt,
     parentId,
@@ -386,6 +401,16 @@ async function openResearch(candidate: ImprovementCandidate, now: Date): Promise
   return goal.id;
 }
 
+/** AUTO-20-1: an originated weakness says which observation raised it and what Brain judged from it. */
+function originationLine(raw: unknown): string {
+  if (!raw || typeof raw !== 'object') return '';
+  const o = raw as { source?: string; observation?: string; judgment?: string; worthwhile?: string };
+  return (
+    `Brain originated this from its own observation (${String(o.source ?? 'unknown')}: ${String(o.observation ?? '')}). ` +
+    `Its judgment: ${String(o.judgment ?? '')} Worth doing because: ${String(o.worthwhile ?? '')} `
+  );
+}
+
 /** The engineering objective Factory receives: complete, evidenced, with acceptance conditions. */
 export function composeObjective(candidate: ImprovementCandidate, link: Linked, history: ImprovementCandidate[], baseline: MetricReading) {
   const samples = ((candidate.evidence['samples'] as string[] | undefined) ?? []).slice(0, 5);
@@ -404,6 +429,7 @@ export function composeObjective(candidate: ImprovementCandidate, link: Linked, 
     (combined.length ? `It also covers ${combined.join(', ')} (same owner). ` : '') +
     `The owner of this behaviour is ${candidate.ownerComponent}; extend it, do not add a second mechanism. ` +
     (candidate.evidence['knownCause'] ? `Diagnosis from the rows: ${String(candidate.evidence['knownCause'])} ` : '') +
+    originationLine(candidate.evidence['origination']) +
     `Recorded failure reasons, verbatim: ${samples.map((s) => JSON.stringify(s)).join('; ')}. ` +
     (methods.length
       ? `Accepted method research Brain holds that bears on it: ${methods.map((m) => `${m.claim} (${m.source ?? 'no source'})`).join(' | ')}. `
