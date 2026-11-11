@@ -1,14 +1,19 @@
 /**
- * A synthesis its worker failed on a transient cause is replaced, bounded, and
- * a park says what the item recorded (§15, §20, §33).
+ * A synthesis that ended without filing a document is replaced, bounded, and
+ * a park cites the item it stopped on (§15, §20, §33).
  *
  * Production, seven days to 2026-11-11: two of the five recorded NEEDS_HUMAN
  * reasons were "A synthesis work item finished without recording anything, and
- * nothing was recorded about why." The synthesis item had been failed by its
- * worker as DEPENDENCY_UNAVAILABLE — a provider that could not answer — which
- * `mayReplace` did not count as spent, so the packet parked holding accepted
- * research; and `faultedOut` read only the orchestration's reason, so the park
- * said nothing was recorded while the item's own `result_summary` said why.
+ * nothing was recorded about why." No row for those two parks is cited here:
+ * the reasons are verbatim, but the work items behind them were not read, so
+ * which state they ended in is not known. That text is reached from every state
+ * an earlier synthesis can end in while the packet still has no document —
+ * FAILED on a transient cause (DEPENDENCY_UNAVAILABLE, WORKER_ERROR, UNKNOWN),
+ * SUCCEEDED without filing anything, and CANCELLED with attempts left. The
+ * first two are now replaced, bounded. The third still parks by design (only
+ * an ended packet or a person cancels a current-round synthesis;
+ * packetFaultDiagnosis.test.ts holds it), and is pinned below. The
+ * post-release measurement of this park class is what confirms the cause.
  *
  * A replacement is still refused when an earlier item reached the filing
  * effect (that is `synthesisRecovery`'s, which asks the store first), and an
@@ -239,5 +244,83 @@ describe('a packet that does not cover the goal\'s mandatory part', () => {
     const result = await advancePacket(id);
     expect(result.status).toBe('NEEDS_HUMAN');
     expect(await synthItems(id)).toHaveLength(0);
+  });
+});
+
+/** End every live synthesis item in `state`, as a worker or a sweep would leave it. */
+async function endQueuedSynthesis(id: string, state: 'SUCCEEDED' | 'CANCELLED', summary: string | null): Promise<void> {
+  for (const item of await synthItems(id)) {
+    if (item.state !== 'QUEUED' && item.state !== 'LEASED') continue;
+    await getDb().run(
+      `UPDATE work_items SET state = ?, failure_category = NULL, result_summary = ?, attempt_count = 1,
+              completed_at = ?, updated_at = ? WHERE id = ?`,
+      [state, summary, new Date().toISOString(), new Date(Date.now() + 1000).toISOString(), item.id],
+    );
+  }
+}
+
+describe('the other states that produced "finished without recording anything"', () => {
+  it('replaces a synthesis that SUCCEEDED without filing a document', async () => {
+    const id = await readyPacket();
+    expect((await advancePacket(id)).enqueued.map((e) => e.workType)).toEqual(['RESEARCH_SYNTHESIZE']);
+    await endQueuedSynthesis(id, 'SUCCEEDED', null);
+    expect((await getOrchestration(id))!.documentId).toBeNull();
+    const result = await advancePacket(id);
+    expect(result.status).not.toBe('NEEDS_HUMAN');
+    expect(result.enqueued.map((e) => e.workType)).toEqual(['RESEARCH_SYNTHESIZE']);
+    expect(await synthItems(id)).toHaveLength(2);
+  });
+
+  it('still parks a synthesis CANCELLED with attempts left: a cancellation is a decision, not a fault to retry', async () => {
+    const id = await readyPacket();
+    await advancePacket(id);
+    const item = (await synthItems(id))[0]!;
+    expect(item.maxAttempts).toBeGreaterThan(1);
+    await endQueuedSynthesis(id, 'CANCELLED', 'cancelled by an operator');
+    const result = await advancePacket(id);
+    expect(result.status).toBe('NEEDS_HUMAN');
+    expect(result.enqueued).toEqual([]);
+    expect(await synthItems(id)).toHaveLength(1);
+  });
+
+  it('parks after MAX_ITEMS_PER_TARGET no-op successes, citing the item by id instead of "nothing was recorded"', async () => {
+    const id = await readyPacket();
+    await advancePacket(id);
+    await endQueuedSynthesis(id, 'SUCCEEDED', null);
+    for (let n = 2; n <= MAX_ITEMS_PER_TARGET; n += 1) {
+      expect((await advancePacket(id)).enqueued.map((e) => e.workType)).toEqual(['RESEARCH_SYNTHESIZE']);
+      await endQueuedSynthesis(id, 'SUCCEEDED', null);
+    }
+    const items = await synthItems(id);
+    expect(items).toHaveLength(MAX_ITEMS_PER_TARGET);
+    const parked = await advancePacket(id);
+    expect(parked.status).toBe('NEEDS_HUMAN');
+    const reason = (await getOrchestration(id))!.failureReason!;
+    expect(reason).not.toBe(faultedOutReason('synthesis'));
+    expect(reason).not.toContain('nothing was recorded about why');
+    expect(reason).toContain('SUCCEEDED');
+    expect(items.some((item) => reason.includes(item.id))).toBe(true);
+  });
+
+  it('still refuses a no-op success whose filing reached the store', async () => {
+    const id = await readyPacket();
+    await advancePacket(id);
+    await endQueuedSynthesis(id, 'SUCCEEDED', null);
+    const item = (await synthItems(id))[0]!;
+    const now = new Date().toISOString();
+    const op = newId('idop');
+    await getDb().run(
+      `INSERT INTO idempotency_operations
+         (id, scope_hash, key_fingerprint, namespace, namespace_version, project_id,
+          created_by_type, work_item_id, request_fingerprint, state, attempt_count,
+          failure_category, reserved_at, completed_at, created_at, updated_at)
+       VALUES (?, ?, ?, 'research.synthesis', 1, ?, 'WORKER', ?, 'fp', 'FAILED', 1,
+               'INTERNAL_ERROR', ?, ?, ?, ?)`,
+      [op, `scope-${op}`, `key-${op}`, fixture.project.id, item.id, now, now, now, now],
+    );
+    const result = await advancePacket(id);
+    expect(result.status).toBe('NEEDS_HUMAN');
+    expect(result.enqueued).toEqual([]);
+    expect(await synthItems(id)).toHaveLength(1);
   });
 });

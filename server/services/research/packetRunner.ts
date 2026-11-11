@@ -298,6 +298,8 @@ async function mayReplace(
    * recorded nothing is a different fact — a worker said it was done, which
    * `brain_complete_work` now refuses — and stays a fault for a person, as do
    * items cancelled for any other reason (a round reopened, a packet ended).
+   * A synthesis is the exception, below: its no-op successes are replaced
+   * under the filing-effect check.
    */
   /*
    * For every type, FAILED counts as spent when the queue spent the attempts —
@@ -330,7 +332,23 @@ async function mayReplace(
     (item.failureCategory === 'DEPENDENCY_UNAVAILABLE' ||
       item.failureCategory === 'WORKER_ERROR' ||
       item.failureCategory === 'UNKNOWN');
-  if (!earlier.every((item) => exhausted(item) || transient(item))) return false;
+  /*
+   * The same park text ("finished without recording anything") is also reached
+   * by a synthesis that SUCCEEDED and left no document: a worker said it was
+   * done and filed nothing. The caller only gets here while the packet has no
+   * document, and `researchItemRecorded` confirms it per item. For a synthesis
+   * that is not a judgement on its input, so it is replaced under the same two
+   * bounds as above: no earlier item reached the filing effect, and at most
+   * MAX_ITEMS_PER_TARGET items per target. A CANCELLED synthesis with attempts
+   * left stays a fault: inside the current round only an ended packet or a
+   * person cancels one, and tests/packetFaultDiagnosis.test.ts holds that.
+   */
+  const ended = async (item: WorkItem): Promise<boolean> =>
+    type === 'RESEARCH_SYNTHESIZE' && item.state === 'SUCCEEDED' && !(await researchItemRecorded(item));
+  for (const item of earlier) {
+    if (exhausted(item) || transient(item)) continue;
+    if (!(await ended(item))) return false;
+  }
   if (type === 'RESEARCH_SYNTHESIZE') {
     const reached = await getDb().get<{ n: number }>(
       `SELECT COUNT(*) AS n FROM idempotency_operations
@@ -517,20 +535,34 @@ export function faultedOutReason(what: string): string {
 }
 
 /**
- * The newest failed item's own reason for this target, naming its work type,
- * or null when no failed item recorded one.
+ * What the newest item for this target recorded, or null. A FAILED item with a
+ * summary gives its worker's own reason; otherwise a SUCCEEDED item that filed
+ * nothing is named by id, so the park cites the row a person would investigate
+ * rather than saying nothing was recorded.
  */
 function lastItemFailure(
   items: WorkItem[] | undefined,
   predicate: ((item: WorkItem) => boolean) | undefined,
 ): string | null {
   if (!items || !predicate) return null;
-  const failed = items
-    .filter((item) => predicate(item) && item.state === 'FAILED' && (item.resultSummary?.trim().length ?? 0) > 0)
-    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
-  const last = failed[0];
+  const newest = (list: WorkItem[]): WorkItem | undefined =>
+    [...list].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))[0];
+  const own = items.filter(predicate);
+  const failed = newest(own.filter((item) => item.state === 'FAILED' && (item.resultSummary?.trim().length ?? 0) > 0));
+  if (failed) {
+    return `The last ${failed.workType} work item failed (${failed.failureCategory ?? 'UNKNOWN'}): ${failed.resultSummary!.trim()}`;
+  }
+  // A no-op success is the one other ended state a park reaches with nothing on
+  // the orchestration; name its row so the park cites what to investigate.
+  const last = newest(own.filter((item) => item.state === 'SUCCEEDED'));
   if (!last) return null;
-  return `The last ${last.workType} work item failed (${last.failureCategory ?? 'UNKNOWN'}): ${last.resultSummary!.trim()}`;
+  const summary = last.resultSummary?.trim();
+  return (
+    `The last ${last.workType} work item (${last.id}) ended ${last.state}` +
+    ' without recording what it exists to record' +
+    (summary ? `: ${summary}` : ', and its row carries no reason') +
+    `. ${own.length} item(s) for this target; the packet cannot continue on its own: re-plan it, or investigate that item.`
+  );
 }
 
 /**
