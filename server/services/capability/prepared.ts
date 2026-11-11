@@ -211,6 +211,11 @@ export interface FactoryHandoffContext {
   blockedWorkItemIds?: string[];
 }
 
+/** One change request per requirement and goal, whichever entrance made it. */
+export function preparedSubmissionKey(projectId: string, requirementId: string, goal: string): string {
+  return `prepared-option:${createHash('sha256').update(`${projectId}\u0000${requirementId}\u0000${goal}`).digest('hex').slice(0, 24)}`;
+}
+
 /**
  * Hand the minimum missing capability to the existing Factory as a change
  * request, once. The submission key is derived from the requirement and the
@@ -226,7 +231,7 @@ export async function handOffToFactory(
   context: FactoryHandoffContext,
 ): Promise<{ changeRequest: FactoryChangeRequest; created: boolean } | null> {
   if (!resolution.handoff || !resolution.minimum) return null;
-  const submissionKey = `prepared-option:${createHash('sha256').update(`${projectId}\u0000${resolution.requirementId}\u0000${context.goal}`).digest('hex').slice(0, 24)}`;
+  const submissionKey = preparedSubmissionKey(projectId, resolution.requirementId, context.goal);
   const { changeRequest, created } = await ensureChangeRequest({
     projectId,
     submissionKey,
@@ -271,17 +276,30 @@ export async function resumeOf(
   projectId: string,
   requirementId: string,
   blockedWorkItemIds: readonly string[],
+  blockedBinIds: readonly string[] = [],
 ): Promise<{ handedOffAt: string | null; resumed: boolean; completedAfter: string[] }> {
   const events = await listEventsByEntity('capability_requirement', requirementId);
   const handoff = events
     .filter((e) => e.projectId === projectId && e.payload.kind === PREPARED_HANDOFF_KIND)
     .map((e) => e.createdAt)
     .sort()[0];
-  if (!handoff || blockedWorkItemIds.length === 0) return { handedOffAt: handoff ?? null, resumed: false, completedAfter: [] };
-  const rows = await getDb().all<{ id: string; completed_at: string | null }>(
-    `SELECT id, completed_at FROM work_items WHERE project_id = ? AND state = 'SUCCEEDED' AND id IN (${blockedWorkItemIds.map(() => '?').join(',')})`,
-    [projectId, ...blockedWorkItemIds],
-  );
+  if (!handoff || (blockedWorkItemIds.length === 0 && blockedBinIds.length === 0)) {
+    return { handedOffAt: handoff ?? null, resumed: false, completedAfter: [] };
+  }
+  const rows: Array<{ id: string; completed_at: string | null }> = [];
+  if (blockedWorkItemIds.length > 0) {
+    rows.push(...(await getDb().all<{ id: string; completed_at: string | null }>(
+      `SELECT id, completed_at FROM work_items WHERE project_id = ? AND state = 'SUCCEEDED' AND id IN (${blockedWorkItemIds.map(() => '?').join(',')})`,
+      [projectId, ...blockedWorkItemIds],
+    )));
+  }
+  if (blockedBinIds.length > 0) {
+    // A bin that waited on the capability resumed when it ran to COMPLETE after the handoff.
+    rows.push(...(await getDb().all<{ id: string; completed_at: string | null }>(
+      `SELECT id, completed_at FROM bins WHERE project_id = ? AND state = 'COMPLETE' AND id IN (${blockedBinIds.map(() => '?').join(',')})`,
+      [projectId, ...blockedBinIds],
+    )));
+  }
   const times = rows.filter((r) => r.completed_at !== null);
   const resumed = blockedWorkResumed({ handedOffAt: handoff, unitRunTimes: times.map((r) => r.completed_at!) });
   return { handedOffAt: handoff, resumed, completedAfter: times.filter((r) => r.completed_at! > handoff).map((r) => r.id) };
@@ -289,15 +307,241 @@ export async function resumeOf(
 
 export const PREPARED_RESUMED_KIND = 'PREPARED_OPTION_RESUMED';
 
+export const PREPARED_NEED_KIND = 'PREPARED_OPTION_NEED';
+
+/** Bin states that are waiting to run: not leased, not terminal. */
+const WAITING_BIN_STATES = ['DRAFT', 'READY', 'NEEDS_HUMAN'] as const;
+
+/** A goal's waiting work that requires a requirement some prepared option stands behind. */
+export interface IdentifiedNeed {
+  projectId: string;
+  requirementId: string;
+  /** Stable for the project and requirement, so every pass converges on one change request. */
+  goal: string;
+  option: PreparedOption;
+  blockedBinIds: string[];
+  blockedWorkItemIds: string[];
+}
+
+const parsePayload = (raw: string): Record<string, unknown> => {
+  try { return JSON.parse(raw) as Record<string, unknown>; } catch { return {}; }
+};
+
+/** The goal a need is filed under: the project's work that waits on the requirement. */
+export function needGoal(projectId: string, requirementId: string): string {
+  return `the work of project ${projectId} that waits on ${requirementId}`;
+}
+
 /**
- * Judge, from rows, every handoff whose blocked work has not yet been recorded
- * as resumed. Called from `advanceSources` on the Russell tick, so nobody has to
- * remember an old option: a handoff that names blocked work items is re-read
- * each pass and, the first time `resumeOf` finds one of them completed after
- * the handoff, a single RESUMED event is appended. It creates no work, holds no
- * lease and spends nothing; a handoff that names no work items is never judged.
+ * Identify, from rows alone, which goals' waiting work needs a recorded prepared
+ * option. A bin declares what it needs in `required_capabilities`; when one of
+ * those ids is a requirement a prepared option stands behind, and the bin is
+ * still waiting, that is the dependency — nobody has to say "now remember that
+ * old feature". The option recorded in the bin's own project wins; otherwise the
+ * latest one recorded anywhere, because a capability is Brain's, not a project's.
  */
-export async function advancePreparedOptions(): Promise<{ judged: number; resumed: number }> {
+export async function identifyNeeds(): Promise<IdentifiedNeed[]> {
+  const db = getDb();
+  const optionRows = await db.all<{ project_id: string; payload: string; created_at: string }>(
+    `SELECT project_id, payload, created_at FROM project_events
+      WHERE entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED' AND payload LIKE ?
+      ORDER BY created_at ASC`,
+    [`%"${PREPARED_OPTION_KIND}"%`],
+  );
+  const latest = new Map<string, PreparedOption>();
+  const latestInProject = new Map<string, PreparedOption>();
+  for (const r of optionRows) {
+    const p = parsePayload(r.payload);
+    if (p.kind !== PREPARED_OPTION_KIND) continue;
+    let option: PreparedOption;
+    try { option = validatePreparedOption(p.option); } catch { continue; }
+    latest.set(option.requirementId, option);
+    latestInProject.set(`${r.project_id}\u0000${option.requirementId}`, option);
+  }
+  if (latest.size === 0) return [];
+
+  const requirementIds = [...latest.keys()];
+  const bins = await db.all<{ id: string; project_id: string; required_capabilities: string | null }>(
+    `SELECT id, project_id, required_capabilities FROM bins
+      WHERE state IN (${WAITING_BIN_STATES.map(() => '?').join(',')})
+        AND (${requirementIds.map(() => 'required_capabilities LIKE ?').join(' OR ')})
+      ORDER BY created_at ASC, id ASC`,
+    [...WAITING_BIN_STATES, ...requirementIds.map((id) => `%${JSON.stringify(id)}%`)],
+  );
+  const grouped = new Map<string, IdentifiedNeed>();
+  for (const bin of bins) {
+    let needed: unknown;
+    try { needed = JSON.parse(bin.required_capabilities ?? '[]'); } catch { continue; }
+    if (!Array.isArray(needed)) continue;
+    for (const raw of needed) {
+      if (typeof raw !== 'string') continue;
+      const requirementId = raw.trim();
+      const option = latestInProject.get(`${bin.project_id}\u0000${requirementId}`) ?? latest.get(requirementId);
+      if (!option) continue;
+      const key = `${bin.project_id}\u0000${requirementId}`;
+      const need = grouped.get(key) ?? {
+        projectId: bin.project_id,
+        requirementId,
+        goal: needGoal(bin.project_id, requirementId),
+        option,
+        blockedBinIds: [],
+        blockedWorkItemIds: [],
+      };
+      if (!need.blockedBinIds.includes(bin.id)) need.blockedBinIds.push(bin.id);
+      grouped.set(key, need);
+    }
+  }
+  const needs = [...grouped.values()];
+  for (const need of needs) {
+    const items = await db.all<{ id: string }>(
+      `SELECT id FROM work_items WHERE project_id = ? AND bin_id IN (${need.blockedBinIds.map(() => '?').join(',')}) ORDER BY id`,
+      [need.projectId, ...need.blockedBinIds],
+    );
+    need.blockedWorkItemIds = items.map((i) => i.id);
+  }
+  return needs;
+}
+
+/** The repository a project onboarded for the Factory, as the Factory's own entrance reads it. */
+export interface PreparedRepositoryChoice { remote: string; repositoryId: string }
+
+/**
+ * What resolving a need reaches outside this module. Defaults are the existing
+ * owners — the project's onboarded repositories and the Factory's one
+ * `submitObjective` entrance — loaded lazily so this module stays a leaf.
+ */
+export interface PreparedNeedDeps {
+  repositoryChoices?: (projectId: string) => Promise<PreparedRepositoryChoice[]>;
+  submit?: (input: {
+    projectId: string;
+    objective: string;
+    expectedOutcome: string;
+    nonGoals: string[];
+    acceptanceConditions: Array<{ statement: string; verification: string; mandatory: boolean }>;
+    repositoryRemote: string;
+    submissionKey: string;
+  }) => Promise<{ changeRequest: { id: string }; created: boolean }>;
+}
+
+async function defaultRepositoryChoices(projectId: string): Promise<PreparedRepositoryChoice[]> {
+  const { repositoryChoicesFor } = await import('../russell/software.ts');
+  return (await repositoryChoicesFor(projectId)).map((c) => ({ remote: c.remote, repositoryId: c.repositoryId }));
+}
+
+const defaultSubmit: NonNullable<PreparedNeedDeps['submit']> = async (input) => {
+  const { submitObjective } = await import('../factory/contract.ts');
+  return submitObjective(input);
+};
+
+/**
+ * Turn every identified need into the minimum missing capability handed to the
+ * existing Factory, once, without anyone remembering the option.
+ *
+ * Each (project, requirement) gets one NEED event the first time it is seen,
+ * naming the waiting bins, the permitted and gated methods and the minimum.
+ * Then, while no handoff exists for it: with a permitted method and exactly one
+ * onboarded repository, the exact requirement goes to `submitObjective` (a
+ * draft the Factory approves where it always does, external spend prohibited)
+ * and a HANDOFF event names the blocked bins and work items, which
+ * `advancePreparedOptions` then judges for resumption. A need that cannot be
+ * handed over is recorded once per distinct reason — a closed gate, no or
+ * several repositories, a Factory refusal — and never forced: no gate is
+ * crossed here, and a person's gate is only listed.
+ */
+export async function resolvePreparedNeeds(deps: PreparedNeedDeps = {}): Promise<{ identified: number; handedOff: number }> {
+  const needs = await identifyNeeds();
+  if (needs.length === 0) return { identified: 0, handedOff: 0 };
+  const repositoryChoices = deps.repositoryChoices ?? defaultRepositoryChoices;
+  const submit = deps.submit ?? defaultSubmit;
+  let identified = 0;
+  let handedOff = 0;
+  for (const need of needs) {
+    const events = (await listEventsByEntity('capability_requirement', need.requirementId)).filter((e) => e.projectId === need.projectId);
+    if (events.some((e) => e.payload.kind === PREPARED_HANDOFF_KIND)) continue;
+    const resolution = resolveNeed(need.option, { requirementId: need.requirementId, goal: need.goal });
+    const recordNeed = async (outcome: string, reason: string | null): Promise<void> => {
+      const already = events.some((e) => e.payload.kind === PREPARED_NEED_KIND && e.payload.outcome === outcome && (e.payload.reason ?? null) === reason);
+      if (already) return;
+      await recordEvent({
+        projectId: need.projectId,
+        entityType: 'capability_requirement',
+        entityId: need.requirementId,
+        eventType: 'CAPABILITY_ASSESSED',
+        payload: {
+          kind: PREPARED_NEED_KIND, integration: false, identifiedBy: 'BRAIN', outcome, reason,
+          goal: need.goal, blockedBinIds: need.blockedBinIds, blockedWorkItemIds: need.blockedWorkItemIds,
+          permitted: resolution.permitted.map((m) => m.name),
+          gated: resolution.gated.map((g) => ({ method: g.method.name, gates: g.gates })),
+          minimum: resolution.minimum?.name ?? null,
+          needsPerson: resolution.needsPerson,
+        },
+      });
+    };
+    if (!events.some((e) => e.payload.kind === PREPARED_NEED_KIND)) identified += 1;
+    if (!resolution.handoff || !resolution.minimum) {
+      await recordNeed('GATED', `every access method waits on a gate only a person can open: ${resolution.needsPerson.join(', ') || 'none recorded'}`);
+      continue;
+    }
+    const choices = await repositoryChoices(need.projectId);
+    if (choices.length !== 1) {
+      await recordNeed('NO_REPOSITORY', choices.length === 0
+        ? 'this project has no repository onboarded for the Factory'
+        : `this project has ${choices.length} repositories onboarded, and choosing one is a person's decision`);
+      continue;
+    }
+    const choice = choices[0]!;
+    let changeRequestId: string;
+    try {
+      const submitted = await submit({
+        projectId: need.projectId,
+        objective: resolution.handoff.objective,
+        expectedOutcome: `${need.requirementId} works in production and ${need.goal} resumes`,
+        nonGoals: ['keeping the option warm', 'crossing a credential, contract, spend or permission gate'],
+        acceptanceConditions: resolution.handoff.acceptanceConditions.map((statement) => ({
+          statement,
+          verification: 'proof reading over real attempts, and rows showing the goal\'s work ran afterwards',
+          mandatory: true,
+        })),
+        repositoryRemote: choice.remote,
+        submissionKey: preparedSubmissionKey(need.projectId, need.requirementId, need.goal),
+      });
+      changeRequestId = submitted.changeRequest.id;
+    } catch (error) {
+      // A refusal or an unreadable forge is recorded and asked again next pass; it is never a handoff.
+      await recordNeed('FACTORY_REFUSED', error instanceof Error ? error.message : String(error));
+      continue;
+    }
+    await recordNeed('HANDED_OFF', null);
+    await recordEvent({
+      projectId: need.projectId,
+      entityType: 'capability_requirement',
+      entityId: need.requirementId,
+      eventType: 'CAPABILITY_ASSESSED',
+      payload: {
+        kind: PREPARED_HANDOFF_KIND, integration: false, identifiedBy: 'BRAIN', changeRequestId,
+        goal: need.goal, method: resolution.minimum.name, repositoryId: choice.repositoryId,
+        blockedWorkItemIds: need.blockedWorkItemIds, blockedBinIds: need.blockedBinIds,
+      },
+    });
+    handedOff += 1;
+  }
+  return { identified, handedOff };
+}
+
+/**
+ * Identify, hand off, and judge — from rows, on every pass. Called from
+ * `advanceSources` on the Russell tick, so nobody has to remember an old
+ * option: `resolvePreparedNeeds` finds the waiting bins that require a prepared
+ * requirement and hands the minimum to the Factory once; then every handoff
+ * that names blocked bins or work items is re-read and, the first time
+ * `resumeOf` finds one of them completed after the handoff, a single RESUMED
+ * event is appended. It holds no lease, fires no worker and spends nothing; a
+ * handoff that names no blocked work is never judged.
+ */
+export async function advancePreparedOptions(
+  deps: PreparedNeedDeps = {},
+): Promise<{ identified: number; handedOff: number; judged: number; resumed: number }> {
+  const needs = await resolvePreparedNeeds(deps);
   const rows = await getDb().all<{ project_id: string; entity_id: string; payload: string }>(
     `SELECT project_id, entity_id, payload FROM project_events
       WHERE entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED'
@@ -308,13 +552,18 @@ export async function advancePreparedOptions(): Promise<{ judged: number; resume
     try { return JSON.parse(raw) as Record<string, unknown>; } catch { return {}; }
   };
   const done = new Set<string>();
-  const pending: Array<{ projectId: string; requirementId: string; changeRequestId: string; blocked: string[] }> = [];
+  const pending: Array<{ projectId: string; requirementId: string; changeRequestId: string; blocked: string[]; blockedBins: string[] }> = [];
+  const ids = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
   for (const r of rows) {
     const p = parse(r.payload);
     const crId = typeof p.changeRequestId === 'string' ? p.changeRequestId : '';
     if (p.kind === PREPARED_RESUMED_KIND) done.add(crId);
-    else if (p.kind === PREPARED_HANDOFF_KIND && Array.isArray(p.blockedWorkItemIds) && p.blockedWorkItemIds.length > 0) {
-      pending.push({ projectId: r.project_id, requirementId: r.entity_id, changeRequestId: crId, blocked: p.blockedWorkItemIds.filter((x): x is string => typeof x === 'string') });
+    else if (p.kind === PREPARED_HANDOFF_KIND) {
+      const blocked = ids(p.blockedWorkItemIds);
+      const blockedBins = ids(p.blockedBinIds);
+      if (blocked.length > 0 || blockedBins.length > 0) {
+        pending.push({ projectId: r.project_id, requirementId: r.entity_id, changeRequestId: crId, blocked, blockedBins });
+      }
     }
   }
   let judged = 0;
@@ -322,7 +571,7 @@ export async function advancePreparedOptions(): Promise<{ judged: number; resume
   for (const h of pending) {
     if (done.has(h.changeRequestId)) continue;
     judged += 1;
-    const r = await resumeOf(h.projectId, h.requirementId, h.blocked);
+    const r = await resumeOf(h.projectId, h.requirementId, h.blocked, h.blockedBins);
     if (!r.resumed) continue;
     await recordEvent({
       projectId: h.projectId,
@@ -333,5 +582,5 @@ export async function advancePreparedOptions(): Promise<{ judged: number; resume
     });
     resumed += 1;
   }
-  return { judged, resumed };
+  return { identified: needs.identified, handedOff: needs.handedOff, judged, resumed };
 }
