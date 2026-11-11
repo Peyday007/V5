@@ -1456,17 +1456,40 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   if (result.status === 'AWAITING_REPAIR') {
     const fragments = await currentFragments(orchestrationId);
-    const waiting = fragments.some((fragment) => fragment.nextRetryAt !== null);
+    /*
+     * A retry time is a wait only while it is still ahead. One that has passed
+     * is a repair that is due: reading it as a wait left the packet live, idle
+     * and holding its slot until the progress deadline wrote its research off
+     * as FAILED — a due, still-allowed repair lost instead of run.
+     */
+    const now = queueNow();
+    const waiting = fragments.some((fragment) => fragment.nextRetryAt !== null && fragment.nextRetryAt > now);
     if (waiting) return result;
     /*
-     * Reachable now only through a race — the verdict branch asks
-     * `assessRepairs` before it writes AWAITING_REPAIR — so when it does happen
-     * it names the refusals rather than only that nothing is pending.
+     * Nothing is scheduled to return, so the one repair answer decides: a
+     * repair it would still mint is minted here and the packet moves on; one
+     * it refuses parks the packet with those refusals in its words.
      */
     const orchestration = await getOrchestration(orchestrationId);
     const repairs = orchestration
       ? await assessRepairs({ orchestration, fragments })
       : { mintable: [], refused: [] };
+    if (orchestration && repairs.mintable.length > 0) {
+      let minted = 0;
+      try {
+        minted = await mintRepairs({ orchestration, fragments, items: live });
+      } catch (error) {
+        if (!(error instanceof RepairRefusedByGrant)) throw error;
+        const reason =
+          `A repair attempt for ${error.fragmentKey} was refused by the permission this packet ` +
+          `runs under: ${error.detail}. Nothing was researched or spent on it, and every earlier ` +
+          'attempt and accepted claim is kept. Renewing or extending that permission lets the ' +
+          'repair run on the next tick; stopping the work is the other answer.';
+        await parkOrchestration(orchestrationId, reason, { stampCompleted: true });
+        return { ...result, status: 'NEEDS_HUMAN', waitingOn: `a person: ${reason}` };
+      }
+      if (minted > 0) return await advancePacket(orchestrationId);
+    }
     const detail = repairs.refused.map((entry) => entry.reason).join('; ');
     await parkOrchestration(orchestrationId,
         'The packet was left awaiting a repair that has no claimable work and no scheduled ' +
@@ -2766,6 +2789,23 @@ export const PACKET_STALL_WINDOW_MS = 4 * 60 * 60 * 1000;
 export const PACKET_NOOP_RETRY_MS = 60 * 60 * 1000;
 const idleNoopAt = new Map<string, number>();
 
+/**
+ * How long a live packet may go without movement, with nothing outstanding,
+ * before an advance that still changes nothing concludes it.
+ *
+ * The stall window above only *detects*: it advances the packet, and when the
+ * advance changes nothing the packet was left as it was and tried again an hour
+ * later, for ever — live, idle and holding its slot. That is a progress deadline
+ * with no bound action, which reports and never resolves (Kubernetes'
+ * ProgressDeadlineExceeded alone); the bound action is the exit a Step Functions
+ * task's TimeoutSeconds gives it. Longer than `PACKET_STALL_WINDOW_MS`, so a
+ * packet always gets at least one ordinary advance first, and under the six
+ * hours `PACKETS_MOVING` measures. Read from the packet's own `updated_at`, so a
+ * restart that forgets `idleNoopAt` forgets only the retry pacing, never the
+ * judgment.
+ */
+export const PACKET_PROGRESS_DEADLINE_MS = 5 * 60 * 60 * 1000;
+
 /** Test hook: forget which packets were tried without effect. */
 export function resetIdlePacketAttempts(): void {
   idleNoopAt.clear();
@@ -2823,19 +2863,137 @@ export async function advanceIdlePackets(
   for (const row of rows) {
     const before = await getOrchestration(row.id);
     if (!before) continue;
-    const result = await advancePacket(row.id);
+    /*
+     * One packet whose advance throws must not end the sweep. Ordered oldest
+     * first and never stamped, it would be selected first again on every tick
+     * and stop every packet behind it from being reached.
+     */
+    let result: AdvanceResult | null = null;
+    let failure: string | null = null;
+    try {
+      result = await advancePacket(row.id);
+    } catch (error) {
+      failure = error instanceof Error ? error.message : String(error);
+    }
     const after = await getOrchestration(row.id);
     const minted = (await listWorkItemsForOrchestration(row.id)).some((item) =>
       LIVE_ITEM.has(item.state),
     );
-    if (!after || (after.status === before.status && !minted && after.updatedAt === before.updatedAt)) {
+    if (!after || !result || (after.status === before.status && !minted && after.updatedAt === before.updatedAt)) {
       idleNoopAt.set(row.id, nowMs);
+      if (after && after.status === before.status && after.updatedAt === before.updatedAt && !minted) {
+        const concluded = await concludeStalledPacket(before, nowMs, failure);
+        if (concluded) out.push({ orchestrationId: row.id, from: before.status, to: concluded });
+      }
       continue;
     }
     if (after.updatedAt === before.updatedAt) await beat(row.id);
     out.push({ orchestrationId: row.id, from: before.status, to: result.status });
   }
   return out;
+}
+
+/**
+ * The bound action of the progress deadline: conclude a packet whose advance has
+ * stopped producing movement.
+ *
+ * Judged only from the packet's rows. It must have gone `PACKET_PROGRESS_DEADLINE_MS`
+ * without an update (the advance that just ran left `updated_at` alone, so this
+ * is the age of its last real movement), and it must have no QUEUED or LEASED
+ * item. It is left alone when its rows say it is waiting by design and not
+ * stalled:
+ *
+ *   - **A plan awaiting a person's approval** (a PLANNED fragment). That is the
+ *     §16 gate, and `advancePacket` already refuses to treat it as a stall.
+ *     Concluding it would decide about spend for a person; parking it would
+ *     erase the difference between that wait and a stuck packet.
+ *   - **A repair scheduled to return** (a fragment whose `nextRetryAt` is still
+ *     ahead). It already has a bounded exit, and that time is it.
+ *
+ * A packet one of whose fragments is itself NEEDS_HUMAN already needs a person
+ * by its own rows, so that packet parks at NEEDS_HUMAN with the same sentence
+ * and a `RESEARCH_BLOCKED` event. So does a packet behind a mission, by the same
+ * rule `advancePacket` applies when no fragment clears its gate: only a goal
+ * round with no mission ends FAILED, and a packet behind a mission parks,
+ * because a mission's park has a person and a card. A repair whose `nextRetryAt`
+ * has already passed is not such a packet: `advancePacket` treats it as due and
+ * mints it or parks with the repair answer's refusals, so this deadline is the
+ * backstop only for a packet whose advance genuinely cannot move it (an advance
+ * that fails every time, or a state nothing else resolves).
+ *
+ * Everything else is concluded through the transition a packet that cannot go
+ * on already takes, FAILED with its reason, plus a `RESEARCH_FAILED` event.
+ * Nothing is synthesized, so no mandatory requirement is filed uncovered
+ * (invariant 20). No gate, audit or verification is consulted or skipped. Every
+ * fragment, claim and attempt keeps its row. Unless a fragment already asks for
+ * a person, it is not NEEDS_HUMAN: nothing in its rows asks anyone anything, and
+ * a park would hand the owner a decision with nothing to decide. FAILED is also what lets a research
+ * goal start its next round. The write is guarded in its own statement on the
+ * status and `updated_at` it judged, and on there still being no outstanding
+ * work, so a packet that moved in the meantime is not touched. A transition it
+ * makes ends with `recomputeProject`, as every outcome transition does (§6).
+ * Returns the status it wrote, or null when it left the packet alone.
+ */
+async function concludeStalledPacket(
+  packet: ResearchOrchestration,
+  nowMs: number,
+  failure: string | null,
+): Promise<'FAILED' | 'NEEDS_HUMAN' | null> {
+  const idleMs = nowMs - Date.parse(packet.updatedAt);
+  if (!(idleMs >= PACKET_PROGRESS_DEADLINE_MS)) return null;
+  const fragments = await currentFragments(packet.id);
+  if (fragments.some((fragment) => fragment.status === 'PLANNED')) return null;
+  const now = new Date(nowMs).toISOString();
+  if (fragments.some((fragment) => fragment.nextRetryAt !== null && fragment.nextRetryAt > now)) return null;
+
+  const fragmentAsks = fragments.some((fragment) => fragment.status === 'NEEDS_HUMAN');
+  const mission = fragmentAsks ? null : await getMissionByOrchestration(packet.id);
+  const needsPerson = fragmentAsks || mission !== null;
+  const hours = Math.floor(idleMs / 3_600_000);
+  const reason =
+    `This packet sat ${packet.status} for ${hours} hour${hours === 1 ? '' : 's'} with no work queued ` +
+    `or leased, and advancing it ${failure ? `failed (${failure.slice(0, 300)})` : 'changed nothing'}. ` +
+    `That is past the ${PACKET_PROGRESS_DEADLINE_MS / 3_600_000}-hour progress deadline, so it is ` +
+    (fragmentAsks
+      ? 'parked for the person one of its fragments already asks for, and it no longer holds a ' +
+        'slot as live work. '
+      : mission
+      ? `parked for the person behind mission ${mission.id}, whose card carries it, and it no ` +
+        'longer holds a slot as live work. '
+      : 'concluded here and no longer holds a slot for movement that will not come. ') +
+    'Nothing was synthesized, and every fragment, claim and attempt keeps its row.';
+  const to: 'FAILED' | 'NEEDS_HUMAN' = needsPerson ? 'NEEDS_HUMAN' : 'FAILED';
+  const done = await getDb().run(
+    `UPDATE research_orchestrations
+        SET status = ?, ${to === 'FAILED' ? 'failed_at = ?,' : ''} completed_at = ?, failure_reason = ?, updated_at = ?
+      WHERE id = ? AND status = ? AND updated_at = ?
+        AND NOT EXISTS (SELECT 1 FROM work_items w
+                         WHERE w.orchestration_id = research_orchestrations.id AND w.state IN ('QUEUED','LEASED'))`,
+    [to, ...(to === 'FAILED' ? [now] : []), now, reason, now, packet.id, packet.status, packet.updatedAt],
+  );
+  if (done.changes !== 1) return null;
+  idleNoopAt.delete(packet.id);
+  await recordEvent({
+    projectId: packet.projectId,
+    layerId: packet.layerId,
+    entityType: 'RUN',
+    entityId: packet.runId,
+    eventType: needsPerson ? 'RESEARCH_BLOCKED' : 'RESEARCH_FAILED',
+    payload: {
+      orchestrationId: packet.id,
+      reason,
+      status: to,
+      stuckStatus: packet.status,
+      idleMs,
+      progressDeadlineMs: PACKET_PROGRESS_DEADLINE_MS,
+      ...(failure ? { advanceError: failure.slice(0, 300) } : {}),
+    },
+  });
+  // The transition changed reality, so it re-derives state like every other
+  // outcome transition does (§6): the run, layer and runtime snapshot must not
+  // keep reading the packet as live until something unrelated recomputes.
+  await recomputeProject(packet.projectId);
+  return to;
 }
 
 /**
