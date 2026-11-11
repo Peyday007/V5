@@ -28,6 +28,8 @@ import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
 import { insertFeedItems } from '../../repos/feeds.ts';
 import { DELIVERABLE_LABEL, type DeliverableKind } from '../cash/deliverables/spec.ts';
+import type { LearnedDetector } from '../../domain/searchIntelligence.ts';
+import type { SearchReport } from '../research/searchReport/report.ts';
 
 /** The source a detection's own lead item is filed under. */
 export const CODE_SIGNAL_SOURCE = 'code-signal';
@@ -252,7 +254,26 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
   const now = input.now ?? new Date();
   const db = getDb();
   const reports: DetectorRunReport[] = [];
-  for (const detector of input.detectors ?? DETECTORS) {
+  /*
+   * The production pass installs what was learned beside the code rules
+   * (`learnedRun.ts`): modes settled from measured precision, a failing
+   * method's detector held back, each pass recorded against its method. A
+   * caller that names its own detectors gets exactly those. A fault in the
+   * learned part never stops the code rules.
+   */
+  const learnedById = new Map<string, LearnedDetector>();
+  let installed: readonly Detector[] = input.detectors ?? DETECTORS;
+  if (!input.detectors) {
+    try {
+      const { installLearned } = await import('./learnedRun.ts');
+      const { run } = await installLearned(now);
+      for (const one of run) learnedById.set(one.detector.id, one.learned);
+      installed = [...DETECTORS, ...run.map((one) => one.detector)];
+    } catch {
+      /* the code rules still run */
+    }
+  }
+  for (const detector of installed) {
     const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
     const rows = await db.all<{ id: string; source: string; url: string; title: string; organization: string | null; published_at: string | null; fetched_at: string }>(
       `SELECT id, source, url, title, organization, published_at, fetched_at FROM feed_items
@@ -349,6 +370,15 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
       }
       if (signal.deliverable && (await fileDetectionLead(detectionId, signal))) report.filed += 1;
     }
+    const learned = learnedById.get(detector.id);
+    if (learned) {
+      try {
+        const { recordLearnedPass } = await import('./learnedRun.ts');
+        await recordLearnedPass({ learned, records, signals });
+      } catch {
+        /* the detection rows above already stand */
+      }
+    }
     reports.push(report);
   }
   return reports;
@@ -409,6 +439,12 @@ export interface DetectionReading {
   covered: number;
   /** Of those, how many no free model was ever asked about: the calls actually avoided. */
   coveredUnscreened: number;
+  /**
+   * What shared (GENERAL) search learning has done, from rows: the search
+   * report's counts and which methods were turned into code. Null when it
+   * could not be read.
+   */
+  search: { counts: SearchReport['counts']; turnedIntoCode: SearchReport['turnedIntoCode']; subjects: SearchReport['subjects'] } | null;
 }
 
 export async function detectionReading(): Promise<DetectionReading> {
@@ -426,5 +462,17 @@ export async function detectionReading(): Promise<DetectionReading> {
     byRule: rules.map((row) => ({ rule: row.rule, mode: row.mode, detections: Number(row.n), leads: Number(row.leads) })),
     covered: Number(covered?.n ?? 0),
     coveredUnscreened: Number(unscreened?.n ?? 0),
+    search: await searchSummary(),
   };
+}
+
+async function searchSummary(): Promise<DetectionReading['search']> {
+  try {
+    const { buildSearchReport } = await import('../research/searchReport/report.ts');
+    const { FEED_READER } = await import('./learnedRun.ts');
+    const report = await buildSearchReport(FEED_READER);
+    return { counts: report.counts, turnedIntoCode: report.turnedIntoCode, subjects: report.subjects };
+  } catch {
+    return null;
+  }
 }
