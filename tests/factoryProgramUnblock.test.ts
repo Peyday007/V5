@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { grantable, pathsNamedIn, widenScope } from '../server/services/factory/program/unblock.ts';
+import { grantable, pathsNamedIn, resolveShortPaths, widenScope } from '../server/services/factory/program/unblock.ts';
 
 describe('widening a campaign scope', () => {
   it('widens files to their directory, keeps globs, and never reaches the program verification code', () => {
@@ -31,5 +31,19 @@ describe('scope reconciliation reads paths and refuses what is not safe to grant
     for (const path of ['server/services/identity/secrets.ts', 'server/services/auth/session.ts', 'server/repos/oauth.ts', '.github/workflows/deploy.yml', 'server/services/cash/ledger.ts', 'server/services/payments/stripe.ts', 'data/brain.db']) {
       expect(grantable(path, forbidden), path).toBe(false);
     }
+  });
+});
+
+describe('a blocker that names a path from inside a package', () => {
+  it('reads it as the one full path that is a file or that a unit owns, and leaves an ambiguous one alone', () => {
+    const detail =
+      'failure-classifier-unwired requires outside the approved scope: routing/failures/classify.ts — ' +
+      'F-ACQUIRE requires outside the approved scope: cash/needs.ts, docs/x.md, util/both.ts, nowhere/gone.ts. A repair is not created for a file it may not change.';
+    const files = new Set(['server/services/cash/needs.ts', 'server/util/both.ts', 'client/src/util/both.ts']);
+    expect(resolveShortPaths(detail, ['server/services/routing/failures/**'], (path) => files.has(path))).toEqual([
+      'server/services/routing/failures/classify.ts',
+      'server/services/cash/needs.ts',
+    ]);
+    expect(resolveShortPaths(null, [])).toEqual([]);
   });
 });

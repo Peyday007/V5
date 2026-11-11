@@ -19,6 +19,9 @@
  * Every step is recorded by the machinery it uses, and a LIVE, complete or
  * cancelled campaign is never touched.
  */
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { matchesGlob } from '../glob.ts';
 import { getCampaignByChangeRequest, getChangeRequest, listUnits } from '../../../repos/factory.ts';
 import { getPlan, getProgram, listCampaignLinks } from '../../../repos/factoryProgram.ts';
 import { campaignTestPath } from './coordinator.ts';
@@ -196,6 +199,33 @@ export function pathsNamedIn(text: string | null | undefined): string[] {
   return [...new Set([...text.matchAll(PATH_IN_TEXT)].map((m) => m[1]!.replace(/[.,;:)]+$/, '')))];
 }
 
+const SHORT_PATH_ROOTS = ['server/services/', 'server/', 'client/src/', 'client/', 'shared/'];
+const onDisk = (path: string): boolean => existsSync(fileURLToPath(new URL(`../../../../${path}`, import.meta.url)));
+
+/*
+ * A reviewer writes a path from inside a package (`cash/needs.ts`), and when no
+ * scope glob covers it the blocker repeats it that way, so the grant it asks for
+ * names no real file (production 2026-11-11: fcp_95cb47d2 and fcp_97a06815 sat
+ * BLOCKED after reconciliation ran, asking for `cash/needs.ts` and
+ * `routing/failures/classify.ts`). Each short path is read as the one full path
+ * under a source root that is a file here or that a unit of the campaign owns;
+ * none, or two, and it is left alone.
+ */
+export function resolveShortPaths(text: string | null | undefined, unitGlobs: string[], exists: (path: string) => boolean = onDisk): string[] {
+  if (!text) return [];
+  const listed = [...text.matchAll(/outside the approved scope: (.+?)(?= — |; |\. A repair|$)/g)].flatMap((m) => m[1]!.split(', '));
+  const resolved: string[] = [];
+  for (const raw of listed) {
+    const path = raw.trim();
+    if (!/^[A-Za-z0-9_.\/-]+\.[A-Za-z]{1,5}$/.test(path) || pathsNamedIn(path).length > 0) continue;
+    const candidates = SHORT_PATH_ROOTS.map((root) => `${root}${path}`).filter(
+      (candidate) => exists(candidate) || unitGlobs.some((glob) => glob === candidate || matchesGlob(candidate, glob)),
+    );
+    if (candidates.length === 1) resolved.push(candidates[0]!);
+  }
+  return [...new Set(resolved)];
+}
+
 /** Whether a path may be granted automatically. */
 export function grantable(path: string, forbidden: string[]): boolean {
   if (SENSITIVE.test(path)) return false;
@@ -232,7 +262,12 @@ export async function reconcileBlockedScopes(now = Date.now(), force = false): P
     const forbidden = forbiddenPathsFor(changeRequest.repository);
     const units = await listUnits(campaign.id);
     const exhausted = units.filter((unit) => unit.state === 'FAILED' && unit.attempt >= unit.maxAttempts && unit.maxAttempts < MAX_UNIT_ATTEMPTS);
-    const named = [...new Set([campaign.blockerDetail, ...exhausted.map((unit) => unit.failureDetail)].flatMap(pathsNamedIn))];
+    const named = [
+      ...new Set([
+        ...[campaign.blockerDetail, ...exhausted.map((unit) => unit.failureDetail)].flatMap(pathsNamedIn),
+        ...resolveShortPaths(campaign.blockerDetail, units.flatMap((unit) => unit.ownedPaths)),
+      ]),
+    ];
     const ok = (path: string): boolean => grantable(path, forbidden) && scopesOverlap([path], PROTECTED_VERIFICATION_PATHS).length === 0;
     const wanted = [...new Set([...widenScope(changeRequest.mutationScope), ...named])].filter(ok);
     const scope = [...new Set([...changeRequest.mutationScope, ...wanted])].sort();
