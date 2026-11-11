@@ -65,7 +65,11 @@ jobs:
         id: repair
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          ALL_SECRETS: ${{ toJSON(secrets) }}
+          # Each syncable credential by name (tests/integrationRegistry.test.ts
+          # keeps this list equal to the registry's GITHUB_SECRET credentials).
+          SYNC_INSTANTLY_API_KEY: ${{ secrets.INSTANTLY_API_KEY }}
+          SYNC_STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          SYNC_RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           SEALED_NAME: ${{ github.event.inputs.sealed_name }}
           SEALED_VALUE: ${{ github.event.inputs.sealed_value }}
         run: |
@@ -101,7 +105,7 @@ jobs:
           python3 - "$staged" "$repairs" <<'PY'
           import hashlib, json, os, sys
           staged, repairs = sys.argv[1], sys.argv[2]
-          secrets = json.loads(os.environ['ALL_SECRETS'])
+          secrets = {k[len('SYNC_'):]: v for k, v in os.environ.items() if k.startswith('SYNC_')}
           held = dict(line.split()[:2] for line in os.environ.get('HELD', '').splitlines() if line.strip())
           names = os.environ['SYNCABLE'].split()
           owners = {'INSTANTLY_API_KEY': 'instantly', 'STRIPE_SECRET_KEY': 'stripe', 'RESEND_API_KEY': 'resend'}
@@ -161,7 +165,24 @@ jobs:
       - name: Record repairs and check every integration
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          ALL_SECRETS: ${{ toJSON(secrets) }}
+          # Presence only (true/false), for the integrations whose credentials live
+          # in GitHub Actions; kept equal to the registry by the same test.
+          HAS_FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN != '' }}
+          HAS_FLY_ORG_TOKEN: ${{ secrets.FLY_ORG_TOKEN != '' }}
+          HAS_RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY != '' }}
+          HAS_RUNPOD_VLLM_KEY: ${{ secrets.RUNPOD_VLLM_KEY != '' }}
+          HAS_RUNPOD_VLLM_URL: ${{ secrets.RUNPOD_VLLM_URL != '' }}
+          HAS_ETSY_API_KEY: ${{ secrets.ETSY_API_KEY != '' }}
+          HAS_ETSY_SHARED_SECRET: ${{ secrets.ETSY_SHARED_SECRET != '' }}
+          HAS_ETSY_REDIRECT_URI: ${{ secrets.ETSY_REDIRECT_URI != '' }}
+          HAS_PINTEREST_APP_ID: ${{ secrets.PINTEREST_APP_ID != '' }}
+          HAS_PINTEREST_APP_SECRET: ${{ secrets.PINTEREST_APP_SECRET != '' }}
+          HAS_PINTEREST_REDIRECT_URI: ${{ secrets.PINTEREST_REDIRECT_URI != '' }}
+          HAS_PINTEREST_STANDARD_ACCESS: ${{ secrets.PINTEREST_STANDARD_ACCESS != '' }}
+          HAS_FOURTHWALL_API_USERNAME: ${{ secrets.FOURTHWALL_API_USERNAME != '' }}
+          HAS_FOURTHWALL_API_PASSWORD: ${{ secrets.FOURTHWALL_API_PASSWORD != '' }}
+          HAS_OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY != '' }}
+          HAS_OMNIROUTE_PASSWORD: ${{ secrets.OMNIROUTE_PASSWORD != '' }}
         run: |
           set -euo pipefail
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
@@ -172,7 +193,7 @@ jobs:
             done < "$repairs"
           fi
           # Names of the repository secrets, so integrations that live in GitHub Actions read as present or missing.
-          names=$(python3 -c 'import json,os; print(",".join(sorted(k for k in json.loads(os.environ["ALL_SECRETS"]) if k.isupper())))')
+          names=$(python3 -c 'import os; print(",".join(sorted(k[4:] for k, v in os.environ.items() if k.startswith("HAS_") and v == "true")))')
           set +e
           flyctl ssh console --app "$app" -C "sh -c 'cd /app && node --import tsx scripts/integrations.ts public-keys && node --import tsx scripts/integrations.ts check --record integrations.yml --github-secrets $names'" 2>&1 | tee check.txt
           set -e
