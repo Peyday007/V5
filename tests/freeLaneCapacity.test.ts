@@ -20,9 +20,10 @@ import {
   stopAdaptivePool,
   waitingNow,
   freeLaneSpareSurfaces,
+  adaptivePoolRunning,
 } from '../server/services/freeLane/capacity.ts';
 import { recordBinEvent } from '../server/repos/bins.ts';
-import { resetFreeLaneMemberships } from '../server/services/freeLane/worker.ts';
+import { resetFreeLaneMemberships, startFreeLaneLoop, stopFreeLaneLoop } from '../server/services/freeLane/worker.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 import type { SourceFetch } from '../server/services/sources/fetchForWorker.ts';
 
@@ -204,13 +205,69 @@ describe('the control step heals the pool it owns (rule 9: nothing claimable wai
   const taken = async (): Promise<number> =>
     Number((await getDb().get<{ n: number | string }>("SELECT COUNT(*) AS n FROM work_items WHERE work_type = 'RESEARCH_FRAGMENT' AND state <> 'QUEUED'", []))?.n ?? 0);
 
-  it('membership lost: work queued after the lane cached no projects is claimed on the next step, not after the hourly recovery', async () => {
+  /*
+   * The two cases below reproduce the recorded failure class itself: claimable
+   * research waiting at idle capacity in a state the lane never leaves on its
+   * own, however long it waits. Each asserts the state the earlier code could
+   * not leave (the grant it held names no project; the pool never started), so
+   * waiting longer would not have made either pass on that code. The case
+   * after them is narrower: a heal wakes sleeping slots on its own step.
+   */
+  it('membership lost (the recorded class): work whose packet bin has moved on is claimed by the running pool itself, with no heal and no forced step', async () => {
+    resetFreeLaneMemberships();
+    await queueFragments(3);
+    // A retry queued after its bin went COMPLETE: still the lane's work by purpose, and counted as waiting.
+    await getDb().run("UPDATE bins SET state = 'COMPLETE'", []);
+    expect(await waitingNow()).toBe(3);
+    // The grant the lane held before (a free-lane bin still READY, LEASED or NEEDS_HUMAN) names no
+    // project here. It is a function of bin state, not of time: every one-minute re-read, and the
+    // hourly recovery's reset, answered the same, so on that code this work waited for good.
+    const oldGrant = await getDb().all<{ project_id: string }>(
+      "SELECT DISTINCT project_id FROM bins WHERE purpose IN ('PLAY_RESEARCH', 'GRUNT') AND state IN ('READY', 'LEASED', 'NEEDS_HUMAN')",
+      [],
+    );
+    expect(oldGrant).toHaveLength(0);
+    startAdaptivePool({ config: CONFIG, completer, fetchSource, search: async () => [], pressure: () => calm }, 60_000);
+    // Only the step startAdaptivePool runs itself; claimed by the slots' own first pass.
+    for (let i = 0; i < 50 && (await taken()) < 3; i += 1) await pause(100);
+    expect(await taken()).toBe(3);
+    expect(await healed()).toHaveLength(0);
+  }, 30_000);
+
+  it('lane pool stopped (the recorded class): a pool whose start threw is started again and claims the waiting work, without a process restart', async () => {
+    await queueFragments(2);
+    let attempts = 0;
+    stopFreeLaneLoop();
+    startFreeLaneLoop(0, 1, {
+      // The production start, after one failed import (the cause recorded with 93abb6f).
+      start: () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('import failed');
+        startAdaptivePool({ config: CONFIG, completer, fetchSource, search: async () => [], pressure: () => calm }, 60_000);
+      },
+      running: () => adaptivePoolRunning(),
+      retryMs: 50,
+      maxRetryMs: 200,
+    });
+    try {
+      // Before the retry, nothing runs and nothing will: no control step, no slot, no timer of the pool's own.
+      expect(adaptivePoolRunning()).toBe(false);
+      for (let i = 0; i < 50 && (await taken()) === 0; i += 1) await pause(100);
+      expect(attempts).toBe(2);
+      expect(adaptivePoolRunning()).toBe(true);
+      expect(await taken()).toBeGreaterThan(0);
+    } finally {
+      stopFreeLaneLoop();
+    }
+  }, 30_000);
+
+  it('a heal wakes idle slots on its own step: work queued after the lane found nothing is claimed on that step, not after the idle sleep', async () => {
     resetFreeLaneMemberships();
     // The lane starts with nothing to do: its slots read their memberships (none), cache them, and sleep.
     startAdaptivePool({ config: CONFIG, completer, fetchSource, search: async () => [], pressure: () => calm }, 60_000);
     await pause(400);
     await queueFragments(3);
-    // The recorded failure: work waits, the cached membership is stale, and the slots claim nothing.
+    // The slots are asleep (IDLE_SLEEP_MS): within this pause they claim nothing.
     await pause(600);
     expect(await waitingNow()).toBe(3);
     expect(await taken()).toBe(0);
@@ -236,32 +293,5 @@ describe('the control step heals the pool it owns (rule 9: nothing claimable wai
     expect(await waitingNow()).toBe(2);
     expect(await taken()).toBe(0);
     expect(await healed()).toHaveLength(1);
-  }, 30_000);
-
-  it('lane pool stopped: a pool whose slots all exited is refilled by the next step without restarting the pool', async () => {
-    let broken = true;
-    const options = {
-      config: CONFIG,
-      fetchSource,
-      search: async () => [],
-      pressure: () => calm,
-      // Every slot reads this before it claims: while broken, each slot ends the moment it starts.
-      get completer(): Completer {
-        if (broken) throw new Error('slot crashed');
-        return completer;
-      },
-    };
-    startAdaptivePool(options, 60_000);
-    await pause(400);
-    broken = false;
-    await queueFragments(2);
-    const reading = await controlStep();
-    expect(reading?.models.length).toBe(2);
-    for (const model of reading!.models) expect(model.running).toBe(model.target);
-    const rows = await healed();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.reason).toMatch(/brain-a: 2 slot\(s\) had exited \(0 of \d+ running\); refilled to \d+/);
-    for (let i = 0; i < 40 && (await taken()) === 0; i += 1) await pause(100);
-    expect(await taken()).toBeGreaterThan(0);
   }, 30_000);
 });

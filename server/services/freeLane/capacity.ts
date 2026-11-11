@@ -303,25 +303,30 @@ async function slot(pool: ModelPool, k: number, config: LaneConfig): Promise<voi
   pool.running += 1;
   try {
     while (!stopped && k < pool.target) {
-      const base = {
-        workers: workersCache,
-        worker: pool.worker,
-        index: pool.index,
-        completer: poolOptions.completer ?? httpCompleter,
-        fetchSource: poolOptions.fetchSource ?? ((url: string) => readSource(url, { caller: 'free-lane' })),
-        search: poolOptions.search ?? discoverCandidates,
-        config,
-      };
-      samplePools();
       pool.busy += 1;
       pool.peakBusy = Math.max(pool.peakBusy, pool.busy);
       let result: Awaited<ReturnType<typeof takeOne>> = { claimed: null, ok: false, ms: 0 };
+      /*
+       * The whole iteration is guarded, and the message read cannot itself
+       * throw: a rejection that is not an Error (null, a string) used to throw
+       * again inside this catch, past the loop, and end the slot.
+       */
       try {
+        samplePools();
+        const base = {
+          workers: workersCache,
+          worker: pool.worker,
+          index: pool.index,
+          completer: poolOptions.completer ?? httpCompleter,
+          fetchSource: poolOptions.fetchSource ?? ((url: string) => readSource(url, { caller: 'free-lane' })),
+          search: poolOptions.search ?? discoverCandidates,
+          config,
+        };
         result = await takeOne(base);
         // Nothing for this model's own roles: take the other model's, so idle capacity is used.
         if (!result.claimed) result = await takeOne({ ...base, spillover: true });
       } catch (error) {
-        console.warn('[free-lane] slot failed:', (error as Error).message);
+        console.warn('[free-lane] slot failed:', String((error as Error | null)?.message ?? error));
       } finally {
         pool.busy -= 1;
       }
