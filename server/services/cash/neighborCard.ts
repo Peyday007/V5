@@ -133,7 +133,7 @@ export interface Deps {
   fetch: Fetch;
   env: NodeJS.ProcessEnv;
   sleep: (ms: number) => Promise<void>;
-  resolveMx: (domain: string) => Promise<boolean>;
+  resolveMx: (domain: string) => Promise<boolean | null>;
   log: (line: string) => void;
 }
 
@@ -142,16 +142,37 @@ export function defaultDeps(): Deps {
     fetch: (url, init) => fetch(url, init),
     env: process.env,
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
-    resolveMx: async (domain) => {
-      try {
-        const rows = await Promise.race([dns.resolveMx(domain), new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout')), 8000))]);
-        return rows.some((r) => r.exchange && r.exchange !== '.');
-      } catch {
-        return false;
-      }
-    },
+    resolveMx: (domain) => hasMailServer(domain),
     log: (line) => console.log(line),
   };
+}
+
+/**
+ * Does the domain publish a mail server? `true`/`false` only on an answer;
+ * `null` when no resolver answered, which is not a "no" (§39): the address is
+ * left for the next pass rather than refused. DNS-over-HTTPS first, because a
+ * container's own resolver can answer "no data" for every domain (this
+ * session's sandbox did, which refused every address on the first pass); the
+ * system resolver only when that cannot be reached.
+ */
+export async function hasMailServer(domain: string, fetcher: Fetch = fetch): Promise<boolean | null> {
+  try {
+    const res = await fetcher(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=MX`, { signal: AbortSignal.timeout(8000) });
+    if (res.ok) {
+      const body = (await res.json()) as { Status?: number; Answer?: { type?: number; data?: string }[] };
+      if (body.Status === 3) return false;
+      if (body.Status === 0) return (body.Answer ?? []).some((a) => a.type === 15 && !/\s\.$/.test(a.data ?? ''));
+    }
+  } catch {
+    /* fall through to the system resolver */
+  }
+  try {
+    const rows = await Promise.race([dns.resolveMx(domain), new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout')), 8000))]);
+    return rows.some((r) => r.exchange && r.exchange !== '.');
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    return code === 'ENOTFOUND' ? false : null;
+  }
 }
 
 class InstantlyError extends Error {}
@@ -509,13 +530,16 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
   }).slice(0, options.maxSites ?? 60);
   let found = 0;
   let noMx = 0;
+  let unverified = 0;
   let added = 0;
   await pool(fresh, 6, async (c) => {
     const hit = await findPublishedEmail(deps, c.website);
     if (!hit) return;
     found += 1;
     if (known.emails.has(hit.email)) return;
-    if (!(await deps.resolveMx(hit.email.split('@')[1]!))) { noMx += 1; return; }
+    const mx = await deps.resolveMx(hit.email.split('@')[1]!);
+    if (mx === null) { unverified += 1; return; }
+    if (!mx) { noMx += 1; return; }
     const cat = CATEGORY[c.category]!;
     try {
       await instantly(deps, 'POST', '/leads', {
@@ -537,7 +561,7 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
   const sources = `${chamber.map(([s]) => s).join(', ')}; map tile ${tile} (${batches[2]?.length ?? 0} on the map)`;
   const line = fresh.length === 0
     ? `refill: nothing new to read this pass (${discovered} discovered from ${sources}, all already in the campaign or not usable)`
-    : `refill: ${discovered} discovered from ${sources}; ${fresh.length} new sites read; ${found} published an address; ${noMx} refused for no mail server; ${added} added`;
+    : `refill: ${discovered} discovered from ${sources}; ${fresh.length} new sites read; ${found} published an address; ${noMx} refused for no mail server; ${unverified} left for the next pass (no resolver answered); ${added} added`;
   return { discovered, fresh: fresh.length, found, noMx, added, line };
 }
 
