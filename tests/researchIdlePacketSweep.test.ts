@@ -17,9 +17,11 @@ import {
   updateOrchestration,
 } from '../server/repos/research.ts';
 import { enqueueWork } from '../server/repos/workQueue.ts';
+import { createWorker } from '../server/repos/identity.ts';
 import {
   advanceIdlePackets,
   concludeUnworkablePackets,
+  PACKET_PROGRESS_DEADLINE_MS,
   PACKET_STALL_WINDOW_MS,
   resetIdlePacketAttempts,
 } from '../server/services/research/packetRunner.ts';
@@ -154,5 +156,172 @@ describe('advanceIdlePackets', () => {
     // the second pass skips it and reaches the packet behind it.
     expect((await advanceIdlePackets(1)).map((e) => e.orchestrationId)).toEqual([movable]);
     expect((await getOrchestration(stuck))!.updatedAt).toBe(stuckBefore.updatedAt);
+  });
+});
+
+/**
+ * The bound action. Detection alone left a packet whose advance changes nothing
+ * live, unstamped and re-tried every hour for ever. Past the progress deadline,
+ * judged from its own rows, it is concluded once.
+ */
+describe('the progress deadline', () => {
+  const OVERDUE = PACKET_PROGRESS_DEADLINE_MS + 60_000;
+  /** Between the stall window and the deadline: advanced, but not yet concluded. */
+  const UNDER = Math.floor((PACKET_STALL_WINDOW_MS + PACKET_PROGRESS_DEADLINE_MS) / 2);
+
+  async function age(id: string, ageMs: number): Promise<void> {
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [
+      new Date(Date.now() - ageMs).toISOString(),
+      id,
+    ]);
+  }
+
+  async function fragmentOn(id: string, patch: Parameters<typeof updateFragment>[1]): Promise<void> {
+    const [fragment] = await createFragments([{
+      orchestrationId: id,
+      projectId,
+      layerId,
+      fragmentIndex: 0,
+      fragmentKey: 'f0',
+      question: 'q',
+      requiredEvidence: [],
+      acceptableSourceTypes: [],
+      excludedSourceTypes: [],
+      completionCriteria: [],
+      dependsOn: [],
+      minIndependentSources: 1,
+    }]);
+    await updateFragment(fragment!.id, patch);
+  }
+
+  /**
+   * The recorded failure class, from rows: AWAITING_REPAIR whose repair time has
+   * already passed, on a fragment left RUNNING with no item. `advancePacket`
+   * reads any `nextRetryAt` as a wait, so it changes nothing, every time.
+   */
+  async function stalled(ageMs: number, fragmentStatus: 'RUNNING' | 'NEEDS_HUMAN' = 'RUNNING'): Promise<string> {
+    const id = await packet('AWAITING_REPAIR', ageMs);
+    await fragmentOn(id, { status: fragmentStatus, nextRetryAt: new Date(Date.now() - 3_600_000).toISOString() });
+    await age(id, ageMs);
+    return id;
+  }
+
+  async function events(id: string): Promise<{ event_type: string; payload: string }[]> {
+    return getDb().all<{ event_type: string; payload: string }>(
+      `SELECT event_type, payload FROM project_events WHERE payload LIKE ?`,
+      [`%${id}%`],
+    );
+  }
+
+  it('reproduces the stall: under the deadline the advance changes nothing and the packet stays live', async () => {
+    const id = await stalled(UNDER);
+    const before = (await getOrchestration(id))!;
+    expect(await advanceIdlePackets(10)).toEqual([]);
+    const after = (await getOrchestration(id))!;
+    expect(after.status).toBe('AWAITING_REPAIR');
+    expect(after.updatedAt).toBe(before.updatedAt);
+  });
+
+  it('concludes a no-op idle packet past the deadline through the existing tick, with its reason and an event', async () => {
+    const id = await stalled(OVERDUE);
+    await concludeUnworkablePackets(10);
+    const after = (await getOrchestration(id))!;
+    expect(after.status).toBe('FAILED');
+    expect(after.failureReason).toMatch(/sat AWAITING_REPAIR for 5 hours/);
+    expect(after.failureReason).toMatch(/progress deadline/);
+    expect(after.failureReason).toMatch(/Nothing was synthesized/);
+    expect(after.failedAt).not.toBeNull();
+    expect(after.documentId).toBeNull();
+    const failed = (await events(id)).filter((e) => e.event_type === 'RESEARCH_FAILED');
+    expect(failed).toHaveLength(1);
+    expect(JSON.parse(failed[0]!.payload)).toMatchObject({ orchestrationId: id, stuckStatus: 'AWAITING_REPAIR', status: 'FAILED' });
+
+    // Once: a concluded packet is no longer selected.
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect((await events(id)).filter((e) => e.event_type === 'RESEARCH_FAILED')).toHaveLength(1);
+  });
+
+  it('reads the judgment from rows, so a restart neither resets it nor brings it forward', async () => {
+    const overdue = await stalled(UNDER);
+    const young = await stalled(UNDER);
+    // First pass: both are under the deadline and are only remembered as no-ops.
+    expect(await advanceIdlePackets(10)).toEqual([]);
+
+    // Time passes for one of them, and the process restarts.
+    await age(overdue, OVERDUE);
+    resetIdlePacketAttempts();
+
+    const moved = await advanceIdlePackets(10);
+    expect(moved).toEqual([{ orchestrationId: overdue, from: 'AWAITING_REPAIR', to: 'FAILED' }]);
+    expect((await getOrchestration(overdue))!.status).toBe('FAILED');
+    expect((await getOrchestration(young))!.status).toBe('AWAITING_REPAIR');
+  });
+
+  it('parks at NEEDS_HUMAN only when a fragment already asks for a person', async () => {
+    const id = await stalled(OVERDUE, 'NEEDS_HUMAN');
+    const moved = await advanceIdlePackets(10);
+    expect(moved).toEqual([{ orchestrationId: id, from: 'AWAITING_REPAIR', to: 'NEEDS_HUMAN' }]);
+    const after = (await getOrchestration(id))!;
+    expect(after.status).toBe('NEEDS_HUMAN');
+    expect(after.failureReason).toMatch(/one of its fragments already asks for/);
+    expect((await events(id)).map((e) => e.event_type)).toContain('RESEARCH_BLOCKED');
+  });
+
+  it('never concludes a plan waiting for a person to approve it: that is the §16 gate, not a stall', async () => {
+    const id = await packet('PLANNING', OVERDUE);
+    await fragmentOn(id, { status: 'PLANNED' });
+    await age(id, OVERDUE);
+    const before = (await getOrchestration(id))!;
+    expect(await advanceIdlePackets(10)).toEqual([]);
+    const after = (await getOrchestration(id))!;
+    expect(after.status).toBe('PLANNING');
+    expect(after.updatedAt).toBe(before.updatedAt);
+  });
+
+  it('never concludes a repair that is scheduled to return', async () => {
+    const id = await packet('AWAITING_REPAIR', OVERDUE);
+    await fragmentOn(id, { status: 'RUNNING', nextRetryAt: new Date(Date.now() + 3_600_000).toISOString() });
+    await age(id, OVERDUE);
+    expect(await advanceIdlePackets(10)).toEqual([]);
+    expect((await getOrchestration(id))!.status).toBe('AWAITING_REPAIR');
+  });
+
+  it('never selects or changes an overdue packet with a QUEUED item, or one under a live lease', async () => {
+    const queued = await stalled(OVERDUE);
+    await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_SYNTHESIZE',
+      payload: {},
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: queued,
+    });
+    await age(queued, OVERDUE);
+    const leased = await stalled(OVERDUE);
+    const item = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_SYNTHESIZE',
+      payload: {},
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: leased,
+    });
+    await getDb().run(
+      `UPDATE work_items SET state = 'LEASED', lease_id = 'lse_live', worker_id = ?, lease_expires_at = ? WHERE id = ?`,
+      [
+        (await createWorker({ name: 'holding-worker', createdByType: 'SYSTEM', createdById: 'test' })).id,
+        new Date(Date.now() + 3_600_000).toISOString(),
+        item.id,
+      ],
+    );
+    await age(leased, OVERDUE);
+    const before = [(await getOrchestration(queued))!, (await getOrchestration(leased))!];
+
+    const moved = (await concludeUnworkablePackets(10)).map((e) => e.orchestrationId);
+    const swept = (await advanceIdlePackets(10)).map((e) => e.orchestrationId);
+    expect([...moved, ...swept]).not.toContain(queued);
+    expect([...moved, ...swept]).not.toContain(leased);
+    expect((await getOrchestration(queued))!).toEqual(before[0]);
+    expect((await getOrchestration(leased))!).toEqual(before[1]);
   });
 });
