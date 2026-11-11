@@ -225,7 +225,12 @@ function buildBlocks(lines: Line[], pageNumber: number, bodyHeight: number): Ext
 
   const flush = (): void => {
     if (!current || current.lines.length === 0) return;
-    const text = current.lines.map((line) => line.text).join(' ').replace(/\s+/g, ' ').trim();
+    // Lines are kept as lines: where a line ended is what tells normalization a
+    // hyphen at its end was a break ("intermedi-" / "ation") rather than real text.
+    const text = current.lines
+      .map((line) => line.text.replace(/\s+/g, ' ').trim())
+      .filter((line) => line.length > 0)
+      .join('\n');
     if (text.length > 0) {
       const x0 = Math.min(...current.lines.map((line) => line.x0));
       const x1 = Math.max(...current.lines.map((line) => line.x1));

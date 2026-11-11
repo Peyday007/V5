@@ -29,7 +29,11 @@ export function textToBlocks(source: string, markdown: boolean): ExtractedBlock[
   let fenced: string[] | null = null;
 
   const flushParagraph = (): void => {
-    const text = paragraph.join(' ').replace(/[ \t]+/g, ' ').trim();
+    // Source lines stay lines, so a word hyphenated across them can be told from a real hyphen.
+    const text = paragraph
+      .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+      .filter((line) => line.length > 0)
+      .join('\n');
     if (text.length > 0) blocks.push(blockOf('PARAGRAPH', text));
     paragraph = [];
   };
