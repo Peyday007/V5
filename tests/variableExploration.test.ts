@@ -102,6 +102,24 @@ describe('§102 mechanics', () => {
     expect(base.p50).toBeLessThanOrEqual(base.p90);
   });
 
+  it('never holds the event loop: requests are served between slices of the sweep', async () => {
+    // Production, 2026-11-11 (Deploy 42998216834): a sweep that yielded every 2,000 reads coincided with a request timing out after the restart.
+    let last = performance.now();
+    let worst = 0;
+    const tick = setInterval(() => {
+      const t = performance.now();
+      worst = Math.max(worst, t - last);
+      last = t;
+    }, 1);
+    const b = evaluateGoalPortfolio({ ...portfolioInput, openings: GOAL_10K_OPENINGS, worlds: 200 });
+    const started = performance.now();
+    const again = await reconstructPlan({ openings: GOAL_10K_OPENINGS, portfolio: { ...portfolioInput, worlds: 200 }, baseline: b, required: 0.9, explore: { maxMs: 1 } });
+    clearInterval(tick);
+    expect(again.exploration?.sweep?.variations ?? 0).toBeGreaterThan(10_000);
+    expect(performance.now() - started).toBeGreaterThan(200);
+    expect(worst).toBeLessThan(150);
+  });
+
   it('a second goal with nothing in common sweeps its own variables', async () => {
     const openings = [one('opp_x', {}), one('opp_y', { price: swept(2000, 4000), close: swept(0.02, 0.08), volume: swept(5, 30) }), one('opp_z', { repeatable: false, price: swept(800, 1200), close: swept(0.3, 0.6) })];
     const input = { remaining: 6000, daysLeft: 45, capitalCeiling: 1500, beforeProof: 200, perWeek: 400, resources: null, worlds: 300, seed: 3 };

@@ -522,6 +522,8 @@ const RELIEVES: Record<FastReading['binding'], Family[]> = {
 };
 
 const yieldNow = () => new Promise<void>((r) => setImmediate(r));
+/** The longest the sweep holds the event loop between yields: requests are served between slices (§63). */
+export const SLICE_MS = 8;
 
 export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> {
   const now = ctx.now ?? Date.now;
@@ -542,6 +544,13 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
     ceiling,
   });
 
+  // Yield by elapsed time, not by count: one read can cost a microsecond or, when it builds a new operator state, a millisecond.
+  let sliceStart = performance.now();
+  const breathe = async () => {
+    if (performance.now() - sliceStart < SLICE_MS) return;
+    await yieldNow();
+    sliceStart = performance.now();
+  };
   const variables = discoverVariables(ctx);
   const conditions = discoverConditions(ctx.base);
   const space = variables.reduce((n, v) => n * v.levels.length, 1);
@@ -741,6 +750,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
   const sample = Math.min(SCREEN_SAMPLE, space);
   let screened = 0;
   for (let i = 0; i < sample * 3 && screened < sample && !late(); i++) {
+    await breathe();
     const levels = variables.map((v) => Math.floor(rand() * v.levels.length));
     const st = read(levels, 'SCREEN');
     if (!st) continue;
@@ -749,7 +759,6 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
       sums[j]![l]!.n++;
       sums[j]![l]!.s += st.score;
     });
-    if (screened % 1000 === 0) await yieldNow();
   }
   const meanOf = (j: number, l: number) => (sums[j]![l]!.n ? sums[j]![l]!.s / sums[j]![l]!.n : -Infinity);
   variables.forEach((v, j) => {
@@ -796,7 +805,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
       if (idx[j]! < live[j]!.length) break;
       idx[j] = 0;
     }
-    if (c % 2000 === 1999) await yieldNow();
+    await breathe();
   }
 
   // 4. Many directions over the same space: each approach is an objective, and some a constraint.
@@ -850,6 +859,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
       }
       for (const c of candidates) {
         if (late()) break;
+        await breathe();
         const before = variations;
         const st = read(c, a);
         if (variations > before) {
@@ -922,7 +932,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
       const challenged = fastReading(f.rows, f.L, f.committed, { ...adj, respond: (adj.respond ?? 1) * 0.5, close: (adj.close ?? 1) * 0.5 });
       const st: Strategy = { ...s, approach: 'CONDITIONS', conditions: moved, reading, challenged, score: fastScore(reading, challenged, assumedCount(s.levels) + Object.keys(moved).length, ctx.remaining), supported: false, assumptions: [], label: '' };
       if (s.supported && mathBetter(st, bestMathematical)) bestMathematical = st;
-      if (conditionReads % 2000 === 0) await yieldNow();
+      await breathe();
     }
   }
   if (bestMathematical) {
