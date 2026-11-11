@@ -19,6 +19,15 @@
  *  - claiming a capability works on the strength of tests alone: VERIFY records
  *    its baseline and its real-world comparison or it is refused.
  *
+ * Where a loop stands is its position, not the set of steps it ever recorded.
+ * A record that sends the loop back — a VERIFY with `passed: false` (back to
+ * ACQUIRE unless it names another step), or any record naming `reopens` — makes
+ * the step it names and every later one outstanding again until each is
+ * recorded anew, and a new ACQUIRE makes VERIFY onward outstanding again. A
+ * VALUE whose decision is to abandon the direction closes the loop: nothing is
+ * outstanding and it is not offered for resumption, until a later step reopens
+ * VALUE or an earlier step.
+ *
  * Nothing here decides whether a gap is worth closing; VALUE records a judgment
  * somebody made from evidence. A figure that is not known is recorded as unknown.
  */
@@ -66,20 +75,62 @@ export interface GapLoopState {
   steps: GapStepRecord[];
   /** Latest record per step, by step. */
   latest: Partial<Record<GapLoopStep, GapStepRecord>>;
-  /** Steps not yet recorded, in vocabulary order: what a resuming worker may do next. */
+  /**
+   * Steps not recorded at the loop's current position, in vocabulary order: never
+   * recorded, or recorded before a later record sent the loop back past them.
+   * Empty when the loop was abandoned. What a resuming worker may do next.
+   */
   outstanding: GapLoopStep[];
-  /** The first outstanding step, or null when every step is recorded. */
+  /** The first outstanding step, or null when none is (complete or abandoned). */
   next: GapLoopStep | null;
-  /** True once the loop has recorded INTEGRATE after its last ACQUIRE. */
+  /** True once INTEGRATE is recorded and no later record (a new ACQUIRE, a failed VERIFY, a reopen) sent the loop back past it. */
   integrated: boolean;
+  /** True when the standing VALUE judgment is to abandon the direction. */
+  abandoned: boolean;
   cause: GapCause | null;
 }
 
 export class GapStepRefused extends Error {}
 
+const stepIndex = (step: GapLoopStep): number => GAP_LOOP_STEPS.indexOf(step);
+const asStep = (value: unknown): GapLoopStep | null => GAP_LOOP_STEPS.find((one) => one === value) ?? null;
+
+/** True when a VERIFY record says the real-world comparison failed. */
+export function verificationFailed(detail: Record<string, unknown>): boolean {
+  if (detail['passed'] === false) return true;
+  const outcome = detail['outcome'];
+  return typeof outcome === 'string' && /^(fail|failed|regressed|worse)$/i.test(outcome.trim());
+}
+
+/** True when a VALUE record's decision is to abandon the direction. */
+export function valueAbandons(detail: Record<string, unknown>): boolean {
+  if (detail['abandon'] === true) return true;
+  const decision = detail['decision'];
+  if (typeof decision === 'string' && /^abandon/i.test(decision.trim())) return true;
+  const chosen = detail['chosen'];
+  return typeof chosen === 'string' && /^abandon/i.test(chosen.trim());
+}
+
+/**
+ * The earliest step a record sends the loop back to, or null when it sends it
+ * nowhere. An explicit `reopens` wins; a failed VERIFY goes back to ACQUIRE; a
+ * new ACQUIRE needs verifying and integrating again.
+ */
+export function reopenedBy(step: GapLoopStep, detail: Record<string, unknown>): GapLoopStep | null {
+  const explicit = asStep(detail['reopens']);
+  if (explicit) return explicit;
+  if (step === 'VERIFY' && verificationFailed(detail)) return 'ACQUIRE';
+  if (step === 'ACQUIRE') return 'VERIFY';
+  return null;
+}
+
 /** A step's mandatory content, checked before anything is written. Pure. */
 export function refusalFor(step: GapLoopStep, detail: Record<string, unknown>, state: GapLoopState): string | null {
   const text = (key: string): boolean => typeof detail[key] === 'string' && (detail[key] as string).trim().length > 0;
+  if (detail['reopens'] !== undefined) {
+    const target = asStep(detail['reopens']);
+    if (!target) return `reopens names one of ${GAP_LOOP_STEPS.join(', ')}`;
+  }
   switch (step) {
     case 'HYPOTHESIS':
       if (!text('enables') || !text('measure') || !text('failureMode')) return 'a hypothesis names what the piece enables, which measure changes and how the decision could fail';
@@ -127,9 +178,29 @@ export function gapStateFrom(gapKey: string, rows: readonly Row[]): GapLoopState
     steps.push({ gapKey, step, at: row.at, summary: row.reason ?? '', detail });
   }
   const latest: Partial<Record<GapLoopStep, GapStepRecord>> = {};
-  for (const record of steps) latest[record.step] = record;
-  const outstanding = GAP_LOOP_STEPS.filter((step) => !latest[step]);
-  const lastAcquire = latest.ACQUIRE?.at ?? null;
+  const position: Partial<Record<GapLoopStep, number>> = {};
+  steps.forEach((record, index) => {
+    latest[record.step] = record;
+    position[record.step] = index;
+  });
+  /*
+   * A recorded step is stale when a record at or after it sent the loop back to
+   * it or to an earlier step. Row order, not the timestamp, decides "after", so
+   * two records in the same millisecond still have an order.
+   */
+  const stale = (step: GapLoopStep): boolean => {
+    const at = position[step];
+    if (at === undefined) return true;
+    for (let i = at; i < steps.length; i += 1) {
+      const record = steps[i]!;
+      const back = reopenedBy(record.step, record.detail);
+      // At i === at this is the step's own record: one that reopens itself (a failed VERIFY) leaves it outstanding.
+      if (back && stepIndex(back) <= stepIndex(step)) return true;
+    }
+    return false;
+  };
+  const abandoned = Boolean(latest.VALUE && !stale('VALUE') && valueAbandons(latest.VALUE.detail));
+  const outstanding = abandoned ? [] : GAP_LOOP_STEPS.filter((step) => stale(step));
   const cause = latest.HYPOTHESIS?.detail['cause'];
   return {
     gapKey,
@@ -137,7 +208,8 @@ export function gapStateFrom(gapKey: string, rows: readonly Row[]): GapLoopState
     latest,
     outstanding,
     next: outstanding[0] ?? null,
-    integrated: Boolean(latest.INTEGRATE && (lastAcquire === null || latest.INTEGRATE.at >= lastAcquire)),
+    integrated: Boolean(latest.INTEGRATE && !stale('INTEGRATE')),
+    abandoned,
     cause: GAP_CAUSES.includes(cause as GapCause) ? (cause as GapCause) : null,
   };
 }
@@ -152,7 +224,7 @@ export async function readGapLoop(gapKey: string): Promise<GapLoopState> {
   return gapStateFrom(gapKey, rows);
 }
 
-/** Gaps with a recorded loop that have not integrated, newest activity first: what to resume. */
+/** Gaps with a recorded loop that neither integrated nor were abandoned, newest activity first: what to resume. */
 export async function openGapLoops(limit = 20): Promise<GapLoopState[]> {
   const keys = await getDb().all<{ workload_class: string }>(
     `SELECT workload_class FROM bin_events
@@ -161,7 +233,7 @@ export async function openGapLoops(limit = 20): Promise<GapLoopState[]> {
     [GAP_EVENT, Math.max(1, limit) * 3],
   );
   const states = await Promise.all(keys.map((row) => readGapLoop(row.workload_class)));
-  return states.filter((state) => !state.integrated).slice(0, limit);
+  return states.filter((state) => !state.integrated && !state.abandoned).slice(0, limit);
 }
 
 /** Record one step on a gap. Refused, and nothing written, when the step's mandatory content is missing. */
@@ -222,7 +294,7 @@ export async function searchExisting(input: { terms: readonly string[]; paths?: 
 /** The lines a status page prints for one loop. */
 export function formatGapLoop(state: GapLoopState): string[] {
   return [
-    `GAP ${state.gapKey} cause=${state.cause ?? 'unknown'} integrated=${state.integrated ? 'yes' : 'no'} next=${state.next ?? 'none'}`,
+    `GAP ${state.gapKey} cause=${state.cause ?? 'unknown'} integrated=${state.integrated ? 'yes' : 'no'}${state.abandoned ? ' abandoned=yes' : ''} next=${state.next ?? 'none'}`,
     ...state.steps.map((one) => `  ${one.at.slice(0, 19)}Z ${one.step.padEnd(15)} ${one.summary}`),
   ];
 }
