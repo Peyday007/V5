@@ -22,10 +22,17 @@
  *   9. an exception its commitments show — a missed date, a failed payment, a rejected
  *      delivery, a released commitment — is detected, its consequence quantified and its
  *      remedy worked out inside the authority held, and recorded once
- *      (`deliverables/exceptions.ts`). Detecting is all it does.
+ *      (`deliverables/exceptions.ts`). Detecting is all it does;
+ *  10. a detected exception whose remedy is a refund asks once for a person's
+ *      approval; an approved one is carried out through the existing refund
+ *      path, and a sourced case is rehearsed from its rows when it changed
+ *      (`advanceExceptionRecovery`). A refund is the one effect here, and only
+ *      on a named person's approval.
  *
- * It sends nothing. Every external effect is still a person's press or a
- * granted tick through `perform.ts`, and nothing here calls an adapter.
+ * It sends nothing on its own authority. Every external effect is still a
+ * person's press or a granted tick through `perform.ts`; the one exception is
+ * step 10's refund, which is carried out only after a named person approved
+ * that exact refund, and through the same refund path their own press uses.
  */
 import { getOpportunity, transitionOpportunity, listOpportunities } from '../../../repos/cashPortfolio.ts';
 import { getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
@@ -42,7 +49,7 @@ import { agreementAnswering } from '../../../domain/cashJourney.ts';
 import { advanceFulfillment, moveToDelivering, type FulfillmentPass } from './fulfillment.ts';
 import { collectable, dealPosition } from './position.ts';
 import { recordOutcomes } from './learning.ts';
-import { recordDetectedExceptions } from '../deliverables/exceptions.ts';
+import { advanceExceptionRecovery, recordDetectedExceptions } from '../deliverables/exceptions.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -60,6 +67,8 @@ export interface JourneyTickReport {
   outcomes: number;
   /** Exceptions the commitment rows show, and the new ones recorded this pass. */
   exceptions: { detected: number; recorded: number };
+  /** Refund approvals asked for, approved refunds carried out, and sourced cases rehearsed this pass. */
+  recovery: { asked: number; carried: number; rehearsed: number };
 }
 
 export async function advanceJourney(
@@ -75,6 +84,7 @@ export async function advanceJourney(
     collected: 0,
     outcomes: 0,
     exceptions: { detected: 0, recorded: 0 },
+    recovery: { asked: 0, carried: 0, rehearsed: 0 },
   };
   const mode = await getCashMode(projectId);
   if (!mode) return report;
@@ -157,10 +167,25 @@ export async function advanceJourney(
       }
     }
     report.outcomes += await recordOutcomes((await getOpportunity(listed.id))!, mode.currency);
-    if ((await agreementsFor(listed.id)).length > 0) {
+    const agreements = await agreementsFor(listed.id);
+    if (agreements.length > 0) {
       const found = await recordDetectedExceptions({ projectId, opportunityId: listed.id, currency: mode.currency, now: now.toISOString() });
       report.exceptions.detected += found.detected;
       report.exceptions.recorded += found.recorded;
+      // 10. Carry each case forward: ask for the one approval a refund needs, carry out an approved one,
+      //     and rehearse a sourced case from its rows whenever it changed.
+      const current = (await getOpportunity(listed.id))!;
+      const recovery = await advanceExceptionRecovery({
+        projectId,
+        opportunityId: listed.id,
+        currency: mode.currency,
+        sourceRef: current.source?.trim() || (current.sourceClaimId ? `claim:${current.sourceClaimId}` : null),
+        agreementIds: agreements.map((a) => a.id),
+        now: now.toISOString(),
+      });
+      report.recovery.asked += recovery.asked;
+      report.recovery.carried += recovery.carried;
+      if (recovery.rehearsal) report.recovery.rehearsed += 1;
     }
   }
   return report;

@@ -15,7 +15,10 @@ import { actionKey, beginExecution, capture, fillCard, markReady, recordMoneyEve
 import { CAPTURE_KEY, qualificationKeys } from '../server/services/cash/tier.ts';
 import { recordAgreement, releaseAgreement } from '../server/services/cash/journey/deal.ts';
 import { advanceJourney } from '../server/services/cash/journey/tick.ts';
-import { rehearseStoredCase } from '../server/services/cash/deliverables/exceptions.ts';
+import { RECOVERY_EVENT, agreementOfTransition, refundApprovalKey, rehearseStoredCase } from '../server/services/cash/deliverables/exceptions.ts';
+import { declare } from '../server/services/cash/journey/fulfillment.ts';
+import { closeNeed } from '../server/services/cash/needs.ts';
+import { needForKey } from '../server/repos/cashPortfolio.ts';
 import { commitmentProblem } from '../server/services/cash/deliverables/lifecycleProbes.ts';
 import { readCommitments } from '../server/services/cash/deliverables/commitments.ts';
 import { getProbe } from '../server/services/factory/program/probes.ts';
@@ -39,12 +42,13 @@ beforeEach(async () => {
 
 afterEach(() => clearAdapters());
 
-async function executing(title = 'A paid intake repair', priceCents = 75_000, mechanism = 'EXPLICIT_PAID_REQUEST'): Promise<string> {
+async function executing(title = 'A paid intake repair', priceCents = 75_000, mechanism = 'EXPLICIT_PAID_REQUEST', source: string | null = null): Promise<string> {
   const captured = await capture({
     projectId,
     actorRef: userId,
     ownerUserId: userId,
     title,
+    source,
     mechanism: mechanism as 'EXPLICIT_PAID_REQUEST',
     currency: 'USD',
     requiredCapabilities: [],
@@ -178,6 +182,111 @@ describe('the journey tick consumes the commitment model', () => {
     const r = await probe('r01.life-29-3'); // the tick has not run
     expect(r.ok).toBe(false);
     expect(r.detail).toMatch(/not on record/);
+  });
+});
+
+describe('the journey tick carries a case forward (LIFE-29-3 on the live path)', () => {
+  it('rehearses a sourced case from its rows on its own, once per change, and the probe passes on that row', async () => {
+    const id = await executing('A paid intake repair', 75_000, 'EXPLICIT_PAID_REQUEST', 'https://example.test/requests/intake-repair');
+    const agreement = await agree(id);
+    expect((await releaseAgreement({ agreementId: agreement.id, reason: 'The buyer cancelled.', actorRef: userId })).ok).toBe(true);
+    expect((await probe('r01.life-29-3')).ok).toBe(false);
+    const first = await advanceJourney(projectId);
+    expect(first.recovery.rehearsed).toBe(1);
+    const traced = await cashEventsOfKind(id, 'rehearsal.traced');
+    expect(traced.length).toBe(1);
+    const detail = traced[0]!.detail as { sourceRef: string; valid: boolean; exceptions: unknown[]; fingerprint: string | null };
+    expect(detail.sourceRef).toBe('https://example.test/requests/intake-repair');
+    expect(detail.valid).toBe(true);
+    expect(detail.exceptions.length).toBeGreaterThan(0);
+    expect(detail.fingerprint).toBeTruthy();
+    const r = await probe('r01.life-29-3');
+    expect(r.detail).toMatch(/sourced rehearsal/);
+    expect(r.ok).toBe(true);
+    // Nothing changed, so the next pass traces nothing new.
+    const second = await advanceJourney(projectId);
+    expect(second.recovery.rehearsed).toBe(0);
+    expect((await cashEventsOfKind(id, 'rehearsal.traced')).length).toBe(1);
+  });
+
+  it('does not rehearse a case with no source, so it is never mistaken for a demonstration', async () => {
+    const id = await executing();
+    const agreement = await agree(id);
+    expect((await releaseAgreement({ agreementId: agreement.id, reason: 'The buyer cancelled.', actorRef: userId })).ok).toBe(true);
+    const pass = await advanceJourney(projectId);
+    expect(pass.recovery.rehearsed).toBe(0);
+    expect((await cashEventsOfKind(id, 'rehearsal.traced')).length).toBe(0);
+    expect((await probe('r01.life-29-3')).ok).toBe(false);
+  });
+
+  it('asks once for a refund approval, carries the refund out only after a person approves it, and records the recovery', async () => {
+    const id = await executing('A paid intake repair', 75_000, 'EXPLICIT_PAID_REQUEST', 'https://example.test/requests/refund-case');
+    const agreement = await agree(id);
+    const declared = await declare({ projectId, agreementId: agreement.id, kind: 'PERSON', performer: 'The owner', actorRef: userId });
+    expect(declared.ok).toBe(true);
+    await settled(id);
+    expect((await releaseAgreement({ agreementId: agreement.id, reason: 'The buyer cancelled after paying.', actorRef: userId })).ok).toBe(true);
+
+    const first = await advanceJourney(projectId);
+    expect(first.recovery.asked).toBe(1);
+    expect(first.recovery.carried).toBe(0);
+    const exceptionId = String(((await cashEventsOfKind(id, 'exception.detected'))[0]!.detail as { exceptionId: string }).exceptionId);
+    const need = await needForKey(projectId, refundApprovalKey(id));
+    expect(need?.state).toBe('OPEN');
+    expect(need?.blockedAction).toBe('APPROVED_REFUND');
+    expect(need?.expectedCostCents).toBe(75_000);
+
+    // Asked once: a second pass neither re-asks nor refunds on its own.
+    const second = await advanceJourney(projectId);
+    expect(second.recovery.asked).toBe(0);
+    expect(second.recovery.carried).toBe(0);
+    expect((await cashEventsOfKind(id, RECOVERY_EVENT)).length).toBe(0);
+
+    // A person approves; the next pass carries it out through the refund path and records who decided.
+    expect((await closeNeed({ needId: need!.id, to: 'RESOLVED', resolution: 'Approved: refund the buyer in full.', actorUserId: userId })).ok).toBe(true);
+    const third = await advanceJourney(projectId);
+    expect(third.recovery.carried).toBe(1);
+    const recovered = await cashEventsOfKind(id, RECOVERY_EVENT);
+    expect(recovered.length).toBe(1);
+    expect(recovered[0]!.detail).toMatchObject({ remedy: 'APPROVED_REFUND', by: userId, amountCents: 75_000, agreementId: agreement.id });
+    // One payment at risk, however many exceptions show it: one refund covers each of them.
+    expect((recovered[0]!.detail as { exceptionIds: string[] }).exceptionIds).toContain(exceptionId);
+    expect((await cashEventsOfKind(id, 'CASH_REFUND_AUTHORIZED')).length).toBe(1);
+
+    // The rehearsal re-traced with the recovery decision in it.
+    const traces = await cashEventsOfKind(id, 'rehearsal.traced');
+    const last = traces[traces.length - 1]!.detail as { steps: { kind: string; detail: string }[] };
+    expect(last.steps.some((st) => st.kind === 'RECOVERY' && /APPROVED_REFUND decided by/.test(st.detail))).toBe(true);
+
+    // Done once: later passes do not refund again.
+    const fourth = await advanceJourney(projectId);
+    expect(fourth.recovery.carried).toBe(0);
+    expect((await cashEventsOfKind(id, RECOVERY_EVENT)).length).toBe(1);
+  });
+
+  it('remembers a declined refund and does not ask again', async () => {
+    const id = await executing();
+    const agreement = await agree(id);
+    expect((await declare({ projectId, agreementId: agreement.id, kind: 'PERSON', performer: 'The owner', actorRef: userId })).ok).toBe(true);
+    await settled(id);
+    expect((await releaseAgreement({ agreementId: agreement.id, reason: 'The buyer cancelled after paying.', actorRef: userId })).ok).toBe(true);
+    expect((await advanceJourney(projectId)).recovery.asked).toBe(1);
+    const exceptionId = String(((await cashEventsOfKind(id, 'exception.detected'))[0]!.detail as { exceptionId: string }).exceptionId);
+    const need = (await needForKey(projectId, refundApprovalKey(id)))!;
+    expect((await closeNeed({ needId: need.id, to: 'WITHDRAWN', resolution: 'No refund: the work was already done.', actorUserId: userId })).ok).toBe(true);
+    const after = await advanceJourney(projectId);
+    expect(after.recovery.asked).toBe(0);
+    expect(after.recovery.carried).toBe(0);
+    expect((await cashEventsOfKind(id, RECOVERY_EVENT)).length).toBe(0);
+  });
+});
+
+describe('agreementOfTransition (pure)', () => {
+  it('reads the agreement from an agreement-scoped transition id and nothing from a ledger row', () => {
+    expect(agreementOfTransition('failure:agr_1')).toBe('agr_1');
+    expect(agreementOfTransition('delivery:agr_2:3')).toBe('agr_2');
+    expect(agreementOfTransition('ledger:men_1')).toBeNull();
+    expect(agreementOfTransition(null)).toBeNull();
   });
 });
 
