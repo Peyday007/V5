@@ -264,3 +264,77 @@ export async function superviseRunpodPod(
     state.running = false;
   }
 }
+
+/* ------------------------------------------------------------------------- */
+/* Spend, from the supervisor's own samples                                   */
+/* ------------------------------------------------------------------------- */
+
+/** One `RUNPOD_POD` row, as far as spend is concerned. */
+export interface PodSpendRow {
+  outcome: string;
+  durationMs: number | null;
+  measures: Record<string, unknown>;
+}
+
+export interface PodSpend {
+  /** Dollars the pod billed over the sampled time: Σ costPerHr × hours, over samples that saw it RUNNING. */
+  dollars: number;
+  /** Hours of RUNNING samples that carried a price. */
+  runningHours: number;
+  /** RUNNING samples RunPod returned no price for: their time is not in `dollars`. */
+  unpricedRunningSamples: number;
+  /** Every `SAMPLE_*` row read, whatever the pod's status. */
+  samples: number;
+}
+
+/**
+ * The pod's GPU spend, derived from the `SAMPLE_*` rows the supervisor writes
+ * every `SAMPLE_MS` with RunPod's own `costPerHr` (CAP-16-3: a gain is weighed
+ * against dollars spent, and the dollars are measured, not assumed). A sample
+ * covers its `durationMs`; only a RUNNING pod bills compute, so EXITED,
+ * TERMINATED and UNKNOWN samples add nothing. Pure, so the figure replays from
+ * the rows.
+ */
+export function podSpendFromRows(rows: readonly PodSpendRow[]): PodSpend {
+  let dollars = 0;
+  let runningHours = 0;
+  let unpricedRunningSamples = 0;
+  let samples = 0;
+  for (const row of rows) {
+    if (!row.outcome.startsWith('SAMPLE_')) continue;
+    samples += 1;
+    if (row.outcome !== 'SAMPLE_RUNNING') continue;
+    const hours = (row.durationMs ?? SAMPLE_MS) / 3_600_000;
+    const raw = row.measures['costPerHr'];
+    const cost = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : Number.NaN;
+    if (!Number.isFinite(cost) || cost < 0) {
+      unpricedRunningSamples += 1;
+      continue;
+    }
+    dollars += cost * hours;
+    runningHours += hours;
+  }
+  return { dollars, runningHours, unpricedRunningSamples, samples };
+}
+
+/** The pod's spend since `since` (ISO), read from its `RUNPOD_POD` sample rows. */
+export async function readPodSpend(since: string): Promise<PodSpend> {
+  const rows = await getDb().all<{ outcome: string | null; duration_ms: number | string | null; measures: string | null }>(
+    `SELECT outcome, duration_ms, measures FROM bin_events
+      WHERE event_type = 'RUNPOD_POD' AND outcome LIKE 'SAMPLE_%' AND at >= ? ORDER BY at`,
+    [since],
+  );
+  return podSpendFromRows(
+    rows.map((r) => {
+      let measures: Record<string, unknown> = {};
+      try {
+        const parsed: unknown = r.measures ? JSON.parse(r.measures) : {};
+        if (parsed && typeof parsed === 'object') measures = parsed as Record<string, unknown>;
+      } catch {
+        measures = {};
+      }
+      const duration = r.duration_ms === null ? null : Number(r.duration_ms);
+      return { outcome: r.outcome ?? '', durationMs: duration !== null && Number.isFinite(duration) ? duration : null, measures };
+    }),
+  );
+}

@@ -18,6 +18,7 @@ import { databasePoolReadings } from '../../db/database.ts';
 import { waitingNow } from './capacity.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { isRunpodSlot } from '../cheap/runpod.ts';
+import { readPodSpend, type PodSpend } from '../cheap/runpodPod.ts';
 import { causeOfReason, type RouteFailureCause } from './worker.ts';
 
 export type Measured<T> = { measured: true; value: T } | { measured: false; reason: string };
@@ -82,7 +83,12 @@ export interface ProcessReading {
 export interface Constraint {
   stage: string | null;
   basis: string;
-  /** Present only when a measurement supports it. */
+  /**
+   * Present only when a measurement supports it: what one more replica of the
+   * constrained stage would add at its measured rate, in accepted facts per hour
+   * (capped by what is waiting), and what it would cost in `dollars` per hour at
+   * the stage's measured spend.
+   */
   expectedGain: Measured<{ acceptedFactsPerHour: number; dollars: number }>;
   /** Scaling the web process is never what this recommends. */
   recommendation: string;
@@ -96,6 +102,8 @@ export interface StageCapacityReport {
   totalProductiveJobs: number;
   purposesSumToTotal: boolean;
   process: ProcessReading;
+  /** The GPU pod's spend in the window, from the supervisor's `RUNPOD_POD` samples; the free providers cost $0. */
+  gpuSpend: Measured<PodSpend>;
   /** Which model route is failing, the cause the rows name, and whether it has answered since. */
   diagnosis: ThroughputDiagnosis;
   constrained: Constraint;
@@ -478,7 +486,11 @@ function readProcess(): ProcessReading {
  * nothing waiting is not constrained, however slow. A gain is projected only
  * where it can be measured, and never as a reason to scale the web process.
  */
-export function chooseConstraint(stages: StageReading[], failing: ThroughputDiagnosis['primary'] = null): Constraint {
+export function chooseConstraint(
+  stages: StageReading[],
+  failing: ThroughputDiagnosis['primary'] = null,
+  windowHours = 6,
+): Constraint {
   const first = failing
     ? `Restore model route ${failing.route} first: ${failing.failures} failure(s) in the window name ${failing.cause} (${failing.evidence}). `
     : '';
@@ -512,10 +524,79 @@ export function chooseConstraint(stages: StageReading[], failing: ThroughputDiag
     basis:
       `${stage.label}: ${worst.waiting} waiting, ${Math.round(worst.rate * 100)}% of processed items accepted.` +
       (failing ? ` Failing route ${failing.route}: ${failing.cause}.` : ''),
-    // Dollars per job are not recorded, so a gain per dollar cannot be claimed.
-    expectedGain: NOT('accepted facts per hour per dollar needs a recorded dollar cost, which the lane does not keep'),
+    expectedGain: projectedGain(stage, worst.waiting, worst.rate, windowHours),
     recommendation,
   };
+}
+
+/**
+ * What one more replica of the constrained stage would add, from its own
+ * measurements: its measured accepted rate (never more than the waiting work at
+ * its measured acceptance can yield), at its measured dollars per hour. A stage
+ * whose spend is not measured projects nothing.
+ */
+export function projectedGain(stage: StageReading, waiting: number, acceptance: number, windowHours: number): Constraint['expectedGain'] {
+  if (!stage.incrementalDollars.measured) {
+    return NOT(`accepted facts per hour per dollar needs the stage's spend, which is not measured: ${stage.incrementalDollars.reason}`);
+  }
+  const hours = windowHours > 0 ? windowHours : 6;
+  return ok({
+    acceptedFactsPerHour: Math.min(stage.acceptedPerHour, waiting * acceptance),
+    dollars: stage.incrementalDollars.value / hours,
+  });
+}
+
+/** The lane stages a model call serves, and so the stages the GPU's spend belongs to. */
+const LANE_STAGES = (): StageDefinition[] => STAGES.filter((s) => s.workTypes.length > 0);
+
+/**
+ * Each lane stage's share of the window's model spend. The free providers cost
+ * $0, so the lane's model spend is the GPU pod's, measured from the supervisor's
+ * samples. It is divided by the items each stage sent to a GPU slot, so a stage
+ * that never used the GPU spent nothing on it. A pod that billed while no item
+ * used it is idle spend: incremental to no stage, and reported in `gpuSpend`.
+ * Without samples, or with a running sample RunPod gave no price for, the spend
+ * is not known and is not invented. Pure.
+ */
+export function laneDollarsByStage(
+  spend: PodSpend,
+  gpuItemsByStage: ReadonlyMap<string, number>,
+): Map<string, Measured<number>> {
+  const out = new Map<string, Measured<number>>();
+  const lane = LANE_STAGES().map((s) => s.id);
+  if (spend.samples === 0) {
+    for (const id of lane) out.set(id, NOT('no RunPod supervisor sample in the window, so the GPU pod\'s spend is not recorded (the free providers cost $0)'));
+    return out;
+  }
+  if (spend.unpricedRunningSamples > 0) {
+    for (const id of lane) out.set(id, NOT(`RunPod returned no price for ${spend.unpricedRunningSamples} running sample(s) in the window`));
+    return out;
+  }
+  const gpuItems = lane.reduce((sum, id) => sum + (gpuItemsByStage.get(id) ?? 0), 0);
+  for (const id of lane) {
+    out.set(id, ok(gpuItems > 0 ? (spend.dollars * (gpuItemsByStage.get(id) ?? 0)) / gpuItems : 0));
+  }
+  return out;
+}
+
+/** Lane items each stage sent to a GPU slot in the window, from `FREE_LANE_ITEM` reasons (`model <route>…`). */
+async function readGpuItemsByStage(since: string): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const lane = LANE_STAGES();
+  const types = lane.flatMap((s) => [...s.workTypes]);
+  const rows = await getDb().all<{ workload_class: string | null; reason: string | null; k: number | string }>(
+    `SELECT workload_class, reason, COUNT(*) AS k FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND reason LIKE 'model %' AND workload_class IN (${placeholders(types)})
+      GROUP BY workload_class, reason`,
+    [since, ...types],
+  );
+  for (const row of rows) {
+    const route = routeOfReason(row.reason);
+    if (!route || !isRunpodSlot(route)) continue;
+    const stage = lane.find((s) => s.workTypes.includes(row.workload_class ?? ''));
+    if (stage) out.set(stage.id, (out.get(stage.id) ?? 0) + n(row.k));
+  }
+  return out;
 }
 
 /** The model route a `FREE_LANE_ITEM` reason names (`model <route>` or `model <route>: …`). */
@@ -649,6 +730,19 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
   const since = new Date(nowMs - hours * 3_600_000).toISOString();
   const stages: StageReading[] = [];
   for (const def of STAGES) stages.push(await readStage(def, since, hours, nowMs));
+  // The lane's dollars, measured from the GPU pod's own samples and divided by
+  // which stage used the GPU (the free providers cost $0).
+  const spend = await readPodSpend(since);
+  const dollars = laneDollarsByStage(spend, await readGpuItemsByStage(since));
+  for (const stage of stages) {
+    const measured = dollars.get(stage.stage);
+    if (measured) stage.incrementalDollars = measured;
+  }
+  const gpuSpend: Measured<PodSpend> = spend.samples === 0
+    ? NOT('no RunPod supervisor sample in the window')
+    : spend.unpricedRunningSamples > 0
+      ? NOT(`RunPod returned no price for ${spend.unpricedRunningSamples} running sample(s) in the window`)
+      : ok(spend);
   const purposes = await readPurposes(since);
   const totalProductiveJobs = purposes.reduce((sum, p) => sum + p.productiveJobs, 0);
   const total = await getDb().get<{ k: number | string }>(
@@ -664,8 +758,9 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
     totalProductiveJobs,
     purposesSumToTotal: totalProductiveJobs === n(total?.k),
     process: readProcess(),
+    gpuSpend,
     diagnosis,
-    constrained: chooseConstraint(stages, diagnosis.primary),
+    constrained: chooseConstraint(stages, diagnosis.primary, hours),
   };
 }
 
