@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { consentUrl, loadKit, REFRESH_OUT, runEtsy } from '../scripts/launch/etsy.ts';
+import { consentUrl, loadKit, REFRESH_OUT, runEtsy, SHOP_TEXT } from '../scripts/launch/etsy.ts';
 import type { StageContext } from '../scripts/launch/types.ts';
 
 const REPO = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -19,7 +19,7 @@ interface FakeListing { listing_id: number; title: string; state: string; tags: 
 
 /** An in-memory Etsy: the endpoints the stage uses, with Etsy's activation rules. */
 function fakeEtsy(opts: { canPublish?: boolean; listings?: FakeListing[] } = {}) {
-  const shop = { canPublish: opts.canPublish ?? true, listings: opts.listings ?? [] as FakeListing[], nextId: 1000 };
+  const shop = { canPublish: opts.canPublish ?? true, listings: opts.listings ?? [] as FakeListing[], nextId: 1000, text: {} as Record<string, string> };
   const calls: Array<{ method: string; path: string }> = [];
   const badKeyHeaders: string[] = [];
   const codes = new Map<string, string>(); // code → challenge
@@ -52,6 +52,11 @@ function fakeEtsy(opts: { canPublish?: boolean; listings?: FakeListing[] } = {})
     if (p === '/v3/application/users/me') return json(200, { user_id: 1, shop_id: SHOP });
     if (p === '/v3/application/seller-taxonomy/nodes') {
       return json(200, { count: 1, results: [{ id: 1, name: 'Toys & Games', children: [{ id: 2, name: 'Games & Puzzles', children: [{ id: 3, name: 'Puzzles', children: [{ id: 12626, name: 'Word & Number Puzzles', children: [] }] }] }] }] });
+    }
+    if (p === `/v3/application/shops/${SHOP}` && method === 'GET') return json(200, { shop_id: SHOP, ...shop.text });
+    if (p === `/v3/application/shops/${SHOP}` && method === 'PUT') {
+      for (const [k, v] of new URLSearchParams(String(init?.body))) shop.text[k] = v;
+      return json(200, { shop_id: SHOP, ...shop.text });
     }
     if (p === `/v3/application/shops/${SHOP}/listings` && method === 'GET') {
       const state = url.searchParams.get('state') ?? 'active';
@@ -170,6 +175,7 @@ describe('Etsy launch stage', () => {
       expect(made.images.sort()).toEqual(l.images.map((_, i) => i + 1));
       expect(made.files).toEqual(l.files.map((f) => path.basename(f)));
     }
+    expect(fake.shop.text).toEqual(SHOP_TEXT); // announcement, receipts and policy set once
     expect(fake.badKeyHeaders).toEqual([]);
     expect(fs.readFileSync(path.join(ROOT, REFRESH_OUT), 'utf8').trim()).toBe('rt-1');
     expect(first.detail).toContain(REFRESH_OUT);
