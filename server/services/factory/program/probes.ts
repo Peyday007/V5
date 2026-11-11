@@ -287,3 +287,7 @@ define('r01.opp-04', async (args) => (await releaseOne<typeof import('./release0
 define('r01.auth-20-3', async (args) => (await releaseOne<typeof import('./release01/authorityProbe.ts')>('./release01/authorityProbe.ts', (m) => m.graduatedAuthorityHoldsOnRows))(args));
 define('r01.auth-21-6', async (args) => (await releaseOne<typeof import('./release01/authorityProbe.ts')>('./release01/authorityProbe.ts', (m) => m.readOnlyNeverActsOnRows))(args));
 define('r01.auth-34', async (args) => (await releaseOne<typeof import('./release01/authorityProbe.ts')>('./release01/authorityProbe.ts', (m) => m.policyToActionHoldsOnRows))(args));
+define('r01.gov-17-3', async () => {
+  const { BRAIN_REVISION } = await import('../../../env.ts');
+  return (await import('./releaseEvaluation.ts')).releaseEvaluationHoldsOnRows(BRAIN_REVISION);
+});

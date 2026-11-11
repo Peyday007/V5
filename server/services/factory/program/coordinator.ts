@@ -744,6 +744,17 @@ export async function tickProgram(programId: string, ports: ProgramPorts): Promi
 
   input = await statusInput(program, ports);
   reading = deriveProgramReading(input);
+  // GOV-17-3: what this release changed, once per revision, read from cash and goal rows.
+  try {
+    const { evaluateRelease } = await import('./releaseEvaluation.ts');
+    await evaluateRelease({
+      programId,
+      revision,
+      verifiedRequirements: reading.requirements.filter((r) => r.status === 'PRODUCTION_VERIFIED').map((r) => r.key),
+    });
+  } catch (error) {
+    console.warn(`[program] release evaluation failed: ${String((error as Error)?.message ?? error)}`);
+  }
   if (reading.verdict === 'DONE') {
     const { listFactoryEvents } = await import('../../../repos/factoryFleet.ts');
     const done = (await listFactoryEvents(null, { kinds: [PROGRAM_EVENT_KINDS.done], limit: 500 })).some((e) => (e.detail as { programId?: string }).programId === programId);
