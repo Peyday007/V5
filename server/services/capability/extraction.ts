@@ -1141,7 +1141,7 @@ export async function advanceSources(): Promise<{
 
   await settleAmendments();
 
-  // Deferred options: judge from rows whether handed-off work resumed (GOV-22-2).
+  // Deferred options (GOV-22-2): hand a live goal's need for a prepared option to the Factory, then judge from rows whether its work resumed.
   await advancePreparedOptions();
 
   return { dispatched, settled, audited, promoted, recovered };

@@ -250,16 +250,29 @@ export async function handOffToFactory(
     rollbackRequirement: context.rollbackRequirement,
     verificationCommands: context.verificationCommands,
   });
-  if (created) {
-    await recordEvent({
-      projectId,
-      entityType: 'capability_requirement',
-      entityId: resolution.requirementId,
-      eventType: 'CAPABILITY_ASSESSED',
-      payload: { kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId: changeRequest.id, goal: context.goal, method: resolution.minimum.name, blockedWorkItemIds: context.blockedWorkItemIds ?? [] },
-    });
-  }
+  if (created) await recordHandoff(projectId, resolution, changeRequest.id, context.goal, context.blockedWorkItemIds ?? []);
   return { changeRequest, created };
+}
+
+/** The handoff row `resumeOf` and `advancePreparedOptions` read; written once per change request. */
+async function recordHandoff(
+  projectId: string,
+  resolution: NeedResolution,
+  changeRequestId: string,
+  goal: string,
+  blockedWorkItemIds: readonly string[],
+  goalId: string | null = null,
+): Promise<void> {
+  await recordEvent({
+    projectId,
+    entityType: 'capability_requirement',
+    entityId: resolution.requirementId,
+    eventType: 'CAPABILITY_ASSESSED',
+    payload: {
+      kind: PREPARED_HANDOFF_KIND, integration: false, changeRequestId, goal, goalId,
+      method: resolution.minimum?.name ?? null, blockedWorkItemIds: [...blockedWorkItemIds],
+    },
+  });
 }
 
 /**
@@ -297,7 +310,12 @@ export const PREPARED_RESUMED_KIND = 'PREPARED_OPTION_RESUMED';
  * the handoff, a single RESUMED event is appended. It creates no work, holds no
  * lease and spends nothing; a handoff that names no work items is never judged.
  */
-export async function advancePreparedOptions(): Promise<{ judged: number; resumed: number }> {
+export async function advancePreparedOptions(
+  deps: ConnectNeedsDeps = {},
+): Promise<{ judged: number; resumed: number; needs: ConnectNeedsReport }> {
+  // A live goal that is now blocked on a prepared option is found first, so a
+  // handoff made this pass is already a row when resumption is judged.
+  const needs = await connectGoalNeeds(deps);
   const rows = await getDb().all<{ project_id: string; entity_id: string; payload: string }>(
     `SELECT project_id, entity_id, payload FROM project_events
       WHERE entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED'
@@ -333,5 +351,188 @@ export async function advancePreparedOptions(): Promise<{ judged: number; resume
     });
     resumed += 1;
   }
-  return { judged, resumed };
+  return { judged, resumed, needs };
 }
+
+export const PREPARED_NEEDED_KIND = 'PREPARED_OPTION_NEEDED';
+
+/** The latest prepared option recorded for each requirement, from any project: the option belongs to the capability, not to who prepared it. */
+export async function latestPreparedOptions(): Promise<Map<string, PreparedOption>> {
+  const rows = await getDb().all<{ payload: string; created_at: string }>(
+    `SELECT payload, created_at FROM project_events
+      WHERE entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED' AND payload LIKE ?
+      ORDER BY created_at ASC`,
+    [`%"${PREPARED_OPTION_KIND}"%`],
+  );
+  const out = new Map<string, PreparedOption>();
+  for (const r of rows) {
+    let p: Record<string, unknown>;
+    try { p = JSON.parse(r.payload) as Record<string, unknown>; } catch { continue; }
+    if (p.kind !== PREPARED_OPTION_KIND) continue;
+    const o = p.option as PreparedOption | undefined;
+    if (o?.requirementId) out.set(o.requirementId, o);
+  }
+  return out;
+}
+
+/** What `connectGoalNeeds` hands the existing Factory contract; the default is `submitObjective` against Brain's own repository. */
+export type SubmitNeed = (input: {
+  objective: string;
+  expectedOutcome: string;
+  nonGoals: string[];
+  acceptanceConditions: { statement: string; verification: string; mandatory: boolean }[];
+  submissionKey: string;
+}) => Promise<{ changeRequestId: string; created: boolean }>;
+
+export interface ConnectNeedsDeps {
+  submit?: SubmitNeed;
+}
+
+export interface ConnectNeedsReport {
+  /** Live goals whose latest capability assessment was read. */
+  goals: number;
+  /** (goal, requirement) pairs newly handed to the Factory. */
+  handedOff: number;
+  /** (goal, requirement) pairs whose every method is behind a gate a person must open; recorded, never forced. */
+  gated: number;
+  /** Submissions the Factory contract refused this pass, with the reason; retried next pass. */
+  refused: string[];
+}
+
+/**
+ * The production half of GOV-22-2: a real objective now requires a dormant
+ * capability, and nobody has to say "remember that old option".
+ *
+ * Reads each live goal's latest `CAPABILITY_ASSESSED` row (written by
+ * `assessLiveObjectives` on the improvement tick), and for every blocking
+ * requirement that has a prepared option and has not yet been handed off for
+ * that goal: compares the permitted access methods (`resolveNeed`), hands the
+ * minimum missing capability to the existing Factory contract
+ * (`submitObjective`, idempotent by submission key), and records the handoff
+ * with the goal's waiting work so `advancePreparedOptions` can judge from rows
+ * whether that work resumed. When every method is gated, it records the gates
+ * a person must open once and hands nothing over. It creates no work item,
+ * holds no lease and spends nothing.
+ */
+export async function connectGoalNeeds(deps: ConnectNeedsDeps = {}): Promise<ConnectNeedsReport> {
+  const report: ConnectNeedsReport = { goals: 0, handedOff: 0, gated: 0, refused: [] };
+  const options = await latestPreparedOptions();
+  if (options.size === 0) return report;
+  const rows = await getDb().all<{ project_id: string; entity_id: string; payload: string; intent: string }>(
+    `SELECT e.project_id, e.entity_id, e.payload, w.intent FROM project_events e
+       JOIN workstreams w ON w.id = e.entity_id
+      WHERE e.entity_type = 'WORKSTREAM' AND e.event_type = 'CAPABILITY_ASSESSED'
+        AND w.archived_at IS NULL AND w.cancelled_at IS NULL
+      ORDER BY e.created_at DESC LIMIT 500`,
+    [],
+  );
+  const latest = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) if (!latest.has(r.entity_id)) latest.set(r.entity_id, r);
+  report.goals = latest.size;
+  const settled = await settledNeeds();
+  for (const [goalId, row] of latest) {
+    let blocking: string[] = [];
+    try {
+      const b = (JSON.parse(row.payload) as { blocking?: unknown }).blocking;
+      blocking = Array.isArray(b) ? b.filter((x): x is string => typeof x === 'string') : [];
+    } catch {
+      continue;
+    }
+    for (const entry of blocking) {
+      const requirementId = entry.slice(entry.indexOf(':') + 1);
+      const option = options.get(requirementId);
+      if (!option || settled.has(`${requirementId}\u0000${goalId}`)) continue;
+      const goal = `goal ${goalId} (${row.intent.trim().slice(0, 120)})`;
+      const resolution = resolveNeed(option, { requirementId, goal });
+      if (!resolution.handoff || !resolution.minimum) {
+        await recordEvent({
+          projectId: row.project_id,
+          entityType: 'capability_requirement',
+          entityId: requirementId,
+          eventType: 'CAPABILITY_ASSESSED',
+          payload: {
+            kind: PREPARED_NEEDED_KIND, integration: false, goalId, goal,
+            needsPerson: resolution.needsPerson,
+            gated: resolution.gated.map((g) => ({ method: g.method.name, gates: g.gates })),
+          },
+        });
+        settled.add(`${requirementId}\u0000${goalId}`);
+        report.gated += 1;
+        continue;
+      }
+      const submissionKey = `prepared-option:${createHash('sha256').update(`${requirementId}\u0000${goalId}`).digest('hex').slice(0, 24)}`;
+      let submitted: { changeRequestId: string; created: boolean };
+      try {
+        submitted = await (deps.submit ?? submitToBrainFactory)({
+          objective: resolution.handoff.objective,
+          expectedOutcome: `${requirementId} works in production and the blocked work of ${goal} resumes`,
+          nonGoals: ['keeping the option warm', 'crossing a credential, contract, spend or permission gate'],
+          acceptanceConditions: resolution.handoff.acceptanceConditions.map((statement) => ({
+            statement,
+            verification: "proof reading over real attempts, and rows showing the goal's work ran afterwards",
+            mandatory: true,
+          })),
+          submissionKey,
+        });
+      } catch (error) {
+        report.refused.push(`${requirementId} for ${goalId}: ${String((error as Error).message ?? error).slice(0, 200)}`);
+        continue;
+      }
+      const waiting = await getDb().all<{ id: string }>(
+        `SELECT id FROM work_items WHERE project_id = ? AND state IN ('QUEUED', 'LEASED') ORDER BY created_at ASC LIMIT 50`,
+        [row.project_id],
+      );
+      await recordHandoff(row.project_id, resolution, submitted.changeRequestId, goal, waiting.map((w) => w.id), goalId);
+      settled.add(`${requirementId}\u0000${goalId}`);
+      report.handedOff += 1;
+    }
+  }
+  return report;
+}
+
+/** (requirement, goal) pairs already handed off or already recorded as gated: each is acted on once. */
+async function settledNeeds(): Promise<Set<string>> {
+  const rows = await getDb().all<{ entity_id: string; payload: string }>(
+    `SELECT entity_id, payload FROM project_events
+      WHERE entity_type = 'capability_requirement' AND event_type = 'CAPABILITY_ASSESSED'
+        AND (payload LIKE ? OR payload LIKE ?)`,
+    [`%${PREPARED_HANDOFF_KIND}"%`, `%${PREPARED_NEEDED_KIND}"%`],
+  );
+  const out = new Set<string>();
+  for (const r of rows) {
+    try {
+      const p = JSON.parse(r.payload) as Record<string, unknown>;
+      if ((p.kind === PREPARED_HANDOFF_KIND || p.kind === PREPARED_NEEDED_KIND) && typeof p.goalId === 'string') {
+        out.add(`${r.entity_id}\u0000${p.goalId}`);
+      }
+    } catch {
+      // A row that does not parse settles nothing.
+    }
+  }
+  return out;
+}
+
+/**
+ * The default submission: the existing Factory contract against Brain's own
+ * repository, on the project that holds the Brain repository grant — the same
+ * route the improvement loop's engineering takes. The change request is left
+ * for the Factory to approve; nothing here approves or starts it.
+ */
+const submitToBrainFactory: SubmitNeed = async (input) => {
+  const row = await getDb().get<{ project_id: string }>(
+    "SELECT project_id FROM factory_project_repositories WHERE grant_id = 'brain' ORDER BY created_at LIMIT 1",
+    [],
+  );
+  if (!row) throw new Error('no project holds the Brain repository grant for Factory');
+  const [{ submitObjective }, { BRAIN_REPOSITORY_REMOTE }] = await Promise.all([
+    import('../factory/contract.ts'),
+    import('../improvement/loop.ts'),
+  ]);
+  const result = await submitObjective({
+    projectId: row.project_id,
+    ...input,
+    repositoryRemote: BRAIN_REPOSITORY_REMOTE,
+    baseBranch: 'production',
+  });
+  return { changeRequestId: result.changeRequest.id, created: result.created };
+};
