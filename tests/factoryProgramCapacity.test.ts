@@ -36,6 +36,19 @@ describe('capacity', () => {
     expect(overlap([[0, 10], [5, 15], [20, 30]], 30)).toEqual({ peak: 2, average: 1 });
   });
 
+  it('counts worker sessions apart from bins, and completed unit bins per hour', () => {
+    // Bins span every wait between reopens; a session spans its own events only.
+    const reading = computeCapacity({
+      ...base,
+      bins: [bin('FACTORY_UNITS', 0, 1, 500), bin('FACTORY_UNITS', 0, 2, 500), bin('FACTORY_UNITS', 0, 3, 500)],
+      sessionSpans: [[at(1), at(60)], [at(30), at(90)], [at(400), at(500)]],
+    });
+    expect(reading.concurrency.peak).toBe(3);
+    expect(reading.sessions).toMatchObject({ distinct: 3, peak: 2 });
+    expect(reading.completed.unitBinsCompleted).toBe(3);
+    expect(reading.completed.unitBinsPerHour).toBe(0.3);
+  });
+
   it('reads stage times, throughput and failures from bin timelines', () => {
     const reading = computeCapacity({
       ...base,

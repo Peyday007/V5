@@ -190,8 +190,8 @@ async function countWorking(campaigns: FactoryCampaign[]): Promise<number> {
  * objective's declared scope is compared against the `ownedPaths` of other live
  * campaigns' units that are still in play (not INTEGRATED, CANCELLED, FAILED or
  * SUPERSEDED); a campaign with no units yet owns nothing and blocks nothing.
- * Compared against every live campaign — a BLOCKED one still owns its branch —
- * and never against a finished one. It is a wait, not a refusal: the entry
+ * Compared against every live campaign except one BLOCKED on a person — which,
+ * as at the unit level, holds nothing — and never against a finished one. It is a wait, not a refusal: the entry
  * starts on the pass after the owning unit is INTEGRATED. Once the campaign
  * runs, `runRemoteTick` defers individual units that collide with a live unit
  * of another campaign, so this admission check is only the coarse first gate.
@@ -211,6 +211,15 @@ const UNIT_OWNERSHIP_ENDED = new Set(['INTEGRATED', 'CANCELLED', 'FAILED', 'SUPE
 async function liveScopes(live: FactoryCampaign[]): Promise<Array<{ campaignId: string; scope: string[] }>> {
   const scopes: Array<{ campaignId: string; scope: string[] }> = [];
   for (const campaign of live) {
+    /*
+     * The same rule `conflictingUnitOfOtherCampaign` applies to units: a campaign
+     * stopped on something only a person can answer holds nothing. Production
+     * 2026-11-11: five Release 01 change requests (three priority-1 repairs) sat
+     * "not admitted" behind fcp_e51947d1 and fcp_709188ac, both BLOCKED for a
+     * person for days; the unit check would have let them run, the admission
+     * gate never asked it.
+     */
+    if (campaign.state === 'BLOCKED' && campaign.blockerKind && BLOCKER_WAIT[campaign.blockerKind]?.wait === 'PERSON') continue;
     const units = await listUnits(campaign.id);
     const owned = units
       .filter((unit) => !UNIT_OWNERSHIP_ENDED.has(unit.state))
