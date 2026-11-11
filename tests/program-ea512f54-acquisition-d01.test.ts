@@ -8,6 +8,7 @@ import {
   repeatedUseFromRows,
 } from '../server/services/sources/acquisition.ts';
 import { operateEvidenceOfRead, readSource, resetSourceAccessMemory } from '../server/services/sources/access.ts';
+import { runOperatePermissionCommand } from '../server/services/sources/operatePermissionCli.ts';
 import { getDb } from '../server/db/database.ts';
 import { freshProject } from './helpers.ts';
 
@@ -190,5 +191,68 @@ describe('OPERATE is reachable on production records through a person\'s permiss
     await recordOperatePermission({ host: 'granted-app.example', granted: false, grantedBy: 'owner' });
     await read('operate-revoked');
     expect((await operateRows('operate-revoked')).map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
+  });
+});
+
+describe('a person grants an operate permission from the terminal, and the read path honours it', () => {
+  it('refuses incomplete or credential-shaped commands without writing a row', async () => {
+    const writes: unknown[] = [];
+    const record = (async (i: unknown) => {
+      writes.push(i);
+      return { permitted: true, accountRef: 'x', grantedBy: 'x', at: null };
+    }) as never;
+    expect((await runOperatePermissionCommand([], { record })).code).toBe(2);
+    expect((await runOperatePermissionCommand(['grant', '--host', 'a.example', '--by', 'owner'], { record })).code).toBe(2);
+    expect((await runOperatePermissionCommand(['grant', '--host', 'a.example', '--account', 'acct'], { record })).code).toBe(2);
+    expect((await runOperatePermissionCommand(['delete', '--host', 'a.example'], { record })).code).toBe(2);
+    expect(writes).toEqual([]);
+    const refused = await runOperatePermissionCommand(['grant', '--host', 'a.example', '--account', 'ghp_abcdefghijklmnopqrstuvwxyz0123456789', '--by', 'owner']);
+    expect(refused.code).toBe(1);
+    expect(refused.out).toMatch(/never a credential/);
+    expect(refused.out).not.toContain('ghp_');
+  });
+
+  it('end to end: grant from the terminal, the next read is operated by BROWSER and proposes a connector; revoke returns it to a handoff', async () => {
+    await freshProject();
+    resetSourceAccessMemory();
+    const PAGE = 'The account dashboard lists 312 open orders for the week. '.repeat(10);
+    const ok = (url: string) => ({ readable: true as const, requestedUrl: url, finalUrl: url, status: 200, contentType: 'text/html', retrievedAt: 'now', sha256: 'x', text: PAGE, truncated: false, totalChars: PAGE.length });
+    const empty = (url: string) => ({ readable: false as const, requestedUrl: url, finalUrl: url, status: 200, retrievedAt: 'now', reason: 'EMPTY' as never, detail: 'needs a browser' });
+    const read = (caller: string) =>
+      readSource('https://cli-granted.example/orders', {
+        resolve: async () => ['93.184.216.34'],
+        robotsAllow: async () => true,
+        learned: async () => null,
+        archive: async () => null,
+        sitemap: async () => null,
+        search: null,
+        connector: async () => null,
+        direct: async (u) => empty(u),
+        browser: async (u) => ok(u),
+        caller,
+      });
+    const operated = async (caller: string) =>
+      (await getDb().all<{ provider: string | null; measures: string }>(`SELECT provider, measures FROM bin_events WHERE event_type = 'ACQUISITION_JUDGMENT' AND workload_class = ?`, [caller]))
+        .map((r) => ({ provider: r.provider, m: JSON.parse(r.measures) as { capability: string; authorizedAccount?: string } }))
+        .filter((r) => r.m.capability === 'OPERATE');
+
+    expect((await runOperatePermissionCommand(['show', '--host', 'cli-granted.example'])).out).toMatch(/no standing permission/);
+    await read('cli-before');
+    expect((await operated('cli-before')).map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
+
+    const granted = await runOperatePermissionCommand(['grant', '--host', 'CLI-Granted.example', '--account', 'ops login for cli-granted', '--by', 'owner']);
+    expect(granted.code).toBe(0);
+    expect(granted.out).toMatch(/may operate this site under "ops login for cli-granted"/);
+    await read('cli-granted-1');
+    await read('cli-granted-2');
+    const after = await operated('cli-granted-2');
+    expect(after.map((r) => r.provider)).toEqual(['BROWSER']);
+    expect(after[0]!.m.authorizedAccount).toBe('PERMISSION_RECORD');
+    const proposals = await getDb().all<{ provider: string; measures: string }>(`SELECT provider, measures FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED'`);
+    expect(proposals.some((p) => p.provider === 'BROWSER' && (JSON.parse(p.measures) as { host: string; capability: string }).host === 'cli-granted.example' && (JSON.parse(p.measures) as { capability: string }).capability === 'OPERATE')).toBe(true);
+
+    expect((await runOperatePermissionCommand(['revoke', '--host', 'cli-granted.example', '--by', 'owner'])).code).toBe(0);
+    await read('cli-revoked');
+    expect((await operated('cli-revoked')).map((r) => r.provider)).toEqual(['HUMAN_HANDOFF']);
   });
 });

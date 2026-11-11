@@ -289,6 +289,9 @@ export async function readRepeatedUse(host: string): Promise<{ repeatedUses: num
  * password). The newest row for the host decides, so a revocation is a later
  * row rather than an edit, and history is kept (§5, §17).
  *
+ * A person makes the row from a terminal (`operatePermissionCli.ts grant|revoke|show`,
+ * invariant 35); `recordOperatePermission` is the one writer behind it.
+ *
  * This is the record the OPERATE judgment reads. A read path (`access.ts`) can
  * only say a browser rendered a public page — it cannot know about an account,
  * and says `false` — so the judgment consults this record whenever the caller
