@@ -10,6 +10,9 @@
  * On each pass, for the GENERAL scope only (feed items and detections are
  * shared rows, so a project's or a person's private pattern never fires here):
  *
+ *   0. the cheap lane's agreed screen answers propose new SHADOW detectors and
+ *      judge every detector's firings on items it was not built from
+ *      (`learnFromScreens.ts`), so precision is measured from production rows;
  *   1. every learned detector's mode is settled from its measured precision —
  *      promoted to ACTIVE or demoted to SHADOW by the stored threshold;
  *   2. a detector serving a search method whose recent runs say PAUSE or
@@ -45,6 +48,19 @@ export interface HeldLearned {
 
 /** Settle modes, then the learned detectors this pass may run and those held back. */
 export async function installLearned(now: Date): Promise<{ run: InstalledLearned[]; held: HeldLearned[] }> {
+  /*
+   * The producer: detectors proposed from the cheap lane's agreed screen
+   * answers, and every detector's firings judged on items it was not built
+   * from (`learnFromScreens.ts`). It runs before the modes are settled, so a
+   * pass promotes or demotes on the judgments it just recorded. A fault there
+   * never stops the detectors that already exist.
+   */
+  try {
+    const { learnFromScreens } = await import('./learnFromScreens.ts');
+    await learnFromScreens(now);
+  } catch {
+    /* settle and run what already exists */
+  }
   for (const d of await listLearnedDetectors(FEED_READER)) await settleDetectorMode(FEED_READER, d.id);
   const run: InstalledLearned[] = [];
   const held: HeldLearned[] = [];
