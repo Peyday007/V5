@@ -16,6 +16,7 @@
 import { getDb } from '../../db/database.ts';
 import { databasePoolReadings } from '../../db/database.ts';
 import { waitingNow } from './capacity.ts';
+import { recordBinEvent } from '../../repos/bins.ts';
 
 export type Measured<T> = { measured: true; value: T } | { measured: false; reason: string };
 
@@ -266,4 +267,40 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
 /** Jobs queued and claimable now, across every stage the lane answers. */
 export async function queuedNow(): Promise<number> {
   return waitingNow({ includeImprovement: false });
+}
+
+/** The `bin_events.event_type` a stage-capacity measurement is recorded under. */
+export const STAGE_CAPACITY_EVENT = 'FREE_LANE_STAGE_CAPACITY';
+
+/**
+ * Measure every stage and record the result as one `bin_events` row, so the
+ * per-stage reading exists on production records rather than only as a function
+ * nobody calls (CAP-16-3). Runs from the free lane's background loop, never from
+ * a web request. A measurement that fails is recorded as failed, with its reason,
+ * rather than skipped silently.
+ */
+export async function recordStageCapacity(options: { hours?: number; now?: number } = {}): Promise<StageCapacityReport | null> {
+  const started = Date.now();
+  try {
+    const report = await stageCapacity(options);
+    const waiting = await queuedNow();
+    await recordBinEvent({
+      eventType: STAGE_CAPACITY_EVENT,
+      outcome: 'MEASURED',
+      reason: report.constrained.basis,
+      durationMs: Date.now() - started,
+      evidenceClass: 'MEASURED',
+      measures: { ...report, queuedNow: waiting } as unknown as Record<string, unknown>,
+    });
+    return report;
+  } catch (error) {
+    await recordBinEvent({
+      eventType: STAGE_CAPACITY_EVENT,
+      outcome: 'NOT_MEASURED',
+      reason: `stage capacity measurement failed: ${(error as Error).message}`.slice(0, 480),
+      durationMs: Date.now() - started,
+      evidenceClass: 'MEASURED',
+    });
+    return null;
+  }
 }
