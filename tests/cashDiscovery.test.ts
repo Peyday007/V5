@@ -1265,30 +1265,38 @@ describe('the wider economy (2026-10-28)', () => {
     );
   });
 
-  it('backs a goal lens off after abandoned rounds as it does after barren harvests', async () => {
+  it('backs a goal lens off after abandoned rounds that searched, as it does after barren harvests', async () => {
     const { nextGoalRoundFor, GOAL_LENS_MAX_BACKOFF_MS } = await import('../server/services/cash/discovery.ts');
     const day = 24 * 60 * 60 * 1000;
     const t0 = Date.parse('2026-11-01T00:00:00Z');
     const at = (round: number) => new Date(t0 + (round - 3) * day).toISOString();
     const abandoned = [1, 2, 3].map((round) => ({
-      round, state: 'ABANDONED', found: 0, openedAt: at(round), harvestedAt: at(round),
+      id: `r${round}`, round, state: 'ABANDONED', found: 0, openedAt: at(round), harvestedAt: at(round),
     })) as never[];
-    expect(nextGoalRoundFor(abandoned, new Date(t0 + 6 * day).toISOString())).toBeNull();
-    expect(nextGoalRoundFor(abandoned, new Date(t0 + 7 * day + 1).toISOString())).toBe(4);
+    // Each of these rounds' research produced claims, none of which filed: they searched.
+    const searched = new Set(Array.from({ length: 12 }, (_, i) => `r${i + 1}`));
+    expect(nextGoalRoundFor(abandoned, new Date(t0 + 6 * day).toISOString(), searched)).toBeNull();
+    expect(nextGoalRoundFor(abandoned, new Date(t0 + 7 * day + 1).toISOString(), searched)).toBe(4);
     const many = Array.from({ length: 12 }, (_, i) => ({
-      round: i + 1, state: 'ABANDONED', found: 0, openedAt: at(i + 1), harvestedAt: at(i + 1),
+      id: `r${i + 1}`, round: i + 1, state: 'ABANDONED', found: 0, openedAt: at(i + 1), harvestedAt: at(i + 1),
     })) as never[];
-    expect(nextGoalRoundFor(many, new Date(t0 + 9 * day + GOAL_LENS_MAX_BACKOFF_MS).toISOString())).toBe(13);
-    const filed = [...abandoned, { round: 4, state: 'HARVESTED', found: 2, openedAt: at(3), harvestedAt: at(3) }] as never[];
-    expect(nextGoalRoundFor(filed, new Date(t0 + 1 * day + 1).toISOString())).toBe(5);
-    expect(nextGoalRoundFor([...abandoned, { round: 4, state: 'OPEN', found: 0, openedAt: at(3) }] as never[], new Date(t0 + 90 * day).toISOString())).toBeNull();
+    expect(nextGoalRoundFor(many, new Date(t0 + 9 * day + GOAL_LENS_MAX_BACKOFF_MS).toISOString(), searched)).toBe(13);
+    const filed = [...abandoned, { id: 'r4', round: 4, state: 'HARVESTED', found: 2, openedAt: at(3), harvestedAt: at(3) }] as never[];
+    expect(nextGoalRoundFor(filed, new Date(t0 + 1 * day + 1).toISOString(), searched)).toBe(5);
+    expect(nextGoalRoundFor([...abandoned, { id: 'r4', round: 4, state: 'OPEN', found: 0, openedAt: at(3) }] as never[], new Date(t0 + 90 * day).toISOString(), searched)).toBeNull();
     // A parked round that already filed openings is not barren: it waits one cool-off, not two.
-    const parkedWithOpening = [{ round: 1, state: 'ABANDONED', found: 1, openedAt: at(3), harvestedAt: at(3) }] as never[];
-    expect(nextGoalRoundFor(parkedWithOpening, new Date(t0 + 1 * day + 1).toISOString())).toBe(2);
+    const parkedWithOpening = [{ id: 'p1', round: 1, state: 'ABANDONED', found: 1, openedAt: at(3), harvestedAt: at(3) }] as never[];
+    expect(nextGoalRoundFor(parkedWithOpening, new Date(t0 + 1 * day + 1).toISOString(), new Set(['p1']))).toBe(2);
+    // The same three rounds stopped before any claim arrived (an outage): they never searched, so one cool-off.
+    expect(nextGoalRoundFor(abandoned, new Date(t0 + 1 * day + 1).toISOString())).toBe(4);
+    // Barren harvests back off with or without the searched set: a finished packet that filed nothing searched.
+    const harvestedEmpty = [1, 2, 3].map((round) => ({ id: `h${round}`, round, state: 'HARVESTED', found: 0, openedAt: at(round), harvestedAt: at(round) })) as never[];
+    expect(nextGoalRoundFor(harvestedEmpty, new Date(t0 + 6 * day).toISOString())).toBeNull();
+    expect(nextGoalRoundFor(harvestedEmpty, new Date(t0 + 7 * day + 1).toISOString())).toBe(4);
   });
 
-  it('backs a real goal lens off after a round whose mission stopped before a packet finished, and not after a parked round that filed', async () => {
-    const { openGoalDiscovery, nextGoalRoundFor } = await import('../server/services/cash/discovery.ts');
+  it('backs a goal lens off only after a round that searched and filed nothing — not after an outage that stopped it before any claim, nor after a parked round that filed', async () => {
+    const { openGoalDiscovery, nextGoalRoundFor, searchedRoundIds } = await import('../server/services/cash/discovery.ts');
     const { createWorkstream, getWorkstream } = await import('../server/repos/register.ts');
     const { setTerms } = await import('../server/services/goals/decide.ts');
     const { setTarget } = await import('../server/services/goals/target.ts');
@@ -1308,21 +1316,49 @@ describe('the wider economy (2026-10-28)', () => {
     const target = (await readGoalPlan({ goalId: g.id, evaluations: 200 }))!.target;
     const bucketRounds = async (bucketId: string) => (await listRounds(projectId)).filter((one) => one.bucketId === bucketId);
 
-    // Round 1 of one lens: its mission fails before any packet finishes.
-    const failedRound = await openGoalDiscovery({ goal: w, target, bestReach: null });
-    expect(failedRound).not.toBeNull();
-    await finishedMission({ candidateId: failedRound!.candidateId, missionEnds: 'FAILED', fragmentStatus: 'REJECTED', claims: [] });
+    // Round 1 of one lens: its mission fails before any claim arrives, as when
+    // Brain's own lane or a model route is down (§53). The angle was never
+    // searched, so this is not evidence the lens has nothing to find.
+    const outageRound = await openGoalDiscovery({ goal: w, target, bestReach: null });
+    expect(outageRound).not.toBeNull();
+    await finishedMission({ candidateId: outageRound!.candidateId, missionEnds: 'FAILED', fragmentStatus: 'REJECTED', claims: [] });
     await harvest({ projectId });
-    const failedHistory = await bucketRounds(failedRound!.bucketId);
-    expect(failedHistory.map((one) => [one.state, one.found])).toEqual([['ABANDONED', 0]]);
+    const outageHistory = await bucketRounds(outageRound!.bucketId);
+    expect(outageHistory.map((one) => [one.state, one.found])).toEqual([['ABANDONED', 0]]);
+    expect(await searchedRoundIds(outageHistory)).toEqual(new Set());
+    // Not barren: asked again after the ordinary single cool-off.
+    expect(nextGoalRoundFor(outageHistory, new Date(Date.now() + 0.5 * day).toISOString(), await searchedRoundIds(outageHistory))).toBeNull();
+    expect(nextGoalRoundFor(outageHistory, new Date(Date.now() + 1.5 * day).toISOString(), await searchedRoundIds(outageHistory))).toBe(2);
+    // Repeated outages never compound into a long park: three stopped rounds in a row still wait one cool-off.
+    const outages = [1, 2, 3].map((round) => ({ ...outageHistory[0]!, id: `${outageHistory[0]!.id}-${round}`, round }));
+    expect(nextGoalRoundFor(outages, new Date(Date.now() + 1.5 * day).toISOString(), await searchedRoundIds(outages))).toBe(4);
+
+    // Another lens: its mission stops, but only after its research ran and its
+    // claims were gated, and none filed an opening. That search found nothing,
+    // so it is barren.
+    const searchedRound = await openGoalDiscovery({ goal: w, target, bestReach: null });
+    expect(searchedRound).not.toBeNull();
+    expect(searchedRound!.bucketId).not.toBe(outageRound!.bucketId);
+    await finishedMission({
+      candidateId: searchedRound!.candidateId,
+      missionEnds: 'FAILED',
+      fragmentStatus: 'REJECTED',
+      claims: [{ claim: 'Industry directories list suppliers but no buyer requests.', lane: SIGNAL_LANE, sourceUrl: 'https://example.test/dir/goal-searched' }],
+    });
+    await harvest({ projectId });
+    const searchedHistory = await bucketRounds(searchedRound!.bucketId);
+    expect(searchedHistory.map((one) => [one.state, one.found])).toEqual([['ABANDONED', 0]]);
+    const searched = await searchedRoundIds(searchedHistory);
+    expect(searched).toEqual(new Set([searchedHistory[0]!.id]));
     // Barren: asked again only after two cool-offs, not one.
-    expect(nextGoalRoundFor(failedHistory, new Date(Date.now() + 1.5 * day).toISOString())).toBeNull();
-    expect(nextGoalRoundFor(failedHistory, new Date(Date.now() + 2.5 * day).toISOString())).toBe(2);
+    expect(nextGoalRoundFor(searchedHistory, new Date(Date.now() + 1.5 * day).toISOString(), searched)).toBeNull();
+    expect(nextGoalRoundFor(searchedHistory, new Date(Date.now() + 2.5 * day).toISOString(), searched)).toBe(2);
 
     // Another lens: its mission parks at a decision, but its claim was filed first.
     const parkedRound = await openGoalDiscovery({ goal: w, target, bestReach: null });
     expect(parkedRound).not.toBeNull();
-    expect(parkedRound!.bucketId).not.toBe(failedRound!.bucketId);
+    expect(parkedRound!.bucketId).not.toBe(outageRound!.bucketId);
+    expect(parkedRound!.bucketId).not.toBe(searchedRound!.bucketId);
     await finishedMission({
       candidateId: parkedRound!.candidateId,
       missionEnds: 'NEEDS_HUMAN',

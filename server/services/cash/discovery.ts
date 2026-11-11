@@ -736,14 +736,58 @@ export const GOAL_OPENING_SENTENCE =
   'A claim with no opportunity_signal is kept as evidence and never becomes an opening, so a way reported without one is lost to the goal.';
 
 /**
- * A closed round that filed nothing. `ABANDONED` is a stopped mission (failed,
- * cancelled, expired unlaunched) and also one parked at a decision, and the
- * count taken at close (`closeEndedRounds`) is what separates them: research
- * that stopped before a packet finished and filed nothing is barren, and a
- * parked round that already filed openings is not.
+ * A closed round whose search ran and filed nothing.
+ *
+ * `HARVESTED` with nothing found is a finished packet that filed nothing.
+ * `ABANDONED` is a mission that stopped (failed, cancelled, expired
+ * unlaunched) or parked at a decision. It is barren only when its search
+ * actually ran: its research produced claims that went through the gate and
+ * none of them filed an opening. A round that stopped before any claim
+ * arrived never searched its angle. Usually Brain's own lane, a model route or
+ * the database was down, and §53 says Brain's outage is nobody's no-show.
+ * Reading that as "this lens has nothing to find" would double the lens's
+ * wait on every outage and park the goal's lenses for days once throughput is
+ * back (§65: a dead end is a watch, not a verdict). Such a round keeps the
+ * ordinary cool-off. `searched` holds the ids of ABANDONED rounds whose
+ * research produced claims (`searchedRoundIds`); without it, no ABANDONED
+ * round is barren.
  */
-function roundFoundNothing(one: Pick<CashDiscoveryRound, 'state' | 'found'>): boolean {
-  return (one.state === 'ABANDONED' || one.state === 'HARVESTED') && one.found === 0;
+function roundFoundNothing(
+  one: Pick<CashDiscoveryRound, 'id' | 'state' | 'found'>,
+  searched: ReadonlySet<string> = NO_ROUNDS,
+): boolean {
+  if (one.found !== 0) return false;
+  if (one.state === 'HARVESTED') return true;
+  return one.state === 'ABANDONED' && searched.has(one.id);
+}
+
+const NO_ROUNDS: ReadonlySet<string> = new Set();
+
+/**
+ * Which of these closed, empty ABANDONED rounds actually searched: research
+ * launched for the round produced at least one claim. One query over the
+ * rounds' orchestrations, so a pass over a goal's lenses stays cheap.
+ */
+export async function searchedRoundIds(rounds: readonly CashDiscoveryRound[]): Promise<Set<string>> {
+  const empty = rounds.filter((one) => one.state === 'ABANDONED' && one.found === 0);
+  const out = new Set<string>();
+  if (empty.length === 0) return out;
+  const missions = await missionsForRounds(empty.map((one) => one.candidateId));
+  const roundByOrchestration = new Map<string, string>();
+  for (const one of empty) {
+    for (const orchestrationId of missions.get(one.candidateId)?.orchestrationIds ?? []) roundByOrchestration.set(orchestrationId, one.id);
+  }
+  const ids = [...roundByOrchestration.keys()];
+  if (ids.length === 0) return out;
+  const rows = await getDb().all<{ orchestration_id: string }>(
+    `SELECT DISTINCT orchestration_id FROM research_claims WHERE orchestration_id IN (${ids.map(() => '?').join(', ')})`,
+    ids,
+  );
+  for (const row of rows) {
+    const roundId = roundByOrchestration.get(row.orchestration_id);
+    if (roundId) out.add(roundId);
+  }
+  return out;
 }
 
 /** A barren goal lens waits longer each time, up to this, and is never retired. */
@@ -755,7 +799,11 @@ export const GOAL_LENS_MAX_BACKOFF_MS = 7 * 24 * 60 * 60 * 1000;
  * stopping after three. A goal without a supported plan keeps searching until
  * its due date; only the wait between askings grows.
  */
-export function nextGoalRoundFor(history: CashDiscoveryRound[], now: string): number | null {
+export function nextGoalRoundFor(
+  history: CashDiscoveryRound[],
+  now: string,
+  searched: ReadonlySet<string> = NO_ROUNDS,
+): number | null {
   if (history.some((one) => one.state === 'OPEN')) return null;
   if (history.length === 0) return 1;
   const ordered = [...history].sort((a, b) => a.round - b.round);
@@ -763,7 +811,7 @@ export function nextGoalRoundFor(history: CashDiscoveryRound[], now: string): nu
   let barren = 0;
   for (let i = ordered.length - 1; i >= 0; i -= 1) {
     const one = ordered[i]!;
-    if (roundFoundNothing(one)) barren += 1;
+    if (roundFoundNothing(one, searched)) barren += 1;
     else break;
   }
   const wait = Math.min(ROUND_COOL_OFF_MS * 2 ** barren, GOAL_LENS_MAX_BACKOFF_MS);
@@ -859,10 +907,11 @@ export async function openGoalDiscovery(input: {
     .slice(0, MAX_INDUSTRY_LENSES)
     .map((node) => ({ id: `ind-${node.id}`, angle: `the ${node.name} industry, and the businesses that supply, serve or buy from it` }));
   const lenses = [...GOAL_LENSES, ...industries];
+  const searched = await searchedRoundIds(mine);
   const choices = lenses.map((lens, index) => {
     const id = `${prefix}-${lens.id}`;
     const history = mine.filter((one) => one.bucketId === id);
-    return { lens, index, id, history, next: nextGoalRoundFor(history, now) };
+    return { lens, index, id, history, next: nextGoalRoundFor(history, now, searched) };
   })
     .filter((one): one is typeof one & { next: number } => one.next !== null)
     .sort((a, b) => a.history.length - b.history.length || a.index - b.index);
@@ -901,7 +950,7 @@ export async function openGoalDiscovery(input: {
    */
   const last = [...history].sort((a, b) => b.round - a.round)[0];
   const methodFirst =
-    last && roundFoundNothing(last)
+    last && roundFoundNothing(last, await searchedRoundIds([last]))
       ? 'The last search from this angle found nothing usable, so start with how such openings are actually found: name the specific directories, public registers, feeds, trade associations and search terms where buyers of this kind publish what they need, open each, say which produced live openings and which did not, and report the openings found through the ones that worked. '
       : '';
   const learned = yieldGuidance(await discoveryYield(t.projectId));
@@ -990,7 +1039,7 @@ export async function openConstructedRound(input: {
   const lens = `mx-${input.key}`;
   const id = `${prefix}-${lens}`;
   const history = mine.filter((one) => one.bucketId === id);
-  const next = nextGoalRoundFor(history, now);
+  const next = nextGoalRoundFor(history, now, await searchedRoundIds(history));
   if (next === null) return null;
   /*
    * An earlier round of this design closed while its research ran on: asking
