@@ -1531,7 +1531,20 @@ export function resetRouteHealth(): void {
   routeHealth.clear();
 }
 
-/** A failing route's standing: null when it is healthy or due its single re-probe item. */
+/**
+ * A failing route's standing, read without spending anything: null when it is
+ * healthy or due its single re-probe item. `admit` asks this first and spends the
+ * re-probe slot (`routeHold`) only once every other filter has admitted the item,
+ * so an item another filter rejects does not cost the route its probe.
+ */
+export function routeHoldReason(model: string, now = Date.now()): string | null {
+  const state = routeHealth.get(model);
+  if (!state || state.failures < ROUTE_FAILURE_LIMIT) return null;
+  if (now >= state.nextProbeAt) return null;
+  return `model route failing (${state.cause}); another model takes the work until it is re-probed`;
+}
+
+/** A failing route's standing: null when it is healthy or due its single re-probe item, which this call spends. */
 export function routeHold(model: string, now = Date.now()): string | null {
   const state = routeHealth.get(model);
   if (!state || state.failures < ROUTE_FAILURE_LIMIT) return null;
@@ -1574,12 +1587,20 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
       return { ok: false, reason: 'the other free worker takes this role' };
     }
     if ((cooldown.get(cooldownKey(worker.model, item.id)) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
-    const held = routeHold(worker.model);
+    // Read the route's standing without spending its single re-probe slot: an
+    // item a later filter rejects must not cost the route its probe.
+    const held = routeHoldReason(worker.model);
     if (held) return { ok: false, reason: held };
     if (unfit.has(`${worker.model}|${item.work_type}`)) return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
     if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
     session = sessionFor(worker, item);
-    return auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
+    const verdict = await auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
+    if (!verdict.ok) return verdict;
+    // Every filter admitted it: only now is the re-probe slot spent. A concurrent
+    // admit that spent it first leaves this item held, as before.
+    const stillHeld = routeHold(worker.model);
+    if (stillHeld) return { ok: false, reason: stillHeld };
+    return verdict;
   };
   const ask = async (types: FreeLaneWorkType[], orchestrationId: string | null): Promise<ClaimedWork | undefined> => {
     let declined = 0;
