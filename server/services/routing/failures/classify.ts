@@ -168,3 +168,22 @@ export function decideFailure(i: DecideInput): FailureDecision {
     }
   }
 }
+
+/**
+ * The evidence a thrown error carries, for a caller that caught one. An error that
+ * states an HTTP status (and a Retry-After) is read by those facts; anything else
+ * contributes only its name and message, which `classifyFailure` consults last.
+ * Duck-typed so this module imports nothing from the resources it classifies.
+ */
+export function evidenceOfError(caught: unknown, extra: Partial<FailureEvidence> = {}): FailureEvidence & { retryAfterMs: number | null } {
+  const record = (caught && typeof caught === 'object' ? caught : {}) as { status?: unknown; retryAfterMs?: unknown; name?: unknown; message?: unknown };
+  const status = typeof record.status === 'number' && Number.isFinite(record.status) ? record.status : null;
+  const retryAfterMs = typeof record.retryAfterMs === 'number' && record.retryAfterMs > 0 ? record.retryAfterMs : null;
+  const text = caught instanceof Error ? `${caught.name}: ${caught.message}` : typeof caught === 'string' ? caught : null;
+  return { httpStatus: status, error: text ? text.slice(0, 300) : null, retryAfterMs, ...extra };
+}
+
+/** One line for a ledger or a log: the class, the response and why. */
+export function describeDecision(d: FailureDecision): string {
+  return `${d.failureClass} → ${d.response}${d.nextLane ? ` on ${d.nextLane}` : ''}${d.retryAfterMs ? ` after ${Math.round(d.retryAfterMs / 1000)}s` : ''}${d.releaseCapacity ? ', capacity released' : ''}: ${d.reason}`;
+}

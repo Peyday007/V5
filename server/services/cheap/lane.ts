@@ -8,7 +8,12 @@
  *
  *  1. Only closed, small tasks with a fixed answer shape are sent (`TASKS`).
  *  2. Every answer is validated; anything off-shape is a failed answer, never
- *     a guess at what the model meant.
+ *     a guess at what the model meant. A failure is classified
+ *     (`routing/failures/classify.ts`) before anything else happens: an
+ *     off-shape answer is re-asked once on the same model with the shape
+ *     restated (the known repair) before it can reach Claude, and a provider
+ *     error is never retried in place — the model's slot is released to the
+ *     provider cooldown and the next model is tried.
  *  3. With two models configured, both answer and must agree; a disagreement
  *     is UNSURE, which goes to Claude like a KEEP.
  *  4. Every answer is a row, so the same input is never asked twice and each
@@ -26,6 +31,7 @@ import { newId, nowIso } from '../../repos/util.ts';
 import { recordRoutedWork } from '../../repos/workRouting.ts';
 import { noticeRepeats } from '../routing/repeats/repeats.ts';
 import { ProviderHttpError, parseRetryAfter, providerCapacity, providerKey, type ProviderCapacity } from '../routing/providers/capacity.ts';
+import { decideFailure, describeDecision, evidenceOfError, type FailureDecision } from '../routing/failures/classify.ts';
 import { DELIVERABLE_KINDS, type DeliverableKind } from '../cash/deliverables/spec.ts';
 
 export interface LaneConfig {
@@ -343,7 +349,7 @@ async function runTask<I, O>(
   const answers: (O | null)[] = [];
   const now = options.now ?? new Date();
   const health = options.health ?? (await modelHealth(kind, now));
-  const seen = { cached: 0, asked: 0, down: 0, deferred: 0, errors: 0, offShape: 0, budgetSpent: false };
+  const seen: LaneSeen = { cached: 0, asked: 0, down: 0, deferred: 0, errors: 0, offShape: 0, repairs: 0, budgetSpent: false, decisions: [] };
   for (const model of config.models) {
     const hit = cached.find((row) => row.model === model);
     if (hit) {
@@ -369,16 +375,37 @@ async function runTask<I, O>(
       break;
     }
     seen.asked += 1;
+    const remaining = config.models.slice(config.models.indexOf(model) + 1);
     let text = '';
     let error: string | null = null;
-    try {
-      text = await (options.completer ?? httpCompleter)(config, model, TASKS[kind].system, prompt(input));
-    } catch (caught) {
-      error = caught instanceof Error ? caught.message.slice(0, 300) : 'failed';
-      capacity.failure(key, caught, now);
+    let parsed: O | null = null;
+    // Bounded by the classifier's attempt cap: each failure is classified, and only the
+    // response it names happens next. Nothing here sleeps or holds a slot for a retry.
+    for (let attempt = 1; ; attempt += 1) {
+      text = '';
+      error = null;
+      try {
+        const asked = attempt === 1 ? prompt(input) : `${prompt(input)}\n\n${REPAIR_NOTE}`;
+        text = await (options.completer ?? httpCompleter)(config, model, TASKS[kind].system, asked);
+      } catch (caught) {
+        error = caught instanceof Error ? caught.message.slice(0, 300) : 'failed';
+        capacity.failure(key, caught, now);
+        const evidence = evidenceOfError(caught);
+        seen.decisions.push(
+          decideFailure({ evidence, lane: 'CHEAP', attempts: attempt, retryAfterMs: evidence.retryAfterMs, alternativeWorker: remaining.length > 0 }),
+        );
+        break;
+      }
+      capacity.success(key);
+      parsed = parse(text);
+      if (parsed) break;
+      const decision = decideFailure({ evidence: { outputInvalid: true }, lane: 'CHEAP', attempts: attempt, repairAvailable: true });
+      seen.decisions.push(decision);
+      if (decision.response !== 'KNOWN_REPAIR') break;
+      // The repair is another call: it honours the provider's capacity and the day's budget like the first.
+      if (!capacity.reserve(key, now).allowed || (await usedToday(kind, now)) >= config.dailyBudget) break;
+      seen.repairs += 1;
     }
-    if (!error) capacity.success(key);
-    const parsed = error ? null : parse(text);
     if (error) seen.errors += 1;
     else if (!parsed) seen.offShape += 1;
     await db.run(
@@ -404,6 +431,44 @@ async function runTask<I, O>(
   return merged;
 }
 
+/** Restated on a re-ask after an off-shape answer: the known repair for MALFORMED_OUTPUT. */
+export const REPAIR_NOTE =
+  'Your previous reply was not in the required shape. Reply again with ONLY the JSON object described above: no prose, no code fences, no extra keys.';
+
+/** What one task saw across its models, and every failure decision made on the way. */
+export interface LaneSeen {
+  cached: number;
+  asked: number;
+  down: number;
+  deferred: number;
+  errors: number;
+  offShape: number;
+  repairs: number;
+  budgetSpent: boolean;
+  decisions: FailureDecision[];
+}
+
+/**
+ * The one failure decision a task's ledger row carries. When a model was asked and
+ * failed, that classified decision stands — an off-shape answer that survived its
+ * repair outranks a provider error, because only it is evidence about the lane's
+ * ability. When no model was asked, the reason none was is classified the same way:
+ * every model skipped as down is PROVIDER_DOWN; a deferral or a spent budget is
+ * RATE_LIMITED. Null when the task answered, or nothing failed.
+ */
+export function laneDecision(seen: LaneSeen, answered: boolean): FailureDecision | null {
+  if (answered) return null;
+  const malformed = seen.decisions.filter((d) => d.failureClass === 'MALFORMED_OUTPUT');
+  const last = malformed[malformed.length - 1] ?? seen.decisions[seen.decisions.length - 1];
+  if (last) return last;
+  if (seen.asked > 0 || seen.cached > 0) return null;
+  if (seen.down > 0 && seen.deferred === 0 && !seen.budgetSpent) {
+    return decideFailure({ evidence: { providerDown: true }, lane: 'CHEAP', attempts: 1 });
+  }
+  if (seen.deferred > 0 || seen.budgetSpent) return decideFailure({ evidence: { httpStatus: 429 }, lane: 'CHEAP', attempts: 1 });
+  return null;
+}
+
 /**
  * Write the cheap lane's routing decision for one task to the ledger: CHEAP,
  * why, what was reused, what failed and whether the models agreed. The output
@@ -414,20 +479,18 @@ async function recordLaneDecision(
   kind: TaskKind,
   hash: string,
   route: LaneRoute,
-  seen: { cached: number; asked: number; down: number; deferred: number; errors: number; offShape: number; budgetSpent: boolean },
+  seen: LaneSeen,
   answered: boolean,
 ): Promise<void> {
-  const failureClass =
-    seen.offShape > 0 ? 'MALFORMED_OUTPUT'
-    : seen.errors > 0 ? 'TRANSIENT_PROVIDER'
-    : seen.asked === 0 && seen.cached === 0 && seen.down > 0 ? 'PROVIDER_DOWN'
-    : seen.asked === 0 && seen.cached === 0 && (seen.deferred > 0 || seen.budgetSpent) ? 'RATE_LIMITED'
-    : null;
+  const decision = laneDecision(seen, answered);
+  const failureClass = decision?.failureClass ?? null;
   const reasons = [
     `${kind} is a closed-answer task in the cheap lane's reviewed TASKS, validated by parsing and model agreement`,
     `models: ${seen.cached} answered from cheap_results, ${seen.asked} asked, ${seen.down} skipped as down, ${seen.deferred} deferred by provider capacity`,
   ];
   if (seen.budgetSpent) reasons.push(`the ${kind} daily budget was spent before every model was asked`);
+  if (seen.repairs > 0) reasons.push(`${seen.repairs} off-shape answer(s) re-asked on the same model with the shape restated before any escalation`);
+  if (decision) reasons.push(`failure classified: ${describeDecision(decision)}`);
   await recordRoutedWork({
     projectId: route.projectId,
     workKind: `CHEAP_${kind}`,
@@ -440,7 +503,7 @@ async function recordLaneDecision(
     ],
     reusedResultId: seen.cached > 0 && seen.asked === 0 ? `cheap_results:${kind}:${hash}` : null,
     failureClass,
-    outcome: answered ? 'ANSWERED' : 'NO_SIGNAL',
+    outcome: answered ? 'ANSWERED' : decision?.response === 'ESCALATE' ? 'ESCALATED' : 'NO_SIGNAL',
     validationResult: answered ? 'validated answer, models agreed' : 'no validated agreement',
   });
   // A lane task is a closed-answer shape: once it repeats, it is a candidate to
