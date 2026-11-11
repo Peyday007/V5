@@ -5,7 +5,51 @@
  * real need classifies each access method by the gates still closed
  * (`resolveNeed`), and that nothing recorded here ever reads as an integration.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+/*
+ * The handoff goes through the Factory's own entrance (`submitObjective`), the
+ * only one the tick uses; a second entrance in prepared.ts was finding F3. The
+ * entrance and the repository choice are stubbed so a change request is the
+ * real row `ensureChangeRequest` writes, with no forge involved.
+ */
+const submitted: Array<Record<string, unknown>> = [];
+let repositories: Array<{ remote: string }> = [];
+vi.mock('../server/services/russell/software.ts', () => ({
+  repositoryChoicesFor: async () => repositories,
+}));
+vi.mock('../server/services/factory/contract.ts', async () => {
+  const { ensureChangeRequest } = await import('../server/repos/factory.ts');
+  class ContractError extends Error {}
+  return {
+    ContractError,
+    submitObjective: async (s: Record<string, unknown>) => {
+      submitted.push(s);
+      const out = await ensureChangeRequest({
+        projectId: s.projectId as string,
+        submissionKey: s.submissionKey as string,
+        objective: s.objective as string,
+        expectedOutcome: s.expectedOutcome as string,
+        nonGoals: s.nonGoals as string[],
+        acceptanceConditions: (s.acceptanceConditions as Array<{ statement: string; verification: string }>).map((c, i) => ({
+          id: `A0${i + 1}`, statement: c.statement, verification: c.verification, mandatory: true,
+        })),
+        repository: s.repositoryRemote as string,
+        repositoryRoot: null,
+        baseBranch: 'production',
+        baseSha: 'a'.repeat(40),
+        environment: 'LOCAL',
+        riskClass: 'MEDIUM',
+        mutationScope: ['server/**'],
+        deploymentPolicy: 'NONE',
+        rollbackRequirement: 'revert',
+        verificationCommands: ['npm run typecheck'],
+      });
+      return { ...out, derived: {} };
+    },
+  };
+});
+
 import { freshProject } from './helpers.ts';
 import {
   COSTLY_EFFORT,
@@ -15,8 +59,9 @@ import {
   advancePreparedOptions,
   countsAsIntegration,
   gatesOfRequirement,
-  handOffToFactory,
   handoffCausedResumption,
+  identifyPreparedDependencies,
+  PREPARED_HANDOFF_KIND,
   preparedOptionFromRequirement,
   resumeOf,
   preparedOptions,
@@ -29,8 +74,10 @@ import {
 import { listEvents } from '../server/repos/events.ts';
 import { ensureCampaign, patchCampaign } from '../server/repos/factory.ts';
 import { enqueueWork } from '../server/repos/workQueue.ts';
+import { createBin } from '../server/repos/bins.ts';
 import { getDb } from '../server/db/database.ts';
 import type { ProgramRequirement } from '../server/domain/factoryProgram.ts';
+import type { BinManifest } from '../server/domain/types.ts';
 
 const method = (over: Record<string, unknown> = {}) => ({ name: 'tool-a', kind: 'OPEN_SOURCE_TOOL', gates: [], effort: 2, sources: ['https://example.test/a'], ...over });
 const valid = (over: Record<string, unknown> = {}) => ({
@@ -41,6 +88,37 @@ const valid = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 const opt = (methods: unknown[]): PreparedOption => validatePreparedOption(valid({ methods }));
+
+/** Open work of a real objective, a bin naming `requirementId`, with one unfinished item: the blocked work the tick finds. */
+const blockedBin = async (projectId: string, requirementId: string, goal = 'goal-x'): Promise<{ binId: string; itemId: string }> => {
+  const bin = await createBin({
+    projectId,
+    kind: 'RESEARCH_PACKET',
+    title: 'Blocked research',
+    objective: 'Establish something that needs the capability.',
+    manifest: {
+      objective: 'Do the declared thing.', why: 'a prepared-option test',
+      lineage: { projectId, layerId: null, goal, orchestrationId: null },
+      units: [{ key: 'u', establishes: 'a value', input: '{}', transform: 'sha256', dependsOn: [] }],
+      acceptableSources: [], excludedSources: [], evidence: ['a stored value'], outputs: ['one result'],
+      authorizedActions: ['submit unit results'], prohibitedActions: ['anything with an external effect'],
+      budgetUnits: 1, retry: { maxAttempts: 3, backoffSeconds: 30 }, stoppingConditions: ['the declared unit has a result'],
+    } as BinManifest,
+    completionContract: 'DETERMINISTIC_UNITS_V1',
+    workloadClass: 'RESEARCH',
+    requiredCapabilities: [requirementId],
+    createdByType: 'SYSTEM',
+    createdById: 'test',
+    ready: true,
+  });
+  const item = await enqueueWork({ projectId, workType: 'RESEARCH_AUDIT', payload: { role: 'PRIMARY' }, createdByType: 'SYSTEM', binId: bin.id });
+  return { binId: bin.id, itemId: item.id };
+};
+
+beforeEach(() => {
+  submitted.length = 0;
+  repositories = [];
+});
 
 describe('validatePreparedOption refuses what is not an option', () => {
   it('accepts a complete option and trims text', () => {
@@ -168,18 +246,52 @@ describe('a prepared option is never an integration', () => {
       expect((await preparedOptions(projectId)).get('req-1')?.feasibility.note).toBe('newer');
     });
 
+    it('records its warm cost on the event: no worker, and every costly method named as refused', async () => {
+      await recordPreparedOption(projectId, valid({ methods: [method({ name: 'ok', effort: 1 }), method({ name: 'browser', effort: COSTLY_EFFORT })] }));
+      const [event] = (await listEvents(projectId, 100)).filter((e) => e.payload.kind === PREPARED_OPTION_KIND);
+      expect(event!.payload.warm).toEqual({ workers: 0, refused: [expect.stringContaining('browser')] });
+      expect(event!.payload.integration).toBe(false);
+    });
+
+    it('an option recorded long ago is still read, however many events came after it (finding F3)', async () => {
+      await recordPreparedOption(projectId, valid({ requirementId: 'old-req' }));
+      const { recordEvent } = await import('../server/repos/events.ts');
+      for (let i = 0; i < 1001; i += 1) {
+        await recordEvent({ projectId, entityType: 'project', entityId: projectId, eventType: 'CAPABILITY_ASSESSED', payload: { kind: 'NOISE', i } });
+      }
+      expect((await preparedOptions(projectId)).has('old-req')).toBe(true);
+      const blocked = await blockedBin(projectId, 'old-req');
+      expect(await identifyPreparedDependencies()).toMatchObject({ identified: 1 });
+      const deps = (await listEvents(projectId, 50)).filter((e) => e.payload.sourceRef === `bin:${blocked.binId}`);
+      expect(deps).toHaveLength(1);
+      expect(deps[0]!.payload.integration).toBe(false);
+    });
+
     it('records nothing when the option is invalid', async () => {
       await expect(recordPreparedOption(projectId, valid({ methods: [] }))).rejects.toThrow(PreparedOptionError);
       expect((await listEvents(projectId, 100)).filter((e) => e.payload.kind === PREPARED_OPTION_KIND)).toHaveLength(0);
     });
 
     it('hands nothing to the Factory when only gated methods exist', async () => {
-      const r = resolveNeed(opt([method({ gates: ['CREDENTIALS'] })]), { requirementId: 'req-1', goal: 'g' });
-      const out = await handOffToFactory(projectId, r, {
-        goal: 'g', repository: 'o/r', baseBranch: 'production', baseSha: 'a'.repeat(40),
-        mutationScope: ['server/**'], verificationCommands: ['npm run typecheck'], rollbackRequirement: 'revert',
-      });
-      expect(out).toBeNull();
+      repositories = [{ remote: 'https://github.com/o/r' }];
+      await recordPreparedOption(projectId, valid({ methods: [method({ gates: ['CREDENTIALS'] })] }));
+      await blockedBin(projectId, 'req-1', 'g');
+      expect(await identifyPreparedDependencies()).toMatchObject({ handedOff: 0 });
+      expect(submitted).toHaveLength(0);
+      expect((await listEvents(projectId, 100)).filter((e) => e.payload.kind === PREPARED_HANDOFF_KIND)).toHaveLength(0);
+    });
+
+    it('the module has exactly one Factory entrance, and it is submitObjective (finding F3)', async () => {
+      const mod = await import('../server/services/capability/prepared.ts');
+      expect('handOffToFactory' in mod).toBe(false);
+      const { readFileSync } = await import('node:fs');
+      const source = readFileSync(new URL('../server/services/capability/prepared.ts', import.meta.url), 'utf8');
+      expect(source).not.toMatch(/\bensureChangeRequest\s*\(/);
+      expect(source).toMatch(/\bsubmitObjective\s*\(/);
+      for (const name of ['preparedOptions', 'warmCost', 'countsAsIntegration']) {
+        const calls = source.match(new RegExp(`(?<!function )\\b${name}\\(`, 'g')) ?? [];
+        expect(calls.length, `${name} has a production caller`).toBeGreaterThan(0);
+      }
     });
   });
 
@@ -206,17 +318,16 @@ describe('a prepared option is never an integration', () => {
       projectId = (await freshProject()).project.id;
     });
 
-    const handOff = async (requirementId: string, blocked: string[]) => {
-      const r = resolveNeed(opt([method()]), { requirementId, goal: 'goal-x' });
-      const out = await handOffToFactory(projectId, r, {
-        goal: 'goal-x', repository: 'o/r', baseBranch: 'production', baseSha: 'a'.repeat(40),
-        mutationScope: ['server/**'], verificationCommands: ['npm run typecheck'], rollbackRequirement: 'revert',
-        blockedWorkItemIds: blocked,
-      });
-      return out!.changeRequest.id;
+    /** The production path: an option is recorded, open work names it, and the tick hands it to the Factory. */
+    const handOff = async (requirementId: string): Promise<string> => {
+      repositories = [{ remote: 'https://github.com/o/r' }];
+      await recordPreparedOption(projectId, valid({ requirementId }));
+      expect(await identifyPreparedDependencies()).toMatchObject({ handedOff: 1 });
+      const handoff = (await listEvents(projectId, 100)).find((e) => e.payload.kind === PREPARED_HANDOFF_KIND && e.entityId === requirementId);
+      expect(handoff!.payload.integration).toBe(false);
+      return handoff!.payload.changeRequestId as string;
     };
-    const blockedItem = async (): Promise<string> =>
-      (await enqueueWork({ projectId, workType: 'RESEARCH_AUDIT', payload: { role: 'PRIMARY' }, createdByType: 'SYSTEM' })).id;
+    const blockedItem = async (requirementId: string): Promise<string> => (await blockedBin(projectId, requirementId)).itemId;
     const succeed = async (id: string, completedAt: string): Promise<void> => {
       await getDb().run(`UPDATE work_items SET state = 'SUCCEEDED', completed_at = ? WHERE id = ?`, [completedAt, id]);
     };
@@ -227,8 +338,8 @@ describe('a prepared option is never an integration', () => {
     const handedOffAt = async (requirementId: string): Promise<string> => (await resumeOf(projectId, requirementId, ['none'])).handedOffAt!;
 
     it('a blocked item that succeeds after the handoff, with nothing implemented, is not a resumption and records nothing', async () => {
-      const item = await blockedItem();
-      await handOff('req-1', [item]);
+      const item = await blockedItem('req-1');
+      await handOff('req-1');
       await succeed(item, at(await handedOffAt('req-1'), 1));
       const r = await resumeOf(projectId, 'req-1', [item]);
       expect(r.resumed).toBe(false);
@@ -238,8 +349,8 @@ describe('a prepared option is never an integration', () => {
     });
 
     it('work that finished before the campaign completed was not caused by it', async () => {
-      const item = await blockedItem();
-      const cr = await handOff('req-1', [item]);
+      const item = await blockedItem('req-1');
+      const cr = await handOff('req-1');
       const t0 = await handedOffAt('req-1');
       await succeed(item, at(t0, 1));
       await complete(cr, at(t0, 2));
@@ -254,8 +365,8 @@ describe('a prepared option is never an integration', () => {
     });
 
     it('a withdrawn change request is never a resumption, even with a complete campaign', async () => {
-      const item = await blockedItem();
-      const cr = await handOff('req-1', [item]);
+      const item = await blockedItem('req-1');
+      const cr = await handOff('req-1');
       const t0 = await handedOffAt('req-1');
       await complete(cr, at(t0, 1));
       await succeed(item, at(t0, 2));
@@ -264,8 +375,8 @@ describe('a prepared option is never an integration', () => {
     });
 
     it('a mapped requirement must read WORKING over attempts since the implementation', async () => {
-      const item = await blockedItem();
-      const cr = await handOff('INTAKE.PLAN', [item]);
+      const item = await blockedItem('INTAKE.PLAN');
+      const cr = await handOff('INTAKE.PLAN');
       const t0 = await handedOffAt('INTAKE.PLAN');
       await complete(cr, at(t0, 0.001));
       await succeed(item, at(t0, 0.01));
