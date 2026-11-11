@@ -35,6 +35,8 @@ The owner's message is the contract, and a program — not you — decides when 
    npm run finish -- evidence R6 --http https://… --expect "…"
    npm run finish -- evidence R1 --covered R3,R4,R5             # a heading over its items
    ```
+   A proof attached by mistake that fails: `npm run finish -- withdraw R3 --reason "…"`
+   (only failing proofs; a passing one is never withdrawn).
    A command that cannot fail (`true`, `echo`, `… || true`) is refused. Results are
    cached per tree, so re-checking unchanged work costs nothing and repeats nothing.
 3. `npm run finish -- check`. It prints one verdict:
