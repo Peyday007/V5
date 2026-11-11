@@ -43,8 +43,8 @@ describe('acquisition judgments do not read their history once per read', () => 
       ['load-bound-11'],
     );
     const parsed = judgments.map((j) => JSON.parse(j.measures) as { capability: string; repeatedUses: number | null });
-    // Both judgments of the twelfth read see all twelve reads of the workflow, counted once and shared.
-    expect(parsed.map((p) => p.capability).sort()).toEqual(['ACQUIRE', 'OPERATE']);
+    // The twelfth read's judgment (ACQUIRE only: a read is never an operation) sees all twelve reads of the workflow, counted once.
+    expect(parsed.map((p) => p.capability)).toEqual(['ACQUIRE']);
     expect(parsed.every((p) => p.repeatedUses === 12)).toBe(true);
     // A justified connector is proposed once per host and route, not once per read.
     const proposals = await getDb().all<{ provider: string; measures: string }>(`SELECT provider, measures FROM bin_events WHERE event_type = 'CONNECTOR_PROPOSED'`);
