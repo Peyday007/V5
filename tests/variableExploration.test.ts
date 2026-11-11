@@ -11,6 +11,7 @@ import { evaluateGoalPortfolio } from '../server/services/goals/portfolio.ts';
 import { reconstructPlan, renderReconstruction } from '../server/services/goals/reconstruction.ts';
 import { compile, fastReading, type Limits } from '../server/services/goals/reasoning/variables.ts';
 import { recentExplorations, recordExploration } from '../server/services/goals/reasoning/learning.ts';
+import { inlineEvaluator, openEvaluator } from '../server/services/goals/reasoning/evaluatorPool.ts';
 import { freshProject, teardown } from './helpers.ts';
 import { GOAL_10K_LIMITS, GOAL_10K_OPENINGS, GOAL_10K_RECORD } from './fixtures/goal10k.ts';
 import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
@@ -118,6 +119,18 @@ describe('§102 mechanics', () => {
     expect(again.exploration?.sweep?.variations ?? 0).toBeGreaterThan(10_000);
     expect(performance.now() - started).toBeGreaterThan(200);
     expect(worst).toBeLessThan(150);
+  });
+
+  it('runs on a pool thread, not the server\'s loop, and reads the same as inline', async () => {
+    // Production, 2026-11-11: both releases whose boot ran the sweep on the main loop timed out a database-heavy request after the restart.
+    const pool = openEvaluator(1);
+    const job = { openings: GOAL_10K_OPENINGS, portfolio: portfolioInput, baseline, required: 0.9, greedy: { openings: GOAL_10K_OPENINGS, committed: 0, changes: [] }, maxVariations: 5_000 };
+    const threaded = await pool.sweep(job);
+    const inline = await inlineEvaluator().sweep(job);
+    await pool.close();
+    expect(threaded.variations).toBe(inline.variations);
+    expect(threaded.bestSupported?.label).toBe(inline.bestSupported?.label);
+    expect(threaded.directions.map((d) => d.signature)).toEqual(inline.directions.map((d) => d.signature));
   });
 
   it('a time bound is shared between stages: a slow machine still searches locally and moves the world', async () => {

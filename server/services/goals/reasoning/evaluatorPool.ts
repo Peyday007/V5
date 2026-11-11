@@ -17,6 +17,8 @@
 import { availableParallelism } from 'node:os';
 import { Worker } from 'node:worker_threads';
 import { evaluateGoalPortfolio, type GoalPortfolio } from '../portfolio.ts';
+import type { SweepJob } from '../reconstruction.ts';
+import { DEFAULT_SWEEP_MS, type VariableSweep } from './variables.ts';
 
 export const MAX_THREADS = 4;
 /** An evaluation that takes longer than this on a thread is abandoned and run inline instead. */
@@ -28,6 +30,8 @@ export interface Evaluator {
   /** Threads evaluating at once; 1 when inline. */
   readonly threads: number;
   evaluate(input: PortfolioInput): Promise<GoalPortfolio>;
+  /** The variable sweep (§102), on a thread when the pool has one: it runs for up to a minute and must not hold the server's loop. */
+  sweep(job: SweepJob): Promise<VariableSweep>;
   close(): Promise<void>;
 }
 
@@ -54,6 +58,10 @@ export function inlineEvaluator(): Evaluator {
       await new Promise<void>((resolve) => setImmediate(resolve));
       return evaluateGoalPortfolio(input);
     },
+    async sweep(job) {
+      const { sweepFor } = await import('../reconstruction.ts');
+      return sweepFor(job);
+    },
     async close() {},
   };
 }
@@ -65,13 +73,14 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
   const workers: Worker[] = [];
   const idle: Worker[] = [];
   const waiting: Array<() => void> = [];
-  const pending = new Map<number, { resolve: (p: GoalPortfolio) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pending = new Map<number, { resolve: (p: any) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
   let broken = false;
   let next = 1;
   try {
     for (let i = 0; i < threads; i++) {
       const worker = new Worker(new URL('./evaluator-boot.mjs', import.meta.url), { resourceLimits: { maxOldGenerationSizeMb: 384 } });
-      worker.on('message', (message: { id: number; ok: boolean; result?: GoalPortfolio; message?: string }) => {
+      worker.on('message', (message: { id: number; ok: boolean; result?: unknown; message?: string }) => {
         const job = pending.get(message.id);
         if (!job) return;
         pending.delete(message.id);
@@ -98,29 +107,31 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
     idle.push(w);
     waiting.shift()?.();
   };
+  /** One job on one thread; on a thread failure or a timeout, the same job inline — never a lost one. */
+  const onThread = async <T>(message: Record<string, unknown>, timeoutMs: number, fallback: () => Promise<T>): Promise<T> => {
+    if (broken) return fallback();
+    const worker = await take();
+    try {
+      return await new Promise<T>((resolve, reject) => {
+        const id = next++;
+        const timer = setTimeout(() => {
+          pending.delete(id);
+          reject(new Error('timed out on its thread'));
+        }, timeoutMs);
+        pending.set(id, { resolve, reject, timer });
+        worker.postMessage({ id, ...message });
+      });
+    } catch {
+      broken = true;
+      return fallback();
+    } finally {
+      give(worker);
+    }
+  };
   return {
     threads,
-    async evaluate(input) {
-      if (broken) return inline.evaluate(input);
-      const worker = await take();
-      try {
-        return await new Promise<GoalPortfolio>((resolve, reject) => {
-          const id = next++;
-          const timer = setTimeout(() => {
-            pending.delete(id);
-            reject(new Error('evaluation timed out on its thread'));
-          }, EVALUATION_TIMEOUT_MS);
-          pending.set(id, { resolve, reject, timer });
-          worker.postMessage({ id, input });
-        });
-      } catch {
-        // A thread that failed or could not take the input: the same evaluation inline, never a lost one.
-        broken = true;
-        return inline.evaluate(input);
-      } finally {
-        give(worker);
-      }
-    },
+    evaluate: (input) => onThread<GoalPortfolio>({ kind: 'evaluate', input }, EVALUATION_TIMEOUT_MS, () => inline.evaluate(input)),
+    sweep: (job) => onThread<VariableSweep>({ kind: 'sweep', job }, (job.maxMs ?? DEFAULT_SWEEP_MS) + 120_000, () => inline.sweep(job)),
     async close() {
       for (const job of pending.values()) clearTimeout(job.timer);
       await Promise.all(workers.map((w) => w.terminate().catch(() => 0)));
@@ -150,6 +161,7 @@ export function sharedEvaluator(): Evaluator {
   return {
     threads: s.evaluator.threads,
     evaluate: (input) => s.evaluator.evaluate(input),
+    sweep: (job) => s.evaluator.sweep(job),
     async close() {
       if (released) return;
       released = true;
