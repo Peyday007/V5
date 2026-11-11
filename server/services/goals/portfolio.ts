@@ -157,9 +157,14 @@ export interface GoalPortfolio {
 const BEHAVIOURAL: ReadonlySet<keyof ModelledOpportunity> = new Set(['respond', 'close', 'volume']);
 export function sampleSizeOf(one: ModelledOpportunity): number | undefined {
   if (one.agreedValue > 0) {
-    // Money a buyer already agreed draws nothing but whether it settles in time.
+    // Money a buyer already agreed still draws whether, and when, it settles:
+    // a signed contract is not settled cash, and the counterparty paying (or
+    // defaulting) is behaviour measured on a sample, never a certainty. Only
+    // a reconstructed record of real collections states that sample; a fixed
+    // days-to-cash term says when payment is due, not that it arrives, so it
+    // calibrates nothing (invariant 39).
     const days = one.daysToCash;
-    return days.inferred ? days.inferred.observations : days.value !== null ? Number.POSITIVE_INFINITY : undefined;
+    return days.inferred ? days.inferred.observations : undefined;
   }
   const drawn: Array<keyof ModelledOpportunity> = one.repeatable ? INPUT_NAMES.map(([key]) => key) : ['price', 'daysToCash', 'close', 'directCost'];
   let n = Number.POSITIVE_INFINITY;
