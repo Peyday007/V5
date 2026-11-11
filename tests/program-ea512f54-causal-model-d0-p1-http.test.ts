@@ -242,10 +242,19 @@ describe('account, trace and claim', () => {
     expect(r.body.account.nodes).toHaveLength(3);
     expect(r.body.account.actions).toHaveLength(1);
     expect(r.body.account.routes[0].freeCents.value).toBe(45_000);
-    expect(r.body.sent).toBe(false);
     expect(r.body.needs).toEqual([
       { subject: 'route rt: when tax is paid', question: 'What is the when tax is paid for route rt, and what evidences it?', route: 'RESEARCH', permissions: [] },
     ]);
+    // Sent to an owner that acts on it, not merely named: a need in the review, written once
+    // (an earlier request in this file may already have sent this graph's need).
+    expect(r.body.sent).toEqual([{ subject: 'route rt: when tax is paid', sent: true, to: 'REVIEW_NEED', ref: expect.stringMatching(/^cnd_/), created: expect.any(Boolean) }]);
+    const again = await call('POST', `${CAUSAL()}/account`, { cookie: adminCookie, body: { graph: GRAPH() } });
+    expect(again.body.sent).toEqual([{ ...r.body.sent[0], created: false }]);
+  });
+
+  it('a research need goes onto a named orchestration only when it is this project’s', async () => {
+    const r = await call('POST', `${CAUSAL()}/account`, { cookie: adminCookie, body: { graph: GRAPH(), orchestrationId: 'orc_absent' } });
+    expect(r.status).toBe(404);
   });
 
   it('an action that needs a permission is a need for authorized action', async () => {
@@ -253,6 +262,7 @@ describe('account, trace and claim', () => {
     graph.actions[0]!.permissions = ['billing:write'];
     const r = await call('POST', `${CAUSAL()}/account`, { cookie: adminCookie, body: { graph } });
     expect(r.body.needs.find((n: { route: string }) => n.route === 'AUTHORIZED_ACTION')).toMatchObject({ subject: 'action a1', permissions: ['billing:write'] });
+    expect(r.body.sent.find((n: { subject: string }) => n.subject === 'action a1')).toMatchObject({ sent: true, to: 'REVIEW_NEED' });
   });
 
   it('an unknown claim is a research need', async () => {

@@ -8,7 +8,12 @@
  * principal type. Levels come from `services/identity/policy.ts`'s defaults: a
  * POST is WRITE and nothing here widens that.
  *
- * Nothing here acts on the world. A graph may travel in the request, or be named
+ * Nothing here acts on the world, and the one thing it writes besides a stored
+ * graph is a need: a decision-critical unknown is sent, idempotently, to the
+ * owner that acts on it — a research question on the orchestration the request
+ * names (`orchestrationId`), or the review a person reads — through
+ * `services/quant/needs.ts`, and every answer says per need where it went
+ * (`sent`). A graph may travel in the request, or be named
  * by `graphKey` and read back from what an earlier request stored. Storing is an
  * append to `project_events` (the existing append-only history), one row per
  * version of a named graph, so there is no second store and no migration; the
@@ -16,7 +21,7 @@
  * graph by `services/quant/graph.ts`, the one owner of the model: a route that
  * re-derived a figure would be a second model. A figure with no
  * lineage is refused, an unknown stays unknown in every answer, and a question the
- * graph cannot answer is returned as a named need rather than a guess.
+ * graph cannot answer is a need sent to its owner rather than a guess.
  */
 import { Router } from 'express';
 import { badRequest, bodyOf, handler, notFound, pathId, requirePerson, requireProject, unprocessable } from './helpers.ts';
@@ -51,6 +56,7 @@ import {
   type MoneyRouteReading,
   type OperationalAction,
 } from '../services/quant/graph.ts';
+import { UnknownOrchestrationError, sendNeeds, type Need, type NeedDelivery } from '../services/quant/needs.ts';
 
 export const causalRouter = Router();
 
@@ -195,25 +201,14 @@ function chainFrom(raw: unknown): { startUnits: number; stages: ChainStage[] } |
 /* What the graph cannot answer is a need, not a guess                        */
 /* ------------------------------------------------------------------------- */
 
-export interface Need {
-  /** What is missing, in the graph's own words. */
-  subject: string;
-  /** The targeted question that would settle it. */
-  question: string;
-  /** Information is learned; an action needs authority a person or a grant holds. */
-  route: 'RESEARCH' | 'AUTHORIZED_ACTION';
-  /** For an action: the permissions its owner must hold. */
-  permissions: string[];
-}
+export type { Need, NeedDelivery } from '../services/quant/needs.ts';
 
 /**
  * The decision-critical unknowns: figures nobody has, route gaps, a chain stage
- * with an unknown input, and the actions whose permissions are not yet held. They
- * are named, not enqueued: the route has no scheduler of its own (§10.3), so
- * handing a need to the research planner or to a person's approval is that owner's
- * job, and `sent` says so rather than implying it happened.
+ * with an unknown input, and the actions whose permissions are not yet held.
+ * Pure: `delivered` below is what sends them.
  */
-function needsOf(graph: CausalGraph, readings: MoneyRouteReading[], chain: ChainReading | null): { sent: false; needs: Need[] } {
+function needsOf(graph: CausalGraph, readings: MoneyRouteReading[], chain: ChainReading | null): Need[] {
   const needs: Need[] = [];
   for (const reading of readings) {
     for (const gap of reading.gaps) {
@@ -239,7 +234,35 @@ function needsOf(graph: CausalGraph, readings: MoneyRouteReading[], chain: Chain
       });
     }
   }
-  return { sent: false, needs };
+  return needs;
+}
+
+/** The graph's identity for keying its needs: its stored key when it has one, otherwise its subject. */
+function scopeOf(body: Json, fallback: string): string {
+  if (typeof body.graphKey === 'string' && body.graph === undefined) return `key:${graphKeyOf(body.graphKey)}`;
+  if (typeof body.storeAs === 'string') return `key:${graphKeyOf(body.storeAs)}`;
+  return `subject:${fallback}`;
+}
+
+/**
+ * Send the needs to the owners that act on them (`services/quant/needs.ts`):
+ * a research question on the orchestration the request names, or the review a
+ * person reads. The answer lists the needs and, per need, where it went.
+ */
+async function delivered(
+  projectId: string,
+  actorRef: string,
+  body: Json,
+  scope: string,
+  needs: Need[],
+): Promise<{ needs: Need[]; sent: NeedDelivery[] }> {
+  const orchestrationId = textOrNull(body.orchestrationId);
+  try {
+    return { needs, sent: await sendNeeds({ projectId, actorRef, graphScope: scope, needs, orchestrationId }) };
+  } catch (error) {
+    if (error instanceof UnknownOrchestrationError) throw notFound(error.message);
+    throw error;
+  }
 }
 
 function readingsOf(graph: CausalGraph): MoneyRouteReading[] {
@@ -311,11 +334,16 @@ async function graphOf(projectId: string, body: Json): Promise<CausalGraph> {
 causalRouter.post(
   '/projects/:projectId/causal/account',
   handler(async (req) => {
-    requirePerson();
+    const principal = requirePerson();
     const projectId = (await requireProject(pathId(req, 'projectId'))).id;
-    const graph = await graphOf(projectId, bodyOf(req));
+    const body = bodyOf(req);
+    const graph = await graphOf(projectId, body);
     // What the graph implies but does not hold yet: shown, not silently added.
-    return { account: fullAccount(graph), discovered: discoverMissing(graph), ...needsOf(graph, readingsOf(graph), null) };
+    return {
+      account: fullAccount(graph),
+      discovered: discoverMissing(graph),
+      ...(await delivered(projectId, principal.id, body, scopeOf(body, graph.subject), needsOf(graph, readingsOf(graph), null))),
+    };
   }),
 );
 
@@ -359,7 +387,7 @@ causalRouter.post(
 causalRouter.post(
   '/projects/:projectId/causal/money-path',
   handler(async (req) => {
-    requirePerson();
+    const principal = requirePerson();
     const projectId = (await requireProject(pathId(req, 'projectId'))).id;
     const body = bodyOf(req);
     const graph = await graphOf(projectId, body);
@@ -381,7 +409,7 @@ causalRouter.post(
         owedAfterward: route.outflows,
         reading: readings[index],
       })),
-      ...needsOf(graph, readings, null),
+      ...(await delivered(projectId, principal.id, body, scopeOf(body, graph.subject), needsOf(graph, readings, null))),
     };
   }),
 );
@@ -459,7 +487,7 @@ function applyChange(graph: CausalGraph, chain: { startUnits: number; stages: Ch
 causalRouter.post(
   '/projects/:projectId/causal/what-if',
   handler(async (req) => {
-    requirePerson();
+    const principal = requirePerson();
     const projectId = (await requireProject(pathId(req, 'projectId'))).id;
     const body = bodyOf(req);
     const changes = list(body.changes, 'changes', 50);
@@ -496,7 +524,7 @@ causalRouter.post(
         bindingConstraintAfter: chainAfter?.bindingConstraint ?? null,
       },
       branches,
-      ...needsOf(afterGraph, afterRoutes, chainAfter),
+      ...(await delivered(projectId, principal.id, body, scopeOf(body, afterGraph.subject), needsOf(afterGraph, afterRoutes, chainAfter))),
     };
   }),
 );
@@ -509,12 +537,14 @@ causalRouter.post(
 causalRouter.post(
   '/projects/:projectId/causal/chain',
   handler(async (req) => {
-    requirePerson();
-    await requireProject(pathId(req, 'projectId'));
-    const chain = chainFrom(bodyOf(req).chain);
+    const principal = requirePerson();
+    const projectId = (await requireProject(pathId(req, 'projectId'))).id;
+    const body = bodyOf(req);
+    const chain = chainFrom(body.chain);
     if (!chain) throw badRequest('"chain" is required.');
     const reading = passVolume(chain.startUnits, chain.stages);
-    return { reading, ...needsOf(createGraph('chain'), [], reading) };
+    const subject = textOrNull(body.subject) ?? 'chain';
+    return { reading, ...(await delivered(projectId, principal.id, body, scopeOf(body, subject), needsOf(createGraph(subject), [], reading))) };
   }),
 );
 
@@ -647,7 +677,7 @@ async function storeVersion(projectId: string, key: string, next: Json, reasonTe
 causalRouter.post(
   '/projects/:projectId/causal/construct',
   handler(async (req) => {
-    requirePerson();
+    const principal = requirePerson();
     const projectId = (await requireProject(pathId(req, 'projectId'))).id;
     const body = bodyOf(req);
     const graph = await graphOf(projectId, body);
@@ -659,7 +689,12 @@ causalRouter.post(
       const done = await storeVersion(projectId, key, graphToJson(graph), body.reason ?? 'constructed: variables the graph implied were added');
       stored = { key, version: done.version };
     }
-    return { discovered: expanded.value, stored, account: fullAccount(graph), ...needsOf(graph, readingsOf(graph), null) };
+    return {
+      discovered: expanded.value,
+      stored,
+      account: fullAccount(graph),
+      ...(await delivered(projectId, principal.id, body, scopeOf(body, graph.subject), needsOf(graph, readingsOf(graph), null))),
+    };
   }),
 );
 
@@ -673,7 +708,7 @@ causalRouter.post(
 causalRouter.post(
   '/projects/:projectId/causal/portfolio',
   handler(async (req) => {
-    requirePerson();
+    const principal = requirePerson();
     const projectId = (await requireProject(pathId(req, 'projectId'))).id;
     const body = bodyOf(req);
     const subject = text(body.subject).trim() || 'portfolio';
@@ -711,7 +746,7 @@ causalRouter.post(
       links: portfolio.links,
       trace: traced,
       account: fullAccount(portfolio.graph),
-      ...needsOf(portfolio.graph, readingsOf(portfolio.graph), null),
+      ...(await delivered(projectId, principal.id, body, `portfolio:${subject}`, needsOf(portfolio.graph, readingsOf(portfolio.graph), null))),
     };
   }),
 );
