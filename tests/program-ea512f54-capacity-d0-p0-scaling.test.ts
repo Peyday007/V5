@@ -19,6 +19,7 @@ import { controlStep, readCapacity, startAdaptivePool, stopAdaptivePool } from '
 import {
   chooseConstraint,
   gateGrowth,
+  perReplicaGain,
   type RecordedStageCapacity,
   type StageCapacityReport,
   type StageReading,
@@ -30,18 +31,32 @@ import type { SourceFetch } from '../server/services/sources/fetchForWorker.ts';
 const measured = <T>(value: T) => ({ measured: true as const, value });
 const not = { measured: false as const, reason: 'unseen' };
 
-function stage(id: string, waiting: number, processedPerHour: number, acceptedPerHour: number, dollars: number | null = null): StageReading {
+const HOUR_MS = 3_600_000;
+
+/**
+ * A stage over the 6 h window. `facts` are its distinct sourced claims; `replicas`
+ * is how many items it had in flight on average, recorded as item time
+ * (`elapsedMs` = replicas x window), which is how the reading measures it.
+ */
+function stage(
+  id: string,
+  waiting: number,
+  processedPerHour: number,
+  acceptedPerHour: number,
+  dollars: number | null = null,
+  { facts = 0, replicas = 1 }: { facts?: number; replicas?: number } = {},
+): StageReading {
   return {
     stage: id,
     label: `${id} label`,
     queueSize: measured(waiting),
     oldestUsefulItemMinutes: measured(0),
     itemsProcessedPerHour: measured(processedPerHour),
-    uniqueUsableFacts: measured(0),
+    uniqueUsableFacts: measured(facts),
     droppedOrDuplicate: measured(0),
     modelCallsAvoided: not,
     providerFailures: measured(0),
-    elapsedMs: measured(0),
+    elapsedMs: measured(replicas * 6 * HOUR_MS),
     incrementalDollars: dollars === null ? not : measured(dollars),
     resources: not,
     accepted: 0,
@@ -58,7 +73,8 @@ function recorded(stages: StageReading[], options: { primary?: ThroughputDiagnos
 }
 
 const FAILING = { route: 'brain-a', cause: 'credentials' as never, failures: 40, evidence: 'credentials ×40' };
-const CONSTRAINED_AT_MODEL = [stage('model-interpretation', 50, 20, 10)];
+// 2 replicas producing 120 facts in 6 h (20 facts/h, 1 per processed item): one more adds 10 facts/h.
+const CONSTRAINED_AT_MODEL = [stage('model-interpretation', 120, 20, 10, null, { facts: 120, replicas: 2 })];
 
 describe('gateGrowth: restore first, then scale only the measured constraint', () => {
   const base = { model: 'brain-a', gpu: false, current: 4, stableHigh: 8 };
@@ -96,9 +112,50 @@ describe('gateGrowth: restore first, then scale only the measured constraint', (
 
   it('on a GPU slot requires the reading’s priced expected gain', () => {
     expect(gateGrowth({ ...base, gpu: true, proposed: 16, recorded: recorded(CONSTRAINED_AT_MODEL) }).reason).toMatch(/GPU's expected gain is not measured/);
-    const priced = gateGrowth({ ...base, gpu: true, proposed: 16, recorded: recorded([stage('model-interpretation', 50, 20, 10, 6)]) });
+    // $6 over 6 h is $1/h for the stage, run by 2 replicas: one more costs $0.5/h.
+    const priced = gateGrowth({ ...base, gpu: true, proposed: 16, recorded: recorded([stage('model-interpretation', 120, 20, 10, 6, { facts: 120, replicas: 2 })]) });
     expect(priced).toMatchObject({ target: 16, held: false });
-    expect(priced.reason).toMatch(/for \$1\/h/);
+    expect(priced.reason).toMatch(/measured gain 10 accepted facts\/h for \$0\.5\/h/);
+  });
+});
+
+describe('the expected gain is what ONE added replica adds, in accepted facts per hour', () => {
+  it('divides the stage\'s facts per hour and its dollars by the replicas it measurably ran', () => {
+    // 4 replicas, 240 facts in 6 h = 40 facts/h; $24 in 6 h = $4/h. Backlog is ample.
+    const s = stage('model-interpretation', 1000, 40, 40, 24, { facts: 240, replicas: 4 });
+    const gain = chooseConstraint([s], null, 6).expectedGain;
+    expect(gain).toEqual({ measured: true, value: { acceptedFactsPerHour: 10, dollars: 1 } });
+    // Not the whole stage's rate or spend.
+    expect(perReplicaGain(s, 6)).not.toEqual({ measured: true, value: { acceptedFactsPerHour: 40, dollars: 4 } });
+  });
+
+  it('counts accepted facts, not accepted items', () => {
+    // 60 items accepted per hour, but they carried no sourced claim: nothing is gained.
+    const s = stage('model-interpretation', 500, 60, 60, 6, { facts: 0, replicas: 2 });
+    expect(perReplicaGain(s, 6)).toEqual({ measured: true, value: { acceptedFactsPerHour: 0, dollars: 0.5 } });
+  });
+
+  it('bounds it by the facts the waiting work yields per hour, not by a raw count', () => {
+    // 3 waiting at 0.5 facts per processed item = 1.5 facts, over the 6 h window = 0.25 facts/h,
+    // although one replica runs at 30 facts/h (the old bound compared 1.5 facts with a rate).
+    const s = stage('model-interpretation', 3, 120, 60, 6, { facts: 360, replicas: 2 });
+    const gain = perReplicaGain(s, 6);
+    expect(gain.measured && gain.value.acceptedFactsPerHour).toBeCloseTo(0.25, 10);
+  });
+
+  it('is not measured when the facts, the replicas or the spend are not', () => {
+    const s = stage('model-interpretation', 100, 20, 10, 6, { facts: 60, replicas: 2 });
+    expect(perReplicaGain({ ...s, uniqueUsableFacts: not }, 6).measured).toBe(false);
+    expect(perReplicaGain({ ...s, elapsedMs: not }, 6).measured).toBe(false);
+    expect(perReplicaGain({ ...s, elapsedMs: measured(0) }, 6).measured).toBe(false);
+    expect(perReplicaGain({ ...s, incrementalDollars: not }, 6).measured).toBe(false);
+    // A free provider's slot is priced at $0 by its caller and still needs the rest.
+    expect(perReplicaGain({ ...s, incrementalDollars: not }, 6, 0)).toEqual({ measured: true, value: { acceptedFactsPerHour: 5, dollars: 0 } });
+  });
+
+  it('gates a free slot on the per-replica gain, not the stage total', () => {
+    const v = gateGrowth({ model: 'brain-a', gpu: false, current: 4, stableHigh: 8, proposed: 16, recorded: recorded([stage('model-interpretation', 1000, 40, 40, null, { facts: 240, replicas: 4 })]) });
+    expect(v.reason).toMatch(/measured gain 10 accepted facts\/h for \$0\/h/);
   });
 });
 
