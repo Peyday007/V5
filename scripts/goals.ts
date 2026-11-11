@@ -56,6 +56,7 @@ import { discoveryYield, type YieldRow } from '../server/services/cash/discovery
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
+import { measurePlan, measurementLines } from '../server/services/economy/measure/index.ts';
 import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 
 class Halt extends Error {}
@@ -442,6 +443,7 @@ async function plan(): Promise<void> {
   const reading = await readGoalPlan({ goalId, persist: false });
   if (!reading) fail(`No targeted goal ${goalId}.`);
   printPlan(reading);
+  for (const line of measurementLines(await measurePlan(reading))) console.log(line);
   await printSearching(reading);
   const history = await listReadings(goalId);
   for (const row of history.slice(-10)) console.log(`  history     ${row.created_at} ${row.verdict} chosen=${row.chosen_strategy ?? '—'}${row.scenario_run_id ? ` run=${row.scenario_run_id}` : ''}`);
