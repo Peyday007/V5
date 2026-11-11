@@ -179,7 +179,10 @@ def report():
     for r in rows:
         lines.append(f"| {r['business']} | {r['name']} | {r['status']} | {r.get('leads', 0)} | {r.get('contacted', 0)} | {r.get('sent', 0)} | "
                      f"{r.get('replies', 0)} | {r.get('auto_replies', 0)} | {r.get('bounced', 0)} | {r.get('unsubscribed', 0)} |")
-    open(os.path.join(ROOT, 'STATUS.md'), 'w').write('\n'.join(lines) + '\n')
+    path = os.path.join(ROOT, 'STATUS.md')
+    old = open(path).read().split('\n')[1:] if os.path.exists(path) else None
+    if old != (('\n'.join(lines) + '\n').split('\n')[1:]):  # rewrite only when a figure changed, not the clock
+        open(path, 'w').write('\n'.join(lines) + '\n')
     print('\n'.join(lines))
     return rows
 
