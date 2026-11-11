@@ -18,7 +18,17 @@
  *   6. (an unpaid invoice past its due date is reported, never rewritten);
  *   7. EXECUTING → DELIVERING once something agreed was delivered,
  *      DELIVERING → COLLECTED once `collectable` holds;
- *   8. what the deal taught is recorded as outcomes (`learning.ts`).
+ *   8. what the deal taught is recorded as outcomes (`learning.ts`);
+ *   9. an exception its commitments show — a missed date, a failed payment, a rejected
+ *      delivery, a released commitment — is detected, its consequence quantified and its
+ *      remedy worked out inside the authority held, and recorded once
+ *      (`deliverables/exceptions.ts`); a refund that would remedy it is asked
+ *      for as a person's approval, and a sourced case is traced as a rehearsal
+ *      whenever it changed. Nothing is carried out here;
+ *  10. the deal's realization is read from its rows — delivery steps derived from
+ *      the agreed scope, delivery and acceptance evidence, open redo obligations,
+ *      the accounting result — and recorded when it changed, with each repeat-
+ *      business signal the rows show (`deliverables/realization.ts`).
  *
  * It sends nothing. Every external effect is still a person's press or a
  * granted tick through `perform.ts`, and nothing here calls an adapter.
@@ -38,6 +48,9 @@ import { agreementAnswering } from '../../../domain/cashJourney.ts';
 import { advanceFulfillment, moveToDelivering, type FulfillmentPass } from './fulfillment.ts';
 import { collectable, dealPosition } from './position.ts';
 import { recordOutcomes } from './learning.ts';
+import { recordDetectedExceptions, rehearseCaseOnTick } from '../deliverables/exceptions.ts';
+import { recordRealization } from '../deliverables/realization.ts';
+import { recordRowDependencies } from '../deliverables/commitments.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -53,6 +66,10 @@ export interface JourneyTickReport {
   delivering: number;
   collected: number;
   outcomes: number;
+  /** Exceptions the commitment rows show, and the new ones recorded this pass. */
+  exceptions: { detected: number; recorded: number; rehearsed: number };
+  /** Realization readings recorded this pass, and repeat-business signals newly on record. */
+  realization: { recorded: number; aftercare: number };
 }
 
 export async function advanceJourney(
@@ -67,6 +84,8 @@ export async function advanceJourney(
     delivering: 0,
     collected: 0,
     outcomes: 0,
+    exceptions: { detected: 0, recorded: 0, rehearsed: 0 },
+    realization: { recorded: 0, aftercare: 0 },
   };
   const mode = await getCashMode(projectId);
   if (!mode) return report;
@@ -149,6 +168,18 @@ export async function advanceJourney(
       }
     }
     report.outcomes += await recordOutcomes((await getOpportunity(listed.id))!, mode.currency);
+    if ((await agreementsFor(listed.id)).length > 0) {
+      // Brain records the external dependencies the rows imply, once each time they change (LIFE-29-1).
+      await recordRowDependencies({ projectId, opportunityId: listed.id, currency: mode.currency });
+      const found = await recordDetectedExceptions({ projectId, opportunityId: listed.id, currency: mode.currency, now: now.toISOString() });
+      report.exceptions.detected += found.detected;
+      report.exceptions.recorded += found.recorded;
+      const rehearsed = await rehearseCaseOnTick({ projectId, opportunityId: listed.id, currency: mode.currency, now: now.toISOString() });
+      if (rehearsed.rehearsed) report.exceptions.rehearsed += 1;
+      const realized = await recordRealization({ projectId, opportunityId: listed.id, currency: mode.currency });
+      if (realized.recorded) report.realization.recorded += 1;
+      report.realization.aftercare += realized.aftercare;
+    }
   }
   return report;
 }
