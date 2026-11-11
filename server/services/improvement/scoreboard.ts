@@ -245,7 +245,14 @@ export interface GapMeasures {
   closedWithoutOwnerInput: number;
   /** Delivered (merged) but not shown to have worked: reported beside, never counted as success. */
   deliveredNotProven: number;
-  /** Median hours from detection to a measured KEPT decision, or unmeasured. */
+  /**
+   * Median hours from detection to actual capability use, over the gaps closed
+   * in the window: from `created_at` (set once on insert; re-detection never
+   * moves it) to the first DELIVERED event — the moment the change went into
+   * production use, which the later KEPT decision proved worked. Never
+   * `updated_at`: re-detection and every later patch move it, so it measures the
+   * last write rather than use. Null when no closed gap has a delivery time.
+   */
   hoursToUseMedian: number | null;
   regressions: { reverted: number; keptNoEffect: number };
   /** The constructed-round yield, this window against the one before it, through the existing comparison. */
@@ -254,15 +261,84 @@ export interface GapMeasures {
   cost: Unmeasured;
 }
 
+/** One row of a decided candidate joined with one of its DECIDED or DELIVERED events. */
+export interface DecisionEventRow {
+  id: string;
+  decision: string;
+  created_at: string;
+  delivered_at: string | null;
+  kind: string;
+  detail: string;
+  at: string;
+}
+
+export interface TimedGap {
+  id: string;
+  decision: string;
+  /** Detection: the candidate's `created_at`. */
+  detectedAt: string;
+  /** When the current decision was made: the last DECIDED event naming it. */
+  decidedAt: string;
+  /** When the change went into production use: the first DELIVERED event, else `delivered_at`. */
+  deliveredAt: string | null;
+}
+
+function namedDecision(detail: string): unknown {
+  try {
+    return (JSON.parse(detail) as Record<string, unknown> | null)?.['decision'];
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Times each decided candidate from its append-only events, never from
+ * `updated_at` (which re-detection and later patches move), and keeps those
+ * whose decision fell in [from, to). The decision time is the last DECIDED
+ * event whose detail names the row's current decision; a candidate with no
+ * such event has no recorded decision time and is counted in no window.
+ */
+export function timeDecidedGaps(rows: readonly DecisionEventRow[], from: string, to: string): TimedGap[] {
+  const gaps = new Map<string, TimedGap>();
+  const delivered = new Map<string, string>();
+  for (const row of rows) {
+    if (row.kind === 'DELIVERED') {
+      const seen = delivered.get(row.id);
+      if (!seen || row.at < seen) delivered.set(row.id, row.at);
+      continue;
+    }
+    if (row.kind !== 'DECIDED' || namedDecision(row.detail) !== row.decision) continue;
+    const seen = gaps.get(row.id);
+    if (!seen || row.at > seen.decidedAt) {
+      gaps.set(row.id, { id: row.id, decision: row.decision, detectedAt: row.created_at, decidedAt: row.at, deliveredAt: row.delivered_at });
+    }
+  }
+  return [...gaps.values()]
+    .map((g) => ({ ...g, deliveredAt: delivered.get(g.id) ?? g.deliveredAt }))
+    .filter((g) => g.decidedAt >= from && g.decidedAt < to);
+}
+
+/** Sorted hours from detection to delivery over closed gaps; non-finite or negative spans are left out. */
+export function hoursToUse(gaps: readonly TimedGap[]): number[] {
+  return gaps
+    .map((g) => (g.deliveredAt ? (Date.parse(g.deliveredAt) - Date.parse(g.detectedAt)) / 3_600_000 : Number.NaN))
+    .filter((h) => Number.isFinite(h) && h >= 0)
+    .sort((a, b) => a - b);
+}
+
 /** Gaps identified and closed over [from, to), counted from improvement rows. */
 export async function readGapMeasures(from: string, to: string): Promise<GapMeasures> {
   const db = getDb();
-  const [opened, decided, delivered, owner] = await Promise.all([
+  const [opened, events, delivered, owner] = await Promise.all([
     db.get<{ n: number | string }>('SELECT COUNT(*) AS n FROM improvement_candidates WHERE created_at >= ? AND created_at < ?', [from, to]),
-    db.all<{ id: string; decision: string; created_at: string; updated_at: string }>(
-      `SELECT id, decision, created_at, updated_at FROM improvement_candidates
-        WHERE decision IN ('KEPT', 'KEPT_NO_EFFECT', 'REVERTED') AND updated_at >= ? AND updated_at < ?`,
-      [from, to],
+    // Decision and delivery times come from the append-only events the loop
+    // writes beside `decideCandidate` and the delivery patch, never `updated_at`.
+    db.all<DecisionEventRow>(
+      `SELECT c.id, c.decision, c.created_at, c.delivered_at, e.kind, e.detail, e.at
+         FROM improvement_candidates c
+         JOIN improvement_events e ON e.candidate_id = c.id AND e.kind IN ('DECIDED', 'DELIVERED')
+        WHERE c.decision IN ('KEPT', 'KEPT_NO_EFFECT', 'REVERTED') AND e.at < ?`,
+      [to],
     ),
     db.get<{ n: number | string }>(
       "SELECT COUNT(*) AS n FROM improvement_candidates WHERE delivered_at >= ? AND delivered_at < ? AND (decision IS NULL OR decision <> 'KEPT')",
@@ -273,12 +349,10 @@ export async function readGapMeasures(from: string, to: string): Promise<GapMeas
       [],
     ),
   ]);
+  const decided = timeDecidedGaps(events, from, to);
   const kept = decided.filter((r) => r.decision === 'KEPT');
   const touched = new Set(owner.map((r) => r.candidate_id));
-  const hours = kept
-    .map((r) => (Date.parse(r.updated_at) - Date.parse(r.created_at)) / 3_600_000)
-    .filter((h) => Number.isFinite(h) && h >= 0)
-    .sort((a, b) => a - b);
+  const hours = hoursToUse(kept);
   const median = hours.length === 0 ? null : hours.length % 2 ? hours[(hours.length - 1) / 2]! : (hours[hours.length / 2 - 1]! + hours[hours.length / 2]!) / 2;
   const span = Date.parse(to) - Date.parse(from);
   const before = new Date(Date.parse(from) - span).toISOString();
