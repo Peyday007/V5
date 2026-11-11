@@ -1,6 +1,8 @@
 # Store setup: owner's click-by-click
 
-**Platform:** Fourthwall Free ($0). **Your work:** sign up, upload, paste, publish. **Time:** about 2–2½ hours at a laptop. The product designer does not work on a phone ([Fourthwall](https://help.fourthwall.com/create-and-sell-products/how-to-guides/design-a-new-product)).
+**Platform:** Fourthwall Free ($0). **Your work:** sign up, verify payouts, create one API user, and flip the shop to Live. **Brain creates, prices and publishes every product** through Fourthwall's official Platform API (`scripts/launch/store.ts`). You upload nothing. **Time:** about 30 minutes.
+
+Why this works: Fourthwall's API creates design products from print files: upload → register image → `POST /open-api/v1.0/products` with `type: "design"` → publish ([Create design products](https://docs.fourthwall.com/guides/create-design-products), [Create a product](https://docs.fourthwall.com/api-reference/platform/products/create-product.md), read 2026-11-11). A shop's API user has full access ([Authentication](https://docs.fourthwall.com/guides/authentication.md)). The Free plan allows 50 products for accounts made after Aug 25, 2025 ([Free FAQs](https://help.fourthwall.com/frequently-asked-questions/account-and-plans/fourthwall-free-faqs)). Brain publishes 12.
 
 Menu names below are from Fourthwall's help center, updated Oct–Nov 2026. If a label differs slightly, the dashboard search ("Omnisearch") finds it.
 
@@ -30,27 +32,23 @@ Before you commit, search the name on the USPTO trademark search and Etsy (5 min
 5. Open **Settings → Billing and payouts → Set up your payouts**. Complete Stripe Connect: legal name, DOB, SSN last 4, home address, bank account or debit card. Payouts arrive monthly once the balance is at least $25.
 6. **Sales tax:** nothing to do. Fourthwall is merchant of record and collects and remits US sales tax ([source](https://help.fourthwall.com/frequently-asked-questions/payments-and-pricing/creator-tax-information)). Do **not** register for a PA sales-tax licence for this shop.
 
-## 3. Upload the 10 products (≈75 min, about 7 min each)
+## 3. Give Brain the API key (≈3 min). Brain does the products.
 
-For each row of `CATALOG.md` / `catalog.csv`:
+1. In the Fourthwall dashboard: **Settings → For developers** ([direct link](https://my-shop.fourthwall.com/admin/dashboard/settings/for-developers?redirect)). Under **Open API**, click **Create API User**. Only the shop owner (Super Admin) can do this.
+2. It shows a **Username** and a **Password**. In GitHub, open **Peyday007/V5 → Settings → Secrets and variables → Actions → New repository secret** and add:
+   - `FOURTHWALL_API_USERNAME` = the username
+   - `FOURTHWALL_API_PASSWORD` = the password
+3. That's all. On its next hourly run, the launch workflow creates and publishes every product. It uploads each print file, picks the colours and sizes, and sets the price to `retail_usd` (base cost + a profit margin, so 2XL+ upcharges are automatic). It checks each price before it publishes. Re-runs never duplicate a product.
 
-1. **Products → Create new product → Design a new product.**
-2. Search the catalog for the exact blank name, for example "White Glossy Mug". Check that the **brand/model** matches the catalog (for example Mugz WGM78). Click **Design now**.
-3. **Upload image.** Use the file from `designs/<product>/`.
-   - **Apparel:** pick the **Front Large** print area and let the 4500×5400 file fill it. Size it to 100% of the print area.
-   - **Mugs:** the file is the full wrap. Fit it to the print area so the left grid and the right answer both stay clear of the handle.
-   - **Journal:** align the wrap to the overlay. The front is the right half.
-4. **Colours/variants:** tick only the colours listed in `CATALOG.md`.
-   - Use the **light-shirt file on light colours only** and the **dark-shirt file on dark colours only**. Make two listings if the designer will not take a different file per colour, for example "Solve Responsibly Tee – Light" and "Solve Responsibly Tee – Dark".
-   - Poster: tick **12×16 and 18×24** only.
-   - 15 oz mug (product 07): tick **15 oz** only.
-5. **Check the base cost** shown at the bottom of the designer against `CATALOG.md`. If it is higher, raise retail by the difference.
-6. **Listing details:** paste the title, description and tags from `catalog.csv`. Set the **price** to the `retail_usd` column. For apparel 2XL+, add the upcharge the designer shows.
-7. Click publish / **Add to shop**. Use **Save as hidden** if you want to finish all ten first.
+What Brain publishes (12 listings for the 10 products):
+- Both shirts are split into a **Light Colors** and a **Dark Colors** listing, because each print file suits one shade.
+- **Product 10** uses the **Hardcover Bound Notebook | JournalBook®** (5.5×8.5 in, 80 lined pages, Navy, $12.71 base) instead of the Spoke Hardcover Journal. Fourthwall's API cannot render the Spoke journal (`supportsBackendRendering: false`). The cover is front-only, so the answer is printed small and upside-down in its corner (`designs/10-puzzle-notes-journal/front-journalbook-1678x2501.png`).
+- The 15 oz mug uses `print-15oz-fourthwall-5400x2100.png`: the same art, padded with white to Fourthwall's 18:7 mug wrap.
+- Tags and SEO titles in `catalog.csv` are not settable through the API. They are optional, and the listing works without them.
 
-Optional, recommended (about $13 plus a week's wait, so it does not block launch): **Place order → Choose products to order** for one mug at cost, to see print quality.
+Optional (about $13 plus a week's wait, so it does not block launch): **Place order → Choose products to order** for one mug at cost, to see print quality.
 
-## 4. Pages and policies (≈20 min)
+## 4. Pages and policies (optional, ≈20 min; the API cannot edit pages, and the defaults are fine to launch)
 
 Fourthwall gives every shop four default pages: **Contact, Privacy Policy, Terms of Service, Returns & FAQ**. The policy pages are **kept up to date by Fourthwall until you edit them** ([source](https://help.fourthwall.com/manage-my-shop/shop-settings/edit-site-policies)). That is the platform's free generator.
 
@@ -94,7 +92,7 @@ Fourthwall gives every shop four default pages: **Contact, Privacy Policy, Terms
 
 ### FAQ
 > **Does the puzzle really have one solution?** Yes. Every grid was proved to have exactly one solution by two independent solvers. Each has a recorded ID, and the answer is printed on the item.
-> **Where's the answer?** Mugs: on the opposite side, upside down. Journal: on the back cover. Poster: tiny and upside down in the bottom corner. Shirts, tote and coaster: email us the product name and we'll send it.
+> **Where's the answer?** Mugs: on the opposite side, upside down. Notebook: small and upside down in the corner of the cover. Poster: tiny and upside down in the bottom corner. Shirts, tote and coaster: email us the product name and we'll send it.
 > **How hard are they?** Most are easy to medium (28–42 starting numbers). The Large Print mug is the easiest, and Focus Mode and the poster are the toughest.
 > **Can I write on the mug?** We'd stick to solving it in your head, or copy it onto paper. The print is dishwasher and microwave safe, not pencil-proof.
 > **When will it arrive?** See the shipping policy: usually 9–15 days in total with standard US shipping. Order by Dec 8 for Christmas.
@@ -103,7 +101,7 @@ Fourthwall gives every shop four default pages: **Contact, Privacy Policy, Terms
 
 ## 5. Go live (≈5 min)
 
-1. **Site design** → click the status tag at the top right → **Live** → **Save** ([source](https://help.fourthwall.com/manage-my-shop/shop-settings/change-site-status)).
+1. **Site design** → click the status tag at the top right → **Live** → **Save** ([source](https://help.fourthwall.com/manage-my-shop/shop-settings/change-site-status)). The API can read the shop status but cannot change it, so this one click is yours. The launch summary flags it until it is done.
 2. Open the shop in a private window. Add a mug to the cart and go as far as the payment page to see shipping and tax. Don't pay.
 3. Done. The store can take real orders.
 
@@ -122,7 +120,8 @@ Fourthwall gives every shop four default pages: **Contact, Privacy Policy, Terms
 | Step | Minutes |
 |---|---|
 | Sign up, settings, payouts | 20 |
-| 10 products | 75 |
-| Pages and policies | 20 |
+| API user + two GitHub secrets | 3 |
+| 10 products | 0: Brain publishes them |
+| Pages and policies (optional; the defaults work) | 0–20 |
 | Go live and test cart | 5–10 |
-| **Total** | **≈2–2½ hours**: a store able to accept real orders the same day |
+| **Total** | **≈30 minutes**: a store able to accept real orders the same day |

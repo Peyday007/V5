@@ -86,6 +86,8 @@ jobs:
           ETSY_SHARED_SECRET: ${{ secrets.ETSY_SHARED_SECRET }}
           ETSY_REDIRECT_URI: ${{ secrets.ETSY_REDIRECT_URI }}
           ETSY_AUTH_REDIRECT_URL: ${{ inputs.etsy_redirect_url }}
+          FOURTHWALL_API_USERNAME: ${{ secrets.FOURTHWALL_API_USERNAME }}
+          FOURTHWALL_API_PASSWORD: ${{ secrets.FOURTHWALL_API_PASSWORD }}
         run: |
           if [ -n "$ETSY_AUTH_REDIRECT_URL" ]; then echo "::add-mask::$ETSY_AUTH_REDIRECT_URL"; fi
           export ETSY_REFRESH_TOKEN="${ETSY_REFRESH_TOKEN_CARRIED:-}"

@@ -36,7 +36,7 @@ if (want === 'ready' || want === 'all') {
 
 // The report: each business answers all four questions.
 const readme = exists('README.md') ? fs.readFileSync(path.join(dir, 'README.md'), 'utf8') : '';
-const sections = { ready: /What is ready/i, missing: /Missing before customers can buy/i, cost: /Exact cost to activate/i, actions: /Action required from you/i };
+const sections = { ready: /What is ready/i, actions: /Your personal actions/i, cost: /Costs/i };
 for (const biz of ['Local co-op mailer', 'Etsy shop', 'Dropshipping store']) {
   const at = readme.indexOf(`## ${biz}`);
   need(at >= 0, `README: no "## ${biz}" section`);
