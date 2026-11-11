@@ -77,6 +77,29 @@ The mock-up's mailing panel follows the USPS rule. **Before the print order,**
 check the indicia against the EDDM tool's downloadable indicia and the
 printer's EDDM template; the printer may also place its small tag.
 
+## 4a. Email outreach, prepared in the owner's Instantly workspace (2026-11-11)
+
+- **Campaign:** `Neighbor Card · Camp Hill Jan 2027` (id `e4d48b2a-67f4-4f16-9c2b-8e34b0629fc1`),
+  **draft, mails nobody.** 3 steps (day 0 / 3 / 8), weekdays 9–4 ET, stop on reply,
+  no open or link tracking, 15 a day.
+- **Leads:** 37 West Shore businesses whose **own website publishes** the address
+  (`prospect-emails.csv`: id, email, the page it was read from; built by
+  `build/emails.py`). Four published addresses were dropped because they belong
+  to a web vendor, an ad agency or a franchise head office. Each lead carries its
+  category, January hook and payback line as custom variables.
+- **Sender:** `info@cleanflowco.com`, the one account whose From name is the
+  owner's own. The other 17 accounts carry other names; an honest From line is a
+  CAN-SPAM requirement, so they are not used here.
+- **Not in the email:** the card images (attachments and links hurt
+  deliverability, and there is no public host yet). Step 1 carries the
+  homes-by-town table as text and offers the card, map and rate card on a "card"
+  reply.
+- **The one thing it waits for:** the owner's physical mailing address (a PO box
+  is fine), which CAN-SPAM requires in every message. Then:
+  `python3 build/instantly_campaign.py activate --address "…"` writes it into all
+  three steps and starts the campaign. `prepare` re-runs safely.
+- The other 80 prospects (no published email) remain phone and walk-in.
+
 ## 5. What is missing before an advertiser can pay (owner only)
 
 1. **A Stripe account** in the owner's name, with SSN and bank account for
