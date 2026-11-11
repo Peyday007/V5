@@ -5,6 +5,13 @@
  *   npx tsx server/services/sources/operatePermissionCli.ts grant  --host app.example --account "owner login" --by peyton [--note "…"]
  *   npx tsx server/services/sources/operatePermissionCli.ts revoke --host app.example --by peyton [--note "…"]
  *   npx tsx server/services/sources/operatePermissionCli.ts show   --host app.example
+ *   npx tsx server/services/sources/operatePermissionCli.ts handoffs
+ *
+ * `handoffs` lists the open ACCESS_HANDOFF rows: every place automation stopped
+ * at a genuine access boundary (no authorized account, a login, a challenge, a
+ * bot restriction, a licence) and the permitted route a person is asked to seek.
+ * A grant here closes an OPERATE handoff; a later readable access closes an
+ * ACQUIRE one.
  *
  * Invariant 35: a decision a person makes that has no surface they already use
  * is a terminal, and reaching the shell is the authentication. This is the only
@@ -19,11 +26,12 @@
  * are judged before any grant is read.
  */
 import { closeDatabase, initDatabase } from '../../db/database.ts';
-import { readOperatePermission, recordOperatePermission, type OperatePermission } from './acquisition.ts';
+import { readOpenHandoffs, readOperatePermission, recordOperatePermission, type OpenHandoff, type OperatePermission } from './acquisition.ts';
 
 export interface OperatePermissionCliDeps {
   record?: typeof recordOperatePermission;
   read?: typeof readOperatePermission;
+  handoffs?: () => Promise<OpenHandoff[]>;
 }
 
 function flag(argv: readonly string[], name: string): string | null {
@@ -36,7 +44,16 @@ function flag(argv: readonly string[], name: string): string | null {
 const USAGE =
   'usage: operatePermissionCli.ts grant --host H --account REF --by NAME [--note TEXT]\n' +
   '       operatePermissionCli.ts revoke --host H --by NAME [--note TEXT]\n' +
-  '       operatePermissionCli.ts show --host H';
+  '       operatePermissionCli.ts show --host H\n' +
+  '       operatePermissionCli.ts handoffs';
+
+/** One line per open handoff: where automation stopped, at what, and what to seek. Pure. */
+export function describeHandoffs(open: readonly OpenHandoff[]): string {
+  if (open.length === 0) return 'No open access handoffs: nothing is waiting on a person.';
+  return open
+    .map((h) => `${h.at}  ${h.host}  ${h.capability} stopped at ${h.boundaries.join(', ') || 'no permitted route'} — seek ${h.seek || 'a permitted route'}${h.purpose ? ` (for: ${h.purpose})` : ''}`)
+    .join('\n');
+}
 
 function describe(host: string, p: OperatePermission): string {
   return p.permitted
@@ -50,6 +67,7 @@ export async function runOperatePermissionCommand(
   deps: OperatePermissionCliDeps = {},
 ): Promise<{ code: number; out: string }> {
   const [command] = argv;
+  if (command === 'handoffs') return { code: 0, out: describeHandoffs(await (deps.handoffs ?? readOpenHandoffs)()) };
   const host = flag(argv, 'host')?.trim().toLowerCase() ?? '';
   if (!host || (command !== 'grant' && command !== 'revoke' && command !== 'show')) return { code: 2, out: USAGE };
   const read = deps.read ?? readOperatePermission;

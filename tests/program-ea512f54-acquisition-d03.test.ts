@@ -11,6 +11,7 @@ const harness = (seen = false) => {
       record: (async (e: Ev) => void events.push(e)) as never,
       proposalOnRecord: async () => seen,
       repeatedUse: async () => ({ repeatedUses: 0, repeatedUsesNeedingFallback: 0 }),
+      handoffOnRecord: async () => false,
     },
   };
 };
@@ -48,6 +49,8 @@ describe('a justified connector or script is acted on, not just computed', () =>
       h.deps,
     );
     expect(j.route).toBe('HUMAN_HANDOFF');
-    expect(h.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT']);
+    // A handoff is raised to a person, and never proposed as a connector or script.
+    expect(h.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT', 'ACCESS_HANDOFF']);
+    expect(h.events.map((e) => e.eventType)).not.toContain('CONNECTOR_PROPOSED');
   });
 });
