@@ -122,13 +122,19 @@ export interface Scoreboard {
   from: string;
   to: string;
   metrics: MetricReading[];
+  /**
+   * Gaps Brain identified and closed by itself over the same window (AUTO-20-4).
+   * Part of the scoreboard rather than a separate report, so every reader of the
+   * scoreboard — the improvement reading, `admin improvement show` — carries it.
+   */
+  gaps: GapMeasures;
 }
 
-/** Every metric over one window. */
+/** Every metric over one window, and the gaps identified and closed in it. */
 export async function readScoreboard(from: string, to: string): Promise<Scoreboard> {
   const metrics: MetricReading[] = [];
   for (const key of METRIC_KEYS) metrics.push(await readMetric(key, from, to));
-  return { from, to, metrics };
+  return { from, to, metrics, gaps: await readGapMeasures(from, to) };
 }
 
 /** Free-lane failures by class over [from, to), with up to five verbatim reasons each. */
