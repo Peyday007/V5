@@ -258,7 +258,14 @@ function workflowPassed(g, workflow, target) {
   const runs = g.slug && gh(`repos/${g.slug}/actions/workflows/${workflow}/runs?branch=${g.canonical}&per_page=30`);
   if (!runs?.workflow_runs) return { ok: false, detail: `could not read ${workflow} runs from GitHub` };
   const covering = runs.workflow_runs.filter((r) => r.head_sha === target || contains(target, r.head_sha));
-  const pass = covering.find((r) => r.conclusion === 'success');
+  // A Deploy superseded by a newer canonical tip ends `success` having released
+  // nothing: its "Deploy to Fly" job is skipped. 2026-11-11 08:31–09:10, nine
+  // such runs in a row while parallel sessions merged, and this check read each
+  // as a release. A release is the job that releases.
+  const released = (r) =>
+    workflow !== 'deploy.yml' ||
+    (gh(`repos/${g.slug}/actions/runs/${r.id}/jobs`)?.jobs ?? []).some((j) => /^Deploy to Fly/.test(j.name) && j.conclusion === 'success');
+  const pass = covering.find((r) => r.conclusion === 'success' && released(r));
   if (pass) return { ok: true, detail: `${workflow} run ${pass.id} succeeded on ${pass.head_sha.slice(0, 7)}` };
   const live = covering.find((r) => r.status !== 'completed');
   if (live) return { ok: false, pending: `run:${live.id}`, detail: `${workflow} run ${live.id} is ${live.status}` };
