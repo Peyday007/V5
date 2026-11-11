@@ -12,11 +12,20 @@
  *   MARGIN_EARNED         accepted revenue less every incremental cost, each once
  *   CASH_AVAILABLE        settled funds net of refunds and costs actually paid
  *
- * Nothing here is stored. Every reading is derived from rows Brain already
- * owns: the obligation (`journey/fulfillment.ts` `readObligation`) and the money
- * ledger (`cash_money_entries`, with the arithmetic of `money.ts`). This file
- * adds no store, scheduler or authority path; it is a pure function over those
- * rows plus a thin reader that fetches them.
+ * No reading is stored. Every reading is derived from rows Brain already
+ * owns: the obligation (`journey/fulfillment.ts` `readObligation`), the money
+ * ledger (`cash_money_entries`, with the arithmetic of `money.ts`), and the
+ * structure somebody stated about the transaction — declared steps and external
+ * dependencies — which is appended to `cash_events` (the cash section's own
+ * append-only history) as `commitment.structure_stated` and read back by
+ * `readCommitments`. This file adds no table, scheduler or authority path.
+ *
+ * External dependencies come from two places, and both are recorded: those the
+ * rows themselves imply (each agreement's acceptance condition is a quality
+ * check; money received for work nobody accepted is refund exposure; money paid
+ * but not settled is a payment hold — `dependenciesFromRows`), which the journey
+ * tick records once each time they change (`recordRowDependencies`); and those a
+ * person or another subsystem states (`recordCommitmentStructure`).
  *
  * Structure is data, not a template. A transaction may skip steps, branch,
  * restart, split into milestones, or have several purchasers and providers, so
@@ -126,6 +135,10 @@ export interface ExternalDependency {
   holder?: Party | null;
   deadline?: string | null;
   satisfied?: boolean | null;
+  /** What it was read from: `rows` (derived from the obligation and ledger rows) or who stated it. */
+  source?: string;
+  /** A stable reference within the transaction (an agreement id, a ledger entry), when one exists. */
+  ref?: string | null;
 }
 
 export interface OwedMoney {
@@ -512,7 +525,258 @@ export function deriveCommitments(input: CommitmentInput): CommitmentReading {
   };
 }
 
-/** Read the rows for one opportunity and derive. Writes nothing. */
+/* -------------------------------------------------------------------------- */
+/* External dependencies the rows imply                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The external dependencies the transaction's own rows imply. Pure, and never
+ * invented: each is a plain reading of a row.
+ *  - quality check: every live agreement's acceptance condition, satisfied once
+ *    accepted, unsatisfied when the buyer rejected it;
+ *  - refund exposure: customer money received for work not yet accepted, or a
+ *    refund authorized and not confirmed;
+ *  - payment hold: money paid but not yet settled into usable funds, due when
+ *    the payment said its funds become available;
+ *  - delivery method: what the opportunity card records about how the work is
+ *    delivered, held by the fulfilment owner it names.
+ * A term the rows do not carry (a delivery location, a cancellation provision)
+ * is never guessed here; it is stated through `recordCommitmentStructure`.
+ */
+export function dependenciesFromRows(input: {
+  obligations: ObligationReading[];
+  entries: CashMoneyEntry[];
+  currency: string;
+  /** The opportunity card's own statement of how the work is delivered and by whom, when it has one. */
+  card?: { deliveryMethod: string | null; fulfillmentOwner: string | null } | null;
+}): ExternalDependency[] {
+  const entries = input.entries.filter((e) => e.currency === input.currency);
+  const out: ExternalDependency[] = [];
+  const method = input.card?.deliveryMethod?.trim();
+  if (method) {
+    const owner = input.card?.fulfillmentOwner?.trim();
+    out.push({ kind: 'delivery method', detail: method, holder: owner ? { role: 'provider', ref: owner } : null, deadline: null, satisfied: null, source: 'rows', ref: 'card:deliveryMethod' });
+  }
+  const live = input.obligations.filter((o) => o.agreement.releasedAt === null && o.agreement.currency === input.currency);
+  for (const o of live) {
+    const condition = (o.acceptance.condition || o.agreement.acceptanceCondition || '').trim();
+    if (!condition) continue;
+    out.push({
+      kind: 'quality check',
+      detail: condition,
+      holder: { role: 'buyer', ref: o.agreement.opportunityId },
+      deadline: null,
+      satisfied: o.acceptance.state === 'ACCEPTED' ? true : o.acceptance.state === 'REJECTED' ? false : null,
+      source: 'rows',
+      ref: `agreement:${o.agreement.id}`,
+    });
+  }
+  const payments = sumKind(entries, 'CUSTOMER_PAYMENT');
+  const refunds = sumKind(entries, 'REFUND');
+  const settled = sumKind(entries, 'SETTLEMENT');
+  const acceptedCents = live
+    .filter((o) => o.acceptance.state === 'ACCEPTED' && o.delivery.state === 'DELIVERED')
+    .reduce((n, o) => n + o.agreement.amountCents, 0);
+  const unaccepted = Math.max(0, payments - refunds - acceptedCents);
+  const unconfirmed = input.obligations.flatMap((o) => o.refunds).filter((r) => r.state !== 'CONFIRMED').reduce((n, r) => n + r.amountCents, 0);
+  if (unaccepted > 0 || unconfirmed > 0) {
+    out.push({
+      kind: 'refund exposure',
+      detail: [
+        unaccepted > 0 ? `${unaccepted} ${input.currency} received for work not yet accepted` : '',
+        unconfirmed > 0 ? `${unconfirmed} ${input.currency} of refunds authorized and not confirmed` : '',
+      ].filter(Boolean).join('; '),
+      holder: { role: 'payer', ref: 'brain' },
+      deadline: null,
+      satisfied: false,
+      source: 'rows',
+      ref: null,
+    });
+  }
+  const held = Math.max(0, payments - settled);
+  if (held > 0) {
+    const due = entries
+      .filter((e) => e.kind === 'CUSTOMER_PAYMENT' && e.fundsAvailableAt)
+      .map((e) => e.fundsAvailableAt!)
+      .sort()
+      .at(-1) ?? null;
+    out.push({
+      kind: 'payment hold',
+      detail: `${held} ${input.currency} paid and not yet settled into usable funds`,
+      holder: { role: 'payment provider', ref: 'settlement' },
+      deadline: due,
+      satisfied: false,
+      source: 'rows',
+      ref: null,
+    });
+  }
+  return out;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Stated structure, recorded in the cash section's append-only history         */
+/* -------------------------------------------------------------------------- */
+
+export const COMMITMENT_STRUCTURE_KIND = 'commitment.structure_stated';
+
+export class CommitmentStructureError extends Error {}
+
+const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+const party = (v: unknown): Party | null => {
+  const p = (v ?? null) as Record<string, unknown> | null;
+  return p && str(p.role) && str(p.ref) ? { role: str(p.role), ref: str(p.ref) } : null;
+};
+const OUTCOMES: readonly CommitmentTransition['outcome'][] = ['PENDING', 'DONE', 'REJECTED', 'FAILED', 'RELEASED', 'UNKNOWN'];
+
+/** Refuse a declared step that cannot say what it is and who must do what. */
+export function validateDeclared(input: unknown): DeclaredTransition {
+  const d = (input ?? {}) as Record<string, unknown>;
+  const id = str(d.id);
+  const kind = str(d.kind);
+  const action = str(d.action);
+  if (!id || !kind || !action) throw new CommitmentStructureError('a declared step needs an id, a kind and an action');
+  if (d.outcome !== undefined && !OUTCOMES.includes(d.outcome as CommitmentTransition['outcome'])) throw new CommitmentStructureError(`step ${id}: unknown outcome`);
+  if (d.stage !== undefined && d.stage !== null && !(COMMITMENT_STAGES as readonly unknown[]).includes(d.stage)) throw new CommitmentStructureError(`step ${id}: unknown stage`);
+  const list = (v: unknown) => (Array.isArray(v) ? v.map(str).filter(Boolean) : undefined);
+  const out: DeclaredTransition = { id, kind, action };
+  if (d.holder !== undefined) out.holder = party(d.holder);
+  if (d.deadline !== undefined) out.deadline = str(d.deadline) || null;
+  if (list(d.terms)) out.terms = list(d.terms);
+  if (list(d.evidence)) out.evidence = list(d.evidence);
+  if (d.outcome !== undefined) out.outcome = d.outcome as CommitmentTransition['outcome'];
+  if (d.outcomeDetail !== undefined) out.outcomeDetail = str(d.outcomeDetail) || null;
+  if (d.at !== undefined) out.at = str(d.at) || null;
+  if (typeof d.amountCents === 'number' && Number.isFinite(d.amountCents)) out.amountCents = Math.round(d.amountCents);
+  if (d.stage !== undefined) out.stage = (d.stage as CommitmentStage | null) ?? null;
+  if (Array.isArray(d.parties)) out.parties = d.parties.map(party).filter((p): p is Party => p !== null);
+  for (const k of ['branchOf', 'restartOf', 'milestone'] as const) if (d[k] !== undefined) out[k] = str(d[k]) || null;
+  return out;
+}
+
+/** Refuse a dependency that does not say what kind it is and what it requires. */
+export function validateDependency(input: unknown): ExternalDependency {
+  const d = (input ?? {}) as Record<string, unknown>;
+  const kind = str(d.kind);
+  const detail = str(d.detail);
+  if (!kind || !detail) throw new CommitmentStructureError('an external dependency needs a kind and a detail');
+  const out: ExternalDependency = { kind, detail };
+  if (d.holder !== undefined) out.holder = party(d.holder);
+  if (d.deadline !== undefined) out.deadline = str(d.deadline) || null;
+  if (d.satisfied !== undefined) out.satisfied = typeof d.satisfied === 'boolean' ? d.satisfied : null;
+  if (d.source !== undefined && str(d.source)) out.source = str(d.source);
+  if (d.ref !== undefined) out.ref = str(d.ref) || null;
+  return out;
+}
+
+/** One dependency's identity for reading: a later statement of the same one supersedes the earlier. */
+const dependencyKey = (d: ExternalDependency): string => `${d.kind.toLowerCase()}\u0000${d.ref ?? d.detail}`;
+
+/**
+ * Record structure the rows do not carry — declared steps (a branch, another
+ * purchaser or provider, a deadline) and external dependencies (a delivery
+ * location, a scheduling window, a cancellation provision…). Appended to
+ * `cash_events`; history is never rewritten, and a later statement of the same
+ * step id or the same dependency supersedes the earlier one for reading only.
+ */
+export async function recordCommitmentStructure(input: {
+  projectId: string;
+  opportunityId: string;
+  actorRef: string;
+  declared?: unknown[];
+  dependencies?: unknown[];
+  reason?: string;
+  fingerprint?: string | null;
+}): Promise<{ eventId: string; declared: DeclaredTransition[]; dependencies: ExternalDependency[] }> {
+  const declared = (input.declared ?? []).map(validateDeclared);
+  const dependencies = (input.dependencies ?? []).map(validateDependency).map((d) => ({ ...d, source: d.source ?? input.actorRef }));
+  if (declared.length === 0 && dependencies.length === 0) throw new CommitmentStructureError('nothing was stated');
+  const { recordCashEvent } = await import('../../../repos/cashMode.ts');
+  const event = await recordCashEvent({
+    projectId: input.projectId,
+    opportunityId: input.opportunityId,
+    kind: COMMITMENT_STRUCTURE_KIND,
+    actorRef: input.actorRef,
+    summary: `stated ${declared.length} step(s) and ${dependencies.length} external dependenc${dependencies.length === 1 ? 'y' : 'ies'}${input.reason ? `: ${input.reason}` : ''}`.slice(0, 300),
+    detail: {
+      declared: declared as unknown as Record<string, unknown>[],
+      dependencies: dependencies as unknown as Record<string, unknown>[],
+      fingerprint: input.fingerprint ?? null,
+    },
+  });
+  return { eventId: event.id, declared, dependencies };
+}
+
+/** Everything stated about one transaction, latest statement of each step and dependency winning. */
+export async function storedCommitmentStructure(opportunityId: string): Promise<{ declared: DeclaredTransition[]; dependencies: ExternalDependency[] }> {
+  const { cashEventsOfKind } = await import('../../../repos/cashMode.ts');
+  const steps = new Map<string, DeclaredTransition>();
+  const deps = new Map<string, ExternalDependency>();
+  for (const event of await cashEventsOfKind(opportunityId, COMMITMENT_STRUCTURE_KIND)) {
+    const d = (event.detail ?? {}) as { declared?: unknown; dependencies?: unknown };
+    for (const raw of Array.isArray(d.declared) ? d.declared : []) {
+      try { const step = validateDeclared(raw); steps.set(step.id, step); } catch { /* an unreadable old row states nothing */ }
+    }
+    for (const raw of Array.isArray(d.dependencies) ? d.dependencies : []) {
+      try { const dep = validateDependency(raw); deps.set(dependencyKey(dep), dep); } catch { /* as above */ }
+    }
+  }
+  return { declared: [...steps.values()], dependencies: [...deps.values()] };
+}
+
+/** Caller-supplied first, then stated, then row-derived: the first of each identity wins. */
+function mergeDependencies(...lists: ExternalDependency[][]): ExternalDependency[] {
+  const out = new Map<string, ExternalDependency>();
+  for (const list of lists) for (const d of list) if (!out.has(dependencyKey(d))) out.set(dependencyKey(d), d);
+  return [...out.values()];
+}
+
+function mergeDeclared(...lists: DeclaredTransition[][]): DeclaredTransition[] {
+  const out = new Map<string, DeclaredTransition>();
+  for (const list of lists) for (const d of list) if (!out.has(d.id)) out.set(d.id, d);
+  return [...out.values()];
+}
+
+/** The card fields a dependency is read from; null when the opportunity is gone. */
+async function cardOf(opportunityId: string): Promise<{ deliveryMethod: string | null; fulfillmentOwner: string | null } | null> {
+  const { getOpportunity } = await import('../../../repos/cashPortfolio.ts');
+  const o = await getOpportunity(opportunityId);
+  return o ? { deliveryMethod: o.deliveryMethod, fulfillmentOwner: o.fulfillmentOwner } : null;
+}
+
+/**
+ * The journey tick's recorder: the dependencies the rows imply, appended once
+ * each time they change (keyed by a fingerprint of the set), so Brain records
+ * the dependency rather than only computing it on a read.
+ */
+export async function recordRowDependencies(input: { projectId: string; opportunityId: string; currency: string }): Promise<{ recorded: boolean; dependencies: number }> {
+  const [obligations, entries, card] = await Promise.all([
+    readObligations(input.opportunityId),
+    listMoneyEntries({ projectId: input.projectId, opportunityId: input.opportunityId, limit: 2000 }),
+    cardOf(input.opportunityId),
+  ]);
+  const dependencies = dependenciesFromRows({ obligations, entries, currency: input.currency, card });
+  if (dependencies.length === 0) return { recorded: false, dependencies: 0 };
+  const { createHash } = await import('node:crypto');
+  const fingerprint = createHash('sha256').update(JSON.stringify(dependencies)).digest('hex').slice(0, 32);
+  const { cashEventsOfKind } = await import('../../../repos/cashMode.ts');
+  const prior = await cashEventsOfKind(input.opportunityId, COMMITMENT_STRUCTURE_KIND);
+  if (prior.some((e) => (e.detail as { fingerprint?: unknown } | null)?.fingerprint === fingerprint)) return { recorded: false, dependencies: dependencies.length };
+  await recordCommitmentStructure({
+    projectId: input.projectId,
+    opportunityId: input.opportunityId,
+    actorRef: 'BRAIN',
+    dependencies,
+    reason: 'read from the agreement and ledger rows',
+    fingerprint,
+  });
+  return { recorded: true, dependencies: dependencies.length };
+}
+
+/**
+ * Read the rows and the stated structure for one opportunity and derive.
+ * Writes nothing. A caller's `declared` and `dependencies` are added to what is
+ * on record, never in place of it.
+ */
 export async function readCommitments(input: {
   projectId: string;
   opportunityId: string;
@@ -521,17 +785,24 @@ export async function readCommitments(input: {
   dependencies?: ExternalDependency[];
   now?: string;
 }): Promise<CommitmentReading> {
-  const [obligations, entries] = await Promise.all([
+  const [obligations, entries, stored, card] = await Promise.all([
     readObligations(input.opportunityId),
     listMoneyEntries({ projectId: input.projectId, opportunityId: input.opportunityId, limit: 2000 }),
+    storedCommitmentStructure(input.opportunityId),
+    cardOf(input.opportunityId),
   ]);
   return deriveCommitments({
     opportunityId: input.opportunityId,
     currency: input.currency,
     obligations,
     entries,
-    declared: input.declared,
-    dependencies: input.dependencies,
+    declared: mergeDeclared(input.declared ?? [], stored.declared),
+    // What the rows imply now outranks a stale BRAIN-recorded copy of it; a person's statement outranks both.
+    dependencies: mergeDependencies(
+      input.dependencies ?? [],
+      stored.dependencies.filter((d) => d.source !== 'rows'),
+      dependenciesFromRows({ obligations, entries, currency: input.currency, card }),
+    ),
     now: input.now ?? new Date().toISOString(),
   });
 }
