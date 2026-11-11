@@ -391,17 +391,67 @@ export async function runStore(ctx: StageContext): Promise<StageResult> {
   const ok = items.length - failed;
   const tally = (['CREATED', 'UPDATED', 'EXISTS', 'WOULD_CREATE', 'FAILED'] as const)
     .map((s) => [s, items.filter((i) => i.state === s).length] as const).filter(([, n]) => n).map(([s, n]) => `${n} ${s}`).join(', ');
-  const detail = `${LISTINGS.length} listings (10 products): ${tally}${domain ? ` · https://${domain}` : ''}`;
+
+  // ---- 3. the launch discount code (not a product: reported in the detail and `outputs`, never in `items`)
+  const promo = await ensurePromo(api, ctx.dryRun);
+  const outputs = promo.live ? { promoCode: PROMO.code, promoPercent: String(PROMO.percentage) } : undefined;
+  const detail = `${LISTINGS.length} listings (10 products): ${tally}${domain ? ` · https://${domain}` : ''} · ${promo.note}`;
   if (ctx.dryRun) return { stage, status: failed ? (ok ? 'PARTIAL' : 'FAILED') : 'DONE', detail: `dry run — ${detail}`, items };
-  if (failed) return { stage, status: ok ? 'PARTIAL' : 'FAILED', detail, items };
+  if (failed) return { stage, status: ok ? 'PARTIAL' : 'FAILED', detail, items, ...(outputs ? { outputs } : {}) };
   // Fourthwall's API cannot change the site status; a shop still "coming soon" takes no orders.
   if (shop.status && shop.status !== 'LIVE') {
     return {
-      stage, status: 'NEEDS_OWNER', items, detail: `${detail} · shop status ${shop.status}`,
+      stage, status: 'NEEDS_OWNER', items, detail: `${detail} · shop status ${shop.status}`, ...(outputs ? { outputs } : {}),
       ownerAction: 'Every product is published. Fourthwall\'s API cannot switch the shop on: in the dashboard, Site design → the status tag at top right → Live → Save (one click, once).',
     };
   }
-  return { stage, status: 'DONE', detail, items };
+  return { stage, status: 'DONE', detail, items, ...(outputs ? { outputs } : {}) };
+}
+
+// ---------------------------------------------------------------- launch discount code
+
+/**
+ * One shop-wide launch code, created through Fourthwall's Promotions API
+ * (POST /open-api/v1.0/promotions, type SHOP_SINGLE; docs.fourthwall.com/api-reference/platform/promotions,
+ * read 2026-11-11). It costs nothing to create: a buyer who uses it pays 10% less, which comes out
+ * of the margin (the smallest margin in catalog.csv, the coaster's $6.75 on $12.99, stays positive).
+ * Idempotent by code: the list is read first, and a 409 PROMOTION_CODE_DUPLICATION also means "exists".
+ * The Pinterest stage quotes the code only when this reports it Live.
+ */
+export const PROMO = { code: 'PUZZLE10', percentage: 10 } as const;
+
+interface Promotion { id?: string; code?: string; codes?: Array<{ code?: string }>; status?: string; discount?: { percentage?: number } }
+
+async function ensurePromo(
+  api: <T>(method: string, p: string, body?: unknown) => Promise<T>, dryRun: boolean,
+): Promise<{ live: boolean; note: string }> {
+  const has = (p: Promotion): boolean => p.code === PROMO.code || Boolean(p.codes?.some((c) => c.code === PROMO.code));
+  try {
+    const list = await api<{ results?: Promotion[] }>('GET', `/promotions?codes=${PROMO.code}&size=100`);
+    const found = (list.results ?? []).find(has);
+    if (found) return { live: found.status === 'Live', note: `code ${PROMO.code} exists (${found.status ?? 'status unknown'})` };
+    if (dryRun) return { live: false, note: `would create code ${PROMO.code} (${PROMO.percentage}% off)` };
+    const body = {
+      type: 'SHOP_SINGLE', code: PROMO.code,
+      discount: { type: 'PERCENTAGE', percentage: PROMO.percentage, shipping: 'Excluded' },
+      limits: { oneUsePerCustomer: true },
+    };
+    let created: Promotion;
+    try {
+      created = await api<Promotion>('POST', '/promotions', body);
+    } catch (e) {
+      if (e instanceof HttpError && e.status === 409) return { live: true, note: `code ${PROMO.code} exists` };
+      throw e;
+    }
+    const pct = created.discount?.percentage;
+    if (pct !== undefined && pct !== PROMO.percentage) {
+      return { live: false, note: `code ${PROMO.code} created but reads back ${pct}% off, expected ${PROMO.percentage}%; not advertised` };
+    }
+    return { live: (created.status ?? 'Live') === 'Live', note: `code ${PROMO.code} created (${PROMO.percentage}% off, one use per customer)` };
+  } catch (e) {
+    // The code is a nicety for the pins; its failure never fails the store.
+    return { live: false, note: `code ${PROMO.code} not available: ${(e as Error).message}` };
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {

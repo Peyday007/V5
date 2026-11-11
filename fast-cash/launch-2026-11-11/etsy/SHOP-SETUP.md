@@ -141,12 +141,12 @@ Etsy may say "Your listing is being reviewed" for a new shop; that is normal.
 
 **When an order comes in: do nothing.** Etsy delivers the files instantly and emails the buyer. Etsy notifies you of the sale. Digital sales are not held in reserve ([Etsy](https://help.etsy.com/hc/articles/360058722214)); deposits go to your bank weekly on Mondays by default ([Etsy](https://help.etsy.com/hc/articles/360046998234)). Only act if a buyer messages you about a file problem: reply with the PDF attached in Etsy Messages, or refund from the order page.
 
-**Free ($0) promotion that Etsy itself provides:**
+**Free ($0) promotion that Etsy itself provides** (all optional; none is required of you — Brain's customer acquisition is item 4):
 
 1. **Shop sale** — Shop Manager › Marketing › Sales and discounts › *Run a sale*: 20–25% off everything, Nov 11 – Dec 24. Sale prices show a strike-through in search. Cost: only the discount on sales you'd make.
 2. **Thank-you coupon** — same page: automatic coupon (e.g. 25% off) sent after each purchase, to win the bundle upsell.
 3. **Offers to interested shoppers** (if your shop is offered it): automatic discount to people who favorited an item or left something in their cart.
-4. **Share buttons** — every listing has a **Share** button (Facebook, Pinterest, X, email). Pinterest is the strongest free channel for printables: pin each hero image with a link to the listing.
+4. **Pinterest — Brain does it.** Pinterest is the strongest free channel for printables, so the Launch workflow pins each active listing's hero image, linked to the listing, on the board "Large print & printable puzzles" (`scripts/launch/pinterest.ts`). Your only part is authorizing a free Pinterest business account (`../README.md`, *Customer acquisition*); nothing here is pinned by hand.
 5. **Shop updates / Etsy app** — post a photo of a printed page on your desk ("printing Christmas sudoku for Grandma") from the Etsy Seller app.
 6. **Renew/refresh** — after 2–3 weeks, edit titles/tags of listings with views but no sales (Shop Manager › Stats shows search terms used to find you). Editing is free.
 7. **Reviews** — Etsy automatically asks buyers for a review; first reviews matter more than anything else for new-shop ranking.

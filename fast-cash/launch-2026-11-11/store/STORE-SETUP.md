@@ -1,6 +1,6 @@
 # Store setup: owner's click-by-click
 
-**Platform:** Fourthwall Free ($0). **Your work:** sign up, verify payouts, create one API user, and flip the shop to Live. **Brain creates, prices and publishes every product** through Fourthwall's official Platform API (`scripts/launch/store.ts`). You upload nothing. **Time:** about 30 minutes.
+**Platform:** Fourthwall Free ($0). **Your work:** sign up, verify payouts, create one API user, flip the shop to Live, and authorize a free Pinterest business account (§6). **Brain creates, prices and publishes every product** through Fourthwall's official Platform API (`scripts/launch/store.ts`). You upload nothing. **Time:** about 30 minutes.
 
 Why this works: Fourthwall's API creates design products from print files: upload → register image → `POST /open-api/v1.0/products` with `type: "design"` → publish ([Create design products](https://docs.fourthwall.com/guides/create-design-products), [Create a product](https://docs.fourthwall.com/api-reference/platform/products/create-product.md), read 2026-11-11). A shop's API user has full access ([Authentication](https://docs.fourthwall.com/guides/authentication.md)). The Free plan allows 50 products for accounts made after Aug 25, 2025 ([Free FAQs](https://help.fourthwall.com/frequently-asked-questions/account-and-plans/fourthwall-free-faqs)). Brain publishes 12.
 
@@ -107,13 +107,23 @@ Fourthwall gives every shop four default pages: **Contact, Privacy Policy, Terms
 
 ---
 
-## 6. $0 traffic plan for week 1 (≈30 min/day)
+## 6. Customer acquisition: Brain does it, $0, no ads
 
-1. **Day 1: your own circle.** Post the mockup previews (`designs/*/mockup-preview*.png`) on your personal Facebook, Instagram and Nextdoor. Text: "I opened a little puzzle-gift shop: every sudoku on it has exactly one solution. Order by Dec 8 for Christmas." Text 10–20 people who'd actually buy (the sudoku-solving relatives). In practice the first orders come from here.
-2. **Days 1–3: Pinterest** (free business account). Make 3 pins per product: the mockup, the plain design, and a close-up of the grid. Link each to its product URL. Use the tags from `catalog.csv` in pin descriptions, plus "Christmas gift for grandparents" and "gift for puzzle lover". Pinterest is the one free channel where gift shoppers search in November.
-3. **Days 2–7: communities.** Answer genuinely in Facebook puzzle and sudoku groups and r/sudoku when it's on-topic. Read each group's self-promo rules first, and only post the shop where allowed. Post one free printable of a puzzle (the poster grid) with the shop link.
-4. **Day 3:** a short phone video: "solving the puzzle on my mug" (TikTok / Reels / Shorts). Show the answer upside down on the back.
-5. **Etsy?** Not in week 1. An Etsy print-on-demand shop is a **separate store**: its own per-listing and per-sale fees, its own policies, and you connect a supplier such as Printify or Printful to it. It is not part of Fourthwall. Revisit in January if the designs sell.
+Pinterest is the free channel where gift shoppers search in November, and its API lets Brain do all of it. **Your part is creating and authorizing accounts; nothing else, ever.** No posting, pinning, group answers or videos are asked of you, and no money is spent (no ads, no paid tools).
+
+**What Brain does by itself** (Launch workflow, stage `scripts/launch/pinterest.ts`, every hour):
+- Creates two public boards, **Puzzle gifts** and **Large print & printable puzzles**.
+- Pins every product the moment its store is live: one pin per Fourthwall listing (12, from `designs/*/mockup-preview*.png`) and one per active Etsy listing (8, from `etsy/images/*/01-hero.png`). Each pin links to the live product page it was read from, with the product's own description, its `catalog.csv` / `listings.csv` tags and honest "gift for a puzzle lover" keywords.
+- Creates the shop's launch code **PUZZLE10** (10% off, one use per customer) through Fourthwall's Promotions API and quotes it in every store pin. The discount comes out of the margin only when a buyer uses it; the smallest margin (coaster, $6.75) stays positive.
+- Never pins twice: it lists the account's pins first and matches them by product link. Never pins early: a store that is not live yet shows as **WAITING** in the launch summary, and its pins go up on the first run after it goes live.
+
+**Your actions (account creation and authorization only).** The launch summary prints each one, with the exact link, when it is the next step:
+1. Create a free **Pinterest business account** (pinterest.com/business/create), or convert yours (Settings → Account management → Convert to a business account).
+2. At **developers.pinterest.com/apps → Connect app**, register an app (name "Brain pin publisher"; website and privacy policy = the shop's URL and its Privacy Policy page). Pinterest reviews it; when it shows **Trial access**, add the redirect URI `http://localhost:8085/` and save the App ID and App secret key as the secrets `PINTEREST_APP_ID` and `PINTEREST_APP_SECRET`.
+3. Authorize: click the link the next Launch run prints, press **Give access**, and paste the address-bar URL (a localhost page that does not load) into **Actions → Launch → Run workflow → pinterest_redirect_url**. The login then carries over from run to run.
+4. **Standard access** (one time): Pinterest shows pins made by a Trial app to nobody but the account owner, so public pins need its Standard tier. On the app card click **Upgrade** and attach a screen recording of step 3 plus the Launch run log showing "Pinterest account verified" (Pinterest requires a video of the authorization flow and an API call). Pinterest reviews it by hand and publishes no turnaround; developers report one to several weeks. When the approval email arrives, add the secret `PINTEREST_STANDARD_ACCESS` = `approved`; the next run pins everything live.
+
+**What the API cannot do, said plainly:** until Standard access is approved, nothing Brain pins is visible to shoppers, so it pins nothing and the summary says so. Etsy's API has no endpoint for coupons or sales, so the PUZZLE10 code is the store's only; the Etsy pins carry no code.
 
 ## 7. Timing summary
 
@@ -124,4 +134,6 @@ Fourthwall gives every shop four default pages: **Contact, Privacy Policy, Terms
 | 10 products | 0: Brain publishes them |
 | Pages and policies (optional; the defaults work) | 0–20 |
 | Go live and test cart | 5–10 |
+| Pinterest business account, app and authorization (§6) | ≈15, plus Pinterest's review |
+| Customer acquisition (pins, boards, launch code) | 0: Brain does it |
 | **Total** | **≈30 minutes**: a store able to accept real orders the same day |

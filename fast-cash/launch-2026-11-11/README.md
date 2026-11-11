@@ -93,3 +93,36 @@ Actions → New repository secret**.
    `FOURTHWALL_API_PASSWORD`.
 3. Site design → status → **Live**. Fourthwall's API cannot switch this, so
    it is one click.
+
+---
+
+## Customer acquisition for both stores (Pinterest, $0)
+
+**What is ready**
+- **Brain pins both stores through Pinterest's API** (`scripts/launch/pinterest.ts`,
+  the Launch workflow's last stage): two boards, one pin per live Fourthwall
+  listing (12) and per active Etsy listing (8), each linked to its live product
+  page, with the product's own copy, tags and gift keywords. A store that is not
+  live yet is reported **WAITING** and pinned on the first run after it is.
+  Re-runs find pins by link and never duplicate one.
+- **Launch code:** Brain creates **PUZZLE10** (10% off, one use per customer) in
+  the Fourthwall shop and quotes it in the store's pins. Etsy's API cannot make
+  coupons, so the Etsy pins carry none.
+- **Costs:** $0. No ads, no paid tools; the code only lowers the margin of an
+  order that uses it.
+
+**Your personal actions** (account creation and authorization only)
+1. Create a free Pinterest business account.
+2. Register an app at developers.pinterest.com; when it has Trial access, add
+   the redirect URI `http://localhost:8085/` and save the App ID and secret as
+   `PINTEREST_APP_ID` and `PINTEREST_APP_SECRET`.
+3. Click the **Give access** link the next Launch run prints and paste the
+   address-bar URL into **Actions → Launch → Run workflow →
+   pinterest_redirect_url**.
+4. Request **Standard access** on the app card (Pinterest requires a screen
+   recording of step 3; its manual review has no published turnaround). Trial
+   pins are visible only to you, so Brain pins nothing until then. When the
+   approval email arrives, save the secret `PINTEREST_STANDARD_ACCESS` =
+   `approved`.
+
+Nothing else is yours: no posting, pinning, groups or videos.
