@@ -18,6 +18,7 @@ import {
 } from '../server/repos/research.ts';
 import { enqueueWork } from '../server/repos/workQueue.ts';
 import { createWorker } from '../server/repos/identity.ts';
+import { launchMission, linkMission } from '../server/repos/russellMissions.ts';
 import {
   advanceIdlePackets,
   concludeUnworkablePackets,
@@ -265,6 +266,30 @@ describe('the progress deadline', () => {
     expect(after.status).toBe('NEEDS_HUMAN');
     expect(after.failureReason).toMatch(/one of its fragments already asks for/);
     expect((await events(id)).map((e) => e.event_type)).toContain('RESEARCH_BLOCKED');
+  });
+
+  it('parks a packet behind a mission instead of failing it: the mission has a person and a card', async () => {
+    const id = await stalled(OVERDUE);
+    const { mission } = await launchMission({
+      projectId,
+      layerId,
+      visibility: 'PRIVATE',
+      objective: 'a mission whose packet stalled',
+      whyNow: 'the owner rule: only a round with no mission ends FAILED',
+      idempotencyKey: `stalled-mission-${id}`,
+    });
+    await linkMission({ missionId: mission.id, orchestrationId: id });
+
+    const moved = await advanceIdlePackets(10);
+    expect(moved).toEqual([{ orchestrationId: id, from: 'AWAITING_REPAIR', to: 'NEEDS_HUMAN' }]);
+    const after = (await getOrchestration(id))!;
+    expect(after.status).toBe('NEEDS_HUMAN');
+    expect(after.failedAt).toBeNull();
+    expect(after.failureReason).toMatch(/person its mission already has/);
+    expect(after.failureReason).toMatch(/progress deadline/);
+    const types = (await events(id)).map((e) => e.event_type);
+    expect(types).toContain('RESEARCH_BLOCKED');
+    expect(types).not.toContain('RESEARCH_FAILED');
   });
 
   it('never concludes a plan waiting for a person to approve it: that is the §16 gate, not a stall', async () => {

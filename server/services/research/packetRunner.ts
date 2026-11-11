@@ -2796,8 +2796,8 @@ export async function advanceIdlePackets(
  *   - **A repair scheduled to return** (a fragment whose `nextRetryAt` is still
  *     ahead). It already has a bounded exit, and that time is it.
  *
- * A packet one of whose fragments is itself NEEDS_HUMAN already needs a person
- * by its own rows, so that packet parks at NEEDS_HUMAN with the same sentence
+ * A packet one of whose fragments is itself NEEDS_HUMAN, or a packet behind a
+ * mission, already has a person by its own rows, so that packet parks at NEEDS_HUMAN with the same sentence
  * and a `RESEARCH_BLOCKED` event. The stall this was built for is
  * AWAITING_REPAIR with a fragment whose `nextRetryAt` has already passed:
  * `advancePacket` reads any retry time as a wait.
@@ -2826,15 +2826,26 @@ async function concludeStalledPacket(
   const now = new Date(nowMs).toISOString();
   if (fragments.some((fragment) => fragment.nextRetryAt !== null && fragment.nextRetryAt > now)) return null;
 
-  const needsPerson = fragments.some((fragment) => fragment.status === 'NEEDS_HUMAN');
+  /*
+   * A packet behind a mission parks, exactly as `advancePacket`'s
+   * no-fragment-cleared branch decides it: only a round with no mission ends
+   * FAILED, because a mission's park has a person and a card. Concluding a
+   * mission-backed packet FAILED from fragment status alone took that person
+   * out of the loop.
+   */
+  const fragmentAsks = fragments.some((fragment) => fragment.status === 'NEEDS_HUMAN');
+  const missionAsks = !fragmentAsks && (await getMissionByOrchestration(packet.id)) !== null;
+  const needsPerson = fragmentAsks || missionAsks;
   const hours = Math.floor(idleMs / 3_600_000);
   const reason =
     `This packet sat ${packet.status} for ${hours} hour${hours === 1 ? '' : 's'} with no work queued ` +
     `or leased, and advancing it ${failure ? `failed (${failure.slice(0, 300)})` : 'changed nothing'}. ` +
     `That is past the ${PACKET_PROGRESS_DEADLINE_MS / 3_600_000}-hour progress deadline, so it is ` +
     (needsPerson
-      ? 'parked for the person one of its fragments already asks for, and it no longer holds a ' +
-        'slot as live work. '
+      ? (fragmentAsks
+          ? 'parked for the person one of its fragments already asks for'
+          : 'parked for the person its mission already has') +
+        ', and it no longer holds a slot as live work. '
       : 'concluded here and no longer holds a slot for movement that will not come. ') +
     'Nothing was synthesized, and every fragment, claim and attempt keeps its row.';
   const to: 'FAILED' | 'NEEDS_HUMAN' = needsPerson ? 'NEEDS_HUMAN' : 'FAILED';
