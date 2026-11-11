@@ -36,7 +36,7 @@ import {
 import { objectExistence, objectExists, readObject, storageKeyOf} from '../storage.ts';
 import { detectFormat } from './formats.ts';
 import { extractDocx, DocxUnreadableError } from './docx.ts';
-import { extractPdf, PdfUnreadableError, type ExtractedBlock, type ExtractedPage } from './pdf.ts';
+import { collapseBlockWhitespace, extractPdf, PdfUnreadableError, type ExtractedBlock, type ExtractedPage } from './pdf.ts';
 import { extractText } from './text.ts';
 import { getOcrEngine, LOW_CONFIDENCE, type OcrPageResult } from './ocr.ts';
 import { normalizeBlockText } from './normalize.ts';
@@ -234,7 +234,7 @@ async function applyOcr(
  * and their confidence; one that only returns text gets split on blank lines.
  * Either way every block says it was read by recognition.
  */
-function ocrBlocksFor(result: OcrPageResult, note: string): ExtractedBlock[] {
+export function ocrBlocksFor(result: OcrPageResult, note: string): ExtractedBlock[] {
   if (result.blocks && result.blocks.length > 0) {
     return result.blocks.map<ExtractedBlock>((block) => ({
       pageNumber: result.pageNumber,
@@ -251,7 +251,7 @@ function ocrBlocksFor(result: OcrPageResult, note: string): ExtractedBlock[] {
   }
   return result.text
     .split(/\n{2,}/)
-    .map((paragraph) => paragraph.replace(/\s+/g, ' ').trim())
+    .map((paragraph) => collapseBlockWhitespace(paragraph).trim())
     .filter((paragraph) => paragraph.length > 0)
     .map<ExtractedBlock>((paragraph) => ({
       pageNumber: result.pageNumber,
