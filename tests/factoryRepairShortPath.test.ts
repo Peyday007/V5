@@ -52,4 +52,20 @@ describe('a short path in a finding', () => {
       expect(scope.ownedPaths).toEqual(['server/services/cash/authority.ts', 'tests/program-x-auth*.test.ts']);
     }
   });
+
+  it('reads a test\'s subject from the one source file a person granted when its unit owns several', () => {
+    const input = {
+      suggested: ['tests/program-x-acquisition-d01.test.ts'],
+      statement: 'operate-unreachable: tests/program-x-acquisition-d01.test.ts shows the judge never reaches OPERATE',
+      evidence: '',
+      category: 'BEHAVIOR' as const,
+      forbiddenPaths: [],
+      units: [{ unitKey: 'u1', ownedPaths: ['server/services/sources/access.ts', 'server/services/sources/accessMethods.ts', 'server/services/sources/acquisition.ts', 'tests/program-x-acquisition-d01.test.ts'] }],
+    };
+    const before = resolveRepairScope({ ...input, mutationScope: ['server/services/sources/**', 'tests/program-x-acquisition*.test.ts'] });
+    expect(before.ok).toBe(false);
+    const after = resolveRepairScope({ ...input, mutationScope: ['server/services/sources/**', 'server/services/sources/acquisition.ts', 'tests/program-x-acquisition*.test.ts'] });
+    expect(after.ok).toBe(true);
+    if (after.ok) expect(after.rootCauseFiles).toEqual(['server/services/sources/acquisition.ts']);
+  });
 });
