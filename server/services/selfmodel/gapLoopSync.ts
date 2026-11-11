@@ -143,6 +143,7 @@ export function gapStepsDue(c: ImprovementCandidate, state: GapLoopState, found:
       detail: {
         baseline: `${c.metric} = ${result?.before?.value ?? 'unknown'} in the window before delivery`,
         comparison: `${c.metric} = ${result?.after?.value ?? 'unknown'} after ${c.deliveredRef ?? 'delivery'} on production rows; verdict ${result?.primary?.verdict ?? 'unknown'}`,
+        passed: c.decision === 'KEPT',
       },
     });
   }
