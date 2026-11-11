@@ -50,6 +50,7 @@ import {
 } from '../../repos/goals.ts';
 import { assembleGoals, type GoalView } from './model.ts';
 import { rankGoals } from './priority.ts';
+import { reconcilePreparedCapabilitiesIfDue, type CapabilityPassReport } from './capabilityPromotion.ts';
 
 export interface GoalTickReport {
   goals: number;
@@ -57,6 +58,11 @@ export interface GoalTickReport {
   released: { binId: string; goalId: string; why: string }[];
   reprioritized: { binId: string; goalId: string; priority: number }[];
   moved: { goalId: string; from: number | null; to: number; reason: string }[];
+  /**
+   * Prepared program requirements promoted from measured blockers in cash rows, or
+   * demoted when that need vanished (GOV-22-1), at most once a minute.
+   */
+  capabilities?: CapabilityPassReport[] | { error: string };
 }
 
 const LIVE = new Set(['DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN']);
@@ -211,5 +217,7 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
     report.moved.push({ goalId: rank.id, from: last ? last.rank : null, to: rank.rank, reason: why.reason });
   }
 
+  // Readiness from measured blockers: the capability pass applies `priority.ts`'s decisions.
+  report.capabilities = await reconcilePreparedCapabilitiesIfDue();
   return report;
 }
