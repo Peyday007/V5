@@ -1028,6 +1028,13 @@ jobs:
             if ! grep -q '^HOSTED-VERIFICATION' hosted-verification.txt 2>/dev/null \
                 || grep -q '^HOSTED-VERIFICATION: FAIL could-not-complete' hosted-verification.txt 2>/dev/null; then
               echo "::error::RELEASED, VERIFICATION COULD NOT RUN: this commit is serving, and the pass before the restart could not complete (see its first error above). Not evidence of a defect; the release is not verified."
+            # The same for the pass after the restart. Deploy 43065787279
+            # (2026-11-11): every check passed before the restart, then one MCP
+            # call timed out after it ("could-not-complete", no FAIL line), and
+            # this read as BEHAVIOUR DEFECTIVE.
+            elif grep -q '^HOSTED-VERIFICATION: FAIL could-not-complete' hosted-after-restart.txt 2>/dev/null \
+                && ! grep -h -q -E '^ *FAIL  ' hosted-verification.txt hosted-after-restart.txt 2>/dev/null; then
+              echo "::error::RELEASED, VERIFICATION COULD NOT RUN: this commit is serving, the pass before the restart passed, and the pass after it could not complete (see its first error above). Not evidence of a defect; the release is not verified."
             elif grep -q '^HOSTED-VERIFY-GUARD' hosted-verification.txt hosted-after-restart.txt 2>/dev/null \
                 || ! grep -q '^HOSTED-VERIFICATION' hosted-after-restart.txt 2>/dev/null; then
               # A pass the guard stopped answered too slowly to finish; the checks
