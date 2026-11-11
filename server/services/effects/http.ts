@@ -29,6 +29,7 @@ import {
   type ExecutionResult,
   type RunInput,
 } from './engine.ts';
+import { operationContinuity } from './continuity.ts';
 import type { IdempotencyOperation } from '../../domain/types.ts';
 
 export const IDEMPOTENCY_HEADER = 'idempotency-key';
@@ -106,13 +107,18 @@ export async function runIdempotentRequest<T>(
         throw conflict(
           'An earlier attempt at this operation had an unknown outcome. ' +
             'It must be resolved by an administrator before it can be retried.',
-          { reason: 'RECONCILIATION_REQUIRED', operationId: outcome.operation.id },
+          {
+            reason: 'RECONCILIATION_REQUIRED',
+            operationId: outcome.operation.id,
+            continuity: await operationContinuity(outcome.operation.id),
+          },
         );
       case 'TERMINAL_FAILURE':
         throw conflict('That operation has already failed and will not be retried.', {
           reason: 'ALREADY_TERMINAL',
           category: outcome.operation.failureCategory,
           operationId: outcome.operation.id,
+          continuity: await operationContinuity(outcome.operation.id),
         });
     }
   } catch (error) {
@@ -126,6 +132,7 @@ export async function runIdempotentRequest<T>(
       throw conflict('An equivalent request is already being processed.', {
         reason: 'IN_PROGRESS',
         operationId: error.operation.id,
+        continuity: await operationContinuity(error.operation.id),
       });
     }
     throw error;

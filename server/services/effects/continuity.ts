@@ -32,7 +32,7 @@
  * - FAILED_EXTERNAL_CONSTRAINT: terminal. The refusal is final for this
  *   effect, and no retry under this key may bypass it.
  */
-import { listAttempts, listOperations, operationNow } from '../../repos/idempotency.ts';
+import { getOperation, listAttempts, listOperations, operationNow } from '../../repos/idempotency.ts';
 import type { EffectAttempt, EffectFailureCategory, IdempotencyOperation, OperationState } from '../../domain/types.ts';
 
 export const CONTINUITY_CLASSES = [
@@ -230,4 +230,72 @@ export async function effectContinuityAccount(projectId: string): Promise<Contin
     unsettled: totals.MAY_HAVE_BEEN_ACCEPTED + totals.UNKNOWN,
     truncated: operations.length >= READ_LIMIT,
   };
+}
+
+/**
+ * What a caller who retried an operation is told about it.
+ *
+ * The account is only worth keeping if it reaches the moment somebody would
+ * act on a wrong belief — sending again. `runIdempotentRequest` (and so every
+ * idempotent route) attaches this to its refusal when an earlier attempt is
+ * unknown, still running or settled as failed, so the caller learns what Brain
+ * knows and what remains uncertain instead of guessing.
+ *
+ * A caller-safe projection (invariant 30): the class, the class's own
+ * sentence, and the counts. Never a receipt, a provider's words, a result
+ * summary or a correlation id — those stay in the rows and in the project
+ * account, which is read under the project's own authorization.
+ */
+export interface ContinuityReport {
+  class: ContinuityClass;
+  /** What Brain has established about the effect. */
+  known: string;
+  /** What remains uncertain, or null when nothing does. */
+  uncertain: string | null;
+  attempts: number;
+  sentAttempts: number;
+  executorLease: 'LIVE' | 'EXPIRED' | null;
+  retrySafe: boolean;
+  needsReconciliation: boolean;
+}
+
+const REPORT_WORDS: Record<ContinuityClass, { known: string; uncertain: string | null }> = {
+  ATTEMPTED_NOT_SENT: { known: 'The operation was reserved and nothing was sent to the outside world.', uncertain: null },
+  MAY_HAVE_BEEN_ACCEPTED: {
+    known: 'At least one attempt was sent to the outside world.',
+    uncertain: 'Whether the outside world accepted it is not yet established; it is reconciled before anything is sent again.',
+  },
+  CONFIRMED: { known: 'The effect is confirmed.', uncertain: null },
+  UNKNOWN: {
+    known: 'An attempt was made and its outcome was not established.',
+    uncertain: 'It may have taken effect. It is reconciled with the outside world or decided by a person, and never resent automatically.',
+  },
+  FAILED_RECOVERABLE: { known: 'The outside world refused it retryably and did nothing.', uncertain: null },
+  FAILED_EXTERNAL_CONSTRAINT: { known: 'It was refused for good; no retry under this key may bypass the refusal.', uncertain: null },
+};
+
+/** The caller-safe projection of one classified operation. */
+export function continuityReport(entry: Pick<ContinuityEntry, 'class' | 'attempts' | 'sentAttempts' | 'executorLease' | 'retrySafe' | 'needsReconciliation'>): ContinuityReport {
+  const words = REPORT_WORDS[entry.class];
+  return {
+    class: entry.class,
+    known: words.known,
+    uncertain: words.uncertain,
+    attempts: entry.attempts,
+    sentAttempts: entry.sentAttempts,
+    executorLease: entry.executorLease,
+    retrySafe: entry.retrySafe,
+    needsReconciliation: entry.needsReconciliation,
+  };
+}
+
+/**
+ * The continuity report of one operation, read from its current rows. Null
+ * when the operation is gone. Read-only.
+ */
+export async function operationContinuity(operationId: string): Promise<ContinuityReport | null> {
+  const operation = await getOperation(operationId);
+  if (!operation) return null;
+  const attempts = await listAttempts(operation.id);
+  return continuityReport(classifyOperation(operation, attempts));
 }
