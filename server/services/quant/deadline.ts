@@ -142,6 +142,57 @@ export interface RouteMoneyInput {
    * grantable), so an absence of `BORROWED_IN` is a structural zero rather than an unknown.
    */
   borrowingUnrecordable?: boolean;
+  /**
+   * True when the rows record every customer receipt and every outlay of the
+   * route (a ledger route), so an outlay whose funder no row states is
+   * attributed from the rows themselves: the part the customer's money already
+   * in hand covered was customer-funded, the rest was self-funded
+   * (`attributeFunding`). Left unset, an unstated funder stays unattributed.
+   */
+  fundingFromReceipts?: boolean;
+}
+
+/**
+ * Who funded each outlay whose funder no row states, read from the order money
+ * moved. Walks the route's movements in time order, drain-first at the same
+ * instant (the order peak working capital uses, so a same-moment receipt never
+ * funds an outlay): customer receipts fill a pool, refunds and chargebacks give
+ * customer money back out of it, and each outlay is customer-funded up to what
+ * the pool still holds and self-funded beyond it. An outlay a row already
+ * attributes keeps its funder; a customer-funded one draws on the pool. The
+ * owner's own capital and borrowing are never customer money. Pure.
+ */
+export function attributeFunding(events: readonly MoneyEvent[]): { customer: number; self: number; derived: number } {
+  const t = (e: MoneyEvent) => Date.parse(e.at);
+  const drains = (e: MoneyEvent) => e.kind === 'SUPPLIER_OUTLAY' || e.kind === 'REFUND' || e.kind === 'CHARGEBACK';
+  const flow = events
+    .filter((e) => Number.isFinite(e.amount) && e.amount >= 0 && Number.isFinite(t(e)))
+    .filter((e) => e.kind === 'FUNDS_RECEIVED' || drains(e))
+    .map((e, i) => ({ e, i }))
+    .sort((a, b) => t(a.e) - t(b.e) || Number(drains(b.e)) - Number(drains(a.e)) || a.i - b.i)
+    .map(({ e }) => e);
+  let pool = 0;
+  let customer = 0;
+  let self = 0;
+  let derived = 0;
+  for (const e of flow) {
+    if (e.kind === 'FUNDS_RECEIVED') pool += e.amount;
+    else if (e.kind === 'REFUND' || e.kind === 'CHARGEBACK') pool = Math.max(0, pool - e.amount);
+    else if (e.fundedBy === 'SELF') self += e.amount;
+    else {
+      const covered = Math.min(e.amount, pool);
+      if (e.fundedBy === 'CUSTOMER') {
+        customer += e.amount;
+        pool -= covered;
+        continue;
+      }
+      pool -= covered;
+      customer += covered;
+      self += e.amount - covered;
+      derived += e.amount;
+    }
+  }
+  return { customer, self, derived };
 }
 
 export const CASH_IDENTITIES = [
@@ -211,8 +262,13 @@ export function quantifyRouteMoney(route: RouteMoneyInput): RouteMoneyVelocity {
   const of = (k: MoneyEvent['kind']) => ev.filter((e) => e.kind === k);
 
   const outlays = of('SUPPLIER_OUTLAY').sort((a, b) => ms(a.at)! - ms(b.at)!);
-  const spendBy = (who: 'CUSTOMER' | 'SELF') => (outlays.some((o) => o.fundedBy === who) ? sum(outlays.filter((o) => o.fundedBy === who).map((o) => o.amount)) : null);
-  const unattributed = outlays.filter((o) => !o.fundedBy);
+  // On a route whose rows record every receipt and outlay, an unstated funder is read from the
+  // order money moved; anywhere else it stays unattributed rather than assumed.
+  const funding = route.fundingFromReceipts && outlays.length > 0 ? attributeFunding(ev) : null;
+  const spendBy = (who: 'CUSTOMER' | 'SELF') =>
+    funding ? (who === 'CUSTOMER' ? funding.customer : funding.self)
+    : outlays.some((o) => o.fundedBy === who) ? sum(outlays.filter((o) => o.fundedBy === who).map((o) => o.amount)) : null;
+  const unattributed = funding ? [] : outlays.filter((o) => !o.fundedBy);
   if (outlays.length === 0) unknowns.push('no supplier outlay row');
   else if (unattributed.length > 0) unknowns.push('some supplier outlays do not say who funded them');
 
@@ -406,8 +462,9 @@ export function scoreRoutes(
  *    PIPELINE_RELEASED is that billing released, so it leaves billings and receivables;
  *  - CUSTOMER_PAYMENT is funds received; SETTLEMENT is the same money becoming
  *    usable, so it dates usable cash and is never counted as a second receipt;
- *  - COST is a supplier outlay whose funder no row states (so spend stays
- *    unattributed rather than assumed self-funded);
+ *  - COST is a supplier outlay; no row states its funder, so it is attributed
+ *    from the route's own rows (`attributeFunding`): covered by customer money
+ *    already received is customer-funded, the rest self-funded — never assumed;
  *  - UNPAID_COMMITMENT is a supplier liability, dated when incurred;
  *    COMMITMENT_PAID closes it (the matching COST row is the money, so it is never
  *    a second outlay) and COMMITMENT_RELEASED shrinks it;
@@ -496,6 +553,8 @@ export function routeInputsFromEntries(
       usableCashAt: settled.sort()[0],
       events,
       borrowingUnrecordable: true,
+      // The ledger records every receipt and outlay of the route, so the funder is read from them.
+      fundingFromReceipts: true,
     });
   }
   return inputs;
