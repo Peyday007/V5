@@ -436,7 +436,7 @@ const CHAMBER_CATEGORIES: [string, keyof typeof CATEGORY][] = [
 ];
 const CHAMBER = 'https://business.mechanicsburgchamber.org';
 /** Towns whose businesses sell to Camp Hill & Hampden households. */
-const TOWNS = /camp hill|mechanicsburg|lemoyne|new cumberland|enola|wormleysburg|shiremanstown|harrisburg|hampden|summerdale/i;
+const TOWNS = /camp hill|mechanicsburg|lemoyne|new cumberland|enola|wormleysburg|shiremanstown|harrisburg|hampden|summerdale|dillsburg|boiling springs|carlisle|hummelstown|linglestown|paxtang|penbrook|steelton|highspire|middletown|marysville|grantham|lewisberry|etters/i;
 
 const decode = (s: string) => s.replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
 
@@ -458,7 +458,26 @@ export async function discoverChamber(deps: Deps, slug: string, key: keyof typeo
 }
 
 /** OpenStreetMap features with a website, in one West Shore tile; brand chains are left out (their sites answer for head office). */
-const OSM_TILES = ['40.20,-77.05,40.26,-76.95', '40.20,-76.95,40.27,-76.86', '40.13,-77.05,40.20,-76.86', '40.26,-77.05,40.32,-76.86'];
+/**
+ * The commercially relevant area: everywhere a Camp Hill household drives to
+ * for a dentist, a mechanic or a dinner — the West Shore, Harrisburg and its
+ * eastern suburbs, Mechanicsburg out to Carlisle, and down to Dillsburg — as a
+ * grid of 0.06° × 0.08° tiles, nearest first; every hourly pass reads three, so
+ * the whole grid is covered about twice a day. Owner's order, 2026-11-11: "Search the
+ * entire commercially relevant area, not just the original prospect list."
+ */
+export const OSM_TILES: string[] = (() => {
+  const tiles: { box: string; d: number }[] = [];
+  for (let s = 40.08; s < 40.38; s += 0.06) {
+    for (let w = -77.28; w < -76.66; w += 0.08) {
+      const n = s + 0.06;
+      const e = w + 0.08;
+      const d = Math.hypot((s + n) / 2 - 40.235, ((w + e) / 2 + 76.93) * 0.77);
+      tiles.push({ box: `${s.toFixed(2)},${w.toFixed(2)},${n.toFixed(2)},${e.toFixed(2)}`, d });
+    }
+  }
+  return tiles.sort((a, b) => a.d - b.d).map((t) => t.box);
+})();
 const OSM_KEY: [RegExp, keyof typeof CATEGORY][] = [
   [/^(dentist)$/, 'dental'], [/^(doctors|clinic|physiotherapist|chiropractor|optometrist|healthcare|optician)$/, 'health'], [/^(veterinary|pet|pet_grooming)$/, 'pets'],
   [/^(restaurant|cafe|bar|pub|ice_cream|bakery)$/, 'restaurant'], [/^(hairdresser|beauty|massage|tattoo|cosmetics)$/, 'personal'], [/^(car_repair|tyres|car_wash|car)$/, 'auto'],
@@ -519,20 +538,20 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
   const slot = options.slot ?? Math.floor(Date.now() / 3_600_000);
   const known = await campaignLeads(deps, campaignId);
   const chamber = [CHAMBER_CATEGORIES[slot % CHAMBER_CATEGORIES.length]!, CHAMBER_CATEGORIES[(slot + 6) % CHAMBER_CATEGORIES.length]!];
-  const tile = OSM_TILES[slot % OSM_TILES.length]!;
-  const batches = await Promise.all([...chamber.map(([s, k]) => discoverChamber(deps, s, k)), discoverOsm(deps, tile)]);
+  const tiles = [0, 1, 2].map((i) => OSM_TILES[(slot * 3 + i) % OSM_TILES.length]!);
+  const batches = await Promise.all([...chamber.map(([s, k]) => discoverChamber(deps, s, k)), ...tiles.map((t) => discoverOsm(deps, t))]);
   const seen = new Set<string>();
   const fresh = batches.flat().filter((c) => {
     const d = rootDomain(c.website);
     if (!d || known.domains.has(d) || seen.has(d) || FOREIGN_DOMAINS.some((f) => d === f || d.endsWith(`.${f}`)) || /facebook|instagram|linkedin|yelp/.test(d)) return false;
     seen.add(d);
     return true;
-  }).slice(0, options.maxSites ?? 60);
+  }).slice(0, options.maxSites ?? 150);
   let found = 0;
   let noMx = 0;
   let unverified = 0;
   let added = 0;
-  await pool(fresh, 6, async (c) => {
+  await pool(fresh, 10, async (c) => {
     const hit = await findPublishedEmail(deps, c.website);
     if (!hit) return;
     found += 1;
@@ -558,11 +577,34 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
     }
   });
   const discovered = batches.reduce((n, b) => n + b.length, 0);
-  const sources = `${chamber.map(([s]) => s).join(', ')}; map tile ${tile} (${batches[2]?.length ?? 0} on the map)`;
+  const sources = `${chamber.map(([s]) => s).join(', ')}; map tiles ${tiles.join(', ')} (${batches.slice(chamber.length).reduce((n, b) => n + b.length, 0)} on the map)`;
   const line = fresh.length === 0
     ? `refill: nothing new to read this pass (${discovered} discovered from ${sources}, all already in the campaign or not usable)`
     : `refill: ${discovered} discovered from ${sources}; ${fresh.length} new sites read; ${found} published an address; ${noMx} refused for no mail server; ${unverified} left for the next pass (no resolver answered); ${added} added`;
   return { discovered, fresh: fresh.length, found, noMx, added, line };
+}
+
+/**
+ * What the shared mailboxes already carry for the owner's other active
+ * campaigns: each one's largest day of sends in the last week, from Instantly's
+ * own daily analytics. A sender's daily limit is per mailbox across every
+ * campaign, so this is subtracted from the combined limit to give what the
+ * Neighbor Card can actually use.
+ */
+export async function committedElsewhere(deps: Deps, campaignId: string, senders: string[]): Promise<{ committed: number; line: string }> {
+  const mine = new Set(senders);
+  const others = itemsOf(await instantly(deps, 'GET', '/campaigns?limit=100'))
+    .filter((c) => c.id !== campaignId && c.status === 1 && ((c.email_list as string[] | undefined) ?? []).some((e) => mine.has(e)));
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  let committed = 0;
+  const parts: string[] = [];
+  for (const c of others) {
+    const days = (await instantly(deps, 'GET', `/campaigns/analytics/daily?campaign_id=${String(c.id)}&start_date=${since}`)) as unknown as { sent?: number }[];
+    const peak = Array.isArray(days) ? days.reduce((m, d) => Math.max(m, Number(d.sent) || 0), 0) : 0;
+    committed += peak;
+    parts.push(`${String(c.name)} ${peak}/day`);
+  }
+  return { committed, line: parts.length ? `shared senders also carry: ${parts.join(', ')}` : 'no other active campaign shares these senders' };
 }
 
 export async function deliveryReport(deps: Deps, campaignId: string): Promise<{ sent: number; bounced: number; leads: number; replies: number; line: string }> {
@@ -586,6 +628,13 @@ export async function runNeighborCard(deps: Deps = defaultDeps(), options: { ref
     id = sync.id;
     lines.push(sync.line);
     if (sync.status !== 1) ok = false;
+    try {
+      const { emails } = await healthySenders(deps);
+      const shared = await committedElsewhere(deps, sync.id, emails);
+      lines.push(`capacity: ${Math.max(0, sync.dailyCapacity - shared.committed)}/day usable of ${sync.dailyCapacity}/day across ${sync.senders} healthy senders (${shared.line})`);
+    } catch (error) {
+      lines.push(`capacity read failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   } catch (error) {
     ok = false;
     lines.push(`sync failed: ${error instanceof Error ? error.message : String(error)}`);
