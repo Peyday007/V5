@@ -1546,6 +1546,24 @@ export function resetRouteHealth(): void {
   routeHealth.clear();
 }
 
+/** The `bin_events.event_type` rows a route's hold and its restoration are recorded under. */
+export const ROUTE_HELD_EVENT = 'FREE_LANE_ROUTE_HELD';
+export const ROUTE_RESTORED_EVENT = 'FREE_LANE_ROUTE_RESTORED';
+
+export interface RouteHealthReading {
+  model: string;
+  failures: number;
+  cause: RouteFailureCause;
+  held: boolean;
+}
+
+/** Every route with recorded failures, held or not, for the per-stage measurement to carry. */
+export function routeHealthSnapshot(): RouteHealthReading[] {
+  return [...routeHealth.entries()]
+    .map(([model, state]) => ({ model, failures: state.failures, cause: state.cause, held: state.failures >= ROUTE_FAILURE_LIMIT }))
+    .sort((a, b) => a.model.localeCompare(b.model));
+}
+
 /** A failing route's standing: null when it is healthy or due its single re-probe item. */
 export function routeHold(model: string, now = Date.now()): string | null {
   const state = routeHealth.get(model);
@@ -1561,7 +1579,20 @@ export function routeHold(model: string, now = Date.now()): string | null {
 /** A route that answered is healthy again; a route that did not is counted, with its cause. */
 export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: string }, now = Date.now()): void {
   if (outcome.ok) {
+    const was = routeHealth.get(model);
     routeHealth.delete(model);
+    // A held route answering again is the restoration the spec asks to observe:
+    // it is written to the rows, with the cause it recovered from.
+    if (was && was.failures >= ROUTE_FAILURE_LIMIT) {
+      void recordBinEvent({
+        eventType: ROUTE_RESTORED_EVENT,
+        outcome: 'RESTORED',
+        reason: `model route ${model} answered again after ${was.failures} failures (${was.cause})`,
+        provider: model,
+        evidenceClass: 'MEASURED',
+        measures: { model, cause: was.cause, failures: was.failures },
+      });
+    }
     return;
   }
   const why = outcome.why ?? '';
@@ -1572,7 +1603,18 @@ export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: 
   const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now + ROUTE_REPROBE_MS };
   state.failures += 1;
   state.cause = cause;
-  if (state.failures === ROUTE_FAILURE_LIMIT) state.nextProbeAt = now + ROUTE_REPROBE_MS;
+  if (state.failures === ROUTE_FAILURE_LIMIT) {
+    state.nextProbeAt = now + ROUTE_REPROBE_MS;
+    // The cause a route is held for is a record, not only a reason string on the items it refused.
+    void recordBinEvent({
+      eventType: ROUTE_HELD_EVENT,
+      outcome: 'HELD',
+      reason: `model route ${model} held after ${state.failures} consecutive failures (${cause})`,
+      provider: model,
+      evidenceClass: 'MEASURED',
+      measures: { model, cause, failures: state.failures },
+    });
+  }
   routeHealth.set(model, state);
 }
 

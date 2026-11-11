@@ -87,7 +87,40 @@ export interface StageCapacityReport {
   totalProductiveJobs: number;
   purposesSumToTotal: boolean;
   process: ProcessReading;
+  /** Each failing model route in the window, with the cause its own errors name. */
+  routeCauses: RouteCauseReading[];
+  /** The cause most failures in the window were recorded under, on a route that has not answered since. */
+  primaryCause: { model: string; cause: string; failures: number } | null;
   constrained: Constraint;
+}
+
+/**
+ * One model route's failures in the window, read from the cause `worker.ts`
+ * writes into each failed item's reason (`model call failed [cause]: …`).
+ * `restored` is true when the route submitted an accepted item after its last
+ * failure: the route is working again on the rows, not only in memory.
+ */
+export interface RouteCauseReading {
+  model: string;
+  cause: string;
+  failures: number;
+  lastFailureAt: string;
+  lastSubmittedAt: string | null;
+  restored: boolean;
+}
+
+/**
+ * Whether existing queued work advanced since the previous recorded reading.
+ * `STALLED` is work waiting at both readings with nothing accepted between them;
+ * `ADVANCING` is at least one accepted item since; `IDLE` is nothing waiting;
+ * `FIRST_READING` is no earlier reading to compare with.
+ */
+export interface QueueAdvance {
+  verdict: 'ADVANCING' | 'STALLED' | 'IDLE' | 'FIRST_READING';
+  previousAt: string | null;
+  previousQueued: number | null;
+  queuedNow: number;
+  acceptedSincePrevious: number | null;
 }
 
 const n = (value: unknown): number => Number(value ?? 0) || 0;
@@ -226,8 +259,12 @@ function readProcess(): ProcessReading {
  * nothing waiting is not constrained, however slow. A gain is projected only
  * where it can be measured, and never as a reason to scale the web process.
  */
-export function chooseConstraint(stages: StageReading[]): Constraint {
+export function chooseConstraint(stages: StageReading[], cause: StageCapacityReport['primaryCause'] = null): Constraint {
+  const first = cause
+    ? `Restore model route ${cause.model} first: ${cause.failures} failures in the window name ${cause.cause} as the cause. `
+    : '';
   const recommendation =
+    first +
     'Restore the failing provider, credential, route or verification path first and watch whether queued work advances; ' +
     'scale independent workers only after a measured gain. Do not enlarge the web process because a queue is long.';
   let worst: { stage: StageReading; waiting: number; rate: number } | null = null;
@@ -258,6 +295,93 @@ export function chooseConstraint(stages: StageReading[]): Constraint {
   };
 }
 
+/**
+ * Reads the model and the cause out of a failed `FREE_LANE_ITEM` reason, as
+ * worker.ts writes it: `model <m>: model call failed [<cause>]: <detail>`.
+ * A reason in any other shape names no cause and returns null.
+ */
+export function parseFailureCause(reason: string | null): { model: string; cause: string } | null {
+  const match = /^model (\S+): model call failed \[([^\]]+)\]/.exec(reason ?? '');
+  return match ? { model: match[1]!, cause: match[2]! } : null;
+}
+
+/** Failing routes and their causes in the window, from the rows. */
+export async function readRouteCauses(since: string): Promise<RouteCauseReading[]> {
+  const db = getDb();
+  const failed = await db.all<{ reason: string | null; at: string }>(
+    `SELECT reason, at FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND reason LIKE '%model call failed [%'`,
+    [since],
+  );
+  const submitted = await db.all<{ reason: string | null; last: string | null }>(
+    `SELECT reason, MAX(at) AS last FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'SUBMITTED' AND at >= ?
+      GROUP BY reason`,
+    [since],
+  );
+  const lastOk = new Map<string, string>();
+  for (const row of submitted) {
+    const model = /^model (\S+)$/.exec(row.reason ?? '')?.[1];
+    if (model && row.last) lastOk.set(model, row.last);
+  }
+  const byKey = new Map<string, RouteCauseReading>();
+  for (const row of failed) {
+    const parsed = parseFailureCause(row.reason);
+    if (!parsed) continue;
+    const key = `${parsed.model}\u0000${parsed.cause}`;
+    const entry = byKey.get(key) ?? {
+      model: parsed.model,
+      cause: parsed.cause,
+      failures: 0,
+      lastFailureAt: row.at,
+      lastSubmittedAt: lastOk.get(parsed.model) ?? null,
+      restored: false,
+    };
+    entry.failures += 1;
+    if (row.at > entry.lastFailureAt) entry.lastFailureAt = row.at;
+    byKey.set(key, entry);
+  }
+  return [...byKey.values()]
+    .map((entry) => ({ ...entry, restored: entry.lastSubmittedAt !== null && entry.lastSubmittedAt > entry.lastFailureAt }))
+    .sort((a, b) => b.failures - a.failures || a.model.localeCompare(b.model) || a.cause.localeCompare(b.cause));
+}
+
+/** The cause behind most failures on a route that has not answered since; null when none is failing. */
+export function primaryCause(routes: readonly RouteCauseReading[]): StageCapacityReport['primaryCause'] {
+  const open = routes.filter((route) => !route.restored);
+  const top = open[0];
+  return top ? { model: top.model, cause: top.cause, failures: top.failures } : null;
+}
+
+/** Compares the queue and accepted work with the previous recorded reading. */
+export async function readQueueAdvance(queuedNowCount: number): Promise<QueueAdvance> {
+  const db = getDb();
+  const previous = await db.get<{ at: string; measures: string | null }>(
+    `SELECT at, measures FROM bin_events
+      WHERE event_type = ? AND outcome = 'MEASURED'
+      ORDER BY at DESC LIMIT 1`,
+    [STAGE_CAPACITY_EVENT],
+  );
+  if (!previous) {
+    return { verdict: queuedNowCount > 0 ? 'FIRST_READING' : 'IDLE', previousAt: null, previousQueued: null, queuedNow: queuedNowCount, acceptedSincePrevious: null };
+  }
+  let previousQueued: number | null = null;
+  try {
+    const parsed = JSON.parse(previous.measures ?? '{}') as { queuedNow?: unknown };
+    previousQueued = typeof parsed.queuedNow === 'number' ? parsed.queuedNow : null;
+  } catch {
+    previousQueued = null;
+  }
+  const accepted = await db.get<{ k: number | string }>(
+    "SELECT COUNT(*) AS k FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'SUBMITTED' AND at > ?",
+    [previous.at],
+  );
+  const acceptedSincePrevious = n(accepted?.k);
+  const verdict: QueueAdvance['verdict'] =
+    acceptedSincePrevious > 0 ? 'ADVANCING' : queuedNowCount > 0 || (previousQueued ?? 0) > 0 ? 'STALLED' : 'IDLE';
+  return { verdict, previousAt: previous.at, previousQueued, queuedNow: queuedNowCount, acceptedSincePrevious };
+}
+
 /** The per-stage, per-purpose measurement for the last `hours` hours (default 6). */
 export async function stageCapacity(options: { hours?: number; now?: number } = {}): Promise<StageCapacityReport> {
   const hours = options.hours && options.hours > 0 ? options.hours : 6;
@@ -271,6 +395,8 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
     "SELECT COUNT(*) AS k FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'SUBMITTED' AND at >= ?",
     [since],
   );
+  const routeCauses = await readRouteCauses(since);
+  const cause = primaryCause(routeCauses);
   return {
     windowHours: hours,
     since,
@@ -279,7 +405,9 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
     totalProductiveJobs,
     purposesSumToTotal: totalProductiveJobs === n(total?.k),
     process: readProcess(),
-    constrained: chooseConstraint(stages),
+    routeCauses,
+    primaryCause: cause,
+    constrained: chooseConstraint(stages, cause),
   };
 }
 
@@ -303,13 +431,20 @@ export async function recordStageCapacity(options: { hours?: number; now?: numbe
   try {
     const report = await stageCapacity(options);
     const waiting = await queuedNow();
+    // Read before this row is written, so the comparison is with the previous reading.
+    const advance = await readQueueAdvance(waiting);
+    // The in-process route health (which routes are held right now), alongside the rows' view of the window.
+    const { routeHealthSnapshot } = await import('./worker.ts');
+    const cause = report.primaryCause
+      ? ` Cause: ${report.primaryCause.cause} on ${report.primaryCause.model} (${report.primaryCause.failures} failures).`
+      : ' No failing model route in the window.';
     await recordBinEvent({
       eventType: STAGE_CAPACITY_EVENT,
       outcome: 'MEASURED',
-      reason: report.constrained.basis,
+      reason: `${report.constrained.basis}${cause} Queue ${advance.verdict.toLowerCase()}.`,
       durationMs: Date.now() - started,
       evidenceClass: 'MEASURED',
-      measures: { ...report, queuedNow: waiting } as unknown as Record<string, unknown>,
+      measures: { ...report, queuedNow: waiting, queueAdvance: advance, heldRoutes: routeHealthSnapshot() } as unknown as Record<string, unknown>,
     });
     return report;
   } catch (error) {
