@@ -140,6 +140,13 @@ describe('the deployment keys', () => {
     expect(verify(null, data, key, Buffer.from(headers['x-brain-signature'], 'base64'))).toBe(true);
   });
 
+  it('reads an RSA seal key the way OpenSSL 3 writes it (PKCS#1 DER)', () => {
+    const pkcs1 = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ format: 'der', type: 'pkcs1' }).toString('base64');
+    const env = { BRAIN_INTEGRATION_SEAL_KEY: pkcs1 };
+    expect(sealPublicKey(env)).not.toBeNull();
+    expect(unseal(seal(sealPublicKey(env)!.spki, 'v'), env)).toBe('v');
+  });
+
   it('opens a sealed credential only with the deployment key', () => {
     const env = { BRAIN_INTEGRATION_SEAL_KEY: rsa() };
     const sealed = seal(sealPublicKey(env)!.spki, 'instantly-key-value');
@@ -160,6 +167,19 @@ describe('Google Places through V2', () => {
     expect(refused.bridge).toBe('REFUSED');
     expect(refused.detail).toContain('pinned');
     expect((await probeV2Places({ env: {} })).bridge).toBe('NOT_CONFIGURED');
+  });
+
+  it("reads an unpinned bridge as Brain's repair, not the owner's", async () => {
+    const readings = await readIntegrations({
+      env: { ...env, INSTANTLY_API_KEY: 'k'.repeat(40) },
+      probe: true,
+      probes: { 'v2-places': async () => ({ ok: 'repairing', detail: 'not pinned' }), 'v2-bridge': async () => ({ ok: 'repairing', detail: 'not pinned' }) },
+    });
+    for (const id of ['google-places', 'v2']) {
+      const r = readings.find((one) => one.id === id)!;
+      expect(r.state).toBe('REPAIRING');
+      expect(r.ownerAction).toBeNull();
+    }
   });
 
   it('records each search before sending it and stops at the ceiling', async () => {

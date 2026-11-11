@@ -57,6 +57,12 @@ export interface IntegrationReading {
   checkedAt: string;
 }
 
+/** ok: accepted; false: refused (the owner's); null: no answer; 'repairing': Brain is completing it. */
+export interface ProbeResult {
+  ok: boolean | null | 'repairing';
+  detail: string;
+}
+
 const AUTOMATIC: CredentialDelivery[] = ['GITHUB_SECRET', 'CONNECTOR_SEALED', 'GENERATED', 'WORKFLOW'];
 
 export interface ReadOptions {
@@ -66,7 +72,7 @@ export interface ReadOptions {
   /** Run the live probes. Off for the page's instant reading, on for a check. */
   probe?: boolean;
   /** Injected by tests. */
-  probes?: Partial<Record<string, () => Promise<{ ok: boolean | null; detail: string }>>>;
+  probes?: Partial<Record<string, () => Promise<ProbeResult>>>;
 }
 
 function readCredential(
@@ -88,7 +94,7 @@ function readCredential(
 }
 
 /** The live probes, each answering ok (true), refused (false) or unreachable (null). */
-function liveProbes(env: NodeJS.ProcessEnv): Record<string, () => Promise<{ ok: boolean | null; detail: string }>> {
+function liveProbes(env: NodeJS.ProcessEnv): Record<string, () => Promise<ProbeResult>> {
   return {
     instantly: async () => {
       const r = await probeInstantly({ env });
@@ -98,13 +104,16 @@ function liveProbes(env: NodeJS.ProcessEnv): Record<string, () => Promise<{ ok: 
       const r = await probeStripe({ env });
       return { ok: r.verdict === 'VERIFIED' ? true : r.verdict === 'BAD_CREDENTIAL' ? false : null, detail: r.detail };
     },
+    // A bridge V2 does not trust yet (key unpinned, route undeployed) is Brain's
+    // own unfinished repair, never the owner's; only V2 holding no Places key is.
     'v2-places': async () => {
       const r = await probeV2Places({ env });
-      return { ok: r.places === 'VERIFIED' ? true : r.places === 'UNREACHABLE' ? null : false, detail: r.detail };
+      const ok = r.places === 'VERIFIED' ? true : r.places === 'UNREACHABLE' ? null : r.bridge !== 'VERIFIED' ? 'repairing' : false;
+      return { ok, detail: r.detail };
     },
     'v2-bridge': async () => {
       const r = await probeV2Places({ env });
-      return { ok: r.bridge === 'VERIFIED' ? true : r.bridge === 'UNREACHABLE' ? null : false, detail: r.detail };
+      return { ok: r.bridge === 'VERIFIED' ? true : r.bridge === 'UNREACHABLE' ? null : 'repairing', detail: r.detail };
     },
     database: async () => {
       await getDb().all('SELECT 1 AS one', []);
@@ -162,6 +171,7 @@ export async function readIntegrations(options: ReadOptions = {}): Promise<Integ
     try {
       const result = await probe();
       if (result.ok === true) return reading('CONNECTED', result.detail);
+      if (result.ok === 'repairing') return reading('REPAIRING', result.detail);
       if (result.ok === false) return reading('REFUSED', result.detail, true);
       return reading('UNREACHABLE', result.detail);
     } catch (error) {
