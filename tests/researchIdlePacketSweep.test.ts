@@ -5,7 +5,29 @@
  * nothing calls `advancePacket` on it; if its last advance never happened it is
  * idle for ever. The tick sweep must reach it from rows.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * Packets whose advance breaks. Every live state the advance can read now moves
+ * a packet (a repair whose return time passed included), so the progress
+ * deadline's remaining job is the advance that cannot finish: it throws, the
+ * sweep catches it, and the packet must still not sit live for ever. The break
+ * is the advance's first read of the packet's work items, and only that read:
+ * the sweep's own reads, and everything the conclusion writes, are real.
+ */
+const brokenAdvance = new Set<string>();
+vi.mock('../server/repos/workQueue.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../server/repos/workQueue.ts')>();
+  return {
+    ...actual,
+    listWorkItemsForOrchestration: async (id: string, ...rest: unknown[]) => {
+      if (brokenAdvance.has(id) && (new Error().stack ?? '').includes('finishRecordedAuditRoles')) {
+        throw new Error('the advance could not read this packet');
+      }
+      return (actual.listWorkItemsForOrchestration as (...a: unknown[]) => ReturnType<typeof actual.listWorkItemsForOrchestration>)(id, ...rest);
+    },
+  };
+});
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createRun } from '../server/repos/runs.ts';
@@ -31,6 +53,7 @@ let layerId = '';
 
 beforeEach(async () => {
   resetIdlePacketAttempts();
+  brokenAdvance.clear();
   const fixture = await freshProject();
   projectId = fixture.project.id;
   layerId = (await fixture.layerByName('World Model')).id;
@@ -195,11 +218,24 @@ describe('the progress deadline', () => {
   }
 
   /**
-   * The recorded failure class, from rows: AWAITING_REPAIR whose repair time has
-   * already passed, on a fragment left RUNNING with no item. `advancePacket`
-   * reads any `nextRetryAt` as a wait, so it changes nothing, every time.
+   * An advance that cannot finish: the packet is live, idle, has nothing
+   * outstanding, and advancing it throws every time, so it changes nothing.
    */
   async function stalled(ageMs: number, fragmentStatus: 'RUNNING' | 'NEEDS_HUMAN' = 'RUNNING'): Promise<string> {
+    const id = await packet('AWAITING_REPAIR', ageMs);
+    await fragmentOn(id, { status: fragmentStatus });
+    await age(id, ageMs);
+    brokenAdvance.add(id);
+    return id;
+  }
+
+  /**
+   * The recorded failure class, from rows: AWAITING_REPAIR whose repair time
+   * has already passed. `advancePacket` read any `nextRetryAt` as a wait, so it
+   * changed nothing, every time, until the deadline wrote the packet off with
+   * the repair it was owed never minted.
+   */
+  async function pastDue(ageMs: number, fragmentStatus: 'RUNNING' | 'BLOCKED'): Promise<string> {
     const id = await packet('AWAITING_REPAIR', ageMs);
     await fragmentOn(id, { status: fragmentStatus, nextRetryAt: new Date(Date.now() - 3_600_000).toISOString() });
     await age(id, ageMs);
@@ -213,7 +249,34 @@ describe('the progress deadline', () => {
     );
   }
 
-  it('reproduces the stall: under the deadline the advance changes nothing and the packet stays live', async () => {
+  it('mints a repair whose return time has passed instead of reading it as a wait, even past the deadline', async () => {
+    const id = await pastDue(OVERDUE, 'BLOCKED');
+    await concludeUnworkablePackets(10);
+    const after = (await getOrchestration(id))!;
+    expect(after.status).toBe('RESEARCHING');
+    expect(after.failedAt).toBeNull();
+    const attempts = await getDb().all<{ attempt: number; status: string }>(
+      `SELECT attempt, status FROM research_fragments WHERE orchestration_id = ? ORDER BY attempt`,
+      [id],
+    );
+    expect(attempts.map((a) => a.attempt)).toEqual([1, 2]);
+    const live = await getDb().all<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM work_items WHERE orchestration_id = ? AND state IN ('QUEUED','LEASED')`,
+      [id],
+    );
+    expect(Number(live[0]!.c)).toBeGreaterThan(0);
+    expect((await events(id)).filter((e) => e.event_type === 'RESEARCH_FAILED')).toHaveLength(0);
+  });
+
+  it('parks a past-due repair with nothing left to mint, naming why, instead of leaving it idle', async () => {
+    const id = await pastDue(UNDER, 'RUNNING');
+    const moved = await advanceIdlePackets(10);
+    expect(moved).toEqual([{ orchestrationId: id, from: 'AWAITING_REPAIR', to: 'NEEDS_HUMAN' }]);
+    const after = (await getOrchestration(id))!;
+    expect(after.failureReason).toMatch(/no scheduled time still ahead to return/);
+  });
+
+  it('reproduces the stall: under the deadline an advance that cannot finish changes nothing and the packet stays live', async () => {
     const id = await stalled(UNDER);
     const before = (await getOrchestration(id))!;
     expect(await advanceIdlePackets(10)).toEqual([]);
@@ -229,6 +292,7 @@ describe('the progress deadline', () => {
     expect(after.status).toBe('FAILED');
     expect(after.failureReason).toMatch(/sat AWAITING_REPAIR for 5 hours/);
     expect(after.failureReason).toMatch(/progress deadline/);
+    expect(after.failureReason).toMatch(/failed \(the advance could not read this packet\)/);
     expect(after.failureReason).toMatch(/Nothing was synthesized/);
     expect(after.failedAt).not.toBeNull();
     expect(after.documentId).toBeNull();

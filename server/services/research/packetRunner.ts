@@ -1365,7 +1365,18 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   if (result.status === 'AWAITING_REPAIR') {
     const fragments = await currentFragments(orchestrationId);
-    const waiting = fragments.some((fragment) => fragment.nextRetryAt !== null);
+    /*
+     * Only a return time still ahead is a wait. One that has passed is due, and
+     * reading it as a wait left the packet AWAITING_REPAIR with nothing to wake
+     * it — "packet idle holding a slot" — until the progress deadline wrote it
+     * off as FAILED, never having said why no further attempt could be made.
+     * Past due, it falls through to the same assessment as a packet with no
+     * return time at all. A repair still allowed was already minted by
+     * `advanceOnce`'s `mintRepairs` above, so what reaches here is parked with
+     * the refusals that say why nothing more can be tried.
+     */
+    const now = queueNow();
+    const waiting = fragments.some((fragment) => fragment.nextRetryAt !== null && fragment.nextRetryAt > now);
     if (waiting) return result;
     /*
      * Reachable now only through a race — the verdict branch asks
@@ -1379,7 +1390,7 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
     const detail = repairs.refused.map((entry) => entry.reason).join('; ');
     await parkOrchestration(orchestrationId,
         'The packet was left awaiting a repair that has no claimable work and no scheduled ' +
-        'time to return' +
+        'time still ahead to return' +
         (detail ? ` (${detail})` : '') +
         '. Nothing would ever pick it up, so it is a decision rather than a wait.', { stampCompleted: true });
     return { ...result, status: 'NEEDS_HUMAN', waitingOn: 'a person: no repair is actually pending' };
