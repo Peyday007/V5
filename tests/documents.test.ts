@@ -701,7 +701,9 @@ describe('provenance', () => {
 
 describe('normalization', () => {
   it('cleans extraction artifacts and reports what it changed', () => {
-    const raw = 'The interme­di- ation ﻿layer deﬁnes  custody rules.';
+    // The hard hyphen ends a line: that is the extraction artifact. On one line
+    // it would be a real suspended hyphen and must survive (normalizeSuspendedHyphen.test.ts).
+    const raw = 'The interme­di-\nation ﻿layer deﬁnes  custody rules.';
     const result = normalizeBlockText(raw);
 
     expect(result.text).toBe('The intermediation layer defines custody rules.');
