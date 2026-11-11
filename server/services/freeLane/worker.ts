@@ -1543,9 +1543,29 @@ export function routeHold(model: string, now = Date.now()): string | null {
   return `model route failing (${state.cause}); another model takes the work until it is re-probed`;
 }
 
+/**
+ * The `bin_events.event_type` a route's change of standing is recorded under:
+ * `HELD` (with its cause) when it stops being offered items, `RESTORED` when a
+ * held route answers again. `stageCapacity.ts` reads these to say whether model
+ * throughput was restored, rather than leaving the cause in a log line.
+ */
+export const ROUTE_STATE_EVENT = 'FREE_LANE_ROUTE';
+
+function recordRouteState(model: string, outcome: 'HELD' | 'RESTORED', cause: RouteFailureCause, failures: number): void {
+  void recordBinEvent({
+    eventType: ROUTE_STATE_EVENT,
+    outcome,
+    reason: `model ${model}: ${outcome === 'HELD' ? `held after ${failures} failures (${cause})` : `answered again after ${failures} failures (${cause})`}`,
+    evidenceClass: 'MEASURED',
+    measures: { model, cause, failures },
+  });
+}
+
 /** A route that answered is healthy again; a route that did not is counted, with its cause. */
 export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: string }, now = Date.now()): void {
   if (outcome.ok) {
+    const prior = routeHealth.get(model);
+    if (prior && prior.failures >= ROUTE_FAILURE_LIMIT) recordRouteState(model, 'RESTORED', prior.cause, prior.failures);
     routeHealth.delete(model);
     return;
   }
@@ -1557,7 +1577,10 @@ export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: 
   const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now + ROUTE_REPROBE_MS };
   state.failures += 1;
   state.cause = cause;
-  if (state.failures === ROUTE_FAILURE_LIMIT) state.nextProbeAt = now + ROUTE_REPROBE_MS;
+  if (state.failures === ROUTE_FAILURE_LIMIT) {
+    state.nextProbeAt = now + ROUTE_REPROBE_MS;
+    recordRouteState(model, 'HELD', cause, state.failures);
+  }
   routeHealth.set(model, state);
 }
 

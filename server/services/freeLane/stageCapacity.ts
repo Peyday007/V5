@@ -17,6 +17,7 @@ import { getDb } from '../../db/database.ts';
 import { databasePoolReadings } from '../../db/database.ts';
 import { waitingNow } from './capacity.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
+import { classifyRouteFailure, ROUTE_STATE_EVENT, type RouteFailureCause } from './worker.ts';
 
 export type Measured<T> = { measured: true; value: T } | { measured: false; reason: string };
 
@@ -79,6 +80,49 @@ export interface Constraint {
   recommendation: string;
 }
 
+/** One model route's standing in the window, read from its own item rows. */
+export interface RouteDiagnosis {
+  model: string;
+  /** Model-call failures, by the cause their own error names (database pressure excluded). */
+  failures: number;
+  causes: Partial<Record<RouteFailureCause, number>>;
+  dominantCause: RouteFailureCause | null;
+  submitted: number;
+  lastFailureAt: string | null;
+  lastSubmittedAt: string | null;
+  /** Route standing changes the worker recorded (`FREE_LANE_ROUTE`). */
+  held: number;
+  restored: number;
+  /**
+   * FAILING: its latest item was a model-call failure. RESTORED: it failed in the
+   * window and its latest item was accepted. HEALTHY: accepted, no model-call failure.
+   */
+  status: 'FAILING' | 'RESTORED' | 'HEALTHY' | 'IDLE';
+}
+
+/** Whether queued work advanced since the previous recorded reading. */
+export interface QueueAdvance {
+  previousAt: string;
+  previousQueued: number;
+  queuedNow: number;
+  submittedSince: number;
+  advancing: boolean;
+}
+
+/**
+ * The first remedial action of CAP-16-3, measured: which cause is failing model
+ * throughput, what restores it, and whether queued work advanced afterwards.
+ */
+export interface ThroughputRestoration {
+  routes: RouteDiagnosis[];
+  /** The cause behind the failing routes, the most frequent one; null when none fails. */
+  cause: RouteFailureCause | null;
+  action: string;
+  queue: Measured<QueueAdvance>;
+  verdict: 'RESTORED' | 'FAILING' | 'NOT_ADVANCING' | 'NO_FAILURE_SEEN';
+  basis: string;
+}
+
 export interface StageCapacityReport {
   windowHours: number;
   since: string;
@@ -87,6 +131,8 @@ export interface StageCapacityReport {
   totalProductiveJobs: number;
   purposesSumToTotal: boolean;
   process: ProcessReading;
+  queuedNow: number;
+  throughput: ThroughputRestoration;
   constrained: Constraint;
 }
 
@@ -207,10 +253,14 @@ function readProcess(): ProcessReading {
  * nothing waiting is not constrained, however slow. A gain is projected only
  * where it can be measured, and never as a reason to scale the web process.
  */
-export function chooseConstraint(stages: StageReading[]): Constraint {
-  const recommendation =
+export function chooseConstraint(stages: StageReading[], throughput?: ThroughputRestoration): Constraint {
+  const general =
     'Restore the failing provider, credential, route or verification path first and watch whether queued work advances; ' +
     'scale independent workers only after a measured gain. Do not enlarge the web process because a queue is long.';
+  const recommendation =
+    throughput && (throughput.verdict === 'FAILING' || throughput.verdict === 'NOT_ADVANCING')
+      ? `${throughput.basis} ${throughput.action} ${general}`
+      : general;
   let worst: { stage: StageReading; waiting: number; rate: number } | null = null;
   for (const stage of stages) {
     if (!stage.queueSize.measured || !stage.itemsProcessedPerHour.measured) continue;
@@ -239,6 +289,134 @@ export function chooseConstraint(stages: StageReading[]): Constraint {
   };
 }
 
+/** What restores a route failing for each cause. Data, not a whitelist: an unnamed cause gets the last entry. */
+export const RESTORE_ACTION: Record<RouteFailureCause, string> = {
+  credentials: 'The provider refused the credential: the route stays held and other models take its work until the credential is replaced by whoever holds it.',
+  'task routing': 'The provider does not serve the requested model: correct the route or model name; the route stays held meanwhile.',
+  'broken GPU': 'The GPU host is failing: the route stays held, other models take its work, and one item re-probes it every interval.',
+  'provider availability': 'The provider is busy or unreachable: items back off and one re-probes the route every interval.',
+  database: 'Brain\'s own database was busy; this is not a model-route failure.',
+  unclassified: 'The failure names no known cause: read the recorded reasons for the route before changing capacity.',
+};
+
+const ROUTE_REASON = /^model (.+?)(?:: ([\s\S]*))?$/;
+const CAUSE_TAG = /model call failed \[([^\]]+)\]/;
+
+/** Reads each route's failures by cause and its latest standing from the lane's own item rows. */
+async function readRoutes(since: string, nowIso: string): Promise<RouteDiagnosis[]> {
+  const db = getDb();
+  const rows = await db.all<{ outcome: string | null; reason: string | null; at: string }>(
+    `SELECT outcome, reason, at FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND at <= ?
+        AND (outcome = 'SUBMITTED' OR reason LIKE '%model call failed%')
+      ORDER BY at`,
+    [since, nowIso],
+  );
+  const states = await db.all<{ outcome: string | null; measures: string | null }>(
+    `SELECT outcome, measures FROM bin_events WHERE event_type = ? AND at >= ? AND at <= ?`,
+    [ROUTE_STATE_EVENT, since, nowIso],
+  );
+  const routes = new Map<string, RouteDiagnosis & { last: 'ok' | 'fail' | null }>();
+  const route = (model: string) => {
+    let r = routes.get(model);
+    if (!r) {
+      r = { model, failures: 0, causes: {}, dominantCause: null, submitted: 0, lastFailureAt: null, lastSubmittedAt: null, held: 0, restored: 0, status: 'IDLE', last: null };
+      routes.set(model, r);
+    }
+    return r;
+  };
+  for (const row of rows) {
+    const match = ROUTE_REASON.exec(row.reason ?? '');
+    if (!match) continue;
+    const r = route(match[1]!);
+    if (row.outcome === 'SUBMITTED') {
+      r.submitted += 1;
+      r.lastSubmittedAt = row.at;
+      r.last = 'ok';
+      continue;
+    }
+    const why = match[2] ?? '';
+    const tagged = CAUSE_TAG.exec(why)?.[1] as RouteFailureCause | undefined;
+    const cause = tagged && tagged in RESTORE_ACTION ? tagged : classifyRouteFailure(why);
+    if (cause === 'database') continue;
+    r.failures += 1;
+    r.causes[cause] = (r.causes[cause] ?? 0) + 1;
+    r.lastFailureAt = row.at;
+    r.last = 'fail';
+  }
+  for (const row of states) {
+    let model: unknown;
+    try {
+      model = (JSON.parse(row.measures ?? '{}') as { model?: unknown }).model;
+    } catch {
+      continue;
+    }
+    if (typeof model !== 'string') continue;
+    const r = route(model);
+    if (row.outcome === 'HELD') r.held += 1;
+    if (row.outcome === 'RESTORED') r.restored += 1;
+  }
+  return [...routes.values()]
+    .map(({ last, ...r }) => {
+      const ranked = (Object.entries(r.causes) as [RouteFailureCause, number][]).sort((a, b) => b[1] - a[1]);
+      const status: RouteDiagnosis['status'] =
+        last === 'fail' ? 'FAILING' : last === 'ok' ? (r.failures > 0 ? 'RESTORED' : 'HEALTHY') : 'IDLE';
+      return { ...r, dominantCause: ranked[0]?.[0] ?? null, status };
+    })
+    .sort((a, b) => b.failures - a.failures || a.model.localeCompare(b.model));
+}
+
+/** Queued work since the previous recorded reading: did items leave the queue as accepted work? */
+async function readQueueAdvance(nowIso: string, queuedNow: number): Promise<Measured<QueueAdvance>> {
+  const db = getDb();
+  const previous = await db.get<{ at: string; measures: string | null }>(
+    `SELECT at, measures FROM bin_events WHERE event_type = ? AND outcome = 'MEASURED' AND at < ? ORDER BY at DESC LIMIT 1`,
+    [STAGE_CAPACITY_EVENT, nowIso],
+  );
+  if (!previous) return NOT('no earlier stage-capacity reading to compare with');
+  let previousQueued: unknown;
+  try {
+    previousQueued = (JSON.parse(previous.measures ?? '{}') as { queuedNow?: unknown }).queuedNow;
+  } catch {
+    previousQueued = undefined;
+  }
+  if (typeof previousQueued !== 'number') return NOT('the earlier reading recorded no queue size');
+  const since = await db.get<{ k: number | string }>(
+    "SELECT COUNT(*) AS k FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'SUBMITTED' AND at > ? AND at <= ?",
+    [previous.at, nowIso],
+  );
+  const submittedSince = n(since?.k);
+  return ok({ previousAt: previous.at, previousQueued, queuedNow, submittedSince, advancing: submittedSince > 0 || (previousQueued === 0 && queuedNow === 0) });
+}
+
+/** Names the cause of failing model throughput and whether restoring it moved queued work. Exported for tests. */
+export function judgeThroughput(routes: RouteDiagnosis[], queue: Measured<QueueAdvance>): ThroughputRestoration {
+  const failing = routes.filter((r) => r.status === 'FAILING');
+  const tally = new Map<RouteFailureCause, number>();
+  for (const r of failing) for (const [cause, k] of Object.entries(r.causes) as [RouteFailureCause, number][]) tally.set(cause, (tally.get(cause) ?? 0) + k);
+  const cause = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const recovered = routes.filter((r) => r.status === 'RESTORED');
+  const queueText = queue.measured
+    ? `${queue.value.submittedSince} accepted since ${queue.value.previousAt}; ${queue.value.previousQueued} → ${queue.value.queuedNow} queued.`
+    : `Queue advance not measured: ${queue.reason}.`;
+  if (failing.length > 0) {
+    const names = failing.map((r) => `${r.model} (${r.dominantCause ?? 'unclassified'}, ${r.failures} failures)`).join(', ');
+    return { routes, cause, action: RESTORE_ACTION[cause ?? 'unclassified'], queue, verdict: 'FAILING', basis: `Failing model routes: ${names}. ${queueText}` };
+  }
+  if (queue.measured && !queue.value.advancing) {
+    return {
+      routes, cause: null, queue, verdict: 'NOT_ADVANCING',
+      action: 'No model route is failing, yet no queued item was accepted: look at admission, routing and verification before capacity.',
+      basis: `No route failing but queued work did not advance. ${queueText}`,
+    };
+  }
+  if (recovered.length > 0) {
+    const names = recovered.map((r) => `${r.model} (was ${r.dominantCause ?? 'unclassified'})`).join(', ');
+    return { routes, cause: null, queue, verdict: 'RESTORED', action: 'Throughput restored; keep measuring before any scale-up.', basis: `Routes answering again: ${names}. ${queueText}` };
+  }
+  return { routes, cause: null, queue, verdict: 'NO_FAILURE_SEEN', action: 'No model-call failure in the window.', basis: `No model-call failure in the window. ${queueText}` };
+}
+
 /** The per-stage, per-purpose measurement for the last `hours` hours (default 6). */
 export async function stageCapacity(options: { hours?: number; now?: number } = {}): Promise<StageCapacityReport> {
   const hours = options.hours && options.hours > 0 ? options.hours : 6;
@@ -252,6 +430,9 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
     "SELECT COUNT(*) AS k FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'SUBMITTED' AND at >= ?",
     [since],
   );
+  const nowIso = new Date(nowMs).toISOString();
+  const waiting = await queuedNow();
+  const throughput = judgeThroughput(await readRoutes(since, nowIso), await readQueueAdvance(nowIso, waiting));
   return {
     windowHours: hours,
     since,
@@ -260,7 +441,9 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
     totalProductiveJobs,
     purposesSumToTotal: totalProductiveJobs === n(total?.k),
     process: readProcess(),
-    constrained: chooseConstraint(stages),
+    queuedNow: waiting,
+    throughput,
+    constrained: chooseConstraint(stages, throughput),
   };
 }
 
@@ -283,14 +466,14 @@ export async function recordStageCapacity(options: { hours?: number; now?: numbe
   const started = Date.now();
   try {
     const report = await stageCapacity(options);
-    const waiting = await queuedNow();
     await recordBinEvent({
       eventType: STAGE_CAPACITY_EVENT,
       outcome: 'MEASURED',
-      reason: report.constrained.basis,
+      // The throughput verdict leads: it is the first remedial action, before any scale-up.
+      reason: `${report.throughput.verdict}: ${report.throughput.basis} | ${report.constrained.basis}`,
       durationMs: Date.now() - started,
       evidenceClass: 'MEASURED',
-      measures: { ...report, queuedNow: waiting } as unknown as Record<string, unknown>,
+      measures: report as unknown as Record<string, unknown>,
     });
     return report;
   } catch (error) {
