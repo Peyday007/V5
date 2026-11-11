@@ -68,6 +68,26 @@ export interface StageMeasurement {
   measuredAt: string;
 }
 
+/**
+ * The policies a goal can carry. SQUEEZE is one of them, not the definition of
+ * a goal. The kinds live here because both the store (`goal_policies`) and the
+ * gate (`services/goals/policy.ts`) need the same list.
+ */
+export const GOAL_POLICY_KINDS = ['SQUEEZE', 'LONG_TERM_VENTURE', 'CREATIVE', 'RESEARCH', 'RECURRING_INCOME'] as const;
+export type GoalPolicyKind = (typeof GOAL_POLICY_KINDS)[number];
+
+/** One recorded policy decision for a goal; the latest per goal is current. */
+export interface GoalPolicyRecord {
+  id: string;
+  goalId: string;
+  kind: GoalPolicyKind;
+  reliabilityNormal: number | null;
+  reliabilityAdverse: number | null;
+  reason: string | null;
+  setByUserId: string | null;
+  createdAt: string;
+}
+
 export const POSSIBILITY_KINDS = ['OPPORTUNITY', 'ACTIVITY', 'VENTURE'] as const;
 export type PossibilityKind = (typeof POSSIBILITY_KINDS)[number];
 

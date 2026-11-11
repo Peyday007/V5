@@ -7,8 +7,9 @@
 import { getDb } from '../db/database.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
 import { evidenceProblem } from '../domain/economy.ts';
+import { GOAL_POLICY_KINDS } from '../domain/economy.ts';
 import type {
-  ActivityVariable, EconomicEdge, EconomicRelation, EndpointKind, EvidenceStatus, OperatorKind,
+  ActivityVariable, GoalPolicyKind, GoalPolicyRecord, EconomicEdge, EconomicRelation, EndpointKind, EvidenceStatus, OperatorKind,
   Possibility, PossibilityCondition, PossibilityEdge, PossibilityKind, PossibilityRelation,
   PossibilityRequirements, Stage, StageMeasurement,
 } from '../domain/economy.ts';
@@ -234,4 +235,67 @@ export async function stageMeasurements(
     researchJobs: Number(r['research_jobs']), premiumAiJobs: Number(r['premium_ai_jobs']),
     note: sn(r['note']), measuredAt: s(r['measured_at']),
   }));
+}
+
+function mapGoalPolicy(r: Row): GoalPolicyRecord {
+  const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+  return {
+    id: s(r['id']), goalId: s(r['goal_id']), kind: s(r['kind']) as GoalPolicyKind,
+    reliabilityNormal: num(r['reliability_normal']), reliabilityAdverse: num(r['reliability_adverse']),
+    reason: sn(r['reason']), setByUserId: sn(r['set_by_user_id']), createdAt: s(r['created_at']),
+  };
+}
+
+/**
+ * Record a goal's policy. Append-only: a change is a new row and the earlier
+ * ones stay as history. A reliability override is SQUEEZE's alone, and the
+ * adverse bar may not sit above the normal one; both are refused here rather
+ * than stored and silently ignored later.
+ */
+export async function setGoalPolicy(input: {
+  goalId: string; kind: GoalPolicyKind; reliabilityNormal?: number | null;
+  reliabilityAdverse?: number | null; reason?: string | null; setByUserId?: string | null;
+}): Promise<GoalPolicyRecord> {
+  if (!(GOAL_POLICY_KINDS as readonly string[]).includes(input.kind)) {
+    throw new Error(`A goal policy is one of ${GOAL_POLICY_KINDS.join(', ')}.`);
+  }
+  const normal = input.reliabilityNormal ?? null;
+  const adverse = input.reliabilityAdverse ?? null;
+  if (input.kind !== 'SQUEEZE' && (normal !== null || adverse !== null)) {
+    throw new Error(`${input.kind} carries no reliability standard; only SQUEEZE does.`);
+  }
+  for (const v of [normal, adverse]) {
+    if (v !== null && !(Number.isFinite(v) && v > 0 && v <= 1)) throw new Error('A reliability standard is a share above 0 and at most 1.');
+  }
+  if (normal !== null && adverse !== null && adverse > normal) {
+    throw new Error('The adverse standard may not be higher than the normal one.');
+  }
+  const id = newId('gpl');
+  // The latest row per goal is the current policy, so two changes in one
+  // millisecond must still order: a new row is stamped strictly after the last.
+  const last = await getDb().get<{ created_at: string }>(
+    `SELECT created_at FROM goal_policies WHERE goal_id = ? ORDER BY created_at DESC LIMIT 1`, [input.goalId]);
+  let at = nowIso();
+  if (last && at <= last.created_at) at = new Date(Date.parse(last.created_at) + 1).toISOString();
+  await getDb().run(
+    `INSERT INTO goal_policies (id, goal_id, kind, reliability_normal, reliability_adverse, reason, set_by_user_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, input.goalId, input.kind, normal, adverse, input.reason ?? null, input.setByUserId ?? null, at],
+  );
+  return { id, goalId: input.goalId, kind: input.kind, reliabilityNormal: normal, reliabilityAdverse: adverse,
+    reason: input.reason ?? null, setByUserId: input.setByUserId ?? null, createdAt: at };
+}
+
+/** The goal's current policy row, or null when nobody has set one. */
+export async function currentGoalPolicy(goalId: string): Promise<GoalPolicyRecord | null> {
+  const row = await getDb().get<Row>(
+    `SELECT * FROM goal_policies WHERE goal_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`, [goalId]);
+  return row ? mapGoalPolicy(row) : null;
+}
+
+/** Every policy the goal has had, oldest first. */
+export async function goalPolicyHistory(goalId: string): Promise<GoalPolicyRecord[]> {
+  const rows = await getDb().all<Row>(
+    `SELECT * FROM goal_policies WHERE goal_id = ? ORDER BY created_at, id`, [goalId]);
+  return rows.map(mapGoalPolicy);
 }

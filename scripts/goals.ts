@@ -23,6 +23,8 @@
  *   npm run goals -- terms <wst_…> [--outcome "…"] [--due 2026-10-01] [--commitment CUSTOMER] --admin a@b
  *   npm run goals -- create --reason "Collect 10000 dollars in 30 days" --project prj_… --due 2026-11-27 SETTLED_CASH-1000000-USD-50000-120 --admin a@b
  *   npm run goals -- target <wst_…> SETTLED_CASH-1000000-USD-50000-120 --project prj_… --admin a@b
+ *   npm run goals -- policy <wst_…> LONG_TERM_VENTURE [--reason "…"] --admin a@b
+ *   npm run goals -- policy <wst_…> SQUEEZE [--normal 0.95] [--adverse 0.85] --admin a@b
  *   npm run goals -- plan <wst_…>            (reads and prints; writes nothing)
  *
  * A target spec is METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS]], dashes
@@ -57,6 +59,8 @@ import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { measurePlan, measurementLines } from '../server/services/economy/measure/index.ts';
+import { POLICY_KINDS, policySentence, readGoalPolicy, type PolicyKind } from '../server/services/goals/policy.ts';
+import { setGoalPolicy } from '../server/repos/economy.ts';
 import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 
 class Halt extends Error {}
@@ -342,6 +346,41 @@ async function targetCommand(command: 'create' | 'target'): Promise<void> {
   console.log('GOALS: OK');
 }
 
+/**
+ * Give a goal its policy. SQUEEZE is the default for a goal nobody set; a
+ * long-term venture, creative, research or recurring-income goal is not held
+ * to squeeze rules once this records it. Append-only: the earlier policy stays
+ * as history.
+ */
+async function policyCommand(): Promise<void> {
+  const adminId = await administrator();
+  const [, goalId, kindWord] = words();
+  const goal = goalId ? await getWorkstream(goalId) : null;
+  if (!goal) fail(`No goal ${goalId ?? '(none named)'}.`);
+  const kind = (kindWord ?? '').toUpperCase().replace(/-/g, '_');
+  if (!(POLICY_KINDS as readonly string[]).includes(kind)) fail(`Name the policy: one of ${POLICY_KINDS.join(', ')}.`);
+  const share = (name: string): number | null => {
+    const value = flag(name);
+    if (value === undefined) return null;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0 || n > 1) fail(`--${name} is a share above 0 and at most 1, e.g. 0.9.`);
+    return n;
+  };
+  const normal = share('normal');
+  const adverse = share('adverse');
+  if (kind !== 'SQUEEZE' && (normal !== null || adverse !== null)) fail(`${kind} carries no reliability standard; --normal and --adverse belong to SQUEEZE.`);
+  let record;
+  try {
+    record = await setGoalPolicy({ goalId: goal.id, kind: kind as PolicyKind, reliabilityNormal: normal, reliabilityAdverse: adverse, reason: flag('reason') ?? null, setByUserId: adminId });
+  } catch (error) {
+    fail(`The policy was not set: ${(error as Error).message}`);
+  }
+  const stored = await readGoalPolicy({ id: goal.id, target: goal.target });
+  await recordWorkstreamEvent({ workstreamId: goal.id, kind: 'GOAL_POLICY_SET', summary: `Policy: ${policySentence(stored)}`.slice(0, 400), detail: { policyId: record.id, kind: record.kind }, actorRef: `person:${adminId}` });
+  console.log(`policy ${goal.id}: ${policySentence(stored)}`);
+  console.log('GOALS: OK');
+}
+
 /** What the goal is doing about its own gap: its search rounds and its path research. */
 async function printSearching(reading: PlanReading): Promise<void> {
   const prefix = `goal-${reading.goalId}`;
@@ -443,6 +482,8 @@ async function plan(): Promise<void> {
   const reading = await readGoalPlan({ goalId, persist: false });
   if (!reading) fail(`No targeted goal ${goalId}.`);
   printPlan(reading);
+  const goal = await getWorkstream(goalId);
+  console.log(`  policy      ${policySentence(await readGoalPolicy({ id: goalId, target: goal?.target ?? null, daysLeft: reading.target.daysLeft }))}`);
   for (const line of measurementLines(await measurePlan(reading))) console.log(line);
   await printSearching(reading);
   const history = await listReadings(goalId);
@@ -469,10 +510,12 @@ async function main(): Promise<void> {
     case 'create':
     case 'target':
       return await targetCommand(command);
+    case 'policy':
+      return await policyCommand();
     case 'plan':
       return await plan();
     default:
-      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, plan');
+      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, policy, plan');
       process.exitCode = 1;
       console.log('GOALS: FAIL');
   }

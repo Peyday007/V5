@@ -6,9 +6,16 @@
  * long-term venture, a creative goal, a research goal or a recurring-income
  * goal does not inherit its rules, and is never judged as though it did.
  *
- * Pure: it reads nothing and writes nothing. The plan calls `gateRecommendation`
- * with what it already holds, and gets back whether the plan may be
- * recommended and every reason it may not.
+ * The judgement is pure: `policyFor`, `supportedProbability` and
+ * `gateRecommendation` read nothing and write nothing. The plan calls
+ * `gateRecommendation` with what it already holds, and gets back whether the
+ * plan may be recommended and every reason it may not.
+ *
+ * Which policy a goal carries is a row, not an argument somebody remembers to
+ * pass: `goal_policies` holds it (written on a terminal by
+ * `npm run goals -- policy`), and `readGoalPolicy` is the one exported reader
+ * that turns that row and the goal's own target into a `GoalPolicy`. A goal
+ * nobody gave a policy reads as SQUEEZE and says it was not set.
  *
  *   * A probability is *supported* only when it comes from comparable finished
  *     outcomes (a measured rate with a sample and a lower bound) or from an
@@ -21,9 +28,11 @@
  *   * A plan must also survive combined ordinary setbacks, not only single ones.
  */
 import type { GoalTarget } from '../../domain/register.ts';
+import { GOAL_POLICY_KINDS, type GoalPolicyKind, type GoalPolicyRecord } from '../../domain/economy.ts';
+import { currentGoalPolicy } from '../../repos/economy.ts';
 
-export const POLICY_KINDS = ['SQUEEZE', 'LONG_TERM_VENTURE', 'CREATIVE', 'RESEARCH', 'RECURRING_INCOME'] as const;
-export type PolicyKind = (typeof POLICY_KINDS)[number];
+export const POLICY_KINDS = GOAL_POLICY_KINDS;
+export type PolicyKind = GoalPolicyKind;
 
 /** The stages of a complete goal; reliability is judged across all of them. */
 export const GOAL_STAGES = ['ACQUISITION', 'FULFILMENT', 'PAYMENT', 'CAPACITY', 'TIMING', 'CONTINGENCIES'] as const;
@@ -98,6 +107,45 @@ export function policyFor(input: {
     },
     reliability: validStandard(merged) ? merged : { ...DEFAULT_RELIABILITY },
   };
+}
+
+export interface StoredGoalPolicy {
+  policy: GoalPolicy;
+  /** The row it was read from; null when nobody set one and the default applied. */
+  record: GoalPolicyRecord | null;
+}
+
+/**
+ * The goal's policy as recorded: its latest `goal_policies` row, applied to the
+ * goal's own target and deadline. This is how a long-term, creative, research
+ * or recurring-income goal reaches its own policy in production.
+ */
+export async function readGoalPolicy(goal: {
+  id: string;
+  target?: GoalTarget | null;
+  daysLeft?: number | null;
+}): Promise<StoredGoalPolicy> {
+  const record = await currentGoalPolicy(goal.id);
+  const reliability: Partial<ReliabilityStandard> = {};
+  if (record?.reliabilityNormal != null) reliability.normal = record.reliabilityNormal;
+  if (record?.reliabilityAdverse != null) reliability.adverse = record.reliabilityAdverse;
+  const policy = policyFor({
+    kind: record?.kind ?? null,
+    target: goal.target ?? null,
+    daysLeft: goal.daysLeft ?? null,
+    overrides: { reliability },
+  });
+  return { policy, record };
+}
+
+/** One line a person reads: which policy, where it came from, and what it holds the goal to. */
+export function policySentence(stored: StoredGoalPolicy): string {
+  const { policy, record } = stored;
+  const origin = record ? `set ${record.createdAt.slice(0, 10)}${record.reason ? ` — ${record.reason}` : ''}` : 'not set, so the default applies';
+  if (policy.kind !== 'SQUEEZE' || !policy.reliability) {
+    return `${policy.kind} (${origin}): not held to squeeze rules — no fixed target, deadline or reliability gate.`;
+  }
+  return `SQUEEZE (${origin}): a recommended plan needs a supported ${pct(policy.reliability.normal)} chance, ${pct(policy.reliability.adverse)} under combined setbacks.`;
 }
 
 /** A probability and what it rests on. `basis` decides whether it is supported. */
