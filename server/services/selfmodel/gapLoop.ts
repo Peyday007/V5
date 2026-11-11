@@ -72,6 +72,12 @@ export interface GapLoopState {
   next: GapLoopStep | null;
   /** True once the loop has recorded INTEGRATE after its last ACQUIRE. */
   integrated: boolean;
+  /**
+   * True when the loop's last recorded step is CONTINUE: it decided (kept,
+   * retired or abandoned the direction) and resumed other work. A later step
+   * reopens it. An integrated loop is concluded too.
+   */
+  concluded: boolean;
   cause: GapCause | null;
 }
 
@@ -131,13 +137,15 @@ export function gapStateFrom(gapKey: string, rows: readonly Row[]): GapLoopState
   const outstanding = GAP_LOOP_STEPS.filter((step) => !latest[step]);
   const lastAcquire = latest.ACQUIRE?.at ?? null;
   const cause = latest.HYPOTHESIS?.detail['cause'];
+  const integrated = Boolean(latest.INTEGRATE && (lastAcquire === null || latest.INTEGRATE.at >= lastAcquire));
   return {
     gapKey,
     steps,
     latest,
     outstanding,
     next: outstanding[0] ?? null,
-    integrated: Boolean(latest.INTEGRATE && (lastAcquire === null || latest.INTEGRATE.at >= lastAcquire)),
+    integrated,
+    concluded: integrated || steps[steps.length - 1]?.step === 'CONTINUE',
     cause: GAP_CAUSES.includes(cause as GapCause) ? (cause as GapCause) : null,
   };
 }
@@ -152,7 +160,7 @@ export async function readGapLoop(gapKey: string): Promise<GapLoopState> {
   return gapStateFrom(gapKey, rows);
 }
 
-/** Gaps with a recorded loop that have not integrated, newest activity first: what to resume. */
+/** Gaps with a recorded loop that has not concluded, newest activity first: what to resume. */
 export async function openGapLoops(limit = 20): Promise<GapLoopState[]> {
   const keys = await getDb().all<{ workload_class: string }>(
     `SELECT workload_class FROM bin_events
@@ -161,7 +169,7 @@ export async function openGapLoops(limit = 20): Promise<GapLoopState[]> {
     [GAP_EVENT, Math.max(1, limit) * 3],
   );
   const states = await Promise.all(keys.map((row) => readGapLoop(row.workload_class)));
-  return states.filter((state) => !state.integrated).slice(0, limit);
+  return states.filter((state) => !state.concluded).slice(0, limit);
 }
 
 /** Record one step on a gap. Refused, and nothing written, when the step's mandatory content is missing. */
