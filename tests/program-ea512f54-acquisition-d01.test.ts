@@ -85,8 +85,10 @@ describe('OPERATE is reachable on production records through a person\'s permiss
     });
     expect(j.route).toBe('HUMAN_HANDOFF');
     expect(j.boundaries).toEqual(['NO_AUTHORIZED_ACCOUNT']);
-    expect(r.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT']);
+    // No connector is proposed without a grant; the missing grant is opened for a person instead.
+    expect(r.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT', 'ACCESS_HANDOFF']);
     expect(r.events[0]!.measures).toMatchObject({ authorizedAccount: 'NONE', accountRef: null });
+    expect(r.events[1]!.measures).toMatchObject({ host: 'app.example', boundary: 'NO_AUTHORIZED_ACCOUNT' });
   });
 
   it('a granted permission turns the same producer evidence into a BROWSER route and a connector proposal', async () => {

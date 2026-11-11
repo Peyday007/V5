@@ -48,6 +48,8 @@ describe('a justified connector or script is acted on, not just computed', () =>
       h.deps,
     );
     expect(j.route).toBe('HUMAN_HANDOFF');
-    expect(h.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT']);
+    // No connector or script is ever proposed for a handoff; the stop is opened for a person instead.
+    expect(h.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT', 'ACCESS_HANDOFF']);
+    expect(h.events.some((e) => e.eventType === 'CONNECTOR_PROPOSED')).toBe(false);
   });
 });
