@@ -147,6 +147,29 @@ export async function listPossibilities(projectId: string, ownerUserId: string):
   return rows.map(mapPossibility);
 }
 
+/** One possibility, only when it belongs to this owner in this project. */
+export async function getPossibility(
+  projectId: string, ownerUserId: string, id: string,
+): Promise<Possibility | null> {
+  const row = await getDb().get<Row>(
+    'SELECT * FROM possibilities WHERE project_id = ? AND owner_user_id = ? AND id = ?',
+    [projectId, ownerUserId, id],
+  );
+  return row ? mapPossibility(row) : null;
+}
+
+/** Replace a possibility's requirements and parked reason, owner-scoped. */
+export async function updatePossibilityRequirements(input: {
+  projectId: string; ownerUserId: string; id: string;
+  requirements: PossibilityRequirements; parkedReason: string | null;
+}): Promise<void> {
+  await getDb().run(
+    `UPDATE possibilities SET requirements = ?, parked_reason = ?, updated_at = ?
+      WHERE project_id = ? AND owner_user_id = ? AND id = ?`,
+    [toJson(input.requirements), input.parkedReason, nowIso(), input.projectId, input.ownerUserId, input.id],
+  );
+}
+
 export async function linkPossibilities(input: {
   projectId: string; fromId: string; toId: string; relation: PossibilityRelation;
 }): Promise<PossibilityEdge> {
