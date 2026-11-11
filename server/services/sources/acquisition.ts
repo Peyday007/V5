@@ -292,11 +292,11 @@ export async function readRepeatedUse(host: string): Promise<{ repeatedUses: num
  * A person makes the row from a terminal (`operatePermissionCli.ts grant|revoke|show`,
  * invariant 35); `recordOperatePermission` is the one writer behind it.
  *
- * This is the record the OPERATE judgment reads. A read path (`access.ts`) can
- * only say a browser rendered a public page — it cannot know about an account,
- * and says `false` — so the judgment consults this record whenever the caller
- * has not itself established an account, and an operation becomes BROWSER or
- * MODEL_ASSISTED exactly when a person granted it. A permission is never
+ * This is the record the OPERATE judgment reads. An OPERATE need comes from a
+ * caller that asks to operate a system — never from a read: `access.ts` records
+ * every read as ACQUIRE only, whatever route it took — so the judgment consults
+ * this record whenever that caller has not itself established an account, and an
+ * operation becomes BROWSER or MODEL_ASSISTED exactly when a person granted it. A permission is never
  * authorization to contact strangers, evade defenses or commit the business:
  * those boundaries are judged first and refuse regardless of any grant.
  */

@@ -560,44 +560,15 @@ export function acquisitionEvidenceOfRead(
   };
 }
 
-/**
- * Whether a read operated a site's interface, and what that says in the OPERATE
- * capability's terms. Pure. A BROWSER attempt is Brain driving an interface rather
- * than fetching a document, so it is the OPERATE capability's evidence; a read
- * that never opened the browser says nothing about it and yields null.
- *
- * No account is ever asserted: the research browser does not sign in
- * (`browserMcp.ts`), so `authorizedAccountOnRecord` is false and the judgment
- * records the stop honestly (NO_AUTHORIZED_ACCOUNT) instead of claiming an
- * operation under a permission nobody evidenced.
+/*
+ * A read is never an operation. Reading a page — even one the research browser had
+ * to render — is the ACQUIRE capability, and it is recorded as that alone. OPERATE
+ * (using a site's functionality under an account a person permitted) is a separate
+ * capability with its own need: it is judged only when something asks to operate
+ * a system (`recordAcquisitionJudgment({ kind: 'OPERATE', ... })`), never inferred
+ * from the route a read happened to take, so the OPERATE rows on production are
+ * operations somebody asked for rather than research reads that operated nothing.
  */
-export function operateEvidenceOfRead(
-  read: Pick<SourceRead, 'attempts'>,
-  boundary: AccessEvidence['boundary'] | null,
-  evidence: AccessEvidence,
-): AcquisitionEvidence | null {
-  if (!read.attempts.some((a) => a.method === 'BROWSER')) return null;
-  return {
-    interactiveInterfaceOnly: evidence.interfaceOnly === true,
-    interfaceUnfamiliarOrChanged: evidence.interfaceUnfamiliar === true,
-    authorizedAccountOnRecord: false,
-    blockedAtBoundary: boundary !== null && boundary !== 'PAYMENT' && boundary !== 'LEGAL',
-    requiresLicence: boundary === 'PAYMENT' || boundary === 'LEGAL',
-    ...(boundary ? { boundary } : {}),
-  };
-}
-
-async function judgeReadAsOperation(
-  read: SourceRead,
-  host: string | null,
-  boundary: AccessEvidence['boundary'] | null,
-  evidence: AccessEvidence,
-  caller: string,
-): Promise<void> {
-  const operated = operateEvidenceOfRead(read, boundary, evidence);
-  if (!operated) return;
-  await recordAcquisitionJudgment({ kind: 'OPERATE', purpose: `operate the interface at ${read.requestedUrl}`, host }, operated, { caller });
-}
 
 async function judgeReadAsAcquisition(
   read: SourceRead,
@@ -661,12 +632,11 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
       methodConstraints: judged.constraints,
     },
   });
-  // Reading a public source is the ACQUIRE capability: ask the acquisition judgment what
+  // Reading a source is the ACQUIRE capability, and only that (a read is never an
+  // OPERATE judgment, whichever route it took): ask the acquisition judgment what
   // this read's own evidence supports (existing bulk sources first, a connector when the
   // host's SOURCE_ACCESS history justifies one) and record it beside the access row.
   await judgeReadAsAcquisition(read, host, boundary ?? null, evidence, caller).catch(() => undefined);
-  // Driving a site's interface is the other capability: record its own judgment, never folded into the ACQUIRE row.
-  await judgeReadAsOperation(read, host, boundary ?? null, evidence, caller).catch(() => undefined);
 }
 
 /* ------------------------------------------------------------------------- */

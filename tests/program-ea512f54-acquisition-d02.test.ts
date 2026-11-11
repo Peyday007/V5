@@ -5,7 +5,7 @@ import {
   repeatedUseFromRows,
 } from '../server/services/sources/acquisition.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, SCRIPT_CONVERSION_RUNS } from '../server/services/sources/accessMethods.ts';
-import { operateEvidenceOfRead, readSource, resetSourceAccessMemory, robotsAllows, robotsRules } from '../server/services/sources/access.ts';
+import { readSource, resetSourceAccessMemory, robotsAllows, robotsRules } from '../server/services/sources/access.ts';
 import { getDb } from '../server/db/database.ts';
 import { freshProject } from './helpers.ts';
 
@@ -240,8 +240,7 @@ describe('repeatedUseFromRows is exercised alongside the judgment', () => {
   });
 });
 
-describe('OPERATE has a production producer, separate from ACQUIRE', () => {
-  const attempt = (method: string, readable: boolean) => ({ method: method as never, readable, reason: readable ? null : 'EMPTY', status: null, ms: 1 });
+describe('a read is ACQUIRE only; OPERATE is never inferred from the route a read took', () => {
   const PAGE = 'Official statistics say the median wage was 41,000 dollars in 2025. '.repeat(10);
   const okFetch = (url: string) => ({ readable: true as const, requestedUrl: url, finalUrl: url, status: 200, contentType: 'text/html', retrievedAt: 'now', sha256: 'x', text: PAGE, truncated: false, totalChars: PAGE.length });
   const emptyFetch = (url: string) => ({ readable: false as const, requestedUrl: url, finalUrl: url, status: 200, retrievedAt: 'now', reason: 'EMPTY' as never, detail: 'needs a browser' });
@@ -250,26 +249,18 @@ describe('OPERATE has a production producer, separate from ACQUIRE', () => {
     return rows.map((r) => (JSON.parse(r.measures) as { capability: string }).capability).sort();
   };
 
-  it('a read that never opened the browser says nothing about operating an interface', () => {
-    expect(operateEvidenceOfRead({ attempts: [attempt('DIRECT', true)] }, null, {})).toBeNull();
-  });
-
-  it('a browser attempt is OPERATE evidence, and no account is ever asserted', () => {
-    const ev = operateEvidenceOfRead({ attempts: [attempt('DIRECT', false), attempt('BROWSER', true)] }, null, { interfaceOnly: true, interfaceUnfamiliar: true });
-    expect(ev).toMatchObject({ interactiveInterfaceOnly: true, interfaceUnfamiliarOrChanged: true, authorizedAccountOnRecord: false });
-    const j = judgeAcquisitionNeed({ kind: 'OPERATE', purpose: 'p' }, ev!);
+  it('an OPERATE need with no account is a handoff naming the missing account', () => {
+    const j = judgeAcquisitionNeed({ kind: 'OPERATE', purpose: 'p' }, { interactiveInterfaceOnly: true, interfaceUnfamiliarOrChanged: true, authorizedAccountOnRecord: false });
     expect(j.capability).toBe('OPERATE');
     expect(j.route).toBe('HUMAN_HANDOFF');
     expect(j.boundaries).toEqual(['NO_AUTHORIZED_ACCOUNT']);
   });
 
-  it('a boundary met after the browser is carried into the OPERATE judgment', () => {
-    const ev = operateEvidenceOfRead({ attempts: [attempt('BROWSER', false)] }, 'CAPTCHA', {})!;
-    expect(ev.blockedAtBoundary).toBe(true);
-    expect(judgeAcquisitionNeed({ kind: 'OPERATE', purpose: 'p' }, ev).boundaries).toEqual(['ACCESS_BARRIER']);
+  it('a boundary an operation meets is carried into the OPERATE judgment', () => {
+    expect(judgeAcquisitionNeed({ kind: 'OPERATE', purpose: 'p' }, { blockedAtBoundary: true, boundary: 'CAPTCHA' }).boundaries).toEqual(['ACCESS_BARRIER']);
   });
 
-  it('readSource writes one OPERATE and one ACQUIRE ACQUISITION_JUDGMENT row when the browser ran', async () => {
+  it('readSource writes only an ACQUIRE ACQUISITION_JUDGMENT row even when the browser ran', async () => {
     await freshProject();
     resetSourceAccessMemory();
     await readSource('https://operate-producer.example/app', {
@@ -284,7 +275,10 @@ describe('OPERATE has a production producer, separate from ACQUIRE', () => {
       browser: async (u) => okFetch(u),
       caller: 'operate-producer-test',
     });
-    expect(await capabilitiesOf('operate-producer-test')).toEqual(['ACQUIRE', 'OPERATE']);
+    // The browser did run on this read, and it is still recorded as acquiring information, not operating a system.
+    const access = await getDb().all<{ provider: string | null }>(`SELECT provider FROM bin_events WHERE event_type = 'SOURCE_ACCESS'`);
+    expect(access.map((r) => r.provider)).toContain('BROWSER');
+    expect(await capabilitiesOf('operate-producer-test')).toEqual(['ACQUIRE']);
   });
 
   it('a plain direct read produces no OPERATE row', async () => {
