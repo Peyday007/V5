@@ -28,9 +28,13 @@ import {
   updateFragment,
 } from '../server/repos/research.ts';
 import { listWorkItemsForOrchestration } from '../server/repos/workQueue.ts';
+import { createRequirements } from '../server/repos/reconciliation.ts';
+import { createResearchGoal } from '../server/repos/russellAuthority.ts';
+import { createUser } from '../server/repos/identity.ts';
 import {
   advancePacket,
   faultedOutReason,
+
   MAX_ITEMS_PER_TARGET,
 } from '../server/services/research/packetRunner.ts';
 
@@ -160,5 +164,80 @@ describe('a synthesis failed on a transient cause', () => {
     expect(result.status).toBe('NEEDS_HUMAN');
     expect(result.enqueued).toEqual([]);
     expect((await getOrchestration(id))!.failureReason).toContain('the packet text is malformed');
+  });
+});
+
+/*
+ * The recorded class "The packet does not cover the goal's mandatory part, so
+ * it was not synthesized." For a research goal's round with no mission, that
+ * park reached nobody and, being live to `goalContinuation`, held the goal's
+ * next round. It now ends FAILED, the same rule a round where no fragment
+ * cleared its gate already follows; invariant 20 is untouched (nothing is
+ * synthesized), the gap is still recorded, and a round behind a mission, or
+ * outside any goal, still parks for its person.
+ */
+describe('a packet that does not cover the goal\'s mandatory part', () => {
+  async function withOpenMandatoryRequirement(id: string): Promise<void> {
+    const orchestration = (await getOrchestration(id))!;
+    await createRequirements([
+      {
+        orchestrationId: id, projectId: orchestration.projectId, layerId: orchestration.layerId, requirementKey: 'heartbeat-mechanisms',
+        ordinal: 0, statement: 'Which documented mechanisms detect that a unit of work holding a worker slot has gone silent',
+        necessity: 'MANDATORY', kind: 'RESEARCH',
+      },
+    ]);
+  }
+  async function asGoalRound(id: string): Promise<string> {
+    const layer = await fixture.layerByName('World Model');
+    const user = await createUser({ email: `gr-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' });
+    const goal = await createResearchGoal({
+      projectId: fixture.project.id, ownerUserId: user.id, createdByUserId: user.id, name: 'Worker liveness',
+      maxPackets: 2, maxFragments: 10, deadline: new Date(Date.now() + 7_200_000).toISOString(),
+      researchAssignment: 'How do work queues detect a dead worker?', researchLayerId: layer.id,
+    });
+    await getDb().run('UPDATE research_orchestrations SET goal_id = ?, goal_packet_key = ? WHERE id = ?', [goal.id, 'round-1', id]);
+    return goal.id;
+  }
+  const gapEvents = async (id: string) =>
+    (await getDb().all<{ payload: string }>(`SELECT payload FROM project_events WHERE event_type = 'RESEARCH_COVERAGE_GAP'`, []))
+      .filter((row) => row.payload.includes(id));
+
+  it('ends a goal round with no mission FAILED instead of parking it with nobody to ask, and still records the gap', async () => {
+    const id = await readyPacket();
+    await withOpenMandatoryRequirement(id);
+    await asGoalRound(id);
+    const result = await advancePacket(id);
+    expect(result.status).toBe('FAILED');
+    expect(result.enqueued).toEqual([]);
+    const after = (await getOrchestration(id))!;
+    expect(after.status).toBe('FAILED');
+    expect(after.failureReason).toMatch(/^The packet does not cover the goal's mandatory part, so it was not synthesized\./);
+    expect(after.failureReason).toContain('may start its next round');
+    expect(await synthItems(id)).toHaveLength(0);
+    expect(await gapEvents(id)).toHaveLength(1);
+  });
+
+  it('still parks for a person when the packet is not a goal round', async () => {
+    const id = await readyPacket();
+    await withOpenMandatoryRequirement(id);
+    const result = await advancePacket(id);
+    expect(result.status).toBe('NEEDS_HUMAN');
+    expect((await getOrchestration(id))!.failureReason).not.toContain('may start its next round');
+    expect(await synthItems(id)).toHaveLength(0);
+  });
+
+  it('still parks for a person when a mission stands behind the goal round', async () => {
+    const id = await readyPacket();
+    await withOpenMandatoryRequirement(id);
+    await asGoalRound(id);
+    const now = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO russell_missions (id, project_id, objective, why_now, state, orchestration_id, idempotency_key, created_at, updated_at)
+       VALUES (?, ?, 'cover the gap', 'asked by the owner', 'RUNNING', ?, ?, ?, ?)`,
+      [newId('rms'), fixture.project.id, id, newId('key'), now, now],
+    );
+    const result = await advancePacket(id);
+    expect(result.status).toBe('NEEDS_HUMAN');
+    expect(await synthItems(id)).toHaveLength(0);
   });
 });
