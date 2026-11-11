@@ -153,10 +153,19 @@ export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
   const open = (await listCandidates({ open: true })).map((c) => c.weaknessKey);
   const { capabilityWeaknesses } = await import('../selfmodel/capabilities.ts');
   // Judged on the running release where it has its own sample, so a failure the release already fixed raises no repair.
-  lastCapabilityGaps = await capabilityWeaknesses(now, [...detected.map((w) => w.key), ...open], new Date(processStartedAt)).catch((error: unknown) => {
+  const gaps = await capabilityWeaknesses(now, [...detected.map((w) => w.key), ...open], new Date(processStartedAt)).catch((error: unknown) => {
     console.warn(`capability assessment failed: ${String((error as Error)?.message ?? error)}`);
-    return [];
+    return [] as Weakness[];
   });
+  // AUTO-20-1: work nobody asked for and nothing failed to reveal — a goal near its date with nothing
+  // moving, capacity idle beside executable work, openings that lapsed untaken, one missing resource
+  // several opportunities wait on. Same cadence and the same path as a capability gap.
+  const { originatedWeaknesses } = await import('../selfmodel/originate.ts');
+  const origins = await originatedWeaknesses(now, [...detected.map((w) => w.key), ...gaps.map((w) => w.key), ...open]).catch((error: unknown) => {
+    console.warn(`origination failed: ${String((error as Error)?.message ?? error)}`);
+    return [] as Weakness[];
+  });
+  lastCapabilityGaps = [...gaps, ...origins];
   return [...detected, ...lastCapabilityGaps];
 }
 
