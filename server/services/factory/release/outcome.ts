@@ -41,6 +41,21 @@ const PERSON_BLOCKERS: Record<FactoryBlockerKind, string | null> = {
   PROTECTED_SCOPE: MAINTAINER_ACTION,
 };
 
+/**
+ * Blockers the contract's own author resolves through the operator door
+ * (`amend`, `regrant-unit`): the session that submitted the objective, never
+ * the owner. Production 2026-11-11, fcp_ef7bb04a: a correct review finding
+ * needed four more files in scope, and the outcome read "Stopped until a
+ * person acts" for a routine amendment.
+ */
+const CONTRACT_BLOCKERS: ReadonlySet<FactoryBlockerKind> = new Set([
+  'DEPENDENCY_CYCLE',
+  'UNIT_EXHAUSTED_ATTEMPTS',
+  'CONTRADICTORY_CONTRACT',
+  'SCOPE_AMENDMENT_REQUIRED',
+  'REPAIR_OWNERSHIP_UNRESOLVED',
+]);
+
 export interface OutcomeInput {
   campaign: FactoryCampaign;
   grant: ReleaseGrant | null;
@@ -102,7 +117,9 @@ export function deriveOutcome(input: OutcomeInput): ObjectiveOutcome {
         'BLOCKED',
         kind === 'PROTECTED_SCOPE'
           ? 'Routed to the maintainer: no Factory worker may change this scope.'
-          : action
+          : kind && CONTRACT_BLOCKERS.has(kind)
+            ? 'Stopped until the submitting session amends the contract (factory amend or regrant-unit); not the owner\'s.'
+            : action
             ? 'Stopped until a person acts.'
             : 'Stopped; Brain re-examines this by itself every tick.',
         campaign.blockerDetail ?? kind ?? 'blocked',

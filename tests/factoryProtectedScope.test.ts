@@ -123,6 +123,16 @@ describe('a protected scope is routed to the maintainer', () => {
     expect(outcome.personAction).toMatch(/^MAINTAINER:/);
   });
 
+  it('a scope amendment a repair needs is the submitting session\'s, never "until a person acts"', async () => {
+    const id = await campaignWithScope(['server/services/documents/normalize.ts']);
+    const campaign = { ...(await getCampaign(id))!, state: 'BLOCKED' as const, blockerKind: 'SCOPE_AMENDMENT_REQUIRED' as const, blockerDetail: 'F1 requires outside the approved scope: server/services/documents/pdf.ts.' };
+    const outcome = deriveOutcome({ campaign, grant: null, latestRun: null, origin: null });
+    expect(outcome.status).toBe('BLOCKED');
+    expect(outcome.detail).toMatch(/submitting session amends the contract/);
+    expect(outcome.detail).not.toMatch(/person acts/);
+    expect(outcome.personAction).toMatch(/Widen the mutation scope/);
+  });
+
   it('a scope with a writable path is planned as before', async () => {
     const id = await campaignWithScope(['server/services/factory/release/outcome.ts', 'server/services/documents/**']);
     const report = await tickRemoteCampaign(id);

@@ -454,6 +454,17 @@ async function main(): Promise<void> {
           `reason ${result.amendment.reason}\n` +
           `re-verification ${result.amendment.requiresReverification ? 'required' : 'not required'}\n`,
       );
+      /*
+       * A campaign parked on its contract is not re-ticked by the dispatcher, so
+       * "the next tick queues the repair by itself" waited for a tick that never
+       * came (production 2026-11-11, fcp_ef7bb04a: the scope was amended and
+       * the campaign stayed BLOCKED until a session ticked it by hand). The
+       * amendment is the event that changes the campaign's reality; tick it here.
+       */
+      if (campaign && campaign.state === 'BLOCKED') {
+        const report = await tickRemoteCampaign(campaign.id);
+        process.stdout.write(`ticked ${report.campaignId}: ${report.state} — ${report.stage}\n`);
+      }
       break;
     }
 
