@@ -39,8 +39,6 @@ import type { CashObservation } from '../../../domain/cashJourney.ts';
 import { getMembership } from '../../../repos/identity.ts';
 import { raiseNeed } from '../needs.ts';
 import { readCommitments, type CommitmentReading, type CommitmentTransition, type DeclaredTransition, type ExternalDependency, type Party } from './commitments.ts';
-// Registers the production probes r01.life-29-1 and r01.life-29-3 wherever the journey tick loads; they reach this module only at call time.
-import './lifecycleProbes.ts';
 
 export const EXCEPTION_KINDS = ['SCOPE_CHANGE', 'MISSED_DATE', 'CANCELLATION', 'PAYMENT_FAILURE', 'DISPUTE'] as const;
 export type ExceptionKind = (typeof EXCEPTION_KINDS)[number];

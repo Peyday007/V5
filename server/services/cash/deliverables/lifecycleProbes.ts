@@ -32,11 +32,12 @@
  * repeat business is one deal construction reads (`repeatBusinessObservations`). No
  * deal with a live agreement is a failure, never a pass on nothing (§39).
  *
- * Registered here because `probes.ts` is a protected path; `exceptions.ts` imports
- * this module so it is registered wherever the journey tick loads.
+ * The judgments live here, beside the model they read; they are registered in
+ * the protected `probes.ts`, which is the only place a release probe may be
+ * defined (a campaign does not register its own judge).
  */
 import { getDb } from '../../../db/database.ts';
-import { registerProbe, type ProbeResult } from '../../factory/program/probes.ts';
+import type { ProbeResult } from '../../factory/program/probes.ts';
 import type { CommitmentReading } from './commitments.ts';
 import type { StoredRealization } from './realization.ts';
 
@@ -231,6 +232,3 @@ export async function realizationHoldsOnRows(): Promise<ProbeResult> {
   };
 }
 
-registerProbe(COMMITMENT_PROBE, commitmentsHoldOnRows);
-registerProbe(REALIZATION_PROBE, realizationHoldsOnRows);
-registerProbe(EXCEPTION_PROBE, exceptionsHoldOnRows);

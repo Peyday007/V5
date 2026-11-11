@@ -11,12 +11,15 @@ afterEach(async () => {
 });
 
 describe('Release 01 probes before their behavior ships', () => {
-  it('COM-13-3 and GOV-22-2 do not pass on a Brain without the code', async () => {
-    for (const name of ['r01.com-13-3', 'r01.gov-22-2']) {
-      const result = await getProbe(name)!({});
-      expect(result.ok, `${name}: ${result.detail}`).toBe(false);
-      expect(result.detail.length).toBeGreaterThan(10);
-    }
+  it('COM-13-3 does not pass on a Brain without the code', async () => {
+    const result = await getProbe('r01.com-13-3')!({});
+    expect(result.ok, `r01.com-13-3: ${result.detail}`).toBe(false);
+    expect(result.detail.length).toBeGreaterThan(10);
+  });
+
+  it('GOV-22-2 passes once the prepared-option code ships (factory-program-d0)', async () => {
+    const result = await getProbe('r01.gov-22-2')!({});
+    expect(result.ok, `r01.gov-22-2: ${result.detail}`).toBe(true);
   });
 });
 
