@@ -395,3 +395,26 @@ describe('an approved program answers its own blocked campaigns', () => {
     expect(await unblockApprovedPrograms(Date.now() + 60_000)).toEqual([]);
   });
 });
+
+describe('scope reconciliation answers any campaign blocked on scope', () => {
+  it('acts on a campaign BLOCKED on exhausted attempts and leaves a running one alone', async () => {
+    const { reconcileBlockedScopes } = await import('../server/services/factory/program/unblock.ts');
+    const { ensureCampaign, patchCampaign } = await import('../server/repos/factory.ts');
+    const programId = await submitAndApprove();
+    await tickProgram(programId, new Line());
+    const [link] = await listCampaignLinks(programId);
+    const { campaign } = await ensureCampaign({
+      changeRequestId: link!.changeRequestId, projectId: fixture.project.id, baseSha: 'a'.repeat(40),
+      laneTarget: 1, laneTargetReason: 'test', executionMode: 'REMOTE',
+    } as never);
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run('UPDATE factory_change_requests SET mutation_scope = ?, approved_by_user_id = ? WHERE id = ?', [JSON.stringify(['server/services/cash/funnel.ts']), approverId, link!.changeRequestId]);
+    // Running: nothing to reconcile.
+    expect((await reconcileBlockedScopes(Date.now(), true)).filter((s) => s.campaign === campaign.id)).toEqual([]);
+    await patchCampaign(campaign.id, { state: 'BLOCKED', blockerKind: 'UNIT_EXHAUSTED_ATTEMPTS' as never, blockerDetail: 'The failing test is tests/cashFunnel.test.ts, outside the unit.' });
+    const steps = (await reconcileBlockedScopes(Date.now(), true)).filter((s) => s.campaign === campaign.id);
+    // The scope step is refused here only because this test project never onboarded the repository.
+    expect(steps.length).toBeGreaterThan(0);
+    expect(steps[0]!.action === 'SCOPE' || steps[0]!.detail.startsWith('scope:')).toBe(true);
+  });
+});
