@@ -1843,6 +1843,10 @@ async function main(): Promise<void> {
       const { readProgram, tickProgram } = await import('../server/services/factory/program/coordinator.ts');
       const { productionPorts } = await import('../server/services/factory/program/ports.ts');
       const { listPrograms } = await import('../server/repos/factoryProgram.ts');
+      // A probe module registers itself when imported. The server loads it through the
+      // cash routes (cash/view.ts); this process loads no routes, so it is loaded here,
+      // or the CLI would read a requirement as "no such probe" that the server can check.
+      await import('../server/services/cash/telemetryProbe.ts');
       const programId = flagString(flags, 'program') ?? (await listPrograms(['APPROVED', 'DRAFT'])).at(-1)?.id ?? fail('--program is required');
       const ports = productionPorts();
       if (command === 'program-tick') {
