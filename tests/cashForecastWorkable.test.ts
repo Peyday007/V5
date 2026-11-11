@@ -138,12 +138,34 @@ describe('the forecast counts work, not evidence', () => {
     expect(forecast.revenue.valueCents).toBe(40_000);
   });
 
-  it('with no tiers supplied nothing is workable', async () => {
+  it('with no tiers supplied no evidence is workable, and a taken piece counts exactly as the portfolio counts it', async () => {
     rows.length = 0;
-    rows.push(opportunity({ id: 'cop_r', state: 'READY', priceCents: 75_000 }));
+    rows.push(opportunity({ id: 'cop_e', priceCents: 90_000 }));
+    const evidenceOnly = await cashForecast({ projectId: 'prj_1', currency: 'USD' });
+    expect(evidenceOnly.qualified).toBe(0);
+    expect(evidenceOnly.considered).toBe(1);
+    expect(evidenceOnly.revenue.valueCents).toBeNull();
+
+    rows.length = 0;
+    rows.push(opportunity({ id: 'cop_e', priceCents: 90_000 }), opportunity({ id: 'cop_r', state: 'READY', priceCents: 75_000 }));
     const forecast = await cashForecast({ projectId: 'prj_1', currency: 'USD' });
-    expect(forecast.qualified).toBe(0);
-    expect(forecast.considered).toBe(1);
-    expect(forecast.revenue.valueCents).toBeNull();
+    expect(forecast.qualified).toBe(1);
+    expect(forecast.considered).toBe(2);
+    expect(forecast.revenue.valueCents).toBe(75_000);
+  });
+
+  it('agrees with the portfolio on every piece whose tier is missing from the map, in every state', async () => {
+    const { isWorkable, tierOf, UNREAD_TIER } = await import('../server/services/cash/portfolio.ts');
+    const states = ['EVIDENCE_CARD', 'READY', 'EXECUTING', 'DELIVERING', 'COLLECTED'] as const;
+    for (const state of states) {
+      rows.length = 0;
+      rows.push(opportunity({ id: 'cop_missing', state, priceCents: 30_000 }));
+      // The portfolio's own reading of a piece absent from the map.
+      expect(tierOf({}, 'cop_missing')).toBe(UNREAD_TIER);
+      const portfolioSays = isWorkable({ tier: tierOf({}, 'cop_missing').tier, state });
+      const forecast = await cashForecast({ projectId: 'prj_1', currency: 'USD', tiers: {} });
+      expect(forecast.qualified, state).toBe(portfolioSays ? 1 : 0);
+      expect(forecast.revenue.valueCents, state).toBe(portfolioSays ? 30_000 : null);
+    }
   });
 });
