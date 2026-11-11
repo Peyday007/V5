@@ -87,6 +87,8 @@ export interface AcquisitionEvidence {
   repeatedUses?: number;
   /** Of those, how many needed a route beyond a plain direct read. */
   repeatedUsesNeedingFallback?: number;
+  /** Measured reliability 0..1 per method on this need, where runs have measured it (e.g. a recorded workflow whose locators stopped fitting). */
+  reliability?: AccessEvidence['reliability'];
 }
 
 export interface AcquisitionJudgment {
@@ -174,6 +176,7 @@ export function judgeAcquisitionNeed(need: AcquisitionNeed, evidence: Acquisitio
     interfaceUnfamiliar: evidence.interfaceUnfamiliarOrChanged,
     boundary: evidence.blockedAtBoundary ? (evidence.boundary ?? 'AUTHENTICATION') : undefined,
     needsLicence: evidence.requiresLicence,
+    ...(evidence.reliability ? { reliability: evidence.reliability } : {}),
   });
   const route = selection.method;
   const boundaries: AcquisitionBoundary[] = [];
@@ -356,7 +359,7 @@ export async function readOperatePermission(host: string): Promise<OperatePermis
 }
 
 /** A credential-shaped string is never an account reference: the record names an account, it does not hold one. */
-function looksLikeSecret(value: string): boolean {
+export function looksLikeSecret(value: string): boolean {
   return /[:@].*[:@]|^(sk|pk|ghp|gho|xox[abp]|brn[a-z])[-_]|^[A-Za-z0-9+/_-]{32,}={0,2}$/.test(value);
 }
 

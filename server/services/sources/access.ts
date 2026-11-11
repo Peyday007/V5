@@ -17,7 +17,11 @@
  *   CONNECTOR   a site's own public API, for a site whose pages the general
  *               routes cannot read (`connectors.ts`).
  *   BROWSER     a JavaScript render in Playwright MCP, run as a separate app
- *               (`browserMcp.ts`) — only where robots.txt allows the path.
+ *               (`browserMcp.ts`) — only where robots.txt allows the path. Where
+ *               a person granted operation of the host and a READ workflow is
+ *               recorded for it (`browserWorkflow.ts`), the BROWSER route is that
+ *               workflow instead: navigation, search, form entry and download
+ *               under the granted account, with its own success checks.
  *   SITEMAP     the same site's sitemap or feed, for a deep link that 404s: the
  *               page the site now lists for the closest path. What is returned
  *               is that page, under its own address, never the address asked for.
@@ -43,6 +47,7 @@ import { connectorFor } from './connectors.ts';
 import { searchSuccessor } from './discover.ts';
 import { recordAcquisitionJudgment, REPEATED_USE_WINDOW_MS, type AcquisitionEvidence } from './acquisition.ts';
 import { activeRoutine, routinesFrom, type Routine, type RoutineUse } from './routines.ts';
+import { readWorkflowFor, readWorkflows, runAndRecordWorkflow, workflowRunAsFetch, type WorkflowStatus } from './browserWorkflow.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, type AccessEvidence } from './accessMethods.ts';
 import { checkDestination, fetchForWorker, systemResolver, type Resolver, type SourceFetch } from './fetchForWorker.ts';
 
@@ -71,7 +76,17 @@ export type SourceRead = SourceFetch & {
   terms?: ReadTerms;
   /** The reusable routine (from a CONNECTOR_PROPOSED row, `routines.ts`) that led this read, when one did. */
   routine?: RoutineUse;
+  /** The recorded workflow that operated the site's interface for this read, under the granted account. */
+  operated?: { workflow: string; accountRef: string | null; outcome: string };
 };
+
+/** What operating a recorded workflow for one read produced. */
+export interface WorkflowRead {
+  read: SourceFetch;
+  workflow: string;
+  accountRef: string | null;
+  outcome: string;
+}
 
 export interface AccessDeps {
   direct?: (url: string) => Promise<SourceFetch>;
@@ -91,6 +106,12 @@ export interface AccessDeps {
   learned?: (host: string) => Promise<AccessMethod | null>;
   /** The routine a CONNECTOR_PROPOSED row built for this host (`routines.ts`); defaults to the recorded rows. */
   routine?: (host: string) => Promise<Routine | null>;
+  /**
+   * Operate the host's recorded READ workflow for this URL (`browserWorkflow.ts`), or null
+   * when none is recorded or granted. Defaults on only when no reader was injected and a
+   * browser is configured.
+   */
+  workflow?: ((url: string, host: string, robotsAllowed: () => Promise<boolean>) => Promise<WorkflowRead | null>) | null;
   record?: (read: SourceRead, caller: string, ms: number) => Promise<void>;
   /** Which part of Brain asked, for the event. */
   caller?: string;
@@ -494,7 +515,27 @@ async function defaultRoutine(host: string): Promise<Routine | null> {
   return routineMap.get(host) ?? null;
 }
 
+/** Recorded browser workflows, refreshed on the same cadence. */
+let workflowsAt = 0;
+let workflowMap = new Map<string, WorkflowStatus>();
+
+async function defaultWorkflow(url: string, host: string, robotsAllowed: () => Promise<boolean>): Promise<WorkflowRead | null> {
+  if (Date.now() - workflowsAt > LEARN_REFRESH_MS) {
+    workflowMap = await readWorkflows();
+    workflowsAt = Date.now();
+  }
+  const status = readWorkflowFor(host, workflowMap);
+  if (!status || !(await robotsAllowed())) return null;
+  const run = await runAndRecordWorkflow(status, { url }, { judge: false, caller: 'source-access' });
+  // A host nobody granted is not operated, and the ordinary routes run as before.
+  if (run.boundary === 'NO_AUTHORIZED_ACCOUNT' || run.outcome === 'REFUSED') return null;
+  workflowsAt = 0;
+  return { read: workflowRunAsFetch(url, run), workflow: run.name, accountRef: run.accountRef, outcome: run.outcome };
+}
+
 export function resetSourceAccessMemory(): void {
+  workflowsAt = 0;
+  workflowMap = new Map();
   routinesAt = 0;
   routineMap = new Map();
   learnedAt = 0;
@@ -566,21 +607,23 @@ export function acquisitionEvidenceOfRead(
  * than fetching a document, so it is the OPERATE capability's evidence; a read
  * that never opened the browser says nothing about it and yields null.
  *
- * No account is ever asserted: the research browser does not sign in
- * (`browserMcp.ts`), so `authorizedAccountOnRecord` is false and the judgment
- * records the stop honestly (NO_AUTHORIZED_ACCOUNT) instead of claiming an
- * operation under a permission nobody evidenced.
+ * An account is asserted only when a recorded workflow operated the site under
+ * a person's grant (`browserWorkflow.ts`); a plain render does not sign in
+ * (`browserMcp.ts`), so for it `authorizedAccountOnRecord` is false and the
+ * judgment records the stop honestly (NO_AUTHORIZED_ACCOUNT) instead of
+ * claiming an operation under a permission nobody evidenced.
  */
 export function operateEvidenceOfRead(
-  read: Pick<SourceRead, 'attempts'>,
+  read: Pick<SourceRead, 'attempts'> & { operated?: SourceRead['operated'] },
   boundary: AccessEvidence['boundary'] | null,
   evidence: AccessEvidence,
 ): AcquisitionEvidence | null {
   if (!read.attempts.some((a) => a.method === 'BROWSER')) return null;
   return {
-    interactiveInterfaceOnly: evidence.interfaceOnly === true,
+    interactiveInterfaceOnly: evidence.interfaceOnly === true || read.operated !== undefined,
     interfaceUnfamiliarOrChanged: evidence.interfaceUnfamiliar === true,
-    authorizedAccountOnRecord: false,
+    // Only a recorded workflow run under a granted account operates as someone; a render never does.
+    authorizedAccountOnRecord: read.operated?.accountRef != null,
     blockedAtBoundary: boundary !== null && boundary !== 'PAYMENT' && boundary !== 'LEGAL',
     requiresLicence: boundary === 'PAYMENT' || boundary === 'LEGAL',
     ...(boundary ? { boundary } : {}),
@@ -652,6 +695,7 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
       chars: read.readable ? read.totalChars : 0,
       attempts: read.attempts,
       ...(read.routine ? { routine: read.routine } : {}),
+      ...(read.operated ? { operated: read.operated } : {}),
       methodClass: boundary ? judged.method : used,
       methodJudged: judged.method,
       methodAgrees: boundary ? true : agrees,
@@ -687,8 +731,10 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   const learned = deps.learned ?? defaultLearned;
   const record = deps.record ?? defaultRecord;
   const routineOf = deps.routine ?? defaultRoutine;
+  const workflow = deps.workflow !== undefined ? deps.workflow : deps.direct || !browserMcpUrl() ? null : defaultWorkflow;
   const attempts: AccessAttempt[] = [];
   let routineUsed: RoutineUse | undefined;
+  let operated: SourceRead['operated'];
   const terms: ReadTerms = {};
   /** Whether the site's robots.txt allows the browser route; a refusal is recorded as a term of this read. */
   const browserAllowed = async (): Promise<boolean> => {
@@ -730,7 +776,7 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
           detail: 'the site answered with a bot challenge, not the page',
         }
       : read;
-    const out: SourceRead = { ...honest, method, attempts, ...(routineUsed ? { routine: routineUsed } : {}), ...(terms.robotsDisallows || attempts.some((a) => a.status === 429) ? { terms: { ...terms, ...(attempts.some((a) => a.status === 429) ? { rateLimited: true } : {}) } } : {}) };
+    const out: SourceRead = { ...honest, method, attempts, ...(routineUsed ? { routine: routineUsed } : {}), ...(operated ? { operated } : {}), ...(terms.robotsDisallows || attempts.some((a) => a.status === 429) ? { terms: { ...terms, ...(attempts.some((a) => a.status === 429) ? { rateLimited: true } : {}) } } : {}) };
     await record(out, deps.caller ?? 'unknown', Date.now() - started).catch(() => undefined);
     return out;
   };
@@ -749,6 +795,20 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   if (connectorFor(url) || deps.connector) {
     const viaApi = await attempt('CONNECTOR', () => connector(url));
     if (viaApi?.readable) return done(viaApi, 'CONNECTOR');
+  }
+
+  // A recorded READ workflow on a host a person granted: operate the interface under that
+  // account, as the browser route, before any anonymous route. robots.txt still governs it.
+  if (workflow) {
+    const ran: { value: WorkflowRead | null } = { value: null };
+    const viaWorkflow = await attempt('BROWSER', async () => {
+      ran.value = await workflow(url, host, browserAllowed);
+      return ran.value?.read ?? null;
+    });
+    if (ran.value) operated = { workflow: ran.value.workflow, accountRef: ran.value.accountRef, outcome: ran.value.outcome };
+    // No workflow applies to this host: nothing was attempted, so nothing is recorded as one.
+    else if (!attempts[attempts.length - 1]?.reason?.startsWith('ERROR')) attempts.pop();
+    if (viaWorkflow?.readable) return done(viaWorkflow, 'BROWSER');
   }
 
   // A reusable routine a CONNECTOR_PROPOSED row built for this host leads, so the

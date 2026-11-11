@@ -23,6 +23,12 @@
  * routine is never authorization to sign in, solve a challenge or ignore
  * robots.txt. The read path still checks the destination and robots before it
  * runs a routine, exactly as it does for any other route.
+ *
+ * A routine here chooses a route for anonymous reads. Operating a site under a
+ * granted account — navigation, search, form entry, downloads, success checks —
+ * is a recorded workflow (`browserWorkflow.ts`), which the read path runs as its
+ * BROWSER route before any routine; and a model-assisted repair of a workflow
+ * whose interface changed is a new workflow version, not this render.
  */
 import type { AccessAttempt, AccessMethod } from './access.ts';
 import type { MethodClass } from './accessMethods.ts';
