@@ -20,6 +20,7 @@ type Stage = { name: string; file: string; fn: string };
 const STAGES: Stage[] = [
   { name: 'Stripe payment links (mailer)', file: './stripe.ts', fn: 'runStripe' },
   { name: 'Mailer materials', file: './mailer.ts', fn: 'runMailer' },
+  { name: 'Expansion offers (payment links)', file: './offers.ts', fn: 'runOffers' },
   { name: 'Etsy listings', file: './etsy.ts', fn: 'runEtsy' },
   { name: 'Print-on-demand store', file: './store.ts', fn: 'runStore' },
 ];

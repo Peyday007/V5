@@ -11,6 +11,7 @@
 #             and the owner's details read from Stripe (artifact `launch-mailer`)
 #   Etsy    — 8 digital listings created, files and photos uploaded, published
 #   Store   — 10 print-on-demand products created and published
+#   Offers  — payment links for the expansion businesses (businesses/*/offer.json)
 #
 # The owner's only part is creating and verifying the accounts and saving each
 # platform's key as a repository secret; nothing here asks him for anything
@@ -27,7 +28,7 @@ on:
         required: true
         default: run
       only:
-        description: 'optional: stripe | mailer | etsy | store'
+        description: 'optional: stripe | mailer | offers | etsy | store'
         required: false
         default: ''
       etsy_redirect_url:
@@ -116,6 +117,7 @@ jobs:
             .launch-out/summary.md
             .launch-out/results.json
             .launch-out/stripe-links.json
+            .launch-out/offer-links.json
             .launch-out/mailer/*.md
             .launch-out/mailer/mockup/
           if-no-files-found: ignore

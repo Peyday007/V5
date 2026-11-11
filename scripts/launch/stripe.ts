@@ -47,7 +47,7 @@ function form(params: Record<string, string | number | boolean>): string {
   return Object.entries(params).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
 }
 
-async function call(ctx: StageContext, key: string, method: 'GET' | 'POST', p: string, body?: Record<string, string | number | boolean>, idem?: string): Promise<Json> {
+export async function call(ctx: StageContext, key: string, method: 'GET' | 'POST', p: string, body?: Record<string, string | number | boolean>, idem?: string): Promise<Json> {
   const headers: Record<string, string> = { Authorization: `Bearer ${key}`, 'Stripe-Version': VERSION };
   if (body) headers['Content-Type'] = 'application/x-www-form-urlencoded';
   if (idem) headers['Idempotency-Key'] = idem;
@@ -57,7 +57,7 @@ async function call(ctx: StageContext, key: string, method: 'GET' | 'POST', p: s
   return json;
 }
 
-async function listAll(ctx: StageContext, key: string, p: string): Promise<Json[]> {
+export async function listAll(ctx: StageContext, key: string, p: string): Promise<Json[]> {
   const out: Json[] = [];
   let after = '';
   for (let i = 0; i < 20; i++) {
