@@ -289,31 +289,46 @@ function principalFor(worker: FreeWorker, projectIds: string[], sessionRef: stri
 /* Which items are the free lane's                                            */
 /* ------------------------------------------------------------------------- */
 
-/** The newest bin owning an item, and its purpose. */
 /**
- * A work item's owning purpose, cached ten minutes. The claim window pages past
- * work the lane declines (`claimWork`), so an idle slot can ask about dozens of
- * items every pass; on a saturated database that must not be a query each.
+ * A work item's owning bin and its purpose, cached ten minutes. The claim window
+ * pages past work the lane declines (`claimWork`), so an idle slot can ask about
+ * dozens of items every pass; on a saturated database that must not be a query
+ * each.
+ *
+ * A research item usually carries no `bin_id` (`workQueue.ts`: `advancePacket`
+ * creates fragments, verifications and audits with no bin), so its owner is the
+ * newest bin of its orchestration. The same owner is what each `FREE_LANE_ITEM`
+ * row is written against, so stage capacity attributes a job to the purpose the
+ * lane admitted it for — never to UNATTRIBUTED because the item row had no bin.
  */
-const purposeCache = new Map<string, { at: number; purpose: string | null }>();
+interface OwningBin {
+  binId: string;
+  purpose: string | null;
+}
+const purposeCache = new Map<string, { at: number; owner: OwningBin }>();
 const PURPOSE_TTL_MS = 10 * 60_000;
 
-async function owningPurpose(item: Pick<WorkItemRow, 'bin_id' | 'orchestration_id'>): Promise<string | null> {
+export async function owningBin(item: Pick<WorkItemRow, 'bin_id' | 'orchestration_id'>): Promise<OwningBin | null> {
   const key = item.bin_id ?? item.orchestration_id ?? null;
   if (!key) return null;
   const cacheKey = `${item.bin_id ? 'b' : 'o'}:${key}`;
   const hit = purposeCache.get(cacheKey);
-  if (hit && Date.now() - hit.at < PURPOSE_TTL_MS) return hit.purpose;
+  if (hit && Date.now() - hit.at < PURPOSE_TTL_MS) return hit.owner;
   const owner = item.bin_id ? 'b.id = ?' : 'b.orchestration_id = ?';
-  const row = await getDb().get<{ purpose: string | null }>(
-    `SELECT b.purpose FROM bins b WHERE ${owner} ORDER BY b.created_at DESC LIMIT 1`,
+  const row = await getDb().get<{ id: string; purpose: string | null }>(
+    `SELECT b.id, b.purpose FROM bins b WHERE ${owner} ORDER BY b.created_at DESC LIMIT 1`,
     [key],
   );
-  const purpose = row?.purpose ?? null;
+  if (!row) return null;
+  const found: OwningBin = { binId: row.id, purpose: row.purpose ?? null };
   if (purposeCache.size > 5000) purposeCache.clear();
   // An item with no bin yet may get one: only a found purpose is remembered.
-  if (purpose !== null) purposeCache.set(cacheKey, { at: Date.now(), purpose });
-  return purpose;
+  if (found.purpose !== null) purposeCache.set(cacheKey, { at: Date.now(), owner: found });
+  return found;
+}
+
+async function owningPurpose(item: Pick<WorkItemRow, 'bin_id' | 'orchestration_id'>): Promise<string | null> {
+  return (await owningBin(item))?.purpose ?? null;
 }
 
 export function resetPurposeCache(): void {
@@ -1567,6 +1582,8 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   if (projectIds.length === 0) return { claimed: null, ok: false, ms: 0 };
   let session = '';
   let one: ClaimedWork | undefined;
+  // The bin each admitted item belongs to, so its FREE_LANE_ITEM row names it.
+  const owners = new Map<string, string>();
   const unfit = await unfitNow(workers.map((w) => w.model), Date.now(), config.fallbackModel ?? null);
   const scopes = projectIds.map((projectId) => ({ projectId, scopes: [...CONNECTOR_SCOPES] }));
   const admit = async (item: WorkItemRow) => {
@@ -1578,6 +1595,8 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     if (held) return { ok: false, reason: held };
     if (unfit.has(`${worker.model}|${item.work_type}`)) return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
     if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
+    const owner = await owningBin(item);
+    if (owner) owners.set(item.id, owner.binId);
     session = sessionFor(worker, item);
     return auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
   };
@@ -1694,6 +1713,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   const ms = Date.now() - started;
   await recordBinEvent({
     eventType: 'FREE_LANE_ITEM',
+    binId: owners.get(one.workItemId) ?? null,
     projectId: one.projectId,
     workItemId: one.workItemId,
     workerId: worker.workerId,
