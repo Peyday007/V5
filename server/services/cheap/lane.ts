@@ -24,6 +24,7 @@ import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { newId, nowIso } from '../../repos/util.ts';
 import { recordRoutedWork } from '../../repos/workRouting.ts';
+import { noticeRepeats } from '../routing/repeats/repeats.ts';
 import { ProviderHttpError, parseRetryAfter, providerCapacity, providerKey, type ProviderCapacity } from '../routing/providers/capacity.ts';
 import { DELIVERABLE_KINDS, type DeliverableKind } from '../cash/deliverables/spec.ts';
 
@@ -442,6 +443,12 @@ async function recordLaneDecision(
     outcome: answered ? 'ANSWERED' : 'NO_SIGNAL',
     validationResult: answered ? 'validated answer, models agreed' : 'no validated agreement',
   });
+  // A lane task is a closed-answer shape: once it repeats, it is a candidate to
+  // become a code detector. Only a task a model actually answered counts, and
+  // noticing is advisory — it never blocks or fails the screen.
+  if (seen.asked > 0) {
+    try { await noticeRepeats(route.projectId, `CHEAP_${kind}`); } catch { /* advisory */ }
+  }
 }
 
 /** Screen one opening. Null means "no signal", never DROP. */

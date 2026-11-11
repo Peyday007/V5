@@ -18,6 +18,7 @@ import { dependencyKeys, toDependencies } from '../../domain/dependencies.ts';
 import type {
   FragmentDependency, ProviderQuota, ResearchFragment } from '../../domain/types.ts';
 import type { AIProvider } from '../../providers/types.ts';
+import { decidedBy, type DecisionImpact, type OpenQuestion } from '../routing/priority/order.ts';
 
 /**
  * The order the spec asks for, most urgent first.
@@ -131,12 +132,47 @@ export function assignExecutionPriority<T extends TierInput>(briefs: T[]): T[] {
 
 const EFFORT_ORDER: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
 
+/** What an answer to a fragment of this tier can do to the decision the packet serves. */
+const TIER_IMPACT: Record<PriorityTier, DecisionImpact> = {
+  BOUNDARY_AND_DEFINITION: 'CHANGES_DECISION',
+  FOUNDATIONAL_EVIDENCE: 'CHANGES_DECISION',
+  CALCULATION_INPUT: 'CHANGES_DECISION',
+  CONTRADICTION_RESOLUTION: 'CHANGES_DECISION',
+  MANDATORY_SYNTHESIS_INPUT: 'CHANGES_DECISION',
+  SUPPORTING_CONTEXT: 'INFORMS',
+  OPTIONAL_ENRICHMENT: 'CONTEXT',
+};
+
+/**
+ * A runnable fragment as an open question for the value-weighted order
+ * (`routing/priority/order.ts`), from the fragment's own facts and nothing
+ * invented: what its tier can do to the decision, how much work waits on it,
+ * whether it is a repair, how many requirements its answer serves (reuse), and
+ * its effort as cost. A stated value is never guessed (null), and staleness is
+ * unknown here (null) — an unknown never ranks a fragment higher.
+ */
+export function fragmentQuestion(fragment: ResearchFragment, all: ResearchFragment[]): OpenQuestion {
+  return {
+    key: String(fragment.fragmentIndex).padStart(6, '0'),
+    impact: TIER_IMPACT[tierOf(fragment, all).tier],
+    valueCents: null,
+    costUnits: (EFFORT_ORDER[fragment.estimatedEffort ?? 'MEDIUM'] ?? 1) + 1,
+    blocks: dependents(fragment, all),
+    reuse: (fragment.requirementIds ?? []).length,
+    staleDays: null,
+    attempt: fragment.attempt,
+  };
+}
+
 /**
  * Order the fragments that are ready to run right now.
  *
  * Every fragment here already has its dependencies settled, so reordering is
  * safe — what it decides is only which of several runnable things is worth the
- * next slice of the allowance.
+ * next slice of the allowance. The tier comes first (it is a dependency order);
+ * a caller's decision value is next; inside that, the value-weighted order of
+ * `routing/priority/order.ts` decides lexicographically over named facts, so a
+ * volume of low-value fragments never outranks one that more work waits on.
  */
 export function executionOrder(
   ready: ResearchFragment[],
@@ -147,8 +183,7 @@ export function executionOrder(
   const ranked = ready.map((fragment) => ({
     fragment,
     rank: tierOf(fragment, all).rank,
-    unblocks: dependents(fragment, all),
-    effort: EFFORT_ORDER[fragment.estimatedEffort ?? 'MEDIUM'] ?? 1,
+    question: fragmentQuestion(fragment, all),
   }));
   ranked.sort((a, b) => {
     if (a.rank !== b.rank) return a.rank - b.rank;
@@ -156,12 +191,7 @@ export function executionOrder(
       const diff = valueOf(b.fragment) - valueOf(a.fragment);
       if (diff !== 0) return diff;
     }
-    // Whatever unblocks the most work next is worth the slot.
-    if (a.unblocks !== b.unblocks) return b.unblocks - a.unblocks;
-    // A repair is work already half paid for; finish it before opening new work.
-    if (a.fragment.attempt !== b.fragment.attempt) return b.fragment.attempt - a.fragment.attempt;
-    if (a.effort !== b.effort) return a.effort - b.effort;
-    return a.fragment.fragmentIndex - b.fragment.fragmentIndex;
+    return decidedBy(a.question, b.question)?.sign ?? 0;
   });
   return ranked.map((entry) => entry.fragment);
 }

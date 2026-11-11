@@ -26,6 +26,8 @@ export interface OpenQuestion {
   reuse: number;
   /** Days since the opportunity's evidence was last current; null = never read. */
   staleDays: number | null;
+  /** Attempts already made at it; a repair is work already half paid for. Absent = 1. */
+  attempt?: number;
 }
 
 export interface Ranked {
@@ -41,6 +43,7 @@ export function decidedBy(a: OpenQuestion, b: OpenQuestion): { sign: number; cri
   const steps: [string, number][] = [
     ['it can change the decision', impactRank(a.impact) - impactRank(b.impact)],
     ['more work waits on it', b.blocks - a.blocks],
+    ['it is a repair already half paid for', (b.attempt ?? 1) - (a.attempt ?? 1)],
     // A stated value beats an unstated one: an unknown never ranks higher.
     ['its stated value is higher', (b.valueCents ?? -1) - (a.valueCents ?? -1)],
     ['its answer is reused more', b.reuse - a.reuse],
