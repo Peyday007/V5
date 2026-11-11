@@ -214,11 +214,21 @@ export async function reconcileBlockedScopes(now = Date.now(), force = false): P
   const { PROTECTED_VERIFICATION_PATHS } = await import('../../../domain/factoryProgram.ts');
   const { scopesOverlap } = await import('./plan.ts');
   const parked = await listBins({ states: ['NEEDS_HUMAN'], kindPrefix: 'FACTORY_', limit: 500 });
+  /*
+   * A campaign Brain's own improvement loop approved has no person on its change
+   * request; the owner's authorization covers it too, recorded against the Brain
+   * administrator exactly as the operator commands record theirs (production
+   * 2026-11-11: three BRAIN IMPROVEMENT campaigns were skipped for this alone).
+   */
+  const { listUsers } = await import('../../../repos/identity.ts');
+  const admin = (await listUsers()).find((user) => user.isBrainAdmin && !user.disabled)?.id ?? null;
   const steps: UnblockStep[] = [];
   for (const campaign of await listLiveCampaigns()) {
     if (campaign.state !== 'BLOCKED' || !campaign.blockerKind || !RECONCILABLE_BLOCKERS.has(campaign.blockerKind)) continue;
-    const changeRequest = await getChangeRequest(campaign.changeRequestId);
-    if (!changeRequest?.approvedByUserId) continue;
+    const found = await getChangeRequest(campaign.changeRequestId);
+    const approver = found?.approvedByUserId ?? admin;
+    if (!found || !approver) continue;
+    const changeRequest = { ...found, approvedByUserId: approver };
     const forbidden = forbiddenPathsFor(changeRequest.repository);
     const units = await listUnits(campaign.id);
     const exhausted = units.filter((unit) => unit.state === 'FAILED' && unit.attempt >= unit.maxAttempts && unit.maxAttempts < MAX_UNIT_ATTEMPTS);
