@@ -1,0 +1,43 @@
+{
+  "objective": "Extractors flatten a line-wrap hyphen into a space, so after normalize.ts stopped rejoining a hard hyphen before a space (PR #748, campaign fcp_ef7bb04a), a word hyphenated across a line ('recog-' / 'nition') reaches normalizeBlockText as 'recog- nition' and stays split in normalized_text, which retrieval and audits read (CLAUDE.md section 9). Every place that joins the lines of one block with a space must instead join a line that ends in a letter followed by '-' to the next line with a newline ('\\n'), so normalizeBlockText rejoins it; every other line join stays a space. The places: server/services/documents/pdf.ts buildBlocks (current.lines ... .join(' ')), server/services/documents/ocr.ts (the paragraph's rows joined with ' ', where a row is the last word of its line), server/services/documents/extraction.ts ocrBlocksFor (paragraph.replace(/\\s+/g, ' ') flattens the newline away), and server/services/documents/text.ts (paragraph.join(' ') at lines 33 and 69). This builds on PR #748: normalize.ts is not changed. Add tests/extractorLineWrapHyphen.test.ts.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "factory/campaign/fcp_ef7bb04a535643949c9c",
+  "expectedOutcome": "A word hyphenated across a line break in a PDF, OCR or plain-text source is rejoined in normalized_text ('recognition'); a suspended hyphen within a line ('pre- and post-closing') is still left unchanged.",
+  "nonGoals": [
+    "Changing normalize.ts or any other normalisation rule",
+    "Re-normalising stored documents",
+    "Changing how lines are ordered or grouped into blocks"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "pdf.ts layoutPage on two lines of one paragraph, 'the recog-' above 'nition rule', yields a block whose text keeps the hyphen followed by a newline, and normalizeBlockText of that block text is 'the recognition rule'.",
+      "verification": "npx vitest run tests/extractorLineWrapHyphen.test.ts",
+      "mandatory": true
+    },
+    {
+      "statement": "A plain-text paragraph 'the recog-\\nnition rule' and an OCR paragraph whose first line ends 'recog-' each produce a block that normalizeBlockText turns into 'recognition'; a line 'pre- and post-closing' within one line is unchanged in every extractor.",
+      "verification": "npx vitest run tests/extractorLineWrapHyphen.test.ts",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/documents.test.ts, tests/normalizeSuspendedHyphen.test.ts and every existing extraction test pass, and the repository typechecks.",
+      "verification": "npx vitest run tests/documents.test.ts tests/normalizeSuspendedHyphen.test.ts && npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/documents/pdf.ts",
+    "server/services/documents/ocr.ts",
+    "server/services/documents/extraction.ts",
+    "server/services/documents/text.ts",
+    "tests/extractorLineWrapHyphen.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npx vitest run tests/extractorLineWrapHyphen.test.ts tests/normalizeSuspendedHyphen.test.ts tests/documents.test.ts"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change.",
+  "submissionKey": "extractor-line-wrap-hyphen-2026-11-11"
+}
