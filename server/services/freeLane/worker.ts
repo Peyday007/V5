@@ -217,11 +217,34 @@ export async function ensureFreeWorkers(config: LaneConfig): Promise<FreeWorker[
  * there is work for it. Idempotent: an existing grant is not rewritten.
  */
 async function ensureMemberships(worker: FreeWorker): Promise<string[]> {
+  /*
+   * 'Membership lost' (rule 9) was never a stale cache — projectsFor re-reads
+   * this every minute. It was this list disagreeing with what the lane counts as
+   * waiting (`waitingNow`): that counts a queued item whose owning bin has a
+   * free-lane purpose in ANY state, keyed by the item's own project, while this
+   * granted only projects holding a bin still READY, LEASED or NEEDS_HUMAN. An
+   * item that outlived its bin's open state (a retry queued after the bin moved
+   * on) sat in a project the worker never joined, so every re-read answered the
+   * same and it waited for good. Grant from the items themselves too, by the
+   * same predicate `waitingNow` and `freeLaneAdmits` use — except under a bin
+   * that is not yet ready (DRAFT) or was withdrawn (CANCELLED): that work is
+   * not meant to run, and a membership must not be what makes it run.
+   */
+  const types = [...FREE_LANE_WORK_TYPES];
+  const purposes = [...FREE_LANE_PURPOSES];
   const projects = (
     await getDb().all<{ project_id: string }>(
-      `SELECT DISTINCT project_id FROM bins
-        WHERE purpose IN ('PLAY_RESEARCH', 'GRUNT') AND state IN ('READY', 'LEASED', 'NEEDS_HUMAN')`,
-      [],
+      `SELECT project_id FROM bins
+        WHERE purpose IN (${purposes.map(() => '?').join(', ')}) AND state IN ('READY', 'LEASED', 'NEEDS_HUMAN')
+       UNION
+       SELECT w.project_id FROM work_items w
+        WHERE w.state IN ('QUEUED', 'LEASED') AND w.attempt_count < w.max_attempts
+          AND w.work_type IN (${types.map(() => '?').join(', ')})
+          AND EXISTS (SELECT 1 FROM bins b
+                       WHERE (b.id = w.bin_id OR (b.orchestration_id IS NOT NULL AND b.orchestration_id = w.orchestration_id))
+                         AND b.purpose IN (${purposes.map(() => '?').join(', ')})
+                         AND b.state NOT IN ('DRAFT', 'CANCELLED'))`,
+      [...purposes, ...types, ...purposes],
     )
   ).map((row) => row.project_id);
   // §87: while the activation gate is ACTIVE, also the project holding the improvement loop's own research.
