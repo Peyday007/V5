@@ -59,6 +59,15 @@ export interface AcquisitionNeed {
   evadesDefenses?: boolean;
   /** The need would, as asked, bind the company (order, purchase, offer, signature, acceptance). */
   makesBusinessCommitment?: boolean;
+  /**
+   * OPERATE only: the operation this judgment routes will itself run inside the
+   * signed-in session that holds the granted account (`browserWorkflow.ts`). Only
+   * then is the OPERATE_PERMISSION record consulted and its account named on the
+   * judgment row. A caller that does not run under an account (an anonymous
+   * render, a survey, a judgment made for its own sake) leaves this unset, and its
+   * row can never claim an account was used.
+   */
+  runsUnderAccount?: boolean;
 }
 
 /** What is known about the need. Every field is optional: absent means "not established". */
@@ -313,11 +322,13 @@ export async function readRepeatedUse(host: string): Promise<{ repeatedUses: num
  * A person makes the row from a terminal (`operatePermissionCli.ts grant|revoke|show`,
  * invariant 35); `recordOperatePermission` is the one writer behind it.
  *
- * This is the record the OPERATE judgment reads. A read path (`access.ts`) can
- * only say a browser rendered a public page — it cannot know about an account,
- * and says `false` — so the judgment consults this record whenever the caller
- * has not itself established an account, and an operation becomes BROWSER or
- * MODEL_ASSISTED exactly when a person granted it. A permission is never
+ * This is the record the OPERATE judgment reads, and only for a need that will
+ * actually run under the account (`AcquisitionNeed.runsUnderAccount`, set by
+ * `browserWorkflow.ts`, whose account workflows run in the signed-in session).
+ * A read (`access.ts`) is never an operation: the research browser does not
+ * sign in, so a grant on a host changes nothing about how its pages are read or
+ * recorded. An operation becomes BROWSER or MODEL_ASSISTED exactly when a person
+ * granted it and the operation uses it. A permission is never
  * authorization to contact strangers, evade defenses or commit the business:
  * those boundaries are judged first and refuse regardless of any grant.
  */
@@ -461,11 +472,11 @@ export async function recordAcquisitionJudgment(
     const counted = await (deps.repeatedUse ?? readRepeatedUse)(need.host);
     used = { ...evidence, ...counted };
   }
-  // An account the caller could not establish is looked up in the permission record:
-  // a read path never knows about accounts, and a person's grant is what makes operation possible.
+  // The permission record is consulted, and its account named on the row, only for an operation
+  // that will itself run under that account. A row names an account only when an operation uses it (§18, inv. 45).
   let accountSource: 'CALLER' | 'PERMISSION_RECORD' | 'NONE' = used.authorizedAccountOnRecord === true ? 'CALLER' : 'NONE';
   let permission: OperatePermission | null = null;
-  if (need.kind === 'OPERATE' && need.host && used.authorizedAccountOnRecord !== true) {
+  if (need.kind === 'OPERATE' && need.runsUnderAccount === true && need.host && used.authorizedAccountOnRecord !== true) {
     permission = await (deps.operatePermission ?? readOperatePermission)(need.host);
     if (permission.permitted) {
       used = { ...used, authorizedAccountOnRecord: true };
