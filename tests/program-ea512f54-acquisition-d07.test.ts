@@ -61,7 +61,7 @@ describe('SEARCH_FIRST runs source discovery and is judged again on what it foun
   });
 
   it('a search that found nothing makes the bespoke route proposable', async () => {
-    const h = harness();
+    const h = harness({ found: { query: 'q', candidates: ['https://y.example/about'], bulkCandidates: [], searched: true } });
     const j = await recordAcquisitionJudgment({ kind: 'ACQUIRE', purpose: 'p', host: 'y.example' }, { stableHttpDocuments: true }, h.deps);
     expect(h.events.map((e) => e.outcome)).toEqual(['SEARCH_FIRST', 'NONE_FOUND', 'ROUTE_SELECTED']);
     expect(j.route).toBe('HTTP');
@@ -113,11 +113,66 @@ describe('discovery is a search for corpora, judged by the shape of the address'
     expect(d).toMatchObject({ candidates: [], bulkCandidates: [] });
   });
 
+  it('a failed or skipped search is not searched, and an answered one is (F-DISCOVERY-UNKNOWN-AS-NONE)', async () => {
+    const failed = await discoverExistingSources({ purpose: 'p', host: 'h.example' }, { search: async () => Promise.reject(new Error('timeout')) });
+    expect(failed.searched).toBe(false);
+    // webSearch answers [] when it skipped (queue full, endpoints paused) or its fetch failed: no address is not knowledge.
+    const skipped = await discoverExistingSources({ purpose: 'p', host: 'h.example' }, { search: async () => [] });
+    expect(skipped.searched).toBe(false);
+    const answered = await discoverExistingSources({ purpose: 'p', host: 'h.example' }, { search: async () => ['https://h.example/about'] });
+    expect(answered).toMatchObject({ searched: true, bulkCandidates: [] });
+  });
+
   it('the newest discovery for the host inside the window is the one on record', () => {
     const now = Date.parse('2026-11-10T00:00:00Z');
     const row = (at: string, bulk: string[]) => ({ event_type: 'SOURCE_DISCOVERY', outcome: 'FOUND', at, measures: JSON.stringify({ host: 'a.example', query: 'q', candidates: bulk, bulkCandidates: bulk }) });
     expect(discoveryFromRows([row('2026-11-09T00:00:00Z', ['old']), row('2026-11-09T12:00:00Z', ['new'])], 'a.example', { now })?.bulkCandidates).toEqual(['new']);
     expect(discoveryFromRows([row('2026-10-01T00:00:00Z', ['stale'])], 'a.example', { now })).toBeNull();
+  });
+
+  it('a row that records no answered search is never read back as "already searched"', () => {
+    const now = Date.parse('2026-11-10T00:00:00Z');
+    const r = (at: string, m: Record<string, unknown>) => ({ event_type: 'SOURCE_DISCOVERY', outcome: 'NONE_FOUND', at, measures: JSON.stringify({ host: 'u.example', query: 'q', ...m }) });
+    // An older row written when a skipped/failed search was recorded as NONE_FOUND with nothing returned.
+    expect(discoveryFromRows([r('2026-11-09T00:00:00Z', { candidates: [], bulkCandidates: [] })], 'u.example', { now })).toBeNull();
+    expect(discoveryFromRows([r('2026-11-09T00:00:00Z', { candidates: [], bulkCandidates: [], searched: false })], 'u.example', { now })).toBeNull();
+    // A newer unknown does not hide an older answered search.
+    const answered = r('2026-11-08T00:00:00Z', { candidates: ['https://u.example/about'], bulkCandidates: [], searched: true });
+    expect(discoveryFromRows([answered, r('2026-11-09T00:00:00Z', { candidates: [], bulkCandidates: [] })], 'u.example', { now })?.candidates).toEqual(['https://u.example/about']);
+  });
+});
+
+describe('an unknown search is never recorded as "searched, none found" (F-DISCOVERY-UNKNOWN-AS-NONE)', () => {
+  const unsearched: SourceDiscovery = { query: 'q', candidates: [], bulkCandidates: [], searched: false };
+
+  it('a skipped, refused, timed-out or failed search writes no SOURCE_DISCOVERY and leaves SEARCH_FIRST standing', async () => {
+    const h = harness({ found: unsearched });
+    const j = await recordAcquisitionJudgment({ kind: 'ACQUIRE', purpose: 'p', host: 'v.example' }, { stableHttpDocuments: true }, h.deps);
+    expect(h.searches()).toBe(1);
+    expect(h.events.map((e) => [e.eventType, e.outcome])).toEqual([['ACQUISITION_JUDGMENT', 'SEARCH_FIRST']]);
+    expect(j.outcome).toBe('SEARCH_FIRST');
+    expect(j.bespokeCrawlerMayBeProposed).toBe(false);
+    expect(h.events[0]!.measures).toMatchObject({ bulkSearchDone: false, bespokeCrawlerMayBeProposed: false });
+    expect(h.events.some((e) => e.eventType === 'CONNECTOR_PROPOSED')).toBe(false);
+  });
+
+  it('an unsearched discovery on record does not answer "has anyone looked": the host is searched again', async () => {
+    const h = harness({ discovery: unsearched, found: { query: 'q', candidates: ['https://v.example/data/all.csv'], bulkCandidates: ['https://v.example/data/all.csv'], searched: true } });
+    const j = await recordAcquisitionJudgment({ kind: 'ACQUIRE', purpose: 'p', host: 'v.example' }, { stableHttpDocuments: true }, h.deps);
+    expect(h.searches()).toBe(1);
+    expect(h.events[0]!.measures).not.toHaveProperty('discoveryOnRecord');
+    expect(j.route).toBe('BULK');
+  });
+
+  it('a search that throws is not a discovery either', async () => {
+    const h = harness();
+    const j = await recordAcquisitionJudgment(
+      { kind: 'ACQUIRE', purpose: 'p', host: 't.example' },
+      { stableHttpDocuments: true },
+      { ...h.deps, discover: (need) => discoverExistingSources(need, { search: async () => Promise.reject(new Error('refused')) }) },
+    );
+    expect(h.events.map((e) => e.eventType)).toEqual(['ACQUISITION_JUDGMENT']);
+    expect(j.bespokeCrawlerMayBeProposed).toBe(false);
   });
 });
 
@@ -201,6 +256,38 @@ describe('end to end on the database', () => {
     const judgments = (await rows('ACQUISITION_JUDGMENT', caller)).map((j) => [j.outcome, JSON.parse(j.measures).route]);
     expect(judgments[0]).toEqual(['SEARCH_FIRST', null]);
     expect(judgments).toContainEqual(['ROUTE_SELECTED', 'BULK']);
+  });
+
+  it('a read whose discovery search failed records no discovery, and the host is searched again later', async () => {
+    await freshProject();
+    resetSourceAccessMemory();
+    const caller = 'discovery-unknown-e2e';
+    let searches = 0;
+    let searchWorks = false;
+    const deps = {
+      ...base,
+      direct: async (u: string) => ok(u),
+      discover: async (need: { host?: string | null; purpose: string }) => {
+        searches += 1;
+        return discoverExistingSources(need, {
+          search: async () => (searchWorks ? ['https://unknown-registry.example/bulk/companies.zip'] : Promise.reject(new Error('search endpoint paused'))),
+        });
+      },
+      caller,
+    };
+    await readSource('https://unknown-registry.example/company/1', deps);
+    await settle();
+    expect(searches).toBe(1);
+    expect(await rows('SOURCE_DISCOVERY', caller)).toEqual([]);
+    const first = (await rows('ACQUISITION_JUDGMENT', caller)).map((j) => JSON.parse(j.measures) as Record<string, unknown>);
+    expect(first.some((m) => m.bulkSearchDone === true || m.bespokeCrawlerMayBeProposed === true)).toBe(false);
+    // The next refresh: the host was not marked searched, so a working search now runs and is recorded.
+    resetSourceAccessMemory();
+    searchWorks = true;
+    await readSource('https://unknown-registry.example/company/2', deps);
+    await settle();
+    expect(searches).toBe(2);
+    expect((await rows('SOURCE_DISCOVERY', caller)).map((d) => d.outcome)).toEqual(['FOUND']);
   });
 
   it('a refused read opens a handoff that the terminal lists, and a later read that routes settles it', async () => {
