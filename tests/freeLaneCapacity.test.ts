@@ -238,6 +238,61 @@ describe('the control step heals the pool it owns (rule 9: nothing claimable wai
     expect(await healed()).toHaveLength(1);
   }, 30_000);
 
+  /*
+   * The recorded failure class is claimable research waiting an hour or more beside
+   * idle slots. The two tests below reproduce states in which waiting longer changes
+   * nothing under the earlier code: no cache TTL expires and no idle sleep ends that
+   * clears them. So each one fails on that code however long it is given, rather
+   * than only being slower there. Neither forces a control step: the pool's own
+   * interval (60 s here) never fires inside the test.
+   */
+  it('membership lost, for good: work whose bin has moved on is claimed, where re-reading the old grant never finds its project', async () => {
+    resetFreeLaneMemberships();
+    await queueFragments(2);
+    // A retry queued after its owning bin moved on (FAILED, not withdrawn). The earlier grant took only
+    // projects with a READY, LEASED or NEEDS_HUMAN bin, so this project was never joined. Every minute's
+    // re-read gave the same answer, and the item waited for good while waitingNow counted it.
+    await getDb().run("UPDATE bins SET state = 'FAILED'", []);
+    const openBins = await getDb().get<{ n: number | string }>(
+      "SELECT COUNT(*) AS n FROM bins WHERE purpose IN ('PLAY_RESEARCH', 'GRUNT') AND state IN ('READY', 'LEASED', 'NEEDS_HUMAN')", []);
+    expect(Number(openBins?.n ?? 0)).toBe(0);
+    expect(await waitingNow()).toBe(2);
+    startAdaptivePool({ config: CONFIG, completer, fetchSource, search: async () => [], pressure: () => calm }, 60_000);
+    for (let i = 0; i < 50 && (await taken()) === 0; i += 1) await pause(100);
+    expect(await taken()).toBeGreaterThan(0);
+    // No control step healed it: the grant itself now reaches the work.
+    expect(await healed()).toHaveLength(0);
+  }, 30_000);
+
+  it('lane pool stopped while the control step keeps failing: the pool refills its exited slots itself and claims the waiting work', async () => {
+    let broken = true;
+    let steps = 0;
+    const options = {
+      config: CONFIG,
+      fetchSource,
+      search: async () => [],
+      // The first step starts the slots. After that, the same database fault that ended them makes every
+      // step throw before `fill`. Under the earlier code that step was the only refill, so the pool stayed
+      // empty however long it ran.
+      pressure: () => {
+        steps += 1;
+        if (steps > 1) throw new Error('database unavailable');
+        return calm;
+      },
+      get completer(): Completer {
+        if (broken) throw new Error('slot crashed');
+        return completer;
+      },
+    };
+    startAdaptivePool(options, 200);
+    await pause(400);
+    broken = false;
+    await queueFragments(2);
+    for (let i = 0; i < 100 && (await taken()) === 0; i += 1) await pause(100);
+    expect(steps).toBeGreaterThan(5);
+    expect(await taken()).toBeGreaterThan(0);
+  }, 30_000);
+
   it('lane pool stopped: a pool whose slots all exited is refilled by the next step without restarting the pool', async () => {
     let broken = true;
     const options = {
