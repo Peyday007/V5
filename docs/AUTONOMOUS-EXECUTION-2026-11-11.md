@@ -106,8 +106,20 @@ Left out on purpose: `gh api`/`curl` (a prefix rule cannot stop `-X DELETE`),
 
 ## The demonstration
 
-One instruction: `objectives/normalize-suspended-hyphen-v2.json`, a live
-defect. An earlier Factory campaign on it (`fcp_4bc9ef45`) had run out of
-attempts and parked on the owner. Submitted with `--ref`, approved, then
-carried by the Factory as campaign `fcp_b11abd00`. The result is recorded
-below when the campaign ends.
+One instruction: a live defect in `server/services/documents/normalize.ts`.
+`SOFT_HYPHEN_BREAK` turned "pre- and post-closing" into "preand post-closing" in
+`normalized_text`, which retrieval and audits read. An earlier Factory campaign
+on it (`fcp_4bc9ef45`) had run out of attempts and parked on the owner.
+
+What happened, in order (owner interventions: **0**):
+
+| # | event | who resolved it |
+|---|---|---|
+| 1 | `objectives/normalize-suspended-hyphen-v2.json` submitted, approved, planned (`fcp_b11abd00`). | session → Factory |
+| 2 | **Failure.** Two implementer attempts refused: `tests/documents.test.ts:704` asserts the defect ('di- ation' → 'intermediation'), so A03 contradicted A01. | session amended the scope and regranted the unit (`regrant-unit --why ownership-widened`) |
+| 3 | **Failure.** The worker read A03 as forbidding the fixture edit. `amend` could not carry prose through `factory.yml` (`extra` refuses quotes). | #723 added `amend --value-file`. The Deploy livelock (above) kept it off production, so the session **changed strategy**: it retired `fcp_b11abd00` and resubmitted the corrected contract as v3. |
+| 4 | **Temporary outage.** The v3 submit hit the forge's hourly read budget. | waited for the window, resubmitted (`fcr_3f494a99`) |
+| 5 | **Interruption.** This session's context was compacted mid-run and its watcher was killed at its time limit. The Factory kept working on its own: campaign `fcp_ef7bb04a` planned in 35s, and a worker wrote the fix and test and integrated it (attempt 1/3). The resumed session read the state from production rows. | Factory, durable state |
+| 6 | **Failure found by Brain itself.** The independent review found a regression: a hyphen before CRLF (`'recog-\r\nnition'`) was no longer rejoined. Brain created `repair-F1` without being asked. | Factory review → repair unit |
+
+The rest is recorded when the campaign ends.
