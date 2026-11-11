@@ -144,14 +144,21 @@ export interface GoalPortfolio {
  * observations it was reconstructed from; a fixed term (a price, a cost, days
  * to cash) is a fact rather than a draw and does not bound the sample; a fixed
  * behavioural rate (reply, close, the deals a market takes) is a rate somebody
- * measured on a sample nobody stated, so it does.
+ * measured on a sample nobody stated, so it does. Money already agreed is
+ * not exempt: whether it is paid is a draw nobody has measured. The answer is
+ * always a finite count of observations or undefined, never infinite.
  */
 const BEHAVIOURAL: ReadonlySet<keyof ModelledOpportunity> = new Set(['respond', 'close', 'volume']);
 export function sampleSizeOf(one: ModelledOpportunity): number | undefined {
   if (one.agreedValue > 0) {
-    // Money a buyer already agreed draws nothing but whether it settles in time.
-    const days = one.daysToCash;
-    return days.inferred ? days.inferred.observations : days.value !== null ? Number.POSITIVE_INFINITY : undefined;
+    // Money a buyer already agreed still has to be paid: a signed contract is
+    // not settled cash. Whether the counterparty pays at all, pays in full and
+    // pays in time is a behavioural draw, and nothing in the model measures it —
+    // days to cash, even inferred, counts how long payments that did arrive
+    // took, never how often agreed money failed to arrive. So the sample behind
+    // an agreement is unstated, and a reading resting on it is never calibrated
+    // (CAUSAL-14-2, CAUSAL-14-5). A fixed term is never an infinite sample.
+    return undefined;
   }
   const drawn: Array<keyof ModelledOpportunity> = one.repeatable ? INPUT_NAMES.map(([key]) => key) : ['price', 'daysToCash', 'close', 'directCost'];
   let n = Number.POSITIVE_INFINITY;
@@ -160,7 +167,8 @@ export function sampleSizeOf(one: ModelledOpportunity): number | undefined {
     if (input.inferred) n = Math.min(n, input.inferred.observations);
     else if (input.value === null || BEHAVIOURAL.has(key)) return undefined;
   }
-  return n;
+  // Only observations bound a sample; a reading with none behind it states no sample.
+  return Number.isFinite(n) ? n : undefined;
 }
 
 /**

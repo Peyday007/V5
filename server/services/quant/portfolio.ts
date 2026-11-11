@@ -457,7 +457,8 @@ export function assess(problem: PortfolioProblem, best: PortfolioReading | null)
   const problems: string[] = [];
   for (const one of members) {
     if (!one.justified) problems.push(`"${one.key}": samples are not evidence-backed (invented or unvalidated inputs)`);
-    else if (one.evidence?.sampleSize === undefined || !(one.evidence.sampleSize >= MIN_EVIDENCE_SAMPLE)) problems.push(`"${one.key}": sample size ${one.evidence?.sampleSize === undefined ? 'is not stated' : `${one.evidence.sampleSize} is under ${MIN_EVIDENCE_SAMPLE}`}`);
+    else if (one.evidence?.sampleSize === undefined || !Number.isFinite(one.evidence.sampleSize)) problems.push(`"${one.key}": sample size is not stated as a finite count of observations`);
+    else if (!(one.evidence.sampleSize >= MIN_EVIDENCE_SAMPLE)) problems.push(`"${one.key}": sample size ${one.evidence.sampleSize} is under ${MIN_EVIDENCE_SAMPLE}`);
     if (one.evidence?.conditionsChanged) problems.push(`"${one.key}": conditions changed since its observations, so they may not transfer`);
   }
   const base = { coverage: best.reach, tailSettledP10: best.settledP10, validationProblems: problems };
