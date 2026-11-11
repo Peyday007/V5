@@ -22,11 +22,18 @@ const flag = (name: string) => {
   return i >= 0 ? Number(argv[i + 1]) : undefined;
 };
 
+// One pooler client, like every operator script beside the running app (§39).
+process.env.BRAIN_DATABASE_POOL_SIZE ??= '1';
+
 const deps = defaultDeps();
 let database = false;
 if (signingKey()) {
   try {
-    await initDatabase();
+    let timer: NodeJS.Timeout | undefined;
+    await Promise.race([
+      initDatabase(),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('the database did not open within 60 seconds')), 60_000); }),
+    ]).finally(() => clearTimeout(timer));
     database = true;
     const meter = {
       used: () => countIntegrationUsage('google-places', `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`),
