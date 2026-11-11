@@ -46,9 +46,17 @@ export interface StageReading {
   oldestUsefulItemMinutes: Measured<number | null>;
   itemsProcessedPerHour: Measured<number>;
   uniqueUsableFacts: Measured<number>;
+  /**
+   * Records dropped or repeated, and nothing else: claims Brain refused that the
+   * lane dropped from a submission, plus submissions of an item already submitted
+   * in the window. A provider failure or a retryable failure is neither; those are
+   * `providerFailures` and `otherFailures`.
+   */
   droppedOrDuplicate: Measured<number>;
   modelCallsAvoided: Measured<number>;
   providerFailures: Measured<number>;
+  /** Items handed back or failed for any reason other than a provider failure (Brain busy, no usable answer). */
+  otherFailures: Measured<number>;
   elapsedMs: Measured<number>;
   incrementalDollars: Measured<number>;
   accepted: number;
@@ -95,6 +103,17 @@ const NOT = (reason: string): { measured: false; reason: string } => ({ measured
 const ok = <T>(value: T): { measured: true; value: T } => ({ measured: true, value });
 const placeholders = (items: readonly unknown[]): string => items.map(() => '?').join(', ');
 
+/** The dropped-claim count a FREE_LANE_ITEM event's measures carry, or 0. Exported for tests. */
+export function droppedClaimsIn(measures: string | null): number {
+  if (!measures) return 0;
+  try {
+    const value = (JSON.parse(measures) as { droppedClaims?: unknown }).droppedClaims;
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** Per-stage reading from the rows. Exported for tests. */
 async function readStage(def: StageDefinition, since: string, hours: number, nowMs: number): Promise<StageReading> {
   const blank = (reason: string): StageReading => ({
@@ -107,6 +126,7 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     droppedOrDuplicate: NOT(reason),
     modelCallsAvoided: NOT('model calls avoided are not recorded'),
     providerFailures: NOT(reason),
+    otherFailures: NOT(reason),
     elapsedMs: NOT(reason),
     incrementalDollars: NOT('the lane records no dollar cost per job'),
     accepted: 0,
@@ -140,16 +160,35 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     [since, ...types],
   );
 
+  // A repeated submission: a SUBMITTED event for an item that already had one in the window.
+  const repeats = await db.get<{ k: number | string; items: number | string }>(
+    `SELECT COUNT(*) AS k, COUNT(DISTINCT work_item_id) AS items FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'SUBMITTED' AND at >= ?
+        AND work_item_id IS NOT NULL AND workload_class IN (${placeholders(types)})`,
+    [since, ...types],
+  );
+  // Claims the lane dropped from a submission Brain refused, recorded on the item's event.
+  const droppedRows = await db.all<{ measures: string | null }>(
+    `SELECT measures FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND measures LIKE '%droppedClaims%'
+        AND workload_class IN (${placeholders(types)})`,
+    [since, ...types],
+  );
+
   let total = 0;
   let accepted = 0;
   let providerFailures = 0;
+  let otherFailures = 0;
   let ms = 0;
   for (const row of events) {
     total += n(row.k);
     ms += n(row.ms);
     if (row.outcome === 'SUBMITTED') accepted += n(row.k);
-    if (n(row.failed) === 1) providerFailures += n(row.k);
+    else if (n(row.failed) === 1) providerFailures += n(row.k);
+    else otherFailures += n(row.k);
   }
+  const duplicates = Math.max(0, n(repeats?.k) - n(repeats?.items));
+  const dropped = droppedRows.reduce((sum, row) => sum + droppedClaimsIn(row.measures), 0);
   const oldest = queued?.oldest ? Math.max(0, Math.round((nowMs - Date.parse(queued.oldest)) / 60_000)) : null;
   return {
     stage: def.id,
@@ -158,10 +197,10 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     oldestUsefulItemMinutes: ok(oldest),
     itemsProcessedPerHour: ok(total / hours),
     uniqueUsableFacts: ok(n(facts?.n)),
-    // Outcomes that did not become an accepted submission: dropped or repeated work.
-    droppedOrDuplicate: ok(total - accepted),
+    droppedOrDuplicate: ok(dropped + duplicates),
     modelCallsAvoided: NOT('model calls avoided are not recorded'),
     providerFailures: ok(providerFailures),
+    otherFailures: ok(otherFailures),
     elapsedMs: ok(ms),
     incrementalDollars: NOT('the lane records no dollar cost per job'),
     accepted,

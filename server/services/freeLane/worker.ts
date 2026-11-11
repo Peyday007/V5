@@ -612,6 +612,8 @@ interface Ctx {
   why: string;
   /** How sources were found for a fragment: search results, and which of the read pages came from them. */
   discovery?: { searched: number; readFromSearch: number; readFromModel: number };
+  /** Claims Brain refused and the lane dropped from a submission (CAP-16-3's dropped records). */
+  droppedClaims?: number;
 }
 
 /** `ask` for one item, recording why on the item when the model gives nothing usable. */
@@ -694,6 +696,7 @@ export async function submitDroppingRefusedClaims(ctx: Ctx, tool: string, args: 
       const at = index ? Number(index[1]) : -1;
       if (tool !== 'brain_submit_claims' || !claims || claims.length < 2 || at < 0 || at >= claims.length || dropped >= 5) throw error;
       current = { ...current, claims: claims.filter((_, i) => i !== at) };
+      ctx.droppedClaims = (ctx.droppedClaims ?? 0) + 1;
     }
   }
 }
@@ -1703,7 +1706,9 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
     durationMs: ms,
     evidenceClass: 'MEASURED',
-    ...(ctx.discovery ? { measures: { discovery: ctx.discovery } } : {}),
+    ...(ctx.discovery || ctx.droppedClaims
+      ? { measures: { ...(ctx.discovery ? { discovery: ctx.discovery } : {}), ...(ctx.droppedClaims ? { droppedClaims: ctx.droppedClaims } : {}) } }
+      : {}),
   });
   return { claimed: one, ok, ms };
 }
