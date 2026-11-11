@@ -26,12 +26,21 @@ S = {}
 #   holds the production routes behind those gates and hands off only the
 #   internally authorized preparation (GOV-22-2).
 GATE_NAMES = ('CREDENTIALS', 'CONTRACT', 'SPEND', 'PERMISSION')
-def r(prefix, key, title, subsystem, priority, paths, missing, existing=None, evidence='', deps=(), prepared=False, behavior=None, gates=None):
+#   capabilities: the production capability keys the requirement provides —
+#   {key: why}, where key is the one real work is blocked on: a cash capability
+#   id (`PUBLISH_A_LISTING`, the `CAPABILITY:<id>` of `cash_needs.blocker_key`),
+#   a capability-map id (`RESEARCH.ACCESS.READ`) or a routing capability a bin
+#   requires. Written as `Capability <KEY>: <why>` constraints, which the
+#   prepared-option producer reads so the option it records is found when a
+#   commercial or research objective is blocked on that key (GOV-22-2, F2).
+def r(prefix, key, title, subsystem, priority, paths, missing, existing=None, evidence='', deps=(), prepared=False, behavior=None, gates=None, capabilities=None):
     for g in (gates or {}):
         if g not in GATE_NAMES: raise SystemExit(f'{key}: unknown gate {g}')
+    for c in (capabilities or {}):
+        if not c or any(ch.isspace() or ch == ':' for ch in c): raise SystemExit(f'{key}: capability key {c!r} must be one word')
     S[prefix] = dict(key=key, title=title, subsystem=subsystem, priority=priority, paths=list(paths), missing=missing,
                      existing=list(existing or []), evidence=evidence, deps=list(deps), prepared=prepared, behavior=behavior,
-                     gates=dict(gates or {}))
+                     gates=dict(gates or {}), capabilities=dict(capabilities or {}))
 
 FP = ['server/services/factory/program/**', 'server/domain/factoryProgram.ts']
 PROGRAM_EVIDENCE = ('§96 programs (verbatim source, omission-refusing map, dependency-ordered campaigns, production-verified status) '
@@ -231,7 +240,9 @@ r('21.4', 'ACQ-21-4', 'Discovery → access → code ingestion → parsing → p
 r('21.5', 'ACQ-21-5', 'Browser routines as versioned reusable capabilities', 'browser-operator', 'P3', ['server/services/sources/browser/**'],
   'Authorized bounded workflows with selectors, checks, secret-free logs and idempotency.', prepared=True, existing=['.github/workflows/browser.yml'], evidence='browser workflow exists.',
   gates={'CREDENTIALS': 'a browser workflow runs under an account only the owner can sign in to',
-         'PERMISSION': 'each site and workflow must be authorized before it runs in production'})
+         'PERMISSION': 'each site and workflow must be authorized before it runs in production'},
+  capabilities={'PUBLISH_A_LISTING': 'a marketplace with no publishing API is reached through an authorized browser routine',
+                'RESEARCH.ACCESS.READ': 'a page that only renders in a browser is read through a browser routine'})
 r('21.6', 'AUTH-21-6', 'Read-only learning never authorizes consequential agency', 'authority', 'P0', ['server/services/cash/authority.ts'],
   'Enforce on the action path; routine research continues when a login or payment needs the owner.', deps=['AUTH-20-3'])
 r('21.7', 'CAP-21-7', 'Resource-aware acquisition measurement; scale only the constrained component', 'capacity', 'P1', ['server/services/feeds/**'],
@@ -425,7 +436,8 @@ for d in reqs:
         'key': key, 'kind': 'CAPABILITY', 'title': title[:160], 'subsystem': d['subsystem'], 'source': srcs, 'quote': None,
         'behavior': behavior, 'inputs': [], 'outputs': [], 'constraints': ['Extend the existing owner; no duplicate scheduler, store or authority path (§10.3, §20.4).',
                                                                        'No category, industry or example is a whitelist (R01-A1, §18.1).']
-                                                                      + [f'Gate {g}: {why}' for g, why in d.get('gates', {}).items()],
+                                                                      + [f'Gate {g}: {why}' for g, why in d.get('gates', {}).items()]
+                                                                      + [f'Capability {c}: {why}' for c, why in d.get('capabilities', {}).items()],
         'dependsOn': [x for x in deps], 'interactsWith': [], 'existing': existing, 'missingWork': missing,
         'paths': d['paths'], 'verification': [{'kind': 'PROBE', 'probe': f'r01.{key.lower()}', 'statement': f'{key} demonstrated on production rows'}],
         'ambiguities': amb, 'priority': d['priority'], **({'prepared': True} if d['prepared'] else {}),
