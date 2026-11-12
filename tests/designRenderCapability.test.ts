@@ -24,7 +24,12 @@ import {
   effectiveCapabilities,
   evaluateContract,
 } from '../server/services/bins/contracts.ts';
-import { binAdmission, recordDemonstratedCapabilities } from '../server/services/bins/service.ts';
+import {
+  binAdmission,
+  fleetDeclarationScanCount,
+  forgetFleetDeclarations,
+  recordDemonstratedCapabilities,
+} from '../server/services/bins/service.ts';
 import { routeBin, type RoutingCandidate } from '../server/services/dispatch/router.ts';
 import type { Bin, BinManifest, FleetAccount, FleetRoutine, Principal, WorkerScope } from '../server/domain/types.ts';
 
@@ -36,6 +41,8 @@ let projectId = '';
 
 beforeEach(async () => {
   projectId = (await freshProject()).project.id;
+  // The fleet's declarations are shared for a short window; each test builds its own fleet.
+  forgetFleetDeclarations();
 });
 
 function renderLike(over: Partial<Bin> = {}): Bin {
@@ -337,5 +344,47 @@ describe('a surface that renders declares the browser it proved it has', () => {
       await recordDemonstratedCapabilities({ id: 'b', completionContract: 'DESIGN_RENDER_V1', leaseSessionRef: null } as Bin),
     ).toEqual([]);
     expect((await getRoutine(routine.id))!.capabilities).toEqual([]);
+  });
+});
+
+/*
+ * Review finding: admission read every Routine and every Account on each
+ * admission of a render bin with a session, so each claim attempt cost two
+ * full-table reads on the pressure-sensitive claim path (§61/§63). The fleet is
+ * now read only when its answer can change the verdict, and then once per short
+ * window — without changing a single verdict above.
+ */
+describe('admission does not scan the fleet on every claim', () => {
+  it('scans at most once across many admissions of the browserless session, and still skips it', async () => {
+    const { bin, principal, worker, session } = await setup(true);
+    const before = fleetDeclarationScanCount();
+    for (let i = 0; i < 5; i += 1) {
+      const admit = await binAdmission({ workerId: worker.id, principal, sessionRef: session });
+      const verdict = await admit(bin);
+      expect(verdict.ok).toBe(false);
+      expect(verdict.quiet).toBe(true);
+    }
+    expect(fleetDeclarationScanCount() - before).toBeLessThanOrEqual(1);
+  });
+
+  it('never scans for a session Brain did not fire', async () => {
+    const { bin, principal, worker } = await setup(true);
+    const before = fleetDeclarationScanCount();
+    const admit = await binAdmission({ workerId: worker.id, principal, sessionRef: `cse_unfired_${tag()}` });
+    const verdict = await admit(bin);
+    expect(verdict.ok).toBe(true);
+    expect(fleetDeclarationScanCount()).toBe(before);
+  });
+
+  it('never scans for a session whose own enabled Routine already declares the browser', async () => {
+    // The session Brain fired from `plain`, which is now declared to have a browser.
+    const { bin, principal, worker, plain, session } = await setup(false);
+    await setRoutineCapabilities({ routineId: plain.id, capabilities: ['browser'], actor: 'test', reason: 'has Chromium' });
+    const before = fleetDeclarationScanCount();
+    const admit = await binAdmission({ workerId: worker.id, principal, sessionRef: session });
+    const verdict = await admit(bin);
+    expect(verdict.reason ?? null).toBeNull();
+    expect(verdict.ok).toBe(true);
+    expect(fleetDeclarationScanCount()).toBe(before);
   });
 });
