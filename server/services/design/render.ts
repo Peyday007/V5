@@ -70,6 +70,7 @@ import {
 } from '../../repos/bins.ts';
 import { openBinRequest, recordCapture } from '../../repos/design.ts';
 import type { CaptureReadings, DesignCapture, DesignCycle, DesignSurface } from '../../domain/design.ts';
+import type { BinManifest } from '../../domain/types.ts';
 import { coerceReadings } from './observe.ts';
 import { measurePass } from './operate.ts';
 import { DEFAULT_VIEWPORTS } from './surfaces.ts';
@@ -115,6 +116,136 @@ export interface OpenRenderInput {
 }
 
 /**
+ * The command a render bin's worker is told to run, exactly as the manifest
+ * prints it — one function, so the instruction and the test that holds the
+ * manifest's authority against it cannot disagree about what it is.
+ */
+export function renderCommand(input: Pick<OpenRenderInput, 'pass' | 'surfaces'>): string {
+  return (
+    `npm run design -- render --pass ${input.pass} --surfaces ` +
+    input.surfaces.map((one) => one.surfaceKey).join(',')
+  );
+}
+
+/**
+ * What a render bin asks of its worker, and the authority to do it.
+ *
+ * Production, 7 days to 2026-11-12: six of six render bins ended NEEDS_HUMAN
+ * with "No render was submitted" after three attempts each. It was first read
+ * as a routing gap — render work handed to sessions with no browser — and a
+ * direct run refuted that: an ordinary cloud worker session runs the command
+ * below to exit 0 and prints a valid submission in under a minute (eight
+ * surfaces, 35s, 22 KB, well inside the unit's 64 000-character limit).
+ *
+ * The defect was the manifest's authority, not the fleet. Every worker is told
+ * that `authorizedActions` is *the whole of its authority* and that where a
+ * list conflicts with the work "the prohibition wins and you report the
+ * conflict". The command needs this repository's dependencies — `tsx`,
+ * `vite` and Playwright are devDependencies, and a fresh session has no
+ * `node_modules` — and it builds the client into `client/dist/` and boots a
+ * throwaway Brain. The manifest authorized none of the install, and prohibited
+ * "changing any file in the repository", which a build reads as forbidding.
+ * A worker that obeyed both lists could not run the one command it was given,
+ * so it submitted nothing — on every surface, which is why the pattern held
+ * across workers rather than on one job.
+ *
+ * So the authority is the command's own footprint, stated, and no wider:
+ * install from the lockfile, build, start a local throwaway Brain, write
+ * captures to a temporary directory. What stays prohibited is what a render
+ * must never do — change a tracked file, push, install a paid service, edit
+ * the submission. `tests/designRenderCapability.test.ts` holds every step of
+ * the command against this list.
+ */
+export function designRenderManifest(input: OpenRenderInput): BinManifest {
+  const addresses = input.surfaces
+    .map((surface) => {
+      const widths = surface.viewports.map((one) => `${one.width}`).join(', ');
+      return `  ${surface.surfaceKey} — GET ${surface.route} at ${widths}px wide (${surface.title})`;
+    })
+    .join('\n');
+  return {
+    objective: 'Render the registered surfaces below and report what was measured in the page.',
+    why:
+      'The deployed Brain cannot open a browser. Without a render taken somewhere that can, ' +
+      'every statement about this interface would be a statement about its source.',
+    lineage: {
+      projectId: input.projectId,
+      layerId: null,
+      goal: 'An interface that does not have to be corrected by hand on every screen.',
+      orchestrationId: null,
+    },
+    units: [
+      {
+        key: RENDER_UNIT_KEY,
+        establishes: 'what these surfaces actually render as, at each declared width',
+        input:
+          'In the checkout, install the repository’s own dependencies from its lockfile if ' +
+          '`node_modules` is absent, then run the command, which does the whole job and prints ' +
+          'the submission:\n\n' +
+          '    npm ci\n' +
+          `    ${renderCommand(input)}\n\n` +
+          'It builds the client, starts a Brain of its own, signs in, drives the browser ' +
+          'already present at PLAYWRIGHT_BROWSERS_PATH, writes the images beside itself and ' +
+          'prints one JSON object on stdout between BEGIN and END markers. Submit that object ' +
+          'verbatim as this unit’s value.\n\n' +
+          'It renders against a throwaway Brain rather than this one, deliberately: a capture ' +
+          'is supposed to be a fact about the product, and pointing a harness at live data ' +
+          'would photograph somebody’s real project rows.\n\n' +
+          `This is pass ${input.pass} of cycle ${input.cycle.id}. The addresses, for a reader:\n` +
+          addresses,
+        transform: 'NONE',
+        dependsOn: [],
+      },
+    ],
+    acceptableSources: [
+      'The product, started from the repository checkout you already have.',
+      'A real browser. The one at PLAYWRIGHT_BROWSERS_PATH is already installed; do not ' +
+        'download another and do not install a paid service.',
+    ],
+    excludedSources: [
+      'The source code. A reading of a stylesheet is not a measurement of a rendered page, and ' +
+        'this lane exists precisely because the two come apart.',
+      'A previous run’s images. Every capture carries the revision it was taken at, and ' +
+        'submitting an older one would bind a finding to a tree it is not about.',
+    ],
+    evidence: [
+      'Every capture carries the sha-256 of the exact bytes written, the engine that drew it ' +
+        'and its version, and the revision the tree was at.',
+      'The readings are taken in the live document — a bounding rectangle, elementFromPoint at ' +
+        'a control’s own centre, a computed contrast ratio — because the image has thrown all ' +
+        'of them away.',
+    ],
+    outputs: [
+      `One unit result under the key "${RENDER_UNIT_KEY}", whose value is the JSON object the ` +
+        'command printed.',
+      'It has "revision", "treeDirty" and "captures". Do not edit any of it: the hashes are ' +
+        'what make it evidence rather than a report.',
+    ],
+    authorizedActions: [
+      'installing this repository’s own dependencies from its lockfile (`npm ci`)',
+      'building the client into its git-ignored output directory, as the command does',
+      'starting this product locally, as a throwaway Brain on a temporary database',
+      'driving a browser against it',
+      'writing captures to the temporary directory the command creates',
+      'submitting one unit result',
+    ],
+    prohibitedActions: [
+      'changing any file git tracks in the repository',
+      'pushing anything anywhere',
+      'installing a paid service or a new credential',
+      'editing the printed submission by hand',
+    ],
+    budgetUnits: 1,
+    retry: { maxAttempts: 2, backoffSeconds: 120 },
+    stoppingConditions: [
+      'the submission has been made',
+      'or the product could not be started or the browser could not be found, which is reported ' +
+        'as a blocker naming which — never as an empty render',
+    ],
+  };
+}
+
+/**
  * Open the bin that asks somebody with a browser to look.
  *
  * Idempotent by the round, in `openDesignReview`'s shape and for its reason: the
@@ -123,13 +254,6 @@ export interface OpenRenderInput {
  * fleet may already have been fired at.
  */
 export async function openDesignRender(input: OpenRenderInput): Promise<string> {
-  const addresses = input.surfaces
-    .map((surface) => {
-      const widths = surface.viewports.map((one) => `${one.width}`).join(', ');
-      return `  ${surface.surfaceKey} — GET ${surface.route} at ${widths}px wide (${surface.title})`;
-    })
-    .join('\n');
-
   const bin = await createBin({
     projectId: input.projectId,
     layerId: null,
@@ -143,81 +267,7 @@ export async function openDesignRender(input: OpenRenderInput): Promise<string> 
       'A component’s source is not the interface. What a person sees is the product of every ' +
       'stylesheet, every container width and every font that did or did not load, so a design ' +
       'finding has to be about a render rather than about code.',
-    manifest: {
-      objective: 'Render the registered surfaces below and report what was measured in the page.',
-      why:
-        'The deployed Brain cannot open a browser. Without a render taken somewhere that can, ' +
-        'every statement about this interface would be a statement about its source.',
-      lineage: {
-        projectId: input.projectId,
-        layerId: null,
-        goal: 'An interface that does not have to be corrected by hand on every screen.',
-        orchestrationId: null,
-      },
-      units: [
-        {
-          key: RENDER_UNIT_KEY,
-          establishes: 'what these surfaces actually render as, at each declared width',
-          input:
-            'Run this in the checkout, which does the whole job and prints the submission:\n\n' +
-            `    npm run design -- render --pass ${input.pass} --surfaces ` +
-            `${input.surfaces.map((one) => one.surfaceKey).join(',')}\n\n` +
-            'It builds the client, starts a Brain of its own, signs in, drives the browser ' +
-            'already present at PLAYWRIGHT_BROWSERS_PATH, writes the images beside itself and ' +
-            'prints one JSON object on stdout between BEGIN and END markers. Submit that object ' +
-            'verbatim as this unit’s value.\n\n' +
-            'It renders against a throwaway Brain rather than this one, deliberately: a capture ' +
-            'is supposed to be a fact about the product, and pointing a harness at live data ' +
-            'would photograph somebody’s real project rows.\n\n' +
-            `This is pass ${input.pass} of cycle ${input.cycle.id}. The addresses, for a reader:\n` +
-            addresses,
-          transform: 'NONE',
-          dependsOn: [],
-        },
-      ],
-      acceptableSources: [
-        'The product, started from the repository checkout you already have.',
-        'A real browser. The one at PLAYWRIGHT_BROWSERS_PATH is already installed; do not ' +
-          'download another and do not install a paid service.',
-      ],
-      excludedSources: [
-        'The source code. A reading of a stylesheet is not a measurement of a rendered page, and ' +
-          'this lane exists precisely because the two come apart.',
-        'A previous run’s images. Every capture carries the revision it was taken at, and ' +
-          'submitting an older one would bind a finding to a tree it is not about.',
-      ],
-      evidence: [
-        'Every capture carries the sha-256 of the exact bytes written, the engine that drew it ' +
-          'and its version, and the revision the tree was at.',
-        'The readings are taken in the live document — a bounding rectangle, elementFromPoint at ' +
-          'a control’s own centre, a computed contrast ratio — because the image has thrown all ' +
-          'of them away.',
-      ],
-      outputs: [
-        `One unit result under the key "${RENDER_UNIT_KEY}", whose value is the JSON object the ` +
-          'command printed.',
-        'It has "revision", "treeDirty" and "captures". Do not edit any of it: the hashes are ' +
-          'what make it evidence rather than a report.',
-      ],
-      authorizedActions: [
-        'starting this product locally',
-        'driving a browser against it',
-        'submitting one unit result',
-      ],
-      prohibitedActions: [
-        'changing any file in the repository',
-        'pushing anything anywhere',
-        'installing a paid service or a new credential',
-        'editing the printed submission by hand',
-      ],
-      budgetUnits: 1,
-      retry: { maxAttempts: 2, backoffSeconds: 120 },
-      stoppingConditions: [
-        'the submission has been made',
-        'or the product could not be started or the browser could not be found, which is reported ' +
-          'as a blocker naming which — never as an empty render',
-      ],
-    },
+    manifest: designRenderManifest(input),
     completionContract: DESIGN_RENDER_CONTRACT,
     createdByType: 'SYSTEM',
     /*

@@ -1,16 +1,21 @@
 /**
- * A render bin goes to a surface that can render, and never strands.
+ * A render bin can be done by the worker it is handed, and goes to a surface
+ * that can render.
  *
  * Production, 7 days to 2026-11-12: six of six DESIGN_RENDER bins ended
  * NEEDS_HUMAN with "The bin used all 3 attempts without satisfying
- * DESIGN_RENDER_V1 v1. Outstanding: No render was submitted". The bins carried
- * no `requiredCapabilities`, so the router fired and the assigner handed them to
- * any surface — sessions with no browser, which could not produce a render —
- * and every attempt was spent on a worker that could never have answered.
+ * DESIGN_RENDER_V1 v1. Outstanding: No render was submitted".
  *
- * The contract now implies the capability (`contractCapabilities`), applied by
- * both gates while some enabled Routine declares it and dropped while none
- * does, so the fix routes render work to a browser and cannot strand it.
+ * The cause is the manifest, not the fleet: a direct run in an ordinary worker
+ * session renders with the manifest's exact command. The command needs the
+ * repository's dependencies installed and builds the client, and the manifest
+ * authorized neither and prohibited "changing any file in the repository" — so
+ * a worker that kept to its authority could not run it and submitted nothing.
+ * `the manifest authorizes the command it gives` reproduces that class.
+ *
+ * The contract also implies a routing preference (`contractCapabilities`),
+ * applied by both gates while some enabled Routine declares it and dropped
+ * while none does, so render work prefers a browser and cannot strand.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
@@ -31,6 +36,10 @@ import {
   recordDemonstratedCapabilities,
 } from '../server/services/bins/service.ts';
 import { routeBin, type RoutingCandidate } from '../server/services/dispatch/router.ts';
+import { designRenderManifest, renderCommand } from '../server/services/design/render.ts';
+import { SEED_SURFACES } from '../server/services/design/surfaces.ts';
+import { readFileSync } from 'node:fs';
+import type { DesignCycle, DesignSurface } from '../server/domain/design.ts';
 import type { Bin, BinManifest, FleetAccount, FleetRoutine, Principal, WorkerScope } from '../server/domain/types.ts';
 
 const NOW = '2026-11-12T12:00:00.000Z';
@@ -386,5 +395,69 @@ describe('admission does not scan the fleet on every claim', () => {
     expect(verdict.reason ?? null).toBeNull();
     expect(verdict.ok).toBe(true);
     expect(fleetDeclarationScanCount()).toBe(before);
+  });
+});
+
+describe('the manifest authorizes the command it gives', () => {
+  /*
+   * The recorded failure class: a render bin whose worker, keeping to the
+   * manifest's authority as every worker is told to, cannot run the one command
+   * the manifest gives it, and so submits nothing. Six of six in production.
+   */
+  const surfaces = SEED_SURFACES.map((seed, index) => ({
+    ...seed,
+    id: `srf_${index}`,
+    registeredBy: 'test',
+    retiredAt: null,
+    retiredReason: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  })) as unknown as DesignSurface[];
+  const built = () =>
+    designRenderManifest({ cycle: { id: 'dcy_test' } as DesignCycle, pass: 0, projectId: 'prj_test', surfaces });
+
+  it('gives the exact command, and the dependency install it needs in a fresh checkout', () => {
+    const render = built();
+    const input = render.units[0]?.input ?? '';
+    expect(render.units.map((unit) => unit.key)).toEqual(['design_render']);
+    expect(input).toContain(renderCommand({ pass: 0, surfaces }));
+    expect(input).toContain('npm ci');
+  });
+
+  it('authorizes every step of the command’s own footprint', () => {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+      scripts: Record<string, string>;
+      devDependencies: Record<string, string>;
+      dependencies: Record<string, string>;
+    };
+    // The command runs through a tool that only an install provides, so the
+    // install is part of the work, not a side effect of it.
+    const runner = (pkg.scripts['design'] ?? '').split(' ')[0] ?? '';
+    expect(runner).toBe('tsx');
+    expect({ ...pkg.dependencies, ...pkg.devDependencies }[runner]).toBeDefined();
+
+    const authorized = built().authorizedActions.join('\n').toLowerCase();
+    expect(authorized).toContain('npm ci');
+    expect(authorized).toMatch(/building the client/);
+    expect(authorized).toMatch(/starting this product locally/);
+    expect(authorized).toMatch(/driving a browser/);
+    expect(authorized).toMatch(/temporary directory/);
+    expect(authorized).toMatch(/submitting one unit result/);
+  });
+
+  it('prohibits nothing the command must do, and keeps every prohibition a render needs', () => {
+    const prohibited = built().prohibitedActions;
+    // The prohibition that made the command unrunnable: a build writes files.
+    expect(prohibited).not.toContain('changing any file in the repository');
+    expect(prohibited).toContain('changing any file git tracks in the repository');
+    expect(prohibited).toContain('pushing anything anywhere');
+    expect(prohibited).toContain('installing a paid service or a new credential');
+    expect(prohibited).toContain('editing the printed submission by hand');
+  });
+
+  it('builds only into output git ignores, so the tracked-file prohibition holds while it runs', () => {
+    const ignored = readFileSync(new URL('../.gitignore', import.meta.url), 'utf8').split('\n');
+    expect(ignored).toContain('client/dist/');
+    expect(ignored).toContain('node_modules');
   });
 });
