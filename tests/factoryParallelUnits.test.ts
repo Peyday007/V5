@@ -273,6 +273,28 @@ describe('independent units are separately claimable', () => {
      * nothing on later ticks: production read `bin_unit_results` 5,227 times
      * in 50 minutes re-asking bins whose every unit had moved on.
      */
+    /*
+     * And a READY unit elsewhere in the campaign does not make a finished bin
+     * worth re-reading: alpha's bin reported only alpha, beta is READY, and the
+     * bin's results are not read again (1,152 reads in 15 minutes, 2026-11-12).
+     */
+    {
+      expect((await getUnitByKey(campaignId, 'beta'))?.state).toBe('READY');
+      const db = getDbForTest();
+      const realAll = db.all.bind(db);
+      let alphaReads = 0;
+      db.all = (async (sql: string, params?: unknown[]) => {
+        if (/FROM bin_unit_results WHERE bin_id/.test(sql) && params?.[0] === alphaBin.id) alphaReads += 1;
+        return realAll(sql, params as never);
+      }) as typeof db.all;
+      try {
+        await tickRemoteCampaign(campaignId);
+      } finally {
+        db.all = realAll;
+      }
+      expect(alphaReads).toBe(0);
+    }
+
     await getDbForTest().run("UPDATE factory_work_units SET state = 'INTEGRATED' WHERE campaign_id = ?", [campaignId]);
     // Every bin finished: the unit list must be read once for all of them,
     // not once per bin (3,890 reads in 23 minutes on production, 2026-11-12).

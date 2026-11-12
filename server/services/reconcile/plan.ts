@@ -40,8 +40,9 @@ import {
   listCoverage,
   listRequirements,
   type CreateRequirementInput,
+  listExistingClaimsForDocuments,
 } from '../../repos/reconciliation.ts';
-import { getCurrentExtractionRun } from '../../repos/extraction.ts';
+import { currentExtractionRunsFor } from '../../repos/extraction.ts';
 import { claimsForDocument } from './claims.ts';
 import { buildCoverageMatrix, dedupeClaims, readArchive, type CoverageAssessment } from './coverage.ts';
 
@@ -131,9 +132,29 @@ export async function inventoryProject(projectId: string): Promise<{
   let pending = 0;
   const claims: ExistingClaim[] = [];
 
-  for (const document of await listDocuments(projectId)) {
-    if (!document.filesystemPath || document.fileMissing) continue;
-    const run = await getCurrentExtractionRun(document.id);
+  /*
+   * Two statements for the archive rather than two per document. Production,
+   * 2026-11-12: a project of 989 documents made this ~2,000 sequential reads,
+   * and on a loaded database `brain_propose_fragments` — which runs it inline —
+   * passed its time limit and failed the release's hosted verification three
+   * times running. Same rows, same order; a document with no stored claims is
+   * still inventoried on its own, exactly as before.
+   */
+  const documents = (await listDocuments(projectId)).filter(
+    (document) => document.filesystemPath && !document.fileMissing,
+  );
+  const runs = await currentExtractionRunsFor(documents.map((document) => document.id));
+  const storedClaims = await listExistingClaimsForDocuments(
+    documents
+      .filter((document) => {
+        const run = runs.get(document.id);
+        return run && (run.status === 'READY' || run.status === 'READY_WITH_WARNINGS');
+      })
+      .map((document) => document.id),
+  );
+
+  for (const document of documents) {
+    const run = runs.get(document.id) ?? null;
     if (!run || (run.status !== 'READY' && run.status !== 'READY_WITH_WARNINGS')) {
       unreadable += 1;
       // Pending only while a reading could plausibly still finish: an
@@ -147,7 +168,8 @@ export async function inventoryProject(projectId: string): Promise<{
       continue;
     }
     read += 1;
-    claims.push(...await claimsForDocument(document.id));
+    const stored = storedClaims.get(document.id);
+    claims.push(...(stored && stored.length > 0 ? stored : await claimsForDocument(document.id)));
   }
 
   return { claims, documentsRead: read, documentsUnreadable: unreadable, documentsPending: pending };
