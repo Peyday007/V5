@@ -881,14 +881,19 @@ async function evaluateFactoryDelivery(bin: Bin): Promise<ContractVerdict> {
  * The capabilities a worker must have for this contract to be satisfiable at
  * all, owned here beside the evaluator that would otherwise refuse it.
  *
- * Production, 7 days to 2026-11-12: six of six `DESIGN_RENDER_V1` bins ended
- * NEEDS_HUMAN with "The bin used all 3 attempts without satisfying
- * DESIGN_RENDER_V1 v1. Outstanding: No render was submitted". The bins carried
- * no `requiredCapabilities`, so the router fired and the assigner handed them to
- * any surface — sessions with no browser, which cannot produce a render and so
- * submitted none — and every attempt went on a worker that could never have
- * answered. A contract that only a browser can satisfy *is* a declaration that
- * it needs one; it is read from here rather than restated on every bin.
+ * A contract that only a browser can satisfy *is* a declaration that it needs
+ * one; it is read from here rather than restated on every bin. This is a
+ * routing **preference**, and fails open while no surface declares it.
+ *
+ * It is not what emptied the six `DESIGN_RENDER_V1` bins that ended
+ * NEEDS_HUMAN in the 7 days to 2026-11-12 with "No render was submitted". It
+ * was first written as that fix, and a direct run refuted it: an ordinary
+ * cloud worker session renders with the manifest's exact command. The cause
+ * was the render manifest withholding the authority its own command needs —
+ * installing dependencies, building the client — from workers told that the
+ * authorized list is the whole of their authority. That is corrected where
+ * the manifest is written, `designRenderManifest` in
+ * `services/design/render.ts`.
  */
 const CONTRACT_CAPABILITIES: Readonly<Record<string, readonly string[]>> = {
   DESIGN_RENDER_V1: ['browser'],
