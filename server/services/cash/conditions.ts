@@ -186,6 +186,26 @@ export async function readNeedCondition(need: CashNeed): Promise<NeedVerificatio
     };
   }
 
+  /*
+   * A continuation decision a person was told about (`continuationGate`): a
+   * time-critical commitment or an external constraint. Settled once the
+   * action it held back is on the record after the need was raised — by
+   * Brain once the dependency recovers, or by whoever did it another way.
+   */
+  if (need.requestKey.startsWith('effect-continuation:') && need.opportunityId) {
+    const [, , action] = need.requestKey.split(':');
+    if (!action) return null;
+    const later = (await actionsFor(need.opportunityId)).some(
+      (one) => one.action === action && one.createdAt >= need.createdAt,
+    );
+    return {
+      holds: later,
+      reading: later
+        ? `A ${action} is on the record since Brain raised this.`
+        : `No ${action} has been recorded since Brain raised this.`,
+    };
+  }
+
   /* A confirmed effect no grant could be named for: settled once its receipt is recorded. */
   if (need.requestKey.startsWith('effect-unattributed:') && need.opportunityId) {
     const operationId = need.requestKey.slice(need.requestKey.lastIndexOf(':') + 1);
