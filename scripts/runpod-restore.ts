@@ -8,7 +8,8 @@
  *
  * Last lines, for the workflow: `POD <id> <status> <usd/h>` and `URL <address>`.
  */
-import { ensurePod } from '../server/services/cheap/runpodRestore.ts';
+import { ensurePod, sweepBenchPods } from '../server/services/cheap/runpodRestore.ts';
+import { accountReading } from '../server/services/cheap/runpodAccount.ts';
 
 const apiKey = process.env['RUNPOD_API_KEY']?.trim();
 const vllmKey = process.env['RUNPOD_VLLM_KEY']?.trim();
@@ -20,6 +21,15 @@ const ceiling = Number(process.env['RUNPOD_MAX_USD_PER_HOUR']);
 
 async function main(): Promise<void> {
   const wait = process.argv.includes('--wait');
+  // A benchmark pod a cancelled run left behind bills until deleted (§108).
+  const swept = await sweepBenchPods(apiKey!).catch(() => []);
+  if (swept.length) console.log(`SWEPT leftover benchmark pod(s): ${swept.join(', ')}`);
+  // RunPod deletes every pod when the balance reaches zero (2026-11-10): the runway is reported every hour.
+  const account = await accountReading(apiKey!);
+  if (account.balance !== null) {
+    console.log(`ACCOUNT balance $${account.balance.toFixed(2)} · spending $${account.spendPerHour?.toFixed(3) ?? '?'}/h · runway ${account.runwayHours === null ? 'unknown' : `${Math.round(account.runwayHours)} h`}`);
+    if (account.runwayHours !== null && account.runwayHours < 72) console.log(`RUNWAY-LOW ${Math.round(account.runwayHours)}`);
+  }
   const attempt = () =>
     ensurePod({
       apiKey: apiKey!,

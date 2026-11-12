@@ -119,6 +119,10 @@ export const OPERATOR_TOOL_NAMES = [
   'brain_operator_continue_idle',
   'brain_operator_submit_fix',
   'brain_operator_record_learning',
+  'brain_operator_allocation',
+  'brain_operator_decide',
+  'brain_operator_verify',
+  'brain_operator_set_goal_focus',
 ] as const;
 
 /** Hermes' own toolsets the operator keeps: its memory, its skills and a task list. No shell, files, browser or web. */
@@ -135,6 +139,9 @@ export function operatorBrief(input: { nowIso: string; runId: string; goals?: st
     'pursues goals — the first is collecting $10,000 of settled cash. You direct its work through the brain_operator_*',
     'tools. They are your only hands: do not describe actions, take them.',
     '',
+    'Revenue is settled cash only: leads, forecasts, invoices and unpaid sales are not revenue. Never claim a',
+    'probability of success the ledger has not shown.',
+    '',
     'Each run, for every goal:',
     '1. The goals are listed above with their ids (brain_operator_goals returns the same list). Start with the first.',
     '2. brain_operator_goal {goal_id} — inspect what Brain already has: its blockers, open person-requests (each says',
@@ -142,14 +149,22 @@ export function operatorBrief(input: { nowIso: string; runId: string; goals?: st
     '   brain_operator_goal_plan {goal_id} — the quantitative plan: which strategy reaches the target, what fails, the next test.',
     '   brain_operator_integrations — which services Brain can use right now.',
     '3. brain_operator_history — what you did before and what you learned. Do not repeat a strategy that already failed.',
-    '4. Act on what can be fixed now:',
+    '4. brain_operator_allocation — which goal the next unit of capacity is worth most to, and which is consuming',
+    '   capacity for nothing. brain_operator_verify (no arguments) — your past decisions still owed a verdict: judge',
+    '   each that is due with the evidence you just read, before deciding anything new.',
+    '5. Decide, then act. Before any action that matters, brain_operator_decide: at least two genuinely different',
+    '   options (change any variable — price, buyer segment, channel, deal structure, financing, timing, which goal gets',
+    '   capacity — or do nothing), each with probability, value and cost (null when unknown), the assumptions, and a',
+    '   prediction you can check later. If the challenger says REVISE, reconsider before standing by it. Then act:',
     '   - a request marked moot=true holds the goal on a decision nobody can make: brain_operator_withdraw_moot_request.',
     '   - idle capacity beside waiting work: brain_operator_continue_idle.',
-    '   - a software defect that keeps recurring (the same failure in the rows, every run): brain_operator_submit_fix,',
-    '     with the evidence (row ids, verbatim reasons) and the files that own the behaviour.',
-    '5. brain_operator_capacity and the goal again — monitor the actual result. If nothing moved since your last run,',
-    '   find the cause and change strategy.',
-    '6. brain_operator_record_learning — one lesson per thing you found, with its evidence, so it is not rediscovered.',
+    '   - a goal consuming capacity with nothing to show (stance PAUSE) or a paused one worth restarting (RESTART):',
+    '     brain_operator_set_goal_focus with the decision id.',
+    '   - a software defect or a missing capability that keeps costing the goal (the same failure in the rows, every',
+    '     run): brain_operator_submit_fix, with the evidence (row ids, verbatim reasons) and the files that own it.',
+    '6. brain_operator_capacity and the goal again — observe the actual result. If nothing moved since your last run,',
+    '   find the cause and change strategy rather than repeating it.',
+    '7. brain_operator_record_learning — one lesson per thing you found, with its evidence, so it is not rediscovered.',
     '   Save durable facts with your memory tool too.',
     '',
     'Limits you keep: you never spend money, contact anyone, approve a plan, or claim something was answered that was',
@@ -172,6 +187,34 @@ export interface OperatorModel {
   model: string;
   apiKey: string | null;
   label: string;
+  /** The window the endpoint actually serves; Hermes sizes its compression from it. */
+  contextLength?: number | null;
+}
+
+/**
+ * Order the operator's models by what they did (§108), not by a fixed list.
+ *
+ * Production, 2026-11-12: the switchboard was first and every run on it failed —
+ * a free provider's per-minute token limit (HTTP 429), a window too small for
+ * the operator's tools ("grown too large"). A model's score is its operator
+ * runs that finished DONE, smoothed (Laplace) so one run is not a verdict, plus
+ * the benchmark's tool score when there is one. Ties keep the given order.
+ */
+export function rankOperatorModels(
+  models: OperatorModel[],
+  record: Map<string, { runs: number; ok: number }>,
+  benchmark: Map<string, number> = new Map(),
+): OperatorModel[] {
+  const score = (m: OperatorModel): number => {
+    const r = record.get(m.label) ?? { runs: 0, ok: 0 };
+    const runs = (r.ok + 1) / (r.runs + 2);
+    const bench = benchmark.get(m.label);
+    return bench === undefined ? runs : (runs + bench) / 2;
+  };
+  return models
+    .map((m, i) => ({ m, i, s: score(m) }))
+    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .map((x) => x.m);
 }
 
 /**
@@ -184,7 +227,7 @@ export interface OperatorModel {
  */
 export function operatorModels(input: {
   lane: { url: string; key: string | null; models: string[] } | null;
-  pod: { url: string; key: string | null; model: string } | null;
+  pod: { url: string; key: string | null; model: string; contextLength?: number | null } | null;
   override?: string | null;
 }): OperatorModel[] {
   const out: OperatorModel[] = [];
@@ -193,11 +236,12 @@ export function operatorModels(input: {
   const laneModels = input.override?.trim() ? [input.override.trim()] : (input.lane?.models ?? []);
   if (input.lane) {
     for (const model of laneModels.filter(Boolean).slice(0, 2)) {
-      out.push({ baseUrl: withV1(input.lane.url), model, apiKey: input.lane.key, label: `free:${model}` });
+      // The switchboard's free providers cap a request near 64K; Hermes compresses to fit.
+      out.push({ baseUrl: withV1(input.lane.url), model, apiKey: input.lane.key, label: `free:${model}`, contextLength: 65536 });
     }
   }
   if (input.pod) {
-    out.push({ baseUrl: withV1(input.pod.url), model: input.pod.model, apiKey: input.pod.key, label: `gpu:${input.pod.model}` });
+    out.push({ baseUrl: withV1(input.pod.url), model: input.pod.model, apiKey: input.pod.key, label: `gpu:${input.pod.model}`, contextLength: input.pod.contextLength ?? null });
   }
   return out;
 }

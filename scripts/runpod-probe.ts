@@ -24,6 +24,7 @@ if (!rawUrl) {
 }
 const url = normalizeRunpodUrl(rawUrl);
 let failed = false;
+let servedContext: number | null = null;
 const say = (ok: boolean, step: string, detail: string) => {
   if (!ok) failed = true;
   console.log(`${ok ? 'PASS' : 'FAIL'} ${step}: ${detail}`);
@@ -51,8 +52,10 @@ async function main(): Promise<void> {
     });
     const body = (await listed.json().catch(() => ({}))) as { data?: { id: string; max_model_len?: number }[] };
     const ids = (body.data ?? []).map((one) => one.id);
-    if (!model) model = ids[0] ?? '';
+    // A pinned name the pod no longer serves (a recipe change) falls back to what it serves.
+    if (!model || !ids.includes(model)) model = ids[0] ?? '';
     const served = body.data?.find((one) => one.id === model);
+    servedContext = served?.max_model_len ?? null;
     say(listed.ok && !!served, 'models', `HTTP ${listed.status}, serving [${ids.join(', ')}], Brain will use "${model}"${served?.max_model_len ? `, context ${served.max_model_len}` : ''}`);
     if (served?.max_model_len && served.max_model_len < 20_000) {
       say(false, 'context', `max_model_len ${served.max_model_len} is under the 20000 research packets need (start vLLM with --max-model-len 32768)`);
@@ -102,6 +105,28 @@ async function main(): Promise<void> {
   } catch (error) {
     say(false, 'long', (error as Error).message.slice(0, 200));
   }
+  // 6. tools — the operator's every call is a structured tool call (§108). Production's 4B
+  // recipe answered HTTP 400 here; a pod that fails it still serves research, never Hermes.
+  try {
+    const { chatFor, OPERATOR_BENCH_TOOLS, GOAL_ID } = await import('../server/services/cheap/modelBench.ts');
+    const chat = chatFor({ label: 'probe', url, key, model, usdPerHour: null }, fetch, 180_000);
+    const r = await chat(
+      [
+        { role: 'system', content: "You are Brain's operator. Act only through the tools." },
+        { role: 'user', content: `Inspect goal ${GOAL_ID}.` },
+      ],
+      OPERATOR_BENCH_TOOLS,
+      2048,
+    );
+    const call = r.toolCalls[0];
+    const ok = !r.error && !!call && call.name === 'brain_operator_goal' && call.args?.['goal_id'] === GOAL_ID;
+    console.log(`${ok ? 'PASS' : 'WARN'} tools: ${ok ? `structured call ${call!.name} in ${r.ms} ms` : (r.error ?? `no structured call (${r.content.slice(0, 120)})`)}`);
+    console.log(`TOOLS ${ok ? 'on' : 'off'}`);
+  } catch (error) {
+    console.log(`WARN tools: ${(error as Error).message.slice(0, 200)}`);
+    console.log('TOOLS off');
+  }
+  if (servedContext) console.log(`CONTEXT ${servedContext}`);
   console.log(`MODEL ${model}`);
 }
 

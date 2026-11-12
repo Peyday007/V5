@@ -49,6 +49,7 @@ import {
   operatorDue,
   operatorIntervalMinutes,
   operatorModels,
+  rankOperatorModels,
   type OperatorModel,
 } from '../../domain/operator.ts';
 
@@ -79,14 +80,40 @@ export async function modelsFor(env: NodeJS.ProcessEnv = process.env): Promise<O
   // The switchboard's models, without the GPU's slot label `laneConfig` puts first.
   const freeModels = lane ? lane.models.filter((m) => !isRunpodSlot(m)) : [];
   // The GPU only once its recipe serves tool calls in a window Hermes accepts (64K):
-  // production's pod runs Qwen3-4B at 32K without a tool-call parser, and a fallback
-  // to it failed every run it reached (HTTP 400, 2026-11-12 09:18).
-  const podReady = (env['BRAIN_OPERATOR_GPU'] ?? '').trim() === 'on';
-  return operatorModels({
+  // production's pod ran Qwen3-4B at 32K without a tool-call parser, and a fallback
+  // to it failed every run it reached (HTTP 400, 2026-11-12 09:18). The connect step
+  // sets BRAIN_RUNPOD_TOOLS=on only after the probe's tool-call check passed (§108).
+  const podReady = (env['BRAIN_OPERATOR_GPU'] ?? '').trim() === 'on' || (env['BRAIN_RUNPOD_TOOLS'] ?? '').trim() === 'on';
+  const context = Number(env['BRAIN_RUNPOD_CONTEXT']);
+  const models = operatorModels({
     lane: freeUrl ? { url: freeUrl, key: env['BRAIN_CHEAP_LLM_KEY']?.trim() || null, models: freeModels } : null,
-    pod: pod && podReady ? { url: pod.url, key: pod.key, model: pod.model } : null,
+    pod: pod && podReady ? { url: pod.url, key: pod.key, model: pod.model, contextLength: Number.isFinite(context) && context > 0 ? context : null } : null,
     override: env['BRAIN_OPERATOR_MODEL'] ?? null,
   });
+  return rankOperatorModels(models, await operatorModelRecord().catch(() => new Map()), benchmarkToolScores(env));
+}
+
+/** Each model's operator runs, attributed to the model the run started on. */
+export async function operatorModelRecord(): Promise<Map<string, { runs: number; ok: number }>> {
+  const record = new Map<string, { runs: number; ok: number }>();
+  for (const run of await recentOperatorRuns(20)) {
+    const first = (run.model ?? '').split(' → ')[0]?.trim();
+    if (!first || run.state === 'RUNNING') continue;
+    const r = record.get(first) ?? { runs: 0, ok: 0 };
+    r.runs += 1;
+    if (run.state === 'DONE') r.ok += 1;
+    record.set(first, r);
+  }
+  return record;
+}
+
+/** The benchmark's operator tool score for the GPU's served model, set by the connect step (§108). */
+export function benchmarkToolScores(env: NodeJS.ProcessEnv): Map<string, number> {
+  const out = new Map<string, number>();
+  const score = Number(env['BRAIN_RUNPOD_TOOL_SCORE']);
+  const model = env['BRAIN_RUNPOD_MODEL']?.trim();
+  if (model && Number.isFinite(score) && score >= 0 && score <= 1) out.set(`gpu:${model}`, score);
+  return out;
 }
 
 /** The operator worker, its memberships on every project, created on first use. */
@@ -274,7 +301,7 @@ async function performRun(runId: string, config: OperatorConfig, models: Operato
     const body = {
       runId,
       prompt: operatorBrief({ nowIso: new Date().toISOString(), runId, goals: snapshotForBrief(snapshot) }),
-      models: models.map((m) => ({ baseUrl: m.baseUrl, model: m.model, apiKey: m.apiKey })),
+      models: models.map((m) => ({ baseUrl: m.baseUrl, model: m.model, apiKey: m.apiKey, ...(m.contextLength ? { contextLength: m.contextLength } : {}) })),
       mcp: { url: `${config.brainUrl}/mcp`, token: issued.plaintext, tools: [...OPERATOR_TOOL_NAMES] },
       toolsets: [...OPERATOR_HERMES_TOOLSETS],
       memory,

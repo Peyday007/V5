@@ -164,6 +164,8 @@ export async function runpodChat(
       max_tokens: options.maxTokens,
       // Closed tasks with a fixed JSON shape: thinking costs time and VRAM and adds nothing.
       chat_template_kwargs: { enable_thinking: false },
+      // gpt-oss reasons before it answers and spends max_tokens doing it; low keeps lane answers whole (§108).
+      reasoning_effort: 'low',
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: prompt },

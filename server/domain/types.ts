@@ -522,6 +522,12 @@ export const EVENT_TYPES = [
   'OPERATOR_FIX_NOT_STARTED',
   /** An operator run finished; its report and the tools it called (§106). */
   'OPERATOR_RUN_FINISHED',
+  /** The operator committed a reviewed, challenged decision with a prediction on the ledger (§108). */
+  'OPERATOR_DECISION',
+  /** The operator recorded what a decision's prediction actually came to (§108). */
+  'OPERATOR_DECISION_VERIFIED',
+  /** The operator paused or resumed a goal to move capacity, under a recorded decision (§108). */
+  'OPERATOR_GOAL_FOCUS',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
