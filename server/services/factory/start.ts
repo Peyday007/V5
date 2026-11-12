@@ -22,12 +22,24 @@
  * reaching this, and neither may pass a principal in: this function starts a
  * campaign for a change request that is already approvable, and deciding *who*
  * may is the router's job in both cases.
+*
+ * What *is* decided here is the engineering action itself (AUTH-20-3's
+ * standing-grant engineering class). An approved contract is the release
+ * envelope: Factory coding and its tests are inside it once the change request
+ * is approved, and a merge and a deploy are inside it only when the contract's
+ * own `deploymentPolicy` declares a release. Every one of those is judged by
+ * `decideAction` — the one authority every action path calls before an effect —
+ * so it lands on the durable ledger as an AUTHORITY_DECISION row with its
+ * principal, scope and cause, and an emergency stop or a refused envelope stops
+ * the campaign before any work is dealt. No second policy engine: the envelope
+ * is read from the contract row, and the judgment is the existing owner's.
  */
 import { approveObjective } from './contract.ts';
 import { campaignSpecFor } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
 import { ensureCampaign, getChangeRequest } from '../../repos/factory.ts';
 import type { FactoryCampaign, FactoryChangeRequest } from '../../domain/factory.ts';
+import type { ActionDecision } from '../cash/authority.ts';
 
 export type StartCampaignOutcome =
   | { ok: false; reason: string; changeRequest: FactoryChangeRequest }
@@ -78,7 +90,7 @@ export async function approveAndStartCampaign(
     if (!approval.ok) {
       return { ok: false, reason: approval.reason ?? 'The objective could not be approved.', changeRequest: approval.changeRequest };
     }
-    return startApproved(approval.changeRequest);
+    return startApproved(approval.changeRequest, null);
   }
   /*
    * A standing authority is checked here as well as by the caller, so no
@@ -119,10 +131,64 @@ export async function approveAndStartCampaign(
     };
   }
 
-  return startApproved(approval.changeRequest);
+  return startApproved(approval.changeRequest, 'userId' in input ? input.userId : null);
 }
 
-async function startApproved(approved: FactoryChangeRequest): Promise<StartCampaignOutcome> {
+/** The engineering actions a campaign for this contract performs, in the order they happen. */
+export function engineeringActionsFor(changeRequest: Pick<FactoryChangeRequest, 'deploymentPolicy'>): Array<'FACTORY_CODE' | 'FACTORY_TEST' | 'FACTORY_MERGE' | 'FACTORY_DEPLOY'> {
+  const actions: Array<'FACTORY_CODE' | 'FACTORY_TEST' | 'FACTORY_MERGE' | 'FACTORY_DEPLOY'> = ['FACTORY_CODE', 'FACTORY_TEST'];
+  if (changeRequest.deploymentPolicy !== 'NONE') actions.push('FACTORY_MERGE', 'FACTORY_DEPLOY');
+  return actions;
+}
+
+/**
+ * Whether the approved contract's release envelope covers an engineering
+ * action. Read from the row, never from a caller: coding and testing are inside
+ * it once a person or a standing grant approved the change request; a merge and
+ * a deploy are inside it only when the contract declares a release. Pure.
+ */
+export function releaseEnvelopeAllows(
+  changeRequest: Pick<FactoryChangeRequest, 'approvedAt' | 'approvedVia' | 'deploymentPolicy'>,
+  action: 'FACTORY_CODE' | 'FACTORY_TEST' | 'FACTORY_MERGE' | 'FACTORY_DEPLOY',
+): boolean {
+  const approved = changeRequest.approvedAt !== null && changeRequest.approvedVia !== null;
+  if (!approved) return false;
+  if (action === 'FACTORY_CODE' || action === 'FACTORY_TEST') return true;
+  return changeRequest.deploymentPolicy !== 'NONE';
+}
+
+/**
+ * Judge the campaign's engineering actions on the standing-grant engineering
+ * class, each one ledgered by `decideAction`. The first refusal is returned and
+ * the rest are not judged: a campaign that may not code has nothing to merge.
+ */
+async function judgeEngineering(approved: FactoryChangeRequest, userId: string | null): Promise<ActionDecision | null> {
+  const { BRAIN_PRINCIPAL, decideAction } = await import('../cash/authority.ts');
+  const principal = userId ?? approved.approvedByUserId ?? BRAIN_PRINCIPAL;
+  for (const action of engineeringActionsFor(approved)) {
+    const decision = await decideAction({
+      projectId: approved.projectId,
+      action,
+      path: action === 'FACTORY_CODE' || action === 'FACTORY_TEST' ? 'INTERNAL' : 'API',
+      mode: 'PERFORM',
+      releaseEnvelopeAllows: releaseEnvelopeAllows(approved, action),
+      principal,
+      subjectRef: approved.id,
+    });
+    if (!decision.ok) return decision;
+  }
+  return null;
+}
+
+async function startApproved(approved: FactoryChangeRequest, userId: string | null): Promise<StartCampaignOutcome> {
+  const refused = await judgeEngineering(approved, userId);
+  if (refused) {
+    return {
+      ok: false,
+      reason: `The campaign was not started: ${refused.ledger.action} was refused (${refused.ledger.cause}): ${refused.reason}.`,
+      changeRequest: approved,
+    };
+  }
   /*
    * How this campaign runs, and whether it continues a pull request somebody is
    * already reading — both derived from the contract and the forge rather than
