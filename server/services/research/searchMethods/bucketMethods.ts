@@ -131,16 +131,6 @@ export function outcomeOfRound(ending: RoundEnding): { outcome: RunOutcome; fail
   return null;
 }
 
-/** The newest version of a bucket's method, whatever its trust state, or null when it has none. */
-export async function latestBucketMethod(projectId: string, bucketId: string): Promise<SearchMethod | null> {
-  let latest: SearchMethod | null = null;
-  for (const method of await listSearchMethods(readerForProject(projectId))) {
-    if (method.scope !== 'PROJECT' || method.projectId !== projectId || method.methodKey !== bucketId) continue;
-    if (!latest || method.version > latest.version) latest = method;
-  }
-  return latest;
-}
-
 /** The bucket's method, created on its first recorded run. */
 export async function methodForBucket(projectId: string, bucket: BucketShape): Promise<SearchMethod> {
   return createSearchMethod({
@@ -154,6 +144,16 @@ export async function methodForBucket(projectId: string, bucket: BucketShape): P
     query: bucket.title,
     checkProcedure: 'An opening is filed only from a sourced claim; it counts as verified once it reaches CANDIDATE, and a duplicate of an opening already held counts against the method.',
   });
+}
+
+/** The newest version of a bucket's method, whatever its trust state, or null when it has none. */
+export async function latestBucketMethod(projectId: string, bucketId: string): Promise<SearchMethod | null> {
+  let latest: SearchMethod | null = null;
+  for (const method of await listSearchMethods(readerForProject(projectId))) {
+    if (method.scope !== 'PROJECT' || method.projectId !== projectId || method.methodKey !== bucketId) continue;
+    if (!latest || method.version > latest.version) latest = method;
+  }
+  return latest;
 }
 
 /** Revisions of one bucket's method before a further failure pauses it with a retry time instead. */
