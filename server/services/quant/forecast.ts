@@ -66,7 +66,7 @@ export interface PredictionRow {
   /** What the claim rests on, by name. Empty is a finding, not a default. */
   data: readonly string[];
   assumptions: readonly string[];
-  /** Stated probability that the outcome occurs, or null when it is a point estimate only. */
+  /** Stated probability that the outcome occurs, or null when it is a point estimate only (see `impliedProbability` for an interval claim). */
   probability: number | null;
   /** The comparable-opportunity bucket the calibration is judged within. */
   comparableKey: string;
@@ -94,6 +94,42 @@ export interface LedgerEntry {
   prediction: PredictionRow;
   exposure: ExposureRow | null;
   outcome: OutcomeRow | null;
+}
+
+/**
+ * The probability a claim states, or the one its own stated interval implies.
+ *
+ * A stated probability is used as it is. A point estimate that states no
+ * probability but does state an interval drawn from a sample — the form the
+ * cash forecast is recorded in (`ledger.ts recordCashForecast`: "… (range
+ * LOW..HIGH)" in the outcome, "derived from N opportunity row(s)" among the
+ * assumptions) — is a claim that the realized figure lands inside that range,
+ * and the range is the minimum and maximum of N rows. Distribution-free, the
+ * chance that one further draw lands between the extremes of N exchangeable
+ * draws is (N − 1) / (N + 1). That is the probability the claim carries, so
+ * production predictions can be judged CALIBRATED or MISCALIBRATED like any
+ * other: a range drawn from too few or too unrepresentative rows shows up as a
+ * gap between that implied rate and how often the figure actually landed.
+ *
+ * `occurred` on such a claim's outcome means the figure landed in the range.
+ * Below two rows there is no spread to imply anything, and an interval that is
+ * empty or reversed implies nothing either: those stay null — unjudged, never
+ * a default.
+ */
+export function impliedProbability(p: Pick<PredictionRow, 'probability' | 'outcome' | 'assumptions'>): number | null {
+  if (p.probability !== null) return p.probability;
+  const range = /\(range (-?\d+(?:\.\d+)?)\.\.(-?\d+(?:\.\d+)?)\)/.exec(p.outcome);
+  if (!range) return null;
+  const low = Number(range[1]);
+  const high = Number(range[2]);
+  if (!Number.isFinite(low) || !Number.isFinite(high) || high < low) return null;
+  let rows: number | null = null;
+  for (const a of p.assumptions) {
+    const m = /derived from (\d+) opportunity row/.exec(a);
+    if (m) rows = Number(m[1]);
+  }
+  if (rows === null || !Number.isInteger(rows) || rows < 2) return null;
+  return (rows - 1) / (rows + 1);
 }
 
 /** The version of each claim that was current at `at`: the latest made on or before it. */
@@ -153,7 +189,7 @@ export const MISCALIBRATION_Z = 2;
 export function calibrate(entries: readonly LedgerEntry[], windowDays = 90): CalibrationBucket[] {
   const groups = new Map<string, LedgerEntry[]>();
   for (const e of entries) {
-    if (!e.outcome || e.prediction.probability === null) continue;
+    if (!e.outcome || impliedProbability(e.prediction) === null) continue;
     const window = Math.floor(Date.parse(e.outcome.observedAt) / (windowDays * 86_400_000));
     const key = `${e.prediction.comparableKey}\u0000${Number.isFinite(window) ? window : 'undated'}`;
     const list = groups.get(key) ?? [];
@@ -168,11 +204,12 @@ export function calibrate(entries: readonly LedgerEntry[], windowDays = 90): Cal
   const out: CalibrationBucket[] = [];
   const judge = (comparableKey: string, list: LedgerEntry[], scope: CalibrationBucket['scope']): void => {
     const n = list.length;
-    const meanForecast = list.reduce((s, e) => s + (e.prediction.probability as number), 0) / n;
+    const prob = (e: LedgerEntry): number => impliedProbability(e.prediction) as number;
+    const meanForecast = list.reduce((s, e) => s + prob(e), 0) / n;
     const observedRate = list.filter((e) => e.outcome!.occurred).length / n;
     const dates = list.map((e) => e.outcome!.observedAt).sort();
     // Standard error of a sum of independent Bernoulli forecasts, from the forecasts themselves.
-    const variance = list.reduce((s, e) => s + (e.prediction.probability as number) * (1 - (e.prediction.probability as number)), 0);
+    const variance = list.reduce((s, e) => s + prob(e) * (1 - prob(e)), 0);
     const enough = n >= MIN_CALIBRATION_SAMPLE;
     const zScore = enough && variance > 0 ? (observedRate * n - meanForecast * n) / Math.sqrt(variance) : null;
     out.push({
@@ -230,7 +267,8 @@ export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket
   if (!outcome) {
     return { ...base, contradicted: false, probabilityOfWhatHappened: null, surpriseBits: null, kind: 'UNJUDGED', causes: [], owner: null, owners: [], claimGaps: [], reason: 'no outcome has been recorded for this version' };
   }
-  const given = p.probability === null ? null : outcome.occurred ? p.probability : 1 - p.probability;
+  const stated = impliedProbability(p);
+  const given = stated === null ? null : outcome.occurred ? stated : 1 - stated;
   const contradicted = given !== null && given < 0.5;
   // Zero given to what happened is an unbounded surprise; keep it a finite, comparable number.
   const surpriseBits = given === null ? null : -Math.log2(Math.max(given, 1e-6));
@@ -358,11 +396,11 @@ export function compareAfterCorrection(
   correctedAt: string,
   minSample = MIN_CALIBRATION_SAMPLE,
 ): CorrectionComparison {
-  const own = entries.filter((e) => e.prediction.comparableKey === comparableKey && e.outcome && e.prediction.probability !== null);
+  const own = entries.filter((e) => e.prediction.comparableKey === comparableKey && e.outcome && impliedProbability(e.prediction) !== null);
   const gapOf = (list: LedgerEntry[]): number | null =>
     list.length < minSample
       ? null
-      : list.filter((e) => e.outcome!.occurred).length / list.length - list.reduce((s, e) => s + (e.prediction.probability as number), 0) / list.length;
+      : list.filter((e) => e.outcome!.occurred).length / list.length - list.reduce((s, e) => s + (impliedProbability(e.prediction) as number), 0) / list.length;
   const beforeSet = own.filter((e) => e.outcome!.observedAt < correctedAt);
   const afterSet = own.filter((e) => e.outcome!.observedAt >= correctedAt);
   if (afterSet.length === 0) return { before: gapOf(beforeSet), after: null, nBefore: beforeSet.length, nAfter: 0, verdict: 'NO_NEW_OBSERVATIONS' };
