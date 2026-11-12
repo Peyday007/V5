@@ -57,9 +57,12 @@ async function isListing(opportunity: CashOpportunity): Promise<boolean> {
 export const UNWORTHY_RESEARCH_RELEASED_EVENT = 'CASH_UNWORTHY_RESEARCH_RELEASED';
 
 /**
- * Why research may be released for good: reasons no later fact reverses. A
- * goal's exclusion is its owner's words, a listing stays a listing, a closing
- * date that passed stays passed, and the owner does no physical work. A
+ * Why research in flight may be released now. A listing stays a listing, a
+ * closing date that passed stays passed, and the owner does no physical work.
+ * A goal's exclusion is its owner's words for that goal only and holds while
+ * every live goal excludes the opening: releasing stops today's research and
+ * keeps the row where it was, so when the goal ends or its owner lifts the
+ * exclusion the opening is judged again like any other (§105). A
  * screen's REJECT or a size test is not here — the goal screen already
  * releases on its own verdicts, and a size is a fact research can still move.
  */

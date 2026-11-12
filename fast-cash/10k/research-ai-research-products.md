@@ -1,5 +1,7 @@
 # Selling AI-produced research and data products directly — commercial research
 
+> **Corrected 2026-11-12 (§105):** government and federal work is not excluded. Every opening is judged on its economics, its time to revenue and feasibility, never its industry. A long award cycle may not suit a 30-day sprint, and it stays eligible for longer goals.
+
 Researched 2026-11-02/03 with web search. The operator's limits: settled cash by
 **2026-11-27**, no more than $300 at risk before income, no more than $3,000 in total,
 no paid data APIs, no freelance-platform bidding, no government buyers, online only.
