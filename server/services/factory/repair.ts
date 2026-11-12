@@ -50,7 +50,7 @@ import {
   resolveFinding,
 } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
-import { forbiddenPathsFor, ownershipReachesForbidden } from './forbidden.ts';
+import { forbiddenPathsFor, ownedPathsClearOf, ownershipReachesForbidden } from './forbidden.ts';
 import { matchesGlob } from './glob.ts';
 import { MAX_UNIT_ATTEMPTS } from './regrant.ts';
 import { PROTECTED_VERIFICATION_PATHS } from '../../domain/factoryProgram.ts';
@@ -335,6 +335,8 @@ export async function queueRepairs(
       continue;
     }
     const unitKey = repairUnitKey(finding, units);
+    // A glob inherited from the units may reach a forbidden file; it is listed out instead.
+    ownership.ownedPaths = ownedPathsClearOf(ownership.ownedPaths, forbiddenPaths);
 
     /*
      * The same validator the planner uses, over the campaign as installed plus
@@ -536,8 +538,8 @@ export async function queueVerificationRepair(
    * scope was a repair that could write anywhere the contract could. Held to the
    * same validator as every other unit.
    */
-  const ownedPaths = [...new Set(live.flatMap((unit) => unit.ownedPaths))];
   const forbiddenPaths = forbiddenPathsFor(changeRequest.repository);
+  const ownedPaths = ownedPathsClearOf([...new Set(live.flatMap((unit) => unit.ownedPaths))], forbiddenPaths);
   if (ownedPaths.length === 0) {
     return {
       ok: false, unitKey, reason: 'REPAIR_SCOPE_INSUFFICIENT',
