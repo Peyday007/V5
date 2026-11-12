@@ -557,7 +557,7 @@ export async function openDiscovery(input: {
    * for revision, and the decision is read from its runs here. A read that
    * fails gates nothing, so discovery never stops on its own bookkeeping.
    */
-  const gates = await bucketGates(input.projectId, offered.map((one) => one.id), now).catch(() => new Map<string, { mayOpen: boolean }>());
+  const gates = await bucketGates(input.projectId, offered.map((one) => one.id), now).catch(() => new Map<string, { mayOpen: boolean; revision: string | null }>());
   for (const bucket of fairOrder(offered, rounds)) {
     if (out.length >= limit) break;
     if (gates.get(bucket.id)?.mayOpen === false) continue;
@@ -584,7 +584,7 @@ export async function openDiscovery(input: {
       mode,
       bucket,
       next,
-      statement: questionFor(bucket, mode.objective, next, history, held, frame),
+      statement: questionFor(bucket, mode.objective, next, history, held, frame, gates.get(bucket.id)?.revision ?? null),
     });
     if (!round) continue;
     out.push({ bucketId: bucket.id, candidateId: round.candidateId, round: next });
@@ -1005,8 +1005,11 @@ export function questionFor(
   history: readonly CashDiscoveryRound[],
   held: HeldExclusions = { lines: [], omitted: 0 },
   frame: ExecutionFrame | null = null,
+  revision: string | null = null,
 ): string {
   const parts = [bucket.question, `This is for a short cash sprint whose goal is: ${objective}`];
+  // A revised search method says what its earlier rounds got wrong; the round asks differently.
+  if (revision) parts.push(revision);
   if (frame) parts.push(executionFrameSentence(frame));
   if (round > 1) {
     const found = history.reduce((total, one) => total + one.found, 0);
