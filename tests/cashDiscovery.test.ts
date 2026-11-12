@@ -1403,4 +1403,56 @@ describe('the wider economy (2026-10-28)', () => {
     await harvest({ projectId });
     expect((await bucketRounds(tagged!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 1]]);
   });
+
+  it('files a goal lens round’s untagged pattern only when it states a price, never for its dates or counts', async () => {
+    const { openGoalDiscovery } = await import('../server/services/cash/discovery.ts');
+    const { PATTERN_LANE, patternStatesPrice } = await import('../server/repos/research.ts');
+    const { createWorkstream, getWorkstream } = await import('../server/repos/register.ts');
+    const { setTerms } = await import('../server/services/goals/decide.ts');
+    const { setTarget } = await import('../server/services/goals/target.ts');
+    const { forgetGoalReadings, readGoalPlan } = await import('../server/services/goals/plan.ts');
+    const day = 24 * 60 * 60 * 1000;
+
+    // The rule on its own: a currency against a number is a price; a year, a date or a count is not.
+    for (const priced of ['$400 a month', 'USD 1,500 per setup', 'EUR 90 each', '€90 each', '400 dollars a month', '5,500 USD', '£75 per visit']) {
+      expect(patternStatesPrice(priced)).toBe(true);
+    }
+    for (const unpriced of ['examples posted March 2026 and May 2026', '12 firms hired outside help', 'in 2025 European firms paid agencies', 'shipped 5 pounds of samples']) {
+      expect(patternStatesPrice(unpriced)).toBe(false);
+    }
+
+    forgetGoalReadings();
+    await activated();
+    const g = await createWorkstream({ projectId, title: 'Collect cash fast', intent: 'Collect settled cash.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: new Date(Date.now() + 25 * day).toISOString(), ownerUserId: userId }, `person:${userId}`);
+    expect(
+      (await setTarget({
+        goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId,
+        capitalCeilingCents: 300_000, hoursCeiling: 200, now: new Date(Date.now() - 60_000),
+      } as Parameters<typeof setTarget>[0])).ok,
+    ).toBe(true);
+    const w = (await getWorkstream(g.id))!;
+    const target = (await readGoalPlan({ goalId: g.id, evaluations: 200 }))!.target;
+    const bucketRounds = async (bucketId: string) => (await listRounds(projectId)).filter((one) => one.bucketId === bucketId);
+
+    // The reviewer's case: buying words and the two dated examples the profile requires, and no price.
+    const unpriced = await openGoalDiscovery({ goal: w, target, bestReach: null });
+    expect(unpriced).not.toBeNull();
+    await finishedMission({
+      candidateId: unpriced!.candidateId,
+      claims: [{ claim: 'Dentists repeatedly pay outside firms for appointment reminders (examples posted March 2026 and May 2026).', lane: PATTERN_LANE, sourceUrl: 'https://example.test/goal-lens/unpriced' }],
+    });
+    await harvest({ projectId });
+    expect((await bucketRounds(unpriced!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 0]]);
+
+    // The same pattern carrying the price the lens asked for is filed without the worker's tag.
+    const priced = await openGoalDiscovery({ goal: w, target, bestReach: null });
+    expect(priced).not.toBeNull();
+    await finishedMission({
+      candidateId: priced!.candidateId,
+      claims: [{ claim: 'Dentists repeatedly pay outside firms $120 a month for appointment reminders (examples posted March 2026 and May 2026).', lane: PATTERN_LANE, sourceUrl: 'https://example.test/goal-lens/priced' }],
+    });
+    await harvest({ projectId });
+    expect((await bucketRounds(priced!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 1]]);
+  });
 });
