@@ -28,6 +28,8 @@ import {
 } from '../../repos/identity.ts';
 import {
   failStaleOperatorRuns,
+  MEMORY_MAX_BYTES,
+  recordOperatorLearning,
   finishOperatorRun,
   readOperatorMemory,
   recentOperatorRuns,
@@ -283,9 +285,9 @@ async function recordResult(runId: string, result: OperatorResult, modelLabel: s
     result.error = `every Brain tool call failed (${brainCalls.length})${result.preflight ? `; preflight: ${result.preflight}` : ''}`;
   }
   const ok = result.error === null && result.final !== null;
-  const stored = await storeOperatorMemory(runId, result.memory);
   const finished = await finishOperatorRun({ id: runId, state: ok ? 'DONE' : 'FAILED', summary: result.final, toolCalls: result.toolCalls, error: result.error });
   if (!finished) return false;
+  const stored = await storeOperatorMemory(runId, ok ? await carriedMemory(runId, result) : result.memory);
   await recordIntegrationEvent({
     integrationId: OPERATOR_INTEGRATION,
     kind: 'USAGE',
@@ -305,6 +307,39 @@ async function recordResult(runId: string, result: OperatorResult, modelLabel: s
   }
   return true;
 }
+
+/**
+ * Production, 2026-11-12 (opr_516308bd): the run withdrew fifteen moot requests
+ * and commissioned a fix, then ended its report without calling
+ * record_learning or its memory tool — so the next run would have started from
+ * nothing it learned. What a run found is Brain's state (invariant 12) and does
+ * not depend on the model remembering step 7: a run that acted and wrote no
+ * lesson has its report kept as one, and its report becomes the memory's
+ * "last run" so the next run continues from it.
+ */
+export async function carriedMemory(runId: string, result: OperatorResult): Promise<Record<string, string>> {
+  const acted = result.toolCalls.some((c) => c.ok && OPERATOR_ACTION_TOOLS.some((t) => c.tool.endsWith(t)));
+  const learned = result.toolCalls.some((c) => c.ok && c.tool.endsWith('brain_operator_record_learning'));
+  if (acted && !learned && result.final) {
+    await recordOperatorLearning({ goalId: null, runId, lesson: `Run ${runId} report (kept by Brain; the run recorded no lesson itself): ${result.final}`, evidence: `operator_runs ${runId}; tools ${result.toolCalls.filter((c) => c.ok).map((c) => c.tool.replace(/^mcp__brain__/, '')).join(', ')}` });
+  }
+  const memory = Object.keys(result.memory).length ? { ...result.memory } : await readOperatorMemory();
+  if (result.final) {
+    const prior = (memory['memories/MEMORY.md'] ?? '').replace(/\n?## Last run[\s\S]*$/, '').trimEnd();
+    memory['memories/MEMORY.md'] = `${prior}${prior ? '\n\n' : ''}## Last run (${runId})\n${result.final}`.slice(-MEMORY_MAX_BYTES);
+  }
+  return memory;
+}
+
+/** The tools that change Brain's operations, as opposed to reading it. */
+const OPERATOR_ACTION_TOOLS = [
+  'brain_operator_withdraw_moot_request',
+  'brain_operator_continue_idle',
+  'brain_operator_submit_fix',
+  'brain_operator_set_goal_focus',
+  'brain_operator_commission',
+  'brain_operator_prioritize_engineering',
+];
 
 async function performRun(runId: string, config: OperatorConfig, models: OperatorModel[]): Promise<void> {
   let credentialId: string | null = null;
