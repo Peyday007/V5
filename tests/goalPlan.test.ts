@@ -872,8 +872,9 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
       return statements;
     };
     const atForty = await count();
-    // A bounded total. The money route read (one statement per currency, #758) is in it.
-    expect(atForty).toBeLessThan(125);
+    // A bounded total. The money route read (one statement per currency, #758) and the
+    // forecast ledger kept on each refresh (LEARN-15-1, a fixed cost per project) are in it.
+    expect(atForty).toBeLessThan(140);
     // And what the bound is for: twenty more openings cost a few statements, not several each.
     for (let i = 40; i < 60; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 20_000 + i });
     const atSixty = await count();
