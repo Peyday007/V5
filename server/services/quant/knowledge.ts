@@ -41,6 +41,9 @@ import type { Correction, ExposureRow, OutcomeRow, PredictionRow } from './forec
 import { getDb } from '../../db/database.ts';
 import { listWorkstreamEvents, recordWorkstreamEvent } from '../../repos/register.ts';
 import { upsertCandidate } from '../../repos/improvement.ts';
+import { raiseNeed } from '../cash/needs.ts';
+import { questionKey } from '../cash/conditions.ts';
+import { parseBlockerKey } from '../../domain/types.ts';
 
 /** The opportunity quantities this adapter can infer, and how each is measured. */
 export const CASH_QUANTITIES = {
@@ -202,6 +205,135 @@ export interface LearningDeps {
   note?: typeof recordWorkstreamEvent;
   /** Factory's intake for a software correction; defaults to the improvement register (§87). */
   toFactory?: typeof upsertCandidate;
+  /** The commercial operation's own intake for a non-software correction; defaults to `cash/needs.ts raiseNeed`. */
+  raise?: typeof raiseNeed;
+  /** The openings whose card figures a cash claim was computed from; defaults to `listOpportunities`. */
+  openings?: (projectId: string) => Promise<CashOpportunity[]>;
+}
+
+/* ------------------------------------------------------------------------- */
+/* A non-software correction opens its owner's work                            */
+/* ------------------------------------------------------------------------- */
+
+/** Opening states whose figures `cash/forecast.ts` totals into a claim (its LIVE set). */
+const FORECAST_STATES: readonly string[] = ['EVIDENCE_CARD', 'READY', 'EXECUTING', 'DELIVERING', 'COLLECTED'];
+
+/**
+ * The card fields that carry what each cash claim was computed from: revenue is
+ * the openings' prices, contribution is price less the money that goes out first.
+ * A research correction re-establishes these, from a different source.
+ */
+export const CLAIM_FIELDS: Readonly<Record<'revenue' | 'contribution', readonly string[]>> = {
+  revenue: ['revenueRange'],
+  contribution: ['revenueRange', 'directCosts', 'requiredCapital'],
+};
+
+/** At most this many openings get research per correction: the largest figures move a total most. */
+export const CORRECTION_OPENINGS = 4;
+
+/** What a cash claim id names: `cash:<project>:<currency>:<figure>`. Null for any other claim. */
+export function parseCashClaim(claimId: string): { projectId: string; currency: string; figure: 'revenue' | 'contribution' } | null {
+  const m = /^cash:(.+):([^:]+):(revenue|contribution)$/.exec(claimId);
+  return m ? { projectId: m[1]!, currency: m[2]!, figure: m[3] as 'revenue' | 'contribution' } : null;
+}
+
+function words(s: string): string {
+  return s.toLowerCase().replace(/_/g, ' ');
+}
+
+/**
+ * Open the work a non-software correction needs, with the owner that does it
+ * (LEARN-15-1: "research and commercial operations own nonsoftware corrections").
+ *
+ *   * A RESEARCH cause is a fact under the forecast that was wrong, so each
+ *     opening whose figure the corrected claim totals gets a research question
+ *     on the field that figure came from — the ordinary question path
+ *     (`questionKey`, which `cash/operate.ts startDependentWork` turns into
+ *     research), so the answer lands on the card through the evidence gate and
+ *     the next forecast and plan are computed from it. The largest figures
+ *     first, a bounded number of them.
+ *   * A COMMERCIAL_OPERATIONS cause (capacity, timing, execution) is how the
+ *     work was run, which no source settles: it becomes one need on the
+ *     operation's own review, naming the correction and what settles it.
+ *
+ * Every need is keyed, so raising it again while it is open adds nothing.
+ * Returns the ids of the needs that now carry the correction.
+ */
+export async function openCorrectionWork(
+  projectId: string,
+  correction: Correction,
+  why: string,
+  deps: Pick<LearningDeps, 'raise' | 'openings'> = {},
+): Promise<string[]> {
+  const intake = deps.raise ?? raiseNeed;
+  // One refused or failed need never stops the rest of the correction's work, nor the routing around it.
+  const raise = async (input: Parameters<typeof raiseNeed>[0]) => {
+    try {
+      return await intake(input);
+    } catch (err) {
+      return { ok: false as const, reason: err instanceof Error ? err.message : String(err) };
+    }
+  };
+  const cause = words(correction.cause);
+  const claims = correction.claimIds.map(parseCashClaim).filter((c): c is NonNullable<typeof c> => !!c && c.projectId === projectId);
+  const ids: string[] = [];
+  const settles = `A new version of ${correction.claimIds.join(', ')} is stated after this correction, and outcomes observed from then on are compared with the misses that exposed it.`;
+
+  if (correction.owner === 'RESEARCH' && claims.length > 0) {
+    const all = await (deps.openings ?? ((id: string) => listOpportunities({ projectId: id })))(projectId);
+    const asked = new Set<string>();
+    for (const claim of claims) {
+      const feeding = all
+        .filter((o) => !o.duplicateOfId && FORECAST_STATES.includes(o.state) && o.currency === claim.currency)
+        .sort((a, b) => (b.priceCents ?? 0) - (a.priceCents ?? 0) || a.id.localeCompare(b.id))
+        .slice(0, CORRECTION_OPENINGS);
+      for (const opening of feeding) {
+        for (const field of CLAIM_FIELDS[claim.figure]) {
+          const key = questionKey(opening.id, field);
+          if (asked.has(key)) continue;
+          asked.add(key);
+          const ask =
+            `The cash forecast built on this opening's ${field} missed systematically (${cause}). ` +
+            `Re-establish the ${field} for "${opening.title.slice(0, 120)}" from a source other than the one already on the card, ` +
+            'with its date, and say whether the earlier figure was wrong, stale or measured on a different population.';
+          const raised = await raise({
+            projectId,
+            opportunityId: opening.id,
+            actorRef: 'BRAIN',
+            blockedAction: `Correct the ${field} under the ${claim.currency} ${claim.figure} forecast for "${opening.title.slice(0, 120)}"`,
+            whyItMatters: `${correction.misses} systematic forecast miss(es) trace to ${cause}; the plans built on this forecast stay wrong until the fact under it is corrected. ${why}`.slice(0, 1000),
+            recommendedPath: ask,
+            setupEffort: 'One bounded look.',
+            nextStep: ask,
+            completionCondition: `The ${field} is recorded on this card.`,
+            requestKey: key,
+            blockerKey: parseBlockerKey(`FIELD:${field}`),
+          });
+          if (raised.ok) ids.push(raised.value.id);
+        }
+      }
+    }
+    if (ids.length > 0) return ids;
+  }
+
+  // Commercial operations, or a research cause with no opening left to research: one need on the
+  // operation's own review, naming the correction, so the miss is never left at a reading.
+  const raised = await raise({
+    projectId,
+    actorRef: 'BRAIN',
+    blockedAction: `Correct the cash forecast's ${cause} (${words(correction.owner)})`,
+    whyItMatters: `${correction.misses} systematic miss(es) on ${correction.claimIds.join(', ')} trace to ${cause}, and the plans built on this forecast stay wrong until it is corrected. ${why}`.slice(0, 1000),
+    recommendedPath:
+      correction.owner === 'COMMERCIAL_OPERATIONS'
+        ? `Change how the work is run where ${cause} caused the miss — the capacity committed, the timing promised or the way the work was executed — and record the change on the opportunities it touches.`
+        : `Research the ${cause} behind the forecast: which facts under ${correction.claimIds.join(', ')} were wrong, and what the right ones are, each with its source.`,
+    setupEffort: 'One bounded look.',
+    nextStep: `Read the misses on ${correction.claimIds.join(', ')} in the forecast ledger and correct the ${cause} they share.`,
+    completionCondition: settles,
+    requestKey: `forecast-correction:${correction.cause}:${correction.claimIds.join(',')}`,
+  });
+  if (raised.ok) ids.push(raised.value.id);
+  return ids;
 }
 
 async function alreadyRouted(goalId: string, key: string): Promise<boolean> {
@@ -215,11 +347,13 @@ async function alreadyRouted(goalId: string, key: string): Promise<boolean> {
  *
  *   * every correction is routed to its owner — a software cause to Factory
  *     through the improvement register, the existing intake that engineers
- *     Brain's own repository (§87); a research or commercial-operations cause to
- *     the record of every goal whose plan rests on the corrected claim, which is
- *     where that goal's research and operations read what to change — and, when
- *     no goal's plan rests on it, to the register too, so a systematic miss
- *     always produces work and never stops at a reading;
+ *     Brain's own repository (§87); a research or commercial-operations cause
+ *     opens that owner's work (`openCorrectionWork`: research questions on the
+ *     facts under the corrected claim, or a need on the operation's review) and
+ *     is noted, with those needs, on the record of every goal whose plan rests on
+ *     the corrected claim — and, when no goal's plan rests on it, goes to the
+ *     register too, so a systematic miss always produces work and never stops at
+ *     a reading;
  *   * every dependent plan in `recompute` is handed back for an immediate re-read
  *     (`requestGoalPlanPass`, the owner of plan recomputation), so the next plan
  *     is built on the corrected claims;
@@ -253,18 +387,23 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
     });
   for (const correction of reading.corrections) {
     const key = correctionKey(correction);
-    let reachedGoal = false;
-    for (const goal of goals) {
+    const reached = goals.filter((goal) => (dependsOn.get(planClaimId(goal.id)) ?? []).some((c) => correction.claimIds.includes(c)));
+    const reachedGoal = reached.length > 0;
+    const fresh: DependentGoal[] = [];
+    for (const goal of reached) if (!(await routed(goal.id, key))) fresh.push(goal);
+    // A non-software correction new to some goal opens its owner's work first — research questions on the
+    // facts under the corrected claim, or a need on the operation's review — so the goal's record names the
+    // work that corrects it and the replan below re-reads a forecast that work will change. Once per new
+    // reading: the same correction read again on the next refresh is already routed and opens nothing.
+    const why = reading.diagnoses.find((d) => d.kind === 'SYSTEMATIC' && d.causes.includes(correction.cause))?.reason ?? '';
+    const needs = correction.owner !== 'FACTORY' && fresh.length > 0 ? await openCorrectionWork(projectId, correction, why, deps) : [];
+    for (const goal of fresh) {
       const claim = planClaimId(goal.id);
-      const reaches = (dependsOn.get(claim) ?? []).some((c) => correction.claimIds.includes(c));
-      if (!reaches) continue;
-      reachedGoal = true;
-      if (await routed(goal.id, key)) continue;
       await note({
         workstreamId: goal.id,
         kind: CORRECTION_EVENT,
-        summary: `The cash forecast missed systematically: ${correction.cause} on ${correction.claimIds.length} claim(s), corrected by ${correction.owner}.`.slice(0, 400),
-        detail: { key, cause: correction.cause, owner: correction.owner, claimIds: correction.claimIds, misses: correction.misses, recompute: recompute.has(claim) },
+        summary: `The cash forecast missed systematically: ${correction.cause} on ${correction.claimIds.length} claim(s), corrected by ${correction.owner}${needs.length ? ` through ${needs.length} opened need(s)` : ''}.`.slice(0, 400),
+        detail: { key, cause: correction.cause, owner: correction.owner, claimIds: correction.claimIds, misses: correction.misses, recompute: recompute.has(claim), needIds: needs },
         actorRef: 'BRAIN',
       });
       if (recompute.has(claim)) await replan(goal.id, `forecast correction ${correction.cause}`);
@@ -273,7 +412,6 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
     // claim; when no goal does, nobody would read it there, so it goes to the register as well, naming the
     // measurement or correction it needs. A systematic miss always produces work, never nothing.
     if (correction.owner === 'FACTORY' || !reachedGoal) {
-      const why = reading.diagnoses.find((d) => d.kind === 'SYSTEMATIC' && d.causes.includes(correction.cause))?.reason ?? '';
       const software = correction.owner === 'FACTORY';
       // Idempotent by weakness key: the register refreshes a live candidate and never reopens a decided one.
       await (deps.toFactory ?? upsertCandidate)({
