@@ -46,7 +46,7 @@
  * worker what to say. It says what is being asked and what would count as an
  * answer, which is the difference between an assignment and a script.
  */
-import { correctionsForRound } from './judgeRound.ts';
+import { correctionsForRound, recentJudgeCorrections } from './judgeRound.ts';
 import { bundleKeyFor } from './bundling.ts';
 import { RESEARCH_METHOD_SUMMARY, RESEARCH_METHOD_VERSION } from './method.ts';
 import { laneIds } from '../../domain/evidenceLanes.ts';
@@ -121,6 +121,11 @@ export interface AssignmentView {
    * synthesis is told exactly what it always was.
    */
   correctionsRequested: Awaited<ReturnType<typeof correctionsForRound>>;
+  /**
+   * What independent judges in this project recently asked other reports to
+   * correct (§80). Synthesis only; context, never a control.
+   */
+  recentJudgeCorrections: Awaited<ReturnType<typeof recentJudgeCorrections>>;
   /**
    * What each dependency actually established, for a fragment allowed to start
    * before its dependency succeeded.
@@ -450,6 +455,10 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
      */
     correctionsRequested:
       item.workType === 'RESEARCH_SYNTHESIZE' ? await correctionsForRound(orchestration) : null,
+    recentJudgeCorrections:
+      item.workType === 'RESEARCH_SYNTHESIZE'
+        ? await recentJudgeCorrections(orchestration.projectId).catch(() => null)
+        : null,
     claimsToCite:
       item.workType === 'RESEARCH_SYNTHESIZE'
         ? toCite(

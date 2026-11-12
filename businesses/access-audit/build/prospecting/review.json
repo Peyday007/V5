@@ -1,0 +1,93 @@
+{
+ "_note": "Hand review of the qualified list (2026-11-11). exclude: not a small independent business, or a sector we do not pitch. fix: corrections to name/industry/state read from the business's own site.",
+ "exclude": {
+  "NMS": "NANA Management Services, large Alaska Native corporation subsidiary",
+  "Eden Health": "Evergreen Healthcare Group, multi-facility skilled-nursing operator",
+  "Bachman's Plymouth": "regional garden-centre chain",
+  "Underground Printing": "multi-state retail chain",
+  "Stoney Creek Hotel & Conference Center": "hotel chain",
+  "Gordon Thomas Honeywell LLP": "large regional law firm",
+  "Urban Float": "multi-location franchise",
+  "Skagit Casino Resort": "tribal casino resort",
+  "The Highly Connected Dispensary": "cannabis retail, not pitched",
+  "Velvet Cannabis Dispensary": "cannabis retail, not pitched",
+  "Wildflower Bread Company": "restaurant chain",
+  "Anthem House powered by Placemakr": "national apartment-hotel operator",
+  "Cascade Natural Gas Commercial and Industrial Program": "utility",
+  "C & D Courier": "multi-city courier company, Dallas branch email",
+  "Alaska Pollock Fishery Alliance": "industry trade association",
+  "SAGE Veterinary Centers": "multi-hospital veterinary group",
+  "Price 4 Charter Buses & Limos | Davenport Charter Bus, Party Bus, Limo Rentals": "national booking network",
+  "Semiahmoo Resort, Golf, and Spa": "large resort",
+  "Sunday Lunchbox": "non-profit programme",
+  "Aldridge Gardens": "public garden owned by the City of Hoover",
+  "Brame": "regional wholesale distributor, not small"
+ },
+ "fix": {
+  "Crimson": {
+   "name": "The Wildbirch Hotel",
+   "industry": "lodging"
+  },
+  "Bull City Dental   Desiree T Palmer DMD PA": {
+   "name": "Bull City Dental"
+  },
+  "Home Attendant Care / Home Attendant Nursing": {
+   "name": "Home Attendant Care"
+  },
+  "Nesin Therapy Services, PC - Research Park Clinic": {
+   "name": "Nesin Therapy Services"
+  },
+  "Lundgren & Johnson, PSC, Criminal Defense Attorneys": {
+   "name": "Lundgren & Johnson"
+  },
+  "Mariette Geldenhuys, Attorney and Mediator": {
+   "name": "Geldenhuys Law"
+  },
+  "#thesmiledoc": {
+   "name": "The Smile Doc"
+  },
+  "Haus Salon - Nicollet": {
+   "name": "HAUS Salon"
+  },
+  "August Moon Spa": {
+   "industry": "salon-spa"
+  },
+  "Animal Emergency Care": {
+   "industry": "veterinary"
+  },
+  "Valleydale Animal Clinic": {
+   "industry": "veterinary"
+  },
+  "Cahaba Spay Neuter": {
+   "industry": "veterinary"
+  },
+  "Alaska Dog Works": {
+   "industry": "pet-services"
+  },
+  "Vellidan": {
+   "industry": "fitness",
+   "state": "NY"
+  },
+  "Sensibly Sprouted": {
+   "state": "WA"
+  },
+  "The Grand Family Dental": {
+   "state": "TX"
+  },
+  "Quad City Safety, Inc.": {
+   "industry": "safety-supplies"
+  },
+  "LFS Marine & Outdoor": {
+   "industry": "retail"
+  },
+  "Concierge Collection": {
+   "industry": "lodging"
+  },
+  "Olsen's Grain": {
+   "industry": "pet-services"
+  },
+  "Concord Feed & Pet Supplies": {
+   "industry": "pet-services"
+  }
+ }
+}

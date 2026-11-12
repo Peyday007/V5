@@ -31,7 +31,10 @@
  * `services/infra/incidents.ts` from the listener below.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import * as diagnosticsChannel from 'node:diagnostics_channel';
+import { Session as InspectorSession } from 'node:inspector';
 import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks';
+import { getHeapStatistics } from 'node:v8';
 
 /* ------------------------------------------------------------------------- */
 /* Classification                                                            */
@@ -612,6 +615,477 @@ export function eventLoopReading(now = Date.now()): EventLoopReading | null {
   loopWindowStartedAt = now;
   return reading;
 }
+/* ------------------------------------------------------------------------- */
+/* Stall attribution                                                         */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Which work was in flight when the event loop stopped (2026-10-31).
+ *
+ * The delay histogram says the loop was blocked for up to 31 s on a 2 GB
+ * machine with a third of its heap in use, so the stall is synchronous work and
+ * not collection — and nothing said whose. A synchronous block runs inside one
+ * of the activities in flight at that instant, so each stall is charged to every
+ * labelled activity that was open across it. One stall cannot name the culprit;
+ * the label present in every long stall can, and the totals here are that
+ * intersection read as counts.
+ */
+const STALL_PROBE_MS = 250;
+const STALL_RECORD_MS = 2_000;
+const activeActivities = new Map<string, number>();
+const stallTotals = new Map<string, { stalls: number; totalMs: number; maxMs: number }>();
+const recentStalls: { ms: number; at: string; active: string[] }[] = [];
+let stallTimer: ReturnType<typeof setInterval> | null = null;
+let stallLast = Date.now();
+
+/*
+ * Every recorded stall with its time, for the pressure reading (§63): a
+ * process whose own event loop is held is overloaded however fast the
+ * database answers. Kept for the pressure window and no longer.
+ */
+const STALL_LOG_MS = 10 * 60_000;
+const stallLog: { at: number; ms: number }[] = [];
+
+/** Record one stall. Exported for tests; the probe is the only caller in production. */
+export function noteStall(ms: number, at = Date.now()): void {
+  stallLog.push({ at, ms });
+  while (stallLog.length > 0 && stallLog[0]!.at < at - STALL_LOG_MS) stallLog.shift();
+}
+
+/** Milliseconds this process's event loop spent in stalls of 2 s or more since `sinceMs`. */
+export function stalledMsSince(sinceMs: number): number {
+  let total = 0;
+  for (const one of stallLog) if (one.at >= sinceMs) total += one.ms;
+  return total;
+}
+
+/** Tests only. */
+export function resetStallLog(): void {
+  stallLog.length = 0;
+}
+
+/*
+ * Whether the probe's stalls feed the pressure reading. On in production. Off
+ * under vitest by default: a test's own synchronous work (building a fresh
+ * database, hashing a password, a whole pass run inline) is seconds of stall
+ * on a loaded runner, which put suites that never asked about pressure into
+ * SHEDDING and deferred the very passes they assert on
+ * (opportunityReconsiderationWalk, cashAutonomousFunnel, autonomyChain on
+ * 2026-11-12). The pressure suite drives `noteStall` directly.
+ */
+function stallsFeedPressure(): boolean {
+  const setting = (process.env['BRAIN_STALL_PRESSURE'] ?? '').toLowerCase();
+  if (setting === 'off' || setting === '0') return false;
+  if (setting === 'on' || setting === '1') return true;
+  return !process.env['VITEST'];
+}
+
+function ensureStallProbe(): void {
+  if (stallTimer) return;
+  stallLast = Date.now();
+  stallTimer = setInterval(() => {
+    const now = Date.now();
+    const late = now - stallLast - STALL_PROBE_MS;
+    stallLast = now;
+    if (late < STALL_RECORD_MS) return;
+    profileWindowStallMs = Math.max(profileWindowStallMs, late);
+    const active = [...activeActivities.keys()].sort();
+    recentStalls.push({ ms: late, at: new Date(now).toISOString(), active });
+    if (recentStalls.length > 20) recentStalls.shift();
+    if (stallsFeedPressure()) noteStall(late, now);
+    for (const label of active.length > 0 ? active : ['(nothing labelled)']) {
+      const t = stallTotals.get(label) ?? { stalls: 0, totalMs: 0, maxMs: 0 };
+      t.stalls += 1;
+      t.totalMs += late;
+      t.maxMs = Math.max(t.maxMs, late);
+      stallTotals.set(label, t);
+    }
+  }, STALL_PROBE_MS);
+  stallTimer.unref?.();
+  ensureStallProfiler();
+  ensureOutboundCounter();
+}
+
+/* ------------------------------------------------------------------------- */
+/* Stall profiles                                                            */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The code that held the event loop, read from V8's own sampler (2026-11-06).
+ *
+ * Labels say which activities were open across a stall; on 2026-11-06 every
+ * long stall was charged to the same three (`dispatch:tick`,
+ * `factory:remote-tick`, `russell:reconcile-bins`) because they are always
+ * open, so the label intersection named nobody — while 65 s stalls cost the
+ * pool its connections (`CONNECTION_LOST`) and read as a database outage.
+ *
+ * So the process samples its own stack, in windows of a minute, and keeps the
+ * window only when a stall happened inside it: the frames that spent the most
+ * time on the CPU there, by their own time and by the nearest Brain frame
+ * above them (a JSON.parse is charged to the Brain function that called it).
+ * Sampling every 10 ms costs well under a percent of one core; a window with
+ * no stall is dropped without being summarised.
+ */
+const PROFILE_WINDOW_MS = 60_000;
+const PROFILE_SAMPLING_US = 10_000;
+const PROFILES_KEPT = 3;
+const PROFILE_FRAMES = 10;
+let profileSession: InspectorSession | null = null;
+let profileTimer: ReturnType<typeof setInterval> | null = null;
+let profileWindowStallMs = 0;
+let profileWindowStartedAt = Date.now();
+const stallProfiles: StallProfile[] = [];
+
+export interface StallProfileFrame {
+  frame: string;
+  ms: number;
+}
+
+export interface StallProfile {
+  /** When the window closed. */
+  at: string;
+  windowMs: number;
+  /** The longest stall inside the window. */
+  stallMs: number;
+  sampledMs: number;
+  /** Frames by their own time on the CPU. */
+  self: StallProfileFrame[];
+  /** Time charged to the nearest frame in Brain's own source above each sample. */
+  brain: StallProfileFrame[];
+}
+
+interface CpuProfileNode {
+  id: number;
+  callFrame: { functionName: string; url: string; lineNumber: number };
+  children?: number[];
+}
+
+export interface CpuProfile {
+  nodes: CpuProfileNode[];
+  samples?: number[];
+  timeDeltas?: number[];
+}
+
+function frameName(node: CpuProfileNode): string {
+  const { functionName, url, lineNumber } = node.callFrame;
+  const name = functionName || '(anonymous)';
+  if (!url) return name;
+  const at = url.lastIndexOf('/server/');
+  const scripts = url.lastIndexOf('/scripts/');
+  const nm = url.lastIndexOf('/node_modules/');
+  const short =
+    nm >= 0 ? url.slice(nm + 1) : at >= 0 ? url.slice(at + 1) : scripts >= 0 ? url.slice(scripts + 1) : url.replace(/^.*\//, '');
+  return `${name} ${short}:${lineNumber + 1}`;
+}
+
+function isBrainFrame(node: CpuProfileNode): boolean {
+  const url = node.callFrame.url;
+  return url.includes('/server/') && !url.includes('/node_modules/');
+}
+
+/** Self time and Brain-frame time per frame, from one V8 CPU profile. Pure. */
+export function summarizeCpuProfile(profile: CpuProfile, limit = PROFILE_FRAMES): { sampledMs: number; self: StallProfileFrame[]; brain: StallProfileFrame[] } {
+  const byId = new Map<number, CpuProfileNode>();
+  const parent = new Map<number, number>();
+  for (const node of profile.nodes) {
+    byId.set(node.id, node);
+    for (const child of node.children ?? []) parent.set(child, node.id);
+  }
+  const brainOf = new Map<number, string>();
+  const nearestBrain = (id: number): string => {
+    const known = brainOf.get(id);
+    if (known !== undefined) return known;
+    let cursor: number | undefined = id;
+    let found = '(outside Brain source)';
+    // With no Brain frame above it (a socket callback keeps no caller), the
+    // nearest library frame still says whose work it was: pg, undici, ws.
+    let library: string | null = null;
+    while (cursor !== undefined) {
+      const node = byId.get(cursor);
+      if (!node) break;
+      if (isBrainFrame(node)) {
+        found = frameName(node);
+        library = null;
+        break;
+      }
+      if (library === null && node.callFrame.url.includes('/node_modules/')) {
+        const url = node.callFrame.url;
+        const pkg = url.slice(url.lastIndexOf('/node_modules/') + 14).split('/');
+        library = `(library ${pkg[0]?.startsWith('@') ? `${pkg[0]}/${pkg[1] ?? ''}` : pkg[0]})`;
+      }
+      cursor = parent.get(cursor);
+    }
+    if (library) found = library;
+    brainOf.set(id, found);
+    return found;
+  };
+  const self = new Map<string, number>();
+  const brain = new Map<string, number>();
+  const samples = profile.samples ?? [];
+  const deltas = profile.timeDeltas ?? [];
+  let sampledUs = 0;
+  // A sample's delta is the time since the previous sample, which the sampled
+  // stack was on the CPU for: the next delta belongs to this sample.
+  for (let i = 0; i < samples.length; i++) {
+    const node = byId.get(samples[i]!);
+    if (!node) continue;
+    const us = Math.max(0, deltas[i + 1] ?? deltas[i] ?? 0);
+    if (node.callFrame.functionName === '(idle)') continue;
+    sampledUs += us;
+    const key = frameName(node);
+    self.set(key, (self.get(key) ?? 0) + us);
+    const owner = nearestBrain(node.id);
+    brain.set(owner, (brain.get(owner) ?? 0) + us);
+  }
+  const top = (m: Map<string, number>): StallProfileFrame[] =>
+    [...m.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([frame, us]) => ({ frame, ms: Math.round(us / 1000) }));
+  return { sampledMs: Math.round(sampledUs / 1000), self: top(self), brain: top(brain) };
+}
+
+function profilerWanted(): boolean {
+  const setting = (process.env['BRAIN_STALL_PROFILER'] ?? '').toLowerCase();
+  if (setting === 'off' || setting === '0') return false;
+  if (setting === 'on' || setting === '1') return true;
+  return !process.env['VITEST'];
+}
+
+function ensureStallProfiler(): void {
+  if (profileSession || !profilerWanted()) return;
+  try {
+    const session = new InspectorSession();
+    session.connect();
+    session.post('Profiler.enable');
+    session.post('Profiler.setSamplingInterval', { interval: PROFILE_SAMPLING_US });
+    session.post('Profiler.start');
+    profileSession = session;
+    profileWindowStartedAt = Date.now();
+    profileWindowStallMs = 0;
+    profileTimer = setInterval(rotateStallProfile, PROFILE_WINDOW_MS);
+    profileTimer.unref?.();
+  } catch {
+    profileSession = null;
+  }
+}
+
+function rotateStallProfile(): void {
+  const session = profileSession;
+  if (!session) return;
+  const stallMs = profileWindowStallMs;
+  const startedAt = profileWindowStartedAt;
+  profileWindowStallMs = 0;
+  profileWindowStartedAt = Date.now();
+  try {
+    session.post('Profiler.stop', (err, result) => {
+      try {
+        if (!err && stallMs >= STALL_RECORD_MS && result?.profile) {
+          const summary = summarizeCpuProfile(result.profile as unknown as CpuProfile);
+          stallProfiles.push({ at: new Date().toISOString(), windowMs: Date.now() - startedAt, stallMs, ...summary });
+          if (stallProfiles.length > PROFILES_KEPT) stallProfiles.shift();
+        }
+      } finally {
+        try {
+          session.post('Profiler.start');
+        } catch {
+          /* the next rotation tries again */
+        }
+      }
+    });
+  } catch {
+    /* an inspector that will not answer leaves the labels as the only reading */
+  }
+}
+
+/** The profiles of the latest windows that held a stall, newest last. */
+export function stallProfileReading(): StallProfile[] {
+  return stallProfiles.slice();
+}
+
+/* ------------------------------------------------------------------------- */
+/* Outbound connections                                                      */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Every client socket this process opens, counted by the host it went to.
+ *
+ * The first stall profiles (2026-11-06 02:50Z) put 15 of every 60 CPU seconds
+ * in opening TLS connections (`wrap`, `init`, `start`, `setSession`,
+ * `setCiphers`), and none of it under a Brain frame, because a handshake runs
+ * in socket callbacks that keep no caller. A connection that is not reused
+ * costs a handshake; which client fails to reuse its connections is answered
+ * by counting where they go. Node publishes every client socket on the
+ * `net.client.socket` channel, so this costs one map increment per socket.
+ */
+const outboundByHost = new Map<string, { opened: number; tls: number }>();
+let outboundSince = new Date().toISOString();
+let outboundSubscribed = false;
+
+function noteOutbound(host: string, secure: boolean): void {
+  const key = host.slice(0, 80) || '(unknown)';
+  const row = outboundByHost.get(key) ?? { opened: 0, tls: 0 };
+  row.opened += 1;
+  if (secure) row.tls += 1;
+  outboundByHost.set(key, row);
+  // Bounded: a crawler-shaped workload must not grow this without end.
+  if (outboundByHost.size > 500) {
+    const smallest = [...outboundByHost.entries()].sort((a, b) => a[1].opened - b[1].opened)[0];
+    if (smallest) outboundByHost.delete(smallest[0]);
+  }
+}
+
+export function ensureOutboundCounter(): void {
+  if (outboundSubscribed) return;
+  outboundSubscribed = true;
+  outboundSince = new Date().toISOString();
+  try {
+    diagnosticsChannel.subscribe('net.client.socket', (message) => {
+      const socket = (message as { socket?: NodeJS.EventEmitter & { servername?: string; remoteAddress?: string; _host?: string; encrypted?: boolean } }).socket;
+      if (!socket) return;
+      let counted = false;
+      const count = (): void => {
+        if (counted) return;
+        counted = true;
+        const host = socket.servername || socket._host || socket.remoteAddress || '(unknown)';
+        noteOutbound(String(host), socket.encrypted === true || typeof socket.servername === 'string');
+      };
+      socket.once('secureConnect', count);
+      socket.once('connect', () => setImmediate(count));
+      socket.once('close', count);
+    });
+  } catch {
+    outboundSubscribed = false;
+  }
+}
+
+export interface OutboundReading {
+  since: string;
+  minutes: number;
+  byHost: { host: string; opened: number; tls: number; perMinute: number }[];
+}
+
+export function outboundReading(limit = 12): OutboundReading {
+  ensureOutboundCounter();
+  const minutes = Math.max(1 / 60, (Date.now() - Date.parse(outboundSince)) / 60_000);
+  return {
+    since: outboundSince,
+    minutes: Math.round(minutes * 10) / 10,
+    byHost: [...outboundByHost.entries()]
+      .map(([host, r]) => ({ host, ...r, perMinute: Math.round((r.opened / minutes) * 10) / 10 }))
+      .sort((a, b) => b.opened - a.opened)
+      .slice(0, limit),
+  };
+}
+
+/** Run `fn` labelled, so a stall while it is in flight is charged to it. */
+export async function withActivity<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  const end = beginActivity(label);
+  try {
+    return await fn();
+  } finally {
+    end();
+  }
+}
+
+/** Open a labelled activity; the returned function closes it, once. */
+export function beginActivity(label: string): () => void {
+  ensureStallProbe();
+  activeActivities.set(label, (activeActivities.get(label) ?? 0) + 1);
+  let open = true;
+  return () => {
+    if (!open) return;
+    open = false;
+    const n = (activeActivities.get(label) ?? 1) - 1;
+    if (n <= 0) activeActivities.delete(label);
+    else activeActivities.set(label, n);
+  };
+}
+
+/** A request path with ids collapsed, so labels stay a small set. */
+export function activityPath(path: string): string {
+  return path
+    .split('/')
+    .map((seg) => (/^[a-z]{2,6}_[0-9a-f]{8,}$/.test(seg) || /^[0-9a-f-]{16,}$/.test(seg) || /^\d+$/.test(seg) ? ':id' : seg))
+    .join('/')
+    .slice(0, 80);
+}
+
+export interface StallReading {
+  /** Per label: stalls of at least STALL_RECORD_MS it was in flight across. */
+  byActivity: { label: string; stalls: number; totalMs: number; maxMs: number }[];
+  recent: { ms: number; at: string; active: string[] }[];
+  thresholdMs: number;
+  /** CPU profiles of the latest windows a stall happened in. */
+  profiles: StallProfile[];
+}
+
+export function stallReading(limit = 15): StallReading {
+  ensureStallProbe();
+  return {
+    profiles: stallProfileReading(),
+    byActivity: [...stallTotals.entries()]
+      .map(([label, t]) => ({ label, ...t }))
+      .sort((a, b) => b.totalMs - a.totalMs)
+      .slice(0, limit),
+    recent: recentStalls.slice(-8),
+    thresholdMs: STALL_RECORD_MS,
+  };
+}
+
+/**
+ * How much memory this process holds, against the ceiling that ends it.
+ *
+ * Production runs on a 1 GB machine, the Brain alone sits near half of it after
+ * boot, and on 2026-10-30 the machine was OOM-killed (`exit_code=137`) three
+ * minutes into a release verification, after a pass that had spent forty-five
+ * minutes in garbage collection near the heap limit. Nothing Brain recorded
+ * could say so: the event-loop reading showed stalls and no reading said why.
+ * The peak is kept, because the reading taken after a recovery is the one that
+ * lies.
+ */
+export interface MemoryReading {
+  rssMB: number;
+  heapUsedMB: number;
+  /** V8's own ceiling for this process; a heap pressing it collects constantly. */
+  heapLimitMB: number;
+  externalMB: number;
+  peakRssMB: number;
+  peakRssAt: string | null;
+}
+
+let peakRss = 0;
+let peakRssAt: string | null = null;
+
+export function memoryReading(now = Date.now()): MemoryReading | null {
+  try {
+    const usage = process.memoryUsage();
+    if (usage.rss > peakRss) {
+      peakRss = usage.rss;
+      peakRssAt = new Date(now).toISOString();
+    }
+    const mb = (bytes: number): number => Math.round(bytes / 1_048_576);
+    return {
+      rssMB: mb(usage.rss),
+      heapUsedMB: mb(usage.heapUsed),
+      heapLimitMB: mb(v8HeapLimit()),
+      externalMB: mb(usage.external),
+      peakRssMB: mb(peakRss),
+      peakRssAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function v8HeapLimit(): number {
+  try {
+    return getHeapStatistics().heap_size_limit;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * The first caller frame outside the database layer, as `file:line`. Read
  * only when a transaction opens, never per statement.

@@ -40,6 +40,23 @@ import { sameProviderSession } from '../../domain/sessionRef.ts';
 export const IN_FLIGHT_WINDOW_MS = 30 * 60_000;
 
 /**
+ * How long a fire nobody answered still holds a slot and still blocks a re-fire.
+ *
+ * Shorter than `IN_FLIGHT_WINDOW_MS` on purpose. That window is right for a
+ * session that *arrived* and is working; it was also being applied to one that
+ * never arrived, so every no-show cost thirty minutes before the bin could be
+ * fired again. A cold start measures about 35 s. Factory campaign fcp_0157 lost
+ * 31 minutes this way before its architect started, and its first integration
+ * 41 minutes, most of it the same wait. A fire is "unanswered" only while the
+ * bin is still at the generation it was fired at — nobody took the lease — so a
+ * session that did arrive is still counted for the full window. The cost of a
+ * session that arrives later than this is one extra fire that finds no work.
+ * `reopenNoShowDispatches` is passed this same number, so a fire stops being
+ * counted and becomes reopenable at the same instant.
+ */
+export const NO_SHOW_WINDOW_MS = 8 * 60_000;
+
+/**
  * Unproductive session starts per account: the adaptive control that replaced
  * the fixed hourly activation budget.
  *
@@ -128,8 +145,13 @@ export interface StartFacts {
   nowMs: number;
   /** Its own session reached Brain (an arrival or an assignment matched to it). */
   arrived: boolean;
-  /** The leases its session took, and what became of each. */
-  leases: { productive: boolean; live: boolean }[];
+  /**
+   * The leases its session took, and what became of each. `withheldByBrain`:
+   * the holder was handed nothing because Brain withheld the work (an
+   * admission refusal, or nothing claimable at the moment) — Brain's choice of
+   * bin, not the account's failure.
+   */
+  leases: { productive: boolean; live: boolean; withheldByBrain?: boolean }[];
   /** Some session — any session — arrived at Brain within its settle window. */
   brainAnswering: boolean;
 }
@@ -138,6 +160,11 @@ export interface StartFacts {
 export function classifyStart(facts: StartFacts): StartVerdict {
   if (facts.leases.some((one) => one.productive)) return 'PRODUCTIVE';
   if (facts.leases.some((one) => one.live)) return 'PENDING';
+  // Every lease ended with Brain withholding the work: the session turned up
+  // and was given nothing it could do. Charging that to the account refused
+  // its productive fires for an hour (production, 2026-10-30: 152 fires
+  // withheld) for a choice the dispatcher made.
+  if (facts.leases.length > 0 && facts.leases.every((one) => one.withheldByBrain)) return 'NOT_JUDGED';
   if (facts.leases.length > 0) return 'UNPRODUCTIVE_NO_WORK';
   const settled = facts.nowMs - facts.sentAtMs >= ARRIVAL_SETTLE_MS;
   if (facts.arrived) return settled ? 'UNPRODUCTIVE_NO_WORK' : 'PENDING';
@@ -238,6 +265,15 @@ async function readProductivity(
     [since, ...PRODUCTIVE_EVENTS],
   );
   const productive = new Set(worked.map((row) => `${row.bin_id}#${row.lease_generation}`));
+  const withheld = new Set(
+    (
+      await db.all<{ bin_id: string; lease_generation: number | null }>(
+        `SELECT bin_id, lease_generation FROM bin_events
+          WHERE event_type = 'BIN_ITEM_WITHHELD' AND at >= ? AND bin_id IS NOT NULL`,
+        [since],
+      )
+    ).map((row) => `${row.bin_id}#${row.lease_generation}`),
+  );
 
   const binIds = [...new Set(assignments.map((row) => row.bin_id))];
   const bins = new Map<string, { state: string; lease_generation: number; lease_expires_at: string | null; orchestration_id: string | null }>();
@@ -305,6 +341,7 @@ async function readProductivity(
       return {
         productive:
           productive.has(`${row.bin_id}#${generation}`) || passes.some((at) => at >= row.at),
+        withheldByBrain: withheld.has(`${row.bin_id}#${generation}`),
         live:
           bin !== undefined &&
           bin.state === 'LEASED' &&
@@ -471,6 +508,12 @@ export interface FleetSnapshot {
   candidates: RoutingCandidate[];
   fleetPolicy: FleetPolicy | null;
   fleetInFlight: number;
+  /**
+   * Of `fleetInFlight`, the activations on repository surfaces — the Software
+   * Factory's. The fleet target bounds everything else; Factory work is
+   * bounded by its own surfaces' Routine and account targets (see `routeBin`).
+   */
+  factoryInFlight: number;
   /** Routines registered but skipped because their secret is not deployed. */
   missingSecrets: { routineId: string; secretName: string }[];
 }
@@ -515,7 +558,18 @@ export interface FleetSnapshot {
  *      claimable work everywhere else in this codebase (§19); a session whose
  *      lease Brain has already written off is not occupying a slot.
  *
- *   4. **The fire is recent**, which is `IN_FLIGHT_WINDOW_MS` and was already
+ *   4. **The bin was not handed back after this fire.** A bin is fired at
+ *      generation g; taking it advances the generation and releasing it
+ *      advances it again, back to READY. So a READY bin whose generation is past
+ *      its newest fire's was taken and given back — the session that fire
+ *      started has had its turn. It held the slot for the rest of the window
+ *      anyway, and on 2026-10-30 that was the dominant refusal in the fleet:
+ *      12,398 fires withheld for `FLEET_TARGET_REACHED` in 24 hours while ready
+ *      work waited, the "in flight" sessions largely ones that had handed their
+ *      bin back because the next audit role needs another session (§23). A
+ *      fire nobody answered keeps its generation and is still counted.
+ *
+ *   5. **The fire is recent**, which is `IN_FLIGHT_WINDOW_MS` and was already
  *      here. It is the backstop for everything the first three cannot see.
  *
  * Every one of these can only *lower* the count, so the failure mode this
@@ -523,6 +577,11 @@ export interface FleetSnapshot {
  * slot's compare-and-swap and the provider's own refusals all still bound the
  * other direction.
  */
+/** The unproductive-starts bucket a Routine's fires are judged in: its account, per family. */
+export function productivityKey(routine: { accountId: string; capabilities: readonly string[] }): string {
+  return routine.capabilities.includes('repository') ? `${routine.accountId}#factory` : routine.accountId;
+}
+
 export async function inFlightByRoutine(nowMs: number): Promise<Map<string, number>> {
   const since = new Date(nowMs - IN_FLIGHT_WINDOW_MS).toISOString();
   const now = new Date(nowMs).toISOString();
@@ -587,8 +646,12 @@ async function readInFlight(since: string, now: string): Promise<Map<string, num
               SELECT MAX(d2.lease_generation) FROM bin_dispatch d2
                WHERE d2.bin_id = d.bin_id AND d2.state = 'SENT')
         AND (b.state <> 'LEASED' OR b.lease_expires_at > ?)
+        AND NOT (b.state = 'READY' AND b.lease_generation > d.lease_generation)
+        -- A fire nobody answered (the bin is still at its generation) holds a
+        -- slot only for NO_SHOW_WINDOW_MS; one somebody took keeps the window.
+        AND (b.lease_generation <> d.lease_generation OR d.sent_at >= ?)
       GROUP BY d.routine_id`,
-    [since, now],
+    [since, now, new Date(Date.parse(now) - NO_SHOW_WINDOW_MS).toISOString()],
   );
   const out = new Map<string, number>();
   for (const row of rows) {
@@ -664,9 +727,16 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
 
   const accountById = new Map<string, FleetAccount>(accounts.map((a) => [a.id, a]));
   // Both read defensively: an unreadable count routes as it always did.
+  /*
+   * Judged per account *and family*. Production 2026-11-10: research sessions on
+   * an account that also hosts the Factory surface ended with nothing to claim,
+   * and three Factory bins waited on ACCOUNT_SESSIONS_UNPRODUCTIVE although no
+   * Factory session there had been unproductive. A research start that found no
+   * research is not evidence about the Factory surface beside it.
+   */
   const productivity = await productivityByAccount(
     now.getTime(),
-    new Map(routines.map((routine) => [routine.id, routine.accountId])),
+    new Map(routines.map((routine) => [routine.id, productivityKey(routine)])),
   ).catch(() => new Map<string, AccountProductivity>());
   const networkBlocked = await networkBlockedRoutines(now.getTime()).catch(() => new Set<string>());
   const perAccount = new Map<string, number>();
@@ -740,7 +810,7 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
       accountInFlight: perAccount.get(account.id) ?? 0,
       routineTarget: routinePolicy ? effectiveTarget(routinePolicy, nowIso).target : null,
       accountTarget: accountPolicy ? effectiveTarget(accountPolicy, nowIso).target : null,
-      accountUnproductiveStarts: productivity.get(account.id)?.unproductive ?? 0,
+      accountUnproductiveStarts: productivity.get(productivityKey(routine))?.unproductive ?? 0,
       accountUnproductiveLimit: UNPRODUCTIVE_STARTS_THRESHOLD,
       allowanceReport: allowanceReports.get(account.id) ?? null,
     });
@@ -748,8 +818,12 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
 
   let fleetInFlight = 0;
   for (const n of perRoutine.values()) fleetInFlight += n;
+  let factoryInFlight = 0;
+  for (const routine of routines) {
+    if (routine.capabilities.includes('repository')) factoryInFlight += perRoutine.get(routine.id) ?? 0;
+  }
 
-  return { candidates, fleetPolicy, fleetInFlight, missingSecrets };
+  return { candidates, fleetPolicy, fleetInFlight, factoryInFlight, missingSecrets };
 }
 
 /**

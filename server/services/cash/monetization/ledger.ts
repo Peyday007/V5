@@ -234,6 +234,24 @@ function marginFor(facts: ReadonlyMap<MonetizationAttribute, MonetizationPathFac
  * and reading the same rows twice is how two figures on one screen come to
  * disagree about the same thing.
  */
+/**
+ * A ledger of thousands of possibilities is a long synchronous walk, and the
+ * same event loop answers sign-in, check-in and /healthz; giving the loop back
+ * every few hundred entries keeps one derivation from being a 10-second stall.
+ */
+const YIELD_EVERY = 250;
+/**
+ * A subject's graph is a pure function of its paths' methods and the edges
+ * somebody recorded, and both change rarely; recomputing every subject's
+ * pairwise graph on every compose was the largest single cost left after the
+ * grouping above. Keyed by subject, valid only while its signature matches, so
+ * a changed path or recorded edge recomputes that subject and nothing else.
+ * Readers never mutate a GraphEdge, which is what makes sharing them safe.
+ */
+const subjectGraphMemo = new Map<string, { signature: string; edges: GraphEdge[] }>();
+const SUBJECT_GRAPH_MEMO_MAX = 5_000;
+const yieldToLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
 export async function composeLedger(input: {
   projectId: string;
   now?: string;
@@ -307,16 +325,46 @@ export async function composeLedger(input: {
    * the paths' own creation order, but it is a bias toward the older
    * discoveries and a reader should know it is there.
    */
+  let yieldedSubjects = 0;
   const walkBudget = Math.max(
     MIN_SEQUENCE_BUDGET,
     Math.floor(SEQUENCE_BUDGET / Math.max(1, subjectIds.length)),
   );
+  /*
+   * Grouped once rather than filtered per subject: the filter was
+   * subjects × paths (372 × 8 129 in production) on every compose, and the
+   * recorded-edge filter was that again times the subject's paths.
+   */
+  const pathsBySubject = new Map<string, MonetizationPath[]>();
+  for (const one of paths) {
+    const k = subjectKey(one);
+    const list = pathsBySubject.get(k);
+    if (list) list.push(one);
+    else pathsBySubject.set(k, [one]);
+  }
+  const subjectOfPath = new Map(paths.map((one) => [one.id, subjectKey(one)]));
+  const recordedBySubject = new Map<string, typeof recordedEdges>();
+  for (const edge of recordedEdges) {
+    const k = subjectOfPath.get(edge.fromPathId);
+    if (k === undefined) continue;
+    const list = recordedBySubject.get(k);
+    if (list) list.push(edge);
+    else recordedBySubject.set(k, [edge]);
+  }
   for (const subjectId of subjectIds) {
-    const mine = paths.filter((one) => subjectKey(one) === subjectId);
-    const edges = subjectGraph(
-      mine,
-      recordedEdges.filter((edge) => mine.some((one) => one.id === edge.fromPathId)),
-    );
+    if (++yieldedSubjects % 25 === 0) await yieldToLoop();
+    const mine = pathsBySubject.get(subjectId) ?? [];
+    const recordedHere = recordedBySubject.get(subjectId) ?? [];
+    const signature = `${mine.map((one) => `${one.id}:${one.method}:${one.opportunityId ?? ''}:${one.industryNodeId ?? ''}:${one.title}`).join(',')}#${recordedHere.map((edge) => `${edge.id}:${edge.kind}:${edge.fromPathId}>${edge.toPathId}:${edge.rationale}`).join(',')}`;
+    const cached = subjectGraphMemo.get(subjectId);
+    let edges: GraphEdge[];
+    if (cached && cached.signature === signature) {
+      edges = cached.edges;
+    } else {
+      edges = subjectGraph(mine, recordedHere);
+      if (subjectGraphMemo.size > SUBJECT_GRAPH_MEMO_MAX) subjectGraphMemo.clear();
+      subjectGraphMemo.set(subjectId, { signature, edges });
+    }
     edgesBySubject.set(subjectId, edges);
     if (allSequences.length >= MAX_SEQUENCES) continue;
     allSequences.push(...sequences(mine, edges, { budget: walkBudget }));
@@ -334,7 +382,9 @@ export async function composeLedger(input: {
    * dependencies against it.
    */
   const firstPass = new Map<string, MonetizationStatus>();
+  let walked = 0;
   for (const path of paths) {
+    if (++walked % YIELD_EVERY === 0) await yieldToLoop();
     firstPass.set(
       path.id,
       deriveStatus({
@@ -352,12 +402,23 @@ export async function composeLedger(input: {
     );
   }
 
+  /* Each path's edges, indexed once rather than filtered out of its subject's per path. */
+  const edgesByPath = new Map<string, GraphEdge[]>();
+  for (const edges of edgesBySubject.values()) {
+    for (const edge of edges) {
+      for (const end of edge.fromPathId === edge.toPathId ? [edge.fromPathId] : [edge.fromPathId, edge.toPathId]) {
+        const list = edgesByPath.get(end);
+        if (list) list.push(edge);
+        else edgesByPath.set(end, [edge]);
+      }
+    }
+  }
+
   const entries: LedgerEntry[] = [];
   for (const path of paths) {
+    if (++walked % YIELD_EVERY === 0) await yieldToLoop();
     const facts = factsByPath.get(path.id) ?? new Map<MonetizationAttribute, MonetizationPathFact>();
-    const edges = (edgesBySubject.get(subjectKey(path)) ?? []).filter(
-      (edge) => edge.fromPathId === path.id || edge.toPathId === path.id,
-    );
+    const edges = edgesByPath.get(path.id) ?? [];
     /*
      * A dependency somebody **established**, never one the method table drew.
      *

@@ -4,12 +4,14 @@ import {
   databasePressure,
   ENTER_FAILURES,
   ENTER_P90_MS,
+  ENTER_STALLED_MS,
   LEAVE_P90_MS,
+  LEAVE_STALLED_MS,
   MIN_SAMPLES,
   RECOVER_AFTER_MS,
   resetPressure,
 } from '../server/db/pressure.ts';
-import { countDatabaseFailure, noteStatement, resetInfraCounters } from '../server/db/infra.ts';
+import { countDatabaseFailure, noteStall, noteStatement, resetInfraCounters, resetStallLog } from '../server/db/infra.ts';
 import { DEFERRABLE_UNDER_PRESSURE, runPass } from '../server/services/russell/loop.ts';
 
 const fast = (n = MIN_SAMPLES) => Array.from({ length: n }, () => 40);
@@ -69,6 +71,22 @@ describe('database pressure: entering and leaving', () => {
     expect(advance({ times: fast(), failures: ENTER_FAILURES - 1 }, 1_000 + RECOVER_AFTER_MS).state).toBe('NORMAL');
   });
 
+  it('enters SHEDDING when this process\'s event loop is held, however fast the database answers', () => {
+    // Deploy 43170557687: statements fast, the loop stalled 2–12 s at a time.
+    expect(advance({ times: fast(200), failures: 0, stalledMs: ENTER_STALLED_MS - 1 }, 1_000).state).toBe('NORMAL');
+    const reading = advance({ times: fast(200), failures: 0, stalledMs: ENTER_STALLED_MS }, 2_000);
+    expect(reading.state).toBe('SHEDDING');
+    expect(reading.reason).toMatch(/event loop was stalled/);
+  });
+
+  it('does not recover while the loop still stalls, and recovers once it stops', () => {
+    advance({ times: fast(), failures: 0, stalledMs: ENTER_STALLED_MS }, 0);
+    expect(advance({ times: fast(), failures: 0, stalledMs: LEAVE_STALLED_MS }, 1_000).state).toBe('SHEDDING');
+    expect(advance({ times: fast(), failures: 0, stalledMs: LEAVE_STALLED_MS }, 1_000 + RECOVER_AFTER_MS).state).toBe('SHEDDING');
+    advance({ times: fast(), failures: 0, stalledMs: 0 }, 2_000 + RECOVER_AFTER_MS);
+    expect(advance({ times: fast(), failures: 0, stalledMs: 0 }, 2_000 + 2 * RECOVER_AFTER_MS).state).toBe('NORMAL');
+  });
+
   it('silence is not recovery', () => {
     advance({ times: slow(), failures: 0 }, 0);
     expect(advance({ times: [], failures: 0 }, RECOVER_AFTER_MS * 3).state).toBe('SHEDDING');
@@ -78,7 +96,18 @@ describe('database pressure: entering and leaving', () => {
 describe('database pressure from what the adapter felt', () => {
   beforeEach(() => {
     resetInfraCounters();
+    resetStallLog();
     resetPressure();
+  });
+
+  it('reads the process\'s own event-loop stalls inside the window only', () => {
+    for (let i = 0; i < 30; i++) noteStatement('SELECT 1', 5);
+    const now = Date.now();
+    noteStall(ENTER_STALLED_MS, now - 10 * 60_000 + 1);
+    expect(databasePressure(now).state).toBe('NORMAL');
+    noteStall(ENTER_STALLED_MS / 2, now - 1_000);
+    noteStall(ENTER_STALLED_MS / 2, now);
+    expect(databasePressure(now).state).toBe('SHEDDING');
   });
 
   it('does not read lost connections as overload, and says what it felt', () => {

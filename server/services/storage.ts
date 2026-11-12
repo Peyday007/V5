@@ -266,6 +266,11 @@ async function askStore(key: string): Promise<'PRESENT' | 'ABSENT' | 'UNKNOWN'> 
  */
 const existenceMemo = new AsyncLocalStorage<Map<string, Promise<'PRESENT' | 'ABSENT' | 'UNKNOWN'>>>();
 
+/** Whether the caller is already inside a `withExistenceMemo`, so a nested reader need not open its own. */
+export function insideExistenceMemo(): boolean {
+  return existenceMemo.getStore() !== undefined;
+}
+
 /** Run `work` with existence answers de-duplicated inside it. Nested calls share the outer memo. */
 export async function withExistenceMemo<T>(work: () => Promise<T>): Promise<T> {
   if (existenceMemo.getStore()) return await work();

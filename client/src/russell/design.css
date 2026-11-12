@@ -4901,3 +4901,36 @@ details.rs-card > section.rs-card {
   min-height: 2.5rem;
   font-size: 1rem;
 }
+
+/* Magic Deck Lab — scoped to .rs-magic. */
+.rs-magic-nav { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.rs-magic-nav a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 0.75rem; }
+.rs-magic-nav a[aria-current='page'] { font-weight: 600; text-decoration: underline; }
+.rs-magic-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.rs-magic button, .rs-magic input, .rs-magic select, .rs-magic textarea { font-size: 16px; max-width: 100%; }
+.rs-magic textarea { width: 100%; box-sizing: border-box; }
+.rs-magic label { display: block; margin: 0.5rem 0; }
+.rs-magic-stale, .rs-magic-error { border-left: 3px solid currentColor; padding-left: 0.5rem; }
+.rs-magic-tag, .rs-magic-ci { font-size: 0.85em; opacity: 0.8; }
+.rs-magic .rs-table { display: block; overflow-x: auto; }
+.rs-magic-fields { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
+@media (max-width: 520px) { .rs-magic-fields { grid-template-columns: 1fr; } }
+
+/* Historical memory */
+.rs-memory .rs-tabs { flex-wrap: wrap; }
+.rs-memory-choices { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+.rs-memory-decide textarea { width: 100%; box-sizing: border-box; margin-top: 0.25rem; }
+.rs-memory-filters { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0; }
+.rs-memory-filters input:not([type='date']) { flex: 1 1 12rem; min-width: 0; }
+.rs-memory-timeline { padding-left: 1.25rem; }
+.rs-memory-timeline > li { margin-bottom: 0.75rem; }
+.rs-memory-transcript { list-style: none; padding: 0; }
+.rs-memory-transcript > li { border-left: 3px solid var(--rule); padding: 0.25rem 0.75rem; margin: 0.5rem 0; }
+.rs-memory-transcript > li[data-role='USER'] { border-left-color: var(--verdigris); }
+.rs-memory-transcript > li[data-alternate='true'] { opacity: 0.7; border-left-style: dashed; }
+.rs-memory-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.25rem 0; }
+.rs-memory-image { max-width: 100%; height: auto; display: block; margin-top: 0.25rem; }
+.rs-memory-table { width: 100%; border-collapse: collapse; }
+.rs-memory-table th { text-align: left; font-weight: normal; padding: 0.2rem 0.5rem 0.2rem 0; }
+.rs-memory-table td { text-align: right; font-variant-numeric: tabular-nums; }
+.rs-memory-topics ul { padding-left: 1.25rem; }

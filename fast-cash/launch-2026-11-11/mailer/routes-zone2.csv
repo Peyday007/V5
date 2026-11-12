@@ -1,0 +1,8 @@
+zip_crid,zip,route,type,post_office,residential,business,total,median_income,median_age,avg_hh_size,main_municipality,municipality_split,centroid_lat,centroid_lon
+17050C005,17050,C005,city,MECHANICSBURG,792,12,804,129903,39,2.6,Hampden township (Cumberland),Hampden township (Cumberland) 100%,40.25071,-76.97886
+17050C006,17050,C006,city,MECHANICSBURG,831,187,1018,61469,43,1.8,Hampden township (Cumberland),Hampden township (Cumberland) 95%,40.22176,-76.97722
+17050C015,17050,C015,city,MECHANICSBURG,630,0,630,115563,40,2.74,Hampden township (Cumberland),Hampden township (Cumberland) 100%,40.24904,-76.99218
+17050C022,17050,C022,city,MECHANICSBURG,755,115,870,129903,39,2.6,Hampden township (Cumberland),Hampden township (Cumberland) 100%,40.24101,-76.98452
+17050R014,17050,R014,rural,MECHANICSBURG,631,3,634,131577,50,2.37,Hampden township (Cumberland),Hampden township (Cumberland) 100%,40.27054,-76.99365
+17050R015,17050,R015,rural,MECHANICSBURG,683,1,684,102876,42,2.76,Hampden township (Cumberland),Hampden township (Cumberland) 100%,40.26166,-76.99109
+17050R018,17050,R018,rural,MECHANICSBURG,628,2,630,129158,49,2.33,Hampden township (Cumberland),Hampden township (Cumberland) 100%,40.26479,-76.96593

@@ -35,6 +35,7 @@
  * ordinary text — nothing found in model output, a document, a web page or an
  * adapter row is ever executed.
  */
+import { unverifiedChanceClaims } from '../scenario/planCheck.ts';
 import { decideProjectAccess } from '../identity/policy.ts';
 import { CANDIDATE_PRIORITIES } from '../../domain/types.ts';
 import type { CandidatePriority, Principal } from '../../domain/types.ts';
@@ -112,11 +113,31 @@ export interface ProposalRefusal {
     | 'BAD_CONFIDENCE'
     | 'BAD_PRIORITY'
     | 'UNRESOLVABLE_REFERENCE'
+    | 'UNKNOWN_PART_FIELD'
     | 'MISSING_REQUIRED_PART'
     | 'BAD_DUPLICATE_REFERENCE'
-    | 'PROBE_OUT_OF_BOUNDS';
+    | 'PROBE_OUT_OF_BOUNDS'
+    | 'UNVERIFIED_PROBABILITY';
 }
 export type ProposalResult = { ok: true; proposal: ValidatedProposal } | ProposalRefusal;
+
+/**
+ * The keys each nested part may carry. An extra one refuses the whole proposal,
+ * exactly as an extra top-level key does: the turn manifest tells a worker these
+ * and no others, so a compliant worker is unaffected.
+ */
+export const CANDIDATE_KEYS: ReadonlySet<string> = new Set(['title', 'statement', 'duplicateOf']);
+export const PROBE_KEYS: ReadonlySet<string> = new Set(['question', 'maxLookups']);
+export const SOFTWARE_KEYS: ReadonlySet<string> = new Set(['title', 'objective', 'expectedOutcome']);
+
+function unknownPartField(part: string, value: object, allowed: ReadonlySet<string>): ProposalRefusal | null {
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) {
+      return refuse('UNKNOWN_PART_FIELD', `the proposed ${part} carried a field this version does not accept`);
+    }
+  }
+  return null;
+}
 
 /** Every key this version understands. An extra one refuses the proposal. */
 const KNOWN_FIELDS = new Set([
@@ -289,6 +310,14 @@ export function validateProposal(input: {
       : refuse('MISSING_ANSWER', 'the proposal had nothing to say to the person');
   }
 
+  // A chance of success is computed (`scenario/planCheck.ts`), never written.
+  // An answer that tells a person how likely something is to work, with no
+  // checked plan behind it, is refused whole — the same rule a plan's own
+  // narrative is held to, at the surface where prose reaches a person most.
+  if (unverifiedChanceClaims(answer).length > 0) {
+    return refuse('UNVERIFIED_PROBABILITY', 'the answer stated a chance of success that no checked model computed');
+  }
+
   let confidence: number | null = null;
   if (body['confidence'] !== undefined && body['confidence'] !== null) {
     const value = body['confidence'];
@@ -332,6 +361,8 @@ export function validateProposal(input: {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return refuse('MISSING_REQUIRED_PART', 'the proposed idea was not readable');
     }
+    const extraCandidate = unknownPartField('idea', value, CANDIDATE_KEYS);
+    if (extraCandidate) return extraCandidate;
     const title = text((value as Record<string, unknown>)['title'], FIELD_LIMITS.candidateTitle);
     const statement = text(
       (value as Record<string, unknown>)['statement'],
@@ -364,6 +395,8 @@ export function validateProposal(input: {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return refuse('MISSING_REQUIRED_PART', 'the proposed probe was not readable');
     }
+    const extraProbe = unknownPartField('probe', value, PROBE_KEYS);
+    if (extraProbe) return extraProbe;
     const question = text((value as Record<string, unknown>)['question'], FIELD_LIMITS.probeQuestion);
     const lookups = (value as Record<string, unknown>)['maxLookups'];
     if (!question) {
@@ -392,6 +425,8 @@ export function validateProposal(input: {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return refuse('MISSING_REQUIRED_PART', 'the proposed software change was not readable');
     }
+    const extraSoftware = unknownPartField('software change', value, SOFTWARE_KEYS);
+    if (extraSoftware) return extraSoftware;
     const record = value as Record<string, unknown>;
     const title = text(record['title'], FIELD_LIMITS.softwareTitle);
     const objective = text(record['objective'], FIELD_LIMITS.softwareObjective);

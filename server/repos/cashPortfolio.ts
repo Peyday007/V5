@@ -926,14 +926,15 @@ export async function recordNeedContinuation(id: string, note: string): Promise<
 export async function needsAwaitingContinuation(
   projectId: string,
   now?: string,
+  limit?: number,
 ): Promise<CashNeed[]> {
   const at = now ?? portfolioNow();
   const rows = await getDb().all<CashNeedRow>(
     `SELECT * FROM cash_needs
       WHERE project_id = ? AND continued_at IS NULL AND state IN ('RESOLVED', 'WITHDRAWN')
         AND (continuation_not_before IS NULL OR continuation_not_before <= ?)
-      ORDER BY resolved_at, id`,
-    [projectId, at],
+      ORDER BY resolved_at, id${limit !== undefined ? ' LIMIT ?' : ''}`,
+    limit !== undefined ? [projectId, at, limit] : [projectId, at],
   );
   return rows.map(mapNeed);
 }

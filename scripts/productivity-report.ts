@@ -16,6 +16,10 @@
  *
  * Before and after are the same length, either side of `--split`, so a reader
  * compares like with like. Without `--split` it reports the last `--hours`.
+ *
+ * It ends with the system-wide rolling 1h/6h/24h telemetry (TEL-07-1): job
+ * count beside useful claims and commercially actionable openings, each as a
+ * numerator over a stated denominator, read fresh.
  */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
@@ -354,6 +358,16 @@ async function packets(window: Window, projectId: string | null): Promise<void> 
         AND (CAST(? AS TEXT) IS NULL OR project_id = ?)`,
     [window.from, window.to, projectId, projectId],
   );
+  // Why they are parked, so a count of parks names its causes.
+  const parkReasons = await db.all<{ reason: string; n: number }>(
+    `SELECT SUBSTR(COALESCE(failure_reason, '(no reason recorded)'), 1, 110) AS reason, COUNT(*) AS n
+       FROM research_orchestrations
+      WHERE status = 'NEEDS_HUMAN' AND updated_at >= ? AND updated_at < ?
+        AND (CAST(? AS TEXT) IS NULL OR project_id = ?)
+      GROUP BY SUBSTR(COALESCE(failure_reason, '(no reason recorded)'), 1, 110)
+      ORDER BY n DESC LIMIT 8`,
+    [window.from, window.to, projectId, projectId],
+  );
   const leases = await db.get<{ n: number; workers: number }>(
     `SELECT COUNT(*) AS n, COUNT(DISTINCT worker_id) AS workers FROM work_leases
       WHERE claimed_at >= ? AND claimed_at < ? AND (CAST(? AS TEXT) IS NULL OR project_id = ?)`,
@@ -379,6 +393,7 @@ async function packets(window: Window, projectId: string | null): Promise<void> 
   console.log(
     `    resumed rounds=${resumed.length} (${rate(resumed.length)}/h)  parked-or-reparked (last write in window)=${Number(parkedNow?.n ?? 0)}`,
   );
+  for (const row of parkReasons) console.log(`      park ${String(row.n).padStart(4)}  ${row.reason}`);
   const assignments = Number(binAssignments?.n ?? 0);
   console.log(
     `    bin assignments=${assignments} fires=${Number(fires?.n ?? 0)} item leases=${Number(leases?.n ?? 0)}  ` +
@@ -462,6 +477,21 @@ async function packets(window: Window, projectId: string | null): Promise<void> 
   console.log(
     `    fires withheld: ${deferred.map((row) => `${row.outcome ?? '-'}=${row.n}`).join(' ') || 'none'}`,
   );
+  // Which project and workload each withheld fire was for, and how many bins.
+  const byProject = await db.all<{ outcome: string | null; project_id: string | null; workload_class: string | null; n: number; bins: number }>(
+    `SELECT e.outcome AS outcome, e.project_id AS project_id, b.workload_class AS workload_class,
+            COUNT(*) AS n, COUNT(DISTINCT e.bin_id) AS bins
+       FROM bin_events e LEFT JOIN bins b ON b.id = e.bin_id
+      WHERE e.event_type IN ('DISPATCH_DEFERRED', 'DISPATCH_UNROUTED') AND e.at >= ? AND e.at < ?
+        AND (CAST(? AS TEXT) IS NULL OR e.project_id = ?)
+      GROUP BY e.outcome, e.project_id, b.workload_class ORDER BY COUNT(*) DESC LIMIT 12`,
+    [window.from, window.to, projectId, projectId],
+  );
+  for (const row of byProject) {
+    console.log(
+      `      ${String(row.n).padStart(5)}  ${row.outcome ?? '-'}  project=${row.project_id ?? '—'}  class=${row.workload_class ?? '—'}  bins=${row.bins}`,
+    );
+  }
 }
 
 /** What is waiting, now: the recoverable backlog and where its packets are. */
@@ -486,6 +516,37 @@ async function backlog(projectId: string | null): Promise<void> {
   } catch (error) {
     console.log(`  JUDGE-PARKED NOW  unreadable: ${(error as Error).message}`);
   }
+}
+
+/**
+ * The rolling 1h/6h/24h telemetry (TEL-07-1), read fresh from the rows now —
+ * never the screen's one-minute reuse — because this report is what a person
+ * reads before deciding whether research is short of CPU, memory, GPU or model
+ * capacity, and an earlier window's reading is not a ceiling (S-0083).
+ *
+ * System-wide by design: queues, utilization and provider failure belong to
+ * the whole Brain, not to `--project`. Every figure is numerator over an
+ * explicit denominator, and each denominator is said once in words. A reading
+ * that does not carry every listed measure in every window is refused, so the
+ * report cannot print OK over a reading with a measure missing; a measure whose
+ * rows could not be read prints as unknown, which is a fact, not a failure.
+ */
+async function telemetry(): Promise<void> {
+  const { rollingTelemetry, formatTelemetry, telemetryMeasureKeys, TELEMETRY_WINDOWS } = await import('../server/services/cash/screenMetrics.ts');
+  const reading = await rollingTelemetry(new Date());
+  const listed = telemetryMeasureKeys();
+  for (const window of TELEMETRY_WINDOWS) {
+    const figures = reading.windows[window.key] ?? [];
+    const missing = listed.filter((measure) => !figures.some((f) => f.measure === measure));
+    if (missing.length > 0) throw new Error(`telemetry ${window.key} window is missing ${missing.join(', ')}`);
+    const unstated = figures.filter((f) => !f.denominatorIs.trim());
+    if (unstated.length > 0) throw new Error(`telemetry ${window.key}: ${unstated.map((f) => f.measure).join(', ')} state no denominator`);
+  }
+  for (const line of formatTelemetry(reading)) console.log(`  ${line}`);
+  console.log('  DENOMINATORS');
+  for (const f of reading.windows['1h']) console.log(`    ${f.measure.padEnd(22)} over ${f.denominatorIs}${f.note ? `  (${f.note})` : ''}`);
+  const unknown = TELEMETRY_WINDOWS.flatMap((w) => reading.windows[w.key].filter((f) => f.basis === 'UNKNOWN').map((f) => `${w.key} ${f.measure}`));
+  console.log(`  TELEMETRY-READING: ${listed.length} measures x ${TELEMETRY_WINDOWS.length} windows at ${reading.at}${unknown.length ? `; unreadable: ${unknown.join(', ')}` : ''}`);
 }
 
 async function main(): Promise<void> {
@@ -519,6 +580,7 @@ async function main(): Promise<void> {
   await parked(projectId);
   await backlog(projectId);
   await repeated(projectId);
+  await telemetry();
   console.log('PRODUCTIVITY-REPORT: OK');
 }
 

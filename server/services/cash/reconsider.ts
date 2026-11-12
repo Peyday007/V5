@@ -84,6 +84,7 @@ import { evidenceCard } from './card.ts';
 import { CAPTURE_INPUTS, CAPTURE_KEY, cashTier } from './tier.ts';
 import { ALSO_ANSWERS_BY_LANE, FIELD_BY_LANE } from './validation.ts';
 import { closedBy } from './closing.ts';
+import { requestDecisionRecompute } from '../../repos/cashDecisions.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -1026,6 +1027,11 @@ export async function reconsiderAffected(
   const now = options.now ?? nowIso();
   const detection = await detectChanges(projectId, { now });
   const triggered = await fanOut(projectId, detection, { now });
+  // A reopened piece's goal decisions are recomputed for this change, once. A
+  // piece a person stopped is only asked about, and is never decided over.
+  for (const target of triggered) {
+    if (target.via !== 'PERSON') await requestDecisionRecompute(target.opportunityId, target.changeRef, now);
+  }
   const watermarksMoved = await commitDetection(projectId, detection);
   return { readings: detection.readings, changes: detection.changes.length, triggered, watermarksMoved };
 }

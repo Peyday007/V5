@@ -32,6 +32,7 @@
 import { authorityNow, checkAuthority, spendTotals } from '../../repos/russellAuthority.ts';
 import { RESEARCH_WORK_CLASS } from '../russell/launch.ts';
 import { databasePressure } from '../../db/pressure.ts';
+import { getDb } from '../../db/database.ts';
 import { sharedFleetSnapshot } from '../dispatch/candidates.ts';
 import { surfaceIneligibility } from '../dispatch/router.ts';
 
@@ -172,6 +173,7 @@ const surfaceMemo = new Map<string, { at: number; count: number | null }>();
 /** Tests, and a write that knows the fleet just changed. */
 export function forgetResearchSurfaces(): void {
   surfaceMemo.clear();
+  spareMemo.clear();
 }
 
 async function readRoutableResearchSurfaces(projectId: string): Promise<number | null> {
@@ -249,18 +251,166 @@ export function operatorResearchMax(env = process.env): number | null {
   return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : null;
 }
 
-export function applyOperatorMax(room: ResearchRoom, max: number | null): ResearchRoom {
+/**
+ * Whether the operator has put the Routines on focus: Claude works on what
+ * improves every job, and cash finding moves to the free models and feeds.
+ *
+ * `cheap-lane.yml focus` sets `BRAIN_CASH_RESEARCH_MAX` (with
+ * `BRAIN_CLAUDE_DISCOVERY=off`); the ceiling is the owner saying so.
+ * `claude-discovery-off` alone stops bulk rounds and keeps a goal's own search. Under focus
+ * idle Routine capacity is **never** a reason to start more cash research: an
+ * idle Routine is capacity kept for Brain-improvement work, not a gap to fill.
+ * Production, 2026-10-31: the idle-fill lift (#385) undid focus within hours and
+ * a Routine spent its run hunting buyers for one Pennsylvania farm opening.
+ */
+export function routineFocus(env = process.env): boolean {
+  return operatorResearchMax(env) !== null;
+}
+
+/**
+ * Constructed rounds one goal may hold open under focus (§83).
+ *
+ * Focus stops Routines hunting openings, and one kind of hunting is kept: a
+ * round asking about an arrangement Brain constructed for an approved cash goal
+ * whose held openings cannot reach it. That is the one search the plan cannot
+ * replace with feeds, because nobody publishes an arrangement nobody has named.
+ * It stays inside the operator's ceiling (never above `BRAIN_CASH_RESEARCH_MAX`,
+ * so a ceiling of 0 still stops it) and inside this small fixed number, so focus
+ * keeps meaning what the owner set it to mean. Null when focus is off.
+ */
+export const FOCUS_CONSTRUCTED_LIVE = 2;
+export function focusConstructedCap(env = process.env): number | null {
+  const max = operatorResearchMax(env);
+  if (max === null) return null;
+  return Math.min(max, FOCUS_CONSTRUCTED_LIVE);
+}
+
+/**
+ * Idle research surfaces cash research may use: none under focus.
+ */
+export async function cashSpareSurfaces(projectId: string): Promise<number> {
+  if (routineFocus() && !(await freeLaneOwnsResearch(projectId))) return 0;
+  return (await spareResearchSurfaces(projectId)) ?? 0;
+}
+
+/**
+ * Whether this project's research is the free lane's rather than the routines'
+ * (§84, §86): brain-only mode is on and the project is not a Brain project.
+ *
+ * Focus exists to keep Routine time for work that improves every job. Under
+ * brain-only mode the Routines never take this project's research at all, so a
+ * focus limit on it protects nothing and only leaves the free lane idle beside
+ * it — production, 2026-11-03: two constructed rounds allowed while the lane
+ * reported its slots unfilled.
+ */
+export async function freeLaneOwnsResearch(projectId: string): Promise<boolean> {
+  try {
+    const { brainOnlyMode } = await import('../bins/brainOnly.ts');
+    if (!(await brainOnlyMode())) return false;
+    const project = await getDb().get<{ slug: string; purpose: string }>('SELECT slug, purpose FROM projects WHERE id = ?', [projectId]);
+    const { isBrainProject } = await import('../../domain/binPurpose.ts');
+    return !isBrainProject(project ?? null);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The constructed rounds a goal may have live: the focus cap, widened by the
+ * free lane's measured spare when the free lane owns this project's research.
+ * Null when no focus is set.
+ */
+export async function constructedCapFor(projectId: string, env = process.env): Promise<number | null> {
+  const cap = focusConstructedCap(env);
+  if (cap === null || !(await freeLaneOwnsResearch(projectId))) return cap;
+  return Math.max(cap, FOCUS_CONSTRUCTED_LIVE + ((await spareResearchSurfaces(projectId)) ?? 0));
+}
+
+/**
+ * The operator's ceiling binds only while capacity is contended.
+ *
+ * `BRAIN_CASH_RESEARCH_MAX` exists so low-yield dives do not take Routine time
+ * from work that improves every job. When surfaces sit idle with nothing
+ * waiting to be fired, there is no such work to protect, and holding the
+ * ceiling only leaves capacity idle beside eligible research (rule 9).
+ * Production, 2026-10-31 21:41Z: the ceiling held cash research at its fixed
+ * number while 8 routable research surfaces had 2 activations between them.
+ * So the ceiling rises by the measured spare — idle research surfaces less the
+ * bins already waiting for one — and falls back the moment work queues up.
+ * It never raises the room past the grant; `researchRoomFrom` decided that.
+ */
+export function applyOperatorMax(room: ResearchRoom, max: number | null, spare = 0): ResearchRoom {
   if (max === null) return room;
-  const allowed = Math.max(0, max - room.inFlight);
+  const lift = Math.max(0, Math.trunc(spare));
+  const allowed = Math.max(0, max + lift - room.inFlight);
   if (allowed >= room.room) return room;
   return {
     room: allowed,
     cap: room.inFlight + allowed,
     inFlight: room.inFlight,
     limitedBy: 'OPERATOR',
-    reason: `an operator capped cash research at ${max} at once`,
+    reason:
+      lift > 0
+        ? `an operator capped cash research at ${max} at once, raised by ${lift} idle research surface(s)`
+        : `an operator capped cash research at ${max} at once, and no research surface is idle`,
   };
 }
+
+/**
+ * Research surfaces for this project that are idle now, less the bins already
+ * waiting to be fired: capacity nothing is going to use unless more work is
+ * started. Null when unreadable — the caller then lifts nothing, because an
+ * unknown is never a favourable assumption.
+ */
+export async function spareResearchSurfaces(projectId: string): Promise<number | null> {
+  const nowMs = Date.now();
+  const held = spareMemo.get(projectId);
+  if (held && nowMs >= held.at && nowMs - held.at < SURFACE_REUSE_MS) return held.count;
+  let count: number | null = null;
+  try {
+    const snapshot = await sharedFleetSnapshot();
+    const now = new Date(nowMs).toISOString();
+    let idle = 0;
+    for (const candidate of snapshot.candidates) {
+      if (surfaceIneligibility(candidate) !== null) continue;
+      if (!candidate.servesProjects.includes(projectId)) continue;
+      if (Array.isArray(candidate.servesFamilies) && !candidate.servesFamilies.includes('RESEARCH')) continue;
+      const waits = [candidate.routine.retryAt, candidate.account.retryAt].filter(
+        (at): at is string => typeof at === 'string' && at > now,
+      );
+      if (waits.length > 0) continue;
+      if ((candidate.routineInFlight ?? 0) > 0) continue;
+      idle += 1;
+    }
+    const waiting = await getDb().get<{ n: number | string }>(
+      `SELECT COUNT(DISTINCT b.id) AS n FROM bins b
+         JOIN bin_dispatch d ON d.bin_id = b.id AND d.lease_generation = b.lease_generation
+        WHERE b.project_id = ? AND b.state = 'READY' AND b.held_by_workstream_id IS NULL
+          AND d.state IN ('PENDING', 'SENDING') AND d.next_attempt_at <= ?`,
+      [projectId, now],
+    );
+    count = Math.max(0, idle - Number(waiting?.n ?? 0));
+    /*
+     * §86: under brain-only mode a non-Brain project's research is the free
+     * lane's, not the routines' (§84), so its spare is the free lane's measured
+     * idle capacity rather than idle Claude surfaces that may not take it.
+     */
+    const { brainOnlyMode } = await import('../bins/brainOnly.ts');
+    if (await brainOnlyMode()) {
+      const project = await getDb().get<{ slug: string; purpose: string }>('SELECT slug, purpose FROM projects WHERE id = ?', [projectId]);
+      const { isBrainProject } = await import('../../domain/binPurpose.ts');
+      if (!isBrainProject(project ?? null)) {
+        const { freeLaneSpareSurfaces } = await import('../freeLane/capacity.ts');
+        count = await freeLaneSpareSurfaces(nowMs);
+      }
+    }
+  } catch {
+    count = null;
+  }
+  spareMemo.set(projectId, { at: nowMs, count });
+  return count;
+}
+const spareMemo = new Map<string, { at: number; count: number | null }>();
 
 /** The room for one kind of research in one project. */
 export async function researchRoom(input: {
@@ -273,5 +423,8 @@ export async function researchRoom(input: {
     inFlight: input.inFlight,
     unlaunched: input.unlaunched,
   });
-  return room.room <= 0 ? room : applyOperatorMax(room, operatorResearchMax());
+  if (room.room <= 0) return room;
+  const max = operatorResearchMax();
+  if (max === null) return room;
+  return applyOperatorMax(room, max, await cashSpareSurfaces(input.projectId));
 }

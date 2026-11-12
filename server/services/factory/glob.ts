@@ -60,3 +60,24 @@ export function matchesGlob(candidate: string, glob: string): boolean {
   return new RegExp(`^${asDirectory}$`).test(target);
 }
 
+
+/**
+ * Does a unit that owns this glob own this file?
+ *
+ * `matchesGlob`, plus one equivalence: a migration's number is a position in a
+ * sequence other campaigns also take from, not part of what the unit owns. A
+ * plan names `server/db/migrations/133_x.sql` because 133 was free when it
+ * planned; if 131 is free when the unit runs, `131_x.sql` is the same file at
+ * its right position. Without this, the only number a unit could write was the
+ * one it planned, a gap failed the repository's own tests, and on 2026-10-30
+ * three campaigns spent every attempt being told to renumber a file they were
+ * not allowed to write. Same directory, same name after the number — nothing
+ * wider. Forbidden paths are still asked with `matchesGlob` alone.
+ */
+export function ownsPath(candidate: string, glob: string): boolean {
+  if (matchesGlob(candidate, glob)) return true;
+  const owned = /^(.*migrations\/)\d+_([^/*?[\]{}]+)$/.exec(glob.split(path.sep).join('/'));
+  if (!owned) return false;
+  const file = /^(.*migrations\/)\d+_([^/]+)$/.exec(candidate.split(path.sep).join('/'));
+  return !!file && file[1] === owned[1] && file[2] === owned[2];
+}

@@ -52,6 +52,8 @@ import type { McpTool } from './toolkit.ts';
 import { RESEARCH_TOOLS } from './researchTools.ts';
 import { BIN_TOOLS } from './binTools.ts';
 import { ENGINEERING_TOOLS } from './engineeringTools.ts';
+import { OPERATOR_TOOLS } from './operatorTools.ts';
+import { fetchSourceTool } from './sourceTools.ts';
 import { activeBinForWorker, confinementFor } from '../repos/bins.ts';
 import { RESEARCH_METHOD, RESEARCH_METHOD_VERSION } from '../services/research/method.ts';
 import {
@@ -674,6 +676,16 @@ const failTool: McpTool = {
         proof,
         suppliedKey: optionalIdempotencyKey(args),
         requestId,
+        /*
+         * One fail per lease, not one per item. The generation is read from
+         * the item Brain holds, never from the caller (invariant 27), so a
+         * retried call on the same lease replays and a fail under a later
+         * lease is its own effect. Production, 2026-11-04: the free lane's
+         * second release of an item replayed the first ("ALREADY_RECORDED"),
+         * left the item leased, and its expiry spent an attempt the release
+         * was meant to refund.
+         */
+        discriminator: `lease:${item.leaseGeneration}`,
         // The category is an input — it is what the caller asked to record —
         // so unlike a summary it belongs in the identity.
         payload: { workItemId: item.id, operation: 'fail', category },
@@ -733,6 +745,16 @@ const releaseTool: McpTool = {
         proof,
         suppliedKey: optionalIdempotencyKey(args),
         requestId,
+        /*
+         * One release per lease, not one per item. The generation is read from
+         * the item Brain holds, never from the caller (invariant 27), so a
+         * retried call on the same lease replays and a release under a later
+         * lease is its own effect. Production, 2026-11-04: the free lane's
+         * second release of an item replayed the first ("ALREADY_RECORDED"),
+         * left the item leased, and its expiry spent an attempt the release
+         * was meant to refund.
+         */
+        discriminator: `lease:${item.leaseGeneration}`,
         payload: { workItemId: item.id, operation: 'release' },
       },
       async () => await releaseWork(proof, detail),
@@ -945,6 +967,8 @@ export const TOOLS: readonly McpTool[] = [
   documentTextTool,
   searchEvidenceTool,
   researchMethodTool,
+  // A page the worker's own sandbox cannot open, read by Brain under its lease.
+  fetchSourceTool,
   // Step 9. In a second file because there are eight of them and this one was
   // already long, and in the *same* array because there is one surface. A
   // second registry would be a second place to forget something.
@@ -958,6 +982,9 @@ export const TOOLS: readonly McpTool[] = [
   // evidence, test policy, existing owners, next action, blockers. Same array,
   // same reason as the two above.
   ...ENGINEERING_TOOLS,
+  // §106 — the operator directs every goal through these. Same array, same
+  // reason: who may *succeed* with them is `operator:act`, decided at execution.
+  ...OPERATOR_TOOLS,
 ];
 
 const BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));

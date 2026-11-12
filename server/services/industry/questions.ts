@@ -33,6 +33,7 @@
  * the kernel exists to ask, and would be wrong about every economy the
  * classification systems have revised since somebody typed it.
  */
+import { sprintGoalLine } from '../../domain/operatingModel.ts';
 import { SEARCH_BUCKETS, type SearchBucket } from '../cash/discovery.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
 
@@ -48,7 +49,7 @@ export const BOOTSTRAP_QUESTION =
 export function bootstrapQuestion(objective: string, round: number): string {
   const parts = [
     BOOTSTRAP_QUESTION,
-    `This is the starting map for a short cash sprint whose goal is: ${objective}`,
+    sprintGoalLine(objective, 'This is the starting map for'),
     'Declare every sector you establish with structural_finding set to SUB_INDUSTRY and ' +
       "structural_subject set to that sector's own name. A sector described in prose and not " +
       'declared does not reach the map.',
@@ -79,7 +80,7 @@ export function mapQuestion(input: {
       'what are the stages of producing and delivering in it, which kinds of organisation pay ' +
       'for work in it, who or what actually performs that work, how does money change hands ' +
       'and on what cycle, and where is supply constrained?',
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     'Declare every level you establish on its claim: structural_finding set to the kind it is ' +
       "and structural_subject set to that subject's own name.",
   ];
@@ -117,7 +118,7 @@ export function scanQuestion(input: {
   const subject = input.path.join(' → ');
   const parts = [
     `Within ${subject}: ${input.bucket.question}`,
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
   ];
   if (input.round > 1) {
     parts.push(
@@ -160,7 +161,7 @@ export function capitalQuestion(input: {
   }
   if (where) parts.push(`It sits in ${where}.`);
   parts.push(
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     'Take the requirements apart rather than reporting a headline startup cost. Declare each ' +
       'requirement with structural_finding set to CAPITAL_REQUIREMENT and each structure with ' +
       'CAPITAL_RESTRUCTURING naming the requirement it answers. Where no source publishes an ' +

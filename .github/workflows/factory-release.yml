@@ -184,14 +184,17 @@ jobs:
           echo "head=$(printf '%s' "$action" | jq -r '.headSha // ""')" >> "$GITHUB_OUTPUT"
           if [ -z "$kind" ]; then echo "Nothing to release."; fi
 
-  gate:
+  # The merged tree, checked once: merge, scan, typecheck, impacted tests, build,
+  # and the list of the whole suite the shards below must partition.
+  gate-tree:
     name: Gate the merged tree
     needs: plan
     if: needs.plan.outputs.needs_gate == 'true'
-    runs-on: ubuntu-latest
-    # The whole Postgres suite takes up to two hours (postgres-suite.yml records
-    # why its own bound is 120); a bound the gate cannot finish inside is not a gate.
-    timeout-minutes: 180
+    # Pinned with Deploy and the Postgres suite (#663): ubuntu-latest became
+    # 26.04, whose tesseract 5.5 reads ocr.test's deliberately poor scan, so
+    # every release gate failed on a test production's tesseract 5.3 passes.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     permissions:
       contents: read
     outputs:
@@ -282,14 +285,19 @@ jobs:
           npm run test:impacted
           npm run build
 
-      - name: The whole suite against Postgres, on the merged tree
-        id: postgres
+      # What the shards must partition: the whole suite, as vitest lists it from
+      # the merged tree, using the trusted copy of the partition script.
+      - name: List the whole suite on the merged tree
+        id: listing
         working-directory: work
-        run: |
-          set -euo pipefail
-          # The trusted copy of the cluster script, so the change cannot choose
-          # how its own database gate is set up; the merged tree's own suite.
-          sh ../trusted/scripts/test-postgres.sh run -- npx vitest run
+        run: bash ../trusted/.github/workflows/postgres-shards.sh all ../postgres-suite-files.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-suite-files
+          path: postgres-suite-files.txt
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Bundle the tested merge
         if: success() && steps.merge.outputs.already_merged != 'true'
@@ -310,7 +318,7 @@ jobs:
           MERGE_FAILURE: ${{ steps.merge.outputs.failure }}
           SCAN: ${{ steps.scan.outcome }}
           TESTS: ${{ steps.tests.outcome }}
-          POSTGRES: ${{ steps.postgres.outcome }}
+          LISTING: ${{ steps.listing.outcome }}
         run: |
           failure="$MERGE_FAILURE"
           if [ -z "$failure" ] && [ "$SCAN" = "failure" ]; then
@@ -320,13 +328,172 @@ jobs:
           if [ -z "$failure" ] && [ "$TESTS" = "failure" ]; then
             failure="typecheck, the impacted tests or the build failed on the merged tree"
           fi
+          if [ -z "$failure" ] && [ "$LISTING" = "failure" ]; then
+            failure="vitest could not list the suite on the merged tree"
+          fi
+          echo "failure=$failure" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # The whole suite against Postgres, in eight shards, on the exact gated merge
+  # ---------------------------------------------------------------------------
+  #
+  # Measured on production (factory capacity, 2026-11-09): a release took a
+  # median 112 minutes against about 5 to plan, code, integrate and review, and
+  # most of it was this suite run in one job (run 1110: over 70 minutes). The
+  # canonical Postgres suite already splits it eight ways (postgres-suite.yml),
+  # and the gate now does the same. Each shard rebuilds the tree the gate
+  # merged — from the gate's bundle, checked against the reported sha — and runs
+  # its share with the trusted cluster script; `gate` below fails unless every
+  # shard passed and their own reports show every file ran exactly once.
+  gate-postgres:
+    name: The whole suite against Postgres, on the merged tree (shard ${{ matrix.shard }}/8)
+    needs: [plan, gate-tree]
+    if: needs.gate-tree.result == 'success'
+    # Pinned with Deploy and the Postgres suite (#663): ubuntu-latest became
+    # 26.04, whose tesseract 5.5 reads ocr.test's deliberately poor scan, so
+    # every release gate failed on a test production's tesseract 5.3 passes.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - name: Trusted checkout of the canonical branch
+        uses: actions/checkout@v4
+        with:
+          ref: production
+          path: trusted
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: trusted/package-lock.json
+
+      - uses: actions/download-artifact@v4
+        if: needs.gate-tree.outputs.already_merged != 'true'
+        with:
+          name: release-merge
+          path: gate
+
+      - name: Rebuild the gated merge
+        env:
+          MERGE_SHA: ${{ needs.gate-tree.outputs.merge_sha }}
+          ALREADY: ${{ needs.gate-tree.outputs.already_merged }}
+        run: |
+          set -euo pipefail
+          case "$MERGE_SHA" in *[!0-9a-f]*|'') echo "::error::No gated merge sha."; exit 1 ;; esac
+          git clone --quiet --no-local trusted work
+          cd work
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          if [ "$ALREADY" = "true" ]; then
+            git fetch --quiet origin "$MERGE_SHA"
+          else
+            git fetch --quiet ../gate/merge.bundle "+HEAD:refs/release/gated"
+          fi
+          git checkout --quiet --detach "$MERGE_SHA"
+          [ "$(git rev-parse HEAD)" = "$MERGE_SHA" ] || { echo "::error::Not the gated merge."; exit 1; }
+
+      - name: Dependencies and the OCR tooling the runtime image has
+        working-directory: work
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in 1 2 3; do
+            if timeout 300 sudo apt-get update -qq && timeout 300 sudo apt-get install -y -qq poppler-utils tesseract-ocr tesseract-ocr-eng >/dev/null; then ok=1; break; fi
+            echo "::warning::OCR tooling install attempt $attempt did not finish; retrying."
+            # A runner whose Azure apt mirror stops resolving (2026-11-11: every
+            # suite shard from 13:32 to 16:26 failed here, so nothing released)
+            # takes the next attempt from Ubuntu's own archive.
+            sudo sed -i 's#mirror+file:/etc/apt/apt-mirrors.txt#http://archive.ubuntu.com/ubuntu/#g; s#http://azure.archive.ubuntu.com/ubuntu/#http://archive.ubuntu.com/ubuntu/#g' /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
+          done
+          [ "$ok" = 1 ] || { echo "::error::Could not install the OCR tooling."; exit 1; }
+          npm ci --no-audit --no-fund
+
+      - name: This shard of the whole suite
+        working-directory: work
+        run: |
+          set -euo pipefail
+          # The trusted copy of the cluster script, so the change cannot choose
+          # how its own database gate is set up; the merged tree's own suite.
+          sh ../trusted/scripts/test-postgres.sh run -- npx vitest run --shard=${{ matrix.shard }}/8 \
+            --reporter=default --reporter=json --outputFile.json=../shard-report.json
+
+      - name: What this shard ran
+        if: ${{ !cancelled() }}
+        working-directory: work
+        run: bash ../trusted/.github/workflows/postgres-shards.sh ran ../shard-report.json ../release-shard-${{ matrix.shard }}.txt
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: release-shard-${{ matrix.shard }}
+          path: release-shard-${{ matrix.shard }}.txt
+          if-no-files-found: ignore
+          retention-days: 3
+
+  # The gate's one verdict, under the name the release job reads: the merged
+  # tree passed, every shard passed, and the shards ran the whole suite once.
+  gate:
+    name: Gate the merged tree (verdict)
+    needs: [plan, gate-tree, gate-postgres]
+    if: ${{ !cancelled() && needs.plan.outputs.needs_gate == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      merge_sha: ${{ needs.gate-tree.outputs.merge_sha }}
+      already_merged: ${{ needs.gate-tree.outputs.already_merged }}
+      failure: ${{ steps.verdict.outputs.failure }}
+    steps:
+      - name: Trusted checkout of the canonical branch
+        uses: actions/checkout@v4
+        with:
+          ref: production
+          path: trusted
+          sparse-checkout: .github/workflows
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        if: needs.gate-tree.result == 'success'
+        with:
+          pattern: release-*-*
+          path: lists
+
+      - name: Verdict
+        id: verdict
+        env:
+          TREE: ${{ needs.gate-tree.result }}
+          TREE_FAILURE: ${{ needs.gate-tree.outputs.failure }}
+          POSTGRES: ${{ needs.gate-postgres.result }}
+        run: |
+          failure="$TREE_FAILURE"
+          if [ -z "$failure" ] && [ "$TREE" != "success" ]; then
+            failure="the merged-tree gate did not finish ($TREE)"
+          fi
           if [ -z "$failure" ] && [ "$POSTGRES" = "failure" ]; then
             failure="the whole suite against Postgres failed on the merged tree"
           fi
-          if [ -z "$failure" ] && [ "$POSTGRES" = "cancelled" ]; then
-            failure="the Postgres suite did not finish inside the gate's bound"
+          if [ -z "$failure" ] && [ "$POSTGRES" != "success" ]; then
+            failure="the Postgres suite did not finish inside the gate's bound ($POSTGRES)"
+          fi
+          if [ -z "$failure" ]; then
+            if ! bash trusted/.github/workflows/postgres-shards.sh check lists/release-suite-files/postgres-suite-files.txt \
+                lists/release-shard-1/release-shard-1.txt lists/release-shard-2/release-shard-2.txt \
+                lists/release-shard-3/release-shard-3.txt lists/release-shard-4/release-shard-4.txt \
+                lists/release-shard-5/release-shard-5.txt lists/release-shard-6/release-shard-6.txt \
+                lists/release-shard-7/release-shard-7.txt lists/release-shard-8/release-shard-8.txt; then
+              failure="the shards did not run every test file exactly once"
+            fi
           fi
           echo "failure=$failure" >> "$GITHUB_OUTPUT"
+          if [ -n "$failure" ]; then echo "::error::$failure"; exit 1; fi
 
   release:
     name: Merge, deploy, verify

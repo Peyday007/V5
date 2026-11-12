@@ -20,10 +20,13 @@
  *   npm run goals -- cancel <wst_…> --reason "…" --admin a@b
  *   npm run goals -- reinstate <wst_…> --admin a@b
  *   npm run goals -- depends <wst_…> <wst_…> --admin a@b
+ *   npm run goals -- objective <wst_…> [--intent "…"] [--outcome "…"] --admin a@b
+ *   npm run goals -- undepend <wst_…> <wst_other…> --reason "…" --admin a@b
  *   npm run goals -- terms <wst_…> [--outcome "…"] [--due 2026-10-01] [--commitment CUSTOMER] --admin a@b
  *   npm run goals -- create --reason "Collect 10000 dollars in 30 days" --project prj_… --due 2026-11-27 SETTLED_CASH-1000000-USD-50000-120 --admin a@b
  *   npm run goals -- target <wst_…> SETTLED_CASH-1000000-USD-50000-120 --project prj_… --admin a@b
  *   npm run goals -- plan <wst_…>            (reads and prints; writes nothing)
+ *   npm run goals -- industry [wst_…] [--reason "the operator's ambition"]   (§92: reads and prints; writes nothing)
  *
  * A target spec is METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS]], dashes
  * only, so it passes the workflow's id check: the figure, how much, in which
@@ -32,7 +35,7 @@
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 import { getUserByEmail } from '../server/repos/identity.ts';
-import { createWorkstream, getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent } from '../server/repos/register.ts';
+import { createWorkstream, getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent, supersedeLink } from '../server/repos/register.ts';
 import { getCampaign, getChangeRequest } from '../server/repos/factory.ts';
 import { getMission } from '../server/repos/russellMissions.ts';
 import { getCandidate } from '../server/repos/russellCandidates.ts';
@@ -43,17 +46,31 @@ import { GOAL_COMMITMENTS, type GoalCommitment } from '../server/domain/goals.ts
 import { assembleGoals, type GoalView } from '../server/services/goals/model.ts';
 import { briefFrom } from '../server/services/goals/briefing.ts';
 import { unfiledWork } from '../server/services/register/unfiled.ts';
-import { cancel, pause, reinstate, resume, setTerms } from '../server/services/goals/decide.ts';
+import { cancel, changeObjective, pause, reinstate, resume, setDependency, setTerms } from '../server/services/goals/decide.ts';
 import { spendingRuleSentence } from '../server/services/goals/spending.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
+import { harvest } from '../server/services/cash/discovery.ts';
 import { listNeeds } from '../server/repos/cashPortfolio.ts';
 import { latestMissionForCandidate } from '../server/repos/russellMissions.ts';
 import { getCycle } from '../server/repos/russellCycle.ts';
+import { getDb } from '../server/db/database.ts';
+import { workforceView } from '../server/services/fleet/workforce.ts';
+import { shortlistFunnel } from '../server/services/feeds/run.ts';
 import { discoveryYield, type YieldRow } from '../server/services/cash/discoveryYield.ts';
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
+import { methodYield, recentExplorations } from '../server/services/goals/reasoning/learning.ts';
+import { askConstructedArrangements, askPathwayConstructions, CHAIN_LABEL, goalArrangements, goalLimits, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
+import { constructArrangements } from '../server/services/cash/construct.ts';
+import { renderPathways } from '../server/services/goals/pathways.ts';
+import { renderReconstruction } from '../server/services/goals/reconstruction.ts';
+import { goalExclusions } from '../server/services/cash/exclusions.ts';
+import { targetProperties } from '../server/services/cash/properties.ts';
+import { executionFrame, MAX_LIVE_GOAL_ROUNDS } from '../server/services/cash/discovery.ts';
+import { assembleEvidence, evidenceFromMap, goalConstruction } from '../server/services/industry/construction/service.ts';
+import { constructIndustry, renderConstruction } from '../server/services/industry/construction/construction.ts';
+import { interpretIntent } from '../server/services/industry/construction/intent.ts';
 
 class Halt extends Error {}
 
@@ -263,15 +280,26 @@ async function decide(command: string): Promise<void> {
     }
     case 'depends': {
       if (!otherId || !(await getWorkstream(otherId))) fail(`No goal ${otherId ?? '(none named)'} to depend on.`);
-      if (otherId === goalId) fail('A goal cannot depend on itself.');
-      for (const link of await listLinks(otherId)) {
-        if (link.kind === 'WORKSTREAM' && link.relation === 'DEPENDS_ON' && link.ref === goalId) {
-          fail('That would make the two goals wait on each other for ever.');
-        }
+      result = await setDependency(goalId, otherId, { actorRef, userId: adminId });
+      break;
+    }
+    case 'objective': {
+      const intent = flag('intent');
+      const outcome = flag('outcome');
+      result = await changeObjective(goalId, { intent, outcome }, actorRef);
+      break;
+    }
+    case 'undepend': {
+      const reason = flag('reason') ?? fail('undepend needs --reason.');
+      if (!otherId) fail('undepend needs the goal to stop depending on.');
+      const live = (await listLinks(goalId)).find((one) => one.kind === 'WORKSTREAM' && one.relation === 'DEPENDS_ON' && one.ref === otherId);
+      if (!live) fail(`${goalId} has no live dependency on ${otherId}.`);
+      if (await supersedeLink(live.id, reason)) {
+        await recordWorkstreamEvent({ workstreamId: goalId, kind: 'LINK_SUPERSEDED', summary: reason, detail: { linkId: live.id }, actorRef });
+        result = { ok: true, reason: null, consequence: 'The link is superseded, with its row and reason kept; the goal tick releases its bins on the next pass if nothing else holds them.' };
+      } else {
+        result = { ok: false, reason: 'The link was already superseded.', consequence: 'Nothing changed.' };
       }
-      await linkWorkstream({ workstreamId: goalId, kind: 'WORKSTREAM', ref: otherId, relation: 'DEPENDS_ON', recordedBy: 'PERSON', recordedByUserId: adminId });
-      await recordWorkstreamEvent({ workstreamId: goalId, kind: 'GOAL_DEPENDENCY_SET', summary: `Waits on ${otherId} until it completes.`, actorRef });
-      result = { ok: true, reason: null, consequence: 'Its live bins are held until that goal completes, then released on the next tick.' };
       break;
     }
     default:
@@ -344,6 +372,27 @@ async function printSearching(reading: PlanReading): Promise<void> {
   const rounds = (await listRounds(reading.target.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
   const cycle = await getCycle();
   console.log(`  tick        ${cycle ? `${cycle.state}, last ran ${cycle.lastRanAt ?? 'never'}${cycle.lastError ? `; last problem: ${cycle.lastError.slice(0, 400)}` : ''}` : 'no tick has run'}`);
+  // The repair-to-goal loop (§88): what the capability check last found blocking this goal,
+  // what a repair cleared, and when the goal was resumed because of it. Rows, not a heartbeat.
+  const checks = await getDb().all<{ created_at: string; payload: string }>(
+    `SELECT created_at, payload FROM project_events WHERE entity_type = 'WORKSTREAM' AND entity_id = ? AND event_type = 'CAPABILITY_ASSESSED'
+      ORDER BY created_at DESC LIMIT 3`,
+    [reading.goalId],
+  );
+  for (const one of checks) {
+    let p: { ready?: boolean; blocking?: string[]; cleared?: string[] } = {};
+    try {
+      p = JSON.parse(one.payload) as typeof p;
+    } catch {
+      p = {};
+    }
+    console.log(`  check       ${one.created_at} ready=${p.ready ?? '?'} blocking=${(p.blocking ?? []).join(',') || 'none'} cleared=${(p.cleared ?? []).join(',') || 'none'}`);
+  }
+  const resumes = await getDb().all<{ created_at: string; summary: string }>(
+    `SELECT created_at, summary FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_RESUMED_AFTER_REPAIR' ORDER BY created_at DESC LIMIT 3`,
+    [reading.goalId],
+  );
+  for (const one of resumes) console.log(`  resumed     ${one.created_at} ${one.summary.slice(0, 200)}`);
   // Who can do this research: a search or a path question needs a worker that can open the web.
   const snapshot = await sharedFleetSnapshot();
   const research = snapshot.candidates.filter(
@@ -356,10 +405,52 @@ async function printSearching(reading: PlanReading): Promise<void> {
   const show = (r: YieldRow) => `${r.key} ${r.useful}/${r.openings} useful${r.qualified ? ` ${r.qualified} qualified` : ''}${r.rounds ? `, ${r.rounds} search(es) ${r.failedRounds} failed, ${r.fragments} research jobs` : ''}`;
   console.log(`  methods     ${found.byMethod.slice(0, 12).map(show).join(' · ')}`);
   console.log(`  sources     ${found.bySource.slice(0, 12).map(show).join(' · ')}`);
+  // How the workforce, the free AI and the code feeds ran in the last day.
+  const wf = await workforceView({ mayRead: () => true });
+  console.log(`  workforce   24h: ${wf.totals.completed24h} jobs finished, ${wf.totals.researchPasses24h} research passes, ${wf.totals.connected} accounts connected, ${wf.totals.working} working now, ${wf.totals.idleWithWork} idle with work waiting; queue ${wf.queue.ready} ready ${wf.queue.leased} in progress`);
+  for (const a of wf.accounts) {
+    const d = a.last24h;
+    console.log(`    account   ${a.name}: ${a.status} · routines ${a.routines.usable}/${a.routines.total} usable · 24h started ${d.started} arrived ${d.arrived} took ${d.assigned} finished ${d.completed} handed back ${d.handedBack} failed ${d.failed} passes ${d.researchPasses}${a.heldReasons.length ? ` · held: ${a.heldReasons.join('; ').slice(0, 200)}` : ''}`);
+  }
+  const cheap = await getDb().all<{ kind: string; model: string; total: number | string; failed: number | string }>(
+    `SELECT kind, model, COUNT(*) AS total, SUM(CASE WHEN ok = 1 THEN 0 ELSE 1 END) AS failed
+       FROM cheap_results WHERE created_at >= ? GROUP BY kind, model ORDER BY kind, model`,
+    [new Date(Date.now() - 24 * 60 * 60_000).toISOString()],
+  );
+  console.log(`  free AI     24h: ${cheap.reduce((n, r) => n + Number(r.total), 0)} answers, ${cheap.reduce((n, r) => n + Number(r.failed ?? 0), 0)} failed`);
+  for (const r of cheap) console.log(`    free AI   ${r.kind} ${r.model}: ${r.total} answers, ${r.failed ?? 0} failed`);
+  const feeds = await getDb().get<{ n: number | string }>(`SELECT COUNT(*) AS n FROM feed_items WHERE fetched_at >= ?`, [new Date(Date.now() - 24 * 60 * 60_000).toISOString()]).catch(() => null);
+  const funnel = await shortlistFunnel(reading.target.projectId).catch(() => null);
+  console.log(`  code feeds  24h: ${feeds ? Number(feeds.n) : '?'} new items pulled; ${funnel ? `pool ${funnel.pool}, screened by free AI ${funnel.screened}, kept ${funnel.kept}, passed rules ${funnel.passedRules}, sent to Claude ${funnel.chosen.length}` : 'funnel unreadable'}`);
+  const t = reading.target;
+  const frame = await executionFrame(t.projectId, t.currency);
+  void frame;
+  // The plan's own construction, held for ten minutes: composing 404 arrangements again over one connection took 7.5 min.
+  const built = await goalArrangements((await getWorkstream(reading.goalId))!, t, new Date(), goalLimits(reading).bestReachCents);
+  console.log(`  targets     ${targetProperties(goalLimits(reading)).map((one) => `${one.property} (${one.because})`).join('; ') || 'none: the limits of this goal ask for no particular property'}`);
+  console.log(`  excluded    ${(await goalExclusions((await getWorkstream(reading.goalId))!)).join(', ') || 'nothing the owner said to leave out'}`);
+  const byOrigin = new Map<string, number>();
+  const byExposure = new Map<string, number>();
+  for (const one of built) {
+    byOrigin.set(one.origin, (byOrigin.get(one.origin) ?? 0) + 1);
+    byExposure.set(one.stress.exposure, (byExposure.get(one.stress.exposure) ?? 0) + 1);
+  }
+  console.log(`  designs     ${[...byOrigin].map(([k, v]) => `${k} ${v}`).join(', ')} · worst case ${[...byExposure].map(([k, v]) => `${k} ${v}`).join(', ')}`);
+  const byStructure = new Map<string, number>();
+  for (const one of built) byStructure.set(one.structure, (byStructure.get(one.structure) ?? 0) + 1);
+  console.log(`  constructed ${built.length} arrangement(s) composed from the industry map, evidenced payers and proved deliverables${byStructure.size ? ` (${[...byStructure].map(([k, v]) => `${k} ${v}`).join(', ')})` : ''}`);
+  for (const one of built.slice(0, 16)) {
+    const asked = rounds.filter((r) => r.bucketId.endsWith(`-mx-${one.key}`));
+    console.log(`    ${one.key} ${one.origin.padEnd(8)} ${one.structure.padEnd(11)} ${one.design.funding}/${one.design.aggregation}/${one.design.repeat} · worst case ${one.stress.exposure}${one.stress.worstCaseCents ? ` ${one.stress.worstCaseCents / 100}` : ''} · meets ${one.targetsMet.join(',') || '—'}${one.emergent.length ? ` · also ${one.emergent.join(',')}` : ''}${one.precedent ? ` · from "${one.precedent.title.slice(0, 40)}"` : ''}`);
+    console.log(`      claims ${one.evidenced} · value ${one.value.tier}${one.value.observations ? ` p10 ${round(one.value.p10)} p50 ${round(one.value.p50)} p90 ${round(one.value.p90)} (${one.value.observations} obs)` : ''} · to establish: ${one.unknownParts.join(', ')} · ${asked.length ? `asked ${asked.length}x (${asked.map((r) => r.state).join(',')})` : 'not asked yet'} · ${one.label.slice(0, 90)}`);
+  }
   console.log(`  searching   ${rounds.length} round(s) of this goal's own search`);
   for (const round of rounds) {
     const mission = await latestMissionForCandidate(round.candidateId);
-    console.log(`    ${round.bucketId.slice(prefix.length + 1) || 'open'} round ${round.round} ${round.state} found ${round.found ?? '—'} · idea ${round.candidateId} · mission ${mission ? `${mission.id} ${mission.state}${mission.terminalReason ? ` (${mission.terminalReason.replace(/\s+/g, ' ').slice(0, 200)})` : ''}` : 'not launched yet'}`);
+    // With no mission, the idea's own state says why: queued for a slot, parked, or refused.
+    const idea = mission ? null : await getCandidate(round.candidateId);
+    const waiting = idea ? `not launched yet (idea ${idea.state}${idea.reason ? `: ${idea.reason.replace(/\s+/g, ' ').slice(0, 200)}` : ''})` : 'not launched yet';
+    console.log(`    ${round.bucketId.slice(prefix.length + 1) || 'open'} round ${round.round} ${round.state} found ${round.found ?? '—'} · idea ${round.candidateId} · mission ${mission ? `${mission.id} ${mission.state}${mission.orchestrationId ? ` · packet ${mission.orchestrationId}` : ''}${(mission.terminalReason ?? mission.waitingOn) ? ` (${(mission.terminalReason ?? mission.waitingOn)!.replace(/\s+/g, ' ').slice(0, 300)})` : ''}` : waiting}`);
   }
   const ids = new Set(reading.considered.map((one) => one.opportunityId));
   // Every research question on these openings, whichever pass raised it: the
@@ -384,7 +475,7 @@ async function printSearching(reading: PlanReading): Promise<void> {
   for (const [key, count] of [...groups].sort((a, b) => b[1] - a[1]).slice(0, 40)) console.log(`    ${String(count).padStart(3)}x ${key}`);
 }
 
-function printPlan(reading: PlanReading): void {
+async function printPlan(reading: PlanReading): Promise<void> {
   const t = reading.target;
   console.log(`PLAN ${reading.goalId}  ${reading.verdict}`);
   console.log(`  target      ${t.targetCents / 100} ${t.currency} ${t.metricLabel}; ledger shows ${t.achievedCents / 100} since ${t.since.slice(0, 10)}; ${t.remainingCents / 100} to go; ${t.daysLeft ?? '—'} day(s) left`);
@@ -393,9 +484,48 @@ function printPlan(reading: PlanReading): void {
   console.log(`  resources   ${t.resources ?? 'not stated'}`);
   console.log(`  spending    ${spendingRuleSentence(t) ?? 'no pace set'}`);
   console.log(`  verdict     ${reading.summary}`);
-  console.log(`  considered  ${reading.considered.length} opening(s), ${reading.considered.filter((one) => one.modelled).length} in the simulation; ${reading.needsMoreOpenings ? 'not enough yet, so Brain keeps searching' : 'a realistic plan exists'}`);
+  const acc = reading.acceptance;
+  console.log(`  acceptance  ${acc.status} (requires a defensible ${Math.round(acc.required * 100)}% chance of collecting the target before the deadline) · ${acc.sentence}`);
+  if (acc.probability) console.log(`    basis     ${acc.probability.basis} ${Math.round(acc.probability.value * 1000) / 10}% (lower bound ${Math.round(acc.probability.lowerBound * 1000) / 10}%, n=${acc.probability.sample}) · ${acc.probability.note}`);
+  if (acc.candidate) console.log(`    candidate ${acc.candidate.source} ${acc.candidate.opportunityIds.join(' + ')} · settled p50 ${acc.candidate.settledP50 === null ? '—' : Math.round(acc.candidate.settledP50)} · ${acc.candidate.reach === null ? 'reach not computed' : `reach ${Math.round(acc.candidate.reach * 1000) / 10}% (${acc.candidate.reachBasis === 'PROBABILITY' ? 'probability' : 'coverage, not a probability'})`}`);
+  for (const why of acc.shortfalls) console.log(`    short     ${why}`);
+  console.log(`  pool        ${reading.pool.conclusion}: ${reading.pool.sentence}`);
+  if (reading.pathways) {
+    for (const line of renderPathways(reading.pathways)) console.log(line);
+    // What the next pass would do with the pathways' constructed moves, and why (§93). Opens nothing.
+    const goal = await getWorkstream(reading.goalId);
+    if (goal) {
+      const why: string[] = [];
+      await askPathwayConstructions(goal, reading, new Date(), MAX_LIVE_GOAL_ROUNDS, why, true);
+      for (const line of why) console.log(`    construct ${line}`);
+    }
+  }
+  console.log(`  considered  ${reading.considered.length} opening(s), ${reading.considered.filter((one) => one.modelled).length} in the simulation; ${reading.needsMoreOpenings ? (reading.acceptance.status === 'ACCEPTED' ? 'an accepted plan exists; Brain keeps searching for stronger openings' : 'no accepted plan, so Brain keeps constructing and searching') : 'an accepted plan exists'}`);
   for (const one of reading.considered.slice(0, 8)) {
-    console.log(`    ${one.modelled ? 'model' : '     '} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);
+    console.log(`    ${one.modelled ? 'model' : '     '} ${one.stage.slice(0, 1)} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);
+  }
+  printPortfolio(reading.portfolio);
+  // Why the plan falls short, what was changed, and the strongest reconstruction (§99).
+  if (reading.reconstruction) for (const line of renderReconstruction(reading.reconstruction)) console.log(line);
+  // Which ways of reasoning have worked, across every goal, and this goal's recent explorations (§101).
+  const yieldRows = await methodYield().catch(() => []);
+  if (yieldRows.length) {
+    console.log(`  methods     ${yieldRows.reduce((n, x) => n + x.methods, 0)} way(s) of reasoning on record`);
+    for (const y of yieldRows.slice(0, 12)) console.log(`    learned   ${y.stance.padEnd(24)} ${y.origin.toLowerCase().padEnd(10)} ${y.methods} method(s), ${y.tries} tri(es), ${y.improvements} improved, ${y.wins} won, mean lift ${(y.meanLift * 100).toFixed(1)}%`);
+  }
+  for (const x of await recentExplorations(reading.goalId).catch(() => [])) console.log(`    explored  ${x.created_at} ${Number(x.variations).toLocaleString('en-US')} variation(s) of ${x.variables} variable(s), ${x.directions} direction(s), ${x.model_directions} from the model; best ${(x.best_reach * 100).toFixed(1)}% vs greedy ${(x.greedy_reach * 100).toFixed(1)}%${x.replaced ? ' (strategy replaced)' : ''}: ${x.best_method ?? 'greedy kept'}`);
+  console.log(`  ladder      ${Object.entries(reading.ladder).map(([stage, n]) => `${stage} ${n}`).join(' · ')}`);
+  console.log(`  policy      ${reading.executionPolicy}${reading.executionPolicy === 'SQUEEZE' ? ': a cash target with a deadline; no market-testing phase, sellable openings are sold now, several at once' : ''}`);
+  for (const one of reading.sales) {
+    console.log(`  sale        ${one.opportunityId} up to ${one.potentialReach === null ? '?' : Math.round(one.potentialReach)} · [${one.test.by}] ${one.title.slice(0, 70)}`);
+    if (one.test.blocker) console.log(`    blocker   ${one.test.blocker}`);
+    // Research runs beside the sale, never ahead of it: the questions on this opening and where each stands.
+    const questions = (await listNeeds({ projectId: reading.target.projectId })).filter((n) => n.opportunityId === one.opportunityId && n.requestKey?.startsWith('question:'));
+    for (const q of questions) console.log(`    research  ${q.requestKey!.split(':').pop()} ${q.state}`);
+  }
+  for (const one of reading.marketTests) {
+    console.log(`  market test ${one.opportunityId} up to ${one.potentialReach === null ? '?' : Math.round(one.potentialReach)} · [${one.test.by}] ${one.title.slice(0, 70)}`);
+    if (one.test.blocker) console.log(`    blocker   ${one.test.blocker}`);
   }
   if (reading.scenarioRunId) console.log(`  scenario    model ${reading.scenarioModelId} run ${reading.scenarioRunId}`);
   if (reading.basisNote) console.log(`  basis       ${reading.basisNote}`);
@@ -409,22 +539,189 @@ function printPlan(reading: PlanReading): void {
     for (const failed of s.constraintsFailed) console.log(`    FAILS     ${failed}`);
   }
   if (reading.nextTest) {
-    console.log(`  next test   [${reading.nextTest.by}] ${reading.nextTest.test}`);
+    console.log(`  ${reading.executionPolicy === 'SQUEEZE' ? 'next step  ' : 'next test  '} [${reading.nextTest.by}] ${reading.nextTest.test}`);
     if (reading.nextTest.blocker) console.log(`  blocker     ${reading.nextTest.blocker}`);
   }
   for (const one of reading.excluded.slice(0, 15)) console.log(`  left out    ${one.opportunityId} ${one.title.slice(0, 70)}: ${one.reason}`);
   if (reading.excluded.length > 15) console.log(`  left out    … and ${reading.excluded.length - 15} more`);
+  // Every reason counted, and every physical-work exclusion listed in full: the owner's
+  // rule (§91) refuses only work the owner would do himself, and this is where to check it.
+  const byReason = new Map<string, number>();
+  for (const one of reading.excluded) {
+    const key = one.reason.replace(/:.*$/, '').slice(0, 80);
+    byReason.set(key, (byReason.get(key) ?? 0) + 1);
+  }
+  for (const [reason, n] of [...byReason].sort((a, b) => b[1] - a[1])) console.log(`  left out ×${String(n).padStart(3)} ${reason}`);
+  for (const one of reading.excluded.filter((x) => /physical work/i.test(x.reason))) {
+    console.log(`  physical    ${one.opportunityId} ${one.title.slice(0, 80)} — ${one.reason.replace(/^[^:]*: /, '').slice(0, 160)}`);
+  }
+  // Evidence-only openings become usable only through their validation dive (payer, route, buying
+  // evidence). Whether that research is running is the next question when the plan does not move.
+  const evidenceOnly = reading.excluded.filter((x) => /^evidence only/.test(x.reason)).map((x) => x.opportunityId);
+  if (evidenceOnly.length > 0) {
+    const marks = evidenceOnly.map(() => '?').join(',');
+    const rows = await getDb().all<{ state: string | null; payer: number | string; price: number | string; channel: number | string; n: number | string }>(
+      `SELECT validation_state AS state, (payer IS NOT NULL AND payer <> '') AS payer, (price_cents IS NOT NULL) AS price,
+              (reachable_channel IS NOT NULL AND reachable_channel <> '') AS channel, COUNT(*) AS n
+         FROM cash_opportunities WHERE id IN (${marks}) GROUP BY 1, 2, 3, 4 ORDER BY COUNT(*) DESC`,
+      evidenceOnly,
+    );
+    for (const r of rows) {
+      console.log(`  evidence    ×${String(r.n).padStart(3)} dive ${r.state ?? 'never started'} · payer ${Number(r.payer) ? 'yes' : 'no'} · price ${Number(r.price) ? 'yes' : 'no'} · route ${Number(r.channel) ? 'yes' : 'no'}`);
+    }
+    // Why the blocked dives stopped: their fragments' own recorded reasons, most common first.
+    const why = await getDb().all<{ reason: string; n: number | string }>(
+      `SELECT SUBSTR(f.blocked_reason, 1, 140) AS reason, COUNT(*) AS n
+         FROM cash_opportunities o JOIN research_fragments f ON f.orchestration_id = o.validation_orchestration_id
+        WHERE o.id IN (${marks}) AND o.validation_state = 'BLOCKED' AND f.blocked_reason IS NOT NULL
+        GROUP BY SUBSTR(f.blocked_reason, 1, 140) ORDER BY COUNT(*) DESC LIMIT 6`,
+      evidenceOnly,
+    );
+    for (const w of why) console.log(`  dive block  ×${String(w.n).padStart(3)} ${w.reason}`);
+  }
+  // §79: what was reconstructed instead of swept, and which questions could change the choice.
+  const tiers = new Map<string, number>();
+  for (const one of reading.inferred) tiers.set(one.tier, (tiers.get(one.tier) ?? 0) + 1);
+  console.log(`  inferred    ${reading.inferred.length} unknown(s) reconstructed from evidence instead of swept blind${tiers.size ? ` (${[...tiers].map(([k, v]) => `${k} ${v}`).join(', ')})` : ''}`);
+  for (const one of reading.inferred.slice(0, 12)) {
+    console.log(`    ${one.tier.padEnd(10)} ${one.field.padEnd(15)} p10 ${round(one.p10)} · p50 ${round(one.p50)} · p90 ${round(one.p90)} from ${one.observations} obs ${one.justified ? '(distribution)' : '(bounds only)'} · ${one.title.slice(0, 50)}`);
+  }
+  console.log(`  questions   ${reading.researchPriority.length === 0 ? 'no input moves the goal-met share, so none is ranked' : `${reading.researchPriority.filter((one) => one.changesDecision).length} of ${reading.researchPriority.length} unknown(s) could change the choice`}`);
+  for (const one of reading.researchPriority.slice(0, 10)) {
+    console.log(`    ${one.decision.padEnd(22)} ${one.variable.padEnd(10)} value ${one.value.toFixed(4)}${one.field ? ` ${one.field}` : ''} — ${one.reason}`);
+  }
+}
+
+function round(x: number): string {
+  return Math.abs(x) < 1 ? x.toFixed(3) : x < 100 ? x.toFixed(1) : String(Math.round(x));
 }
 
 async function plan(): Promise<void> {
   const [, goalId] = words();
   if (!goalId) fail('plan needs a goal id.');
+  const started = Date.now();
+  process.env['BRAIN_PLAN_TRACE'] ??= '1';
   const reading = await readGoalPlan({ goalId, persist: false });
   if (!reading) fail(`No targeted goal ${goalId}.`);
-  printPlan(reading);
+  await printPlan(reading);
+  console.log(`  timing      plan read in ${Date.now() - started} ms; ${reading.inferred.length} inferred input(s), ${reading.researchPriority.length} ranked question(s)`);
+  const searching = Date.now();
   await printSearching(reading);
+  console.log(`  timing      search and digging listed in ${Date.now() - searching} ms`);
   const history = await listReadings(goalId);
   for (const row of history.slice(-10)) console.log(`  history     ${row.created_at} ${row.verdict} chosen=${row.chosen_strategy ?? '—'}${row.scenario_run_id ? ` run=${row.scenario_run_id}` : ''}`);
+  console.log('GOALS: OK');
+}
+
+/** Open this pass's constructed rounds now, exactly as the tick would (§81). */
+async function construct(): Promise<void> {
+  const [, goalId] = words();
+  if (!goalId) fail('construct needs a goal id.');
+  const goal = await getWorkstream(goalId);
+  const reading = await readGoalPlan({ goalId, persist: false });
+  if (!goal || !reading) fail(`No targeted goal ${goalId}.`);
+  /*
+   * The same harvest the sprint tick runs, so this command shows what research
+   * already returned becoming openings rather than waiting for the next tick.
+   * Idempotent: a claim already filed is never filed twice.
+   */
+  const filed = await harvest({ projectId: reading.target.projectId, limit: Number(flag('harvest') ?? 20) });
+  console.log(`harvest filed ${filed.length} opening(s)`);
+  for (const one of filed) console.log(`  filed ${JSON.stringify(one).slice(0, 220)}`);
+  await explainConstructedRounds(goal.id, reading.target.projectId);
+  await explainIdeaBacklog();
+  if (flag('explain') !== undefined) {
+    console.log('GOALS: OK');
+    return;
+  }
+  const opened = await askConstructedArrangements(goal, reading, new Date(), Number(flag('max') ?? 2), MAX_LIVE_GOAL_ROUNDS + Number(flag('spare') ?? 0));
+  for (const id of opened) await linkWorkstream({ workstreamId: goal.id, kind: 'CANDIDATE', ref: id, relation: 'PURSUES', recordedBy: 'BRAIN', recordedByUserId: null });
+  console.log(`construct ${goalId}: opened ${opened.length} round(s)${opened.length ? `: ${opened.join(', ')}` : ' (cool-off, live cap or a closed gate)'}`);
+  console.log('GOALS: OK');
+}
+
+/**
+ * Where each of the goal's constructed rounds got to: its research packet, its
+ * fragments, the claims the gate accepted, and how many of those said what
+ * kind of opening they are — which is what the harvest files from.
+ */
+async function explainConstructedRounds(goalId: string, projectId: string): Promise<void> {
+  const rounds = (await listRounds(projectId)).filter((r) => r.bucketId.startsWith(`goal-${goalId}-mx-`)).sort((a, b) => b.openedAt.localeCompare(a.openedAt));
+  console.log(`constructed rounds ${rounds.length}: ${['OPEN', 'HARVESTED', 'ABANDONED'].map((s) => `${s}=${rounds.filter((r) => r.state === s).length}`).join(' ')} · openings filed ${rounds.reduce((n, r) => n + r.found, 0)}`);
+  for (const round of rounds.slice(0, Number(flag('rounds') ?? 12))) {
+    const mission = await latestMissionForCandidate(round.candidateId);
+    const orc = mission?.orchestrationId ? await getOrchestration(mission.orchestrationId) : null;
+    console.log(`  ${round.openedAt.slice(0, 16)} ${round.state} found=${round.found} ${round.bucketId.slice(round.bucketId.indexOf('-mx-') + 4, round.bucketId.indexOf('-mx-') + 60)}`);
+    console.log(`    mission ${mission ? `${mission.state}${mission.waitingOn ? ` waiting on ${mission.waitingOn}` : ''}` : 'none'} · packet ${orc ? `${orc.id} ${orc.status}${orc.failureReason ? `: ${orc.failureReason.slice(0, 220)}` : ''}` : 'none'}`);
+    if (!orc) continue;
+    const frags = await getDb().all<{ status: string; n: number }>('SELECT status, COUNT(*) AS n FROM research_fragments WHERE orchestration_id = ? GROUP BY status', [orc.id]);
+    const claims = await getDb().get<{ total: number; accepted: number; signalled: number }>(
+      `SELECT COUNT(*) AS total, SUM(CASE WHEN accepted = 1 THEN 1 ELSE 0 END) AS accepted,
+              SUM(CASE WHEN accepted = 1 AND opportunity_signal IS NOT NULL THEN 1 ELSE 0 END) AS signalled
+         FROM research_claims WHERE orchestration_id = ?`,
+      [orc.id],
+    );
+    const reasons = await getDb().all<{ reason: string; n: number }>(
+      `SELECT COALESCE(rejection_reason, validation_state) AS reason, COUNT(*) AS n FROM research_claims
+        WHERE orchestration_id = ? AND accepted = 0 GROUP BY COALESCE(rejection_reason, validation_state) ORDER BY COUNT(*) DESC LIMIT 3`,
+      [orc.id],
+    );
+    const lanes = await getDb().all<{ lane: string; n: number }>(
+      `SELECT COALESCE(evidence_lane, '-') AS lane, COUNT(*) AS n FROM research_claims WHERE orchestration_id = ? AND accepted = 1 GROUP BY COALESCE(evidence_lane, '-')`,
+      [orc.id],
+    );
+    console.log(`    fragments ${frags.map((f) => `${f.status}=${f.n}`).join(' ') || 'none'} · claims ${claims?.total ?? 0}, accepted ${claims?.accepted ?? 0}, with an opening kind ${claims?.signalled ?? 0} · lanes ${lanes.map((l) => `${l.lane}=${l.n}`).join(' ') || 'none'}`);
+    for (const r of reasons) console.log(`    rejected ${r.n}x ${String(r.reason).slice(0, 160)}`);
+    const openings = await getDb().all<{ id: string; state: string; title: string; opportunity_signal: string | null }>(
+      'SELECT id, state, title, opportunity_signal FROM cash_opportunities WHERE orchestration_id = ? ORDER BY created_at',
+      [orc.id],
+    );
+    for (const o of openings) console.log(`    opening ${o.id} ${o.state} ${o.opportunity_signal ?? '-'} · ${o.title.slice(0, 110)}`);
+  }
+}
+
+/**
+ * Where an approved goal's own ideas stand in Russell's queues: ideas waiting
+ * to be judged, judged ideas waiting for a launch, and the goal's place in each.
+ */
+async function explainIdeaBacklog(): Promise<void> {
+  const { goalIdeaSql } = await import('../server/services/goals/goalWork.ts');
+  const cycle = await getCycle();
+  const counts = await getDb().all<{ bucket: string; goal: number; n: number; oldest: string | null }>(
+    `SELECT t.bucket, t.goal, COUNT(*) AS n, MIN(t.created_at) AS oldest FROM (
+       SELECT CASE WHEN c.priority IS NULL THEN 'unjudged' WHEN c.state = 'QUEUED' THEN 'queued' ELSE c.state END AS bucket,
+              CASE WHEN ${goalIdeaSql('c')} THEN 1 ELSE 0 END AS goal, c.created_at
+         FROM russell_candidates c
+        WHERE c.project_id IS NOT NULL AND c.state <> 'MERGED'
+          AND (c.priority IS NULL OR c.state = 'QUEUED' OR c.state = 'CAPTURED')) t
+      GROUP BY t.bucket, t.goal ORDER BY t.bucket, t.goal`,
+  );
+  console.log(`ideas      cycle ${cycle ? `launches/cycle ${cycle.maxLaunchesPerCycle}` : 'unreadable'}`);
+  for (const one of counts) console.log(`  ${one.bucket.padEnd(9)} ${one.goal ? 'goal ' : 'other'} ${one.n}  oldest ${one.oldest ?? '-'}`);
+}
+
+/**
+ * Industry construction (§92), read-only: a goal's own intent, or the words
+ * given with --reason, through the industry map, the goal's recorded facts and
+ * any reference evidence, to a decision and its first transaction.
+ */
+async function industry(): Promise<void> {
+  const goalId = words()[1];
+  const text = flag('reason');
+  if (goalId) {
+    const read = await goalConstruction(goalId, { intent: text ?? null });
+    if (!read) fail(`No goal ${goalId}.`);
+    console.log(`industry construction for ${read.goal.id} (${read.goal.title})`);
+    console.log(`  evidence: ${read.evidenceLayers.join('; ') || 'none'}`);
+    console.log(renderConstruction(read.construction));
+  } else {
+    if (!text) fail('industry needs a goal id or --reason "the operator\'s ambition".');
+    const intent = interpretIntent(text);
+    const evidence = assembleEvidence({ text, industry: intent.industry, geography: intent.geography, map: evidenceFromMap([], []), recorded: [] });
+    console.log(`industry construction for: ${text}`);
+    console.log(`  evidence: ${evidence.provenance.join('; ') || 'none'}`);
+    console.log(renderConstruction(constructIndustry({ intentText: text, evidence })));
+  }
   console.log('GOALS: OK');
 }
 
@@ -443,14 +740,20 @@ async function main(): Promise<void> {
     case 'reinstate':
     case 'terms':
     case 'depends':
+    case 'objective':
+    case 'undepend':
       return await decide(command);
     case 'create':
     case 'target':
       return await targetCommand(command);
     case 'plan':
       return await plan();
+    case 'construct':
+      return await construct();
+    case 'industry':
+      return await industry();
     default:
-      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, plan');
+      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, objective, undepend, create, target, plan, construct, industry');
       process.exitCode = 1;
       console.log('GOALS: FAIL');
   }
@@ -464,3 +767,37 @@ main()
     process.exitCode = 1;
   })
   .finally(() => closeDatabase());
+
+/** The quant engine's combined plan and each opening's estimated demand (§79). */
+function printPortfolio(portfolio: import('../server/services/goals/portfolio.ts').GoalPortfolio | null): void {
+  if (!portfolio) return;
+  const r = (x: number) => (Math.abs(x) < 10 ? x.toFixed(x < 1 ? 3 : 1) : String(Math.round(x)));
+  const l = portfolio.limits;
+  console.log(`  quant       ${portfolio.basis === 'PROBABILITY' ? 'probability' : 'coverage of tested conditions, not a probability'}; ${portfolio.searched} combination(s) searched; target ${Math.round(l.target)} in ${l.deadlineDays} day(s)`);
+  console.log(`    limits    start capital ${l.startingCapital ?? 'none'} · per arrangement ${l.perArrangement ?? 'none'} · spend ceiling ${l.spendCeiling ?? 'none'} · outreach ${l.contactsPerDay.value ?? `${l.contactsPerDay.low}–${l.contactsPerDay.high}`}/day (${l.contactsPerDay.source}) · shared-outreach correlation ${l.correlation}`);
+  const m0 = portfolio.measuredRates;
+  if (m0) {
+    const pc = (x: number) => `${(x * 100).toFixed(2)}%`;
+    console.log(`    measured   reply ${pc(m0.low)}–${pc(m0.high)} on ${m0.sent} sends (${m0.replies} replies, ${m0.opportunities} opportunities, ${((m0.bounced / m0.sent) * 100).toFixed(1)}% bounced) from the Instantly workspace`);
+    console.log(`    authority  ${m0.assessment.authority} → ${m0.applied}: ${m0.assessment.sentence}`);
+    if (m0.asIs) console.log(`    as-is      if the new campaign does no better: reach ${(m0.asIs.reach * 100).toFixed(1)}% · settled p10 ${Math.round(m0.asIs.settledP10)} p50 ${Math.round(m0.asIs.settledP50)} p90 ${Math.round(m0.asIs.settledP90)}`);
+  }
+  const b = portfolio.best;
+  if (b) {
+    console.log(`    best      reaches the target in ${(b.reach * 100).toFixed(1)}% of worlds · settled p10 ${Math.round(b.settledP10)} p50 ${Math.round(b.settledP50)} p90 ${Math.round(b.settledP90)} · capital short ${(b.capitalShort * 100).toFixed(0)}% · over spend ${(b.overSpend * 100).toFixed(0)}%`);
+    for (const m of b.members) console.log(`      member  ${m.opportunityId} ${m.share === null ? 'one-off' : `${m.share * 100}% of outreach`} · ${m.title.slice(0, 70)}`);
+  } else {
+    console.log('    best      none: no combination can run inside the limits');
+  }
+  for (const a of portfolio.alternatives) console.log(`    alt       ${(a.reach * 100).toFixed(1)}% · p50 ${Math.round(a.settledP50)} · ${a.members.map((m) => m.title.slice(0, 28)).join(' + ')}`);
+  const est = portfolio.demand.filter((d) => d.opportunityId.startsWith('arr_'));
+  const found = portfolio.demand.length - est.length;
+  console.log(`    compared  ${found} found opening(s) + ${est.length} constructed estimate(s); refused ${portfolio.demand.filter((d) => d.refused).length}; estimates in the best combination ${b ? b.members.filter((m) => m.opportunityId.startsWith('arr_')).length : 0}`);
+  const shown = [...portfolio.demand].sort((x, y) => y.revenue.p50 - x.revenue.p50 || y.revenue.p90 - x.revenue.p90).slice(0, 16);
+  for (const d of shown) {
+    console.log(
+      `    demand    ${d.opportunityId} ${d.repeatable ? 'repeatable' : 'one-off'} · contacted p50 ${r(d.contacted.p50)} · interested ${r(d.interested.p10)}/${r(d.interested.p50)}/${r(d.interested.p90)} · deals ${r(d.deals.p10)}/${r(d.deals.p50)}/${r(d.deals.p90)} · revenue ${r(d.revenue.p10)}/${r(d.revenue.p50)}/${r(d.revenue.p90)} · reply ${r(d.respond.p50)} close ${r(d.close.p50)} price ${r(d.price.p50)} days ${r(d.days.p50)} · ${d.refused ? `REFUSED ${d.refused}` : d.justified ? 'evidenced' : `not established: ${d.unestablished.join(', ')}`} · ${d.title.slice(0, 50)}`,
+    );
+  }
+  for (const m of portfolio.missing.slice(0, 8)) console.log(`    missing   ${m}`);
+}

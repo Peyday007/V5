@@ -11,6 +11,7 @@
  * vanished is reported as *inconsistent* — never as present — so the user is
  * told what is actually wrong instead of being silently blocked.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type {
   Dependency,
   DependencyCheckItem,
@@ -30,7 +31,7 @@ import {
   dependenciesDrifted,
   resolveProjectDependencies,
 } from '../repos/dependencies.ts';
-import { findDocumentByCanonicalName, getDocument } from '../repos/documents.ts';
+import { findDocumentByCanonicalName, findDocumentsByCanonicalNames, getDocument } from '../repos/documents.ts';
 import { recordEvent } from '../repos/events.ts';
 import { listLayers } from '../repos/layers.ts';
 import { getRun } from '../repos/runs.ts';
@@ -101,6 +102,51 @@ async function inferRequiredLayerId(projectId: string, canonicalName: string): P
   return bestId;
 }
 
+/**
+ * One recompute asks for the same few canonical names over and over: every
+ * run not yet started, then every layer's active runs and unfinished
+ * documents. Production, 2026-11-05 21:23–22:20Z: `findDocumentByCanonicalName`
+ * ran 49 932 times in an hour (about 14 a second), the database's largest cost
+ * by ~700×, and Brain shed load. Inside `withNameLookups` each (project, name)
+ * is read once per pass; outside it every call reads current rows as before.
+ * Only these read-only checks use it; the paths that write dependency rows
+ * read the document themselves.
+ */
+const nameMemo = new AsyncLocalStorage<Map<string, Promise<Document | null>>>();
+
+export function withNameLookups<T>(fn: () => Promise<T>): Promise<T> {
+  if (nameMemo.getStore()) return fn();
+  return nameMemo.run(new Map(), fn);
+}
+
+function memoKey(projectId: string, canonicalName: string): string {
+  return `${projectId}\n${canonicalName.trim().toLowerCase()}`;
+}
+
+/**
+ * Put every name a check is about to evaluate into the memo with one
+ * statement, so the check's concurrent evaluations take one pooled connection
+ * instead of one each (§61). Names already in the memo are not read again.
+ */
+function prefetchNames(projectId: string, names: readonly string[]): void {
+  const memo = nameMemo.getStore();
+  if (!memo) return;
+  const missing = [...new Set(names)].filter((name) => !memo.has(memoKey(projectId, name)));
+  if (missing.length === 0) return;
+  const batch = findDocumentsByCanonicalNames(projectId, missing);
+  for (const name of missing) {
+    const key = memoKey(projectId, name);
+    const hit = batch.then((found) => found.get(name) ?? null);
+    memo.set(key, hit);
+    hit.catch(() => memo.delete(key));
+  }
+}
+
+function documentNamed(projectId: string, canonicalName: string): Promise<Document | null> {
+  prefetchNames(projectId, [canonicalName]);
+  return nameMemo.getStore()!.get(memoKey(projectId, canonicalName))!;
+}
+
 async function evaluate(
   projectId: string,
   canonicalName: string,
@@ -111,7 +157,7 @@ async function evaluate(
   // The canonical name is authoritative; the stored link is only a cache of a
   // previous resolution and may point at a row that has since been renamed.
   const document =
-    await findDocumentByCanonicalName(projectId, canonicalName) ??
+    await documentNamed(projectId, canonicalName) ??
     (linkedDocumentId ? await getDocument(linkedDocumentId) : null);
   const presence = await documentPresence(document);
   return {
@@ -153,6 +199,14 @@ async function checkDependencyRows(
   projectId: string,
   rows: Dependency[],
 ): Promise<DependencyCheckResult> {
+  return withNameLookups(() => checkDependencyRowsWithin(projectId, rows));
+}
+
+async function checkDependencyRowsWithin(
+  projectId: string,
+  rows: Dependency[],
+): Promise<DependencyCheckResult> {
+  prefetchNames(projectId, rows.map((row) => row.requiredCanonicalName));
   return summarize(
     await Promise.all(
       rows.map((row) =>
@@ -195,13 +249,13 @@ export async function checkCanonicalNames(
   projectId: string,
   requiredCanonicalNames: string[],
 ): Promise<DependencyCheckResult> {
-  return summarize(
-    await Promise.all(
-      uniqueNames(requiredCanonicalNames).map((name) =>
-        evaluate(projectId, name, true, 'SOURCE_PACKET', null),
-      ),
-    ),
-  );
+  const names = uniqueNames(requiredCanonicalNames);
+  return withNameLookups(async () => {
+    prefetchNames(projectId, names);
+    return summarize(
+      await Promise.all(names.map((name) => evaluate(projectId, name, true, 'SOURCE_PACKET', null))),
+    );
+  });
 }
 
 /**
@@ -220,6 +274,48 @@ export async function setRunDependencies(
   const required = options.required ?? true;
   const names = uniqueNames(requiredCanonicalNames);
 
+  /*
+   * Everything this reads is read before the transaction opens (2026-11-06).
+   *
+   * It used to resolve each name inside the transaction — one lookup and one
+   * storage existence check (an HTTPS request to the document store) per name,
+   * all queued on the transaction's single connection. On production that held
+   * the connection while the store answered, and the lookups queued behind one
+   * another: the single-name documents lookup from here averaged 7.8 s (max
+   * 15.5 s) and the dependency INSERT 15.5 s over 8 minutes, which alone put
+   * the pool's pressure reading at SHEDDING and deferred Brain's optional work
+   * with the database server idle. Now the names are read in one statement and
+   * their presence asked once each, before; the transaction holds only the
+   * rows it writes. A document arriving between the two is caught by the next
+   * recompute's relink, exactly as one arriving after the commit always was.
+   */
+  const existingBefore = await listDependenciesForRun(runId);
+  const documents = await findDocumentsByCanonicalNames(
+    run.projectId,
+    uniqueNames([...names, ...existingBefore.map((row) => row.requiredCanonicalName)]),
+  );
+  const resolve = async (canonicalName: string): Promise<{ document: Document | null; documentId: string | null }> => {
+    const document = documents.has(canonicalName)
+      ? (documents.get(canonicalName) ?? null)
+      : await findDocumentByCanonicalName(run.projectId, canonicalName);
+    const presence = await documentPresence(document);
+    return { document, documentId: presence.present ? (document?.id ?? null) : null };
+  };
+  const resolved = new Map<string, { document: Document | null; documentId: string | null; layerId: string | null }>();
+  // Outside any transaction, so these may run together: the store's own
+  // connection pool bounds how many existence checks are in flight.
+  await Promise.all(
+    uniqueNames([...names, ...existingBefore.map((row) => row.requiredCanonicalName)]).map(async (canonicalName) => {
+      const { document, documentId } = await resolve(canonicalName);
+      resolved.set(normalizeName(canonicalName), {
+        document,
+        documentId,
+        layerId: document?.layerId ?? (await inferRequiredLayerId(run.projectId, canonicalName)),
+      });
+    }),
+  );
+  const resolutionOf = (canonicalName: string) => resolved.get(normalizeName(canonicalName));
+
   const db = getDb();
   return await db.transaction(async () => {
     const existing = await listDependenciesForRun(runId);
@@ -233,26 +329,36 @@ export async function setRunDependencies(
       );
     if (unchanged) {
       // Still re-point the resolution links: documents may have arrived since.
-      return await Promise.all(existing.map((row) => relinkDependency(row)));
+      const out: Dependency[] = [];
+      for (const row of existing) {
+        const known = resolutionOf(row.requiredCanonicalName);
+        if (!known) {
+          out.push(await relinkDependency(row));
+          continue;
+        }
+        if (known.documentId !== row.requiredDocumentId) await linkDependencyToDocument(row.id, known.documentId);
+        out.push({ ...row, requiredDocumentId: known.documentId });
+      }
+      return out;
     }
 
     await deleteDependenciesForRun(runId);
-    return await Promise.all(
-      names.map(async (canonicalName) => {
-        const document = await findDocumentByCanonicalName(run.projectId, canonicalName);
-        const presence = await documentPresence(document);
-        return createDependency({
+    const out: Dependency[] = [];
+    for (const canonicalName of names) {
+      const known = resolutionOf(canonicalName)!;
+      out.push(
+        await createDependency({
           projectId: run.projectId,
           dependentRunId: runId,
           requiredCanonicalName: canonicalName,
-          requiredDocumentId: presence.present ? (document?.id ?? null) : null,
-          requiredLayerId:
-            document?.layerId ?? (await inferRequiredLayerId(run.projectId, canonicalName)),
+          requiredDocumentId: known.documentId,
+          requiredLayerId: known.layerId,
           dependencyType,
           required,
-        });
-      }),
-    );
+        }),
+      );
+    }
+    return out;
   });
 }
 

@@ -51,6 +51,7 @@
  * Hitting a bound preserves the remaining candidates for the next cycle. It
  * never drops them, and it never consumes a whole tick in one pass.
  */
+import { goalFirstSql, goalIdeaSql } from '../goals/goalWork.ts';
 import {
   claimCycle,
   completeCycle,
@@ -135,7 +136,7 @@ import {
 } from './planning.ts';
 import { resumeParkedAcrossProjects } from './resumeParked.ts';
 import { promoteEligibleClaims } from '../../repos/sharedFindings.ts';
-import { classifyInfraFailure } from '../../db/infra.ts';
+import { classifyInfraFailure, withActivity } from '../../db/infra.ts';
 import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
 import {
@@ -148,7 +149,7 @@ import {
   resumeAnsweredRequest,
 } from './needsHuman.ts';
 import { parseJson } from '../../repos/util.ts';
-import { getCashMode } from '../../repos/cashMode.ts';
+import { cashNow, getCashMode } from '../../repos/cashMode.ts';
 import { launchableUnderCashMode } from '../cash/lifecycle.ts';
 import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
@@ -157,13 +158,17 @@ import { runManufacturingKernel } from '../manufacturing/kernel.ts';
 import { runDealflowKernel } from '../dealflow/kernel.ts';
 import { runPuzzleKernel } from '../puzzle/kernel.ts';
 import { operate } from '../cash/operate.ts';
-import { retireMarketplaceListings, type ListingsRetired } from '../cash/retireListings.ts';
+import { withGoalLimitsMemo } from '../cash/worthResearching.ts';
+import { releaseUnworthyResearch, retireMarketplaceListings, type ListingsRetired } from '../cash/retireListings.ts';
 import { retireUnjudgeableBins } from '../bins/retireUnjudgeable.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import type { RussellCandidate, RussellMission, RussellVisibility } from '../../domain/types.ts';
 
 /** How often the loop wakes when nothing else has woken it. */
+/** Fresh ideas one launch pass may start into free research slots (§98). */
+export const SLOT_FILL_PER_TICK = 5;
+
 export const RUSSELL_TICK_MS = 30_000;
 
 /** How often the tick re-walks missing execution lineage. A backlog, not a tick concern. */
@@ -184,6 +189,7 @@ import { scanIfStale } from '../selfmodel/refresh.ts';
 import { watchIdleOnTick } from '../engineering/watchdog.ts';
 import { databasePressure } from '../../db/pressure.ts';
 import { withArchiveMemo } from '../reconcile/coverage.ts';
+import { runMemoryPass, type MemoryPassReport } from '../memory/pipeline.ts';
 
 export interface TickReport {
   /**
@@ -192,6 +198,8 @@ export interface TickReport {
    * could not read the goals leaves it out rather than reporting zeros.
    */
   goals?: GoalTickReport;
+  /** What the historical-memory pass did (docs/HISTORICAL-MEMORY.md); absent when it did not run. */
+  memory?: MemoryPassReport;
   /** What the research-goal continuation pass did; absent when it could not run. */
   researchGoals?: GoalContinuationReport;
   ran: boolean;
@@ -447,6 +455,8 @@ export interface TickReport {
    * visible backlog.
    */
   unresolvedAnswers: { requestId: string; reason: string }[];
+  /** Research parks Brain answered under the standing grant (§80). */
+  routineDecisions: { requestId: string; missionId: string | null; choice: string | null; reason: string }[];
   /**
    * Budget holds pushed out because their mission is still alive. A silence
    * here beside a running mission means its hold is about to lapse and refund
@@ -691,8 +701,16 @@ export async function runPass(
     report.passFailures.push({ pass: name, error: 'skipped: the database is not answering this tick' });
     return false;
   }
+  const hung = hungPasses.get(name);
+  if (hung) {
+    report.passFailures.push({
+      pass: name,
+      error: `skipped: its run from ${hung} has not settled, and a pass never runs twice at once`,
+    });
+    return false;
+  }
   try {
-    await fn();
+    await boundedPass(name, () => withActivity(`russell:${name}`, fn));
     return true;
   } catch (error) {
     const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
@@ -705,6 +723,52 @@ export async function runPass(
 }
 
 const INFRA_MARK = 'infra: ';
+
+/**
+ * A pass that does not settle must not stop the tick (2026-11-06).
+ *
+ * The timer runs one tick at a time, and a tick is forty-odd passes in a row,
+ * so one pass that never settles held `running` for good: production read no
+ * completed Russell tick after the 03:34Z restart, and no deep dive started
+ * from 22:05Z on with "8 eligible, 1 slot free, the next tick starts one".
+ * Every pass now has a bound. One that outruns it is recorded as a failure and
+ * the tick goes on; its run is left to settle on its own, and until it does
+ * the same pass is skipped, so nothing runs twice at once.
+ */
+export const RUSSELL_PASS_LIMIT_MS = 5 * 60_000;
+const hungPasses = new Map<string, string>();
+
+export class PassTimedOut extends Error {}
+
+async function boundedPass(name: string, run: () => Promise<unknown>, limitMs = passLimitMs()): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const started = new Date().toISOString();
+  const work = run();
+  const limit = new Promise<'TIMED_OUT'>((resolve) => {
+    timer = setTimeout(() => resolve('TIMED_OUT'), limitMs);
+    (timer as { unref?: () => void }).unref?.();
+  });
+  try {
+    const outcome = await Promise.race([work.then(() => 'DONE' as const), limit]);
+    if (outcome === 'TIMED_OUT') {
+      hungPasses.set(name, started);
+      void work.catch(() => undefined).finally(() => hungPasses.delete(name));
+      throw new PassTimedOut(`did not settle within ${Math.round(limitMs / 1000)} s; the tick went on without it`);
+    }
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function passLimitMs(): number {
+  const raw = Number(process.env['BRAIN_RUSSELL_PASS_LIMIT_MS'] ?? '');
+  return Number.isFinite(raw) && raw >= 1_000 ? raw : RUSSELL_PASS_LIMIT_MS;
+}
+
+/** Tests: which passes are still running past their bound. */
+export function hungRussellPasses(): string[] {
+  return [...hungPasses.keys()];
+}
 
 /**
  * The passes that start optional work: new questions, promotions, scans and
@@ -730,6 +794,8 @@ export const DEFERRABLE_UNDER_PRESSURE: ReadonlySet<string> = new Set([
   'frontier',
   'lens-inquiries',
   'feeds',
+  'improvement-loop',
+  'historical-memory',
 ]);
 
 /** True, and recorded on the report, when optional work should wait. */
@@ -794,6 +860,7 @@ const EMPTY: TickReport = {
   linkedNext: [],
   needsHuman: [],
   unresolvedAnswers: [],
+  routineDecisions: [],
   renewedReservations: [],
   frontier: [],
   lensInquiries: { dispatched: 0, settled: 0 },
@@ -872,6 +939,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
     linkedNext: [],
     needsHuman: [],
     unresolvedAnswers: [],
+  routineDecisions: [],
   renewedReservations: [],
     frontier: [],
     /*
@@ -1304,17 +1372,24 @@ async function tickOnce(owner: string): Promise<TickReport> {
     });
 
     /*
+     * Historical memory: index, organize, excavate and re-evaluate a person's
+     * conversation history in bounded steps (docs/HISTORICAL-MEMORY.md). Every
+     * stage reads what is due from its own checkpoints, so a pass cut short
+     * resumes where it stopped. Optional work, deferred under database
+     * pressure; an idle pass costs a handful of indexed reads.
+     */
+    await runPass(report, 'historical-memory', async () => {
+      report.memory = await runMemoryPass({ budgetMs: 15_000 });
+    });
+
+    /*
      * A targeted goal's plan: compose the scenario model from rows, run the
      * existing engine, apply the evidence gate, and record what actually
      * happened once the target is met or the due date passes. At most every
      * half hour per goal, deferred under database pressure, and it writes only
      * an append-only reading when the conclusion changed.
      */
-    if (!shedding(report, 'goal-plans')) {
-      await runPass(report, 'goal-plans', async () => {
-        await advanceGoalPlans();
-      });
-    }
+    if (!shedding(report, 'goal-plans')) startGoalPlans(report);
 
     /*
      * Rule 9 of the engineering policy: executable work beside idle capacity is
@@ -1324,6 +1399,27 @@ async function tickOnce(owner: string): Promise<TickReport> {
      */
     await runPass(report, 'idle-watch', async () => {
       await watchIdleOnTick();
+    });
+
+    /*
+     * Brain improving itself (§87): weaknesses from the rows become research
+     * for Claude routines and engineering for Factory, measured after delivery.
+     * At most every ten minutes, idempotent by rows.
+     */
+    await runPass(report, 'improvement-loop', async () => {
+      const { improvementTickIfDue } = await import('../improvement/loop.ts');
+      await improvementTickIfDue();
+    });
+
+    /*
+     * Brain's operator (§106): Hermes Agent directs every goal through the
+     * operator tools. Started here when due (hourly by default) and never
+     * awaited — the run streams back on its own and is recorded when it ends.
+     * Does nothing until the operator app is deployed and connected.
+     */
+    await runPass(report, 'operator', async () => {
+      const { operatorTickIfDue } = await import('../operator/run.ts');
+      await operatorTickIfDue();
     });
 
     /*
@@ -1566,7 +1662,20 @@ async function tickOnce(owner: string): Promise<TickReport> {
     });
 
     await runPass(report, 'judge-unjudged', async () => {
-      for (const candidate of await unjudged(cycle.maxLaunchesPerCycle)) {
+      /*
+       * Judging spends nothing (the launch does, and stays bounded by the cycle
+       * and the grant), so an approved goal's own ideas are judged a few more
+       * per tick. Production, 2026-11-03 23:46Z: a tick on the contended
+       * database judged about one idea every thirteen minutes, and the goal's
+       * dives waited behind nine of its own older questions.
+       */
+      const goalIdeas = await unjudgedGoalIdeas(GOAL_JUDGMENTS_PER_TICK);
+      // The cycle's own count still goes to whatever is next, so other work is not starved behind the goal's.
+      const goalIds = new Set(goalIdeas.map((one) => one.id));
+      const ordinary = (await unjudged(cycle.maxLaunchesPerCycle + goalIdeas.length))
+        .filter((one) => !goalIds.has(one.id))
+        .slice(0, cycle.maxLaunchesPerCycle);
+      for (const candidate of [...goalIdeas, ...ordinary]) {
         const outcome = await judgeCandidate(candidate.id);
         if (outcome.answeredByArchive) report.answeredByArchive.push(candidate.id);
         else if (outcome.ok) report.planning.push(candidate.id);
@@ -1692,7 +1801,12 @@ async function tickOnce(owner: string): Promise<TickReport> {
         await checkDueSites();
         await screenFeedLeads();
         const target = await shortlistProject((await listProjects()).map((one) => one.id));
-        if (target) await openFeedShortlist({ projectId: target });
+        if (target) {
+          // Under focus idle Routines are kept for Brain work, so the shortlist is not widened.
+          const { cashSpareSurfaces } = await import('../cash/researchRoom.ts');
+          const spare = await cashSpareSurfaces(target).catch(() => 0);
+          await openFeedShortlist({ projectId: target, spare });
+        }
       });
       for (const project of await listProjects()) {
         // The five kernels start new questions; under database pressure they
@@ -1748,7 +1862,16 @@ async function tickOnce(owner: string): Promise<TickReport> {
           });
         }
 
-        if (!shedKernels) try {
+        /*
+         * The industry kernel runs under database pressure, as discovery does.
+         * It is a handful of reads and at most four inserts (MAX_OPEN_KERNEL_ROUNDS),
+         * and shedding it starved the one thing construction composes from:
+         * production, 2026-11-02, held 37 top-level sectors of which two had ever
+         * been scanned, INDUSTRY_ROUND_OPENED=4 in the project's whole history,
+         * and four asks reported ready that nothing opened — so every constructed
+         * arrangement was the same anime buyer population.
+         */
+        try {
           /*
            * And the axis the ten buckets never had: *where* to look.
            *
@@ -1793,8 +1916,15 @@ async function tickOnce(owner: string): Promise<TickReport> {
               settled: kernel.absorbed.settled.map((one) => one.roundId),
             });
           }
-        } catch {
-          /* a map that could not be advanced is left exactly as it was */
+          for (const failure of kernel.failures ?? []) {
+            report.passFailures.push({ pass: `industry-kernel ${project.id}`, error: failure });
+            console.error(`[brain] industry kernel ${project.id}: ${failure}`);
+          }
+        } catch (error) {
+          // Recorded, never swallowed: a silent kernel is how the map stopped growing.
+          const message = error instanceof Error ? error.message : String(error);
+          report.passFailures.push({ pass: `industry-kernel ${project.id}`, error: message });
+          console.error(`[brain] industry kernel ${project.id}: ${message}`);
         }
 
         if (!shedKernels) try {
@@ -2048,7 +2178,10 @@ async function tickOnce(owner: string): Promise<TickReport> {
            * gates nothing: an open need is a valid execution state and Brain
            * carries on around it.
            */
-          const operated = await operate(project.id);
+          const operated = await withGoalLimitsMemo(() => operate(project.id));
+          for (const failure of operated.failures) {
+            report.passFailures.push({ pass: `cash ${failure.step} ${project.id}`, error: failure.error });
+          }
           const raised = [
             ...operated.capabilities.raised,
             ...operated.gaps.map((one) => one.needId),
@@ -2081,8 +2214,12 @@ async function tickOnce(owner: string): Promise<TickReport> {
               monetizationMoved: operated.monetization.moved,
             });
           }
-        } catch {
-          /* a sprint whose operating pass could not run is left as it was */
+        } catch (error) {
+          // A sprint whose operating pass could not run is left as it was, and the tick says why.
+          report.passFailures.push({
+            pass: `cash-operate ${project.id}`,
+            error: (error instanceof Error ? error.message : String(error)).slice(0, 300),
+          });
         }
 
         try {
@@ -2100,6 +2237,18 @@ async function tickOnce(owner: string): Promise<TickReport> {
           }
         } catch {
           /* a retirement pass that could not run is retried next tick */
+        }
+
+        try {
+          /*
+           * Research still running on an opening no live goal may use — one the
+           * goal's owner excluded, a closed one, one the owner would have to
+           * work physically — is stopped (`cash/retireListings.ts`), so its
+           * fleet slots go to openings that can still become a sale.
+           */
+          await releaseUnworthyResearch(project.id, cashNow());
+        } catch {
+          /* retried next tick */
         }
       }
     });
@@ -2173,6 +2322,31 @@ async function tickOnce(owner: string): Promise<TickReport> {
      * undoes the answer and narrows the choices to the ones that can still act,
      * so what comes back is a card whose remaining options are true.
      */
+    /*
+     * 1g. Answer the research parks the standing grant already covers (§80):
+     * file what was accepted with its gaps named, or decline what nothing
+     * cleared. Before the resume step, so the answer is carried out this tick.
+     */
+    await runPass(report, 'routine-decisions', async () => {
+      const { answerRoutineParks } = await import('./routineDecisions.ts');
+      for (const decision of await answerRoutineParks({ limit: 200 })) {
+        if (decision.choice) report.routineDecisions.push(decision);
+      }
+    });
+    // The same decision for a park no card was ever opened for (judge parks, packets with no mission).
+    await runPass(report, 'unasked-parks', async () => {
+      const { answerUnaskedParks } = await import('./routineDecisions.ts');
+      for (const decision of await answerUnaskedParks({ limit: 50 })) {
+        if (decision.decided) report.routineDecisions.push({ requestId: '', missionId: null, choice: 'RECORD_GAPS', reason: `${decision.orchestrationId}: ${decision.reason}` });
+      }
+    });
+
+    // A RECORD_GAPS decision whose packet re-parked on spent audit attempts is carried out again.
+    await runPass(report, 'refile-decided-parks', async () => {
+      const { refileDecidedParks } = await import('./routineDecisions.ts');
+      await refileDecidedParks({ limit: 5 });
+    });
+
     await runPass(report, 'answered-requests', async () => {
       // The whole backlog, not one cycle's worth: an answer waiting for a
       // research slot keeps its place, and a window that size would hide a
@@ -2278,9 +2452,22 @@ async function tickOnce(owner: string): Promise<TickReport> {
       });
     } else await runPass(report, 'launch', async () => {
       const launchable = await nextLaunchable(cycle.maxEventsPerCycle);
+      /*
+       * Free research slots are filled, not trickled (§98). The cycle's bound
+       * stops Russell's own output — a follow-on — from becoming its own input
+       * without limit, and it still binds follow-ons. Production, 2026-11-09:
+       * 138 launchable ideas beside 88 free grant slots at one launch a tick.
+       * Fresh ideas may now take up to SLOT_FILL_PER_TICK of the free slots;
+       * `reserve` still refuses any launch over a grant's at-once ceiling.
+       */
+      const { researchSlotsFree } = await import('../engineering/watchdog.ts');
+      const fill = Math.min(SLOT_FILL_PER_TICK, await researchSlotsFree().catch(() => 0));
+      const limit = Math.max(cycle.maxLaunchesPerCycle, fill);
       let started = 0;
+      let followOns = 0;
       for (const entry of launchable) {
-        if (started >= cycle.maxLaunchesPerCycle) {
+        if (entry.followOnOfMissionId && followOns >= cycle.maxLaunchesPerCycle) continue;
+        if (started >= limit) {
           // The bound stopped the tick, and the rest stay queued for the next
           // one. Preserved rather than dropped: a candidate that lost a race for
           // a slot has not been decided against.
@@ -2291,6 +2478,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
         if (outcome.ok && !outcome.replayed) {
           report.launched.push(outcome.mission!.id);
           started += 1;
+          if (entry.followOnOfMissionId) followOns += 1;
           /*
            * And now the parent can be told, because only now does the follow-on
            * have a mission id.
@@ -2541,6 +2729,7 @@ export async function nextLaunchable(limit: number): Promise<
              )
         )
       ORDER BY
+        ${goalFirstSql('c')},
         CASE priority
           WHEN 'MUST_DO' THEN 0 WHEN 'BIG_MOVE' THEN 1 WHEN 'WORTH_DOING' THEN 2
           WHEN 'EXPLORE' THEN 3 ELSE 4 END,
@@ -3254,11 +3443,25 @@ async function retirePlanningDefect(input: {
  * have been excluded from being judged for ever, which is the opposite of what
  * it was written to do.
  */
+/** An approved goal's own ideas judged per tick on top of the cycle's own count. */
+export const GOAL_JUDGMENTS_PER_TICK = 5;
+
+/** The goal's own unjudged ideas, oldest first. */
+async function unjudgedGoalIdeas(limit: number): Promise<{ id: string }[]> {
+  return getDb().all<{ id: string }>(
+    `SELECT c.id FROM russell_candidates c
+      WHERE c.priority IS NULL AND c.state <> 'MERGED' AND c.project_id IS NOT NULL AND ${goalIdeaSql('c')}
+      ORDER BY c.created_at, c.rowid
+      LIMIT ?`,
+    [Math.max(0, limit)],
+  );
+}
+
 async function unjudged(limit: number): Promise<{ id: string }[]> {
   return getDb().all<{ id: string }>(
     `SELECT c.id FROM russell_candidates c
       WHERE c.priority IS NULL AND c.state <> 'MERGED' AND c.project_id IS NOT NULL
-      ORDER BY c.created_at, c.rowid
+      ORDER BY ${goalFirstSql('c')}, c.created_at, c.rowid
       LIMIT ?`,
     [Math.max(1, limit)],
   );
@@ -3292,6 +3495,44 @@ async function parkResearchedIdea(candidateId: string, refusal: string): Promise
   return recorded ? reason : null;
 }
 
+/*
+ * The goal-plan pass runs beside the tick rather than inside it. A plan read is
+ * a scenario run of up to twenty seconds plus the searches it opens, and every
+ * pass after it — the per-project harvest, judgement, launches — waited for it
+ * on every tick, while the plan in turn waited for every pass before it. Both
+ * only read rows the other writes, so neither has to wait: the tick starts the
+ * pass when none is in flight and moves on, and a failure is recorded on the
+ * next tick's row exactly as an inline one was. One in flight per process, as
+ * the scenario slot already is.
+ */
+let goalPlansInFlight: Promise<void> | null = null;
+let goalPlansFailure: string | null = null;
+
+export function startGoalPlans(report: Pick<TickReport, 'passFailures' | 'deferred'>): void {
+  if (goalPlansFailure) {
+    report.passFailures.push({ pass: 'goal-plans', error: goalPlansFailure });
+    goalPlansFailure = null;
+  }
+  if (goalPlansInFlight) return;
+  const own: Pick<TickReport, 'passFailures' | 'deferred'> = { passFailures: [], deferred: [] };
+  goalPlansInFlight = runPass(own, 'goal-plans', async () => {
+    await advanceGoalPlans();
+  })
+    .then(() => {
+      const failure = own.passFailures[0];
+      if (failure) goalPlansFailure = failure.error;
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      goalPlansInFlight = null;
+    });
+}
+
+/** Tests, and a clean stop: the goal-plan pass this process started, settled. */
+export async function settleGoalPlans(): Promise<void> {
+  await goalPlansInFlight;
+}
+
 let timer: ReturnType<typeof setInterval> | null = null;
 let running = false;
 
@@ -3315,6 +3556,8 @@ export function startRussell(owner: string, intervalMs = RUSSELL_TICK_MS): void 
      * connection(s) in use, 3 caller(s) waiting" on 2026-09-24, and the tick
      * that could not finish kept being joined by the next.
      */
+    // A hang inside a pass is bounded by runPass, so the tick returns; a
+    // second tick beside a running one is never started.
     if (running) return;
     running = true;
     void tick(owner)

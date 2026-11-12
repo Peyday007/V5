@@ -17,6 +17,7 @@
  */
 import { useState } from 'react';
 import { CashApi, type Placement } from '../lib/cashApi.ts';
+import { decisionLines, explanationFor } from '../lib/cashDecision.ts';
 import type { CashPage } from './cashPage.ts';
 import type {
   BlockerGroup,
@@ -110,6 +111,27 @@ export function StandingHistory({ page, id }: { page: CashPage; id: string }): J
   );
 }
 
+/** One piece's decision, in words: why, what binds it, what is missing, what reopens it. */
+export function DecisionExplained({ page, id }: { page: CashPage; id: string }): JSX.Element | null {
+  const explanation = explanationFor(page, id);
+  if (!explanation) return null;
+  return (
+    <div className="rs-decision-explained" data-stance={explanation.stance}>
+      <p className="rs-item-meta">
+        <strong>{explanation.headline}</strong>
+      </p>
+      <dl className="rs-decision-lines">
+        {decisionLines(explanation).map((line) => (
+          <div key={line.label}>
+            <dt className="rs-item-meta">{line.label}</dt>
+            <dd>{line.text}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
 /** The standing sentence for one piece in the portfolio list. */
 export function StandingLine({ page, id }: { page: CashPage; id: string }): JSX.Element | null {
   const placement = page.full?.myCurrentWork.placements.find((p) => p.opportunity.id === id);
@@ -123,6 +145,7 @@ export function StandingLine({ page, id }: { page: CashPage; id: string }): JSX.
         {kind ? <strong>{STANDING_LABEL[kind] ?? kind}. </strong> : null}
         {sentence}
       </p>
+      <DecisionExplained page={page} id={id} />
       <StandingHistory page={page} id={id} />
     </div>
   );
@@ -170,6 +193,7 @@ export function ActionableNow({ page }: { page: CashPage }): JSX.Element {
                 <p className="rs-item-title">{row.title}</p>
                 <p className="rs-badge">{row.kind ? (STANDING_LABEL[row.kind] ?? row.kind) : '—'}</p>
                 <p className="rs-decision-why">{row.sentence}</p>
+                <DecisionExplained page={page} id={row.id} />
                 <StandingHistory page={page} id={row.id} />
               </li>
             ))}

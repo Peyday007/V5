@@ -48,6 +48,10 @@ jobs:
       - uses: ./.github/actions/await-release
 
       - name: Report
+        # An SSH session a deploy restarts under hangs until GitHub's six-hour job
+        # limit and holds every later read behind it (2026-11-02, twice). admin.yml
+        # bounds the same step the same way.
+        timeout-minutes: 15
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |

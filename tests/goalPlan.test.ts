@@ -20,7 +20,8 @@ import { recordMoney } from '../server/repos/cashLedger.ts';
 import { createWorkstream, getWorkstream, listLinks } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { readTarget, setTarget } from '../server/services/goals/target.ts';
-import { advanceGoalPlans, listReadings, readGoalPlan, recordGoalOutcome } from '../server/services/goals/plan.ts';
+import { advanceGoalPlans, listReadings, PLAN_EVIDENCE_FLOOR_MS, PLAN_REFRESH_MS, planDue, readGoalPlan, recordGoalOutcome, requestGoalPlanPass } from '../server/services/goals/plan.ts';
+import { MAX_MODEL_OPPORTUNITIES } from '../server/services/cash/goalScenario.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { getCandidate } from '../server/repos/russellCandidates.ts';
 import { linkWorkstream } from '../server/repos/register.ts';
@@ -52,7 +53,7 @@ async function fact(o: CashOpportunity, field: string, value: string, kind: 'EVI
 }
 
 /** A qualified, repeatable play with the given economics. */
-async function play(input: { title: string; priceCents: number; days?: number; capitalCents?: number; hours?: number; costCents?: number; reach?: boolean; signal?: boolean }): Promise<CashOpportunity> {
+async function play(input: { title: string; priceCents: number; days?: number; capitalCents?: number; hours?: number; costCents?: number; reach?: boolean; signal?: boolean; volume?: string | null }): Promise<CashOpportunity> {
   const o = await createOpportunity({
     projectId,
     cashModeId,
@@ -82,6 +83,9 @@ async function play(input: { title: string; priceCents: number; days?: number; c
   if (input.days !== undefined) await fact(o, 'timeToFirstCash', `${input.days} days`);
   if (input.costCents !== undefined) await fact(o, 'directCosts', `$${input.costCents / 100}`);
   if (input.capitalCents !== undefined) await fact(o, 'exposure', `$${input.capitalCents / 100}`);
+  // Established by default, so each test exercises the link it names; the
+  // market-volume link has its own tests.
+  if (input.volume !== null) await fact(o, 'buyerVolume', input.volume ?? '400 property managers are listed in the state directory; each orders monthly.');
   return o;
 }
 
@@ -169,20 +173,59 @@ describe('the gate', () => {
     expect(reading.strategies[0]!.constraintsFailed.join(' ')).toMatch(/more than the 500 the owner said this goal may commit/);
   });
 
-  it('recommends only when every link is established and the cautious numbers reach the target', async () => {
+  it('a complete chain whose cautious numbers reach the target is a candidate, not an accepted plan, without a calibrated 90%', async () => {
     // Fulfilment is a real proof: Brain renders and verifies a sample of the deliverable.
     expect((await proveCapabilities()).SPREADSHEET.available).toBe(true);
     const o = await play({ title: 'Agreed monthly reports', priceCents: 400_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
     await insertAgreement({ projectId, opportunityId: o.id, amountCents: 1_200_000, currency: 'USD', deliverable: 'reports', acceptanceCondition: 'delivered', evidenceKind: 'WRITTEN_ACCEPTANCE', evidenceRef: 'email-1', recordedBy: 'PERSON', requestKey: 'agree-1' });
     const id = await goal(1_000_000);
     const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
-    expect(reading.verdict).toBe('RECOMMENDABLE');
+    // Owner, 2026-11-09: acceptance needs a defensible 90% chance; a point reading is not one.
+    expect(reading.verdict).toBe('NEEDS_EVIDENCE');
+    expect(reading.strategies.some((one) => one.verdict === 'RECOMMENDABLE')).toBe(false);
+    expect(reading.acceptance.status).toBe('CANDIDATE_ONLY');
+    expect(reading.acceptance.probability).toBeNull();
+    expect(reading.acceptance.accepted).toBeNull();
+    expect(reading.acceptance.candidate?.opportunityIds).toContain(o.id);
+    expect(reading.acceptance.shortfalls.join(' ')).toMatch(/point reading, not a 90% probability/);
+    expect(reading.summary).toMatch(/qualified candidate, not an accepted plan/);
+    expect(reading.strategies[0]!.chainComplete).toBe(true);
     expect(reading.strategies[0]!.links.every((one) => one.ok)).toBe(true);
-    // No success percentage: there is no record of earlier recommended plans.
+    // Keeps constructing, modifying and comparing while nothing is accepted.
+    expect(reading.needsMoreOpenings).toBe(true);
+    // No success percentage: there is no record of earlier accepted plans.
     expect(reading.measuredChance).toBeNull();
-    // The recommended plan's opportunity is now work the goal pursues.
+    // The candidate is still pursued — it is the strongest provisional plan.
     expect((await listLinks(id)).some((one) => one.kind === 'OPPORTUNITY' && one.ref === o.id && one.relation === 'PURSUES')).toBe(true);
     expect(reading.scenarioRunId).toBeTruthy();
+    // The persisted reading records the acceptance, not just the verdict.
+    const row = (await listReadings(id))[0]!;
+    expect(row.verdict).toBe('NEEDS_EVIDENCE');
+    expect(JSON.parse(row.forecast!).acceptance.status).toBe('CANDIDATE_ONLY');
+  });
+
+  it('accepts the same plan only once this Brain measured a 90% record of plans like it', async () => {
+    await proveCapabilities();
+    const o = await play({ title: 'Agreed monthly reports', priceCents: 400_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    await insertAgreement({ projectId, opportunityId: o.id, amountCents: 1_200_000, currency: 'USD', deliverable: 'reports', acceptanceCondition: 'delivered', evidenceKind: 'WRITTEN_ACCEPTANCE', evidenceRef: 'email-9', recordedBy: 'PERSON', requestKey: 'agree-9' });
+    // 40 earlier accepted plans, every one achieved: Wilson lower bound ≈ 0.91.
+    const history = await createWorkstream({ projectId, title: 'history', intent: 'history', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    const at = new Date(now.getTime() - 86_400_000).toISOString();
+    for (let i = 0; i < 40; i += 1) {
+      await getDb().run(
+        `INSERT INTO goal_plan_readings (id, workstream_id, digest, scenario_model_id, scenario_run_id, verdict, chosen_strategy, strategies, next_test, forecast, created_at) VALUES (?, ?, ?, NULL, NULL, 'RECOMMENDABLE', NULL, '[]', NULL, NULL, ?)`,
+        [`gpr_hist_${i}`, history.id, `d${i}`, at],
+      );
+      await getDb().run(
+        `INSERT INTO goal_outcomes (id, workstream_id, reading_id, kind, achieved_cents, target_cents, detail, observed_at) VALUES (?, ?, ?, 'ACHIEVED', 100, 100, '{}', ?)`,
+        [`gou_hist_${i}`, history.id, `gpr_hist_${i}`, at],
+      );
+    }
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    expect(reading.measuredChance!.lowerBound).toBeGreaterThanOrEqual(0.9);
+    expect(reading.acceptance.status).toBe('ACCEPTED');
+    expect(reading.acceptance.probability).toMatchObject({ basis: 'MEASURED_RECORD', sample: 40 });
+    expect(reading.verdict).toBe('RECOMMENDABLE');
   });
 
   it('does not let one buyer saying yes stand for a rate: a smaller agreement still needs evidence', async () => {
@@ -247,6 +290,62 @@ describe('the gate', () => {
     expect((await advanceGoalPlans(new Date(now.getTime() + 60_000))).read).toBe(0);
     expect(await listReadings(id)).toHaveLength(1);
   });
+
+  it('re-reads the plan as soon as an opening arrives, not on the next half-hour, and only when something changed', async () => {
+    await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    await goal(100_000);
+    // A reading is stamped with the real clock, so the times here start from this test, not from the
+    // file's load: on a slow Postgres shard over a minute passed before this ran, and "three minutes
+    // later" landed inside the two-minute evidence floor (Postgres suite 42189614746, 42183325704).
+    const start = new Date();
+    const at = (minutes: number) => new Date(start.getTime() + minutes * 60_000);
+    expect((await advanceGoalPlans(start)).read).toBe(1);
+    // Past the floor, nothing new: no scenario run spent re-reading the same rows.
+    // Minutes well past the floor, because the first run is stamped with real time,
+    // and a loaded Postgres shard can spend a minute getting here (2026-11-06 flake).
+    expect((await advanceGoalPlans(at(10))).read).toBe(0);
+    // New evidence: a harvested opening. Read on this pass, well inside the half-hour.
+    await play({ title: 'Quarterly tenant surveys', priceCents: 40_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    const pass = await advanceGoalPlans(at(12));
+    expect(pass).toMatchObject({ read: 1, onEvidence: 1 });
+    // Read once for that evidence, not again until something else moves.
+    expect((await advanceGoalPlans(at(15))).read).toBe(0);
+  });
+
+  it('resumes the goal the moment a repair clears a gap: the plan is read at once and the resume is a row', async () => {
+    await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    const id = await goal(100_000);
+    expect((await advanceGoalPlans(now)).read).toBe(1);
+    // One minute later nothing is due: inside the evidence floor and the refresh window.
+    expect((await advanceGoalPlans(new Date(now.getTime() + 60_000))).read).toBe(0);
+    // The hourly capability check finds COMPUTE.DATABASE no longer blocking the goal.
+    requestGoalPlanPass(id, 'COMPUTE.DATABASE');
+    const pass = await advanceGoalPlans(new Date(now.getTime() + 90_000));
+    expect(pass).toMatchObject({ read: 1, resumed: 1 });
+    const events = await getDb().all<{ kind: string; detail: string }>(
+      "SELECT kind, detail FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_RESUMED_AFTER_REPAIR'",
+      [id],
+    );
+    expect(events).toHaveLength(1);
+    expect(JSON.parse(events[0]!.detail).cleared).toBe('COMPUTE.DATABASE');
+    // Once: the request is spent.
+    expect((await advanceGoalPlans(new Date(now.getTime() + 120_000))).resumed).toBe(0);
+  });
+});
+
+describe('when a plan is due (pure)', () => {
+  const base = { now: 10 * 60_000, lastInputs: 'a' };
+  it('reads a goal never read, and after the half-hour whatever changed', () => {
+    expect(planDue({ ...base, since: 0, inputs: null })).toBe('FIRST');
+    expect(planDue({ ...base, now: PLAN_REFRESH_MS + 1, since: 1, inputs: 'a' })).toBe('REFRESH');
+  });
+  it('reads early only past the floor and only on changed inputs', () => {
+    expect(planDue({ ...base, since: base.now - PLAN_EVIDENCE_FLOOR_MS + 1, inputs: 'b' })).toBeNull();
+    expect(planDue({ ...base, since: base.now - PLAN_EVIDENCE_FLOOR_MS, inputs: 'a' })).toBeNull();
+    expect(planDue({ ...base, since: base.now - PLAN_EVIDENCE_FLOOR_MS, inputs: 'b' })).toBe('EVIDENCE');
+    // Unknown after a restart counts as changed.
+    expect(planDue({ ...base, since: base.now - PLAN_EVIDENCE_FLOOR_MS, inputs: 'a', lastInputs: undefined })).toBe('EVIDENCE');
+  });
 });
 
 
@@ -310,8 +409,12 @@ describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
     expect(unstated.nextTest).toMatchObject({ link: 'ECONOMICS', by: 'PERSON' });
     expect(unstated.nextTest!.test).toMatch(/ties up about 4000 USD/);
 
-    // The owner says more may be used: the same plan is recommendable.
-    expect((await readGoalPlan({ goalId: await goal(1_000_000, 1_000_000), evaluations: 2_000 }))!.verdict).toBe('RECOMMENDABLE');
+    // The owner says more may be used: the same plan qualifies on every link — a candidate,
+    // not an accepted plan, until a calibrated 90% supports it (owner, 2026-11-09).
+    const roomy = (await readGoalPlan({ goalId: await goal(1_000_000, 1_000_000), evaluations: 2_000 }))!;
+    expect(roomy.strategies[0]!.chainComplete).toBe(true);
+    expect(roomy.acceptance.status).toBe('CANDIDATE_ONLY');
+    expect(roomy.verdict).toBe('NEEDS_EVIDENCE');
     // The owner says less: not viable, and it says why.
     const tight = (await readGoalPlan({ goalId: await goal(1_000_000, 100_000), evaluations: 2_000 }))!;
     expect(tight.verdict).toBe('NOT_VIABLE');
@@ -372,11 +475,19 @@ describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
     await setTerms(g.id, { dueAt: inDays(30), ownerUserId: userId }, `person:${userId}`);
     await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId, resources: 'a box truck and two weekend helpers' });
 
-    const mine = async () => (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${g.id}-`));
+    const all = async () => (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${g.id}-`));
+    // Lens rounds ask the world; `-mx-` rounds ask about arrangements Brain constructed (§81).
+    const mine = async () => (await all()).filter((one) => !one.bucketId.includes('-mx-'));
     const first = await advanceGoalPlans(now);
     expect(first.asked).toBe(1);
+    expect(first.constructed).toBe(1);
+    expect((await all()).filter((one) => one.bucketId.includes('-mx-'))).toHaveLength(1);
     const rounds = await mine();
     expect(rounds.map((one) => one.bucketId)).toEqual([`goal-${g.id}-open`]);
+    // The round is the goal's own work, so the goal's rank reaches its bins.
+    expect(
+      (await listLinks(g.id)).some((one) => one.kind === 'CANDIDATE' && one.ref === rounds[0]!.candidateId && one.relation === 'PURSUES'),
+    ).toBe(true);
     const statement = (await getCandidate(rounds[0]!.candidateId))!.statement;
     expect(statement).toMatch(/any way at all, in any market, industry or arrangement/);
     expect(statement).toMatch(/reach at most USD 300/);
@@ -387,16 +498,16 @@ describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
     // Each later read asks from a different angle, never the same one twice at once…
     for (let i = 1; i <= 4; i += 1) await advanceGoalPlans(new Date(now.getTime() + i * 31 * 60_000));
     const lenses = (await mine()).map((one) => one.bucketId.slice(`goal-${g.id}-`.length));
-    expect(lenses.sort()).toEqual(['brokerage', 'consumer', 'open']);
-    // …and no more than three are open at once.
-    expect((await mine()).filter((one) => one.state === 'OPEN')).toHaveLength(3);
+    expect(lenses.sort()).toEqual(['consumer', 'open']);
+    // …and no more than three are open at once, constructed rounds included.
+    expect((await all()).filter((one) => one.state === 'OPEN')).toHaveLength(3);
     // Three is how many run at once, not how many are asked: when one settles,
     // a new angle is asked in its place.
     const settled = (await mine()).find((one) => one.bucketId.endsWith('-open'))!;
     await getDb().run(`UPDATE cash_discovery_rounds SET state = 'HARVESTED', found = 0, harvested_at = ? WHERE candidate_id = ?`, [now.toISOString(), settled.candidateId]);
     await advanceGoalPlans(new Date(now.getTime() + 6 * 31 * 60_000));
     const after = (await mine()).map((one) => one.bucketId.slice(`goal-${g.id}-`.length));
-    expect(after.sort()).toEqual(['brokerage', 'consumer', 'open', 'subcontract']);
+    expect(after.sort()).toEqual(['brokerage', 'consumer', 'open']);
   });
 });
 
@@ -547,6 +658,29 @@ describe('how the money actually arrives (2026-10-28)', () => {
     expect(statement).toMatch(/only pays after a competitive award/);
   });
 
+  it("compiles a goal's own round to accept a repeating buyer pattern as well as one open request (§80)", async () => {
+    await oneOff({ title: 'Federal RFP, too slow', priceCents: 13_502_000, days: null });
+    const id = await pacedGoalFor();
+    expect((await advanceGoalPlans(now)).asked).toBe(1);
+    const round = (await listRounds(projectId)).find((one) => one.bucketId.startsWith(`goal-${id}-`))!;
+    // Off the in-code slug map, so the round compiles under the sprint's own discovery envelope.
+    await getDb().run('UPDATE projects SET slug = ? WHERE id = ?', [`goalmech-${projectId.slice(-6)}`, projectId]);
+    const { compileMission } = await import('../server/services/russell/compiler.ts');
+    const { getProject } = await import('../server/repos/projects.ts');
+    const compiled = await compileMission({
+      candidate: (await getCandidate(round.candidateId))!,
+      project: (await getProject(projectId))!,
+      archive: { claimsConsidered: 0, contradicting: [] },
+    });
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+    const lanes = compiled.mission.fragments[0]!.requiredEvidence;
+    expect(lanes.find((lane) => lane.id === 'demand_signal')!.necessity).toBe('CONDITIONAL');
+    const pattern = lanes.find((lane) => lane.id === 'demand_pattern')!;
+    expect(pattern.necessity).toBe('CONDITIONAL');
+    expect(pattern.evidenceKind).toBe('MARKET_PATTERN');
+  });
+
   it("searches for the goal even while bulk Claude discovery is switched off", async () => {
     await oneOff({ title: 'Federal RFP, too slow', priceCents: 13_502_000, days: null });
     const id = await pacedGoalFor();
@@ -554,10 +688,27 @@ describe('how the money actually arrives (2026-10-28)', () => {
     process.env['BRAIN_CLAUDE_DISCOVERY'] = 'off';
     try {
       expect((await advanceGoalPlans(now)).asked).toBe(1);
-      expect((await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-`))).toHaveLength(1);
+      expect((await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-`) && !one.bucketId.includes('-mx-'))).toHaveLength(1);
     } finally {
       if (before === undefined) delete process.env['BRAIN_CLAUDE_DISCOVERY'];
       else process.env['BRAIN_CLAUDE_DISCOVERY'] = before;
+    }
+  });
+
+  it('opens no lens round on a Claude Routine while the Routines are on focus, only its constructed search (§83)', async () => {
+    await oneOff({ title: 'Federal RFP, too slow', priceCents: 13_502_000, days: null });
+    const id = await pacedGoalFor();
+    const before = process.env['BRAIN_CASH_RESEARCH_MAX'];
+    process.env['BRAIN_CASH_RESEARCH_MAX'] = '1';
+    try {
+      expect((await advanceGoalPlans(now)).asked).toBe(0);
+      const rounds = (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-`));
+      // At most the operator ceiling (1 here), and every one a constructed arrangement.
+      expect(rounds.length).toBeLessThanOrEqual(1);
+      expect(rounds.every((one) => one.bucketId.startsWith(`goal-${id}-mx-`))).toBe(true);
+    } finally {
+      if (before === undefined) delete process.env['BRAIN_CASH_RESEARCH_MAX'];
+      else process.env['BRAIN_CASH_RESEARCH_MAX'] = before;
     }
   });
 });
@@ -578,11 +729,169 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
   });
 
   it('judges every opening it holds, not only the few the simulation fits', async () => {
-    for (let i = 0; i < 7; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 200_000 + i });
+    // One more than the engine fits, so the judgement covers what the simulation leaves out.
+    const held = MAX_MODEL_OPPORTUNITIES + 1;
+    for (let i = 0; i < held; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 200_000 + i });
     const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
-    expect(reading.considered).toHaveLength(7);
-    expect(reading.considered.filter((one) => one.modelled)).toHaveLength(4);
+    expect(reading.considered).toHaveLength(held);
+    expect(reading.considered.filter((one) => one.modelled)).toHaveLength(MAX_MODEL_OPPORTUNITIES);
+    // A portfolio of eight, not a shortlist of four (production modelled 4 of 28 on 2026-11-02).
+    expect(MAX_MODEL_OPPORTUNITIES).toBeGreaterThanOrEqual(8);
+    // Combinations are evaluated even when every single-opening strategy would fill the limit.
+    expect(reading.strategies.some((one) => one.key.startsWith('combine_'))).toBe(true);
     expect(reading.considered.every((one) => Array.isArray(one.missing))).toBe(true);
+  });
+
+  it('sells an opening a responsible offer can be made on, with no market-test phase first (SQUEEZE, owner 2026-11-06)', async () => {
+    const o = await oneOff({ title: 'Arrange a load for a shipper', priceCents: 40_000, capitalCents: 0 });
+    const id = await goal(1_000_000);
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
+    // A cash target with a deadline is a SQUEEZE goal: no market tests, sales.
+    expect(reading.executionPolicy).toBe('SQUEEZE');
+    expect(reading.marketTests).toEqual([]);
+    const one = reading.considered.find((c) => c.opportunityId === o.id)!;
+    // Conversion is unknown, and it is learned by selling, not required first.
+    expect(one.missing).toContain('CONVERSION');
+    const sale = reading.sales.find((m) => m.opportunityId === o.id)!;
+    expect(sale.test.link).toBe('CONVERSION');
+    expect(sale.test.test).toMatch(/^Sell ".*": offer it to its reachable buyers at 400 USD for an actual sale, contract or deposit/);
+    expect(sale.test.test).not.toMatch(/test|downgrade/i);
+    // The permission is a blocker on the sale, not a reason to run a test first,
+    // and it names the sale's own terms rather than asking for a blanket grant.
+    expect(sale.test.by).toBe('PERSON');
+    // Every missing link at once: one grant alone would send nothing and collect nothing (2026-11-07).
+    expect(sale.test.blocker).toMatch(/CONTACT_BUYER/);
+    expect(sale.test.blocker).toMatch(/BRAIN_MESSAGING_PROVIDER=instantly and INSTANTLY_API_KEY/);
+    expect(sale.test.blocker).toMatch(/QUOTE_AND_INVOICE and ACCEPT_PAYMENT/);
+    expect(sale.test.blocker).toMatch(/STRIPE_SECRET_KEY/);
+    expect(sale.test.blocker).toMatch(/^This sale waits for authorization\. Terms: sells "/);
+    // A $400 sale cannot make a $10K plan viable: the goal's own step stays Brain's
+    // planning work, never the authorization (owner, 2026-11-07).
+    expect(reading.verdict).toBe('NOT_VIABLE');
+    expect(reading.nextTest?.by).toBe('BRAIN');
+    expect(reading.nextTest?.test).toMatch(/^Discover, construct and research openings/);
+    // The goal pursues it now, without a RECOMMENDABLE verdict, so its money limits bind it.
+    expect(reading.verdict).not.toBe('RECOMMENDABLE');
+    const links = await listLinks(id);
+    expect(links.some((l) => l.kind === 'OPPORTUNITY' && l.ref === o.id && l.relation === 'PURSUES')).toBe(true);
+    const pursued = await getDb().all<{ kind: string }>("SELECT kind FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_SALE_PURSUED'", [id]);
+    expect(pursued).toHaveLength(1);
+    // Idempotent: a second read links and records nothing new.
+    await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true });
+    expect((await getDb().all("SELECT kind FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_SALE_PURSUED'", [id]))).toHaveLength(1);
+  });
+
+  it('researches demand, price and market size for an opening while it is being sold, without holding the sale', async () => {
+    const o = await oneOff({ title: 'Arrange a load for a shipper', priceCents: 40_000, capitalCents: 0 });
+    const id = await goal(1_000_000);
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
+    expect(reading.sales.map((one) => one.opportunityId)).toContain(o.id);
+    const trace: string[] = [];
+    const { researchGoalPaths } = await import('../server/services/goals/pathResearch.ts');
+    await researchGoalPaths({ reading, projectId, now, trace, dryRun: false });
+    const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
+    const asked = (await listNeeds({ projectId, states: ['OPEN'] })).filter((one) => one.opportunityId === o.id).map((one) => one.requestKey);
+    // How many buyers exist and how often they buy (demand and market size), beside the sale.
+    expect(asked).toContain(`question:${o.id}:buyerVolume`);
+    // The sale is unchanged by the research: still offered, still pursued.
+    const again = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
+    expect(again.sales.map((one) => one.opportunityId)).toContain(o.id);
+    expect(again.sales.find((one) => one.opportunityId === o.id)?.test.test).toMatch(/^Sell /);
+    expect((await listLinks(id)).some((l) => l.kind === 'OPPORTUNITY' && l.ref === o.id && l.relation === 'PURSUES')).toBe(true);
+  });
+
+  it('asks to authorize one sale by its terms, and never makes that the goal\u2019s blocker (owner, 2026-11-07)', async () => {
+    const o = await oneOff({ title: 'Arrange a load for a shipper', priceCents: 40_000, capitalCents: 0 });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    const blocker = reading.sales.find((one) => one.opportunityId === o.id)!.test.blocker ?? '';
+    // What is sold, to whom, at what price, who fulfils it, the margin, when cash comes and what it adds.
+    for (const part of [/sells "/, /to /, /at 400 USD/, /fulfilled by /, /margin /, /cash /, /contributes up to \d+ of the 10000 USD still needed/]) expect(blocker).toMatch(part);
+    expect(reading.nextTest?.blocker ?? null).toBeNull();
+  });
+
+  it('researches a small sale too: how many buyers exist is what could make it larger', async () => {
+    const o = await oneOff({ title: 'A small puzzle submission', priceCents: 5_000, capitalCents: 0 });
+    const id = await goal(1_000_000);
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
+    expect(reading.sales.map((one) => one.opportunityId)).toContain(o.id);
+    const { tooSmallForGoals } = await import('../server/services/goals/materiality.ts');
+    expect(tooSmallForGoals(o.id)).toBeNull();
+    const { researchGoalPaths } = await import('../server/services/goals/pathResearch.ts');
+    await researchGoalPaths({ reading, projectId, now, dryRun: false });
+    const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
+    const asked = (await listNeeds({ projectId, states: ['OPEN'] })).filter((one) => one.opportunityId === o.id).map((one) => one.requestKey);
+    expect(asked).toContain(`question:${o.id}:buyerVolume`);
+  });
+
+  it('sells several independent openings at once, largest contribution first', async () => {
+    const small = await oneOff({ title: 'A small arrangement', priceCents: 5_000, capitalCents: 0 });
+    const large = await oneOff({ title: 'A large arrangement', priceCents: 300_000, capitalCents: 0 });
+    const mid = await oneOff({ title: 'A middling arrangement', priceCents: 80_000, capitalCents: 0 });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    const order = reading.sales.map((one) => one.opportunityId);
+    expect(order).toEqual(expect.arrayContaining([small.id, large.id, mid.id]));
+    expect(order.indexOf(large.id)).toBeLessThan(order.indexOf(small.id));
+    // Discovery and construction keep looking for stronger openings while these are sold.
+    expect(reading.needsMoreOpenings).toBe(true);
+    // The operator reaches buyers in that order (operate.ts advanceWithinAuthority).
+    await advanceGoalPlans(now);
+    const { salesOrderForProject } = await import('../server/services/goals/plan.ts');
+    const operatorOrder = salesOrderForProject(projectId);
+    expect(operatorOrder.indexOf(large.id)).toBeLessThan(operatorOrder.indexOf(small.id));
+  });
+
+  it('reads collected money as the top of the ladder, and a step over the before-income limit as not test-ready', async () => {
+    const paid = await oneOff({ title: 'A paid arrangement', priceCents: 30_000 });
+    const heavy = await oneOff({ title: 'Needs stock bought first', priceCents: 90_000, capitalCents: 80_000 });
+    await recordMoney({ projectId, opportunityId: paid.id, kind: 'CUSTOMER_PAYMENT', amountCents: 30_000, currency: 'USD', recordedBy: 'PERSON', idempotencyKey: `k${Math.random().toString(36).slice(2, 10)}`, verifiedReference: 'pi_ladder' });
+    const id = await goal(1_000_000, 300_000);
+    const w = (await getWorkstream(id))!;
+    await setTarget({ goal: w, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId, capitalCeilingCents: 300_000, capitalBeforeProofCents: 30_000, hoursCeiling: 200, now: new Date(now.getTime() - 30_000) });
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
+    expect(reading.considered.find((c) => c.opportunityId === paid.id)!.stage).toBe('F_COLLECTED');
+    expect(reading.considered.find((c) => c.opportunityId === heavy.id)!.stage).not.toBe('C_MARKET_TEST_READY');
+  });
+
+  it('reads a large project in a bounded number of statements, not several per opening', async () => {
+    // Production, 2026-11-02: 841 statements for 150 openings put the read past 15 minutes on the remote database.
+    for (let i = 0; i < 40; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 20_000 + i });
+    const id = await goal(1_000_000);
+    const db = getDb() as unknown as Record<'all' | 'get' | 'run', (...args: unknown[]) => unknown>;
+    const count = async (): Promise<number> => {
+      const originals = { all: db.all, get: db.get, run: db.run };
+      let statements = 0;
+      for (const m of ['all', 'get', 'run'] as const) {
+        const orig = originals[m].bind(db);
+        db[m] = (...args: unknown[]) => { statements += 1; return orig(...args); };
+      }
+      try {
+        expect(await readGoalPlan({ goalId: id, evaluations: 2_000 })).not.toBeNull();
+      } finally {
+        Object.assign(db, originals);
+      }
+      return statements;
+    };
+    const atForty = await count();
+    // A bounded total. The money route read (one statement per currency, #758) is in it.
+    expect(atForty).toBeLessThan(125);
+    // And what the bound is for: twenty more openings cost a few statements, not several each.
+    for (let i = 40; i < 60; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 20_000 + i });
+    const atSixty = await count();
+    expect(atSixty - atForty).toBeLessThan(10);
+  }, 120_000);
+
+  it('never builds a plan on the owner doing physical work, and still plans the same service brokered', async () => {
+    // The standing rule (domain/operatingModel.ts), owner 2026-11-02: "I DO NOT WANT TO PERFORM PHYSICAL WORK."
+    const own = await oneOff({ title: 'Hand out 3,000 door hangers for a holiday lights promotion', priceCents: 35_000 });
+    const brokered = await oneOff({ title: 'Holiday light installation for homeowners', priceCents: 35_000, fulfilledBy: { who: 'An independent installer crew (subcontractor)', kind: 'PERSON' } });
+    // A service nobody has named a provider for is considered, its fulfilment an open question (owner, 2026-11-07).
+    const unnamed = await oneOff({ title: 'Holiday light installation on single-story homes', priceCents: 35_000, fulfilledBy: { who: 'the owner', kind: 'PERSON' } });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    expect(reading.considered.some((one) => one.opportunityId === own.id)).toBe(false);
+    expect(reading.excluded.find((one) => one.opportunityId === own.id)?.reason).toMatch(/owner's physical work/);
+    expect(reading.considered.some((one) => one.opportunityId === brokered.id)).toBe(true);
+    // Named as the owner's own work it is still ruled out.
+    expect(reading.considered.some((one) => one.opportunityId === unnamed.id)).toBe(false);
   });
 
   it('raises research for the path to the money on the openings closest to a plan', async () => {
@@ -600,6 +909,19 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(id).toBeTruthy();
   });
 
+  it('researches a small repeat service instead of judging it too small (owner, 2026-11-07)', async () => {
+    const cleaning = await oneOff({ title: 'Recurring house cleaning for busy households, $150 a visit, booked online and done by independent cleaners', priceCents: 15_000, days: null });
+    await goal(1_000_000);
+    await advanceGoalPlans(now);
+    const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
+    const asked = (await listNeeds({ projectId, states: ['OPEN'] })).filter((one) => one.opportunityId === cleaning.id).map((one) => one.requestKey);
+    // Not screened as "too small to matter": its path to the money is researched. (Under SQUEEZE its
+    // volume is learned by selling, so what is asked is how the money settles, not how many buyers.)
+    expect(asked.length).toBeGreaterThan(0);
+    const { tooSmallForGoals } = await import('../server/services/goals/materiality.ts');
+    expect(tooSmallForGoals(cleaning.id)).toBeNull();
+  });
+
   it('spends no research on an opening too small to matter, and asks a guessed one only what buyers pay', async () => {
     const small = await oneOff({ title: 'A one-off bounty worth little', priceCents: 25_000, days: null });
     const guessed = await oneOff({ title: 'A big listing at a guessed price', priceCents: 3_600_000, days: null });
@@ -608,8 +930,15 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     await advanceGoalPlans(now);
     const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
     const open = await listNeeds({ projectId, states: ['OPEN'] });
-    expect(open.filter((one) => one.opportunityId === small.id && one.requestKey?.startsWith('question:'))).toHaveLength(0);
-    expect(open.filter((one) => one.opportunityId === guessed.id).map((one) => one.requestKey)).toEqual([`question:${guessed.id}:revenueRange`]);
+    // Small, but being sold (SQUEEZE): its research runs beside the sale, so it is asked; a small opening
+    // nobody is selling stays unresearched (the pre-sale rule is unchanged).
+    const reading = (await readGoalPlan({ goalId: (await getDb().get<{ id: string }>("SELECT id FROM workstreams ORDER BY created_at DESC LIMIT 1"))!.id, evaluations: 2_000 }))!;
+    const smallSold = reading.sales.some((one) => one.opportunityId === small.id);
+    expect(open.filter((one) => one.opportunityId === small.id && one.requestKey?.startsWith('question:')).length > 0).toBe(smallSold);
+    // Being sold (SQUEEZE), it keeps every question beside the sale: what buyers pay, when money settles,
+    // and how many buyers exist.
+    const asked = open.filter((one) => one.opportunityId === guessed.id).map((one) => one.requestKey);
+    expect(asked).toEqual(expect.arrayContaining([`question:${guessed.id}:revenueRange`, `question:${guessed.id}:buyerVolume`]));
   });
 
   it("does not count Brain's own estimate as an answer, so a question is researched rather than churned", async () => {

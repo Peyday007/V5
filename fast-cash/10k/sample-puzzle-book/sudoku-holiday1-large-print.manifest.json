@@ -1,0 +1,619 @@
+{
+  "volume": "holiday1",
+  "pdf": "sudoku-holiday1-large-print.pdf",
+  "sha256": "502c639242b70603deceadf8f68cbc6f1bc2abe8dd3af2fe8e6da04213af0738",
+  "pages": 50,
+  "trim": "8.5x11in, no bleed",
+  "layout": "LARGE_PRINT",
+  "puzzles": 40,
+  "attempts": 40,
+  "refusedInvalid": 0,
+  "refusedDuplicate": 0,
+  "byDifficulty": {
+    "EASY": 20,
+    "MEDIUM": 16,
+    "EXPERT": 4
+  },
+  "entries": [
+    {
+      "number": 1,
+      "seed": "sudoku-book-holiday1-0",
+      "intended": "EASY",
+      "measured": "EASY",
+      "canonicalHash": "58f881c8849da64b72eea47c3218466b3dcc03ce8a096bba8ad29f793605f84c",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 2,
+      "seed": "sudoku-book-holiday1-1",
+      "intended": "MEDIUM",
+      "measured": "EASY",
+      "canonicalHash": "e091d47d180507610e06a1f99c758ed2aa1bd95bb39bc55b078e5b2189fb4bc3",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 3,
+      "seed": "sudoku-book-holiday1-2",
+      "intended": "HARD",
+      "measured": "EASY",
+      "canonicalHash": "fb2212f3191c0781bfb95a7bc898352530cfd5d43ce2c5931a29d839498a4d19",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 4,
+      "seed": "sudoku-book-holiday1-4",
+      "intended": "EASY",
+      "measured": "EASY",
+      "canonicalHash": "6dcdf7b935e2f84264a3ec79a8c3d68070afde8e62cf628a12b4418bc0429388",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 5,
+      "seed": "sudoku-book-holiday1-5",
+      "intended": "MEDIUM",
+      "measured": "EASY",
+      "canonicalHash": "1a647051a96840d66b35beed18bbee0d18d928879ddfa38ffd7469f8edde6fa3",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 6,
+      "seed": "sudoku-book-holiday1-8",
+      "intended": "EASY",
+      "measured": "EASY",
+      "canonicalHash": "a9bddd16464a88cf101aa6d932f9e4334323514cefd17064ed24b58cd3de5604",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 7,
+      "seed": "sudoku-book-holiday1-9",
+      "intended": "MEDIUM",
+      "measured": "EASY",
+      "canonicalHash": "2319070e7c19960dfeda969c7f3d9177cee83d37e70e030eaf4da13d1458662c",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 8,
+      "seed": "sudoku-book-holiday1-12",
+      "intended": "EASY",
+      "measured": "EASY",
+      "canonicalHash": "76d6f63ce4c60ae7a27afdb9903bdb8b69e3877653d558d7208d57b3f616f4e2",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 9,
+      "seed": "sudoku-book-holiday1-13",
+      "intended": "MEDIUM",
+      "measured": "EASY",
+      "canonicalHash": "fef46b1bef703e355770354c33f19092270f7b21060ef65cf6578a19a67e1b20",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 10,
+      "seed": "sudoku-book-holiday1-16",
+      "intended": "EASY",
+      "measured": "EASY",
+      "canonicalHash": "13cb4193e418defb3c7662eb9faff4ca7f0b3b378989743b364a24d7ca769039",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 11,
+      "seed": "sudoku-book-holiday1-17",
+      "intended": "MEDIUM",
+      "measured": "EASY",
+      "canonicalHash": "48271bf9b9aa202a817b7e6cd2a9dec86e471483ccd1b88dbcd646d1f403712e",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 12,
+      "seed": "sudoku-book-holiday1-20",
+      "intended": "EASY",
+      "measured": "EASY",
+      "canonicalHash": "2982e3c38df12a94428e6cc51b5f8a3fd0ea22b6806bc87ce15a1e9dad856b14",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 13,
+      "seed": "sudoku-book-holiday1-21",
+      "intended": "MEDIUM",
+      "measured": "EASY",
+      "canonicalHash": "7c1ade447c09a2973177a2c5c354e906e690eb4d0366bec3478e6a184bbd8618",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 14,
+      "seed": "sudoku-book-holiday1-24",
+      "intended": "EASY",
+      "measured": "EASY",
+      "canonicalHash": "3d74a4d60ed6edff7247cbf8724c3276612f542417f50644713d7f198a0b0cee",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 15,
+      "seed": "sudoku-book-holiday1-28",
+      "intended": "EASY",
+      "measured": "EASY",
+      "canonicalHash": "73bf77f99099b384090120602b535c026b85c4e85418f15e1aa51433a8c7788b",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 16,
+      "seed": "sudoku-book-holiday1-29",
+      "intended": "MEDIUM",
+      "measured": "EASY",
+      "canonicalHash": "94b2dfeb6defd1d7c45226f36ff4f8a3b9c325e4ba029e77c665dcf57e8d0f91",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 17,
+      "seed": "sudoku-book-holiday1-31",
+      "intended": "HARD",
+      "measured": "EASY",
+      "canonicalHash": "f853e95cd527f6d784cec09d33b4f2b651c99a7531bbf4456f456bae6516d910",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 18,
+      "seed": "sudoku-book-holiday1-32",
+      "intended": "EASY",
+      "measured": "EASY",
+      "canonicalHash": "1710a7073d5e9f96f9a7af997244f1aa841f2d084e7c69876bf3427976f8256a",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 19,
+      "seed": "sudoku-book-holiday1-36",
+      "intended": "EASY",
+      "measured": "EASY",
+      "canonicalHash": "f2fb3421cb66899e010f17d936de4ad612ed1dbb45717ff3821453308eb2754d",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 20,
+      "seed": "sudoku-book-holiday1-37",
+      "intended": "MEDIUM",
+      "measured": "EASY",
+      "canonicalHash": "301d7aed5ac87a283b52251136cf45341064266fa706c52f22a41cf86f1e4695",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 21,
+      "seed": "sudoku-book-holiday1-3",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "7cfd331586ad6ae24af8fe93e5e45a90bd10e1010ff9dc42a34d93976e1eaa8b",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 22,
+      "seed": "sudoku-book-holiday1-7",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "ae997c2e0d70c95da4feff6fdad7650981c0adcaec3df14eddac73c2b5ffbd82",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 23,
+      "seed": "sudoku-book-holiday1-11",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "13f0fc84374fb3e73005563b5bbbb56e6c8daafdab471a021c61ef0cd884d10c",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 24,
+      "seed": "sudoku-book-holiday1-14",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "06c9d63892bf2c5729a2204c92e0f810f8b2bdffa8bc58ed11185852e4087788",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 25,
+      "seed": "sudoku-book-holiday1-18",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "495c6aa79d83003220a0bc677b07e641bf4ff6a2163642be315416c7e7134762",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 26,
+      "seed": "sudoku-book-holiday1-19",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "909faff063ddb3585050cab34becfbfe79f1963771ef04423710618e1a3789ab",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 27,
+      "seed": "sudoku-book-holiday1-23",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "12352cbd306811c58f50cb770db3f5d942962a2e38a32f32748e37e24c10e60d",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 28,
+      "seed": "sudoku-book-holiday1-25",
+      "intended": "MEDIUM",
+      "measured": "MEDIUM",
+      "canonicalHash": "577d6551bd80468c132d10b85382891df3aec6ffc13b78380677b5315cd01d87",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 29,
+      "seed": "sudoku-book-holiday1-26",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "5d59fe2c012ae9924b93c8a83a2e1b6fdd08b77fb396b4606d71292e0b5b2b77",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 30,
+      "seed": "sudoku-book-holiday1-27",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "93b8adaa3a6177a98309ba6e57595660c184a304ea9ce5dfef255a6bb1687a24",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 31,
+      "seed": "sudoku-book-holiday1-30",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "c91d431aa04d7adcfcd31f86517b8815a68ed84f446e3a246d663d539b0e6953",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 32,
+      "seed": "sudoku-book-holiday1-33",
+      "intended": "MEDIUM",
+      "measured": "MEDIUM",
+      "canonicalHash": "1fa795502558b4a1b43454d60c622297dd40b729fe49865d06dfdba9ceecd8b5",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 33,
+      "seed": "sudoku-book-holiday1-34",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "f1a646e27be7fbac8eb6c5d5fb2c55748f7c339052450cfbd345e1ec372e61b4",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 34,
+      "seed": "sudoku-book-holiday1-35",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "04127389e1a9e6c87aa2072ab9e318faf204e3f313b848749b5bee0884de976d",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 35,
+      "seed": "sudoku-book-holiday1-38",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "d497dfa33a050b8a000e0b50cc0a52289b3fad8eb9efa6a5835b1674a2a07285",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 36,
+      "seed": "sudoku-book-holiday1-39",
+      "intended": "HARD",
+      "measured": "MEDIUM",
+      "canonicalHash": "5097f1f3e2b7d5b9ee7f581fbc029ab3cb6f50a4f7d5d4d94a45732db717ad29",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 37,
+      "seed": "sudoku-book-holiday1-6",
+      "intended": "HARD",
+      "measured": "EXPERT",
+      "canonicalHash": "f32a47affa75a33904acadfc1aa3382c75c71261193bbbc5a541e076bb6b5e66",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 38,
+      "seed": "sudoku-book-holiday1-10",
+      "intended": "HARD",
+      "measured": "EXPERT",
+      "canonicalHash": "ef12199d42c3f55fd2f348d9c0a8f9ca7a9054a009a94ab0e1bdd4636dec96ed",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 39,
+      "seed": "sudoku-book-holiday1-15",
+      "intended": "HARD",
+      "measured": "EXPERT",
+      "canonicalHash": "18fba509912b5fa7d731b6bca8c7637804a58c1614665f7327ed9f1caa056416",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    },
+    {
+      "number": 40,
+      "seed": "sudoku-book-holiday1-22",
+      "intended": "HARD",
+      "measured": "EXPERT",
+      "canonicalHash": "cc60eca7c6023cd7314f52cc2764400858b5efbaed6f0993d56a5d5e8b72591d",
+      "checks": [
+        "PASS grid is a nine-by-nine of digits and blanks",
+        "PASS the givens do not contradict each other",
+        "PASS at least seventeen givens",
+        "PASS exactly one solution",
+        "PASS the printed solution is that solution",
+        "PASS the answer key is the solution"
+      ]
+    }
+  ]
+}

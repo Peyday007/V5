@@ -1,0 +1,102 @@
+{
+  "requirements": [
+    {
+      "key": "HEALTH-1",
+      "kind": "CAPABILITY",
+      "title": "The running Brain answers its health check",
+      "subsystem": "Health",
+      "source": ["S-0002"],
+      "behavior": "GET /healthz on the running Brain answers 200.",
+      "inputs": ["an unauthenticated GET /healthz"],
+      "outputs": ["HTTP 200"],
+      "constraints": ["no credential required"],
+      "existing": { "paths": ["server/index.ts"], "evidence": "server/index.ts serves /healthz; the release verifier already requires it" },
+      "verification": [{ "kind": "HTTP", "path": "/healthz", "expectStatus": 200, "statement": "the health check answers 200" }]
+    },
+    {
+      "key": "HEALTH-2",
+      "kind": "CAPABILITY",
+      "title": "The program ledger is readable",
+      "subsystem": "Health",
+      "source": ["S-0003"],
+      "behavior": "The running Brain can read the factory_program_verifications table.",
+      "inputs": ["the database the running Brain uses"],
+      "outputs": ["a readable table"],
+      "existing": { "paths": ["server/db/migrations/140_factory_programs.sql", "server/db/pg-migrations/131_factory_programs.sql"], "evidence": "migrations 140 (SQLite) and 131 (Postgres) create the program tables" },
+      "verification": [{ "kind": "PROBE", "probe": "db.table-exists", "args": { "table": "factory_program_verifications" } }]
+    },
+    {
+      "key": "BUILD-1",
+      "kind": "CAPABILITY",
+      "title": "The Build page explains when a program is done",
+      "subsystem": "Build page",
+      "source": ["S-0004"],
+      "behavior": "The Build page shows the sentence: A program of many campaigns is done only when every requirement passes its checks in the running Brain.",
+      "inputs": [],
+      "outputs": ["the sentence, in the served client bundle"],
+      "constraints": ["one sentence beside the existing campaign hints; no other change to the page"],
+      "existing": { "paths": ["client/src/russell/Build.tsx"], "evidence": "client/src/russell/Build.tsx already explains how campaigns finish (claimed by the mapper; the running Brain decides)" },
+      "verification": [{ "kind": "BUNDLE_TEXT", "text": "A program of many campaigns is done only when every requirement passes its checks in the running Brain." }]
+    },
+    {
+      "key": "GUIDE-1",
+      "kind": "CAPABILITY",
+      "title": "A guide to submitting a program",
+      "subsystem": "Guide",
+      "source": ["S-0005"],
+      "behavior": "docs/FACTORY-PROGRAMS.md explains how to submit a program with factory program-submit, approve it with program-approve, and read it with program-status.",
+      "inputs": [],
+      "outputs": ["docs/FACTORY-PROGRAMS.md"],
+      "missingWork": "Write docs/FACTORY-PROGRAMS.md naming the three commands and what each does.",
+      "paths": ["docs/FACTORY-PROGRAMS.md"],
+      "verification": [{ "kind": "PROBE", "probe": "repo.file-at-revision", "args": { "path": "docs/FACTORY-PROGRAMS.md", "contains": "program-submit" } }]
+    },
+    {
+      "key": "GUIDE-2",
+      "kind": "CAPABILITY",
+      "title": "The guide stays short",
+      "subsystem": "Guide",
+      "source": ["S-0006"],
+      "behavior": "docs/FACTORY-PROGRAMS.md is at most 150 lines long.",
+      "dependsOn": ["GUIDE-1"],
+      "missingWork": "Keep the guide within 150 lines.",
+      "paths": ["docs/FACTORY-PROGRAMS.md"],
+      "verification": [{ "kind": "PROBE", "probe": "repo.file-at-revision", "args": { "path": "docs/FACTORY-PROGRAMS.md", "maxLines": 150 } }],
+      "ambiguities": [{ "item": "S-0006", "question": "How short is \"short where appropriate\"?", "interpretation": "At most 150 lines." }]
+    },
+    {
+      "key": "CHECK-1",
+      "kind": "CAPABILITY",
+      "title": "A checklist for writing a requirement map",
+      "subsystem": "Checklist",
+      "source": ["S-0007"],
+      "behavior": "docs/FACTORY-PROGRAMS-CHECKLIST.md lists every field of a requirement (key, kind, title, subsystem, source, behavior, inputs, outputs, constraints, dependsOn, interactsWith, existing, missingWork, paths, verification, ambiguities) and the seven statuses SPECIFIED, MAPPED, IMPLEMENTED, INTEGRATED, the verified status, BLOCKED and NOT_DONE.",
+      "dependsOn": ["GUIDE-1"],
+      "missingWork": "Write docs/FACTORY-PROGRAMS-CHECKLIST.md.",
+      "paths": ["docs/FACTORY-PROGRAMS-CHECKLIST.md"],
+      "verification": [
+        { "kind": "PROBE", "probe": "repo.file-at-revision", "args": { "path": "docs/FACTORY-PROGRAMS-CHECKLIST.md", "contains": "missingWork" } },
+        { "kind": "PROBE", "probe": "repo.file-at-revision", "args": { "path": "docs/FACTORY-PROGRAMS-CHECKLIST.md", "contains": "INTEGRATED" } }
+      ]
+    },
+    {
+      "key": "LINK-1",
+      "kind": "INTERACTION",
+      "title": "The guide and the checklist find each other",
+      "subsystem": "Links",
+      "source": ["S-0008"],
+      "behavior": "docs/FACTORY-PROGRAMS.md links to FACTORY-PROGRAMS-CHECKLIST.md, and the checklist links back to FACTORY-PROGRAMS.md.",
+      "interactsWith": ["GUIDE-1", "CHECK-1"],
+      "missingWork": "Add the link from each document to the other.",
+      "paths": ["docs/FACTORY-PROGRAMS.md", "docs/FACTORY-PROGRAMS-CHECKLIST.md"],
+      "verification": [
+        { "kind": "PROBE", "probe": "repo.file-at-revision", "args": { "path": "docs/FACTORY-PROGRAMS.md", "contains": "FACTORY-PROGRAMS-CHECKLIST.md" } },
+        { "kind": "PROBE", "probe": "repo.file-at-revision", "args": { "path": "docs/FACTORY-PROGRAMS-CHECKLIST.md", "contains": "(FACTORY-PROGRAMS.md)" } }
+      ]
+    }
+  ],
+  "context": [
+    { "item": "S-0001", "reason": "the introduction states no requirement" },
+    { "item": "S-0009", "reason": "a note about this document" }
+  ]
+}

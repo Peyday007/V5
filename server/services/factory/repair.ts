@@ -31,17 +31,29 @@ import type {
   FactoryRiskClass,
   FactoryWorkUnit,
 } from '../../domain/factory.ts';
-import { ensureUnit, getUnit, listDependencies, listUnits, promoteReadyUnits } from '../../repos/factory.ts';
+import {
+  ensureUnit,
+  getUnit,
+  listDependencies,
+  listUnits,
+  promoteReadyUnits,
+  regrantUnitAttempts,
+  widenUnitOwnership,
+} from '../../repos/factory.ts';
 import {
   attachRepair,
   listFactoryEvents,
+  listFindings,
   listOpenFindings,
   listUnqueuedFindings,
   recordFactoryEvent,
   resolveFinding,
 } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
-import { forbiddenPathsFor } from './forbidden.ts';
+import { forbiddenPathsFor, ownedPathsClearOf, ownershipReachesForbidden } from './forbidden.ts';
+import { matchesGlob } from './glob.ts';
+import { MAX_UNIT_ATTEMPTS } from './regrant.ts';
+import { PROTECTED_VERIFICATION_PATHS } from '../../domain/factoryProgram.ts';
 import {
   graphFromRows,
   pathsNamedIn as namedIn,
@@ -166,6 +178,28 @@ export function amendmentNeededDetail(
   );
 }
 
+/**
+ * The repair unit's key, unique to this finding. Finding keys are numbered per
+ * review, so a second review's `F1` is not the first review's `F1`. Keyed only by
+ * `findingKey`, the second finding was attached to the first finding's
+ * INTEGRATED unit and marked REPAIRED on a commit that never touched it
+ * (production 2026-11-11, fcp_ef7bb04a: a MAJOR entry-point finding closed by
+ * the CRLF repair). A key another finding's repair already holds gets a suffix.
+ */
+export function repairUnitKey(
+  finding: Pick<FactoryFinding, 'id' | 'findingKey'>,
+  units: Pick<FactoryWorkUnit, 'unitKey' | 'repairsFindingId'>[],
+): string {
+  const full = `repair-${finding.findingKey}`;
+  const takenByOther = (key: string) =>
+    units.some((unit) => unit.unitKey === key && unit.repairsFindingId !== finding.id);
+  if (!takenByOther(full.slice(0, 60))) return full.slice(0, 60);
+  for (let n = 2; ; n += 1) {
+    const key = `${full.slice(0, 55)}-${n}`;
+    if (!takenByOther(key)) return key;
+  }
+}
+
 function riskForSeverity(severity: FactoryFinding['severity']): FactoryRiskClass {
   if (severity === 'BLOCKER') return 'HIGH';
   if (severity === 'MAJOR') return 'MEDIUM';
@@ -233,8 +267,58 @@ export async function queueRepairs(
   };
 
   for (const finding of findings) {
+    if (isPlatformProcessFinding(finding)) {
+      await settleAsPlatformOwed(campaign.id, finding, 'it is about how the factory ran this campaign, not about the work it built');
+      result.skipped.push({ findingId: finding.id, reason: 'PLATFORM_PROCESS' });
+      continue;
+    }
+    if (isProbeFinding(finding)) {
+      // The judge is the program's to write (§96, §97); the requirement stays unverified until it passes.
+      const note =
+        'owed by the program, not this campaign: the acceptance probe is defined only in the protected ' +
+        'verification module; the requirement stays unverified until its probe passes on production';
+      if (await resolveFinding(finding.id, 'ACCEPTED_LIMITATION', note)) {
+        await recordFactoryEvent({
+          campaignId: campaign.id,
+          kind: FACTORY_EVENT_KINDS.repairOwnershipBlocked,
+          evidenceClass: 'DERIVED',
+          detail: { findingId: finding.id, findingKey: finding.findingKey, reason: 'PROBE_OWED_BY_PROGRAM', detail: note },
+        });
+      }
+      result.skipped.push({ findingId: finding.id, reason: 'PROBE_OWED_BY_PROGRAM' });
+      continue;
+    }
     const ownership = ownershipForRepair(finding, changeRequest, units, forbiddenPaths, dependsOn);
     if (!ownership.ok) {
+      if (
+        ownership.reason === 'REQUIRED_FILE_NOT_WRITABLE' &&
+        ownership.forbidden.length === 0 &&
+        ownership.outsideScope.length > 0 &&
+        ownership.outsideScope.every(isProtectedVerificationPath)
+      ) {
+        /*
+         * A program's acceptance probe is the judge of the campaign, and only
+         * the protected module defines it (§96, §97), so no grant could ever let
+         * a repair write it and the campaign would wait forever (production
+         * 2026-11-11: money-d0-p0 and transaction-lifecycle-d0-p1 parked on
+         * "probes.ts is outside the approved scope"). The finding is the program
+         * owner's, recorded as such; nothing is lost, because a requirement whose
+         * probe does not pass on production is never PRODUCTION_VERIFIED.
+         */
+        const note =
+          `owed by the program, not this campaign: ${ownership.outsideScope.join(', ')} is the protected ` +
+          'verification path; the requirement stays unverified until its probe passes on production';
+        if (await resolveFinding(finding.id, 'ACCEPTED_LIMITATION', note)) {
+          await recordFactoryEvent({
+            campaignId: campaign.id,
+            kind: FACTORY_EVENT_KINDS.repairOwnershipBlocked,
+            evidenceClass: 'DERIVED',
+            detail: { findingId: finding.id, findingKey: finding.findingKey, reason: 'PROBE_OWED_BY_PROGRAM', detail: note, outsideScope: ownership.outsideScope },
+          });
+        }
+        result.skipped.push({ findingId: finding.id, reason: 'PROBE_OWED_BY_PROGRAM' });
+        continue;
+      }
       if (ownership.reason === 'REQUIRED_FILE_NOT_WRITABLE') {
         result.needsAmendment.push({
           findingId: finding.id,
@@ -250,7 +334,9 @@ export async function queueRepairs(
       }
       continue;
     }
-    const unitKey = `repair-${finding.findingKey}`.slice(0, 60);
+    const unitKey = repairUnitKey(finding, units);
+    // A glob inherited from the units may reach a forbidden file; it is listed out instead.
+    ownership.ownedPaths = ownedPathsClearOf(ownership.ownedPaths, forbiddenPaths);
 
     /*
      * The same validator the planner uses, over the campaign as installed plus
@@ -346,6 +432,80 @@ export async function queueRepairs(
   return result;
 }
 
+/** How many more attempts a widened repair gets. */
+export const WIDENED_REPAIR_ATTEMPTS = 3;
+
+/**
+ * A repair that ran out of attempts because it did not own the files it had to
+ * change, put back once with those files.
+ *
+ * The repair's ownership is derived from the finding, and for an unwired
+ * mechanism the finding names the mechanism while the fix is its caller — a
+ * file nobody named. Production, fcp_0b8d9fcc, 2026-10-30: the repair owned
+ * `server/repos/cashDecisions.ts`, spent three attempts, and each worker said
+ * exactly which files the fix needed. `factory regrant-unit --add-owned-paths`
+ * answers it, but only when a person reads the blocker; this answers it on the
+ * tick, from the worker's own words, with the same bounds.
+ *
+ * What it may add is narrow: concrete files the worker's own failure detail
+ * names, each inside the scope a person approved and none the repository
+ * forbids. So nothing here widens the contract — it moves a repair to files the
+ * contract already allows. Once per unit, recorded, held to the same validator
+ * as every other unit, with the failure history left on the row.
+ */
+export async function widenExhaustedRepairs(
+  campaign: FactoryCampaign,
+  changeRequest: FactoryChangeRequest,
+): Promise<{ unitKey: string; added: string[] }[]> {
+  const units = await listUnits(campaign.id);
+  const candidates = units.filter(
+    (unit) => unit.kind === 'REPAIR' && unit.state === 'FAILED' && unit.repairsFindingId && unit.failureDetail,
+  );
+  if (candidates.length === 0) return [];
+  const already = new Set(
+    (await listFactoryEvents(campaign.id, { kinds: [FACTORY_EVENT_KINDS.repairScopeWidened] })).map((event) =>
+      String(event.detail['unitId']),
+    ),
+  );
+  const forbiddenPaths = forbiddenPathsFor(changeRequest.repository);
+  const dependencies = await listDependencies(campaign.id);
+  const widened: { unitKey: string; added: string[] }[] = [];
+
+  for (const unit of candidates) {
+    if (already.has(unit.id)) continue;
+    const added = pathsNamedIn(unit.failureDetail ?? '').filter(
+      (path) =>
+        !unit.ownedPaths.includes(path) &&
+        changeRequest.mutationScope.some((glob) => matchesGlob(path, glob)) &&
+        ownershipReachesForbidden(path, forbiddenPaths) === null,
+    );
+    if (added.length === 0) continue;
+    const ownedPaths = [...unit.ownedPaths, ...added];
+    const verdict = validateUnitGraph(
+      [
+        ...graphFromRows(units, dependencies).filter((row) => row.key !== unit.unitKey),
+        { key: unit.unitKey, kind: 'REPAIR', ownedPaths, dependsOn: [], acceptance: [] },
+      ],
+      { mutationScope: changeRequest.mutationScope, forbiddenPaths },
+    );
+    if (verdict.issues.some((issue) => issue.fatal && issue.units.includes(unit.unitKey))) continue;
+    const maxAttempts = Math.min(MAX_UNIT_ATTEMPTS, unit.maxAttempts + WIDENED_REPAIR_ATTEMPTS);
+    if (maxAttempts <= unit.attempt) continue;
+    if (!(await widenUnitOwnership(unit.id, ownedPaths))) continue;
+    const moved = (await regrantUnitAttempts({ unitId: unit.id, maxAttempts })).raised;
+    if (!moved) continue;
+    await recordFactoryEvent({
+      campaignId: campaign.id,
+      unitId: unit.id,
+      kind: FACTORY_EVENT_KINDS.repairScopeWidened,
+      evidenceClass: 'DERIVED',
+      detail: { unitId: unit.id, unitKey: unit.unitKey, added, from: unit.maxAttempts, to: maxAttempts },
+    });
+    widened.push({ unitKey: unit.unitKey, added });
+  }
+  return widened;
+}
+
 /**
  * A failing verification command is a defect, and defects become work.
  *
@@ -378,8 +538,8 @@ export async function queueVerificationRepair(
    * scope was a repair that could write anywhere the contract could. Held to the
    * same validator as every other unit.
    */
-  const ownedPaths = [...new Set(live.flatMap((unit) => unit.ownedPaths))];
   const forbiddenPaths = forbiddenPathsFor(changeRequest.repository);
+  const ownedPaths = ownedPathsClearOf([...new Set(live.flatMap((unit) => unit.ownedPaths))], forbiddenPaths);
   if (ownedPaths.length === 0) {
     return {
       ok: false, unitKey, reason: 'REPAIR_SCOPE_INSUFFICIENT',
@@ -491,6 +651,72 @@ export async function reconcileRepairs(campaignId: string): Promise<{
 }
 
 /**
+ * Repair units whose failure does not stand in the way of finishing.
+ *
+ * A review that PASSes still queues repairs for its MINOR findings, and those
+ * repairs are ordinary units with ordinary attempts. When one retires FAILED the
+ * campaign used to stop at `UNIT_EXHAUSTED_ATTEMPTS` for ever — production,
+ * fcp_0d2f161801a94944a18d, 2026-10-30: review PASS, five of six units
+ * integrated, and a MINOR repair whose worker reported three times, correctly,
+ * that making the finding untrue would break the contract's own acceptance
+ * condition. Nothing could answer it short of retiring the campaign.
+ *
+ * A failed repair of a **non-gating** finding is therefore set aside rather than
+ * blocking: the finding stays OPEN — it is not repaired and is never reported as
+ * repaired — so the pull request lists it as a remaining limitation and a
+ * person reads it there. A gating finding's failed repair still blocks, exactly
+ * as before.
+ */
+export async function nonGatingFailedRepairIds(campaignId: string): Promise<Set<string>> {
+  await settleProgramOwedRepairs(campaignId);
+  const findings = await listFindings(campaignId);
+  return new Set(
+    findings
+      .filter(
+        (finding) =>
+          finding.repairUnitId !== null &&
+          (finding.state === 'ACCEPTED_LIMITATION' ||
+            (['OPEN', 'REPAIR_QUEUED'].includes(finding.state) && !GATING_SEVERITIES.has(finding.severity))),
+      )
+      .map((finding) => finding.repairUnitId as string),
+  );
+}
+
+/** What a repair worker writes when the fix it was given lives on the program's protected verification path. */
+const PROGRAM_OWED_FAILURE = /protected (probes module|verification path)|server\/services\/factory\/program\/probes\.ts/i;
+
+/**
+ * A repair that spent every attempt because its fix is the program's own probe
+ * (production 2026-11-11: factory-program-d0, telemetry-d0-p1 — twelve attempts
+ * each, every worker reporting the probe lives on the protected path) is the
+ * program's finding, settled as `queueRepairs` settles one before a repair
+ * exists. The requirement stays unverified until its probe passes.
+ */
+export async function settleProgramOwedRepairs(campaignId: string): Promise<string[]> {
+  const settled: string[] = [];
+  for (const finding of await gatingFindings(campaignId)) {
+    if (!finding.repairUnitId) continue;
+    const unit = await getUnit(finding.repairUnitId);
+    if (!unit || unit.state !== 'FAILED' || unit.attempt < unit.maxAttempts) continue;
+    if (isPlatformProcessFinding(finding)) {
+      if (await settleAsPlatformOwed(campaignId, finding, `${unit.unitKey} spent every attempt on the factory's own machinery`)) settled.push(finding.id);
+      continue;
+    }
+    if (!PROGRAM_OWED_FAILURE.test(unit.failureDetail ?? '')) continue;
+    const note = `owed by the program, not this campaign: ${unit.unitKey} spent every attempt because the fix is the protected verification path; the requirement stays unverified until its probe passes on production`;
+    if (!(await resolveFinding(finding.id, 'ACCEPTED_LIMITATION', note))) continue;
+    await recordFactoryEvent({
+      campaignId,
+      kind: FACTORY_EVENT_KINDS.repairOwnershipBlocked,
+      evidenceClass: 'DERIVED',
+      detail: { findingId: finding.id, findingKey: finding.findingKey, reason: 'PROBE_OWED_BY_PROGRAM', detail: note, unitKey: unit.unitKey },
+    });
+    settled.push(finding.id);
+  }
+  return settled;
+}
+
+/**
  * Findings that still stand in the way of finishing.
  *
  * Read from rows rather than from the last review's verdict, because a review is
@@ -500,4 +726,51 @@ export async function reconcileRepairs(campaignId: string): Promise<{
 export async function gatingFindings(campaignId: string): Promise<FactoryFinding[]> {
   const findings = await listOpenFindings(campaignId);
   return findings.filter((finding) => GATING_SEVERITIES.has(finding.severity));
+}
+
+/**
+ * A file only the program's protected verification module may change. A finding
+ * often names a path short of the repository root ("factory/program/probes.ts"
+ * on production, 2026-11-11, capacity-d0-p0), so the path is also read as the
+ * tail of a protected one: completed by each leading part of a protected glob.
+ */
+export function isProtectedVerificationPath(path: string): boolean {
+  const clean = path.replace(/^\.?\//, '');
+  return PROTECTED_VERIFICATION_PATHS.some((glob) => {
+    if (glob === clean || matchesGlob(clean, glob) || glob.endsWith(`/${clean}`)) return true;
+    const parts = glob.replace(/\/\*\*$/, '').split('/');
+    for (let i = 1; i < parts.length; i += 1) {
+      if (matchesGlob(`${parts.slice(0, i).join('/')}/${clean}`, glob)) return true;
+    }
+    return false;
+  });
+}
+
+/**
+ * A finding about the factory's own process — how review bins were dealt, how
+ * sessions were routed — rather than about the work the campaign built
+ * (production 2026-11-11, authority-d0-p0: DISPATCH, "one session receives
+ * repeated review bins", repaired three times by a unit that could only touch
+ * cash/ and was told the fix was in the dispatcher). The platform owns it; the
+ * campaign's code is judged on its own findings.
+ */
+export function isPlatformProcessFinding(finding: Pick<FactoryFinding, 'category'>): boolean {
+  return /^(process|dispatch|platform|factory)$/i.test((finding.category ?? '').trim());
+}
+
+async function settleAsPlatformOwed(campaignId: string, finding: FactoryFinding, why: string): Promise<boolean> {
+  const note = `owed by the platform, not this campaign: ${why}; recorded for the factory's own improvement`;
+  if (!(await resolveFinding(finding.id, 'ACCEPTED_LIMITATION', note))) return false;
+  await recordFactoryEvent({
+    campaignId,
+    kind: FACTORY_EVENT_KINDS.repairOwnershipBlocked,
+    evidenceClass: 'DERIVED',
+    detail: { findingId: finding.id, findingKey: finding.findingKey, reason: 'PLATFORM_PROCESS', detail: note, statement: finding.statement.slice(0, 500) },
+  });
+  return true;
+}
+
+/** A finding that a program's acceptance probe is missing or unregistered, by its own key or category. */
+export function isProbeFinding(finding: Pick<FactoryFinding, 'findingKey' | 'category'>): boolean {
+  return /probe/i.test(finding.findingKey) || /probe/i.test(finding.category ?? '');
 }

@@ -1,0 +1,65 @@
+{
+  "objective": "Finish the Factory throughput overhaul. VERIFIED BASELINE (production, 2026-10-30) — extend these owners, never add a second scheduler, queue or router beside them. Already landed by hand as the bootstrap (PR factory/parallel-units): server/services/factory/remoteLoop.ts runRemoteTick now creates one FACTORY_UNITS bin per READY unit via createUnitsBin(campaign, cr, [unit]) and uses liveUnitKeys()/unitKeysOfBin() from server/services/factory/remote.ts so no unit is handed out twice, and lets the integration stage start while sibling units are still with workers; createPlanBin tells the planner to shape wide, shallow graphs. Measured before it: campaign fcp_0b8d9fccd0064270ae34 waited 2h07m from plan bin created (00:55:49Z) to plan installed (03:02:53Z) and four live campaigns each had exactly one unit with the fleet while every dispatch read FLEET_TARGET_REACHED. What remains, as three independent pieces of work: (1) CROSS-CAMPAIGN CONFLICTS BY REAL OWNERSHIP. tests/factoryLine.test.ts describe 'two objectives that would edit the same files are not run at once' encodes the old declared-scope rule and must be rewritten in the same unit to the new one (admit when no live unit owns an overlapping path; hold while a live, unintegrated unit of another campaign owns one, and release once it is INTEGRATED) — the first campaign for this objective, fcp_54203afc1f444c07b239, failed integration exactly there because that file was outside its scope. server/services/factory/line.ts admitQueued holds a queued objective whenever its declared mutationScope pathsOverlap()s any live campaign's scope, so broad scopes such as 'tests/**' or 'server/db/migrations/**' serialize unrelated campaigns. Replace that comparison with one against the ownedPaths of the other live campaigns' units that are not INTEGRATED, CANCELLED or FAILED (a campaign with no units yet blocks nothing), and in remoteLoop.ts, before creating a unit's bin, defer only that unit (with a stageDetail/note naming the other campaign and unit) when its ownedPaths pathsOverlap() a LEASED, IMPLEMENTED or bin-carried READY unit of another live campaign in the same repository; independent units of the same campaign keep going. Directly approved campaigns (scripts/factory.ts approve) get the same unit-level protection because it lives in the tick. (2) STAGE LATENCY MEASUREMENTS. Extend server/services/factory/throughput.ts ThroughputReport with a `stages` block computed from the campaign's own bins and factory events: planDurationMs (plan bin created to PLAN_INSTALLED), timeToFirstCodingMs (campaign created to the first FACTORY_UNITS bin's first lease), per-stage queue delay (bin READY to first lease, from bins/bin_events, per kind: average and max), integrationDelayMs and reviewDelayMs (UNIT_IMPLEMENTED to the integrate bin's lease; integrated head to review bin lease), concurrentUnitBinsMax (peak simultaneously LEASED FACTORY_UNITS bins), unitsPerHour and completionMs; each an EvidenceNumber, null with basis 'not measured' when the rows do not exist, never 0. Print the block in scripts/factory.ts `throughput`. (3) IDLE REASONS. In scripts/factory.ts add `idle` printing, for every READY factory bin, how long it has waited and its current dispatch lastErrorKind/reason (e.g. FLEET_TARGET_REACHED with in-flight and target), and for every routable Routine whether it is in flight, rate limited until when, quarantined, or idle, using the existing fleetSnapshot()/routeBin() readings rather than re-deriving eligibility. Owner-last (reserve) account routing is deliberately NOT part of this objective: the live campaign for objectives/intelligent-research-routing.json owns it in server/services/dispatch/router.ts, and this campaign must not touch that file, server/repos/fleet.ts, server/domain/types.ts or scripts/fleet.ts. In scripts/factory.ts add only the new `idle` case and the `throughput` printing, as self-contained hunks.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Unrelated campaigns no longer wait on each other's broad declared scopes, only on real overlapping unit ownership; `factory throughput` reports measured planning, first-coding, queue, integration and review latencies and peak concurrent implementation bins; `factory idle` explains every waiting bin and idle surface.",
+  "nonGoals": [
+    "Implementing any of the five queued Brain upgrade objectives",
+    "Changing credentials, secrets, account permissions, authorization, server/services/identity/**, server/services/bins/routing.ts or any repository envelope",
+    "Raising or lowering fleet, account or Routine targets in code, or ignoring a provider refusal or retry window",
+    "Bypassing independent review, forge verification, integration verification, delivery checks or the release gate",
+    "A second scheduler, queue, router or metrics store beside the existing ones",
+    "Reverting the one-bin-per-unit bootstrap",
+    "Owner-last or reserve account routing, or any change to server/services/dispatch/router.ts, server/repos/fleet.ts, server/domain/types.ts or scripts/fleet.ts (owned by the live routing campaign)"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/factoryCrossCampaign.test.ts: two queued objectives whose declared scopes both include 'tests/**' but whose live units own disjoint files are both admitted by admitQueued; one whose queued scope overlaps a live, unintegrated unit's ownedPaths is held with a reason naming that campaign.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/factoryCrossCampaign.test.ts: a READY unit whose ownedPaths overlap a LEASED or IMPLEMENTED unit of another live campaign in the same repository gets no bin on the tick and the campaign's note names the other unit, while a disjoint sibling in the same campaign does get a bin; once the other unit is INTEGRATED the deferred unit gets its bin on the next tick.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/factoryLine.test.ts asserts the new rule in place of the old declared-scope hold, and passes.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/factoryStageLatency.test.ts: for a campaign built from rows with known timestamps the throughput report's stages block returns the exact planDurationMs, timeToFirstCodingMs, queue delays and concurrentUnitBinsMax; a stage with no rows reports value null with a basis, never 0.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "scripts/factory.ts has an `idle` command that lists each READY factory bin with its wait and current dispatch refusal, and `throughput` prints the stages block; tests cover the idle reading's function.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/factory/line.ts",
+    "server/services/factory/remoteLoop.ts",
+    "server/services/factory/throughput.ts",
+    "server/services/factory/metrics.ts",
+    "scripts/factory.ts",
+    "tests/factoryLine.test.ts",
+    "tests/factoryCrossCampaign.test.ts",
+    "tests/factoryStageLatency.test.ts",
+    "tests/factoryIdle.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Revert the merged pull request. No migration and no schema change; nothing is deleted."
+}

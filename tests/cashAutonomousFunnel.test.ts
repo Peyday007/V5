@@ -674,7 +674,7 @@ describe('the autonomous funnel cannot skip evidence it does not have', () => {
         'on twenty parcels, closing 30 October 2026.',
       deepDive: DEEP_DIVE.map((one) =>
         one.lane === 'price_evidence'
-          ? { ...one, claim: 'Comparable parcel-ownership research engagements are quoted on request.' }
+          ? { ...one, claim: 'Comparable parcel-ownership research engagements are priced at about two thousand dollars.' }
           : one,
       ),
     };
@@ -707,7 +707,7 @@ describe('the autonomous funnel cannot skip evidence it does not have', () => {
         'on twenty parcels, closing 30 October 2026.',
       deepDive: DEEP_DIVE.map((one) =>
         one.lane === 'price_evidence'
-          ? { ...one, claim: 'Comparable parcel-ownership research engagements are quoted on request.' }
+          ? { ...one, claim: 'Comparable parcel-ownership research engagements are priced at about two thousand dollars.' }
           : one,
       ),
       field: {

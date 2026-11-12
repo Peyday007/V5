@@ -354,6 +354,39 @@ describe('routing chooses on fleet state, and says why when it will not', () => 
     expect(result.refusal).toBe('FLEET_TARGET_REACHED');
   });
 
+  /*
+   * The fleet target bounds research and general work, not the Factory.
+   * Production, 2026-10-30: the target was 1 to save Claude capacity for the
+   * factory build, and a 9-unit and an 11-unit campaign took turns on that one
+   * slot behind research. A Factory bin is bounded by its own surfaces'
+   * targets, and its activations do not use up the research budget.
+   */
+  it('routes a Factory bin past a reached fleet target, bounded by its own surfaces', () => {
+    const policy = { version: 6, target: 1, paused: false, boostTarget: null, boostUntil: null, exploreCeiling: null, exploreUntil: null, actor: 'op' } as never;
+    const factoryBin = binLike({
+      requiredCapabilities: ['repository'],
+      workloadClass: 'FACTORY_UNITS',
+      manifest: { repository: { remote: 'https://github.com/Peyday007/V5' } },
+    } as Partial<Bin>);
+    const surface = candidate({ capabilities: ['repository', 'repository-write'] }, {});
+    const factory = routeBin({ bin: factoryBin, candidates: [surface], fleetPolicy: policy, fleetInFlight: 5, factoryInFlight: 1, now: NOW });
+    expect(factory.ok).toBe(true);
+    // Its own surfaces still bound it.
+    const full = routeBin({
+      bin: factoryBin,
+      candidates: [candidate({ capabilities: ['repository', 'repository-write'] }, {}, { accountInFlight: 4, accountTarget: 4 })],
+      fleetPolicy: policy, fleetInFlight: 5, factoryInFlight: 4, now: NOW,
+    });
+    expect(full.ok).toBe(false);
+    // Research is still held at the target, and Factory activations are not charged to it.
+    const research = routeBin({ bin: binLike(), candidates: [candidate({}, {})], fleetPolicy: policy, fleetInFlight: 1, factoryInFlight: 1, now: NOW });
+    expect(research.ok).toBe(true);
+    const held = routeBin({ bin: binLike(), candidates: [candidate({}, {})], fleetPolicy: policy, fleetInFlight: 2, factoryInFlight: 1, now: NOW });
+    expect(held.ok).toBe(false);
+    if (held.ok) throw new Error('unreachable');
+    expect(held.refusal).toBe('FLEET_TARGET_REACHED');
+  });
+
   it('separates account headroom from Routine headroom', () => {
     // The distinction the whole step turns on: a Routine with room on an
     // account that has none must not be chosen.

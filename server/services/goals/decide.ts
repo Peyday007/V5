@@ -29,7 +29,8 @@
  */
 import { getDb } from '../../db/database.ts';
 import type { GoalCommitment } from '../../domain/goals.ts';
-import { getWorkstream, listLinks, recordWorkstreamEvent, updateWorkstream } from '../../repos/register.ts';
+import type { WorkstreamLink } from '../../domain/register.ts';
+import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent, updateWorkstream } from '../../repos/register.ts';
 import { binsHeldBy, cancelGoal, pauseGoal, reinstateGoal, resumeGoal, setGoalTerms } from '../../repos/goals.ts';
 
 export interface DecisionResult {
@@ -182,5 +183,64 @@ export async function changeObjective(
     consequence: pursuing.length
       ? `${pursuing.length} piece(s) of work were started under the previous objective and keep going. Supersede any link that no longer serves the new one; its row and its history stay.`
       : 'No work was linked yet, so nothing was started under the previous objective.',
+  };
+}
+
+/**
+ * Declare that this goal cannot finish before another one does — the one writer
+ * of that decision. The cycle rule walks what the other goal depends on,
+ * transitively, over live DEPENDS_ON links, and refuses when it reaches this
+ * goal: goals waiting on each other would hold each other's bins for ever.
+ * A refusal writes nothing. Authorization stays with the caller.
+ */
+export async function setDependency(
+  goalId: string,
+  otherGoalId: string,
+  by: { actorRef: string; userId: string },
+): Promise<DecisionResult & { link?: WorkstreamLink }> {
+  if (otherGoalId === goalId) {
+    return { ok: false, reason: 'A goal cannot depend on itself.', consequence: 'Nothing changed.' };
+  }
+  const goal = await getWorkstream(goalId);
+  if (!goal) return { ok: false, reason: 'No such goal.', consequence: 'Nothing changed.' };
+  const other = await getWorkstream(otherGoalId);
+  if (!other) return { ok: false, reason: 'No such goal to depend on.', consequence: 'Nothing changed.' };
+
+  const seen = new Set<string>();
+  const queue = [other.id];
+  while (queue.length) {
+    const next = queue.shift()!;
+    if (next === goal.id) {
+      return { ok: false, reason: 'That would make the two goals wait on each other for ever.', consequence: 'Nothing changed.' };
+    }
+    if (seen.has(next)) continue;
+    seen.add(next);
+    for (const link of await listLinks(next)) {
+      if (link.kind === 'WORKSTREAM' && link.relation === 'DEPENDS_ON') queue.push(link.ref);
+    }
+  }
+
+  const link = await linkWorkstream({
+    workstreamId: goal.id,
+    kind: 'WORKSTREAM',
+    ref: other.id,
+    relation: 'DEPENDS_ON',
+    label: other.title,
+    recordedBy: 'PERSON',
+    recordedByUserId: by.userId,
+  });
+  await recordWorkstreamEvent({
+    workstreamId: goal.id,
+    kind: 'GOAL_DEPENDENCY_SET',
+    summary: `Waits on "${other.title}" until it completes.`,
+    detail: { dependsOn: other.id, linkId: link.id },
+    actorRef: by.actorRef,
+  });
+  return {
+    ok: true,
+    reason: null,
+    consequence:
+      'Until that goal completes, Brain holds this goal’s live bins so capacity goes to work that can move; it releases them on the first tick after the other goal completes.',
+    link,
   };
 }

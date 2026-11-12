@@ -385,6 +385,18 @@ describe('expired or closed openings cannot qualify', () => {
     expect((await whyNotDiving((await getOpportunity(id))!)).kind).toBe('DISQUALIFIED');
   });
 
+  it('a description filed in ruled_out is held as a possible disqualifier, not one that ends the opening', async () => {
+    const one = await dive('described', [
+      { lane: 'contact_mode', text: 'Order through the distributor’s dealer portal.' },
+      { lane: 'ruled_out', text: 'HVAC Business is one of the largest wholesale distributors of mini split systems in the United States.' },
+    ]);
+    const id = await opening([one]);
+    await applyValidationAnswers(projectId);
+    expect(await cardFact(id, 'disqualifiedBy')).toBeNull();
+    expect(await cardFact(id, 'possibleDisqualifier')).not.toBeNull();
+    expect((await whyNotDiving((await getOpportunity(id))!)).kind).not.toBe('DISQUALIFIED');
+  });
+
   it('the same card with a documented absence of any disqualifier does qualify', async () => {
     const one = await dive('open', [
       { lane: 'contact_mode', text: 'Proposals by email to rfp@stlpartnership.com.' },

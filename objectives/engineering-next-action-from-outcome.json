@@ -1,0 +1,45 @@
+{
+  "objective": "brain_next_engineering_action cannot say DONE for a Factory campaign that is live, nor NEEDS_HUMAN for one stopped on a person. server/mcp/engineeringTools.ts reachedForCampaign(state, prOpen) maps a campaign's stage to an outcome level: COMPLETE and AWAITING_RELEASE reach at most PR_OPEN, BLOCKED and CANCELLED reach null, and human_blocker_open is only ever the caller's value. So a session asking with intended_outcome PRODUCTION_WORKING about a campaign whose objective outcome (server/services/factory/release/outcome.ts objectiveOutcome) is LIVE is told to keep working, and one asking about a campaign that is BLOCKED on a person is never told NEEDS_HUMAN. Fix: when task_ref is a campaign id, derive `reached` and `humanBlockerOpen` from objectiveOutcome(campaign) — LIVE → PRODUCTION_WORKING; RELEASING with a release run in DEPLOYING or VERIFYING → MERGED (a merge sha exists); otherwise fall back to the existing stage mapping; outcome.needsPerson → humanBlockerOpen true (OR-ed with the caller's value). Keep reachedForCampaign for the fallback and keep every existing behaviour for non-campaign task refs.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "brain_next_engineering_action answers DONE for a LIVE campaign asked about PRODUCTION_WORKING, and NEEDS_HUMAN for a campaign whose objective outcome needs a person.",
+  "nonGoals": [
+    "Changing objectiveOutcome or any file under server/services/factory/",
+    "Any schema, route or migration change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/engineeringNextActionOutcome.test.ts: for a campaign whose objectiveOutcome is LIVE, the derived reached level is PRODUCTION_WORKING and the decision for intended_outcome PRODUCTION_WORKING is DONE.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "For a campaign whose objectiveOutcome has needsPerson true, the decision is NEEDS_HUMAN even when the caller passes human_blocker_open false.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A campaign still building keeps the existing stage mapping (reachedForCampaign), and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/mcp/engineeringTools.ts",
+    "tests/engineeringNextActionOutcome.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change.",
+  "submissionKey": "engineering-next-action-from-outcome-v1",
+  "release": {
+    "reason": "Benchmark: a small bounded change Factory should carry from submission to live with no person.",
+    "liveChecks": [
+      { "kind": "HTTP", "path": "/healthz", "expectStatus": 200 }
+    ]
+  }
+}

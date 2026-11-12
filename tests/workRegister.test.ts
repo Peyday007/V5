@@ -33,6 +33,7 @@ import {
   workstreamsForRef,
 } from '../server/repos/register.ts';
 import { assembleRegister, viewOf } from '../server/services/register/view.ts';
+import { createCandidate } from '../server/repos/russellCandidates.ts';
 import { createConversation } from '../server/repos/russellConversations.ts';
 import { captureSoftwareRequest } from '../server/repos/russellSoftware.ts';
 import { submitObjective, approveObjective } from '../server/services/factory/contract.ts';
@@ -125,6 +126,16 @@ describe('the register stores an intent and derives everything else', () => {
     // And it says so rather than inventing an instruction.
     expect(view.nextAction).toBeNull();
     expect(view.stateEvidence).toContain('nothing linked');
+  });
+
+  it('does not ask a person to approve an idea Brain captured and judges itself', async () => {
+    const one = await stream();
+    const idea = await createCandidate({ title: 'A goal round', statement: 'Which ways could bring the money in?', projectId });
+    await linkWorkstream({ workstreamId: one.id, kind: 'CANDIDATE', ref: idea.id, relation: 'PURSUES', recordedBy: 'BRAIN' });
+    const view = await viewOf(one, await listLinks(one.id));
+    expect(view.state).toBe('PROPOSED');
+    expect(view.nextAction).not.toContain('Approve it');
+    expect(view.nextAction).toContain('Brain judges each idea');
   });
 
   it('moves when the row it points at moves, with nothing rewritten', async () => {

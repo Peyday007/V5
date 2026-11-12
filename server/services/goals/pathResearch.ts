@@ -17,9 +17,11 @@
  * and money in the account, who decides it, how long it takes and the payment
  * terms — because that is what turns "3 to 60 days" into a fact.
  *
- * What research cannot settle is not asked here: whether buyers will say yes
- * is a test, and reaching them is a permission.
+ * What research cannot settle is not asked here: whether these buyers will say
+ * yes is a test, and reaching them is a permission. How often comparable buyers
+ * said yes is published, and is asked.
  */
+import { isArrangementId } from '../cash/goalScenario.ts';
 import { getOpportunity, listNeeds } from '../../repos/cashPortfolio.ts';
 import { closeNeed, raiseNeed } from '../cash/needs.ts';
 import { cardFact } from '../../repos/cashCardFacts.ts';
@@ -36,7 +38,8 @@ import type { ChainLink, PlanReading } from './plan.ts';
  * but each has to matter: an opening that cannot bring a tenth of the gap even
  * if every buyer agreed costs research it can never repay.
  */
-export const MIN_SHARE_WORTH_RESEARCHING = 0.1;
+export { MIN_SHARE_WORTH_RESEARCHING } from './materiality.ts';
+import { MIN_SHARE_WORTH_RESEARCHING } from './materiality.ts';
 
 /** At most this many openings per goal get path research at once. */
 export const PATH_RESEARCH_OPENINGS = 4;
@@ -60,6 +63,29 @@ const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> =
     { field: 'directCosts', ask: 'Find the published costs of delivering one sale: tools, materials, fees, subcontracted work, shipping.' },
     { field: 'requiredCapital', ask: 'State the most money that goes out before any comes back for one sale, and when it goes out.' },
   ],
+  MARKET_VOLUME: [
+    {
+      field: 'buyerVolume',
+      ask:
+        'Count how many buyers of exactly this kind exist and can be reached through a published channel — a directory, ' +
+        'register, association list or marketplace category, with its number and source — and how often one buyer buys this ' +
+        '(weekly, monthly, yearly or once). State both as numbers; "many" or "thousands" is not a count.',
+    },
+  ],
+  /*
+   * Whether buyers say yes is finally a test, but how often buyers of this kind
+   * say yes to offers like it is published, and the quant engine estimates
+   * sales from it before Brain has made any (owner, 2026-11-03).
+   */
+  CONVERSION: [
+    {
+      field: 'conversionRates',
+      ask:
+        'Find published reply and close rates for selling this kind of offer to buyers of exactly this kind through a channel run ' +
+        'online: the share of prospects contacted who reply with interest, and the share of those who buy, each as a percentage ' +
+        'with its source, date and the population it was measured on.',
+    },
+  ],
   OFFER_AND_PRICE: [
     { field: 'revenueRange', ask: 'Find what buyers are published as actually paying for this — a figure or a range, each with its source and date.' },
   ],
@@ -73,11 +99,21 @@ export async function researchGoalPaths(input: {
   trace?: string[];
   /** Decide only: raise and withdraw nothing. */
   dryRun?: boolean;
+  /**
+   * Research surfaces idle with nothing waiting. Each one lets one more
+   * opening, and two more questions, be researched at once — the caps below
+   * are a floor for a busy fleet, not a ceiling on an idle one.
+   */
+  spare?: number;
 }): Promise<string[]> {
+  const spare = Math.max(0, Math.trunc(input.spare ?? 0));
+  const openingCap = PATH_RESEARCH_OPENINGS + spare;
+  const questionCap = MAX_OPEN_PATH_QUESTIONS + 2 * spare;
   const note = (line: string) => input.trace?.push(line);
   const now = input.now ?? new Date();
   const raised: string[] = [];
-  const considered = input.reading.considered;
+  // An estimated arrangement has no opening row to raise a question on: its research is the constructed round (§82).
+  const considered = input.reading.considered.filter((one) => !isArrangementId(one.opportunityId));
   const ids = new Set(considered.map((one) => one.opportunityId));
   const open = await listNeeds({ projectId: input.projectId, states: ['OPEN'] });
   const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
@@ -104,18 +140,72 @@ export async function researchGoalPaths(input: {
   const potential = (one: (typeof considered)[number]) => Math.max(one.supportedReach, one.potentialReach ?? 0);
   // Biggest possible contribution first, so research goes where an answer can
   // change what Brain pursues; an award only after ways that pay in steps.
+  // The quant engine's best combination is what the plan rests on: its members' facts first.
+  const inBest = new Set(input.reading.portfolio?.best?.members.map((one) => one.opportunityId) ?? []);
   const order = [...considered].sort(
     (a, b) =>
       Number(a.competitiveAward) - Number(b.competitiveAward) ||
+      Number(inBest.has(b.opportunityId)) - Number(inBest.has(a.opportunityId)) ||
       potential(b) - potential(a) ||
       b.supportedReach - a.supportedReach ||
       a.missing.length - b.missing.length,
   );
+  /*
+   * What the run measured (§79): an unknown whose answer cannot change the
+   * choice of strategy is not researched, and one that waiting for would cost
+   * the deadline is acted on or learned by doing instead. Questions that do
+   * change the choice go first, largest value first.
+   */
+  const priority = new Map<string, NonNullable<PlanReading['researchPriority']>[number]>();
+  for (const one of input.reading.researchPriority ?? []) if (one.opportunityId && one.field) priority.set(`${one.opportunityId}:${one.field}`, one);
+  const valueOf = (id: string) => Math.max(0, ...[...priority.values()].filter((one) => one.opportunityId === id && one.decision === 'RESEARCH_FIRST').map((one) => one.value));
+  /*
+   * The reasoning loop (§93): pathways whose unknowns could move the plan go
+   * first after the measured priority, and a research move on a pathway —
+   * where its buyers are reached, who fulfils it, how many buyers there are —
+   * adds to the question on the same field the figure the transaction must hit.
+   * Its constructed moves (a different transaction from the same evidence)
+   * are asked as constructed rounds, not here.
+   */
+  const swing = new Map<string, number>();
+  for (const one of input.reading.pathways?.informationValue ?? []) {
+    swing.set(one.opportunityId, Math.max(swing.get(one.opportunityId) ?? 0, one.swing + (one.changesPlan ? remaining : 0)));
+  }
+  const movesOf = new Map<string, { field: string; mustHit: string }[]>();
+  for (const pathway of input.reading.pathways?.pathways ?? []) {
+    const asks = pathway.moves.filter((move) => move.action === 'RESEARCH' && move.field && move.mustHit).map((move) => ({ field: move.field!, mustHit: move.mustHit! }));
+    if (asks.length > 0) movesOf.set(pathway.opportunityId, asks);
+  }
+  if (swing.size > 0 || priority.size > 0) {
+    order.sort((a, b) => valueOf(b.opportunityId) - valueOf(a.opportunityId) || (swing.get(b.opportunityId) ?? 0) - (swing.get(a.opportunityId) ?? 0));
+  }
   let openings = 0;
+  const squeeze = input.reading.executionPolicy === 'SQUEEZE';
+  const selling = new Set((input.reading.sales ?? []).map((one) => one.opportunityId));
+  /*
+   * An opening being sold is researched first and outside the shared caps
+   * (production, 2026-11-07, Goals plan 42349305781: 25 live path questions
+   * on other openings against a cap of 8, so the one sale got no demand,
+   * price or market-size question at all). It is bounded anyway: at most
+   * MAX_CONCURRENT_SALES openings, each question deduplicated and asked at
+   * most MAX_ASKINGS times.
+   */
+  if (squeeze) order.sort((a, b) => Number(selling.has(b.opportunityId)) - Number(selling.has(a.opportunityId)));
   for (const one of order) {
-    if (openings >= PATH_RESEARCH_OPENINGS || openHere >= MAX_OPEN_PATH_QUESTIONS) break;
+    const beingSold = squeeze && selling.has(one.opportunityId);
+    if ((openings >= openingCap || openHere >= questionCap) && !beingSold) break;
+    /*
+     * Research runs beside a SQUEEZE goal's sales and never ahead of them
+     * (owner, 2026-11-06, twice): an opening being sold is still asked what
+     * buyers pay, how many buyers exist and how often they buy — the
+     * quantitative demand, price and market-size evidence the plan models —
+     * while its offers go out. Nothing here gates a sale: a question is a need
+     * raised for research, and the sale reads none of them.
+     */
+    const sold = squeeze && selling.has(one.opportunityId);
     let asks = one.missing.flatMap((link) => FIELDS_FOR[link] ?? []);
-    if (asks.length === 0) continue;
+    if (sold && !one.volumeEstablished && !asks.some((a) => a.field === 'buyerVolume')) asks = [...asks, FIELDS_FOR.MARKET_VOLUME![0]!];
+    if (asks.length === 0 && (one.volumeEstablished !== false || one.competitiveAward)) continue;
     /*
      * Worth asking about only if the answer could change what Brain pursues.
      * An opening whose most, even with every buyer agreeing, is under a tenth
@@ -124,15 +214,31 @@ export async function researchGoalPaths(input: {
      * only a guess — is asked one thing first, what buyers actually pay,
      * because that answer decides whether anything else is worth asking.
      */
-    if (potential(one) < floor && one.potentialReach !== null) {
+    // Judged by size only once its volume is known or it pays once by nature (see materiality.ts).
+    const sizeKnown = one.volumeEstablished !== false || one.competitiveAward || one.paysOnce === true;
+    // Too small to research — unless it is being sold: how many buyers exist is what could make it larger.
+    if (sizeKnown && potential(one) < floor && one.potentialReach !== null && !sold) {
       note(`${one.title.slice(0, 60)}: too small to matter — at most ${Math.round(potential(one))} of the ${Math.round(remaining)} still needed, even if every buyer agreed`);
       continue;
     }
-    if (one.supportedReach < floor) {
+    if (one.supportedReach < floor && !sold) {
+      // (An opening being sold keeps every question it has: its research runs beside the sale.)
       // No supported price big enough yet: what buyers actually pay decides
       // whether anything else about it is worth asking, so ask that alone.
       asks = [FIELDS_FOR.OFFER_AND_PRICE![0]!];
+      // Small per sale with volume unknown: how many buyers, how often, is asked beside the price.
+      if (!sizeKnown) asks = [...asks, FIELDS_FOR.MARKET_VOLUME![0]!];
+    } else if (!one.volumeEstablished && one.supportedReach < remaining && !one.competitiveAward && !asks.some((a) => a.field === 'buyerVolume')) {
+      // One deal cannot carry the goal: whether it sells again — how many
+      // buyers, how often — is investigated, never assumed (§81).
+      asks = [...asks, FIELDS_FOR.MARKET_VOLUME![0]!];
     }
+    const moves = movesOf.get(one.opportunityId) ?? [];
+    // The question keeps its method and gains the figure the transaction must hit, so the answer is read against the goal.
+    asks = asks.map((a) => {
+      const move = moves.find((one) => one.field === a.field);
+      return move ? { ...a, ask: `${a.ask} For this to matter to the goal: ${move.mustHit}.` } : a;
+    });
     const opportunity = await getOpportunity(one.opportunityId);
     if (!opportunity) continue;
     if (diveOwnsItsQuestions(opportunity)) {
@@ -144,7 +250,13 @@ export async function researchGoalPaths(input: {
     // next ones unresearched.
     let actedHere = false;
     for (const { field, ask } of asks) {
-      if (openHere >= MAX_OPEN_PATH_QUESTIONS) break;
+      if (openHere >= questionCap && !sold) break;
+      const measured = priority.get(`${one.opportunityId}:${field}`);
+      // A sale's demand, price and market size are researched beside it whatever the run ranked them.
+      if (measured && measured.decision !== 'RESEARCH_FIRST' && !sold) {
+        note(`${one.title.slice(0, 60)} ${field}: not asked — ${measured.decision.toLowerCase().replace(/_/g, ' ')}: ${measured.reason}`);
+        continue;
+      }
       const key = questionKey(opportunity.id, field);
       // Already established from a source or by a person: asking again would
       // be settled the instant it was raised and re-raised on the next read.
@@ -218,7 +330,7 @@ export async function researchGoalPaths(input: {
     }
     if (actedHere) openings += 1;
   }
-  note(`live path questions ${openHere} of ${MAX_OPEN_PATH_QUESTIONS}; openings researched ${openings} of ${PATH_RESEARCH_OPENINGS}`);
+  note(`live path questions ${openHere} of ${questionCap}; openings researched ${openings} of ${openingCap}`);
   return raised;
 }
 

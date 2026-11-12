@@ -60,6 +60,10 @@
  *   npm run admin -- cash seed-industry <project> "<subject name>" --admin someone@example.com
  *   npm run admin -- cash constraints <project> ["<additions, empty clears>"] --admin someone@example.com
  */
+import { freeLaneReading, freeLaneThroughput } from '../server/services/freeLane/coverage.ts';
+import { freeLaneTick } from '../server/services/freeLane/worker.ts';
+import { accessWindow, compareReaders, failedUrlSample, laneWindow } from '../server/services/sources/accessReport.ts';
+import { binPurposeReading, brainOnlyReading, setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { ARCHITECTURE_LAYER, ARCHITECTURE_SLUG } from '../server/services/capability/ingest.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
 import type { GoalBudgetStatus } from '../server/repos/russellAuthority.ts';
@@ -74,7 +78,8 @@ import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
 import { CASH_LAYER_NAME, setConstraints } from '../server/services/cash/lifecycle.ts';
 import { splitObjective } from '../server/services/cash/root.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
-import { seedSubject } from '../server/services/industry/seed.ts';
+import { retireSubject, seedSubject } from '../server/services/industry/seed.ts';
+import { INDUSTRY_NODE_KINDS, type IndustryNodeKind } from '../server/domain/types.ts';
 import { createLayer, listLayers } from '../server/repos/layers.ts';
 import { binForOrchestration, createBin } from '../server/repos/bins.ts';
 import fs from 'node:fs';
@@ -110,6 +115,7 @@ import {
   renameUser,
   signInNameTaken,
   listWorkers,
+  listIdentityEvents,
   recordIdentityEvent,
   revokeMembership,
   setWorkerStatus,
@@ -122,7 +128,7 @@ import { countLivePasskeys } from '../server/repos/passkeys.ts';
 import { listOrchestrationsByProject, currentFragments } from '../server/repos/research.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import { reissueMissingVerification, retryFragment } from '../server/services/research/reissue.ts';
-import { CONNECTOR_SCOPES } from '../server/domain/types.ts';
+import { CONNECTOR_SCOPES, IDENTITY_RESULTS, type IdentityResult } from '../server/domain/types.ts';
 import {
   WORKLOAD_FAMILIES,
   decideBinRouting,
@@ -360,18 +366,23 @@ interface GoalPreset {
   days: number;
 }
 
+/*
+ * Brain-improvement goals run 14 days, the money ones 2. Every improvement goal
+ * expired at 2 days with 1 of 5 packets spent (production, 2026-10-31), so the
+ * Routines had no Brain work left and idle-fill handed them cash research.
+ */
 const GOAL_PRESETS: Record<string, GoalPreset> = {
-  methods: { prefix: 'Methods:', name: 'Methods: how Brain researches and judges (v2)', assignment: METHODS_ASSIGNMENT, maxPackets: 10, maxFragments: 60, days: 2 },
+  methods: { prefix: 'Methods:', name: 'Methods: how Brain researches and judges (v2)', assignment: METHODS_ASSIGNMENT, maxPackets: 10, maxFragments: 60, days: 14 },
   signals: { prefix: 'Signals:', name: 'Signals: where buyers show up in free public data', assignment: SIGNALS_ASSIGNMENT, maxPackets: 6, maxFragments: 36, days: 2 },
   strategy: { prefix: 'Strategy:', name: 'Strategy: which kinds of business are worth building', assignment: STRATEGY_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  learning: { prefix: 'Learning:', name: 'Learning: getting smarter from what actually paid', assignment: LEARNING_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
+  learning: { prefix: 'Learning:', name: 'Learning: getting smarter from what actually paid', assignment: LEARNING_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
   ladder: { prefix: 'Ladder:', name: 'Ladder: stacking small cash into large ventures', assignment: LADDER_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  memory: { prefix: 'Memory:', name: 'Memory: storing and recalling what Brain learns', assignment: MEMORY_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  judgment: { prefix: 'Judgment:', name: 'Judgment: AI that checks its own reasoning', assignment: JUDGMENT_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  research: { prefix: 'Research:', name: 'Research: how top research agents search and verify', assignment: RESEARCH_METHOD_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  agents: { prefix: 'Agents:', name: 'Agents: running many AI workers well', assignment: AGENTS_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  selfimprove: { prefix: 'Self-improvement:', name: 'Self-improvement: a system that upgrades its own rules', assignment: SELFIMPROVE_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  split: { prefix: 'Split:', name: 'Split: free models for small steps, Claude for hard ones', assignment: SPLIT_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
+  memory: { prefix: 'Memory:', name: 'Memory: storing and recalling what Brain learns', assignment: MEMORY_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
+  judgment: { prefix: 'Judgment:', name: 'Judgment: AI that checks its own reasoning', assignment: JUDGMENT_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
+  research: { prefix: 'Research:', name: 'Research: how top research agents search and verify', assignment: RESEARCH_METHOD_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
+  agents: { prefix: 'Agents:', name: 'Agents: running many AI workers well', assignment: AGENTS_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
+  selfimprove: { prefix: 'Self-improvement:', name: 'Self-improvement: a system that upgrades its own rules', assignment: SELFIMPROVE_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
+  split: { prefix: 'Split:', name: 'Split: free models for small steps, Claude for hard ones', assignment: SPLIT_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
 };
 
 async function administrator(): Promise<User> {
@@ -456,6 +467,10 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@example.com]
 
   people    list | foundation | rename <user|email> "<name>"
+  brain-only show [<bin_…> …] | on | off   (Claude routines take only Brain-improvement work, §84)
+  utilization show | run   (every capacity pool: waiting, running, capacity, idle beside work, §98)
+  free-lane show | run [ticks]             (free models do the displaced research, §85)
+  sources   show [hours] | compare [n]     (how research reads public pages, and what each route recovered)
   capacity  show | adopt <user|email> <trig_…>
   factory   invite <project> <user|email>
   workers   list | disable <name> | enable <name> | archive <name>
@@ -465,7 +480,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
             clear <worker> | retire <worker> --reason "why"
   connectors show | derive | attach <brnc_…> <trig_…>
              reconnect <cnr_…|trig_…> <user|email>
-             probe <trig_…> [--no-wait] | probe-status <trig_…|crp_…>
+             probe <trig_…> [--no-wait] | probe-status <trig_…|crp_…> | auto-probe
              repoint-worker <cnr_…> <to-worker>
   projects  list | create <name>
   access    show <worker> | grant <worker> <project> | revoke <worker> <project>
@@ -474,6 +489,9 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
   packets   list <project> | approve <orchestration>
             independence [project] | scope [project] | reaudit <orchestration>
             retry-fragment <fragment> | reissue <workItem>
+  identity  events [--actor <id>] [--project <id>] [--action <ACTION>]
+                    [--result SUCCESS|DENIED|FAILED] [--limit <n>]
+                    (§17's append-only audit; read-only, needs no --admin)
 
 Connecting a site is not here. It is a person's decision and it lives in
 Russell, under Connected sites, which is the only place a site credential is
@@ -1292,6 +1310,25 @@ async function main(): Promise<void> {
       console.log(`  ${connectorId} now authorizes as ${to} (was ${before.workerId ?? 'none'}); recorded against ${actor.id}.`);
       break;
     }
+    /*
+     * Brain's own probe pass (§100): every quarantined Routine, when Brain will
+     * next probe it by itself, or the one reason it never will.
+     */
+    case 'connectors auto-probe': {
+      const { autoProbePlan } = await import('../server/services/fleet/autoRecovery.ts');
+      const { liveRecoveryProbe } = await import('../server/repos/recoveryProbes.ts');
+      const live = await liveRecoveryProbe();
+      console.log(`  live probe: ${live ? `${live.id} for ${live.routineId} until ${live.expiresAt}` : 'none'}`);
+      for (const row of await autoProbePlan()) {
+        console.log(
+          `  ${row.routineName.padEnd(22)} ${row.routineRef}  ` +
+            (row.dueAt
+              ? `due=${row.dueAt} failed=${row.failed} last=${row.lastProbeAt ?? '—'} signal=${row.signal ?? '—'}`
+              : `never: ${row.never}`),
+        );
+      }
+      break;
+    }
     case 'connectors probe-status': {
       const target = rest[0] ?? fail('Name the Routine (trig_…) or the probe (crp_…).');
       const { getRecoveryProbe, latestRecoveryProbeFor } = await import('../server/repos/recoveryProbes.ts');
@@ -1317,6 +1354,304 @@ async function main(): Promise<void> {
       console.log('');
       console.log('  worker=— is a connection whose surface Brain has not been told about.');
       console.log('  `capacity adopt <user> <trig_…>` is what records one.');
+      break;
+    }
+    /*
+     * Brain-only mode (§84): Claude routines take only Brain-improvement work.
+     *
+     * `show` reads the switch and every live bin by purpose and lane, and with
+     * bin ids after it, each one's purpose, the rule that decided it, and its
+     * lane. `on` and `off` are the only way the switch changes, attributed to a
+     * real administrator; turning it on also runs the clean-up pass at once.
+     * The owner said the mode stays on until they say otherwise.
+     */
+    /*
+     * Every pool Brain schedules onto (§98): waiting, running, capacity, and
+     * whether it is idle beside waiting work, with the interventions recorded
+     * in the last day. `run` also continues what is idle.
+     */
+    case 'utilization show':
+    case 'utilization run': {
+      const { brainUtilization, watchUtilization } = await import('../server/services/engineering/watchdog.ts');
+      const pools = command === 'run' ? (await watchUtilization({})).pools : await brainUtilization();
+      for (const one of pools) {
+        console.log(
+          `  ${one.pool.padEnd(15)} waiting ${String(one.waiting).padStart(5)}  running ${String(one.running).padStart(4)}  capacity ${String(one.capacity).padStart(4)}  ${one.idle ? 'IDLE BESIDE WORK' : 'ok'}  ${one.because.slice(0, 160)}`,
+        );
+      }
+      const recent = await getDb().all<{ created_at: string; attempted_action: string; replacement_action: string }>(
+        "SELECT created_at, attempted_action, replacement_action FROM engineering_interventions WHERE kind = 'IDLE_WITH_EXECUTABLE_WORK' AND created_at > ? ORDER BY created_at DESC LIMIT 15",
+        [new Date(Date.now() - 24 * 3_600_000).toISOString()],
+      );
+      console.log(`  interventions (24h): ${recent.length}`);
+      for (const one of recent) console.log(`    ${one.created_at}  ${one.attempted_action.slice(0, 140)}  -> ${one.replacement_action}`);
+      break;
+    }
+    case 'brain-only show': {
+      const reading = await brainOnlyReading();
+      console.log(`  brain_only_mode  ${reading.mode ? 'ON' : 'OFF'}  (set ${reading.updatedAt ?? '—'} by ${reading.updatedBy ?? '—'})`);
+      for (const lane of reading.lanes) {
+        console.log(`  ${lane.purpose.padEnd(18)} ${lane.state.padEnd(12)} ${lane.lane.padEnd(22)} ${lane.n}`);
+      }
+      for (const binId of rest) {
+        const one = await binPurposeReading(binId);
+        console.log(
+          one
+            ? `  ${one.id}  ${one.state}  purpose=${one.purpose ?? 'UNCLASSIFIED'}  basis=${one.basis ?? '—'}  lane=${one.lane}  leased=${one.leased ? 'yes' : 'no'}`
+            : `  ${binId}  not found`,
+        );
+      }
+      break;
+    }
+    /*
+     * The free research lane (§85): what is displaced from Claude routines, what
+     * the free models are doing with it, and what reached Brain. `run` takes
+     * one tick now through the same path the loop takes.
+     */
+    case 'free-lane show': {
+      const reading = await freeLaneReading();
+      const c = reading.coverage;
+      console.log(`  configured        ${c.configured ? `yes (${c.models} model(s))` : 'no'}`);
+      console.log(`  ready             ${c.ready ? 'yes' : 'NO'} — ${c.reason}`);
+      console.log(`  displaced queued  ${JSON.stringify(c.displaced)}`);
+      console.log(`  unsupported       ${JSON.stringify(c.unsupported)}`);
+      const idle = await getDb().get<{ at: string; reason: string; measures: string }>(
+        "SELECT at, reason, measures FROM bin_events WHERE event_type = 'FREE_LANE_IDLE' ORDER BY at DESC LIMIT 1",
+      );
+      if (idle) console.log(`  idle with work    ${idle.at} ${idle.reason} ${idle.measures}`);
+      console.log(`  last hour         submitted=${c.submittedLastHour} failed=${c.failedLastHour}  last=${c.lastSubmittedAt ?? '—'}`);
+      console.log(`  runner consumed   ${c.consumedLastDay} next-stage item(s) queued after free-lane work (24h)`);
+      console.log(`  outcomes (24h)    ${JSON.stringify(reading.outcomesLastDay)}`);
+      console.log(`  packets resumed   ${reading.packetsTouched}`);
+      console.log(`  claims            ${reading.claimsAccepted} accepted of ${reading.claimsSubmitted} submitted by free workers`);
+      console.log(`  packets filed     ${reading.documentsFiled}`);
+      for (const failure of reading.recentFailures) console.log(`  failed            ${failure}`);
+      // What hands work back without spending it: invisible above, and what kept audits cycling.
+      const released = await getDb().all<{ at: string; workload_class: string; reason: string }>(
+        `SELECT at, workload_class, reason FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'RELEASED_TRANSIENT'
+          ORDER BY at DESC LIMIT 8`,
+      );
+      for (const r of released) console.log(`  released          ${r.at} ${r.workload_class} ${String(r.reason ?? '').slice(0, 200)}`);
+      // §86: what the adaptive pool is doing, from rows.
+      const t = await freeLaneThroughput();
+      console.log(`  running now       ${t.runningNow} job(s) leased by free workers`);
+      for (const c of t.capacity) {
+        console.log(`  capacity          ${c.model}: target ${c.target}, highest stable ${c.stableHigh} — ${c.reason} (${c.updatedAt})`);
+      }
+      console.log(`  max target        ${t.maxTargetReached}`);
+      {
+        const { unfitNow, resetFreeLaneFitness } = await import('../server/services/freeLane/worker.ts');
+        resetFreeLaneFitness();
+        const { laneConfig } = await import('../server/services/cheap/lane.ts');
+        const unfit = await unfitNow(t.capacity.map((c) => c.model), Date.now(), laneConfig()?.fallbackModel ?? null);
+        console.log(`  held back         ${unfit.size === 0 ? 'none' : [...unfit].join(', ')} (model|work type whose answers Brain rejects, 24h)`);
+      }
+      const h = t.lastHour;
+      console.log(`  last hour         completed=${h.completed} accepted=${h.accepted} failed=${h.failed} providerErrors=${h.providerErrors}`);
+      console.log(`  last hour output  claimsAccepted=${h.claimsAccepted} documents=${h.documents} nextStageItems=${h.nextStage}`);
+      console.log(`  last 10 min       completed=${t.last10Min.completed} accepted/min=${t.last10Min.perMinute}`);
+      // The free providers cost nothing; a RunPod GPU in the lane bills by the hour, measured in runpod-report.
+      console.log(
+        process.env['BRAIN_RUNPOD_MODE']?.trim() === 'primary'
+          ? `  cost              free providers $0; the RunPod GPU bills by the hour — measured by the Cheap lane workflow's runpod-report`
+          : `  cost              $0 (free providers only; no paid call is made from the lane)`,
+      );
+      for (const line of t.recentScaling) console.log(`  scaling           ${line}`);
+      break;
+    }
+    /*
+     * The source-access layer (services/sources/access.ts): what each route read,
+     * the same window before it, and Brain's own failed URLs re-read both ways.
+     */
+    case 'sources show': {
+      const hours = Math.min(Math.max(Number(rest[0] ?? '24') || 24, 1), 24 * 14);
+      const now = Date.now();
+      const since = new Date(now - hours * 3_600_000).toISOString();
+      const before = new Date(now - 2 * hours * 3_600_000).toISOString();
+      const nowIso = new Date(now).toISOString();
+      const a = await accessWindow(since, nowIso);
+      console.log(`  window            last ${hours}h (previous ${hours}h shown as "before")`);
+      console.log(`  source reads      ${a.reads}: readable ${a.readable}, DIRECT alone would have read ${a.directReadable}`);
+      console.log(`  readable by route ${JSON.stringify(a.byMethod)}`);
+      console.log(`  ms per read       direct=${a.msPerReadDirect ?? '—'} fallback=${a.msPerReadFallback ?? '—'}`);
+      console.log(`  learned per host  ${JSON.stringify(a.learned)}`);
+      for (const h of a.failingHosts) console.log(`  still failing     ${h.host} x${h.failures} ${JSON.stringify(h.reasons)}`);
+      const lanePrint = (label: string, w: Awaited<ReturnType<typeof laneWindow>>): void => {
+        console.log(
+          `  free lane ${label.padEnd(7)} fragments submitted=${w.fragmentsSubmitted} failed=${w.fragmentsFailed} noReadableSource=${w.noReadableSource} ` +
+            `verify=${w.verifySubmitted} syntheses=${w.synthesesSubmitted} claims accepted ${w.claimsAccepted}/${w.claimsSubmitted} ` +
+            `ms/submitted fragment=${w.msPerSubmittedFragment ?? '—'}`,
+        );
+      };
+      lanePrint('before', await laneWindow(before, since));
+      lanePrint('after', await laneWindow(since, nowIso));
+      break;
+    }
+    /*
+     * §88: the capability maps read against production. `capabilities show [hours]`
+     * prints every requirement's WORKING/BROKEN/MISSING/UNPROVEN with its reading and
+     * the connected gaps; `capabilities objective --text-b64 …` says which maps a new
+     * objective needs, whether it is substantial enough to assess, and what blocks it.
+     */
+    case 'capabilities show':
+    case 'capabilities objective': {
+      const { assessAll, formatAssessment } = await import('../server/services/selfmodel/capabilities.ts');
+      const { assessObjective } = await import('../server/domain/capabilityMap.ts');
+      const hours = Math.min(Math.max(Number(rest[0] ?? '24') || 24, 1), 24 * 14);
+      const all = await assessAll({ hours });
+      if (command === 'show') {
+        for (const one of all) for (const line of formatAssessment(one)) console.log(line);
+        break;
+      }
+      const encoded = flag('text-b64') ?? fail('Pass --text-b64: the objective, base64.');
+      const text = Buffer.from(encoded, 'base64').toString('utf8');
+      const verdict = assessObjective({ text }, Object.fromEntries(all.map((a) => [a.map, a.assessed])));
+      console.log(`  substantial  ${verdict.substantial}  maps=${verdict.maps.join(',') || 'none'}  ready=${verdict.ready}`);
+      for (const g of verdict.blocking) console.log(`    blocks  ${g.status.padEnd(8)} ${g.id.padEnd(26)} ${g.why}`);
+      break;
+    }
+    case 'sources search': {
+      // Runs one search from this machine: whether the endpoints answer here, and what they return.
+      const { webSearch, searchStats } = await import('../server/services/sources/discover.ts');
+      const query = rest.join(' ').trim() || 'small business size standards';
+      const urls = await webSearch(query);
+      console.log(`  query    ${query}`);
+      console.log(`  results  ${urls.length} ${JSON.stringify(searchStats)}`);
+      for (const u of urls) console.log(`    ${u}`);
+      const refused = await getDb().all<{ at: string; reason: string }>(
+        "SELECT at, reason FROM bin_events WHERE event_type = 'SOURCE_SEARCH' ORDER BY at DESC LIMIT 5",
+      );
+      for (const r of refused) console.log(`  refused  ${r.at} ${r.reason}`);
+      break;
+    }
+    case 'sources compare': {
+      const n = Math.min(Math.max(Number(rest[0] ?? '25') || 25, 1), 60);
+      const urls = rest.slice(1).filter((u) => /^https?:\/\//.test(u));
+      const sample = urls.length > 0 ? urls : await failedUrlSample(n);
+      const result = await compareReaders(sample);
+      console.log(`  sample            ${sample.length} failed research URL(s) from this Brain's own records; browser ${result.browser ? 'configured' : 'NOT configured'}`);
+      for (const r of result.rows) {
+        console.log(`  ${r.improved ? 'RECOVERED' : 'same     '} ${r.before.padEnd(16)} ${String(r.beforeMs).padStart(6)}ms -> ${r.after.padEnd(16)} ${String(r.afterMs).padStart(6)}ms ${r.method}  ${r.url.slice(0, 140)}`);
+        if (r.preview) console.log(`            read: "${r.preview}"`);
+      }
+      const read = (s: string) => s.startsWith('READ');
+      const ok = result.rows.filter((r) => read(r.after));
+      console.log(`  pages read        before ${result.rows.filter((r) => read(r.before)).length}/${result.rows.length}, after ${ok.length}/${result.rows.length}, recovered ${result.rows.filter((r) => r.improved).length}`);
+      const ms = (xs: number[]) => (xs.length ? Math.round(xs.reduce((x, y) => x + y, 0) / xs.length) : 0);
+      console.log(`  ms per success    before ${ms(result.rows.filter((r) => read(r.before)).map((r) => r.beforeMs))}, after ${ms(ok.map((r) => r.afterMs))}`);
+      console.log(`  brain rss         ${result.rssBeforeMb} MB -> ${result.rssAfterMb} MB (the browser runs in its own app)`);
+      break;
+    }
+    case 'free-lane run': {
+      await administrator();
+      const ticks = Math.min(Math.max(Number(rest[0] ?? '1') || 1, 1), 10);
+      for (let n = 0; n < ticks; n += 1) {
+        const tick = await freeLaneTick();
+        console.log(`  tick ${n + 1}: ${JSON.stringify(tick)}`);
+        if (!tick.configured || tick.claimed === 0) break;
+      }
+      break;
+    }
+    /*
+     * Brain improving itself (§87): the scoreboard, the register of
+     * weaknesses from detection to measured decision, and what happened.
+     * `tick` runs one pass of the loop now, the same pass the tick runs.
+     */
+    /*
+     * Historical memory (docs/HISTORICAL-MEMORY.md). Counts only — never a
+     * conversation, a title or an idea: this output lands in a workflow log.
+     */
+    case 'memory show': {
+      const { coverageReport } = await import('../server/services/memory/coverage.ts');
+      const owners = await getDb().all<{ owner_user_id: string }>(
+        `SELECT DISTINCT owner_user_id FROM memory_conversations
+         UNION SELECT DISTINCT owner_user_id FROM bridge_conversations WHERE message_count > 0
+         UNION SELECT DISTINCT owner_user_id FROM memory_archives`,
+      );
+      console.log(`  owners with history  ${owners.length}`);
+      for (const { owner_user_id: owner } of owners) {
+        const c = await coverageReport(owner);
+        console.log(`  OWNER ${owner}`);
+        console.log(`    archives            ${c.archives.total} (complete ${c.archives.complete}, receiving ${c.archives.receiving})`);
+        console.log(`    conversations       declared ${c.conversations.declared}, recovered ${c.conversations.recovered}, bridge ${c.conversations.fromBridge}, failed ${c.conversations.failed}, not sent ${c.conversations.notYetSent}`);
+        console.log(`    messages            declared ${c.messages.declared}, stored ${c.messages.stored}, alternate ${c.messages.alternateBranches}, superseded ${c.messages.supersededVersions}`);
+        console.log(`    attachments         referenced ${c.attachments.referenced}, recovered ${c.attachments.recovered}, referenced-only ${c.attachments.referencedOnly}, failed ${c.attachments.failed}`);
+        console.log(`    search index        messages ${c.search.messagesIndexed}/${c.search.messagesWithText}, passages ${c.search.passages}, conversations pending ${c.search.conversationsPending}`);
+        console.log(`    organization        topics ${c.organization.topics}, subtopics ${c.organization.subtopics}, merged ${c.organization.merged}, retired ${c.organization.retired}`);
+        console.log(`    registry            ideas ${c.registry.ideas} ${JSON.stringify(c.registry.byState)}, reconstructed ${c.registry.reconstructed}`);
+        console.log(`    rediscovery         open ${c.rediscovery.open}, decided ${c.rediscovery.decided}, decisions ${c.rediscovery.decisions}`);
+        console.log(`    hubs                ${c.hubs.total} ${JSON.stringify(c.hubs.byState)}`);
+        console.log(`    range               ${c.dateRange.first ?? '—'} → ${c.dateRange.last ?? '—'} (since summer 2025: ${c.dateRange.since2025Summer}, before: ${c.dateRange.before2025Summer})`);
+      }
+      break;
+    }
+    case 'memory sweep': {
+      await administrator();
+      const { sweepToCompletion } = await import('../server/services/memory/pipeline.ts');
+      const reports = await sweepToCompletion({ maxPasses: 40 });
+      const total = reports.reduce(
+        (a, r) => ({
+          absorbed: a.absorbed + r.absorbed, indexed: a.indexed + r.indexed, passages: a.passages + r.passages,
+          excavated: a.excavated + r.excavated, ideas: a.ideas + r.ideasCreated, reconstructed: a.reconstructed + r.reconstructed,
+          surfaced: a.surfaced + r.surfaced, hubs: a.hubs + r.hubsPrepared,
+        }),
+        { absorbed: 0, indexed: 0, passages: 0, excavated: 0, ideas: 0, reconstructed: 0, surfaced: 0, hubs: 0 },
+      );
+      const last = reports[reports.length - 1];
+      console.log(`  passes ${reports.length}  ${JSON.stringify(total)}  remaining ${JSON.stringify(last?.remaining ?? {})}`);
+      break;
+    }
+    case 'improvement show': {
+      const { improvementReading } = await import('../server/services/improvement/loop.ts');
+      const reading = await improvementReading();
+      const s = reading.switch;
+      console.log(`  improvement_loop  ${s.enabled ? 'ON' : 'OFF'}  (set ${s.updatedAt ?? '—'} by ${s.updatedBy ?? '—'})`);
+      const { activationReading } = await import('../server/services/improvement/activation.ts');
+      const act = await activationReading();
+      console.log(`  free-lane research  ${act.state}  (evaluated ${act.checkedAt ?? 'never'} by ${act.via ?? '—'})${act.waitingOn.length ? `  waiting on ${act.waitingOn.join(', ')}` : ''}`);
+      for (const c of act.checks) console.log(`    ${c.ok ? 'ok ' : 'NO '} ${c.key.padEnd(26)} ${c.detail}`);
+      const { improvementResearchWork } = await import('../server/services/improvement/activation.ts');
+      const work = await improvementResearchWork();
+      console.log(`  improvement research  goals=${work.goals} items=${JSON.stringify(work.items)} free-lane on loop research (24h)=${JSON.stringify(work.freeLane)} free-lane on all Brain research (24h)=${JSON.stringify(work.freeLaneBrain)} takeable now=${work.waitingNow} settled loop packets=${work.settledPackets}`);
+      for (const board of reading.scoreboard) {
+        console.log(`  SCOREBOARD ${board.window}`);
+        for (const m of board.metrics) {
+          const value = m.value === null ? '—' : m.value;
+          console.log(`    ${m.key.padEnd(30)} ${String(value).padEnd(9)} ${m.status === 'MEASURED' ? '' : 'INSUFFICIENT DATA '}(${m.numerator}/${m.denominator})${m.context ? ` ${JSON.stringify(m.context)}` : ''}`);
+        }
+      }
+      console.log(`  FREE-LANE FRAGMENT FAILURES (24h, ${reading.failureClasses.attempts} settled): ${JSON.stringify(reading.failureClasses.failures)}`);
+      console.log(`  FREE-LANE FAILURES (recent): ${reading.detectors.freeLaneRecent}`);
+      console.log(`  CLAIM REJECTIONS (7d): ${reading.detectors.claims}`);
+      console.log(`  PACKET OUTCOMES (7d): ${reading.detectors.packets}`);
+      console.log(`  OWNER INTERVENTIONS (7d): ${reading.detectors.owner}`);
+      console.log(`  CANDIDATES ${reading.candidates.length}`);
+      for (const c of reading.candidates) {
+        console.log(`    ${c.key}  ${c.stage}  ${c.owner}  ${c.decision ?? ''}  baseline=${c.baseline ?? '—'} after=${c.after ?? '—'} ${c.verdict ?? ''}`);
+        console.log(`      ${c.title} — next: ${c.next}${c.reason ? ` — ${c.reason}` : ''}${c.links ? ` [${c.links}]` : ''}`);
+      }
+      for (const line of reading.recent) console.log(`  event  ${line}`);
+      break;
+    }
+    case 'improvement tick': {
+      await administrator();
+      const { improvementTick } = await import('../server/services/improvement/loop.ts');
+      console.log(`  ${JSON.stringify(await improvementTick())}`);
+      break;
+    }
+    case 'improvement on':
+    case 'improvement off': {
+      const actor = await administrator();
+      const { setImprovementSwitch } = await import('../server/services/improvement/authority.ts');
+      await setImprovementSwitch(command === 'on', actor.email ?? actor.id, rest.join(' ').trim() || null);
+      console.log(`  improvement_loop is ${command === 'on' ? 'ON' : 'OFF'}, recorded against ${actor.email ?? actor.id}.`);
+      break;
+    }
+    case 'brain-only on':
+    case 'brain-only off': {
+      const actor = await administrator();
+      await setBrainOnlyMode(command === 'on', actor.email ?? actor.id, rest.join(' ').trim() || null);
+      console.log(`  brain_only_mode is ${command === 'on' ? 'ON' : 'OFF'}, recorded against ${actor.email ?? actor.id}.`);
       break;
     }
     case 'projects list': {
@@ -1960,6 +2295,46 @@ async function main(): Promise<void> {
       }
       break;
     }
+    case 'packets parks': {
+      const { parkReadings } = await import('../server/services/russell/routineDecisions.ts');
+      const rows = await parkReadings();
+      console.log(`PARKED ${rows.length}`);
+      for (const r of rows) console.log(`  ${JSON.stringify(r)}`);
+      break;
+    }
+    /*
+     * Why recent packets ended, and what their audit and synthesis items
+     * recorded. Read-only: the capability map's JOB_OUTCOME and AUDIT probes
+     * count these; this prints the rows behind the counts (§88).
+     */
+    case 'packets recent': {
+      const hours = Number(rest[0] ?? '6') || 6;
+      const from = new Date(Date.now() - hours * 3_600_000).toISOString();
+      const db = getDb();
+      const ended = await db.all<Record<string, unknown>>(
+        `SELECT id, status, SUBSTR(COALESCE(failure_reason, cancel_reason, ''), 1, 400) AS reason,
+                COALESCE(completed_at, failed_at, cancelled_at, updated_at) AS at
+           FROM research_orchestrations
+          WHERE status IN ('COMPLETE', 'COMPLETE_WITH_GAPS', 'FAILED', 'NEEDS_HUMAN', 'CANCELLED')
+            AND COALESCE(completed_at, failed_at, cancelled_at, updated_at) >= ?
+          ORDER BY at DESC LIMIT 40`,
+        [from],
+      );
+      console.log(`PACKETS ENDED since ${from}: ${ended.length}`);
+      for (const r of ended) console.log(`  ${JSON.stringify(r)}`);
+      const items = await db.all<Record<string, unknown>>(
+        `SELECT id, work_type, state, attempt_count, failure_category,
+                SUBSTR(COALESCE(result_summary, cancelled_reason, ''), 1, 300) AS summary, updated_at
+           FROM work_items
+          WHERE work_type IN ('RESEARCH_AUDIT', 'RESEARCH_SYNTHESIZE') AND state IN ('SUCCEEDED', 'FAILED', 'CANCELLED')
+            AND updated_at >= ?
+          ORDER BY updated_at DESC LIMIT 40`,
+        [from],
+      );
+      console.log(`AUDIT/SYNTHESIS ITEMS settled: ${items.length}`);
+      for (const r of items) console.log(`  ${JSON.stringify(r)}`);
+      break;
+    }
     case 'packets list': {
       const project = await projectFrom(rest[0] ?? fail('Name a project.'));
       for (const orchestration of await listOrchestrationsByProject(project.id)) {
@@ -2186,6 +2561,27 @@ async function main(): Promise<void> {
      * decides when the subject is asked about, the discovery grant decides
      * whether that may run, and the evidence gate decides what may be claimed.
      */
+    case 'cash instantly': {
+      /*
+       * Read-only (§94): the owner's Instantly workspace as Brain sees it —
+       * sending accounts and their health, the daily capacity between them,
+       * the campaigns, Brain's own campaign, and the replies on it that Brain
+       * would record. Sends nothing, creates nothing, activates nothing.
+       */
+      const { probeInstantly, readInstantlyReplies, BRAIN_CAMPAIGN_NAME } = await import('../server/services/cash/providers/instantly.ts');
+      const probe = await probeInstantly();
+      console.log(`  instantly        ${probe.verdict}: ${probe.detail}`);
+      if (probe.workspace) {
+        for (const one of probe.workspace.accounts) console.log(`  account          ${one.healthy ? 'healthy  ' : 'unhealthy'} status ${one.status} warmup ${one.warmupStatus ?? '-'} limit ${one.dailyLimit ?? '-'}/day ${one.email.replace(/^[^@]+/, '…')}`);
+        for (const one of probe.workspace.campaigns) console.log(`  campaign         ${one.id} status ${one.status} ${one.brains ? '(Brain\'s)' : '(the owner\'s; Brain never changes it)'} ${one.name.slice(0, 60)}`);
+        const brain = probe.workspace.campaigns.find((one) => one.name === BRAIN_CAMPAIGN_NAME);
+        if (brain) {
+          const replies = await readInstantlyReplies({ campaignId: brain.id, pages: 1 });
+          console.log(`  replies          ${replies.ok ? `${replies.replies.length} received on Brain's campaign (${replies.replies.filter((r) => r.autoReply).length} auto-replies)` : replies.reason}`);
+        }
+      }
+      break;
+    }
     case 'cash constraints': {
       const project = await projectFrom(rest[0] ?? fail('Name the project.'));
       if (rest.length < 2) {
@@ -2220,6 +2616,40 @@ async function main(): Promise<void> {
     case 'cash seed-industry': {
       const actor = await administrator();
       const project = await projectFrom(rest[0] ?? fail('Name the project.'));
+      /*
+       * A whole subtree at once, from `--text-b64`: one subject a line,
+       * `KIND | name | description`, a child indented under its parent. Each
+       * line is the same `seedSubject` call, so each is recorded and every
+       * narrower part is still something research confirms or retires.
+       */
+      const tree = flag('text-b64');
+      if (tree) {
+        const lines = Buffer.from(tree, 'base64').toString('utf8').split('\n').filter((line) => line.trim());
+        const stack: Array<{ indent: number; id: string }> = [];
+        for (const line of lines) {
+          const indent = line.length - line.trimStart().length;
+          const [kindText, nameText, description] = line.trim().split('|').map((part) => part.trim());
+          const kind = (kindText ?? '').toUpperCase();
+          if (!(INDUSTRY_NODE_KINDS as readonly string[]).includes(kind)) fail(`"${kindText}" is not a kind of subject (${INDUSTRY_NODE_KINDS.join(', ')}).`);
+          if (!nameText) fail(`A line names no subject: ${line.trim()}`);
+          while (stack.length && stack[stack.length - 1]!.indent >= indent) stack.pop();
+          const parentId = stack[stack.length - 1]?.id ?? null;
+          const seeded = await seedSubject({
+            projectId: project.id,
+            name: nameText,
+            kind: kind as IndustryNodeKind,
+            description: description || null,
+            parentId,
+            actorRef: actor.id,
+            reason: `Seeded from the terminal by ${actor.email ?? actor.id}, on a recorded instruction.`,
+          });
+          stack.push({ indent, id: seeded.node.id });
+          console.log(`  ${seeded.node.id}  ${'  '.repeat(stack.length - 1)}${seeded.node.name}  [${seeded.node.kind}/${seeded.node.origin}]  ${seeded.created ? 'seeded' : 'already on the map'}`);
+        }
+        await recordIdentityEvent({ actorType: 'HUMAN', actorId: actor.id, action: 'UPDATE_PROJECT', targetType: 'PROJECT', targetId: project.id, projectId: project.id, result: 'SUCCESS' });
+        console.log('  Brain decides when to ask about each. Nothing was spent and no research started.');
+        break;
+      }
       const name = rest.slice(1).join(' ').trim() || fail('Name the subject to seed.');
 
       const result = await seedSubject({
@@ -2250,6 +2680,32 @@ async function main(): Promise<void> {
           ? '  Brain decides when to ask about it. Nothing was spent and no research started.'
           : '  It was already on the map, so nothing changed.',
       );
+      break;
+    }
+    /*
+     * Taking a subject off the map, from the terminal: the same function the
+     * Cash page's retire route calls, with the administrator as the actor and
+     * the reason recorded, so the retirement stays answerable.
+     */
+    case 'cash retire-industry': {
+      const actor = await administrator();
+      const project = await projectFrom(rest[0] ?? fail('Name the project.'));
+      // The workflow passes "<ind_…> <reason words>" as one argument; a terminal may pass them apart.
+      const [nodeId, ...words] = rest.slice(1).join(' ').trim().split(/\s+/);
+      if (!nodeId) fail('Name the subject (ind_...).');
+      const reason = words.join(' ').trim() || fail('Say why it is retired.');
+      const node = await retireSubject({ projectId: project.id, nodeId, reason, actorRef: actor.id });
+      if (!node) fail('No subject with that id in this project.');
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'UPDATE_PROJECT',
+        targetType: 'PROJECT',
+        targetId: project.id,
+        projectId: project.id,
+        result: 'SUCCESS',
+      });
+      console.log(`  ${node.id}  ${node.name}  retired: ${node.retiredReason ?? reason}`);
       break;
     }
     case 'packets scope': {
@@ -2442,6 +2898,62 @@ async function main(): Promise<void> {
         actor: { type: 'HUMAN', id: actor.id },
       });
       console.log(`  ${JSON.stringify(result)}`);
+      break;
+    }
+
+    /*
+     * §17's audit, read rather than reconstructed: `identity_events` is
+     * append-only, and this is the one terminal reader of it. A read, so it
+     * needs no `--admin` — the same rule `people list` and `workers list`
+     * already follow.
+     *
+     * What is printed is exactly what the repository's own `IdentityEvent`
+     * shape stores minus what §17 forbids: `credentialId`, `metadata`,
+     * `userAgent` and `remoteAddr` never cross into this terminal, because an
+     * identity event may hold identifiers, prefixes and categories and must
+     * never hold anything that reads like a credential.
+     */
+    case 'identity events': {
+      const resultFlag = flag('result');
+      let result: IdentityResult | undefined;
+      if (resultFlag !== null) {
+        const normalized = resultFlag.trim().toUpperCase();
+        const match = IDENTITY_RESULTS.find((candidate) => candidate === normalized);
+        if (!match) {
+          fail(
+            `"${resultFlag}" is not a valid result. Expected one of: ${IDENTITY_RESULTS.join(', ')}.`,
+          );
+        }
+        result = match;
+      }
+      let limit = 200;
+      const limitFlag = flag('limit');
+      if (limitFlag !== null) {
+        const parsed = Number(limitFlag.trim());
+        if (!Number.isInteger(parsed) || parsed < 1 || parsed > 1000) {
+          fail(`"${limitFlag}" is not a valid limit. It must be a whole number between 1 and 1000.`);
+        }
+        limit = parsed;
+      }
+      const actorId = flag('actor');
+      const projectId = flag('project');
+      const action = flag('action');
+      const events = await listIdentityEvents({
+        ...(actorId ? { actorId } : {}),
+        ...(projectId ? { projectId } : {}),
+        ...(action ? { action } : {}),
+        ...(result ? { result } : {}),
+        limit,
+      });
+      for (const event of events) {
+        console.log(
+          `  ${event.createdAt}  actor=${event.actorType}:${event.actorId ?? '—'}  ` +
+            `action=${event.action}  result=${event.result}` +
+            (event.reason ? `  reason=${event.reason}` : '') +
+            (event.targetType ? `  target=${event.targetType}:${event.targetId ?? '—'}` : '') +
+            (event.projectId ? `  project=${event.projectId}` : ''),
+        );
+      }
       break;
     }
     default:

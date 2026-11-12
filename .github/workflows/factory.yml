@@ -39,7 +39,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'submit | approve | status | allocation | events | throughput | pull-request | campaigns | bins | remote-tick | amend | plan | release | set-state | answer-bin | reauthorize | regrant-unit | retire'
+        description: 'submit | approve | status | outcome | wait | allocation | events | throughput | pull-request | campaigns | bins | remote-tick | amend | plan | release | set-state | answer-bin | reauthorize | regrant-unit | retire | program-submit | program-approve | program-status | program-tick | program-depend | program-amend | program-release | program-unblock | capacity'
         required: true
         default: status
       file:
@@ -64,8 +64,16 @@ on:
         default: ''
 
 # Never at the same time as a deploy: the machine is being replaced during one.
+# Every run holds a group of its own. GitHub keeps one pending run per group and
+# the newest pending cancels the one waiting, so a shared group drops work: a
+# `status` was cancelled by another session's `submit` (2026-10-30), and on
+# 2026-11-02 a session that dispatched approve, authorize-release, submit and
+# submit back to back had the middle two cancelled without a word. Reads change
+# nothing, and every write here is a guarded, idempotent database operation
+# (§19, §20), so nothing needs the queue; keeping off a machine mid-release is
+# await-release's job.
 concurrency:
-  group: brain-console-factory
+  group: brain-console-factory-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -88,7 +96,9 @@ jobs:
       - uses: ./.github/actions/await-release
 
       - name: Run
-        timeout-minutes: 20
+        # `wait` watches one objective to its end, up to a little under the
+        # six hours GitHub allows a job; every other command is bounded at 20.
+        timeout-minutes: ${{ inputs.command == 'wait' && 350 || 20 }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           # Through the environment, never interpolated into the shell: an input
@@ -150,9 +160,49 @@ jobs:
           if [ -n "$FACTORY_EXTRA" ];    then args="$args $FACTORY_EXTRA"; fi
 
           echo "factory $args"
-          set +e
-          flyctl ssh console --app "$app" -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh $args" 2>&1 | tee factory.txt
-          set -e
+          if [ "$FACTORY_COMMAND" = 'wait' ]; then
+            # One run that ends when the objective does, so a session watches
+            # this run to termination instead of dispatching `status` every few
+            # minutes (41 of 60 factory.yml runs were exactly that). Each probe
+            # is a short `factory outcome` on its own one-connection console, so
+            # nothing holds one of the pooler's fifteen clients between probes.
+            # A probe that fails — a deploy replacing the machine — is retried.
+            [ -n "$FACTORY_CAMPAIGN" ] || { echo "FACTORY REFUSED: wait needs --campaign"; exit 1; }
+            deadline=$(( $(date +%s) + ${FACTORY_WAIT_SECONDS:-20400} ))
+            : > factory.txt
+            while :; do
+              # Bounded: a console opened while a deploy replaced the machine
+              # hung for hours and held the wait past the objective's end
+              # (fcp_90dacf0a finished 14:33; its wait was still open at 14:57).
+              timeout --kill-after=15 180 flyctl ssh console --app "$app" \
+                -C "nice -n 19 env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh outcome --campaign $FACTORY_CAMPAIGN" \
+                > probe.txt 2>&1 || true
+              if grep -q '^FACTORY-OUTCOME-TERMINAL:' probe.txt; then
+                cat probe.txt | tee -a factory.txt
+                echo "FACTORY: OK" | tee -a factory.txt
+                break
+              fi
+              if [ "$(date +%s)" -ge "$deadline" ]; then
+                cat probe.txt | tee -a factory.txt
+                echo "FACTORY-WAIT: STILL-RUNNING — dispatch wait again for $FACTORY_CAMPAIGN" | tee -a factory.txt
+                echo "FACTORY: OK" | tee -a factory.txt
+                break
+              fi
+              grep -m1 -E '^(BUILDING|VERIFYING|RELEASING|BLOCKED|LIVE|CANCELLED) — ' probe.txt || true
+              # Fifteen minutes: each probe is a whole Node process on the
+              # production machine, so a wait must cost little, and an objective
+              # that took hours is reported at most fifteen minutes late.
+              sleep "${FACTORY_WAIT_PROBE_SECONDS:-900}"
+            done
+          else
+            set +e
+            # Lowest CPU priority: every operator command is a `node --import tsx`
+            # process on the machine that serves Brain, and transpiling the app's
+            # import graph beside it stalled /healthz for 25-30 s at a time on the
+            # shared-cpu machine (2026-11-02, 16:18-16:57).
+            flyctl ssh console --app "$app" -C "nice -n 19 env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh $args" 2>&1 | tee factory.txt
+            set -e
+          fi
 
           # The same output, as one annotation. A run's log lives in blob storage
           # that some operators' sandboxes cannot reach, while annotations are

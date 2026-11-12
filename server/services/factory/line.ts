@@ -33,6 +33,7 @@ import {
   getCampaignByChangeRequest,
   getChangeRequest,
   listLiveCampaigns,
+  listUnits,
   pathsOverlap,
 } from '../../repos/factory.ts';
 import { listFactoryEvents, recordFactoryEvent } from '../../repos/factoryFleet.ts';
@@ -180,18 +181,20 @@ async function countWorking(campaigns: FactoryCampaign[]): Promise<number> {
 
 
 /**
- * The live campaign a queued objective's mutation scope intersects, if any.
+ * The live campaign whose units own files a queued objective's scope reaches.
  *
- * Two campaigns whose declared scopes overlap would each branch from the same
- * base and edit the same files, and the second pull request would arrive
- * conflicted with the first. The factory already refuses to lease two *units*
- * whose surfaces intersect (`pathsOverlap`, the same coarse prefix comparison,
- * whose expensive mistake is answering no); this is that rule one level up.
- * Compared against every live campaign — a BLOCKED one still owns its branch —
- * and never against a finished one, whose work is on a pull request a person
- * merges. It is a wait, not a refusal: the entry starts on the pass after the
- * other campaign stops being live, and lower-priority work that does not
- * overlap is started meanwhile.
+ * Two campaigns would each branch from the same base and conflict only where
+ * they edit the same files. What a campaign edits is what its *units* own, not
+ * what its objective was allowed to touch, so a broad declared scope such as
+ * `tests/**` must not serialize campaigns whose units are disjoint. The queued
+ * objective's declared scope is compared against the `ownedPaths` of other live
+ * campaigns' units that are still in play (not INTEGRATED, CANCELLED, FAILED or
+ * SUPERSEDED); a campaign with no units yet owns nothing and blocks nothing.
+ * Compared against every live campaign except one BLOCKED on a person — which,
+ * as at the unit level, holds nothing — and never against a finished one. It is a wait, not a refusal: the entry
+ * starts on the pass after the owning unit is INTEGRATED. Once the campaign
+ * runs, `runRemoteTick` defers individual units that collide with a live unit
+ * of another campaign, so this admission check is only the coarse first gate.
  */
 async function overlappingLiveCampaign(
   scope: string[],
@@ -203,11 +206,25 @@ async function overlappingLiveCampaign(
   return null;
 }
 
+const UNIT_OWNERSHIP_ENDED = new Set(['INTEGRATED', 'CANCELLED', 'FAILED', 'SUPERSEDED']);
+
 async function liveScopes(live: FactoryCampaign[]): Promise<Array<{ campaignId: string; scope: string[] }>> {
   const scopes: Array<{ campaignId: string; scope: string[] }> = [];
   for (const campaign of live) {
-    const request = await getChangeRequest(campaign.changeRequestId);
-    if (request) scopes.push({ campaignId: campaign.id, scope: request.mutationScope });
+    /*
+     * The same rule `conflictingUnitOfOtherCampaign` applies to units: a campaign
+     * stopped on something only a person can answer holds nothing. Production
+     * 2026-11-11: five Release 01 change requests (three priority-1 repairs) sat
+     * "not admitted" behind fcp_e51947d1 and fcp_709188ac, both BLOCKED for a
+     * person for days; the unit check would have let them run, the admission
+     * gate never asked it.
+     */
+    if (campaign.state === 'BLOCKED' && parkedOffFleet(campaign.blockerKind)) continue;
+    const units = await listUnits(campaign.id);
+    const owned = units
+      .filter((unit) => !UNIT_OWNERSHIP_ENDED.has(unit.state))
+      .flatMap((unit) => unit.ownedPaths);
+    if (owned.length > 0) scopes.push({ campaignId: campaign.id, scope: owned });
   }
   return scopes;
 }
@@ -245,7 +262,7 @@ export async function admitQueued(): Promise<AdmissionReport> {
       if (clash) {
         report.skipped.push({
           entryId: entry.id,
-          reason: `its mutation scope overlaps live campaign ${clash}; it starts once that campaign is no longer live`,
+          reason: `its mutation scope overlaps files owned by an unintegrated unit of live campaign ${clash}; it starts once those units are integrated`,
         });
         continue;
       }
@@ -282,7 +299,6 @@ export async function admitQueued(): Promise<AdmissionReport> {
       },
     });
     report.admitted.push({ entryId: entry.id, changeRequestId: changeRequest.id, campaignId: campaign.id });
-    scopes.push({ campaignId: campaign.id, scope: changeRequest.mutationScope });
     if (await holdsSlot(campaign)) working += 1;
   }
   report.working = working;
@@ -324,7 +340,16 @@ export interface LineBin {
  * somebody to act, and names what. A `Record` over the whole union, so a blocker
  * kind added later is a compile error until somebody says which it is.
  */
-export const BLOCKER_WAIT: Record<FactoryBlockerKind, { wait: 'AUTOMATIC' | 'PERSON'; remedy: string }> = {
+/**
+ * `MAINTAINER`: neither Brain's next tick nor the owner — the authorized
+ * engineering session. Like PERSON it holds no files and is not re-ticked.
+ */
+export type BlockerWait = 'AUTOMATIC' | 'PERSON' | 'MAINTAINER';
+/** A blocked campaign nothing in the fleet will move: it holds no files and admits nothing. */
+export const parkedOffFleet = (kind: FactoryBlockerKind | null | undefined): boolean =>
+  !!kind && BLOCKER_WAIT[kind]?.wait !== 'AUTOMATIC';
+
+export const BLOCKER_WAIT: Record<FactoryBlockerKind, { wait: BlockerWait; remedy: string }> = {
   NO_HEALTHY_EXECUTION_SURFACE: {
     wait: 'AUTOMATIC',
     remedy: 'Resumes on the next tick once a surface that can take the stage is eligible.',
@@ -351,6 +376,12 @@ export const BLOCKER_WAIT: Record<FactoryBlockerKind, { wait: 'AUTOMATIC' | 'PER
       'A repair needs a file the approved scope does not cover. Amend mutation_scope to add ' +
       'exactly the files named; the next tick queues the repair.',
   },
+  PROTECTED_SCOPE: {
+    wait: 'MAINTAINER',
+    remedy:
+      'No Factory worker may change this scope. A direct Brain engineering session makes the change ' +
+      '(factory-objective skill), or amends the scope to writable paths; the next tick plans it then.',
+  },
   REPAIR_OWNERSHIP_UNRESOLVED: {
     wait: 'PERSON',
     remedy:
@@ -367,7 +398,7 @@ export interface LineCampaign {
   bins: LineBin[];
   /** Null while it is moving. */
   blocked: null | {
-    wait: 'AUTOMATIC' | 'PERSON';
+    wait: BlockerWait;
     kind: string;
     detail: string;
     remedy: string;
@@ -588,7 +619,6 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     const executableNow = policy.maxActive > 0 && clash === null && slotsLeft > 0;
     if (executableNow) {
       slotsLeft -= 1;
-      if (request) scopes.push({ campaignId: `queued:${entry.id}`, scope: request.mutationScope });
     }
     queued.push({
       entry,
@@ -599,7 +629,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
         policy.maxActive === 0
           ? 'AUTO is off.'
           : clash
-            ? `Priority ${entry.priority}; its files overlap live campaign ${clash.startsWith('queued:') ? 'an objective ahead of it' : clash}, so it waits for that to finish.`
+            ? `Priority ${entry.priority}; its files overlap those owned by unintegrated units of live campaign ${clash}, so it waits for them to be integrated.`
             : executableNow
               ? `Priority ${entry.priority}; a slot is free, so the next pass starts it.`
               : `Priority ${entry.priority}; waits for one of ${policy.maxActive} slot(s) to free.`,

@@ -125,6 +125,8 @@ export function readMoneyFigures(text: string, currency: string): MoneyFigure[] 
       if (/^[kKmMbB]/.test(after) && !/\s/.test(after)) continue;
       const rest = text.slice(match.index + match[0].length);
       if (SCALE_WORD.test(rest)) continue;
+      // A space-grouped number (`$12 000`) would be returned truncated: refuse it.
+      if (/^ \d{3}(?!\d)/.test(rest)) continue;
       // A symbol glued to a letter belongs to another currency: `C$`, `A$`,
       // `HK$` and `NT$` all end in `$`, and reading them as dollars is the
       // unknown read as the favourable assumption. `US$` is its own marker.

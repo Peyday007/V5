@@ -1,0 +1,102 @@
+{
+  "objective": "Make Brain a general goal engine that understands how money is actually made, screens possibilities cheaply, keeps everything useful for later, and only recommends a plan whose reliability is supported. VERIFIED BASELINE (production, 2026-10-30) — extend, never duplicate: industry kernel server/services/industry/** (industry_nodes tree, structural_finding claims, capital per requirement, allocate.ts rounds); trigger buckets server/services/cash/triggers.ts; one code detector (CONCENTRATED_HIRING) in server/services/feeds/detectors.ts over feed_items; cheap free-AI lane server/services/cheap/lane.ts; scenario engine server/services/scenario/** fed by server/services/cash/goalScenario.ts; goal plan, path research and spending pace in server/services/goals/** (plan.ts readGoalPlan/advanceGoalPlans, pathResearch.ts, spending.ts, target.ts TargetReading: metric, targetCents, daysLeft, capitalCeilingCents, capitalBeforeProofCents, capitalPerWeekCents, hoursCeiling, resources); measured plan chance (measuredChance) already refuses to state a probability without finished plans; reconsideration on change refs server/services/cash/reconsider.ts; discovery yield server/services/cash/discoveryYield.ts. FIVE SIBLING CAMPAIGNS own other paths and MUST NOT be duplicated: scenario-expansion (goals/**, scenario/**, goalScenario.ts), search-intelligence (discovery.ts, triggers.ts, feeds/**, research/**, cheap/**, knowledge/**), opportunity-screening-and-ranking (cash/*.ts: value layers, deterministic REJECT/HOLD/PRIORITIZE screen, value-of-information, ranking, learning), information-collection (feeds/**, collect/**, sources/**), intelligent-research-routing (routing/**, dispatch router, cheap lane routing). This campaign CONSUMES their exported functions and adds only what none of them owns. WORK, split into independently testable units with disjoint owned paths: (A) ECONOMIC RELATIONSHIPS in the industry kernel: typed edges between industry nodes and activities (supplies, buys from, enables, requires, complements, competes) plus per-activity economic variables (revenue per transaction, margin, acquisition cost and time, conversion, demand volume, frequency, completion time, capacity, failure/refund rates, upfront capital, money tied up, payment timing, repeat rate, required skills/equipment/permissions — open set, not a closed schema), each VERIFIED (sourced claim) / ESTIMATE (basis stated) / UNKNOWN, and marked ESTABLISHED_OPERATOR vs REPRODUCIBLE_BY_NEW_OPERATOR. Variables are exported in the shape goalScenario.ts already consumes; no second calculator. (B) SIGNAL COMBINATIONS: a code module that links detector outputs and trigger-bucket findings for the same organisation or place into combined signals (e.g. expansion + hiring + supply shortage), connects each to an industry node, a possible need and capture methods, and labels it SIGNAL, never confirmed demand. Established patterns run as code over batches with no Claude job per record; unfamiliar patterns are proposed to research once, then converted to tested code. (C) THE POSSIBILITY STORE (All-Consuming Algorithm): every opportunity, activity or venture that does not fit an active goal is kept with its requirements (capital, customers, time, skills, workers, equipment, permissions, geography, suppliers, prior goals), its dependency edges (requires, enables, unlocks-after, supplies, complements, conflicts) and the conditions that would make it worth reconsidering. Reconsideration is event-driven through the existing reconsider change refs (capital changed, goal achieved, capability acquired, price changed, relationship discovered) with indexed lookups — no full rescans, no research to keep anything warm. Chains of opportunity (cash op -> recurring service -> larger venture) are derived from the edges. Private project data never crosses users; only permitted general methods and public knowledge are shared (the shared_findings boundary). (D) GOAL POLICIES: a goal carries a policy; SQUEEZE is one configurable policy (own target, deadline, capital limits; default reliability standards 90% normal / 80% realistic adverse, configurable per goal) and other policies (long-term venture, creative, research, recurring income) do not inherit squeeze rules. The squeeze recommendation gate requires a supported probability for the COMPLETE goal (acquisition, fulfilment, payment, capacity, timing, contingencies) from evidence and comparable outcomes; when evidence cannot support a number it says so and the plan is not recommendable — coverage from a sweep is never presented as probability. Combined plausible setbacks are tested, not only single ones. Policy lives in a module this campaign owns and is read by the plan through one exported function; edits inside server/services/goals/** wait until scenario-expansion has merged and stay minimal. (E) RELIABILITY ENGINEERING: for serious candidate plans, the unit derives failure paths (customer acquisition, single customer, supplier/worker failure, upfront exposure, payment delay, capacity) and proposes concrete protections from evidence (alternative suppliers, multiple customer sources, deposits/payment terms, backup capacity, combining compatible paths); each accepted improvement is reflected in the plan and its evidence, and a plan is rebuilt rather than research piled on. (F) ACTIVE GOALS FIRST: premium research capacity goes to active near-term goals per the user's configured priorities; distant possibilities are organised by code in the background with no premium jobs; no fixed percentage reserve; per-user isolation of goals, resources and schedules. (G) MEASUREMENT: per goal and stage (code screen, targeted investigation, simulation/plan construction, deep reasoning, execution) record time spent, candidates screened/rejected/advanced, research jobs and premium AI jobs consumed, relevant openings found, supported plans produced, bottlenecks and why work is taking longer; benchmark before and after on the live $10K goal; no speed claim without measurement; no fixed time budget that silently abandons work. Reuse V2 collection and commercial workflow capabilities where they already do the job.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Production Brain holds typed economic relationships and sourced/estimated/unknown variables per activity in the industry kernel; links combined trigger signals to industries and needs in code; keeps a possibility store with requirements, dependencies and reconsideration conditions that react to change events without rescans; applies a configurable SQUEEZE policy whose gate refuses an unsupported probability and a plan that fails combined ordinary setbacks; prioritises active goals; and records per-stage time and job counts. On the live $10K goal the readout shows candidates considered, rejected cheaply, advanced, industries and methods used, comparable evidence, variables, unknowns, plans built, setbacks tested, whether any plan meets the policy, time taken, AI jobs consumed and work done by code.",
+  "nonGoals": [
+    "A second knowledge database, graph, calculator, ranking module, screen or discovery system beside the existing ones and the five sibling campaigns.",
+    "Hardcoding $10,000, 30 days, $3,000 or the 90/80 thresholds as universal values.",
+    "Any fabricated probability or confidence number; sweep coverage presented as probability.",
+    "Forcing long-term, creative or research goals through squeeze rules.",
+    "Spending money, contacting anyone, launching ventures or changing user priorities automatically.",
+    "Exposing one user's private data, resources or goals to another.",
+    "Editing authorization, identity, deploy workflows, secrets, or server/services/bins/routing.ts.",
+    "Premium AI jobs spent keeping inactive possibilities warm."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "An opportunity whose stated owner capital exceeds the goal's capital limit, or whose payment arrives after a cash goal's deadline, is screened out by code with the limit named and no deep AI job is launched; missing facts produce HOLD, never REJECT.",
+      "verification": "npm test — counts research jobs before/after.",
+      "mandatory": true
+    },
+    {
+      "statement": "A candidate with zero reach under the goal's conditions is not researched again while stronger unexplored candidates remain.",
+      "verification": "npm test.",
+      "mandatory": true
+    },
+    {
+      "statement": "A rejected opportunity stays in the possibility store with its reconsideration conditions, and raising the goal's capital limit (a change event) reconsiders exactly the affected possibilities without a full scan.",
+      "verification": "npm test — counts rows touched.",
+      "mandatory": true
+    },
+    {
+      "statement": "An industry is represented with typed economic relationships to other industries and with variables marked VERIFIED, ESTIMATE or UNKNOWN, and those variables reach goalScenario.ts as model inputs with their provenance.",
+      "verification": "npm test.",
+      "mandatory": true
+    },
+    {
+      "statement": "Two or more related triggers for one organisation are linked into one combined signal tied to an industry and a possible need, labelled SIGNAL and never counted as buyer demand; a batch of 1000 records is processed by code with zero Claude jobs and its time is measured.",
+      "verification": "npm test.",
+      "mandatory": true
+    },
+    {
+      "statement": "Different business arrangements (direct sale, brokerage, subcontract, referral, resale) can be compared for the same underlying need.",
+      "verification": "npm test.",
+      "mandatory": true
+    },
+    {
+      "statement": "A SQUEEZE goal reads its own target, deadline, capital limits and reliability policy; asked for a 90% plan without supporting evidence it refuses to state a probability and the plan is not recommendable; a plan that fails combined ordinary setbacks cannot pass the gate; reliability is computed for the whole goal, not one transaction.",
+      "verification": "npm test.",
+      "mandatory": true
+    },
+    {
+      "statement": "A plan improved with an alternative supplier, a second customer source, a deposit or a compatible second path is rebuilt and its evidence updated.",
+      "verification": "npm test.",
+      "mandatory": true
+    },
+    {
+      "statement": "A long-term or creative goal is not evaluated under squeeze rules.",
+      "verification": "npm test.",
+      "mandatory": true
+    },
+    {
+      "statement": "Stored general knowledge supports a later goal without repeating the research, while private project data stays isolated across users and existing authorization checks still refuse a worker principal.",
+      "verification": "npm test.",
+      "mandatory": true
+    },
+    {
+      "statement": "Active-goal research is dispatched ahead of unrelated long-term research under the user's configured priorities.",
+      "verification": "npm test.",
+      "mandatory": true
+    },
+    {
+      "statement": "Per-stage time, candidates screened/rejected/advanced and AI jobs consumed are recorded and printed by the goals plan readout.",
+      "verification": "npm test and the Goals workflow plan readout in production.",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/industry/**",
+    "server/repos/industry.ts",
+    "server/domain/industry.ts",
+    "server/services/economy/**",
+    "server/repos/economy.ts",
+    "server/domain/economy.ts",
+    "server/services/signals/**",
+    "server/repos/signals.ts",
+    "server/domain/signals.ts",
+    "server/services/goals/policy.ts",
+    "server/services/goals/reliability.ts",
+    "server/db/migrations/**",
+    "server/db/pg-migrations/**",
+    "scripts/goals.ts",
+    "tests/**"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Revert the merged pull requests. Migrations only add tables or nullable columns; no existing row changes meaning and nothing is deleted. The goal policy defaults to the current behaviour for any goal without one, so removing the new rows restores today's plan reading."
+}

@@ -39,4 +39,4 @@ export BRAIN_DATABASE_CONNECT_TIMEOUT_MS="${BRAIN_DATABASE_CONNECT_TIMEOUT_MS:-6
 # claim about what it asked for rather than a reading of what is serving.
 echo "SERVING_REVISION ${BRAIN_REVISION:-<unstamped>}"
 
-exec node --import tsx scripts/cash-report.ts "$@"
+exec nice -n 19 node --import tsx scripts/cash-report.ts "$@"

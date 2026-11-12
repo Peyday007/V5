@@ -96,6 +96,7 @@
  * asking the queue for it instead of waiting to be handed a bin.
  */
 import type { Bin, Principal, WorkItemRow, WorkerScope } from '../../domain/types.ts';
+import { workItemPurposeAdmits } from './brainOnly.ts';
 
 /**
  * The families Brain routes by.
@@ -390,7 +391,22 @@ export function familyOfWorkType(workType: string): WorkloadFamily {
 export function workloadAdmission(routing: WorkerRouting) {
   return async (item: WorkItemRow): Promise<{ ok: boolean; reason?: string }> => {
     const family = familyOfWorkType(item.work_type);
-    if (routing.families.includes(family)) return { ok: true };
+    if (routing.families.includes(family)) {
+      /*
+       * Brain-only mode (§84), at the queue's own entrance: a work item is
+       * claimable only when the bin that owns it is. Without this a routine
+       * could reach a play packet's audit role by asking the queue for it
+       * instead of being handed the bin — which is how single-play audits kept
+       * reaching Claude after their bins were spent.
+       */
+      if (await workItemPurposeAdmits(item)) return { ok: true };
+      return {
+        ok: false,
+        reason:
+          'brain-only mode: Claude routines take only Brain-improvement work, and this item belongs ' +
+          'to work that is not',
+      };
+    }
     return {
       ok: false,
       reason:

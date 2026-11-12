@@ -15,7 +15,7 @@
  * four states of a read — loading, empty, forbidden, error — are four different
  * screens.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type SyntheticEvent } from 'react';
 import { listState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { FactoryApi } from '../lib/factoryApi.ts';
@@ -268,7 +268,7 @@ function Line({ projectId }: { projectId: string }): JSX.Element {
             <li key={row.campaign.id}>
               <strong>{row.objective.slice(0, 140)}</strong>
               <p className="rs-item-meta">
-                {row.blocked!.wait === 'PERSON' ? 'Needs you' : 'Waiting automatically'} · {row.blocked!.kind}
+                {row.blocked!.wait === 'PERSON' ? 'Needs you' : row.blocked!.wait === 'MAINTAINER' ? 'With the maintainer session' : 'Waiting automatically'} · {row.blocked!.kind}
                 {row.blocked!.detail ? ` — ${row.blocked!.detail}` : ''}
               </p>
               <p className="rs-item-meta">{row.blocked!.remedy}</p>
@@ -1049,6 +1049,9 @@ function Campaigns({
       <p className="rs-hint">
         A change that lands after its review is reviewed again before it ships.
       </p>
+      <p className="rs-hint">
+        A program of many campaigns is done only when every requirement passes its checks in the running Brain.
+      </p>
       {state.phase !== 'READY' ? (
         <p className={`rs-state rs-state-${state.phase.toLowerCase()}`}>
           {state.message}
@@ -1137,6 +1140,91 @@ const UNIT_WORDS: Record<string, string> = {
 function plainObjective(objective: string): string {
   const first = objective.split('\n')[0] ?? objective;
   return first.replace(/\s*\((?:cop|rcn|orc|fcp|rsw)_[a-z0-9]+\)/gi, '').trim();
+}
+
+type Loaded<T> =
+  | { phase: 'IDLE' }
+  | { phase: 'LOADING' }
+  | { phase: 'ERROR'; message: string }
+  | { phase: 'READY'; data: T };
+
+/** Fetches once, the first time the disclosure is opened, and never before. */
+function useOnOpen<T>(load: () => Promise<T>): {
+  state: Loaded<T>;
+  onToggle(event: SyntheticEvent<HTMLDetailsElement>): void;
+} {
+  const [state, setState] = useState<Loaded<T>>({ phase: 'IDLE' });
+  const onToggle = (event: SyntheticEvent<HTMLDetailsElement>): void => {
+    if (!event.currentTarget.open || state.phase !== 'IDLE') return;
+    setState({ phase: 'LOADING' });
+    load().then(
+      (data) => setState({ phase: 'READY', data }),
+      (error: unknown) =>
+        setState({ phase: 'ERROR', message: error instanceof Error ? error.message : 'Brain could not read this.' }),
+    );
+  };
+  return { state, onToggle };
+}
+
+function figure(label: string, n: { value: number | null; evidence: string; basis: string }): JSX.Element {
+  return (
+    <li key={label} className="rs-item-meta">
+      {label}:{' '}
+      {n.value === null ? (
+        <>
+          not measured ({n.evidence.toLowerCase()}) — {n.basis}
+        </>
+      ) : (
+        <>
+          {n.value} ({n.evidence.toLowerCase()}) — {n.basis}
+        </>
+      )}
+    </li>
+  );
+}
+
+/** The two campaign readers: what the pull request would say, and how fast the build ran. */
+function CampaignReaders({ campaignId }: { campaignId: string }): JSX.Element {
+  const pr = useOnOpen(() => FactoryApi.pullRequest(campaignId));
+  const speed = useOnOpen(() => FactoryApi.throughput(campaignId));
+  return (
+    <>
+      <details className="rs-details" onToggle={pr.onToggle}>
+        <summary>Read the pull request it would open</summary>
+        {pr.state.phase === 'LOADING' ? <p className="rs-hint">Loading…</p> : null}
+        {pr.state.phase === 'ERROR' ? (
+          <p className="rs-state rs-state-error">{pr.state.message}</p>
+        ) : null}
+        {pr.state.phase === 'READY' ? (
+          pr.state.data.title === null ? (
+            <p className="rs-hint">No pull request has been rendered for this build yet.</p>
+          ) : (
+            <>
+              <p>
+                <strong>{pr.state.data.title}</strong>
+              </p>
+              <pre className="rs-pre">{pr.state.data.body ?? ''}</pre>
+            </>
+          )
+        ) : null}
+      </details>
+      <details className="rs-details" onToggle={speed.onToggle}>
+        <summary>How fast it ran</summary>
+        {speed.state.phase === 'LOADING' ? <p className="rs-hint">Loading…</p> : null}
+        {speed.state.phase === 'ERROR' ? (
+          <p className="rs-state rs-state-error">{speed.state.message}</p>
+        ) : null}
+        {speed.state.phase === 'READY' ? (
+          <ul className="rs-list">
+            {figure('Units per hour', speed.state.data.unitsPerHour)}
+            {figure('Most sessions at once', speed.state.data.maxObservedConcurrency)}
+            {figure('Concurrency observed', speed.state.data.concurrency.observed)}
+            {figure('Concurrency declared', speed.state.data.concurrency.declared)}
+          </ul>
+        ) : null}
+      </details>
+    </>
+  );
 }
 
 function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
@@ -1285,6 +1373,8 @@ function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
           independent session has passed it.
         </p>
       )}
+
+      <CampaignReaders campaignId={campaign.id} />
 
       {/* Progressive disclosure: everything a person needs to *judge* the
           build is above; what an operator needs to *debug* it is here. */}

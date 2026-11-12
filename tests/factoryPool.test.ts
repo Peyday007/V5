@@ -57,9 +57,9 @@ import {
   listDispatchesForBin,
   markDispatchSent,
 } from '../server/repos/bins.ts';
-import { dispatchTick } from '../server/services/dispatch/loop.ts';
+import { dispatchTick, endsBurst } from '../server/services/dispatch/loop.ts';
 import { fleetSnapshot, IN_FLIGHT_WINDOW_MS } from '../server/services/dispatch/candidates.ts';
-import { routeBin } from '../server/services/dispatch/router.ts';
+import { refusalEndsBurst, routeBin } from '../server/services/dispatch/router.ts';
 import { decideBinRouting } from '../server/services/bins/routing.ts';
 import { judgePool, readFactoryPool, verifyFactoryPool } from '../server/services/dispatch/pool.ts';
 import { createProbeBin } from '../server/services/fleet/probe.ts';
@@ -717,6 +717,28 @@ describe('proving each surface, one at a time', () => {
     });
     expect(decision.ok).toBe(false);
     if (!decision.ok) expect(decision.refusal).toBe('PINNED_SURFACE_UNAVAILABLE');
+  });
+
+  it('does not end the burst for a pinned bin on a quarantined Routine', async () => {
+    const target = surfaces[0]!;
+    await setRoutineState({ routineId: target.routineId, from: 'ENABLED', to: 'QUARANTINED', reason: 'test' });
+    const binId = await factoryBin('pinned-quarantined', { pinnedRoutineId: target.routineId });
+    const snapshot = await fleetSnapshot();
+    const decision = routeBin({
+      bin: (await getBin(binId))!,
+      candidates: snapshot.candidates,
+      fleetPolicy: snapshot.fleetPolicy,
+      fleetInFlight: snapshot.fleetInFlight,
+      now: new Date().toISOString(),
+    });
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) {
+      // FLEET-scoped, so it would end every burst it is met in — but the pin
+      // makes it a fact about this one bin.
+      expect(refusalEndsBurst(decision.refusal)).toBe(true);
+      expect(endsBurst((await getBin(binId))!, decision.refusal)).toBe(false);
+      expect(endsBurst({ pinnedRoutineId: null }, decision.refusal)).toBe(true);
+    }
   });
 
   it('calls a surface proven only on the whole chain, and the pool only when every one is', async () => {

@@ -30,7 +30,7 @@ import {
   deliveryReadings,
   getDeliveryProofByBin,
 } from '../server/repos/deliveryProofs.ts';
-import { isRepositoryAccessRefusal, recordDeliveryEvidence } from '../server/services/dispatch/deliveryEvidence.ts';
+import { backfillDeliveryEvidence, isRepositoryAccessRefusal, recordDeliveryEvidence } from '../server/services/dispatch/deliveryEvidence.ts';
 import { readCommission } from '../server/services/fleet/commission.ts';
 import { getDb } from '../server/db/database.ts';
 import type { Bin, FleetRoutine } from '../server/domain/types.ts';
@@ -324,6 +324,54 @@ describe('a declared repository-write is not a capability until a delivery probe
     const delivery = reading.steps.find((s) => s.key === 'delivery')!;
     expect(delivery.state).toBe('PASS');
     expect(delivery.detail).toMatch(/real Factory work/);
+  });
+
+  it('backfills history once, and a later boot skips what is already recorded without re-reading the Routine', async () => {
+    // Deploy 43193124644: every boot re-attempted ~1,190 recorded pushes, three statements each, inside the dispatch tick.
+    const now = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO factory_change_requests (id, project_id, submission_key, objective, expected_outcome, repository, base_branch, base_sha, rollback_requirement, created_at, updated_at)
+       VALUES ('fcr_backfill', ?, 'k', 'o', 'e', ?, 'production', ?, 'r', ?, ?)`,
+      [fixture.project.id, REMOTE, HEAD, now, now] as never[],
+    );
+    await getDb().run(
+      `INSERT INTO factory_campaigns (id, change_request_id, project_id, base_sha, integration_branch, execution_mode, started_at, created_at, updated_at)
+       VALUES ('fcp_backfill', 'fcr_backfill', ?, ?, 'i', 'REMOTE', ?, ?, ?)`,
+      [fixture.project.id, HEAD, now, now, now] as never[],
+    );
+    const bins: Bin[] = [];
+    for (let i = 0; i < 3; i++) {
+      const bin = await writeBin(['repository']);
+      await dispatched(bin.id, routine.routineRef, `cse_BACKFILL00000${i}`);
+      await getDb().run(
+        `INSERT INTO factory_events (id, campaign_id, session_id, kind, evidence_class, detail, at)
+         VALUES (?, 'fcp_backfill', ?, 'UNIT_IMPLEMENTED', 'MEASURED', ?, ?)`,
+        [`fev_backfill${i}`, `cse_BACKFILL00000${i}`, JSON.stringify({ binId: bin.id, headSha: HEAD }), now] as never[],
+      );
+      bins.push(bin);
+    }
+    expect(await backfillDeliveryEvidence()).toEqual({ examined: 3, credited: 3 });
+    for (const bin of bins) expect((await getDeliveryProofByBin(bin.id))?.state).toBe('PROVEN');
+
+    const db = getDb();
+    const realAll = db.all.bind(db);
+    const realGet = db.get.bind(db);
+    const realRun = db.run.bind(db);
+    const statements: string[] = [];
+    db.all = (async (sql: string, params?: unknown[]) => (statements.push(sql), realAll(sql, params as never))) as typeof db.all;
+    db.get = (async (sql: string, params?: unknown[]) => (statements.push(sql), realGet(sql, params as never))) as typeof db.get;
+    db.run = (async (sql: string, params?: unknown[]) => (statements.push(sql), realRun(sql, params as never))) as typeof db.run;
+    let again;
+    try {
+      again = await backfillDeliveryEvidence();
+    } finally {
+      db.all = realAll;
+      db.get = realGet;
+      db.run = realRun;
+    }
+    expect(again).toEqual({ examined: 3, credited: 0 });
+    // The history and the recorded keys: two statements, whatever the history holds.
+    expect(statements.length).toBe(2);
   });
 
   it('still routes read-only Factory work (planning, review) to the same surface', async () => {

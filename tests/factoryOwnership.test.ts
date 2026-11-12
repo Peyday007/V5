@@ -35,7 +35,8 @@ import { createUser } from '../server/repos/identity.ts';
 import { approveObjective, submitObjective } from '../server/services/factory/contract.ts';
 import { installPlan, validatePlan, type UnitSpec } from '../server/services/factory/planner.ts';
 import { checkOwnership } from '../server/services/factory/integrate.ts';
-import { ownershipForRepair, queueRepairs } from '../server/services/factory/repair.ts';
+import { ownershipForRepair, queueRepairs, widenExhaustedRepairs } from '../server/services/factory/repair.ts';
+import { getDb } from '../server/db/database.ts';
 import {
   graphFromRows,
   OWNERSHIP_REASONS,
@@ -558,6 +559,51 @@ describe('B — a repair owns where the defect must be fixed, not only where it 
       ownedPaths: ['src/impl.ts', 'src/impl.test.ts'],
     });
   });
+
+  async function exhaustedRepair(changeRequest: FactoryChangeRequest, detail: string) {
+    const { campaign } = await seededCampaign(changeRequest);
+    await review(
+      campaign.id,
+      'src/impl.test.ts:3 fails: value is 1 where the change requires 2',
+      'Suggested paths: src/impl.test.ts',
+    );
+    await queueRepairs(campaign, changeRequest);
+    const repair = (await listUnits(campaign.id)).find((u) => u.kind === 'REPAIR')!;
+    await getDb().run(
+      `UPDATE factory_work_units SET state = 'FAILED', attempt = max_attempts,
+         failure_category = 'WORKER_ERROR', failure_detail = ? WHERE id = ?`,
+      [detail, repair.id],
+    );
+    return { campaign, repair };
+  }
+
+  it('is put back once with the in-scope files its worker named, and more attempts', async () => {
+    const changeRequest = await approved();
+    const { campaign, repair } = await exhaustedRepair(
+      changeRequest,
+      'The unit owns only src/impl.ts. The fix needs a caller in src/wire.ts; lib/outside.ts would help too.',
+    );
+    const widened = await widenExhaustedRepairs(campaign, changeRequest);
+    expect(widened).toEqual([{ unitKey: repair.unitKey, added: ['src/wire.ts'] }]);
+    const after = (await listUnits(campaign.id)).find((u) => u.id === repair.id)!;
+    expect(after.state).toBe('READY');
+    expect(after.ownedPaths).toContain('src/wire.ts');
+    expect(after.ownedPaths).not.toContain('lib/outside.ts');
+    expect(after.maxAttempts).toBe(repair.maxAttempts + 3);
+    expect(after.failureDetail).toContain('src/wire.ts');
+    // Once per unit, however many ticks ask.
+    await getDb().run(`UPDATE factory_work_units SET state = 'FAILED', attempt = max_attempts WHERE id = ?`, [repair.id]);
+    expect(await widenExhaustedRepairs(campaign, changeRequest)).toEqual([]);
+    const events = (await listFactoryEvents(campaign.id)).filter((e) => e.kind === 'REPAIR_SCOPE_WIDENED');
+    expect(events.length).toBe(1);
+  });
+
+  it('names nothing new, and stays failed', async () => {
+    const changeRequest = await approved();
+    const { campaign, repair } = await exhaustedRepair(changeRequest, 'The value is still wrong in src/impl.ts.');
+    expect(await widenExhaustedRepairs(campaign, changeRequest)).toEqual([]);
+    expect((await listUnits(campaign.id)).find((u) => u.id === repair.id)!.state).toBe('FAILED');
+  });
 });
 
 describe('what the independent review found, pinned', () => {
@@ -707,5 +753,44 @@ describe('the re-review’s findings, pinned', () => {
     const at = source.indexOf('if (!repair.ok) {');
     expect(at).toBeGreaterThan(-1);
     expect(source.slice(at, at + 1200)).toMatch(/block\(report, campaign, 'CONTRADICTORY_CONTRACT'/);
+  });
+});
+
+describe('a path written from inside a package', () => {
+  const units = [
+    { unitKey: 'decision', kind: 'IMPLEMENTATION', state: 'INTEGRATED', ownedPaths: ['server/repos/cashDecisions.ts', 'server/services/cash/decisions.ts'] },
+  ];
+  const scope = { mutationScope: ['server/repos/cash*.ts', 'server/services/cash/*.ts'] } as unknown as FactoryChangeRequest;
+
+  it('resolves to the one campaign path it is the tail of, rather than blocking on an amendment', () => {
+    // Production, fcp_0b8d9fcc, 2026-10-30: the reviewer wrote repos/cashDecisions.ts.
+    const finding = {
+      findingKey: 'decision-record-no-producer', category: 'unwired-mechanism', severity: 'BLOCKER',
+      statement: 'recordDecision in repos/cashDecisions.ts has no caller outside tests.', evidence: '',
+    } as unknown as FactoryFinding;
+    const ownership = ownershipForRepair(finding, scope, units as never);
+    expect(ownership).toMatchObject({ ok: true });
+    expect((ownership as { ownedPaths: string[] }).ownedPaths).toContain('server/repos/cashDecisions.ts');
+  });
+
+  it('also resolves against a scope glob when no unit names the file exactly', () => {
+    const finding = {
+      findingKey: 'g', category: 'unwired-mechanism', severity: 'BLOCKER',
+      statement: 'recordDecision in repos/cashDecisions.ts has no caller.', evidence: '',
+    } as unknown as FactoryFinding;
+    const globUnits = [{ unitKey: 'd', kind: 'IMPLEMENTATION', state: 'INTEGRATED', ownedPaths: ['server/repos/cash*.ts'] }];
+    const ownership = ownershipForRepair(finding, scope, globUnits as never);
+    expect(ownership).toMatchObject({ ok: true });
+    expect((ownership as { ownedPaths: string[] }).ownedPaths).toContain('server/repos/cashDecisions.ts');
+  });
+
+  it('leaves an ambiguous tail as written, so it still asks a person', () => {
+    const finding = {
+      findingKey: 'y', category: 'correctness', severity: 'BLOCKER',
+      statement: 'cash/x.ts is wrong', evidence: '',
+    } as unknown as FactoryFinding;
+    const two = [{ unitKey: 'a', kind: 'IMPLEMENTATION', state: 'INTEGRATED', ownedPaths: ['server/cash/x.ts', 'client/cash/x.ts'] }];
+    const ownership = ownershipForRepair(finding, { mutationScope: ['server/**', 'client/**'] } as unknown as FactoryChangeRequest, two as never);
+    expect(ownership).toMatchObject({ ok: false, reason: 'REQUIRED_FILE_NOT_WRITABLE', outsideScope: ['cash/x.ts'] });
   });
 });

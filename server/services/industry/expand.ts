@@ -151,7 +151,9 @@ export async function openAsks(input: {
       });
     } catch (error) {
       if (error instanceof RoundNotOpened) continue;
-      throw error;
+      // One ask that cannot be written must not stop the others behind it.
+      console.error(`[brain] industry ask ${ask.purpose} ${ask.subject.slice(0, 80)} not opened: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
     }
 
     const candidateId = round.candidateId;

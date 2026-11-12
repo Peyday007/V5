@@ -442,6 +442,14 @@ const WAITING_ON_A_PERSON = `(
   ))
 )`;
 
+/** How long a running packet may go unmoved before its hold stops counting (the dive stall is six hours too). */
+export const STALLED_HOLD_HOURS = 6;
+/** A live mission whose packet has not been updated since the bound cutoff. One `?`. */
+const STALLED_PACKET = `(
+  m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING')
+  AND EXISTS (SELECT 1 FROM research_orchestrations so WHERE so.id = m.orchestration_id AND so.updated_at < ?)
+)`;
+
 /**
  * Keep a live mission's reservation from expiring underneath it.
  *
@@ -502,6 +510,26 @@ export async function renewLiveMissionReservations(limit: number): Promise<strin
         )`,
     [nowIso(), nowIso()],
   );
+  /*
+   * A packet nothing has moved in STALLED_HOLD_HOURS is not using a slot
+   * either, and its hold lapses the same way: the row stays HELD, its work
+   * stays queued, and the moment the packet moves again the renewal below
+   * readmits it under the ceiling. Production, 2026-11-04: thirteen pricing
+   * questions on one-off openings held all thirteen slots for 13–21 hours with
+   * no pass, renewed every tick, while four eligible goal dives waited.
+   */
+  const stalledBefore = new Date(Date.now() - STALLED_HOLD_HOURS * 3_600_000).toISOString();
+  await getDb().run(
+    `UPDATE russell_budget_reservations
+        SET expires_at = ?
+      WHERE state = 'HELD'
+        AND expires_at > ?
+        AND id IN (
+          SELECT m.reservation_id FROM russell_missions m
+           WHERE m.reservation_id IS NOT NULL AND ${STALLED_PACKET}
+        )`,
+    [nowIso(), nowIso(), stalledBefore],
+  );
 
   const rows = await getDb().all<{ reservation_id: string; expires_at: string }>(
     `SELECT m.reservation_id AS reservation_id, r.expires_at AS expires_at
@@ -511,9 +539,10 @@ export async function renewLiveMissionReservations(limit: number): Promise<strin
         AND m.reservation_id IS NOT NULL
         AND r.state = 'HELD'
         AND NOT ${WAITING_ON_A_PERSON}
+        AND NOT ${STALLED_PACKET}
       ORDER BY r.expires_at
       LIMIT ?`,
-    [Math.max(1, limit)],
+    [stalledBefore, Math.max(1, limit)],
   );
   const renewed: string[] = [];
   const now = nowIso();

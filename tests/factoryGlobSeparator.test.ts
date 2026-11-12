@@ -30,3 +30,16 @@ describe('a glob with ** in the middle', () => {
     expect(matchesGlob('ab', 'a/**')).toBe(false);
   });
 });
+
+describe('a migration a unit owns keeps its name, not its number', () => {
+  it('owns the same migration renumbered, and nothing wider', async () => {
+    const { ownsPath } = await import('../server/services/factory/glob.ts');
+    const owned = 'server/db/migrations/133_search_intelligence.sql';
+    expect(ownsPath('server/db/migrations/131_search_intelligence.sql', owned)).toBe(true);
+    expect(ownsPath('server/db/migrations/133_search_intelligence.sql', owned)).toBe(true);
+    expect(ownsPath('server/db/migrations/131_other.sql', owned)).toBe(false);
+    expect(ownsPath('server/db/pg-migrations/131_search_intelligence.sql', owned)).toBe(false);
+    expect(ownsPath('server/db/migrations/x/131_search_intelligence.sql', owned)).toBe(false);
+    expect(ownsPath('server/services/131_search_intelligence.sql', 'server/services/133_search_intelligence.sql')).toBe(false);
+  });
+});

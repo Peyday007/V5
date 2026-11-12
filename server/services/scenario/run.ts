@@ -23,6 +23,8 @@ import {
 import { canonicalJson, compileModel, sha256, type CompiledModel } from './model.ts';
 import { ScenarioRunError, draw, evaluateAll, resolveBasis, scenariosFor } from './engine.ts';
 import { dominance, dominanceCriteria, rankByObjective, sensitivity, strategyResults } from './analyze.ts';
+import { informationValue } from '../quant/value.ts';
+import type { InformationValueResult } from '../../domain/scenario.ts';
 
 export { ScenarioModelError } from './model.ts';
 export { ScenarioRunError } from './engine.ts';
@@ -133,7 +135,47 @@ export function runScenarioModel(definition: ScenarioModelDefinition, options: R
     dominanceCriteria: criteria.map((c) => c.label),
     ranking,
     sensitivity: sens,
+    ...(options.informationValue ? { informationValue: valueOfInformation(model, draws, raw, options.informationValue.metric, basis) } : {}),
     limitations,
+  };
+}
+
+/**
+ * The value of information over this run's own worlds: for each sampled input,
+ * how much better the chosen strategy's metric would be on average if that
+ * input were known before choosing (`quant/value.ts`). An evaluation that is
+ * invalid or infeasible scores the metric's worst observed value, so a strategy
+ * cannot look good by breaking a constraint.
+ */
+function valueOfInformation(model: CompiledModel, draws: ReturnType<typeof draw>, raw: ReturnType<typeof evaluateAll>, metric: string, basis: ScenarioResult['basis']): InformationValueResult {
+  const n = raw.scenarios;
+  const index = metric === 'contribution' ? -1 : model.metrics.findIndex((m) => m.key === metric);
+  if (metric !== 'contribution' && index < 0) throw new ScenarioRunError(`Information value names "${metric}", which is neither contribution nor a metric of this model.`);
+  const better = index < 0 ? 'HIGHER' : model.metrics[index]!.better;
+  const column = index < 0 ? raw.contribution : raw.metrics[index]!;
+  let worst = Infinity;
+  for (let i = 0; i < column.length; i++) {
+    const value = better === 'HIGHER' ? column[i]! : -column[i]!;
+    if (raw.status[i] === 0 && value < worst) worst = value;
+  }
+  if (!Number.isFinite(worst)) worst = 0;
+  const actions = model.strategies.map((strategy, s) => {
+    const scores = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const at = s * n + i;
+      scores[i] = raw.status[at] === 0 ? (better === 'HIGHER' ? column[at]! : -column[at]!) : worst;
+    }
+    return { key: strategy.spec.key, scores };
+  });
+  const inputs = model.sampled.map((v) => ({ key: model.variables[v]!.spec.key, values: draws.base.subarray(v * n, (v + 1) * n) }));
+  const result = informationValue({ inputs, actions });
+  const sign = better === 'HIGHER' ? 1 : -1;
+  return {
+    metric,
+    basis,
+    baseline: { strategy: result.baseline.action, expected: sign * result.baseline.expected },
+    perfect: result.perfect,
+    inputs: result.inputs,
   };
 }
 
@@ -148,6 +190,8 @@ export function runConfigHash(modelHash: string, options: RunOptions): string {
     overrides: options.overrides ?? {},
     objective: options.objective ?? null,
     acceptable: options.acceptable ?? null,
+    // Absent from the hash when not asked, so every earlier run keeps its hash.
+    ...(options.informationValue ? { informationValue: options.informationValue } : {}),
   }));
 }
 

@@ -41,8 +41,11 @@ import { MachinesView } from './Machines.tsx';
 import { LaborView } from './Labor.tsx';
 import { PuzzlesView } from './Puzzles.tsx';
 import { ScenariosView } from './Scenarios.tsx';
+import { MagicView } from './Magic.tsx';
+import { MemoryView } from './Memory.tsx';
 import { ResearchView } from './Research.tsx';
 import { ConnectionsPanel } from './Connections.tsx';
+import { IntegrationsView } from './Integrations.tsx';
 import { ClaudeConnectionCard } from './ClaudeConnection.tsx';
 import {
   FleetView,
@@ -80,7 +83,7 @@ import { PeopleAndCapacityView } from './People.tsx';
  * `/work`, `/projects` or `/sites` works exactly as it did. Those surfaces are
  * reached from More, at every width.
  */
-const SECTIONS = [
+export const SECTIONS = [
   { name: 'HOME' as const, label: 'Home', primary: true },
   { name: 'CASH' as const, label: 'Cash', primary: true },
   { name: 'RESEARCH' as const, label: 'Research', primary: true },
@@ -90,6 +93,8 @@ const SECTIONS = [
   { name: 'WORK' as const, label: 'All work', primary: false },
   { name: 'PROJECTS' as const, label: 'Ideas', primary: false },
   { name: 'KNOWLEDGE' as const, label: 'What Brain knows', primary: false },
+  /* Historical memory: a person's own recovered history; not project-scoped. */
+  { name: 'MEMORY' as const, label: 'Historical memory', primary: false },
   { name: 'SITES' as const, label: 'Connected sites', primary: false },
   /*
    * Machines, Labor, Puzzles and Scenarios are specialized business systems,
@@ -99,6 +104,10 @@ const SECTIONS = [
    * Their addresses are unchanged, so a deep link still works.
    */
   { name: 'SYSTEMS' as const, label: 'Business systems', primary: false },
+  /* Integrations (§103): every connected service and its health, Brain-wide. */
+  { name: 'INTEGRATIONS' as const, label: 'Integrations', primary: false },
+  /* Magic Deck Lab: secondary, reached from More; never a primary destination. */
+  { name: 'MAGIC' as const, label: 'Magic', primary: false },
 ];
 
 /** The systems the Business systems destination opens, and what each is for. */
@@ -611,6 +620,7 @@ export function RussellShell({
         {route.name === 'BUILD' ? <BuildView projectId={projectId} /> : null}
         {route.name === 'PROJECTS' ? <ProjectView projectId={projectId} /> : null}
         {route.name === 'KNOWLEDGE' ? <KnowledgeView projectId={projectId} /> : null}
+        {route.name === 'MEMORY' ? <MemoryView /> : null}
         {route.name === 'FLEET' ? (
           <>
             {/*
@@ -639,9 +649,16 @@ export function RussellShell({
           </>
         ) : null}
         {route.name === 'SYSTEMS' ? <BusinessSystems go={go} /> : null}
+        {route.name === 'INTEGRATIONS' ? <IntegrationsView /> : null}
         {route.name === 'MACHINES' ? <MachinesView projectId={kernelProject(homes.data?.manufacturing)} /> : null}
         {route.name === 'LABOR' ? <LaborView projectId={kernelProject(homes.data?.labor)} /> : null}
         {route.name === 'PUZZLES' ? <PuzzlesView projectId={kernelProject(homes.data?.puzzles)} /> : null}
+        {route.name === 'MAGIC' ? (
+          <MagicView
+            section={route.section}
+            onNavigate={(path) => go(parseRoute(path))}
+          />
+        ) : null}
         {route.name === 'SCENARIOS' ? <ScenariosView projectId={projectId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}

@@ -226,7 +226,9 @@ describe('a recovery probe establishes attribution from its own fire', () => {
       requestId: 'req_stranger',
     } as unknown as Principal;
     const arrival = await checkIn({ principal, workerId: stranger.id, sessionRef: 'cse_MISBOUND1' });
-    expect(arrival.assigned).toBe(true);
+    // The fire was for the Routine's own worker, so the stranger is sent to its
+    // other connector rather than served (WRONG_CONNECTOR, 2026-11-10).
+    expect(arrival).toEqual({ assigned: false, reason: 'WRONG_CONNECTOR' });
 
     await settleRecoveryProbes();
     await settleRecoveryProbes(later());

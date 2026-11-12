@@ -678,6 +678,28 @@ describe('research prioritization', () => {
     expect(plan.asks[0]!.opportunityId).toBe(opportunity.id);
   });
 
+  it('asks no capital round for an opening filed outside the map, and the rest of the pass still opens', async () => {
+    // Production, 2026-11-02: that ask failed industry_rounds' node check on every tick and nothing opened for weeks.
+    await activated();
+    const seed = await seedSubject({ projectId, name: 'Residential seasonal home services', actorRef: userId });
+    const mode = (await getCashMode(projectId))!;
+    const offMap = await createOpportunity({
+      projectId,
+      cashModeId: mode.id,
+      ownerUserId: userId,
+      title: 'An importer plan filed by a discovery bucket',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: mode.currency,
+    });
+    await transitionOpportunity({ id: offMap.id, from: ['DISCOVERED'], to: 'EVIDENCE_CARD' });
+    const plan = await planFrom(await graphSnapshot(projectId));
+    expect(plan.asks.some((one) => one.opportunityId === offMap.id)).toBe(false);
+    expect(plan.declined.some((one) => /outside the industry map/.test(one.why))).toBe(true);
+    const pass = await runIndustryKernel(projectId);
+    expect(pass.failures ?? []).toEqual([]);
+    expect(pass.opened.some((one) => one.nodeId === seed.node.id)).toBe(true);
+  });
+
   it('never opens more questions at once than the concurrency bound', async () => {
     await activated();
     for (let index = 0; index < 8; index += 1) {
@@ -697,6 +719,25 @@ describe('research prioritization', () => {
     const plan = await planFrom(await graphSnapshot(projectId));
     const subjects = plan.asks.map((one) => one.nodeId ?? one.opportunityId ?? 'bootstrap');
     expect(new Set(subjects).size).toBe(subjects.length);
+  });
+
+  it("scans a subject a person seeded before Brain's own bootstrap sectors", async () => {
+    // Production, 2026-11-02: three seeds waited behind 35 never-scanned bootstrap sectors, ordered by age.
+    await activated();
+    const seeded = await seedSubject({ projectId, name: 'Residential seasonal home services', actorRef: userId });
+    const plan = await planFrom(await graphSnapshot(projectId));
+    const first = plan.asks.find((one) => one.purpose === 'SCAN');
+    expect(first?.nodeId).toBe(seeded.node.id);
+    expect(first?.why).toMatch(/a person seeded it/);
+  });
+
+  it('runs under database pressure, because shedding it starved construction of buyer populations', () => {
+    const loop = readFileSync(new URL('../server/services/russell/loop.ts', import.meta.url), 'utf8');
+    const at = loop.indexOf('const kernel = await runIndustryKernel(project.id);');
+    const guard = loop.lastIndexOf('if (!shedKernels) try {', at);
+    const opened = loop.lastIndexOf('try {', at);
+    // The nearest enclosing try is not the shed-guarded one.
+    expect(opened).toBeGreaterThan(guard + 'if (!shedKernels) '.length);
   });
 
   it('is a pure decision over a snapshot, so the same input gives the same plan', async () => {

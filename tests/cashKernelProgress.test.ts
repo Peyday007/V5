@@ -774,7 +774,8 @@ async function claimedOpening(
 describe('RES-6: being able to research is not being able to deliver', () => {
   it('withholds delivery and fulfilment when nothing records what delivering needs', async () => {
     const { proposeTerms } = await import('../server/services/cash/answers.ts');
-    const piece = await opening('PAID_TASK_OR_CONTRACT', 'Haul gravel to a job site.');
+    // A neutral title: one that reads as the owner's physical work is refused earlier, by the operating rule.
+    const piece = await opening('PAID_TASK_OR_CONTRACT', 'Compile a supplier price comparison for a buyer.');
     const proposal = await proposeTerms(piece);
     expect(proposal.terms.map((one) => one.field)).not.toContain('delivery');
     expect(proposal.terms.map((one) => one.field)).not.toContain('fulfillment');
@@ -819,6 +820,61 @@ describe('RES-6: being able to research is not being able to deliver', () => {
     expect(proposal.withheld.find((one) => one.field === 'fulfillment')?.because).toMatch(
       /physical work/,
     );
+  });
+
+  /*
+   * Recommended-approach change #3 (2026-10-15): a welding contract, NEH grants
+   * and employment listings were dived, and only afterwards did the delivery
+   * reading withhold each. The question is now asked before a slot is spent —
+   * and only a known bar refuses: an unrecorded or unallocated delivery is a
+   * blank, which a dive may still answer (invariant 39).
+   */
+  it('spends no deep dive on an opening whose delivery needs physical work, and still dives a blank one', async () => {
+    const { whyNotDiving } = await import('../server/services/cash/validation.ts');
+    const { createWorkflow, createTask, recordAllocation } = await import(
+      '../server/repos/labor.ts'
+    );
+    // Work only the owner could do in person is refused before any dive by the standing operating rule.
+    const inPerson = await opening('PAID_TASK_OR_CONTRACT', 'Hand out 3,000 door hangers in two neighbourhoods.', { requiredCapabilities: [] });
+    expect((await whyNotDiving((await getOpportunity(inPerson.id))!)).kind).toBe('NOT_WORTH_RESEARCHING');
+    // An on-site service is researched: which independent provider performs it is the question (owner, 2026-11-07).
+    const onSite = await opening('PAID_TASK_OR_CONTRACT', 'Weld and fabricate railings on site.', { requiredCapabilities: [] });
+    expect((await whyNotDiving((await getOpportunity(onSite.id))!)).kind).toBe('ELIGIBLE');
+    const piece = await opening('PAID_TASK_OR_CONTRACT', 'Fabricate railings for a client.', {
+      requiredCapabilities: [],
+    });
+    // Nothing recorded about delivery: a blank, so the dive still goes ahead.
+    expect((await whyNotDiving((await getOpportunity(piece.id))!)).kind).toBe('ELIGIBLE');
+
+    const { workflow } = await createWorkflow({
+      projectId,
+      name: 'Delivering: railings',
+      description: 'd',
+      origin: 'SEED',
+      opportunityId: piece.id,
+    });
+    const { task } = await createTask({
+      projectId,
+      workflowId: workflow.id,
+      name: 'Weld the railings',
+      output: 'Railings installed',
+      origin: 'SEED',
+    });
+    // A task nobody has allocated is still a blank.
+    expect((await whyNotDiving((await getOpportunity(piece.id))!)).kind).toBe('ELIGIBLE');
+
+    await recordAllocation({
+      projectId,
+      taskId: task.id,
+      productionLayer: 'PHYSICAL_OPERATOR',
+      necessityReason: 'PHYSICAL_EXECUTION',
+      decidedBy: 'PERSON',
+      decidedByRef: userId,
+      rationale: 'Welding is done by somebody on site.',
+    } as never);
+    const refusal = await whyNotDiving((await getOpportunity(piece.id))!);
+    expect(refusal.kind).toBe('CANNOT_DELIVER');
+    expect(refusal.kind === 'CANNOT_DELIVER' && refusal.because).toMatch(/physical work \(Weld the railings\)/);
   });
 
   it('withdraws the old research-only proposal, guarded on its exact text, once', async () => {

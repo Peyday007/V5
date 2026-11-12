@@ -16,17 +16,44 @@
 #             questions at one at a time (BRAIN_CASH_RESEARCH_MAX=1) and stops
 #             broad discovery, so Routines work on what improves every job.
 #
+#   runpod-test — probe the RunPod GPU (repository secrets RUNPOD_VLLM_URL,
+#             RUNPOD_VLLM_KEY, optional RUNPOD_VLLM_MODEL) with Brain's own lane
+#             code: refuses no key, serves the model, real task, 4 in parallel,
+#             a research-sized prompt. Nothing on the Brain changes.
+#   runpod-connect — probe, and only if it passes put the GPU in slot A
+#             (BRAIN_RUNPOD_* on the Brain, mode primary). The free providers
+#             stay as slot B and as the GPU's fallback.
+#   runpod-disconnect — back to free providers only (mode off).
+#   runpod-report — research jobs by model on production, and GPU fallbacks.
+#   runpod-cycle — the production test of automatic power: stop the pod, watch
+#             Brain start it again for waiting research, wait for vLLM to serve.
+#   runpod-restore — find Brain's pod, or recreate it from the recipe in
+#             `cheap/runpodRestore.ts` (same GPU, image, model, no paid volume,
+#             refused above RUNPOD_MAX_USD_PER_HOUR), wait for vLLM, probe, connect.
+#   runpod-auto — what the hourly schedule runs: nothing until the RUNPOD_*
+#             secrets exist; then probe and connect on its own; once connected,
+#             reconnect if the secrets change, and report the GPU's research jobs.
+#             With RUNPOD_API_KEY, a deleted pod is recreated first (runpod-restore).
+#
 # No key is printed. Free provider keys never pass through here: they are
 # entered in OmniRoute's own dashboard.
 name: Cheap lane
 
 on:
+  # The GPU connects itself: the first hourly run after the RUNPOD_* secrets
+  # exist probes it and, on a pass, connects it (runpod-auto).
+  schedule:
+    - cron: '41 * * * *'
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus'
+        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore'
         required: true
         default: deploy
+      hours:
+        description: 'For runpod-report: the window in hours (1-48). The report also prints the equal window before it, for a before/after reading.'
+        required: false
+        default: '6'
 
 concurrency:
   group: cheap-lane
@@ -36,10 +63,28 @@ jobs:
   cheap:
     name: Cheap lane
     runs-on: ubuntu-latest
+    # A Deploy that replaces the machine mid-command can leave `flyctl ssh`
+    # waiting on a dead session for the runner's six hours, holding this
+    # workflow's concurrency group the whole time (2026-11-06: a runpod-report
+    # and a connection report hung 66 and 25 minutes, queueing every later one).
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - uses: ./.github/actions/await-release
+        with:
+          # This workflow restarts the Brain, so it waits out the hosted
+          # verification too, not only the machine replacement.
+          whole-job: 'true'
+          timeout-seconds: '2700'
+      # Only the RunPod actions run Brain's own code here (the probe).
+      - uses: actions/setup-node@v4
+        if: startsWith(inputs.action || 'runpod-auto', 'runpod-')
+        with:
+          node-version: 22
+          cache: npm
+      - if: startsWith(inputs.action || 'runpod-auto', 'runpod-')
+        run: npm ci --no-audit --no-fund
       - name: Run
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -49,13 +94,147 @@ jobs:
           OMNIROUTE_PASSWORD: ${{ secrets.OMNIROUTE_PASSWORD }}
           OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
           OMNIROUTE_MODEL: ${{ secrets.OMNIROUTE_MODEL }}
-          ACTION: ${{ inputs.action }}
+          RUNPOD_VLLM_URL: ${{ secrets.RUNPOD_VLLM_URL }}
+          RUNPOD_VLLM_KEY: ${{ secrets.RUNPOD_VLLM_KEY }}
+          RUNPOD_VLLM_MODEL: ${{ secrets.RUNPOD_VLLM_MODEL }}
+          # The RunPod account key (not vLLM's --api-key): lets Brain stop an idle pod and start it for new work.
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          # The pod's hourly price (a repository variable, not a secret), for cost per research job.
+          RUNPOD_USD_PER_HOUR: ${{ vars.RUNPOD_USD_PER_HOUR }}
+          # The most a recreated pod may cost (a repository variable); unset = the measured $0.24/h.
+          RUNPOD_MAX_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_USD_PER_HOUR }}
+          ACTION: ${{ inputs.action || 'runpod-auto' }}
+          HOURS_INPUT: ${{ inputs.hours || '6' }}
         run: |
           set -eu
           exec > >(tee cheap.txt) 2>&1
           brain=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          # Digits only, bounded: it is spliced into a remote command line.
+          HOURS=$(printf '%s' "$HOURS_INPUT" | tr -cd '0-9')
+          case "$HOURS" in ''|0) HOURS=6 ;; esac
+          [ "$HOURS" -gt 48 ] && HOURS=48
           cheap=northline-cheap
+          # The GPU's settings, fingerprinted so a changed secret is noticed without reading one back.
+          fingerprint() { gpu_fp=$(printf '%s\n%s\n%s\n%s' "$RUNPOD_VLLM_URL" "$RUNPOD_VLLM_KEY" "$RUNPOD_VLLM_MODEL" "${RUNPOD_API_KEY:-}" | sha256sum | cut -c1-16); }
+          fingerprint
+          # The pod's address is read from RunPod, not from the secret, so a pod
+          # RunPod deleted (an empty balance, 2026-11-10) is recreated and found
+          # without anyone editing a secret. Never starts or stops a pod.
+          pod_id=''
+          restore() {
+            [ -n "${RUNPOD_API_KEY:-}" ] || return 0
+            rc=0; npx tsx scripts/runpod-restore.ts "$@" > restore.txt 2>&1 || rc=$?
+            cat restore.txt
+            [ $rc -eq 0 ] || { echo "::error title=runpod::No GPU pod could be found or recreated; the lines above give RunPod's answer."; return $rc; }
+            url=$(grep '^URL ' restore.txt | cut -d' ' -f2-)
+            pod_id=$(grep '^POD ' restore.txt | cut -d' ' -f2)
+            grep -q '^CREATED ' restore.txt && echo "::notice title=runpod::Recreated the GPU pod ($(grep '^POD ' restore.txt | cut -d' ' -f2-)/h)."
+            [ -n "$url" ] && RUNPOD_VLLM_URL="$url"
+            fingerprint
+          }
+          probe() { rc=0; npx tsx scripts/runpod-probe.ts > probe.txt 2>&1 || rc=$?; cat probe.txt; return $rc; }
+          gpu_connect() {
+            model=$(grep '^MODEL ' probe.txt | cut -d' ' -f2-)
+            flyctl secrets set --app "$brain" \
+              BRAIN_RUNPOD_URL="$RUNPOD_VLLM_URL" \
+              BRAIN_RUNPOD_KEY="$RUNPOD_VLLM_KEY" \
+              BRAIN_RUNPOD_MODEL="$model" \
+              BRAIN_RUNPOD_FINGERPRINT="$gpu_fp" \
+              BRAIN_RUNPOD_MODE=primary >/dev/null
+            [ -z "$pod_id" ] || flyctl secrets set --app "$brain" BRAIN_RUNPOD_POD_ID="$pod_id" >/dev/null
+            if [ -n "${RUNPOD_API_KEY:-}" ]; then
+              flyctl secrets set --app "$brain" BRAIN_RUNPOD_API_KEY="$RUNPOD_API_KEY" >/dev/null
+              echo "::notice title=runpod::Auto stop/start on: Brain stops the pod after 15 idle minutes and starts it when research arrives."
+            else
+              echo "::warning title=runpod::No RUNPOD_API_KEY secret: the pod is never stopped automatically, and bills while idle."
+            fi
+            echo "::notice title=runpod::Connected. Slot A of the free lane is now the GPU ($model); free providers are slot B and its fallback."
+          }
+          gpu_report() {
+            price=$(printf '%s' "${RUNPOD_USD_PER_HOUR:-}" | tr -cd '0-9.')
+            flyctl ssh console --app "$brain" -C "env BRAIN_RUNPOD_USD_PER_HOUR=${price:-0} sh /app/scripts/runpod-report.sh --hours ${HOURS:-6}" | tee report.txt || true
+            fb=$(flyctl logs --app "$brain" --no-tail 2>&1 | grep -c '\[runpod\] fallback' || true)
+            grep -q 'RUNPOD-REPORT: OK' report.txt || echo "::warning title=runpod::The report did not finish (no RUNPOD-REPORT: OK); its counts are partial."
+            echo "GPU fallbacks in the recent log: $fb"
+            q=$(grep -A20 '^RESEARCH QUALITY' report.txt | grep 'runpod/' | head -1 | sed 's/^ *//' || true)
+            [ -z "$q" ] || echo "::notice title=runpod quality::$q"
+            c=$(grep '^GPU COST' report.txt | head -1 || true)
+            [ -z "$c" ] || echo "::notice title=runpod cost::$c"
+            n=$(grep '^RUNPOD_SUBMITTED ' report.txt | cut -d' ' -f2 || echo 0)
+            if [ "${n:-0}" -gt 0 ]; then
+              echo "::notice title=runpod::Research jobs on the GPU: ${n} submitted in the last ${HOURS:-6}h (fallbacks in log: $fb)."
+            else
+              echo "::warning title=runpod::No research job submitted on the GPU in the last ${HOURS:-6}h yet (fallbacks in log: $fb)."
+            fi
+          }
+          # The gateway keeps a JSON file per call and rotated application logs on
+          # a 1 GB volume. Production, 2026-11-09: they filled it (call_logs 276 MB
+          # in one day, logs 260 MB), every call failed "database or disk is full",
+          # and the free lane sat idle for ten hours beside 76 waiting research items.
+          # Its own debugging output is pruned every hour; its database is not touched.
+          gateway_prune() {
+            [ -n "${FLY_ORG_TOKEN:-}" ] || { echo "::warning title=cheap lane::No FLY_ORG_TOKEN: the gateway's logs were not pruned."; return 0; }
+            FLY_API_TOKEN="$FLY_ORG_TOKEN" flyctl ssh console --app "$cheap" -C "sh -c 'find /app/data/call_logs -type f -mmin +120 -delete 2>/dev/null; find /app/data/call_logs -mindepth 1 -type d -empty -delete 2>/dev/null; ls -1t /app/data/logs/application/app.*.log 2>/dev/null | tail -n +3 | xargs -r rm -f; df -h /app/data | tail -1'" \
+              || echo "::warning title=cheap lane::The gateway prune did not run."
+          }
           case "$ACTION" in
+            runpod-test)
+              [ -n "$RUNPOD_VLLM_URL" ] || { echo "::error::Set the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
+              restore
+              probe
+              ;;
+            runpod-connect)
+              [ -n "$RUNPOD_VLLM_URL" ] || { echo "::error::Set the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
+              restore
+              probe || { echo "::error::The GPU did not pass the probe; nothing on the Brain changed."; exit 1; }
+              gpu_connect
+              ;;
+            runpod-disconnect)
+              flyctl secrets set --app "$brain" BRAIN_RUNPOD_MODE=off >/dev/null
+              echo "::notice title=runpod::The GPU is out of the lane; free providers only."
+              ;;
+            runpod-report)
+              gpu_report
+              ;;
+            runpod-restore)
+              [ -n "${RUNPOD_API_KEY:-}" ] && [ -n "$RUNPOD_VLLM_KEY" ] || { echo "::error::Set the RUNPOD_API_KEY and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
+              restore --wait
+              probe || { echo "::error::The GPU did not pass the probe; nothing on the Brain changed."; exit 1; }
+              gpu_connect
+              ;;
+            runpod-cycle)
+              # The production test of automatic power: stop the pod, watch the running
+              # Brain start it again for waiting research, wait for vLLM. Always leaves it started.
+              timeout --signal=TERM --kill-after=30 3000 \
+                flyctl ssh console --app "$brain" -C "sh /app/scripts/runpod-cycle.sh" | tee cycle.txt || true
+              grep -q '^RUNPOD-CYCLE: PASS' cycle.txt || { echo "::error title=runpod::The automatic stop/start test did not pass; the lines above say which step."; exit 1; }
+              echo "::notice title=runpod::Automatic power proven: stopped, started by Brain for waiting research, model served."
+              ;;
+            prune)
+              gateway_prune
+              ;;
+            runpod-auto)
+              gateway_prune
+              if [ -z "$RUNPOD_VLLM_URL" ]; then
+                echo "::notice title=runpod::Waiting for the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY secrets. Free providers only."
+                exit 0
+              fi
+              restore --wait || true
+              # What the Brain runs now: its mode and the fingerprint of the settings it was given (never a key).
+              state=$(flyctl ssh console --app "$brain" -C 'printenv BRAIN_RUNPOD_MODE BRAIN_RUNPOD_FINGERPRINT' 2>/dev/null | tr -d '\r' | tr '\n' ' ' || true)
+              if echo "$state" | grep -qw primary && echo "$state" | grep -qw "$gpu_fp"; then
+                # A pod Brain stopped for idleness fails the probe by design; the report
+                # still runs, so stopped time and the money it saved are measured too.
+                if probe; then :
+                else echo "::notice title=runpod::The GPU did not answer its probe (stopped while idle, or down); the Brain answers on the free providers meanwhile and starts the pod when research arrives."; fi
+                gpu_report
+              elif echo "$state" | grep -qw off; then
+                echo "::notice title=runpod::The GPU was disconnected on purpose (mode off); run runpod-connect to bring it back."
+              else
+                if probe; then gpu_connect
+                else echo "::warning title=runpod::The GPU is not ready yet; nothing on the Brain changed. The next hourly run tries again."; fi
+              fi
+              ;;
             deploy)
               [ -n "$FLY_ORG_TOKEN" ] || { echo "::error::Set the FLY_ORG_TOKEN repository secret: an organization token from the Fly dashboard (Tokens). The Brain's own deploy token cannot create another app."; exit 1; }
               # The Brain's own organization, read with the Brain's token, so the
@@ -96,8 +275,11 @@ jobs:
               flyctl machine list --app "$cheap" || true
               flyctl logs --app "$cheap" --no-tail 2>&1 | tail -120 || true
               m=$(flyctl machine list --app "$cheap" --json | grep -o '"id": *"[0-9a-f]*"' | head -1 | grep -o '[0-9a-f]\{8,\}' || true)
-              [ -n "$m" ] && flyctl ssh console --app "$cheap" -C "node -e eval(Buffer.from('Y29uc3QgaG9zdHM9WydodHRwczovL2FwaS5ncm9xLmNvbS9vcGVuYWkvdjEvbW9kZWxzJywnaHR0cHM6Ly9hcGkuY2VyZWJyYXMuYWkvdjEvbW9kZWxzJywnaHR0cHM6Ly9pbnRlZ3JhdGUuYXBpLm52aWRpYS5jb20vdjEvbW9kZWxzJywnaHR0cHM6Ly9vcGVucm91dGVyLmFpL2FwaS92MS9tb2RlbHMnLCdodHRwczovL2dlbmVyYXRpdmVsYW5ndWFnZS5nb29nbGVhcGlzLmNvbS92MWJldGEvbW9kZWxzJ107KGFzeW5jKCk9Pntmb3IoY29uc3QgaCBvZiBob3N0cyl7Y29uc3QgdD1EYXRlLm5vdygpO3RyeXtjb25zdCByPWF3YWl0IGZldGNoKGgse3NpZ25hbDpBYm9ydFNpZ25hbC50aW1lb3V0KDE1MDAwKX0pO2NvbnNvbGUubG9nKGgsci5zdGF0dXMsRGF0ZS5ub3coKS10LCdtcycpO31jYXRjaChlKXtjb25zb2xlLmxvZyhoLCdFUlInLFN0cmluZygoZS5jYXVzZSYmZS5jYXVzZS5jb2RlKXx8ZS5tZXNzYWdlKSxEYXRlLm5vdygpLXQsJ21zJyk7fX1jb25zb2xlLmxvZygnbWVtJyxKU09OLnN0cmluZ2lmeShwcm9jZXNzLm1lbW9yeVVzYWdlKCkpLCdub2RlJyxwcm9jZXNzLnZlcnNpb24pO30pKCk7','base64').toString())" || true
+              [ -n "$m" ] && flyctl ssh console --app "$cheap" -C "node -e \"eval(Buffer.from('Y29uc3QgaG9zdHM9WydodHRwczovL2FwaS5ncm9xLmNvbS9vcGVuYWkvdjEvbW9kZWxzJywnaHR0cHM6Ly9hcGkuY2VyZWJyYXMuYWkvdjEvbW9kZWxzJywnaHR0cHM6Ly9pbnRlZ3JhdGUuYXBpLm52aWRpYS5jb20vdjEvbW9kZWxzJywnaHR0cHM6Ly9vcGVucm91dGVyLmFpL2FwaS92MS9tb2RlbHMnLCdodHRwczovL2dlbmVyYXRpdmVsYW5ndWFnZS5nb29nbGVhcGlzLmNvbS92MWJldGEvbW9kZWxzJ107KGFzeW5jKCk9Pntmb3IoY29uc3QgaCBvZiBob3N0cyl7Y29uc3QgdD1EYXRlLm5vdygpO3RyeXtjb25zdCByPWF3YWl0IGZldGNoKGgse3NpZ25hbDpBYm9ydFNpZ25hbC50aW1lb3V0KDE1MDAwKX0pO2NvbnNvbGUubG9nKGgsci5zdGF0dXMsRGF0ZS5ub3coKS10LCdtcycpO31jYXRjaChlKXtjb25zb2xlLmxvZyhoLCdFUlInLFN0cmluZygoZS5jYXVzZSYmZS5jYXVzZS5jb2RlKXx8ZS5tZXNzYWdlKSxEYXRlLm5vdygpLXQsJ21zJyk7fX1jb25zb2xlLmxvZygnbWVtJyxKU09OLnN0cmluZ2lmeShwcm9jZXNzLm1lbW9yeVVzYWdlKCkpLCdub2RlJyxwcm9jZXNzLnZlcnNpb24pO30pKCk7','base64').toString())\"" || true
               flyctl machine status "$m" --app "$cheap" || true
+              # What fills the volume: a full disk fails every call with
+              # "database or disk is full" (production, 2026-11-09).
+              [ -n "$m" ] && flyctl ssh console --app "$cheap" -C "sh -c 'df -h /app/data; du -ah /app/data 2>/dev/null | sort -h | tail -25'" || true
               ;;
             test)
               # One real question to each combo, timed, from outside the machine.
@@ -107,7 +289,7 @@ jobs:
                 code=$(curl -sS -o reply.json -w '%{http_code}' --max-time 120 \
                   -H "authorization: Bearer $OMNIROUTE_API_KEY" -H 'content-type: application/json' \
                   -d "{\"model\":\"$model\",\"max_tokens\":2000,\"reasoning_effort\":\"low\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with the word ok.\"}]}" \
-                  "https://$cheap.fly.dev/v1/chat/completions" || echo 000)
+                  "https://$cheap.fly.dev/v1/chat/completions") || code=000
                 echo "model $model: HTTP $code in $(( $(date +%s) - start ))s"
                 head -c 600 reply.json 2>/dev/null; echo
               done

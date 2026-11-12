@@ -1,0 +1,22 @@
+{
+ "checked_rows": 10,
+ "fields_checked": [
+  "Title",
+  "Sol#",
+  "Department/Ind.Agency",
+  "Sub-Tier",
+  "Type",
+  "ResponseDeadLine",
+  "NaicsCode",
+  "SetASide",
+  "PopCity",
+  "PopState"
+ ],
+ "field_mismatches": [],
+ "notice_ids_not_in_source": [],
+ "independent_recount": 10,
+ "generator_matched_total": 10,
+ "shown": 10,
+ "open_matches_not_shown": 0,
+ "checked_at_utc": "2026-11-11T09:13:56+00:00"
+}

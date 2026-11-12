@@ -28,6 +28,7 @@ import { createRun, getRun, updateRun } from '../server/repos/runs.ts';
 import { getDocument, listDocumentsByLayer } from '../server/repos/documents.ts';
 import { listEventsByLayer } from '../server/repos/events.ts';
 import { getLayer } from '../server/repos/layers.ts';
+import { getDb } from '../server/db/database.ts';
 import { getProject } from '../server/repos/projects.ts';
 
 let fixture: TestProject;
@@ -94,6 +95,38 @@ describe('dependency checker', () => {
     expect(first).toHaveLength(2);
     expect(second.map((d) => d.id).sort()).toEqual(first.map((d) => d.id).sort());
     expect((await checkRunDependencies(run.id)).requiredCount).toBe(2);
+  });
+
+  it('resolves a run\u2019s names in one statement, before its transaction, with no single-name lookups', async () => {
+    // Production 2026-11-06: one lookup and one storage check per name inside
+    // the transaction held its connection for seconds (lookups 7.8 s average).
+    const layer = await fixture.layerByName('Discovery Logic');
+    const run = await failedRun(layer.id);
+    await addDocument(fixture, 'Discovery Logic', 'v1');
+    const db = getDb() as unknown as Record<'get' | 'all', (sql: string, ...rest: unknown[]) => unknown>;
+    const originals = { get: db.get, all: db.all };
+    const single: string[] = [];
+    const batched: string[] = [];
+    db.get = (sql: string, ...rest: unknown[]) => {
+      if (sql.includes('lower(canonical_name) = lower(?)')) single.push(sql);
+      return originals.get.call(db, sql, ...rest);
+    };
+    db.all = (sql: string, ...rest: unknown[]) => {
+      if (sql.includes('lower(canonical_name) IN (')) batched.push(sql);
+      return originals.all.call(db, sql, ...rest);
+    };
+    let rows: Awaited<ReturnType<typeof setRunDependencies>> = [];
+    try {
+      rows = await setRunDependencies(run.id, ['Discovery Logic v1', 'Discovery Logic v1B', 'Discovery Logic v1C']);
+    } finally {
+      db.get = originals.get;
+      db.all = originals.all;
+    }
+    expect(single).toEqual([]);
+    expect(batched).toHaveLength(1);
+    expect(rows).toHaveLength(3);
+    expect(rows.filter((r) => r.requiredDocumentId !== null)).toHaveLength(1);
+    expect(rows.every((r) => r.requiredLayerId === layer.id)).toBe(true);
   });
 });
 

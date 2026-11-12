@@ -1400,7 +1400,14 @@ export async function listIdentityEvents(
     where.push('result = ?');
     params.push(filter.result);
   }
-  const limit = Math.min(Math.max(filter.limit ?? 200, 1), 1000);
+  // A non-finite limit (an untrusted caller's NaN) must fall back to the
+  // default rather than propagate into `LIMIT`, where it would either bind
+  // nothing or throw depending on the driver.
+  const requestedLimit = filter.limit;
+  const limit = Math.min(
+    Math.max(Number.isFinite(requestedLimit) ? (requestedLimit as number) : 200, 1),
+    1000,
+  );
   params.push(limit);
   return (
     await getDb().all<IdentityEventRow>(

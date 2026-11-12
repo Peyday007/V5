@@ -74,7 +74,7 @@ import {
 } from '../../repos/factory.ts';
 import { recordFactoryEvent, recordIntegration } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
-import { matchesGlob } from './integrate.ts';
+import { ownsPath } from './glob.ts';
 import { forbiddenIn, forbiddenPathsFor } from './forbidden.ts';
 
 /**
@@ -160,6 +160,44 @@ export function roundBaseFor(campaign: FactoryCampaign): string {
  * read. The bin recorded it, so the bin is asked — which is the same reason every
  * other decision here is taken from a row rather than from the clock.
  */
+/**
+ * The units an integration report is judged against: the ones this bin's own
+ * manifest told the worker to merge, plus any implemented since.
+ *
+ * Production 2026-11-10: the validator read the campaign's *current*
+ * IMPLEMENTED units while the worker had been handed the list frozen into the
+ * manifest at creation. Once a unit on that list was integrated by an earlier
+ * round, every honest report — merging exactly what the manifest named — was
+ * refused as "not one of the units this bin was given", eighteen attempts
+ * running, until the bin parked and its campaign stopped for a person.
+ */
+export function integrationUnitsFor(
+  bin: Bin,
+  implemented: { unitKey: string; headSha: string | null; ownedPaths: string[] }[],
+): { unitKey: string; headSha: string; ownedPaths: string[] }[] {
+  const out = new Map<string, { unitKey: string; headSha: string; ownedPaths: string[] }>();
+  for (const unit of bin.manifest.units ?? []) {
+    let input: unknown = null;
+    try {
+      input = typeof unit.input === 'string' ? JSON.parse(unit.input) : null;
+    } catch {
+      input = null;
+    }
+    const order = (input as { mergeInOrder?: unknown } | null)?.mergeInOrder;
+    if (!Array.isArray(order)) continue;
+    for (const entry of order as { unitKey?: unknown; headSha?: unknown; ownedPaths?: unknown }[]) {
+      if (typeof entry?.unitKey !== 'string' || typeof entry.headSha !== 'string') continue;
+      const paths = Array.isArray(entry.ownedPaths) ? entry.ownedPaths.filter((p): p is string => typeof p === 'string') : [];
+      out.set(entry.unitKey, { unitKey: entry.unitKey, headSha: entry.headSha, ownedPaths: paths });
+    }
+  }
+  for (const unit of implemented) {
+    if (unit.headSha === null || out.has(unit.unitKey)) continue;
+    out.set(unit.unitKey, { unitKey: unit.unitKey, headSha: unit.headSha, ownedPaths: unit.ownedPaths });
+  }
+  return [...out.values()];
+}
+
 export function binBaseOf(bin: Bin, campaign: FactoryCampaign): string {
   const recorded = bin.manifest.repository?.baseSha;
   return typeof recorded === 'string' && /^[0-9a-f]{40}$/.test(recorded)
@@ -338,7 +376,16 @@ export async function createPlanBin(
           'mutation scope, every verification command must be one the contract already ' +
           'declares, no two units may own an overlapping path unless one depends on the ' +
           'other, and every mandatory acceptance condition must be served by some unit. ' +
-          'Brain refuses the whole plan for any of those, so read the repository first.',
+          'Brain refuses the whole plan for any of those, so read the repository first.\n\n' +
+          'Shape the plan for parallel work. Every unit gets its own worker and every unit ' +
+          'without an outstanding dependency starts at once, while a dependency costs a whole ' +
+          'implement-and-integrate round before the dependent unit can even begin. So: size ' +
+          'each unit as one coherent, independently testable change a single session can finish ' +
+          '(typically one module and its test); split a large change by file ownership rather ' +
+          'than by step; and declare `dependsOn` only where a unit genuinely needs code another ' +
+          'unit creates (it imports a new symbol, calls a new route, reads a new column). Two ' +
+          'units touching related features in different files are independent. Prefer a wide, ' +
+          'shallow graph over a deep chain. A one-file objective is one unit.',
         input: JSON.stringify({
           expectedOutcome: changeRequest.expectedOutcome,
           nonGoals: changeRequest.nonGoals,
@@ -408,6 +455,19 @@ export async function createUnitsBin(
         'same commit and owns paths no other one owns — so they may be implemented ' +
         'concurrently. Do not merge them into each other and do not touch the integration ' +
         'branch: a later bin integrates them in the order Brain decides.',
+      ...(unit.ownedPaths.some((path) => /migrations\//.test(path))
+        ? [
+            // Production, 2026-10-30: two campaigns each "reserved" 131-132 for a
+            // sibling and took 133/134, and both integrations were refused for a
+            // numbering gap — one campaign spent all three attempts on it.
+            'A new migration takes the next number after the highest one in that base commit, ' +
+              'in each chain (server/db/migrations and server/db/pg-migrations are numbered ' +
+              'independently). Never skip a number or leave room for another campaign: a gap ' +
+              'fails the repository\'s own tests. If another change lands the same number first, ' +
+              'the next attempt renumbers to the next free one. A migration path above is owned by its ' +
+              'name, not its number: write it under the right number even if the path above says another.',
+          ]
+        : []),
       'Commit your work and push that branch. Then submit a result for this unit key with a ' +
         'JSON value of the shape {"unitKey","outcome":"IMPLEMENTED"|"BLOCKED","branch",' +
         '"headSha","filesChanged":[],"commands":[{"command","exitCode"}],"summary",' +
@@ -418,7 +478,11 @@ export async function createUnitsBin(
       branch: remoteBranchFor(campaign, unit),
       baseSha: base,
       ownedPaths: unit.ownedPaths,
-      verification: unit.verification.length > 0 ? unit.verification : changeRequest.verificationCommands,
+      // A unit is never what ships, so it runs the intermediate-round commands.
+      verification: intermediateRoundCommands(
+        unit.verification.length > 0 ? unit.verification : changeRequest.verificationCommands,
+        base,
+      ).commands,
       expectedArtifact: unit.expectedArtifact,
       requiredContext: unit.requiredContext,
     }),
@@ -452,8 +516,17 @@ export async function createUnitsBin(
   });
   manifest.prohibitedActions = [
     ...manifest.prohibitedActions,
-    `push, merge into or otherwise move ${campaign.integrationBranch} — integrating is a ` +
-      'separate bin, judged by a session that did not implement any of this',
+    /*
+     * In *this* bin. It used to add "judged by a session that did not implement
+     * any of this" — a guarantee nothing enforces (a separate session is a
+     * property of the fleet, see `createIntegrateBin`). A worker that went on to
+     * take the integrate bin believed it, refused as "not independent", and two
+     * refusals parked the bin for a person (fcp_8cd968ad, 2026-11-02); each
+     * five-second refusal also counted as an unproductive start, and three
+     * throttled the only account, so the campaign's parallel unit waited 44 min.
+     */
+    `push, merge into or otherwise move ${campaign.integrationBranch} from this bin — integrating ` +
+      'is a separate bin, which any session, including this one, may take afterwards',
     'open, update or comment on a pull request',
   ];
 
@@ -474,6 +547,47 @@ export async function createUnitsBin(
     ready: true,
     maxAttempts: 2,
   });
+}
+
+/**
+ * The commands an intermediate round runs: the contract's, with its full test
+ * suite replaced by the tests the round's change can reach.
+ *
+ * CLAUDE.md rule 3 — typecheck and `test:impacted` while developing, the full
+ * gate once, on what is released — applied to the Factory's own rounds. Every
+ * unit bin and every integration round used to run the contract's full suite,
+ * so a fourteen-unit campaign paid for it more than a dozen times, and then the
+ * final integration, the review, the release gate and Deploy each paid for it
+ * again. Every Factory round now runs this; the whole suite is run once by CI
+ * on the commit that is released — the release gate's Postgres suite, or
+ * Deploy's test job, which refuses to release on a failure — so what ships is
+ * still judged by the whole suite.
+ *
+ * A repository with no `test:impacted` script runs its full command, as the
+ * note says, so this changes nothing for one that cannot take it.
+ */
+const FULL_SUITE_COMMANDS = new Set(['npm test', 'npm run test', 'npx vitest run', 'vitest run', 'npm t']);
+
+export function intermediateRoundCommands(
+  commands: readonly string[],
+  base: string,
+): { commands: string[]; note: string | null } {
+  if (!commands.some((command) => FULL_SUITE_COMMANDS.has(command.trim()))) {
+    return { commands: [...commands], note: null };
+  }
+  const impacted = `npm run test:impacted -- --base ${base}`;
+  const out: string[] = [];
+  for (const command of commands) {
+    const next = FULL_SUITE_COMMANDS.has(command.trim()) ? impacted : command;
+    if (!out.includes(next)) out.push(next);
+  }
+  return {
+    commands: out,
+    note:
+      `\`${impacted}\` stands in for the contract's full test suite: CI runs the whole suite once, ` +
+      'on the commit that is released (the release gate, or Deploy\'s test job). If ' +
+      "package.json has no `test:impacted` script, run the contract's full test command instead.",
+  };
 }
 
 /**
@@ -505,10 +619,29 @@ export async function createIntegrateBin(
    * is already up to date and have no words for why.
    */
   drift?: { expected: string; actual: string } | null,
+  /**
+   * True when no other unit is outstanding, so this round's tree is what will
+   * ship: it runs every command the contract declares. Any earlier round runs
+   * `intermediateRoundCommands`.
+   */
+  finalRound = true,
 ): Promise<Bin | null> {
   const mergeable = units.filter((unit) => unit.branch !== null && unit.headSha !== null);
   if (mergeable.length === 0) return null;
   const base = roundBaseFor(campaign);
+  /*
+   * Every round, the final one included, runs the change-scoped commands. The
+   * full suite is paid once, where CLAUDE.md rule 3 puts it: in CI on the SHA
+   * that is released — the release gate's whole Postgres suite for an automatic
+   * release, Deploy's test job (which refuses to release on a failure) for one a
+   * session merges. Measured 2026-11-02 on fcp_90dacf0a (a two-file change):
+   * plan 44 s, implementation 5 min, then the final integration, the review and
+   * Deploy each ran the whole suite (~40 min of CI shards each on one worker).
+   * `finalRound` is still recorded so the integrator can say so.
+   */
+  void finalRound;
+  const round = intermediateRoundCommands(changeRequest.verificationCommands, base);
+  const touchesMigrations = mergeable.some((unit) => unit.ownedPaths.some((path) => /(^|\/)(pg-)?migrations\//.test(path)));
   const order = mergeable.map((unit) => ({
     unitKey: unit.unitKey,
     branch: unit.branch,
@@ -522,7 +655,10 @@ export async function createIntegrateBin(
     why:
       'These unit branches are implemented and confirmed by the forge. The campaign has one ' +
       'branch, and this is the bin that moves it: merge them in the order given, run the ' +
-      "repository's own commands on the merged tree, and push only if they pass.",
+      "repository's own commands on the merged tree, and push only if they pass. If your " +
+      'session implemented one of these units, take this bin anyway: integration is not a review ' +
+      'and needs no independence (the review is a later, separate bin), and a unit bin\'s "do not ' +
+      'move the integration branch" applied to that bin only.',
     campaign,
     changeRequest,
     units: [
@@ -533,8 +669,9 @@ export async function createIntegrateBin(
             `order given, starting from ${base}.`,
           '',
           'Create the integration branch from that commit if it does not exist yet; otherwise ' +
-            'start from where it is. Merge each unit branch in turn. Then run every command the ' +
-            'contract declares on the merged tree.',
+            'start from where it is. Merge each unit branch in turn. Then run every command in ' +
+            '`verification` below on the merged tree.' +
+            (round.note ? ` ${round.note}` : ''),
           '',
           '**Push the integration branch only if every command exits 0.** If one fails, or if a ' +
             'merge conflicts, push nothing and report BLOCKED with the command, its exit code ' +
@@ -555,6 +692,28 @@ export async function createIntegrateBin(
             'you, and the wrong one when a command failed, because then the work goes back ' +
             'unchanged and the next integrator meets the same failure.',
           '',
+          ...(touchesMigrations
+            ? [
+                /*
+                 * Production, 2026-10-30/31: three campaigns stopped here because a
+                 * unit's migration was numbered at planning time and another change
+                 * took or skipped those numbers before integration, leaving a gap or
+                 * a collision the repository's own tests refuse. The integrator was
+                 * forbidden to touch it and the unit had no attempts left, so a
+                 * mechanical rename stranded whole campaigns. A unit owns its
+                 * migration by name, not by number (`ownsPath`), so renaming it stays
+                 * inside what the unit declared.
+                 */
+                '**One edit is yours to make: a migration number.** If, after the merges, either ' +
+                  'chain (server/db/migrations, server/db/pg-migrations — numbered independently) ' +
+                  'has a gap or two files with one number, and the cause is a migration a unit in ' +
+                  'this list added, rename that file with `git mv` to the next free number in its ' +
+                  'chain (keep its name after the number, change nothing inside it and nothing else), ' +
+                  'commit that as its own commit, and then run the ' +
+                  'commands. Never renumber a migration that is already in the base commit.',
+                '',
+              ]
+            : []),
           'Then submit a result for unit key `integrate` with a JSON value of the shape ' +
             '{"outcome":"IMPLEMENTED"|"BLOCKED","integrationBranch","headSha",' +
             '"merged":[{"unitKey","branch","headSha"}],"conflicts":[],' +
@@ -580,9 +739,10 @@ export async function createIntegrateBin(
           baseSha: base,
           mergeInOrder: order,
           verification:
-            changeRequest.verificationCommands.length > 0
-              ? changeRequest.verificationCommands
+            round.commands.length > 0
+              ? round.commands
               : ['(this contract declares no verification commands)'],
+          finalRound,
         }),
         transform: 'FACTORY_INTEGRATE',
         dependsOn: [],
@@ -604,7 +764,8 @@ export async function createIntegrateBin(
     'rewrite, force-push or delete any unit branch',
     'open, update or comment on a pull request — delivery is a later bin',
     'change any file yourself: resolving a conflict by editing the work is implementing, and ' +
-      'this bin does not implement',
+      'this bin does not implement' +
+      (touchesMigrations ? ' (the one exception is renumbering a unit\'s migration, described above)' : ''),
   ];
 
   return await createFactoryBin({
@@ -673,7 +834,13 @@ export async function createReviewBin(
           reviewedSha,
           round,
           acceptanceConditions: changeRequest.acceptanceConditions.map((c) => c.id),
-          verification: changeRequest.verificationCommands,
+          // The change-scoped commands against the campaign base: the reviewer
+          // judges this change, and the whole suite runs once in CI on what is
+          // released (see createIntegrateBin).
+          verification: intermediateRoundCommands(changeRequest.verificationCommands, campaign.baseSha).commands,
+          wholeSuite:
+            'Not yours to run: CI runs the whole suite on the released commit (the release gate, or ' +
+            "Deploy's test job, which refuses to release on a failure).",
         }),
         transform: 'FACTORY_REVIEW',
         dependsOn: [],
@@ -800,7 +967,7 @@ export async function verifyUnitReport(
   }
 
   const outside = comparison.body.files.filter(
-    (file) => !expected.ownedPaths.some((glob) => matchesGlob(file, glob)),
+    (file) => !expected.ownedPaths.some((glob) => ownsPath(file, glob)),
   );
   if (outside.length > 0) {
     problems.push(
@@ -1117,7 +1284,7 @@ export async function verifyIntegrationReport(
     .filter((unit): unit is { unitKey: string; headSha: string; ownedPaths: string[] } => !!unit)
     .flatMap((unit) => unit.ownedPaths);
   const outside = comparison.body.files.filter(
-    (file) => !allowed.some((glob) => matchesGlob(file, glob)),
+    (file) => !allowed.some((glob) => ownsPath(file, glob)),
   );
   if (outside.length > 0) {
     problems.push(
@@ -1612,6 +1779,33 @@ async function createFactoryBin(input: CreateBinInput): Promise<Bin> {
 /** Whether this campaign already has a live bin for a stage, so a tick adds no second one. */
 export function liveBinOfKind(bins: Bin[], kind: string): Bin | null {
   return bins.find((bin) => bin.kind === kind && isLiveBin(bin)) ?? null;
+}
+
+/** The unit keys a bin's manifest hands out. */
+export function unitKeysOfBin(bin: Bin): string[] {
+  return (bin.manifest.units ?? []).map((unit) => unit.key);
+}
+
+/**
+ * The unit keys a live implementation bin already carries.
+ *
+ * Implementation is the one stage that is *not* one-bin-per-campaign. A units bin
+ * holds one lease, so a bin carrying every ready unit was one worker doing all of
+ * them in sequence while every other healthy surface sat idle — production,
+ * 2026-10-30: four live campaigns, each "1 unit(s) with the fleet", each unit a
+ * separate session's worth of work that could have run beside the others. The
+ * units a plan makes ready together are disjoint by construction (`validatePlan`
+ * refuses overlapping ownership between units that do not depend on each other),
+ * so each one gets its own bin and its own lease, and the stage's guard becomes
+ * "no unit is handed out twice" rather than "no stage is handed out twice".
+ */
+export function liveUnitKeys(bins: Bin[]): Set<string> {
+  const keys = new Set<string>();
+  for (const bin of bins) {
+    if (bin.kind !== 'FACTORY_UNITS' || !isLiveBin(bin)) continue;
+    for (const key of unitKeysOfBin(bin)) keys.add(key);
+  }
+  return keys;
 }
 
 /**

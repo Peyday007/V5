@@ -67,6 +67,7 @@ export function normalizeOptions(raw: Partial<RunOptions> | undefined): RunOptio
   if (raw?.overrides !== undefined) options.overrides = raw.overrides;
   if (raw?.objective !== undefined) options.objective = raw.objective;
   if (raw?.acceptable !== undefined) options.acceptable = raw.acceptable;
+  if (raw?.informationValue !== undefined) options.informationValue = raw.informationValue;
   if (options.evaluations > SCENARIO_LIMITS.maxEvaluations) options.evaluations = SCENARIO_LIMITS.maxEvaluations;
   return options;
 }

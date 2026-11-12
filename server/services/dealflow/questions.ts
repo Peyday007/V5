@@ -37,6 +37,7 @@
  * would be wrong about every class the trade has taken up since somebody typed
  * it. So there is no such list anywhere in this kernel.
  */
+import { sprintGoalLine } from '../../domain/operatingModel.ts';
 import { COMPLIANCE_LAYERS, COST_COMPONENTS } from '../../domain/dealflow.ts';
 import type { ComplianceLayer, DealParty } from '../../domain/types.ts';
 
@@ -60,7 +61,7 @@ export const SEED_QUESTION =
 export function seedQuestion(objective: string, round: number): string {
   const parts = [
     SEED_QUESTION,
-    `This is the starting map for a short cash sprint whose goal is: ${objective}`,
+    sprintGoalLine(objective, 'This is the starting map for'),
     'Declare every organisation you establish on its own claim: deal_finding set to BUYER_NEED ' +
       'or SUPPLIER_CAPABILITY, deal_subject set to that organisation’s own name, ' +
       'deal_equipment set to the class of equipment, and deal_jurisdiction set to the country ' +
@@ -93,7 +94,7 @@ export function demandQuestion(input: {
       'published tender, or a procurement notice? For each one: the organisation, the country ' +
       'it operates in, what triggered the need, roughly how many units, and how urgent the ' +
       'source says it is.',
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     `Declare each organisation with deal_finding set to BUYER_NEED, deal_subject set to its ` +
       `own name, deal_equipment set to exactly "${input.equipmentClass}" — copy that string ` +
       'verbatim, because a different wording is a different class to Brain and will pair with ' +
@@ -128,7 +129,7 @@ export function supplyQuestion(input: {
       'stated minimum order and lead time, and whether they publish a willingness to ' +
       'customise? Prefer manufacturers with real engineering evidence and thin international ' +
       'sales coverage over ones already well distributed, and say which is which.',
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     `Declare each manufacturer with deal_finding set to SUPPLIER_CAPABILITY, deal_subject set ` +
       `to its own name, deal_equipment set to exactly "${input.equipmentClass}" — copy that ` +
       'string verbatim — and deal_jurisdiction set to its country. Where a source publishes a ' +
@@ -187,7 +188,7 @@ export function complianceQuestion(input: {
       'quality certificate does not make the product approved; a product approval does not ' +
       'make the state register it; and neither means the buyer will accept it. Answer each ' +
       'layer on its own evidence.',
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     'Declare every requirement you establish with deal_finding set to COMPLIANCE_REQUIREMENT, ' +
       'deal_value set to the layer it belongs to, deal_subject set to the requirement’s ' +
       `own name, deal_equipment set to exactly "${input.equipmentClass}", and ` +
@@ -228,7 +229,7 @@ export function landedCostQuestion(input: {
       'bases or in different currencies into a single number: report them as published. Brain ' +
       'withholds the landed cost when they disagree and says why, which is the correct outcome; ' +
       'a harmonised number would be one nobody can check.',
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     'Declare every figure with deal_finding set to COST_COMPONENT, deal_value set to the line ' +
       `it is (${COST_COMPONENTS.join(', ')}), the amount in deal_amount_cents in minor units, ` +
       'deal_currency set to the published currency\u2019s three-letter code, deal_subject set ' +
@@ -265,7 +266,7 @@ export function structureQuestion(input: {
     'For each one, say what the arrangement actually is, who pays, when they pay, and what the ' +
       'source says it is worth — in the source’s own words, including ranges. Do not ' +
       'convert a range into a single rate.',
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     'Declare each arrangement you find evidence of with deal_finding set to ' +
       'COMMERCIAL_PRECEDENT, deal_value set to the structure it is, deal_subject set to what ' +
       'the source says it pays in the source\u2019s own words, and deal_equipment set to ' +
@@ -291,7 +292,7 @@ export function decisionMakerQuestion(input: {
     'Use what the organisation and the public record publish. Do not infer a name from a ' +
       'job title elsewhere, and do not report a person from a directory that does not say they ' +
       'hold that role now.',
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     'Declare what you establish with deal_finding set to DECISION_MAKER and deal_subject set ' +
       `to "${input.party.name}". Leave deal_equipment out — this finding is about the ` +
       'organisation rather than about a class of equipment.',
@@ -317,7 +318,7 @@ export function adjacentQuestion(input: {
     'A plausible adjacency is not a finding. Only report a class where a source shows this ' +
       'organisation, or a directly comparable operation in the same market, actually procuring ' +
       'it.',
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     'Declare each one with deal_finding set to BUYER_NEED, deal_subject set to the ' +
       'organisation’s name, deal_equipment set to the new class of equipment, and ' +
       'deal_jurisdiction set to its country.',

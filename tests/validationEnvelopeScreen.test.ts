@@ -52,6 +52,44 @@ describe('a Cash deep dive is not refused by its own envelope', () => {
       expect(ownActionMatches(text, pattern), text).toEqual([]);
     }
   });
+
+  // Production, 2026-11-02: orc_d083edfc645c47e6b99d's judge follow-up was
+  // refused for "instructs the researcher to purchase". A hyphenated compound
+  // names a kind of business; the verb on its own is still refused.
+  it('reads a hyphenated compound as a name, and still refuses the verb', () => {
+    const discovery = APPROVAL_ENVELOPES['RUSSELL_CASH_DISCOVERY_V1']!.forbiddenActions;
+    const judge =
+      'Which published group-purchase operators (for example heating-oil or freight co-ops and ' +
+      'bulk-buy clubs) publish an arranger fee or commission, a minimum run size and two dated runs?';
+    expect(ownActionMatches(judge, discovery)).toEqual([]);
+    expect(ownActionMatches('Record the purchase-order terms each buyer publishes.', discovery)).toEqual([]);
+    expect(ownActionMatches('Purchase the supplier list and record its price.', discovery).length).toBeGreaterThan(0);
+  });
+
+  // Production, 2026-11-02: orc_eefa0aa5fb194685b079's judge follow-up asked
+  // for buyers' "purchase frequency" and was refused, so the buyer-economics
+  // question was cancelled unresearched.
+  it('reads a modifier or a third party’s verb as subject matter, and still refuses Brain’s own', () => {
+    const discovery = APPROVAL_ENVELOPES['RUSSELL_CASH_DISCOVERY_V1']!.forbiddenActions;
+    for (const text of [
+      'Which kinds of buyers repeatedly pay for spreadsheet or website work, each with a published directory count, purchase frequency and the price they pay?',
+      'Which small firms that hire freelancers for presentation work publish what they paid?',
+      'Record the purchase price and purchase volume each listing states.',
+    ]) {
+      expect(ownActionMatches(text, discovery), text).toEqual([]);
+    }
+    for (const text of [
+      'Purchase the directory and count its members.',
+      'Purchase data from the directory.',
+      'Purchase records from the county.',
+      'Purchase order forms from the supplier.',
+      'Find the cheapest supplier, then we will purchase the list.',
+      'Hire a contractor to build the sample.',
+      'Find the vendor that we purchase from and purchase it.',
+    ]) {
+      expect(ownActionMatches(text, discovery).length, text).toBeGreaterThan(0);
+    }
+  });
 });
 
 /*
@@ -70,6 +108,27 @@ describe('the stage-one screen passes the same envelope', () => {
 
   it('admits the screen question the compiler writes', () => {
     expect(ownActionMatches(validationQuestion(opening, 'SCREEN'), envelope.forbiddenActions)).toEqual([]);
+  });
+
+  it('asks a recurring arrangement for a named buyer who paid, not for the one payer it does not have', () => {
+    const recurring = {
+      ...opening,
+      title: 'Shared EDDM postcards',
+      buyingSignal: 'Local businesses repeatedly buy shared Every Door Direct Mail postcard campaigns.',
+      opportunitySignal: 'RECURRING_OUTSOURCED_WORK',
+    } as unknown as CashOpportunity;
+    const question = validationQuestion(recurring, 'SCREEN');
+    expect(ownActionMatches(question, envelope.forbiddenActions)).toEqual([]);
+    expect(question).toMatch(/names as having paid for this kind of work/);
+    expect(question).toMatch(/reaches more buyers of that kind/);
+    expect(question).not.toMatch(/this specific opening/);
+    // Production, 2026-11-05: "whether buyers can still buy it …; if so, submit that one fact in the
+    // ruled_out lane" was read as "if they can", and a screen filed availability as a disqualifier.
+    expect(question).toMatch(/Only if it has stopped or excludes us/);
+    expect(question).toMatch(/still bought is not a ruled_out fact/);
+    expect(question).not.toMatch(/; if so,/);
+    // A one-off opening keeps its own question.
+    expect(validationQuestion(opening, 'SCREEN')).toMatch(/this specific opening/);
   });
 
   it('asks only the kill lanes, each the full profile’s own lane object', () => {
@@ -115,5 +174,44 @@ describe('the stage-one screen passes the same envelope', () => {
     });
     expect(verdict.reasons).toEqual([]);
     expect(verdict.fits).toBe(true);
+  });
+});
+
+/*
+ * Recommended-approach change #5 (2026-10-15): the Artisanal Sudoku opening's
+ * second dive re-asked the whole qualification and left `directCosts` blank —
+ * nothing is bought to make a puzzle, so no source publishes that cost. A
+ * second full round now asks the open lanes by name, says a documented absence
+ * is an answer, and still restates the payer the gate requires.
+ */
+describe('a second full dive asks what the first left open, by lane', () => {
+  const envelope = APPROVAL_ENVELOPES['RUSSELL_CASH_VALIDATION_V1']!;
+  const opening = {
+    title: 'Puzzle submissions',
+    buyingSignal: 'Artisanal Sudoku pays $50 per accepted original puzzle.',
+    source: 'https://artisanalsudoku.substack.com/p/submissions',
+    signalObservedAt: '2026-10-14',
+  } as unknown as CashOpportunity;
+
+  it('names cost_evidence, invites a NEGATIVE_EXISTENCE answer, and keeps the payer', () => {
+    const question = validationQuestion(opening, 'FULL', [
+      'delivery',
+      'directCosts',
+      'requiredCapital',
+      'recommendation',
+    ]);
+    expect(question).toContain('cost_evidence (directCosts)');
+    expect(question).toContain('NEGATIVE_EXISTENCE');
+    expect(question).toMatch(/restated in the payer lane/);
+    // Not the whole qualification again, and nothing composed is asked as a lane.
+    expect(question).not.toContain('what comparable work is published at');
+    expect(question).not.toMatch(/\(delivery\)|\(recommendation\)/);
+    expect(ownActionMatches(question, envelope.forbiddenActions)).toEqual([]);
+  });
+
+  it('asks the whole qualification on a first round, or when nothing open has a lane', () => {
+    const whole = validationQuestion(opening, 'FULL');
+    expect(whole).toContain('what comparable work is published at');
+    expect(validationQuestion(opening, 'FULL', ['recommendation'])).toBe(whole);
   });
 });

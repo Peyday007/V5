@@ -67,6 +67,13 @@ export const FACTORY_BLOCKER_KINDS = [
    * repair bin was created rather than one that could only weaken a test.
    */
   'REPAIR_OWNERSHIP_UNRESOLVED',
+  /**
+   * The approved scope lies entirely inside paths no Factory worker may change
+   * (the release gate, deploy workflows, `.claude/**`). No worker is handed it;
+   * the authorized maintainer — a direct Brain engineering session — makes the
+   * change, or amends the scope to a writable one. Never the owner's by default.
+   */
+  'PROTECTED_SCOPE',
 ] as const;
 export type FactoryBlockerKind = (typeof FACTORY_BLOCKER_KINDS)[number];
 

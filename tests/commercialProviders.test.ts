@@ -255,7 +255,7 @@ describe('MESSAGING — Resend, one email to one published address', () => {
     const lines = await commercialProviderStatus({} as NodeJS.ProcessEnv);
     const messaging = lines.find((one) => one.area === 'MESSAGING')!;
     expect(messaging.state).toBe('MISSING');
-    expect(messaging.nextAction).toContain('RESEND_API_KEY');
+    expect(messaging.nextAction).toContain('INSTANTLY_API_KEY');
     expect(lines.map((one) => one.state)).toEqual(['MISSING', 'MISSING', 'MISSING']);
 
     // Configured and registered: CONNECTED, and still no value anywhere.
@@ -301,6 +301,12 @@ describe('MESSAGING — the message is the card, never an invention', () => {
     expect(message.text).toContain('1200.00 USD');
     expect(message.text).toContain('no thanks');
     expect(composeBuyerMessage({ ...piece, priceCents: null }).ok).toBe(false);
+    // Only an explicit paid request is quoted back as the buyer's own request (2026-11-07).
+    const notAsked = composeBuyerMessage({ ...piece, mechanism: 'SUPPLY_DEMAND_MISMATCH' });
+    expect(notAsked.ok && notAsked.text).not.toContain('published request');
+    expect(notAsked.ok && notAsked.subject).toBe('Offer: Repair the intake valve within a week.');
+    const asked = composeBuyerMessage({ ...piece, mechanism: 'EXPLICIT_PAID_REQUEST' });
+    expect(asked.ok && asked.text).toContain('We saw your published request');
   });
 });
 

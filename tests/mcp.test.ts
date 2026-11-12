@@ -838,9 +838,15 @@ describe('authorization', () => {
     // Enqueue, cancel and resolve are ADMIN and name no worker scope. A leaked
     // worker credential must not be able to create work for the fleet or decide
     // what an unknown outcome meant.
+    // `brain_fetch_source` is the one reader allowed the word: it opens a public
+    // http(s) page only for a worker holding a live lease on that research item,
+    // after DNS, and refuses every private, loopback and metadata address
+    // (tests/fetchSource.test.ts). Any other tool carrying the word is refused.
+    const allowed = new Set(['brain_fetch_source']);
     for (const forbidden of ['enqueue', 'cancel', 'resolve', 'sql', 'exec', 'fetch', 'file', 'shell']) {
-      expect(names.some((name) => name.includes(forbidden))).toBe(false);
+      expect(names.some((name) => name.includes(forbidden) && !allowed.has(name)), forbidden).toBe(false);
     }
+    expect(names).toContain('brain_fetch_source');
   });
 });
 

@@ -67,6 +67,8 @@
  * never a favourable assumption, arriving at the moment an opportunity is born
  * rather than being asserted away by whoever created it.
  */
+import { OPERATING_MODEL_SENTENCE } from '../../domain/operatingModel.ts';
+import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 import { learnedLensesForProject, learnSubjectFromClaim, SUBJECT_LENS_PREFIX } from '../knowledge/subjects/subjects.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
@@ -83,15 +85,19 @@ import {
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
 import { statesNamedIn } from '../../domain/jurisdiction.ts';
-import { createCandidate } from '../../repos/russellCandidates.ts';
+import { createCandidate, getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
 import {
   closeRound,
+  countSettledRoundOpening,
+  roundForCandidate,
   listRounds,
   openRound,
   openRoundsByCandidate,
 } from '../../repos/cashDiscovery.ts';
 import { listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
 import { discoveryYield, usefulOpeningIds, yieldGuidance } from './discoveryYield.ts';
+import { commonTo, exclusionSentence, type ExclusionClass } from './exclusions.ts';
+import { liveGoalLimits } from './worthResearching.ts';
 import {
   bucketGates,
   compileBucketMethod,
@@ -103,6 +109,7 @@ import { getClaim, signalledClaims } from '../../repos/research.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
 import { mechanismForSignal } from '../../domain/opportunitySignals.ts';
+import { OPPORTUNITY_SIGNALS } from '../../domain/types.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { cashPosition } from './money.ts';
 import { proveCapabilities } from './deliverables/capabilities.ts';
@@ -605,7 +612,7 @@ export async function openDiscovery(input: {
       mode,
       bucket,
       next,
-      statement: questionFor(bucket, mode.objective, next, history, held, frame, gates.get(bucket.id)?.revision ?? null),
+      statement: questionFor(bucket, mode.objective, next, history, held, frame, commonTo(await liveGoalLimits(input.projectId, new Date().toISOString())), gates.get(bucket.id)?.revision ?? null),
     });
     if (!round) continue;
     out.push({ bucketId: bucket.id, candidateId: round.candidateId, round: next });
@@ -731,6 +738,67 @@ export const MAX_INDUSTRY_LENSES = 60;
  */
 export const MAX_LIVE_GOAL_ROUNDS = 3;
 
+/**
+ * What a goal round looks for first (owner, 2026-11-05): work run remotely and
+ * fulfilled mostly by AI, sold to buyers who can be named, at prices buyers are
+ * shown paying, collected fast. A preference in the question, not a filter:
+ * the gate, harvest and plan judge every opening exactly as before.
+ */
+/*
+ * Until 2026-11-07 this asked only for work to fulfil mostly with AI-produced digital output
+ * that businesses pay for, which with the screens beside it steered every goal round away
+ * from brokered home services and household buyers the owner allows (§91).
+ */
+export const REMOTE_AI_FOCUS =
+  'Look for work this operation can run entirely online: work it fulfils with AI-produced digital output (documents, data, research, content, code, automations), and services that independent contractors or suppliers perform for businesses or households while this operation sells, books, refers or subcontracts them and coordinates them remotely (home services, local services, consumer services, small repeat purchases). Neither kind is preferred over the other. ' +
+  'For each opening give: the kind of buyer and where they are found, a dated sign that buyers want it now, the price buyers are shown paying for it, how many such buyers there are and how often each buys, who performs or produces the work and how it is delivered, what it costs to get each customer, the cost per sale, and how quickly the money is collected.';
+
+/**
+ * How a goal lens's answer becomes an opening, said in the question.
+ *
+ * The harvest files only a claim whose reader set `opportunity_signal`
+ * (`signalledClaims`). A goal lens asks "which ways could bring this goal
+ * money" — an arrangement question, not "find a published request" — and the
+ * profile asks for a signal only on "a concrete opening", so workers answered
+ * with buyer, price and settlement claims and tagged none of them. Production
+ * read 0 of 18 goal rounds filing an opening, recorded as "round abandoned
+ * with nothing found": the research ran, the claims were gated, and nothing
+ * could be harvested. Constructed rounds met the same cause on 2026-11-02 and
+ * were fixed by naming the field (`construct.ts`, `OPENING_SENTENCE`); this is
+ * that fix for the lens rounds. The worker still decides whether a claim is
+ * an opening and which signal it is, from the whole closed set; a signalled
+ * claim passes the same gate, and the harvested piece is qualified like any
+ * other. No bar is lowered.
+ */
+export const GOAL_OPENING_SENTENCE =
+  'Report each way that a source shows a payer for as an opening, by setting opportunity_signal on the claim that names those buyers ' +
+  `to whichever of ${OPPORTUNITY_SIGNALS.join(', ')} the source shows. ` +
+  'A claim with no opportunity_signal is kept as evidence and never becomes an opening, so a way reported without one is lost to the goal.';
+
+/**
+ * A closed round that filed nothing, however it closed. This is what makes the
+ * next asking start from how such openings are found (`methodFirst`): a search
+ * that came back empty or stopped short is not repeated as it was.
+ */
+function roundFoundNothing(one: Pick<CashDiscoveryRound, 'state' | 'found'>): boolean {
+  return (one.state === 'ABANDONED' || one.state === 'HARVESTED') && one.found === 0;
+}
+
+/**
+ * A round whose research actually finished and filed nothing: evidence that
+ * this angle, asked this way, has nothing to find. Only `HARVESTED` says the
+ * research finished (its mission is DONE). `ABANDONED` means a mission that
+ * failed, was cancelled, expired unlaunched, was answered by the archive or
+ * parked at a decision. A round can end that way because Brain's own lane,
+ * model route or database was down, and then the angle was never searched.
+ * Brain's outage is nobody's no-show (§53), and a dead end is a watch, not a
+ * verdict (§65), so an ABANDONED round is no evidence either way. It neither
+ * lengthens a lens's wait nor erases the barren harvests before it.
+ */
+function roundSearchedAndFoundNothing(one: Pick<CashDiscoveryRound, 'state' | 'found'>): boolean {
+  return one.state === 'HARVESTED' && one.found === 0;
+}
+
 /** A barren goal lens waits longer each time, up to this, and is never retired. */
 export const GOAL_LENS_MAX_BACKOFF_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -748,7 +816,9 @@ export function nextGoalRoundFor(history: CashDiscoveryRound[], now: string): nu
   let barren = 0;
   for (let i = ordered.length - 1; i >= 0; i -= 1) {
     const one = ordered[i]!;
-    if (one.state === 'HARVESTED' && one.found === 0) barren += 1;
+    // A round that stopped before its research finished says nothing about the angle: skip it.
+    if (one.state === 'ABANDONED' && one.found === 0) continue;
+    if (roundSearchedAndFoundNothing(one)) barren += 1;
     else break;
   }
   const wait = Math.min(ROUND_COOL_OFF_MS * 2 ** barren, GOAL_LENS_MAX_BACKOFF_MS);
@@ -783,7 +853,20 @@ export async function openGoalDiscovery(input: {
   bestReach: number | null;
   /** Openings Brain already holds for the goal, so a new round looks elsewhere. */
   heldTitles?: string[];
+  /**
+   * What the goal's plan found wrong with what research has produced so far,
+   * as instructions (`goals/researchYield.ts`): a search that keeps returning
+   * openings the plan cannot use is asked differently, not again.
+   */
+  diagnosis?: string;
   now?: string;
+  /**
+   * How many of this goal's rounds may be open at once. Defaults to
+   * `MAX_LIVE_GOAL_ROUNDS`; the plan pass raises it by the research surfaces
+   * that are idle with nothing waiting (`spareResearchSurfaces`), so a goal's
+   * search widens when the fleet has room and narrows when work queues up.
+   */
+  liveCap?: number;
 }): Promise<OpenedDiscovery | null> {
   /*
    * Not behind `BRAIN_CLAUDE_DISCOVERY`. That switch stops *bulk* finding so the
@@ -793,6 +876,15 @@ export async function openGoalDiscovery(input: {
    * so every goal round was refused before it was asked and the goal read
    * "keeps searching" over zero rounds. Like the feed shortlist, it asks anyway.
    */
+  /*
+   * Except under focus. A goal round is a Claude Routine hunting openings —
+   * bulk finding for one goal — and focus is the owner saying Routines do not
+   * hunt; the feeds and the free models do (the feed shortlist still reaches a
+   * strong model). Rounds already open finish and are harvested. Under
+   * brain-only mode a goal round is the free lane's, not a Routine's (§84,
+   * §86), so focus has nothing here to protect and the goal keeps searching.
+   */
+  if (routineFocus() && !(await freeLaneOwnsResearch(input.target.projectId))) return null;
   const gate = await discoveryAllowed(input.target.projectId);
   if (!gate.allowed || !gate.mode) return null;
   const mode = gate.mode;
@@ -807,7 +899,8 @@ export async function openGoalDiscovery(input: {
    */
   const prefix = `${GOAL_BUCKET_PREFIX}${input.goal.id}`;
   const mine = (await listRounds(t.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
-  if (mine.filter((one) => one.state === 'OPEN').length >= MAX_LIVE_GOAL_ROUNDS) return null;
+  const liveCap = Math.max(MAX_LIVE_GOAL_ROUNDS, Math.trunc(input.liveCap ?? MAX_LIVE_GOAL_ROUNDS));
+  if ((await roundsStillResearching(mine)) >= liveCap) return null;
   /*
    * The fixed angles are a starting point, not the whole map: Brain's own
    * industry map (`industry_nodes`, filled from classification systems and
@@ -863,7 +956,7 @@ export async function openGoalDiscovery(input: {
    */
   const last = [...history].sort((a, b) => b.round - a.round)[0];
   const methodFirst =
-    last && (last.state === 'ABANDONED' || (last.state === 'HARVESTED' && last.found === 0))
+    last && roundFoundNothing(last)
       ? 'The last search from this angle found nothing usable, so start with how such openings are actually found: name the specific directories, public registers, feeds, trade associations and search terms where buyers of this kind publish what they need, open each, say which produced live openings and which did not, and report the openings found through the ones that worked. '
       : '';
   const learned = yieldGuidance(await discoveryYield(t.projectId));
@@ -874,9 +967,12 @@ export async function openGoalDiscovery(input: {
     `Looking at ${lens.angle} — in any market or industry, and as one opening or several running at once — ` +
       `which lawful ways could bring this operation ${amount} more of ` +
       `${t.metricLabel} within ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'}? ${held}${elsewhere} ${capital} ${resources} ${pace} ` +
-      `Report only ways that could bring at least ${t.currency} ${Math.round((t.remainingCents / 100) * 0.1)} within that time — alone, or as a stream many buyers pay repeatedly — and leave out one-off small payments, contests, bounties and submissions that pay a few hundred at most. ` +
+      `Report ways that could bring at least ${t.currency} ${Math.round((t.remainingCents / 100) * 0.1)} within that time — alone, or as a stream many buyers pay repeatedly. A small price is not a reason to leave a way out: a $50–$300 service or sale that many households or businesses buy again and again counts by its total, so give how many buyers there are and how often each buys. Leave out only one-off contests, bounties and submissions that pay a few hundred at most. ` +
       'For each, name who pays, what buyers are published as actually paying, when the money would settle, ' +
       'what it needs up front, and what it would need that the operation does not have yet?' +
+      ` ${REMOTE_AI_FOCUS}` +
+      ` ${GOAL_OPENING_SENTENCE}` +
+      (input.diagnosis ? ` ${input.diagnosis}` : '') +
       (learned ? ` ${learned}` : '') +
       ' For each opening, say how it was found: the source and the search that led to it.',
     lens.id,
@@ -897,9 +993,118 @@ export async function openGoalDiscovery(input: {
     mode,
     bucket,
     next,
-    statement: questionFor(bucket, mode.objective, next, history, heldLines, frame),
+    statement: questionFor(bucket, mode.objective, next, history, heldLines, frame, commonTo(await liveGoalLimits(t.projectId, new Date().toISOString()))),
   });
   return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
+}
+
+/**
+ * Open one round for an arrangement Brain constructed itself (§81).
+ *
+ * The construction module decides *what* to ask — an arrangement composed from
+ * a buyer population, a need, a way to fulfil it and a way to be paid, none of
+ * which a person named — and this is the only door it asks through: the same
+ * gate, the same frame, the same candidate-and-round transaction and the same
+ * harvest every goal lens uses. The bucket id carries the arrangement's key,
+ * so each arrangement keeps its own history and backoff, and its rounds count
+ * against the goal's live cap like any lens.
+ */
+export async function openConstructedRound(input: {
+  goal: { id: string; title: string };
+  projectId: string;
+  /** Stable, short, url-safe: becomes `goal-<goalId>-mx-<key>`. */
+  key: string;
+  title: string;
+  question: string;
+  now?: string;
+  liveCap?: number;
+}): Promise<OpenedDiscovery | null> {
+  const gate = await discoveryAllowed(input.projectId);
+  if (!gate.allowed || !gate.mode) return null;
+  const mode = gate.mode;
+  const now = input.now ?? new Date().toISOString();
+  const prefix = `${GOAL_BUCKET_PREFIX}${input.goal.id}`;
+  const mine = (await listRounds(input.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
+  const liveCap = Math.max(MAX_LIVE_GOAL_ROUNDS, Math.trunc(input.liveCap ?? MAX_LIVE_GOAL_ROUNDS));
+  if ((await roundsStillResearching(mine)) >= liveCap) return null;
+  /*
+   * Focus keeps exactly this search (§83): an approved goal's constructed
+   * arrangements, inside an ACTIVE sprint (the gate above), at most
+   * `focusConstructedCap` open at once. Lens rounds, bulk discovery and the
+   * idle-fill lift stay stopped. #389 stopped this too, and with it the only
+   * research that could add an opening the held ones cannot reach.
+   */
+  const focusCap = await constructedCapFor(input.projectId);
+  const mx = mine.filter((one) => one.bucketId.startsWith(`${prefix}-mx-`));
+  /*
+   * Under focus the cap counts constructed research still running under a
+   * round already closed, not only OPEN rounds (§83): a park closes a round
+   * while its research goes on, and that research is still a Routine's.
+   */
+  if (focusCap !== null && (await liveConstructedResearch(mx)) >= focusCap) return null;
+  const lens = `mx-${input.key}`;
+  const id = `${prefix}-${lens}`;
+  const history = mine.filter((one) => one.bucketId === id);
+  const next = nextGoalRoundFor(history, now);
+  if (next === null) return null;
+  /*
+   * An earlier round of this design closed while its research ran on: asking
+   * again now would research the same design twice. Production, 2026-11-02:
+   * mx-7b4358e63f7c read ABANDONED over a RUNNING mission.
+   */
+  if (history.length > 0) {
+    const missions = await missionsForRounds(history.map((one) => one.candidateId));
+    if ([...missions.values()].some((one) => one.latest && !TERMINAL_MISSION.has(one.latest.state))) return null;
+  }
+  const bucket = goalBucket(input.goal.id, input.goal.title, input.question, lens);
+  bucket.title = input.title.slice(0, 160);
+  const frame = await executionFrame(input.projectId, mode.currency);
+  const held = await heldExclusions({ projectId: input.projectId, bucket, history });
+  const round = await openBucketRound({ projectId: input.projectId, mode, bucket, next, statement: questionFor(bucket, mode.objective, next, history, held, frame) });
+  return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
+}
+
+const TERMINAL_MISSION = new Set(['DONE', 'FAILED', 'CANCELLED']);
+
+/**
+ * How many of these rounds still hold a research slot: OPEN rounds less those
+ * whose research has finished — every fragment of every mission the round's
+ * idea launched is terminal — while their synthesis and audit run on.
+ *
+ * A round's openings are harvested fragment by fragment as each one is gated
+ * (`signalledClaims` reads ACCEPTED and BLOCKED fragments), so a round whose
+ * fragments are all done has nothing left to discover. It stayed OPEN — and
+ * counted against the goal's live cap — until its packet's synthesis and audit
+ * ended, which on the free lane is often longer than the research was: the
+ * goal's next question waited for the previous one's paperwork. The round
+ * still closes, and still records what it found, exactly as before.
+ */
+export async function roundsStillResearching(rounds: readonly CashDiscoveryRound[]): Promise<number> {
+  const open = rounds.filter((one) => one.state === 'OPEN');
+  if (open.length === 0) return 0;
+  const ids = open.map((one) => one.candidateId);
+  const finished = await getDb().all<{ candidate_id: string }>(
+    `SELECT DISTINCT m.candidate_id FROM russell_missions m
+      WHERE m.candidate_id IN (${ids.map(() => '?').join(', ')}) AND m.orchestration_id IS NOT NULL
+        AND EXISTS (SELECT 1 FROM research_fragments f WHERE f.orchestration_id = m.orchestration_id)
+        AND NOT EXISTS (
+          SELECT 1 FROM russell_missions m2 JOIN research_fragments f2 ON f2.orchestration_id = m2.orchestration_id
+           WHERE m2.candidate_id = m.candidate_id AND f2.status NOT IN ('ACCEPTED', 'BLOCKED', 'REJECTED', 'CANCELLED'))`,
+    ids,
+  );
+  return open.length - finished.length;
+}
+
+/**
+ * Constructed research live among these rounds: OPEN ones, plus closed ones
+ * whose idea's latest mission has not ended.
+ */
+export async function liveConstructedResearch(rounds: readonly CashDiscoveryRound[]): Promise<number> {
+  const open = rounds.filter((one) => one.state === 'OPEN').length;
+  const closed = rounds.filter((one) => one.state !== 'OPEN');
+  if (closed.length === 0) return open;
+  const missions = await missionsForRounds(closed.map((one) => one.candidateId));
+  return open + [...missions.values()].filter((one) => one.latest && !TERMINAL_MISSION.has(one.latest.state)).length;
 }
 
 /**
@@ -1026,12 +1231,19 @@ export function questionFor(
   history: readonly CashDiscoveryRound[],
   held: HeldExclusions = { lines: [], omitted: 0 },
   frame: ExecutionFrame | null = null,
+  exclusions: readonly ExclusionClass[] = [],
   revision: string | null = null,
 ): string {
   const parts = [bucket.question, `This is for a short cash sprint whose goal is: ${objective}`];
   // A revised search method says what its earlier rounds got wrong; the round asks differently.
   if (revision) parts.push(revision);
-  if (frame) parts.push(executionFrameSentence(frame));
+  // The standing operating rule is in every question: inside the frame when there is one, on its own otherwise.
+  parts.push(frame ? executionFrameSentence(frame) : OPERATING_MODEL_SENTENCE);
+  // What every live goal's owner excluded is said in the question, so a worker never
+  // spends a pass on it (production 2026-11-02: 128 openings filed and then left out
+  // at plan time). A constructed round already carries it in its own text.
+  const leaveOut = exclusionSentence(exclusions).trim();
+  if (leaveOut && !bucket.question.includes(leaveOut)) parts.push(leaveOut);
   if (round > 1) {
     const found = history.reduce((total, one) => total + one.found, 0);
     parts.push(
@@ -1107,7 +1319,9 @@ export function executionFrameSentence(frame: ExecutionFrame): string {
     'operation, so on its own it is not an opening. A kind of business that publicly and ' +
     'repeatedly pays for something this operation delivers, with a published place to find those ' +
     'businesses and their email addresses, is an opening, and the prices others charge them are ' +
-    'its price evidence.'
+    'its price evidence. ' +
+    // The standing operating rule (domain/operatingModel.ts), in every question Brain asks.
+    OPERATING_MODEL_SENTENCE
   );
 }
 
@@ -1218,19 +1432,22 @@ export function safeExclusion(text: string): boolean {
 async function liveRounds(
   projectId: string,
 ): Promise<Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>> {
-  // Trigger buckets always resolve, so a round opened while triggers were on is
-  // still harvested after they are switched off.
-  const byId = new Map(
-    [...SEARCH_BUCKETS, ...TRIGGER_BUCKETS, FEED_SHORTLIST_BUCKET, ...(await learnedLensesForProject(projectId))].map((bucket) => [bucket.id, bucket]),
-  );
+  // Subjects Brain learned resolve too, so a learned lens's open round is still harvested.
+  const learned = await learnedLensesForProject(projectId);
   const out = new Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>();
   for (const [candidateId, round] of await openRoundsByCandidate(projectId)) {
-    const bucket =
-      byId.get(round.bucketId) ??
-      (round.bucketId.startsWith(GOAL_BUCKET_PREFIX) ? goalBucket(round.bucketId.slice(GOAL_BUCKET_PREFIX.length), 'a goal') : undefined);
+    const bucket = bucketForRound(round, learned);
     if (bucket) out.set(candidateId, { round, bucket });
   }
   return out;
+}
+
+/** The bucket a round asked, from its id: a listed bucket, a learned subject lens, or a goal's own. */
+function bucketForRound(round: CashDiscoveryRound, learned: readonly SearchBucket[] = []): SearchBucket | undefined {
+  // Trigger buckets always resolve, so a round opened while triggers were on is
+  // still harvested after they are switched off.
+  const listed = [...SEARCH_BUCKETS, ...TRIGGER_BUCKETS, FEED_SHORTLIST_BUCKET, ...learned].find((bucket) => bucket.id === round.bucketId);
+  return listed ?? (round.bucketId.startsWith(GOAL_BUCKET_PREFIX) ? goalBucket(round.bucketId.slice(GOAL_BUCKET_PREFIX.length), 'a goal') : undefined);
 }
 
 export interface Harvested {
@@ -1342,6 +1559,29 @@ export async function harvest(input: {
     return missionIdOf.get(orchestrationId) ?? null;
   };
 
+  /*
+   * The round behind a claim whose round has already closed (§83).
+   *
+   * A round closes ABANDONED the moment its mission parks at a decision, so the
+   * bucket can be asked again; the routine-decision pass then files the parked
+   * report short and the mission ends DONE. Its claims are still harvested, but
+   * production filed every one of them unattributed: 24 of a goal's rounds read
+   * "ABANDONED found 0" over DONE missions, so a constructed arrangement that
+   * did find an opening could never be shown to have. The round is read by the
+   * mission's own candidate, for attribution only: it is never reopened, and
+   * the opening is counted on it below.
+   */
+  const settledByOrchestration = new Map<string, { round: CashDiscoveryRound; bucket: SearchBucket } | null>();
+  const settledRoundFor = async (orchestrationId: string) => {
+    if (!settledByOrchestration.has(orchestrationId)) {
+      const mission = await getMissionByOrchestration(orchestrationId);
+      const round = mission?.candidateId ? await roundForCandidate(mission.candidateId) : null;
+      const bucket = round && round.projectId === input.projectId && round.state !== 'OPEN' ? bucketForRound(round, await learnedLensesForProject(input.projectId)) : undefined;
+      settledByOrchestration.set(orchestrationId, round && bucket ? { round, bucket } : null);
+    }
+    return settledByOrchestration.get(orchestrationId) ?? null;
+  };
+
   const signalled = await signalledClaims({ projectId: input.projectId, limit: limit * 4 });
 
   const out: Harvested[] = [];
@@ -1361,7 +1601,7 @@ export async function harvest(input: {
      */
     if (claim.claimType === 'NEGATIVE_EXISTENCE') continue;
 
-    const context = roundByOrchestration.get(entry.orchestrationId) ?? null;
+    const context = roundByOrchestration.get(entry.orchestrationId) ?? (await settledRoundFor(entry.orchestrationId));
 
     /*
      * One opportunity per supported opening, decided by the database.
@@ -1428,6 +1668,7 @@ export async function harvest(input: {
         'asked; it does not say who pays.',
     });
     if (!created) continue;
+    if (context && context.round.state !== 'OPEN') await countSettledRoundOpening(context.round.id);
 
     /*
      * The signal, and only the signal.
@@ -1556,8 +1797,10 @@ async function closeEndedRounds(input: {
   for (const [candidateId, entry] of input.live) {
     const missions = input.roundMissions.get(candidateId);
     const mission = missions?.latest ?? null;
-    const to: 'HARVESTED' | 'ABANDONED' | null =
+    let to: 'HARVESTED' | 'ABANDONED' | null =
       missions?.outcome ?? (mission?.state === 'NEEDS_HUMAN' ? 'ABANDONED' : null);
+    const expired = !to && !mission && (await expireUnlaunchedGoalRound(entry.round, candidateId));
+    if (expired) to = 'ABANDONED';
     if (!to) continue;
     opportunities ??= await listOpportunities({ projectId: input.projectId });
     const found = opportunities.filter((one) => one.discoveryRoundId === entry.round.id).length;
@@ -1595,7 +1838,9 @@ async function closeEndedRounds(input: {
     if (to === 'HARVESTED') continue;
     const why = mission
       ? `its research is ${mission.state.toLowerCase()}`
-      : 'the archive already answered it, so nothing launched';
+      : expired
+        ? `its idea never launched in ${UNLAUNCHED_GOAL_ROUND_MS / 3_600_000} hours, so it was retired to free the goal's slot`
+        : 'the archive already answered it, so nothing launched';
     await recordCashEvent({
       projectId: input.projectId,
       kind: 'CASH_DISCOVERY_ROUND_STOPPED',
@@ -1614,6 +1859,38 @@ async function closeEndedRounds(input: {
     });
   }
   return closed;
+}
+
+/**
+ * How long a goal's own round may wait for its idea to become a mission (§83).
+ *
+ * A goal round's idea is launched within minutes on a healthy tick. One that
+ * is still unlaunched after this has met something that will not answer by
+ * itself — a compiler refusal that parked it, a launch queue it never reached —
+ * and its OPEN round holds one of the goal's few live slots (two under focus)
+ * for ever. Ordinary buckets are untouched: their rounds hold no goal's slot.
+ */
+export const UNLAUNCHED_GOAL_ROUND_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Retire a goal round whose idea never launched, so it stops holding a slot.
+ *
+ * The idea is moved to REJECTED first, guarded on the state read, so it can
+ * never launch afterwards and duplicate the round asked next in its place; if
+ * it launched in the meantime the swap fails and the round stays OPEN for its
+ * mission. Nothing is deleted: the idea, its judgment and the round keep their
+ * rows, and the arrangement may be asked again after its cool-off.
+ */
+async function expireUnlaunchedGoalRound(round: CashDiscoveryRound, candidateId: string): Promise<boolean> {
+  if (!round.bucketId.startsWith(GOAL_BUCKET_PREFIX)) return false;
+  if (Date.now() - Date.parse(round.openedAt) < UNLAUNCHED_GOAL_ROUND_MS) return false;
+  // Not while every research mission slot is held: that wait is the grant's, not the idea's,
+  // and rejecting the idea for it would discard a question that was simply queued.
+  const { researchMissionSlotsFull } = await import('../russell/launch.ts');
+  if ((await researchMissionSlotsFull(round.projectId).catch(() => null)) === true) return false;
+  const candidate = await getCandidate(candidateId);
+  if (!candidate || !['CAPTURED', 'PROMOTED', 'QUEUED', 'PARKED'].includes(candidate.state)) return false;
+  return transitionCandidate({ candidateId, from: candidate.state, to: 'REJECTED' });
 }
 
 function clamp(text: string, max: number): string {

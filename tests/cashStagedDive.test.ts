@@ -130,8 +130,10 @@ describe('a staged deep dive asks the kill questions first', () => {
     await settle(id, 'BLOCKED');
     expect((await whyNotDiving((await getOpportunity(id))!)).kind).not.toBe('STAGE_ONE_FAILED');
 
-    // It ran, and settled with no payer found.
-    await launchMission({
+    // It became a mission, but its research recorded nothing (the free model
+    // providers answering 503/429 for hours): no source was read, so no payer
+    // was ruled out either.
+    const { mission } = await launchMission({
       projectId,
       visibility: 'SHARED',
       objective: 'screen',
@@ -139,6 +141,31 @@ describe('a staged deep dive asks the kill questions first', () => {
       idempotencyKey: `screen:${first.candidateId}`,
       candidateId: first.candidateId,
     });
+    const { createRun } = await import('../server/repos/runs.ts');
+    const { createOrchestration, createFragments, currentFragments, insertClaims } = await import('../server/repos/research.ts');
+    const fixture = (await getDb().get<{ id: string }>('SELECT id FROM layers WHERE project_id = ? LIMIT 1', [projectId]))!;
+    const run = await createRun({ projectId, layerId: fixture.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'q' });
+    const packet = await createOrchestration({ projectId, layerId: fixture.id, runId: run.id, title: 'screen', assignment: 'screen', provider: 'WORKER', autoApprove: false });
+    await getDb().run('UPDATE russell_missions SET orchestration_id = ? WHERE id = ?', [packet.id, mission.id]);
+    expect((await whyNotDiving((await getOpportunity(id))!)).kind).not.toBe('STAGE_ONE_FAILED');
+
+    // It read sources, and settled with no payer found.
+    await createFragments([
+      {
+        orchestrationId: packet.id, projectId, layerId: fixture.id, geography: 'any market',
+        requiredEvidence: [{ id: 'payer', description: 'who pays', necessity: 'REQUIRED' }],
+        acceptableSourceTypes: ['a page'], excludedSourceTypes: ['a forecast'], completionCriteria: ['a dated source'],
+        minIndependentSources: 1, maxRepairs: 2, fragmentIndex: 0, fragmentKey: 'opening-screen', question: 'q', dependsOn: [], attempt: 1,
+      },
+    ] as unknown as Parameters<typeof createFragments>[0]);
+    const [fragment] = await currentFragments(packet.id);
+    await insertClaims([{
+      orchestrationId: packet.id, fragmentId: fragment!.id, passId: null, passKey: 'BROAD_SCAN' as const,
+      claim: 'No published source names who pays for parcel ownership research here.', sourceUrl: 'https://example.test/parcels', sourceTitle: 'A page', sourcePublisher: 'A publisher', sourceDate: '2026-11-01',
+      evidenceExcerpt: 'x', evidenceLocator: 'the page', evidenceLane: 'payer', opportunitySignal: null, closesOn: null,
+      retrievedAt: '2026-11-02', confidence: 0.5, validationState: 'SOURCED' as const, validationDetail: null, sourced: true,
+      claimType: 'SOURCED_FACT' as const, contentHash: `screen|${id}`,
+    }]);
     expect((await whyNotDiving((await getOpportunity(id))!)).kind).toBe('STAGE_ONE_FAILED');
     const concluded = await concludeScreens(projectId);
     expect(concluded.map((one) => one.opportunityId)).toEqual([id]);
@@ -215,7 +242,7 @@ describe('dives are counted per change epoch, with no lifetime cap', () => {
   });
 
   it('the same change ref does not open an epoch twice', async () => {
-    const id = await opening('an expiring surplus lot');
+    const id = await opening('an expiring paid request');
     await spendEpoch(id);
     await tick();
     expect(await requestReconsideration({ projectId, opportunityId: id, changeRef: 'evidence@same' })).toBe(true);
@@ -363,5 +390,103 @@ describe('decision-value order and the fields worth researching', () => {
     const worth = fieldsWorthResearching(o, tier);
     expect(worth[0]).toBe('payer');
     expect(worth.every((key) => key === 'payer' || key === 'disqualifiers')).toBe(true);
+  });
+});
+
+describe('an opening a goal’s own search found is dived first', () => {
+  it('starts the goal-found opening ahead of an older one when only one dive fits', async () => {
+    const older = await opening('An older county request for a traffic study');
+    const found = await opening('Home-service firms repeatedly pay for missed-call text-back setup');
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO cash_discovery_rounds (id, project_id, cash_mode_id, bucket_id, mechanism, round, candidate_id, state, opened_at, found, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, 'HARVESTED', ?, 1, ?, ?)`,
+      ['cdr_goalfound', projectId, modeId, 'goal-wst_x-mx-abc', 'GOAL_MECHANISM', 'rcn_goalfound', at, at, at],
+    );
+    await getDb().run('UPDATE cash_opportunities SET discovery_round_id = ? WHERE id = ?', ['cdr_goalfound', found]);
+    const started = await startValidations({ projectId, limit: 1 });
+    expect(started.map((one) => one.opportunityId)).toEqual([found]);
+    expect(started.map((one) => one.opportunityId)).not.toContain(older);
+  });
+});
+
+describe('under brain-only mode a goal’s own openings dive beside the operator ceiling', () => {
+  it('starts a few goal-found dives past a ceiling of one, and none past it without brain-only', async () => {
+    const { setBrainOnlyMode } = await import('../server/services/bins/brainOnly.ts');
+    const saved = process.env['BRAIN_CASH_RESEARCH_MAX'];
+    process.env['BRAIN_CASH_RESEARCH_MAX'] = '1';
+    try {
+      const at = new Date().toISOString();
+      await getDb().run(
+        `INSERT INTO cash_discovery_rounds (id, project_id, cash_mode_id, bucket_id, mechanism, round, candidate_id, state, opened_at, found, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, 'HARVESTED', ?, 3, ?, ?)`,
+        ['cdr_goalmany', projectId, modeId, 'goal-wst_y-mx-def', 'GOAL_MECHANISM', 'rcn_goalmany', at, at, at],
+      );
+      const ids: string[] = [];
+      for (const title of ['Firms repeatedly pay for gift brokerage', 'Contractors repeatedly pay for missed-call setup', 'Shops repeatedly pay for shared postcards']) {
+        const id = await opening(title);
+        await getDb().run('UPDATE cash_opportunities SET discovery_round_id = ? WHERE id = ?', ['cdr_goalmany', id]);
+        ids.push(id);
+      }
+      const without = await startValidations({ projectId });
+      expect(without.length).toBeLessThanOrEqual(1);
+      await setBrainOnlyMode(true, 'test', 'research is the free lane’s');
+      const beside = await startValidations({ projectId });
+      expect(without.length + beside.length).toBeGreaterThan(1);
+      expect([...without, ...beside].every((one) => ids.includes(one.opportunityId))).toBe(true);
+    } finally {
+      await setBrainOnlyMode(false, 'test', null);
+      if (saved === undefined) delete process.env['BRAIN_CASH_RESEARCH_MAX'];
+      else process.env['BRAIN_CASH_RESEARCH_MAX'] = saved;
+    }
+  });
+
+  it('queues a goal dive while every grant slot is held, for Russell to launch goal-first when one frees', async () => {
+    const { setBrainOnlyMode } = await import('../server/services/bins/brainOnly.ts');
+    const { checkAuthority } = await import('../server/repos/russellAuthority.ts');
+    const { RESEARCH_WORK_CLASS } = await import('../server/services/russell/launch.ts');
+    const saved = process.env['BRAIN_CASH_RESEARCH_MAX'];
+    process.env['BRAIN_CASH_RESEARCH_MAX'] = '1';
+    try {
+      const at = new Date().toISOString();
+      await getDb().run(
+        `INSERT INTO cash_discovery_rounds (id, project_id, cash_mode_id, bucket_id, mechanism, round, candidate_id, state, opened_at, found, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, 'HARVESTED', ?, 2, ?, ?)`,
+        ['cdr_goalfull', projectId, modeId, 'goal-wst_z-mx-ghi', 'GOAL_MECHANISM', 'rcn_goalfull', at, at, at],
+      );
+      const ids: string[] = [];
+      for (const title of [
+        'Firms repeatedly pay for pooled solar purchases',
+        'Venues repeatedly pay for activity licences',
+        'Studios repeatedly pay for outsourced in-between frames',
+        'Shops repeatedly pay for shared mailers',
+      ]) {
+        const id = await opening(title);
+        await getDb().run('UPDATE cash_opportunities SET discovery_round_id = ? WHERE id = ?', ['cdr_goalfull', id]);
+        ids.push(id);
+      }
+      const authority = await checkAuthority({ projectId, workClass: RESEARCH_WORK_CLASS });
+      expect(authority.ok && authority.goal).toBeTruthy();
+      const goal = authority.ok ? authority.goal! : null;
+      const expires = new Date(Date.now() + 3_600_000).toISOString();
+      for (let i = 0; i < goal!.maxConcurrent; i += 1) {
+        await getDb().run(
+          `INSERT INTO russell_budget_reservations (id, goal_id, kind, amount, idempotency_key, state, expires_at, created_at)
+           VALUES (?, ?, 'MISSION', 1, ?, 'HELD', ?, ?)`,
+          [`rbr_full_${i}`, goal!.id, `full-${projectId}-${i}`, expires, at],
+        );
+      }
+      await setBrainOnlyMode(true, 'test', 'research is the free lane’s');
+      const started = await startValidations({ projectId });
+      expect(started.length).toBeGreaterThan(0);
+      expect(started.every((one) => ids.includes(one.opportunityId))).toBe(true);
+      // Queued dives hold no launch, so they never keep another goal opening from queueing.
+      const next = await startValidations({ projectId });
+      expect(new Set([...started, ...next].map((one) => one.opportunityId))).toEqual(new Set(ids));
+    } finally {
+      await setBrainOnlyMode(false, 'test', null);
+      if (saved === undefined) delete process.env['BRAIN_CASH_RESEARCH_MAX'];
+      else process.env['BRAIN_CASH_RESEARCH_MAX'] = saved;
+    }
   });
 });

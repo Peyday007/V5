@@ -1,3 +1,4 @@
+import { withActivity } from '../../db/infra.ts';
 /**
  * The part where Brain does something about a need, rather than filing it.
  *
@@ -46,10 +47,13 @@
  * an attempt, or stops unrelated work. An open need is a valid execution state
  * and Brain carries on around it, which is exactly what the plan means.
  */
+import { syncInstantlyReplies } from './providers/instantlySync.ts';
+import { executionPolicyForProject } from '../goals/policy.ts';
 import { reconcileCashJobs, type JobReconciliation } from './jobPipeline.ts';
 import { handOffReadyTests, type FactoryHandoffPass } from './factoryHandoff.ts';
 import { advanceJourney, type JourneyTickReport } from './journey/tick.ts';
 import {
+  getNeed,
   getOpportunity,
   listNeeds,
   listOpportunities,
@@ -72,7 +76,7 @@ import {
   type ReconsiderPass,
 } from './reconsider.ts';
 import { projectStandings, recordStandingChanges, type StandingChange } from './standing.ts';
-import { createCandidate, getCandidate } from '../../repos/russellCandidates.ts';
+import { createCandidate, getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import {
   readAllCapabilities,
@@ -111,8 +115,29 @@ import {
 } from './perform.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
+import { decideOpenings, type DecideOpeningsPass } from './decisions.ts';
 import { describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
+import { orderFieldsByCost } from './infoValue.ts';
+import { recordQuestionsSkipped } from './screenMetrics.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
+
+/*
+ * The decision pass re-screens every opening under every live goal, about two
+ * statements a pair, and the Cash tick runs every few seconds. Its decisions
+ * are idempotent and derived from rows, so running it less often loses
+ * nothing; running it every tick over ~340 openings was a standing load on a
+ * database that was already timing out (production, 2026-10-31). At most once
+ * per interval per project, per process.
+ */
+export const DECISION_PASS_INTERVAL_MS = 5 * 60_000;
+const lastDecisionPass = new Map<string, number>();
+function decisionPassDue(projectId: string): boolean {
+  const at = Date.now();
+  const last = lastDecisionPass.get(projectId);
+  if (last !== undefined && at - last < DECISION_PASS_INTERVAL_MS) return false;
+  lastDecisionPass.set(projectId, at);
+  return true;
+}
 
 /** Brain acting on its own account, never a person and never a worker. */
 const BRAIN = 'BRAIN';
@@ -428,6 +453,8 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
     projectId,
     states: ['DISCOVERED', 'EVIDENCE_CARD'],
   })) {
+    // Card readings are synchronous work: hand the event loop back between openings (§90, 2026-11-06 58 s stalls).
+    await new Promise<void>((resolve) => setImmediate(resolve));
     // A second record of an opening is researched through its survivor, never
     // again on its own (`duplicates.ts`).
     if (opportunity.duplicateOfId) continue;
@@ -458,7 +485,26 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * blank is asked once it has settled, which is what this pass is for.
      */
     if (diveOwnsItsQuestions(opportunity)) continue;
-    if (await notWorthResearching(opportunity, { now: cashNow() })) continue;
+    const unworthy = await notWorthResearching(opportunity, { now: cashNow() });
+    if (unworthy) {
+      /*
+       * A screened-out opening is not asked its card's questions, and that is a
+       * decision worth counting: each question no answer could change is
+       * recorded as skipped, with why, rather than dropped without a trace.
+       */
+      if (unworthy.kind === 'SCREENED_OUT') {
+        const skipped = evidenceCard(opportunity).fields
+          .filter((one) => one.loadBearing && one.owner === 'BRAIN_RESEARCH' && one.value === null)
+          .map((one) => one.key);
+        await recordQuestionsSkipped({
+          projectId,
+          opportunityId: opportunity.id,
+          fields: skipped,
+          why: `No answer could change the decision: ${describeNotWorthResearching(unworthy)}.`,
+        });
+      }
+      continue;
+    }
     const card = evidenceCard(opportunity);
     const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
     /*
@@ -471,6 +517,7 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
       opportunity,
       card: engine,
       readiness: card.readiness,
+      policy: await executionPolicyForProject(projectId),
     });
     /*
      * A signal is asked only the questions that could stop it being one.
@@ -492,7 +539,7 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
         ? card.fields.filter((one) => (CAPTURE_INPUTS as readonly string[]).includes(one.key))
         : card.fields;
 
-    for (const field of asking) {
+    for (const field of orderFieldsByCost(asking)) {
       if (!field.loadBearing || field.owner !== 'BRAIN_RESEARCH' || field.value !== null) continue;
       const key = questionKey(opportunity.id, field.key);
       if (keys.has(key)) continue;
@@ -633,7 +680,8 @@ export async function reconcileEngineGaps(projectId: string): Promise<Discoverab
     if (await notWorthResearching(opportunity, { now: cashNow() })) continue;
     const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
     if (engine.disqualifiedBy) continue;
-    const reading = cashTier({ opportunity, card: engine, readiness: evidenceCard(opportunity).readiness });
+    // Under a SQUEEZE goal only what a responsible offer needs is asked; the sale answers the rest.
+    const reading = cashTier({ opportunity, card: engine, readiness: evidenceCard(opportunity).readiness, policy: await executionPolicyForProject(projectId) });
     if (reading.tier !== 'CANDIDATE') continue;
     const fields = reading.toAdvance
       .map((one) => one.key as string)
@@ -697,13 +745,25 @@ export interface Continuation {
   retry: boolean;
 }
 
+/** Needs one continuation pass takes, oldest due first (2026-11-06 82 s stalls). */
+export const NEED_CONTINUATIONS_PER_PASS = 25;
+
 export async function runNeedContinuations(
   projectId: string,
   now?: string,
 ): Promise<Continuation[]> {
   const out: Continuation[] = [];
   const at = now ?? new Date().toISOString();
-  for (const need of await needsAwaitingContinuation(projectId, at)) {
+  /*
+   * Bounded per pass, and the event loop handed back between needs.
+   * Production, 2026-11-06 00:36Z: this pass took every due need in the
+   * project, each through `markReady`, in one stretch — event-loop stalls of
+   * up to 82 s, with the dispatch tick, the factory and every pool checkout
+   * behind them. The oldest due needs go first; a deferred one waits for its
+   * own `continuation_not_before`, so the rest are reached on later passes.
+   */
+  for (const need of await needsAwaitingContinuation(projectId, at, NEED_CONTINUATIONS_PER_PASS)) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
     // Claim first. The effect belongs on the far side of the compare-and-swap,
     // because two ticks reading one resolved need must produce one resumption.
     if (!(await claimNeedContinuation(need.id, at))) continue;
@@ -735,6 +795,15 @@ export async function runNeedContinuations(
 async function continueOne(
   need: CashNeed,
 ): Promise<{ note: string; resumed: boolean; retry: boolean }> {
+  // A remedy a person was asked to approve (`deliverables/exceptions.ts`):
+  // resolving it is the approval, and this carries the remedy out — once, as
+  // the claim above guarantees, and never retried, because an effect whose
+  // outcome is unknown is not repeated (§26). A withdrawal is recorded as declined.
+  const { parseRemedyApprovalKey, carryOutApprovedRemedy } = await import('./deliverables/exceptions.ts');
+  if (parseRemedyApprovalKey(need.requestKey)) {
+    const done = await carryOutApprovedRemedy(need);
+    return { note: done.note, resumed: done.ok, retry: false };
+  }
   if (need.state === 'WITHDRAWN') {
     return {
       note: 'Withdrawn, so there was nothing waiting to resume.',
@@ -927,6 +996,8 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
      * ruled out, and it launches by itself the tick that stops being true.
      */
     if (diveOwnsItsQuestions(opportunity)) continue;
+    // Raised before a goal excluded it, or before it closed: never launched (2026-11-07).
+    if (await notWorthResearching(opportunity, { now: cashNow() })) continue;
     if (cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }).disqualifiedBy) {
       continue;
     }
@@ -943,6 +1014,107 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
     out.push({ needId: need.id, candidateId: candidate.id });
   }
   return out;
+}
+
+/** The acquiring routes that need a worker, as `needs.ts` names them. */
+export type AcquiringRoute = 'INTEGRATION' | 'COMMERCIAL' | 'RESEARCH';
+
+/**
+ * What a handed-off need was given to work on (AUTO-20-2 step 5, S-0249).
+ *
+ * `ALLOCATED` is a real idea the research pipeline launches — captured, judged
+ * and run under the standing grant exactly like `startDependentWork`'s — and
+ * `reused` says it was already alive on the need. `DIVE` is the opening's own
+ * deep dive, which already holds a worker on every question about it.
+ * `REFUSED` names why no worker could be given: nothing is reported as handed
+ * that nobody is working on.
+ */
+export type NeedWork =
+  | { kind: 'ALLOCATED'; needId: string; candidateId: string; reused: boolean }
+  | { kind: 'DIVE'; needId: string; opportunityId: string }
+  | { kind: 'REFUSED'; needId: string; reason: string };
+
+/** Whether an idea still holds, or can still be given, a worker. */
+async function ideaAlive(candidateId: string): Promise<boolean> {
+  const candidate = await getCandidate(candidateId);
+  if (!candidate) return false;
+  if (candidate.state === 'REJECTED' || candidate.state === 'PARKED' || candidate.state === 'MERGED' || candidate.state === 'DONE') return false;
+  const mission = await latestMissionForCandidate(candidateId);
+  return !mission || (mission.state !== 'FAILED' && mission.state !== 'CANCELLED' && mission.state !== 'DONE');
+}
+
+/**
+ * What a worker is asked to establish so the need can be acquired, by the route
+ * that acquires it. No vendor, method or category is named here: the need's own
+ * recommended path and completion condition are the brief, and the worker finds
+ * the alternatives (S-0246).
+ */
+export function acquisitionAsk(need: Pick<CashNeed, 'blockedAction' | 'recommendedPath' | 'nextStep' | 'completionCondition'>, route: AcquiringRoute): string {
+  const settles = need.completionCondition?.trim() ? ` It is settled when: ${need.completionCondition.trim()}` : '';
+  const path = need.recommendedPath.trim() ? ` The recommended way forward so far: ${need.recommendedPath.trim()}` : '';
+  switch (route) {
+    case 'INTEGRATION':
+      return (
+        `Brain cannot yet do this: ${need.blockedAction.trim()}. Find every way it could acquire the missing capability that ` +
+        'already exists — an installed or public connector, API, plugin, export of the data, standard library or a provider ' +
+        'granting permitted access — with each one\'s access terms, cost and setup steps from its own published documentation, ' +
+        `and which one is cheapest to put in use.${path}${settles}`
+      );
+    case 'COMMERCIAL':
+      return (
+        `This is blocked on a counterparty: ${need.blockedAction.trim()}. Identify the specific organisations that could be ` +
+        'that counterparty, each with its published channel for being reached, its published terms, and the evidence that it ' +
+        `does this.${path}${settles}`
+      );
+    case 'RESEARCH':
+      return `${need.nextStep.trim()}${path}${settles}`;
+  }
+}
+
+/**
+ * Give one handed-off need a worker through the research pipeline, the owner that
+ * already turns needs into missions (`startDependentWork`). Captured rather than
+ * launched, for the same reason: the archive is asked first, the judgment decides,
+ * and the standing authority decides whether anything may be spent.
+ *
+ * Reuse first: a need whose idea is still alive keeps it; an opening whose dive is
+ * asking its questions already has its worker. Idempotent: the idea is pinned to the
+ * need only while the need names none, and an idea that lost that race is rejected
+ * so no orphan holds a slot.
+ */
+export async function startNeedWork(need: CashNeed, route: AcquiringRoute): Promise<NeedWork> {
+  if (need.state !== 'OPEN') return { kind: 'REFUSED', needId: need.id, reason: `the need is ${need.state}` };
+  if (need.candidateId && (await ideaAlive(need.candidateId))) {
+    return { kind: 'ALLOCATED', needId: need.id, candidateId: need.candidateId, reused: true };
+  }
+  const opportunity = need.opportunityId ? await getOpportunity(need.opportunityId) : null;
+  if (need.opportunityId && !opportunity) return { kind: 'REFUSED', needId: need.id, reason: 'its opening no longer exists' };
+  if (opportunity) {
+    if (diveOwnsItsQuestions(opportunity)) return { kind: 'DIVE', needId: need.id, opportunityId: opportunity.id };
+    const notWorth = await notWorthResearching(opportunity, { now: cashNow() });
+    if (notWorth) return { kind: 'REFUSED', needId: need.id, reason: `its opening is not worth researching: ${describeNotWorthResearching(notWorth)}` };
+    if (cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }).disqualifiedBy) {
+      return { kind: 'REFUSED', needId: need.id, reason: 'its opening is ruled out by its own card' };
+    }
+  }
+  const ask = acquisitionAsk(need, route);
+  const candidate = await createCandidate({
+    projectId: need.projectId,
+    visibility: 'SHARED',
+    title: need.blockedAction.slice(0, 200),
+    statement: opportunity ? dependentQuestion(opportunity, { nextStep: ask }) : ask,
+  });
+  const pointed = need.candidateId
+    ? await replaceNeedCandidate(need.id, need.candidateId, candidate.id)
+    : await setNeedCandidate(need.id, candidate.id);
+  if (pointed) return { kind: 'ALLOCATED', needId: need.id, candidateId: candidate.id, reused: false };
+  // Another pass pinned an idea first: use that one and retire this copy.
+  await transitionCandidate({ candidateId: candidate.id, from: 'CAPTURED', to: 'REJECTED' });
+  const now = await getNeed(need.id);
+  if (now?.candidateId && (await ideaAlive(now.candidateId))) {
+    return { kind: 'ALLOCATED', needId: need.id, candidateId: now.candidateId, reused: true };
+  }
+  return { kind: 'REFUSED', needId: need.id, reason: 'the need changed while its work was being started' };
 }
 
 /** The shape every `dependentQuestion` begins with. */
@@ -1055,14 +1227,30 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
       out.took.push({
         opportunityId: opportunity.id,
         did: 'MARKED_READY',
-        detail: 'Every load-bearing field is answered, so this is ready to test.',
+        detail: 'Every load-bearing field is answered, so an offer can be made on it.',
       });
     } else {
       out.withheld.push({ opportunityId: opportunity.id, because: ready.reason });
     }
   }
 
-  for (const opportunity of await listOpportunities({ projectId, states: ['READY'] })) {
+  /*
+   * Buyers are reached in the order the project's SQUEEZE goals sell —
+   * contribution to the whole goal first (`salesOrderForProject`) — so the
+   * few contacts a pass may send go to the largest openings, not to whichever
+   * row is oldest. Pieces no goal ranks keep their order after them.
+   */
+  const { salesOrderForProject } = await import('../goals/plan.ts');
+  const salesOrder = salesOrderForProject(projectId);
+  const rank = (id: string) => {
+    const at = salesOrder.indexOf(id);
+    return at < 0 ? Number.MAX_SAFE_INTEGER : at;
+  };
+  const readyPieces = (await listOpportunities({ projectId, states: ['READY'] }))
+    .map((one, at) => ({ one, at }))
+    .sort((a, b) => rank(a.one.id) - rank(b.one.id) || a.at - b.at)
+    .map(({ one }) => one);
+  for (const opportunity of readyPieces) {
     if (opportunity.duplicateOfId) continue;
     // A piece whose own figures lose money is never contacted for, whoever marked it ready.
     if (losesMoneyOnItsFigures(opportunity)) {
@@ -1358,6 +1546,11 @@ export async function operate(
   continuations: Continuation[];
   dependentWork: DependentWork[];
   validations: ValidationProgress;
+  /**
+   * Steps that threw this pass, each in its own failure domain. Empty on a
+   * pass where every step ran.
+   */
+  failures: { step: string; error: string }[];
   /** Confirmed effects whose record this pass finished. Empty when there were none. */
   effects: ReconciledEffect[];
   authority: AuthorityAdvance;
@@ -1375,6 +1568,8 @@ export async function operate(
     | Omit<ReconsiderPass, 'readings'>
     | { error: string }
     | null;
+  /** One current REJECT / HOLD / PRIORITIZE per opening per goal, from the code screen (`decisions.ts`). */
+  decisions?: DecideOpeningsPass | { error: string } | { skipped: string };
   /** Reopen watches recorded on derived dead ends, and standing changes written. */
   standing?: { derived: DerivedCondition[]; changes: StandingChange[] } | { error: string } | { skipped: string };
 }> {
@@ -1389,6 +1584,7 @@ export async function operate(
       continuations: [],
       dependentWork: [],
       validations: { started: [], settled: [] },
+      failures: [],
       effects: [],
       authority: { took: [], withheld: [] },
       invoicing: { issued: [], uncertain: [], failed: [], withheld: [], paid: [], settled: [], voided: [] },
@@ -1418,7 +1614,7 @@ export async function operate(
    * rather than by noticing. It archives nothing and moves nothing — see
    * `reclassify.ts`.
    */
-  const reclassified = await recordWorkModelReclassification(projectId);
+  const reclassified = await withActivity('cash:recordWorkModelReclassification', () => recordWorkModelReclassification(projectId));
   /*
    * Then what changed in the world since the last pass, and everyone waiting
    * on it (`reconsider.ts`). Before the capability path, because it reads the
@@ -1428,20 +1624,59 @@ export async function operate(
    */
   let reconsidered: ReconsiderPass | { error: string } | null = null;
   try {
-    reconsidered = await reconsiderAffected(projectId, { now });
+    reconsidered = await withActivity('cash:reconsiderAffected', () => reconsiderAffected(projectId, { now }));
   } catch (error) {
     reconsidered = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
   }
-  const capabilities = await reconcileCapabilityNeeds(
+  const capabilities = await withActivity('cash:reconcileCapabilityNeeds', () => reconcileCapabilityNeeds(
     projectId,
     reconsidered && 'readings' in reconsidered ? { readings: reconsidered.readings } : {},
-  );
-  const research = await applyResearchAnswers(projectId);
-  const proposed = await proposeCommercialTerms(projectId);
-  const withdrawnResearch = await withdrawResearchNotWorthIt(projectId);
-  const gaps = [...(await reconcileDiscoverableGaps(projectId)), ...(await reconcileEngineGaps(projectId))];
-  const continuations = await runNeedContinuations(projectId, now);
-  const dependentWork = await startDependentWork(projectId);
+  ));
+  /*
+   * The steps up to the deep dives, each in its own failure domain.
+   *
+   * They used to run as one chain inside the tick's silent `catch`, so one
+   * dropped connection in any of them skipped every step after it, the deep
+   * dives included, and nothing recorded why. Production, 2026-11-06
+   * 01:33-04:30Z: eight eligible openings, a free slot, ticks completing, and
+   * no dive started for six hours. Each step reads rows rather than the one
+   * before it, so a step that threw leaves the next one correct, one tick
+   * staler at worst; its failure is returned and the tick records it.
+   */
+  const failures: { step: string; error: string }[] = [];
+  const step = async <T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> => {
+    try {
+      return await withActivity(`cash:${label}`, fn);
+    } catch (error) {
+      failures.push({ step: label, error: (error instanceof Error ? error.message : String(error)).slice(0, 300) });
+      return fallback;
+    }
+  };
+  const research = await step('applyResearchAnswers', () => applyResearchAnswers(projectId), { applied: [], unanswered: [] });
+  const proposed = await step('proposeCommercialTerms', () => proposeCommercialTerms(projectId), []);
+  /*
+   * Decide every opening under every live goal before research is withdrawn or
+   * launched, so the record a person reads is the one the gate acted on. Its
+   * own failure domain: a decision pass that throws must not stop the rest.
+   */
+  let decisions: DecideOpeningsPass | { error: string } | { skipped: string };
+  // A caller that supplies `now` is driving time itself (tests, replays) and is never throttled.
+  if (!now && !decisionPassDue(projectId)) {
+    decisions = { skipped: `the decision pass runs at most every ${DECISION_PASS_INTERVAL_MS / 60_000} minutes` };
+  } else {
+    try {
+      decisions = await withActivity('cash:decideOpenings', () => decideOpenings(projectId, now ? { now } : {}));
+    } catch (error) {
+      decisions = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
+    }
+  }
+  const withdrawnResearch = await step('withdrawResearchNotWorthIt', () => withdrawResearchNotWorthIt(projectId), []);
+  const gaps = [
+    ...(await step('reconcileDiscoverableGaps', () => reconcileDiscoverableGaps(projectId), [])),
+    ...(await step('reconcileEngineGaps', () => reconcileEngineGaps(projectId), [])),
+  ];
+  const continuations = await step('runNeedContinuations', () => runNeedContinuations(projectId, now), []);
+  const dependentWork = await step('startDependentWork', () => startDependentWork(projectId), []);
   /*
    * And the bounded deep dive on each opening, which is where the commercial
    * questions actually get answered.
@@ -1452,7 +1687,7 @@ export async function operate(
    * and `mayReplace` decides which answer stands — by authority rather than by
    * whichever arrived last.
    */
-  const validations = await runValidations(projectId);
+  const validations = await step('runValidations', () => runValidations(projectId), { started: [], settled: [] });
   /*
    * Last, and that order is the point: a piece only becomes ready because the
    * research landed on its card and the proposal filled what the research could
@@ -1469,15 +1704,15 @@ export async function operate(
    * buyer. It sends nothing, and it runs in every sprint state, because
    * writing down history is not new discovery.
    */
-  const recovered = await recoverAbandonedEffects(projectId);
-  const effects = [...recovered, ...(await reconcileConfirmedEffects(projectId))];
+  const recovered = await withActivity('cash:recoverAbandonedEffects', () => recoverAbandonedEffects(projectId));
+  const effects = [...recovered, ...(await withActivity('cash:reconcileConfirmedEffects', () => reconcileConfirmedEffects(projectId)))];
   /*
    * Then the journey after the first action, from rows: ledger entries for
    * agreements, Brain's own fulfilment work read back, acceptance applied,
    * silence recorded, the state moved, and what finished deals taught. It
    * sends nothing.
    */
-  const authority = await advanceWithinAuthority(projectId);
+  const authority = await withActivity('cash:advanceWithinAuthority', () => advanceWithinAuthority(projectId));
   /*
    * And a READY_TO_TEST opening whose test is software goes to the Factory,
    * under the standing grant's BUILD_A_TEST. After the readiness pass above,
@@ -1485,7 +1720,7 @@ export async function operate(
    */
   // Its own failure domain: a Factory that cannot be reached must not stop
   // invoicing, the journey or the ledger below; the next pass asks again.
-  const factory = await handOffReadyTests(projectId).catch(
+  const factory = await withActivity('cash:handOffReadyTests', () => handOffReadyTests(projectId)).catch(
     (error: unknown): FactoryHandoffPass => ({
       handedOff: [],
       waiting: [{ opportunityId: '', reason: error instanceof Error ? error.message.slice(0, 200) : 'failed' }],
@@ -1498,8 +1733,15 @@ export async function operate(
    * the contact pass because nothing here depends on it, and before the
    * journey because the journey reads money this may have just recorded.
    */
-  const invoicing = await runInvoicing(projectId, now ? new Date(now) : new Date());
-  const journey = await advanceJourney(projectId, now ? new Date(now) : new Date());
+  const invoicing = await withActivity('cash:runInvoicing', () => runInvoicing(projectId, now ? new Date(now) : new Date()));
+  /*
+   * Buyers' replies in the owner's Instantly unibox, read onto the deals they
+   * answer before the journey derives silence from contacts nobody answered
+   * (§94). Read-only toward Instantly, at most every few minutes a project
+   * (its unibox allows 20 requests a minute), and its own failure domain.
+   */
+  if (replySyncDue(projectId)) await withActivity('cash:syncInstantlyReplies', () => syncInstantlyReplies(projectId)).catch(() => null);
+  const journey = await withActivity('cash:advanceJourney', () => advanceJourney(projectId, now ? new Date(now) : new Date()));
   /*
    * Then the jobs: every opening the passes above qualified, readied or took
    * into execution gets its one canonical execution job, and each live job
@@ -1509,7 +1751,7 @@ export async function operate(
    */
   let jobs: JobReconciliation | { error: string };
   try {
-    jobs = await reconcileCashJobs(projectId);
+    jobs = await withActivity('cash:reconcileCashJobs', () => reconcileCashJobs(projectId));
   } catch (error) {
     jobs = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
   }
@@ -1529,7 +1771,7 @@ export async function operate(
    * evidence. And it gates nothing — no pass here refuses a piece, charges an
    * attempt, starts work or spends anything.
    */
-  const monetization = await runMonetizationLedger(projectId, now);
+  const monetization = await withActivity('cash:runMonetizationLedger', () => runMonetizationLedger(projectId, now));
   /*
    * Last of all, the standing of every piece as the passes above left it: each
    * derived dead end is given the watch that could reopen it, and a standing
@@ -1545,9 +1787,9 @@ export async function operate(
     if (!standingDue(projectId, now ? Date.parse(now) : Date.now(), triggeredThisTick(reconsidered))) {
       standing = { skipped: 'standing was composed recently; nothing triggered since' };
     } else {
-    const standings = await projectStandings(projectId);
-    const derived = await recordDerivedReopenConditions(projectId, standings);
-    standing = { derived, changes: await recordStandingChanges(projectId, standings) };
+    const standings = await withActivity('cash:projectStandings', () => projectStandings(projectId));
+    const derived = await withActivity('cash:recordDerivedReopenConditions', () => recordDerivedReopenConditions(projectId, standings));
+    standing = { derived, changes: await withActivity('cash:recordStandingChanges', () => recordStandingChanges(projectId, standings)) };
     }
   } catch (error) {
     standing = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
@@ -1565,11 +1807,13 @@ export async function operate(
     capabilities,
     gaps,
     withdrawnResearch,
+    decisions,
     research,
     proposed,
     continuations,
     dependentWork,
     validations,
+    failures,
     effects,
     authority,
     invoicing,
@@ -1594,10 +1838,39 @@ export interface MonetizationPass {
   commissions: CommissionPass;
 }
 
+/**
+ * The monetization ledger is history and a reading — it gates nothing — and at
+ * ~8 000 possibilities it is the largest synchronous derivation on the tick:
+ * production, 2026-10-31, stalled the event loop 11.5 s with this pass the only
+ * cash work in flight (`stalls in cash:runMonetizationLedger`). A position
+ * recorded ten minutes late describes the same movement, so on the production
+ * path it runs at most once per interval per project. A caller that supplies
+ * `now` drives time itself and is never throttled.
+ */
+export const MONETIZATION_PASS_INTERVAL_MS = 10 * 60_000;
+const lastMonetizationPass = new Map<string, number>();
+function monetizationPassDue(projectId: string): boolean {
+  const at = Date.now();
+  const last = lastMonetizationPass.get(projectId);
+  if (last !== undefined && at - last < MONETIZATION_PASS_INTERVAL_MS) return false;
+  lastMonetizationPass.set(projectId, at);
+  return true;
+}
+
 async function runMonetizationLedger(
   projectId: string,
   now?: string,
 ): Promise<MonetizationPass> {
+  if (!now && !monetizationPassDue(projectId)) {
+    return {
+      pathsAdded: [],
+      figuresCarried: [],
+      evidenced: [],
+      moved: 0,
+      evaluated: 0,
+      commissions: { opened: [], recorded: [], settled: [], declined: [], openNow: 0 },
+    };
+  }
   const enumerated = await enumeratePossibilities(projectId);
 
   /*
@@ -1668,3 +1941,12 @@ function triggeredThisTick(reconsidered: unknown): boolean {
   return Array.isArray(triggered) ? triggered.length > 0 : Boolean(triggered);
 }
 
+
+/** Replies are read at most this often per project; the unibox allows 20 requests a minute. */
+export const REPLY_SYNC_EVERY_MS = 5 * 60_000;
+const lastReplySync = new Map<string, number>();
+function replySyncDue(projectId: string, now = Date.now()): boolean {
+  if (now - (lastReplySync.get(projectId) ?? 0) < REPLY_SYNC_EVERY_MS) return false;
+  lastReplySync.set(projectId, now);
+  return true;
+}

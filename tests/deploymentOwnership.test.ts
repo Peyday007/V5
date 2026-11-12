@@ -344,6 +344,71 @@ describe('an operator command cannot cancel a deployment', () => {
   });
 
   /**
+   * A workflow that restarts the Brain waits out the whole release job.
+   *
+   * The ordinary wait ends once the machine is replaced, which is right for a
+   * command that only reads. A restart is different: on 2026-11-11 an
+   * Integrations run found no machine step in flight, ran `secrets deploy`,
+   * and restarted the Brain in the middle of the hosted verification before
+   * the restart. The release served, and could not be verified.
+   */
+  it('makes every workflow that restarts the Brain wait out the whole Deploy to Fly job', () => {
+    const restarts = (text: string) =>
+      text.split('\n').some((line) =>
+        !/^\s*#/.test(line) &&
+        (/flyctl\s+secrets\s+(set|unset|import)\b/.test(line) && !/--stage\b/.test(line) ||
+          /flyctl\s+secrets\s+deploy\b/.test(line) ||
+          /flyctl\s+(apps|machine)\s+restart\b/.test(line)),
+      );
+    const restarting = workflows()
+      .filter((f) => !f.endsWith('/deploy.yml'))
+      .filter((f) => restarts(read(f)));
+    expect(restarting.length).toBeGreaterThan(0);
+    const unguarded = restarting.filter(
+      (f) => !/uses: \.\/\.github\/actions\/await-release\n\s+with:\n(?:\s+#.*\n)*\s+whole-job: 'true'/.test(read(f)),
+    );
+    expect(unguarded).toEqual([]);
+    expect(read('.github/actions/await-release/action.yml')).toContain(
+      '(.name == "Deploy to Fly" and $ENV.WHOLE_JOB == "true")',
+    );
+  });
+
+  /**
+   * The wait covers the minutes that replace the machine, not the whole run.
+   *
+   * It used to hold every console command for as long as any Deploy run was in
+   * flight — tests and both forty-minute hosted verifications included, against
+   * a Brain that was serving throughout — so routine Factory reads took 25
+   * minutes each whenever deploys landed back to back.
+   */
+  it('holds a command only while a Deploy job is replacing or restarting the machine', () => {
+    const action = read('.github/actions/await-release/action.yml');
+    expect(action).toMatch(/MACHINE_STEPS='\^\(Deploy\|/);
+    expect(action).toContain('Restart it, so persistence means something');
+    expect(action).toContain('/jobs?filter=latest');
+    expect(action).toContain('"Deploy to Fly"');
+    // Every name it waits on is a real step of the deploy workflow.
+    const deploy = read('.github/workflows/deploy.yml');
+    const steps = /MACHINE_STEPS='\^\(([^)]+)\)\$'/.exec(action)?.[1]?.split('|') ?? [];
+    expect(steps.length).toBeGreaterThan(3);
+    for (const step of steps) expect(deploy).toContain(`- name: ${step}\n`);
+  });
+
+  /**
+   * A read cannot be evicted by somebody else's dispatch.
+   */
+  it('gives Factory and Fleet read commands a group of their own run', () => {
+    for (const file of ['.github/workflows/fleet.yml']) {
+      expect(read(file)).toMatch(/group: brain-console-\w+-\$\{\{ contains\(fromJSON\('\["(status|show)"/);
+      expect(read(file)).toMatch(/format\('read-\{0\}', github\.run_id\) \|\| 'write'/);
+    }
+    // The Factory door gives every run, read or write, a group of its own: a
+    // shared write group cancelled the middle two of four back-to-back writes
+    // (2026-11-02), and every write it runs is guarded and idempotent.
+    expect(read('.github/workflows/factory.yml')).toMatch(/group: brain-console-factory-\$\{\{ github\.run_id \}\}/);
+  });
+
+  /**
    * And a campaign cannot edit either half of this.
    *
    * `.github/workflows/**` was already forbidden as a directory, for §28's

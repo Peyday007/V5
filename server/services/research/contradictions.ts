@@ -46,22 +46,66 @@ function normalize(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-/** Every number in a claim, so two figures can be compared rather than two sentences. */
-function quantities(text: string): number[] {
-  const out: number[] = [];
-  for (const match of text.matchAll(/(-?\d[\d,]*(?:\.\d+)?)\s*(%|percent|per cent|k|m|bn|billion|million|trillion)?/gi)) {
-    const base = Number(match[1]!.replace(/,/g, ''));
+interface Quantity {
+  /** A percentage and a magnitude are never compared with each other. */
+  kind: 'percent' | 'magnitude';
+  value: number;
+}
+
+/**
+ * Every figure in a claim, tagged by kind, so two figures can be compared
+ * rather than two sentences. A bare year is a date and not a quantity, and a
+ * unit must end at a word boundary so "5 months" is not five million.
+ */
+function quantities(text: string): Quantity[] {
+  const out: Quantity[] = [];
+  const pattern = /(-?\d[\d,]*(?:\.\d+)?)\s*(%|(?:percent|per cent|k|m|bn|billion|million|trillion)\b)?/gi;
+  for (const match of text.matchAll(pattern)) {
+    const raw = match[1]!;
+    const base = Number(raw.replace(/,/g, ''));
     if (!Number.isFinite(base)) continue;
     const unit = (match[2] ?? '').toLowerCase();
+    const before = text[match.index! - 1] ?? '';
+    const isYear = unit === '' && /^\d{4}$/.test(raw) && base >= 1900 && base <= 2100 && !/[$€£¥]/.test(before);
+    if (isYear) continue;
+    if (unit === '%' || unit === 'percent' || unit === 'per cent') {
+      out.push({ kind: 'percent', value: base });
+      continue;
+    }
     const scale =
       unit === 'k' ? 1e3
       : unit === 'm' || unit === 'million' ? 1e6
       : unit === 'bn' || unit === 'billion' ? 1e9
       : unit === 'trillion' ? 1e12
       : 1;
-    out.push(base * scale);
+    out.push({ kind: 'magnitude', value: base * scale });
   }
   return out;
+}
+
+/**
+ * Spreads between same-kind figures. Each figure on the shorter side is matched
+ * to the closest unused figure on the other, so the order a claim states its
+ * figures in does not decide the comparison. Empty when nothing is comparable.
+ */
+function comparableSpreads(left: Quantity[], right: Quantity[]): number[] {
+  const spreads: number[] = [];
+  const spread = (x: number, y: number) => Math.abs(x - y) / Math.max(Math.abs(x), Math.abs(y), 1);
+  for (const kind of ['percent', 'magnitude'] as const) {
+    let a = left.filter((q) => q.kind === kind).map((q) => q.value);
+    let b = right.filter((q) => q.kind === kind).map((q) => q.value);
+    if (a.length > b.length) [a, b] = [b, a];
+    const unused = [...b];
+    for (const x of a) {
+      let best = 0;
+      for (let j = 1; j < unused.length; j += 1) {
+        if (spread(x, unused[j]!) < spread(x, unused[best]!)) best = j;
+      }
+      spreads.push(spread(x, unused[best]!));
+      unused.splice(best, 1);
+    }
+  }
+  return spreads;
 }
 
 /** Words that mean the two numbers were produced in different ways. */
@@ -133,12 +177,11 @@ export function classifyContradiction(left: Scoped, right: Scoped): Contradictio
 
   const leftNumbers = quantities(left.claim);
   const rightNumbers = quantities(right.claim);
-  const bothQuantified = leftNumbers.length > 0 && rightNumbers.length > 0;
+  const spreads = comparableSpreads(leftNumbers, rightNumbers);
 
-  if (bothQuantified) {
-    const a = leftNumbers[0]!;
-    const b = rightNumbers[0]!;
-    const spread = Math.abs(a - b) / Math.max(Math.abs(a), Math.abs(b), 1);
+  if (spreads.length > 0) {
+    // Every comparable pair must agree; the widest disagreement decides.
+    const spread = Math.max(...spreads);
     if (spread === 0) {
       return {
         kind: 'RESOLVED_BY_CONTEXT',

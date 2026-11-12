@@ -1,0 +1,919 @@
+{
+ "product": "easy-sudoku-for-beginners",
+ "title": "Easy Sudoku for Beginners",
+ "pdf": "Large-Print-Easy-Sudoku-for-Beginners-60-Puzzles.pdf",
+ "sha256": "18ed12b538ed2d55e54d26cd5ee9e428d559a9918e7870dbd517b2bf01405934",
+ "bytes": 245322,
+ "pages": 73,
+ "trim": "8.5x11in US Letter",
+ "puzzles": 60,
+ "byFormat": {
+  "sudoku": 60
+ },
+ "byDifficulty": {
+  "EASY": 60
+ },
+ "allValid": true,
+ "entries": [
+  {
+   "n": 1,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-0",
+   "measured": "EASY",
+   "canonicalHash": "e70b4935d6acf0af0b0c70ceb4cf73b85314b6d9f7bebc774898721061a4b1c6",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 2,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-1",
+   "measured": "EASY",
+   "canonicalHash": "f846f8536150e670798eb3911e43aa7e943de71f4b743102d569fa99486f0037",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 3,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-2",
+   "measured": "EASY",
+   "canonicalHash": "531e0204d50edac7e0c0fa7f7c3049309cfc8577e96d9adfb586a6ec76e82272",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 4,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-3",
+   "measured": "EASY",
+   "canonicalHash": "cef6e9572c2b8f6894b04de4938938c0490590ab964344a549a26f2d6723779f",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 5,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-4",
+   "measured": "EASY",
+   "canonicalHash": "65e35c8e27a6f358b0dcbb78f9b859add60b80fc9398fd284875a6d8467522f5",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 6,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-5",
+   "measured": "EASY",
+   "canonicalHash": "407a07deb7260a574f5a431e740eced85989cb0cc5c369ce551289d2a39d25f4",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 7,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-6",
+   "measured": "EASY",
+   "canonicalHash": "259d3397b1713e37713e458cca9dc3acfce4d1992ec96c3b06cd9a089fb4ccb0",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 8,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-7",
+   "measured": "EASY",
+   "canonicalHash": "4839cea735760102637a86bd22fff3a1048d1ae0814218b745d16093a59ff7c3",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 9,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-8",
+   "measured": "EASY",
+   "canonicalHash": "bdf23dad6dbfdcc49f3f8bc2d23d05e1a9d384732b0596577c2c0f46a8da7d18",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 10,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-9",
+   "measured": "EASY",
+   "canonicalHash": "661ef3a355dbb606336c0296f6716a01f4e0abead41d63855845fd88eb8f8833",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 11,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-10",
+   "measured": "EASY",
+   "canonicalHash": "5f1a17e7bea392d33c86c65b23b508385fe9eb9dda2422b0b79c72e9d9419101",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 12,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-11",
+   "measured": "EASY",
+   "canonicalHash": "218075a9699a85a0296f63f7b63b2c713a89f316230c99d4a149315ed7157129",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 13,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-12",
+   "measured": "EASY",
+   "canonicalHash": "b789853cee6871b08738bc6803b663b0165b089b4292a079d4d5ab8e914d69ce",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 14,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-13",
+   "measured": "EASY",
+   "canonicalHash": "31a3483847e64bb2e05185c7a75586ffb43a6f4f0c26d06aeadc3e94cdd4d364",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 15,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-14",
+   "measured": "EASY",
+   "canonicalHash": "d1e302020e76fa830423b02c7ff82443d1ba78a1689893decd8f2f5599e8b3de",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 16,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-15",
+   "measured": "EASY",
+   "canonicalHash": "70b97c4f09ed6472e637c1bd7e3ca09bc2ca12ef617cb13973de5c4cb1cbfe07",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 17,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-16",
+   "measured": "EASY",
+   "canonicalHash": "06d8886cce85d9d6fbb3151277bcf0427d41e36edc4362da0f805f6f0a65d1f8",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 18,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-17",
+   "measured": "EASY",
+   "canonicalHash": "07fec28a18dcbc225c37a334811692da77a7a3df43de4376ca3dae65a16b48c7",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 19,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-18",
+   "measured": "EASY",
+   "canonicalHash": "8806d905a4fed6abb18a48bf828a1ec8549de739b7ac6e10addfb6faf19e9d49",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 20,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-19",
+   "measured": "EASY",
+   "canonicalHash": "969c408425ea35afdf9d20b1d92292b1fdf024e8e1bf347925c97ae45ad3ad97",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 21,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-20",
+   "measured": "EASY",
+   "canonicalHash": "fd7ee07660ceb3159ec3946caeca398b6e4452693990b3c4bf3a209025bb8680",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 22,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-21",
+   "measured": "EASY",
+   "canonicalHash": "5631fafe9274addf413fca2b8ae0e19de33cb4d9a461b9cb0dec1d67a4f04e96",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 23,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-22",
+   "measured": "EASY",
+   "canonicalHash": "60f1177e97bcc7784314f348ff85116a8992402c78eb336d97e40522fd7f8ddc",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 24,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-23",
+   "measured": "EASY",
+   "canonicalHash": "27b5ac283df2aa5beb305ff204b6aeac31782eec01b938c19ce4e2fa0bef7a69",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 25,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-24",
+   "measured": "EASY",
+   "canonicalHash": "53add8e1e9424c55176649f0d699c55d4a0979b6b17acd431da2b8f5d2ee8723",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 26,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-25",
+   "measured": "EASY",
+   "canonicalHash": "f97c59e17f37069137b793b80482f4d19169a2ae946fad365fc0badeb2998c08",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 27,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-26",
+   "measured": "EASY",
+   "canonicalHash": "b13fa760f168296d2f02887d3710c9557a01dfb0e91156afd956a5bc43fa40b9",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 28,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-27",
+   "measured": "EASY",
+   "canonicalHash": "1a58aac9df0b4ef572b0b3ace1c298560be853117476d13dadcaf8b84fc2bbf8",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 29,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-28",
+   "measured": "EASY",
+   "canonicalHash": "306603518e3f6e3e86d14df033efa0f81b05ef92993a628f80a500c751565694",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 30,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-29",
+   "measured": "EASY",
+   "canonicalHash": "deea4fa94acfd269a9a5faae3f8d31f52c3a9f1e4ac13c39deca8455eaef8cf9",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 31,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-30",
+   "measured": "EASY",
+   "canonicalHash": "45c4bada9267869e0e1aba752ef25d7ec2c7540c541546be5fe68ea91294ec38",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 32,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-31",
+   "measured": "EASY",
+   "canonicalHash": "cf1a8b6d9c6b81ab3fae6aa2e5b12cb0de008932db16778d91986aff76af2e7c",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 33,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-32",
+   "measured": "EASY",
+   "canonicalHash": "68a46a66ec1ff2afaba57bb915e4b00c23c0d0268195ccaf6186c74d3e8b29e8",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 34,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-33",
+   "measured": "EASY",
+   "canonicalHash": "28ee5d1134d1156c8ca14805eefd28c93a6119ce5be864f73fff500c2e79dc35",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 35,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-34",
+   "measured": "EASY",
+   "canonicalHash": "9ad1e6bfa94d31098d953eb86f3dc62c62567648ac0802b1c44f32aac80c3c5a",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 36,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-35",
+   "measured": "EASY",
+   "canonicalHash": "babc6ef74bb5d37f5baf36f7394a7fcc7e088561ce5d50795288b534ad14156c",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 37,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-36",
+   "measured": "EASY",
+   "canonicalHash": "7e252fc9f05d0910bb3d20f1207fbb27ad3443a6483079966e35ae4947389de1",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 38,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-37",
+   "measured": "EASY",
+   "canonicalHash": "beb6cfca4019084558fe16f344f3150fc1f1f44ac6904231d332f8424c8789e0",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 39,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-38",
+   "measured": "EASY",
+   "canonicalHash": "c09629adf9c120b42f9ac05352f48bede11ac4120e73baf2aa432e213dc84f90",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 40,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-39",
+   "measured": "EASY",
+   "canonicalHash": "02fb5b9adbce1a5a33b77c61de88f8958fc9cbcd9541797c188f32474e9f8a0f",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 41,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-40",
+   "measured": "EASY",
+   "canonicalHash": "f440bd410d0a19dfd58d86355ada2ab4c2e7e41b2b6a2b064b561ac3b9084a31",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 42,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-41",
+   "measured": "EASY",
+   "canonicalHash": "458ad84fafd9818e476e3d7597dfd0327208ff8e6699fceb424bb22e125270bf",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 43,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-42",
+   "measured": "EASY",
+   "canonicalHash": "2fe846664d07af874798ccd4a2cbfddf0a500ade804590d5e21a916ffd389934",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 44,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-43",
+   "measured": "EASY",
+   "canonicalHash": "a2b0162ba2bf818a48f79a33ff8ac16f196787fb235f772837fe9d2697781111",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 45,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-44",
+   "measured": "EASY",
+   "canonicalHash": "77c385dfd1d5656dcd3cb48c8ad43d10b65fa6e7e56a52d420802a2bf259a214",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 46,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-45",
+   "measured": "EASY",
+   "canonicalHash": "1945fef39cbf44fc90d5c374f3f6bcd8359160700b920f2eefded05aac2fbb2b",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 47,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-46",
+   "measured": "EASY",
+   "canonicalHash": "a53276090520a4b78e47d7cf8c55dd7375252942f854c4acabdcfe15a4813b77",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 48,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-47",
+   "measured": "EASY",
+   "canonicalHash": "516c741e4c430ba75500c2326f04b54ed1724ad59f99f02df30a086f0a77750f",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 49,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-48",
+   "measured": "EASY",
+   "canonicalHash": "16653a67199cde28cb57fdaaa9018cd2602553f29d93bcb476f26afa2bc0d2ba",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 50,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-49",
+   "measured": "EASY",
+   "canonicalHash": "cdcf42d7539adeaa9d0687131a4d9b925386c58eca4fb3718a6968acd26e846a",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 51,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-50",
+   "measured": "EASY",
+   "canonicalHash": "44eb0813814c63457c5fe69cef190fba888af0dd3423878b9e45418d6f44d662",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 52,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-51",
+   "measured": "EASY",
+   "canonicalHash": "8c218125dcf8eca794e5b804b364a492821cdc434cb146516dbbcffc66def375",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 53,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-52",
+   "measured": "EASY",
+   "canonicalHash": "614c4771155ffa1323944fb8a4dba2889f2cb00c501fd1eaa3af9e56e9164bb3",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 54,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-53",
+   "measured": "EASY",
+   "canonicalHash": "410947d7ecd3e0611d44dd25c05383977d8f42dd7752d58d9e90eb917a25f68b",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 55,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-54",
+   "measured": "EASY",
+   "canonicalHash": "fff2e859263353fe68b89033b56f7426299d4bdce68bf333cb0141ca8d0dabbe",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 56,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-55",
+   "measured": "EASY",
+   "canonicalHash": "c1522430afa03d7e633bc9defea574b04b0355ea7b8e86af0035024fe528875b",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 57,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-56",
+   "measured": "EASY",
+   "canonicalHash": "1f2918de07c4b56072417afd8a6a88d5877c23d5100a991c03b3e85ca629273d",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 58,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-57",
+   "measured": "EASY",
+   "canonicalHash": "9bb9724f4112d2d35cd1a0611a4fa51a18264c91caaed6f0b2e2fd8584d45f4e",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 59,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-58",
+   "measured": "EASY",
+   "canonicalHash": "7cd53ff28df524c66b92b0f67bf26f3d255221864e97556c5f0a41c6de90f5c0",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  },
+  {
+   "n": 60,
+   "format": "sudoku",
+   "seed": "etsy-2026-easy-59",
+   "measured": "EASY",
+   "canonicalHash": "5d97499674a06c2039a5367c4d3be24521d6c8080d1f164c85386695bf60ecd7",
+   "checks": [
+    "PASS grid is a nine-by-nine of digits and blanks",
+    "PASS the givens do not contradict each other",
+    "PASS at least seventeen givens",
+    "PASS exactly one solution",
+    "PASS the printed solution is that solution",
+    "PASS the answer key is the solution"
+   ]
+  }
+ ]
+}

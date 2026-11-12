@@ -10,4 +10,4 @@ cd "$(dirname "$0")/.."
 export BRAIN_DATABASE_POOL_SIZE="${BRAIN_DATABASE_POOL_SIZE:-1}"
 
 echo "SERVING_REVISION ${BRAIN_REVISION:-<unstamped>}"
-exec node --import tsx scripts/connection-report.ts "$@"
+exec nice -n 19 node --import tsx scripts/connection-report.ts "$@"

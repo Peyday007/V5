@@ -133,7 +133,9 @@ async function exhaustedAction(routine: FleetRoutine, lastState: string | null):
  */
 async function slowCheckSentence(routineId: string): Promise<string> {
   const next = await nextAutoProbeAt(routineId);
-  return next ? ` Brain checks it again by itself at ${next}, once a day, and lifts it the moment a right session arrives.` : '';
+  return next
+    ? ` Brain checks it again by itself at ${next}, once a day (once a week after two weeks), immediately when its worker gains or uses a new Brain connector, and lifts it the moment a right session arrives.`
+    : '';
 }
 
 /** How long an eligible surface may go unfired, with work waiting it cannot take, before that is a finding. */

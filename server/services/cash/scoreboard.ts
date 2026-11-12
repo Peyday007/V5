@@ -6,6 +6,7 @@
  * count of rows; nothing is estimated. Read on the same derivation the Cash
  * page reads (`sharedFrontier`), so the board and the page cannot disagree.
  */
+import { runpodConfig, runpodReading } from '../cheap/runpod.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { sharedFrontier } from './shared.ts';
 import { laneReading } from '../cheap/lane.ts';
@@ -88,6 +89,13 @@ async function triggerYields(
   });
 }
 
+function runpodLine(): string {
+  const gpu = runpodConfig();
+  if (!gpu) return '  gpu         RunPod off (free providers only)';
+  const r = runpodReading();
+  return `  gpu         RunPod ${gpu.model}: ${r.served} served · ${r.fellBack} fell back to free · breaker ${r.breakerOpen ? 'OPEN' : 'closed'} (since boot)`;
+}
+
 export function formatScoreboard(board: Scoreboard): string[] {
   const lane = board.cheapLane;
   return [
@@ -97,7 +105,8 @@ export function formatScoreboard(board: Scoreboard): string[] {
     `  acted       ${board.executing} being worked · ${board.collected} paid`,
     lane.enabled
       ? `  free lane   ${lane.today} screens today of ${lane.budget} (keep ${lane.verdicts.KEEP}, drop ${lane.verdicts.DROP}, unsure ${lane.verdicts.UNSURE}, failed ${lane.failed})`
-      : '  free lane   off (no BRAIN_CHEAP_LLM_URL set)',
+      : '  free lane   off (no BRAIN_CHEAP_LLM_URL or RunPod set)',
+    runpodLine(),
     `  feeds       ${board.feeds.today} raw leads today · ${board.feeds.items} held · ${board.feeds.shortlisted} sent to Claude`,
     board.sites
       ? `  sites       ${board.sites.businesses} named businesses mapped · ${board.sites.checked} checked · ${board.sites.pending} problems waiting a second look · ${board.sites.confirmed} confirmed${Object.keys(board.sites.byProblem).length ? ` (${Object.entries(board.sites.byProblem).map(([k, v]) => `${k} ${v}`).join(', ')})` : ''}`

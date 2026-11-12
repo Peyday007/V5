@@ -157,7 +157,10 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
-    runs-on: ubuntu-latest
+    # Pinned to the OS whose OCR stack matches production's image (tesseract 5.3,
+    # Debian bookworm). ubuntu-latest moved to 26.04 on 2026-11-10 (tesseract
+    # 5.5), which reads the deliberately poor test scan as text (§98 record).
+    runs-on: ubuntu-24.04
     outputs:
       superseded: ${{ steps.fresh.outputs.superseded || steps.tests.outputs.superseded }}
     steps:
@@ -191,9 +194,21 @@ jobs:
       - name: Install the OCR tooling the runtime image has
         if: steps.fresh.outputs.superseded != 'true'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            poppler-utils tesseract-ocr tesseract-ocr-eng
+          # Bounded and retried: on 2026-10-31 three runners hung inside this
+          # step for over 80 minutes, and the deploy waiting on the suite waited
+          # with them. A normal install takes seconds; a hang now fails over to
+          # a fresh attempt after five minutes, three times at most.
+          ok=0
+          for attempt in 1 2 3; do
+            if timeout 300 sudo apt-get update && timeout 300 sudo apt-get install -y --no-install-recommends \
+                poppler-utils tesseract-ocr tesseract-ocr-eng; then ok=1; break; fi
+            echo "::warning::OCR tooling install attempt $attempt did not finish; retrying."
+            # A runner whose Azure apt mirror stops resolving (2026-11-11: every
+            # suite shard from 13:32 to 16:26 failed here, so nothing released)
+            # takes the next attempt from Ubuntu's own archive.
+            sudo sed -i 's#mirror+file:/etc/apt/apt-mirrors.txt#http://archive.ubuntu.com/ubuntu/#g; s#http://azure.archive.ubuntu.com/ubuntu/#http://archive.ubuntu.com/ubuntu/#g' /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
+          done
+          [ "$ok" = 1 ] || { echo '::error::Could not install the OCR tooling in three bounded attempts.'; exit 1; }
           tesseract --version | head -1
           pdftoppm -v 2>&1 | head -1
 
@@ -675,21 +690,25 @@ jobs:
       # measurement this file exists to insist on.
       - name: Prove the live Brain is actually shut
         id: hosted
-        timeout-minutes: 45
+        timeout-minutes: 25
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          # Bounded, and names an OOM kill or a restart when the pass did not
+          # finish: see the script.
           set +e
-          flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/verify-hosted.sh https://$app.fly.dev --leave-beacon" \
-            2>&1 | tee hosted-verification.txt
+          bash .github/workflows/hosted-verify.sh --leave-beacon hosted-verification.txt
           set -e
           # The verdict comes from a line the script printed, not from an exit
           # code that had to survive an SSH session, a shell and a CLI.
           if grep -q '^HOSTED-VERIFICATION: PASS' hosted-verification.txt; then
             grep '^HOSTED-VERIFICATION' hosted-verification.txt
             exit 0
+          fi
+          if grep -q '^HOSTED-VERIFY-GUARD' hosted-verification.txt; then
+            grep '^HOSTED-VERIFY-GUARD' hosted-verification.txt
+            echo "::error::The hosted verification did not finish. The lines above say whether it ran out of time or the machine was killed or restarted under it."
+            exit 1
           fi
           if ! grep -q '^HOSTED-VERIFICATION' hosted-verification.txt; then
             echo "::error::The hosted verification never ran. If the output above says the SSH connection failed, the Fly token cannot open a console on this app; nothing else in this deploy is affected."
@@ -815,7 +834,7 @@ jobs:
         id: hosted_after
         # Bounded for the reason the pre-restart probe is, and this is the step
         # that demonstrated the need.
-        timeout-minutes: 45
+        timeout-minutes: 25
         # `always()` because the step before it may have failed, and this one
         # answers a different question: the pre-restart pass says what the new
         # image refuses, this says what survived. A restart nobody checked is
@@ -830,13 +849,37 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           set +e
-          flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/verify-hosted.sh https://$app.fly.dev --check-beacon" \
-            2>&1 | tee hosted-after-restart.txt
+          bash .github/workflows/hosted-verify.sh --check-beacon hosted-after-restart.txt
           set -e
           grep -q '^HOSTED-VERIFICATION: PASS' hosted-after-restart.txt
+
+      # Job logs and artifacts live on storage some sessions cannot reach;
+      # annotations come through the GitHub API itself (#347's reason). A
+      # verification that hangs or fails must be readable by whoever is
+      # operating the release unattended, so both passes publish their verdict,
+      # every FAIL line and the tail — the tail is where a hang stopped.
+      - name: Publish both verification passes as annotations
+        if: always() && steps.release.outcome == 'success'
+        run: |
+          python3 - <<'PY'
+          import re
+          enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          for name in ('hosted-verification.txt', 'hosted-after-restart.txt'):
+              try:
+                  text = open(name, encoding='utf-8', errors='replace').read()
+              except OSError:
+                  print(f'::warning title={name}::not written: the pass never started')
+                  continue
+              verdict = re.findall(r'^HOSTED-VERIFICATION:.*$', text, re.M)
+              fails = re.findall(r'^ *FAIL .*$|^HOSTED-VERIFY-GUARD.*$', text, re.M)
+              head = (verdict[-1] if verdict else 'NO VERDICT LINE: the pass did not finish') + '\n'
+              print(f'::notice title={name} verdict::{enc(head + chr(10).join(fails)[:5500])}')
+              tail = text[-24000:]
+              chunks = [tail[i:i + 6000] for i in range(0, len(tail), 6000)]
+              for n, chunk in enumerate(chunks, 1):
+                  print(f'::notice title={name} tail {n}/{len(chunks)}::{enc(chunk)}')
+          PY
 
       # Neither verification step is `continue-on-error` any more: a failed
       # check reads as failed, and the steps that must still run say so
@@ -970,7 +1013,46 @@ jobs:
               || echo "(no FAIL line: read the step for what it did print)"
           done
           if [ -n "$failing" ]; then
-            echo "::error::The hosted verification did not pass ($failing). The failing conditions are printed directly above."
+            # Which of the three it is, said once: the release itself
+            # succeeded above, so this is either verification that could not
+            # run or behaviour that is defective, and the two send somebody to
+            # different places. A pass before the restart that printed no
+            # verdict never judged anything, and the restart pass's "no beacon"
+            # is then its consequence, not a second finding.
+            # A pass that printed "could-not-complete" stopped before judging
+            # the whole surface, exactly like one with no verdict, and the
+            # restart pass's "no beacon" is its consequence. Deploy 42137365702
+            # (2026-11-06): 503s on the credential check before the restart,
+            # 274/275 after it with only the beacon missing, read as
+            # BEHAVIOUR DEFECTIVE.
+            if ! grep -q '^HOSTED-VERIFICATION' hosted-verification.txt 2>/dev/null \
+                || grep -q '^HOSTED-VERIFICATION: FAIL could-not-complete' hosted-verification.txt 2>/dev/null; then
+              echo "::error::RELEASED, VERIFICATION COULD NOT RUN: this commit is serving, and the pass before the restart could not complete (see its first error above). Not evidence of a defect; the release is not verified."
+            # The same for the pass after the restart. Deploy 43065787279
+            # (2026-11-11): every check passed before the restart, then one MCP
+            # call timed out after it ("could-not-complete", no FAIL line), and
+            # this read as BEHAVIOUR DEFECTIVE.
+            elif grep -q '^HOSTED-VERIFICATION: FAIL could-not-complete' hosted-after-restart.txt 2>/dev/null \
+                && ! grep -h -q -E '^ *FAIL  ' hosted-verification.txt hosted-after-restart.txt 2>/dev/null; then
+              echo "::error::RELEASED, VERIFICATION COULD NOT RUN: this commit is serving, the pass before the restart passed, and the pass after it could not complete (see its first error above). Not evidence of a defect; the release is not verified."
+            elif grep -q '^HOSTED-VERIFY-GUARD' hosted-verification.txt hosted-after-restart.txt 2>/dev/null \
+                || ! grep -q '^HOSTED-VERIFICATION' hosted-after-restart.txt 2>/dev/null; then
+              # A pass the guard stopped answered too slowly to finish; the checks
+              # it failed before being stopped are listed above, and are evidence
+              # of slowness first. Deploy 41452489625: 27 s answers after the
+              # restart, three unrelated checks failed, no verdict line.
+              echo "::error::RELEASED, VERIFICATION DID NOT FINISH: a pass was stopped before its verdict (the live Brain answered too slowly). Its failed checks are above; the release is not verified."
+            elif grep -h -q -E '^ *FAIL  ' hosted-verification.txt hosted-after-restart.txt 2>/dev/null \
+                && ! grep -h -E '^ *FAIL  ' hosted-verification.txt hosted-after-restart.txt 2>/dev/null \
+                  | grep -v -q -E ' — 50[0-9]( |$)'; then
+              # Every failed check was answered 5xx: the Brain was unavailable
+              # (booting, or out of database connections), which says nothing
+              # about whether its behaviour is right. Deploy 41488989210: four
+              # 503/502 answers after the restart, 276/280.
+              echo "::error::RELEASED, BRAIN UNAVAILABLE DURING VERIFICATION: every failed check above was answered 5xx. Availability, not behaviour; the release is not verified."
+            else
+              echo "::error::RELEASED, BEHAVIOUR DEFECTIVE: the hosted verification did not pass ($failing). The failing conditions are printed directly above."
+            fi
             exit 1
           fi
           echo "The live Brain refused everything it should have, twice, either side of a real restart,"

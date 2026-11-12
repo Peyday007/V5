@@ -1,0 +1,21 @@
+{
+  "business": "grant-prospects",
+  "brand": "Funder Ledger",
+  "products": [
+    {
+      "key": "report",
+      "name": "Grant Prospect Report",
+      "price_usd": 149,
+      "description": "One report for one organization and up to three focus areas (or a second state): 25-40 best-fit foundations ranked by grants they made to similar organizations, with recipient, amount, purpose, contact and application instructions from the 990-PF, plus open and forecast federal opportunities that admit nonprofits. HTML + PDF, delivered within 2 business days.",
+      "recurring": null
+    },
+    {
+      "key": "monthly",
+      "name": "New-opportunities update",
+      "price_usd": 49,
+      "description": "Monthly re-run of the report: newly filed 990-PFs that add funders for your focus, and new Grants.gov postings and forecasts, with what changed since last month. Cancel any time.",
+      "recurring": "month"
+    }
+  ],
+  "free_sample": "The full report is sent free to an organization that replies, before anything is paid for (campaign.sample)."
+}

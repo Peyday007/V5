@@ -16,6 +16,7 @@
  * until the cheap lane is configured, because without the free models the
  * volume has nowhere to go but Claude.
  */
+import { sprintGoalLine } from '../../domain/operatingModel.ts';
 import { getDb } from '../../db/database.ts';
 import { insertFeedItems, markShortlisted, pullState, recordFeedPull, unlistedFeedItems, type StoredFeedItem } from '../../repos/feeds.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -107,8 +108,26 @@ export function lanePacing(health: Map<string, { total: number; failed: number }
 }
 /** Leads handed to Claude per shortlist round. */
 export const SHORTLIST_SIZE = 10;
-/** One shortlist round a day at most. */
+/** One shortlist round a day at most while the research fleet is busy. */
 export const SHORTLIST_INTERVAL_MS = 20 * 3_600_000;
+/**
+ * While research surfaces sit idle with nothing waiting, the next shortlist may
+ * open this soon after the last one settled, and carries more leads. Production,
+ * 2026-11-01: 670 leads kept by the free models, ten a day reaching Claude, and
+ * routable research surfaces idle beside them. Spare is zero the moment work
+ * queues up, so this binds only while capacity is idle (§78).
+ */
+export const SHORTLIST_SPARE_INTERVAL_MS = 2 * 3_600_000;
+export const SHORTLIST_PER_SPARE = 5;
+export const SHORTLIST_MAX_SIZE = 25;
+
+/** The shortlist's size and spacing for this much idle research capacity. Pure. */
+export function shortlistPace(spare: number): { size: number; intervalMs: number } {
+  const idle = Math.max(0, Math.trunc(spare));
+  return idle > 0
+    ? { size: Math.min(SHORTLIST_MAX_SIZE, SHORTLIST_SIZE + SHORTLIST_PER_SPARE * idle), intervalMs: SHORTLIST_SPARE_INTERVAL_MS }
+    : { size: SHORTLIST_SIZE, intervalMs: SHORTLIST_INTERVAL_MS };
+}
 
 export async function pullDueFeeds(input: {
   now?: Date;
@@ -292,7 +311,7 @@ function shortlistLine(item: StoredFeedItem, screen: LeadOutput): string | null 
   const clean = (value: string, max: number) => value.replace(/[.,;:!?—–\n"]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
   const line =
     `"${clean(item.title, 90)}" at ${item.url} — the need as read: ${clean(screen.need, 80)}; ` +
-    `the work it could take: ${DELIVERABLE_LABEL[screen.deliverable as keyof typeof DELIVERABLE_LABEL] ?? screen.deliverable}`;
+    `the work it could take: ${screen.deliverable === 'BROKERED_SERVICE' ? 'a service an independent contractor performs and this operation sells and coordinates' : (DELIVERABLE_LABEL[screen.deliverable as keyof typeof DELIVERABLE_LABEL] ?? screen.deliverable)}`;
   if (safeLeadLine(line)) return line;
   const bare = `${item.url} — the work it could take: ${screen.deliverable}`;
   return safeLeadLine(bare) ? bare : null;
@@ -305,7 +324,8 @@ function shortlistLine(item: StoredFeedItem, screen: LeadOutput): string | null 
  * not stop, because it is not bulk finding: it is a strong model verifying a
  * short list the free models and the rules already narrowed.
  */
-export async function openFeedShortlist(input: { projectId: string; now?: Date }): Promise<string | null> {
+export async function openFeedShortlist(input: { projectId: string; now?: Date; spare?: number }): Promise<string | null> {
+  const pace = shortlistPace(input.spare ?? 0);
   const now = input.now ?? new Date();
   const gate = await discoveryAllowed(input.projectId);
   if (!gate.allowed || !gate.mode) return null;
@@ -313,15 +333,23 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date }
   const history = (await listRounds(input.projectId)).filter((one) => one.bucketId === FEED_SHORTLIST_BUCKET.id);
   if (history.some((one) => one.state === 'OPEN')) return null;
   const latest = history.reduce<string | null>((max, one) => (!max || one.openedAt > max ? one.openedAt : max), null);
-  if (latest && now.getTime() - Date.parse(latest) < SHORTLIST_INTERVAL_MS) return null;
+  const settled = history.reduce<string | null>((max, one) => {
+    const at = one.harvestedAt ?? one.openedAt;
+    return !max || at > max ? at : max;
+  }, null);
+  if (latest && now.getTime() - Date.parse(latest) < SHORTLIST_INTERVAL_MS) {
+    // Idle capacity shortens the wait, measured from when the last one settled.
+    if (pace.intervalMs >= SHORTLIST_INTERVAL_MS) return null;
+    if (settled && now.getTime() - Date.parse(settled) < pace.intervalMs) return null;
+  }
 
-  const { chosen } = await shortlistFunnel(input.projectId, now);
+  const { chosen } = await shortlistFunnel(input.projectId, now, pace.size);
   if (chosen.length === 0) return null;
 
   const frame = await executionFrame(input.projectId, mode.currency);
   const statement = [
     FEED_SHORTLIST_BUCKET.question,
-    `This is for a short cash sprint whose goal is: ${mode.objective}`,
+    sprintGoalLine(mode.objective),
     frame ? executionFrameSentence(frame) : '',
     'Free models read these public posts and kept them; nothing about them is established yet. ' +
       'Open each page. Report as an opening only what the page itself shows, quoting it, and say ' +
@@ -389,7 +417,11 @@ export interface ShortlistFunnel {
 }
 
 /** Which leads would go to Claude now, with the count at every step. Writes nothing. */
-export async function shortlistFunnel(projectId: string, now: Date = new Date()): Promise<ShortlistFunnel> {
+export async function shortlistFunnel(
+  projectId: string,
+  now: Date = new Date(),
+  size: number = SHORTLIST_SIZE,
+): Promise<ShortlistFunnel> {
   const since = new Date(now.getTime() - LEAD_MAX_AGE_MS).toISOString();
   const pool = await unlistedFeedItems({ since, limit: 2_000 });
   const screens = await leadScreens(pool);
@@ -403,7 +435,7 @@ export async function shortlistFunnel(projectId: string, now: Date = new Date())
     // Fast cash: a lead with no near window waits until the short ones run out.
     .filter((item, _i, all) =>
       screens.get(item.id)?.window === 'SHORT' ||
-      all.filter((one) => screens.get(one.id)?.window === 'SHORT').length < SHORTLIST_SIZE)
+      all.filter((one) => screens.get(one.id)?.window === 'SHORT').length < size)
     .filter((item) => {
       const key = openingSourceKey(item.url);
       return !key || !held.has(key);
@@ -416,7 +448,7 @@ export async function shortlistFunnel(projectId: string, now: Date = new Date())
     });
   const chosen: { item: StoredFeedItem; line: string }[] = [];
   for (const item of ranked) {
-    if (chosen.length >= SHORTLIST_SIZE) break;
+    if (chosen.length >= size) break;
     const line = shortlistLine(item, screens.get(item.id)!);
     if (line) chosen.push({ item, line });
   }

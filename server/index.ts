@@ -11,6 +11,8 @@
  * explicitly: instead of a dead port, a minimal app answers every `/api` request
  * with the reason it could not start.
  */
+import { startFreeLaneLoop } from './services/freeLane/worker.ts';
+import { activityPath, beginActivity } from './db/infra.ts';
 import { registerCommercialProviders } from './services/cash/providers/register.ts';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -61,6 +63,7 @@ import { recordProcessStart, startInfraIncidentRecorder } from './services/infra
 import { settleTokenTouches } from './services/identity/tokenTouch.ts';
 import { startRussell } from './services/russell/loop.ts';
 import { startConnectRefresh } from './services/connect/loop.ts';
+import { startIntegrationsLoop } from './services/integrations/loop.ts';
 import { startFactoryRemoteLoop } from './services/factory/remoteLoop.ts';
 import { scanIfStale } from './services/selfmodel/refresh.ts';
 import { repairLaunches } from './services/russell/launch.ts';
@@ -155,6 +158,13 @@ function buildApp(gate: AccessGateConfig): Express {
   // before anything can try to read one. Ahead of the body parsers, so that a
   // request refused for its *size* still has an id in the log.
   app.use(requestContext());
+  // Which request was in flight when the event loop stalled (db/infra.ts).
+  app.use((req: Request, res: Response, next: () => void) => {
+    const end = beginActivity(`http:${req.method} ${activityPath(req.path)}`);
+    res.once('finish', end);
+    res.once('close', end);
+    next();
+  });
 
   // The MCP endpoint, mounted before the application-wide body parser so that
   // it can enforce its own, much smaller, limit. It is deliberately outside
@@ -809,6 +819,13 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
     startFactoryRemoteLoop();
 
     /*
+     * The free research lane (§85): commercial research Claude routines no
+     * longer take, answered by the cheap lane's free models through the same
+     * queue, tools and gates. Off when no cheap lane is configured.
+     */
+    startFreeLaneLoop();
+
+    /*
      * One reading of Brain's own parts, if the last one is no longer about this
      * system.
      *
@@ -892,6 +909,13 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
      * It writes nothing when nothing has changed.
      */
     startConnectRefresh();
+
+    /*
+     * The integration registry's clock (§103): an hourly health check and an
+     * hourly Neighbor Card pass, cadenced from their last recorded rows so a
+     * restart neither skips nor repeats them.
+     */
+    startIntegrationsLoop();
 
     // Documents that have never been read are queued now, so a folder dropped in
     // while the server was down becomes auditable without anyone asking.

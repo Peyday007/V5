@@ -43,7 +43,7 @@
  */
 
 /** Bumped when the text changes, and recorded on the run that used it. */
-export const RESEARCH_METHOD_VERSION = '2026-09-11.1';
+export const RESEARCH_METHOD_VERSION = '2026-10-30.1';
 
 /**
  * The standing method, restored from the workflow that produced the archive's
@@ -76,6 +76,12 @@ Paywalls, robots exclusions, JavaScript-only pages, 403s and dead links are
 ordinary. Try the alternatives: an official mirror, the regulator's own copy,
 the filing rather than the summary, a cached authoritative version, a different
 official jurisdiction page.
+
+If **your own environment** cannot reach the site at all — a DNS failure, a
+proxy 403, an allowlist refusal — call \`brain_fetch_source\` with the research
+item you hold and the URL. Brain opens the public page itself and returns its
+text, final URL, status and retrieval time. Quote passages from that text. It
+changes who opens the page, never which sources your assignment may cite.
 
 If you still cannot read it, **submit the claim with its retrieval state set**
 (PAYWALLED, ROBOTS_BLOCKED, JS_ONLY, NOT_REACHABLE). Do not quietly drop it and
@@ -178,7 +184,9 @@ export const RESEARCH_METHOD_SUMMARY =
   + 'description), or the submission is refused whole before anything is stored; search '
   + 'broadly, then open full sources rather than quoting snippets; ' +
   'prefer primary evidence and classify each source PRIMARY, SECONDARY or ANECDOTAL; when a ' +
-  'source is paywalled, robots-blocked, JavaScript-only or unreachable, try an official ' +
+  'source is unreachable from your own environment (DNS failure, proxy 403, allowlist), ' +
+  'read it through brain_fetch_source, which Brain opens for you under your lease; when a ' +
+  'source is paywalled, robots-blocked or JavaScript-only, try an official ' +
   'alternative and, if it is still unreadable, submit the claim with its retrieval state set ' +
   'rather than dropping it or inferring the page — an unread source is recorded as unresolved, ' +
   'not as a rejection; state uncertainty explicitly; carry forward any condition your ' +

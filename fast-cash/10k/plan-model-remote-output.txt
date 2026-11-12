@@ -1,0 +1,44 @@
+basis SWEEP · probabilistic=false
+Sweep (Latin hypercube) over declared ranges: shares are coverage of the tested conditions, not probabilities.
+
+high_focus: Half the outreach on AI setups, rest on gifts/lists, ads on
+  settled p10 $1,807 · p50 $3,112 · p90 $5,210 · max $10,754
+  share of tested conditions: ≥$10k 0% · ≥$5k 12% · ≥$2k 85%
+  interested conversations p10 6.7 p50 10.4 p90 14.7
+    r_high   mean $1,133
+    r_gift   mean $1,645
+    r_list   mean $171
+    r_leads  mean $154
+    r_packs  mean $250
+
+all_high: All outreach on AI setups, ads on
+  settled p10 $1,265 · p50 $2,420 · p90 $4,447 · max $8,873
+  share of tested conditions: ≥$10k 0% · ≥$5k 6% · ≥$2k 64%
+  interested conversations p10 6.7 p50 10.4 p90 14.7
+    r_high   mean $2,265
+    r_gift   mean $0
+    r_list   mean $0
+    r_leads  mean $154
+    r_packs  mean $250
+
+gift_focus: Mostly gift brokerage
+  settled p10 $2,118 · p50 $4,240 · p90 $8,227 · max $17,988
+  share of tested conditions: ≥$10k 4% · ≥$5k 38% · ≥$2k 92%
+  interested conversations p10 6.7 p50 10.4 p90 14.7
+    r_high   mean $453
+    r_gift   mean $3,839
+    r_list   mean $86
+    r_leads  mean $154
+    r_packs  mean $250
+
+no_ads: Half on AI setups, no ads
+  settled p10 $1,652 · p50 $2,963 · p90 $5,041 · max $10,582
+  share of tested conditions: ≥$10k 0% · ≥$5k 10% · ≥$2k 81%
+  interested conversations p10 6.7 p50 10.4 p90 14.7
+    r_high   mean $1,133
+    r_gift   mean $1,645
+    r_list   mean $171
+    r_leads  mean $0
+    r_packs  mean $250
+
+$10k at mid-evidence rates needs ~41 interested conversations (each worth ~$245); the shared outreach yields the conversations above.

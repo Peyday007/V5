@@ -1,3 +1,4 @@
+import type { BinPurpose } from './binPurpose.ts';
 /**
  * Domain contract for Brain.
  *
@@ -503,6 +504,24 @@ export const EVENT_TYPES = [
   // The answering transition for a work item whose attempt ceiling now
   // binds at the claim as well as at `failWork`.
   'WORK_ATTEMPTS_REGRANTED',
+  /** A research park Brain answered under the standing grant (§80). */
+  'RUSSELL_ROUTINE_DECISION',
+  /** A substantial goal checked against the capability maps; recorded when what blocks it changes (§88). */
+  'CAPABILITY_ASSESSED',
+  /** A rediscovered historical idea the owner chose to explore or plan became a Russell idea here. */
+  'MEMORY_IDEA_PROMOTED',
+  /** A rediscovered historical idea the owner gave its own section became this project. */
+  'MEMORY_SECTION_CREATED',
+  /** A hub prepared from a sustained commitment in the owner's history was accepted as this project. */
+  'MEMORY_HUB_ACCEPTED',
+  /** The operator withdrew a person-request its mission no longer waits on (§106). */
+  'OPERATOR_WITHDREW_MOOT_REQUEST',
+  /** The operator sent a defect to Factory on the standing improvement order (§106). */
+  'OPERATOR_FIX_SUBMITTED',
+  /** The operator's fix was submitted and Factory refused to start it, with why (§106). */
+  'OPERATOR_FIX_NOT_STARTED',
+  /** An operator run finished; its report and the tools it called (§106). */
+  'OPERATOR_RUN_FINISHED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -888,6 +907,23 @@ export type IndustryNodeKind = (typeof INDUSTRY_NODE_KINDS)[number];
 
 export const INDUSTRY_NODE_ORIGINS = ['SEED', 'BOOTSTRAP', 'DISCOVERED'] as const;
 export type IndustryNodeOrigin = (typeof INDUSTRY_NODE_ORIGINS)[number];
+
+/** A fact recorded against a goal's industry construction (§92): append-only. */
+export interface ConstructionFactRow {
+  id: string;
+  project_id: string | null;
+  workstream_id: string;
+  fact_key: string;
+  segment: string | null;
+  low: number;
+  high: number;
+  status: string;
+  measures: string;
+  source_title: string;
+  source_url: string | null;
+  recorded_by: string;
+  created_at: string;
+}
 
 export interface IndustryNodeRow {
   id: string;
@@ -3978,8 +4014,27 @@ export const WORKER_SCOPES = [
   // membership, no approval, no research write — so a stolen site credential
   // reaches exactly the surface a site already had.
   'external:sync',
+
+  // §106 — the operator. One scope for the bounded actions the operator's
+  // tools perform (settle a request its mission no longer waits on, continue
+  // idle capacity, send a defect to Factory on the owner's standing improvement
+  // order, record a lesson). Each action re-checks its own rule; the scope only
+  // says this credential is the operator's.
+  'operator:act',
 ] as const;
 export type WorkerScope = (typeof WORKER_SCOPES)[number];
+
+/**
+ * What the operator's per-run credential gets (§106): read every project it
+ * directs, and act through the operator tools. No queue claiming, no research
+ * writes — it directs the workers that do those, it is not one of them.
+ */
+export const OPERATOR_SCOPES: readonly WorkerScope[] = [
+  'project:read',
+  'research:read',
+  'queue:read',
+  'operator:act',
+];
 
 /**
  * What a remote worker gets, decided here rather than by a person ticking boxes.
@@ -4130,7 +4185,9 @@ export type WorkerStatus = (typeof WORKER_STATUSES)[number];
 export const ACTOR_TYPES = ['HUMAN', 'WORKER', 'SYSTEM', 'ANONYMOUS'] as const;
 export type ActorType = (typeof ACTOR_TYPES)[number];
 
-export const IDENTITY_RESULTS = ['SUCCESS', 'DENIED', 'FAILED'] as const;
+// UNKNOWN: an MCP call answered at its time limit while the work was still
+// running — invariant 26, the outcome is not known and is not "failed".
+export const IDENTITY_RESULTS = ['SUCCESS', 'DENIED', 'FAILED', 'UNKNOWN'] as const;
 export type IdentityResult = (typeof IDENTITY_RESULTS)[number];
 
 /**
@@ -5583,6 +5640,9 @@ export interface BinRow {
   ready_at: string | null;
   completed_at: string | null;
   factory_campaign_id: string | null;
+  /** Migration 134: what the bin is for. NULL is unclassified, which is denied to Claude. */
+  purpose?: string | null;
+  purpose_basis?: string | null;
 }
 
 export interface Bin {
@@ -5664,6 +5724,12 @@ export interface Bin {
    * query about either of them ambiguous.
    */
   factoryCampaignId: string | null;
+  /**
+   * What the bin is for (`domain/binPurpose.ts`), set when it was created.
+   * Null is unclassified, and unclassified is denied to Claude (§84).
+   */
+  purpose?: BinPurpose | null;
+  purposeBasis?: string | null;
 }
 
 export interface BinDispatchRow {
@@ -11113,4 +11179,133 @@ export interface CashPreparedDecisionRow {
   prepared_by: 'BRAIN';
   state: 'PREPARED_NOT_SENT';
   created_at: string;
+}
+
+/* --------------------------------------------------------------------------
+ * Brain improving itself (§87, migration 136 / pg 127)
+ * ------------------------------------------------------------------------ */
+
+export interface ImprovementCandidateRow {
+  id: string;
+  weakness_key: string;
+  kind: string;
+  title: string;
+  problem: string;
+  metric_key: string;
+  downstream_metric: string | null;
+  owner_component: string;
+  frequency: number;
+  denominator: number;
+  scope: string;
+  severity: string;
+  evidence: string;
+  proposal: string | null;
+  dependency_check: string | null;
+  research_goal_id: string | null;
+  change_request_id: string | null;
+  campaign_id: string | null;
+  delivered_at: string | null;
+  delivered_ref: string | null;
+  baseline: string | null;
+  result: string | null;
+  decision: string | null;
+  decision_reason: string | null;
+  combined_into_id: string | null;
+  held_on: string | null;
+  attempt: number;
+  parent_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImprovementEventRow {
+  id: string;
+  candidate_id: string | null;
+  kind: string;
+  detail: string;
+  at: string;
+}
+
+/** A way of reasoning about a goal and its record (§101, migration 143). */
+export interface ReasoningMethodRow {
+  id: string;
+  signature: string;
+  name: string;
+  stance: string;
+  origin: string;
+  thinking: string;
+  /** JSON: `{ from, program }` — the direction's executable program. */
+  program: string;
+  tries: number;
+  improvements: number;
+  wins: number;
+  total_lift: number;
+  best_lift: number;
+  first_goal_id: string | null;
+  created_at: string;
+  last_used_at: string;
+}
+
+/** One exploration a plan read ran (§101, migration 143); append-only. */
+export interface ReasoningExplorationRow {
+  id: string;
+  goal_id: string;
+  directions: number;
+  model_directions: number;
+  stances: number;
+  baseline_reach: number;
+  greedy_reach: number;
+  best_reach: number;
+  best_method: string | null;
+  replaced: number;
+  summary: string;
+  /** Distinct variations the variable sweep read (§102); 0 when none ran. */
+  variations: number;
+  /** Decision variables plus conditions the sweep discovered. */
+  variables: number;
+  /** The sweep's compact summary as JSON, or null. */
+  sweep: string | null;
+  created_at: string;
+}
+
+/** One reading, repair or metered call of a connected service (migration 145 / pg 136, §103). */
+export interface IntegrationEventRow {
+  id: string;
+  integration_id: string;
+  kind: 'CHECK' | 'REPAIR' | 'USAGE';
+  state: string;
+  detail: string;
+  source: string;
+  recorded_at: string;
+}
+
+/** One operator run (§106, migration 146 / pg 137). */
+export interface OperatorRunRow {
+  id: string;
+  state: 'RUNNING' | 'DONE' | 'FAILED';
+  model: string;
+  started_at: string;
+  finished_at: string | null;
+  summary: string | null;
+  /** JSON array of `{ tool, ok }`, in call order. */
+  tool_calls: string;
+  error: string | null;
+}
+
+/** The operator's current memory file or skill, by name (§106). */
+export interface OperatorMemoryRow {
+  name: string;
+  body: string;
+  updated_at: string;
+  run_id: string | null;
+}
+
+/** A lesson the operator recorded, append-only (§106). */
+export interface OperatorLearningRow {
+  id: string;
+  goal_id: string | null;
+  run_id: string | null;
+  lesson: string;
+  evidence: string;
+  recorded_at: string;
 }

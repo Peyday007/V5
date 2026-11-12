@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'show | file | pause | resume | cancel | reinstate | depends | terms | create | target | plan'
+        description: 'show | file | pause | resume | cancel | reinstate | depends | terms | create | target | plan | construct | industry'
         required: true
         default: show
       goal:
@@ -36,7 +36,7 @@ on:
         required: false
         default: ''
       reason:
-        description: 'For pause and cancel: why. For create: the goal in plain words (letters, digits, spaces and . , - _)'
+        description: 'For pause and cancel: why. For create: the goal in plain words. For industry: the operator ambition to construct from (letters, digits, spaces and . , - _)'
         required: false
         default: ''
       commitment:
@@ -76,6 +76,11 @@ jobs:
       - uses: ./.github/actions/await-release
 
       - name: Run
+        # An SSH session a deploy restarts under hangs until GitHub's six-hour job
+        # limit and holds every later read behind it (2026-11-02, twice). admin.yml
+        # bounds the same step the same way.
+        # `plan` composes the goal's 400 constructed arrangements and its portfolio over one connection (~11 min on 2026-11-06).
+        timeout-minutes: 30
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           G_COMMAND: ${{ inputs.command }}
@@ -94,7 +99,7 @@ jobs:
 
           # The allowlist is the control; the input's description is a label.
           case "$G_COMMAND" in
-            show|file|pause|resume|cancel|reinstate|depends|terms|create|target|plan) ;;
+            show|file|pause|resume|cancel|reinstate|depends|terms|create|target|plan|construct|industry) ;;
             *) echo "::error::Refusing '$G_COMMAND'."; exit 1 ;;
           esac
 
@@ -117,7 +122,7 @@ jobs:
             '') ;;
             *[!A-Za-z0-9_.@+-]*) echo "::error::Refusing the administrator address."; exit 1 ;;
           esac
-          if [ "$G_COMMAND" != show ] && [ "$G_COMMAND" != plan ] && [ -z "$G_ADMIN" ]; then
+          if [ "$G_COMMAND" != show ] && [ "$G_COMMAND" != plan ] && [ "$G_COMMAND" != industry ] && [ -z "$G_ADMIN" ]; then
             echo "::error::'$G_COMMAND' changes something, so it needs an administrator."
             exit 1
           fi

@@ -1,0 +1,875 @@
+[
+{
+"cat": "health-care-11",
+"name": "AZIZKHAN INT. MED., ASSOC.",
+"addr": "888 POPLAR CHURCH ROAD",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 724-2126",
+"member": "https://business.mechanicsburgchamber.org/list/member/azizkhan-int-med-assoc-60"
+},
+{
+"cat": "health-care-11",
+"name": "SMILES ON TRINDLE DENTAL CARE",
+"addr": "4805 E TRINDLE RD",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 697-4606",
+"member": "https://business.mechanicsburgchamber.org/list/member/smiles-on-trindle-dental-care-486"
+},
+{
+"cat": "health-care-11",
+"name": "CAMP HILL FAMILY CHIROPRACTIC",
+"addr": "157 S. 32ND ST",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 761-8840",
+"member": "https://business.mechanicsburgchamber.org/list/member/camp-hill-family-chiropractic-65"
+},
+{
+"cat": "health-care-11",
+"name": "PENN STATE HEALTH HOLY SPIRIT MEDICAL CENTER",
+"addr": "503 N 21ST ST",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 763-2100",
+"member": "https://business.mechanicsburgchamber.org/list/member/penn-state-health-holy-spirit-medical-center-709"
+},
+{
+"cat": "health-care-11",
+"name": "SYNERGY HOMECARE OF MID PENN",
+"addr": "20 Westminster Dr",
+"city": "Carlisle",
+"zip": "17013",
+"phone": "717-243-5473",
+"member": "https://business.mechanicsburgchamber.org/list/member/synergy-homecare-of-mid-penn-688"
+},
+{
+"cat": "health-care-11",
+"name": "CORNERSTONE CHIROPRACTIC LLC",
+"addr": "2 KACEY CT",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 458-5877",
+"member": "https://business.mechanicsburgchamber.org/list/member/cornerstone-chiropractic-llc-1114"
+},
+{
+"cat": "health-care-11",
+"name": "GEISINGER",
+"addr": "100 N ACADEMY AVE",
+"city": "DANVILLE",
+"zip": "17822",
+"phone": "(570) 214-7688",
+"member": "https://business.mechanicsburgchamber.org/list/member/geisinger-1206"
+},
+{
+"cat": "health-care-11",
+"name": "AT HOME REHAB & WELLNES LLC",
+"addr": "1674 HARALSON DR",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 275-0090",
+"member": "https://business.mechanicsburgchamber.org/list/member/at-home-rehab-wellnes-llc-1147"
+},
+{
+"cat": "health-care-11",
+"name": "HERD CHIROPRACTIC CLINIC",
+"addr": "2704 MARKET ST",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 737-1681",
+"member": "https://business.mechanicsburgchamber.org/list/member/herd-chiropractic-clinic-475"
+},
+{
+"cat": "health-care-11",
+"name": "DENTAL HEALTH OF SILVER SPRING",
+"addr": "11 FLOWERS DRIVE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 766-0600",
+"member": "https://business.mechanicsburgchamber.org/list/member/dental-health-of-silver-spring-113"
+},
+{
+"cat": "health-care-11",
+"name": "HOME INSTEAD",
+"addr": "15 N 12TH ST",
+"city": "LEMOYNE",
+"zip": "17043",
+"phone": "(717) 384-9018",
+"member": "https://business.mechanicsburgchamber.org/list/member/home-instead-184"
+},
+{
+"cat": "health-care-11",
+"name": "KEYSTONE PODIATRIC MEDICAL ASSOCIATES",
+"addr": "5001 LOUISE DR",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 458-5611",
+"member": "https://business.mechanicsburgchamber.org/list/member/keystone-podiatric-medical-associates-976"
+},
+{
+"cat": "health-care-11",
+"name": "AFC URGENT CARE - CAMP HILL",
+"addr": "3201 MARKET ST",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 857-6172",
+"member": "https://business.mechanicsburgchamber.org/list/member/afc-urgent-care-camp-hill-1270"
+},
+{
+"cat": "health-care-11",
+"name": "ACRI FAMILY CHIROPRACTIC CLINIC",
+"addr": "202 N FREDERICK ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 691-8155",
+"member": "https://business.mechanicsburgchamber.org/list/member/acri-family-chiropractic-clinic-mechanicsburg-465"
+},
+{
+"cat": "health-care-11",
+"name": "CPRS PHYSICAL THERAPY",
+"addr": "102 N BALTIMORE ST",
+"city": "DILLSBURG",
+"zip": "17019",
+"phone": "(866) 279-6999",
+"member": "https://business.mechanicsburgchamber.org/list/member/cprs-physical-therapy-1295"
+},
+{
+"cat": "health-care-11",
+"name": "CONCENTRA MEDICAL CENTER",
+"addr": "4910 RITTER RD",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 795-1819",
+"member": "https://business.mechanicsburgchamber.org/list/member/concentra-medical-center-494"
+},
+{
+"cat": "health-care-11",
+"name": "PENNSYLVANIA CANCER SPECIALISTS & RESEARCH INSTITUTE",
+"addr": "6475 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 918-9600",
+"member": "https://business.mechanicsburgchamber.org/list/member/pennsylvania-cancer-specialists-research-institute-1166"
+},
+{
+"cat": "health-care-11",
+"name": "ADVANCED PHYSICAL THERAPY AND FITNESS",
+"addr": "102 WEST ALLEN STREET",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 790-9994",
+"member": "https://business.mechanicsburgchamber.org/list/member/advanced-physical-therapy-and-fitness-14"
+},
+{
+"cat": "health-care-11",
+"name": "UPMC URGENT CARE",
+"addr": "6481 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 796-9355",
+"member": "https://business.mechanicsburgchamber.org/list/member/upmc-urgent-care-515"
+},
+{
+"cat": "health-care-11",
+"name": "CRAIG M. ANZUR, DMD -  ANZUR PERIODONTICS, P.C.",
+"addr": "4225 TRINDLE RD",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 763-7971",
+"member": "https://business.mechanicsburgchamber.org/list/member/craig-m-anzur-dmd-anzur-periodontics-p-c-939"
+},
+{
+"cat": "health-care-11",
+"name": "ADORATION HOSPICE",
+"addr": "1200 CAMP HILL BYPASS",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 763-4001",
+"member": "https://business.mechanicsburgchamber.org/list/member/adoration-hospice-1039"
+},
+{
+"cat": "health-care-11",
+"name": "MECHANICSBURG EYE ASSOCIATES",
+"addr": "100 NORTH WALNUT STREET",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-4757",
+"member": "https://business.mechanicsburgchamber.org/list/member/mechanicsburg-eye-associates-254"
+},
+{
+"cat": "health-care-11",
+"name": "Arkview Recovery Center",
+"addr": "4950 Wilson Lane",
+"city": "Mechanicsburg",
+"zip": "17055",
+"phone": "(717) 825-7853",
+"member": "https://business.mechanicsburgchamber.org/list/member/arkview-recovery-center-1203"
+},
+{
+"cat": "health-care-11",
+"name": "RESIDENTIAL HEALTHCARE",
+"addr": "100 STERLING PKWY",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "",
+"member": "https://business.mechanicsburgchamber.org/list/member/residential-healthcare-490"
+},
+{
+"cat": "health-care-11",
+"name": "BENECARD PBF",
+"addr": "5040 RITTER RD",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(877) 723-6003",
+"member": "https://business.mechanicsburgchamber.org/list/member/benecard-pbf-1178"
+},
+{
+"cat": "health-care-11",
+"name": "DIALYSIS CARE CENTER",
+"addr": "200 BENT CREEK BLVD, STE 1",
+"city": "MECHANISBURG",
+"zip": "17050",
+"phone": "(717) 795-4665",
+"member": "https://business.mechanicsburgchamber.org/list/member/dialysis-care-center-995"
+},
+{
+"cat": "health-care-11",
+"name": "ENCOMPASS HEALTH REHABILITATION HOSPITAL OF MECHANICSBURG",
+"addr": "175 LANCASTER BLVD",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 691-3700",
+"member": "https://business.mechanicsburgchamber.org/list/member/encompass-health-rehabilitation-hospital-of-mechanicsburg-665"
+},
+{
+"cat": "health-care-11",
+"name": "WEISS PHYSICAL THERAPY ASSOCIATES PC",
+"addr": "1700 BENT CREEK BLVD  STE 120",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 697-4000",
+"member": "https://business.mechanicsburgchamber.org/list/member/weiss-physical-therapy-associates-pc-422"
+},
+{
+"cat": "health-care-11",
+"name": "WINDING CREEK COUNSELING SERVICES",
+"addr": "100 WINDING CREEK BLVD  #3",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 590-7283",
+"member": "https://business.mechanicsburgchamber.org/list/member/winding-creek-counseling-services-708"
+},
+{
+"cat": "health-care-11",
+"name": "ASSISTING HANDS",
+"addr": "300 BRIDGE ST",
+"city": "NEW CUMBERLAND",
+"zip": "17070",
+"phone": "(717) 551-6805",
+"member": "https://business.mechanicsburgchamber.org/list/member/assisting-hands-1271"
+},
+{
+"cat": "health-care-11",
+"name": "PAM HEALTH REHABILITATION HOSPITAL OF HAMPDEN",
+"addr": "1828 GOOD HOPE RD",
+"city": "ENONLA",
+"zip": "17025",
+"phone": "(717) 706-5970",
+"member": "https://business.mechanicsburgchamber.org/list/member/pam-health-rehabilitation-hospital-of-hampden-1273"
+},
+{
+"cat": "health-care-11",
+"name": "CSL PLASMA",
+"addr": "4880 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 620-5155",
+"member": "https://business.mechanicsburgchamber.org/list/member/csl-plasma-945"
+},
+{
+"cat": "health-care-11",
+"name": "GILBERT PHYSICAL THERAPY",
+"addr": "5103 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 591-0955",
+"member": "https://business.mechanicsburgchamber.org/list/member/gilbert-physical-therapy-805"
+},
+{
+"cat": "health-care-11",
+"name": "SHAH NEUROLOGY & EPILEPSY",
+"addr": "1700 BENT CREEK BLVD",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 697-4980",
+"member": "https://business.mechanicsburgchamber.org/list/member/shah-neurology-epilepsy-459"
+},
+{
+"cat": "health-care-11",
+"name": "CARLISLE BOWENWORKS",
+"addr": "616 W MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 386-8279",
+"member": "https://business.mechanicsburgchamber.org/list/member/carlisle-bowenworks-1086"
+},
+{
+"cat": "health-care-11",
+"name": "HOLISTIC AURA BY SHAM'S",
+"addr": "5004 LENKER ST",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 462-3951",
+"member": "https://business.mechanicsburgchamber.org/list/member/holistic-aura-by-sham-s-1297"
+},
+{
+"cat": "health-care-11",
+"name": "CLAREMONT NURSING & REHAB CENTER",
+"addr": "1000 CLAREMONT RD",
+"city": "CARLISLE",
+"zip": "17013",
+"phone": "(717) 243-2031",
+"member": "https://business.mechanicsburgchamber.org/list/member/claremont-nursing-rehab-center-852"
+},
+{
+"cat": "health-care-11",
+"name": "SILVER SPRING FOOT AND ANKLE",
+"addr": "1300 BENT CREEK BLVD",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 237-9000",
+"member": "https://business.mechanicsburgchamber.org/list/member/silver-spring-foot-and-ankle-1229"
+},
+{
+"cat": "health-care-11",
+"name": "CARLISLE PIKE FAMILY DENTISTRY",
+"addr": "5007 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 288-5999",
+"member": "https://business.mechanicsburgchamber.org/list/member/carlisle-pike-family-dentistry-1073"
+},
+{
+"cat": "health-care-11",
+"name": "SENIOR HELPERS",
+"addr": "3806 MARKET STREET",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 920-0707",
+"member": "https://business.mechanicsburgchamber.org/list/member/senior-helpers-345"
+},
+{
+"cat": "health-care-11",
+"name": "LEGEND AT SILVER CREEK",
+"addr": "425 LAMBS GAP RD",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 379-9852",
+"member": "https://business.mechanicsburgchamber.org/list/member/legend-at-silver-creek-1194"
+},
+{
+"cat": "health-care-11",
+"name": "PATIENT FIRST",
+"addr": "107 S SPORTING HILL RD",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 943-1781",
+"member": "https://business.mechanicsburgchamber.org/list/member/patient-first-mechanicsburg-586"
+},
+{
+"cat": "health-care-11",
+"name": "ABILITY PROSTHETICS & ORTHOTICS, INC",
+"addr": "2005 TECHNOLOGY PKWY",
+"city": "MECHANICSBURG",
+"zip": "17050-9413",
+"phone": "(717) 458-8429",
+"member": "https://business.mechanicsburgchamber.org/list/member/ability-prosthetics-orthotics-inc-635"
+},
+{
+"cat": "health-care-11",
+"name": "HOMELAND HOSPICE",
+"addr": "2300 VARTAN WAY",
+"city": "HARRISBURG",
+"zip": "17110",
+"phone": "(717) 221-7890",
+"member": "https://business.mechanicsburgchamber.org/list/member/homeland-hospice-991"
+},
+{
+"cat": "health-care-11",
+"name": "DRAYER PHYSICAL THERAPY INSTITUTE",
+"addr": "5108 E TRINDLE RD",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 790-9920",
+"member": "https://business.mechanicsburgchamber.org/list/member/drayer-physical-therapy-institute-742"
+},
+{
+"cat": "health-care-11",
+"name": "GLO SKIN CARE",
+"addr": "600 WILSON LN",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 461-2520",
+"member": "https://business.mechanicsburgchamber.org/list/member/glo-skin-care-993"
+},
+{
+"cat": "health-care-11",
+"name": "MIND OVER MATTER HOLISTIC COUNSELING",
+"addr": "19 N RAILROAD AVE",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 602-5151",
+"member": "https://business.mechanicsburgchamber.org/list/member/mind-over-matter-holistic-counseling-1281"
+},
+{
+"cat": "health-care-11",
+"name": "EAST MAIN DENTAL",
+"addr": "324 E MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-4163",
+"member": "https://business.mechanicsburgchamber.org/list/member/east-main-dental-1049"
+},
+{
+"cat": "health-care-11",
+"name": "BAKER CHIROPRACTIC SPORT AND SPINE CENTER",
+"addr": "156 CUMBERLAND PKWY",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 820-2998",
+"member": "https://business.mechanicsburgchamber.org/list/member/baker-chiropractic-sport-and-spine-center-1168"
+},
+{
+"cat": "health-care-11",
+"name": "ROTHER DENTAL",
+"addr": "555 GETTYSBURG PIKE",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 737-4337",
+"member": "https://business.mechanicsburgchamber.org/list/member/rother-dental-1025"
+},
+{
+"cat": "health-care-11",
+"name": "UPMC",
+"addr": "1995 TECHNOLOGY WAY",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 791-2600",
+"member": "https://business.mechanicsburgchamber.org/list/member/upmc-620"
+},
+{
+"cat": "health-care-11",
+"name": "RUBAI AESTHETICS AND WELLNESS CLINIC",
+"addr": "3860 MARKET ST",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 967-0000",
+"member": "https://business.mechanicsburgchamber.org/list/member/rubai-aesthetics-and-wellness-clinic-1284"
+},
+{
+"cat": "health-care-11",
+"name": "PIVOT PHYSICAL THERAPY",
+"addr": "6455 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 802-8767",
+"member": "https://business.mechanicsburgchamber.org/list/member/pivot-physical-therapy-1076"
+},
+{
+"cat": "health-care-11",
+"name": "SADLER HEALTH CENTER",
+"addr": "5210 East Trindle Road",
+"city": "Mechanicsburg",
+"zip": "17050",
+"phone": "(717) 218-6670",
+"member": "https://business.mechanicsburgchamber.org/list/member/sadler-health-center-1137"
+},
+{
+"cat": "health-care-11",
+"name": "OSS HEALTH",
+"addr": "856 CENTURY DR",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 730-7099",
+"member": "https://business.mechanicsburgchamber.org/list/member/oss-health-748"
+},
+{
+"cat": "health-care-11",
+"name": "FIELDS FAMILY DENTISTRY",
+"addr": "2101 ASPEN DR",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 697-3400",
+"member": "https://business.mechanicsburgchamber.org/list/member/fields-family-dentistry-1072"
+},
+{
+"cat": "health-care-11",
+"name": "HEALTHQUEST TRAINING LLC - CPR/FIRST AID TRAINING",
+"addr": "117 STONEBRIDGE DR",
+"city": "DILLSBURG",
+"zip": "17019",
+"phone": "(410) 988-9441",
+"member": "https://business.mechanicsburgchamber.org/list/member/healthquest-training-llc-cpr-first-aid-training-1165"
+},
+{
+"cat": "health-care-11",
+"name": "BROOKDALE GRANDON FARMS",
+"addr": "1100 GRANDON WAY",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 730-4033",
+"member": "https://business.mechanicsburgchamber.org/list/member/brookdale-grandon-farms-1171"
+},
+{
+"cat": "home-garden-12",
+"name": "A 'N S COMPANY",
+"addr": "121 EAST SIMPSON STREET",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 503-7086",
+"member": "https://business.mechanicsburgchamber.org/list/member/a-n-s-company-2"
+},
+{
+"cat": "home-garden-12",
+"name": "RED ROCK LANDSCAPE",
+"addr": "507 MULBERRY DR",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "805-7971",
+"member": "https://business.mechanicsburgchamber.org/list/member/red-rock-landscape-774"
+},
+{
+"cat": "home-garden-12",
+"name": "NEAT ROOTS, LLC",
+"addr": "P O BOX 7",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 247-8850",
+"member": "https://business.mechanicsburgchamber.org/list/member/neat-roots-llc-1278"
+},
+{
+"cat": "home-garden-12",
+"name": "MOFFITT-SMITH, INC",
+"addr": "39 W LOCUST ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-4112",
+"member": "https://business.mechanicsburgchamber.org/list/member/moffitt-smith-inc-754"
+},
+{
+"cat": "home-garden-12",
+"name": "GRASSROOTS LANDSCAPING",
+"addr": "PO BOX 749",
+"city": "CAMP HILL",
+"zip": "17001",
+"phone": "(717) 648-0126",
+"member": "https://business.mechanicsburgchamber.org/list/member/grassroots-landscaping-168"
+},
+{
+"cat": "home-garden-12",
+"name": "CRAWLSPACE MEDIC OF HARRISBURG",
+"addr": "2225 SYCAMORE ST",
+"city": "HARRISBURG",
+"zip": "17111",
+"phone": "(717) 645-2587",
+"member": "https://business.mechanicsburgchamber.org/list/member/crawlspace-medic-of-harrisburg-1312"
+},
+{
+"cat": "home-garden-12",
+"name": "WEED MAN LAWN CARE",
+"addr": "937 NIXON DR",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-6400",
+"member": "https://business.mechanicsburgchamber.org/list/member/weed-man-lawn-care-970"
+},
+{
+"cat": "personal-services-care-17",
+"name": "CHASE FITNESS PT, LLC",
+"addr": "4928 LOUISE DR",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(814) 462-9599",
+"member": "https://business.mechanicsburgchamber.org/list/member/chase-fitness-pt-llc-1254"
+},
+{
+"cat": "personal-services-care-17",
+"name": "HAIR COUNSELORS LLC",
+"addr": "5002 LENKER ST",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 695-3264",
+"member": "https://business.mechanicsburgchamber.org/list/member/hair-counselors-llc-1133"
+},
+{
+"cat": "personal-services-care-17",
+"name": "THE CRAFT BARBER & CO.",
+"addr": "35 W MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(734) 444-8206",
+"member": "https://business.mechanicsburgchamber.org/list/member/the-craft-barber-co-1156"
+},
+{
+"cat": "personal-services-care-17",
+"name": "CARLISLE BOWENWORKS",
+"addr": "616 W MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 386-8279",
+"member": "https://business.mechanicsburgchamber.org/list/member/carlisle-bowenworks-1086"
+},
+{
+"cat": "personal-services-care-17",
+"name": "VRAIE WELLNES SPA",
+"addr": "4928 LOUISE DR",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 998-0668",
+"member": "https://business.mechanicsburgchamber.org/list/member/vraie-wellnes-spa-1037"
+},
+{
+"cat": "personal-services-care-17",
+"name": "DROP OF INK TATTOO",
+"addr": "5252 E TRINDLE RD",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 691-9442",
+"member": "https://business.mechanicsburgchamber.org/list/member/drop-of-ink-tattoo-631"
+},
+{
+"cat": "personal-services-care-17",
+"name": "CARING TRANSITIONS OF MECHANICSBURG",
+"addr": "720 COLONIAL CT",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 609-1079",
+"member": "https://business.mechanicsburgchamber.org/list/member/caring-transitions-of-mechanicsburg-mechanicsburg-843"
+},
+{
+"cat": "personal-services-care-17",
+"name": "HOFFMAN FUNERAL HOME & CREMATORY",
+"addr": "2020 W TRINDLE RD",
+"city": "CARLISLE",
+"zip": "17013",
+"phone": "(717) 243-4511",
+"member": "https://business.mechanicsburgchamber.org/list/member/hoffman-funeral-home-crematory-844"
+},
+{
+"cat": "personal-services-care-17",
+"name": "ARK FITNESS",
+"addr": "220 N YORK ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 230-1544",
+"member": "https://business.mechanicsburgchamber.org/list/member/ark-fitness-1169"
+},
+{
+"cat": "personal-services-care-17",
+"name": "RUBAI AESTHETICS AND WELLNESS CLINIC",
+"addr": "3860 MARKET ST",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 967-0000",
+"member": "https://business.mechanicsburgchamber.org/list/member/rubai-aesthetics-and-wellness-clinic-1284"
+},
+{
+"cat": "personal-services-care-17",
+"name": "Buhrig Funeral & Cremation, LLC",
+"addr": "37 East Main Street",
+"city": "Mechanicsburg",
+"zip": "17055",
+"phone": "(717) 766-3421",
+"member": "https://business.mechanicsburgchamber.org/list/member/buhrig-funeral-cremation-llc-273"
+},
+{
+"cat": "personal-services-care-17",
+"name": "MECHANICSBURG LEARNING CENTER",
+"addr": "601 E SIMPSON ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-2439",
+"member": "https://business.mechanicsburgchamber.org/list/member/mechanicsburg-learning-center-1070"
+},
+{
+"cat": "personal-services-care-17",
+"name": "REVELATIONS DAY SPA",
+"addr": "17 N RAILROAD AVE",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 385-2563",
+"member": "https://business.mechanicsburgchamber.org/list/member/revelations-day-spa-1116"
+},
+{
+"cat": "personal-services-care-17",
+"name": "THE LEARNING EXPERIENCE, MECHANICSBURG",
+"addr": "165 GATEWAY DR",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(732) 912-9997",
+"member": "https://business.mechanicsburgchamber.org/list/member/the-learning-experience-mechanicsburg-1279"
+},
+{
+"cat": "personal-services-care-17",
+"name": "SYNERGY HOMECARE OF MID PENN",
+"addr": "20 Westminster Dr",
+"city": "Carlisle",
+"zip": "17013",
+"phone": "717-243-5473",
+"member": "https://business.mechanicsburgchamber.org/list/member/synergy-homecare-of-mid-penn-688"
+},
+{
+"cat": "personal-services-care-17",
+"name": "Trout CPA",
+"addr": "930 CENTURY DR",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 569-2900",
+"member": "https://business.mechanicsburgchamber.org/list/member/trout-cpa-924"
+},
+{
+"cat": "personal-services-care-17",
+"name": "ORANGETHEORY FITNESS",
+"addr": "6416 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 288-1243",
+"member": "https://business.mechanicsburgchamber.org/list/member/orangetheory-fitness-1268"
+},
+{
+"cat": "personal-services-care-17",
+"name": "SKY ZONE HARRISBURG",
+"addr": "95 GATEWAY DR",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 208-8909",
+"member": "https://business.mechanicsburgchamber.org/list/member/sky-zone-harrisburg-856"
+},
+{
+"cat": "personal-services-care-17",
+"name": "Malpezzi Funeral Home, Inc",
+"addr": "8 Market Plaza Way",
+"city": "Mechanicsburg",
+"zip": "17055",
+"phone": "(717) 697-4696",
+"member": "https://business.mechanicsburgchamber.org/list/member/malpezzi-funeral-home-inc-239"
+},
+{
+"cat": "personal-services-care-17",
+"name": "H2L STUDIO LLC",
+"addr": "2151 FISHER RD",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 697-4425",
+"member": "https://business.mechanicsburgchamber.org/list/member/h2l-studio-llc-860"
+},
+{
+"cat": "personal-services-care-17",
+"name": "FAMILY NEST PA WEST SHORE",
+"addr": "6196 Spring Rd",
+"city": "SHERMANS DALE",
+"zip": "17090",
+"phone": "(717) 636-0066",
+"member": "https://business.mechanicsburgchamber.org/list/member/family-nest-pa-west-shore-1307"
+},
+{
+"cat": "personal-services-care-17",
+"name": "HOLISTIC AURA BY SHAM'S",
+"addr": "5004 LENKER ST",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 462-3951",
+"member": "https://business.mechanicsburgchamber.org/list/member/holistic-aura-by-sham-s-1297"
+},
+{
+"cat": "personal-services-care-17",
+"name": "THE ADDED TOUCH - PAULUS AND BLACK, INC.",
+"addr": "4200 DERRY ST",
+"city": "HARRISBURG",
+"zip": "17111",
+"phone": "(717) 564-6572",
+"member": "https://business.mechanicsburgchamber.org/list/member/the-added-touch-paulus-and-black-inc-297"
+},
+{
+"cat": "personal-services-care-17",
+"name": "TRUE SELF TATTOO",
+"addr": "20 W MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 645-2583",
+"member": "https://business.mechanicsburgchamber.org/list/member/true-self-tattoo-1237"
+},
+{
+"cat": "personal-services-care-17",
+"name": "BE BALANCED",
+"addr": "3812 MARKET ST",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 673-7046",
+"member": "https://business.mechanicsburgchamber.org/list/member/be-balanced-1052"
+},
+{
+"cat": "personal-services-care-17",
+"name": "ITTEN DOJO INC",
+"addr": "701 W SIMPSON ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-8871",
+"member": "https://business.mechanicsburgchamber.org/list/member/itten-dojo-inc-1291"
+},
+{
+"cat": "personal-services-care-17",
+"name": "TIDE CLEANERS",
+"addr": "6416 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 695-0246",
+"member": "https://business.mechanicsburgchamber.org/list/member/tide-cleaners-1262"
+},
+{
+"cat": "personal-services-care-17",
+"name": "BLITZ 45",
+"addr": "3445 SIMPSON FERRY RD",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 722-5489",
+"member": "https://business.mechanicsburgchamber.org/list/member/blitz-45-1117"
+},
+{
+"cat": "personal-services-care-17",
+"name": "WAXED & WORTH IT",
+"addr": "5600 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 610-0692",
+"member": "https://business.mechanicsburgchamber.org/list/member/waxed-worth-it-1294"
+},
+{
+"cat": "personal-services-care-17",
+"name": "MANOR SALON (THE)",
+"addr": "4500 OAKHURST BLVD.",
+"city": "HARRISBURG",
+"zip": "17110",
+"phone": "(717) 540-1304",
+"member": "https://business.mechanicsburgchamber.org/list/member/manor-salon-the-385"
+},
+{
+"cat": "personal-services-care-17",
+"name": "Classic Drycleaners and Laundromats",
+"addr": "2 Locations in Mechanicsburg!",
+"city": "235 Cumberland Pkwy",
+"zip": "",
+"phone": "766-5112; 766-2292",
+"member": "https://business.mechanicsburgchamber.org/list/member/classic-drycleaners-and-laundromats-81"
+},
+{
+"cat": "personal-services-care-17",
+"name": "MUSSELMAN FUNERAL HOME & CREMATION SERVICES, INC",
+"addr": "324 HUMMEL AVE",
+"city": "LEMOYNE",
+"zip": "17043",
+"phone": "(717) 763-7440",
+"member": "https://business.mechanicsburgchamber.org/list/member/musselman-funeral-home-cremation-services-inc-1080"
+}
+]

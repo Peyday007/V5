@@ -13,4 +13,8 @@
 # Usage:  sh /app/scripts/verify-hosted.sh https://your-brain.fly.dev
 set -e
 cd "$(dirname "$0")/.."
-exec node --import tsx scripts/verify-hosted.ts "$@"
+# The verifier shares a 1 GB machine with the Brain it checks, and on
+# 2026-10-30 that machine was OOM-killed during a pass. Its heap is capped so a
+# runaway verifier fails itself rather than taking the Brain's memory; it needs
+# well under this (the whole import graph is under 100 MB).
+exec node --max-old-space-size=384 --import tsx scripts/verify-hosted.ts "$@"

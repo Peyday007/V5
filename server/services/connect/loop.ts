@@ -21,6 +21,7 @@
  * network: an idle Brain spends nothing here, and nothing in it can start
  * paid work.
  */
+import { withActivity } from '../../db/infra.ts';
 import { refreshProjectionsOnSchedule } from './service.ts';
 
 /**
@@ -46,7 +47,7 @@ export function startConnectRefresh(intervalMs = CONNECT_TICK_MS): void {
     // delta feed is the thing a consumer cannot tell from a real change.
     if (running) return;
     running = true;
-    void refreshProjectionsOnSchedule()
+    void withActivity('connect:refresh', () => refreshProjectionsOnSchedule())
       .catch(() => {
         /* swallowed: a throwing timer callback takes the process down, and an
            unattended Brain that dies because one projection could not be

@@ -1,0 +1,197 @@
+# Brain's open-source agents (§104): Sellbird and Browser Use as one private
+# CPU app, and connecting the Brain to it.
+#
+# Why a separate app, and why CPU. Neither agent needs a GPU: Sellbird reads
+# web pages with no model, and Browser Use thinks with the RunPod vLLM Brain
+# already pays for, sent per request. A Chromium beside the Brain would compete
+# for the 2 GB it runs out of (fly.toml), so the agents run on their own
+# machine, like the research browser (browser.yml): a Flycast (private) address
+# only, stopped when idle and started by Fly's proxy on the next request, so it
+# costs machine time only while it works.
+#
+#   deploy — build agents/ (its tests run inside the image first), push it to
+#            Fly's registry, create or replace the `northline-agents` machine,
+#            generate a fresh key for both sides, and point the Brain at it
+#            (one Brain restart). Values cross only pipes into `secrets import`.
+#   status — the machine, its log, and the probe from inside the Brain.
+#   prove  — one real workflow through each agent from the Brain
+#            (scripts/agents-prove.ts): Sellbird on real businesses the plain
+#            reader missed, Browser Use on one site. Sends nothing.
+#   disconnect — remove both settings; the Neighbor Card reads as before.
+#
+# Brain's operator (§106): Hermes Agent as a second private CPU app,
+# `northline-operator`, built from operator/ (the published Hermes image pinned
+# by digest, plus one standard-library file). Same shape as the agents app.
+#
+#   operator-deploy — build operator/ (its tests run inside the image first),
+#            push, create or replace the machine, a fresh key for both sides,
+#            and point the Brain at it (BRAIN_OPERATOR_URL/_KEY; one restart).
+#   operator-status — the machine, its log, and the probe from the Brain.
+#   operator-run    — one operator run now, from the Brain, waited on; prints
+#            what the operator did (scripts/operator.ts run).
+#   operator-show   — the operator's runs, memory, lessons and actions.
+#   operator-disconnect — remove both settings; the tick stops starting runs.
+name: Agents
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'deploy | status | prove | disconnect | operator-deploy | operator-status | operator-run | operator-show | operator-disconnect'
+        required: true
+        default: status
+
+concurrency:
+  group: open-source-agents
+  cancel-in-progress: false
+
+jobs:
+  agents:
+    name: Open-source agents
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: ./.github/actions/await-release
+        with:
+          # deploy restarts the Brain, so it waits out the hosted verification too.
+          whole-job: 'true'
+          timeout-seconds: '2700'
+      - name: Run
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Creating a second app needs the organization token the browser and cheap lane use.
+          FLY_ORG_TOKEN: ${{ secrets.FLY_ORG_TOKEN }}
+          ACTION: ${{ inputs.action }}
+        run: |
+          set -eu
+          exec > >(tee agents.txt) 2>&1
+          brain=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          app=northline-agents
+          url="http://$app.flycast"
+          brain_token="$FLY_API_TOKEN"
+          on_brain() {
+            # A script on the Brain's own machine, with its private network and settings.
+            flyctl ssh console --app "$brain" -C "sh -c 'cd /app && $1'"
+          }
+          case "$ACTION" in
+            deploy)
+              [ -n "$FLY_ORG_TOKEN" ] || { echo "::error::Set the FLY_ORG_TOKEN repository secret (an organization token)."; exit 1; }
+              tag="registry.fly.io/$app:${GITHUB_SHA::12}"
+              docker build -t "$tag" agents
+              # The focused tests, in the image that ships (Chromium included).
+              docker run --rm "$tag" python -m pytest -q -p no:cacheprovider tests
+              org=$(flyctl status --app "$brain" --json | python3 -c 'import json,sys; d=json.load(sys.stdin); o=d.get("Organization") or d.get("organization") or {}; print(o.get("Slug") or o.get("slug") or "")')
+              export FLY_API_TOKEN="$FLY_ORG_TOKEN"
+              orgflag=${org:+--org $org}
+              flyctl apps list $orgflag --json | grep -q "\"$app\"" || flyctl apps create "$app" $orgflag
+              flyctl ips list --app "$app" --json | grep -q '"private_v6"\|"PrivateV6"\|flycast' \
+                || flyctl ips allocate-v6 --private --app "$app"
+              flyctl auth docker
+              docker push "$tag"
+              # A fresh key for both sides on every deploy: never printed, never in a file.
+              key=$(openssl rand -hex 32)
+              printf 'BRAIN_AGENTS_KEY=%s\n' "$key" | flyctl secrets import --app "$app" --stage >/dev/null
+              machine=$(flyctl machine list --app "$app" --json | grep -o '"id": *"[0-9a-f]*"' | head -1 | grep -o '[0-9a-f]\{8,\}' || true)
+              if [ -n "$machine" ]; then
+                flyctl machine destroy "$machine" --app "$app" --force
+              fi
+              # Not `flyctl deploy`: exactly one workflow ships the Brain
+              # (deploymentOwnership). This is a different app, one machine
+              # from an image this job built and tested.
+              flyctl machine run "$tag" --app "$app" --region iad --name agents \
+                --vm-size shared-cpu-1x --vm-memory 2048 \
+                --port 80:8080/tcp:http \
+                --autostop=stop --autostart=true \
+                --restart on-fail
+              flyctl machine list --app "$app"
+              export FLY_API_TOKEN="$brain_token"
+              printf 'BRAIN_AGENTS_URL=%s\nBRAIN_AGENTS_KEY=%s\n' "$url" "$key" | flyctl secrets import --app "$brain" >/dev/null
+              unset key
+              echo "::notice title=agents::Sellbird and Browser Use are at $url (private); the Brain holds the URL and key."
+              ;;
+            status)
+              [ -n "$FLY_ORG_TOKEN" ] || { echo "::error::Set FLY_ORG_TOKEN."; exit 1; }
+              FLY_API_TOKEN="$FLY_ORG_TOKEN" flyctl machine list --app "$app" || true
+              FLY_API_TOKEN="$FLY_ORG_TOKEN" flyctl logs --app "$app" --no-tail 2>&1 | tail -60 || true
+              on_brain "node --import tsx scripts/agents-prove.ts --probe" || true
+              ;;
+            prove)
+              set +e
+              on_brain "node --import tsx scripts/agents-prove.ts" 2>&1 | tee prove.txt
+              set -e
+              grep -q '^AGENTS-PROVE: OK' prove.txt
+              ;;
+            disconnect)
+              flyctl secrets unset --app "$brain" BRAIN_AGENTS_URL BRAIN_AGENTS_KEY >/dev/null
+              echo "::notice title=agents::Disconnected; the Neighbor Card reads as before. The app stays stopped until deployed again."
+              ;;
+            operator-deploy)
+              [ -n "$FLY_ORG_TOKEN" ] || { echo "::error::Set the FLY_ORG_TOKEN repository secret (an organization token)."; exit 1; }
+              op=northline-operator
+              optag="registry.fly.io/$op:${GITHUB_SHA::12}"
+              docker build -t "$optag" operator
+              # The focused tests, in the image that ships (Hermes included).
+              docker run --rm --entrypoint /opt/hermes/.venv/bin/python "$optag" -m unittest discover -s /opt/brain-operator/tests -v
+              org=$(flyctl status --app "$brain" --json | python3 -c 'import json,sys; d=json.load(sys.stdin); o=d.get("Organization") or d.get("organization") or {}; print(o.get("Slug") or o.get("slug") or "")')
+              export FLY_API_TOKEN="$FLY_ORG_TOKEN"
+              orgflag=${org:+--org $org}
+              flyctl apps list $orgflag --json | grep -q "\"$op\"" || flyctl apps create "$op" $orgflag
+              flyctl ips list --app "$op" --json | grep -q '"private_v6"\|"PrivateV6"\|flycast' \
+                || flyctl ips allocate-v6 --private --app "$op"
+              flyctl auth docker
+              docker push "$optag"
+              key=$(openssl rand -hex 32)
+              printf 'BRAIN_OPERATOR_KEY=%s\n' "$key" | flyctl secrets import --app "$op" --stage >/dev/null
+              machine=$(flyctl machine list --app "$op" --json | grep -o '"id": *"[0-9a-f]*"' | head -1 | grep -o '[0-9a-f]\{8,\}' || true)
+              if [ -n "$machine" ]; then
+                flyctl machine destroy "$machine" --app "$op" --force
+              fi
+              # Stopped when idle; Fly's proxy starts it for the next run. A run
+              # streams NDJSON, so the request stays live while the agent works.
+              flyctl machine run "$optag" --app "$op" --region iad --name operator \
+                --vm-size shared-cpu-1x --vm-memory 2048 \
+                --port 80:8080/tcp:http \
+                --autostop=stop --autostart=true \
+                --restart on-fail
+              flyctl machine list --app "$op"
+              export FLY_API_TOKEN="$brain_token"
+              printf 'BRAIN_OPERATOR_URL=%s\nBRAIN_OPERATOR_KEY=%s\n' "http://$op.flycast" "$key" | flyctl secrets import --app "$brain" >/dev/null
+              unset key
+              echo "::notice title=operator::Hermes Agent is at http://$op.flycast (private); the Brain holds the URL and key and starts a run every hour."
+              ;;
+            operator-status)
+              [ -n "$FLY_ORG_TOKEN" ] || { echo "::error::Set FLY_ORG_TOKEN."; exit 1; }
+              FLY_API_TOKEN="$FLY_ORG_TOKEN" flyctl machine list --app northline-operator || true
+              FLY_API_TOKEN="$FLY_ORG_TOKEN" flyctl logs --app northline-operator --no-tail 2>&1 | tail -60 || true
+              on_brain "node --import tsx scripts/operator.ts probe" || true
+              ;;
+            operator-run)
+              set +e
+              on_brain "node --import tsx scripts/operator.ts run" 2>&1 | tee operator.txt
+              set -e
+              grep -q '^OPERATOR-RUN: OK' operator.txt
+              ;;
+            operator-show)
+              on_brain "node --import tsx scripts/operator.ts show 8"
+              ;;
+            operator-disconnect)
+              flyctl secrets unset --app "$brain" BRAIN_OPERATOR_URL BRAIN_OPERATOR_KEY >/dev/null
+              echo "::notice title=operator::Disconnected; the tick no longer starts operator runs."
+              ;;
+            *) echo "::error::Unknown action '$ACTION'."; exit 1 ;;
+          esac
+
+      # Readable through the checks API, where the log is not.
+      - name: Publish the output as annotations
+        if: always()
+        run: |
+          [ -f agents.txt ] || exit 0
+          python3 - <<'PY'
+          text = open('agents.txt', encoding='utf-8', errors='replace').read()
+          enc = lambda s: s.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)][-10:]
+          for n, chunk in enumerate(chunks, 1):
+              print(f'::notice title=agents {n}/{len(chunks)}::{enc(chunk)}')
+          PY

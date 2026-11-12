@@ -92,6 +92,34 @@ function flagString(flags: Args['flags'], key: string): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+/**
+ * An objective file, from this image or — with `--ref <branch>` — from that
+ * branch through the forge. Without `--ref` a new objective had to be merged
+ * and deployed (about half an hour) before the Factory could start on it; with
+ * it a session pushes the file to its own branch and submits at once. The file
+ * is data, validated by `submitObjective` exactly like one read from disk, and
+ * the repository is `--repository` or the brain repository, never anything else
+ * from the command line beyond the branch name.
+ */
+async function readObjectiveText(file: string, flags: Map<string, string | true> | Record<string, unknown>): Promise<string> {
+  const ref = flagString(flags as never, 'ref');
+  if (!ref) return fs.readFileSync(file, 'utf8');
+  const { parseRemote, readFile } = await import('../server/services/factory/forge.ts');
+  const remote = flagString(flags as never, 'repository') ?? 'https://github.com/Peyday007/V5';
+  const repository = parseRemote(remote) ?? fail(`not a repository this factory can read: ${remote}`);
+  const reply = await readFile(repository, file, ref);
+  if (!reply.ok || reply.body === null) {
+    fail(`could not read ${file} at ${ref}: ${reply.reason ?? `the forge answered ${reply.status}`}`);
+  }
+  return reply.body;
+}
+
+/** `--contains true|false`: the release workflow's authenticated containment reading, or absent. */
+function containsFlag(flags: Args['flags']): boolean | null {
+  const value = flagString(flags, 'contains');
+  return value === 'true' ? true : value === 'false' ? false : null;
+}
+
 function fail(message: string): never {
   process.stderr.write(`${message}\n`);
   process.exit(1);
@@ -236,7 +264,18 @@ async function main(): Promise<void> {
       const projectFlag = flagString(flags, 'project');
       const projects = await listProjects();
       const projectId = projectFlag ?? projects[0]?.id ?? fail('no project exists');
-      const spec = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+      /*
+       * `--ref <branch>` reads the objective file from that branch through the
+       * forge instead of from this image. Without it a new objective had to be
+       * merged and deployed (about half an hour) before the Factory could even
+       * start on it; with it a session pushes the file to its own branch and
+       * submits at once. The file is data — it is parsed and validated by
+       * `submitObjective` exactly like one read from disk — and the repository
+       * is the spec's own or the brain grant's, never a value from the command
+       * line beyond the branch name.
+       */
+      const text = await readObjectiveText(file, flags);
+      const spec = JSON.parse(text) as Record<string, unknown>;
       const result = await submitObjective({
         projectId,
         objective: String(spec['objective'] ?? ''),
@@ -358,8 +397,24 @@ async function main(): Promise<void> {
       const changeRequestId =
         flagString(flags, 'change-request') ?? fail('--change-request is required');
       const field = flagString(flags, 'field') ?? fail('--field is required');
-      const reason = flagString(flags, 'reason') ?? fail('--reason is required');
-      const raw = flagString(flags, 'value') ?? fail('--value is required');
+      /*
+       * `--value-file <path> [--ref <branch>]`: the amendment as a committed JSON
+       * file, `{ "value": …, "reason": "…" }`, read the way `submit` reads an
+       * objective. Prose cannot pass through factory.yml's `extra`, which refuses
+       * quotes and splits on spaces, so a contradictory acceptance condition had
+       * no way to be corrected from a session: fcp_b11abd00 (2026-11-11) spent
+       * two attempts on a condition a worker read as forbidding the fix.
+       */
+      const valueFile = flagString(flags, 'value-file');
+      const fromFile = valueFile
+        ? (JSON.parse(await readObjectiveText(valueFile, flags)) as { value?: unknown; reason?: unknown })
+        : null;
+      if (fromFile && fromFile.value === undefined) fail(`${valueFile} has no "value"`);
+      const reason =
+        flagString(flags, 'reason') ??
+        (typeof fromFile?.reason === 'string' ? fromFile.reason : null) ??
+        fail('--reason is required');
+      const raw = fromFile ? JSON.stringify(fromFile.value) : (flagString(flags, 'value') ?? fail('--value is required'));
       // A list for the list-shaped fields, a plain string for the rest. Parsed
       // here rather than guessed inside the service.
       const listFields = new Set([
@@ -368,7 +423,9 @@ async function main(): Promise<void> {
         'mutation_scope',
         'verification_commands',
       ]);
-      const newValue: unknown = listFields.has(field)
+      const newValue: unknown = fromFile
+        ? listFields.has(field) ? fromFile.value : String(fromFile.value)
+        : listFields.has(field)
         ? raw.trim().startsWith('[')
           ? (JSON.parse(raw) as unknown)
           : raw.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0)
@@ -397,6 +454,17 @@ async function main(): Promise<void> {
           `reason ${result.amendment.reason}\n` +
           `re-verification ${result.amendment.requiresReverification ? 'required' : 'not required'}\n`,
       );
+      /*
+       * A campaign parked on its contract is not re-ticked by the dispatcher, so
+       * "the next tick queues the repair by itself" waited for a tick that never
+       * came (production 2026-11-11, fcp_ef7bb04a: the scope was amended and
+       * the campaign stayed BLOCKED until a session ticked it by hand). The
+       * amendment is the event that changes the campaign's reality; tick it here.
+       */
+      if (campaign && campaign.state === 'BLOCKED') {
+        const report = await tickRemoteCampaign(campaign.id);
+        process.stdout.write(`ticked ${report.campaignId}: ${report.state} — ${report.stage}\n`);
+      }
       break;
     }
 
@@ -574,6 +642,15 @@ async function main(): Promise<void> {
       const scope = projectFlag ? projects.filter((project) => project.id === projectFlag) : projects;
       if (projectFlag && scope.length === 0) fail(`no project ${projectFlag}`);
       let total = 0;
+      /*
+       * Each campaign's objective outcome beside its stage, and a tally of the
+       * outcomes. The stage COMPLETE means "reviewed and opened as a pull
+       * request"; it was read as "delivered" while 53 of those requests sat
+       * open. The outcome is what was delivered: LIVE only when production
+       * runs it (`release/outcome.ts`, `delivery.ts`).
+       */
+      const { objectiveOutcome } = await import('../server/services/factory/release/outcome.ts');
+      const tally = new Map<string, number>();
       for (const project of scope) {
         const campaigns = await listCampaigns(project.id);
         if (campaigns.length === 0) continue;
@@ -581,16 +658,24 @@ async function main(): Promise<void> {
         for (const campaign of campaigns) {
           total += 1;
           const changeRequest = await getChangeRequest(campaign.changeRequestId);
+          const outcome = await objectiveOutcome(campaign);
+          const label = outcome.status === 'BLOCKED' && outcome.needsPerson ? 'BLOCKED(person)' : outcome.status;
+          tally.set(label, (tally.get(label) ?? 0) + 1);
           process.stdout.write(
-            `  ${campaign.id} ${campaign.executionMode} ${campaign.state} ` +
+            `  ${campaign.id} ${campaign.executionMode} ${campaign.state} -> ${label} ` +
               `${campaign.prUrl ?? campaign.prRef ?? '(no pull request)'} — ` +
               `${(changeRequest?.objective ?? '').slice(0, 70)}\n` +
-              `      ${campaign.stageDetail ?? ''}` +
+              `      ${outcome.detail}` +
               `${campaign.blockerKind ? ` [${campaign.blockerKind}]` : ''}\n`,
           );
         }
       }
       if (total === 0) process.stdout.write('no campaign in scope\n');
+      else {
+        process.stdout.write(
+          `outcomes: ${[...tally.entries()].sort().map(([k, v]) => `${k} ${v}`).join(', ')} (of ${total})\n`,
+        );
+      }
       break;
     }
 
@@ -783,6 +868,73 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * Why ready work and idle capacity coexist: every READY factory bin with
+     * its wait and its dispatch refusal, and every Routine's standing. The
+     * eligibility is the router's own (`routeBin`, `surfaceIneligibility`).
+     */
+    case 'idle': {
+      const { readIdle } = await import('../server/services/factory/metrics.ts');
+      const { fleetSnapshot } = await import('../server/services/dispatch/candidates.ts');
+      const { routeBin, surfaceIneligibility } = await import('../server/services/dispatch/router.ts');
+      const { listBins, listDispatchesForBin } = await import('../server/repos/bins.ts');
+      const now = new Date().toISOString();
+      const snapshot = await fleetSnapshot(new Date(now));
+      const ready = await listBins({ states: ['READY'], kindPrefix: 'FACTORY_', limit: 500 });
+      const bins = [];
+      for (const bin of ready) {
+        const dispatches = await listDispatchesForBin(bin.id);
+        const newest = dispatches.reduce<(typeof dispatches)[number] | null>(
+          (best, one) => (best === null || one.leaseGeneration >= best.leaseGeneration ? one : best),
+          null,
+        );
+        const verdict = routeBin({
+          bin,
+          candidates: snapshot.candidates,
+          fleetPolicy: snapshot.fleetPolicy,
+          fleetInFlight: snapshot.fleetInFlight,
+          factoryInFlight: snapshot.factoryInFlight,
+          now,
+        });
+        bins.push({
+          id: bin.id,
+          kind: bin.kind,
+          readySince: bin.readyAt ?? bin.createdAt,
+          dispatch: newest
+            ? { state: newest.state, lastErrorKind: newest.lastErrorKind, lastError: newest.lastError }
+            : null,
+          routing: verdict.ok
+            ? { ok: true as const, routineName: verdict.routine.name }
+            : { ok: false as const, refusal: verdict.refusal, reason: verdict.reason },
+        });
+      }
+      const reading = readIdle({
+        now,
+        bins,
+        routines: snapshot.candidates.map((c) => ({
+          id: c.routine.id,
+          name: c.routine.name,
+          state: c.routine.state,
+          inFlight: c.routineInFlight,
+          retryAt: c.routine.retryAt,
+          ineligibility: surfaceIneligibility(c),
+        })),
+      });
+      process.stdout.write(`READY factory bins: ${reading.bins.length}\n`);
+      for (const bin of reading.bins) {
+        const mins = bin.waitedMs === null ? 'unknown' : `${Math.round(bin.waitedMs / 60_000)}m`;
+        process.stdout.write(
+          `  ${bin.id} ${bin.kind} waited ${mins} dispatch=${bin.dispatchState ?? '—'} ` +
+            `${bin.refusalKind ?? '—'}: ${bin.reason.slice(0, 240)}\n`,
+        );
+      }
+      process.stdout.write(`\nRoutines: ${reading.routines.length}\n`);
+      for (const routine of reading.routines) {
+        process.stdout.write(`  ${routine.name} ${routine.status} — ${routine.detail}\n`);
+      }
+      break;
+    }
+
     case 'throughput': {
       const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
       const report = await throughputReport(campaignId);
@@ -808,6 +960,24 @@ async function main(): Promise<void> {
           figure('rate-limited sessions', report.rateLimited.sessions) +
           figure('rate-limited deferred ms', report.rateLimited.deferredMs),
       );
+      const stages = report.stages;
+      process.stdout.write(
+        '\nstages\n' +
+          figure('plan duration ms', stages.planDurationMs) +
+          figure('time to first coding ms', stages.timeToFirstCodingMs) +
+          figure('integration delay ms', stages.integrationDelayMs) +
+          figure('review delay ms', stages.reviewDelayMs) +
+          figure('max concurrent unit bins', stages.concurrentUnitBinsMax) +
+          figure('units per hour', stages.unitsPerHour) +
+          figure('completion ms', stages.completionMs),
+      );
+      for (const [kind, delay] of Object.entries(stages.queueDelayByKind)) {
+        process.stdout.write(
+          figure(`${kind} queue avg ms`, delay.average) +
+            figure(`${kind} queue max ms`, delay.max) +
+            figure(`${kind} queue samples`, delay.samples),
+        );
+      }
       for (const [heading, entries] of [
         ['per worker', report.perWorker],
         ['per role', report.perRole],
@@ -1005,6 +1175,7 @@ async function main(): Promise<void> {
         maxAttempts: to,
         reasonCode: code,
         operator: `operator:${operator!.id}`,
+        addOwnedPaths: (flagString(flags, 'own') ?? '').split(',').filter((one) => one.length > 0),
       });
       if (!outcome.ok) {
         process.stdout.write(`FACTORY REFUSED: regrant-unit — ${outcome.reason}\n`);
@@ -1254,7 +1425,7 @@ async function main(): Promise<void> {
         process.stdout.write(`  campaign ${row.campaign.id} ${row.campaign.state}${row.working ? '' : ' (holds no slot)'}\n`);
         if (row.blocked) {
           process.stdout.write(
-            `      blocked (${row.blocked.wait === 'PERSON' ? 'NEEDS YOU' : 'automatic wait'}) ${row.blocked.kind}: ` +
+            `      blocked (${row.blocked.wait === 'PERSON' ? 'NEEDS YOU' : row.blocked.wait === 'MAINTAINER' ? 'maintainer session' : 'automatic wait'}) ${row.blocked.kind}: ` +
               `${row.blocked.detail.slice(0, 200)}\n      remedy ${row.blocked.remedy}\n`,
           );
         }
@@ -1328,7 +1499,7 @@ async function main(): Promise<void> {
       );
       const file = flagString(flags, 'file');
       const fromFile = file
-        ? (JSON.parse(fs.readFileSync(file, 'utf8')) as { release?: Record<string, unknown> }).release ?? {}
+        ? (JSON.parse(await readObjectiveText(file, flags)) as { release?: Record<string, unknown> }).release ?? {}
         : {};
       try {
         const { grant, created } = await authorizeAutomaticRelease({
@@ -1408,11 +1579,98 @@ async function main(): Promise<void> {
     case 'release-verify': {
       const runId = flagString(flags, 'run') ?? fail('--run is required');
       const { verifyReleaseRun } = await import('../server/services/factory/release/verify.ts');
-      const outcome = await verifyReleaseRun(runId);
+      const outcome = await verifyReleaseRun(runId, { attestedContains: containsFlag(flags) });
       for (const check of outcome.checks) {
         process.stdout.write(`  ${check.ok ? 'PASS' : 'FAIL'} ${check.check} — ${check.detail}\n`);
       }
-      process.stdout.write(`RELEASE-VERIFY: ${outcome.live ? 'LIVE' : 'FAILED'}\n`);
+      process.stdout.write(`RELEASE-VERIFY: ${outcome.live ? 'LIVE' : outcome.unknown ? 'UNKNOWN' : 'FAILED'}\n`);
+      break;
+    }
+
+    /*
+     * The serving revision, for the release workflow to ask the forge — with its
+     * own token — whether it contains a merge, and hand the answer back in
+     * `--contains` (production reads the forge without one).
+     */
+    case 'release-revision': {
+      const { BRAIN_REVISION } = await import('../server/env.ts');
+      process.stdout.write(`RELEASE-REVISION: ${BRAIN_REVISION ?? 'none'}\n`);
+      break;
+    }
+
+    case 'release-reverify': {
+      const runId = flagString(flags, 'run') ?? fail('--run is required');
+      const { reverifyUnansweredRelease } = await import('../server/services/factory/release/verify.ts');
+      const outcome = await reverifyUnansweredRelease(runId, { attestedContains: containsFlag(flags) });
+      for (const check of outcome.checks) {
+        process.stdout.write(`  ${check.ok ? 'PASS' : check.unknown ? 'UNKNOWN' : 'FAIL'} ${check.check} — ${check.detail}\n`);
+      }
+      process.stdout.write(`RELEASE-VERIFY: ${outcome.live ? 'LIVE' : outcome.unknown ? 'UNKNOWN' : 'FAILED'}\n`);
+      break;
+    }
+
+    /*
+     * Where one objective has got to, and — when it has ended — the one
+     * finished record (`delivery.ts`). `factory wait` runs this every few
+     * minutes from the workflow and stops on the TERMINAL line, so a session
+     * that submitted an objective watches one run to termination instead of
+     * dispatching `status` every four minutes.
+     */
+    case 'outcome': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const campaign = await getCampaign(campaignId);
+      if (!campaign) fail('no such campaign');
+      const { observeDeliveries, noteObjectiveOutcome, isTerminalOutcome, finishedRecords } = await import(
+        '../server/services/factory/delivery.ts'
+      );
+      const { objectiveOutcome } = await import('../server/services/factory/release/outcome.ts');
+      if (campaign.state === 'COMPLETE') await observeDeliveries([campaign]).catch(() => undefined);
+      const fresh = (await getCampaign(campaignId)) ?? campaign;
+      await noteObjectiveOutcome(fresh);
+      const outcome = await objectiveOutcome(fresh);
+      process.stdout.write(
+        `${outcome.status} — ${outcome.detail}\n` +
+          `${outcome.blocker ? `blocker: ${outcome.blocker}\n` : ''}` +
+          `needs a person: ${outcome.needsPerson ? outcome.personAction : 'no'}\n` +
+          `campaign stage: ${fresh.state} — ${fresh.stageDetail ?? ''}\n` +
+          `pull request ${outcome.prUrl ?? '—'}; page ${outcome.pageUrl ?? '—'}\n`,
+      );
+      process.stdout.write(`FACTORY-OUTCOME: ${JSON.stringify({ campaignId, ...outcome })}\n`);
+      if (isTerminalOutcome(outcome)) {
+        const records = await finishedRecords(campaignId);
+        process.stdout.write(
+          `FACTORY-OUTCOME-TERMINAL: ${outcome.status}${outcome.needsPerson ? ' (needs: ' + outcome.personAction + ')' : ''}` +
+            ` recorded ${records.at(-1)?.at ?? 'now'}\n`,
+        );
+      }
+      break;
+    }
+
+    /*
+     * Stale campaign pull requests re-landed through one merged request:
+     * `--pull-request <landing> --closes 40,41,...` records, for each campaign
+     * whose own request is listed, that its work was delivered by the landing
+     * request (verified merged with the forge). See `recordDeliveredBy`.
+     */
+    case 'delivered-by': {
+      const landing = Number(flagString(flags, 'pull-request') ?? fail('--pull-request <landing number> is required'));
+      const closes = (flagString(flags, 'closes') ?? fail('--closes 40,41,... is required'))
+        .split(',')
+        .map((one) => Number(one.trim()))
+        .filter((one) => Number.isInteger(one) && one > 0);
+      if (!Number.isInteger(landing) || landing <= 0 || closes.length === 0) fail('numbers, please');
+      const { recordDeliveredBy } = await import('../server/services/factory/delivery.ts');
+      const result = await recordDeliveredBy({
+        remote: flagString(flags, 'repository') ?? 'https://github.com/Peyday007/V5',
+        landing,
+        closes,
+      });
+      if (result.refused) {
+        process.stdout.write(`FACTORY REFUSED: ${result.refused}\n`);
+        process.exitCode = 1;
+        break;
+      }
+      process.stdout.write(`recorded ${result.recorded.length} campaign(s) as delivered by #${landing}: ${result.recorded.join(', ')}\n`);
       break;
     }
 
@@ -1443,14 +1701,218 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * Programs (§96): one specification, many campaigns. The spec and map files
+     * are read from this image or, with `--ref <branch>`, from that branch through
+     * the forge, exactly like `submit`.
+     */
+    case 'program-skeleton': {
+      const { extractSourceItems } = await import('../server/services/factory/program/spec.ts');
+      const { skeletonMap } = await import('../server/services/factory/program/map.ts');
+      const source = await readObjectiveText(flagString(flags, 'spec') ?? fail('--spec is required'), flags);
+      const items = extractSourceItems(source);
+      process.stdout.write(`${JSON.stringify({ items, map: skeletonMap(items) }, null, 2)}\n`);
+      break;
+    }
+
+    case 'program-submit': {
+      const { submitProgram } = await import('../server/services/factory/program/coordinator.ts');
+      const projects = await listProjects();
+      const projectId = flagString(flags, 'project') ?? projects[0]?.id ?? fail('no project exists');
+      const source = await readObjectiveText(flagString(flags, 'spec') ?? fail('--spec is required'), flags);
+      const mapText = await readObjectiveText(flagString(flags, 'map') ?? fail('--map is required'), flags);
+      const result = await submitProgram({
+        projectId,
+        title: flagString(flags, 'title') ?? source.split('\n').find((line) => line.trim())?.replace(/^#+\s*/, '') ?? 'Program',
+        sourceText: source,
+        map: JSON.parse(mapText) as unknown,
+        repository: flagString(flags, 'repository') ?? 'https://github.com/Peyday007/V5',
+        baseBranch: flagString(flags, 'base') ?? 'production',
+        submissionKey: flagString(flags, 'submission-key'),
+      });
+      process.stdout.write(
+        `${result.created ? 'created' : 'already existed'} program ${result.program.id}\n` +
+          `source sha256 ${result.program.sourceSha256} (${result.sourceItems} items, ${result.normativeItems} normative)\n`,
+      );
+      for (const issue of result.map.errors) process.stdout.write(`MAP-REFUSED ${issue.code} ${issue.subject}: ${issue.detail}\n`);
+      for (const issue of result.map.warnings) process.stdout.write(`map-warning ${issue.code} ${issue.subject}: ${issue.detail}\n`);
+      for (const issue of result.plan?.errors ?? []) process.stdout.write(`PLAN-REFUSED ${issue.code} ${issue.subject}: ${issue.detail}\n`);
+      if (result.planned && result.plan?.ok) {
+        process.stdout.write(`map v${result.program.mapVersion}, plan v${result.program.planVersion}: ${result.planned.campaigns.length} campaign(s), ${result.planned.verifyOnly.length} existing requirement(s) to verify\n`);
+        for (const c of result.planned.campaigns) process.stdout.write(`  ${c.key} [${c.implements.join(', ')}] after [${c.dependsOn.join(', ')}] scope ${c.mutationScope.join(', ')}\n`);
+        for (const s of result.planned.serialized) process.stdout.write(`  serialized ${s.campaign} after ${s.after} on ${s.paths.join(', ')}\n`);
+      } else {
+        process.exitCode = 1;
+        process.stdout.write('FACTORY REFUSED: the map or plan does not account for the specification\n');
+      }
+      break;
+    }
+
+    case 'program-amend': {
+      const { proposeMap } = await import('../server/services/factory/program/coordinator.ts');
+      const programId = flagString(flags, 'program') ?? fail('--program is required');
+      const mapText = await readObjectiveText(flagString(flags, 'map') ?? fail('--map is required'), flags);
+      const users = await listUsers();
+      const result = await proposeMap({
+        programId,
+        map: JSON.parse(mapText) as unknown,
+        actorType: flags['as-factory'] ? 'FACTORY' : 'PERSON',
+        actorId: flags['as-factory'] ? null : (flagString(flags, 'user') ?? users.find((u) => u.isBrainAdmin)?.id ?? null),
+        reason: flagString(flags, 'reason') ?? fail('--reason is required'),
+      });
+      for (const issue of [...result.map.errors, ...(result.plan?.errors ?? [])]) process.stdout.write(`REFUSED ${issue.code} ${issue.subject}: ${issue.detail}\n`);
+      if (result.version === null) {
+        process.exitCode = 1;
+        process.stdout.write('FACTORY REFUSED: the revision was not installed\n');
+      } else process.stdout.write(`installed map v${result.version}\n`);
+      break;
+    }
+
+    case 'program-release': {
+      // Append the owner's next release to a program and map what it adds (§97).
+      const { amendProgram } = await import('../server/services/factory/program/coordinator.ts');
+      const programId = flagString(flags, 'program') ?? fail('--program is required');
+      const source = await readObjectiveText(flagString(flags, 'spec') ?? fail('--spec is required'), flags);
+      const mapText = await readObjectiveText(flagString(flags, 'map') ?? fail('--map is required'), flags);
+      const users = await listUsers();
+      const result = await amendProgram({
+        programId,
+        title: flagString(flags, 'title') ?? source.split('\n').find((line) => line.trim())?.replace(/^#+\s*/, '') ?? 'Release',
+        sourceText: source,
+        map: JSON.parse(mapText) as unknown,
+        actorType: 'PERSON',
+        actorId: flagString(flags, 'user') ?? users.find((u) => u.isBrainAdmin && !u.disabled)?.id ?? null,
+      });
+      process.stdout.write(
+        `release ${result.amendment.number} ${result.amendment.created ? 'appended' : 'already appended'} (sha256 ${result.amendment.sourceSha256}, ${result.newItems} new item(s), ${result.newNormativeItems} normative)\n`,
+      );
+      for (const issue of [...result.map.errors, ...(result.plan?.errors ?? [])]) process.stdout.write(`REFUSED ${issue.code} ${issue.subject}: ${issue.detail}\n`);
+      if (result.version === null) {
+        process.exitCode = 1;
+        process.stdout.write('FACTORY REFUSED: the release map was not installed\n');
+      } else process.stdout.write(`installed map v${result.version}: ${result.planned?.campaigns.length ?? 0} campaign(s) planned\n`);
+      break;
+    }
+
+    case 'program-unblock': {
+      // Widen a program's started campaigns to their directories and own test file, regrant
+      // units that ran out on scope, reopen parked bins — as the program's approver (§97).
+      const { unblockProgram } = await import('../server/services/factory/program/unblock.ts');
+      const { getProgram: readProgramRow } = await import('../server/repos/factoryProgram.ts');
+      const programId = flagString(flags, 'program') ?? fail('--program is required');
+      const row = await readProgramRow(programId);
+      if (!row?.approvedByUserId) fail('the program is not approved');
+      const grantCampaign = flagString(flags, 'campaign');
+      const grantPaths = (flagString(flags, 'add') ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+      if ((grantCampaign === undefined) !== (grantPaths.length === 0)) fail('--campaign and --add go together: the campaign key and the exact paths granted to it');
+      const steps = await unblockProgram({
+        programId,
+        operatorId: row!.approvedByUserId!,
+        ...(grantCampaign ? { grant: { campaign: grantCampaign, paths: grantPaths } } : {}),
+      });
+      for (const step of steps) process.stdout.write(`${step.action} ${step.campaign}: ${step.detail}\n`);
+      process.stdout.write(`unblock: ${steps.filter((s) => s.action !== 'SKIP' && s.action !== 'REFUSED').length} step(s), ${steps.filter((s) => s.action === 'REFUSED').length} refused\n`);
+      break;
+    }
+
+    case 'reconcile-scopes': {
+      // The hourly scope reconciliation, now (owner's authorization 2026-11-11).
+      const { reconcileBlockedScopes } = await import('../server/services/factory/program/unblock.ts');
+      const steps = await reconcileBlockedScopes(Date.now(), true);
+      for (const step of steps) process.stdout.write(`${step.action} ${step.campaign}: ${step.detail}\n`);
+      process.stdout.write(`reconcile: ${steps.filter((s) => s.action !== 'SKIP' && s.action !== 'REFUSED').length} step(s), ${steps.filter((s) => s.action === 'REFUSED').length} refused\n`);
+      break;
+    }
+
+    case 'program-approve': {
+      const { approveProgram } = await import('../server/services/factory/program/coordinator.ts');
+      const programId = flagString(flags, 'program') ?? fail('--program is required');
+      const users = await listUsers();
+      const userFlag = flagString(flags, 'user');
+      const user = userFlag ? users.find((u) => u.id === userFlag) : users.find((u) => u.isBrainAdmin && !u.disabled) ?? users[0];
+      if (!user) fail('no person exists to approve this');
+      const result = await approveProgram({ programId, userId: user.id, autoRelease: flags['auto-release'] === true });
+      for (const question of result.openQuestions) process.stdout.write(`open question (blocks its requirement): ${question}\n`);
+      if (!result.ok) fail(result.reason ?? 'refused');
+      process.stdout.write(`approved by ${user.email}${result.reason ? ` (${result.reason})` : ''}\n`);
+      break;
+    }
+
+    case 'program-tick':
+    case 'program-status': {
+      const { readProgram, tickProgram } = await import('../server/services/factory/program/coordinator.ts');
+      const { productionPorts } = await import('../server/services/factory/program/ports.ts');
+      const { listPrograms } = await import('../server/repos/factoryProgram.ts');
+      // A probe module registers itself when imported. The server loads it through the
+      // cash routes (cash/view.ts); this process loads no routes, so it is loaded here,
+      // or the CLI would read a requirement as "no such probe" that the server can check.
+      await import('../server/services/cash/telemetryProbe.ts');
+      const programId = flagString(flags, 'program') ?? (await listPrograms(['APPROVED', 'DRAFT'])).at(-1)?.id ?? fail('--program is required');
+      const ports = productionPorts();
+      if (command === 'program-tick') {
+        const report = await tickProgram(programId, ports);
+        process.stdout.write(`tick: verified ${report.verified.map((v) => `${v.requirement}=${v.outcome}`).join(', ') || 'none'}; repairs ${report.repairs.map((r) => r.campaign).join(', ') || 'none'}; queued ${report.queued.join(', ') || 'none'}\n`);
+        for (const r of report.refused) process.stdout.write(`  REFUSED ${r.campaign}: ${r.reason}\n`);
+      }
+      const reading = await readProgram(programId, ports);
+      process.stdout.write(
+        `program ${reading.program.id} "${reading.program.title}" ${reading.program.state} map v${reading.program.mapVersion} plan v${reading.program.planVersion}\n` +
+          `source sha256 ${reading.program.sourceSha256}\n` +
+          `counts ${Object.entries(reading.counts).map(([k, v]) => `${k}=${v}`).join(' ')}\n`,
+      );
+      for (const p of reading.progress) process.stdout.write(`  campaign ${p.key}: ${p.outcome ?? 'not started'}${p.campaignId ? ` (${p.campaignId})` : p.changeRequestId ? ` (change request ${p.changeRequestId}, not admitted)` : ''}${p.blocker ? ` — ${p.blocker}` : ''}\n`);
+      for (const r of reading.requirements) {
+        if (r.status === 'PRODUCTION_VERIFIED' && !flags['all']) continue;
+        process.stdout.write(`  ${r.key} ${r.status}${r.reopened ? ' (reopened)' : ''}: ${r.reason}\n`);
+      }
+      process.stdout.write(`PROGRAM-VERDICT: ${reading.verdict}\n`);
+      // The second, independent status (Release 01, R01-C): whether each cash goal
+      // is met, read from the ledger and the goal's own acceptance policy. A
+      // release, a merged campaign or a verified requirement never moves it.
+      const { cashGoalStatuses } = await import('../server/services/goals/status.ts');
+      for (const goal of await cashGoalStatuses()) {
+        process.stdout.write(
+          `CASH-GOAL ${goal.goalId} ${goal.achieved ? 'ACHIEVED' : 'NOT_ACHIEVED'}: ${goal.achievedLabel} of ${goal.targetLabel} ${goal.metric}` +
+            `${goal.daysLeft === null ? '' : `, ${goal.daysLeft} day(s) left`}; plan ${goal.planVerdict ?? 'not yet read'} — ${goal.title}\n`,
+        );
+      }
+      break;
+    }
+
+    case 'program-depend': {
+      const { recordDiscoveredDependency } = await import('../server/services/factory/program/coordinator.ts');
+      const result = await recordDiscoveredDependency({
+        programId: flagString(flags, 'program') ?? fail('--program is required'),
+        requirementKey: flagString(flags, 'requirement') ?? fail('--requirement is required'),
+        dependsOn: flagString(flags, 'depends-on') ?? fail('--depends-on is required'),
+        reason: flagString(flags, 'reason') ?? fail('--reason is required'),
+        actorType: 'FACTORY',
+        actorId: null,
+      });
+      if (!result.ok) fail(result.reason ?? 'refused');
+      process.stdout.write(`replanned: plan v${result.planVersion}\n`);
+      break;
+    }
+
+    case 'capacity': {
+      const { readCapacity } = await import('../server/services/factory/program/capacity.ts');
+      // `--ago N` reads the same window ending N hours ago: the previous day, for a comparison.
+      const ago = Number(flagString(flags, 'ago') ?? '0');
+      const reading = await readCapacity({ sinceHours: Number(flagString(flags, 'hours') ?? '168'), now: new Date(Date.now() - ago * 3_600_000) });
+      process.stdout.write(`${JSON.stringify(reading, null, 2)}\n`);
+      process.stdout.write(`CAPACITY-BOTTLENECK: ${reading.bottleneck}\n`);
+      break;
+    }
+
     default:
       process.stdout.write(
-        'commands: fleet, allocation, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
-          '  remote-tick, campaigns, bins, status, events, throughput, pull-request,\n' +
+        'commands: fleet, allocation, register, submit, approve, amend, plan, run, tick, tick-all, outcome,\n' +
+          '  remote-tick, campaigns, bins, status, events, throughput, idle, pull-request,\n' +
           '  set-state, queue, withdraw, admission, line, burnin,\n' +
           '  answer-bin,\n' +
           '  reauthorize, regrant-unit, retire, release,\n' +
-          '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-status\n',
+          '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-reverify, release-revision, release-status,\n' +
+          '  program-skeleton, program-submit, program-amend, program-release, program-unblock, program-approve, program-tick, program-status, program-depend, capacity\n',
       );
       // An unknown command is the caller getting it wrong, and it used to be
       // reported as success — see the verdict line below.

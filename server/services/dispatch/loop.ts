@@ -51,6 +51,7 @@
  * attempt. That is Step 10's job — a correct basic dispatcher — and
  * capacity-aware routing is explicitly Step 11's.
  */
+import { withActivity } from '../../db/infra.ts';
 import type { Bin } from '../../domain/types.ts';
 import { getDb } from '../../db/database.ts';
 import { reconcileConnectorBindings, recoverReauthorizedSurfaces } from '../fleet/connectorBinding.ts';
@@ -64,6 +65,7 @@ import {
   ensureDispatchIntent,
   getBin,
   isDispatchable,
+  binPurposeAdmits,
   listDispatchableBinHeads,
   markDispatchDeferred,
   markDispatchFailed,
@@ -84,10 +86,10 @@ import {
   recordAllowanceObservation,
   resolveToken,
 } from './fire.ts';
-import { fleetSnapshot, IN_FLIGHT_WINDOW_MS } from './candidates.ts';
+import { fleetSnapshot, NO_SHOW_WINDOW_MS } from './candidates.ts';
 import { shouldQuarantine } from './scaler.ts';
 import { routeBin } from './router.ts';
-import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator } from './router.ts';
+import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator, type RoutingRefusal } from './router.ts';
 import { binNeedsWeb, markDispatchRoutine } from '../../repos/bins.ts';
 import {
   claimRoutineFireSlot,
@@ -155,6 +157,20 @@ export const DISPATCH_TICK_MS = 10_000;
  */
 export const DISPATCH_BURST = 5;
 
+/**
+ * Whether one bin's refusal ends the whole burst.
+ *
+ * A fleet-wide refusal does — except for a pinned bin, whose candidate list is
+ * one Routine by construction, so even `ALL_SURFACES_INELIGIBLE` is a fact
+ * about that bin. Production, 2026-10-31: 136 such refusals in six hours, each
+ * one a stale pinned probe on a quarantined Routine ending the tick for every
+ * bin behind it.
+ */
+export function endsBurst(bin: Pick<Bin, 'pinnedRoutineId'>, refusal: RoutingRefusal): boolean {
+  if (bin.pinnedRoutineId) return false;
+  return refusalEndsBurst(refusal);
+}
+
 export interface TickResult {
   superseded: number;
   /**
@@ -175,6 +191,8 @@ export interface TickResult {
   /** Surfaces put back after their connector was re-authorized. */
   recoveredAfterReauth: string[];
   /** Surfaces stopped at their first session that arrived as another worker. */
+  /** Routines re-registered for the worker their owner switched them to (`adoptSwitchedIdentities`). */
+  adoptedIdentities: string[];
   quarantinedForWrongWorker: string[];
   /** Surfaces put back because their registration now matches the worker that arrived. */
   recoveredAfterRebind: string[];
@@ -223,9 +241,15 @@ export function forgetUnansweredRead(): void {
   unansweredMark = null;
 }
 
+/** How often the brain-only pass runs inside the tick. */
+const BRAIN_ONLY_PASS_MS = 60_000;
+let lastBrainOnlyPass = 0;
+
 export async function dispatchTick(
   options: { burst?: number; projectIds?: string[] } = {},
 ): Promise<TickResult> {
+  // Factory fires this tick, so the burst's research count is not charged for them.
+  let firedFactory = 0;
   const result: TickResult = {
     superseded: 0,
     rearmed: 0,
@@ -234,6 +258,7 @@ export async function dispatchTick(
     revivedAbandoned: 0,
     quarantinedForNoShow: [],
     recoveredAfterReauth: [],
+    adoptedIdentities: [],
     quarantinedForWrongWorker: [],
     recoveredAfterRebind: [],
     autoProbe: null,
@@ -245,6 +270,62 @@ export async function dispatchTick(
     unrouted: {},
     missingSecrets: 0,
   };
+
+  /*
+   * Brain-only mode (§84): tag any live bin that has no purpose and take
+   * non-Brain work out of the Claude lane, before intents are superseded so a
+   * bin parked here has its pending fire retired in this same tick. At most
+   * once a minute; it is idempotent by rows and never stops the tick.
+   */
+  if (Date.now() - lastBrainOnlyPass >= BRAIN_ONLY_PASS_MS) {
+    lastBrainOnlyPass = Date.now();
+    try {
+      const { enforceBrainOnly } = await import('../bins/brainOnly.ts');
+      await enforceBrainOnly();
+      // §85: displaced research must be progressing on its replacement.
+      const { watchDisplacedWork } = await import('../freeLane/coverage.ts');
+      await watchDisplacedWork();
+    } catch (error) {
+      console.warn('[dispatch] brain-only pass failed:', (error as Error).message);
+    }
+    /*
+     * §87's fallback: the improvement pass of the Russell tick evaluates the
+     * free-lane research activation every ten minutes. If it has not for half
+     * an hour (the tick died, was shed, or never started), this evaluates it
+     * and runs the improvement pass, so a missed trigger cannot leave the
+     * self-improvement process idle. A no-op while the regular pass keeps up.
+     */
+    try {
+      const { activationFallback } = await import('../improvement/activation.ts');
+      await activationFallback();
+    } catch (error) {
+      console.warn('[dispatch] improvement activation fallback failed:', (error as Error).message);
+    }
+    /*
+     * Throughput self-correction, each bounded by its own interval: account
+     * targets follow the provider's answers (`autoScaleAccounts`, ten minutes),
+     * and an approved program's campaigns stopped on scope or exhausted
+     * attempts are answered on the approver's standing approval
+     * (`unblockApprovedPrograms`, hourly). Neither creates work.
+     */
+    try {
+      const { autoScaleAccounts } = await import('./scaler.ts');
+      const scaled = await autoScaleAccounts();
+      for (const step of scaled) {
+        console.log(`[dispatch] auto-scale ${step.accountId} ${step.from} -> ${step.to}: ${step.reason}`);
+      }
+    } catch (error) {
+      console.warn('[dispatch] auto-scale failed:', (error as Error).message);
+    }
+    try {
+      const { unblockApprovedPrograms, reconcileBlockedScopes } = await import('../factory/program/unblock.ts');
+      const steps = [...(await unblockApprovedPrograms()), ...(await reconcileBlockedScopes())];
+      const acted = steps.filter((step) => step.action !== 'SKIP');
+      if (acted.length > 0) console.log(`[dispatch] program auto-unblock: ${acted.map((s) => `${s.action} ${s.campaign}`).join('; ')}`);
+    } catch (error) {
+      console.warn('[dispatch] program auto-unblock failed:', (error as Error).message);
+    }
+  }
 
   result.superseded = await supersedeStaleIntents();
 
@@ -314,6 +395,7 @@ export async function dispatchTick(
         candidates: snapshot.candidates,
         fleetPolicy: snapshot.fleetPolicy,
         fleetInFlight: snapshot.fleetInFlight,
+        factoryInFlight: snapshot.factoryInFlight,
         now: new Date().toISOString(),
       });
       return decision.ok || !waitsForOperator(decision.refusal);
@@ -336,12 +418,14 @@ export async function dispatchTick(
    * *did* arrive and whose session then ended mid-stage, because that bin is
    * `LEASED` for ever after and this read used to skip it.
    *
-   * The window is `IN_FLIGHT_WINDOW_MS` and it is passed rather than re-stated,
-   * because `inFlightByRoutine` owns that number: a dispatch stops being
-   * counted as an activation and becomes reopenable at the same instant, so
-   * this can never race a fire Brain still believes is running.
+   * The window is `NO_SHOW_WINDOW_MS` and it is passed rather than re-stated,
+   * because `inFlightByRoutine` owns that number for an unanswered fire: a
+   * dispatch stops being counted as an activation and becomes reopenable at
+   * the same instant, so this can never race a fire Brain still believes is
+   * running. It used to be the thirty-minute `IN_FLIGHT_WINDOW_MS`, which made
+   * every no-show cost half an hour (see `NO_SHOW_WINDOW_MS`).
    */
-  const reopened = await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 50);
+  const reopened = await reopenNoShowDispatches(NO_SHOW_WINDOW_MS, 50);
   for (const entry of reopened) {
     if (entry.outcome === 'REOPENED') result.reopenedNoShows += 1;
     else result.abandonedNoShows += 1;
@@ -422,6 +506,8 @@ export async function dispatchTick(
     lastConnectorReconcile = Date.now();
     try {
       await reconcileConnectorBindings();
+      const { clearStaleConnectorBindings } = await import('../fleet/connectorBinding.ts');
+      await clearStaleConnectorBindings();
     } catch {
       // Evidence, not a precondition. The next pass retries it.
     }
@@ -439,7 +525,10 @@ export async function dispatchTick(
    * dispatch.
    */
   try {
-    const { quarantineWrongWorkerSurfaces, recoverRebindedSurfaces } = await import('../fleet/arrivalIdentity.ts');
+    const { adoptSwitchedIdentities, quarantineWrongWorkerSurfaces, recoverRebindedSurfaces } = await import(
+      '../fleet/arrivalIdentity.ts'
+    );
+    result.adoptedIdentities = (await adoptSwitchedIdentities()).filter((d) => d.adopted).map((d) => d.routineId);
     result.quarantinedForWrongWorker = await quarantineWrongWorkerSurfaces();
     result.recoveredAfterRebind = await recoverRebindedSurfaces();
   } catch {
@@ -530,7 +619,13 @@ export async function dispatchTick(
     // the milliseconds since, and an activation for a bin somebody already
     // holds is a wasted one.
     const bin = await getBin(intent.binId);
-    if (!bin || !isDispatchable(bin) || bin.leaseGeneration !== intent.leaseGeneration) {
+    if (
+      !bin ||
+      !isDispatchable(bin) ||
+      bin.leaseGeneration !== intent.leaseGeneration ||
+      // Brain-only mode, asked again at the fire (§84).
+      !(await binPurposeAdmits(bin.id))
+    ) {
       await markDispatchFailed(intent.id, {
         kind: 'SUPERSEDED',
         message: 'The bin was taken or moved on before this intent was sent.',
@@ -642,6 +737,7 @@ export async function dispatchTick(
           candidates: routable,
           fleetPolicy: snapshot.fleetPolicy,
           fleetInFlight: snapshot.fleetInFlight + result.fired,
+          factoryInFlight: snapshot.factoryInFlight + firedFactory,
           now: new Date().toISOString(),
           needsWeb,
         });
@@ -709,7 +805,7 @@ export async function dispatchTick(
        * is the classification, beside the union it classifies, for the reason
        * `REFUSAL_WAIT` is.
        */
-      if (refusalEndsBurst(decision.refusal)) break;
+      if (endsBurst(bin, decision.refusal)) break;
       continue;
     }
 
@@ -855,6 +951,7 @@ export async function dispatchTick(
       });
       if (decision?.ok) await recordRoutineFire({ routineId: decision.routine.id, ok: true });
       result.fired += 1;
+      if (decision?.ok && decision.routine.capabilities.includes('repository')) firedFactory += 1;
       continue;
     }
 
@@ -1022,7 +1119,7 @@ export function startDispatcher(intervalMs = DISPATCH_TICK_MS): void {
   timer = setInterval(() => {
     if (running) return;
     running = true;
-    void dispatchTick()
+    void withActivity('dispatch:tick', () => dispatchTick())
       .catch(async (error: unknown) => {
         await recordBinEvent({
           eventType: 'DISPATCH_TICK_FAILED',
@@ -1100,15 +1197,13 @@ async function auditFitFor(
   bin: Bin,
   candidates: Awaited<ReturnType<typeof fleetSnapshot>>['candidates'],
 ) {
-  const { listWorkItemsForBin, getWorkItemRow } = await import('../../repos/workQueue.ts');
+  const { listWorkItemsForBin, getWorkItemRows } = await import('../../repos/workQueue.ts');
   const { confinementFor } = await import('../../repos/bins.ts');
   const { auditFireFit } = await import('../research/auditAdmission.ts');
   const items = await listWorkItemsForBin(confinementFor(bin));
   const open = items.filter((item) => item.state === 'QUEUED' || item.state === 'LEASED');
   if (open.length === 0) return null;
-  const rows = (await Promise.all(open.map((item) => getWorkItemRow(item.id)))).filter(
-    (row): row is NonNullable<typeof row> => row !== null,
-  );
+  const rows = await getWorkItemRows(open.map((item) => item.id));
   return await auditFireFit({
     items: rows,
     candidates: candidates.map((candidate) => ({

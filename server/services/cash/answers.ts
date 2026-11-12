@@ -59,6 +59,7 @@
  *     decides what may be spent, executing still needs a recorded action, and a
  *     person's own answer outranks a proposal permanently.
  */
+import { breaksOperatingModel, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { citableClaims } from '../../repos/research.ts';
 import { getMission } from '../../repos/russellMissions.ts';
 import { missionsForRounds } from '../russell/roundMissions.ts';
@@ -78,9 +79,10 @@ import { evidenceCard } from './card.ts';
 import { NEED_RESEARCHABLE_ENGINE_FIELDS } from './engineCard.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed } from './needs.ts';
-import { readCapabilities } from './capabilities.ts';
+import { DELIVERABLE_CAPABILITY_PREFIX, readCapabilities } from './capabilities.ts';
 import { formatMoney, readMoneyFigures } from './figures.ts';
 import { NON_HUMAN_LAYERS } from '../../domain/types.ts';
+import { OPENING_FAMILY } from '../../domain/opportunitySignals.ts';
 import type {
   CashCardFact,
   CashNeed,
@@ -531,9 +533,29 @@ const PHYSICAL = (allocation: LaborAllocation): boolean =>
   allocation.productionLayer === 'PHYSICAL_OPERATOR' ||
   allocation.necessityReason === 'PHYSICAL_EXECUTION';
 
-type DeliveryReading =
+/**
+ * Why a delivery reading withholds.
+ *
+ * Only the first two say Brain cannot produce the thing: physical work, and a
+ * `PRODUCE_*` capability whose proof has not passed (§67). The rest are not a
+ * verdict on delivery — nothing recorded, a capability nobody can read yet and
+ * an unallocated task are unanswered facts, which are tasks and never refusals
+ * (invariant 39); and an integration Brain lacks, such as sending the email,
+ * is a step a person can take by hand.
+ */
+export type DeliveryBar =
+  | 'PHYSICAL'
+  | 'PRODUCTION_MISSING'
+  | 'CAPABILITY_NOT_PRESENT'
+  | 'UNRECORDED'
+  | 'UNALLOCATED';
+
+/** The bars that mean Brain could not fulfil the opening, so a dive on it buys nothing. */
+export const UNDELIVERABLE: ReadonlySet<DeliveryBar> = new Set<DeliveryBar>(['PHYSICAL', 'PRODUCTION_MISSING']);
+
+export type DeliveryReading =
   | { kind: 'PROPOSE'; delivery: string; fulfillment: string; basis: string }
-  | { kind: 'WITHHOLD'; because: string };
+  | { kind: 'WITHHOLD'; because: string; bar: DeliveryBar };
 
 /**
  * How this opening would be delivered and by whom, from the rows that say what
@@ -555,6 +577,10 @@ type DeliveryReading =
  * requirement and proposing past it are the same mistake.
  */
 export async function deliveryReading(opportunity: CashOpportunity): Promise<DeliveryReading> {
+  const fit = operatingFit(operatingFactsOf(opportunity));
+  if (breaksOperatingModel(fit)) {
+    return { kind: 'WITHHOLD', bar: 'PHYSICAL', because: `Not proposed: ${fit.because}.` };
+  }
   const workflow = (await listWorkflows(opportunity.projectId)).find(
     (one) => one.opportunityId === opportunity.id && one.retiredAt === null,
   );
@@ -574,9 +600,29 @@ export async function deliveryReading(opportunity: CashOpportunity): Promise<Del
     const allocation = live.get(task.id);
     return allocation ? PHYSICAL(allocation) : false;
   });
-  if (physical.length > 0) {
+  /*
+   * A physical task is the owner's only when nobody else performs it. Brokered
+   * (a subcontractor or provider is named, or the arrangement itself is a
+   * referral, brokerage or subcontract) it is the supplier's part and the
+   * delivery reading goes on to what this operation does. A physical service
+   * whose provider is not yet known is a question to research, not a verdict
+   * that it cannot be delivered (owner, 2026-11-07).
+   */
+  if (physical.length > 0 && fit.kind === 'BROKERED_PHYSICAL') {
+    // The physical tasks are the provider's; the rest of the reading decides.
+  } else if (physical.length > 0 && fit.kind === 'UNKNOWN') {
     return {
       kind: 'WITHHOLD',
+      bar: 'UNALLOCATED',
+      because:
+        `Delivering this needs physical work (${physical.map((one) => one.name).join(', ')}) that an ` +
+        'independent provider would perform while this operation sells and coordinates it; which ' +
+        'provider is not yet established.',
+    };
+  } else if (physical.length > 0) {
+    return {
+      kind: 'WITHHOLD',
+      bar: 'PHYSICAL',
       because:
         `Delivering this needs physical work (${physical.map((one) => one.name).join(', ')}), ` +
         'which Brain cannot do and nobody has been named for. Being able to research it is ' +
@@ -588,6 +634,7 @@ export async function deliveryReading(opportunity: CashOpportunity): Promise<Del
   if (required.length === 0 && tasks.length === 0) {
     return {
       kind: 'WITHHOLD',
+      bar: 'UNRECORDED',
       because:
         'Nothing records what delivering this requires, so who could deliver it is unknown. ' +
         'Brain being able to research a question is not evidence it can produce what the ' +
@@ -598,6 +645,11 @@ export async function deliveryReading(opportunity: CashOpportunity): Promise<Del
   if (notPresent.length > 0) {
     return {
       kind: 'WITHHOLD',
+      bar: notPresent.some(
+        (one) => one.state === 'MISSING' && one.id.startsWith(DELIVERABLE_CAPABILITY_PREFIX),
+      )
+        ? 'PRODUCTION_MISSING'
+        : 'CAPABILITY_NOT_PRESENT',
       because:
         `Delivering this needs ${notPresent.map((one) => `${one.id} (${one.state})`).join(', ')}, ` +
         'which Brain does not have now; that gap is raised as its own need.',
@@ -607,6 +659,7 @@ export async function deliveryReading(opportunity: CashOpportunity): Promise<Del
   if (unallocated.length > 0) {
     return {
       kind: 'WITHHOLD',
+      bar: 'UNALLOCATED',
       because:
         `Who produces ${unallocated.map((one) => one.name).join(', ')} has not been decided.`,
     };
@@ -740,10 +793,26 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
   if (economics && economics.kind === 'EVIDENCE') {
     sources.push({ text: economics.value, claimId: economics.claimId });
   }
-  if (signal && signal.kind === 'EVIDENCE') {
-    sources.push({ text: signal.value, claimId: signal.claimId });
-  } else if (opportunity.buyingSignal) {
-    sources.push({ text: opportunity.buyingSignal, claimId: null });
+  /*
+   * The signal's own figures only when the signal is a buyer asking.
+   *
+   * A request publishes what its buyer would pay; a broker's sales page, a
+   * price list or an asking price publishes what *its seller* charges. Reading
+   * the second as our price is how production's one READY piece came to read
+   * "USD 5.00" — Campo Brokers' own annual membership fee, against an $800
+   * deposit (`cop_6ec9dafa33f44c268b1d`, recommended-approach change #4). A
+   * piece captured by hand has no declared signal, and its text is what the
+   * person recorded as the request, so it is still read.
+   */
+  const buyerSide =
+    opportunity.opportunitySignal === null ||
+    OPENING_FAMILY[opportunity.opportunitySignal] === 'BUYER_REQUEST';
+  if (buyerSide) {
+    if (signal && signal.kind === 'EVIDENCE') {
+      sources.push({ text: signal.value, claimId: signal.claimId });
+    } else if (opportunity.buyingSignal) {
+      sources.push({ text: opportunity.buyingSignal, claimId: null });
+    }
   }
 
   // The same predicate research's writer applies, so the two writers of
@@ -791,7 +860,10 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
     out.withheld.push({
       field: 'price',
       because:
-        'No source on this card states a figure in ' +
+        (buyerSide
+          ? 'No source on this card states a figure in '
+          : 'Its signal is a seller\'s own page, so the figures on it are what that seller ' +
+            'charges rather than what a buyer would pay us, and no buyer-side source states a figure in ') +
         `${opportunity.currency}, and a price derived from nothing is a number with an ` +
         'explanation attached rather than a reading. Quote one, or research the published rate.',
     });

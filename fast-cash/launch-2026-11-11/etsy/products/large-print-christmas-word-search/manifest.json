@@ -1,0 +1,660 @@
+{
+ "product": "large-print-christmas-word-search",
+ "title": "Large Print Christmas Word Search",
+ "pdf": "Large-Print-Christmas-Word-Search-40-Puzzles.pdf",
+ "sha256": "314f63d7c95c167cbfe5c185107106431d4b5a201ed8302fb1f6633d614a8c28",
+ "bytes": 302715,
+ "pages": 53,
+ "trim": "8.5x11in US Letter",
+ "puzzles": 40,
+ "byFormat": {
+  "word search": 40
+ },
+ "byDifficulty": {
+  "HARD": 30,
+  "MEDIUM": 10
+ },
+ "allValid": true,
+ "entries": [
+  {
+   "n": 1,
+   "format": "word search",
+   "seed": "etsy-2026-xws-0",
+   "theme": "Christmas Eve",
+   "measured": "HARD",
+   "canonicalHash": "c651cd68280b5debc8a03254ef3511c186db8a4c0246c1ee5358ec34628020e5",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 2,
+   "format": "word search",
+   "seed": "etsy-2026-xws-1",
+   "theme": "Winter Wonderland",
+   "measured": "HARD",
+   "canonicalHash": "3135e5a2567c8e30517c3a39a630c8e731bebafd8c657e23fc50e22d8b908891",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 3,
+   "format": "word search",
+   "seed": "etsy-2026-xws-2",
+   "theme": "Holiday Baking",
+   "measured": "MEDIUM",
+   "canonicalHash": "6f23d89505733dcedbf941620bd31e4c7b048d752b4359e75e21b1674e247072",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 4,
+   "format": "word search",
+   "seed": "etsy-2026-xws-3",
+   "theme": "Santa's Workshop",
+   "measured": "HARD",
+   "canonicalHash": "9a9f6eed4e90ef25bed3c6e82a335c5c67efa7495f911a409cf09b1734a2c642",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 5,
+   "format": "word search",
+   "seed": "etsy-2026-xws-4",
+   "theme": "The Nativity",
+   "measured": "MEDIUM",
+   "canonicalHash": "63a9fb36454088e54149cd4b296c8b6206aa307c5bc3f0330cac5210255c3d3b",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 6,
+   "format": "word search",
+   "seed": "etsy-2026-xws-5",
+   "theme": "Deck the Halls",
+   "measured": "HARD",
+   "canonicalHash": "cdc15f4ab58c2197b081a981eb1be5eb142828313a29bfbb1e16e94b7f1066ae",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 7,
+   "format": "word search",
+   "seed": "etsy-2026-xws-6",
+   "theme": "Gifts and Giving",
+   "measured": "HARD",
+   "canonicalHash": "8f8919d3a8927362e2c939ce9fb6bdca92f29868e94032cbc0ceb0c7058808b6",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 8,
+   "format": "word search",
+   "seed": "etsy-2026-xws-7",
+   "theme": "Cozy Christmas",
+   "measured": "HARD",
+   "canonicalHash": "013345435f3d7d5531ba1b0b691ba21c41486b765159355523cb548a5d5bca67",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 9,
+   "format": "word search",
+   "seed": "etsy-2026-xws-8",
+   "theme": "Christmas Dinner",
+   "measured": "HARD",
+   "canonicalHash": "65b47e3402a1a2644ce59b00243738d2014d4281030279c188a7d1d5e46bbbc1",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 10,
+   "format": "word search",
+   "seed": "etsy-2026-xws-9",
+   "theme": "Winter Birds and Woods",
+   "measured": "HARD",
+   "canonicalHash": "6018802b3f1517e6dd2165f1088317fa1cab5ca1e36cbf34d2632a40a95dfdfa",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 11,
+   "format": "word search",
+   "seed": "etsy-2026-xws-10",
+   "theme": "Caroling",
+   "measured": "HARD",
+   "canonicalHash": "ca467c1651539b8f65a2a7e11fa61c2feec6944eb672058eef83f56487edf53e",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 12,
+   "format": "word search",
+   "seed": "etsy-2026-xws-11",
+   "theme": "Happy New Year",
+   "measured": "HARD",
+   "canonicalHash": "af98259ae32fb144b7686c5776cd28ae47d4834b4a7ead0f6a4fc4cb07cf8732",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 13,
+   "format": "word search",
+   "seed": "etsy-2026-xws-12",
+   "theme": "Christmas Eve",
+   "measured": "HARD",
+   "canonicalHash": "92ebd7d91e0a9a0071e099aaaa0ef1b2bec944ebdfd8ae59352e2faa921c9959",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 14,
+   "format": "word search",
+   "seed": "etsy-2026-xws-13",
+   "theme": "Winter Wonderland",
+   "measured": "HARD",
+   "canonicalHash": "1fa7dbbd9d1419368446a0e64ab93eb693828d1dbf074ecbeaa5be3c0a20a823",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 15,
+   "format": "word search",
+   "seed": "etsy-2026-xws-14",
+   "theme": "Holiday Baking",
+   "measured": "HARD",
+   "canonicalHash": "afb7dca1057178e449fa8eeba20e82829df876a7cf39e17dda79fddec1de8b55",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 16,
+   "format": "word search",
+   "seed": "etsy-2026-xws-15",
+   "theme": "Santa's Workshop",
+   "measured": "HARD",
+   "canonicalHash": "67f8fd7b95e413e068de2d89e977f78ec5a02117ea06b597050bd4af2181f63c",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 17,
+   "format": "word search",
+   "seed": "etsy-2026-xws-17",
+   "theme": "The Nativity",
+   "measured": "HARD",
+   "canonicalHash": "805276785b4fc5edb159be75fccf8b83552e95684689df68059d01e97e75d84d",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 18,
+   "format": "word search",
+   "seed": "etsy-2026-xws-18",
+   "theme": "Deck the Halls",
+   "measured": "HARD",
+   "canonicalHash": "d35a84cfb197ed6b164a30951500e36d6ab01a4bc5a67fa99cd77932ca412b4d",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 19,
+   "format": "word search",
+   "seed": "etsy-2026-xws-19",
+   "theme": "Gifts and Giving",
+   "measured": "HARD",
+   "canonicalHash": "d61f50f89e2e0e793626cfcd7f793fd4444941f73b9110a13a2ce0ef8eb0d944",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 20,
+   "format": "word search",
+   "seed": "etsy-2026-xws-20",
+   "theme": "Cozy Christmas",
+   "measured": "HARD",
+   "canonicalHash": "88a0537dbd5989a9318cb75b9d510105389bc56d9cd06bdc32e51b851e6806f2",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 21,
+   "format": "word search",
+   "seed": "etsy-2026-xws-21",
+   "theme": "Christmas Dinner",
+   "measured": "MEDIUM",
+   "canonicalHash": "5cad7538cd38df941734c3aa6b490986db60fe9151c8431d046b8387e0a14ec3",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 22,
+   "format": "word search",
+   "seed": "etsy-2026-xws-22",
+   "theme": "Winter Birds and Woods",
+   "measured": "MEDIUM",
+   "canonicalHash": "41bd35816de869aa8be826f319ec83a0caf63e51d82394c69daf64c19800fe80",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 23,
+   "format": "word search",
+   "seed": "etsy-2026-xws-23",
+   "theme": "Caroling",
+   "measured": "HARD",
+   "canonicalHash": "2b06f6e1f95f9c0dd4bd7ee334ace4484a1d0b5daf8bf2aebd4648415efcf59e",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 24,
+   "format": "word search",
+   "seed": "etsy-2026-xws-24",
+   "theme": "Happy New Year",
+   "measured": "HARD",
+   "canonicalHash": "1e8d6f049a9ff6614c5eb526f3c143f7f1b45ff22afd2cb388d7e26812e5c9c4",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 25,
+   "format": "word search",
+   "seed": "etsy-2026-xws-25",
+   "theme": "Christmas Eve",
+   "measured": "HARD",
+   "canonicalHash": "acaa66c54472f2d9c9d4ca295171e472379d82eb09d1537d8dc31cdcb93f4e05",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 26,
+   "format": "word search",
+   "seed": "etsy-2026-xws-26",
+   "theme": "Winter Wonderland",
+   "measured": "MEDIUM",
+   "canonicalHash": "de939530f452e35d3e2bdff4ea4e05b0390bebe4440a8bad4156fc423a834cfa",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 27,
+   "format": "word search",
+   "seed": "etsy-2026-xws-27",
+   "theme": "Holiday Baking",
+   "measured": "HARD",
+   "canonicalHash": "acecd0c766abb6a8a508996d886ad533b98fd9728abb041cdc6608d22e057843",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 28,
+   "format": "word search",
+   "seed": "etsy-2026-xws-28",
+   "theme": "Santa's Workshop",
+   "measured": "HARD",
+   "canonicalHash": "09f4cf364951a21f5f637d7e850a1b16b0cc0b9c35f7d5db912684fd6c51d791",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 29,
+   "format": "word search",
+   "seed": "etsy-2026-xws-29",
+   "theme": "The Nativity",
+   "measured": "MEDIUM",
+   "canonicalHash": "dd54d606dcf67f7006298a9c2323ccb4f9436d89ea7c6852b1b3cb45128e995c",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 30,
+   "format": "word search",
+   "seed": "etsy-2026-xws-30",
+   "theme": "Deck the Halls",
+   "measured": "MEDIUM",
+   "canonicalHash": "a4b4c7d2776ca75b4a5ec9a6a9a932402415a61daad831a86fd959fd4ca6308e",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 31,
+   "format": "word search",
+   "seed": "etsy-2026-xws-31",
+   "theme": "Gifts and Giving",
+   "measured": "HARD",
+   "canonicalHash": "c9788a152be0fd9e157a9038b56c8bad2e961ea8e2dd4028e67ec2838822ed75",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 32,
+   "format": "word search",
+   "seed": "etsy-2026-xws-32",
+   "theme": "Cozy Christmas",
+   "measured": "HARD",
+   "canonicalHash": "1c3a48be70985fad03f9c66dc94c6cd6a9bd6de9be814de6e95f41b8df220010",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 33,
+   "format": "word search",
+   "seed": "etsy-2026-xws-33",
+   "theme": "Christmas Dinner",
+   "measured": "HARD",
+   "canonicalHash": "8eb9ac3ccfbb9467fc05389169d807cf070f77f1a18b27b316c603ff3bb2a934",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 34,
+   "format": "word search",
+   "seed": "etsy-2026-xws-34",
+   "theme": "Winter Birds and Woods",
+   "measured": "MEDIUM",
+   "canonicalHash": "94b9fa996dd1933eb07af7b0a00f639735320bd81f24507ad5523a0d1b9cd66c",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 35,
+   "format": "word search",
+   "seed": "etsy-2026-xws-35",
+   "theme": "Caroling",
+   "measured": "HARD",
+   "canonicalHash": "7fd8579a7145936e9f6eb9fb44348f81dec667492b310118987a709bdf22e40a",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 36,
+   "format": "word search",
+   "seed": "etsy-2026-xws-36",
+   "theme": "Happy New Year",
+   "measured": "MEDIUM",
+   "canonicalHash": "03013e0b5c367d07a90842b2ed7f6972a427abc1f83eb146ec1254f90c68cceb",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 37,
+   "format": "word search",
+   "seed": "etsy-2026-xws-37",
+   "theme": "Christmas Eve",
+   "measured": "HARD",
+   "canonicalHash": "2527545371d9696991af6d7f8c2d5fc0324d2bc5d5d0ae28cff5e14f2e19781a",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 38,
+   "format": "word search",
+   "seed": "etsy-2026-xws-38",
+   "theme": "Winter Wonderland",
+   "measured": "HARD",
+   "canonicalHash": "12094a8e9eb550d34052eae0708c455837dd64009250391a7301ce2f8d6118f5",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 39,
+   "format": "word search",
+   "seed": "etsy-2026-xws-39",
+   "theme": "Holiday Baking",
+   "measured": "MEDIUM",
+   "canonicalHash": "5f92949aab9e7c65a46c6f2f677521abe94ea36a0d639b1f09011b65a327ed00",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  },
+  {
+   "n": 40,
+   "format": "word search",
+   "seed": "etsy-2026-xws-40",
+   "theme": "Santa's Workshop",
+   "measured": "HARD",
+   "canonicalHash": "98cbeea1d66ff64921d8de505230a3c1981fdcb98ca29c912b4e6b1fb19a2151",
+   "checks": [
+    "PASS the grid is a rectangle of letters",
+    "PASS there is a word list",
+    "PASS every listed word is in the grid",
+    "PASS no listed word appears twice",
+    "PASS the answer key points at the words",
+    "PASS no prohibited string formed by accident"
+   ]
+  }
+ ]
+}

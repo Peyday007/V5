@@ -70,9 +70,23 @@ primary_region = "iad"        # pick the region nearest your Supabase project
     path = "/healthz"
 
 [[vm]]
-  size = "shared-cpu-1x"
+  size = "shared-cpu-2x"
+  # Two shared vCPUs since 2026-10-31. With one, the scenario worker thread and
+  # the event loop share a single core: a 50 000-evaluation run measured 959 ms
+  # before a restart and 15 203 ms after it (Deploy 41226725636), and event-loop
+  # stalls of 30-39 s were charged to work merely in flight beside a running
+  # simulation. A second vCPU lets the worker thread run off the request loop,
+  # which is the whole reason it is a worker thread. About $2 a month more.
   # 1 GB rather than the 256 MB default. Reading a PDF decodes it in memory and
   # OCR spawns tesseract per page; 256 MB gets an out-of-memory kill partway
   # through a large import, which looks like a mysterious restart rather than
   # like a memory limit.
-  memory = "1gb"
+  #
+  # 2 GB since 2026-10-31. On 1 GB the machine was OOM-killed during the
+  # post-deploy verification even after #356 bounded the verifier's own heap to
+  # 384 MB: `oom_killed=true` read from the machine's event log by
+  # hosted-verify.sh on Deploy run 41175178800, with event-loop stalls of
+  # 50-84 s and 34 process restarts in the 24 hours before it. The verifier runs
+  # inside this machine beside the Brain, so the Brain alone fitting is not
+  # enough. About $5 a month more on Fly's shared-cpu-1x pricing.
+  memory = "2gb"

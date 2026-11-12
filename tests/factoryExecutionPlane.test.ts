@@ -1142,6 +1142,50 @@ describe('the hosted tick hands out one stage at a time', () => {
     expect(cleared.blockerKind).toBeNull();
   });
 
+  /*
+   * A plan that serves no unit to a mandatory acceptance condition is refused at
+   * the bin boundary, as the local architect always refused it. The hosted plane
+   * reported `uncoveredConditions` and installed the plan anyway — a campaign
+   * silently smaller than its contract, and under a program a requirement lost
+   * between the program's plan and the campaign's (§96).
+   */
+  it('refuses a plan that leaves a mandatory acceptance condition to nobody', async () => {
+    stubForge({});
+    await tickRemoteCampaign(campaignId);
+    const assigned = await assignNextBin({ workerId, projectIds: [fixture.project.id] });
+    expect(assigned?.bin.kind).toBe('FACTORY_PLAN');
+    await putBinUnitResult({
+      binId: assigned!.bin.id,
+      unitKey: 'plan',
+      value: JSON.stringify({
+        units: [
+          {
+            key: 'unrelated',
+            kind: 'DOCS',
+            title: 'Something else',
+            objective: 'Write documentation nobody asked for, serving no condition.',
+            acceptance: ['a doc exists'],
+            ownedPaths: ['docs/x.md'],
+            requiredContext: [],
+            verification: ['npm test'],
+            expectedArtifact: 'a doc',
+            risk: 'LOW',
+            criticalPath: true,
+            dependsOn: [],
+            serves: [],
+          },
+        ],
+      }),
+      contentHash: 'h-uncovered',
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+    const { evaluateContract } = await import('../server/services/bins/contracts.ts');
+    const verdict = await evaluateContract((await listBins({ projectId: fixture.project.id })).find((b) => b.id === assigned!.bin.id)!);
+    expect(verdict.satisfied).toBe(false);
+    expect(JSON.stringify(verdict)).toContain('No unit serves mandatory acceptance condition A01');
+  });
+
   it('waits for an integrator rather than reviewing work that is only implemented', async () => {
     stubForge({});
     // A unit that has been implemented on its own branch but not integrated.
@@ -2141,9 +2185,24 @@ describe('a unit out of attempts stops the campaign before any review', () => {
     expect(regranted.attempt).toBe(spent.attempt);
     expect(regranted.failureDetail).toBe('the surface could not reach the repository');
 
+    // Widening what it owns: in scope is added; a forbidden path is refused and
+    // nothing is written.
+    const refusedWiden = await regrantUnit({
+      campaignId: campaign.id, unitKey: 'spent', maxAttempts: spent.maxAttempts + 3,
+      reasonCode: 'ownership-widened', operator: 'operator:t', addOwnedPaths: ['.github/workflows/deploy.yml'],
+    });
+    expect(refusedWiden.ok).toBe(false);
+    expect((await getUnitByKey(campaign.id, 'spent'))?.ownedPaths).toEqual(['index.html']);
+    const widened = await regrantUnit({
+      campaignId: campaign.id, unitKey: 'spent', maxAttempts: spent.maxAttempts + 3,
+      reasonCode: 'ownership-widened', operator: 'operator:t', addOwnedPaths: ['src/app.js'],
+    });
+    expect(widened.ok).toBe(true);
+    expect((await getUnitByKey(campaign.id, 'spent'))?.ownedPaths).toEqual(['index.html', 'src/app.js']);
+
     const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
     const events = await listFactoryEvents(campaign.id, { kinds: ['UNIT_ATTEMPTS_REGRANTED'] });
-    expect(events).toHaveLength(1);
+    expect(events).toHaveLength(2);
     expect(events[0]?.detail).toMatchObject({ code: 'surface-blocked', from: spent.maxAttempts });
 
     const next = await tickRemoteCampaign(campaign.id);
@@ -3191,6 +3250,28 @@ describe('a reviewer Brain fired is identified by the fire, not by what it says'
     const verdict = await admit((await getBin(reviewBinId))!);
     expect(verdict.ok).toBe(false);
     expect(verdict.reason ?? '').toContain('implemented part of this campaign');
+  });
+
+  it('refuses a second review of the same commit to the session that already reviewed it', async () => {
+    const { recordReview } = await import('../server/repos/factoryFleet.ts');
+    const { getBin } = await import('../server/repos/bins.ts');
+    await recordReview({
+      campaignId,
+      round: 1,
+      scope: 'CAMPAIGN',
+      reviewerSessionId: 'cse_earlier_reviewer',
+      reviewedSha: BASE,
+      verdict: 'CHANGES_REQUIRED',
+      independence: 'SESSION_SEPARATED',
+      summary: 'asked for changes',
+      findings: [],
+    });
+    const same = await binAdmission({ workerId, principal: reviewerPrincipal(workerId), sessionRef: 'cse_earlier_reviewer' });
+    const refused = await same((await getBin(reviewBinId))!);
+    expect(refused.ok).toBe(false);
+    expect(refused.reason ?? '').toContain('another look at the same commit is a different reviewer');
+    const other = await binAdmission({ workerId, principal: reviewerPrincipal(workerId), sessionRef: 'cse_new_reviewer' });
+    expect((await other((await getBin(reviewBinId))!)).ok).toBe(true);
   });
 });
 

@@ -27,8 +27,10 @@
  * claim is the refusal, not the overlap sweep.
  */
 import { getCampaign } from '../../repos/factory.ts';
+import { listFactoryEvents } from '../../repos/factoryFleet.ts';
+import { getDb } from '../../db/database.ts';
 import type { FactoryEvidenceClass } from '../../domain/factory.ts';
-import { campaignMetrics, type CampaignMetrics } from './metrics.ts';
+import { campaignMetrics, FACTORY_EVENT_KINDS, type CampaignMetrics } from './metrics.ts';
 
 export interface EvidenceNumber {
   value: number | null;
@@ -94,6 +96,36 @@ export interface ThroughputReport {
   perWorker: ThroughputBreakdownEntry[];
   perRole: ThroughputBreakdownEntry[];
   perAccountRef: ThroughputBreakdownEntry[];
+  /** Where the time between stages went, from the campaign's own bins and events. */
+  stages: StageLatency;
+}
+
+export interface QueueDelay {
+  average: EvidenceNumber;
+  max: EvidenceNumber;
+  samples: EvidenceNumber;
+}
+
+export interface StageLatency {
+  planDurationMs: EvidenceNumber;
+  timeToFirstCodingMs: EvidenceNumber;
+  /** Bin READY to its first lease, per bin kind (e.g. FACTORY_UNITS). */
+  queueDelayByKind: Record<string, QueueDelay>;
+  integrationDelayMs: EvidenceNumber;
+  reviewDelayMs: EvidenceNumber;
+  concurrentUnitBinsMax: EvidenceNumber;
+  unitsPerHour: EvidenceNumber;
+  completionMs: EvidenceNumber;
+}
+
+/** The rows a stage measurement reads, so a test can hand them in without a database. */
+export interface StageLatencyInput {
+  campaignId: string;
+  campaignCreatedAt: string | null;
+  mergedUnits: number;
+  bins: { id: string; kind: string; createdAt: string }[];
+  binEvents: { binId: string; eventType: string; at: string }[];
+  events: { kind: string; at: string; detail: Record<string, unknown> }[];
 }
 
 function num(value: number | null, evidence: FactoryEvidenceClass, basis: string): EvidenceNumber {
@@ -435,6 +467,159 @@ function perAccountRefBreakdown(metrics: CampaignMetrics): ThroughputBreakdownEn
   });
 }
 
+const LEASE_STARTS = new Set(['BIN_ASSIGNED', 'BIN_TAKEOVER']);
+const LEASE_ENDS = new Set(['BIN_RELEASED', 'BIN_TERMINAL', 'BIN_LEASE_EXPIRED']);
+
+function notMeasured(what: string): EvidenceNumber {
+  return num(null, 'UNKNOWN', `not measured: ${what}`);
+}
+
+function span(from: string | undefined, to: string | undefined, what: string, missing: string): EvidenceNumber {
+  if (!from || !to) return notMeasured(missing);
+  const ms = Date.parse(to) - Date.parse(from);
+  if (!Number.isFinite(ms) || ms < 0) return notMeasured(`${missing} (the timestamps do not order)`);
+  return num(ms, 'MEASURED', what);
+}
+
+function earliest(times: string[]): string | undefined {
+  return times.length === 0 ? undefined : [...times].sort()[0];
+}
+
+/**
+ * Stage latencies, each from the rows that state it. A figure whose rows do not
+ * exist is null with a basis saying so — zero is a measurement, and the absence
+ * of a row is not one.
+ */
+export function computeStageLatency(input: StageLatencyInput): StageLatency {
+  const kindOf = new Map(input.bins.map((bin) => [bin.id, bin.kind]));
+  const leaseStartsOf = (binId: string): string[] =>
+    input.binEvents.filter((e) => e.binId === binId && LEASE_STARTS.has(e.eventType)).map((e) => e.at);
+  const firstLease = (kind: string): string | undefined =>
+    earliest(input.bins.filter((b) => b.kind === kind).flatMap((b) => leaseStartsOf(b.id)));
+  const eventAts = (kind: string): string[] => input.events.filter((e) => e.kind === kind).map((e) => e.at);
+
+  const planBinCreated = earliest(input.bins.filter((b) => b.kind === 'FACTORY_PLAN').map((b) => b.createdAt));
+  const planDurationMs = span(
+    planBinCreated,
+    earliest(eventAts(FACTORY_EVENT_KINDS.planInstalled)),
+    `earliest FACTORY_PLAN bin created_at to the first PLAN_INSTALLED event for campaign ${input.campaignId}`,
+    `campaign ${input.campaignId} has no FACTORY_PLAN bin or no PLAN_INSTALLED event`,
+  );
+
+  const timeToFirstCodingMs = span(
+    input.campaignCreatedAt ?? undefined,
+    firstLease('FACTORY_UNITS'),
+    `campaign created_at to the first lease of a FACTORY_UNITS bin (BIN_ASSIGNED/BIN_TAKEOVER) for campaign ${input.campaignId}`,
+    `campaign ${input.campaignId} has no leased FACTORY_UNITS bin yet`,
+  );
+
+  const queueDelayByKind: Record<string, QueueDelay> = {};
+  for (const kind of [...new Set(input.bins.map((b) => b.kind))].sort()) {
+    const delays: number[] = [];
+    for (const bin of input.bins.filter((b) => b.kind === kind)) {
+      const ready = earliest(
+        input.binEvents.filter((e) => e.binId === bin.id && e.eventType === 'BIN_READY').map((e) => e.at),
+      );
+      const leased = earliest(leaseStartsOf(bin.id));
+      if (!ready || !leased) continue;
+      const ms = Date.parse(leased) - Date.parse(ready);
+      if (Number.isFinite(ms) && ms >= 0) delays.push(ms);
+    }
+    const basis = `${kind} bins of campaign ${input.campaignId}: first BIN_READY event to first lease`;
+    queueDelayByKind[kind] =
+      delays.length === 0
+        ? {
+            average: notMeasured(`no ${kind} bin of campaign ${input.campaignId} has both BIN_READY and a lease`),
+            max: notMeasured(`no ${kind} bin of campaign ${input.campaignId} has both BIN_READY and a lease`),
+            samples: notMeasured(`no ${kind} bin of campaign ${input.campaignId} has both BIN_READY and a lease`),
+          }
+        : {
+            average: num(Math.round(delays.reduce((a, b) => a + b, 0) / delays.length), 'DERIVED', `average over ${delays.length} bin(s): ${basis}`),
+            max: num(Math.max(...delays), 'MEASURED', `maximum over ${delays.length} bin(s): ${basis}`),
+            samples: num(delays.length, 'MEASURED', `count of ${kind} bins with both events`),
+          };
+  }
+
+  const integrationDelayMs = span(
+    earliest(eventAts(FACTORY_EVENT_KINDS.unitImplemented)),
+    firstLease('FACTORY_INTEGRATE'),
+    `first UNIT_IMPLEMENTED event to the first lease of a FACTORY_INTEGRATE bin for campaign ${input.campaignId}`,
+    `campaign ${input.campaignId} has no UNIT_IMPLEMENTED event or no leased FACTORY_INTEGRATE bin`,
+  );
+  const reviewDelayMs = span(
+    earliest(eventAts(FACTORY_EVENT_KINDS.integrationMerged)),
+    firstLease('FACTORY_REVIEW'),
+    `first INTEGRATION_MERGED event to the first lease of a FACTORY_REVIEW bin for campaign ${input.campaignId}`,
+    `campaign ${input.campaignId} has no INTEGRATION_MERGED event or no leased FACTORY_REVIEW bin`,
+  );
+
+  // Peak overlap of FACTORY_UNITS leases: +1 at each lease start, -1 at the
+  // bin's next lease end. A lease still open at the end of the rows counts.
+  const sweep: { at: number; delta: number }[] = [];
+  const unitBins = input.bins.filter((b) => b.kind === 'FACTORY_UNITS');
+  for (const bin of unitBins) {
+    let open = false;
+    for (const e of input.binEvents
+      .filter((x) => x.binId === bin.id)
+      .sort((a, b) => a.at.localeCompare(b.at))) {
+      if (LEASE_STARTS.has(e.eventType)) {
+        if (open) sweep.push({ at: Date.parse(e.at), delta: -1 });
+        sweep.push({ at: Date.parse(e.at), delta: 1 });
+        open = true;
+      } else if (LEASE_ENDS.has(e.eventType) && open) {
+        sweep.push({ at: Date.parse(e.at), delta: -1 });
+        open = false;
+      }
+    }
+  }
+  let concurrentUnitBinsMax: EvidenceNumber;
+  if (!sweep.some((s) => s.delta > 0)) {
+    concurrentUnitBinsMax = notMeasured(`no FACTORY_UNITS bin of campaign ${input.campaignId} has been leased`);
+  } else {
+    sweep.sort((a, b) => a.at - b.at || a.delta - b.delta);
+    let live = 0;
+    let peak = 0;
+    for (const s of sweep) {
+      live += s.delta;
+      peak = Math.max(peak, live);
+    }
+    concurrentUnitBinsMax = num(
+      peak,
+      'MEASURED',
+      `peak simultaneously LEASED FACTORY_UNITS bins, swept from bin_events lease starts and ends for campaign ${input.campaignId}`,
+    );
+  }
+
+  const completed = input.events
+    .filter((e) => e.kind === FACTORY_EVENT_KINDS.campaignState && e.detail['to'] === 'COMPLETE')
+    .map((e) => e.at);
+  const completionMs = span(
+    input.campaignCreatedAt ?? undefined,
+    earliest(completed),
+    `campaign created_at to its CAMPAIGN_STATE event moving it to COMPLETE (${input.campaignId})`,
+    `campaign ${input.campaignId} has not reached COMPLETE`,
+  );
+  const unitsPerHour =
+    completionMs.value === null || completionMs.value <= 0
+      ? notMeasured(`campaign ${input.campaignId} has no completion span to divide by`)
+      : num(
+          round2(input.mergedUnits / msToHours(completionMs.value)),
+          'DERIVED',
+          `units merged (${input.mergedUnits}) divided by hours from campaign creation to COMPLETE`,
+        );
+
+  return {
+    planDurationMs,
+    timeToFirstCodingMs,
+    queueDelayByKind,
+    integrationDelayMs,
+    reviewDelayMs,
+    concurrentUnitBinsMax,
+    unitsPerHour,
+    completionMs,
+  };
+}
+
 /**
  * The computation, separated from the read — so a test can hand it a recorded
  * `CampaignMetrics` and assert the evidence classes without a database.
@@ -445,7 +630,17 @@ function perAccountRefBreakdown(metrics: CampaignMetrics): ThroughputBreakdownEn
  * read a declared target from. `throughputReport` fills it in afterward, purely
  * for display — never for a calculation.
  */
-export function computeThroughput(metrics: CampaignMetrics): ThroughputReport {
+export function computeThroughput(
+  metrics: CampaignMetrics,
+  stages: StageLatencyInput = {
+    campaignId: metrics.campaignId,
+    campaignCreatedAt: null,
+    mergedUnits: metrics.integration.merged,
+    bins: [],
+    binEvents: [],
+    events: [],
+  },
+): ThroughputReport {
   const observed = observedConcurrency(metrics);
   return {
     campaignId: metrics.campaignId,
@@ -477,6 +672,7 @@ export function computeThroughput(metrics: CampaignMetrics): ThroughputReport {
     perWorker: perWorkerBreakdown(metrics),
     perRole: perRoleBreakdown(metrics),
     perAccountRef: perAccountRefBreakdown(metrics),
+    stages: computeStageLatency(stages),
   };
 }
 
@@ -489,8 +685,29 @@ export function computeThroughput(metrics: CampaignMetrics): ThroughputReport {
  */
 export async function throughputReport(campaignId: string): Promise<ThroughputReport> {
   const metrics = await campaignMetrics(campaignId);
-  const report = computeThroughput(metrics);
   const campaign = await getCampaign(campaignId);
+  const db = getDb();
+  const bins = await db.all<{ id: string; kind: string; created_at: string }>(
+    `SELECT id, kind, created_at FROM bins WHERE factory_campaign_id = ? ORDER BY created_at, rowid`,
+    [campaignId],
+  );
+  const binEvents = bins.length
+    ? await db.all<{ bin_id: string; event_type: string; at: string }>(
+        `SELECT bin_id, event_type, at FROM bin_events
+          WHERE bin_id IN (SELECT id FROM bins WHERE factory_campaign_id = ?)
+          ORDER BY at, rowid`,
+        [campaignId],
+      )
+    : [];
+  const events = await listFactoryEvents(campaignId, { limit: 5000 });
+  const report = computeThroughput(metrics, {
+    campaignId,
+    campaignCreatedAt: campaign?.createdAt ?? null,
+    mergedUnits: metrics.integration.merged,
+    bins: bins.map((b) => ({ id: b.id, kind: b.kind, createdAt: b.created_at })),
+    binEvents: binEvents.map((e) => ({ binId: e.bin_id, eventType: e.event_type, at: e.at })),
+    events: events.map((e) => ({ kind: e.kind, at: e.at, detail: e.detail })),
+  });
   if (!campaign) return report;
   return {
     ...report,

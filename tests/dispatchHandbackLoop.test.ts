@@ -356,6 +356,12 @@ describe('the adaptive account control: only unproductive starts count', () => {
     expect(classifyStart({ ...base, leases: [{ productive: true, live: false }] })).toBe('PRODUCTIVE');
     expect(classifyStart({ ...base, leases: [{ productive: false, live: true }] })).toBe('PENDING');
     expect(classifyStart({ ...base, leases: [{ productive: false, live: false }] })).toBe('UNPRODUCTIVE_NO_WORK');
+    // Brain handed the session nothing it could do: not the account's failure.
+    expect(classifyStart({ ...base, leases: [{ productive: false, live: false, withheldByBrain: true }] })).toBe('NOT_JUDGED');
+    expect(
+      classifyStart({ ...base, leases: [{ productive: false, live: false, withheldByBrain: true }, { productive: false, live: false }] }),
+    ).toBe('UNPRODUCTIVE_NO_WORK');
+    expect(classifyStart({ ...base, leases: [{ productive: true, live: false, withheldByBrain: true }] })).toBe('PRODUCTIVE');
     expect(classifyStart({ ...base, leases: [] })).toBe('UNPRODUCTIVE_NO_WORK');
     expect(classifyStart({ ...base, arrived: false, leases: [] })).toBe('UNPRODUCTIVE_NEVER_ARRIVED');
     // Nothing arrived from anywhere: Brain's outage, charged to nobody.
@@ -400,6 +406,54 @@ describe('the adaptive account control: only unproductive starts count', () => {
     const result = await dispatchTick({ burst: 4, projectIds: [projectId] });
     expect(result.fired).toBe(0);
     expect(result.unrouted['ACCOUNT_SESSIONS_UNPRODUCTIVE']).toBe(1);
+  });
+
+  it('judges a Factory surface apart from the research surfaces on its account', async () => {
+    // Production 2026-11-10: research starts on an account that found nothing
+    // held Factory bins on ACCOUNT_SESSIONS_UNPRODUCTIVE for the surface beside them.
+    for (let index = 0; index < UNPRODUCTIVE_STARTS_THRESHOLD; index += 1) {
+      await pastFire({ sentAt: minutesAgo(40 - index), session: `cse_never_f_${index}` });
+      await binEvent({ type: 'DISPATCH_SESSION_ARRIVED', at: minutesAgo(38 - index), session: `cse_other_f_${index}` });
+    }
+    const factory = await createRoutine({
+      accountId,
+      routineRef: `trig_factory_${Math.random().toString(36).slice(2, 8)}`,
+      name: 'factory-routine',
+      tokenSecretName: 'LOOP_TEST_SECRET',
+      capabilities: ['repository', 'repository-write'],
+    });
+    const { fleetSnapshot } = await import('../server/services/dispatch/candidates.ts');
+    resetProductivityCache();
+    const snapshot = await fleetSnapshot();
+    const research = snapshot.candidates.find((c) => c.routine.id === routineId);
+    const surface = snapshot.candidates.find((c) => c.routine.id === factory.id);
+    expect(research?.accountUnproductiveStarts).toBe(UNPRODUCTIVE_STARTS_THRESHOLD);
+    expect(surface?.accountUnproductiveStarts).toBe(0);
+  });
+
+  it('does not count a session Brain handed nothing it could do against its account', async () => {
+    for (let index = 0; index < UNPRODUCTIVE_STARTS_THRESHOLD + 2; index += 1) {
+      const session = `cse_withheld_${index}`;
+      const binId = await pastFire({ sentAt: minutesAgo(10 + index), session });
+      await binEvent({ type: 'BIN_ASSIGNED', at: minutesAgo(9 + index), binId, generation: 1, session });
+      // Brain's own audit independence rule, or nothing claimable yet: the
+      // session took the bin and Brain withheld the work, then handed it back.
+      await binEvent({
+        type: 'BIN_ITEM_WITHHELD',
+        at: minutesAgo(9 + index),
+        binId,
+        generation: 1,
+        outcome: index % 2 === 0 ? 'REFUSED_BY_ADMISSION' : 'NOT_CLAIMABLE',
+      });
+      await binEvent({ type: 'BIN_RELEASED', at: minutesAgo(9 + index), binId, generation: 1 });
+    }
+    const counted = await productivityByAccount(Date.now(), new Map([[routineId, accountId]]));
+    expect(counted.get(accountId)?.unproductive ?? 0).toBe(0);
+    const orchestrationId = await packet();
+    await researchBin(orchestrationId);
+    await itemAvailableAt(orchestrationId, aMinuteAgo());
+    const result = await dispatchTick({ burst: 4, projectIds: [projectId] });
+    expect(result.unrouted['ACCOUNT_SESSIONS_UNPRODUCTIVE'] ?? 0).toBe(0);
   });
 
   it('never refuses an account for how many productive sessions it started', async () => {

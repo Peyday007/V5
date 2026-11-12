@@ -74,7 +74,7 @@ import {
   plainLayerName,
   readDealDispatch,
 } from '../server/services/russell/dealDispatch.ts';
-import { tick } from '../server/services/russell/loop.ts';
+import { SLOT_FILL_PER_TICK, tick } from '../server/services/russell/loop.ts';
 import { claimCycle, completeCycle, pauseCycle, resumeCycle } from '../server/repos/russellCycle.ts';
 import {
   askHuman,
@@ -95,6 +95,7 @@ import { createRun } from '../server/repos/runs.ts';
 import {
   NEEDS_HUMAN_CHOICES,
   parkStoppedMissions,
+  resumeAnsweredRequest,
   reaskRefusedPlans,
   unparkResolvedMissions,
 } from '../server/services/russell/needsHuman.ts';
@@ -832,6 +833,142 @@ describe('the loop keeps going without anybody watching', () => {
     expect(second.resumed).not.toContain(request.id);
   });
 
+  it('files a recorded-gaps answer without waiting for a research slot it would not use (§80)', async () => {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'one at a time',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 5,
+      maxFragments: 5,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+    const launchOne = async (title: string, statement: string) => {
+      const captured = await capture({ title, statement, projectId, visibility: 'SHARED' });
+      const launched = await launch({
+        projectId,
+        layerId,
+        candidateId: captured.candidate!.id,
+        visibility: 'SHARED',
+        title,
+        assignment: `Under Florida law as in force in 2026, ${statement}?`,
+        objective: 'Settle the Florida position.',
+        whyNow: 'The layer names Florida as open.',
+        acceptableSources: ['Florida Statutes'],
+        excludedSources: [],
+        evidence: ['the exact section'],
+        startedBy: { kind: 'PERSON', id: userId },
+        envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+        authorizedBy: userId,
+      });
+      expect(launched.ok, launched.reason).toBe(true);
+      return launched.mission!;
+    };
+    const parked = await launchOne('Florida licensing', 'is a broker licence required');
+    await withResearch(parked.orchestrationId!, layerId, projectId);
+    await updateOrchestration(parked.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'The evidence bar was not met and the repair ladder is spent.',
+    });
+    await parkStoppedMissions(10);
+    await renewLiveMissionReservations(10);
+    expect((await getMission(parked.id))!.state).toBe('NEEDS_HUMAN');
+    // The one slot is now taken by live research.
+    const running = await launchOne('Florida bonding', 'is a surety bond required');
+    expect((await getMission(running.id))!.state).not.toBe('NEEDS_HUMAN');
+
+    const request = (await listOpenRequests(projectId)).find((entry) => entry.missionId === parked.id)!;
+    await answerHumanRequest({ requestId: request.id, actorUserId: userId, choice: NEEDS_HUMAN_CHOICES.RECORD_GAPS.key });
+    const outcome = await resumeAnsweredRequest((await getHumanRequest(request.id))!);
+    expect(outcome.deferred ?? false).toBe(false);
+    expect(outcome.settled, outcome.reason).toBe(true);
+    expect((await getOrchestration(parked.orchestrationId!))!.unresolvedGapPolicy).toBe('RECORD_GAPS');
+  });
+
+  it('answers a routine research park itself, under the standing grant (§80)', async () => {
+    const goal = await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'standing',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 1,
+      maxFragments: 1,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+    const captured = await capture({
+      title: 'Florida licensing',
+      statement: 'establish the Florida broker licence position from the 2026 statute',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const launched = await launch({
+      projectId,
+      layerId,
+      candidateId: captured.candidate!.id,
+      visibility: 'SHARED',
+      title: 'Florida broker licensing',
+      assignment: 'Under Florida law as in force in 2026, is a broker licence required?',
+      objective: 'Settle the Florida position.',
+      whyNow: 'The layer names Florida as open.',
+      acceptableSources: ['Florida Statutes'],
+      excludedSources: [],
+      evidence: ['the exact section'],
+      startedBy: { kind: 'PERSON', id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+    const mission = launched.mission!;
+    await withResearch(mission.orchestrationId!, layerId, projectId);
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'The evidence bar was not met and the repair ladder is spent.',
+    });
+
+    await tick('instance-a');
+    const request = (await listOpenRequests(projectId)).find((entry) => entry.missionId === mission.id)!;
+    expect(request).toBeDefined();
+
+    // Inside the grace period nothing is decided: the repair passes go first.
+    const { answerRoutineParks, ROUTINE_DECISION_GRACE_MS } = await import(
+      '../server/services/russell/routineDecisions.ts'
+    );
+    expect((await answerRoutineParks()).filter((d) => d.choice)).toHaveLength(0);
+    expect((await getHumanRequest(request.id))!.state).toBe('OPEN');
+
+    const old = new Date(Date.now() - ROUTINE_DECISION_GRACE_MS - 60_000).toISOString();
+    await getDb().run('UPDATE russell_human_requests SET created_at = ? WHERE id = ?', [old, request.id]);
+
+    const ran = await tick('instance-a');
+    expect(ran.routineDecisions.map((d) => d.requestId)).toContain(request.id);
+    expect(ran.resumed).toContain(request.id);
+    const answered = (await getHumanRequest(request.id))!;
+    expect(answered.answeredChoice).toBe('RECORD_GAPS');
+    expect(answered.answeredByUserId).toBe(userId);
+    expect(answered.answeredReason).toMatch(/Decided by Brain under the standing research grant/);
+    expect(answered.answeredReason).toContain(goal.id);
+    const orchestration = await getOrchestration(mission.orchestrationId!);
+    expect(orchestration!.unresolvedGapPolicy).toBe('RECORD_GAPS');
+    expect((await listEvents(projectId)).some((e) => e.eventType === 'RUSSELL_ROUTINE_DECISION')).toBe(true);
+    // And a second pass decides nothing again.
+    expect((await answerRoutineParks()).filter((d) => d.requestId === request.id)).toHaveLength(0);
+  });
+
+  it('never authorizes a plan, and leaves a person’s own goal plan with them', async () => {
+    const { routineChoiceFor } = await import('../server/services/russell/routineDecisions.ts');
+    expect(routineChoiceFor({ choiceKeys: ['APPROVE_PLAN', 'STOP'], brainCompiled: true }).choice).toBe('STOP');
+    expect(routineChoiceFor({ choiceKeys: ['APPROVE_PLAN', 'STOP'], brainCompiled: false }).choice).toBeNull();
+    expect(routineChoiceFor({ choiceKeys: ['RECORD_GAPS', 'STOP'], brainCompiled: false }).choice).toBe('RECORD_GAPS');
+    expect(routineChoiceFor({ choiceKeys: ['STOP'], brainCompiled: false }).choice).toBe('STOP');
+    expect(routineChoiceFor({ choiceKeys: ['approve'], brainCompiled: true }).choice).toBeNull();
+    for (const keys of [['APPROVE_PLAN', 'STOP'], ['RECORD_GAPS', 'STOP'], ['STOP']]) {
+      expect(routineChoiceFor({ choiceKeys: keys, brainCompiled: true }).choice).not.toBe('APPROVE_PLAN');
+    }
+  });
+
   it('holds the concurrency slot for as long as the mission actually runs', async () => {
     /*
      * The defect this exists for, and the reason no existing test caught it.
@@ -1422,6 +1559,79 @@ describe('the loop keeps going without anybody watching', () => {
     await transitionMission({ missionId: mission.id, from: 'RUNNING', to: 'DONE' });
     expect(await renewLiveMissionReservations(10)).not.toContain(mission.reservationId);
     expect((await authorityFor({ projectId })).grant!.spend.maxMissions.used).toBe(1);
+  });
+
+  it('lets a packet nothing has moved in six hours stop holding a slot, and readmits it when it moves', async () => {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'stalled hold',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 5,
+      maxFragments: 5,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+    const captured = await capture({ title: 'Florida bonding', statement: 'is a surety bond required', projectId, visibility: 'SHARED' });
+    const launched = await launch({
+      projectId,
+      layerId,
+      candidateId: captured.candidate!.id,
+      visibility: 'SHARED',
+      title: 'Florida bonding',
+      assignment: 'Under Florida law as in force in 2026, is a surety bond required?',
+      objective: 'Settle the Florida position.',
+      whyNow: 'The layer names Florida as open.',
+      acceptableSources: ['Florida Statutes'],
+      excludedSources: [],
+      evidence: ['the exact section'],
+      startedBy: { kind: 'PERSON', id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+    expect(launched.ok, launched.reason).toBe(true);
+    const mission = launched.mission!;
+    await transitionMission({ missionId: mission.id, from: (await getMission(mission.id))!.state, to: 'RUNNING' });
+    expect((await authorityFor({ projectId })).grant!.spend.maxConcurrent.used).toBe(1);
+
+    // Nothing has moved its packet for seven hours: the hold stops counting.
+    const stale = new Date(Date.now() - 7 * 3_600_000).toISOString();
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [stale, mission.orchestrationId]);
+    expect(await renewLiveMissionReservations(10)).not.toContain(mission.reservationId);
+    expect((await authorityFor({ projectId })).grant!.spend.maxConcurrent.used).toBe(0);
+    expect((await getMission(mission.id))!.state, 'the work itself is untouched').toBe('RUNNING');
+
+    // The packet moves again, and the next tick readmits it under the ceiling.
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [new Date().toISOString(), mission.orchestrationId]);
+    expect(await renewLiveMissionReservations(10)).toContain(mission.reservationId);
+    expect((await authorityFor({ projectId })).grant!.spend.maxConcurrent.used).toBe(1);
+
+    // Lapse it again and let other work take the slot: moving again must not push it over the ceiling.
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [stale, mission.orchestrationId]);
+    await renewLiveMissionReservations(10);
+    const other = await capture({ title: 'Florida escrow', statement: 'is an escrow account required', projectId, visibility: 'SHARED' });
+    const taken = await launch({
+      projectId,
+      layerId,
+      candidateId: other.candidate!.id,
+      visibility: 'SHARED',
+      title: 'Florida escrow',
+      assignment: 'Under Florida law as in force in 2026, is an escrow account required?',
+      objective: 'Settle the Florida position.',
+      whyNow: 'The layer names Florida as open.',
+      acceptableSources: ['Florida Statutes'],
+      excludedSources: [],
+      evidence: ['the exact section'],
+      startedBy: { kind: 'PERSON', id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+    expect(taken.ok, taken.reason).toBe(true);
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [new Date().toISOString(), mission.orchestrationId]);
+    await renewLiveMissionReservations(10);
+    await renewLiveMissionReservations(10);
+    expect((await authorityFor({ projectId })).grant!.spend.maxConcurrent.used).toBe(1);
   });
 
   it('fails a packet that produced nothing rather than asking a person to press the only button', async () => {
@@ -2574,7 +2784,40 @@ describe('the loop starts work, bounded', () => {
     expect((await getCandidate(captured.candidate!.id))!.state).toBe('QUEUED');
   });
 
-  it('starts one, and leaves the rest queued rather than dropping them', async () => {
+  it('fills free research slots a few at a time, and leaves the rest queued rather than dropping them (§98)', async () => {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'acceptance',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 10,
+      maxFragments: 10,
+      maxConcurrent: 10,
+      maxProbes: 1,
+    });
+    const states = ['Florida', 'California', 'Texas', 'Ohio', 'Iowa', 'Utah'];
+    const ids: string[] = [];
+    for (const state of states) ids.push(await queuedWithSpec(`establish the ${state} broker licence position`));
+
+    // Free slots are filled, up to the per-tick fill, not one a tick.
+    const report = await tick('instance-a');
+    expect(report.launched).toHaveLength(SLOT_FILL_PER_TICK);
+    expect(report.bounded).toBe(true);
+
+    // The one that did not go is preserved rather than decided against, so the
+    // next tick starts it — which is the property that makes a bound a pacing
+    // mechanism instead of a way to lose work.
+    const next = await tick('instance-a');
+    expect(next.launched).toHaveLength(states.length - SLOT_FILL_PER_TICK);
+    expect(report.launched).not.toContain(next.launched[0]);
+
+    const missions = await listMissions({ projectId });
+    expect(missions).toHaveLength(states.length);
+    expect(new Set(missions.map((m) => m.candidateId))).toEqual(new Set(ids));
+  });
+
+  it('starts no more than the grant\u2019s free slots allow', async () => {
     await createGoal({
       projectId,
       ownerUserId: userId,
@@ -2583,26 +2826,13 @@ describe('the loop starts work, bounded', () => {
       allowedWork: ['RESEARCH'],
       maxMissions: 5,
       maxFragments: 5,
-      maxConcurrent: 5,
+      maxConcurrent: 1,
       maxProbes: 1,
     });
-    const first = await queuedWithSpec('establish the Florida broker licence position');
-    const second = await queuedWithSpec('establish the California broker licence position');
-
+    await queuedWithSpec('establish the Florida broker licence position');
+    await queuedWithSpec('establish the California broker licence position');
     const report = await tick('instance-a');
     expect(report.launched).toHaveLength(1);
-    expect(report.bounded).toBe(true);
-
-    // The one that did not go is preserved rather than decided against, so the
-    // next tick starts it — which is the property that makes a bound a pacing
-    // mechanism instead of a way to lose work.
-    const next = await tick('instance-a');
-    expect(next.launched).toHaveLength(1);
-    expect(next.launched[0]).not.toBe(report.launched[0]);
-
-    const missions = await listMissions({ projectId });
-    expect(missions).toHaveLength(2);
-    expect(new Set(missions.map((m) => m.candidateId))).toEqual(new Set([first, second]));
   });
 });
 

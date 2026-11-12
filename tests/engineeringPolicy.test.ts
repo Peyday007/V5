@@ -437,9 +437,27 @@ describe('blockers and the metrics they add up to', () => {
       remedy: 'an administrator sets it on Fly',
     });
     expect(accepted.needsHuman).toBe(true);
+    const routine = await call('brain_engineering_blocker', {
+      project_id: projectId,
+      kind: 'HUMAN_DECISION',
+      statement: 'Should the new card go above or below the list?',
+      remedy: 'ask Peyton',
+      checked: ['repo'],
+    });
+    expect(routine.recorded).toBe(false);
+    expect(routine.reason).toMatch(/Rule 11/);
+    const gameChanging = await call('brain_engineering_blocker', {
+      project_id: projectId,
+      kind: 'HUMAN_DECISION',
+      statement: 'Finishing this means spending past the agreed ceiling',
+      remedy: 'Peyton raises the ceiling or says stop',
+      checked: ['configuration'],
+      stop_reason: 'SPEND_OVER_CEILING',
+    });
+    expect(gameChanging.needsHuman).toBe(true);
     const metrics = await interventionMetrics();
-    expect(metrics.byKind.UNNECESSARY_HUMAN_QUESTION).toBe(1);
-    expect(metrics.humanBlockers).toBe(1);
+    expect(metrics.byKind.UNNECESSARY_HUMAN_QUESTION).toBe(2);
+    expect(metrics.humanBlockers).toBe(2);
   });
 });
 

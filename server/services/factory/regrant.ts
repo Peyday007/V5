@@ -16,7 +16,9 @@
  * tick re-derives the stage from rows, so the unit is handed out again only
  * because it is now READY with an attempt left.
  */
-import { getCampaign, getUnitByKey, regrantUnitAttempts } from '../../repos/factory.ts';
+import { getCampaign, getChangeRequest, getUnitByKey, regrantUnitAttempts, widenUnitOwnership } from '../../repos/factory.ts';
+import { matchesGlob } from './glob.ts';
+import { forbiddenIn, forbiddenPathsFor } from './forbidden.ts';
 import { recordFactoryEvent } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 
@@ -29,6 +31,18 @@ export const UNIT_REGRANT_REASONS: Readonly<Record<string, string>> = {
   'surface-blocked':
     'The attempts were spent on an execution-surface failure that has since been corrected ' +
     'where the workers run.',
+  /*
+   * A repair unit is given the file a finding names, and a finding names where
+   * a defect showed rather than where it must be fixed. Production, 2026-10-30:
+   * a repair owned only the repository module while the fix needed the pass
+   * that calls it, both inside the contract's scope; the unit said exactly that
+   * on all three attempts and the campaign stopped. A person widening the
+   * unit's paths — never past the contract's scope or into a forbidden path —
+   * is the answering transition.
+   */
+  'ownership-widened':
+    'The unit owned less than the fix needs; a person added the in-scope paths it named, ' +
+    'so another attempt can do the work rather than report the same blocker.',
 };
 
 /** The most a single regrant may raise a ceiling to. A bound, not a budget. */
@@ -44,6 +58,8 @@ export async function regrantUnit(input: {
   maxAttempts: number;
   reasonCode: string;
   operator: string;
+  /** Extra paths the unit may own; each inside the contract's scope and not forbidden. */
+  addOwnedPaths?: string[];
 }): Promise<UnitRegrantOutcome> {
   const reason = UNIT_REGRANT_REASONS[input.reasonCode];
   if (!reason) {
@@ -70,6 +86,19 @@ export async function regrantUnit(input: {
       reason: `the ceiling is already ${unit.maxAttempts}; a regrant only ever raises it`,
     };
   }
+  const added = (input.addOwnedPaths ?? []).map((path) => path.trim()).filter((path) => path.length > 0);
+  if (added.length > 0) {
+    const changeRequest = await getChangeRequest(campaign.changeRequestId);
+    if (!changeRequest) return { ok: false, reason: 'the campaign has no change request' };
+    const outside = added.filter((path) => !changeRequest.mutationScope.some((glob) => matchesGlob(path, glob)));
+    if (outside.length > 0) {
+      return { ok: false, reason: `outside the contract's mutation scope: ${outside.join(', ')} — amend the scope first` };
+    }
+    const forbidden = forbiddenIn(added, forbiddenPathsFor(changeRequest.repository));
+    if (forbidden.length > 0) return { ok: false, reason: `forbidden for this repository: ${forbidden.join(', ')}` };
+    const widened = await widenUnitOwnership(unit.id, [...new Set([...unit.ownedPaths, ...added])]);
+    if (!widened) return { ok: false, reason: `the unit is ${unit.state}; only a unit that is not leased and not finished is widened` };
+  }
   const regranted = await regrantUnitAttempts({ unitId: unit.id, maxAttempts: input.maxAttempts });
   if (!regranted.raised || !regranted.unit) {
     return {
@@ -94,6 +123,7 @@ export async function regrantUnit(input: {
       attempt: regranted.unit.attempt,
       stateBefore: unit.state,
       stateAfter: regranted.unit.state,
+      ...(added.length > 0 ? { addedOwnedPaths: added } : {}),
     },
   });
   return {

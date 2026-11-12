@@ -31,6 +31,8 @@ import { newId, nowIso, parseJson, retryAtWithin, toJson } from './util.ts';
 import { bindRoutineWorker, getRoutine, recordRoutineCheckIn, recordWorkerSession } from './fleet.ts';
 import { normalizeSessionRef, sameProviderSession, sessionSpellings } from '../domain/sessionRef.ts';
 import { contractLeaseFloorMs } from '../domain/binLease.ts';
+import { classifyBinPurpose, type PurposeDecision } from '../domain/binPurpose.ts';
+import { repositoryIdOf } from '../services/bins/routing.ts';
 import { observeConnectorArrival } from '../services/fleet/connectorBinding.ts';
 import { chargesToAuth, connectorHealth } from '../services/fleet/connectorHealth.ts';
 import type { BinConfinement } from './workQueue.ts';
@@ -189,6 +191,8 @@ export function mapBin(row: BinRow): Bin {
     readyAt: row.ready_at,
     completedAt: row.completed_at,
     factoryCampaignId: row.factory_campaign_id ?? null,
+    purpose: (row.purpose ?? null) as Bin['purpose'],
+    purposeBasis: row.purpose_basis ?? null,
   };
 }
 
@@ -441,6 +445,12 @@ export async function listBinHeads(filter: {
   projectId?: string;
   states?: BinState[];
   limit?: number;
+  /**
+   * Only bins whose attempts are spent. A page of 500 in priority order once
+   * hid two exhausted Factory bins behind 500 READY research bins, so the
+   * reconcile pass never saw them and their campaigns waited for ten hours.
+   */
+  exhausted?: boolean;
 }): Promise<BinHead[]> {
   const clauses: string[] = [];
   const params: SqlParam[] = [];
@@ -452,6 +462,7 @@ export async function listBinHeads(filter: {
     clauses.push(`state IN (${filter.states.map(() => '?').join(', ')})`);
     params.push(...filter.states);
   }
+  if (filter.exhausted) clauses.push('attempt_count >= max_attempts');
   const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
   params.push(Math.min(500, Math.max(1, filter.limit ?? 100)));
   const rows = await getDb().all<BinRow>(
@@ -471,6 +482,8 @@ export async function listBins(filter: {
   projectId?: string;
   states?: BinState[];
   limit?: number;
+  /** Only bins whose kind starts with this, e.g. `FACTORY_`; filtered before the limit. */
+  kindPrefix?: string;
 }): Promise<Bin[]> {
   const clauses: string[] = [];
   const params: SqlParam[] = [];
@@ -481,6 +494,10 @@ export async function listBins(filter: {
   if (filter.states && filter.states.length > 0) {
     clauses.push(`state IN (${filter.states.map(() => '?').join(', ')})`);
     params.push(...filter.states);
+  }
+  if (filter.kindPrefix) {
+    clauses.push('substr(kind, 1, ?) = ?');
+    params.push(filter.kindPrefix.length, filter.kindPrefix);
   }
   const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
   params.push(Math.min(500, Math.max(1, filter.limit ?? 100)));
@@ -631,6 +648,51 @@ export class ManifestTooLarge extends Error {
   }
 }
 
+/**
+ * The purpose a bin is born with, from its own input and its project's row.
+ * Exported for the retag pass, which asks the same question of an existing bin.
+ */
+export async function purposeFor(input: {
+  projectId: string;
+  kind: string;
+  workloadClass?: string | null;
+  completionContract?: string | null;
+  title: string;
+  objective: string;
+  rationale?: string | null;
+  manifest: Partial<BinManifest> | null | undefined;
+}): Promise<PurposeDecision> {
+  const project = await getDb().get<{ slug: string; purpose: string }>(
+    'SELECT slug, purpose FROM projects WHERE id = ?',
+    [input.projectId],
+  );
+  const manifest = (input.manifest ?? {}) as Partial<BinManifest>;
+  return classifyBinPurpose({
+    kind: input.kind,
+    workloadClass: input.workloadClass ?? null,
+    completionContract: input.completionContract ?? null,
+    title: input.title,
+    objective: input.objective,
+    rationale: input.rationale ?? null,
+    goal: typeof manifest.lineage?.goal === 'string' ? manifest.lineage.goal : null,
+    repositoryId: repositoryIdOf({ manifest: manifest as BinManifest }),
+    project: project ?? null,
+  });
+}
+
+async function purposeForNewBin(input: CreateBinInput): Promise<PurposeDecision> {
+  return purposeFor({
+    projectId: input.projectId,
+    kind: input.kind,
+    workloadClass: input.workloadClass ?? null,
+    completionContract: input.completionContract,
+    title: input.title,
+    objective: input.objective,
+    rationale: input.rationale ?? null,
+    manifest: input.manifest,
+  });
+}
+
 export async function createBin(input: CreateBinInput): Promise<Bin> {
   const manifest = toJson(input.manifest);
   const bytes = Buffer.byteLength(manifest, 'utf8');
@@ -639,6 +701,9 @@ export async function createBin(input: CreateBinInput): Promise<Bin> {
   const id = newId('bin');
   const at = binNow();
   const ready = input.ready === true;
+  // What the bin is for, decided here and only here (§84): at creation, from
+  // the rows that created it, never at check-in from what a worker sent.
+  const purpose = await purposeForNewBin(input);
   await getDb().run(
     `INSERT INTO bins (id, project_id, layer_id, kind, title, objective, rationale, manifest,
        completion_contract, contract_version, state, priority, orchestration_id, budget_units,
@@ -646,11 +711,13 @@ export async function createBin(input: CreateBinInput): Promise<Bin> {
        lease_session_ref, leased_at, heartbeat_at, lease_expires_at, lease_renewals,
        checkpoint, checkpoint_at, terminal_reason, last_refusal, refusal_count,
        required_capabilities, workload_class, pinned_routine_id, factory_campaign_id,
-       created_by_type, created_by_id, created_at, updated_at, ready_at, completed_at)
+       created_by_type, created_by_id, created_at, updated_at, ready_at, completed_at,
+       purpose, purpose_basis)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, NULL, NULL, NULL,
              NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, 0,
              ?, ?, ?, ?,
-             ?, ?, ?, ?, ?, NULL)`,
+             ?, ?, ?, ?, ?, NULL,
+             ?, ?)`,
     [
       id,
       input.projectId,
@@ -681,6 +748,8 @@ export async function createBin(input: CreateBinInput): Promise<Bin> {
       at,
       at,
       ready ? at : null,
+      purpose.purpose,
+      purpose.basis,
     ],
   );
   const created = await getBin(id);
@@ -1522,8 +1591,26 @@ export function claimableStateSql(prefix: string): string {
   // in the one predicate every reader composes, because a hold asked by one of
   // five readers is a hold four of them walk straight past.
   return (
-    `(${prefix}held_by_workstream_id IS NULL AND (${prefix}state = 'READY'` +
+    `(${prefix}held_by_workstream_id IS NULL AND ${purposeAdmitsSql(prefix)} AND (${prefix}state = 'READY'` +
     ` OR (${prefix}state = 'LEASED' AND ${prefix}lease_expires_at <= ?)))`
+  );
+}
+
+/**
+ * Brain-only mode, asked in the statement that offers or fires a bin (§84).
+ *
+ * In `claimableStateSql` for the reason the goal hold is: every assigner,
+ * dispatcher, re-arm and supersede pass composes that one predicate, so a
+ * filter placed here cannot be walked past by a sixth reader. The switch is
+ * read from `brain_switches` inside the same statement, so there is no cached
+ * copy of it to be stale. A legal bin is never claimable, whatever the mode;
+ * under the mode only BRAIN_IMPROVEMENT is, and an unclassified bin is not.
+ * No parameters, so every caller's `?` count is unchanged.
+ */
+export function purposeAdmitsSql(prefix: string): string {
+  return (
+    `(COALESCE(${prefix}purpose, '') <> 'BLOCKED_LEGAL' AND (${prefix}purpose = 'BRAIN_IMPROVEMENT'` +
+    ` OR NOT EXISTS (SELECT 1 FROM brain_switches bs WHERE bs.name = 'brain_only_mode' AND bs.enabled = 1)))`
   );
 }
 
@@ -1681,6 +1768,15 @@ export async function recentFiresForBin(binId: string, nowMs: number = Date.now(
     [binId, since],
   );
   return Number(row?.n ?? 0);
+}
+
+/** `purposeAdmitsSql` for one bin, for a reader holding the row in memory. */
+export async function binPurposeAdmits(binId: string): Promise<boolean> {
+  const row = await getDb().get<{ id: string }>(
+    `SELECT id FROM bins WHERE id = ? AND ${purposeAdmitsSql('')}`,
+    [binId],
+  );
+  return row !== undefined && row !== null;
 }
 
 /** The same question asked of a row already in memory. */
@@ -2640,6 +2736,26 @@ export async function terminateUnleasedBin(
 }
 
 /**
+ * Close a bin nobody holds because its contract is already satisfied (§85).
+ *
+ * The free research lane drains a packet's work items from the queue without
+ * leasing the bin, so when the packet files there is no session to call
+ * `brain_bin_complete`. The caller has evaluated the contract against Brain's
+ * own rows first; this is only the guarded write, on the generation it read.
+ */
+export async function completeUnleasedBin(binId: string, leaseGeneration: number, reason: string): Promise<boolean> {
+  const now = binNow();
+  const result = await getDb().run(
+    `UPDATE bins SET state = 'COMPLETE', terminal_reason = ?, completed_at = ?, updated_at = ?
+      WHERE id = ? AND lease_generation = ? AND state IN ('READY', 'DRAFT', 'NEEDS_HUMAN')`,
+    [bounded(reason, MAX_REASON_CHARS), now, now, binId, leaseGeneration],
+  );
+  if (result.changes !== 1) return false;
+  await recordBinEvent({ eventType: 'BIN_TERMINAL', binId, leaseGeneration, outcome: 'COMPLETE', reason });
+  return true;
+}
+
+/**
  * Expired leases, for metrics.
  *
  * Deliberately not load-bearing: an expired lease is already claimable work, so
@@ -3466,7 +3582,10 @@ export async function reopenNoShowDispatches(
  * How long an intent that gave up on unanswered fires waits before Brain asks
  * once more, and how many times it may.
  */
-export const ABANDONED_REVIVE_AFTER_MS = 2 * 3_600_000;
+// Twenty minutes, not two hours: Factory campaign plans waited 2 h 07 m on this
+// cool-off with surfaces healthy again long before. Still bounded by
+// MAX_ABANDONED_REVIVALS, so a dead surface costs two more rounds, not a loop.
+export const ABANDONED_REVIVE_AFTER_MS = 20 * 60_000;
 export const MAX_ABANDONED_REVIVALS = 2;
 /** What one revival adds to the intent's ceiling: one more intent's worth of fires. */
 const REVIVAL_STEP = 5;
@@ -3854,9 +3973,15 @@ export async function claimDispatchIntent(): Promise<BinDispatch | null> {
   const now = binNow();
   const deadline = plusMs(now, DISPATCH_CLAIM_MS);
   const candidates = await db.all<BinDispatchRow>(
-    `SELECT * FROM bin_dispatch
-      WHERE (state = 'PENDING' OR state = 'SENDING') AND next_attempt_at <= ?
-      ORDER BY next_attempt_at, rowid LIMIT 10`,
+    /*
+     * The most important work fires first (Brain-wide resource rule, §98).
+     * The intent queue was ordered by time alone, so a burst of five could be
+     * spent on whatever was queued first while a goal's higher-priority bin
+     * waited a tick; the bin's own priority now leads, time breaks ties.
+     */
+    `SELECT d.* FROM bin_dispatch d LEFT JOIN bins b ON b.id = d.bin_id
+      WHERE (d.state = 'PENDING' OR d.state = 'SENDING') AND d.next_attempt_at <= ?
+      ORDER BY COALESCE(b.priority, 0) DESC, d.next_attempt_at, d.rowid LIMIT 10`,
     [now],
   );
   for (const row of candidates) {

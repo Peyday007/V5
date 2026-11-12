@@ -358,7 +358,7 @@ describe('the realization packet', () => {
     it('does not call the current-state map "missing"', async () => {
       await scanSystem('BOOT');
       const facultyId = await promoteFaculty(
-        definition({ infrastructure: ['A holographic projector for spatial reasoning.'] }),
+        definition({ infrastructure: ['A holographic projector for zebrafish choreography.'] }),
       );
       const { packet } = await openPacket({ facultyId, createdByType: 'SYSTEM' });
       await derivePacket(packet.id);
@@ -370,7 +370,7 @@ describe('the realization packet', () => {
       // "missing" is precisely how the second comes to be believed.
       expect(Object.keys(map)).toContain('nothingMatched');
       expect(Object.keys(map)).not.toContain('missing');
-      expect(map['nothingMatched']).toContain('A holographic projector for spatial reasoning.');
+      expect(map['nothingMatched']).toContain('A holographic projector for zebrafish choreography.');
     });
 
     it('every version is kept, so a map that changed under a packet is visible', async () => {

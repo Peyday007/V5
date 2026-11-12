@@ -7,10 +7,11 @@
  * quality record, because the auditor should not care how the words arrived.
  */
 import type { BlockType } from '../../domain/types.ts';
-import type { ExtractedBlock, ExtractedPage } from './pdf.ts';
+import { joinBlockLines, type ExtractedBlock, type ExtractedPage } from './pdf.ts';
 
 const ATX_HEADING = /^(#{1,6})\s+(.*)$/;
 const SETEXT_UNDERLINE = /^(=+|-{2,})\s*$/;
+const THEMATIC_BREAK = /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/;
 const LIST_ITEM = /^\s*(?:[-*+]|\d{1,3}[.)])\s+/;
 const FENCE = /^\s*(?:```|~~~)/;
 
@@ -29,12 +30,12 @@ export function textToBlocks(source: string, markdown: boolean): ExtractedBlock[
   let fenced: string[] | null = null;
 
   const flushParagraph = (): void => {
-    const text = paragraph.join(' ').replace(/[ \t]+/g, ' ').trim();
+    const text = joinBlockLines(paragraph).replace(/[ \t]+/g, ' ').trim();
     if (text.length > 0) blocks.push(blockOf('PARAGRAPH', text));
     paragraph = [];
   };
 
-  for (const [index, line] of lines.entries()) {
+  for (const line of lines) {
     if (markdown && FENCE.test(line)) {
       if (fenced === null) {
         flushParagraph();
@@ -63,10 +64,16 @@ export function textToBlocks(source: string, markdown: boolean): ExtractedBlock[
         blocks.push(blockOf('HEADING', (atx[2] ?? '').trim()));
         continue;
       }
-      // Setext: the underline belongs to the line above it.
-      const next = lines[index + 1];
-      if (next !== undefined && SETEXT_UNDERLINE.test(next) && line.trim().length > 0 && paragraph.length === 0) {
-        blocks.push(blockOf('HEADING', line.trim()));
+      // Setext: an underline turns the paragraph above it, of any length, into a heading.
+      if (SETEXT_UNDERLINE.test(line) && paragraph.length > 0) {
+        const text = joinBlockLines(paragraph).replace(/[ \t]+/g, ' ').trim();
+        paragraph = [];
+        if (text.length > 0) blocks.push(blockOf('HEADING', text));
+        continue;
+      }
+      // A thematic break is a flush and carries no text of its own.
+      if (THEMATIC_BREAK.test(line)) {
+        flushParagraph();
         continue;
       }
       if (SETEXT_UNDERLINE.test(line) && blocks.at(-1)?.blockType === 'HEADING') continue;

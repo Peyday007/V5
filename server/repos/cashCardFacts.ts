@@ -11,6 +11,7 @@
  * own proposal and carries what it rests on, what it assumed and what would
  * change it. PERSON is somebody's decision, and nothing re-proposes over one.
  */
+import { inReadScope, scopedRead } from './readScope.ts';
 import { getDb } from '../db/database.ts';
 import { newId, nowIso } from './util.ts';
 import type { CashCardFact, CashCardFactRow } from '../domain/types.ts';
@@ -195,8 +196,12 @@ export async function cardFact(
  * otherwise ask `cardFact` once per field: in production that was 360 198
  * single-field reads in under ten hours, one per field per opportunity per tick.
  */
-export async function cardFactMap(opportunityId: string): Promise<(field: string) => CashCardFact | null> {
-  const byField = new Map((await cardFactsFor(opportunityId)).map((fact) => [fact.field, fact]));
+export async function cardFactMap(opportunityId: string, projectId?: string): Promise<(field: string) => CashCardFact | null> {
+  const facts =
+    projectId && inReadScope()
+      ? (await scopedRead(`cardFacts:${projectId}`, () => cardFactsForProject(projectId))).filter((fact) => fact.opportunityId === opportunityId)
+      : await cardFactsFor(opportunityId);
+  const byField = new Map(facts.map((fact) => [fact.field, fact]));
   return (field) => byField.get(field) ?? null;
 }
 

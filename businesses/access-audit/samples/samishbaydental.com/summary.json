@@ -1,0 +1,1729 @@
+{
+ "site": "https://www.samishbaydental.com/",
+ "date": "2026-11-11",
+ "axeVersion": "4.10.2",
+ "pages": [
+  "https://www.samishbaydental.com/",
+  "https://www.samishbaydental.com/contact",
+  "https://www.samishbaydental.com/cart",
+  "https://www.samishbaydental.com/about",
+  "https://www.samishbaydental.com/newpatient",
+  "https://www.samishbaydental.com/aesthetics",
+  "https://www.samishbaydental.com/employer-dental"
+ ],
+ "totals": {
+  "issuesTotal": 47,
+  "criticalSerious": 47,
+  "byImpact": {
+   "critical": 0,
+   "serious": 47,
+   "moderate": 0,
+   "minor": 0
+  },
+  "rulesFailed": 4,
+  "bestPracticeInstances": 22,
+  "axeIssues": 44,
+  "axeCriticalSerious": 44
+ },
+ "teaser": "your homepage has 2 links with no readable name and 1 text element below the minimum contrast ratio",
+ "topIssue": "Elements must meet minimum color contrast ratio thresholds (28x, serious, WCAG 1.4.3)",
+ "couldNotScan": [],
+ "findings": [
+  {
+   "rule": "color-contrast",
+   "title": "Elements must meet minimum color contrast ratio thresholds",
+   "impact": "serious",
+   "bestPractice": false,
+   "wcag": [
+    "1.4.3"
+   ],
+   "level": "AA",
+   "instances": 28,
+   "pages": {
+    "https://www.samishbaydental.com/": 1,
+    "https://www.samishbaydental.com/contact": 5,
+    "https://www.samishbaydental.com/cart": 4,
+    "https://www.samishbaydental.com/about": 10,
+    "https://www.samishbaydental.com/newpatient": 2,
+    "https://www.samishbaydental.com/aesthetics": 3,
+    "https://www.samishbaydental.com/employer-dental": 3
+   },
+   "viewports": [
+    "desktop",
+    "mobile"
+   ],
+   "fix": "Darken the text or lighten the background until the ratio reaches 4.5:1 (3:1 for text 24px+ or 18.66px+ bold). The exact colours and measured ratio are listed per element below; a free checker such as WebAIM's contrast checker shows a passing shade.",
+   "examples": [
+    {
+     "url": "https://www.samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "#yui_3_17_2_1_1794389905674_69 > .sqs-block-button-element--medium.sqs-block-button-element[data-initialized=\"true\"]",
+     "html": "<a href=\"https://scheduling.simplifeye.co/#key=WFoY7k9YpyKwMO7ZWt6xWfYZDcwYydD&amp;gaID=null\" class=\"sqs-block-button-element--medium sqs-button-element--primary sqs-block-button-element\" data-sqsp-button=\"\" target=\"_blank\" data-initialized=\"true\">\n    Schedule your appointment\n  </a>",
+     "detail": "text #ffffff on #dba11c, ratio 2.3:1 (needs 4.5:1), font 12.0pt (16px)"
+    },
+    {
+     "url": "https://www.samishbaydental.com/contact",
+     "viewport": "desktop",
+     "target": "h3 > strong",
+     "html": "<strong>Have a question or ready to book your next appointment? We’re here to help.</strong>",
+     "detail": "text #dba11c on #def1ff, ratio 1.98:1 (needs 3:1), font 26.8pt (35.6704px) bold"
+    },
+    {
+     "url": "https://www.samishbaydental.com/contact",
+     "viewport": "desktop",
+     "target": ".sqsrte-text-color--accent > strong",
+     "html": "<strong>here</strong>",
+     "detail": "text #dba11c on #def1ff, ratio 1.98:1 (needs 4.5:1), font 13.2pt (17.6392px) bold"
+    },
+    {
+     "url": "https://www.samishbaydental.com/contact",
+     "viewport": "desktop",
+     "target": "span[aria-hidden=\"true\"]:nth-child(1)",
+     "html": "<span aria-hidden=\"true\">SEND</span>",
+     "detail": "text #ffffff on #dba11c, ratio 2.3:1 (needs 4.5:1), font 12.0pt (16px)"
+    },
+    {
+     "url": "https://www.samishbaydental.com/contact",
+     "viewport": "desktop",
+     "target": ".sqsrte-small > a[href=\"tel:3605436808\"]",
+     "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>",
+     "detail": "text #dba11c on #064272, ratio 4.49:1 (needs 4.5:1), font 10.8pt (14.3608px)"
+    },
+    {
+     "url": "https://www.samishbaydental.com/contact",
+     "viewport": "desktop",
+     "target": "a:nth-child(7)",
+     "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>",
+     "detail": "text #dba11c on #064272, ratio 4.49:1 (needs 4.5:1), font 10.8pt (14.3608px)"
+    },
+    {
+     "url": "https://www.samishbaydental.com/cart",
+     "viewport": "desktop",
+     "target": "h2",
+     "html": "<h2 aria-label=\"Shopping Cart\" class=\"cart-title css-1myfihz\">Shopping Cart</h2>",
+     "detail": "text #dba11c on #def1ff, ratio 1.98:1 (needs 3:1), font 18.0pt (24px)"
+    },
+    {
+     "url": "https://www.samishbaydental.com/cart",
+     "viewport": "desktop",
+     "target": ".X66v2LRGydM4_qdq",
+     "html": "<a aria-label=\"Continue Shopping\" data-test=\"continue-shopping-link\" class=\"X66v2LRGydM4_qdq nY9px0427YRj4YUU sqs-editable-button sqs-button-element--secondary cart-continue-button\" href=\"/\">Continue Shopping</a>",
+     "detail": "text #dba11c on #def1ff, ratio 1.98:1 (needs 4.5:1), font 12.0pt (16px)"
+    },
+    {
+     "url": "https://www.samishbaydental.com/cart",
+     "viewport": "desktop",
+     "target": "a[href=\"tel:3605436808\"]",
+     "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>",
+     "detail": "text #dba11c on #064272, ratio 4.49:1 (needs 4.5:1), font 10.8pt (14.3608px)"
+    },
+    {
+     "url": "https://www.samishbaydental.com/cart",
+     "viewport": "desktop",
+     "target": "a:nth-child(7)",
+     "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>",
+     "detail": "text #dba11c on #064272, ratio 4.49:1 (needs 4.5:1), font 10.8pt (14.3608px)"
+    },
+    {
+     "url": "https://www.samishbaydental.com/about",
+     "viewport": "desktop",
+     "target": "#block-yui_3_17_2_1_1775245325642_3103 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+     "html": "<h4 style=\"text-align: center; ; white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">Angels in Medicine Newsletter: <a target=\"_blank\" href=\"https://www.medangel.org/expanding-dental-care-access-to-all-jessica-dubek/\">Expanding Dental Care Access to All</a></h4>",
+     "detail": "text #ffffff on #dba11c, ratio 2.3:1 (needs 3:1), font 19.4pt (25.8352px)"
+    },
+    {
+     "url": "https://www.samishbaydental.com/about",
+     "viewport": "desktop",
+     "target": "#block-yui_3_17_2_1_1775245325642_3103 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4 > a[target=\"_blank\"]",
+     "html": "<a target=\"_blank\" href=\"https://www.medangel.org/expanding-dental-care-access-to-all-jessica-dubek/\">Expanding Dental Care Access to All</a>",
+     "detail": "text #ffffff on #dba11c, ratio 2.3:1 (needs 3:1), font 19.4pt (25.8352px)"
+    }
+   ]
+  },
+  {
+   "rule": "target-size",
+   "title": "All touch targets must be 24px large, or leave sufficient space",
+   "impact": "serious",
+   "bestPractice": false,
+   "wcag": [
+    "2.5.8"
+   ],
+   "level": "AA",
+   "instances": 14,
+   "pages": {
+    "https://www.samishbaydental.com/": 2,
+    "https://www.samishbaydental.com/contact": 2,
+    "https://www.samishbaydental.com/cart": 2,
+    "https://www.samishbaydental.com/about": 2,
+    "https://www.samishbaydental.com/newpatient": 2,
+    "https://www.samishbaydental.com/aesthetics": 2,
+    "https://www.samishbaydental.com/employer-dental": 2
+   },
+   "viewports": [
+    "desktop",
+    "mobile"
+   ],
+   "fix": "Make the clickable area at least 24×24px (padding counts), or add space around it.",
+   "examples": [
+    {
+     "url": "https://www.samishbaydental.com/",
+     "viewport": "desktop",
+     "target": ".sqsrte-small > a[href=\"tel:3605436808\"]",
+     "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>",
+     "detail": "Target has insufficient size (121.8px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    },
+    {
+     "url": "https://www.samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "a:nth-child(7)",
+     "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>",
+     "detail": "Target has insufficient size (223.2px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    },
+    {
+     "url": "https://www.samishbaydental.com/contact",
+     "viewport": "desktop",
+     "target": ".sqsrte-small > a[href=\"tel:3605436808\"]",
+     "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>",
+     "detail": "Target has insufficient size (121.8px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    },
+    {
+     "url": "https://www.samishbaydental.com/contact",
+     "viewport": "desktop",
+     "target": "a:nth-child(7)",
+     "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>",
+     "detail": "Target has insufficient size (223.2px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    },
+    {
+     "url": "https://www.samishbaydental.com/cart",
+     "viewport": "desktop",
+     "target": "a[href=\"tel:3605436808\"]",
+     "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>",
+     "detail": "Target has insufficient size (121.8px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    },
+    {
+     "url": "https://www.samishbaydental.com/cart",
+     "viewport": "desktop",
+     "target": "a:nth-child(7)",
+     "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>",
+     "detail": "Target has insufficient size (223.2px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    },
+    {
+     "url": "https://www.samishbaydental.com/about",
+     "viewport": "desktop",
+     "target": "a[href=\"tel:3605436808\"]",
+     "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>",
+     "detail": "Target has insufficient size (121.8px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    },
+    {
+     "url": "https://www.samishbaydental.com/about",
+     "viewport": "desktop",
+     "target": "a:nth-child(7)",
+     "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>",
+     "detail": "Target has insufficient size (223.2px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    },
+    {
+     "url": "https://www.samishbaydental.com/newpatient",
+     "viewport": "desktop",
+     "target": "a[href=\"tel:3605436808\"]",
+     "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>",
+     "detail": "Target has insufficient size (121.8px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    },
+    {
+     "url": "https://www.samishbaydental.com/newpatient",
+     "viewport": "desktop",
+     "target": "a:nth-child(7)",
+     "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>",
+     "detail": "Target has insufficient size (223.2px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    },
+    {
+     "url": "https://www.samishbaydental.com/aesthetics",
+     "viewport": "desktop",
+     "target": "a[href=\"tel:3605436808\"]",
+     "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>",
+     "detail": "Target has insufficient size (121.8px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    },
+    {
+     "url": "https://www.samishbaydental.com/aesthetics",
+     "viewport": "desktop",
+     "target": "a:nth-child(7)",
+     "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>",
+     "detail": "Target has insufficient size (223.2px by 21.5px, should be at least 24px by 24px); Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 19px instead of at least 24px."
+    }
+   ]
+  },
+  {
+   "rule": "focus-not-visible",
+   "title": "Keyboard focus is not visible",
+   "impact": "serious",
+   "bestPractice": false,
+   "wcag": [
+    "2.4.7"
+   ],
+   "level": "AA",
+   "instances": 3,
+   "pages": {
+    "https://www.samishbaydental.com/": 3
+   },
+   "viewports": [
+    "desktop"
+   ],
+   "fix": "Do not remove the browser outline. Add a clear focus style, e.g. a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #1a5fb4; outline-offset: 2px; }.",
+   "examples": [
+    {
+     "url": "https://www.samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "<div> Carousel",
+     "html": "",
+     "detail": "No change in outline, shadow, border, colour or underline when focused by Tab"
+    },
+    {
+     "url": "https://www.samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "<button> Previous",
+     "html": "",
+     "detail": "No change in outline, shadow, border, colour or underline when focused by Tab"
+    },
+    {
+     "url": "https://www.samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "<button> Next",
+     "html": "",
+     "detail": "No change in outline, shadow, border, colour or underline when focused by Tab"
+    }
+   ]
+  },
+  {
+   "rule": "link-name",
+   "title": "Links must have discernible text",
+   "impact": "serious",
+   "bestPractice": false,
+   "wcag": [
+    "2.4.4",
+    "4.1.2"
+   ],
+   "level": "A",
+   "instances": 2,
+   "pages": {
+    "https://www.samishbaydental.com/": 2
+   },
+   "viewports": [
+    "desktop",
+    "mobile"
+   ],
+   "fix": "Put visible text inside the link, or add an accessible name: <a href=\"https://facebook.com/…\" aria-label=\"Our Facebook page\"><svg aria-hidden=\"true\">…</svg></a>.",
+   "examples": [
+    {
+     "url": "https://www.samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "#yui_3_17_2_1_1794389905674_220 > .margin-wrapper > .image-slide-anchor.content-fill[aria-label=\"\"]",
+     "html": "<a href=\"https://www.instagram.com/p/DfcuN2iFLf4/\" target=\"_blank\" aria-label=\"\" class=\"\n                    image-slide-anchor\n                    \n                    content-fill\n                  \" style=\"overflow: hidden;\">",
+     "detail": "Element is in tab order and does not have accessible text; Element does not have text that is visible to screen readers"
+    },
+    {
+     "url": "https://www.samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "#yui_3_17_2_1_1794389905674_224 > .margin-wrapper > .image-slide-anchor.content-fill[aria-label=\"\"]",
+     "html": "<a href=\"https://www.instagram.com/p/DfNC0HaG-JP/\" target=\"_blank\" aria-label=\"\" class=\"\n                    image-slide-anchor\n                    \n                    content-fill\n                  \" style=\"overflow: hidden;\">",
+     "detail": "Element is in tab order and does not have accessible text; Element does not have text that is visible to screen readers"
+    }
+   ]
+  },
+  {
+   "rule": "page-has-heading-one",
+   "title": "Page should contain a level-one heading",
+   "impact": "moderate",
+   "bestPractice": true,
+   "wcag": [],
+   "level": "best practice",
+   "instances": 12,
+   "pages": {
+    "https://www.samishbaydental.com/": 2,
+    "https://www.samishbaydental.com/contact": 2,
+    "https://www.samishbaydental.com/cart": 2,
+    "https://www.samishbaydental.com/newpatient": 2,
+    "https://www.samishbaydental.com/aesthetics": 2,
+    "https://www.samishbaydental.com/employer-dental": 2
+   },
+   "viewports": [
+    "desktop",
+    "mobile"
+   ],
+   "fix": "Mark the page's main title as <h1>.",
+   "examples": [
+    {
+     "url": "https://www.samishbaydental.com/",
+     "viewport": "desktop",
+     "target": "#yui_3_17_2_1_1794389905674_96",
+     "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…",
+     "detail": "Page must have a level-one heading"
+    },
+    {
+     "url": "https://www.samishbaydental.com/",
+     "viewport": "mobile",
+     "target": "#yui_3_17_2_1_1794389912224_96",
+     "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" style=\"--header-height: 94.765625px; scroll-behavior: smooth; --header-fixed-top-offset: 94.765625px; scroll-padding-top: 94.7656px;\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradi…",
+     "detail": "Page must have a level-one heading"
+    },
+    {
+     "url": "https://www.samishbaydental.com/contact",
+     "viewport": "desktop",
+     "target": "html",
+     "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…",
+     "detail": "Page must have a level-one heading"
+    },
+    {
+     "url": "https://www.samishbaydental.com/contact",
+     "viewport": "mobile",
+     "target": "html",
+     "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" style=\"--header-height: 94.765625px; scroll-behavior: smooth; --header-fixed-top-offset: 94.765625px; scroll-padding-top: 94.7656px;\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradi…",
+     "detail": "Page must have a level-one heading"
+    },
+    {
+     "url": "https://www.samishbaydental.com/cart",
+     "viewport": "desktop",
+     "target": "html",
+     "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…",
+     "detail": "Page must have a level-one heading"
+    },
+    {
+     "url": "https://www.samishbaydental.com/cart",
+     "viewport": "mobile",
+     "target": "html",
+     "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" style=\"--header-height: 94.765625px; scroll-behavior: smooth; --header-fixed-top-offset: 94.765625px; scroll-padding-top: 94.7656px;\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradi…",
+     "detail": "Page must have a level-one heading"
+    },
+    {
+     "url": "https://www.samishbaydental.com/newpatient",
+     "viewport": "desktop",
+     "target": "html",
+     "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…",
+     "detail": "Page must have a level-one heading"
+    },
+    {
+     "url": "https://www.samishbaydental.com/newpatient",
+     "viewport": "mobile",
+     "target": "html",
+     "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" style=\"--header-height: 94.765625px; scroll-behavior: smooth; --header-fixed-top-offset: 94.765625px; scroll-padding-top: 94.7656px;\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradi…",
+     "detail": "Page must have a level-one heading"
+    },
+    {
+     "url": "https://www.samishbaydental.com/aesthetics",
+     "viewport": "desktop",
+     "target": "html",
+     "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…",
+     "detail": "Page must have a level-one heading"
+    },
+    {
+     "url": "https://www.samishbaydental.com/aesthetics",
+     "viewport": "mobile",
+     "target": "html",
+     "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" style=\"--header-height: 94.765625px; scroll-behavior: smooth; --header-fixed-top-offset: 94.765625px; scroll-padding-top: 94.7656px;\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradi…",
+     "detail": "Page must have a level-one heading"
+    },
+    {
+     "url": "https://www.samishbaydental.com/employer-dental",
+     "viewport": "desktop",
+     "target": "html",
+     "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…",
+     "detail": "Page must have a level-one heading"
+    },
+    {
+     "url": "https://www.samishbaydental.com/employer-dental",
+     "viewport": "mobile",
+     "target": "html",
+     "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" style=\"--header-height: 94.765625px; scroll-behavior: smooth; --header-fixed-top-offset: 94.765625px; scroll-padding-top: 94.7656px;\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradi…",
+     "detail": "Page must have a level-one heading"
+    }
+   ]
+  },
+  {
+   "rule": "landmark-unique",
+   "title": "Landmarks should have a unique role or role/label/title (i.e. accessible name) combination",
+   "impact": "moderate",
+   "bestPractice": true,
+   "wcag": [],
+   "level": "best practice",
+   "instances": 7,
+   "pages": {
+    "https://www.samishbaydental.com/": 1,
+    "https://www.samishbaydental.com/contact": 1,
+    "https://www.samishbaydental.com/cart": 1,
+    "https://www.samishbaydental.com/about": 1,
+    "https://www.samishbaydental.com/newpatient": 1,
+    "https://www.samishbaydental.com/aesthetics": 1,
+    "https://www.samishbaydental.com/employer-dental": 1
+   },
+   "viewports": [
+    "desktop"
+   ],
+   "fix": "Give each one a distinct aria-label (e.g. \"Main menu\", \"Footer menu\").",
+   "examples": [
+    {
+     "url": "https://www.samishbaydental.com/",
+     "viewport": "desktop",
+     "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+     "html": "<nav class=\"header-nav-list\">",
+     "detail": "The landmark must have a unique aria-label, aria-labelledby, or title to make landmarks distinguishable"
+    },
+    {
+     "url": "https://www.samishbaydental.com/contact",
+     "viewport": "desktop",
+     "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+     "html": "<nav class=\"header-nav-list\">",
+     "detail": "The landmark must have a unique aria-label, aria-labelledby, or title to make landmarks distinguishable"
+    },
+    {
+     "url": "https://www.samishbaydental.com/cart",
+     "viewport": "desktop",
+     "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+     "html": "<nav class=\"header-nav-list\">",
+     "detail": "The landmark must have a unique aria-label, aria-labelledby, or title to make landmarks distinguishable"
+    },
+    {
+     "url": "https://www.samishbaydental.com/about",
+     "viewport": "desktop",
+     "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+     "html": "<nav class=\"header-nav-list\">",
+     "detail": "The landmark must have a unique aria-label, aria-labelledby, or title to make landmarks distinguishable"
+    },
+    {
+     "url": "https://www.samishbaydental.com/newpatient",
+     "viewport": "desktop",
+     "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+     "html": "<nav class=\"header-nav-list\">",
+     "detail": "The landmark must have a unique aria-label, aria-labelledby, or title to make landmarks distinguishable"
+    },
+    {
+     "url": "https://www.samishbaydental.com/aesthetics",
+     "viewport": "desktop",
+     "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+     "html": "<nav class=\"header-nav-list\">",
+     "detail": "The landmark must have a unique aria-label, aria-labelledby, or title to make landmarks distinguishable"
+    },
+    {
+     "url": "https://www.samishbaydental.com/employer-dental",
+     "viewport": "desktop",
+     "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+     "html": "<nav class=\"header-nav-list\">",
+     "detail": "The landmark must have a unique aria-label, aria-labelledby, or title to make landmarks distinguishable"
+    }
+   ]
+  },
+  {
+   "rule": "heading-order",
+   "title": "Heading levels should only increase by one",
+   "impact": "moderate",
+   "bestPractice": true,
+   "wcag": [],
+   "level": "best practice",
+   "instances": 3,
+   "pages": {
+    "https://www.samishbaydental.com/about": 1,
+    "https://www.samishbaydental.com/aesthetics": 1,
+    "https://www.samishbaydental.com/employer-dental": 1
+   },
+   "viewports": [
+    "desktop",
+    "mobile"
+   ],
+   "fix": "Use heading levels in order (H1 → H2 → H3) and style them with CSS rather than picking a level for its size.",
+   "examples": [
+    {
+     "url": "https://www.samishbaydental.com/about",
+     "viewport": "desktop",
+     "target": "#block-yui_3_17_2_1_1775245325642_3103 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+     "html": "<h4 style=\"text-align: center; ; white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">Angels in Medicine Newsletter: <a target=\"_blank\" href=\"https://www.medangel.org/expanding-dental-care-access-to-all-jessica-dubek/\">Expanding Dental Care Access to All</a></h4>",
+     "detail": "Heading order invalid"
+    },
+    {
+     "url": "https://www.samishbaydental.com/aesthetics",
+     "viewport": "desktop",
+     "target": "#block-yui_3_17_2_1_1792087140393_5185 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+     "html": "<h4 style=\"text-align: center; white-space: pre-wrap\" data-rte-preserve-empty=\"true\"><span class=\"sqsrte-text-color--white\">Botox and Microneedling Treatments</span></h4>",
+     "detail": "Heading order invalid"
+    },
+    {
+     "url": "https://www.samishbaydental.com/employer-dental",
+     "viewport": "desktop",
+     "target": "h4",
+     "html": "<h4 style=\"white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">Good oral health supports overall wellness and can help reduce the risk of serious medical conditions like diabetes, strokes, and heart disease - leading to healthier employees.</h4>",
+     "detail": "Heading order invalid"
+    }
+   ]
+  }
+ ],
+ "keyboard": [
+  {
+   "url": "https://www.samishbaydental.com/",
+   "tabStops": 30,
+   "uniqueStops": 30,
+   "reachedEnd": true,
+   "stoppedAt": null,
+   "firstStop": "<a> Skip to Content",
+   "firstIsSkipLink": true,
+   "noVisibleFocus": [
+    "<div> Carousel",
+    "<button> Previous",
+    "<button> Next"
+   ],
+   "focusOnHidden": [],
+   "trap": false,
+   "order": [
+    "<a> Skip to Content",
+    "<a>",
+    "<a> About",
+    "<a> New Patients",
+    "<a> Facial Aesthetics",
+    "<a> Contact",
+    "<a> On-Site Employer Dental",
+    "<a> Facebook",
+    "<a> Instagram",
+    "<a> Schedule now",
+    "<a> Schedule your appointment",
+    "<div> Play",
+    "<a>",
+    "<div> Play",
+    "<div> Play",
+    "<div> Play",
+    "<a>",
+    "<div> Play",
+    "<div> Play",
+    "<a> Our Team",
+    "<div> Carousel",
+    "<button> Previous",
+    "<button> Next",
+    "<a> (360) 543 - 6808",
+    "<div> Map"
+   ]
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "tabStops": 22,
+   "uniqueStops": 22,
+   "reachedEnd": false,
+   "stoppedAt": "iframe reCAPTCHA",
+   "firstStop": "<a> Skip to Content",
+   "firstIsSkipLink": true,
+   "noVisibleFocus": [],
+   "focusOnHidden": [],
+   "trap": false,
+   "order": [
+    "<a> Skip to Content",
+    "<a>",
+    "<a> About",
+    "<a> New Patients",
+    "<a> Facial Aesthetics",
+    "<a> Contact",
+    "<a> On-Site Employer Dental",
+    "<a> Facebook",
+    "<a> Instagram",
+    "<a> Schedule now",
+    "<a> here",
+    "<a> admin@samishbaydental.com",
+    "<a> (360) 543-6808",
+    "<input id=\"name-yui_3_17_2_1_1656615088309_7771-fname-field\">",
+    "<input id=\"name-yui_3_17_2_1_1656615088309_7771-lname-field\">",
+    "<input id=\"email-yui_3_17_2_1_1656615088309_7772-field\">",
+    "<textarea id=\"textarea-yui_3_17_2_1_1656615088309_7774-field\">",
+    "<button> SEND",
+    "<a> (360) 543 - 6808",
+    "<a> admin@samishbaydental.com",
+    "<a> Facebook",
+    "<a> Instagram"
+   ]
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "tabStops": 15,
+   "uniqueStops": 15,
+   "reachedEnd": true,
+   "stoppedAt": null,
+   "firstStop": "<a> Skip to Content",
+   "firstIsSkipLink": true,
+   "noVisibleFocus": [],
+   "focusOnHidden": [],
+   "trap": false,
+   "order": [
+    "<a> Skip to Content",
+    "<a>",
+    "<a> About",
+    "<a> New Patients",
+    "<a> Facial Aesthetics",
+    "<a> Contact",
+    "<a> On-Site Employer Dental",
+    "<a> Facebook",
+    "<a> Instagram",
+    "<a> Schedule now",
+    "<a> Continue Shopping",
+    "<a> (360) 543 - 6808",
+    "<a> admin@samishbaydental.com",
+    "<a> Facebook",
+    "<a> Instagram"
+   ]
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "tabStops": 18,
+   "uniqueStops": 18,
+   "reachedEnd": true,
+   "stoppedAt": null,
+   "firstStop": "<a> Skip to Content",
+   "firstIsSkipLink": true,
+   "noVisibleFocus": [],
+   "focusOnHidden": [],
+   "trap": false,
+   "order": [
+    "<a> Skip to Content",
+    "<a>",
+    "<a> About",
+    "<a> New Patients",
+    "<a> Facial Aesthetics",
+    "<a> Contact",
+    "<a> On-Site Employer Dental",
+    "<a> Facebook",
+    "<a> Instagram",
+    "<a> Schedule now",
+    "<a> Expanding Dental Care Access to All",
+    "<a> Something to Smile About",
+    "<a> Everyone Deserves Dental Care",
+    "<a> Mobile clinic tightens the gap in dental health care in East",
+    "<a> (360) 543 - 6808",
+    "<a> admin@samishbaydental.com",
+    "<a> Facebook",
+    "<a> Instagram"
+   ]
+  },
+  {
+   "url": "https://www.samishbaydental.com/newpatient",
+   "tabStops": 33,
+   "uniqueStops": 33,
+   "reachedEnd": true,
+   "stoppedAt": null,
+   "firstStop": "<a> Skip to Content",
+   "firstIsSkipLink": true,
+   "noVisibleFocus": [],
+   "focusOnHidden": [],
+   "trap": false,
+   "order": [
+    "<a> Skip to Content",
+    "<a>",
+    "<a> About",
+    "<a> New Patients",
+    "<a> Facial Aesthetics",
+    "<a> Contact",
+    "<a> On-Site Employer Dental",
+    "<a> Facebook",
+    "<a> Instagram",
+    "<a> Schedule now",
+    "<a> Schedule Your Appointment",
+    "<button id=\"button-bc8cf45768f263bbd52e-1\"> Are we accepting new Patients?",
+    "<button id=\"button-bc8cf45768f263bbd52e-2\"> What to expect on your first visit?",
+    "<button id=\"button-bc8cf45768f263bbd52e-3\"> What to do before your appointment?",
+    "<button id=\"button-bc8cf45768f263bbd52e-4\"> What insurance and payments forms do we take?",
+    "<button id=\"button-bc8cf45768f263bbd52e-5\"> Do we accept dental emergencies?",
+    "<button id=\"button-bc8cf45768f263bbd52e-6\"> What if you don't have dental insurance?",
+    "<a> View fullsize",
+    "<a> View fullsize",
+    "<a> View fullsize",
+    "<a> View fullsize",
+    "<a> View fullsize",
+    "<a> View fullsize",
+    "<a> View fullsize",
+    "<a> View fullsize"
+   ]
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "tabStops": 15,
+   "uniqueStops": 15,
+   "reachedEnd": true,
+   "stoppedAt": null,
+   "firstStop": "<a> Skip to Content",
+   "firstIsSkipLink": true,
+   "noVisibleFocus": [],
+   "focusOnHidden": [],
+   "trap": false,
+   "order": [
+    "<a> Skip to Content",
+    "<a>",
+    "<a> About",
+    "<a> New Patients",
+    "<a> Facial Aesthetics",
+    "<a> Contact",
+    "<a> On-Site Employer Dental",
+    "<a> Facebook",
+    "<a> Instagram",
+    "<a> Schedule now",
+    "<a> Schedule your appointment",
+    "<a> (360) 543 - 6808",
+    "<a> admin@samishbaydental.com",
+    "<a> Facebook",
+    "<a> Instagram"
+   ]
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "tabStops": 15,
+   "uniqueStops": 15,
+   "reachedEnd": true,
+   "stoppedAt": null,
+   "firstStop": "<a> Skip to Content",
+   "firstIsSkipLink": true,
+   "noVisibleFocus": [],
+   "focusOnHidden": [],
+   "trap": false,
+   "order": [
+    "<a> Skip to Content",
+    "<a>",
+    "<a> About",
+    "<a> New Patients",
+    "<a> Facial Aesthetics",
+    "<a> Contact",
+    "<a> On-Site Employer Dental",
+    "<a> Facebook",
+    "<a> Instagram",
+    "<a> Schedule now",
+    "<a> Learn more",
+    "<a> (360) 543 - 6808",
+    "<a> admin@samishbaydental.com",
+    "<a> Facebook",
+    "<a> Instagram"
+   ]
+  }
+ ],
+ "reflow": [
+  {
+   "url": "https://www.samishbaydental.com/",
+   "overflow": 0,
+   "culprits": []
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "overflow": 0,
+   "culprits": []
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "overflow": 0,
+   "culprits": []
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "overflow": 0,
+   "culprits": []
+  },
+  {
+   "url": "https://www.samishbaydental.com/newpatient",
+   "overflow": 0,
+   "culprits": []
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "overflow": 0,
+   "culprits": []
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "overflow": 0,
+   "culprits": []
+  }
+ ],
+ "instances": [
+  {
+   "url": "https://www.samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#yui_3_17_2_1_1794389905674_69 > .sqs-block-button-element--medium.sqs-block-button-element[data-initialized=\"true\"]",
+   "html": "<a href=\"https://scheduling.simplifeye.co/#key=WFoY7k9YpyKwMO7ZWt6xWfYZDcwYydD&amp;gaID=null\" class=\"sqs-block-button-element--medium sqs-button-element--primary sqs-block-button-element\" data-sqsp-button=\"\" target=\"_blank\" data-initialized=\"true\">\n    Schedule your appointment\n  </a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "landmark-unique",
+   "impact": "moderate",
+   "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+   "html": "<nav class=\"header-nav-list\">"
+  },
+  {
+   "url": "https://www.samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "link-name",
+   "impact": "serious",
+   "target": "#yui_3_17_2_1_1794389905674_220 > .margin-wrapper > .image-slide-anchor.content-fill[aria-label=\"\"]",
+   "html": "<a href=\"https://www.instagram.com/p/DfcuN2iFLf4/\" target=\"_blank\" aria-label=\"\" class=\"\n                    image-slide-anchor\n                    \n                    content-fill\n                  \" style=\"overflow: hidden;\">"
+  },
+  {
+   "url": "https://www.samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "link-name",
+   "impact": "serious",
+   "target": "#yui_3_17_2_1_1794389905674_224 > .margin-wrapper > .image-slide-anchor.content-fill[aria-label=\"\"]",
+   "html": "<a href=\"https://www.instagram.com/p/DfNC0HaG-JP/\" target=\"_blank\" aria-label=\"\" class=\"\n                    image-slide-anchor\n                    \n                    content-fill\n                  \" style=\"overflow: hidden;\">"
+  },
+  {
+   "url": "https://www.samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "page-has-heading-one",
+   "impact": "moderate",
+   "target": "#yui_3_17_2_1_1794389905674_96",
+   "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…"
+  },
+  {
+   "url": "https://www.samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": ".sqsrte-small > a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#yui_3_17_2_1_1794389912224_69 > .sqs-block-button-element--medium.sqs-block-button-element[data-initialized=\"true\"]",
+   "html": "<a href=\"https://scheduling.simplifeye.co/#key=WFoY7k9YpyKwMO7ZWt6xWfYZDcwYydD&amp;gaID=null\" class=\"sqs-block-button-element--medium sqs-button-element--primary sqs-block-button-element\" data-sqsp-button=\"\" target=\"_blank\" data-initialized=\"true\">\n    Schedule your appointment\n  </a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/",
+   "viewport": "mobile",
+   "rule": "link-name",
+   "impact": "serious",
+   "target": "#yui_3_17_2_1_1794389912224_218 > .margin-wrapper > .image-slide-anchor.content-fill[aria-label=\"\"]",
+   "html": "<a href=\"https://www.instagram.com/p/DfcuN2iFLf4/\" target=\"_blank\" aria-label=\"\" class=\"\n                    image-slide-anchor\n                    \n                    content-fill\n                  \" style=\"overflow: hidden;\">"
+  },
+  {
+   "url": "https://www.samishbaydental.com/",
+   "viewport": "mobile",
+   "rule": "link-name",
+   "impact": "serious",
+   "target": "#yui_3_17_2_1_1794389912224_222 > .margin-wrapper > .image-slide-anchor.content-fill[aria-label=\"\"]",
+   "html": "<a href=\"https://www.instagram.com/p/DfNC0HaG-JP/\" target=\"_blank\" aria-label=\"\" class=\"\n                    image-slide-anchor\n                    \n                    content-fill\n                  \" style=\"overflow: hidden;\">"
+  },
+  {
+   "url": "https://www.samishbaydental.com/",
+   "viewport": "mobile",
+   "rule": "page-has-heading-one",
+   "impact": "moderate",
+   "target": "#yui_3_17_2_1_1794389912224_96",
+   "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" style=\"--header-height: 94.765625px; scroll-behavior: smooth; --header-fixed-top-offset: 94.765625px; scroll-padding-top: 94.7656px;\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradi…"
+  },
+  {
+   "url": "https://www.samishbaydental.com/",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": ".sqsrte-small > a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "h3 > strong",
+   "html": "<strong>Have a question or ready to book your next appointment? We’re here to help.</strong>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": ".sqsrte-text-color--accent > strong",
+   "html": "<strong>here</strong>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "span[aria-hidden=\"true\"]:nth-child(1)",
+   "html": "<span aria-hidden=\"true\">SEND</span>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": ".sqsrte-small > a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "desktop",
+   "rule": "landmark-unique",
+   "impact": "moderate",
+   "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+   "html": "<nav class=\"header-nav-list\">"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "desktop",
+   "rule": "page-has-heading-one",
+   "impact": "moderate",
+   "target": "html",
+   "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": ".sqsrte-small > a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": ".sqsrte-text-color--accent > strong",
+   "html": "<strong>here</strong>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "span[aria-hidden=\"true\"]:nth-child(1)",
+   "html": "<span aria-hidden=\"true\">SEND</span>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": ".sqsrte-small > a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "mobile",
+   "rule": "page-has-heading-one",
+   "impact": "moderate",
+   "target": "html",
+   "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" style=\"--header-height: 94.765625px; scroll-behavior: smooth; --header-fixed-top-offset: 94.765625px; scroll-padding-top: 94.7656px;\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradi…"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": ".sqsrte-small > a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/contact",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "h2",
+   "html": "<h2 aria-label=\"Shopping Cart\" class=\"cart-title css-1myfihz\">Shopping Cart</h2>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": ".X66v2LRGydM4_qdq",
+   "html": "<a aria-label=\"Continue Shopping\" data-test=\"continue-shopping-link\" class=\"X66v2LRGydM4_qdq nY9px0427YRj4YUU sqs-editable-button sqs-button-element--secondary cart-continue-button\" href=\"/\">Continue Shopping</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "desktop",
+   "rule": "landmark-unique",
+   "impact": "moderate",
+   "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+   "html": "<nav class=\"header-nav-list\">"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "desktop",
+   "rule": "page-has-heading-one",
+   "impact": "moderate",
+   "target": "html",
+   "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "h2",
+   "html": "<h2 aria-label=\"Shopping Cart\" class=\"cart-title css-1myfihz\">Shopping Cart</h2>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": ".X66v2LRGydM4_qdq",
+   "html": "<a aria-label=\"Continue Shopping\" data-test=\"continue-shopping-link\" class=\"X66v2LRGydM4_qdq nY9px0427YRj4YUU sqs-editable-button sqs-button-element--secondary cart-continue-button\" href=\"/\">Continue Shopping</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "mobile",
+   "rule": "page-has-heading-one",
+   "impact": "moderate",
+   "target": "html",
+   "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" style=\"--header-height: 94.765625px; scroll-behavior: smooth; --header-fixed-top-offset: 94.765625px; scroll-padding-top: 94.7656px;\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradi…"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/cart",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3103 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+   "html": "<h4 style=\"text-align: center; ; white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">Angels in Medicine Newsletter: <a target=\"_blank\" href=\"https://www.medangel.org/expanding-dental-care-access-to-all-jessica-dubek/\">Expanding Dental Care Access to All</a></h4>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3103 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4 > a[target=\"_blank\"]",
+   "html": "<a target=\"_blank\" href=\"https://www.medangel.org/expanding-dental-care-access-to-all-jessica-dubek/\">Expanding Dental Care Access to All</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3355 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+   "html": "<h4 style=\"text-align: center; ; white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">The Island Sounder: <a target=\"_blank\" href=\"https://www.islandssounder.com/2024/04/17/something-to-smile-about/\">Something to Smile About</a></h4>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3355 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4 > a[target=\"_blank\"]",
+   "html": "<a target=\"_blank\" href=\"https://www.islandssounder.com/2024/04/17/something-to-smile-about/\">Something to Smile About</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3646 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+   "html": "<h4 style=\"text-align: center; ; white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">CareQuest News: <a target=\"_blank\" href=\"https://carequest.org/news-blog/in-the-news/page/6/?el_dbe_page\">Everyone Deserves Dental Care</a></h4>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3646 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4 > a[target=\"_blank\"]",
+   "html": "<a target=\"_blank\" href=\"https://carequest.org/news-blog/in-the-news/page/6/?el_dbe_page\">Everyone Deserves Dental Care</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3924 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+   "html": "<h4 style=\"text-align: center; ; white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3924 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4 > a[target=\"_blank\"]",
+   "html": "<a target=\"_blank\" href=\"https://www.cascadiadaily.com/2025/mar/30/mobile-clinic-tightens-the-gap-in-dental-health-care-in-east-whatcom/\">Mobile clinic tightens the gap in dental health care in East Whatcom</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "heading-order",
+   "impact": "moderate",
+   "target": "#block-yui_3_17_2_1_1775245325642_3103 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+   "html": "<h4 style=\"text-align: center; ; white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">Angels in Medicine Newsletter: <a target=\"_blank\" href=\"https://www.medangel.org/expanding-dental-care-access-to-all-jessica-dubek/\">Expanding Dental Care Access to All</a></h4>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "landmark-unique",
+   "impact": "moderate",
+   "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+   "html": "<nav class=\"header-nav-list\">"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3103 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+   "html": "<h4 style=\"text-align: center; ; white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">Angels in Medicine Newsletter: <a target=\"_blank\" href=\"https://www.medangel.org/expanding-dental-care-access-to-all-jessica-dubek/\">Expanding Dental Care Access to All</a></h4>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3103 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4 > a[target=\"_blank\"]",
+   "html": "<a target=\"_blank\" href=\"https://www.medangel.org/expanding-dental-care-access-to-all-jessica-dubek/\">Expanding Dental Care Access to All</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3355 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+   "html": "<h4 style=\"text-align: center; ; white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">The Island Sounder: <a target=\"_blank\" href=\"https://www.islandssounder.com/2024/04/17/something-to-smile-about/\">Something to Smile About</a></h4>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3355 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4 > a[target=\"_blank\"]",
+   "html": "<a target=\"_blank\" href=\"https://www.islandssounder.com/2024/04/17/something-to-smile-about/\">Something to Smile About</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3646 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+   "html": "<h4 style=\"text-align: center; ; white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">CareQuest News: <a target=\"_blank\" href=\"https://carequest.org/news-blog/in-the-news/page/6/?el_dbe_page\">Everyone Deserves Dental Care</a></h4>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3646 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4 > a[target=\"_blank\"]",
+   "html": "<a target=\"_blank\" href=\"https://carequest.org/news-blog/in-the-news/page/6/?el_dbe_page\">Everyone Deserves Dental Care</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3924 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+   "html": "<h4 style=\"text-align: center; ; white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "#block-yui_3_17_2_1_1775245325642_3924 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4 > a[target=\"_blank\"]",
+   "html": "<a target=\"_blank\" href=\"https://www.cascadiadaily.com/2025/mar/30/mobile-clinic-tightens-the-gap-in-dental-health-care-in-east-whatcom/\">Mobile clinic tightens the gap in dental health care in East Whatcom</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "mobile",
+   "rule": "heading-order",
+   "impact": "moderate",
+   "target": "#block-yui_3_17_2_1_1775245325642_3103 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+   "html": "<h4 style=\"text-align: center; ; white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">Angels in Medicine Newsletter: <a target=\"_blank\" href=\"https://www.medangel.org/expanding-dental-care-access-to-all-jessica-dubek/\">Expanding Dental Care Access to All</a></h4>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/about",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/newpatient",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/newpatient",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/newpatient",
+   "viewport": "desktop",
+   "rule": "landmark-unique",
+   "impact": "moderate",
+   "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+   "html": "<nav class=\"header-nav-list\">"
+  },
+  {
+   "url": "https://www.samishbaydental.com/newpatient",
+   "viewport": "desktop",
+   "rule": "page-has-heading-one",
+   "impact": "moderate",
+   "target": "html",
+   "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…"
+  },
+  {
+   "url": "https://www.samishbaydental.com/newpatient",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/newpatient",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/newpatient",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/newpatient",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/newpatient",
+   "viewport": "mobile",
+   "rule": "page-has-heading-one",
+   "impact": "moderate",
+   "target": "html",
+   "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" style=\"--header-height: 94.765625px; scroll-behavior: smooth; --header-fixed-top-offset: 94.765625px; scroll-padding-top: 94.7656px;\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradi…"
+  },
+  {
+   "url": "https://www.samishbaydental.com/newpatient",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/newpatient",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": ".sqs-block-button-element--medium",
+   "html": "<a href=\"https://scheduling.simplifeye.co/#key=WFoY7k9YpyKwMO7ZWt6xWfYZDcwYydD&amp;gaID=null\" class=\"sqs-block-button-element--medium sqs-button-element--primary sqs-block-button-element\" data-sqsp-button=\"\" target=\"_blank\" data-initialized=\"true\">\n    Schedule your appointment\n  </a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "desktop",
+   "rule": "heading-order",
+   "impact": "moderate",
+   "target": "#block-yui_3_17_2_1_1792087140393_5185 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+   "html": "<h4 style=\"text-align: center; white-space: pre-wrap\" data-rte-preserve-empty=\"true\"><span class=\"sqsrte-text-color--white\">Botox and Microneedling Treatments</span></h4>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "desktop",
+   "rule": "landmark-unique",
+   "impact": "moderate",
+   "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+   "html": "<nav class=\"header-nav-list\">"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "desktop",
+   "rule": "page-has-heading-one",
+   "impact": "moderate",
+   "target": "html",
+   "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": ".sqs-block-button-element--medium",
+   "html": "<a href=\"https://scheduling.simplifeye.co/#key=WFoY7k9YpyKwMO7ZWt6xWfYZDcwYydD&amp;gaID=null\" class=\"sqs-block-button-element--medium sqs-button-element--primary sqs-block-button-element\" data-sqsp-button=\"\" target=\"_blank\" data-initialized=\"true\">\n    Schedule your appointment\n  </a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "mobile",
+   "rule": "heading-order",
+   "impact": "moderate",
+   "target": "#block-yui_3_17_2_1_1792087140393_5185 > .sqs-block-content > .sqs-text-block-container > .sqs-html-content[data-sqsp-text-block-content=\"\"] > h4",
+   "html": "<h4 style=\"text-align: center; white-space: pre-wrap\" data-rte-preserve-empty=\"true\"><span class=\"sqsrte-text-color--white\">Botox and Microneedling Treatments</span></h4>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "mobile",
+   "rule": "page-has-heading-one",
+   "impact": "moderate",
+   "target": "html",
+   "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" style=\"--header-height: 94.765625px; scroll-behavior: smooth; --header-fixed-top-offset: 94.765625px; scroll-padding-top: 94.7656px;\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradi…"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/aesthetics",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": ".sqs-block-button-element--medium",
+   "html": "<a href=\"https://www.wearedentall.com/dental-employers\" class=\"sqs-block-button-element--medium sqs-button-element--primary sqs-block-button-element\" data-sqsp-button=\"\" target=\"_blank\" data-initialized=\"true\">\n    Learn more\n  </a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "desktop",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "desktop",
+   "rule": "heading-order",
+   "impact": "moderate",
+   "target": "h4",
+   "html": "<h4 style=\"white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">Good oral health supports overall wellness and can help reduce the risk of serious medical conditions like diabetes, strokes, and heart disease - leading to healthier employees.</h4>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "desktop",
+   "rule": "landmark-unique",
+   "impact": "moderate",
+   "target": ".header-display-desktop > .header-title-nav-wrapper > .header-nav > .header-nav-wrapper > .header-nav-list",
+   "html": "<nav class=\"header-nav-list\">"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "desktop",
+   "rule": "page-has-heading-one",
+   "impact": "moderate",
+   "target": "html",
+   "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl no-touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms no-csstransforms3d csstransition…"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "desktop",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": ".sqs-block-button-element--medium",
+   "html": "<a href=\"https://www.wearedentall.com/dental-employers\" class=\"sqs-block-button-element--medium sqs-button-element--primary sqs-block-button-element\" data-sqsp-button=\"\" target=\"_blank\" data-initialized=\"true\">\n    Learn more\n  </a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "mobile",
+   "rule": "color-contrast",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "mobile",
+   "rule": "heading-order",
+   "impact": "moderate",
+   "target": "h4",
+   "html": "<h4 style=\"white-space:pre-wrap;\" data-rte-preserve-empty=\"true\">Good oral health supports overall wellness and can help reduce the risk of serious medical conditions like diabetes, strokes, and heart disease - leading to healthier employees.</h4>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "mobile",
+   "rule": "page-has-heading-one",
+   "impact": "moderate",
+   "target": "html",
+   "html": "<html xmlns:og=\"http://opengraphprotocol.org/schema/\" xmlns:fb=\"http://www.facebook.com/2008/fbml\" lang=\"en-US\" style=\"--header-height: 94.765625px; scroll-behavior: smooth; --header-fixed-top-offset: 94.765625px; scroll-padding-top: 94.7656px;\" class=\"yui3-js-enabled js flexbox canvas canvastext webgl touch hashchange history draganddrop rgba hsla multiplebgs backgroundsize borderimage borderradi…"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a[href=\"tel:3605436808\"]",
+   "html": "<a href=\"tel:3605436808\">(360) 543 - 6808</a>"
+  },
+  {
+   "url": "https://www.samishbaydental.com/employer-dental",
+   "viewport": "mobile",
+   "rule": "target-size",
+   "impact": "serious",
+   "target": "a:nth-child(7)",
+   "html": "<a href=\"mailto:admin@samishbaydental.com?\">admin@samishbaydental.com</a>"
+  }
+ ]
+}

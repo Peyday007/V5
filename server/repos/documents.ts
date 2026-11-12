@@ -117,12 +117,94 @@ export async function getDocument(id: string): Promise<Document | null> {
   return row ? mapDocument(row) : null;
 }
 
+/**
+ * The file and line that called the lookup, as `services/importer.ts:229`.
+ *
+ * Production, 2026-11-05 23:30-23:51Z: after #538's memo and #542's batch the
+ * single-name lookup still ran ~44 000 times an hour and nothing said from
+ * where, because the process's statement tally is keyed by SQL text. The site
+ * goes into a trailing comment, so the tally (and the connection report) lists
+ * each caller as its own statement; pg_stat_statements ignores comments.
+ */
+function lookupSite(): string {
+  const frame = new Error().stack?.split('\n')[3] ?? '';
+  const match = /server[\\/]([\w./\\-]+\.ts):(\d+)/.exec(frame);
+  return match ? `${match[1]!.replace(/\\/g, '/')}:${match[2]}` : 'unknown';
+}
+
 export async function findDocumentByCanonicalName(projectId: string, canonicalName: string): Promise<Document | null> {
   const row = await getDb().get<DocumentRow>(
-    'SELECT * FROM documents WHERE project_id = ? AND canonical_name = ? COLLATE NOCASE',
+    // lower() on both sides, not COLLATE NOCASE: Postgres cannot use an index
+    // for a nondeterministic collation, so the NOCASE form scanned every
+    // document in the project — 50 000 times an hour on production, 2026-11-05,
+    // at 13 s each. idx_documents_project_lower_name serves this one.
+    `SELECT * FROM documents WHERE project_id = ? AND lower(canonical_name) = lower(?) /* from ${lookupSite()} */`,
     [projectId, canonicalName],
   );
   return row ? mapDocument(row) : null;
+}
+
+/** Names per statement: well under SQLite's and Postgres's parameter limits. */
+const NAME_BATCH = 200;
+
+/**
+ * Many canonical names resolved in one statement per 200, with
+ * `findDocumentByCanonicalName`'s answer for each, keyed by the name as given.
+ *
+ * Production, 2026-11-05 23:26-23:34Z (after #537/#538): the single-name
+ * lookup was fast (~15 ms) but still the pool's largest waiter, ~1.3 s of
+ * checkout wait per call, because a dependency check fired one lookup per name
+ * at once and eight connections served the burst. One statement per check
+ * takes one connection.
+ *
+ * Rows are matched back with a JavaScript case fold; a name that fold cannot
+ * place while a returned row went unplaced falls back to the single-name
+ * lookup, so the database's own lower() stays the authority.
+ */
+export async function findDocumentsByCanonicalNames(
+  projectId: string,
+  names: readonly string[],
+): Promise<Map<string, Document | null>> {
+  const result = new Map<string, Document | null>();
+  const wanted = [...new Set(names)];
+  for (let start = 0; start < wanted.length; start += NAME_BATCH) {
+    const chunk = wanted.slice(start, start + NAME_BATCH);
+    const rows = (await getDb().all<DocumentRow>(
+      `SELECT * FROM documents WHERE project_id = ? AND lower(canonical_name) IN (${chunk.map(() => 'lower(?)').join(', ')})`,
+      [projectId, ...chunk],
+    )).map(mapDocument);
+    const byFold = new Map<string, Document>();
+    for (const row of rows) {
+      const fold = row.canonicalName.toLowerCase();
+      if (!byFold.has(fold)) byFold.set(fold, row);
+    }
+    const placed = new Set<Document>();
+    const unplaced: string[] = [];
+    for (const name of chunk) {
+      const hit = byFold.get(name.toLowerCase());
+      if (hit) {
+        result.set(name, hit);
+        placed.add(hit);
+      } else {
+        unplaced.push(name);
+      }
+    }
+    const leftover = rows.some((row) => !placed.has(row));
+    for (const name of unplaced) {
+      result.set(name, leftover ? await findDocumentByCanonicalName(projectId, name) : null);
+    }
+  }
+  return result;
+}
+
+/** Every canonical name in a project that starts with `prefix`, case-insensitively, in one read. */
+export async function canonicalNamesStartingWith(projectId: string, prefix: string): Promise<string[]> {
+  const escaped = prefix.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`);
+  const rows = await getDb().all<{ canonical_name: string }>(
+    "SELECT canonical_name FROM documents WHERE project_id = ? AND lower(canonical_name) LIKE ? ESCAPE '\\'",
+    [projectId, `${escaped}%`],
+  );
+  return rows.map((r) => r.canonical_name);
 }
 
 export async function findDocumentByPath(filesystemPath: string): Promise<Document | null> {

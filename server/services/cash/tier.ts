@@ -60,6 +60,7 @@
  * with no answer — §30's rule that an unknown is never a favourable assumption,
  * applied to the question of whether something is an opportunity at all.
  */
+import { SQUEEZE_QUALIFICATION, type GoalExecutionPolicy } from '../../domain/goalPolicy.ts';
 import type { EngineCard, EngineCardEntry } from './engineCard.ts';
 import type { CashOpportunity, OpportunitySignal } from '../../domain/types.ts';
 import type { CardFieldKey } from './card.ts';
@@ -296,10 +297,17 @@ export interface TierReading {
 export function qualificationKeys(
   signal: OpportunitySignal | null,
   testFirst = false,
+  policy: GoalExecutionPolicy = 'EVIDENCE_FIRST',
 ): QualificationKey[] {
   if (testFirst) return [...TEST_FIRST_QUALIFICATION];
   const meaning = signal ? SIGNAL_MEANING[signal] : UNSIGNALLED;
-  const out = [...UNIVERSAL_QUALIFICATION];
+  /*
+   * A SQUEEZE goal sells what a responsible offer can be made on, and learns
+   * the rest from the sale (owner, 2026-11-06): no research round qualifies an
+   * opening for an experiment first. What the kind of evidence additionally
+   * needs before it can be delivered (acquisition access, an exit) still counts.
+   */
+  const out = policy === 'SQUEEZE' ? [...(SQUEEZE_QUALIFICATION as readonly QualificationKey[])] : [...UNIVERSAL_QUALIFICATION];
   for (const key of meaning.alsoRequires) if (!out.includes(key)) out.push(key);
   return out;
 }
@@ -319,6 +327,8 @@ export function qualificationKeys(
 export function cashTier(input: {
   opportunity: CashOpportunity;
   card: EngineCard;
+  /** The execution policy of the goal this project serves (`goals/policy.ts`); EVIDENCE_FIRST when none. */
+  policy?: GoalExecutionPolicy;
   /**
    * The short card's own reading: whether a bounded test could be run, and
    * which load-bearing fields are blank if not.
@@ -350,7 +360,8 @@ export function cashTier(input: {
 
   const captured = answered(CAPTURE_KEY);
   const testFirst = isTestFirstPlay(input.opportunity);
-  const keys = qualificationKeys(signal, testFirst);
+  const squeeze = input.policy === 'SQUEEZE';
+  const keys = qualificationKeys(signal, testFirst, input.policy ?? 'EVIDENCE_FIRST');
   const open = keys.filter((key) => !answered(key));
   const answeredCount = keys.length - open.length;
 
@@ -451,7 +462,10 @@ export function cashTier(input: {
       toAdvance: open.map(requirement),
       answered: answeredCount,
       required: keys.length,
-      summary: testFirst
+      summary: squeeze
+        ? `A squeeze goal sells this once ${open.length} thing${open.length === 1 ? '' : 's'} a responsible offer needs ${open.length === 1 ? 'is' : 'are'} ` +
+          'established; demand, price acceptance and time to cash are learned by selling it.'
+        : testFirst
         ? `A low-cost email play: it qualifies once ${open
             .map((key) => (key === 'delivery' ? 'Brain can deliver it' : 'who pays is established'))
             .join(' and ')}. The rest is learned from a bounded test.`
@@ -487,7 +501,10 @@ export function cashTier(input: {
       toAdvance: (input.readiness.missing as QualificationKey[]).map(requirement),
       answered: answeredCount,
       required: keys.length,
-      summary: testFirst
+      summary: squeeze
+        ? 'Everything a responsible offer needs beyond the short card is answered. What is left is ' +
+          'the short card the offer is made on; the sale answers the rest.'
+        : testFirst
         ? 'A low-cost email play: who pays is established and Brain can deliver it. What is ' +
           'left is the short card a bounded test runs against; the test answers the rest.'
         : 'The execution thesis is supported. What is left is the short card a bounded test ' +
@@ -502,9 +519,11 @@ export function cashTier(input: {
     toAdvance: [],
     answered: answeredCount,
     required: keys.length,
-    summary:
-      'Everything a bounded test turns on is answered. What remains is a decision only a ' +
-      'person can make.',
+    summary: squeeze
+      ? 'Ready to sell: a responsible offer can be made on it, and the sale itself establishes ' +
+        'demand, price acceptance and time to cash. Contacting the buyer needs the standing permission.'
+      : 'Everything a bounded test turns on is answered. What remains is a decision only a ' +
+        'person can make.',
   };
 }
 

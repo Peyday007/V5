@@ -1,0 +1,17 @@
+# Pinned. Sellbird itself is installed --no-deps from a pinned commit (Dockerfile):
+# its `mcp` pin conflicts with browser-use's, and its MCP server, keyring and
+# tray app are never imported here.
+browser-use==0.13.14
+fastapi==0.162.5
+uvicorn==0.54.0
+httpx>=0.27.0,<1
+pyyaml>=6.0.1,<7
+python-dotenv>=1.0.1,<2
+beautifulsoup4>=4.12.3,<5
+dnspython>=2.4.2,<3
+aiosmtplib>=5.1.3,<6
+aiosqlite>=0.19,<1
+pydantic>=2.5,<3
+pytz>=2024.1
+playwright>=1.40,<2
+pytest>=8.0,<9

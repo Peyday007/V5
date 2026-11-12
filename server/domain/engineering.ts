@@ -24,6 +24,9 @@
  * finding a worse one.
  */
 
+import { fileURLToPath } from 'node:url';
+import { DEPENDENCY_QUESTIONS } from './improvement.ts';
+
 /* ------------------------------------------------------------------------- */
 /* Vocabulary                                                                 */
 /* ------------------------------------------------------------------------- */
@@ -74,6 +77,22 @@ export const HUMAN_BLOCKER_KINDS: readonly BlockerKind[] = [
   'HUMAN_DECISION',
   'AMBIGUOUS_REQUIREMENT',
 ];
+
+/**
+ * Rule 11 — decide, don't ask. Peyton's standing instruction: a worker makes the
+ * best call for the Brain, records it, and keeps going. A HUMAN_DECISION or an
+ * AMBIGUOUS_REQUIREMENT reaches him only when it names one of these; anything
+ * else is the worker's to decide and goes in the end report under DECIDED.
+ * MISSING_AUTHORITY (a secret, credential or login only he holds) is unaffected.
+ */
+export const STOP_REASONS = [
+  'SPEND_OVER_CEILING',
+  'IRREVERSIBLE_PRODUCTION_LOSS',
+  'LEGAL_RISK',
+  'SECRET_EXPOSED',
+  'MAJOR_NEWS',
+] as const;
+export type StopReason = (typeof STOP_REASONS)[number];
 
 /**
  * Where a question can be answered without a person (rule 7). A blocker that
@@ -135,6 +154,26 @@ const TIER_3_PREFIXES = [
 const TIER_2_PREFIXES = ['server/services/', 'server/mcp/', 'server/routes/', 'server/index.ts'];
 const TIER_1_PREFIXES = ['client/', 'server/domain/', 'scripts/', 'tests/', '.claude/', 'package.json'];
 
+const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url)).replace(/\\/g, '/').replace(/\/+$/, '');
+
+/**
+ * The repo-relative spelling of a path, and whether it could not be placed in the
+ * repository at all (still absolute after stripping the root, or climbing with `..`).
+ */
+export function normaliseChangedPath(raw: string): { path: string; outside: boolean } {
+  let path = raw.trim().replace(/\\/g, '/');
+  for (const root of [REPO_ROOT, process.cwd().replace(/\\/g, '/').replace(/\/+$/, '')]) {
+    if (root && path.startsWith(`${root}/`)) {
+      path = path.slice(root.length + 1);
+      break;
+    }
+  }
+  path = path.replace(/\/{2,}/g, '/');
+  while (path.startsWith('./')) path = path.slice(2).replace(/^\/+/, '');
+  const outside = path.startsWith('/') || /^[A-Za-z]:\//.test(path) || path.split('/').includes('..');
+  return { path, outside };
+}
+
 function isDocs(path: string): boolean {
   return path.startsWith('docs/') || /\.(md|txt)$/i.test(path);
 }
@@ -150,8 +189,11 @@ export function riskForPaths(paths: readonly string[]): { tier: RiskTier; reason
     if (RISK_TIERS.indexOf(to) > RISK_TIERS.indexOf(tier)) tier = to;
     if (!reasons.includes(why)) reasons.push(why);
   };
-  for (const path of paths) {
-    if (TIER_3_PREFIXES.some((prefix) => path.startsWith(prefix))) {
+  for (const rawPath of paths) {
+    const { path, outside } = normaliseChangedPath(rawPath);
+    if (outside) {
+      raise('TIER_2', `${path} is outside the repository or climbs with "..", so its scope is unknown`);
+    } else if (TIER_3_PREFIXES.some((prefix) => path.startsWith(prefix))) {
       raise('TIER_3', `${path} is identity, routing, persistence, schema or deployment`);
     } else if (TIER_2_PREFIXES.some((prefix) => path.startsWith(prefix))) {
       raise('TIER_2', `${path} is subsystem or business logic`);
@@ -198,12 +240,13 @@ export function testPolicy(input: TestPolicyInput): TestPolicy {
   const risk = riskForPaths(input.changedPaths);
   const tier = risk.tier;
   const reasons = [...risk.reasons];
-  const allDocs = input.changedPaths.length > 0 && input.changedPaths.every(isDocs);
+  const changed = input.changedPaths.map((raw) => normaliseChangedPath(raw));
+  const allDocs = changed.length > 0 && changed.every((c) => !c.outside && isDocs(c.path));
 
   const typecheck = !allDocs;
   const impacted = tier !== 'TIER_0';
-  const persistence = input.changedPaths.some(
-    (path) => path.startsWith('server/db/') || path.startsWith('server/repos/'),
+  const persistence = changed.some(
+    ({ path }) => path.startsWith('server/db/') || path.startsWith('server/repos/'),
   );
   const focusedPostgres = tier === 'TIER_3' && persistence;
 
@@ -389,6 +432,12 @@ export interface Preflight {
   testPolicy: TestPolicy;
   existingEvidence: string[];
   duplicateCheck: DuplicateCheck | null;
+  /**
+   * The questions a workflow change answers before it goes live (§87), present
+   * when the change touches routing, lanes, queues or dispatch: what depends on
+   * it, what it displaces, who takes that work and whether they measurably can.
+   */
+  dependencyCheck: { required: boolean; questions: string[]; why: string } | null;
   parallelismAdvice: string;
   doneWhen: string;
   humanAuthorityRequired: boolean;
@@ -436,6 +485,20 @@ const DONE_TEXT: Record<OutcomeLevel, string> = {
   DEPLOYED: 'the released image is serving this commit',
   PRODUCTION_WORKING: 'the real user journey succeeds in production — not a PR, not a green test, the journey',
 };
+
+/** Where work is routed, laned, queued or dispatched: a change here moves work between workers. */
+export const WORKFLOW_OWNERS = [
+  'server/domain/binPurpose.ts',
+  'server/services/bins/',
+  'server/services/freeLane/',
+  'server/services/dispatch/',
+  'server/services/queue/',
+  'server/repos/workQueue.ts',
+  'server/repos/bins.ts',
+  'server/services/factory/start.ts',
+  'server/services/factory/scheduler.ts',
+  'server/services/improvement/',
+] as const;
 
 export function preflight(input: PreflightInput): Preflight {
   const paths = input.changedPaths ?? [];
@@ -496,6 +559,19 @@ export function preflight(input: PreflightInput): Preflight {
     AUTHORITY_MARKERS.some((marker) => input.objective.toLowerCase().includes(marker));
   if (humanAuthorityRequired) reasons.push('New authority (secret, credential, repository, spend or protected merge) stays with a person.');
 
+  const workflow = paths.filter((p) => WORKFLOW_OWNERS.some((owner) => p.startsWith(owner)));
+  const dependencyCheck = workflow.length > 0
+    ? {
+        required: true,
+        questions: Object.values(DEPENDENCY_QUESTIONS),
+        why:
+          `The change touches workflow routing (${workflow.slice(0, 4).join(', ')}). §85: Claude routines were restricted ` +
+          'before the free lane could do the displaced research, and nothing asked. Answer each question with a ' +
+          'production reading before it goes live, and verify the end-to-end journey after.',
+      }
+    : null;
+  if (dependencyCheck) reasons.push('§87: a workflow change answers the dependency check before it ships.');
+
   const outcome = input.intendedOutcome ?? 'PRODUCTION_WORKING';
   reasons.push(`Rule 5: done means ${DONE_TEXT[outcome]}.`);
 
@@ -509,6 +585,7 @@ export function preflight(input: PreflightInput): Preflight {
     testPolicy: tier === policy.tier ? policy : { ...policy, tier },
     existingEvidence: [...(input.provenProperties ?? [])],
     duplicateCheck,
+    dependencyCheck,
     parallelismAdvice:
       'Independent work (no dependency, disjoint owned paths, separate branches) runs concurrently when a surface is free; do not serialize it.',
     doneWhen: DONE_TEXT[outcome],
@@ -638,6 +715,7 @@ export function classifyBlocker(input: {
   kind: BlockerKind;
   statement: string;
   checked: readonly string[];
+  stopReason?: string | null;
 }): { accepted: boolean; needsHuman: boolean; reason: string } {
   const needsHuman = HUMAN_BLOCKER_KINDS.includes(input.kind);
   if (!needsHuman) {
@@ -659,6 +737,18 @@ export function classifyBlocker(input: {
       reason:
         'Rule 7: a question for a person must first be looked up where Brain can know it — name what you checked ' +
         `(${SELF_ANSWERABLE_SOURCES.join(', ')}).`,
+    };
+  }
+  if (
+    input.kind !== 'MISSING_AUTHORITY' &&
+    !(STOP_REASONS as readonly string[]).includes(input.stopReason ?? '')
+  ) {
+    return {
+      accepted: false,
+      needsHuman: false,
+      reason:
+        'Rule 11: decide it yourself — take the reading that is best for the Brain, record it, and list it ' +
+        `under DECIDED in the end report. A person is stopped only for: ${STOP_REASONS.join(', ')}.`,
     };
   }
   return { accepted: true, needsHuman: true, reason: `${input.kind} is a person's to answer.` };

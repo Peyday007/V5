@@ -204,13 +204,18 @@ export interface ScenarioModelDefinition {
 /** Bounds on one run. Each is a ceiling, and exceeding one is a refusal. */
 export const SCENARIO_LIMITS = {
   maxEvaluations: 50_000,
-  maxVariables: 40,
+  /*
+   * 80 so a goal model holds eight openings (4 + 8 × 9). At 40 it held four,
+   * and production's $10K plan simulated 4 of 28 openings (2026-11-02): a
+   * portfolio was read as a shortlist.
+   */
+  maxVariables: 80,
   maxStrategies: 8,
   maxDerived: 60,
   maxLines: 40,
   maxMetrics: 12,
   maxConstraints: 12,
-  maxExpressionLength: 600,
+  maxExpressionLength: 1_200,
   maxExpressionDepth: 40,
   maxEmpiricalValues: 5_000,
   maxChoiceOptions: 12,
@@ -234,6 +239,23 @@ export interface RunOptions {
   objective?: SelectedObjective;
   /** What "acceptable" means for robustness. Default: feasible and contribution ≥ 0. */
   acceptable?: { minContributionCents: number };
+  /**
+   * Measure which uncertain input could change the choice of strategy, by the
+   * expected gain in this metric (or `contribution`) from knowing it first
+   * (§79). An infeasible or invalid evaluation scores the metric's worst value.
+   */
+  informationValue?: { metric: string };
+}
+
+/** Which inputs could change the choice of strategy, measured on the run's own worlds. */
+export interface InformationValueResult {
+  metric: string;
+  /** Over a sweep the gains are over tested conditions, not expectations. */
+  basis: RunBasis;
+  baseline: { strategy: string; expected: number };
+  /** With every input known at once — the ceiling on what research could buy. */
+  perfect: number;
+  inputs: Array<{ key: string; value: number; changesDecision: boolean; bestByBin: string[] }>;
 }
 
 export const SUMMARY_STATISTICS = ['MEAN', 'P10', 'P50', 'P90', 'MIN', 'MAX'] as const;
@@ -405,5 +427,7 @@ export interface ScenarioResult {
   dominanceCriteria: string[];
   ranking: ObjectiveRanking | null;
   sensitivity: Sensitivity;
+  /** Present only when the run was asked for it. */
+  informationValue?: InformationValueResult;
   limitations: string[];
 }

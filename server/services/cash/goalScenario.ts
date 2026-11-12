@@ -24,6 +24,9 @@
  * pays after the deadline contributes nothing, which is what lets a smaller,
  * faster plan beat a bigger, slower one.
  */
+import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
+import { breaksOperatingModel, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
+import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactMap } from '../../repos/cashCardFacts.ts';
 import { agreementsFor } from '../../repos/cashJourney.ts';
@@ -31,15 +34,40 @@ import { readMoneyFigures } from './figures.ts';
 import { readDays } from './monetization/commissionPass.ts';
 import { cashOutcomeLessons, LESSON_MIN_SAMPLE } from './journey/learning.ts';
 import { isTestFirstPlay } from './tier.ts';
+import { readVolume } from './volume.ts';
 import { sharedFrontier } from './shared.ts';
 import type { CashOpportunity, CashCardFact } from '../../domain/types.ts';
 import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, type SourceRef, type StrategySpec, type VariableProvenance } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
+import { inferCashQuantity, loadCashKnowledge, type CashKnowledge, type CashQuantity } from '../quant/knowledge.ts';
+import { toScenarioInput } from '../quant/export.ts';
+import { evaluateGoalPortfolio, type GoalPortfolio } from '../goals/portfolio.ts';
+import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
+import type { VariableSpec } from '../../domain/scenario.ts';
+import type { ConstructedArrangement } from './construct.ts';
+
+/**
+ * Phase timings for a plan read, printed as they happen when BRAIN_PLAN_TRACE is
+ * set (the Goals workflow sets it). Production, 2026-11-02: the read went from
+ * 15 s to past the workflow's 15-minute bound, while the same code reads a
+ * 25-opening plan locally in 0.7 s — only a timing taken where it is slow can
+ * say which phase it is.
+ */
+export function planTrace(scope: string, env = process.env): (label: string) => void {
+  if (!env['BRAIN_PLAN_TRACE']) return () => {};
+  const start = Date.now();
+  let last = start;
+  return (label) => {
+    const now = Date.now();
+    console.error(`  trace ${scope} +${now - last}ms (${now - start}ms) ${label}`);
+    last = now;
+  };
+}
 
 /** Variables the model declares once, and per opportunity. */
 export const GOAL_MODEL_VARIABLES = 4;
-export const OPPORTUNITY_MODEL_VARIABLES = 8;
+export const OPPORTUNITY_MODEL_VARIABLES = 9;
 /**
  * At most this many opportunities in one model, derived from the engine's own
  * variable limit rather than written beside it — a constant written beside it
@@ -63,9 +91,30 @@ export interface ModelInput {
   provenance: VariableProvenance;
   source: SourceRef | null;
   note: string;
+  /**
+   * A distribution or narrowed range the quantitative inference engine (§79)
+   * reconstructed for an unknown from comparable or component evidence. `value`
+   * stays null: an inferred number never establishes a link of the plan's
+   * causal chain, it only replaces a blind sweep with an evidenced one.
+   */
+  distribution?: VariableSpec;
+  inferred?: { tier: EvidenceTier; justified: boolean; p10: number; p50: number; p90: number; observations: number };
 }
 
 export interface ModelledOpportunity {
+  /**
+   * A buyer-acquisition channel of its own, instead of the shared cold
+   * outreach: prospects a day it brings (paid inbound, a marketplace, a
+   * partner), the capacity it draws on and the risk it shares. Set only by a
+   * reconstructed strategy (§99), never by a card.
+   */
+  channel?: { label: string; perDay: ModelInput; resource: string; riskGroup: string };
+  /**
+   * The buyer pays before the supplier is paid, so its direct cost is funded
+   * from the buyer's money rather than the owner's. Set only by a
+   * reconstructed strategy (§99) and always as an assumption.
+   */
+  fundedByBuyer?: boolean;
   opportunity: CashOpportunity;
   index: number;
   tier: string;
@@ -76,7 +125,21 @@ export interface ModelledOpportunity {
   hours: ModelInput;
   daysToCash: ModelInput;
   close: ModelInput;
+  /**
+   * The share of prospects contacted who reply with interest, before any of
+   * them buy — the first step of the quant engine's demand estimate
+   * (`goals/portfolio.ts`). One when `close` was measured per contact, since
+   * that measurement already contains it.
+   */
+  respond: ModelInput;
   directCost: ModelInput;
+  /**
+   * Deals the market can take inside the window: reachable buyers times how
+   * often each buys, as research stated them (`volume.ts`). A one-off is one
+   * deal. A repeatable play whose volume nobody has established is a swept
+   * range here and a missing link in the plan — never a number a plan assumes.
+   */
+  volume: ModelInput;
   /** A live agreement already recorded for this opportunity. */
   agreed: boolean;
   /** What those agreements are worth, in major units: money a buyer has already agreed to. */
@@ -98,6 +161,130 @@ export interface ModelledOpportunity {
    * and it pays in one lump at the end, not little by little.
    */
   competitiveAward: boolean;
+  /**
+   * A constructed arrangement entered on its reconstructed estimates (§82),
+   * not an opening anybody found. Every link of the plan's chain is missing for
+   * it, so it can never make a plan recommendable; it competes only on what it
+   * could contribute, which is what decides where research goes next.
+   */
+  estimated?: { arrangementKey: string; tier: string; observations: number };
+}
+
+/** The id an estimated arrangement takes in a goal model. Never a row. */
+export const ARRANGEMENT_ID_PREFIX = 'arr_';
+export function isArrangementId(id: string): boolean {
+  return id.startsWith(ARRANGEMENT_ID_PREFIX);
+}
+/** At most this many constructed arrangements enter one goal model as estimates. */
+export const MAX_ESTIMATED_ARRANGEMENTS = 12;
+
+/**
+ * A constructed arrangement as a model candidate, from its reconstructed value
+ * alone — or null when nothing reconstructs its value, or its known worst case
+ * breaks the limits. Price is the reconstruction's own p10–p50–p90; everything
+ * else nobody has established is swept, exactly as for an opening with nothing
+ * on its card. A recurring design is repeatable, with its volume a range from
+ * one deal, never a number assumed. Pure.
+ */
+export function estimatedFromArrangement(one: ConstructedArrangement, input: { projectId: string; currency: string; beforeProofCents: number | null }): ModelledOpportunity | null {
+  const { p10, p50, p90 } = one.value;
+  if (one.value.tier === 'UNKNOWN' || !(p50 > 0) || !(p90 >= p10)) return null;
+  if (one.stress.exposure === 'EXCEEDS') return null;
+  const ref: SourceRef = { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `${one.value.tier} reconstruction from ${one.value.observations} observation(s)` };
+  const low = Math.max(0.01, p10);
+  const high = Math.max(low + 0.01, p90);
+  const price: ModelInput = {
+    value: null,
+    low,
+    high,
+    provenance: 'ASSUMPTION',
+    source: ref,
+    note: `reconstructed (${one.value.tier}, ${one.value.observations} obs.), not shown paid: p10 ${p10} p50 ${p50} p90 ${p90}`,
+    // Swept over the reconstruction's range: an estimate carries no distribution (only evidence may).
+    inferred: { tier: one.value.tier as EvidenceTier, justified: false, p10, p50, p90, observations: one.value.observations },
+  };
+  const worst = one.stress.worstCaseCents === null ? null : one.stress.worstCaseCents / 100;
+  const capital: ModelInput =
+    one.stress.exposure === 'SAFE'
+      ? { value: null, low: 0, high: 0.01, provenance: 'ASSUMPTION', source: ref, note: 'the design spends nothing of ours before buyers commit; not yet established in practice' }
+      : worst !== null
+        ? unknown(0, Math.max(0.01, worst), `the design's known worst case is ${worst}; swept from nothing to it`)
+        : unknown(0, high, 'nobody has established the money tied up; swept from nothing to the top price');
+  const repeatable = one.design.repeat !== 'ONE_OFF';
+  const opportunity = {
+    id: `${ARRANGEMENT_ID_PREFIX}${one.key}`,
+    projectId: input.projectId,
+    title: `Constructed: ${one.label}`.slice(0, 200),
+    mechanism: 'OTHER',
+    industry: one.sector,
+    source: null,
+    payer: null,
+    reachableChannel: null,
+    buyingSignal: null,
+    signalObservedAt: null,
+    offerScope: null,
+    priceCents: null,
+    currency: input.currency,
+    fulfillmentOwner: null,
+    peakFundingCents: null,
+    humanHours: null,
+    expiresAt: null,
+    duplicateOfId: null,
+    requiredCapabilities: [],
+    state: 'DISCOVERED',
+    createdAt: new Date(0).toISOString(),
+  } as unknown as CashOpportunity;
+  return {
+    opportunity,
+    index: 0,
+    tier: 'ESTIMATE',
+    repeatable,
+    price,
+    capital,
+    hours: unknown(1, 40, 'nobody has established the hours; swept from 1 to 40 per deal'),
+    daysToCash: unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days'),
+    close: unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing'),
+    respond: unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%'),
+    directCost: unknown(0, Math.max(0.01, high * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the top price'),
+    volume: repeatable
+      ? unknown(1, MAX_BUYERS_OFFERED, `a ${one.design.repeat.toLowerCase().replace('_', ' ')} design repeats, but nobody has established how many buyers exist; swept from 1 deal`)
+      : known(1, 'ASSUMPTION', ref, 'a one-off design is one deal'),
+    agreed: false,
+    agreedValue: 0,
+    agreedDeals: 0,
+    fulfilledBy: null,
+    competitiveAward: false,
+    estimated: { arrangementKey: one.key, tier: one.value.tier, observations: one.value.observations },
+  };
+}
+
+/**
+ * Which constructed arrangements enter the model: those with a reconstructed
+ * value, inside the limits and the goal's exclusions, largest estimated
+ * contribution first (the p50 price, times the deals a recurring design could
+ * repeat inside the window, capped at what is still needed). Not by how easy
+ * each is to research, and not by sector.
+ */
+export function pickEstimatedArrangements(
+  arrangements: readonly ConstructedArrangement[],
+  input: { projectId: string; currency: string; beforeProofCents: number | null; remaining: number; exclusions: Parameters<typeof excludedBy>[1]; limit?: number },
+): ModelledOpportunity[] {
+  const scored: { one: ModelledOpportunity; score: number }[] = [];
+  for (const arrangement of arrangements) {
+    // Judged on what the arrangement is — its label, sector and buyer — never on its research question,
+    // which carries Brain's own instructions ("leave out government contracts", "the owner does no
+    // physical work") and so matched every exclusion: production read 0 of 404 (2026-11-06).
+    const what = `${arrangement.label} ${arrangement.sector ?? ''} ${arrangement.demand.name}`;
+    if (excludedBy(what, input.exclusions)) continue;
+    if (breaksOperatingModel(operatingFit({ title: arrangement.label, offerScope: arrangement.demand.name }))) continue;
+    const one = estimatedFromArrangement(arrangement, input);
+    if (!one) continue;
+    const p50 = arrangement.value.p50;
+    const deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(input.remaining / Math.max(1, p50))) : 1;
+    scored.push({ one, score: Math.min(input.remaining, p50 * deals) });
+  }
+  scored.sort((a, b) => b.score - a.score || a.one.opportunity.id.localeCompare(b.one.opportunity.id));
+  return scored.slice(0, input.limit ?? MAX_ESTIMATED_ARRANGEMENTS).map((one) => one.one);
 }
 
 /**
@@ -122,8 +309,19 @@ export interface GoalModel {
    * its own evidence, so the engine's limit never limits what Brain considers.
    */
   considered: ModelledOpportunity[];
+  /** The constructed arrangements entered on their estimates (§82), for the reasoning loop (§93). */
+  estimates?: ModelledOpportunity[];
   /** Why nothing could be modelled, when nothing could. */
   refusal: string | null;
+  /**
+   * The quant engine's combined reading over every modelled opening: demand
+   * estimated world by world and the combination most likely to reach the
+   * target (`goals/portfolio.ts`). It decides which openings take the
+   * simulation's slots. Null when nothing could be modelled.
+   */
+  portfolio: GoalPortfolio | null;
+  /** Exactly what the portfolio was evaluated on, so a reconstruction (§99) re-reads the same plan. */
+  portfolioInput?: Parameters<typeof evaluateGoalPortfolio>[0] | null;
 }
 
 function kindToProvenance(fact: CashCardFact | null): { provenance: VariableProvenance; source: SourceRef | null } {
@@ -138,6 +336,34 @@ function known(value: number, provenance: VariableProvenance, source: SourceRef 
 
 function unknown(low: number, high: number, note: string): ModelInput {
   return { value: null, low, high, provenance: 'UNKNOWN', source: null, note };
+}
+
+/**
+ * An unknown, inferred from what the project already holds — or the blind
+ * fallback range when nothing bears on it. `scale` turns a share of the price
+ * into money at this opening's price.
+ */
+function inferOr(knowledge: CashKnowledge | null, quantity: CashQuantity, opportunity: CashOpportunity, now: Date, fallback: ModelInput, scale = 1, what = ''): ModelInput {
+  if (!knowledge) return fallback;
+  let est: Estimate | null = null;
+  try {
+    est = inferCashQuantity(knowledge, quantity, opportunity, now);
+  } catch {
+    est = null;
+  }
+  if (!est) return fallback;
+  const scaled: Estimate = scale === 1 ? est : { ...est, p05: est.p05 * scale, p10: est.p10 * scale, p50: est.p50 * scale, p90: est.p90 * scale, p95: est.p95 * scale, samples: est.samples.map((x) => x * scale) };
+  const exported = toScenarioInput(scaled);
+  return {
+    value: null,
+    low: scaled.p05,
+    high: scaled.p95,
+    provenance: exported.provenance,
+    source: exported.sources[0] ?? null,
+    note: `inferred${what}: ${exported.note}`,
+    distribution: exported.spec,
+    inferred: { tier: est.tier, justified: exported.provenance === 'EVIDENCE', p10: scaled.p10, p50: scaled.p50, p90: scaled.p90, observations: est.used.length },
+  };
 }
 
 /** Wilson score interval for a rate measured as successes out of trials. */
@@ -157,8 +383,11 @@ async function modelOpportunity(
   tier: string,
   currency: string,
   lessons: Awaited<ReturnType<typeof cashOutcomeLessons>>,
+  knowledge: CashKnowledge | null = null,
+  now: Date = new Date(),
+  windowDays = 30,
 ): Promise<ModelledOpportunity | { reason: string }> {
-  const fact = await cardFactMap(opportunity.id);
+  const fact = await cardFactMap(opportunity.id, opportunity.projectId ?? undefined);
   const ref: SourceRef = { kind: 'CASH_OPPORTUNITY', ref: opportunity.id };
 
   // Price: the column, else the low end of a published revenue range.
@@ -187,7 +416,7 @@ async function modelOpportunity(
       ? known(opportunity.peakFundingCents / 100, kindToProvenance(exposure).provenance === 'UNKNOWN' ? 'ASSUMPTION' : kindToProvenance(exposure).provenance, kindToProvenance(exposure).source ?? ref, 'money tied up before it pays')
       : capitalFigures.length > 0
         ? known(Math.max(...capitalFigures.map((one) => one.cents)) / 100, kindToProvenance(capitalFact).provenance, kindToProvenance(capitalFact).source, 'the most that goes out before any comes back')
-        : unknown(0, top, 'nobody has established the money tied up; swept from nothing to the whole price');
+        : inferOr(knowledge, 'capitalShare', opportunity, now, unknown(0, top, 'nobody has established the money tied up; swept from nothing to the whole price'), top, ' as a share of the top price');
 
   const hoursFact = fact('hours');
   const hours =
@@ -200,16 +429,16 @@ async function modelOpportunity(
   const daysToCash =
     ttcDays !== null
       ? known(ttcDays, kindToProvenance(ttc).provenance, kindToProvenance(ttc).source, 'days from start to usable cash')
-      : unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days');
+      : inferOr(knowledge, 'daysToCash', opportunity, now, unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days'));
 
   const costFact = fact('directCosts');
   const costFigures = costFact ? readMoneyFigures(costFact.value, currency).filter((one) => !one.perUnit) : [];
   const directCost =
     costFigures.length > 0
       ? known(Math.max(...costFigures.map((one) => one.cents)) / 100, kindToProvenance(costFact).provenance, kindToProvenance(costFact).source, 'the highest published direct cost')
-      : unknown(0, Math.max(1, top * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the price');
+      : inferOr(knowledge, 'costShare', opportunity, now, unknown(0, Math.max(1, top * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the price'), top, ' as a share of the top price');
 
-  const agreements = (await agreementsFor(opportunity.id)).filter((one) => !one.releasedAt);
+  const agreements = (await agreementsFor(opportunity.id, opportunity.projectId ?? undefined)).filter((one) => !one.releasedAt);
   const lesson = lessons.find((one) => one.mechanism === opportunity.mechanism && one.contacts >= LESSON_MIN_SAMPLE);
   // An agreement is one buyer's yes, and is counted as that money — never as a
   // rate the next buyer will match. More buyers need a measured rate of their own.
@@ -225,8 +454,40 @@ async function modelOpportunity(
       note: `measured on this Brain: ${lesson.agreements} of ${lesson.contacts} contacts agreed`,
     };
   } else {
-    close = unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing');
+    close = inferOr(knowledge, 'close', opportunity, now, unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing'));
   }
+  // Agreements per contact already include whether the contact replied.
+  const respond: ModelInput = lesson
+    ? known(1, 'HISTORICAL', close.source, 'the measured rate is agreements per contact, which includes replying')
+    : inferOr(knowledge, 'respond', opportunity, now, unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%'));
+
+  const volumeFact = fact('buyerVolume');
+  const volumeRead = volumeFact ? readVolume(volumeFact.value, windowDays) : null;
+  /*
+   * Repeatable is a fact about the market, not a category: a test-first play
+   * is one by construction, and any other opening becomes one when research
+   * establishes more than one deal inside the window. Nothing else may assume
+   * a second sale.
+   */
+  /*
+   * An estimate of repeat volume with a stated basis (Brain's RECOMMENDATION)
+   * also makes an opening repeatable — but only as a range from one deal up to
+   * the estimate, never as the estimate itself, and volume stays an
+   * unestablished link. Production, 2026-11-06: requiring a sourced count before
+   * a second sale could even be modelled made every opening a one-off, so the
+   * plan was a heap of single small deals however much repeat business existed.
+   */
+  const estimatedRepeat = volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'RECOMMENDATION';
+  const repeatable = isTestFirstPlay(opportunity) || (volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'EVIDENCE') || estimatedRepeat;
+  const volume: ModelInput = !repeatable
+    ? known(1, 'ASSUMPTION', ref, 'a one-off opening is one deal')
+    : estimatedRepeat
+      ? unknown(1, Math.min(MAX_BUYERS_OFFERED, volumeRead!.deals), `estimated, not established: ${volumeRead!.basis}; swept from 1 deal to the estimate`)
+    : volumeRead && volumeFact
+      ? known(volumeRead.deals, kindToProvenance(volumeFact).provenance, kindToProvenance(volumeFact).source, volumeRead.basis)
+      : unknown(1, MAX_BUYERS_OFFERED, volumeFact
+        ? 'the volume on the card states no count of buyers or orders; swept from 1 deal to the most a strategy offers'
+        : 'nobody has established how many buyers exist or how often they buy; swept from 1 deal to the most a strategy offers');
 
   const fulfilmentFact = fact('fulfillment');
   const fulfilledBy =
@@ -238,13 +499,15 @@ async function modelOpportunity(
     opportunity,
     index,
     tier,
-    repeatable: isTestFirstPlay(opportunity),
+    repeatable,
     price,
     capital,
     hours,
     daysToCash,
     close,
+    respond,
     directCost,
+    volume,
     agreed: agreements.length > 0,
     agreedValue: agreements.reduce((sum, one) => sum + one.amountCents, 0) / 100,
     agreedDeals: agreements.length,
@@ -261,32 +524,46 @@ async function modelOpportunity(
  */
 /** A price buyers are shown to pay — a source or this Brain's own record — rather than a guess. */
 export function priceSupported(one: Pick<ModelledOpportunity, 'price'>): boolean {
-  return one.price.provenance === 'EVIDENCE' || one.price.provenance === 'HISTORICAL';
+  return !one.price.inferred && (one.price.provenance === 'EVIDENCE' || one.price.provenance === 'HISTORICAL');
 }
 
 /** How many of an opening's money facts rest on a source or a measurement rather than a guess. */
 export function evidenceCount(one: ModelledOpportunity): number {
   return [one.price, one.close, one.daysToCash, one.directCost, one.capital, one.hours].filter(
-    (input) => input.provenance === 'EVIDENCE' || input.provenance === 'HISTORICAL',
+    (input) => !input.inferred && (input.provenance === 'EVIDENCE' || input.provenance === 'HISTORICAL'),
   ).length;
 }
 
-export function bestCaseReach(one: ModelledOpportunity, remaining: number, daysLeft: number): number {
+/** Whether research has established how many deals the market can take. */
+export function volumeEstablished(one: Pick<ModelledOpportunity, 'volume' | 'repeatable'>): boolean {
+  return !one.repeatable || (one.volume.value !== null && (one.volume.provenance === 'EVIDENCE' || one.volume.provenance === 'HISTORICAL'));
+}
+
+/**
+ * `established` counts a repeatable play's deals only up to the volume research
+ * established — one deal when nobody has — so a supported reach never rests on
+ * buyers nobody has shown exist. Without it the reach is the most the opening
+ * could be worth if research confirms the volume.
+ */
+export function bestCaseReach(one: ModelledOpportunity, remaining: number, daysLeft: number, established = false): number {
   const late = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && one.daysToCash.value > daysLeft;
   if (late) return 0;
   // An award nobody has shown pays inside the window does not count as reach:
   // first it must be won, then delivered, then paid on the buyer's terms.
   if (one.competitiveAward && !(one.daysToCash.provenance === 'EVIDENCE' || one.daysToCash.provenance === 'HISTORICAL')) return 0;
   const price = one.price.high ?? one.price.value ?? 0;
-  const deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(remaining / Math.max(1, price))) : one.agreedValue > 0 ? 0 : 1;
+  let deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(remaining / Math.max(1, price))) : one.agreedValue > 0 ? 0 : 1;
+  if (established && one.repeatable) deals = Math.min(deals, volumeEstablished(one) ? one.volume.value ?? 1 : 1);
   return Math.min(remaining, one.agreedValue + deals * price);
 }
 
 function variable(key: string, label: string, unit: string, input: ModelInput): ScenarioVariable {
-  const spec =
+  const spec: VariableSpec =
     input.value !== null
       ? { kind: 'FIXED' as const, value: input.value }
-      : { kind: 'RANGE' as const, min: input.low ?? 0, max: Math.max(input.high ?? 0, (input.low ?? 0) + 1e-9) };
+      : input.distribution
+        ? input.distribution
+        : { kind: 'RANGE' as const, min: input.low ?? 0, max: Math.max(input.high ?? 0, (input.low ?? 0) + 1e-9) };
   return {
     key,
     label,
@@ -300,7 +577,7 @@ function variable(key: string, label: string, unit: string, input: ModelInput): 
 }
 
 /** Compose the model, or say exactly why there is nothing to model. */
-export async function composeGoalModel(input: { goal: Workstream; target: TargetReading; now?: Date }): Promise<GoalModel> {
+export async function composeGoalModel(input: { goal: Workstream; target: TargetReading; now?: Date; arrangements?: readonly ConstructedArrangement[] }): Promise<GoalModel> {
   const { goal, target } = input;
   const excluded: GoalModel['excluded'] = [];
   const candidates: ModelledOpportunity[] = [];
@@ -310,12 +587,15 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     excluded,
     considered: candidates,
     refusal,
+    portfolio: null,
   });
   if (target.daysLeft === null) return refuse('The goal has no due date, so there is no window to count money inside. Set one with `goals terms --due`.');
   if (target.daysLeft <= 0) return refuse('The goal is past its due date.');
   if (target.achieved) return refuse('The target is already met.');
 
+  const trace = planTrace('compose');
   const frontier = await sharedFrontier({ projectId: target.projectId });
+  trace(`shared frontier: ${frontier.opportunities.length} opening(s)`);
   const tierOf = new Map(frontier.opportunities.map((one) => [one.id, one.tier.tier as string]));
   const live = (await listOpportunities({ projectId: target.projectId })).filter(
     (one) => LIVE.has(one.state) && !one.duplicateOfId && one.currency === target.currency,
@@ -333,10 +613,33 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     return b.createdAt.localeCompare(a.createdAt);
   });
 
+  trace(`live openings: ${live.length}`);
   const lessons = await cashOutcomeLessons(target.projectId);
+  trace('outcome lessons');
+  // What the project already established about other openings, for inference.
+  let knowledge: CashKnowledge | null = null;
+  try {
+    knowledge = await loadCashKnowledge(target.projectId);
+  } catch {
+    knowledge = null;
+  }
+  trace('cash knowledge');
   const included: ModelledOpportunity[] = [];
+  // What the goal's owner said to leave out (§82): an excluded opening takes no slot, and says why.
+  const exclusions = await goalExclusions(input.goal);
   for (const opportunity of ordered) {
     const tier = tierOf.get(opportunity.id) ?? 'SIGNAL';
+    const excludedClass = IN_FLIGHT.has(opportunity.state) ? null : excludedBy(`${opportunity.title} ${opportunity.payer ?? ''} ${opportunity.industry ?? ''}`, exclusions);
+    if (excludedClass) {
+      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `left out by the goal: ${EXCLUSION_CLASSES[excludedClass].label}` });
+      continue;
+    }
+    // The standing operating rule: a plan never rests on the owner's physical work.
+    const fit = operatingFit(operatingFactsOf(opportunity));
+    if (breaksOperatingModel(fit)) {
+      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `needs the owner's physical work: ${fit.because}` });
+      continue;
+    }
     if (tier === 'SIGNAL' && !IN_FLIGHT.has(opportunity.state)) {
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: 'evidence only: nobody has shown who would pay us' });
       continue;
@@ -349,9 +652,32 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `closed on ${opportunity.expiresAt.slice(0, 10)}` });
       continue;
     }
-    const modelled = await modelOpportunity(opportunity, 0, tier, target.currency, lessons);
+    const modelled = await modelOpportunity(opportunity, 0, tier, target.currency, lessons, knowledge, input.now ?? new Date(), target.daysLeft);
+    trace(`modelled ${opportunity.id}`);
     if ('reason' in modelled) excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: modelled.reason });
     else candidates.push(modelled);
+  }
+  /*
+   * Constructed arrangements compete in the same portfolio on their
+   * reconstructed estimates (owner, 2026-11-06). Before, they reached the plan
+   * only after a research round filed an opening for them, so hundreds of
+   * designs were never compared with the small openings that happened to be
+   * found, and the plan was a heap of one-offs. They enter the quant
+   * portfolio — the comparison of contribution that directs research — and
+   * never the gate's slots: an estimate cannot displace an evidenced strategy
+   * or be judged as an opening anybody found.
+   */
+  const estimates: ModelledOpportunity[] = [];
+  if (input.arrangements?.length) {
+    const estimated = pickEstimatedArrangements(input.arrangements, {
+      projectId: target.projectId,
+      currency: target.currency,
+      beforeProofCents: target.capitalBeforeProofCents,
+      remaining: target.remainingCents / 100,
+      exclusions,
+    });
+    estimates.push(...estimated);
+    trace(`estimated arrangements: ${estimated.length} of ${input.arrangements.length}`);
   }
   /*
    * Which openings take the engine's few slots is decided by what each could
@@ -362,13 +688,40 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
    * then the largest reach inside the window, then the evidence tier.
    */
   const remainingMajor = target.remainingCents / 100;
+  /*
+   * The quant engine reads every modelled opening first (§79, owner
+   * 2026-11-03): its demand estimate and the combination most likely to reach
+   * the target decide which openings take the simulation's slots — members of
+   * that combination first, then each by the cash its own demand settles.
+   */
+  let portfolio: GoalPortfolio | null = null;
+  let portfolioInput: Parameters<typeof evaluateGoalPortfolio>[0] | null = null;
+  if (candidates.length + estimates.length > 0) {
+    portfolioInput = {
+      openings: [...candidates, ...estimates],
+      remaining: remainingMajor,
+      daysLeft: target.daysLeft,
+      capitalCeiling: target.capitalCeilingCents === null ? null : target.capitalCeilingCents / 100,
+      beforeProof: target.capitalBeforeProofCents === null ? null : target.capitalBeforeProofCents / 100,
+      perWeek: target.capitalPerWeekCents === null ? null : target.capitalPerWeekCents / 100,
+      resources: target.resources,
+      measuredCapacity: await instantlyCapacity().catch(() => null),
+      measuredRates: await instantlyMeasuredRates().catch(() => null),
+    };
+    portfolio = evaluateGoalPortfolio(portfolioInput);
+    trace('quant portfolio');
+  }
+  const inBest = new Set(portfolio?.best?.members.map((one) => one.opportunityId) ?? []);
+  const demandP50 = new Map((portfolio?.demand ?? []).map((one) => [one.opportunityId, one.refused ? -1 : one.revenue.p50]));
   candidates.sort(
     (a, b) =>
       (IN_FLIGHT.has(a.opportunity.state) || a.agreed ? 0 : 1) - (IN_FLIGHT.has(b.opportunity.state) || b.agreed ? 0 : 1) ||
+      Number(inBest.has(b.opportunity.id)) - Number(inBest.has(a.opportunity.id)) ||
+      (demandP50.get(b.opportunity.id) ?? 0) - (demandP50.get(a.opportunity.id) ?? 0) ||
       Number(a.competitiveAward) - Number(b.competitiveAward) ||
       // Reach at a price buyers are shown to pay comes before reach at a guess.
-      (priceSupported(b) ? bestCaseReach(b, remainingMajor, target.daysLeft!) : 0) -
-        (priceSupported(a) ? bestCaseReach(a, remainingMajor, target.daysLeft!) : 0) ||
+      (priceSupported(b) ? bestCaseReach(b, remainingMajor, target.daysLeft!, true) : 0) -
+        (priceSupported(a) ? bestCaseReach(a, remainingMajor, target.daysLeft!, true) : 0) ||
       evidenceCount(b) - evidenceCount(a) ||
       bestCaseReach(b, remainingMajor, target.daysLeft!) - bestCaseReach(a, remainingMajor, target.daysLeft!) ||
       (TIER_ORDER[a.tier] ?? 3) - (TIER_ORDER[b.tier] ?? 3),
@@ -381,11 +734,17 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     included.push({ ...one, index: included.length + 1 });
   }
   if (included.length === 0) {
-    return refuse(
-      live.length === 0
-        ? 'There is no live opportunity in this project to build a plan from.'
-        : 'No live opportunity is far enough along to model: each one is evidence only or has no price anywhere.',
-    );
+    // Nothing found can be modelled; the portfolio of estimates still says where research would move the goal.
+    return {
+      ...refuse(
+        live.length === 0
+          ? 'There is no live opportunity in this project to build a plan from.'
+          : 'No live opportunity is far enough along to model: each one is evidence only or has no price anywhere.',
+      ),
+      portfolio,
+      portfolioInput,
+      estimates,
+    };
   }
 
   const variables: ScenarioVariable[] = [
@@ -429,6 +788,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       variable(`${o}_days`, `${name}: days to usable cash`, 'days', one.daysToCash),
       variable(`${o}_close`, `${name}: share of buyers who agree`, 'share', one.close),
       variable(`${o}_cost`, `${name}: direct cost per deal`, target.currency, one.directCost),
+      variable(`${o}_volume`, `${name}: deals the market can take in the window`, 'deals', one.volume),
       variable(`${o}_agreed`, `${name}: already agreed by a buyer`, target.currency, known(one.agreedValue, 'EVIDENCE', { kind: 'CASH_OPPORTUNITY', ref: one.opportunity.id, note: 'recorded buyer agreements' }, 'money a buyer has agreed to')),
       {
         key: `${o}_n`,
@@ -441,7 +801,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       },
     );
     derived.push(
-      { key: `${o}_won`, label: `${name}: deals won`, unit: 'deals', expr: `${o}_n * ${o}_close` },
+      { key: `${o}_won`, label: `${name}: deals won`, unit: 'deals', expr: `min(${o}_n * ${o}_close, ${o}_volume)` },
       { key: `${o}_in`, label: `${name}: settles before the deadline`, unit: 'flag', expr: `if(${o}_days <= days_left, 1, 0)` },
     );
     lines.push(
@@ -489,13 +849,6 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     if (!same && strategies.length < SCENARIO_LIMITS.maxStrategies) strategies.push(spec);
   };
   const canonical = (set: StrategySpec['set']) => JSON.stringify(Object.entries(set).sort(([a], [b]) => a.localeCompare(b)));
-  for (const one of included) {
-    add({
-      key: `only_o${one.index}`,
-      label: `Only: ${one.opportunity.title.slice(0, 60)}`,
-      set: { ...none(), [`o${one.index}_n`]: dealsFor(one) },
-    });
-  }
   /*
    * Combinations are built from the openings themselves, never from a split.
    * Each walks the openings in one order and asks each for only what is still
@@ -541,6 +894,16 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       set: { ...none(), ...Object.fromEntries(included.map((one) => [`o${one.index}_n`, dealsFor(one)])) },
     });
   }
+  // Single-opening strategies fill what the engine's strategy limit leaves, after
+  // the combinations: with eight openings modelled, eight "only" strategies would
+  // otherwise take every slot and no portfolio would ever be evaluated.
+  for (const one of included) {
+    add({
+      key: `only_o${one.index}`,
+      label: `Only: ${one.opportunity.title.slice(0, 60)}`,
+      set: { ...none(), [`o${one.index}_n`]: dealsFor(one) },
+    });
+  }
 
   return {
     definition: {
@@ -558,7 +921,10 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     included,
     excluded,
     considered: candidates,
+    estimates,
     refusal: null,
+    portfolio,
+    portfolioInput,
   };
 }
 

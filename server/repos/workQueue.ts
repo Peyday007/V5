@@ -222,6 +222,16 @@ export async function getWorkItemRow(id: string): Promise<WorkItemRow | null> {
   return row ?? null;
 }
 
+/** Rows by id, in the ids' order, in one statement per 200 ids (not one pool checkout each). */
+export async function getWorkItemRows(ids: readonly string[]): Promise<WorkItemRow[]> {
+  const byId = new Map<string, WorkItemRow>();
+  for (let at = 0; at < ids.length; at += 200) {
+    const chunk = ids.slice(at, at + 200);
+    for (const row of await getDb().all<WorkItemRow>(`SELECT * FROM work_items WHERE id IN (${chunk.map(() => '?').join(', ')})`, chunk)) byId.set(row.id, row);
+  }
+  return ids.map((id) => byId.get(id)).filter((row): row is WorkItemRow => row !== undefined);
+}
+
 export async function listWorkItems(
   projectId: string,
   options: { states?: WorkItemState[]; limit?: number } = {},
@@ -510,6 +520,20 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
   // cannot ask the database to sort the world.
   const candidateLimit = Math.min(200, limit * 8);
 
+  /*
+   * Rows already looked at, so the next round reads the next page.
+   *
+   * Production, 2026-11-04 20:56Z → 00:05Z: the free lane claimed nothing for
+   * three hours while 34 commercial fragments waited. It claims one item at a
+   * time with an `admit` rule, so each round read the same top eight rows by
+   * priority — work its rule declines (another lane's, one cooling down after
+   * a provider failure, one it may not audit) — refused all eight, and the
+   * "another round would give the same answer" break below ended the claim.
+   * Nothing past the eighth row was ever offered to it. Each round now skips
+   * what it saw and reads a page twice as large, so declined work at the head
+   * of the queue cannot hide claimable work behind it.
+   */
+  const seen: string[] = [];
   for (let round = 0; round < 3 && claimed.length < limit; round += 1) {
     const now = queueNow();
     const params: SqlParam[] = [now, now, ...projectIds];
@@ -543,6 +567,9 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
       params.push(...scope.params);
     }
     params.push(input.workerId);
+    const seenClause = seen.length > 0 ? ` AND id NOT IN (${seen.map(() => '?').join(', ')})` : '';
+    params.push(...seen);
+    const pageLimit = Math.min(200, candidateLimit * 2 ** round);
 
     // An expired lease is claimable work. That is what makes recovery
     // independent of any process staying alive: the next worker to ask picks it
@@ -559,12 +586,13 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
       `SELECT * FROM work_items
         WHERE ${CLAIMABLE_SQL}
           AND project_id IN (${projectIds.map(() => '?').join(', ')})${typeClause}
-          AND (target_worker_id IS NULL OR target_worker_id = ?)
+          AND (target_worker_id IS NULL OR target_worker_id = ?)${seenClause}
         ORDER BY priority DESC, available_at, created_at, id
-        LIMIT ${candidateLimit}`,
+        LIMIT ${pageLimit}`,
       params,
     );
     if (candidates.length === 0) break;
+    for (const candidate of candidates) seen.push(candidate.id);
 
     let wonThisRound = 0;
     for (const candidate of candidates) {
@@ -691,9 +719,11 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
       });
       wonThisRound += 1;
     }
-    // Every candidate was taken by somebody else or filtered out. Another round
-    // over the same rows would produce the same answer.
-    if (wonThisRound === 0) break;
+    // Every row of the queue there is has been read: nothing further to offer.
+    if (candidates.length < pageLimit) break;
+    // Without an admit rule, a round that won nothing lost every row to other
+    // workers or to scope, and the next page is as contended: stop, as before.
+    if (wonThisRound === 0 && !input.admit) break;
   }
 
   return claimed;

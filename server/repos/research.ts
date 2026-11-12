@@ -515,6 +515,35 @@ export async function updateOrchestration(
   return getOrchestration(id);
 }
 
+/**
+ * Park a packet for a person, unless it is already parked for exactly this
+ * reason. Every pass re-derives a parked packet (NEEDS_HUMAN is deliberately
+ * not terminal), and each restart walks every one of them, so an unconditional
+ * write re-stamped `updated_at` and `completed_at` on hundreds of packets that
+ * had not changed: a write per packet per boot, and a report that read old
+ * parks as new ones (2026-10-31: 58 "parked" in three hours, almost all
+ * September packets re-touched by two restarts). The guard is in the statement,
+ * so a real change of status or reason still lands, and a park that must
+ * record when the packet stopped still does when nothing has. True when it wrote.
+ */
+export async function parkOrchestration(
+  id: string,
+  reason: string | null,
+  options: { stampCompleted?: boolean } = {},
+): Promise<boolean> {
+  const at = nowIso();
+  const done = await getDb().run(
+    `UPDATE research_orchestrations
+        SET status = 'NEEDS_HUMAN', failure_reason = ?,
+            completed_at = CASE WHEN ? = 1 THEN ? ELSE completed_at END,
+            updated_at = ?
+      WHERE id = ? AND NOT (status = 'NEEDS_HUMAN' AND COALESCE(failure_reason, '') = ?
+                             AND (? = 0 OR completed_at IS NOT NULL))`,
+    [reason, options.stampCompleted ? 1 : 0, at, at, id, reason ?? '', options.stampCompleted ? 1 : 0],
+  );
+  return done.changes === 1;
+}
+
 /** Cheap liveness write, so a dead process is distinguishable from a slow one. */
 export async function beat(id: string): Promise<void> {
   const ts = nowIso();
@@ -657,8 +686,7 @@ export async function createFragments(inputs: CreateFragmentInput[]): Promise<Re
    * which handed a capped goal back every fragment it had already created.
    */
   for (const reservationId of charge.reservationIds) await settleReservation(reservationId);
-  const loaded = await Promise.all(ids.map((id) => getFragment(id)));
-  return loaded.filter((f): f is ResearchFragment => f !== null);
+  return (await rowsByIds<ResearchFragmentRow>('research_fragments', ids)).map(mapFragment);
 }
 
 export async function getFragment(id: string): Promise<ResearchFragment | null> {
@@ -1091,13 +1119,64 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
       );
     }
   });
-  const loaded = await Promise.all(ids.map((id) => getClaim(id)));
-  return loaded.filter((claim): claim is ResearchClaim => claim !== null);
+  return claimsByIds(ids);
+}
+
+/**
+ * Rows by id, in the ids' order, in one statement per 200 ids.
+ *
+ * Reading each new row back with its own query, all at once, was one pool
+ * checkout per row: a free-lane submission of forty claims queued forty
+ * callers, and with two dozen slots submitting, production read "8/8
+ * connection(s) in use, 468 caller(s) waiting" (2026-11-05 19:36Z) while
+ * health checks failed and every job's next statement timed out.
+ */
+async function rowsByIds<R extends { id: string }>(table: string, ids: readonly string[]): Promise<R[]> {
+  const byId = new Map<string, R>();
+  for (let at = 0; at < ids.length; at += 200) {
+    const chunk = ids.slice(at, at + 200);
+    for (const row of await getDb().all<R>(`SELECT * FROM ${table} WHERE id IN (${chunk.map(() => '?').join(', ')})`, chunk)) byId.set(row.id, row);
+  }
+  return ids.map((id) => byId.get(id)).filter((row): row is R => row !== undefined);
+}
+
+export async function claimsByIds(ids: readonly string[]): Promise<ResearchClaim[]> {
+  return (await rowsByIds<ResearchClaimRow>('research_claims', ids)).map(mapClaim);
+}
+
+/** The source URL of every claim a project's openings were filed from, in one statement. */
+export async function sourceUrlsForProject(projectId: string): Promise<Map<string, string | null>> {
+  const rows = await getDb().all<{ id: string; source_url: string | null }>(
+    `SELECT c.id, c.source_url FROM research_claims c
+      WHERE c.id IN (SELECT o.source_claim_id FROM cash_opportunities o WHERE o.project_id = ? AND o.source_claim_id IS NOT NULL)`,
+    [projectId],
+  );
+  return new Map(rows.map((row) => [row.id, row.source_url]));
 }
 
 export async function getClaim(id: string): Promise<ResearchClaim | null> {
   const row = await getDb().get<ResearchClaimRow>('SELECT * FROM research_claims WHERE id = ?', [id]);
   return row ? mapClaim(row) : null;
+}
+
+/**
+ * Where each claim came from, in one statement: the source URL, publisher and
+ * date. Quantitative inference uses these as the lineage that decides whether
+ * two observations share data (§79), so it reads them in a batch rather than
+ * one claim at a time.
+ */
+export async function claimSources(ids: string[]): Promise<Map<string, { sourceUrl: string | null; sourcePublisher: string | null; sourceDate: string | null }>> {
+  const out = new Map<string, { sourceUrl: string | null; sourcePublisher: string | null; sourceDate: string | null }>();
+  const unique = [...new Set(ids)];
+  for (let i = 0; i < unique.length; i += 200) {
+    const batch = unique.slice(i, i + 200);
+    const rows = await getDb().all<{ id: string; source_url: string | null; source_publisher: string | null; source_date: string | null }>(
+      `SELECT id, source_url, source_publisher, source_date FROM research_claims WHERE id IN (${batch.map(() => '?').join(', ')})`,
+      batch,
+    );
+    for (const row of rows) out.set(row.id, { sourceUrl: row.source_url, sourcePublisher: row.source_publisher, sourceDate: row.source_date });
+  }
+  return out;
 }
 
 export async function listClaimsForFragment(fragmentId: string): Promise<ResearchClaim[]> {
@@ -1417,6 +1496,58 @@ export async function claimedMethods(input: {
   return rows.map((row) => ({ claim: mapClaim(row) }));
 }
 
+/** The lane a goal round's repeating-buyer pattern is filed under (`compilerProfiles.ts`). */
+export const PATTERN_LANE = 'demand_pattern';
+
+/**
+ * Words a repeating-buyer pattern has to use: somebody paying, buying, hiring
+ * or outsourcing, or a price (§89). The lane names what a claim is meant to be,
+ * not what it says, and production's small GPU model filled it with
+ * definitions ("Shared services is the consolidation of business functions…",
+ * "HVAC Business is one of the largest wholesale distributors…"): four
+ * openings in six hours, none naming a buyer, each a validation dive spent on
+ * nothing. An untagged claim must say buyers pay before the lane makes it an
+ * opening; a claim the worker tagged itself is judged by its tag, as before.
+ */
+export const PATTERN_BUYING_WORDS = ['pay', 'purchas', 'buy', 'bought', 'hire', 'hiring', 'outsourc', 'contract', 'spend', 'subscri', 'retain', 'fee', 'pric', 'cost', 'usd', 'dollar', 'per hour', 'per month', 'per project'] as const;
+const PATTERN_STATES_BUYING_SQL = `(${PATTERN_BUYING_WORDS.map((word) => `LOWER(c.claim) LIKE '%${word}%'`).join(' OR ')})`;
+
+/**
+ * A claim that states a price — a currency beside a number, in either order
+ * ("$400", "USD 400", "400 USD", "900 dollars", "€50"). What a goal lens
+ * round's untagged pattern must state beside its buying words before the lane
+ * makes it an opening (`signalledClaims`): the lens asks for "the price buyers
+ * are shown paying". Any digit is not that — the profile holds a pattern to
+ * two dated examples, so a date, a year or a count is in nearly every pattern
+ * claim, priced or not, and "Dentists repeatedly pay outside firms for
+ * appointment reminders (examples posted March 2026 and May 2026)" would file.
+ * `LIKE`s rather than a character class, because SQLite's `GLOB` and
+ * Postgres's `~` are not one statement; lower-cased, because Postgres's `LIKE`
+ * is case-sensitive.
+ */
+export const PATTERN_PRICE_BEFORE = ['$', '€', '£', 'usd', 'eur', 'gbp'] as const;
+export const PATTERN_PRICE_AFTER = ['$', '€', '£', 'usd', 'eur ', 'euros', 'gbp', 'dollar'] as const;
+const DIGITS = Array.from({ length: 10 }, (_, digit) => String(digit));
+const PATTERN_PRICE_SHAPES = DIGITS.flatMap((digit) =>
+  ['', ' '].flatMap((gap) => [
+    ...PATTERN_PRICE_BEFORE.map((marker) => `${marker}${gap}${digit}`),
+    ...PATTERN_PRICE_AFTER.map((marker) => `${digit}${gap}${marker}`),
+  ]),
+);
+const PATTERN_STATES_PRICE_SQL = `(${PATTERN_PRICE_SHAPES.map((shape) => `(LOWER(c.claim) || ' ') LIKE '%${shape}%'`).join(' OR ')})`;
+
+/** The same price rule, for a reader holding a claim's text. */
+export function patternStatesPrice(text: string): boolean {
+  const lower = `${text.toLowerCase()} `;
+  return PATTERN_PRICE_SHAPES.some((shape) => lower.includes(shape));
+}
+
+/** The same rule, for a reader holding a claim's text. */
+export function patternStatesBuying(text: string): boolean {
+  const lower = text.toLowerCase();
+  return PATTERN_BUYING_WORDS.some((word) => lower.includes(word));
+}
+
 export async function signalledClaims(input: {
   projectId: string;
   limit?: number;
@@ -1426,8 +1557,45 @@ export async function signalledClaims(input: {
        JOIN research_fragments f ON f.id = c.fragment_id
        JOIN research_orchestrations o ON o.id = c.orchestration_id
       WHERE o.project_id = ? AND c.accepted = 1
-        AND c.opportunity_signal IS NOT NULL
+        AND (
+          c.opportunity_signal IS NOT NULL
+          /*
+           * A repeating-buyer pattern found by a constructed round (§83). The
+           * round asks about one designed arrangement, its profile says such a
+           * claim is that arrangement's opening (RECURRING_OUTSOURCED_WORK),
+           * and the gate held it to two dated examples. Production, 2026-11-03:
+           * fifteen constructed rounds, their pattern claims accepted, none
+           * tagged by the worker — so the harvest filed nothing from any of
+           * them. The lane says what the claim is; the worker need not repeat it.
+           */
+          /*
+           * And the same pattern from a goal's own lens round, which asks the
+           * same profile (GOAL_MECHANISM, the same demand_pattern lane and its
+           * two-example floor) a broader question. Production read 0 of 18
+           * lens rounds filing an opening: the research ran, the pattern claims
+           * were gated, and the worker tagged none of them — the class above,
+           * which naming the field in the question (GOAL_OPENING_SENTENCE) did
+           * not fix for constructed rounds either. A lens question is not about
+           * one designed arrangement, so the lane alone does not say which
+           * thing the buyers pay for; the claim must also state the price the
+           * lens asked for ("the price buyers are shown paying") — a currency
+           * beside a number, not any digit, because the two dated examples put
+           * a year in every pattern. "Dentists repeatedly pay for appointment
+           * reminders (examples March 2026 and May 2026)" stays context.
+           */
+          OR (c.evidence_lane = ? AND ${PATTERN_STATES_BUYING_SQL} AND EXISTS (
+                SELECT 1 FROM russell_missions pm
+                  JOIN cash_discovery_rounds pr ON pr.candidate_id = pm.candidate_id
+                 WHERE pm.orchestration_id = o.id
+                   AND (pr.bucket_id LIKE ? OR (pr.bucket_id LIKE ? AND ${PATTERN_STATES_PRICE_SQL}))))
+        )
         AND f.status IN ('ACCEPTED', 'BLOCKED')
+        /*
+         * What the harvest skips anyway, so a bounded read never fills with it:
+         * no source to cite, or a documented absence (never an opening).
+         */
+        AND c.source_url IS NOT NULL
+        AND c.claim_type <> 'NEGATIVE_EXISTENCE'
         /*
          * Not the deep dive's own findings.
          *
@@ -1483,10 +1651,11 @@ export async function signalledClaims(input: {
         )
       ORDER BY c.created_at, c.rowid
       LIMIT ?`,
-    [input.projectId, Math.max(1, input.limit ?? 50)],
+    [input.projectId, PATTERN_LANE, 'goal-%-mx-%', 'goal-%', Math.max(1, input.limit ?? 50)],
   );
   return rows.map((row) => {
-    const claim = mapClaim(row);
+    const mapped = mapClaim(row);
+    const claim = mapped.opportunitySignal || mapped.evidenceLane !== PATTERN_LANE ? mapped : { ...mapped, opportunitySignal: 'RECURRING_OUTSOURCED_WORK' as const };
     return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
   });
 }

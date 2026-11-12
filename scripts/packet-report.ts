@@ -192,6 +192,13 @@ async function main(): Promise<void> {
         `      tagged    ${[...tally.entries()].map(([lane, n]) => `${lane}×${n}`).join(', ')}`,
       );
     }
+    // What the harvest reads: an accepted claim becomes an opening only with an opportunity_signal.
+    for (const claim of accepted) {
+      console.log(
+        `      claim     ${claim.id} ${claim.evidenceLane ?? '(untagged)'} signal ${claim.opportunitySignal ?? '—'}` +
+          ` · ${claim.claim.replace(/\s+/g, ' ').slice(0, 140)}`,
+      );
+    }
     /**
      * Why the rejected claims were rejected, grouped.
      *
@@ -599,17 +606,43 @@ async function main(): Promise<void> {
    */
   const documents = await listDocuments(packet.projectId);
   if (documents.length > 0) {
-    const sized = await Promise.all(
-      documents.map(async (document) => {
-        const key = storageKeyOf(document);
-        return { document, key, size: key ? await objectSize(key) : null };
-      }),
-    );
-    const present = sized.filter((entry) => entry.size !== null);
-    const missing = sized.filter((entry) => entry.size === null);
+    /*
+     * Bounded, and an unanswered question is not an absence.
+     *
+     * Production, 2026-11-02: this listed 955 documents with `Promise.all`,
+     * 955 parallel storage requests against a store already answering 429
+     * `too_many_connections`, and every failed request came back as null and
+     * printed as MISSING — "955 missing", the §18 alarm, from the report's
+     * own load while the packet's own document read back fine. So at most
+     * `STORE_CONCURRENCY` at once, and a request that failed is UNKNOWN.
+     */
+    const STORE_CONCURRENCY = 8;
+    const sized: Array<{ document: (typeof documents)[number]; key: string | null; size: number | null; state: 'PRESENT' | 'ABSENT' | 'UNKNOWN' }> = [];
+    for (let i = 0; i < documents.length; i += STORE_CONCURRENCY) {
+      sized.push(
+        ...(await Promise.all(
+          documents.slice(i, i + STORE_CONCURRENCY).map(async (document) => {
+            const key = storageKeyOf(document);
+            if (!key) return { document, key, size: null, state: 'ABSENT' as const };
+            try {
+              const head = await getStorage().head(key);
+              return head
+                ? { document, key, size: head.size, state: 'PRESENT' as const }
+                : { document, key, size: null, state: 'ABSENT' as const };
+            } catch {
+              return { document, key, size: null, state: 'UNKNOWN' as const };
+            }
+          }),
+        )),
+      );
+    }
+    const present = sized.filter((entry) => entry.state === 'PRESENT');
+    const missing = sized.filter((entry) => entry.state === 'ABSENT');
+    const unknown = sized.filter((entry) => entry.state === 'UNKNOWN');
     console.log('');
     console.log(
-      `PROJECT DOCUMENTS (${documents.length}) — ${present.length} with bytes, ${missing.length} missing`,
+      `PROJECT DOCUMENTS (${documents.length}) — ${present.length} with bytes, ${missing.length} missing, ` +
+        `${unknown.length} the store did not answer for`,
     );
     console.log(`  store       ${getStorage().kind} · ${getStorage().describe()}`);
     for (const entry of sized.slice(0, 40)) {
@@ -618,7 +651,7 @@ async function main(): Promise<void> {
           ` ${(entry.document.version ?? '—').padEnd(6)}` +
           ` ${(entry.document.storageProvider ?? '—').padEnd(9)}` +
           ` file_size ${String(entry.document.fileSize ?? '—').padEnd(8)}` +
-          ` bytes ${entry.size ?? 'MISSING'}`,
+          ` bytes ${entry.state === 'PRESENT' ? entry.size : entry.state === 'ABSENT' ? 'MISSING' : 'UNKNOWN'}`,
       );
     }
     if (sized.length > 40) console.log(`  … and ${sized.length - 40} more`);

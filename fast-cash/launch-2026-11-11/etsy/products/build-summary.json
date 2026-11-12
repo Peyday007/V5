@@ -1,0 +1,118 @@
+[
+ {
+  "product": "large-print-christmas-sudoku",
+  "pdf": "Large-Print-Christmas-Sudoku-50-Puzzles.pdf",
+  "pages": 62,
+  "bytes": 233685,
+  "puzzles": 50,
+  "byDifficulty": {
+   "EASY": 21,
+   "MEDIUM": 21,
+   "EXPERT": 8
+  },
+  "byFormat": {
+   "sudoku": 50
+  },
+  "allValid": true,
+  "sha256": "7cf3097f9daa7b66d4b1b1ba334630eaac75fddbf5f2b408655bd1eb84872e28"
+ },
+ {
+  "product": "large-print-sudoku-100",
+  "pdf": "Large-Print-Sudoku-100-Puzzles-Easy-to-Expert.pdf",
+  "pages": 120,
+  "bytes": 360291,
+  "puzzles": 100,
+  "byDifficulty": {
+   "EASY": 42,
+   "MEDIUM": 42,
+   "EXPERT": 16
+  },
+  "byFormat": {
+   "sudoku": 100
+  },
+  "allValid": true,
+  "sha256": "e65c3a54e01d9a91e1bff90d3ea8bf033fba1450842836924c5669a6149f9584"
+ },
+ {
+  "product": "easy-sudoku-for-beginners",
+  "pdf": "Large-Print-Easy-Sudoku-for-Beginners-60-Puzzles.pdf",
+  "pages": 73,
+  "bytes": 245322,
+  "puzzles": 60,
+  "byDifficulty": {
+   "EASY": 60
+  },
+  "byFormat": {
+   "sudoku": 60
+  },
+  "allValid": true,
+  "sha256": "18ed12b538ed2d55e54d26cd5ee9e428d559a9918e7870dbd517b2bf01405934"
+ },
+ {
+  "product": "expert-sudoku",
+  "pdf": "Large-Print-Expert-Sudoku-60-Puzzles.pdf",
+  "pages": 73,
+  "bytes": 229161,
+  "puzzles": 60,
+  "byDifficulty": {
+   "EXPERT": 60
+  },
+  "byFormat": {
+   "sudoku": 60
+  },
+  "allValid": true,
+  "sha256": "f4ebc022c717fe69f362024cc15d3a72d22bce4addff78116309d41c0f3432d8"
+ },
+ {
+  "product": "large-print-christmas-word-search",
+  "pdf": "Large-Print-Christmas-Word-Search-40-Puzzles.pdf",
+  "pages": 53,
+  "bytes": 302715,
+  "puzzles": 40,
+  "byDifficulty": {
+   "HARD": 30,
+   "MEDIUM": 10
+  },
+  "byFormat": {
+   "word search": 40
+  },
+  "allValid": true,
+  "sha256": "314f63d7c95c167cbfe5c185107106431d4b5a201ed8302fb1f6633d614a8c28"
+ },
+ {
+  "product": "christmas-activity-pack",
+  "pdf": "Christmas-Activity-Pack-32-Puzzles.pdf",
+  "pages": 43,
+  "bytes": 202007,
+  "puzzles": 32,
+  "byDifficulty": {
+   "MEDIUM": 20,
+   "HARD": 3,
+   "EASY": 9
+  },
+  "byFormat": {
+   "word search": 12,
+   "maze": 12,
+   "sudoku": 8
+  },
+  "allValid": true,
+  "sha256": "7c9442e2719ac739b3894bfaeeda30f38cba7b377c1bd651ff759fa94a056b56"
+ },
+ {
+  "product": "large-print-mazes-for-adults",
+  "pdf": "Large-Print-Mazes-for-Adults-40-Mazes.pdf",
+  "pages": 53,
+  "bytes": 310661,
+  "puzzles": 40,
+  "byDifficulty": {
+   "MEDIUM": 28,
+   "HARD": 3,
+   "EASY": 9
+  },
+  "byFormat": {
+   "maze": 40
+  },
+  "allValid": true,
+  "sha256": "7cbf25abb11a303fca7c00cff38687d57902dbd239edc9a6d9afbe59f5144076"
+ }
+]

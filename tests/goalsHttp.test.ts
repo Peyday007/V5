@@ -191,6 +191,42 @@ describe('the goals door', () => {
   });
 });
 
+describe('the industry construction door (§92)', () => {
+  const DETROIT = 'I want to enter last-mile logistics in Metro Detroit. I have $10,000-$30,000 available. I want to start generating revenue quickly, without personally making deliveries.';
+
+  it('reads, replans under overrides, and records what operating taught', async () => {
+    const goal = await createWorkstream({ projectId, title: 'Detroit', intent: DETROIT, purpose: 'LONG_TERM', createdByUserId: userId });
+    const read = await call('GET', `/api/goals/${goal.id}/construction`);
+    expect(read.status).toBe(200);
+    expect(read.body.construction.decision.headline).toMatch(/^Enter as: /);
+    expect(read.body.construction.execution.firstTransaction).toBeTruthy();
+
+    const replan = await call('POST', `/api/goals/${goal.id}/construction`, { capitalLow: 500, capitalHigh: 900 });
+    expect(replan.status).toBe(200);
+    expect(replan.body.construction.intent.capital).toEqual({ low: 500, high: 900 });
+    expect(replan.body.seeded).toBeNull();
+    expect((await call('POST', `/api/goals/${goal.id}/construction`, { control: ['NOT_A_KIND'] })).status).toBe(400);
+
+    const recorded = await call('POST', `/api/goals/${goal.id}/construction/facts`, { key: 'price_per_unit', segment: 'local_merchants', low: 15, high: 16, measures: 'quoted by a pharmacy' });
+    expect(recorded.status).toBe(200);
+    expect(recorded.body.fact.status).toBe('OBSERVED');
+    expect(recorded.body.construction.learning.observed).toHaveLength(1);
+    expect((await call('POST', `/api/goals/${goal.id}/construction/facts`, { key: 'made_up', low: 1, measures: 'x' })).status).toBe(400);
+  });
+
+  it('refuses a worker, lets a viewer read but not record, and hides another operation’s goal', async () => {
+    const goal = await createWorkstream({ projectId, title: 'Detroit', intent: DETROIT, purpose: 'LONG_TERM', createdByUserId: userId });
+    const theirs = await goalIn(otherProjectId, 'Theirs');
+    expect((await call('GET', `/api/goals/${theirs.id}/construction`)).text).toBe((await call('GET', '/api/goals/wst_doesnotexist0000000/construction')).text);
+    current = human('VIEWER');
+    expect((await call('GET', `/api/goals/${goal.id}/construction`)).status).toBe(200);
+    expect((await call('POST', `/api/goals/${goal.id}/construction/facts`, { key: 'price_per_unit', low: 1, measures: 'x' })).status).toBe(404);
+    expect((await call('POST', `/api/goals/${goal.id}/construction`, { seed: true })).status).toBe(404);
+    current = worker();
+    expect((await call('GET', `/api/goals/${goal.id}/construction`)).status).toBeGreaterThanOrEqual(400);
+  });
+});
+
 /*
  * The hosted verification is the only thing that proves this boundary against
  * production, and its first version skipped the comparison on every deploy:

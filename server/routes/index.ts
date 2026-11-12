@@ -16,6 +16,7 @@ import { healthRouter } from './health.ts';
 import { layersRouter } from './layers.ts';
 import { projectsRouter } from './projects.ts';
 import { providersRouter } from './providers.ts';
+import { integrationsRouter } from './integrations.ts';
 import { researchRouter } from './research.ts';
 import { runsRouter } from './runs.ts';
 import { russellRouter } from './russell.ts';
@@ -31,6 +32,8 @@ import { peopleRouter } from './people.ts';
 import { registerRouter } from './register.ts';
 import { goalsRouter } from './goals.ts';
 import { bridgeRouter } from './bridge.ts';
+import { magicRouter } from './magic.ts';
+import { memoryRouter } from './memory.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
 export function createApiRouter(): Router {
@@ -77,6 +80,25 @@ export function createApiRouter(): Router {
    * arrived on one.
    */
   router.use(bridgeRouter);
+
+  /*
+   * Historical memory: a person's own conversation history, recovered,
+   * organized and rediscovered. Every route is `requirePerson` and scoped to
+   * the owner in its own statements; nothing here is addressed by a project.
+   */
+  router.use(memoryRouter);
+
+  /*
+   * Magic Deck Lab. Every route is `requirePerson` and owner-scoped in the
+   * repository, so another person's deck and a missing one answer identically.
+   */
+  router.use(magicRouter);
+
+  /*
+   * Integrations (§103): the registry of connected services, their health and
+   * repairs. Brain-administrator only, guarded on its own path.
+   */
+  router.use(integrationsRouter);
 
   router.use(healthRouter);
   // Audit routes carry their own prefixes (/runs/:id/..., /layers/:id/...),

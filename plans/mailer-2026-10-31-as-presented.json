@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "title": "Local mailer, prepaid 3-month packages — exactly as presented on 2026-10-31",
+  "goal": { "metric": "SETTLED_CASH", "target": 10000, "unit": "USD", "deadlineDays": 25, "capitalCeiling": 3000, "preFirstPaymentCeiling": 300, "goalId": "wst_7b4fcbb5f2384f31b6c3" },
+  "model": {
+    "title": "Mailer as presented",
+    "currency": "USD",
+    "horizon": "the 25 days to the goal deadline",
+    "variables": [
+      { "key": "contacts", "label": "Businesses contacted", "unit": "contact", "provenance": "ASSUMPTION", "controllable": true, "spec": { "kind": "RANGE", "min": 0, "max": 20000 } },
+      { "key": "reply_rate", "label": "Interested replies per contact", "unit": "reply/contact", "provenance": "ASSUMPTION", "controllable": false, "spec": { "kind": "RANGE", "min": 0.005, "max": 0.05 } },
+      { "key": "close_rate", "label": "Packages per interested reply", "unit": "package/reply", "provenance": "ASSUMPTION", "controllable": false, "spec": { "kind": "RANGE", "min": 0.05, "max": 0.3 } },
+      { "key": "price", "label": "Package price (3 mailings)", "unit": "USD/package", "provenance": "ASSUMPTION", "controllable": false, "spec": { "kind": "FIXED", "value": 450 } },
+      { "key": "cities", "label": "Cities", "unit": "city", "provenance": "ASSUMPTION", "controllable": true, "spec": { "kind": "RANGE", "min": 1, "max": 8 } },
+      { "key": "mailings_per_city", "label": "Mailings each package promises", "unit": "mailing/city", "provenance": "ASSUMPTION", "controllable": false, "spec": { "kind": "FIXED", "value": 3 } },
+      { "key": "cost_per_mailing", "label": "Print, postage and fulfilment per mailing", "unit": "USD/mailing", "provenance": "EVIDENCE", "controllable": false, "spec": { "kind": "FIXED", "value": 1300 }, "sources": [{ "kind": "URL", "ref": "https://pod.wave.co/podcast/the-side-hustle-show/719-1000-per-postcard-the-every-door-direct-mail-side-hustle" }] }
+    ],
+    "derived": [
+      { "key": "replies", "label": "Interested replies", "unit": "reply", "expr": "floor(contacts * reply_rate)" },
+      { "key": "packages", "label": "Packages sold", "unit": "package", "expr": "floor(replies * close_rate)" },
+      { "key": "collected", "label": "Collected and settled", "unit": "USD", "expr": "packages * price" },
+      { "key": "mailings", "label": "Mailings owed", "unit": "mailing", "expr": "cities * mailings_per_city" },
+      { "key": "fulfilment", "label": "Cost of every mailing owed", "unit": "USD", "expr": "mailings * cost_per_mailing" }
+    ],
+    "lines": [
+      { "key": "sales", "label": "Package sales", "kind": "REVENUE", "expr": "collected" },
+      { "key": "fulfilment_cost", "label": "Printing and postage", "kind": "COST", "expr": "fulfilment" }
+    ],
+    "strategies": [ { "key": "as_presented", "label": "As presented", "set": { "contacts": 4000, "cities": 4 } } ]
+  },
+  "strategy": "as_presented",
+  "point": { "reply_rate": 0.03, "close_rate": 0.2 },
+  "roles": { "outcome": "collected" },
+  "obligations": [ { "label": "Three mailings per package", "revenueLine": "sales", "costLine": "fulfilment_cost", "costDerived": "fulfilment" } ],
+  "checkpoints": [ { "label": "Day-7 checkpoint", "numerator": "packages", "denominator": "contacts", "atLeast": { "numerator": 2, "denominator": 1000 } } ],
+  "probability": { "value": 0.9, "outcome": "collected" },
+  "narrative": "Contact about 4,000 businesses. About 3% reply interested and about 20% of those buy, so 23 prepaid packages at $450 each bring $10,350. Four cities, three mailings each, about $1,300 per mailing, all paid from customer money. Checkpoint: 2 packages per 1,000 contacts. That puts the plan at roughly 90% likely."
+}

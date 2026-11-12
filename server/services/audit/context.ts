@@ -79,8 +79,10 @@ export interface AuditContext {
   dependencies: DependencyCheckResult;
   /** The artifact(s) under audit. */
   artifacts: ArtifactContent[];
-  /** Sibling documents in the layer that are not themselves under audit. */
+  /** Sibling documents in the layer that are not themselves under audit: the most recent `MAX_AUDIT_SIBLINGS`. */
   siblings: ArtifactContent[];
+  /** Siblings beyond that, counted rather than read. */
+  siblingsOmitted?: number;
   /** Canonical documents of other layers this layer builds on. */
   parentFoundation: { layerName: string; canonicalName: string }[];
   previousAudits: Audit[];
@@ -251,6 +253,11 @@ export interface BuildAuditContextInput {
  * Assemble everything an audit is allowed to see. Pure: it reads state, records
  * nothing, and never consults a provider.
  */
+/** Siblings an audit lists, most recent first; the rest are counted (2026-11-05 pool flood). */
+export const MAX_AUDIT_SIBLINGS = 25;
+/** Siblings read at once, so a layer's history never takes the whole pool. */
+const SIBLING_READ_BATCH = 8;
+
 export async function buildAuditContext(input: BuildAuditContextInput): Promise<AuditContext> {
   const layer = await getLayer(input.layerId);
   if (!layer) throw new Error(`Cannot audit: unknown layer ${input.layerId}`);
@@ -293,18 +300,34 @@ export async function buildAuditContext(input: BuildAuditContextInput): Promise<
   const artifacts = await Promise.all(
     artifactDocuments.map((document) => toArtifact(document, perDocumentBudget)),
   );
-  const siblingDocuments =
+  /*
+   * Siblings are context — the prompt lists each one's name and status — so the
+   * most recent `MAX_AUDIT_SIBLINGS` are read, a batch at a time, and the rest
+   * are counted. Production, 2026-11-05 20:33Z: a research layer held hundreds
+   * of filed packets, each audit read every one at once, and one free-lane
+   * audit queued 1 021 callers on an eight-connection pool, failing every other
+   * job and the health check with it.
+   */
+  const allSiblings =
     input.mode === 'SINGLE_DOCUMENT'
       ? layerDocuments.filter((document) => !artifactIds.has(document.id))
       : [];
+  const siblingDocuments = [...allSiblings].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, MAX_AUDIT_SIBLINGS);
+  const siblingsOmitted = allSiblings.length - siblingDocuments.length;
   const siblingRuns = await currentExtractionRunsFor(siblingDocuments.map((document) => document.id));
   const siblings = await withExistenceMemo(async () => {
     await prefetchExistence(siblingDocuments.map((document) => storageKeyOf(document)));
-    return await Promise.all(
-      siblingDocuments.map((document) =>
-        readDocumentText(document, 0, { run: siblingRuns.get(document.id) ?? null, withText: false }),
-      ),
-    );
+    const read: ArtifactContent[] = [];
+    for (let at = 0; at < siblingDocuments.length; at += SIBLING_READ_BATCH) {
+      read.push(
+        ...(await Promise.all(
+          siblingDocuments
+            .slice(at, at + SIBLING_READ_BATCH)
+            .map((document) => readDocumentText(document, 0, { run: siblingRuns.get(document.id) ?? null, withText: false })),
+        )),
+      );
+    }
+    return read;
   });
 
   const run = input.runId ? await getRun(input.runId) : await sourceRunFor(artifactDocuments);
@@ -369,6 +392,7 @@ export async function buildAuditContext(input: BuildAuditContextInput): Promise<
     dependencies,
     artifacts,
     siblings,
+    siblingsOmitted,
     parentFoundation,
     previousAudits: (await listAuditsByLayer(layer.id)).slice(0, 5),
     presentVersions,

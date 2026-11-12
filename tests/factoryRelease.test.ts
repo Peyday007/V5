@@ -25,6 +25,16 @@ import {
   withdrawAutomaticRelease,
 } from '../server/services/factory/release/grant.ts';
 import { deriveOutcome, objectiveOutcome } from '../server/services/factory/release/outcome.ts';
+import {
+  finishedRecords,
+  isTerminalOutcome,
+  latestDelivery,
+  noteObjectiveOutcome,
+  observeDeliveries,
+  recordDeliveredBy,
+  resetDeliveryThrottle,
+  type ForgePort,
+} from '../server/services/factory/delivery.ts';
 import { verifyLive, type VerifyDeps } from '../server/services/factory/release/verify.ts';
 import { latestRun, listRuns, openRun } from '../server/repos/factoryRelease.ts';
 import { forbiddenPathsFor } from '../server/services/factory/forbidden.ts';
@@ -231,6 +241,9 @@ describe('the release gate', () => {
     expect(decideRelease({ ...base, latestReview: { ...review, independence: 'UNKNOWN' } }).eligible).toBe(false);
     expect(decideRelease({ ...base, latestReview: { ...review, reviewedSha: 'b'.repeat(40) } }).eligible).toBe(false);
     expect(decideRelease({ ...base, openFindings: [{} as never] }).eligible).toBe(false);
+    expect(decideRelease({ ...base, openFindings: [{ severity: 'MAJOR' } as never] }).eligible).toBe(false);
+    // A MINOR limitation a passing review left open does not hold the release.
+    expect(decideRelease({ ...base, openFindings: [{ severity: 'MINOR' } as never] })).toMatchObject({ eligible: true, reasons: [] });
     expect(decideRelease({ ...base, changedFilesTruncated: true }).eligible).toBe(false);
     expect(decideRelease({ ...base, changedFiles: null }).eligible).toBe(false);
     expect(decideRelease({ ...base, repositorySlug: 'Peyday007/other' }).eligible).toBe(false);
@@ -366,6 +379,24 @@ describe('the release plan and its state machine', () => {
     expect(outcome).toMatchObject({ status: 'BLOCKED', needsPerson: true });
     expect(outcome.blocker).toBe('tests failed');
   });
+
+  it('gives the whole suite failing on the merged tree one more gate, and no more', async () => {
+    const { SUITE_FAILED_ON_MERGED_TREE } = await import('../server/domain/factoryRelease.ts');
+    const changeRequest = await approved('Show a fourth friendly line on the Build page.');
+    const campaign = await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    stubForge(['client/a.tsx']);
+    const first = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    expect(first.action?.campaignId).toBe(campaign.id);
+    await advanceRelease({ runId: first.action!.runId, to: 'FAILED', failureStage: 'GATE', failureDetail: `the release gate refused: ${SUITE_FAILED_ON_MERGED_TREE}` });
+    expect((await objectiveOutcome(campaign)).status).toBe('RELEASING');
+    const second = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    expect(second.action?.action).toBe('RELEASE');
+    expect((await latestRun(campaign.id))!.attempt).toBe(2);
+    await advanceRelease({ runId: second.action!.runId, to: 'FAILED', failureStage: 'GATE', failureDetail: `the release gate refused: ${SUITE_FAILED_ON_MERGED_TREE}` });
+    expect((await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null })).action).toBeNull();
+    expect((await objectiveOutcome(campaign)).status).toBe('BLOCKED');
+  });
 });
 
 describe('a pass asked about one campaign knows whether waiting is worth it (FAC-5)', () => {
@@ -466,6 +497,88 @@ describe('verification inside the released Brain', () => {
       (await verifyLive(deps({ revision: 'e'.repeat(40), contains: async () => null }), { mergeSha: 'c'.repeat(40), liveChecks: [] })).live,
     ).toBe(false);
   });
+
+  /*
+   * Release 05f67250 (2026-11-09): one compare request from the machine said
+   * "fetch failed", the revision check read "could not say", and the release was
+   * marked FAILED and a rollback attempted on a change that was live and healthy.
+   * A check nothing answered is UNKNOWN — asked again, never a failure (invariant 26).
+   */
+  it('reads a forge that did not answer as unknown, and an answered no as a failure', async () => {
+    const unanswered = await verifyLive(deps({ revision: 'e'.repeat(40), contains: async () => null }), { mergeSha: 'c'.repeat(40), liveChecks: [] });
+    expect(unanswered).toMatchObject({ live: false, unknown: true });
+    const no = await verifyLive(deps({ revision: 'e'.repeat(40), contains: async () => false }), { mergeSha: 'c'.repeat(40), liveChecks: [] });
+    expect(no).toMatchObject({ live: false, unknown: false });
+    // Unknown beside a definite failure is a failure.
+    const both = await verifyLive(deps({ revision: 'e'.repeat(40), contains: async () => null, health: 503 }), { mergeSha: 'c'.repeat(40), liveChecks: [] });
+    expect(both).toMatchObject({ live: false, unknown: false });
+  });
+
+  it('lets the release workflow answer containment with its own authenticated read, only when Brain\'s did not', () => {
+    const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
+    expect(script).toMatch(/brain\(\['release-revision'\]\)/);
+    expect(script).toMatch(/\/compare\/\$\{mergeSha\}\.\.\.\$\{revision\}/);
+    expect(script).toMatch(/'--contains', String\(contains\)/);
+    const verify = fs.readFileSync('server/services/factory/release/verify.ts', 'utf8');
+    // Brain's own read is asked first; the attested answer is used only when it did not answer.
+    expect(verify.indexOf('compareCommits(repository, ancestor, descendant)')).toBeLessThan(verify.indexOf('options.attestedContains === true'));
+  });
+
+  it('re-verifies only a release that failed on an unanswered check and was never reverted', async () => {
+    const { reverifyUnansweredRelease } = await import('../server/services/factory/release/verify.ts');
+    const changeRequest = await approved();
+    const campaign = await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    stubForge(['client/a.tsx']);
+    const plan = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    const runId = plan.action!.runId;
+    await advanceRelease({ runId, to: 'MERGED', mergeSha: 'c'.repeat(40) });
+    await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '9' });
+    await advanceRelease({ runId, to: 'VERIFYING' });
+    const unanswered = { checks: [{ check: 'revision', ok: false, detail: 'serving eeee; the forge could not say whether it contains the release' }, { check: 'healthz', ok: true, detail: 'answered 200' }] };
+    await advanceRelease({ runId, to: 'FAILED', failureStage: 'VERIFY', failureDetail: 'revision: could not say', verification: unanswered });
+    // An ordinary move never brings a FAILED run back.
+    expect((await advanceRelease({ runId, to: 'VERIFYING' })).moved).toBe(false);
+    // Not while its revert is unaccounted for.
+    await expect(reverifyUnansweredRelease(runId)).rejects.toThrow(/reverted or its revert is unaccounted for/);
+    await advanceRelease({ runId, to: 'FAILED', failureStage: 'VERIFY', failureDetail: 'verification failed; branch: the revert pull request could not be opened (403)' });
+    // This process carries no BRAIN_REVISION, so the re-verification is not LIVE; the run left FAILED for VERIFYING.
+    const outcome = await reverifyUnansweredRelease(runId);
+    expect(outcome.live).toBe(false);
+    expect((await latestRun(campaign.id))!.state).not.toBe('ROLLED_BACK');
+    // A check that answered "no" is never re-verified.
+    const other = await approved('Show a second friendly line on the Build page.');
+    const otherCampaign = await completeCampaign(other);
+    await grant(other.id);
+    const p2 = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    if (p2.action && p2.action.campaignId === otherCampaign.id) {
+      const id = p2.action.runId;
+      await advanceRelease({ runId: id, to: 'MERGED', mergeSha: 'd'.repeat(40) });
+      await advanceRelease({ runId: id, to: 'DEPLOYING', deployRunId: '10' });
+      await advanceRelease({ runId: id, to: 'VERIFYING' });
+      await advanceRelease({ runId: id, to: 'FAILED', failureStage: 'VERIFY', failureDetail: 'the revert pull request could not be opened', verification: { checks: [{ check: 'healthz', ok: false, detail: 'answered 503' }] } });
+      await expect(reverifyUnansweredRelease(id)).rejects.toThrow(/answered: healthz/);
+      // A run the script failed with no recorded check is re-verified: nothing answered no.
+    }
+  });
+
+  it('re-verifies a merged release whose Deploy failed and whose revert never landed', async () => {
+    const { reverifyUnansweredRelease } = await import('../server/services/factory/release/verify.ts');
+    const changeRequest = await approved('Show a third friendly line on the Build page.');
+    const campaign = await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    stubForge(['client/a.tsx']);
+    const plan = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    expect(plan.action?.campaignId).toBe(campaign.id);
+    const runId = plan.action!.runId;
+    await advanceRelease({ runId, to: 'MERGED', mergeSha: 'e'.repeat(40) });
+    await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '11' });
+    await advanceRelease({ runId, to: 'FAILED', failureStage: 'DEPLOY', failureDetail: 'Deploy concluded failure; nothing had been released; branch: the revert pull request could not be opened (403)' });
+    const outcome = await reverifyUnansweredRelease(runId);
+    // No BRAIN_REVISION here, so it is not LIVE — but it was asked again rather than refused.
+    expect(outcome.live).toBe(false);
+    expect((await latestRun(campaign.id))!.state).not.toBe('ROLLED_BACK');
+  });
 });
 
 describe('the status a person reads', () => {
@@ -488,6 +601,21 @@ describe('the status a person reads', () => {
       needsPerson: false,
       blocker: 'no surface',
     });
+  });
+
+  it('reads a hand merge after a release that ended unmerged, and only then', () => {
+    const complete = { ...campaign, state: 'COMPLETE', prUrl: `${REMOTE}/pull/77` } as FactoryCampaign;
+    const grantRow = { revokedAt: null, pagePath: '/build' } as ReleaseGrant;
+    const refused = { state: 'FAILED', headSha: HEAD, attempt: 2, mergeSha: null, failureStage: 'GATE', failureDetail: 'the release gate refused: the whole suite against Postgres failed on the merged tree' } as ReleaseRun;
+    const deployed = { state: 'MERGED', mergeSha: 'm'.repeat(40), deployed: true, revision: 'r'.repeat(40), via: null } as const;
+    expect(deriveOutcome({ campaign: complete, grant: grantRow, latestRun: refused, origin: null }).status).toBe('BLOCKED');
+    expect(deriveOutcome({ campaign: complete, grant: grantRow, latestRun: refused, origin: null, delivery: deployed }).status).toBe('LIVE');
+    expect(deriveOutcome({ campaign: complete, grant: grantRow, latestRun: refused, origin: null, delivery: { ...deployed, deployed: false } }).status).toBe('BLOCKED');
+    // A release still in its hands, or one that merged itself, is not overridden by the forge.
+    const retrying = { ...refused, attempt: 1 } as ReleaseRun;
+    expect(deriveOutcome({ campaign: complete, grant: grantRow, latestRun: retrying, origin: null, delivery: deployed }).status).toBe('RELEASING');
+    const failedAfterMerge = { ...refused, mergeSha: 'm'.repeat(40), failureStage: 'VERIFY' } as ReleaseRun;
+    expect(deriveOutcome({ campaign: complete, grant: grantRow, latestRun: failedAfterMerge, origin: null, delivery: deployed }).status).toBe('BLOCKED');
   });
 });
 
@@ -711,7 +839,7 @@ describe('the release workflow’s own readings', () => {
     // A job or step conditioned on always() cannot be cancelled, so nobody could stop a release.
     expect(workflow.split('\n').filter((line) => /^\s*if:.*always\(\)/.test(line))).toEqual([]);
     expect(script).not.toMatch(/'deploy',\s*'--app'/);
-    const gate = workflow.slice(workflow.indexOf('  gate:'), workflow.indexOf('  release:'));
+    const gate = workflow.slice(workflow.indexOf('  gate-tree:'), workflow.indexOf('  release:'));
     expect(gate).not.toMatch(/secrets\./);
     expect(gate).toMatch(/persist-credentials: false/);
     expect(gate).toMatch(/contents: read/);
@@ -720,11 +848,22 @@ describe('the release workflow’s own readings', () => {
 
   it('every test gate finishes before anything merges, the Postgres half included', () => {
     const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
-    const gate = workflow.slice(workflow.indexOf('  gate:'), workflow.indexOf('  release:'));
+    const gate = workflow.slice(workflow.indexOf('  gate-tree:'), workflow.indexOf('  release:'));
     const release = workflow.slice(workflow.indexOf('  release:'));
     // The whole suite against Postgres runs in the gate, from the trusted copy of the cluster script.
     expect(gate).toMatch(/sh \.\.\/trusted\/scripts\/test-postgres\.sh run -- npx vitest run/);
-    expect(gate).toMatch(/POSTGRES: \$\{\{ steps\.postgres\.outcome \}\}/);
+    expect(gate).toMatch(/POSTGRES: \$\{\{ needs\.gate-postgres\.result \}\}/);
+    // In eight shards, each on the exact gated merge, and the verdict refuses a
+    // partition that skipped or repeated a file (§96: the release median was
+    // dominated by this suite run in one job).
+    expect(gate).toMatch(/--shard=\$\{\{ matrix\.shard \}\}\/8/);
+    expect(gate).toMatch(/shard: \[1, 2, 3, 4, 5, 6, 7, 8\]/);
+    expect(gate).toMatch(/\[ "\$\(git rev-parse HEAD\)" = "\$MERGE_SHA" \]/);
+    expect(gate).toMatch(/postgres-shards\.sh check lists\/release-suite-files/);
+    for (let n = 1; n <= 8; n += 1) expect(gate).toContain(`lists/release-shard-${n}/release-shard-${n}.txt`);
+    // The verdict keeps the name the release job reads, and fails when anything failed.
+    expect(gate).toMatch(/^  gate:\n    name: Gate the merged tree \(verdict\)\n    needs: \[plan, gate-tree, gate-postgres\]/m);
+    expect(gate).toMatch(/if \[ -n "\$failure" \]; then echo "::error::\$failure"; exit 1; fi/);
     // The release job runs only after the gate; nothing in it starts a test suite alongside Deploy.
     expect(release).toMatch(/needs: \[plan, gate\]/);
     // It never runs or dispatches the suite itself; it may only attest, as the
@@ -754,5 +893,136 @@ describe('the release workflow’s own readings', () => {
   it('the Postgres runner never puts its cluster where its owner cannot reach it', () => {
     const runner = fs.readFileSync('scripts/test-postgres.sh', 'utf8');
     expect(runner).toMatch(/if \[ "\$\(id -u\)" = "0" \] \|\| \[ "\$\{#TMP_BASE\}" -gt 60 \]; then\n\s*TMP_BASE=\/tmp/);
+  });
+});
+
+describe('a finished campaign is delivered only when the forge says so', () => {
+  const MERGE = 'b'.repeat(40);
+  const REV = 'c'.repeat(40);
+  function forgePort(pr: { state: string; merged: boolean; mergeCommitSha: string | null }, contains: boolean | null = true) {
+    const calls = { recent: 0, one: 0, contains: 0 };
+    const port: ForgePort = {
+      async recent() {
+        calls.recent += 1;
+        return new Map([[77, pr]]);
+      },
+      async one() {
+        calls.one += 1;
+        return pr;
+      },
+      async contains() {
+        calls.contains += 1;
+        return contains;
+      },
+    };
+    return { port, calls };
+  }
+
+  beforeEach(() => resetDeliveryThrottle());
+
+  it('an open pull request is BLOCKED for a person, recorded once however often it is judged', async () => {
+    const campaign = await completeCampaign(await approved());
+    const { port } = forgePort({ state: 'open', merged: false, mergeCommitSha: null });
+    await observeDeliveries([campaign], { forge: port, revision: REV });
+    expect(await latestDelivery(campaign.id)).toMatchObject({ state: 'OPEN', deployed: false });
+    const outcome = await objectiveOutcome(campaign);
+    expect(outcome).toMatchObject({ status: 'BLOCKED', needsPerson: true });
+    expect(await noteObjectiveOutcome(campaign)).not.toBeNull();
+    expect(await noteObjectiveOutcome(campaign)).toBeNull();
+    expect(await finishedRecords(campaign.id)).toHaveLength(1);
+  });
+
+  it('a merge production does not run yet is not LIVE; once it does, LIVE is a new, single record', async () => {
+    const campaign = await completeCampaign(await approved());
+    const notYet = forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }, false);
+    await observeDeliveries([campaign], { forge: notYet.port, revision: REV });
+    expect(await objectiveOutcome(campaign)).toMatchObject({ status: 'BLOCKED', needsPerson: true });
+    expect((await objectiveOutcome(campaign)).personAction).toMatch(/Dispatch Deploy/);
+    await noteObjectiveOutcome(campaign);
+
+    // Same revision again: no second compare and no second row.
+    await observeDeliveries([campaign], { forge: notYet.port, revision: REV, now: Date.now() + 11 * 60_000 });
+    expect(notYet.calls.contains).toBe(1);
+
+    resetDeliveryThrottle();
+    const live = forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }, true);
+    await observeDeliveries([campaign], { forge: live.port, revision: 'd'.repeat(40) });
+    const outcome = await objectiveOutcome(campaign);
+    expect(outcome.status).toBe('LIVE');
+    expect(await noteObjectiveOutcome(campaign)).toMatchObject({ status: 'LIVE' });
+    expect((await finishedRecords(campaign.id)).map((r) => r.status)).toEqual(['BLOCKED', 'LIVE']);
+
+    // Final: nothing reads the forge for it again.
+    resetDeliveryThrottle();
+    const after = forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }, true);
+    await observeDeliveries([campaign], { forge: after.port, revision: 'd'.repeat(40) });
+    expect(after.calls.recent + after.calls.one + after.calls.contains).toBe(0);
+  });
+
+  it('a pull request closed unmerged is CANCELLED, never complete', async () => {
+    const campaign = await completeCampaign(await approved());
+    const { port } = forgePort({ state: 'closed', merged: false, mergeCommitSha: null });
+    await observeDeliveries([campaign], { forge: port, revision: REV });
+    expect((await objectiveOutcome(campaign)).status).toBe('CANCELLED');
+    expect(isTerminalOutcome(await objectiveOutcome(campaign))).toBe(true);
+  });
+
+  it('a campaign whose stale PR was re-landed through another merged PR is delivered, not cancelled', async () => {
+    const campaign = await completeCampaign(await approved());
+    // Its own #77 was closed unmerged when #500 landed the same change.
+    const own = forgePort({ state: 'closed', merged: false, mergeCommitSha: null });
+    await observeDeliveries([campaign], { forge: own.port, revision: REV });
+    expect((await objectiveOutcome(campaign)).status).toBe('CANCELLED');
+
+    const refused = await recordDeliveredBy({
+      remote: REMOTE,
+      landing: 500,
+      closes: [77],
+      forge: forgePort({ state: 'open', merged: false, mergeCommitSha: null }).port,
+    });
+    expect(refused.refused).toMatch(/not merged/);
+    expect(refused.recorded).toEqual([]);
+
+    const landed = await recordDeliveredBy({
+      remote: REMOTE,
+      landing: 500,
+      closes: [77, 12345],
+      forge: forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }).port,
+    });
+    expect(landed.recorded).toEqual([campaign.id]);
+    expect(await latestDelivery(campaign.id)).toMatchObject({ state: 'MERGED', via: 500, mergeSha: MERGE });
+
+    resetDeliveryThrottle();
+    // Its own closed PR is not read again; only whether production runs the landing merge.
+    const live = forgePort({ state: 'closed', merged: false, mergeCommitSha: null }, true);
+    await observeDeliveries([campaign], { forge: live.port, revision: REV });
+    expect(live.calls.contains).toBe(1);
+    expect((await objectiveOutcome(campaign)).status).toBe('LIVE');
+  });
+
+  it('one compare answers every campaign the same merge delivered', async () => {
+    const one = await completeCampaign(await approved('First greeting line on the Build page.'));
+    await getDb().run('UPDATE factory_campaigns SET pr_ref = ? WHERE id = ?', ['#78', one.id]);
+    const two = await completeCampaign(await approved('Second greeting line on the Build page.'));
+    const merged = forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }, true);
+    await recordDeliveredBy({ remote: REMOTE, landing: 500, closes: [77, 78], forge: merged.port });
+    const live = forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }, true);
+    await observeDeliveries([one, two], { forge: live.port, revision: REV });
+    expect(live.calls.contains).toBe(1);
+    expect((await latestDelivery(one.id))?.deployed).toBe(true);
+    expect((await latestDelivery(two.id))?.deployed).toBe(true);
+  });
+
+  it('a campaign still building is not terminal and writes nothing', async () => {
+    const changeRequest = await approved();
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: changeRequest.baseSha,
+      laneTarget: 1,
+      laneTargetReason: 'initial',
+    });
+    expect(await noteObjectiveOutcome(campaign)).toBeNull();
+    expect(await finishedRecords(campaign.id)).toHaveLength(0);
   });
 });

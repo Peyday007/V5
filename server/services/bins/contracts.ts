@@ -579,8 +579,19 @@ async function evaluateFactoryPlan(bin: Bin): Promise<ContractVerdict> {
   }
 
   const validation = validatePlan(proposal, changeRequest);
-  if (!validation.ok) {
-    return refuse('RETRY', validation.errors, {
+  /*
+   * A plan that leaves a mandatory acceptance condition to nobody is refused here
+   * as it is on the local plane (`architect.ts`). The comment above always said
+   * so and the code only reported it: `uncoveredConditions` rode along in the
+   * verdict's detail while the plan installed with the gap, which is a campaign
+   * silently smaller than its contract — and, under a program, a requirement
+   * dropped between the program's plan and the campaign's (§96).
+   */
+  const uncovered = validation.uncoveredConditions.map(
+    (id) => `No unit serves mandatory acceptance condition ${id}; every mandatory condition must be served by some unit.`,
+  );
+  if (!validation.ok || uncovered.length > 0) {
+    return refuse('RETRY', [...validation.errors, ...uncovered], {
       campaignId,
       unitsProposed: validation.units.length,
       uncoveredConditions: validation.uncoveredConditions,
@@ -735,7 +746,7 @@ async function evaluateFactoryUnits(bin: Bin): Promise<ContractVerdict> {
  * bin fail instead would spend its attempts on a correct report.
  */
 async function evaluateFactoryIntegration(bin: Bin): Promise<ContractVerdict> {
-  const { readIntegrationReport, verifyIntegrationReport, binBaseOf } = await import(
+  const { readIntegrationReport, verifyIntegrationReport, binBaseOf, integrationUnitsFor } = await import(
     '../factory/remote.ts'
   );
   const { getCampaign, getChangeRequest, listUnits } = await import('../../repos/factory.ts');
@@ -786,7 +797,7 @@ async function evaluateFactoryIntegration(bin: Bin): Promise<ContractVerdict> {
     {
       integrationBranch: campaign.integrationBranch,
       baseSha: binBaseOf(bin, campaign),
-      units: implemented,
+      units: integrationUnitsFor(bin, implemented),
     },
     report.value,
   );

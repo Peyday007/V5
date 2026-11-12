@@ -584,12 +584,35 @@ async function rollBack(
   return false;
 }
 
+/**
+ * Whether the revision production serves contains the merge, read by this run
+ * with its own authenticated token — the read Brain often cannot make, since
+ * production asks the forge without one (60 reads an hour, shared). Null when
+ * the forge did not answer here either; Brain then reports UNKNOWN, never FAILED.
+ */
+async function servingContains(mergeSha: string): Promise<boolean | null> {
+  const revision = /^RELEASE-REVISION: ([0-9a-f]{40})$/m.exec(brain(['release-revision']))?.[1];
+  if (!revision) return null;
+  if (revision === mergeSha) return true;
+  const reply = await gh<{ status?: string }>('GET', `/repos/${REPO}/compare/${mergeSha}...${revision}`);
+  if (reply.status !== 200 || !reply.body?.status) return null;
+  return reply.body.status === 'identical' || reply.body.status === 'ahead';
+}
+
 async function verify(action: Action, mergeSha: string): Promise<void> {
-  const out = brain(['release-verify', '--run', action.runId]);
+  const contains = await servingContains(mergeSha).catch(() => null);
+  const out = brain(['release-verify', '--run', action.runId, ...(contains === null ? [] : ['--contains', String(contains)])]);
   log(out);
   const verdict = /^RELEASE-VERIFY: (\w+)/m.exec(out)?.[1];
   if (verdict === 'LIVE') {
     log(`RELEASE: LIVE ${action.runId} ${mergeSha}`);
+    return;
+  }
+  // Nothing answered (the forge did not reply): the run stays VERIFYING and is
+  // never rolled back for it. This pass ends unfinished, so the workflow asks
+  // for the pass that resumes it, which verifies again (invariant 26).
+  if (verdict === 'UNKNOWN') {
+    log(`RELEASE: UNKNOWN ${action.runId} — verification could not be answered; the next pass verifies again`);
     return;
   }
   // FAILED first: ROLLED_BACK may only follow a recorded failure, and a run left

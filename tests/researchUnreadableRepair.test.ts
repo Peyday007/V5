@@ -119,7 +119,11 @@ describe('the unreadable ladder', () => {
     });
     expect(plan.strategies).toEqual(['RESOLVE_CANONICAL_LINK', 'INSPECT_ARCHIVED_SOURCES']);
     expect(plan.missingEvidence).toContain('legislature.mi.gov');
-    expect(plan.missingEvidence).toContain('do not retry the same addresses');
+    // Recommended-approach change #6: the same address is read through Brain
+    // first, whichever surface runs the repair, rather than forbidden outright.
+    expect(plan.missingEvidence).toContain('brain_fetch_source');
+    expect(plan.missingEvidence).not.toContain('do not retry the same addresses');
+    expect(plan.missingEvidence).toMatch(/Only if Brain cannot read them either/);
   });
 
   it('is not chosen for a fragment whose evidence fell short', async () => {

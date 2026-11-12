@@ -23,6 +23,7 @@
  * evaluates the bin's contract against durable rows and returns the verdict. A
  * worker saying it finished is an input to nothing.
  */
+import { brainOnlyMode } from './brainOnly.ts';
 import type {
   Bin,
   BinManifest,
@@ -53,6 +54,7 @@ import {
   recordBinEvent,
   recordBinRefusal,
   releaseBin,
+  regrantBinAttempts,
   reopenNeedsHumanBin,
   resolveNeedsHumanBin,
   terminateUnleasedBin,
@@ -152,11 +154,26 @@ export type CheckInResult =
   | { assigned: true; assignment: Assignment }
   | { assigned: false; reason: 'NO_READY_BINS' }
   /**
+   * Brain-only mode is on and no Brain-improvement bin is ready for this
+   * worker (§84). Whatever else is queued is not Claude's, so the session ends.
+   */
+  | { assigned: false; reason: 'NO_WORK' }
+  /**
    * The session was established and Brain could not finish choosing its work —
    * the database did not answer, or choosing ran past the check-in's time
    * budget. Not a refusal and not "no work": the caller asks again.
    */
-  | { assigned: false; reason: 'RETRY_LATER' };
+  | { assigned: false; reason: 'RETRY_LATER' }
+  /**
+   * The session Brain fired for one worker arrived through a connector that
+   * signs it in as another. A Routine holding two of a person's Brain
+   * connectors picks one per session; this one picked the other. Nothing is
+   * chosen for it here — the fire was for the registered worker — and it is
+   * told to check in again through its other connector, which makes the same
+   * session arrive right (`sessionAlsoArrivedRight`) instead of quarantining
+   * the surface for one wrong pick.
+   */
+  | { assigned: false; reason: 'WRONG_CONNECTOR' };
 
 /**
  * How long choosing work may take inside one check-in.
@@ -462,6 +479,34 @@ export async function binAdmission(input: {
         credentialId: input.principal.credentialId,
       });
       if (!lineage.ok) return { ok: false, reason: lineage.reason ?? 'not independent of the work' };
+      /*
+       * A second look at the same commit is a different reviewer. Production,
+       * 2026-11-11, authority-d0-p0: the same session was dealt the round-3
+       * review of 99d2e019 four times and answered CHANGES_REQUIRED each time,
+       * so no independent verdict could ever be gathered and its own finding
+       * ("one session receives repeated review bins") parked the campaign. A
+       * session that already reviewed the commit under review is refused here,
+       * before the lease, so the refusal costs the bin nothing.
+       */
+      if (reportedSession) {
+        const { getCampaign } = await import('../../repos/factory.ts');
+        const { listReviews } = await import('../../repos/factoryFleet.ts');
+        const campaign = await getCampaign(bin.factoryCampaignId);
+        const head = campaign ? campaign.integrationSha ?? campaign.baseSha : null;
+        const already = head
+          ? (await listReviews(bin.factoryCampaignId)).some(
+              (review) => review.reviewerSessionId === reportedSession && review.reviewedSha === head,
+            )
+          : false;
+        if (already) {
+          return {
+            ok: false,
+            reason:
+              `Session ${reportedSession} has already reviewed ${String(head).slice(0, 12)} for this ` +
+              'campaign; another look at the same commit is a different reviewer.',
+          };
+        }
+      }
     }
 
     /*
@@ -605,13 +650,17 @@ export async function checkIn(input: {
      */
     // Bounded: evidence must not spend the admission budget a session's work needs.
     let evidenceLost: InfraFailureKind | null = null;
+    let verdict: Awaited<ReturnType<typeof observeFiredSessionArrival>> | null = null;
     const evidence = asWorkload(() =>
       observeFiredSessionArrival({
         workerId: input.workerId,
         credentialId: input.principal.credentialId ?? null,
         sessionRef: input.sessionRef ?? null,
       }),
-    );
+    ).then((value) => {
+      verdict = value;
+      return value;
+    });
     // Abandoned past its budget, it finishes (or fails) in the background, observed.
     evidence.catch(() => undefined);
     try {
@@ -626,6 +675,10 @@ export async function checkIn(input: {
         noteInfraFailure(kind, 'check_in:arrival');
         evidenceLost = kind;
       }
+    }
+    // Fired for another worker: redirect rather than serve this identity's queue.
+    if ((verdict as Awaited<ReturnType<typeof observeFiredSessionArrival>> | null)?.kind === 'WRONG_WORKER') {
+      return { assigned: false, reason: 'WRONG_CONNECTOR' };
     }
     /*
      * The infrastructure failure is caught *inside* the workload scope (CON-7).
@@ -656,6 +709,9 @@ export async function checkIn(input: {
       noteSessionUnserved(input, choosing.infra ?? 'CHECK_IN_BUDGET');
       return { assigned: false, reason: 'RETRY_LATER' };
     }
+    if (!result.assigned && result.reason === 'NO_READY_BINS' && (await brainOnlyModeOrOn())) {
+      return { assigned: false, reason: 'NO_WORK' };
+    }
     return result;
   } catch (error) {
     const kind = classifyInfraFailure(error);
@@ -663,6 +719,15 @@ export async function checkIn(input: {
     noteInfraFailure(kind, 'check_in:choose');
     noteSessionUnserved(input, kind);
     return { assigned: false, reason: 'RETRY_LATER' };
+  }
+}
+
+/** The mode, read once for the answer's wording; an unreadable switch reads as ON. */
+async function brainOnlyModeOrOn(): Promise<boolean> {
+  try {
+    return await brainOnlyMode();
+  } catch {
+    return true;
   }
 }
 
@@ -1798,11 +1863,23 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
     });
   }
 
-  const bins = await listBinHeads({
+  const page = await listBinHeads({
     projectId,
     states: ['DRAFT', 'READY', 'LEASED'],
     limit: 500,
   });
+  /*
+   * The exhausted bins are the ones this pass exists to act on, and a page in
+   * priority order is not guaranteed to reach them: production 2026-11-10 had
+   * 500 READY research bins ahead of two exhausted Factory bins, which stayed
+   * READY at 2/2 — neither assignable nor a decision — and held a chain of
+   * three campaigns for ten hours. They are read on their own as well.
+   */
+  const seen = new Set(page.map((bin) => bin.id));
+  const exhausted = (
+    await listBinHeads({ projectId, states: ['READY', 'LEASED'], exhausted: true, limit: 500 })
+  ).filter((bin) => !seen.has(bin.id));
+  const bins = [...page, ...exhausted];
   const report: ReconcileReport = { examined: bins.length, healthy: 0, escalated: 0, details: [...closedWithPacket] };
 
   for (const bin of bins) {
@@ -1853,6 +1930,26 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
     const full = await getBin(bin.id);
     if (!full) continue;
     const verdict = await evaluateContract(full);
+    /*
+     * Not a decision for a person when the only thing outstanding is the
+     * forge's own read budget, or nothing at all. Production 2026-11-09/10:
+     * fifteen program campaigns drained Brain's unauthenticated 60 reads an
+     * hour, every integration reported "the forge's read rate limit is spent
+     * … not a fault in the work", the attempts ran out on that alone, and the
+     * stage parked waiting for a person who had nothing to decide. One more
+     * attempt is granted instead, so a worker reports again once it resets.
+     */
+    if (forgeOnly(verdict)) {
+      const regranted = await regrantBinAttempts({
+        binId: full.id,
+        maxAttempts: full.maxAttempts + 1,
+        reason: 'Attempts spent while the forge refused reads for its rate limit, or with nothing outstanding; not spent on the work failing.',
+      });
+      if (regranted.raised) {
+        report.details.push({ binId: bin.id, disposition: 'RETRY_FORGE', reason: verdict.reasons[0] ?? 'nothing outstanding' });
+        continue;
+      }
+    }
     const reason =
       `The bin used all ${full.maxAttempts} attempts without satisfying ` +
       `${full.completionContract} v${full.contractVersion}. ` +
@@ -1918,6 +2015,12 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
  * gets it wrong for a packet that has legitimately gone back to work; see the
  * comment at the check itself.
  */
+/** A verdict whose only outstanding reason is the forge's read rate limit, or none at all. */
+export function forgeOnly(verdict: Pick<ContractVerdict, 'reasons' | 'disposition'>): boolean {
+  if (verdict.disposition === 'HUMAN') return false;
+  return verdict.reasons.every((reason) => /read rate limit is spent/.test(reason));
+}
+
 export async function reopenParkedBin(input: {
   binId: string;
   operator: string;

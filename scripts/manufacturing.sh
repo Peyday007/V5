@@ -30,4 +30,4 @@ cd "$(dirname "$0")/.."
 # setting wins, and so a terminal can raise it deliberately.
 export BRAIN_DATABASE_POOL_SIZE="${BRAIN_DATABASE_POOL_SIZE:-1}"
 
-exec node --import tsx scripts/manufacturing.ts "$@"
+exec nice -n 19 node --import tsx scripts/manufacturing.ts "$@"

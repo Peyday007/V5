@@ -15,6 +15,7 @@
  *
  * It writes nothing.
  */
+import { withGoalLimitsMemo } from './worthResearching.ts';
 import { preparedDecisions } from './prepared.ts';
 import type { PreparedDecision } from '../../repos/cashPrepared.ts';
 import { cashNow, listCashEvents } from '../../repos/cashMode.ts';
@@ -56,6 +57,9 @@ import { commissionView, type CommissionView } from './monetization/inFlight.ts'
 import { commissionCapacity } from './monetization/commissionPass.ts';
 import { journeyView, type JourneyView } from './journey/view.ts';
 import { cashOutcomeLessons, measuredByMechanism } from './journey/learning.ts';
+import { goalCompareFor, goalRankingFor } from './rankGoal.ts';
+import { candidateSet, type CandidateSet } from './candidateSet.ts';
+import { screenMetrics, type ScreenMetrics } from './screenMetrics.ts';
 
 /** The states a piece has been decided on, so it has a record worth reading. */
 const RECORD_STATES = new Set(['READY', 'EXECUTING', 'DELIVERING', 'COLLECTED']);
@@ -259,9 +263,22 @@ export interface CashView {
    * state; see `services/cash/prepared.ts`.
    */
   prepared: PreparedDecision[];
+  /**
+   * What the goal screen did, counted from rows (decisions by type, questions
+   * skipped, research released, Claude jobs avoided), and the opportunities
+   * that survive the goal's own limits as a set a planner can combine. The set
+   * is null when the project has no goal with a target: there is then no limit
+   * to survive. Owner-only: it quotes counted money.
+   */
+  screening: { metrics: ScreenMetrics; candidates: CandidateSet | null };
 }
 
-export async function cashView(input: {
+/** cashView, with goal limits read once for the whole read (see `withGoalLimitsMemo`). */
+export function cashView(input: Parameters<typeof cashViewUnmemoized>[0]): ReturnType<typeof cashViewUnmemoized> {
+  return withGoalLimitsMemo(() => cashViewUnmemoized(input));
+}
+
+async function cashViewUnmemoized(input: {
   projectId: string;
   now?: string;
 }): Promise<CashView> {
@@ -322,6 +339,7 @@ export async function cashView(input: {
 
   const lessons = await cashOutcomeLessons(input.projectId);
   const standingRows = await readStandingRows(input.projectId, opportunities);
+  const goalCompare = await goalCompareFor(input.projectId, opportunities);
   const plan = assemble({
     opportunities,
     tiers,
@@ -340,6 +358,7 @@ export async function cashView(input: {
      */
     standingInputs: standingRows.standingInputs,
     diveRoom: standingRows.diveRoom,
+    ...(goalCompare ? { goalCompare } : {}),
   });
   const standings = new Map(plan.placements.map((p) => [p.opportunity.id, p.standing]));
 
@@ -539,5 +558,25 @@ export async function cashView(input: {
       now,
     }),
     prepared: await preparedDecisions(input.projectId),
+    screening: await screeningView(input.projectId, opportunities),
   };
+}
+
+
+/**
+ * The goal screen's counters and its surviving set, for the owner's reading.
+ *
+ * Only pieces someone could still work are offered to a planner: a finished or
+ * put-away opening is not a candidate, and one a person took (READY and later)
+ * is work already under way rather than something to combine.
+ */
+async function screeningView(
+  projectId: string,
+  opportunities: Awaited<ReturnType<typeof listOpportunities>>,
+): Promise<{ metrics: ScreenMetrics; candidates: CandidateSet | null }> {
+  const metrics = await screenMetrics(projectId);
+  const open = opportunities.filter((one) => one.state === 'DISCOVERED' || one.state === 'EVIDENCE_CARD');
+  const ranking = await goalRankingFor(projectId, open);
+  const candidates = ranking ? candidateSet([...ranking.inputs.values()], ranking.goal) : null;
+  return { metrics, candidates };
 }

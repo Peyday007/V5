@@ -68,7 +68,7 @@ import {
 /* Ownership                                                                  */
 /* ------------------------------------------------------------------------- */
 
-import { matchesGlob } from './glob.ts';
+import { matchesGlob, ownsPath } from './glob.ts';
 import { forbiddenIn, forbiddenPathsFor } from './forbidden.ts';
 
 export { matchesGlob };
@@ -80,7 +80,7 @@ export interface OwnershipVerdict {
 
 /** Every changed path must be inside something the unit declared. */
 export function checkOwnership(paths: string[], ownedPaths: string[]): OwnershipVerdict {
-  const outside = paths.filter((candidate) => !ownedPaths.some((glob) => matchesGlob(candidate, glob)));
+  const outside = paths.filter((candidate) => !ownedPaths.some((glob) => ownsPath(candidate, glob)));
   return { ok: outside.length === 0, outside };
 }
 

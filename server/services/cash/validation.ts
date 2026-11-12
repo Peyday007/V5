@@ -75,6 +75,7 @@ import {
 import { evidenceCard } from './card.ts';
 import { cashTier } from './tier.ts';
 import { COLUMN } from './answers.ts';
+import { UNDELIVERABLE, deliveryReading } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
 import { researchMissionSlotsFull } from '../russell/launch.ts';
@@ -83,7 +84,7 @@ import { cashPosition } from './money.ts';
 import { CAPTURE_INPUTS, type QualificationKey, type TierReading, type CashTier } from './tier.ts';
 import { DIVE_STARTED_EVENT, diveEpochStart, diveStarts, type DiveStage, type DiveStart } from './diveStage.ts';
 export { diveEpochStart } from './diveStage.ts';
-import { researchRoom, type ResearchRoom, type RoomLimit } from './researchRoom.ts';
+import { freeLaneOwnsResearch, researchCapacity, researchRoom, type ResearchRoom, type RoomLimit } from './researchRoom.ts';
 import { recordReopenCondition, reopenConditionsFor } from '../../repos/cashReconsideration.ts';
 import { formatBlockerKey } from '../../domain/types.ts';
 import type { CashCardFact, CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
@@ -96,6 +97,9 @@ import type { CashCardFact, CashOpportunity, OpportunityValidationState } from '
  * it, and counting it made a Brain with two parked missions unable to start a
  * thirty-ninth dive for ever. What holds capacity is what a worker is working on.
  */
+/** Goal-found dives that may run beside the operator's ceiling when the free lane owns the research. */
+export const GOAL_DIVES_BESIDE_CEILING = 3;
+
 const HOLDS_A_SLOT: ReadonlySet<string> = Object.freeze(new Set(['PENDING', 'RUNNING']));
 
 /**
@@ -317,7 +321,15 @@ export type DiveRefusal =
    * listing, a close inside the runway, or capital the ledger does not hold.
    * Derived on every read, so it lifts by itself (`worthResearching.ts`).
    */
-  | { kind: 'NOT_WORTH_RESEARCHING'; reason: NotWorthResearching };
+  | { kind: 'NOT_WORTH_RESEARCHING'; reason: NotWorthResearching }
+  /**
+   * Brain could not fulfil it even if every commercial question were answered:
+   * its delivery needs physical work, or a `PRODUCE_*` capability whose proof
+   * has not passed. Read from `deliveryReading`, the same rows the card's own
+   * delivery field reads, so it lifts by itself when they change. A blank —
+   * nothing recorded about delivery — is not this (invariant 39).
+   */
+  | { kind: 'CANNOT_DELIVER'; because: string };
 
 /** One line, for a report or an operator. */
 export function describeDiveRefusal(refusal: DiveRefusal): string {
@@ -355,6 +367,8 @@ export function describeDiveRefusal(refusal: DiveRefusal): string {
       return `closed on ${refusal.at} — a dive cannot win an opening that has already closed`;
     case 'NOT_WORTH_RESEARCHING':
       return `not worth a dive now: ${describeNotWorthResearching(refusal.reason)}`;
+    case 'CANNOT_DELIVER':
+      return `Brain could not deliver it: ${refusal.because.slice(0, 160)}`;
   }
 }
 
@@ -396,10 +410,20 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
        * payer" from a screen with no mission at all. It falls through, and
        * `resumeUnlaunchedDives` gives that round back.
        */
+      /*
+       * Nor a screen whose research recorded nothing at all. Production,
+       * 2026-11-04: four of an approved goal's constructed openings went dormant
+       * as "no payer" after the free model providers answered 503/429 for hours
+       * and every screen fragment "finished without recording anything". No
+       * source was read, so no payer was ruled out; the round is counted, and
+       * the epoch's cap below still bounds how often it is asked again.
+       */
+      const screenMission = current?.stage === 'SCREEN' ? await latestMissionForCandidate(current.candidateId) : null;
       if (
         current?.stage === 'SCREEN' &&
         !payerEstablished(opportunity, fact) &&
-        (await latestMissionForCandidate(current.candidateId)) !== null
+        screenMission !== null &&
+        (await screenRecordedClaims(screenMission.orchestrationId))
       ) {
         return { kind: 'STAGE_ONE_FAILED', open: ['payer'], epochStartedAt: epoch.startedAt };
       }
@@ -448,7 +472,26 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
   }
   const waste = await notWorthResearching(opportunity, { now: cashNow() });
   if (waste) return { kind: 'NOT_WORTH_RESEARCHING', reason: waste };
+  /*
+   * Whether Brain could deliver it, before a slot is spent asking.
+   *
+   * Recommended-approach change #3 (2026-10-15): a welding contract, NEH grants
+   * for nonprofits and employment listings were each dived, and the delivery
+   * reading withheld every one afterwards. Last, because it reads the
+   * project's labor rows and every cheaper refusal above has already passed.
+   */
+  const delivery = await deliveryReading(opportunity);
+  if (delivery.kind === 'WITHHOLD' && UNDELIVERABLE.has(delivery.bar)) {
+    return { kind: 'CANNOT_DELIVER', because: delivery.because };
+  }
   return { kind: 'ELIGIBLE' };
+}
+
+/** Whether a screen's packet recorded any claim at all, accepted or not. A packet nobody started recorded none. */
+async function screenRecordedClaims(orchestrationId: string | null): Promise<boolean> {
+  if (!orchestrationId) return false;
+  const row = await getDb().get<{ one: number }>('SELECT 1 AS one FROM research_claims WHERE orchestration_id = ? LIMIT 1', [orchestrationId]);
+  return !!row;
 }
 
 export { closedBy } from './closing.ts';
@@ -539,12 +582,42 @@ export interface ValidationProgress {
 export function validationQuestion(
   opportunity: CashOpportunity,
   stage: DiveStage = 'FULL',
+  /**
+   * The fields an earlier full dive this epoch left open. Given, a FULL
+   * question asks those lanes by name instead of the whole qualification.
+   */
+  stillOpen?: readonly string[],
 ): string {
   const signal = (opportunity.buyingSignal ?? opportunity.title).replace(/\s+/g, ' ').trim();
   const observed = opportunity.signalObservedAt
     ? ` It was published or observed on ${opportunity.signalObservedAt}.`
     : '';
   const source = opportunity.source ? ` The source is ${opportunity.source}.` : '';
+  if (stage === 'SCREEN' && opportunity.opportunitySignal === 'RECURRING_OUTSOURCED_WORK') {
+    /*
+     * A recurring arrangement has many payers, not one, so "who pays for this
+     * specific opening" has no answer and every screen of one ended with the
+     * payer lane empty (production, 2026-11-04/05: pooled solar, three anime
+     * patterns and the EDDM postcard, each "no published source names the
+     * specific payer"). The payer lane still takes a named instance: here, a
+     * buyer a published source names as having paid for this kind of work.
+     */
+    return (
+      `Before anything else is asked about this recurring arrangement — "${signal}" — settle the ` +
+      `three questions that can each end it.${source}${observed} ` +
+      'First establish whether this kind of work has stopped being bought from suppliers like ' +
+      'us, or a published rule excludes us. Only if it has stopped or excludes us, submit that one ' +
+      'fact in the ruled_out lane with its source and stop; that it is still bought is not a ' +
+      'ruled_out fact and is not submitted there. Otherwise establish who pays for it: in the ' +
+      'payer lane, name at least one buyer that ' +
+      'a published source (a case study, client list, testimonial, review, award or order record) ' +
+      'names as having paid for this kind of work, with its date, and the published way a ' +
+      'supplier reaches more buyers of that kind (a directory, association, marketplace category ' +
+      'or register). Then say whether anything published would disqualify it outright. Nothing ' +
+      'else is asked at this stage. Where no published source names any buyer who paid, say so ' +
+      'plainly with where you looked rather than describing a kind of buyer.'
+    );
+  }
   if (stage === 'SCREEN') {
     return (
       `Before anything else is asked about this specific opening — "${signal}" — settle the ` +
@@ -556,6 +629,40 @@ export function validationQuestion(
       'how a supplier reaches them; and whether anything published would disqualify it ' +
       'outright. Nothing else about it is asked at this stage. Where no published source ' +
       'names a payer, say so plainly with where you looked rather than naming a kind of buyer.'
+    );
+  }
+  /*
+   * The second round asks what the first left open, by lane.
+   *
+   * Recommended-approach change #5 (2026-10-15): the Artisanal Sudoku opening's
+   * second dive re-asked the whole qualification and never asked `directCosts`,
+   * the one researchable field still blank — nothing is bought to make a
+   * puzzle, so no source publishes that cost, and a documented absence in
+   * `cost_evidence` is exactly the answer `applyValidationAnswers` writes.
+   * Fields with no lane (a delivery path, a recommendation) are composed from
+   * the others and are not asked.
+   */
+  const lanes = (stillOpen ?? [])
+    .map((field) => ({ field, lane: LANE_FOR_FIELD[field] }))
+    .filter((one): one is { field: string; lane: string } => Boolean(one.lane));
+  if (stage === 'FULL' && lanes.length > 0) {
+    return (
+      `An earlier dive on this specific opening — "${signal}" — answered most of what acting on ` +
+      `it needs.${source}${observed} First confirm it is still open to a supplier like us; if it ` +
+      'has closed or a published rule excludes us, submit that one fact in the ruled_out lane ' +
+      'with its source and stop. Otherwise answer only what is still open, each in its own lane: ' +
+      lanes.map((one) => `${one.lane} (${one.field})`).join('; ') +
+      '. Nothing else about it is asked this round' +
+      // The gate requires the payer lane of every full dive, so a round that
+      // skipped it would block however well it answered the rest.
+      (lanes.some((one) => one.lane === 'payer')
+        ? '. '
+        : ', except that who pays must be restated in the payer lane with the source that names ' +
+          'them, so this round stands on its own evidence. ') +
+      'Where the answer is that something does not ' +
+      'exist — no fee is charged, nothing is bought to deliver it, no licence is required — ' +
+      'that is an answer: submit it as a NEGATIVE_EXISTENCE claim in that lane, with the source ' +
+      'that states it or the published terms you read, rather than leaving the lane empty.'
     );
   }
   return (
@@ -841,7 +948,43 @@ export async function startValidations(input: {
   const derived = await diveRoom(input.projectId, all);
   let room = derived.room;
   if (input.limit !== undefined) room = Math.min(room, Math.max(0, Math.trunc(input.limit)));
-  if (room <= 0) return [];
+  /*
+   * An approved goal's own openings, beyond the operator's ceiling (§83, §86).
+   *
+   * The ceiling and the surface count are about Routine time; under
+   * brain-only mode these dives are the free lane's, whose controller already
+   * sizes its concurrency from provider errors, so the ceiling protects nothing
+   * and only queues the goal's openings one dive at a time. Production,
+   * 2026-11-03: seven goal-found openings, one slot, and one dive that took
+   * 7.5 hours. A small fixed number of them may run beside the ceiling, inside
+   * the grant's own free slots, and only openings a goal round found.
+   */
+  const { listRounds } = await import('../../repos/cashDiscovery.ts');
+  const goalRounds = new Set((await listRounds(input.projectId)).filter((r) => r.bucketId.startsWith('goal-')).map((r) => r.id));
+  const forGoal = (opportunity: CashOpportunity) => !!opportunity.discoveryRoundId && goalRounds.has(opportunity.discoveryRoundId);
+  let goalExtra = 0;
+  if ((derived.limitedBy === 'OPERATOR' || derived.limitedBy === 'SURFACES' || derived.limitedBy === 'GRANT') && input.limit === undefined && (await freeLaneOwnsResearch(input.projectId))) {
+    // The grant's own free slots, one held back for discovery: the free lane, not a Routine surface, does the work.
+    /*
+     * Started means queued, not launched: Russell launches inside the grant and
+     * launches goal ideas first, so a goal dive captured while every slot is
+     * held takes the next one that frees. Production, 2026-11-04: requiring a
+     * free slot here left seven eligible goal dives waiting for hours while
+     * path questions on older openings took each slot as it freed.
+     */
+    const capacity = await researchCapacity(input.projectId);
+    const queueable = capacity.grantMax === null || capacity.shedding ? 0 : GOAL_DIVES_BESIDE_CEILING;
+    /*
+     * Only a launched goal dive holds one of these places. A queued one holds
+     * nothing until Russell launches it inside the grant, so counting it let
+     * three queued dives on one buyer population keep every other goal opening
+     * from even queueing (production, 2026-11-04: the pooled-solar opening sat
+     * ELIGIBLE behind three anime-outsourcing dives that could not launch).
+     */
+    const goalInFlight = all.filter((one) => forGoal(one) && one.validationState === 'RUNNING').length;
+    goalExtra = Math.max(0, Math.min(queueable, GOAL_DIVES_BESIDE_CEILING - goalInFlight));
+  }
+  if (room + goalExtra <= 0) return [];
 
   /*
    * The order is the decision-value order, and it is a preference rather than
@@ -892,6 +1035,7 @@ export async function startValidations(input: {
     } as DiveValueFacts,
   }));
   valued.sort((a, b) => compareDiveValue(a.value, b.value));
+  const tierById = new Map(tiered.map(({ opportunity, tier }) => [opportunity.id, tier]));
   /*
    * The cheap lane's screen, as a preference and never a refusal: an opening
    * two free models agree is junk is dived after everything else, and starts
@@ -910,12 +1054,24 @@ export async function startValidations(input: {
    */
   const quick = (opportunity: CashOpportunity) =>
     opportunity.mechanism === 'TEMPORARY_EXPLOIT' || screens.get(opportunity.id)?.window === 'SHORT';
-  const band = (opportunity: CashOpportunity) => (dropped(opportunity.id) ? 2 : quick(opportunity) ? 0 : 1);
+  /*
+   * An opening an approved goal's own search found comes first (owner,
+   * 2026-11-03: construction must reach the goal's plan). Production: seven
+   * openings filed from constructed rounds sat NOT_STARTED behind 68 older
+   * ones while the plan they were built for read NOT_VIABLE. Junk still last.
+   */
+  const band = (opportunity: CashOpportunity) => (dropped(opportunity.id) ? 3 : forGoal(opportunity) ? 0 : quick(opportunity) ? 1 : 2);
   valued.sort((a, b) => band(a.opportunity) - band(b.opportunity));
 
   const out: StartedValidation[] = [];
   for (const { opportunity, value } of valued) {
-    if (out.length >= room) break;
+    if (out.length >= room) {
+      // Beyond the ceiling, only an approved goal's own openings, and only a few.
+      if (goalExtra <= 0) break;
+      if (!forGoal(opportunity)) continue;
+      if ((await whyNotDiving(opportunity)).kind !== 'ELIGIBLE') continue;
+      goalExtra -= 1;
+    }
     /*
      * One condition, and `refinement-report` reads the same one.
      *
@@ -929,11 +1085,22 @@ export async function startValidations(input: {
 
     const stage = value.stage;
     const epoch = diveEpoch(opportunity);
+    /*
+     * A second full dive asks what the first left open, by lane, rather than
+     * the whole qualification again (recommended-approach change #5).
+     */
+    const askedBefore =
+      stage === 'FULL' &&
+      startsInEpoch(await diveStarts(opportunity.id), epoch).some((one) => one.stage === 'FULL');
     const candidate = await createCandidate({
       projectId: input.projectId,
       visibility: 'SHARED',
       title: `${stage === 'SCREEN' ? 'Screen' : 'Qualify'}: ${opportunity.title}`,
-      statement: validationQuestion(opportunity, stage),
+      statement: validationQuestion(
+        opportunity,
+        stage,
+        askedBefore ? fieldsWorthResearching(opportunity, tierById.get(opportunity.id)!) : undefined,
+      ),
     });
     /*
      * The first dive after a distinct change is round one of its epoch, so the
@@ -1552,9 +1719,15 @@ export async function runValidations(projectId: string): Promise<ValidationProgr
   // A screen that settled without a payer is dormant with its reopen
   // conditions, rather than spending a full dive (§3.3(a)).
   await concludeScreens(projectId);
-  // Free models sort the openings first, so Claude's dives go to the best ones.
-  await screenNewOpenings(projectId).catch(() => 0);
+  /*
+   * Dives start before the cheap screen, not after it. The screen is up to
+   * forty serial free-model calls and only reorders; under a slow or erroring
+   * provider it held every start behind it. Production, 2026-11-05 16:30–20:00Z:
+   * two eligible goal openings and room beside the ceiling, and no dive started.
+   * The screen still orders the next pass.
+   */
   const started = await startValidations({ projectId });
+  await screenNewOpenings(projectId).catch(() => 0);
   return { started, settled };
 }
 
@@ -1687,11 +1860,36 @@ export const ALSO_ANSWERS_BY_LANE: Readonly<Record<string, string>> = Object.fre
   contact_mode: 'access',
 });
 
+/**
+ * The lane a dive answers each card field in: `FIELD_BY_LANE` read backwards,
+ * the first lane declared for a field winning (`disqualifier` before
+ * `ruled_out`, which is declared only when something does rule it out), and
+ * `contact_mode` for `access` as well.
+ */
+const LANE_FOR_FIELD: Readonly<Record<string, string>> = Object.freeze(
+  Object.entries({ ...FIELD_BY_LANE, ...ALSO_ANSWERS_BY_LANE }).reduce<Record<string, string>>(
+    (out, [lane, field]) => {
+      out[field] ??= lane;
+      return out;
+    },
+    {},
+  ),
+);
+
 /** The lane where a dive records what bears on ruling an opening out, absences included. */
 export const DISQUALIFIER_LANE = 'disqualifier';
 
 /** The lane where a dive declares a fact that does rule the opening out. */
 export const RULED_OUT_LANE = 'ruled_out';
+
+/**
+ * Whether a ruled_out claim says the opening is closed to us: it ended,
+ * expired, was awarded or cancelled, or a published rule excludes us. Wording
+ * that says none of these is not a disqualifier, whatever lane it was filed in.
+ */
+export function statesExclusion(text: string): boolean {
+  return /\b(?:clos(?:ed|es|ing)|expir(?:ed|es|y)|no longer|not (?:open|accepting|accepted|available|eligible|permitted|allowed)|ineligible|exclud(?:e|es|ed|ing)|prohibit|forbid|restricted to|only (?:open|available) to|limited to|deadline (?:has )?passed|past (?:the|its) deadline|awarded|cancel+ed|withdrawn|suspended|discontinued|ended|shut down|out of business|disallow|refus(?:e|es|ed)|requires? (?:a |an )?(?:licen[cs]e|certification|registration)|must (?:be|hold|have) (?:a |an )?(?:licen|certif|regist|resident|located))/i.test(text);
+}
 
 export interface AppliedValidation {
   opportunityId: string;
@@ -1768,7 +1966,7 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
     for (const orchestrationId of await finishedDivePackets(opportunity)) {
       const claims = await citableClaims(orchestrationId);
       const ruledOut = claims.some(
-        (one) => one.evidenceLane === RULED_OUT_LANE && one.claimType !== 'NEGATIVE_EXISTENCE',
+        (one) => one.evidenceLane === RULED_OUT_LANE && one.claimType !== 'NEGATIVE_EXISTENCE' && statesExclusion(one.claim),
       );
       for (const claim of claims) {
         if (!claim.sourceUrl) continue;
@@ -1807,7 +2005,17 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
         const classifying = await declares(claim.fragmentId);
         if (claim.claimType !== 'NEGATIVE_EXISTENCE') {
           if (lane === RULED_OUT_LANE) {
-            fields.push(DISQUALIFIED_FIELD);
+            /*
+             * Only a claim that states a closure or an exclusion stops the
+             * opening. Production, 2026-11-05/06: free models filed the
+             * opening's own description in ruled_out ("HVAC Business is one of
+             * the largest wholesale distributors…", "Buyers can still buy it
+             * from a supplier like us.") and each disqualified a goal opening.
+             * Anything else in the lane is held as a possible disqualifier,
+             * which still blocks qualification and earns the one classifying
+             * round that settles it.
+             */
+            fields.push(statesExclusion(claim.claim) ? DISQUALIFIED_FIELD : UNCLASSIFIED_DISQUALIFIER_FIELD);
           } else if (lane === DISQUALIFIER_LANE && !classifying) {
             fields.push(UNCLASSIFIED_DISQUALIFIER_FIELD);
           }

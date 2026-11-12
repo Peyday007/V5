@@ -370,6 +370,50 @@ describe('what the hosted plane ran, recorded from Brain’s own rows', () => {
     expect(await eventReads(() => recordObservedSessions(campaignId))).toBeGreaterThan(0);
   });
 
+  it('does not re-read a swept finished bin after a restart, because the rows already say it was swept', async () => {
+    const campaignId = await campaign();
+    const worker = await createWorker({ name: `w-${Date.now()}`, createdByType: 'SYSTEM', createdById: 't' });
+    const binId = await stageBin(campaignId, 'FACTORY_UNITS', 'u1');
+    await runBin(binId, worker.id, 'cse_one');
+    forgetSweptSessions();
+    expect((await recordObservedSessions(campaignId)).recorded).toBe(1);
+
+    // A restart: the process forgets its memo, the rows remain.
+    forgetSweptSessions();
+    const db = getDb() as unknown as Record<'all', (...args: unknown[]) => unknown>;
+    const original = db.all;
+    let reads = 0;
+    db.all = (...args: unknown[]) => {
+      if (String(args[0]).includes('FROM bin_events')) reads += 1;
+      return original.apply(db, args);
+    };
+    let after: Awaited<ReturnType<typeof recordObservedSessions>> | null = null;
+    try {
+      after = await recordObservedSessions(campaignId);
+    } finally {
+      db.all = original;
+    }
+    expect(reads).toBe(0);
+    expect(after!.recorded).toBe(0);
+    expect(after!.alreadyRecorded).toBe(1);
+    expect(await listSessions(campaignId)).toHaveLength(1);
+
+    // A bin that changed after its last recorded session is read again.
+    forgetSweptSessions();
+    await getDb().run('UPDATE bins SET updated_at = ? WHERE id = ?', [new Date(Date.now() + 60_000).toISOString(), binId]);
+    let moved = 0;
+    db.all = (...args: unknown[]) => {
+      if (String(args[0]).includes('FROM bin_events')) moved += 1;
+      return original.apply(db, args);
+    };
+    try {
+      await recordObservedSessions(campaignId);
+    } finally {
+      db.all = original;
+    }
+    expect(moved).toBeGreaterThan(0);
+  });
+
   /*
    * The reading the whole change exists for: two stages genuinely overlapping.
    * Both bins are leased before either is finished, so the sweep must report a

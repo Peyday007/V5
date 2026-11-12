@@ -157,14 +157,37 @@ const checkInTool: McpTool = {
         projectId: null,
       };
     }
+    if (!result.assigned && result.reason === 'WRONG_CONNECTOR') {
+      return {
+        value: {
+          assigned: false,
+          reason: result.reason,
+          notify: false,
+          message:
+            // No address is named: on one account `/mcp` signs in as the factory worker and
+            // `/mcp/factory` as the research one, so a path would send the session back here.
+            'WRONG_CONNECTOR: this session was started for a different Brain worker than the connector you ' +
+            'just called signs in as. You have more than one Brain connector. Call brain_check_in again now, ' +
+            'with the same session_ref, through your OTHER Brain connector — any Brain connector except the ' +
+            'one you just used, whatever its name or address. Do not end the session and do not send a notification.',
+        },
+        projectId: null,
+      };
+    }
     if (!result.assigned) {
       return {
         value: {
           assigned: false,
           reason: result.reason,
+          // §84: an empty check-in is not news. Nothing is pushed to anyone.
+          notify: false,
           message:
-            'There is no ready bin for you. End the session now — a new worker is activated when ' +
-            'work appears, so waiting costs allowance and gains nothing.',
+            result.reason === 'NO_WORK'
+              ? 'NO_WORK: Claude routines take only Brain-improvement work, and none is ready for you. ' +
+                'End the session now and do not send a notification — work that is not Brain ' +
+                'improvement is parked by Brain and is not yours.'
+              : 'There is no ready bin for you. End the session now — a new worker is activated when ' +
+                'work appears, so waiting costs allowance and gains nothing.',
         },
         projectId: null,
       };

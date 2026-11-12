@@ -314,7 +314,7 @@ how to go about answering one, so the first live packet was researched with
 whatever method the session happened to bring.
 
 **This section is generated from `server/services/research/method.ts`, version
-`2026-09-11.1`, and a test fails if the two disagree.** That matters because the
+`2026-10-30.1`, and a test fails if the two disagree.** That matters because the
 constant is what a worker actually receives at runtime — abridged in the MCP
 `instructions` field every client reads at connect, and in full from
 `brain_research_method`, which you can call before you start. A method written
@@ -338,6 +338,12 @@ Paywalls, robots exclusions, JavaScript-only pages, 403s and dead links are
 ordinary. Try the alternatives: an official mirror, the regulator's own copy,
 the filing rather than the summary, a cached authoritative version, a different
 official jurisdiction page.
+
+If **your own environment** cannot reach the site at all — a DNS failure, a
+proxy 403, an allowlist refusal — call `brain_fetch_source` with the research
+item you hold and the URL. Brain opens the public page itself and returns its
+text, final URL, status and retrieval time. Quote passages from that text. It
+changes who opens the page, never which sources your assignment may cite.
 
 If you still cannot read it, **submit the claim with its retrieval state set**
 (PAYWALLED, ROBOTS_BLOCKED, JS_ONLY, NOT_REACHABLE). Do not quietly drop it and

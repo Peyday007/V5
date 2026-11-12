@@ -23,6 +23,7 @@
  * path nobody has established is how a sprint spends its allowance learning
  * what an evidence card would have said for nothing.
  */
+import { executionPolicyForProject } from '../goals/policy.ts';
 import {
   createOpportunity,
   getOpportunity,
@@ -426,10 +427,12 @@ export async function markReady(input: {
     opportunity,
     card: cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }),
     readiness: card.readiness,
+    // A SQUEEZE goal sells on what a responsible offer needs; the rest is learned from the sale.
+    policy: opportunity.projectId ? await executionPolicyForProject(opportunity.projectId) : 'EVIDENCE_FIRST',
   });
   if (reading.tier !== 'READY_TO_TEST' && reading.tier !== 'QUALIFIED') {
     return refuse(
-      `${reading.summary} Ready to test means the execution thesis is supported, and ` +
+      `${reading.summary} Ready means an offer can be made on it, and ` +
         `${reading.toAdvance.length} thing${reading.toAdvance.length === 1 ? '' : 's'} ` +
         `still ${reading.toAdvance.length === 1 ? 'needs' : 'need'} establishing: ` +
         `${reading.toAdvance.map((one) => one.label.toLowerCase()).join(', ')}.`,

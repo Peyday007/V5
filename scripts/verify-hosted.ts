@@ -65,6 +65,7 @@ import {
 } from '../server/repos/fleet.ts';
 import { auditAdmission, lineageForWorker } from '../server/services/research/auditAdmission.ts';
 import { initStorage } from '../server/services/storage/index.ts';
+import { openPatiently } from './hostedOpen.ts';
 import {
   createUser,
   createWorker,
@@ -108,7 +109,7 @@ import {
   recordReview,
   resolveFinding,
 } from '../server/repos/factoryFleet.ts';
-import { recordCampaignOutcome } from '../server/services/factory/writeback.ts';
+import { FACTORY_CAMPAIGN_OUTCOME, recordCampaignOutcome } from '../server/services/factory/writeback.ts';
 import { listEventsByEntity } from '../server/repos/events.ts';
 import { createLayer, listLayers } from '../server/repos/layers.ts';
 import { listOrchestrationsByProject, updateOrchestration } from '../server/repos/research.ts';
@@ -218,11 +219,14 @@ let base = '';
  * How long any one request to the deployed Brain may take before this gate
  * stops waiting.
  *
- * Fifteen minutes: comfortably past the five-minute wall every previous run
- * hit, and far inside the job's own budget, so a slow judge pass gets to
- * finish and be timed rather than being cut off and reported as nothing.
+ * It was fifteen minutes, chosen to let a slow judge pass finish and be timed.
+ * That pass was repaired (deploy 323: 1m42s over 434 documents), and fifteen
+ * minutes became the shape of every failed deploy from 2026-10-21: three
+ * requests that nothing answered, end to end, filled the step's forty-five.
+ * Four minutes is still more than twice the slowest step measured since, and
+ * the pass as a whole is bounded by `.github/workflows/hosted-verify.sh`.
  */
-const REQUEST_TIMEOUT_MS = 15 * 60 * 1000;
+const REQUEST_TIMEOUT_MS = 4 * 60 * 1000;
 
 async function call(
   path: string,
@@ -1874,7 +1878,15 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
   const beforeRefusal = (await currentFragments(orchestrationId)).find(
     (fragment) => fragment.id === planned[0]!.id,
   );
-  const proseLane = await worker.callTool('brain_submit_claims', {
+  /*
+   * Asked up to three times while there is no answer at all. Deploy 41447315272
+   * recorded this check as "accepted" on the pass after a real restart while its
+   * two siblings — nothing stored, no attempt spent — passed: the call had come
+   * back with no tool result (a transport or protocol failure under the restart's
+   * load), and "not an error result" was read as "accepted". A refusal is still
+   * required of every answer that arrives; only silence is asked again.
+   */
+  const submitProseLane = () => worker.callTool('brain_submit_claims', {
     ...proofOf(fragmentClaim),
     claims: [
       {
@@ -1888,10 +1900,19 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
       },
     ],
   });
+  let proseLane = await submitProseLane();
+  for (let retry = 0; retry < 2 && !proseLane.result; retry += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    proseLane = await submitProseLane();
+  }
   record(
     'a claim labelled with a lane description rather than its id is refused',
     proseLane.result?.isError === true,
-    proseLane.result?.isError === true ? 'isError true' : 'accepted, which it must not be',
+    proseLane.result?.isError === true
+      ? 'isError true'
+      : proseLane.result
+        ? 'accepted, which it must not be'
+        : `no answer after three asks: HTTP ${String(proseLane.status)}${proseLane.error ? ` ${proseLane.error.code} ${proseLane.error.message}` : ''}`,
   );
   const afterRefusal = (await currentFragments(orchestrationId)).find(
     (fragment) => fragment.id === planned[0]!.id,
@@ -4554,7 +4575,11 @@ async function checkFactoryBeacon(required: boolean): Promise<void> {
     `${Number(takeovers[0]?.total ?? 0)} row(s)`,
   );
 
-  const outcomes = await listEventsByEntity('FACTORY_CAMPAIGN', campaign.id);
+  // The writeback by its own event type: a campaign also carries other facts
+  // (an objective's finished record), and "exactly one" is about this one.
+  const outcomes = (await listEventsByEntity('FACTORY_CAMPAIGN', campaign.id)).filter(
+    (event) => event.eventType === FACTORY_CAMPAIGN_OUTCOME,
+  );
   record(
     'the writeback survived, and there is still exactly one of it',
     outcomes.length === 1,
@@ -4658,7 +4683,10 @@ async function main(): Promise<void> {
     process.env['BRAIN_DATABASE_CONNECT_TIMEOUT_MS'] = '120000';
   }
 
-  await initDatabase();
+  // A capacity refusal while the restarted Brain opens its own pool is waited
+  // out, a bounded number of times; anything else still fails here. See
+  // `hostedOpen.ts` for the deploys this cost.
+  await openPatiently('the database', () => initDatabase());
   /**
    * The store, opened explicitly.
    *
@@ -4669,7 +4697,7 @@ async function main(): Promise<void> {
    * bytes. It cost one deploy to find out, which is one more than the line
    * below costs.
    */
-  await initStorage();
+  await openPatiently('the document store', () => initStorage());
 
   let failed = false;
   try {

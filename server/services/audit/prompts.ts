@@ -158,6 +158,7 @@ function artifactSection(context: AuditContext): string {
               `  ${sibling.canonicalName} (${sibling.status})` +
               (sibling.unavailableReason ? ` — ${sibling.unavailableReason}` : ''),
           ),
+          ...(context.siblingsOmitted ? [`  … and ${context.siblingsOmitted} earlier sibling document(s), not listed`] : []),
         ].join('\n')
       : '';
 
