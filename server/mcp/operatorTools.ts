@@ -463,13 +463,16 @@ const learnTool: McpTool = {
   title: 'Operator: record a lesson',
   description:
     'Record a lesson about a goal or about Brain, with the evidence it rests on, so it is not rediscovered. ' +
-    'Append-only: it is shown on every later run in brain_operator_history.',
+    'Append-only: it is shown on every later run in brain_operator_history. When the lesson is your evaluation of ' +
+    'engineering you commissioned (brain_operator_engineering shows it RESOLVED), give its candidate_id and say in the ' +
+    'lesson what the measured change did to the goal — that evaluation closes the improvement cycle.',
   inputSchema: {
     type: 'object',
     properties: {
       goal_id: { type: 'string' },
       lesson: { type: 'string' },
       evidence: { type: 'string' },
+      candidate_id: { type: 'string', description: 'The candidateId (imp_…) of commissioned engineering this lesson evaluates.' },
     },
     required: ['lesson', 'evidence'],
     additionalProperties: false,
@@ -479,8 +482,23 @@ const learnTool: McpTool = {
     requireOperator(principal);
     const lesson = requiredString(args, 'lesson');
     const evidence = requiredString(args, 'evidence');
-    const result = await operatorRecordLearning({ goalId: optionalString(args, 'goal_id'), runId: await currentRunId(), lesson, evidence });
-    return { projectId: null, value: result };
+    const candidateId = optionalString(args, 'candidate_id');
+    if (candidateId) {
+      const { getCandidate } = await import('../repos/improvement.ts');
+      const candidate = await getCandidate(candidateId);
+      if (!candidate || !candidate.evidence['directive']) throw invalidInput('candidate_id names no engineering you commissioned (brain_operator_engineering lists them).');
+    }
+    const { evaluatesMarker, notifyVerifiedImprovements } = await import('../services/operator/director.ts');
+    const result = await operatorRecordLearning({
+      goalId: optionalString(args, 'goal_id'),
+      runId: await currentRunId(),
+      lesson,
+      evidence: candidateId ? `${evaluatesMarker(candidateId)} ${evidence}` : evidence,
+    });
+    if (!candidateId) return { projectId: null, value: result };
+    // The evaluation is the cycle's last step: a verified improvement is told to the owner now, not at the next pass.
+    const notice = await notifyVerifiedImprovements({ candidateId }).catch((error: unknown) => [{ candidateId, status: 'FAILED', detail: String((error as Error)?.message ?? error) }]);
+    return { projectId: null, value: { ...result, ownerNotice: notice[0] ?? { candidateId, status: 'NOT_VERIFIED', detail: 'not RESOLVED yet' } } };
   },
 };
 

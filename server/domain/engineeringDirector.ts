@@ -395,3 +395,147 @@ export function deficiencyKey(d: Pick<Diagnosis, 'deficiency' | 'ownerPaths' | '
   const subject = d.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   return `OPERATOR:${d.deficiency}:${hash(`${d.goalId ?? '-'}|${subject}`).slice(0, 16)}`;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Telling the owner: a verified self-improvement cycle                        */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The facts of one commissioned engineering, read from the rows §109 already keeps:
+ * the candidate's directive, the operator run that commissioned it, Factory's outcome,
+ * §87's measurement and decision, and the operator's own evaluation afterwards.
+ */
+export interface CycleFacts {
+  candidateId: string;
+  title: string;
+  deficiency: string;
+  problem: string;
+  goalId: string | null;
+  goalTitle: string | null;
+  /** Who commissioned it: the operator (Hermes) itself, or Brain's standing director in its place. */
+  origin: 'OPERATOR' | 'STANDING_DIRECTOR' | 'UNKNOWN';
+  /** The operator run named in the directive called brain_operator_commission / submit_fix itself. */
+  commissionedByRun: string | null;
+  intervention: string;
+  campaignId: string | null;
+  factory: {
+    status: string | null;
+    prUrl: string | null;
+    mergeSha: string | null;
+    deployed: boolean;
+    verified: boolean;
+    changedPaths: string[];
+    tests: string;
+  } | null;
+  measurement: { metric: string; before: number | null; after: number | null; verdict: string | null } | null;
+  decision: string | null;
+  decisionReason: string | null;
+  /** When §87 decided KEPT. */
+  decidedAt: string | null;
+  status: EngineeringStatus;
+  goal: { effect: GoalEffect; reasons: string[] };
+  /** The operator's evaluation of this result, recorded by one of its runs after the decision. */
+  evaluation: { runId: string; recordedAt: string; lesson: string } | null;
+}
+
+/** The five steps the owner named (2026-11-12), in order, each read from a row. */
+export const CYCLE_STEPS = [
+  'IDENTIFIED_BY_HERMES',
+  'COMMISSIONED_FACTORY',
+  'RELEASED_AND_VERIFIED',
+  'RESULT_RECEIVED',
+  'GOAL_EVALUATED',
+] as const;
+export type CycleStep = (typeof CYCLE_STEPS)[number];
+
+/**
+ * Whether one engineering is a verified autonomous self-improvement cycle — never read
+ * off a merge. Each step names the row that proves it; a missing one says why.
+ *
+ * 1. Hermes identified it: the directive's origin is the operator, and the run it names
+ *    made the commission call itself (Brain's standing director acting in its place is
+ *    not Hermes identifying anything).
+ * 2. Factory was commissioned: an ENGINEERING intervention with a campaign.
+ * 3. Factory implemented, merged, deployed and verified: LIVE, with a merge and a deploy.
+ * 4. Hermes received the result, and 5. evaluated it against the goal: a lesson recorded
+ *    by an operator run, naming this candidate, after §87 measured the metric and kept
+ *    the change (RESOLVED: KEPT on an IMPROVED measurement). A delivery without that
+ *    measurement is a release, not an improvement.
+ */
+export function verifiedCycle(f: CycleFacts): { verified: boolean; steps: Record<CycleStep, string | null> } {
+  const steps: Record<CycleStep, string | null> = {
+    IDENTIFIED_BY_HERMES:
+      f.origin === 'STANDING_DIRECTOR'
+        ? "commissioned by Brain's standing director, not by Hermes"
+        : f.origin !== 'OPERATOR'
+          ? 'no operator directive'
+          : f.commissionedByRun
+            ? null
+            : 'the operator run named in the directive did not make the commission call itself',
+    COMMISSIONED_FACTORY:
+      f.intervention !== 'ENGINEERING' ? `the intervention was ${f.intervention}, not engineering` : f.campaignId ? null : 'no Factory campaign',
+    RELEASED_AND_VERIFIED: !f.factory
+      ? 'no Factory outcome'
+      : !f.factory.mergeSha
+        ? 'not merged'
+        : !f.factory.deployed
+          ? 'not deployed'
+          : !f.factory.verified || f.factory.status !== 'LIVE'
+            ? `not verified live (${f.factory.status ?? 'unknown'})`
+            : null,
+    RESULT_RECEIVED:
+      f.status !== 'RESOLVED'
+        ? `no demonstrated improvement yet (${f.status}${f.decision ? `, decided ${f.decision}` : ''})`
+        : !f.evaluation
+          ? 'Hermes has not yet received the measured result'
+          : null,
+    GOAL_EVALUATED: !f.evaluation
+      ? 'Hermes has not evaluated the effect on the goal'
+      : f.decidedAt && f.evaluation.recordedAt < f.decidedAt
+        ? 'the evaluation predates the measurement'
+        : null,
+  };
+  return { verified: Object.values(steps).every((s) => s === null), steps };
+}
+
+const ordinalWord = (n: number): string =>
+  n === 1 ? 'first' : n === 2 ? 'second' : n === 3 ? 'third' : `${n}th`;
+
+/**
+ * The owner's message: what was wrong, what Brain fixed, and what actually improved —
+ * the software release and the demonstrated improvement in separate, labelled parts,
+ * because a release is not an improvement. Plain text; every figure is a row's.
+ */
+export function improvementNotice(f: CycleFacts, ordinal: number): { subject: string; text: string } {
+  const goalMoved = f.goal.effect === 'IMPROVED';
+  const subject = `Brain: ${ordinal === 1 ? 'first verified' : `verified #${ordinal}`} autonomous self-improvement — ${f.title}`.slice(0, 200);
+  const m = f.measurement;
+  const text = [
+    `Brain completed its ${ordinalWord(ordinal)} verified autonomous self-improvement cycle.`,
+    '',
+    'THE PROBLEM HERMES FOUND',
+    `${f.title} (${f.deficiency}).`,
+    f.problem.slice(0, 900),
+    '',
+    'WHAT BRAIN FIXED — the software release (a release is not, by itself, an improvement)',
+    `Factory campaign ${f.campaignId ?? '—'}${f.factory?.prUrl ? `, pull request ${f.factory.prUrl}` : ''}.`,
+    `Merged at ${f.factory?.mergeSha?.slice(0, 12) ?? '—'}, deployed, and verified live.`,
+    f.factory?.changedPaths.length ? `Code changed: ${f.factory.changedPaths.slice(0, 8).join(', ')}.` : 'Code changed: not itemised by Factory.',
+    `Tests and review: ${f.factory?.tests ?? 'not recorded'}.`,
+    '',
+    "WHAT ACTUALLY IMPROVED — measured on production after the release",
+    m
+      ? `${m.metric}: ${m.before ?? '—'} → ${m.after ?? '—'} (${m.verdict ?? '—'}). Brain kept the change: ${f.decisionReason ?? 'KEPT'}`.slice(0, 700)
+      : 'No measurement recorded.',
+    `Effect on the goal${f.goalTitle ? ` "${f.goalTitle}"` : f.goalId ? ` ${f.goalId}` : ''}: ${f.goal.effect}${f.goal.reasons.length ? ` — ${f.goal.reasons.join('; ')}` : ''}.`,
+    goalMoved
+      ? 'The goal itself moved.'
+      : 'The defect is fixed and its metric improved; the goal itself did not move, so Hermes is directed to a different lever.',
+    '',
+    "HERMES' EVALUATION",
+    (f.evaluation?.lesson ?? '').slice(0, 900),
+    '',
+    `Record: improvement candidate ${f.candidateId}${f.evaluation ? `, operator run ${f.evaluation.runId}` : ''}. Sent once for this improvement; later verified improvements are each sent once too.`,
+  ].join('\n');
+  return { subject, text: text.slice(0, 7_900) };
+}

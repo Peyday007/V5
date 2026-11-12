@@ -40,7 +40,10 @@ import {
   engineeringPriority,
   judgeEngineering,
   routeEngineering,
+  verifiedCycle,
+  improvementNotice,
   wakesOperator,
+  type CycleFacts,
   DEFICIENCY_CLASSES,
   INTERVENTIONS,
   type DeficiencyClass,
@@ -64,6 +67,8 @@ export const ENGINEERING_EVENTS = {
   decided: 'OPERATOR_INTERVENTION_DECIDED',
   outcome: 'OPERATOR_ENGINEERING_OUTCOME',
   prioritized: 'OPERATOR_ENGINEERING_PRIORITIZED',
+  /** A verified autonomous self-improvement cycle, and the one message the owner was sent about it. */
+  ownerNotified: 'OWNER_IMPROVEMENT_NOTIFIED',
 } as const;
 
 /* ------------------------------------------------------------------------- */
@@ -91,6 +96,8 @@ export interface DiagnosisRequest {
   personOnly?: boolean;
   capacityIdle?: boolean;
   runId: string | null;
+  /** Brain's standing director commissioning in the operator's place (never Hermes identifying it). */
+  standing?: boolean;
 }
 
 /** Why a diagnosis is too thin to act on, or null. The same bar `validateFix` set for a fix. */
@@ -261,7 +268,7 @@ export async function commission(input: DiagnosisRequest, now = new Date()): Pro
   switch (decision.intervention) {
     case 'ENGINEERING':
     case 'EVIDENCE':
-      return engineerOrResearch(diagnosis, decision.intervention, input.runId, goal, base, now);
+      return engineerOrResearch(diagnosis, decision.intervention, input.runId, goal, base, now, input.standing === true);
     case 'CAPACITY': {
       const { continueIdleCapacity } = await import('./actions.ts');
       const moved = await continueIdleCapacity(input.runId);
@@ -322,6 +329,7 @@ async function engineerOrResearch(
   goal: Awaited<ReturnType<typeof goalMark>>,
   base: { intervention: Intervention; why: string; overruled: string | null },
   now: Date,
+  standing = false,
 ): Promise<CommissionResult> {
   const scope = d.ownerPaths.length ? [...d.ownerPaths, 'tests/**'] : ['tests/**'];
   const risk = riskForScope(scope, RELEASE_EXCLUDED_PATHS);
@@ -376,7 +384,7 @@ async function engineerOrResearch(
   let candidate = registered.candidate;
   const duplicate = !registered.created && family.some((c) => c.id === candidate.id);
   const directive = {
-    origin: 'OPERATOR' as const,
+    origin: standing ? ('STANDING_DIRECTOR' as const) : ('OPERATOR' as const),
     runId,
     goalId: d.goalId,
     goalTitle: goal.title,
@@ -640,6 +648,7 @@ export async function directorPass(): Promise<{ recorded: number; wake: number }
     recorded += 1;
     if (prior && wakesOperator(outcome.status)) wake += 1;
   }
+  await notifyVerifiedImprovements().catch((error: unknown) => console.warn(`owner improvement notice: ${String((error as Error)?.message ?? error)}`));
   return { recorded, wake };
 }
 
@@ -853,6 +862,12 @@ export async function engineeringBrief(): Promise<string> {
     for (const one of outcomes) {
       lines.push(`- ${one.candidateId} [${one.status} → ${one.next}] ${one.title.slice(0, 90)}: ${one.sentence.slice(0, 220)}`);
     }
+    if (outcomes.some((one) => one.status === 'RESOLVED')) {
+      lines.push(
+        'For each RESOLVED one you have not evaluated: judge what the measured change did to its goal and record it with ' +
+          'brain_operator_record_learning {candidate_id, goal_id, lesson, evidence}.',
+      );
+    }
   }
   const found = await readDeficiencies().catch(() => []);
   if (found.length) {
@@ -896,7 +911,7 @@ export async function standingCommission(now = new Date()): Promise<string[]> {
           [...(c.evidence['ownerPaths'] as string[])].sort().join(',') === owners),
     );
     if (existing) continue;
-    const result = await commission({ ...one.diagnosis, runId: runs[0]?.id ?? null }, now);
+    const result = await commission({ ...one.diagnosis, runId: runs[0]?.id ?? null, standing: true }, now);
     done.push(`${readingId(one)}: ${result.reason}`);
     if (runs[0]) {
       await recordOperatorLearning({
@@ -908,4 +923,217 @@ export async function standingCommission(now = new Date()): Promise<string[]> {
     }
   }
   return done;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Telling the owner: a verified autonomous self-improvement cycle            */
+/* ------------------------------------------------------------------------- */
+
+/** The marker a lesson carries when the operator evaluates engineering it commissioned. */
+export function evaluatesMarker(candidateId: string): string {
+  return `[evaluates ${candidateId}]`;
+}
+
+/** The effect namespace of the owner's notice: one per verified improvement, for ever. */
+export const OWNER_NOTICE_NAMESPACE = { name: 'brain.notify_owner', version: 1, principalScope: 'PROJECT', retention: 'PERMANENT' } as const;
+
+/** The improvement-event kinds this keeps — rows in §87's own append-only log, no second tracker. */
+export const OWNER_NOTICE_KINDS = { intent: 'OWNER_NOTICE_INTENT', sent: 'OWNER_NOTIFIED', uncertain: 'OWNER_NOTICE_UNCERTAIN', failed: 'OWNER_NOTICE_FAILED' } as const;
+
+/** Everything `verifiedCycle` needs about one outcome, read from the rows §87 and §109 keep. */
+export async function cycleFacts(outcome: EngineeringOutcome): Promise<CycleFacts | null> {
+  const candidate = await getCandidate(outcome.candidateId);
+  if (!candidate) return null;
+  const directive = (candidate.evidence['directive'] ?? {}) as Record<string, unknown>;
+  const origin = directive['origin'] === 'OPERATOR' ? 'OPERATOR' : directive['origin'] === 'STANDING_DIRECTOR' ? 'STANDING_DIRECTOR' : 'UNKNOWN';
+  const runId = typeof directive['runId'] === 'string' ? (directive['runId'] as string) : null;
+  let commissionedByRun: string | null = null;
+  if (runId) {
+    const { getOperatorRun } = await import('../../repos/operator.ts');
+    const run = await getOperatorRun(runId);
+    if (run?.toolCalls.some((c) => c.ok && /brain_operator_(commission|submit_fix)$/.test(c.tool))) commissionedByRun = run.id;
+  }
+  const kept = (await listImprovementEvents({ candidateId: candidate.id, kinds: ['DECIDED'], limit: 20 })).find((e) => e.detail['decision'] === 'KEPT');
+  const decidedAt = kept?.at ?? null;
+  const evaluation = await getDb().get<{ run_id: string; recorded_at: string; lesson: string }>(
+    `SELECT l.run_id, l.recorded_at, l.lesson FROM operator_learnings l JOIN operator_runs r ON r.id = l.run_id
+      WHERE l.evidence LIKE ? AND l.recorded_at >= ? ORDER BY l.recorded_at, l.id LIMIT 1`,
+    [`%${evaluatesMarker(candidate.id)}%`, decidedAt ?? candidate.deliveredAt ?? candidate.createdAt],
+  );
+  return {
+    candidateId: candidate.id,
+    title: candidate.title,
+    deficiency: outcome.deficiency,
+    problem: candidate.problem,
+    goalId: outcome.goalId,
+    goalTitle: typeof directive['goalTitle'] === 'string' ? (directive['goalTitle'] as string) : null,
+    origin,
+    commissionedByRun,
+    intervention: outcome.intervention,
+    campaignId: candidate.campaignId,
+    factory: outcome.factory
+      ? {
+          status: outcome.factory.status,
+          prUrl: outcome.factory.prUrl,
+          mergeSha: outcome.factory.mergeSha,
+          deployed: outcome.factory.deployed,
+          verified: outcome.factory.verified,
+          changedPaths: outcome.factory.changedPaths,
+          tests: outcome.factory.tests,
+        }
+      : null,
+    measurement: outcome.measurement,
+    decision: outcome.decision,
+    decisionReason: outcome.decisionReason,
+    decidedAt,
+    status: outcome.status,
+    goal: { effect: outcome.goal.effect as CycleFacts['goal']['effect'], reasons: outcome.goal.reasons },
+    evaluation: evaluation ? { runId: evaluation.run_id, recordedAt: evaluation.recorded_at, lesson: evaluation.lesson } : null,
+  };
+}
+
+/** The owner's address: the first Brain administrator who has one (the bootstrap owner). */
+async function ownerAddress(): Promise<string | null> {
+  const row = await getDb().get<{ email: string }>(
+    `SELECT email FROM users WHERE is_brain_admin = 1 AND disabled_at IS NULL AND email IS NOT NULL ORDER BY created_at, id LIMIT 1`,
+    [],
+  );
+  return row?.email ?? null;
+}
+
+/** The connected channel that reaches the owner: the Instantly workspace (§94), else Resend when configured. */
+async function ownerChannel(env: NodeJS.ProcessEnv = process.env): Promise<{ name: string; adapter: import('../effects/adapter.ts').EffectAdapter } | null> {
+  const { INSTANTLY_KEY_ENV, messagingConfig, secretValue } = await import('../cash/providers/config.ts');
+  if (secretValue(INSTANTLY_KEY_ENV, env)) {
+    const { createInstantlyOwnerNoticeAdapter } = await import('../cash/providers/instantly.ts');
+    return { name: 'instantly', adapter: createInstantlyOwnerNoticeAdapter({ namespace: OWNER_NOTICE_NAMESPACE.name, env }) };
+  }
+  if (messagingConfig(env).provider === 'resend' && messagingConfig(env).configured) {
+    const { createResendAdapter } = await import('../cash/providers/resend.ts');
+    return { name: 'resend', adapter: createResendAdapter({ namespace: OWNER_NOTICE_NAMESPACE.name, env }) };
+  }
+  return null;
+}
+
+const noticeInFlight = new Set<string>();
+
+export interface OwnerNoticeResult {
+  candidateId: string;
+  status: 'SENT' | 'ALREADY_SENT' | 'NOT_VERIFIED' | 'NO_CHANNEL' | 'NO_RECIPIENT' | 'UNCERTAIN' | 'FAILED' | 'BUSY';
+  detail: string;
+}
+
+/**
+ * Send the owner one message for every verified autonomous self-improvement cycle not yet
+ * told: Hermes found a real deficiency, commissioned Factory, Factory merged, deployed and
+ * verified it, §87 measured an improvement and kept it, and Hermes evaluated the result
+ * against the goal. Exactly once per improvement: the effect engine's key is the candidate,
+ * and the composed message is stored before the first send so every attempt is the same
+ * request. Called from the director pass and, the moment Hermes records its evaluation,
+ * from the operator's lesson tool.
+ */
+export async function notifyVerifiedImprovements(options: { candidateId?: string; env?: NodeJS.ProcessEnv } = {}): Promise<OwnerNoticeResult[]> {
+  const out: OwnerNoticeResult[] = [];
+  const outcomes = (await engineeringOutcomes({ limit: 50 })).filter(
+    (o) => o.status === 'RESOLVED' && (!options.candidateId || o.candidateId === options.candidateId),
+  );
+  for (const outcome of outcomes) {
+    const id = outcome.candidateId;
+    const done = await listImprovementEvents({ candidateId: id, kinds: [OWNER_NOTICE_KINDS.sent, OWNER_NOTICE_KINDS.uncertain], limit: 1 });
+    if (done.length) {
+      out.push({ candidateId: id, status: 'ALREADY_SENT', detail: `${done[0]!.kind} at ${done[0]!.at}` });
+      continue;
+    }
+    const facts = await cycleFacts(outcome);
+    if (!facts) continue;
+    const cycle = verifiedCycle(facts);
+    if (!cycle.verified) {
+      out.push({ candidateId: id, status: 'NOT_VERIFIED', detail: Object.entries(cycle.steps).filter(([, why]) => why).map(([step, why]) => `${step}: ${why}`).join('; ') });
+      continue;
+    }
+    if (noticeInFlight.has(id)) {
+      out.push({ candidateId: id, status: 'BUSY', detail: 'a send for this improvement is in progress' });
+      continue;
+    }
+    noticeInFlight.add(id);
+    try {
+      out.push(await sendNotice(facts, cycle.steps, options.env ?? process.env));
+    } finally {
+      noticeInFlight.delete(id);
+    }
+  }
+  return out;
+}
+
+async function sendNotice(facts: CycleFacts, steps: Record<string, string | null>, env: NodeJS.ProcessEnv): Promise<OwnerNoticeResult> {
+  const id = facts.candidateId;
+  const channel = await ownerChannel(env);
+  if (!channel) return { candidateId: id, status: 'NO_CHANNEL', detail: 'neither INSTANTLY_API_KEY nor a configured Resend is present' };
+  const to = await ownerAddress();
+  if (!to) return { candidateId: id, status: 'NO_RECIPIENT', detail: 'no Brain administrator has an email address' };
+  // The message is composed once and stored, so a retry is the identical request (invariant 27).
+  let intent = (await listImprovementEvents({ candidateId: id, kinds: [OWNER_NOTICE_KINDS.intent], limit: 1 }))[0]?.detail as
+    | { projectId: string; subject: string; text: string; ordinal: number }
+    | undefined;
+  if (!intent) {
+    const projectId = await anchorProject(await goalProject(facts.goalId));
+    if (!projectId) return { candidateId: id, status: 'FAILED', detail: 'no project to record the notice under' };
+    const ordinal = (await listImprovementEvents({ kinds: [OWNER_NOTICE_KINDS.intent], limit: 1000 })).length + 1;
+    const notice = improvementNotice(facts, ordinal);
+    intent = { projectId, subject: notice.subject, text: notice.text, ordinal };
+    await recordImprovementEvent({ candidateId: id, kind: OWNER_NOTICE_KINDS.intent, detail: { ...intent, channel: channel.name } });
+  }
+  const key = `owner-improvement.${id}`;
+  const { runExternalEffect } = await import('../effects/external.ts');
+  const result = await runExternalEffect({
+    adapter: channel.adapter,
+    namespace: OWNER_NOTICE_NAMESPACE,
+    projectId: intent.projectId,
+    key,
+    businessId: id,
+    payload: { requestKey: key, to, subject: intent.subject, text: intent.text },
+    principalType: 'SYSTEM',
+    principalId: 'brain-engineering-director',
+    correlationId: `owner-notice:${id}`,
+  });
+  const event = async (status: string, extra: Record<string, unknown>): Promise<void> => {
+    await recordEvent({
+      projectId: intent.projectId,
+      entityType: 'PROJECT',
+      entityId: intent.projectId,
+      eventType: ENGINEERING_EVENTS.ownerNotified,
+      payload: {
+        candidateId: id,
+        status,
+        ordinal: intent.ordinal,
+        channel: channel.name,
+        subject: intent.subject,
+        // The release and the improvement, kept apart as the message keeps them.
+        release: { campaignId: facts.campaignId, prUrl: facts.factory?.prUrl ?? null, mergeSha: facts.factory?.mergeSha ?? null, deployed: facts.factory?.deployed ?? false, verifiedLive: facts.factory?.verified ?? false },
+        improvement: { measurement: facts.measurement, decision: facts.decision, goalEffect: facts.goal.effect, goalReasons: facts.goal.reasons },
+        evaluationRunId: facts.evaluation?.runId ?? null,
+        steps,
+        ...extra,
+      },
+    });
+  };
+  if (result.status === 'CONFIRMED' || result.status === 'RECONCILED' || result.status === 'REPLAYED') {
+    const receipt = 'receiptRef' in result ? result.receiptRef : (result.operation.resultRef ?? null);
+    await recordImprovementEvent({ candidateId: id, kind: OWNER_NOTICE_KINDS.sent, detail: { channel: channel.name, receipt, ordinal: intent.ordinal } });
+    await event('SENT', { receipt });
+    return { candidateId: id, status: 'SENT', detail: `sent through ${channel.name} (${receipt ?? 'no receipt id'})` };
+  }
+  if (result.status === 'UNCERTAIN') {
+    // Unknown is recorded as unknown and never sent again by itself (invariant 26).
+    await recordImprovementEvent({ candidateId: id, kind: OWNER_NOTICE_KINDS.uncertain, detail: { channel: channel.name, reason: result.reason } });
+    await event('UNCERTAIN', { reason: result.reason });
+    return { candidateId: id, status: 'UNCERTAIN', detail: result.reason };
+  }
+  const why = result.withheld ?? result.operation.resultSummary ?? result.operation.failureCategory ?? 'the provider refused';
+  // A refusal is retried on the next pass under the same key; the same refusal is recorded once, not every pass.
+  const lastFailure = (await listImprovementEvents({ candidateId: id, kinds: [OWNER_NOTICE_KINDS.failed], limit: 1 }))[0];
+  if (lastFailure?.detail['reason'] !== String(why).slice(0, 400)) {
+    await recordImprovementEvent({ candidateId: id, kind: OWNER_NOTICE_KINDS.failed, detail: { channel: channel.name, reason: String(why).slice(0, 400) } });
+  }
+  return { candidateId: id, status: 'FAILED', detail: String(why) };
 }
