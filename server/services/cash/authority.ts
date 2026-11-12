@@ -47,6 +47,7 @@ import {
 } from '../../repos/cashAuthority.ts';
 import { cashEventsOfKindInProject, recordCashEvent } from '../../repos/cashMode.ts';
 import { needForKey, openNeedForKey } from '../../repos/cashPortfolio.ts';
+import { getProject } from '../../repos/projects.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import type { CashAuthority, CashNeed } from '../../domain/types.ts';
 
@@ -149,39 +150,25 @@ export async function checkCommercialAuthority(input: {
       policyVersion: null,
     };
   }
-  const authority = await liveAuthority(input.projectId, input.at);
-  if (!authority) {
-    return {
-      ok: false,
-      authority: null,
-      reason: 'no standing commercial authority exists for this project',
-      policyVersion: null,
-    };
-  }
-  if (authority.prohibitions.includes(input.action)) {
-    return {
-      ok: false,
-      authority,
-      reason: `the commercial authority prohibits ${input.action}`,
-      policyVersion: authority.policyVersion,
-    };
-  }
-  if (!authority.allowedActions.includes(input.action)) {
-    return {
-      ok: false,
-      authority,
-      reason: `the commercial authority does not cover ${input.action}`,
-      policyVersion: authority.policyVersion,
-    };
-  }
   /*
-   * The graduated judgment every action path shares (`decideAction`): an
-   * emergency stop, a revocation, a read-only holder and the action's
-   * consequence class apply here, on the path that performs the effect, and
-   * not only where a caller remembered to ask. The grant checks above stay as
-   * they were; this can only refuse more, never allow what they refused.
+   * Every refusal of a known commercial action goes through the one judgment
+   * every action path shares (`judgeLive`), and is recorded before it is
+   * returned. The grant checks used to return early here, before that
+   * judgment ran, so "no standing authority", "prohibited" and "not covered"
+   * left no AUTHORITY_DECISION row and raised no smallest-approval need, and a
+   * revoked grant (which `liveAuthority` reads as no grant) never reached the
+   * REVOKED cause, its obligations or `recordSuspension`. `judgeAction` makes
+   * the same grant checks with the same words, after the stop, revocation and
+   * read-only checks, so this can only refuse more, never allow what a grant
+   * does not.
    */
-  const judged = await decideAction({
+  const authority = await liveAuthority(input.projectId, input.at);
+  if (!authority && !(await getProject(input.projectId))) {
+    // A project that does not exist has no history to append to and nobody to ask. It is refused in the
+    // same words as a project with no grant (invariant 23), and nothing is written against an absent row.
+    return { ok: false, authority: null, reason: 'no standing commercial authority exists for this project', policyVersion: null };
+  }
+  let judged = await judgeLive({
     projectId: input.projectId,
     action: input.action,
     at: input.at,
@@ -190,16 +177,28 @@ export async function checkCommercialAuthority(input: {
     principal: input.principal,
     access: input.access,
   });
+  // An owner's stored answer can cover a missing grant in the ledger's terms, but money is committed only
+  // under a live grant row that callers read ceilings from: without one, the answer is recorded and the
+  // action still refused, so the row says what happened rather than what the approval would have allowed.
+  if (judged.ok && !authority) {
+    judged = {
+      ...judged,
+      ok: false,
+      reason: 'no standing commercial authority exists for this project',
+      ledger: { ...judged.ledger, disposition: 'REFUSED', cause: 'NO_AUTHORITY' },
+    };
+  }
+  await recordDecision(judged);
   // A caller that states no amount has its sum bounded by its own path's ceilings (the per-action and committed
   // limits are read where the money is committed); that alone is not a refusal here. Every other cause is.
   const amountOnly = !judged.ok && judged.ledger.cause === 'AMOUNT_UNKNOWN' && (input.amountCents === undefined || input.amountCents === null);
-  if (!judged.ok && !amountOnly) {
-    return { ok: false, authority, reason: judged.reason, policyVersion: authority.policyVersion };
+  if ((!judged.ok && !amountOnly) || !authority) {
+    return { ok: false, authority, reason: judged.reason, policyVersion: authority?.policyVersion ?? null };
   }
   return {
     ok: true,
     authority,
-    reason: 'within the standing commercial authority',
+    reason: judged.ledger.cause === 'OWNER_APPROVED' ? judged.reason : 'within the standing commercial authority',
     policyVersion: authority.policyVersion,
   };
 }
