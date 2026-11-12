@@ -63,6 +63,7 @@ import { recordProcessStart, startInfraIncidentRecorder } from './services/infra
 import { settleTokenTouches } from './services/identity/tokenTouch.ts';
 import { startRussell } from './services/russell/loop.ts';
 import { startConnectRefresh } from './services/connect/loop.ts';
+import { startIntegrationsLoop } from './services/integrations/loop.ts';
 import { startFactoryRemoteLoop } from './services/factory/remoteLoop.ts';
 import { scanIfStale } from './services/selfmodel/refresh.ts';
 import { repairLaunches } from './services/russell/launch.ts';
@@ -908,6 +909,13 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
      * It writes nothing when nothing has changed.
      */
     startConnectRefresh();
+
+    /*
+     * The integration registry's clock (§103): an hourly health check and an
+     * hourly Neighbor Card pass, cadenced from their last recorded rows so a
+     * restart neither skips nor repeats them.
+     */
+    startIntegrationsLoop();
 
     // Documents that have never been read are queued now, so a folder dropped in
     // while the server was down becomes auditable without anyone asking.

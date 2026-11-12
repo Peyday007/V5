@@ -15449,3 +15449,9 @@ that no entry declares, so a future integration cannot be wired around it.
 - **One page.** `/integrations` (Brain administrators): every service, the
   components that use it, its health, missing credentials, Brain's repairs and
   the owner's actions, with "Check now".
+- **Brain keeps its own clock** (`integrations/loop.ts`). GitHub's scheduler
+  fired the hourly Neighbor Card workflow twice in eight hours, so the Brain
+  process runs the health check and the Neighbor Card pass itself, each hourly
+  from its last recorded row (deploys restart the process several times an
+  hour). The workflows stay as a second door; credential repairs that write
+  deployment secrets remain the workflow's, since the machine holds no Fly token.

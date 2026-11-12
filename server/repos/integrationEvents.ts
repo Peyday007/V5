@@ -72,3 +72,12 @@ export async function countIntegrationUsage(integrationId: string, sinceIso: str
   );
   return Number(rows[0]?.n ?? 0);
 }
+
+/** The newest event of one integration and kind (and state, when given), or null. */
+export async function latestIntegrationEvent(integrationId: string, kind: IntegrationEventKind, state: string | null = null): Promise<IntegrationEvent | null> {
+  const rows = await getDb().all<IntegrationEventRow>(
+    `SELECT * FROM integration_events WHERE integration_id = ? AND kind = ?${state ? ' AND state = ?' : ''} ORDER BY recorded_at DESC, id DESC LIMIT 1`,
+    state ? [integrationId, kind, state] : [integrationId, kind],
+  );
+  return rows[0] ? map(rows[0]) : null;
+}

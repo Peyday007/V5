@@ -249,3 +249,24 @@ describe('recorded readings and repairs reach the page', () => {
     expect(view.ownerActions.some((a) => a.integration.startsWith('Supabase'))).toBe(true);
   });
 });
+
+describe("the registry's own clock", () => {
+  let dir = '';
+  beforeAll(async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-integrations-loop-'));
+    await initDatabase({ dbPath: path.join(dir, 'brain.db') });
+  });
+  afterAll(async () => {
+    await closeDatabase();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('checks once an hour from its last row, so a restart neither skips nor repeats it', async () => {
+    const { integrationsTick } = await import('../server/services/integrations/loop.ts');
+    const now = Date.now();
+    // No Instantly key: the mailer pass is not attempted, the health check is.
+    expect(await integrationsTick(now, {})).toEqual(['check']);
+    expect(await integrationsTick(now + 10 * 60_000, {})).toEqual([]);
+    expect(await integrationsTick(now + 61 * 60_000, {})).toEqual(['check']);
+  });
+});
