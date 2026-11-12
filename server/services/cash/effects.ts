@@ -57,7 +57,7 @@ import { listAdapters, type EffectAdapter } from '../effects/adapter.ts';
 import { findExternalOperation, runExternalEffect, type ExternalOutcome } from '../effects/external.ts';
 import type { OperationNamespace } from '../effects/engine.ts';
 import { operationsByCorrelation } from '../../repos/idempotency.ts';
-import { cashEventsOfKind, recordCashEvent } from '../../repos/cashMode.ts';
+import { cashEventsOfKind, cashEventsOfKindInProject, recordCashEvent } from '../../repos/cashMode.ts';
 import type { IdempotencyOperation } from '../../domain/types.ts';
 
 /** The commercial actions Brain can be connected to perform itself. */
@@ -122,6 +122,22 @@ export const CONTACT_BUYER_NAMESPACE: OperationNamespace = COMMERCIAL_EFFECTS.CO
 
 const NAMESPACES = PERFORMABLE_ACTIONS.map((one) => COMMERCIAL_EFFECTS[one].namespace.name);
 
+/**
+ * Every namespace a commercial operation of this project can be in: the
+ * actions' own, every registered alternative, and every alternative a person
+ * ever decided about — so an attempt moved to an alternative is found by the
+ * gates and the recovery pass even after its adapter is gone.
+ */
+async function commercialNamespaces(projectId: string): Promise<string[]> {
+  const names = new Set<string>(NAMESPACES);
+  for (const action of PERFORMABLE_ACTIONS) for (const one of alternateAdaptersFor(action)) names.add(one.namespace);
+  for (const event of await cashEventsOfKindInProject(projectId, CONTINUATION_ALTERNATIVE_KIND)) {
+    const ns = (event.detail as Record<string, unknown> | null)?.['namespace'];
+    if (typeof ns === 'string' && ns) names.add(ns);
+  }
+  return [...names];
+}
+
 export function isPerformable(action: string): action is PerformableAction {
   return (PERFORMABLE_ACTIONS as readonly string[]).includes(action);
 }
@@ -147,6 +163,119 @@ export function adapterFor(action: PerformableAction): EffectAdapter | null {
 
 export function contactBuyerAdapter(): EffectAdapter | null {
   return adapterFor('CONTACT_BUYER');
+}
+
+/* ------------------------------------------------------------------------- */
+/* Alternatives a commitment may move to (S-0485)                             */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Registered adapters that declare they can stand in for this action's
+ * operation (`EffectAdapter.alternateFor`): another acquisition channel, or
+ * another supplier of the same work. Which kinds exist is whatever is
+ * registered; nothing here is a whitelist (R01-A1).
+ */
+export function alternateAdaptersFor(action: PerformableAction): EffectAdapter[] {
+  const primary = COMMERCIAL_EFFECTS[action].namespace.name;
+  return listAdapters().filter((one) => one.alternateFor === primary && one.namespace !== primary);
+}
+
+/** The namespace an alternative is performed under: the action's own, renamed, so its version, scope and retention are the commitment's. */
+export function alternateNamespace(action: PerformableAction, name: string): OperationNamespace {
+  return { ...COMMERCIAL_EFFECTS[action].namespace, name };
+}
+
+/** Whether `namespace` performs `action`: its own namespace, or a registered alternative for it. */
+export function performsAction(action: PerformableAction, namespace: string): boolean {
+  return namespace === COMMERCIAL_EFFECTS[action].namespace.name || alternateAdaptersFor(action).some((one) => one.namespace === namespace);
+}
+
+/** The adapter that serves an operation's own namespace, whichever that is. */
+export function adapterForNamespace(namespace: string): EffectAdapter | null {
+  return listAdapters().find((one) => one.namespace === namespace) ?? null;
+}
+
+/** The record of a person's decision that a commitment may (or may not) move to an alternative. */
+export const CONTINUATION_ALTERNATIVE_KIND = 'CASH_CONTINUATION_ALTERNATIVE';
+
+export interface ContinuationPermission {
+  action: PerformableAction;
+  namespace: string;
+  /** Brain may move this action's commitments there. Null: nobody has said. */
+  permitted: boolean | null;
+  /** For a supplier, the contract allows moving the work there. Null: nobody has said. */
+  contractuallyWorkable: boolean | null;
+  decidedBy: string;
+  decidedAt: string;
+}
+
+function triState(value: unknown): boolean | null {
+  return value === true ? true : value === false ? false : null;
+}
+
+/**
+ * Record a person's decision about one alternative. Append-only: a later
+ * decision supersedes an earlier one by being later, and both stay on the
+ * record. A namespace that serves nothing for the action is refused rather
+ * than recorded, so a record never names an alternative that cannot perform.
+ */
+export async function declareContinuationAlternative(input: {
+  projectId: string;
+  action: PerformableAction;
+  namespace: string;
+  permitted: boolean | null;
+  contractuallyWorkable: boolean | null;
+  actorRef: string;
+  note?: string | null;
+}): Promise<ContinuationPermission> {
+  if (input.namespace === COMMERCIAL_EFFECTS[input.action].namespace.name) {
+    throw new Error(`${input.namespace} is the operation itself, not an alternative to it.`);
+  }
+  if (!alternateAdaptersFor(input.action).some((one) => one.namespace === input.namespace)) {
+    throw new Error(`No registered adapter declares that ${input.namespace} can stand in for ${COMMERCIAL_EFFECTS[input.action].doing}.`);
+  }
+  const event = await recordCashEvent({
+    projectId: input.projectId,
+    opportunityId: null,
+    kind: CONTINUATION_ALTERNATIVE_KIND,
+    actorRef: input.actorRef,
+    summary:
+      `${input.namespace} ${input.permitted === true ? 'may' : input.permitted === false ? 'may not' : 'is undecided whether it may'} ` +
+      `stand in for ${COMMERCIAL_EFFECTS[input.action].doing}.`,
+    detail: {
+      action: input.action,
+      namespace: input.namespace,
+      permitted: input.permitted,
+      contractuallyWorkable: input.contractuallyWorkable,
+      note: input.note ?? null,
+    },
+  });
+  return {
+    action: input.action,
+    namespace: input.namespace,
+    permitted: input.permitted,
+    contractuallyWorkable: input.contractuallyWorkable,
+    decidedBy: event.actorRef,
+    decidedAt: event.createdAt,
+  };
+}
+
+/** The latest decision for each alternative of `action` in this project. None recorded is none: unknown, never a yes. */
+export async function continuationPermissions(projectId: string, action: PerformableAction): Promise<Map<string, ContinuationPermission>> {
+  const out = new Map<string, ContinuationPermission>();
+  for (const event of await cashEventsOfKindInProject(projectId, CONTINUATION_ALTERNATIVE_KIND)) {
+    const detail = (event.detail ?? {}) as Record<string, unknown>;
+    if (detail['action'] !== action || typeof detail['namespace'] !== 'string') continue;
+    out.set(detail['namespace'], {
+      action,
+      namespace: detail['namespace'],
+      permitted: triState(detail['permitted']),
+      contractuallyWorkable: triState(detail['contractuallyWorkable']),
+      decidedBy: event.actorRef,
+      decidedAt: event.createdAt,
+    });
+  }
+  return out;
 }
 
 /**
@@ -267,7 +396,7 @@ async function commercialOperations(
 ): Promise<CommercialOperation[]> {
   const rows = await operationsByCorrelation({
     projectId,
-    namespaces: NAMESPACES,
+    namespaces: await commercialNamespaces(projectId),
     correlationPrefix,
     limit: 500,
   });
@@ -383,6 +512,12 @@ export interface CommercialEffectRequest {
   stateAtSend: string;
   /** See `EffectIntent.subjectRef`. */
   subjectRef?: string | null;
+  /**
+   * The alternative namespace `continuationGate` moved this commitment to
+   * (REROUTE). Absent: the action's own. It must be a registered adapter that
+   * declares it stands in for this action.
+   */
+  via?: string | null;
 }
 
 /**
@@ -395,11 +530,17 @@ export interface CommercialEffectRequest {
  */
 export async function sendCommercialEffect(input: CommercialEffectRequest): Promise<ExternalOutcome> {
   const effect = COMMERCIAL_EFFECTS[input.action];
-  const adapter = usableAdapter(effect.namespace);
+  const namespace = input.via ? alternateNamespace(input.action, input.via) : effect.namespace;
+  if (input.via && !alternateAdaptersFor(input.action).some((one) => one.namespace === input.via)) {
+    throw new Error(`${input.via} does not declare that it can stand in for ${effect.doing}.`);
+  }
+  const adapter = usableAdapter(namespace);
   if (!adapter) {
     throw new Error(
-      `No effect adapter is registered for "${effect.namespace.name}", so ` +
-        `${effect.capability} should not have read PRESENT.`,
+      input.via
+        ? `The alternative ${input.via} chosen for ${effect.doing} has no usable adapter.`
+        : `No effect adapter is registered for "${effect.namespace.name}", so ` +
+            `${effect.capability} should not have read PRESENT.`,
     );
   }
   const correlationId = effectCorrelation(
@@ -427,13 +568,14 @@ export async function sendCommercialEffect(input: CommercialEffectRequest): Prom
         amountCents: input.amountCents,
         stateAtSend: input.stateAtSend,
         subjectRef: input.subjectRef ?? null,
+        via: input.via ?? null,
       },
     });
   }
   const key = commercialEffectKey(input.action, input.opportunityId, input.occurrence, input.retry ?? 0);
   return await runExternalEffect({
     adapter,
-    namespace: effect.namespace,
+    namespace,
     projectId: input.projectId,
     key,
     // The identity of this one effect, not of the piece it is for: a

@@ -62,7 +62,7 @@ import { raiseNeed } from './needs.ts';
 import { collectable, dealPosition, owedBackReading, owedBackUnclaimedCents } from './journey/position.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { getOperation } from '../../repos/idempotency.ts';
-import { COMMERCIAL_EFFECTS } from './effects.ts';
+import { performsAction } from './effects.ts';
 import {
   COMMERCIAL_ACTIONS,
   checkCommercialAuthority,
@@ -1539,7 +1539,7 @@ export async function recordMoneyEvent(input: {
       backing !== null &&
       backing.state === 'SUCCEEDED' &&
       backing.projectId === input.projectId &&
-      backing.namespace === COMMERCIAL_EFFECTS.ACCEPT_PAYMENT.namespace.name &&
+      performsAction('ACCEPT_PAYMENT', backing.namespace) &&
       backing.resultRef !== null &&
       backing.resultRef === (input.verifiedReference ?? null) &&
       // and taken for this piece, by the correlation Brain composed at send
