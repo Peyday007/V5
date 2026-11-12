@@ -38,6 +38,14 @@ export function browserMcpUrl(): string | null {
 
 let active = 0;
 const waiting: (() => void)[] = [];
+/**
+ * One bound for every use of the browser from this process: a page render and an
+ * operated workflow (`browserWorkflow.ts`) share the same two slots, so operating
+ * a site can never multiply the memory the browser costs.
+ */
+export async function withBrowserSlot<T>(work: () => Promise<T>): Promise<T> {
+  return slot(work);
+}
 async function slot<T>(work: () => Promise<T>): Promise<T> {
   if (active >= MAX_CONCURRENT) {
     if (waiting.length >= MAX_WAITING) throw new BrowserBusy('the research browser is busy');
@@ -85,9 +93,10 @@ export function evaluateResult(payload: Record<string, unknown>): unknown {
   return value;
 }
 
-type Http = (url: string, init: RequestInit) => Promise<Response>;
+export type Http = (url: string, init: RequestInit) => Promise<Response>;
 
-class McpSession {
+/** One MCP session against the browser server; closed by its owner in a `finally`. */
+export class McpSession {
   private session: string | null = null;
   private id = 0;
   constructor(
