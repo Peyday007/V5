@@ -15619,11 +15619,13 @@ No Claude, OpenAI or Perplexity API is called.
   revokes it when the run ends. The agent reaches Brain only through `/mcp`
   over the private network, authenticated and authorized like any worker (§17,
   §21). It holds nothing between runs.
-- **Its hands are eight tools** (`mcp/operatorTools.ts`, in the one registry),
+- **Its hands are ten tools** (`mcp/operatorTools.ts`, in the one registry),
   filtered by name in Hermes' config and kept eager (no tool-search bridge):
   read — `brain_operator_goals`, `_goal` (blockers, open requests with their
-  mission and packet state and a `moot` reading), `_capacity` (§98's pools),
-  `_history` (its runs, actions and lessons); act — `_withdraw_moot_request`,
+  mission and packet state and a `moot` reading), `_goal_plan` (the planner's
+  stored reading: strategies, simulated reach, conservative settled cash, the
+  next test — §95, §99, §102), `_capacity` (§98's pools), `_integrations`
+  (§103's registry with health), `_history` (its runs, actions and lessons); act — `_withdraw_moot_request`,
   `_continue_idle` (§98's continuation), `_submit_fix` (Factory on the owner's
   standing improvement order, §87, with §58's LOW-risk release when a person
   set that order; `RELEASE_EXCLUDED_PATHS`, review and the gate unchanged),

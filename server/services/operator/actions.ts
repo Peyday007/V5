@@ -122,6 +122,59 @@ export async function operatorHistory(goalId: string | null): Promise<Record<str
   };
 }
 
+/**
+ * The goal's quantitative plan as Brain last read it (§77, §95, §99, §102): the
+ * verdict, the chosen strategy, every strategy's sweep and conservative settled
+ * figure, and the next test. Read from the stored reading — the operator does
+ * not re-run the engine; the goal pass does that on its own cadence.
+ */
+export async function readGoalPlanSummary(goalId: string): Promise<Record<string, unknown>> {
+  const { latestReading } = await import('../goals/plan.ts');
+  const row = await latestReading(goalId);
+  if (!row) return { goalId, reading: null, note: 'Brain has no plan reading for this goal yet.' };
+  const parse = (text: string | null): unknown => {
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text.slice(0, 600);
+    }
+  };
+  const strategies = parse(row.strategies);
+  return {
+    goalId,
+    readAt: row.created_at,
+    verdict: row.verdict,
+    chosenStrategy: row.chosen_strategy,
+    strategies: Array.isArray(strategies)
+      ? strategies.slice(0, 8).map((one: Record<string, unknown>) => ({
+          key: one['key'], label: one['label'], verdict: one['verdict'],
+          constraintsFailed: one['constraintsFailed'], sweep: one['sweep'], conservativeSettled: one['conservativeSettled'],
+        }))
+      : strategies,
+    nextTest: parse(row.next_test),
+    forecast: parse(row.forecast),
+  };
+}
+
+/** Every integration Brain declares (§103) with its latest health reading: what the operator can rely on. */
+export async function readIntegrations(): Promise<Record<string, unknown>[]> {
+  const { INTEGRATIONS } = await import('../integrations/registry.ts');
+  const { latestIntegrationEvent } = await import('../../repos/integrationEvents.ts');
+  const out: Record<string, unknown>[] = [];
+  for (const one of INTEGRATIONS) {
+    const check = await latestIntegrationEvent(one.id, 'CHECK');
+    out.push({
+      id: one.id,
+      name: one.name,
+      capabilities: one.capabilities,
+      health: check ? { state: check.state, at: check.recordedAt, detail: check.detail.slice(0, 200) } : null,
+      ownerAction: one.ownerAction,
+    });
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Acting
 // ---------------------------------------------------------------------------
