@@ -7,7 +7,7 @@
  * deleted — always, in `finally`; `sweepBenchPods` deletes any a cancelled
  * run left behind. `--baseline` also measures what Brain runs today: the
  * production pod (RUNPOD_VLLM_URL/_KEY) and the free switchboard
- * (CHEAP_URL + OMNIROUTE_API_KEY, model OMNIROUTE_MODEL or `auto`).
+ * (--switchboard <address> + OMNIROUTE_API_KEY, model OMNIROUTE_MODEL or `auto`).
  *
  * Spending: no pod above RUNPOD_MAX_USD_PER_HOUR (default 0.24) is kept, and no
  * benchmark pod starts while the account's spend rate plus the new pod would
@@ -119,7 +119,7 @@ async function main(): Promise<void> {
       print(summary);
       results.push(summary);
     }
-    const freeUrl = process.env['CHEAP_URL']?.trim();
+    const freeUrl = arg('switchboard')?.trim();
     const freeKey = process.env['OMNIROUTE_API_KEY']?.trim() ?? null;
     if (freeUrl && freeKey) {
       // Production's operator combo (BRAIN_CHEAP_LLM_MODELS, not listed by /models) and the switchboard's own tool-capable route.

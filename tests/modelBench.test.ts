@@ -66,3 +66,19 @@ describe('model benchmark on Brain tasks (§108)', () => {
     expect(chooseModel([c]).winner).toBeNull();
   });
 });
+
+describe('long context and code tasks', () => {
+  it('finds the one pool failure in ~35K tokens, and grades the SQL fix by its shape', async () => {
+    const { taskLongContext, taskCode } = await import('../server/services/cheap/modelBench.ts');
+    const reader: ChatFn = async (messages) => {
+      const text = String(messages[1]!['content']);
+      const lines = text.split('\n').filter((l) => l.startsWith('RUN '));
+      const i = lines.findIndex((l) => l.includes('database pool'));
+      return reply({ content: JSON.stringify({ pool_run: lines[i]!.split(' ')[1], next_run: lines[i + 1]!.split(' ')[1] }) });
+    };
+    const long = await taskLongContext(reader);
+    expect(long.score).toBe(1);
+    const fixer: ChatFn = async () => reply({ content: '{"cause":"Postgres needs ORDER BY expressions of a SELECT DISTINCT in the select list","sql":"SELECT o.id, o.title, MAX(s.seen_at) AS last_seen FROM openings o JOIN signals s ON s.opening_id = o.id WHERE o.project_id = ? GROUP BY o.id, o.title ORDER BY last_seen DESC"}' });
+    expect((await taskCode(fixer)).score).toBe(1);
+  });
+});

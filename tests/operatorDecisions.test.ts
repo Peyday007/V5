@@ -136,3 +136,13 @@ describe('decide, verify, move capacity (against the database)', () => {
     expect(String(operatorCalibration({ predictions: preds, outcomes: outs }, 'operator:X')['reading'])).toMatch(/overconfident/);
   });
 });
+
+describe('the brief holds the money line', () => {
+  it('names settled cash as the only revenue and forbids an unshown probability', async () => {
+    const { operatorBrief } = await import('../server/domain/operator.ts');
+    const brief = operatorBrief({ nowIso: '2026-11-12T00:00:00Z', runId: 'opr_x' });
+    expect(brief).toMatch(/Revenue is settled cash only: leads, forecasts, invoices and unpaid sales are not revenue/);
+    expect(brief).toMatch(/Never claim a\nprobability of success the ledger has not shown|Never claim a/);
+    for (const tool of ['brain_operator_allocation', 'brain_operator_decide', 'brain_operator_verify', 'brain_operator_set_goal_focus', 'brain_operator_submit_fix']) expect(brief).toContain(tool);
+  });
+});

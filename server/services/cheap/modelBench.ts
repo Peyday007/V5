@@ -1,7 +1,7 @@
 /**
  * A model is chosen by what it does on Brain's own work (§108).
  *
- * Seven tasks, each built from production rows of 2026-11-12, each scored by
+ * Nine tasks, each built from production rows of 2026-11-12, each scored by
  * code rather than by another model's opinion:
  *
  *   diagnose        — the operator's real failed runs: name each cause and its fix;
@@ -508,6 +508,63 @@ export function taskFailedExecution(chat: ChatFn): Promise<TaskScore> {
   });
 }
 
+/**
+ * Long context: the operator reads a long history before it acts. ~35K tokens of
+ * operator run records in production's own shape, one of which — and only one —
+ * is the pool-exhaustion failure; the answer must name it and the run after it.
+ */
+export function taskLongContext(chat: ChatFn): Promise<TaskScore> {
+  const lines: string[] = [];
+  for (let i = 0; i < 520; i += 1) {
+    const id = `opr_${(0x10000000 + i * 7919).toString(16)}${(0xabcdef + i * 31).toString(16)}`;
+    const failures = [
+      'HTTP 429: All credentials for model openai/gpt-oss-120b are cooling down (reset after 24s)',
+      'MCP call timed out after 180.0s (configured timeout: 180.0s)',
+      'This conversation (including attachments) has grown too large to send to brain-a',
+      'HTTP 400: "auto" tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set',
+    ];
+    const line = i === 377
+      ? `RUN ${id} FAILED 2026-11-0${1 + (i % 9)}T${String(i % 24).padStart(2, '0')}:00Z on free:brain-a · tools none · error The database pool had no free connection within 10000ms: 8/8 connection(s) in use, 0 idle, 3 caller(s) waiting, ceiling 8.`
+      : `RUN ${id} ${i % 5 === 0 ? 'DONE' : 'FAILED'} 2026-11-0${1 + (i % 9)}T${String(i % 24).padStart(2, '0')}:00Z on free:brain-a · tools brain_operator_goal, brain_operator_capacity · ${i % 5 === 0 ? 'report: inspected 2 goals, nothing actionable' : `error ${failures[i % failures.length]}`}`;
+    lines.push(line);
+  }
+  const target = lines[377]!.split(' ')[1]!;
+  const after = lines[378]!.split(' ')[1]!;
+  const prompt = [
+    "Below are 520 of Brain's operator run records, oldest first.",
+    ...lines,
+    '',
+    'Exactly one run failed because the database connection pool was exhausted. Which run, and which run id comes immediately after it?',
+    'JSON: {"pool_run":"opr_…","next_run":"opr_…"}',
+  ].join('\n');
+  return judged(chat, 'long_context', prompt, (json) => {
+    const parts = [String(json['pool_run'] ?? '').includes(target) ? 1 : 0, String(json['next_run'] ?? '').includes(after) ? 1 : 0];
+    return { score: (parts[0]! + parts[1]!) / 2, notes: parts[0] ? [] : [`wanted ${target}, got ${String(json['pool_run']).slice(0, 40)}`] };
+  });
+}
+
+/** Code: a real defect class from Brain's own record (CLAUDE.md conventions): SQL that passes SQLite and throws on Postgres. */
+export function taskCode(chat: ChatFn): Promise<TaskScore> {
+  const prompt = [
+    'This TypeScript passes the SQLite test suite and throws on Postgres in production with',
+    '"for SELECT DISTINCT, ORDER BY expressions must appear in select list":',
+    '',
+    "const rows = await db.all(`SELECT DISTINCT o.id, o.title FROM openings o JOIN signals s ON s.opening_id = o.id WHERE o.project_id = ? ORDER BY MAX(s.seen_at) DESC`, [projectId]);",
+    '',
+    'Give the root cause and the corrected SQL that behaves the same on both databases.',
+    'JSON: {"cause":"…","sql":"…"}',
+  ].join('\n');
+  return judged(chat, 'code', prompt, (json) => {
+    const sql = lower(json['sql']);
+    const parts = [
+      /group by/.test(sql) ? 1 : 0,
+      /max\(s\.seen_at\)\s+as\s+\w+/.test(sql) && /order by\s+\w+/.test(sql) ? 1 : 0,
+      /distinct|select list|aggregate|group/.test(lower(json['cause'])) ? 1 : 0,
+    ];
+    return { score: parts.reduce((a, b) => a + b, 0) / parts.length, notes: parts[1] ? [] : ['did not name the aggregate and order by its alias'] };
+  });
+}
+
 export const BENCH_TASKS: Record<string, (chat: ChatFn) => Promise<TaskScore>> = {
   diagnose: taskDiagnose,
   tool_plan: taskToolPlan,
@@ -516,6 +573,8 @@ export const BENCH_TASKS: Record<string, (chat: ChatFn) => Promise<TaskScore>> =
   strategies: taskStrategies,
   assumption: taskAssumption,
   failed_exec: taskFailedExecution,
+  long_context: taskLongContext,
+  code: taskCode,
 };
 
 export interface BenchSummary {

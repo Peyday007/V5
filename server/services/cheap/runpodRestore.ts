@@ -78,6 +78,31 @@ export const RECIPES: Record<string, PodRecipe> = {
     clouds: ['SECURE', 'COMMUNITY'],
     note: 'what production ran to 2026-11-12: no tool-call parser, 32K — unfit for the operator',
   },
+  /**
+   * The existing 16 GB pod, repurposed rather than replaced (§108): its known-good
+   * image, a stronger model, the tool-call parser, and 64K by YaRN with an FP8 KV
+   * cache (weights ~6 GB + 64K × 72 KiB ≈ 4.7 GB fits the 14.7 GB vLLM may use).
+   * 2026-11-12: the 24 GB cards had no stock and a 20B pod on a fresh image never
+   * served; this one keeps the host, the GPU and the image that already boot.
+   */
+  'qwen3-8b-awq-tools': {
+    key: 'qwen3-8b-awq-tools',
+    model: 'Qwen/Qwen3-8B-AWQ',
+    served: 'Qwen/Qwen3-8B-AWQ',
+    gpus: POD_GPUS,
+    image: POD_IMAGE,
+    cuda: ['12.4', '12.5', '12.6', '12.7', '12.8', '12.9', '13.0'],
+    maxModelLen: 65536,
+    args: [
+      '--gpu-memory-utilization', '0.92', '--max-num-seqs', '12', '--kv-cache-dtype', 'fp8',
+      '--rope-scaling', '{"rope_type":"yarn","factor":2.0,"original_max_position_embeddings":32768}',
+      '--enable-auto-tool-choice', '--tool-call-parser', 'hermes',
+    ],
+    containerDiskInGb: 40,
+    minGpuGb: 16,
+    clouds: ['SECURE', 'COMMUNITY'],
+    note: 'Qwen3-8B AWQ on the existing 16 GB pod: tool calls (hermes parser), 64K by YaRN, FP8 KV',
+  },
   'gpt-oss-20b': {
     key: 'gpt-oss-20b',
     model: 'openai/gpt-oss-20b',
@@ -237,6 +262,18 @@ export async function listPods(apiKey: string, fetchImpl?: Fetch): Promise<(Pod 
   const listed = await caller(apiKey, fetchImpl)('GET', '/pods');
   if (!listed.ok) throw new Error(`RunPod refused to list pods: HTTP ${listed.status} ${listed.text.slice(0, 200)}`);
   return (JSON.parse(listed.text || '[]') as Pod[]) ?? [];
+}
+
+/**
+ * Repurpose an existing pod to a recipe (§108): RunPod's update changes the image
+ * and start command and restarts the pod on the same host and GPU — no second
+ * pod, no stock to find. Only a recipe whose GPUs include the pod's own card.
+ */
+export async function repurposePod(apiKey: string, podId: string, recipe: PodRecipe, vllmKey: string, fetchImpl?: Fetch): Promise<{ ok: boolean; status: number; detail: string }> {
+  const spec = podSpec(vllmKey, undefined, 'SECURE', recipe);
+  const body = { imageName: spec['imageName'], dockerEntrypoint: spec['dockerEntrypoint'], dockerStartCmd: spec['dockerStartCmd'], containerDiskInGb: spec['containerDiskInGb'], ports: spec['ports'] };
+  const r = await caller(apiKey, fetchImpl)('PATCH', `/pods/${encodeURIComponent(podId)}`, body);
+  return { ok: r.ok, status: r.status, detail: r.text.replace(/\s+/g, ' ').slice(0, 400) };
 }
 
 export async function deletePod(apiKey: string, podId: string, fetchImpl?: Fetch): Promise<number> {

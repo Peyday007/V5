@@ -2,6 +2,26 @@
 
 Brain's own model on a rented GPU, used before the free providers and backed by them.
 
+## Recipes, benchmark and upgrade (§108)
+
+What a pod serves is a recipe in `server/services/cheap/runpodRestore.ts`
+(`RECIPES`, `ACTIVE_RECIPE`): model, served name, GPUs, image, CUDA, window and
+vLLM flags. Every recipe after the legacy 4B names its `--tool-call-parser` and
+`--reasoning-parser` and serves 64K or more — the 4B's missing parser is why
+every operator call to it failed with HTTP 400.
+
+| action (`cheap-lane.yml`) | what it does |
+|---|---|
+| `runpod-survey` | balance, spend per hour, every pod with its start command, every GPU type's price and stock — read from RunPod, changes nothing |
+| `runpod-bench` (`recipes: baseline,<key>,…`) | the seven Brain tasks of `modelBench.ts` on production's pod and the free switchboard (`baseline`), and on a temporary `brain-bench-<key>` pod per recipe, deleted when done |
+| `runpod-upgrade` (`recipes: <key>`) | a new pod from the recipe beside the old one, probe (tool call included), connect, retire the old one — one pod before and after |
+
+Ceilings: a pod above `RUNPOD_MAX_USD_PER_HOUR` (default $0.24) is deleted at
+creation; benchmark and upgrade pods are refused when the account's spend plus
+the new pod passes `RUNPOD_MAX_TOTAL_USD_PER_HOUR` (default $0.45) or the
+balance would last under 24 hours. The hourly `runpod-auto` prints the balance
+and runway and warns under 72 hours: RunPod deletes every pod at zero.
+
 | | |
 |---|---|
 | GPU | RTX 2000 Ada, 16 GB |
