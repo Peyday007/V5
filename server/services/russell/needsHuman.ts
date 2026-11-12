@@ -30,6 +30,7 @@
 import { currentFragments, getOrchestration } from '../../repos/research.ts';
 import {
   askHuman,
+  getHumanRequest,
   getMission,
   listOpenRequests,
   openRequestFor,
@@ -731,6 +732,52 @@ export async function unparkResolvedMissions(limit: number): Promise<string[]> {
     });
     out.push(mission.id);
   }
+  /*
+   * The moot cards an earlier version already put back in front of a person.
+   * `reopenAnswered` now withdraws a moot answer instead of re-asking, but it
+   * only ever sees `ANSWERED` rows, so the cards it re-opened before that fix
+   * sit `OPEN` and nothing would reach them again. Swept here because this
+   * pass is the loop's existing "Needs You no longer applies" step.
+   */
+  await withdrawMootBacklog(limit);
+  return out;
+}
+
+/**
+ * Withdraw the `OPEN` cards that were re-asked on "the mission moved out of
+ * Needs You" and whose mission still is not waiting on them.
+ *
+ * Production, 2026-11-12: 31 such cards held goal wst_7b4fcbb5f2384f31b6c3 on
+ * "PERSON" after the re-ask itself was fixed, because they were reopened
+ * before it. A card whose `recommendation` is that sentence was put there by
+ * `reopenAnswered` from exactly this failure; if its mission has since come
+ * back to `NEEDS_HUMAN` the card is live again and is left alone.
+ *
+ * The same guarded transition and the same event as `withdrawMootAnswer`:
+ * `OPEN -> WITHDRAWN` (a person who answers first wins), the row is kept, and
+ * one `RUSSELL_ROUTINE_DECISION` is recorded by whichever writer moved it.
+ */
+export async function withdrawMootBacklog(limit: number): Promise<string[]> {
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT r.id FROM russell_human_requests r
+       JOIN russell_missions m ON m.id = r.mission_id
+      WHERE r.state = 'OPEN'
+        AND r.recommendation = ?
+        AND m.state <> 'NEEDS_HUMAN'
+      ORDER BY r.updated_at, r.id
+      LIMIT ?`,
+    [MOVED_OUT_OF_NEEDS_YOU, Math.max(1, limit)],
+  );
+  const out: string[] = [];
+  for (const row of rows) {
+    const request = await getHumanRequest(row.id);
+    if (!request || request.state !== 'OPEN' || !request.missionId) continue;
+    const mission = await getMission(request.missionId);
+    if (mission && mission.state === 'NEEDS_HUMAN') continue;
+    if (!(await withdrawRequest({ requestId: request.id, reason: mootWhy(mission, MOVED_OUT_OF_NEEDS_YOU) }))) continue;
+    await recordMootWithdrawal(request, mission, MOVED_OUT_OF_NEEDS_YOU);
+    out.push(request.id);
+  }
   return out;
 }
 
@@ -1056,12 +1103,6 @@ async function withdrawMootAnswer(
   mission: RussellMission | null,
   reason: string,
 ): Promise<boolean> {
-  const missionState = mission?.state ?? 'GONE';
-  const why = mission
-    ? `Withdrawn: the mission is now ${missionState}, so this answer can no longer be applied ` +
-      `(${reason}) and there is nothing left for you to decide here.`
-    : `Withdrawn: the mission no longer exists, so this answer can no longer be applied ` +
-      `(${reason}) and there is nothing left for you to decide here.`;
   const reopened = await reopenRequest({
     requestId: request.id,
     choices: request.choices,
@@ -1070,8 +1111,25 @@ async function withdrawMootAnswer(
     whyNotRussell: request.whyNotRussell,
   });
   if (!reopened) return false;
-  const withdrawn = await withdrawRequest({ requestId: request.id, reason: why });
+  const withdrawn = await withdrawRequest({ requestId: request.id, reason: mootWhy(mission, reason) });
   if (!withdrawn) return false;
+  await recordMootWithdrawal(request, mission, reason);
+  return true;
+}
+
+function mootWhy(mission: RussellMission | null, reason: string): string {
+  return mission
+    ? `Withdrawn: the mission is now ${mission.state}, so this answer can no longer be applied ` +
+      `(${reason}) and there is nothing left for you to decide here.`
+    : `Withdrawn: the mission no longer exists, so this answer can no longer be applied ` +
+      `(${reason}) and there is nothing left for you to decide here.`;
+}
+
+async function recordMootWithdrawal(
+  request: RussellHumanRequest,
+  mission: RussellMission | null,
+  reason: string,
+): Promise<void> {
   await recordEvent({
     projectId: request.projectId,
     entityType: 'RUSSELL_HUMAN_REQUEST',
@@ -1087,14 +1145,13 @@ async function withdrawMootAnswer(
       decidedBy: 'BRAIN',
       requestId: request.id,
       missionId: request.missionId,
-      missionState,
+      missionState: mission?.state ?? 'GONE',
       answeredChoice: request.answeredChoice,
       answeredByUserId: request.answeredByUserId,
       reason,
       surface: 'RUSSELL',
     },
   });
-  return true;
 }
 
 async function stop(mission: RussellMission): Promise<boolean> {
