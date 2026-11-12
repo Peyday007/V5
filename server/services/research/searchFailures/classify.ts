@@ -37,7 +37,12 @@ export interface MethodDecision {
   action: 'RUN' | 'PAUSE' | 'REVISE';
   /** Null while the method is not failing. */
   cause: FailureCause | null;
-  /** When a paused method may be tried once more; null unless PAUSE. */
+  /**
+   * When a paused method may be tried once more; null unless PAUSE. A REVISE
+   * carries none because it is not a wait: its consumer writes the next
+   * version of the method, which may run at once (`reviseBucketMethod` in
+   * `searchMethods/bucketMethods.ts`).
+   */
   retryAt: string | null;
   failedInARow: number;
   reason: string;
