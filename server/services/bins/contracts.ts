@@ -873,6 +873,56 @@ async function evaluateFactoryDelivery(bin: Bin): Promise<ContractVerdict> {
   return satisfied(observed);
 }
 
+/* ------------------------------------------------------------------------- */
+/* What a contract can only be satisfied by                                   */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The capabilities a worker must have for this contract to be satisfiable at
+ * all, owned here beside the evaluator that would otherwise refuse it.
+ *
+ * Production, 7 days to 2026-11-12: six of six `DESIGN_RENDER_V1` bins ended
+ * NEEDS_HUMAN with "The bin used all 3 attempts without satisfying
+ * DESIGN_RENDER_V1 v1. Outstanding: No render was submitted". The bins carried
+ * no `requiredCapabilities`, so the router fired and the assigner handed them to
+ * any surface — sessions with no browser, which cannot produce a render and so
+ * submitted none — and every attempt went on a worker that could never have
+ * answered. A contract that only a browser can satisfy *is* a declaration that
+ * it needs one; it is read from here rather than restated on every bin.
+ */
+const CONTRACT_CAPABILITIES: Readonly<Record<string, readonly string[]>> = {
+  DESIGN_RENDER_V1: ['browser'],
+};
+
+export function contractCapabilities(completionContract: string): readonly string[] {
+  return CONTRACT_CAPABILITIES[completionContract] ?? [];
+}
+
+/**
+ * The capabilities a surface must declare to be handed this bin.
+ *
+ * The bin's own `requiredCapabilities` always apply, unchanged — they fail
+ * closed exactly as before. A capability **derived** from the contract applies
+ * only while `declaredInFleet` says some Routine declares it: §27's rule, fail
+ * open where the unknown could only waste a fire. A fleet in which nobody has
+ * yet declared `browser` routes a render bin exactly as it did before, rather
+ * than stranding it behind a tag nobody wrote; once one surface declares it,
+ * the others stop being handed work they cannot do. With no `declaredInFleet`
+ * at all only the bin's own requirements are returned, which is the previous
+ * behaviour for every caller that has no fleet to ask.
+ */
+export function effectiveCapabilities(
+  bin: Pick<Bin, 'requiredCapabilities' | 'completionContract'>,
+  declaredInFleet?: (capability: string) => boolean,
+): string[] {
+  const own = [...(bin.requiredCapabilities ?? [])];
+  if (!declaredInFleet) return own;
+  for (const capability of contractCapabilities(bin.completionContract)) {
+    if (!own.includes(capability) && declaredInFleet(capability)) own.push(capability);
+  }
+  return own;
+}
+
 const EVALUATORS: Record<string, Evaluator> = {
   DETERMINISTIC_UNITS_V1: evaluateDeterministicUnits,
   BLUEPRINT_EXTRACTION_V1: evaluateBlueprintExtraction,

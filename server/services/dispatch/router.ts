@@ -31,6 +31,7 @@
  */
 import type { AllowanceReport, Bin, FleetAccount, FleetPolicy, FleetRoutine } from '../../domain/types.ts';
 import { familyOf, repositoryIdOf } from '../bins/routing.ts';
+import { effectiveCapabilities } from '../bins/contracts.ts';
 
 /** Why no Routine was chosen. A closed set, because each one has its own fix. */
 export type RoutingRefusal =
@@ -606,7 +607,20 @@ export function routeBin(input: RoutingInput): RoutingResult {
     };
   }
 
-  const required = requiredCapabilities(bin);
+  /*
+   * The bin's own requirements, plus any its completion contract implies that
+   * some routable surface in this fleet declares (`effectiveCapabilities`). A
+   * render bin is not fired at a browserless surface while a browser surface
+   * exists, and is routed as before while none does.
+   */
+  const required = effectiveCapabilities(bin, (capability) =>
+    candidates.some(
+      (one) =>
+        routable(one.account.state) &&
+        routable(one.routine.state) &&
+        one.routine.capabilities.includes(capability),
+    ),
+  );
   const repository = repositoryIdOf(bin);
   /*
    * The pin, read from the bin's own column and applied before anything else.
