@@ -116,7 +116,8 @@ function liveProbes(env: NodeJS.ProcessEnv): Record<string, () => Promise<ProbeR
     },
     'v2-bridge': async () => {
       const r = await probeV2Places({ env });
-      return { ok: r.bridge === 'VERIFIED' ? true : r.bridge === 'UNREACHABLE' ? null : 'repairing', detail: r.detail };
+      const detail = r.bridge === 'VERIFIED' ? "V2 accepted Brain's signed request." : r.detail;
+      return { ok: r.bridge === 'VERIFIED' ? true : r.bridge === 'UNREACHABLE' ? null : 'repairing', detail };
     },
     database: async () => {
       await getDb().all('SELECT 1 AS one', []);
