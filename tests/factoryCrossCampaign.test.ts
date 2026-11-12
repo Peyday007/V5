@@ -221,6 +221,45 @@ describe('the tick defers only the colliding unit', () => {
     expect(await unitBinKeys(mine)).toEqual([]);
   });
 
+  it('reads each other campaign once per pass, however many of its units wait', async () => {
+    // Deploy 43202746551: units x campaigns change-request and unit reads every 20 s.
+    const others: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const other = await campaignFor((await objective(['**'])).id);
+      const held = await unit(other, `theirs${i}`, [`src/other${i}.ts`]);
+      await promoteReadyUnits(other);
+      await setState(held, 'LEASED');
+      others.push(other);
+    }
+    const mine = await campaignFor((await objective(['**'])).id);
+    for (let i = 0; i < 4; i++) await unit(mine, `waits${i}`, ['src/other0.ts']);
+    await promoteReadyUnits(mine);
+
+    const db = getDb();
+    const realAll = db.all.bind(db);
+    const realGet = db.get.bind(db);
+    let requestReads = 0;
+    let otherUnitReads = 0;
+    const count = (sql: string, params?: unknown[]): void => {
+      if (/FROM factory_change_requests WHERE id/.test(sql)) requestReads += 1;
+      if (/FROM factory_work_units WHERE campaign_id = \?/.test(sql) && others.includes(String(params?.[0]))) otherUnitReads += 1;
+    };
+    db.all = (async (sql: string, params?: unknown[]) => (count(sql, params), realAll(sql, params as never))) as typeof db.all;
+    db.get = (async (sql: string, params?: unknown[]) => (count(sql, params), realGet(sql, params as never))) as typeof db.get;
+    let tick;
+    try {
+      tick = await tickRemoteCampaign(mine);
+    } finally {
+      db.all = realAll;
+      db.get = realGet;
+    }
+    expect(tick.notes.join('\n')).toContain(`waits3 waits for theirs0 of campaign ${others[0]}`);
+    expect(await unitBinKeys(mine)).toEqual([]);
+    // Once per other campaign (and this campaign's own request once), not once per waiting unit.
+    expect(otherUnitReads).toBe(others.length);
+    expect(requestReads).toBeLessThanOrEqual(others.length + 2);
+  });
+
   it('does not defer for a unit that owns nothing in common', async () => {
     const other = await campaignFor((await objective(['**'])).id);
     const otherUnit = await unit(other, 'theirs', ['src/shared.ts']);

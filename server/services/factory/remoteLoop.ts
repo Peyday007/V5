@@ -1683,6 +1683,52 @@ async function noteSurfaceBlocker(
 }
 
 /**
+ * The other live campaigns in one repository, read once for a pass rather than
+ * once per unit it asks about. A pass over this campaign's waiting units writes
+ * only this campaign's rows, so what the others hold cannot change between two
+ * of its units. Production 2026-11-12 (Deploy 43202746551): a held unit was
+ * re-judged every 20 s against every live campaign — its change request, its
+ * units and its bins, per unit, per campaign — 987 change-request reads in 14
+ * minutes on the process the post-restart verification was waiting on.
+ */
+interface OtherCampaigns {
+  list(): Promise<Array<{ other: FactoryCampaign; units: FactoryWorkUnit[]; carried: () => Promise<Set<string>> }>>;
+}
+
+function otherCampaignsOf(campaign: { id: string }, repository: string): OtherCampaigns {
+  let read: ReturnType<OtherCampaigns['list']> | null = null;
+  return {
+    list: () =>
+      (read ??= (async () => {
+        const { BLOCKER_WAIT } = await import('./line.ts');
+        const out: Awaited<ReturnType<OtherCampaigns['list']>> = [];
+        for (const other of await listLiveCampaigns()) {
+          if (other.id === campaign.id) continue;
+          /*
+           * A campaign stopped on something only a person can answer holds nothing.
+           * Its units will not move until somebody acts, and if they ever do its own
+           * integration re-judges them against the moved base like any other change.
+           * Production, 2026-11-02: fcp_cc5ef744 was planned in 16 s and then held for
+           * four hours by fcp_3a8b4e75, BLOCKED (UNIT_EXHAUSTED_ATTEMPTS) since
+           * 2026-10-30, through a unit owning the same goal files; the escalation was
+           * recorded and nothing could release it.
+           */
+          if (other.state === 'BLOCKED' && other.blockerKind && BLOCKER_WAIT[other.blockerKind]?.wait !== 'AUTOMATIC') continue;
+          const otherRequest = await getChangeRequest(other.changeRequestId);
+          if (!otherRequest || otherRequest.repository !== repository) continue;
+          let carried: Promise<Set<string>> | null = null;
+          out.push({
+            other,
+            units: await listUnits(other.id),
+            carried: () => (carried ??= campaignBins(other.id).then(liveUnitKeys)),
+          });
+        }
+        return out;
+      })()),
+  };
+}
+
+/**
  * The unit of another live campaign, in the same repository, that already holds
  * files this unit would edit: one that is with a worker (`LEASED`), finished but
  * not yet integrated (`IMPLEMENTED`), or `READY` and already carried by a live
@@ -1691,35 +1737,15 @@ async function noteSurfaceBlocker(
  * campaign, are never held by this.
  */
 async function conflictingUnitOfOtherCampaign(
-  campaign: { id: string },
-  repository: string,
+  others: OtherCampaigns,
   unit: { ownedPaths: string[] },
 ): Promise<{ campaignId: string; campaignState: string; unitId: string; unitKey: string } | null> {
-  const { BLOCKER_WAIT } = await import('./line.ts');
-  for (const other of await listLiveCampaigns()) {
-    if (other.id === campaign.id) continue;
-    /*
-     * A campaign stopped on something only a person can answer holds nothing.
-     * Its units will not move until somebody acts, and if they ever do its own
-     * integration re-judges them against the moved base like any other change.
-     * Production, 2026-11-02: fcp_cc5ef744 was planned in 16 s and then held for
-     * four hours by fcp_3a8b4e75, BLOCKED (UNIT_EXHAUSTED_ATTEMPTS) since
-     * 2026-10-30, through a unit owning the same goal files; the escalation was
-     * recorded and nothing could release it.
-     */
-    if (other.state === 'BLOCKED' && other.blockerKind && BLOCKER_WAIT[other.blockerKind]?.wait !== 'AUTOMATIC') continue;
-    const otherRequest = await getChangeRequest(other.changeRequestId);
-    if (!otherRequest || otherRequest.repository !== repository) continue;
-    const otherUnits = await listUnits(other.id);
-    let carried: Set<string> | null = null;
+  for (const { other, units: otherUnits, carried } of await others.list()) {
     for (const held of otherUnits) {
       if (!pathsOverlap(unit.ownedPaths, held.ownedPaths)) continue;
       const hit = { campaignId: other.id, campaignState: other.state, unitId: held.id, unitKey: held.unitKey };
       if (held.state === 'LEASED' || held.state === 'IMPLEMENTED') return hit;
-      if (held.state === 'READY') {
-        carried ??= liveUnitKeys(await campaignBins(other.id));
-        if (carried.has(held.unitKey)) return hit;
-      }
+      if (held.state === 'READY' && (await carried()).has(held.unitKey)) return hit;
     }
   }
   return null;
@@ -2108,8 +2134,9 @@ async function runRemoteTick(
     }
     let created = 0;
     const deferred: string[] = [];
+    const others = otherCampaignsOf(fresh, changeRequest.repository);
     for (const unit of uncovered) {
-      const clash = await conflictingUnitOfOtherCampaign(fresh, changeRequest.repository, unit);
+      const clash = await conflictingUnitOfOtherCampaign(others, unit);
       if (clash) {
         const hold = await recordHold(fresh, unit, clash, Date.now());
         const base = `${unit.unitKey} waits for ${clash.unitKey} of campaign ${clash.campaignId}`;
