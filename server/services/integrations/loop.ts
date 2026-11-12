@@ -22,7 +22,13 @@ import { searchPlacesViaV2 } from './v2Bridge.ts';
 
 export const INTEGRATIONS_TICK_MS = 5 * 60_000;
 export const CHECK_PERIOD_MS = 60 * 60_000;
-export const NEIGHBOR_CARD_PERIOD_MS = 60 * 60_000;
+/**
+ * A pass every quarter hour (owner's order, 2026-11-12: "Remove the unnecessary
+ * one-search-per-hour bottleneck"). Each pass reads several sources at once and
+ * rotates by the quarter hour, so the whole area is covered several times a day;
+ * Places stays inside its daily ceiling, which the meter enforces.
+ */
+export const NEIGHBOR_CARD_PERIOD_MS = 15 * 60_000;
 /**
  * Nothing runs in a process's first twenty minutes: Deploy restarts the Brain
  * and then verifies it end to end, and a crawl beside that verification is load
