@@ -186,3 +186,17 @@ describe('Places in one pass', () => {
     expect(line).toContain('not read');
   });
 });
+
+describe('West Shore Chamber listings', () => {
+  it('maps a local member with its published address, and refuses off-category, out-of-area and foreign-domain rows', async () => {
+    const { westShoreCandidate, directoryEmail } = await import('../server/services/cash/neighborCard.ts');
+    const row = { ListingId: 1432, DisplayName: 'Daflure Heating and Cooling', ListingCategory: 'Plumbing/HVAC', CategoryUrlName: 'plumbing-hvac', ListingUrlName: 'Daflure-1432', City: 'Camp Hill', Website: 'www.daflure.com', Email: 'BCrossley@Daflure.com', Member: true };
+    const c = westShoreCandidate(row)!;
+    expect(c).toMatchObject({ category: 'contractor', website: 'http://www.daflure.com', email: 'bcrossley@daflure.com', town: 'Camp Hill' });
+    expect(directoryEmail(c)).toMatchObject({ email: 'bcrossley@daflure.com', confidence: 0.9 });
+    expect(westShoreCandidate({ ...row, ListingCategory: 'Non-Profit' })).toBeNull();
+    expect(westShoreCandidate({ ...row, City: 'Pittsburgh' })).toBeNull();
+    expect(directoryEmail({ ...c, email: 'sales@agency-elsewhere.com' })).toBeNull();
+    expect(directoryEmail({ ...c, email: 'bob.daflure@gmail.com' })).not.toBeNull();
+  });
+});
