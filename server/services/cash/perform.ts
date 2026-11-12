@@ -89,6 +89,7 @@ import { dealPosition } from './journey/position.ts';
 import { emptyInvoicingPass, issueOne } from './invoicing.ts';
 import { listInvoices } from '../../repos/cashInvoices.ts';
 import { usableAdapter } from './effects.ts';
+import { decideCommitmentContinuation } from '../effects/posture.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -986,6 +987,66 @@ function stateAllows(action: PerformableAction, state: CashOpportunity['state'])
 }
 
 /**
+ * S-0485, before anything is sent — by a person's press and by the tick alike:
+ * is the dependency this commitment needs down or constrained, and does an
+ * earlier attempt for it remain unsettled? `decideCommitmentContinuation`
+ * reads that from the effect ledger and `planContinuation` decides. Only
+ * PROCEED sends. An outage is not hammered, a suspended account is not
+ * bypassed, a commitment with an unsettled effect is reconciled before
+ * anything is resent, and a deadline a wait could miss is escalated now —
+ * each decision, with the alternatives it skipped and why, on the cash record.
+ * The attempt being made now is not counted as unsettled: it reconciles under
+ * its own key rather than resending.
+ */
+export async function continuationGate(
+  opportunity: CashOpportunity,
+  action: PerformableAction,
+  occurrence: string,
+  actorRef: string,
+): Promise<Outcome<void>> {
+  const effect = COMMERCIAL_EFFECTS[action];
+  const base = `cash:${opportunity.id}:${action}:`;
+  const current = `${base}${occurrence}`;
+  const continuation = await decideCommitmentContinuation({
+    projectId: opportunity.projectId,
+    namespace: effect.namespace.name,
+    channel: opportunity.reachableChannel,
+    otherAttempt: (op) =>
+      op.correlationId !== null &&
+      op.correlationId.startsWith(base) &&
+      op.correlationId !== current &&
+      !op.correlationId.startsWith(`${current}:`),
+    deadline: opportunity.deadline,
+  });
+  if (continuation.action === 'PROCEED') return { ok: true, value: undefined, message: continuation.reason };
+  await recordCashEvent({
+    projectId: opportunity.projectId,
+    opportunityId: opportunity.id,
+    kind: 'CASH_CONTINUATION_DECIDED',
+    actorRef,
+    summary: `Brain did not attempt ${effect.doing}: ${continuation.action.toLowerCase().replace(/_/g, ' ')}.`,
+    detail: {
+      action,
+      occurrence,
+      decision: continuation.action,
+      to: continuation.to,
+      reason: continuation.reason,
+      skipped: continuation.skipped,
+      namespace: continuation.namespace,
+      health: continuation.health.status,
+      healthReason: continuation.health.reason,
+      unsettled: continuation.unsettled,
+      timeCritical: continuation.timeCritical,
+    },
+  });
+  return refuse(
+    continuation.action === 'REROUTE'
+      ? `${continuation.reason}. Nothing was sent through ${continuation.namespace}.`
+      : `Nothing was sent: ${continuation.reason}.`,
+  );
+}
+
+/**
  * Have Brain perform one commercial action on this piece now.
  *
  * `expectedOccurrence` is what the page said the next occurrence was. It is
@@ -1107,6 +1168,9 @@ export async function performCommercialAction(input: {
         'already have been done. Reload and check before asking again.',
     );
   }
+
+  const continuing = await continuationGate(opportunity, action, occurrence, input.actorRef);
+  if (!continuing.ok) return continuing;
 
   const prepared = await prepare(action, opportunity);
   if (!prepared.ok) return prepared;

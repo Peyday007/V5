@@ -111,6 +111,7 @@ import {
   sendGate,
   type ReconciledEffect,
   prepare,
+  continuationGate,
 } from './perform.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
@@ -1321,6 +1322,13 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
      * reached the buyer names the words that reached them. A card whose offer
      * cannot be drafted is not contacted at all.
      */
+    // S-0485: a dependency that is down or suspended, or an unsettled earlier
+    // attempt, is decided before anything is sent — the same gate a press reads.
+    const continuing = await continuationGate(opportunity, CONTACT_ACTION, occurrence, BRAIN);
+    if (!continuing.ok) {
+      out.withheld.push({ opportunityId: opportunity.id, because: continuing.reason });
+      continue;
+    }
     const prepared = await prepare(CONTACT_ACTION, opportunity);
     if (!prepared.ok) {
       out.withheld.push({ opportunityId: opportunity.id, because: prepared.reason });

@@ -86,18 +86,18 @@ export const CONTINUITY_CLAUSE_OWNERS: readonly ClauseOwner[] = [
   },
   {
     clause: 'change to a permitted acquisition channel when an account is suspended',
-    owner: 'server/services/effects/posture.ts (planContinuation: CONSTRAINED → REROUTE to a permitted, different channel)',
-    reader: 'NOT_AUTHORIZED refusals in idempotency_operations',
+    owner: 'server/services/effects/posture.ts (planContinuation: CONSTRAINED → REROUTE to a permitted, different channel), applied before every send by server/services/cash/perform.ts (performCommercialAction → decideCommitmentContinuation)',
+    reader: 'NOT_AUTHORIZED refusals in idempotency_operations; cash_events CASH_CONTINUATION_DECIDED',
   },
   {
     clause: 'switch suppliers if the original fails and an alternative is contractually workable',
-    owner: 'server/services/effects/posture.ts (planContinuation: contractuallyWorkable must be declared true)',
-    reader: 'idempotency_operations per supplier namespace',
+    owner: 'server/services/effects/posture.ts (planContinuation: contractuallyWorkable must be declared true), applied before every send by server/services/cash/perform.ts (performCommercialAction → decideCommitmentContinuation)',
+    reader: 'idempotency_operations per supplier namespace; cash_events CASH_CONTINUATION_DECIDED',
   },
   {
     clause: 'preserve time-critical customer commitments',
-    owner: 'server/services/effects/posture.ts (planContinuation: ESCALATE_TIME_CRITICAL)',
-    reader: 'GET /api/projects/:projectId/continuity',
+    owner: 'server/services/effects/posture.ts (planContinuation: ESCALATE_TIME_CRITICAL), applied before every send by server/services/cash/perform.ts (performCommercialAction → decideCommitmentContinuation, the opportunity deadline)',
+    reader: 'cash_events CASH_CONTINUATION_DECIDED; continuity.ts continuation --project ID --namespace NS',
   },
   {
     clause: 'backup/restoration procedures for essential data and configurations, with verified restore behavior',
@@ -316,6 +316,71 @@ export function planContinuation(input: ContinuationInput): ContinuationDecision
     reason: `${input.namespace} refused for good (${input.health.reason}) and no permitted alternative exists; this is an external constraint no other service may be used to get past`,
     skipped,
   };
+}
+
+/** A deadline nearer than this is one a backoff could outlast. */
+export const TIME_CRITICAL_WINDOW_MS = 72 * 60 * 60_000;
+
+/** Pure: whether a commitment's deadline is near enough (or past) that waiting out an outage could miss it. */
+export function isTimeCritical(deadline: string | null, now: string = operationNow()): boolean {
+  if (!deadline) return false;
+  const at = Date.parse(deadline);
+  if (Number.isNaN(at)) return false;
+  return at - Date.parse(now) <= TIME_CRITICAL_WINDOW_MS;
+}
+
+const UNSETTLED_CLASSES: ReadonlySet<ContinuityClass> = new Set(['MAY_HAVE_BEEN_ACCEPTED', 'UNKNOWN']);
+
+export interface CommitmentContinuationInput {
+  projectId: string;
+  /** The namespace the commitment would be performed through. */
+  namespace: string;
+  channel: string | null;
+  /** The operations that belong to this commitment and are not the attempt being made now (that one reconciles itself under its own key). */
+  otherAttempt: (operation: IdempotencyOperation) => boolean;
+  deadline: string | null;
+  /** Alternatives the caller's records name; none named is none, never an invented one (R01-A1, invariant 39). */
+  alternatives?: readonly ContinuationAlternative[];
+  now?: string;
+}
+
+export interface CommitmentContinuation extends ContinuationDecision {
+  namespace: string;
+  health: DependencyHealth;
+  unsettled: number;
+  timeCritical: boolean;
+}
+
+/**
+ * The production reading of `planContinuation` for one commitment (S-0485):
+ * the dependency's health and the commitment's unsettled effects are read from
+ * the same ledger rows `dependencyHealth` and `effectContinuityAccount` read,
+ * the deadline decides whether it is time-critical, and the pure decision is
+ * returned with what it was decided from. The caller acts on it — the
+ * commercial send path refuses rather than hammering an outage, bypassing a
+ * suspended account or resending over an unsettled effect — and records it.
+ */
+export async function decideCommitmentContinuation(input: CommitmentContinuationInput): Promise<CommitmentContinuation> {
+  const now = input.now ?? operationNow();
+  const operations = (await listOperations(input.projectId, { limit: 500 })).filter((op) => op.namespace === input.namespace);
+  const outcomes: NamespaceOutcome[] = [];
+  let unsettled = 0;
+  for (const operation of operations) {
+    const attempts = await listAttempts(operation.id);
+    outcomes.push(...outcomesOf(operation, attempts));
+    if (input.otherAttempt(operation) && UNSETTLED_CLASSES.has(classifyOperation(operation, attempts, now).class)) unsettled += 1;
+  }
+  const health = judgeDependency(input.namespace, outcomes, now);
+  const timeCritical = isTimeCritical(input.deadline, now);
+  const decision = planContinuation({
+    namespace: input.namespace,
+    channel: input.channel,
+    health,
+    unsettled,
+    timeCritical,
+    alternatives: input.alternatives ?? [],
+  });
+  return { ...decision, namespace: input.namespace, health, unsettled, timeCritical };
 }
 
 /* ------------------------------------------------------------------------- */

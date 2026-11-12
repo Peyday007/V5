@@ -361,7 +361,8 @@ const CONTINUITY_USAGE =
   '       continuity.ts posture --project ID\n' +
   '       continuity.ts snapshot --project ID\n' +
   '       continuity.ts verify-restore --file PATH [--project ID]\n' +
-  '       continuity.ts drill --project ID';
+  '       continuity.ts drill --project ID\n' +
+  '       continuity.ts continuation --project ID --namespace NS [--channel C] [--deadline ISO]';
 
 function cliFlag(argv: readonly string[], name: string): string | null {
   const at = argv.indexOf(`--${name}`);
@@ -373,6 +374,20 @@ function cliFlag(argv: readonly string[], name: string): string | null {
 export async function runContinuityCommand(argv: readonly string[], deps: ContinuityCliDeps = {}): Promise<{ code: number; out: string }> {
   const [command] = argv;
   const projectId = cliFlag(argv, 'project')?.trim() ?? '';
+  if (command === 'continuation') {
+    // S-0485 for one commitment: the decision the send path applies, read from the same rows.
+    const namespace = cliFlag(argv, 'namespace')?.trim() ?? '';
+    if (!projectId || !namespace) return { code: 2, out: CONTINUITY_USAGE };
+    const posture = await import('./posture.ts');
+    const decision = await posture.decideCommitmentContinuation({
+      projectId,
+      namespace,
+      channel: cliFlag(argv, 'channel'),
+      otherAttempt: () => true,
+      deadline: cliFlag(argv, 'deadline'),
+    });
+    return { code: 0, out: JSON.stringify(decision, null, 2) };
+  }
   if (command === 'posture' || command === 'snapshot' || command === 'verify-restore' || command === 'drill') {
     // S-0485: the degraded posture and the verified restore of this ledger live in posture.ts.
     const posture = await import('./posture.ts');
