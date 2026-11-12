@@ -80,15 +80,29 @@ export function marketplaceOf(url: string | null | undefined): string | null {
   return null;
 }
 
+/**
+ * When a recorded closing date closes, as an instant (epoch ms), or null when
+ * it is unrecorded or unreadable. The one reader of the free-text `expiresAt`
+ * column for the runway, the dive order and the question order: an ISO date
+ * closes at the end of that UTC day, an ISO date-time at that instant, and
+ * anything else is unknown. Every caller reads it here, so no order can call a
+ * date known that the runway check calls unknown.
+ */
+export function closingInstant(expiresAt: string | null): number | null {
+  if (!expiresAt) return null;
+  const value = expiresAt.trim();
+  const closes = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? Date.parse(`${value}T23:59:59.999Z`)
+    : /^\d{4}-\d{2}-\d{2}T/.test(value)
+      ? Date.parse(value)
+      : Number.NaN;
+  return Number.isFinite(closes) ? closes : null;
+}
+
 /** Whether a recorded closing date falls within the runway. Unknown dates are never "soon". */
 export function closesWithin(expiresAt: string | null, now: string, runwayMs = DIVE_RUNWAY_MS): boolean {
-  if (!expiresAt) return false;
-  const value = expiresAt.trim();
-  let closes: number;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) closes = Date.parse(`${value}T23:59:59.999Z`);
-  else if (/^\d{4}-\d{2}-\d{2}T/.test(value)) closes = Date.parse(value);
-  else return false;
-  if (!Number.isFinite(closes)) return false;
+  const closes = closingInstant(expiresAt);
+  if (closes === null) return false;
   return closes - Date.parse(now) < runwayMs;
 }
 
