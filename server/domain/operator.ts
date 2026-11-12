@@ -79,11 +79,23 @@ export function operatorIntervalMinutes(env: NodeJS.ProcessEnv): number {
  */
 export const OPERATOR_BOOT_GRACE_MINUTES = 12;
 
-export function operatorDue(input: { lastStartedAt: string | null; running: boolean; nowMs: number; intervalMinutes: number; processStartedMs?: number }): boolean {
+/** A run that ended before it could act (a busy model, an unreachable door) is retried sooner. */
+export const OPERATOR_RETRY_MINUTES = 15;
+
+export function operatorDue(input: {
+  lastStartedAt: string | null;
+  running: boolean;
+  nowMs: number;
+  intervalMinutes: number;
+  processStartedMs?: number;
+  /** The last run failed without one successful Brain tool call. */
+  lastActedNothing?: boolean;
+}): boolean {
   if (input.running) return false;
   if (input.processStartedMs !== undefined && input.nowMs - input.processStartedMs < OPERATOR_BOOT_GRACE_MINUTES * 60_000) return false;
   if (!input.lastStartedAt) return true;
-  return input.nowMs - Date.parse(input.lastStartedAt) >= input.intervalMinutes * 60_000;
+  const interval = input.lastActedNothing ? Math.min(OPERATOR_RETRY_MINUTES, input.intervalMinutes) : input.intervalMinutes;
+  return input.nowMs - Date.parse(input.lastStartedAt) >= interval * 60_000;
 }
 
 // ---------------------------------------------------------------------------

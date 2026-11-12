@@ -80,6 +80,9 @@ def build_config(body: dict) -> str:
         "    enabled: off",
         "agent:",
         f"  run_budget_seconds: {int(body.get('budgetSeconds', 1200))}",
+        # The free switchboard shares its credentials with Brain's research lane and answers
+        # 429 while they cool down (opr_7af304c3): wait it out rather than give up after 3.
+        "  api_max_retries: 8",
         "memory:",
         "  memory_enabled: true",
         "mcp_servers:",
