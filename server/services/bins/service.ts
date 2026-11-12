@@ -73,7 +73,7 @@ import {
   recentInfraFailures,
   type InfraFailureKind,
 } from '../../db/infra.ts';
-import { databasePoolReadings } from '../../db/database.ts';
+import { databasePoolReadings, getDb } from '../../db/database.ts';
 import { recordUnservedArrival } from '../infra/incidents.ts';
 import {
   claimWork,
@@ -311,7 +311,13 @@ export type BinAdmission = (bin: Bin) => Promise<BinAdmissionVerdict>;
  * Brain's own writer (`recordDemonstratedCapabilities`) clears the window.
  */
 export const FLEET_DECLARATIONS_TTL_MS = 30_000;
-let fleetDeclarations: { readAt: number; set: Promise<ReadonlySet<string>> } | null = null;
+interface FleetDeclarations {
+  /** Every capability some enabled Routine on an enabled account declares. */
+  capabilities: ReadonlySet<string>;
+  /** The `routine_ref` of every enabled Routine on an enabled account. */
+  enabledRefs: ReadonlySet<string>;
+}
+let fleetDeclarations: { readAt: number; read: Promise<FleetDeclarations> } | null = null;
 let fleetDeclarationScans = 0;
 
 export function forgetFleetDeclarations(): void {
@@ -323,30 +329,65 @@ export function fleetDeclarationScanCount(): number {
   return fleetDeclarationScans;
 }
 
-async function declaredFleetCapabilities(nowMs: number = Date.now()): Promise<ReadonlySet<string>> {
+/*
+ * One read of the enabled fleet, shared by both admission rules that need it —
+ * the derived-capability rule (`capabilities`) and the untried-surface rule
+ * (`enabledRefs`) — so neither adds a full-table read to the claim path.
+ */
+function readFleetDeclarations(nowMs: number = Date.now()): Promise<FleetDeclarations> {
   if (fleetDeclarations && nowMs - fleetDeclarations.readAt < FLEET_DECLARATIONS_TTL_MS) {
-    return fleetDeclarations.set;
+    return fleetDeclarations.read;
   }
   fleetDeclarationScans += 1;
-  const set = (async () => {
+  const read = (async () => {
     const { listRoutines, listAccounts } = await import('../../repos/fleet.ts');
     const [routines, accounts] = await Promise.all([listRoutines(), listAccounts()]);
     const enabledAccounts = new Set(
       accounts.filter((account) => account.state === 'ENABLED').map((account) => account.id),
     );
-    const declared = new Set<string>();
+    const capabilities = new Set<string>();
+    const enabledRefs = new Set<string>();
     for (const routine of routines) {
       if (routine.state !== 'ENABLED' || !enabledAccounts.has(routine.accountId)) continue;
-      for (const capability of routine.capabilities) declared.add(capability);
+      enabledRefs.add(routine.routineRef);
+      for (const capability of routine.capabilities) capabilities.add(capability);
     }
-    return declared as ReadonlySet<string>;
+    return { capabilities, enabledRefs } as FleetDeclarations;
   })();
-  const entry = { readAt: nowMs, set };
+  const entry = { readAt: nowMs, read };
   fleetDeclarations = entry;
-  set.catch(() => {
+  read.catch(() => {
     if (fleetDeclarations === entry) fleetDeclarations = null;
   });
-  return set;
+  return read;
+}
+
+async function declaredFleetCapabilities(nowMs: number = Date.now()): Promise<ReadonlySet<string>> {
+  return (await readFleetDeclarations(nowMs)).capabilities;
+}
+
+/**
+ * The Routines whose fired sessions held an earlier lease on this bin.
+ *
+ * Read from `BIN_ASSIGNED` / `BIN_TAKEOVER` — which record the session that took
+ * each lease — and traced to the Routine Brain fired for that session through
+ * the same `routineRefsForSession` the capability check uses. A session Brain
+ * did not fire traces to nothing and contributes nothing, so the rule that
+ * reads this fails open for it.
+ */
+export async function routinesThatTriedBin(binId: string): Promise<Set<string>> {
+  const rows = await getDb().all<{ session_ref: string | null }>(
+    `SELECT DISTINCT session_ref FROM bin_events
+      WHERE bin_id = ? AND event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER') AND session_ref IS NOT NULL`,
+    [binId],
+  );
+  const { routineRefsForSession } = await import('../../repos/bins.ts');
+  const tried = new Set<string>();
+  for (const row of rows) {
+    if (!row.session_ref) continue;
+    for (const ref of await routineRefsForSession(row.session_ref).catch(() => [] as string[])) tried.add(ref);
+  }
+  return tried;
 }
 
 export async function binAdmission(input: {
@@ -505,6 +546,52 @@ export async function binAdmission(input: {
               (readings ? ` without a recorded push refusal for ${writeRepository}` : '') +
               '; the bin is left for a surface that does.',
           };
+        }
+      }
+    }
+
+    /*
+     * A surface that already held this bin and left it unanswered is not handed
+     * it again while an enabled surface that has not tried exists.
+     *
+     * The recorded state, 7 days to 2026-11-12: six of six render bins, in a
+     * fleet where no Routine declares `browser`, were each taken by a session
+     * that submitted no render, and every retry went back to a surface of the
+     * same kind until all three attempts were spent and a person was asked. The
+     * capability rule above cannot help there — there is nothing declared to
+     * route by — but the rows still answer the question: Brain fired the
+     * sessions that held the earlier attempts (`routineRefsForSession`), and a
+     * Routine whose session held a capability-bound bin and gave it back
+     * unsatisfied has shown, on this very bin, that it is not the surface that
+     * can satisfy it. So the next attempt is left for one that has not tried.
+     *
+     * Quiet, like the capability skip: no attempt is spent. Open wherever it
+     * cannot tell, and open once every enabled surface has tried — the bin then
+     * runs out its attempts and reaches a person exactly as before, never
+     * stranded behind a rule nobody can satisfy. The evidence bar is untouched:
+     * a render still has to be submitted to complete.
+     */
+    if (
+      input.sessionRef &&
+      bin.attemptCount > 0 &&
+      contractCapabilities(bin.completionContract).length > 0
+    ) {
+      // The arriving session's own Routines first: a session Brain did not fire reads nothing more.
+      const arriving = await sessionRoutineRefs().catch(() => [] as string[]);
+      const tried = arriving.length > 0 ? await routinesThatTriedBin(bin.id) : new Set<string>();
+      if (tried.size > 0) {
+        if (arriving.every((ref) => tried.has(ref))) {
+          const { enabledRefs } = await readFleetDeclarations();
+          const untried = [...enabledRefs].filter((ref) => !tried.has(ref));
+          if (untried.length > 0) {
+            return {
+              ok: false,
+              quiet: true,
+              reason:
+                `This session was started by a Routine whose session already held this bin and left ` +
+                `${bin.completionContract} unsatisfied; the next attempt is left for a surface that has not tried.`,
+            };
+          }
         }
       }
     }
