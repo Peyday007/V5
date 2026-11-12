@@ -34,7 +34,10 @@
  * stays the one owner of that, and calls in here at the two points where a
  * method's record changes.
  */
-import { createSearchMethod, getSearchMethod, listLearnedDetectors, listMethodRuns, listSearchMethods } from '../../../repos/searchMethods.ts';
+import {
+  createSearchMethod, getSearchMethod, linkMethodSubject, listLearnedDetectors, listMethodRuns, listSearchMethods,
+} from '../../../repos/searchMethods.ts';
+import { SUBJECT_LENS_PREFIX } from '../../knowledge/subjects/subjects.ts';
 import type { LearnedDetector, RunOutcome, SearchMethod, SearchReader } from '../../../domain/searchIntelligence.ts';
 import { decideMethod, type MethodDecision } from '../searchFailures/classify.ts';
 import { routeRequest, type Route } from '../searchRouting/route.ts';
@@ -137,12 +140,30 @@ export function outcomeOfRound(ending: RoundEnding): { outcome: RunOutcome; fail
   return null;
 }
 
-/** The bucket's method, created on its first recorded run. */
+/**
+ * The learned subject a bucket asks about, or null for a constant bucket. A
+ * learned subject reaches discovery as a lens whose id is the subject's id
+ * behind `SUBJECT_LENS_PREFIX` (`knowledge/subjects/subjects.ts` `lensFor`).
+ */
+export function subjectOfBucket(bucketId: string): string | null {
+  if (!bucketId.startsWith(SUBJECT_LENS_PREFIX)) return null;
+  const id = bucketId.slice(SUBJECT_LENS_PREFIX.length).trim();
+  return id || null;
+}
+
+/**
+ * The bucket's method, created on its first recorded run. A lens asked for a
+ * learned subject is linked to that subject, including a method created before
+ * methods carried one, so every method for a subject can be compared with the
+ * others.
+ */
 export async function methodForBucket(projectId: string, bucket: BucketShape): Promise<SearchMethod> {
-  return createSearchMethod({
+  const subjectId = subjectOfBucket(bucket.id);
+  const method = await createSearchMethod({
     scope: 'PROJECT',
     projectId,
     methodKey: bucket.id,
+    subjectId,
     finds: (bucket.question?.trim() || bucket.title).slice(0, 2_000),
     usefulWhen: bucket.mechanism ? `openings by the ${bucket.mechanism} mechanism` : null,
     sources: ['cash discovery round'],
@@ -150,6 +171,10 @@ export async function methodForBucket(projectId: string, bucket: BucketShape): P
     query: bucket.title,
     checkProcedure: 'An opening is filed only from a sourced claim; it counts as verified once it reaches CANDIDATE, and a duplicate of an opening already held counts against the method.',
   });
+  if (subjectId && method.subjectId === null && (await linkMethodSubject(method.id, subjectId))) {
+    return { ...method, subjectId };
+  }
+  return method;
 }
 
 /**
