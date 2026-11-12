@@ -73,7 +73,7 @@ import {
   recentInfraFailures,
   type InfraFailureKind,
 } from '../../db/infra.ts';
-import { databasePoolReadings } from '../../db/database.ts';
+import { databasePoolReadings, getDb } from '../../db/database.ts';
 import { recordUnservedArrival } from '../infra/incidents.ts';
 import {
   claimWork,
@@ -300,6 +300,30 @@ export interface BinAdmissionVerdict {
 
 export type BinAdmission = (bin: Bin) => Promise<BinAdmissionVerdict>;
 
+/**
+ * The Routines whose fired sessions held an earlier lease on this bin.
+ *
+ * Read from `BIN_ASSIGNED` / `BIN_TAKEOVER` — which record the session that took
+ * each lease — and traced to the Routine Brain fired for that session through
+ * the same `routineRefsForSession` the capability check uses. A session Brain
+ * did not fire traces to nothing and contributes nothing, so the rule that
+ * reads this fails open for it.
+ */
+export async function routinesThatTriedBin(binId: string): Promise<Set<string>> {
+  const rows = await getDb().all<{ session_ref: string | null }>(
+    `SELECT DISTINCT session_ref FROM bin_events
+      WHERE bin_id = ? AND event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER') AND session_ref IS NOT NULL`,
+    [binId],
+  );
+  const { routineRefsForSession } = await import('../../repos/bins.ts');
+  const tried = new Set<string>();
+  for (const row of rows) {
+    if (!row.session_ref) continue;
+    for (const ref of await routineRefsForSession(row.session_ref).catch(() => [] as string[])) tried.add(ref);
+  }
+  return tried;
+}
+
 export async function binAdmission(input: {
   workerId: string;
   principal: Principal;
@@ -425,6 +449,61 @@ export async function binAdmission(input: {
               (readings ? ` without a recorded push refusal for ${writeRepository}` : '') +
               '; the bin is left for a surface that does.',
           };
+        }
+      }
+    }
+
+    /*
+     * A surface that already held this bin and left it unanswered is not handed
+     * it again while an enabled surface that has not tried exists.
+     *
+     * The recorded state, 7 days to 2026-11-12: six of six render bins, in a
+     * fleet where no Routine declares `browser`, were each taken by a session
+     * that submitted no render, and every retry went back to a surface of the
+     * same kind until all three attempts were spent and a person was asked. The
+     * capability rule above cannot help there — there is nothing declared to
+     * route by — but the rows still answer the question: Brain fired the
+     * sessions that held the earlier attempts (`routineRefsForSession`), and a
+     * Routine whose session held a capability-bound bin and gave it back
+     * unsatisfied has shown, on this very bin, that it is not the surface that
+     * can satisfy it. So the next attempt is left for one that has not tried.
+     *
+     * Quiet, like the capability skip: no attempt is spent. Open wherever it
+     * cannot tell, and open once every enabled surface has tried — the bin then
+     * runs out its attempts and reaches a person exactly as before, never
+     * stranded behind a rule nobody can satisfy. The evidence bar is untouched:
+     * a render still has to be submitted to complete.
+     */
+    if (
+      input.sessionRef &&
+      bin.attemptCount > 0 &&
+      contractCapabilities(bin.completionContract).length > 0
+    ) {
+      const tried = await routinesThatTriedBin(bin.id);
+      if (tried.size > 0) {
+        const { routineRefsForSession } = await import('../../repos/bins.ts');
+        const arriving = await routineRefsForSession(input.sessionRef).catch(() => [] as string[]);
+        if (arriving.length > 0 && arriving.every((ref) => tried.has(ref))) {
+          const { listRoutines, listAccounts } = await import('../../repos/fleet.ts');
+          const [routines, accounts] = await Promise.all([listRoutines(), listAccounts()]);
+          const enabledAccounts = new Set(
+            accounts.filter((account) => account.state === 'ENABLED').map((account) => account.id),
+          );
+          const untried = routines.filter(
+            (routine) =>
+              routine.state === 'ENABLED' &&
+              enabledAccounts.has(routine.accountId) &&
+              !tried.has(routine.routineRef),
+          );
+          if (untried.length > 0) {
+            return {
+              ok: false,
+              quiet: true,
+              reason:
+                `This session was started by a Routine whose session already held this bin and left ` +
+                `${bin.completionContract} unsatisfied; the next attempt is left for a surface that has not tried.`,
+            };
+          }
         }
       }
     }
