@@ -157,8 +157,10 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     // one call an hourly pass stays inside the free allowance.
     dailyCeiling: 24,
     ownerAction:
-      "In Google Cloud Console, on the project V2's key belongs to, enable Places API (New) and allow it in the key's " +
-      'API restrictions (V2 → Admin → Diagnostics shows the exact refusal).',
+      "Google refuses V2's GOOGLE_PLACES_API_KEY. In Google Cloud Console, on the project that key belongs to: confirm " +
+      'billing is active, enable Places API (New), and allow Places API (New) in the key\'s API restrictions with ' +
+      "Application restrictions set to None (V2 → Admin → Diagnostics → Places shows Google's full refusal). Brain " +
+      'uses the key through V2 as soon as Google accepts it; nothing needs to be copied.',
   },
   {
     id: 'v2',
