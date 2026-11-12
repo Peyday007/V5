@@ -9,6 +9,7 @@ import { freshProject } from './helpers.ts';
 import { BROWSER_WORKFLOW_RUN_EVENT, type OperateDeps, type OperateResult, type WorkflowRun } from '../server/services/sources/browserWorkflow.ts';
 import {
   BROWSER_CAPABILITY_EVENT,
+  capabilityEffectKey,
   classifyWorkflow,
   operateCapability,
   readBrowserCapabilities,
@@ -237,6 +238,38 @@ describe('operating an approved capability', () => {
     const retry = await operateCapability({ projectId, host: HOST, name: 'publish listing', inputs: { month: '2026-10' }, approvals, actor: worker }, h.deps());
     expect(retry).toMatchObject({ outcome: 'REFUSED', failureReason: 'OUTCOME_UNKNOWN', sessionOpened: false });
     expect(h.calls()).toBe(1);
+  });
+
+  it('claims the same effect key the plan reports, and enforces the capability\'s declared rate', async () => {
+    const h = harness();
+    const c = publishCap();
+    c.rateLimit = { maxRunsPerHour: 1, minIntervalMs: 0 };
+    await h.define(c);
+    const record = (await readBrowserCapabilities(HOST, h.capabilityDeps)).get(`${HOST}\u0000publish listing`)!;
+    const approvals = approvalsFor(c);
+    h.setRun({ extracted: [{ name: 'report', text: 'Published listing 7', truncated: false }] });
+    const first = await operateCapability({ projectId, host: HOST, name: 'publish listing', inputs: { month: '2026-10' }, approvals, actor: worker }, h.deps());
+    expect(first.outcome).toBe('COMPLETED');
+    expect(first.effectKey).toBe(capabilityEffectKey(record, { month: '2026-10' }));
+    // A different effect of the same capability inside the hour is deferred by the one budget, before any session.
+    const runRows = async () => h.runRows().map((r, i) => ({ id: `row_${i}`, outcome: r.outcome, at: new Date().toISOString(), measures: r.measures }));
+    const second = await operateCapability({ projectId, host: HOST, name: 'publish listing', inputs: { month: '2026-11' }, approvals, actor: worker }, { ...h.deps(), runRows });
+    expect(second).toMatchObject({ outcome: 'DEFERRED', failureReason: 'RATE_LIMITED', sessionOpened: false });
+    expect(second.budget?.bound).toBe('CAPABILITY_HOURLY');
+    expect(h.calls()).toBe(1);
+  });
+
+  it('defers a read still inside its freshness window without opening a session', async () => {
+    const h = harness();
+    await h.define(readCap());
+    const record = (await readBrowserCapabilities(HOST, h.capabilityDeps)).get(`${HOST}\u0000monthly report`)!;
+    const key = capabilityEffectKey(record, { month: '2026-10' });
+    const out = await operateCapability(
+      { projectId, host: HOST, name: 'monthly report', inputs: { month: '2026-10' }, actor: worker, priorReads: [{ key, outcome: 'COMPLETED', at: new Date().toISOString() }] },
+      h.deps(),
+    );
+    expect(out).toMatchObject({ outcome: 'DEFERRED', failureReason: 'FRESH', sessionOpened: false, effectKey: key });
+    expect(h.calls()).toBe(0);
   });
 
   it('defers a host at its request limit without opening a session', async () => {

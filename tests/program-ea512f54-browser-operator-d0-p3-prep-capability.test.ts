@@ -7,7 +7,8 @@ import {
   consequentialSteps,
   discoverBrowserCapability,
   draftCapabilityFromRun,
-  effectKey,
+  capabilityEffectKey,
+  effectSubject,
   planCapabilityRun,
   readBrowserCapabilities,
   recordBrowserCapability,
@@ -16,6 +17,7 @@ import {
   type BrowserCapability,
   type CapabilityRow,
 } from '../server/services/sources/browser/capability.ts';
+import { browserEffectKey, requestBudgetFrom } from '../server/services/sources/browser/effectGuard.ts';
 import {
   BROWSER_WORKFLOW_EVENT,
   BROWSER_WORKFLOW_RUN_EVENT,
@@ -145,8 +147,8 @@ describe("a mutation's retry policy never allows an automatic retry after an unk
     await recordCapabilityDecision({ host: 'records.example.org', name: 'publish listing', contentHash: v.contentHash, decision: 'APPROVED', by: 'a person' }, s.deps);
     const record = (await readBrowserCapabilities('records.example.org', s.deps)).get('records.example.org\u0000publish listing')!;
     const inputs = { month: '2026-10' };
-    const key = effectKey(v.contentHash, inputs);
-    expect(effectKey(v.contentHash, { month: '2026-10' })).toBe(key);
+    const key = capabilityEffectKey(record, inputs);
+    expect(capabilityEffectKey(record, { month: '2026-10' })).toBe(key);
     const later = s.now() + 3_600_000;
     const at = new Date(s.now()).toISOString();
     // A caller's snapshot of rows can be stale the moment it is read, so it can neither
@@ -159,6 +161,20 @@ describe("a mutation's retry policy never allows an automatic retry after an unk
     await recordCapabilityDecision({ host: 'records.example.org', name: 'monthly report', contentHash: r.contentHash, decision: 'APPROVED', by: 'a person' }, s.deps);
     const read = (await readBrowserCapabilities('records.example.org', s.deps)).get('records.example.org\u0000monthly report')!;
     expect(planCapabilityRun(read, inputs, [], later)).toMatchObject({ decision: 'RUN', claim: 'NONE' });
+  });
+
+  it('there is one effect key: the plan and the claim derive it with the same function', async () => {
+    const s = store();
+    const v = await recordBrowserCapability(mutation(), 'a person', s.deps);
+    await recordCapabilityDecision({ host: 'records.example.org', name: 'publish listing', contentHash: v.contentHash, decision: 'APPROVED', by: 'a person' }, s.deps);
+    const record = (await readBrowserCapabilities('records.example.org', s.deps)).get('records.example.org\u0000publish listing')!;
+    const inputs = { month: '2026-10' };
+    const planned = planCapabilityRun(record, inputs, [], s.now());
+    expect(planned.key).toBe(browserEffectKey({ capability: effectSubject(record), approvedInput: inputs }));
+    expect(planned.key).toMatch(/^bwe-[0-9a-f]{48}$/);
+    expect(effectSubject(record)).toEqual({ host: 'records.example.org', name: 'publish listing', version: `v${v.version}:${v.contentHash}` });
+    const mod = (await import('../server/services/sources/browser/index.ts')) as Record<string, unknown>;
+    expect(mod.effectKey).toBeUndefined();
   });
 
   it('there is one run path: the row-scan runner is gone', async () => {
@@ -245,19 +261,27 @@ describe('lifecycle is derived only from recorded rows', () => {
     expect(aged.fresh).toBe(false);
   });
 
-  it('a read inside its freshness window is not run again, and the rate bound holds across workers', async () => {
+  it('a read inside its freshness window is not run again, and the declared rate bound is the one request budget', async () => {
     const s = store();
     const v = await recordBrowserCapability(base(), 'a person', s.deps);
     await recordCapabilityDecision({ host: 'records.example.org', name: 'monthly report', contentHash: v.contentHash, decision: 'APPROVED', by: 'a person' }, s.deps);
     const record = (await readBrowserCapabilities('records.example.org', s.deps)).get('records.example.org\u0000monthly report')!;
-    const key = effectKey(v.contentHash, { month: '2026-10' });
+    const key = capabilityEffectKey(record, { month: '2026-10' });
     const now = s.now();
     const at = (ms: number) => new Date(now - ms).toISOString();
     expect(planCapabilityRun(record, { month: '2026-10' }, [{ key, outcome: 'COMPLETED', at: at(60_000) }], now).decision).toBe('ALREADY_DONE');
-    const busy = Array.from({ length: 6 }, (_, i) => ({ key: `other-${i}`, outcome: 'COMPLETED', at: at(50 * 60_000 - i * 60_000) }));
-    expect(planCapabilityRun(record, { month: '2026-11' }, busy, now).decision).toBe('WAIT');
-    expect(planCapabilityRun(record, { month: '2026-11' }, [{ key: 'x', outcome: 'COMPLETED', at: at(10_000) }], now).decision).toBe('WAIT');
     expect(planCapabilityRun(record, { nope: '1' }, [], now)).toMatchObject({ decision: 'REFUSED', reason: 'BAD_INPUT' });
+    // The capability's declared rate (6/hour, 60 s apart) holds across workers in the same budget as the host's limit,
+    // counted from the BROWSER_WORKFLOW_RUN rows every worker writes.
+    const rate = { name: record.name, ...record.current.capability.rateLimit };
+    const nowDate = new Date(now);
+    const run = (ms: number, name = record.name) => ({ id: `r${ms}`, outcome: 'COMPLETED', at: at(ms), measures: JSON.stringify({ host: record.host, name }) });
+    const busy = Array.from({ length: 6 }, (_, i) => run(50 * 60_000 - i * 60_000));
+    expect(requestBudgetFrom(record.host, busy, { now: nowDate, capability: rate })).toMatchObject({ decision: 'DEFER', bound: 'CAPABILITY_HOURLY' });
+    expect(requestBudgetFrom(record.host, [run(10_000)], { now: nowDate, capability: rate })).toMatchObject({ decision: 'DEFER', bound: 'CAPABILITY_INTERVAL' });
+    // Another capability's runs on the host do not use this capability's bound.
+    expect(requestBudgetFrom(record.host, [run(10_000, 'something else')], { now: nowDate, capability: rate })).toMatchObject({ decision: 'PROCEED' });
+    expect(planCapabilityRun(record, { month: '2026-11' }, busy.map((r) => ({ key: 'x', outcome: 'COMPLETED', at: r.at })), now).decision).toBe('RUN');
   });
 });
 
