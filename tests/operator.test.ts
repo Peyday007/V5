@@ -93,6 +93,10 @@ describe('the stream Brain reads back', () => {
     ]);
     expect(parsed.memory).toEqual({ 'memories/MEMORY.md': 'x' });
   });
+  it('reads the tool events a collected result carries itself', () => {
+    const parsed = parseOperatorStream(JSON.stringify({ type: 'result', final: 'r', error: null, memory: {}, toolEvents: [{ type: 'tool', tool: 'mcp__brain__brain_operator_continue_idle', ok: true }] }));
+    expect(parsed.toolCalls).toEqual([{ tool: 'mcp__brain__brain_operator_continue_idle', ok: true }]);
+  });
   it('carries the MCP preflight the app measured', () => {
     expect(parseOperatorStream('{"type":"result","final":"x","error":null,"memory":{},"preflight":"HTTP 200 in 40 ms"}').preflight).toBe('HTTP 200 in 40 ms');
   });

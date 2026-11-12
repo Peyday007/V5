@@ -70,5 +70,16 @@ class Translate(unittest.TestCase):
         self.assertEqual(line["error"], "Not found.")
 
 
+class Results(unittest.TestCase):
+    def test_a_finished_result_is_kept_for_a_bounded_number_of_runs(self):
+        server.RESULTS.clear()
+        for n in range(server.RESULTS_KEPT + 3):
+            server.RESULTS[f"opr_{n}"] = {"type": "result"}
+            while len(server.RESULTS) > server.RESULTS_KEPT:
+                server.RESULTS.pop(next(iter(server.RESULTS)))
+        self.assertEqual(len(server.RESULTS), server.RESULTS_KEPT)
+        self.assertNotIn("opr_0", server.RESULTS)
+
+
 if __name__ == "__main__":
     unittest.main()

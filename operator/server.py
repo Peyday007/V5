@@ -35,6 +35,9 @@ PORT = int(os.environ.get("PORT", "8080"))
 MEMORY_MAX_ENTRIES = 60
 MEMORY_MAX_BYTES = 24_000
 LOCK = threading.Lock()
+# Finished results by run id, so a Brain that restarted mid-run can collect one.
+RESULTS: dict[str, dict] = {}
+RESULTS_KEPT = 8
 
 
 def yaml_str(value: str) -> str:
@@ -230,7 +233,7 @@ def run_operator(body: dict, emit) -> dict:
         stderr = proc.stderr.read() if proc.stderr else ""
         if final is None and error is None:
             error = f"hermes exited {proc.returncode} without a result: {stderr[-400:]}"
-        return {"type": "result", "final": final, "error": error, "model": model, "memory": read_memory(home), "tools": len(tools), "preflight": reached}
+        return {"type": "result", "final": final, "error": error, "model": model, "memory": read_memory(home), "tools": len(tools), "toolEvents": tools, "preflight": reached}
     finally:
         shutil.rmtree(home, ignore_errors=True)
 
@@ -256,6 +259,12 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/healthz":
             self._json(200, {"ok": True, "agent": "hermes-agent"})
             return
+        prefix = "/v1/operator/runs/"
+        if self.path.startswith(prefix) and self._authorized():
+            result = RESULTS.get(self.path[len(prefix):])
+            if result is not None:
+                self._json(200, result)
+                return
         self._json(404, {"error": "not found"})
 
     def do_POST(self) -> None:
@@ -279,10 +288,18 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             write_lock = threading.Lock()
 
+            gone = threading.Event()
+
             def emit(obj: dict) -> None:
-                with write_lock:
-                    self.wfile.write((json.dumps(obj) + "\n").encode())
-                    self.wfile.flush()
+                # A Brain that restarted is not a reason to abandon the run: keep going, keep the result.
+                if gone.is_set():
+                    return
+                try:
+                    with write_lock:
+                        self.wfile.write((json.dumps(obj) + "\n").encode())
+                        self.wfile.flush()
+                except OSError:
+                    gone.set()
 
             stop = threading.Event()
 
@@ -300,6 +317,11 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as error:  # noqa: BLE001
                 result = {"type": "result", "final": None, "error": f"operator failed: {error}"[:500], "memory": {}}
             stop.set()
+            run_id = str(body.get("runId") or "")
+            if run_id:
+                RESULTS[run_id] = result
+                while len(RESULTS) > RESULTS_KEPT:
+                    RESULTS.pop(next(iter(RESULTS)))
             emit(result)
         finally:
             LOCK.release()
