@@ -69,8 +69,16 @@ const ACTS = ['brain_operator_withdraw_moot_request', 'brain_operator_continue_i
 const READS = ['brain_operator_goal', 'brain_operator_goal_plan', 'brain_operator_capacity', 'brain_operator_goals', 'brain_operator_allocation'];
 
 async function prove(): Promise<void> {
-  const id = await runOperatorNow();
-  const run = (await recentOperatorRuns(5)).find((r) => r.id === id)!;
+  // `prove latest` judges the newest finished run Brain's own tick started — the autonomous one —
+  // instead of starting another (a shared workflow queue can cancel a dispatched run, and a run
+  // is refused while one is in progress).
+  const latest = process.argv[3] === 'latest';
+  const id = latest ? ((await recentOperatorRuns(10)).find((r) => r.state !== 'RUNNING')?.id ?? '') : await runOperatorNow();
+  const run = (await recentOperatorRuns(20)).find((r) => r.id === id);
+  if (!run) {
+    console.log('OPERATOR-PROOF: FAILED no finished run');
+    return;
+  }
   const names = run.toolCalls.map((c) => ({ tool: c.tool.replace(/^mcp__brain__/, ''), ok: c.ok }));
   console.log(`RUN ${run.id} ${run.state} on ${run.model}${run.error ? ` error ${run.error}` : ''}`);
   console.log(`  tools ${names.map((n) => `${n.tool}${n.ok ? '' : '(failed)'}`).join(', ') || 'none'}`);
