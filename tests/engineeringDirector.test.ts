@@ -169,6 +169,19 @@ describe('the result: a merged pull request is not the improvement', () => {
   });
 });
 
+describe('one code defect is one key, whichever goal names it', () => {
+  it('keys by owner files when they are named, and by goal and title only when none are', async () => {
+    const { deficiencyKey } = await import('../server/domain/engineeringDirector.ts');
+    const hash = (t: string) => t.split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7).toString(16).padStart(16, '0');
+    const a = deficiencyKey({ deficiency: 'RECURRING_OPERATIONAL_FAILURE', ownerPaths: ['b.ts', 'a.ts'], title: 'x', goalId: 'wst_1' }, hash);
+    const b = deficiencyKey({ deficiency: 'RECURRING_OPERATIONAL_FAILURE', ownerPaths: ['a.ts', 'b.ts'], title: 'y', goalId: 'wst_2' }, hash);
+    expect(a).toBe(b);
+    const c = deficiencyKey({ deficiency: 'REPEATED_STRATEGIC_MISTAKE', ownerPaths: [], title: 'x', goalId: 'wst_1' }, hash);
+    const d = deficiencyKey({ deficiency: 'REPEATED_STRATEGIC_MISTAKE', ownerPaths: [], title: 'x', goalId: 'wst_2' }, hash);
+    expect(c).not.toBe(d);
+  });
+});
+
 describe('the operator is continued by an outcome, and given the tools', () => {
   it('starts early for an engineering outcome it has not seen, never inside the boot grace or a running run', () => {
     const now = Date.parse('2026-11-12T12:00:00Z');
@@ -271,6 +284,14 @@ describe('commissioning on real rows', () => {
       expect(defaultMetric(deficiency)).toBeTruthy();
     }
     expect(validateDiagnosis(request({ deficiency: 'VIBES' }) as never)).toContain('deficiency must be one of');
+  });
+
+  it('reaches the same row when another goal names the same defect in the same owner files', async () => {
+    const { commission } = await import('../server/services/operator/director.ts');
+    const first = await commission(request());
+    const other = await commission(request({ goalId: 'wst_another_goal', runId: 'opr_other' }));
+    expect(other).toMatchObject({ duplicate: true, candidateId: first.candidateId, campaignId: first.campaignId });
+    expect(submitted).toHaveLength(1);
   });
 
   it('respects the one-objective-per-owner file-conflict rule: a second defect on a busy owner waits, it does not race', async () => {

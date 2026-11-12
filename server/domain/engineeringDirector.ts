@@ -385,6 +385,9 @@ export function wakesOperator(status: EngineeringStatus): boolean {
 /** A stable key for one deficiency: the same defect named twice is one candidate (§87's register). */
 export function deficiencyKey(d: Pick<Diagnosis, 'deficiency' | 'ownerPaths' | 'title' | 'goalId'>, hash: (text: string) => string): string {
   const owner = [...d.ownerPaths].map((p) => p.trim()).sort().join(',');
-  const subject = owner || d.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  // A defect in code is one defect whichever goal it holds back: keyed by its owner files alone,
+  // so four goals blocked by the same bug are one candidate and one campaign, never four.
+  if (owner) return `OPERATOR:${d.deficiency}:${hash(owner).slice(0, 16)}`;
+  const subject = d.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   return `OPERATOR:${d.deficiency}:${hash(`${d.goalId ?? '-'}|${subject}`).slice(0, 16)}`;
 }
