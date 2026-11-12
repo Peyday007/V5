@@ -51,6 +51,11 @@ describe('cadence, models, brief', () => {
     expect(operatorDue({ lastStartedAt: '2026-11-12T08:59:00Z', running: false, nowMs: now, intervalMinutes: 60 })).toBe(true);
     expect(operatorDue({ lastStartedAt: null, running: true, nowMs: now, intervalMinutes: 60 })).toBe(false);
   });
+  it('waits out the minutes after a restart, when a deploy is still verifying the machine', () => {
+    const now = Date.parse('2026-11-12T10:00:00Z');
+    expect(operatorDue({ lastStartedAt: null, running: false, nowMs: now, intervalMinutes: 60, processStartedMs: now - 60_000 })).toBe(false);
+    expect(operatorDue({ lastStartedAt: null, running: false, nowMs: now, intervalMinutes: 60, processStartedMs: now - 13 * 60_000 })).toBe(true);
+  });
   it('thinks with capacity Brain already has: the free switchboard first, the GPU last', () => {
     const models = operatorModels({
       lane: { url: 'http://northline-cheap.flycast/v1', key: 'k', models: ['free-combo'] },
@@ -87,6 +92,9 @@ describe('the stream Brain reads back', () => {
       { tool: 'mcp__brain__brain_operator_submit_fix', ok: false },
     ]);
     expect(parsed.memory).toEqual({ 'memories/MEMORY.md': 'x' });
+  });
+  it('carries the MCP preflight the app measured', () => {
+    expect(parseOperatorStream('{"type":"result","final":"x","error":null,"memory":{},"preflight":"HTTP 200 in 40 ms"}').preflight).toBe('HTTP 200 in 40 ms');
   });
   it('a stream with no result is a failure, not a success', () => {
     expect(parseOperatorStream('{"type":"tool","tool":"t","ok":true}').error).toMatch(/without a result/);
