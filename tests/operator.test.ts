@@ -238,3 +238,13 @@ describe('the run reads the goals once and states them in the brief', () => {
     expect(operatorBrief({ nowIso: 'x', runId: 'r', goals: text }).startsWith("Brain's goals as read at")).toBe(true);
   });
 });
+
+describe('one snapshot, narrowed to what the caller may read', () => {
+  it('keeps only the goals and requests of the projects named', async () => {
+    const { narrow } = await import('../server/services/operator/snapshot.ts');
+    const goal = (id: string, projectId: string) => ({ id, projectId, title: id, stateEvidence: '', waiting: { kind: 'PERSON', detail: '' }, next: { by: 'BRAIN', action: '' }, decisions: [], blockers: [], lifecycle: 'ACTIVE', state: 'BLOCKED', target: null, dueAt: null, priority: null }) as never;
+    const narrowed = narrow({ takenAt: 't', goals: [goal('wst_a', 'prj_a'), goal('wst_b', 'prj_b')], summaries: [], requests: new Map([['prj_a', []], ['prj_b', []]]) }, ['prj_a']);
+    expect(narrowed.goals.map((g) => g.id)).toEqual(['wst_a']);
+    expect([...narrowed.requests.keys()]).toEqual(['prj_a']);
+  });
+});

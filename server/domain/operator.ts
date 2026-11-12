@@ -61,7 +61,7 @@ export function moot(input: {
 /** Default minutes between runs. One run directs every goal. */
 export const OPERATOR_INTERVAL_MINUTES = 60;
 /** A run that has not reported back after this long is finished as FAILED so the next can start. */
-export const OPERATOR_RUN_TIMEOUT_MINUTES = 30;
+export const OPERATOR_RUN_TIMEOUT_MINUTES = 45;
 /** Bounds on one run, passed to Hermes. */
 export const OPERATOR_MAX_TURNS = 40;
 export const OPERATOR_RUN_BUDGET_SECONDS = 20 * 60;
