@@ -415,18 +415,38 @@ export interface NeedHandoff {
   opportunityId: string | null;
   route: NeedRoute;
   owner: string;
+  /**
+   * The work the owner was actually given (S-0249: "Allocate actual workers and
+   * time; do not stop at a recommendation or spec"). `ALLOCATED` is an idea the
+   * research pipeline runs; `DIVE` is the opening's live deep dive; `WATCH` is the
+   * reconsideration pass that runs every cash tick and settles the fact the need
+   * waits on; `PERSON` is a person's review. `REFUSED` says why nobody was given it.
+   */
+  work:
+    | { kind: 'ALLOCATED'; candidateId: string; reused: boolean }
+    | { kind: 'DIVE'; opportunityId: string }
+    | { kind: 'WATCH' }
+    | { kind: 'PERSON' }
+    | { kind: 'REFUSED'; reason: string };
+}
+
+/** Whether a hand-off left somebody working on the need: a worker, a dive or the standing watch. */
+export function handoffAllocated(one: Pick<NeedHandoff, 'work'>): boolean {
+  return one.work.kind === 'ALLOCATED' || one.work.kind === 'DIVE' || one.work.kind === 'WATCH';
 }
 
 /**
  * Hand a gap's open needs to the owners that acquire them, instead of to the
- * Factory.
+ * Factory, and give each owner the work (AUTO-20-2 step 5).
  *
- * Each still-open need gets one `CASH_NEED_ROUTED` event naming its owner and
- * the gap that noticed it. Each project then gets one reconsideration pass, so
- * the fact each need waits on is read now rather than at the next tick. Every
- * blocked piece not waiting on a person has its decision recompute requested,
- * so the commercial owner re-plans it with the need in view. A need already
- * settled is skipped: the gap it was part of has closed that far on its own.
+ * A need routed to a connector, a counterparty or information becomes one idea
+ * the research pipeline launches under the standing grant (`startNeedWork` in
+ * operate.ts, the owner that already turns needs into missions), pinned to the
+ * need — or keeps the idea or dive already working on it. A watched fact is the
+ * reconsideration pass's, which is run for the project now. A person's need stays
+ * in their review. Each need gets one `CASH_NEED_ROUTED` event naming its owner,
+ * the gap that noticed it and the work it was given. A need already settled is
+ * skipped: the gap it was part of has closed that far on its own.
  */
 export async function handNeedsToOwners(input: {
   needIds: readonly string[];
@@ -437,6 +457,7 @@ export async function handNeedsToOwners(input: {
   const at = input.now ?? new Date().toISOString();
   const handed: NeedHandoff[] = [];
   let skipped = 0;
+  const { startNeedWork } = await import('./operate.ts');
   for (const id of [...new Set(input.needIds)]) {
     const need = await getNeed(id);
     if (!need || need.state !== 'OPEN') {
@@ -444,21 +465,33 @@ export async function handNeedsToOwners(input: {
       continue;
     }
     const owner = needExecutionOwner(need.blockerKey);
+    let work: NeedHandoff['work'];
+    if (owner.route === 'PERSON') work = { kind: 'PERSON' };
+    else if (owner.route === 'WATCH') work = { kind: 'WATCH' };
+    else {
+      const started = await startNeedWork(need, owner.route);
+      work =
+        started.kind === 'ALLOCATED'
+          ? { kind: 'ALLOCATED', candidateId: started.candidateId, reused: started.reused }
+          : started.kind === 'DIVE'
+            ? { kind: 'DIVE', opportunityId: started.opportunityId }
+            : { kind: 'REFUSED', reason: started.reason };
+    }
     await recordCashEvent({
       projectId: need.projectId,
       opportunityId: need.opportunityId,
       kind: 'CASH_NEED_ROUTED',
       actorRef: input.actorRef,
-      summary: `Handed to ${owner.owner} (${owner.route}): ${need.blockedAction}`.slice(0, 400),
-      detail: { needId: need.id, gapKey: input.gapKey, route: owner.route, owner: owner.owner, why: owner.why, blockerKey: need.blockerKey },
+      summary: `Handed to ${owner.owner} (${owner.route}, ${work.kind}): ${need.blockedAction}`.slice(0, 400),
+      detail: { needId: need.id, gapKey: input.gapKey, route: owner.route, owner: owner.owner, why: owner.why, blockerKey: need.blockerKey, work },
     });
-    handed.push({ needId: need.id, projectId: need.projectId, opportunityId: need.opportunityId, route: owner.route, owner: owner.owner });
+    handed.push({ needId: need.id, projectId: need.projectId, opportunityId: need.opportunityId, route: owner.route, owner: owner.owner, work });
   }
   const { reconsiderAffected } = await import('./reconsider.ts');
   const { requestDecisionRecompute } = await import('../../repos/cashDecisions.ts');
-  for (const projectId of new Set(handed.map((h) => h.projectId))) await reconsiderAffected(projectId, { now: at });
+  for (const projectId of new Set(handed.filter((h) => h.work.kind === 'WATCH').map((h) => h.projectId))) await reconsiderAffected(projectId, { now: at });
   for (const one of handed) {
-    if (one.opportunityId && one.route !== 'PERSON') await requestDecisionRecompute(one.opportunityId, `NEED_ROUTED:${input.gapKey}`, at);
+    if (one.opportunityId && handoffAllocated(one)) await requestDecisionRecompute(one.opportunityId, `NEED_ROUTED:${input.gapKey}`, at);
   }
   return { handed, skipped };
 }
