@@ -84,14 +84,7 @@ import {
   listWorkItemsForBin,
   type ClaimScope,
 } from '../../repos/workQueue.ts';
-import {
-  contractCapabilities,
-  effectiveCapabilities,
-  evaluateContract,
-  hashUnitValue,
-  researchPacketParkReason,
-  type ContractVerdict,
-} from './contracts.ts';
+import { evaluateContract, hashUnitValue, researchPacketParkReason, type ContractVerdict } from './contracts.ts';
 import { getWorkerRouting } from '../../repos/identity.ts';
 import { observeFiredSessionArrival } from '../fleet/arrivalIdentity.ts';
 import {
@@ -300,55 +293,6 @@ export interface BinAdmissionVerdict {
 
 export type BinAdmission = (bin: Bin) => Promise<BinAdmissionVerdict>;
 
-/*
- * Which capabilities some enabled Routine on an enabled account declares — the
- * fleet half of `effectiveCapabilities`, asked on the claim path. Read once per
- * short window and shared, rather than as two full-table reads on every
- * admission (§61/§63: the claim path is the first thing database pressure
- * reaches). Staleness only reaches a derived capability, which fails open by
- * §27's rule, so a declaration made inside the window costs at most a fire a
- * surface could not use — the behaviour before the capability existed — and
- * Brain's own writer (`recordDemonstratedCapabilities`) clears the window.
- */
-export const FLEET_DECLARATIONS_TTL_MS = 30_000;
-let fleetDeclarations: { readAt: number; set: Promise<ReadonlySet<string>> } | null = null;
-let fleetDeclarationScans = 0;
-
-export function forgetFleetDeclarations(): void {
-  fleetDeclarations = null;
-}
-
-/** How many times the fleet has actually been scanned for declarations; for tests. */
-export function fleetDeclarationScanCount(): number {
-  return fleetDeclarationScans;
-}
-
-async function declaredFleetCapabilities(nowMs: number = Date.now()): Promise<ReadonlySet<string>> {
-  if (fleetDeclarations && nowMs - fleetDeclarations.readAt < FLEET_DECLARATIONS_TTL_MS) {
-    return fleetDeclarations.set;
-  }
-  fleetDeclarationScans += 1;
-  const set = (async () => {
-    const { listRoutines, listAccounts } = await import('../../repos/fleet.ts');
-    const [routines, accounts] = await Promise.all([listRoutines(), listAccounts()]);
-    const enabledAccounts = new Set(
-      accounts.filter((account) => account.state === 'ENABLED').map((account) => account.id),
-    );
-    const declared = new Set<string>();
-    for (const routine of routines) {
-      if (routine.state !== 'ENABLED' || !enabledAccounts.has(routine.accountId)) continue;
-      for (const capability of routine.capabilities) declared.add(capability);
-    }
-    return declared as ReadonlySet<string>;
-  })();
-  const entry = { readAt: nowMs, set };
-  fleetDeclarations = entry;
-  set.catch(() => {
-    if (fleetDeclarations === entry) fleetDeclarations = null;
-  });
-  return set;
-}
-
 export async function binAdmission(input: {
   workerId: string;
   principal: Principal;
@@ -425,56 +369,23 @@ export async function binAdmission(input: {
      * the case where the answer is known.
      */
     /*
-     * The bin's own requirements, plus any its completion contract implies
-     * that an enabled Routine in the fleet declares — the router's rule
-     * (`effectiveCapabilities`), asked of the same rows so the fire and the
-     * assignment cannot disagree. Production, to 2026-11-12: six of six render
-     * bins were handed to sessions with no browser, none could submit a render,
-     * and each spent all three attempts and went to a person.
+     * Only the bin's own requirements, which fail closed. A capability is not
+     * derived from the completion contract and applied fleet-wide: once one
+     * Routine declared `browser`, that made every other Routine ineligible for
+     * renders, and those Routines could never earn it, because they were never
+     * admitted to a render. An ordinary cloud worker session renders with the
+     * manifest's command (`designRenderManifest`, `services/design/render.ts`),
+     * so the derived preference only concentrated render work onto whichever
+     * Routines happened to complete one first. A bin that genuinely needs a
+     * capability says so in `requiredCapabilities`.
      */
-    /*
-     * Ordered so the fleet is read only when its answer can change the verdict,
-     * because this runs on the claim path, which §61/§63 treat as
-     * pressure-sensitive (it used to read every Routine and every Account on
-     * each admission of a render bin). Nothing is checked for a session Brain
-     * did not fire, so the session's own Routines are read first and once per
-     * admission; a fired session whose Routines already declare everything the
-     * contract could add is able whatever the fleet declares; and only
-     * otherwise is the fleet asked, through `declaredFleetCapabilities`, which
-     * every candidate bin of a check-in — and every check-in inside its short
-     * window — shares.
-     */
-    const own = bin.requiredCapabilities ?? [];
-    const derivable = input.sessionRef ? contractCapabilities(bin.completionContract) : [];
-    if ((own.length > 0 || derivable.length > 0) && input.sessionRef) {
+    const needed = bin.requiredCapabilities ?? [];
+    if (needed.length > 0 && input.sessionRef) {
       const refs = await sessionRoutineRefs();
       if (refs.length > 0) {
         const { getRoutineByRef } = await import('../../repos/fleet.ts');
         const routines = await Promise.all(refs.map((ref) => getRoutineByRef(ref)));
         const known = routines.filter((routine): routine is NonNullable<typeof routine> => routine !== null);
-        /*
-         * When one of the session's own Routines is enabled, on an enabled
-         * account, and declares every derivable capability, the fleet declares
-         * them by that row alone — the same answer the scan would give, read by
-         * primary key. Only otherwise is the fleet asked.
-         */
-        let declaredByOwnRoutine = false;
-        if (derivable.length > 0) {
-          const { getAccount } = await import('../../repos/fleet.ts');
-          for (const routine of known) {
-            if (routine.state !== 'ENABLED') continue;
-            if (!derivable.every((cap) => routine.capabilities.includes(cap))) continue;
-            if ((await getAccount(routine.accountId))?.state === 'ENABLED') {
-              declaredByOwnRoutine = true;
-              break;
-            }
-          }
-        }
-        const fleet =
-          derivable.length === 0 || declaredByOwnRoutine ? null : await declaredFleetCapabilities();
-        const needed = effectiveCapabilities(bin, (capability) =>
-          declaredByOwnRoutine ? true : (fleet?.has(capability) ?? false),
-        );
         const { DELIVERY_PROBE_CLASS, WRITE_CAPABILITY } = await import('../dispatch/router.ts');
         const { repositoryIdOf } = await import('./routing.ts');
         /*
@@ -1676,55 +1587,7 @@ export async function requestCompletion(input: {
    * so nothing here can make the bin's own outcome depend on it.
    */
   await advanceFactoryAfter(bin);
-  await recordDemonstratedCapabilities(bin).catch(() => [] as string[]);
   return { held: true, terminal: true, state: 'COMPLETE', verdict, signals };
-}
-
-/**
- * A surface that satisfied a contract only a capability can satisfy has that
- * capability, and the fleet is told so by the event that proved it.
- *
- * `effectiveCapabilities` routes a render bin to a surface that declares
- * `browser` while one exists — and nothing ever declared it: the only writer
- * of `fleet_routines.capabilities` is a person's `setRoutineCapabilities`, and
- * the render stage recorded that declaration as a pending operator step. So the
- * derived requirement had a consumer (the router and the assigner) and no
- * producer, and every render bin was routed exactly as before. The producer is
- * the one fact Brain itself holds: a `DESIGN_RENDER_V1` verdict is satisfied
- * only by captures whose hashes Brain checked, which no browserless session
- * can produce. The Routines that session was fired from (`routineRefsForSession`
- * — the dispatch row Brain wrote, never the worker's say-so) gain the
- * contract's capabilities, audited through the same writer a person uses.
- *
- * It only ever adds, and only on a satisfied verdict: a refusal, a blocker or a
- * session Brain did not fire changes nothing, and a person's declaration is
- * never removed. Best-effort: the bin's own completion is already recorded.
- */
-export async function recordDemonstratedCapabilities(
-  bin: Pick<Bin, 'id' | 'completionContract' | 'leaseSessionRef'>,
-): Promise<string[]> {
-  const demonstrated = contractCapabilities(bin.completionContract);
-  if (demonstrated.length === 0 || !bin.leaseSessionRef) return [];
-  const { routineRefsForSession } = await import('../../repos/bins.ts');
-  const { getRoutineByRef, setRoutineCapabilities } = await import('../../repos/fleet.ts');
-  const changed: string[] = [];
-  for (const ref of await routineRefsForSession(bin.leaseSessionRef)) {
-    const routine = await getRoutineByRef(ref);
-    if (!routine) continue;
-    const missing = demonstrated.filter((capability) => !routine.capabilities.includes(capability));
-    if (missing.length === 0) continue;
-    await setRoutineCapabilities({
-      routineId: routine.id,
-      capabilities: [...routine.capabilities, ...missing],
-      actor: 'brain:contract-demonstrated',
-      reason:
-        `A session fired from this Routine satisfied ${bin.completionContract} on ${bin.id}, ` +
-        `which only a surface with ${missing.join(', ')} can satisfy.`,
-    });
-    changed.push(routine.id);
-  }
-  if (changed.length > 0) forgetFleetDeclarations();
-  return changed;
 }
 
 /**
