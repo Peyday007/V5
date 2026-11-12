@@ -22,6 +22,7 @@ const LOOPS = [
   'server/services/dispatch/loop.ts',
   'server/services/factory/remoteLoop.ts',
   'server/services/connect/loop.ts',
+  'server/services/integrations/loop.ts',
 ];
 
 function timerBodies(source: string): string[] {
