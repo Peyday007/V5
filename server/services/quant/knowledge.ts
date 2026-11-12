@@ -37,7 +37,8 @@ import type { Estimate, Observation, QuantityNode } from '../../domain/quant.ts'
 import { reconstruct } from './reconstruct.ts';
 import { keepCashLedger, readLedger } from './ledger.ts';
 import { assessModelLearning, type ModelLearningReading } from './learning.ts';
-import type { Correction, ExposureRow, OutcomeRow, PredictionRow } from './forecast.ts';
+import { compareAfterCorrection, impliedProbability, MIN_CALIBRATION_SAMPLE } from './forecast.ts';
+import type { Correction, CorrectionComparison, ExposureRow, OutcomeRow, PredictionRow } from './forecast.ts';
 import { getDb } from '../../db/database.ts';
 import { listWorkstreamEvents, recordWorkstreamEvent } from '../../repos/register.ts';
 import { upsertCandidate } from '../../repos/improvement.ts';
@@ -150,31 +151,74 @@ export function cashDependencyGraph(projectId: string, currencies: readonly stri
   return graph;
 }
 
+/** One correction's rounds on one comparable bucket: the one being judged now, and the ones already judged not to have helped. */
+export interface CorrectionRound {
+  correctedAt: string;
+  failed: CorrectionVerdict[];
+}
+
+/** When the MIN_CALIBRATION_SAMPLE-th resolved forecast in a bucket at or after `from` was observed: the moment it could be judged. */
+function judgeableAt(ledger: ModelLearningReading['ledger'], comparableKey: string, from: string): string | null {
+  const times = ledger
+    .filter((e) => e.prediction.comparableKey === comparableKey && e.outcome && e.outcome.observedAt >= from && impliedProbability(e.prediction) !== null)
+    .map((e) => e.outcome!.observedAt)
+    .sort();
+  return times[MIN_CALIBRATION_SAMPLE - 1] ?? null;
+}
+
 /**
- * When each correction took effect, per comparable bucket, read from the ledger. Pure.
+ * When each correction took effect, per comparable bucket, and the earlier rounds of it that did not help. Pure.
  *
- * A correction takes effect when the model states a new version of a corrected
- * claim after the last systematic miss that named the cause: that version is the
- * corrected model, and only outcomes observed from then on say whether it helped.
- * A claim not yet revised since its miss has no entry — nothing has changed to compare.
+ * A correction takes effect when the model states a new version of a corrected claim once the misses that
+ * named the cause could be judged — a systematic miss needs a calibration sample, so the first revision
+ * after the sample that exposed it is the corrected model. That round stays the one being judged while the
+ * observations after it accumulate: later misses on the same cause are what judge it, never a reason to move
+ * the anchor past them (which would leave nothing after it to compare). Only once the comparison says
+ * NOT_IMPROVED does the next revision, made after the observations that said so, start a new round; the
+ * failed round is kept, so the correction is routed again under a key that names it (`correctionKey`).
+ * A claim not yet revised since its misses has no entry — nothing has changed to compare.
  */
-export function correctionTimes(reading: Pick<ModelLearningReading, 'ledger' | 'diagnoses' | 'corrections'>, predictions: readonly PredictionRow[]): Map<string, string> {
-  const outcomeAt = new Map(reading.ledger.filter((e) => e.outcome).map((e) => [e.prediction.id, e.outcome!.observedAt]));
-  const out = new Map<string, string>();
+export function correctionRounds(reading: Pick<ModelLearningReading, 'ledger' | 'diagnoses' | 'corrections'>, predictions: readonly PredictionRow[]): Map<string, CorrectionRound> {
+  const entry = new Map(reading.ledger.map((e) => [e.prediction.id, e]));
+  const out = new Map<string, CorrectionRound>();
   for (const correction of reading.corrections) {
     for (const claimId of correction.claimIds) {
-      const missedAt = reading.diagnoses
+      const misses = reading.diagnoses
         .filter((d) => d.kind === 'SYSTEMATIC' && d.claimId === claimId && d.causes.includes(correction.cause))
-        .map((d) => outcomeAt.get(d.predictionId) ?? '')
-        .reduce((max, at) => (at > max ? at : max), '');
-      if (!missedAt) continue;
-      const revised = predictions.filter((p) => p.claimId === claimId && p.madeAt > missedAt).sort((a, b) => a.madeAt.localeCompare(b.madeAt))[0];
-      if (!revised) continue;
-      const held = out.get(revised.comparableKey);
-      if (!held || revised.madeAt < held) out.set(revised.comparableKey, revised.madeAt);
+        .map((d) => entry.get(d.predictionId))
+        .filter((e): e is NonNullable<typeof e> => !!e?.outcome)
+        .sort((a, b) => a.outcome!.observedAt.localeCompare(b.outcome!.observedAt));
+      const firstMiss = misses[0];
+      if (!firstMiss) continue;
+      const versions = predictions.filter((p) => p.claimId === claimId).sort((a, b) => a.madeAt.localeCompare(b.madeAt));
+      const exposed = judgeableAt(reading.ledger, firstMiss.prediction.comparableKey, '');
+      const from = exposed && exposed > firstMiss.outcome!.observedAt ? exposed : firstMiss.outcome!.observedAt;
+      let revision = versions.find((p) => p.madeAt > from);
+      if (!revision) continue;
+      const failed: CorrectionVerdict[] = [];
+      for (let guard = 0; guard < 50; guard++) {
+        const comparison = compareAfterCorrection(reading.ledger, revision.comparableKey, revision.madeAt);
+        if (comparison.verdict !== 'NOT_IMPROVED') break;
+        const judged = judgeableAt(reading.ledger, revision.comparableKey, revision.madeAt);
+        const next = judged ? versions.find((p) => p.madeAt > judged) : undefined;
+        if (!next) break;
+        failed.push({ comparableKey: revision.comparableKey, correctedAt: revision.madeAt, comparison });
+        revision = next;
+      }
+      // One comparison per bucket: the latest round on it is the one being judged, and every failed round is kept.
+      const held = out.get(revision.comparableKey);
+      out.set(revision.comparableKey, {
+        correctedAt: held && held.correctedAt > revision.madeAt ? held.correctedAt : revision.madeAt,
+        failed: [...(held?.failed ?? []), ...failed],
+      });
     }
   }
   return out;
+}
+
+/** When each correction took effect, per comparable bucket (see `correctionRounds`). Pure. */
+export function correctionTimes(reading: Pick<ModelLearningReading, 'ledger' | 'diagnoses' | 'corrections'>, predictions: readonly PredictionRow[]): Map<string, string> {
+  return new Map([...correctionRounds(reading, predictions)].map(([key, round]) => [key, round.correctedAt]));
 }
 
 /** The goals whose plans read this project's cash knowledge. */
@@ -188,12 +232,67 @@ async function dependentGoals(projectId: string): Promise<DependentGoal[]> {
   return rows.map((r) => ({ id: r.id, currency: r.target_currency }));
 }
 
-/** The key one correction is routed under: the same cause over the same claims and misses is routed once. */
-export function correctionKey(correction: Correction): string {
-  return `${correction.cause}|${correction.claimIds.join(',')}|${correction.misses}`;
+/**
+ * The key one correction is routed under: the same cause over the same claims and misses is routed once.
+ *
+ * A correction whose revision was compared with the next observations and did not improve them
+ * (`NOT_IMPROVED`) is a new round of the same correction: the earlier routing did not fix the cause, so
+ * the key names each failed revision and the correction is routed again — never mistaken for the reading
+ * already on the record because its miss count happened not to move.
+ */
+export function correctionKey(correction: Correction, failed: readonly CorrectionVerdict[] = []): string {
+  const base = `${correction.cause}|${correction.claimIds.join(',')}|${correction.misses}`;
+  const rounds = failed.filter((v) => v.comparison.verdict === 'NOT_IMPROVED').map((v) => `${v.comparableKey}@${v.correctedAt}`);
+  return rounds.length ? `${base}|not-improved:${[...new Set(rounds)].sort().join(',')}` : base;
 }
 
 export const CORRECTION_EVENT = 'FORECAST_CORRECTION';
+/** A corrected claim's next observations compared with the misses that exposed the cause, on a goal's record. */
+export const COMPARISON_EVENT = 'FORECAST_CORRECTION_COMPARED';
+
+/** One comparison of a correction with the observations after it, with when the correction took effect. */
+export interface CorrectionVerdict {
+  comparableKey: string;
+  correctedAt: string;
+  comparison: CorrectionComparison;
+}
+
+/**
+ * The comparisons that judge one correction: those on the comparable buckets its claims are predicted in. Pure.
+ */
+export function verdictsFor(
+  correction: Correction,
+  reading: Pick<ModelLearningReading, 'comparisons'>,
+  correctedAt: ReadonlyMap<string, string>,
+  predictions: readonly PredictionRow[],
+): CorrectionVerdict[] {
+  const keys = new Set(predictions.filter((p) => correction.claimIds.includes(p.claimId)).map((p) => p.comparableKey));
+  return reading.comparisons
+    .filter((c) => keys.has(c.comparableKey) && correctedAt.has(c.comparableKey))
+    .map((c) => ({ comparableKey: c.comparableKey, correctedAt: correctedAt.get(c.comparableKey)!, comparison: c.comparison }));
+}
+
+/** The key a comparison is recorded under: one record per revision, bucket and verdict, so a change of verdict is news. */
+export function comparisonKey(correction: Correction, verdict: CorrectionVerdict): string {
+  return `compared|${correction.cause}|${verdict.comparableKey}@${verdict.correctedAt}|${verdict.comparison.verdict}`;
+}
+
+/** What a record carries of the calibration and diagnoses behind a correction: bounded, and only its own buckets. */
+export function correctionEvidence(
+  correction: Correction,
+  reading: Pick<ModelLearningReading, 'calibration' | 'diagnoses'>,
+  predictions: readonly PredictionRow[],
+): { calibration: Record<string, unknown>[]; diagnoses: Record<string, number> } {
+  const keys = new Set(predictions.filter((p) => correction.claimIds.includes(p.claimId)).map((p) => p.comparableKey));
+  const calibration = reading.calibration
+    .filter((b) => keys.has(b.comparableKey) && b.scope === 'POOLED')
+    .slice(0, 8)
+    .map((b) => ({ comparableKey: b.comparableKey, n: b.n, meanForecast: b.meanForecast, observedRate: b.observedRate, gap: b.gap, zScore: b.zScore, verdict: b.verdict }));
+  // Expected misses are counted beside systematic ones, so the record never reads every miss as a model failure.
+  const diagnoses: Record<string, number> = {};
+  for (const d of reading.diagnoses) if (correction.claimIds.includes(d.claimId)) diagnoses[d.kind] = (diagnoses[d.kind] ?? 0) + 1;
+  return { calibration, diagnoses };
+}
 
 export interface LearningDeps {
   read?: () => Promise<{ predictions: PredictionRow[]; exposures: ExposureRow[]; outcomes: OutcomeRow[] }>;
@@ -338,7 +437,7 @@ export async function openCorrectionWork(
 
 async function alreadyRouted(goalId: string, key: string): Promise<boolean> {
   const events = await listWorkstreamEvents(goalId, 500);
-  return events.some((e) => e.kind === CORRECTION_EVENT && e.detail['key'] === key);
+  return events.some((e) => (e.kind === CORRECTION_EVENT || e.kind === COMPARISON_EVENT) && e.detail['key'] === key);
 }
 
 /**
@@ -372,7 +471,8 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
   const goals = await (deps.goals ?? dependentGoals)(projectId);
   const dependsOn = cashDependencyGraph(projectId, currencies, goals);
   const first = assessModelLearning({ ...rows, dependsOn });
-  const correctedAt = correctionTimes(first, rows.predictions);
+  const rounds = correctionRounds(first, rows.predictions);
+  const correctedAt = new Map([...rounds].map(([key, round]) => [key, round.correctedAt]));
   const reading = correctedAt.size ? assessModelLearning({ ...rows, dependsOn, correctedAt }) : first;
   if (reading.corrections.length === 0) return reading;
 
@@ -386,7 +486,16 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
       requestGoalPlanPass(goalId, why);
     });
   for (const correction of reading.corrections) {
-    const key = correctionKey(correction);
+    // The next observations after this correction's revision, compared with the misses that exposed it. A
+    // NOT_IMPROVED verdict makes this a new round of the correction (`correctionKey`), routed again in full.
+    const current = verdictsFor(correction, reading, correctedAt, rows.predictions);
+    // Earlier rounds already judged NOT_IMPROVED stay part of the correction's identity and its record.
+    const earlier = current.flatMap((v) => rounds.get(v.comparableKey)?.failed ?? []);
+    const verdicts = [...earlier, ...current];
+    const failed = verdicts.filter((v) => v.comparison.verdict === 'NOT_IMPROVED');
+    const key = correctionKey(correction, verdicts);
+    const evidence = correctionEvidence(correction, reading, rows.predictions);
+    const compared = verdicts.map((v) => ({ comparableKey: v.comparableKey, correctedAt: v.correctedAt, ...v.comparison }));
     const reached = goals.filter((goal) => (dependsOn.get(planClaimId(goal.id)) ?? []).some((c) => correction.claimIds.includes(c)));
     const reachedGoal = reached.length > 0;
     const fresh: DependentGoal[] = [];
@@ -402,11 +511,40 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
       await note({
         workstreamId: goal.id,
         kind: CORRECTION_EVENT,
-        summary: `The cash forecast missed systematically: ${correction.cause} on ${correction.claimIds.length} claim(s), corrected by ${correction.owner}${needs.length ? ` through ${needs.length} opened need(s)` : ''}.`.slice(0, 400),
-        detail: { key, cause: correction.cause, owner: correction.owner, claimIds: correction.claimIds, misses: correction.misses, recompute: recompute.has(claim), needIds: needs },
+        summary: `The cash forecast missed systematically: ${correction.cause} on ${correction.claimIds.length} claim(s), ${failed.length ? 'an earlier correction did not improve the next observations, corrected again' : 'corrected'} by ${correction.owner}${needs.length ? ` through ${needs.length} opened need(s)` : ''}.`.slice(0, 400),
+        detail: {
+          key,
+          cause: correction.cause,
+          owner: correction.owner,
+          claimIds: correction.claimIds,
+          misses: correction.misses,
+          recompute: recompute.has(claim),
+          needIds: needs,
+          round: failed.length ? 'NOT_IMPROVED' : 'FIRST',
+          calibration: evidence.calibration,
+          diagnoses: evidence.diagnoses,
+          comparisons: compared,
+        },
         actorRef: 'BRAIN',
       });
-      if (recompute.has(claim)) await replan(goal.id, `forecast correction ${correction.cause}`);
+      if (recompute.has(claim)) await replan(goal.id, `forecast correction ${correction.cause}${failed.length ? ' (not improved, again)' : ''}`);
+    }
+    // Every reached goal's record carries each verdict on the comparison once — IMPROVED, NOT_IMPROVED or how
+    // far short TOO_FEW is — so the comparison with the next production observations is a record, not a reading.
+    for (const verdict of verdicts) {
+      if (verdict.comparison.verdict === 'NO_NEW_OBSERVATIONS') continue;
+      const ckey = comparisonKey(correction, verdict);
+      const c = verdict.comparison;
+      for (const goal of reached) {
+        if (await routed(goal.id, ckey)) continue;
+        await note({
+          workstreamId: goal.id,
+          kind: COMPARISON_EVENT,
+          summary: `The ${correction.cause} correction to the cash forecast, compared with the ${c.nAfter} observation(s) after it on ${verdict.comparableKey}: ${c.verdict}${c.verdict === 'TOO_FEW' ? ` (${c.nBefore} before, ${c.nAfter} after)` : c.verdict === 'NOT_IMPROVED' ? ', routed again' : ''}.`.slice(0, 400),
+          detail: { key: ckey, correctionKey: key, cause: correction.cause, owner: correction.owner, claimIds: correction.claimIds, comparableKey: verdict.comparableKey, correctedAt: verdict.correctedAt, ...c },
+          actorRef: 'BRAIN',
+        });
+      }
     }
     // A software cause always goes to Factory. Any other cause goes to the goals whose plans rest on the
     // claim; when no goal does, nobody would read it there, so it goes to the register as well, naming the
@@ -414,8 +552,10 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
     if (correction.owner === 'FACTORY' || !reachedGoal) {
       const software = correction.owner === 'FACTORY';
       // Idempotent by weakness key: the register refreshes a live candidate and never reopens a decided one.
+      // A correction that did not improve the next observations is a new weakness: the register never reopens a
+      // decided candidate, so the failed round is its own key and Factory or the owner sees it again.
       await (deps.toFactory ?? upsertCandidate)({
-        weaknessKey: `FORECAST:${correction.cause}`,
+        weaknessKey: failed.length ? `FORECAST:${correction.cause}:not-improved:${failed.map((v) => `${v.comparableKey}@${v.correctedAt}`).sort().join(',')}`.slice(0, 200) : `FORECAST:${correction.cause}`,
         kind: 'FORECAST_MISCALIBRATION',
         title: software
           ? 'The cash forecast is systematically miscalibrated by its own implementation'
@@ -437,6 +577,9 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
           researchQuestion: software ? 'forecast calibration model implementation' : `forecast calibration ${correction.cause.toLowerCase().replace(/_/g, ' ')}`,
           knownCause: `${correction.cause} on ${correction.claimIds.join(', ')} (forecast ledger)`,
           correctionOwner: correction.owner,
+          calibration: evidence.calibration,
+          diagnoses: evidence.diagnoses,
+          comparisons: compared,
           observedAt: new Date().toISOString(),
         },
       });
