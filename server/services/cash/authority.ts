@@ -179,6 +179,9 @@ export function actionContext(input: {
  * one, a revoked one, an unknown action, an unlisted one and a prohibited one
  * are all refusals, and none of them degrades to a weaker allowance.
  */
+/** The ledger cause for a spend authorized with no stated sum, whose ceilings are judged at the commitment. */
+export const AMOUNT_JUDGED_AT_COMMIT = 'AMOUNT_JUDGED_AT_COMMIT' as const;
+
 export async function checkCommercialAuthority(input: {
   projectId: string;
   action: string;
@@ -238,11 +241,32 @@ export async function checkCommercialAuthority(input: {
       ledger: { ...judged.ledger, disposition: 'REFUSED', cause: 'NO_AUTHORITY' },
     };
   }
+  /*
+   * A caller that states no amount has its sum bounded by its own path's ceilings: `commitSpend` judges the
+   * per-action and committed limits inside the commitment's own transaction, where a replay returns before
+   * any ceiling is read (§20). That alone is not a refusal here — and so it must not be *recorded* as one.
+   * The judgment is turned into an authorization before the ledger row is written, under its own cause, so
+   * the row says what happened: Brain was allowed to commit, and the sum is judged where it is committed.
+   * Writing REFUSED and then returning ok made every real spend read as refused while the money moved,
+   * which is exactly the hidden spending AUTH-20-3 forbids. A stated amount is never rewritten: a stated
+   * sum that is negative or unjudgeable stays refused.
+   */
+  if (
+    !judged.ok &&
+    authority &&
+    judged.ledger.cause === 'AMOUNT_UNKNOWN' &&
+    (input.amountCents === undefined || input.amountCents === null)
+  ) {
+    judged = {
+      ...judged,
+      ok: true,
+      reason: 'within the standing commercial authority; the amount is judged against its ceilings where it is committed',
+      neededApproval: null,
+      ledger: { ...judged.ledger, disposition: 'AUTHORIZED', cause: AMOUNT_JUDGED_AT_COMMIT },
+    };
+  }
   const decisionId = await recordDecision(judged);
-  // A caller that states no amount has its sum bounded by its own path's ceilings (the per-action and committed
-  // limits are read where the money is committed); that alone is not a refusal here. Every other cause is.
-  const amountOnly = !judged.ok && judged.ledger.cause === 'AMOUNT_UNKNOWN' && (input.amountCents === undefined || input.amountCents === null);
-  if ((!judged.ok && !amountOnly) || !authority) {
+  if (!judged.ok || !authority) {
     return { ok: false, authority, reason: judged.reason, policyVersion: authority?.policyVersion ?? null, decisionId };
   }
   return {
@@ -411,6 +435,8 @@ export interface AuthorityLedgerRecord {
     | 'EXPIRED_OR_NOT_STARTED'
     | 'NOT_COVERED'
     | 'AMOUNT_UNKNOWN'
+    /** Authorized with no stated sum: the per-action and committed ceilings are judged where the money is committed. */
+    | 'AMOUNT_JUDGED_AT_COMMIT'
     | 'OVER_PER_ACTION_CEILING'
     | 'OVER_COMMITTED_CEILING'
     | 'RELEASE_ENVELOPE'
