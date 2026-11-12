@@ -204,6 +204,27 @@ describe('operating an approved capability', () => {
     expect(h.calls()).toBe(1);
   });
 
+  it('many workers racing the same mutation with no rows yet: exactly one performs it, the claim decides', async () => {
+    const h = harness();
+    const c = publishCap();
+    await h.define(c);
+    const approvals = approvalsFor(c);
+    // Every worker starts from the same empty view of the rows, the window a read-then-write guard loses.
+    h.setRun({ extracted: [], steps: [{ index: 0, kind: 'click', ok: true, detail: 'pressed Publish' }], outcome: 'FAILED', detail: 'timed out after submitting' });
+    const actors = ['wrk_1', 'wrk_2', 'wrk_3', 'wrk_4', 'wrk_5'].map((id) => ({ type: 'WORKER' as const, id }));
+    const results = await Promise.all(actors.map((actor) => operateCapability({ projectId, host: HOST, name: 'publish listing', inputs: { month: '2026-10' }, approvals, actor }, h.deps())));
+    expect(h.calls()).toBe(1);
+    expect(results.filter((r) => r.sessionOpened)).toHaveLength(1);
+    expect(results.find((r) => r.sessionOpened)).toMatchObject({ outcome: 'UNKNOWN', failureReason: 'OUTCOME_UNKNOWN' });
+    for (const r of results.filter((x) => !x.sessionOpened)) expect(r.outcome).toBe('REFUSED');
+    const keys = new Set(results.map((r) => r.effectKey));
+    expect(keys.size).toBe(1);
+    // After the unknown outcome, no later attempt re-performs it either.
+    const later = await operateCapability({ projectId, host: HOST, name: 'publish listing', inputs: { month: '2026-10' }, approvals, actor: worker }, h.deps());
+    expect(later).toMatchObject({ outcome: 'REFUSED', failureReason: 'OUTCOME_UNKNOWN', sessionOpened: false });
+    expect(h.calls()).toBe(1);
+  });
+
   it('records a mutation that ran but did not verify as UNKNOWN, and never re-performs it', async () => {
     const h = harness();
     const c = publishCap();
