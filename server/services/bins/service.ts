@@ -28,6 +28,7 @@ import type {
   Bin,
   BinManifest,
   ClaimedWork,
+  FleetRoutine,
   Principal,
   WorkerScope,
   WorkItem,
@@ -314,6 +315,35 @@ export async function binAdmission(input: {
   });
   const admit = auditAdmission(lineage);
   const routing = input.routing ?? (await workerRoutingFor(input.workerId, input.principal));
+  /*
+   * Read lazily and at most once per admission: the Routines Brain fired this
+   * session from, and the capabilities the enabled fleet declares. Neither
+   * changes between the candidate bins one check-in weighs.
+   */
+  let sessionRoutinesRead: Promise<{ refs: string[]; known: FleetRoutine[] }> | null = null;
+  const sessionRoutines = () =>
+    (sessionRoutinesRead ??= (async () => {
+      const { routineRefsForSession } = await import('../../repos/bins.ts');
+      const { getRoutineByRef } = await import('../../repos/fleet.ts');
+      const refs = await routineRefsForSession(input.sessionRef ?? '');
+      if (refs.length === 0) return { refs, known: [] };
+      const routines = await Promise.all(refs.map((ref) => getRoutineByRef(ref)));
+      return { refs, known: routines.filter((routine): routine is FleetRoutine => routine !== null) };
+    })());
+  let fleetDeclaredRead: Promise<Set<string>> | null = null;
+  const fleetDeclared = () =>
+    (fleetDeclaredRead ??= (async () => {
+      const { listRoutines, listAccounts } = await import('../../repos/fleet.ts');
+      const [routines, accounts] = await Promise.all([listRoutines(), listAccounts()]);
+      const enabledAccounts = new Set(
+        accounts.filter((account) => account.state === 'ENABLED').map((account) => account.id),
+      );
+      return new Set(
+        routines
+          .filter((routine) => routine.state === 'ENABLED' && enabledAccounts.has(routine.accountId))
+          .flatMap((routine) => routine.capabilities),
+      );
+    })());
   return async (bin: Bin): Promise<BinAdmissionVerdict> => {
     /*
      * Scope first, and every dimension of it, before anything else is asked.
@@ -369,32 +399,28 @@ export async function binAdmission(input: {
      * assignment cannot disagree. Production, to 2026-11-12: six of six render
      * bins were handed to sessions with no browser, none could submit a render,
      * and each spent all three attempts and went to a person.
+     *
+     * Asked only of a session Brain fired, and read once per admission. The
+     * fleet scan that decides which contract capabilities apply is two
+     * full-table reads, and the claim path is the one §61/§63 keep cheap: a
+     * session that traces to no Routine can never be refused here, so it
+     * costs no fleet read at all, and a check-in that weighs several render
+     * bins reads the fleet once rather than once per bin.
      */
+    const ownNeeds = bin.requiredCapabilities ?? [];
+    const impliesFleet = contractCapabilities(bin.completionContract).length > 0;
+    const session =
+      input.sessionRef && (ownNeeds.length > 0 || impliesFleet) ? await sessionRoutines() : null;
     const needed =
-      input.sessionRef && contractCapabilities(bin.completionContract).length > 0
+      session && session.refs.length > 0 && impliesFleet
         ? await (async () => {
-            const { listRoutines, listAccounts } = await import('../../repos/fleet.ts');
-            const [routines, accounts] = await Promise.all([listRoutines(), listAccounts()]);
-            const enabledAccounts = new Set(
-              accounts.filter((account) => account.state === 'ENABLED').map((account) => account.id),
-            );
-            return effectiveCapabilities(bin, (capability) =>
-              routines.some(
-                (routine) =>
-                  routine.state === 'ENABLED' &&
-                  enabledAccounts.has(routine.accountId) &&
-                  routine.capabilities.includes(capability),
-              ),
-            );
+            const declared = await fleetDeclared();
+            return effectiveCapabilities(bin, (capability) => declared.has(capability));
           })()
-        : (bin.requiredCapabilities ?? []);
-    if (needed.length > 0 && input.sessionRef) {
-      const { routineRefsForSession } = await import('../../repos/bins.ts');
-      const { getRoutineByRef } = await import('../../repos/fleet.ts');
-      const refs = await routineRefsForSession(input.sessionRef);
-      if (refs.length > 0) {
-        const routines = await Promise.all(refs.map((ref) => getRoutineByRef(ref)));
-        const known = routines.filter((routine): routine is NonNullable<typeof routine> => routine !== null);
+        : ownNeeds;
+    if (session && session.refs.length > 0 && needed.length > 0) {
+      const { refs, known } = session;
+      {
         const { DELIVERY_PROBE_CLASS, WRITE_CAPABILITY } = await import('../dispatch/router.ts');
         const { repositoryIdOf } = await import('./routing.ts');
         /*

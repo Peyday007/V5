@@ -12,7 +12,7 @@
  * both gates while some enabled Routine declares it and dropped while none
  * does, so the fix routes render work to a browser and cannot strand it.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createBin } from '../server/repos/bins.ts';
 import { createAccount, createRoutine, setRoutineCapabilities } from '../server/repos/fleet.ts';
@@ -27,6 +27,26 @@ import {
 import { binAdmission } from '../server/services/bins/service.ts';
 import { routeBin, type RoutingCandidate } from '../server/services/dispatch/router.ts';
 import type { Bin, BinManifest, FleetAccount, FleetRoutine, Principal, WorkerScope } from '../server/domain/types.ts';
+
+/*
+ * Count the fleet's full-table reads without changing what they return: the
+ * admission runs on the claim path, which §61/§63 keep cheap.
+ */
+const fleetReads = vi.hoisted(() => ({ routines: 0, accounts: 0 }));
+vi.mock('../server/repos/fleet.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../server/repos/fleet.ts')>();
+  return {
+    ...actual,
+    listRoutines: (...args: Parameters<typeof actual.listRoutines>) => {
+      fleetReads.routines += 1;
+      return actual.listRoutines(...args);
+    },
+    listAccounts: () => {
+      fleetReads.accounts += 1;
+      return actual.listAccounts();
+    },
+  };
+});
 
 const NOW = '2026-11-12T12:00:00.000Z';
 const SCOPES: WorkerScope[] = ['queue:read', 'queue:claim', 'queue:heartbeat', 'queue:complete'];
@@ -156,7 +176,7 @@ describe('the assigner leaves a render for a surface that can render', () => {
       stoppingConditions: ['the submission has been made'],
     }) as unknown as BinManifest;
 
-  async function setup(browserSurface: boolean) {
+  async function setup(browserSurface: boolean, fired = true) {
     const account = await createAccount({ name: `render-${tag()}` });
     const plain = await createRoutine({
       accountId: account.id, routineRef: `trig_plain_${tag()}`, name: `plain-${tag()}`, tokenSecretName: 'S_PLAIN',
@@ -183,7 +203,7 @@ describe('the assigner leaves a render for a surface that can render', () => {
     // Brain fired this session from the browserless Routine.
     const session = `cse_${tag()}${tag()}${tag()}`;
     const at = new Date().toISOString();
-    await getDb().run(
+    if (fired) await getDb().run(
       `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count, max_attempts,
          next_attempt_at, routine_id, routine_ref, session_ref, created_at, updated_at, sent_at)
        VALUES (?, ?, 0, 'SENT', 1, 5, ?, ?, ?, ?, ?, ?, ?)`,
@@ -231,5 +251,26 @@ describe('the assigner leaves a render for a surface that can render', () => {
     const verdict = await evaluateContract(bin);
     expect(verdict.disposition).toBe('RETRY');
     expect(verdict.reasons.join(' ')).toContain('No render was submitted');
+  });
+
+  it('reads no fleet table for a session Brain did not fire, which this check can never refuse', async () => {
+    const { bin, admit } = await setup(true, false);
+    fleetReads.routines = 0;
+    fleetReads.accounts = 0;
+    const verdict = await admit(bin);
+    if (!verdict.ok) expect(verdict.reason).not.toContain('does not declare');
+    expect(fleetReads).toEqual({ routines: 0, accounts: 0 });
+  });
+
+  it('reads the fleet once per admission however many render bins one check-in weighs', async () => {
+    const { bin, admit } = await setup(true);
+    fleetReads.routines = 0;
+    fleetReads.accounts = 0;
+    const verdicts = [await admit(bin), await admit(bin), await admit(bin)];
+    for (const verdict of verdicts) {
+      expect(verdict.ok).toBe(false);
+      if (!verdict.ok) expect(verdict.quiet).toBe(true);
+    }
+    expect(fleetReads).toEqual({ routines: 1, accounts: 1 });
   });
 });
