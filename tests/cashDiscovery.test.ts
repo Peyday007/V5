@@ -1392,7 +1392,7 @@ describe('the wider economy (2026-10-28)', () => {
     await finishedMission({
       candidateId: untagged!.candidateId,
       claims: [
-        { claim: 'Property managers pay bookkeeping firms 400 dollars a month for rent-roll reconciliation.', lane: SIGNAL_LANE, sourceUrl: 'https://example.test/goal-lens/untagged' },
+        { claim: 'Riverside Property Group posted a request on 2026-11-10 for a bookkeeping firm to reconcile its monthly rent rolls, responses due 2026-11-24.', lane: SIGNAL_LANE, sourceUrl: 'https://example.test/goal-lens/untagged' },
         { claim: 'Rent-roll reconciliation is a common pain point for property managers.', lane: 'market_context', sourceUrl: 'https://example.test/goal-lens/context' },
       ],
     });
