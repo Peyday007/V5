@@ -71,8 +71,36 @@ try {
     await show();
     const run = (await recentOperatorRuns(1))[0];
     console.log(run?.state === 'DONE' ? 'OPERATOR-RUN: OK' : `OPERATOR-RUN: FAILED ${run?.error ?? ''}`);
+  } else if (command === 'engineering') {
+    // §109: what the operator commissioned and what came of it, and what the rows show is weak.
+    const { engineeringOutcomes, readDeficiencies, readingId, directorPass } = await import('../server/services/operator/director.ts');
+    const pass = await directorPass();
+    console.log(`DIRECTOR pass: ${pass.recorded} outcome(s) recorded, ${pass.wake} wake the operator`);
+    for (const one of await engineeringOutcomes({ limit: 10 })) {
+      console.log(`ENGINEERING ${one.candidateId} ${one.weaknessKey} [${one.status} → ${one.next}] priority ${one.priority ?? '-'} goal ${one.goalId ?? '-'}`);
+      console.log(`  ${one.title}`);
+      console.log(`  ${one.sentence}`);
+      if (one.factory) console.log(`  factory ${one.factory.status} pr ${one.factory.prUrl ?? '-'} merge ${one.factory.mergeSha ?? '-'} deployed ${one.factory.deployed} verified ${one.factory.verified} tests ${one.factory.tests} changed ${one.factory.changedPaths.join(', ') || '-'}`);
+      if (one.measurement) console.log(`  measured ${one.measurement.metric}: ${one.measurement.before} → ${one.measurement.after} (${one.measurement.verdict ?? 'not yet'})`);
+      console.log(`  goal ${one.goal.effect}: ${one.goal.reasons.join('; ')}`);
+    }
+    for (const one of await readDeficiencies()) {
+      console.log(`DEFICIENCY ${readingId(one)} ${one.diagnosis.deficiency} → ${one.intervention}: ${one.diagnosis.title} (${one.why})`);
+    }
+  } else if (command === 'commission') {
+    // The standing director's own act, from a terminal: commission a deficiency by its id as the rows state it.
+    const { commission, readDeficiencies, readingId } = await import('../server/services/operator/director.ts');
+    const id = process.argv[3] ?? '';
+    const found = (await readDeficiencies()).find((one) => readingId(one) === id);
+    if (!found) {
+      console.log(`OPERATOR-COMMISSION: no current deficiency ${id}`);
+      process.exitCode = 1;
+    } else {
+      const run = (await recentOperatorRuns(1))[0];
+      console.log(`OPERATOR-COMMISSION: ${JSON.stringify(await commission({ ...found.diagnosis, runId: run?.id ?? null }))}`);
+    }
   } else {
-    console.error('usage: operator show [n] | run | probe');
+    console.error('usage: operator show [n] | run | probe | engineering | commission <dfx_id>');
     process.exitCode = 2;
   }
 } finally {

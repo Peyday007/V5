@@ -1217,6 +1217,22 @@ export async function retireBin(input: {
  * reach that state would give every existing caller a power none of them mean
  * to have.
  */
+/**
+ * Re-prioritize a Factory campaign's *waiting* bins (§109): READY or DRAFT,
+ * never LEASED — work in progress keeps what it has, since interrupting it
+ * would waste more than the reorder saves. One statement; the state guard is
+ * in it, so a bin leased between the read and the write is not touched.
+ */
+export async function reprioritizeWaitingCampaignBins(campaignId: string, priority: number): Promise<number> {
+  const bounded = Math.min(9, Math.max(0, Math.trunc(priority)));
+  const result = await getDb().run(
+    `UPDATE bins SET priority = ?, updated_at = ?
+      WHERE factory_campaign_id = ? AND state IN ('READY', 'DRAFT') AND priority <> ?`,
+    [bounded, binNow(), campaignId, bounded],
+  );
+  return Number(result.changes ?? 0);
+}
+
 export async function markBinReady(id: string): Promise<Bin | null> {
   const at = binNow();
   const result = await getDb().run(

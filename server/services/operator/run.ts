@@ -40,6 +40,7 @@ import { recordIntegrationEvent } from '../../repos/integrationEvents.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { OPERATOR_SCOPES } from '../../domain/types.ts';
 import {
+  OPERATOR_BOOT_GRACE_MINUTES,
   OPERATOR_HERMES_TOOLSETS,
   OPERATOR_MAX_TURNS,
   OPERATOR_RUN_BUDGET_SECONDS,
@@ -151,7 +152,24 @@ let inFlight: Promise<void> | null = null;
 const processStartedMs = Date.now();
 
 /** The tick's call: start a run when one is due. Never awaits the run itself. */
+const DIRECTOR_EVERY_MS = 5 * 60_000;
+let lastDirectorMs = 0;
+
+/**
+ * §109: deliver engineering outcomes to the operator's record, and let Brain's standing
+ * director act on a goal-blocking engineering deficiency the operator's runs could not.
+ * Rows only; runs whether or not the operator app is connected, after the boot grace.
+ */
+async function directorTick(nowMs: number): Promise<void> {
+  if (nowMs - lastDirectorMs < DIRECTOR_EVERY_MS || nowMs - processStartedMs < OPERATOR_BOOT_GRACE_MINUTES * 60_000) return;
+  lastDirectorMs = nowMs;
+  const { directorPass, standingCommission } = await import('./director.ts');
+  await directorPass().catch((error: unknown) => console.warn(`operator director pass: ${String((error as Error)?.message ?? error)}`));
+  await standingCommission(new Date(nowMs)).catch((error: unknown) => console.warn(`operator standing director: ${String((error as Error)?.message ?? error)}`));
+}
+
 export async function operatorTickIfDue(nowMs = Date.now(), env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
+  if (!inFlight) await directorTick(nowMs);
   const config = operatorConfig(env);
   if (!config || inFlight) return null;
   // A run this process did not start (a restart cut its stream): collect its result from the app.
@@ -160,7 +178,9 @@ export async function operatorTickIfDue(nowMs = Date.now(), env: NodeJS.ProcessE
   const running = await runningOperatorRun();
   const last = (await recentOperatorRuns(1))[0] ?? null;
   const lastActedNothing = last !== null && last.state === 'FAILED' && !last.toolCalls.some((c) => c.ok && c.tool.includes('brain_operator_'));
-  if (!operatorDue({ lastStartedAt: last?.startedAt ?? null, running: running !== null, nowMs, intervalMinutes: operatorIntervalMinutes(env), processStartedMs, lastActedNothing })) {
+  const { unseenOutcomeSince } = await import('./director.ts');
+  const outcomeWaiting = await unseenOutcomeSince(last?.startedAt ?? null).catch(() => false);
+  if (!operatorDue({ lastStartedAt: last?.startedAt ?? null, running: running !== null, nowMs, intervalMinutes: operatorIntervalMinutes(env), processStartedMs, lastActedNothing, outcomeWaiting })) {
     return null;
   }
   const models = await modelsFor(env);
@@ -299,9 +319,12 @@ async function performRun(runId: string, config: OperatorConfig, models: Operato
     const { operatorSnapshot, snapshotForBrief } = await import('./snapshot.ts');
     const projectIds = (await listProjects()).map((p) => p.id);
     const snapshot = await operatorSnapshot(projectIds, { fresh: true });
+    // §109: what Factory did with what the operator commissioned, and the deficiencies the rows show.
+    const { engineeringBrief } = await import('./director.ts');
+    const engineering = await engineeringBrief().catch(() => '');
     const body = {
       runId,
-      prompt: operatorBrief({ nowIso: new Date().toISOString(), runId, goals: snapshotForBrief(snapshot) }),
+      prompt: operatorBrief({ nowIso: new Date().toISOString(), runId, goals: snapshotForBrief(snapshot), engineering: engineering || undefined }),
       models: models.map((m) => ({ baseUrl: m.baseUrl, model: m.model, apiKey: m.apiKey, ...(m.contextLength ? { contextLength: m.contextLength } : {}) })),
       mcp: { url: `${config.brainUrl}/mcp`, token: issued.plaintext, tools: [...OPERATOR_TOOL_NAMES] },
       toolsets: [...OPERATOR_HERMES_TOOLSETS],

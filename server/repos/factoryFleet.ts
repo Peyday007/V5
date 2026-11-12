@@ -371,6 +371,22 @@ export async function workerLoad(): Promise<Map<string, number>> {
   return new Map(rows.map((r) => [r.worker_id, Number(r.running)]));
 }
 
+/**
+ * Each worker's demonstrated record (§109): sessions it finished and sessions
+ * that failed, over the window. A rate limit or an abandonment says nothing
+ * about the worker's ability and is not counted.
+ */
+export async function workerTrackRecord(sinceIso: string): Promise<Map<string, { finished: number; failed: number }>> {
+  const rows = await getDb().all<{ worker_id: string; finished: number; failed: number }>(
+    `SELECT worker_id,
+            SUM(CASE WHEN state = 'FINISHED' THEN 1 ELSE 0 END) AS finished,
+            SUM(CASE WHEN state = 'FAILED' THEN 1 ELSE 0 END) AS failed
+       FROM factory_sessions WHERE started_at >= ? GROUP BY worker_id`,
+    [sinceIso],
+  );
+  return new Map(rows.map((r) => [r.worker_id, { finished: Number(r.finished), failed: Number(r.failed) }]));
+}
+
 /* ------------------------------------------------------------------------- */
 /* Sessions                                                                   */
 /* ------------------------------------------------------------------------- */

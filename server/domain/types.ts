@@ -528,6 +528,11 @@ export const EVENT_TYPES = [
   'OPERATOR_DECISION_VERIFIED',
   /** The operator paused or resumed a goal to move capacity, under a recorded decision (§108). */
   'OPERATOR_GOAL_FOCUS',
+  // §109: Hermes as engineering director.
+  'OPERATOR_INTERVENTION_DECIDED',
+  'OPERATOR_ENGINEERING_COMMISSIONED',
+  'OPERATOR_ENGINEERING_PRIORITIZED',
+  'OPERATOR_ENGINEERING_OUTCOME',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

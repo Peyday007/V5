@@ -62,6 +62,7 @@ import { BRAIN_PROJECT_SLUG, BRAIN_REPOSITORY_ID } from '../../domain/binPurpose
 import { RELEASE_EXCLUDED_PATHS } from '../../domain/factoryRelease.ts';
 import { claimRejections, freeLaneFailures, ownerInterventions, packetOutcomes, readMetric } from './scoreboard.ts';
 import { improvementPerson, improvementSwitch } from './authority.ts';
+import { ROUTING_MARKER } from '../../domain/engineeringDirector.ts';
 import type { ExistingMatch } from '../selfmodel/gapLoop.ts';
 import type { ValueJudgment } from '../selfmodel/gapValue.ts';
 
@@ -523,6 +524,7 @@ export function composeObjective(
       ? `Brain originated this from its own observation of the rows (${String((candidate.evidence['origination'] as { family?: string }).family ?? '')}): ${String((candidate.evidence['origination'] as { judgment?: string }).judgment ?? '')} `
       : '') +
     (candidate.evidence['knownCause'] ? `Diagnosis from the rows: ${String(candidate.evidence['knownCause'])} ` : '') +
+    directiveSentence(candidate) +
     `Recorded failure reasons, verbatim: ${samples.map((s) => JSON.stringify(s)).join('; ')}. ` +
     (methods.length
       ? `Accepted method research Brain holds that bears on it: ${methods.map((m) => `${m.claim} (${m.source ?? 'no source'})`).join(' | ')}. `
@@ -551,6 +553,7 @@ export function composeObjective(
         verification: 'npm test',
       },
       { statement: 'The repository typechecks and the impacted tests pass.', verification: 'npm run typecheck && npm run test:impacted' },
+      ...directiveAcceptance(candidate),
       /*
        * No production-measurement condition here. Production, 2026-11-04: campaign
        * fcp_f648380f… blocked two units on "A03 is a post-deploy measurement and
@@ -562,6 +565,82 @@ export function composeObjective(
     // From the paths, not the prose: the prose says "production" (see riskForScope).
     riskClass: riskForScope(scope, RELEASE_EXCLUDED_PATHS),
   };
+}
+
+/**
+ * The operator's directive on a candidate it commissioned (§109), as the objective states it:
+ * the goal it serves, the benefit expected, the priority and why, and how the real effect is
+ * judged. Empty for every candidate a detector raised.
+ */
+export interface Directive {
+  origin: 'OPERATOR';
+  runId: string | null;
+  goalId: string | null;
+  goalTitle: string | null;
+  deficiency: string;
+  intervention: string;
+  expectedBenefit: string;
+  acceptance: string;
+  priority: number;
+  urgency: string;
+  priorityWhy: string;
+  complexity: string;
+  minimumModelClass: 'STRONGEST' | 'FAST';
+  routeWhy: string;
+  evaluation: string;
+}
+
+export function directiveOf(candidate: Pick<ImprovementCandidate, 'evidence'>): Directive | null {
+  const value = candidate.evidence['directive'];
+  return value && typeof value === 'object' && (value as { origin?: unknown }).origin === 'OPERATOR' ? (value as Directive) : null;
+}
+
+function directiveSentence(candidate: ImprovementCandidate): string {
+  const d = directiveOf(candidate);
+  if (!d) return '';
+  return (
+    `Commissioned by Brain's operator${d.runId ? ` (run ${d.runId})` : ''} as a ${d.deficiency} deficiency` +
+    (d.goalId ? ` holding back goal ${d.goalId}${d.goalTitle ? ` ("${d.goalTitle.slice(0, 120)}")` : ''}` : '') +
+    `. Expected benefit: ${d.expectedBenefit} Priority ${d.priority} (${d.urgency}): ${d.priorityWhy}. ` +
+    `How its real effect is judged: ${d.evaluation} ` +
+    (d.minimumModelClass === 'STRONGEST' ? `${ROUTING_MARKER} (${d.routeWhy}) ` : '')
+  );
+}
+
+function directiveAcceptance(candidate: ImprovementCandidate): { statement: string; verification: string }[] {
+  const d = directiveOf(candidate);
+  return d ? [{ statement: d.acceptance.slice(0, 600), verification: 'npm run test:impacted' }] : [];
+}
+
+/**
+ * Register a weakness the operator diagnosed (§109) — the same register, the same family rules,
+ * the same combination by owner as a detector's — and return its live candidate.
+ */
+export async function registerDirected(weakness: Weakness, now = new Date()): Promise<{ candidate: ImprovementCandidate; created: boolean; report: ImprovementTickReport }> {
+  const report: ImprovementTickReport = { ran: true, reason: 'directed', detected: 1, opened: [], advanced: [], decided: [], alerts: [], errors: [] };
+  await register(weakness, now, report);
+  const members = await family(weakness.key);
+  const latest = members.at(-1);
+  if (!latest) throw new Error('The directed candidate was not registered.');
+  return { candidate: latest, created: report.opened.length > 0, report };
+}
+
+/**
+ * Advance one candidate now, outside the ten-minute tick: an authorized assignment is admitted
+ * the moment it exists (§109). The same `advance` the tick runs, with the same one-objective-per-
+ * owner rule, so a candidate whose owner is busy waits for the tick exactly as it would anyway.
+ */
+export async function advanceNow(candidateId: string, now = new Date()): Promise<{ did: string | null; report: ImprovementTickReport }> {
+  const report: ImprovementTickReport = { ran: true, reason: 'directed', detected: 0, opened: [], advanced: [], decided: [], alerts: [], errors: [] };
+  const state = await improvementSwitch();
+  if (!state.enabled) return { did: 'not advanced: the improvement order is switched off', report };
+  const candidate = await getCandidate(candidateId);
+  if (!candidate || candidate.decision) return { did: null, report };
+  const open = await listCandidates({ open: true });
+  const busyOwners = new Set(open.filter((c) => c.id !== candidate.id && c.changeRequestId && !c.deliveredAt).map((c) => c.ownerComponent));
+  const did = await advance(candidate, busyOwners, now, report);
+  if (did) report.advanced.push(`${candidate.weaknessKey}: ${did}`);
+  return { did, report };
 }
 
 export async function brainFactoryProject(): Promise<string | null> {
@@ -947,7 +1026,20 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
       }
       // Then the next step is valued (step 4): every option the existing owners can carry out, compared on
       // expected value, cost, latency, opportunity cost and dependencies, and the best one is taken.
-      const judgment = await valueNextStep(candidate, link, stage as 'DIAGNOSE' | 'ENGINEER', found);
+      const valued = await valueNextStep(candidate, link, stage as 'DIAGNOSE' | 'ENGINEER', found);
+      // The operator's director already decided the intervention from the diagnosis (§109,
+      // `decideIntervention`): engineering goes to Factory, evidence to method research. The
+      // valuation is still recorded beside it, so a disagreement is visible in the gap loop.
+      const directive = directiveOf(candidate);
+      const directed =
+        directive?.intervention === 'ENGINEERING' && stage === 'ENGINEER'
+          ? 'FACTORY_CHANGE'
+          : directive?.intervention === 'EVIDENCE' && !candidate.researchGoalId
+            ? 'COMMISSION_RESEARCH'
+            : null;
+      const judgment: ValueJudgment = directed
+        ? { ...valued, chosen: directed, basis: `Operator directive (${directive!.deficiency}, priority ${directive!.priority}): ${directed}. Brain's valuation chose ${valued.chosen}: ${valued.basis}`.slice(0, 1000) }
+        : valued;
       const needsSlot = judgment.chosen === 'FACTORY_CHANGE' || judgment.chosen === 'REUSE_EXISTING';
       // One live engineering objective per owner component: a chosen change waits while another holds it.
       if (needsSlot && busyOwners.has(candidate.ownerComponent)) return null;

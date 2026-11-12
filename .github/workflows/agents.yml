@@ -42,7 +42,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prove | sales | sales-prove | disconnect | operator-deploy | operator-status | operator-run | operator-show | operator-disconnect'
+        description: 'deploy | status | prove | sales | sales-prove | disconnect | operator-deploy | operator-status | operator-run | operator-show | operator-engineering | operator-disconnect'
         required: true
         default: status
 
@@ -192,6 +192,9 @@ jobs:
               ;;
             operator-show)
               on_brain "node --import tsx scripts/operator.ts show 8"
+              ;;
+            operator-engineering)
+              on_brain "node --import tsx scripts/operator.ts engineering"
               ;;
             operator-disconnect)
               flyctl secrets unset --app "$brain" BRAIN_OPERATOR_URL BRAIN_OPERATOR_KEY >/dev/null

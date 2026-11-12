@@ -15877,3 +15877,87 @@ whose prediction is judged later.
 Tests: `tests/modelBench.test.ts`, `tests/operatorDecisions.test.ts`,
 `tests/runpodRestore.test.ts`. Runs: `cheap-lane.yml runpod-survey |
 runpod-bench | runpod-upgrade`.
+
+## 109. The operator directs engineering, and a merged pull request is not the improvement.
+
+**Owner's order, 2026-11-12.** "Hermes must act as Brain's executive operator,
+diagnosing weaknesses in Brain's reasoning, software, strategies and operations,
+then directing engineering resources to fix them without owner intervention …
+REUSE THESE SYSTEMS. DO NOT BUILD A PARALLEL FACTORY … Do not turn every problem
+into a coding assignment … Do not treat a merged pull request as proof that
+Brain's reasoning or commercial performance improved."
+
+**What was missing.** §106 gave the operator `brain_operator_submit_fix`, which
+called `submitObjective` and `approveAndStartCampaign` directly: no register row,
+so naming the defect twice was deduplicated only by title; no priority beyond
+Factory's defaults; no worker class; no measurement after delivery; and nothing
+came back — the operator never learned whether its fix shipped, let alone
+whether the goal moved. §87's loop had all of the missing half (one row per
+defect, research-before-engineering, the baseline, the measurement, KEPT /
+REVERTED, at most three attempts) and the operator did not use it.
+
+**The shape** (`domain/engineeringDirector.ts` pure, `services/operator/director.ts`):
+
+- **Diagnose.** `brain_operator_deficiencies` reads what the rows already show
+  — a goal held on a person by moot cards that keep returning, operator runs
+  failing on the model, an improvement kind that keeps ending without effect —
+  each as a ready-made diagnosis with an id. A free model chooses; it does not
+  have to discover. It may also describe its own diagnosis.
+- **Decide the intervention** (`decideIntervention`). PERSON when only a person
+  holds what is missing; MODEL when the failure is a model's output; CAPACITY
+  when work waits beside idle capacity and continuing it has not been tried;
+  EVIDENCE when the cause is not established; WATCH when it was seen once;
+  STRATEGY when no code owns it; ENGINEERING only for an established, owned,
+  recurring cause. A less invasive proposal is honoured; engineering the rows
+  do not support is overruled with the reason (`OPERATOR_INTERVENTION_DECIDED`).
+- **Commission, and acknowledge in the same call.** `brain_operator_commission`
+  registers the defect in §87's register (`registerDirected`, keyed
+  `OPERATOR:<class>:<hash(goal, owner paths)>`, so the same defect twice is one
+  campaign) with a directive — the goal, the evidence, the expected benefit,
+  the acceptance, the priority and why, the worker class and why, and how the
+  effect is judged — and advances it **now** (`advanceNow`), not at the next
+  ten-minute tick: `submitObjective`, `approveAndStartCampaign` on the owner's
+  standing order, the LOW-risk release grant, exactly as the loop does. The
+  directive is written into the objective and its acceptance conditions.
+  `brain_operator_submit_fix` is the same path.
+- **Priority from what the defect holds back** (`engineeringPriority`): the goal's
+  remaining value × the share the defect blocks ÷ days left, log-scaled to
+  Factory's 1..9, raised for a defect that blocks the goal outright or keeps
+  recurring. No equal shares, no favourite goal. Applied to the campaign's
+  waiting bins only (`reprioritizeWaitingCampaignBins`: READY or DRAFT, in the
+  statement); a leased bin keeps what it has. `brain_operator_prioritize_engineering`
+  changes it with a reason.
+- **Routing to a worker that can do it** (`routeEngineering`). Brain's economic or
+  planning reasoning, strategy, allocation and algorithms, a wide or risky
+  scope, a second attempt, or an immediate urgency is ARCHITECTURAL: the
+  objective carries `ROUTING_MARKER`, the planner holds every unit STRONGEST,
+  and `scheduler.chooseWorker` **refuses** a FAST worker for a unit marked
+  STRONGEST rather than settling for it because it is free. A bounded fix is
+  FAST work, and the scheduler prefers the cheaper class and the worker with
+  the better 30-day record (`workerTrackRecord`: sessions finished vs failed).
+  No new coding agent: Factory's registry and executors are the surfaces.
+- **The result comes back** (`brain_operator_engineering`, `directorPass`):
+  Factory's status, the pull request, the paths its units own, the
+  verification and review units, merge, deploy, live verification, §87's
+  measurement and decision, and the goal read again (`goalMark`: state, what it
+  waits on, settled cash, best reach, ladder, blockers, moot requests) against
+  the reading stored when it was commissioned. `judgeEngineering` calls a merge
+  without measurement DELIVERED_UNMEASURED; RESOLVED needs KEPT on an improved
+  metric, and a resolved defect whose goal did not move says CHANGE_STRATEGY.
+  Every change is an `OPERATOR_ENGINEERING_OUTCOME` event, and an outcome the
+  operator has not seen starts its next run ten minutes after the last
+  (`operatorDue … outcomeWaiting`) instead of at the hour; the brief carries
+  the outcomes and the deficiencies.
+- **It survives what breaks.** Every step is a row: the candidate, its
+  directive and goal baseline, the Factory campaign, the outcome events. A
+  restart, a failed worker, a model that stopped mid-run, a deploy: the next
+  pass reads where it got to. When the operator's last two runs acted on
+  nothing (the free model rate-limited, overflowed or failed — production
+  2026-11-12, most runs that day), Brain's **standing director**
+  (`standingCommission`) commissions a goal-blocking ENGINEERING deficiency
+  itself and records the lesson; it never does more than that, and never a
+  second campaign.
+
+`npm run operator -- engineering` (and `agents.yml operator-engineering`) prints
+every commissioned intervention with its Factory facts, measurement and goal
+effect, and the deficiencies the rows show. Tests: `tests/engineeringDirector.test.ts`.
