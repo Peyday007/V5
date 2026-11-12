@@ -263,12 +263,23 @@ async function ingestUnitsBin(
     report.notes.push(`"${changeRequest.repository}" is not a repository this Brain can read.`);
     return false;
   }
+  /*
+   * Asked of the units first, because it is the cheap question and almost
+   * always the final one. A completed units bin is offered to this function on
+   * every tick for as long as its campaign is live, and every unit it reported
+   * is past READY after the first pass — so reading its results and three
+   * identity rows before learning that was five statements per bin per tick
+   * for nothing. Production, 2026-11-12: 5,227 `bin_unit_results` reads in 50
+   * minutes, the event loop stalled past 20s, and a goal read after a restart
+   * went unanswered for 240s.
+   */
+  const units = await listUnits(campaign.id);
+  if (!units.some((unit) => unit.state === 'READY')) return false;
   const { reports, problems } = await readUnitReports(bin.id);
   for (const problem of problems) report.notes.push(problem);
   if (reports.size === 0) return false;
   const who = await binIdentity(bin);
 
-  const units = await listUnits(campaign.id);
   let moved = 0;
   for (const [key, unitReport] of reports) {
     const unit = units.find((candidate) => candidate.unitKey === key);
@@ -429,14 +440,15 @@ async function ingestReviewBin(
   bin: Bin,
   report: RemoteTickReport,
 ): Promise<boolean> {
-  const round = (await listReviews(campaign.id)).length + 1;
+  const reviews = await listReviews(campaign.id);
+  const round = reviews.length + 1;
   const review = await readReviewReport(bin.id);
   if (!review.ok) {
     report.notes.push(`The review bin ${bin.id} completed without a usable review.`);
     await noteReviewRefused(campaign, bin, 'the bin completed without a usable review');
     return false;
   }
-  const already = (await listReviews(campaign.id)).some(
+  const already = reviews.some(
     (row) => row.reviewedSha === review.value.reviewedSha && row.verdict === review.value.verdict,
   );
   if (already) return false;
@@ -929,7 +941,6 @@ async function ingestIntegrateBin(
     });
     return false;
   }
-  const who = await binIdentity(bin);
   const units = await listUnits(campaign.id);
   const implemented = units.filter((unit) => unit.state === 'IMPLEMENTED' && unit.headSha !== null);
   /*
@@ -946,6 +957,8 @@ async function ingestIntegrateBin(
    */
   if (implemented.length === 0) return false;
   if (await integrationAlreadyIngested(campaign.id, bin.id)) return false;
+  // Read only once the bin has something to ingest; see `ingestUnitsBin`.
+  const who = await binIdentity(bin);
 
   if (parsed.value.outcome === 'BLOCKED') {
     const failed = parsed.value.commands.filter((command) => command.exitCode !== 0);
