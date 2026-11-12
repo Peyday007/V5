@@ -126,6 +126,8 @@ const processStartedMs = Date.now();
 export async function operatorTickIfDue(nowMs = Date.now(), env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
   const config = operatorConfig(env);
   if (!config || inFlight) return null;
+  // A run this process did not start (a restart cut its stream): collect its result from the app.
+  await collectOrphanedRuns(config);
   await failStaleOperatorRuns(new Date(nowMs - OPERATOR_RUN_TIMEOUT_MINUTES * 60_000).toISOString());
   const running = await runningOperatorRun();
   const last = (await recentOperatorRuns(1))[0] ?? null;
@@ -184,6 +186,12 @@ export function parseOperatorStream(text: string): OperatorResult {
         ...(typeof event['error'] === 'string' && event['error'] ? { error: event['error'].slice(0, 300) } : {}),
       });
     } else if (event['type'] === 'result') {
+      // A result collected after a restart carries its tool events itself.
+      if (calls.length === 0 && Array.isArray(event['toolEvents'])) {
+        for (const one of event['toolEvents'] as Record<string, unknown>[]) {
+          if (typeof one['tool'] === 'string') calls.push({ tool: one['tool'].slice(0, 120), ok: one['ok'] !== false, ...(typeof one['error'] === 'string' && one['error'] ? { error: one['error'].slice(0, 300) } : {}) });
+        }
+      }
       const memory = event['memory'] && typeof event['memory'] === 'object' ? (event['memory'] as Record<string, string>) : {};
       result = {
         final: typeof event['final'] === 'string' ? event['final'] : null,
@@ -196,6 +204,57 @@ export function parseOperatorStream(text: string): OperatorResult {
     }
   }
   return result ?? { final: null, toolCalls: calls, memory: {}, model: null, error: 'the operator ended without a result' };
+}
+
+/**
+ * Production, 2026-11-12 (opr_a3690c66): the run reached Brain and acted — a
+ * continued idle pool, goal reads — and a deploy restarted Brain mid-run, so
+ * its report and memory never arrived and the run read FAILED. The app finishes
+ * a run whatever happens to the stream and keeps the result; this collects it.
+ */
+async function collectOrphanedRuns(config: OperatorConfig): Promise<void> {
+  const running = await runningOperatorRun();
+  if (!running || inFlight) return;
+  try {
+    const res = await fetch(`${config.url}/v1/operator/runs/${running.id}`, {
+      headers: { authorization: `Bearer ${config.key}` },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) return;
+    await recordResult(running.id, parseOperatorStream(JSON.stringify(await res.json())), running.model, 'collected after a restart');
+  } catch {
+    /* the app is stopped or still working; failStaleOperatorRuns bounds the wait */
+  }
+}
+
+async function recordResult(runId: string, result: OperatorResult, modelLabel: string, how: string): Promise<boolean> {
+  // A run whose every Brain call failed directed nothing, whatever its report says.
+  const brainCalls = result.toolCalls.filter((c) => c.tool.includes('brain_operator_'));
+  if (result.error === null && brainCalls.length > 0 && brainCalls.every((c) => !c.ok)) {
+    result.error = `every Brain tool call failed (${brainCalls.length})${result.preflight ? `; preflight: ${result.preflight}` : ''}`;
+  }
+  const ok = result.error === null && result.final !== null;
+  const stored = await storeOperatorMemory(runId, result.memory);
+  const finished = await finishOperatorRun({ id: runId, state: ok ? 'DONE' : 'FAILED', summary: result.final, toolCalls: result.toolCalls, error: result.error });
+  if (!finished) return false;
+  await recordIntegrationEvent({
+    integrationId: OPERATOR_INTEGRATION,
+    kind: 'USAGE',
+    state: ok ? 'RUN_DONE' : 'RUN_FAILED',
+    detail: `run ${runId} on ${result.model ?? modelLabel} (${how}): ${result.toolCalls.length} tool call(s), ${stored} memory entr(ies), MCP preflight ${result.preflight ?? 'not reported'}${result.error ? `; ${result.error}` : ''}`,
+    source: 'operator tick',
+  });
+  const anchor = (await listProjects())[0];
+  if (anchor) {
+    await recordEvent({
+      projectId: anchor.id,
+      entityType: 'PROJECT',
+      entityId: anchor.id,
+      eventType: 'OPERATOR_RUN_FINISHED',
+      payload: { runId, ok, how, model: result.model, tools: result.toolCalls.map((c) => c.tool), summary: result.final?.slice(0, 1500) ?? null, error: result.error },
+    });
+  }
+  return true;
 }
 
 async function performRun(runId: string, config: OperatorConfig, models: OperatorModel[]): Promise<void> {
@@ -230,32 +289,7 @@ async function performRun(runId: string, config: OperatorConfig, models: Operato
     const text = await res.text();
     if (!res.ok) throw new Error(`operator answered HTTP ${res.status}: ${text.slice(0, 300)}`);
     const result = parseOperatorStream(text);
-    const stored = await storeOperatorMemory(runId, result.memory);
-    // A run whose every Brain call failed directed nothing, whatever its report says.
-    const brainCalls = result.toolCalls.filter((c) => c.tool.includes('brain_operator_'));
-    if (result.error === null && brainCalls.length > 0 && brainCalls.every((c) => !c.ok)) {
-      result.error = `every Brain tool call failed (${brainCalls.length})${result.preflight ? `; preflight: ${result.preflight}` : ''}`;
-    }
-    const ok = result.error === null && result.final !== null;
-    await finishOperatorRun({ id: runId, state: ok ? 'DONE' : 'FAILED', summary: result.final, toolCalls: result.toolCalls, error: result.error });
-    await recordIntegrationEvent({
-      integrationId: OPERATOR_INTEGRATION,
-      kind: 'USAGE',
-      state: ok ? 'RUN_DONE' : 'RUN_FAILED',
-      detail: `run ${runId} on ${result.model ?? models[0]!.label}: ${result.toolCalls.length} tool call(s), ${stored} memory entr(ies), MCP preflight ${result.preflight ?? 'not reported'}${result.error ? `; ${result.error}` : ''}`,
-      source: 'operator tick',
-    });
-    const projects = await listProjects();
-    const anchor = projects[0];
-    if (anchor) {
-      await recordEvent({
-        projectId: anchor.id,
-        entityType: 'PROJECT',
-        entityId: anchor.id,
-        eventType: 'OPERATOR_RUN_FINISHED',
-        payload: { runId, ok, model: result.model, tools: result.toolCalls.map((c) => c.tool), summary: result.final?.slice(0, 1500) ?? null, error: result.error },
-      });
-    }
+    await recordResult(runId, result, models[0]!.label, 'streamed');
   } catch (error) {
     const message = (error as Error).message ?? String(error);
     await finishOperatorRun({ id: runId, state: 'FAILED', summary: null, toolCalls: [], error: message });
