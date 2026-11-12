@@ -9,13 +9,14 @@ import { describe, expect, it } from 'vitest';
 import { reconstruct } from '../server/services/quant/reconstruct.ts';
 import { collapseLineage, classify, onScale, pool } from '../server/services/quant/pool.ts';
 import { composeArrangement } from '../server/services/quant/mechanism.ts';
-import { optimizePortfolio, type Activity } from '../server/services/quant/portfolio.ts';
+import { compareReadings, optimizePortfolio, tieObjective, type Activity, type PortfolioReading } from '../server/services/quant/portfolio.ts';
 import { informationValue } from '../server/services/quant/value.ts';
-import { decideResearch } from '../server/services/quant/deadline.ts';
+import { attributeFunding, capitalTurnover, decideResearch, observedCollectionRate, quantifyRouteMoney, rankByObjective, routeInputsFromEntries, scoreRoutes, CASH_IDENTITIES } from '../server/services/quant/deadline.ts';
 import { toScenarioInput } from '../server/services/quant/export.ts';
 import { solveProblem, type QuantProblem } from '../server/services/quant/problem.ts';
 import { runScenarioModel } from '../server/services/scenario/run.ts';
 import type { Observation, QuantityNode } from '../server/domain/quant.ts';
+import type { CashMoneyEntry } from '../server/domain/types.ts';
 
 const now = new Date('2026-10-31T00:00:00Z');
 const src = (ref: string) => ({ kind: 'URL' as const, ref });
@@ -437,5 +438,402 @@ describe('R. a spending ceiling binds on the world, not the average (prepaid loc
   it('refuses spend samples that are not paired with the cash', () => {
     const act: Activity = { key: 'x', label: 'x', justified: true, cash: [1, 2, 3], days: [1, 1, 1], spend: [1] };
     expect(() => optimizePortfolio({ target: 1, deadlineDays: 30, activities: [act] })).toThrow(/paired/);
+  });
+});
+
+describe('MONEY-13-4. route money velocity and distinct cash identities (equipment rental, wedding catering, SaaS resale)', () => {
+  it('walks outflows and receipts in time order for peak working capital, receivables and usable cash', () => {
+    const m = quantifyRouteMoney({
+      routeKey: 'equipment-rental',
+      leadAt: '2026-01-01T00:00:00Z',
+      commitmentAt: '2026-01-11T00:00:00Z',
+      usableCashAt: '2026-01-16T00:00:00Z',
+      events: [
+        { at: '2026-01-11T00:00:00Z', kind: 'BILLING', amount: 1_000 },
+        { at: '2026-01-12T00:00:00Z', kind: 'SUPPLIER_OUTLAY', amount: 300, fundedBy: 'SELF' },
+        { at: '2026-01-13T00:00:00Z', kind: 'SUPPLIER_OUTLAY', amount: 200, fundedBy: 'CUSTOMER' },
+        // Receipt dated with an offset: string order would put it after the outlays it precedes in time.
+        { at: '2026-01-14T01:00:00+02:00', kind: 'FUNDS_RECEIVED', amount: 600 },
+        { at: '2026-01-15T00:00:00Z', kind: 'SUPPLIER_OUTLAY', amount: 400 },
+      ],
+    });
+    expect(m.customerFundedSpend).toBe(200);
+    expect(m.selfFundedSpend).toBe(300);
+    expect(m.unattributedSpend).toBe(400);
+    expect(m.daysLeadToCommitment).toBe(10);
+    expect(m.daysCommitmentToFunds).toBeCloseTo(2 + 23 / 24, 9);
+    expect(m.daysFundsToUsableCash).toBeCloseTo(2 + 1 / 24, 9);
+    expect(m.receivables).toBe(400);
+    // -300, -500 (low), +600 → 100, -400 → -300: the deepest overlap is 500.
+    expect(m.peakWorkingCapital).toBe(500);
+    expect(m.usableCash).toBe(600);
+    expect(m.excludedFromUsable).toBe(0);
+    expect(m.supplierOutlays.map((o) => o.amount)).toEqual([300, 200, 400]);
+    expect(m.unknowns).toContain('some supplier outlays do not say who funded them');
+  });
+
+  it('orders same-instant movements drain-first so the peak is never understated', () => {
+    const m = quantifyRouteMoney({ routeKey: 'same-day', events: [
+      { at: '2026-03-01T00:00:00Z', kind: 'FUNDS_RECEIVED', amount: 100 },
+      { at: '2026-03-01T00:00:00Z', kind: 'SUPPLIER_OUTLAY', amount: 250, fundedBy: 'SELF' },
+    ] });
+    expect(m.peakWorkingCapital).toBe(250);
+  });
+
+  it('treats an advance received beyond billings as zero receivables, never negative', () => {
+    const m = quantifyRouteMoney({ routeKey: 'catering-deposit', events: [
+      { at: '2026-02-01T00:00:00Z', kind: 'BILLING', amount: 500 },
+      { at: '2026-02-01T00:00:00Z', kind: 'FUNDS_RECEIVED', amount: 800 },
+    ] });
+    expect(m.receivables).toBe(0);
+  });
+
+  it('leaves an absent side unknown rather than zero', () => {
+    const m = quantifyRouteMoney({ routeKey: 'no-receipts', events: [{ at: '2026-02-01T00:00:00Z', kind: 'BILLING', amount: 500 }] });
+    expect(m.receivables).toBeNull();
+    expect(m.usableCash).toBeNull();
+    expect(m.peakWorkingCapital).toBeNull();
+    expect(m.customerFundedSpend).toBeNull();
+    expect(m.daysLeadToCommitment).toBeNull();
+    expect(m.unknowns).toEqual(expect.arrayContaining([
+      'no funds-received row, receivables unknown',
+      'no funds-received row, usable cash unknown',
+      'no outflow rows, peak working capital unknown',
+      'lead-to-commitment time not stated',
+    ]));
+  });
+
+  it('subtracts a refund of encumbered money once, and reports refunds beyond receipts as a liability', () => {
+    const m = quantifyRouteMoney({ routeKey: 'refundable-deposit', events: [
+      { at: '2026-04-01T00:00:00Z', kind: 'FUNDS_RECEIVED', amount: 1_000 },
+      { at: '2026-04-01T00:00:00Z', kind: 'FUNDS_RECEIVED', amount: 400, encumbered: true },
+      { at: '2026-04-05T00:00:00Z', kind: 'REFUND', amount: 150 },
+      { at: '2026-04-06T00:00:00Z', kind: 'CHARGEBACK', amount: 50 },
+    ] });
+    expect(m.refundsAndChargebacks).toBe(200);
+    // 1400 received; 200 refunded out of the 400 encumbered; 200 still encumbered.
+    expect(m.usableCash).toBe(1_000);
+    expect(m.excludedFromUsable).toBe(400);
+    expect((m.usableCash ?? 0) + m.excludedFromUsable).toBe(1_400);
+
+    const over = quantifyRouteMoney({ routeKey: 'over-refunded', events: [
+      { at: '2026-04-01T00:00:00Z', kind: 'FUNDS_RECEIVED', amount: 100 },
+      { at: '2026-04-02T00:00:00Z', kind: 'REFUND', amount: 180 },
+    ] });
+    expect(over.usableCash).toBe(-80);
+    expect(over.unknowns.some((u) => u.includes('exceed funds received by 80'))).toBe(true);
+  });
+
+  it('flags a stage dated backwards as inconsistent, not absent', () => {
+    const m = quantifyRouteMoney({ routeKey: 'bad-dates', leadAt: '2026-05-10T00:00:00Z', commitmentAt: '2026-05-01T00:00:00Z', events: [] });
+    expect(m.daysLeadToCommitment).toBeNull();
+    expect(m.unknowns).toContain('lead-to-commitment time is inconsistent: the later event is dated before the earlier one');
+  });
+
+  it('keeps the nine cash identities distinct: rows override stated figures, nothing derives one from another', () => {
+    const m = quantifyRouteMoney({
+      routeKey: 'saas-resale',
+      events: [
+        { at: '2026-06-01T00:00:00Z', kind: 'BILLING', amount: 900 },
+        { at: '2026-06-02T00:00:00Z', kind: 'FUNDS_RECEIVED', amount: 700 },
+      ],
+      identities: { GROSS_BILLINGS: 1_234, NET_PROFIT: -50, BORROWED_PROCEEDS: 5_000, OWNER_DISTRIBUTIONS: -10 },
+    });
+    expect(Object.keys(m.identities).sort()).toEqual([...CASH_IDENTITIES].sort());
+    expect(m.identities.GROSS_BILLINGS).toBe(900);
+    expect(m.identities.SETTLED_CASH).toBe(700);
+    expect(m.identities.USABLE_CASH).toBe(700);
+    expect(m.identities.NET_PROFIT).toBe(-50);
+    expect(m.identities.BORROWED_PROCEEDS).toBe(5_000);
+    // Borrowed money never becomes retained cash, profit or enterprise value.
+    expect(m.identities.RETAINED_CASH).toBeNull();
+    expect(m.identities.ENTERPRISE_VALUE).toBeNull();
+    expect(m.identities.GROSS_MARGIN).toBeNull();
+    expect(m.identities.OWNER_DISTRIBUTIONS).toBeNull();
+    expect(m.unknowns).toEqual(expect.arrayContaining([
+      'gross_billings stated value disagrees with the rows, rows used',
+      'owner_distributions stated value is not a valid amount, ignored',
+      'retained_cash not stated',
+    ]));
+  });
+
+  it('ranks by the objective and sorts an unknown input last, never as zero', () => {
+    const base = (key: string, margin: number | null, peak: number) => ({
+      ...quantifyRouteMoney({
+        routeKey: key, leadAt: '2026-07-01T00:00:00Z', commitmentAt: '2026-07-03T00:00:00Z', usableCashAt: '2026-07-10T00:00:00Z',
+        events: [
+          { at: '2026-07-04T00:00:00Z', kind: 'SUPPLIER_OUTLAY', amount: peak, fundedBy: 'SELF' },
+          { at: '2026-07-05T00:00:00Z', kind: 'FUNDS_RECEIVED', amount: peak * 2 },
+        ],
+        identities: margin === null ? {} : { GROSS_MARGIN: margin },
+      }),
+    });
+    const fast = base('fast-small', 300, 100);
+    const big = base('slow-big', 1_000, 2_000);
+    const unknown = base('unknown-margin', null, 50);
+    const byTurnover = scoreRoutes([{ money: big, collectionProbability: 0.9 }, { money: unknown, collectionProbability: 1 }, { money: fast, collectionProbability: 0.9 }], 'TURNOVER');
+    expect(byTurnover.map((s) => s.routeKey)).toEqual(['fast-small', 'slow-big', 'unknown-margin']);
+    expect(byTurnover[2]!.capitalTurnover).toBeNull();
+    const byContribution = scoreRoutes([{ money: fast, collectionProbability: 0.9 }, { money: big, collectionProbability: 0.9 }], 'CONTRIBUTION');
+    expect(byContribution.map((s) => s.routeKey)).toEqual(['slow-big', 'fast-small']);
+    expect(byContribution[0]!.riskAdjustedContribution).toBeCloseTo(900, 9);
+    expect(scoreRoutes([{ money: fast }], 'CONTRIBUTION')[0]!.riskAdjustedContribution).toBeNull();
+  });
+
+  it('maps ledger rows to routes: settlement dates usable cash and is never a second receipt', () => {
+    const entry = (id: string, opportunityId: string | null, kind: CashMoneyEntry['kind'], cents: number, occurredAt: string, fundsAvailableAt: string | null = null): CashMoneyEntry => ({
+      id, projectId: 'p', opportunityId, commitmentId: null, idempotencyKey: null, payloadFingerprint: null, kind, amountCents: cents, currency: 'USD',
+      verifiedReference: null, fundsAvailableAt, occurredAt, note: null, recordedBy: 'test', createdAt: occurredAt,
+    });
+    const inputs = routeInputsFromEntries([
+      entry('1', 'opp-a', 'PIPELINE_AGREED', 100_000, '2026-08-02T00:00:00Z'),
+      entry('2', 'opp-a', 'PIPELINE_AGREED', 50_000, '2026-08-01T00:00:00Z'),
+      entry('3', 'opp-a', 'COST', 30_000, '2026-08-03T00:00:00Z'),
+      entry('4', 'opp-a', 'CUSTOMER_PAYMENT', 120_000, '2026-08-05T00:00:00Z'),
+      entry('5', 'opp-a', 'SETTLEMENT', 120_000, '2026-08-06T00:00:00Z', '2026-08-08T00:00:00Z'),
+      entry('6', 'opp-a', 'REFUND', 10_000, '2026-08-09T00:00:00Z'),
+      entry('7', null, 'COST', 99_999, '2026-08-03T00:00:00Z'),
+    ]);
+    expect(inputs).toHaveLength(1);
+    const m = quantifyRouteMoney(inputs[0]!);
+    expect(m.routeKey).toBe('opp-a');
+    expect(m.identities.GROSS_BILLINGS).toBe(1_500);
+    expect(m.identities.SETTLED_CASH).toBe(1_200);
+    expect(m.receivables).toBe(300);
+    // The $300 cost left before any customer money arrived, so the rows say it was self-funded.
+    expect(m.unattributedSpend).toBe(0);
+    expect(m.selfFundedSpend).toBe(300);
+    expect(m.customerFundedSpend).toBe(0);
+    expect(m.daysCommitmentToFunds).toBe(4);
+    expect(m.daysFundsToUsableCash).toBe(3);
+    expect(m.daysLeadToCommitment).toBeNull();
+    expect(m.usableCash).toBe(1_100);
+    // Gross margin is row-stated: 1500 billed − 100 refunded − 300 outlays.
+    expect(m.identities.GROSS_MARGIN).toBe(1_100);
+  });
+
+  it('maps every ledger kind: releases, reserves, supplier liabilities and owner capital are never dropped (F8)', () => {
+    const entry = (id: string, kind: CashMoneyEntry['kind'], cents: number, occurredAt: string, fundsAvailableAt: string | null = null): CashMoneyEntry => ({
+      id, projectId: 'p', opportunityId: 'opp-f8', commitmentId: null, idempotencyKey: null, payloadFingerprint: null, kind, amountCents: cents, currency: 'USD',
+      verifiedReference: null, fundsAvailableAt, occurredAt, note: null, recordedBy: 'test', createdAt: occurredAt,
+    });
+    const [input] = routeInputsFromEntries([
+      entry('a1', 'PIPELINE_AGREED', 200_000, '2026-08-01T00:00:00Z'),
+      entry('a2', 'PIPELINE_AGREED', 50_000, '2026-08-02T00:00:00Z'),
+      // The second agreement fell through: no longer billed, so no longer receivable.
+      entry('a3', 'PIPELINE_RELEASED', 50_000, '2026-08-03T00:00:00Z'),
+      entry('c1', 'CAPITAL_IN', 40_000, '2026-08-01T00:00:00Z'),
+      // Supplier commits 900, shrinks by 100, then 500 is paid (COST is the money; COMMITMENT_PAID closes the owing).
+      entry('s1', 'UNPAID_COMMITMENT', 90_000, '2026-08-04T00:00:00Z'),
+      entry('s2', 'COMMITMENT_RELEASED', 10_000, '2026-08-05T00:00:00Z'),
+      entry('s3', 'COMMITMENT_PAID', 50_000, '2026-08-06T00:00:00Z'),
+      entry('s4', 'COST', 50_000, '2026-08-06T00:00:00Z'),
+      entry('p1', 'CUSTOMER_PAYMENT', 150_000, '2026-08-07T00:00:00Z'),
+      entry('p2', 'SETTLEMENT', 150_000, '2026-08-08T00:00:00Z'),
+      // 400 reserved for delivery, 100 of it released: 300 stays restricted.
+      entry('r1', 'RESERVE', 40_000, '2026-08-08T00:00:00Z'),
+      entry('r2', 'RESERVE_RELEASE', 10_000, '2026-08-09T00:00:00Z'),
+      entry('o1', 'CAPITAL_OUT', 20_000, '2026-08-10T00:00:00Z'),
+    ]);
+    // Thirteen rows; SETTLEMENT dates usable cash rather than becoming an event, so twelve events.
+    expect(input!.events).toHaveLength(12);
+    expect(input!.usableCashAt).toBe('2026-08-08T00:00:00Z');
+    const m = quantifyRouteMoney(input!);
+    // Billings are net of the released agreement, and so are receivables.
+    expect(m.identities.GROSS_BILLINGS).toBe(2_000);
+    expect(m.receivables).toBe(500);
+    // The supplier payment is one outlay, not two; the rest of the liability is still owed, dated when incurred.
+    expect(m.supplierOutlays).toEqual([{ at: '2026-08-06T00:00:00Z', amount: 500 }]);
+    expect(m.supplierLiabilities).toEqual([{ at: '2026-08-04T00:00:00Z', amount: 900 }]);
+    expect(m.supplierLiabilityOutstanding).toBe(300);
+    // Margin: 2000 billed − 500 paid − 300 incurred and owed.
+    expect(m.identities.GROSS_MARGIN).toBe(1_200);
+    // Usable cash: 1500 received − 300 restricted − 300 owed to the supplier.
+    expect(m.restrictedCash).toBe(300);
+    expect(m.usableCash).toBe(900);
+    expect(m.excludedFromUsable).toBe(600);
+    expect(m.identities.USABLE_CASH).toBe(900);
+    // Owner capital is distinct from settled cash and from borrowing; distributions are row-derived.
+    expect(m.identities.SETTLED_CASH).toBe(1_500);
+    expect(m.ownerCapitalIn).toBe(400);
+    expect(m.identities.OWNER_DISTRIBUTIONS).toBe(200);
+    expect(m.identities.BORROWED_PROCEEDS).toBe(0);
+    expect(m.unknowns).not.toContain('owner_distributions not stated');
+    expect(m.unknowns).not.toContain('borrowed_proceeds not stated');
+  });
+
+  it('keeps distributions and borrowing unknown off the ledger when no row states them', () => {
+    const m = quantifyRouteMoney({ routeKey: 'hand', events: [{ at: '2026-01-01T00:00:00Z', kind: 'FUNDS_RECEIVED', amount: 10 }] });
+    expect(m.identities.OWNER_DISTRIBUTIONS).toBeNull();
+    expect(m.identities.BORROWED_PROCEEDS).toBeNull();
+    const borrowed = quantifyRouteMoney({ routeKey: 'loan', events: [{ at: '2026-01-01T00:00:00Z', kind: 'BORROWED_IN', amount: 75 }] });
+    expect(borrowed.identities.BORROWED_PROCEEDS).toBe(75);
+    expect(borrowed.identities.SETTLED_CASH).toBeNull();
+  });
+
+  it('scores routes read only from ledger rows and lead rows, with no hand-stated identities (F7)', () => {
+    const entry = (id: string, opportunityId: string, kind: CashMoneyEntry['kind'], cents: number, occurredAt: string, fundsAvailableAt: string | null = null): CashMoneyEntry => ({
+      id, projectId: 'p', opportunityId, commitmentId: null, idempotencyKey: null, payloadFingerprint: null, kind, amountCents: cents, currency: 'USD',
+      verifiedReference: null, fundsAvailableAt, occurredAt, note: null, recordedBy: 'test', createdAt: occurredAt,
+    });
+    const rows = [
+      // Quick route: small, fully collected, short cycle.
+      entry('q1', 'quick', 'PIPELINE_AGREED', 50_000, '2026-09-03T00:00:00Z'),
+      entry('q2', 'quick', 'COST', 10_000, '2026-09-04T00:00:00Z'),
+      entry('q3', 'quick', 'CUSTOMER_PAYMENT', 50_000, '2026-09-05T00:00:00Z'),
+      entry('q4', 'quick', 'SETTLEMENT', 50_000, '2026-09-06T00:00:00Z'),
+      // Large route: bigger margin, half collected so far, long cycle.
+      entry('l1', 'large', 'PIPELINE_AGREED', 400_000, '2026-09-20T00:00:00Z'),
+      entry('l2', 'large', 'COST', 100_000, '2026-09-21T00:00:00Z'),
+      entry('l3', 'large', 'CUSTOMER_PAYMENT', 200_000, '2026-10-10T00:00:00Z'),
+      entry('l4', 'large', 'SETTLEMENT', 200_000, '2026-10-12T00:00:00Z'),
+      // No outlay row: the cost side is unknown, so margin and both scores stay unknown.
+      entry('n1', 'no-cost', 'PIPELINE_AGREED', 90_000, '2026-09-02T00:00:00Z'),
+      entry('n2', 'no-cost', 'CUSTOMER_PAYMENT', 90_000, '2026-09-03T00:00:00Z'),
+      entry('n3', 'no-cost', 'SETTLEMENT', 90_000, '2026-09-04T00:00:00Z'),
+    ];
+    const leads = new Map([['quick', '2026-09-01T00:00:00Z'], ['large', '2026-09-01T00:00:00Z'], ['no-cost', '2026-09-01T00:00:00Z']]);
+    const money = routeInputsFromEntries(rows, leads).map(quantifyRouteMoney);
+    const by = (k: string) => money.find((m) => m.routeKey === k)!;
+    expect(by('quick').identities.GROSS_MARGIN).toBe(400);
+    expect(by('quick').daysLeadToCommitment).toBe(2);
+    expect(by('large').identities.GROSS_MARGIN).toBe(3_000);
+    expect(by('large').daysLeadToCommitment).toBe(19);
+    expect(by('no-cost').identities.GROSS_MARGIN).toBeNull();
+    expect(observedCollectionRate(by('large'))).toBe(0.5);
+
+    const contribution = scoreRoutes(money.map((m) => ({ money: m })), 'CONTRIBUTION');
+    expect(contribution.map((s) => s.routeKey)).toEqual(['large', 'quick', 'no-cost']);
+    expect(contribution[0]!.riskAdjustedContribution).toBe(1_500);
+    expect(contribution[1]!.riskAdjustedContribution).toBe(400);
+    expect(contribution[2]!.riskAdjustedContribution).toBeNull();
+
+    const turnover = scoreRoutes(money.map((m) => ({ money: m })), 'TURNOVER');
+    // quick: 400 / (100 peak × 5 days) = 0.8; large: 1500 / (1000 peak × 41 days) ≈ 0.037.
+    expect(turnover.map((s) => s.routeKey)).toEqual(['quick', 'large', 'no-cost']);
+    expect(turnover[0]!.capitalTurnover).toBeCloseTo(0.8, 9);
+    expect(turnover[1]!.capitalTurnover).toBeCloseTo(1_500 / (1_000 * 41), 9);
+    expect(turnover[2]!.capitalTurnover).toBeNull();
+    // A stated probability still governs over the measured one.
+    expect(scoreRoutes([{ money: by('large'), collectionProbability: 1 }], 'CONTRIBUTION')[0]!.riskAdjustedContribution).toBe(3_000);
+  });
+});
+
+describe('MONEY-13-4. who funded an outlay is read from the order money moved (repair F1)', () => {
+  const at = (d: number) => `2026-09-${String(d).padStart(2, '0')}T00:00:00Z`;
+
+  it('an outlay covered by customer money already received is customer-funded; the rest is self-funded', () => {
+    expect(attributeFunding([
+      { at: at(1), kind: 'FUNDS_RECEIVED', amount: 500 },
+      { at: at(2), kind: 'SUPPLIER_OUTLAY', amount: 300 },
+      { at: at(3), kind: 'SUPPLIER_OUTLAY', amount: 400 },
+    ])).toEqual({ customer: 500, self: 200, derived: 700 });
+  });
+
+  it('a refund gives customer money back before it can fund anything, and owner capital is never customer money', () => {
+    expect(attributeFunding([
+      { at: at(1), kind: 'FUNDS_RECEIVED', amount: 500 },
+      { at: at(1), kind: 'OWNER_CAPITAL_IN', amount: 1_000 },
+      { at: at(2), kind: 'REFUND', amount: 400 },
+      { at: at(3), kind: 'SUPPLIER_OUTLAY', amount: 300 },
+    ])).toEqual({ customer: 100, self: 200, derived: 300 });
+  });
+
+  it('a receipt at the same instant as an outlay does not fund it (drain-first, as the peak is walked)', () => {
+    expect(attributeFunding([
+      { at: at(1), kind: 'FUNDS_RECEIVED', amount: 500 },
+      { at: at(1), kind: 'SUPPLIER_OUTLAY', amount: 200 },
+    ])).toEqual({ customer: 0, self: 200, derived: 200 });
+  });
+
+  it('a funder a row states is kept, and a stated customer-funded outlay draws on the pool', () => {
+    expect(attributeFunding([
+      { at: at(1), kind: 'FUNDS_RECEIVED', amount: 300 },
+      { at: at(2), kind: 'SUPPLIER_OUTLAY', amount: 200, fundedBy: 'CUSTOMER' },
+      { at: at(3), kind: 'SUPPLIER_OUTLAY', amount: 50, fundedBy: 'SELF' },
+      { at: at(4), kind: 'SUPPLIER_OUTLAY', amount: 250 },
+    ])).toEqual({ customer: 300, self: 200, derived: 250 });
+  });
+
+  it('a route built by hand without the ledger flag keeps an unstated funder unattributed', () => {
+    const m = quantifyRouteMoney({ routeKey: 'hand', events: [
+      { at: at(1), kind: 'FUNDS_RECEIVED', amount: 500 },
+      { at: at(2), kind: 'SUPPLIER_OUTLAY', amount: 300 },
+    ] });
+    expect(m.unattributedSpend).toBe(300);
+    expect(m.customerFundedSpend).toBeNull();
+    expect(m.selfFundedSpend).toBeNull();
+  });
+
+  it('ledger rows alone yield both figures: a customer deposit funds the first cost, the owner the overrun', () => {
+    const entry = (id: string, kind: CashMoneyEntry['kind'], cents: number, occurredAt: string): CashMoneyEntry => ({
+      id, projectId: 'p', opportunityId: 'opp-deposit', commitmentId: null, idempotencyKey: null, payloadFingerprint: null, kind, amountCents: cents,
+      currency: 'USD', verifiedReference: null, fundsAvailableAt: null, occurredAt, note: null, recordedBy: 'test', createdAt: occurredAt,
+    });
+    const [input] = routeInputsFromEntries([
+      entry('1', 'PIPELINE_AGREED', 100_000, at(1)),
+      entry('2', 'CUSTOMER_PAYMENT', 40_000, at(2)),
+      entry('3', 'COST', 30_000, at(3)),
+      entry('4', 'COST', 25_000, at(4)),
+      entry('5', 'CUSTOMER_PAYMENT', 60_000, at(9)),
+    ]);
+    const m = quantifyRouteMoney(input!);
+    expect(m.customerFundedSpend).toBe(400);
+    expect(m.selfFundedSpend).toBe(150);
+    expect(m.unattributedSpend).toBe(0);
+    expect(m.customerFundedSpend! + m.selfFundedSpend!).toBe(sumOutlays(m));
+    expect(m.unknowns).not.toContain('some supplier outlays do not say who funded them');
+  });
+});
+
+function sumOutlays(m: { supplierOutlays: { amount: number }[] }): number {
+  return m.supplierOutlays.reduce((t, o) => t + o.amount, 0);
+}
+
+describe('MONEY-13-4: the production chooser ranks by turnover and risk-adjusted collectible contribution', () => {
+  // optimizePortfolio is what evaluateGoalPortfolio (goalScenario, every goal tick) uses to choose routes.
+  const withSpend = (key: string, cash: number, spend: number, days: number, capital: number): Activity => ({
+    key, label: key, justified: true, capital, ...fixed(200, cash, days), spend: new Array<number>(200).fill(spend),
+  });
+
+  it('when no combination reaches the objective, chooses the larger collectible contribution, not the larger gross settled cash', () => {
+    const r = optimizePortfolio({
+      target: 1_000_000, deadlineDays: 60, worlds: 500,
+      activities: [withSpend('gross_heavy', 9_000, 8_500, 10, 0), withSpend('net_heavy', 6_000, 1_000, 10, 0)],
+    });
+    const singles = Object.fromEntries(r.singles.map((one) => [one.keys[0], one]));
+    expect(singles.gross_heavy!.settledP50).toBeGreaterThan(singles.net_heavy!.settledP50);
+    expect(singles.net_heavy!.contribution).toBe(5_000);
+    expect(singles.gross_heavy!.contribution).toBe(500);
+    const alone = optimizePortfolio({ target: 1_000_000, deadlineDays: 60, worlds: 500, activities: [withSpend('gross_heavy', 9_000, 8_500, 10, 0), { ...withSpend('net_heavy', 6_000, 1_000, 10, 0), excludes: ['gross_heavy'] }] });
+    expect(alone.best!.keys).toEqual(['net_heavy']);
+    expect(tieObjective(0)).toBe('CONTRIBUTION');
+  });
+
+  it('when combinations reach the objective equally, chooses the one turning its capital fastest', () => {
+    const slow = withSpend('slow_capital_heavy', 12_000, 0, 25, 5_000);
+    const fast = { ...withSpend('fast_capital_light', 11_000, 0, 5, 500), excludes: ['slow_capital_heavy'] };
+    const r = optimizePortfolio({ target: 10_000, deadlineDays: 30, worlds: 500, activities: [slow, fast] });
+    const singles = Object.fromEntries(r.singles.map((one) => [one.keys[0], one]));
+    expect(singles.slow_capital_heavy!.reach).toBe(1);
+    expect(singles.fast_capital_light!.reach).toBe(1);
+    // The old tie-break (gross settled cash) would have chosen the slow route.
+    expect(singles.slow_capital_heavy!.settledP50).toBeGreaterThan(singles.fast_capital_light!.settledP50);
+    expect(r.best!.keys).toEqual(['fast_capital_light']);
+    expect(singles.fast_capital_light!.capitalTurnover).toBeCloseTo(capitalTurnover(11_000, 500, 5)!, 9);
+    expect(tieObjective(1)).toBe('TURNOVER');
+  });
+
+  it('the portfolio and the ledger ranking share one turnover formula and one objective ordering', () => {
+    expect(capitalTurnover(1_000, 0, 0)).toBe(1_000);
+    expect(capitalTurnover(null, 10, 10)).toBeNull();
+    const a = { capitalTurnover: 2, riskAdjustedContribution: 10 };
+    const b = { capitalTurnover: 1, riskAdjustedContribution: 20 };
+    const c = { capitalTurnover: null, riskAdjustedContribution: null };
+    expect(rankByObjective([c, b, a], 'TURNOVER')).toEqual([a, b, c]);
+    expect(rankByObjective([c, a, b], 'CONTRIBUTION')).toEqual([b, a, c]);
+    const reading = (over: Partial<PortfolioReading>): PortfolioReading => ({ keys: ['x'], reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, capitalShort: 0, overSpend: 0, contribution: 0, capitalTurnover: 0, feasible: true, infeasibleBecause: null, basis: 'PROBABILITY', ...over });
+    expect(compareReadings(reading({ contribution: 10, settledP50: 1 }), reading({ contribution: 5, settledP50: 100 }))).toBeLessThan(0);
+    expect(compareReadings(reading({ reach: 1, capitalTurnover: 1, contribution: 100 }), reading({ reach: 1, capitalTurnover: 3, contribution: 1 }))).toBeGreaterThan(0);
   });
 });
