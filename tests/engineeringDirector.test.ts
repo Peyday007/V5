@@ -264,6 +264,23 @@ describe('commissioning on real rows', () => {
     expect(after).toEqual([{ id: 'bin_busy', priority: 5 }, { id: 'bin_wait', priority: 9 }]);
   });
 
+  it('accepts every deficiency class the director diagnoses, each with a metric its effect is measured on', async () => {
+    const { validateDiagnosis, defaultMetric } = await import('../server/services/operator/director.ts');
+    for (const deficiency of ['ECONOMIC_REASONING', 'PLANNING_ASSUMPTION', 'REPEATED_STRATEGIC_MISTAKE', 'RESOURCE_ALLOCATION', 'MISSING_CAPABILITY', 'BROKEN_INTEGRATION', 'INEFFICIENT_ALGORITHM', 'RECURRING_OPERATIONAL_FAILURE'] as const) {
+      expect(validateDiagnosis(request({ deficiency }) as never)).toBeNull();
+      expect(defaultMetric(deficiency)).toBeTruthy();
+    }
+    expect(validateDiagnosis(request({ deficiency: 'VIBES' }) as never)).toContain('deficiency must be one of');
+  });
+
+  it('respects the one-objective-per-owner file-conflict rule: a second defect on a busy owner waits, it does not race', async () => {
+    const { commission } = await import('../server/services/operator/director.ts');
+    await commission(request());
+    const second = await commission(request({ title: 'A different defect in the same owner file entirely', cause: 'a second established cause in the same owner file, distinct from the first', goalId: 'wst_other' }));
+    expect(second.ok).toBe(true);
+    expect(submitted).toHaveLength(1);
+  });
+
   it('does not send a problem without an established cause to Factory', async () => {
     const { commission } = await import('../server/services/operator/director.ts');
     const result = await commission(request({ cause: null, proposed: 'ENGINEERING' }));
