@@ -117,7 +117,7 @@ import {
 import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
 import { decideOpenings, type DecideOpeningsPass } from './decisions.ts';
-import { describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
+import { closesWithin, describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
 import { orderFieldsByCost } from './infoValue.ts';
 import { recordQuestionsSkipped } from './screenMetrics.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
@@ -617,6 +617,58 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
  */
 export const MAX_OPEN_ENGINE_QUESTIONS = 12;
 
+/** One opening the engine-question pass may raise questions for. */
+export interface QuestionCandidate {
+  opportunity: Pick<CashOpportunity, 'expiresAt' | 'peakFundingCents' | 'createdAt'>;
+  fields: string[];
+  contribution: number | null;
+}
+
+/**
+ * When a recorded window closes, in epoch ms, or null when it is unrecorded,
+ * unparseable, or already inside the research runway — where no question could
+ * be answered in time and the existing order is left to decide.
+ */
+function questionDeadline(expiresAt: string | null, now: string): number | null {
+  if (!expiresAt) return null;
+  const value = expiresAt.trim();
+  let closes: number;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) closes = Date.parse(`${value}T23:59:59.999Z`);
+  else if (/^\d{4}-\d{2}-\d{2}T/.test(value)) closes = Date.parse(value);
+  else return null;
+  if (!Number.isFinite(closes)) return null;
+  if (closesWithin(expiresAt, now)) return null;
+  return closes;
+}
+
+/**
+ * The order engine questions are raised in, under MAX_OPEN_ENGINE_QUESTIONS.
+ *
+ * Production, 2026-11-12 (ORIGINATED:MISSED_OPPORTUNITY:DISCOVERED): 14 of 14
+ * openings whose window ended expired while still DISCOVERED. Federal
+ * solicitations carry a recorded response date, but this order never read it,
+ * so a dated opening with more blanks waited behind undated ones until its
+ * window shut. Earliest Deadline First goes ahead of the existing keys: a dated
+ * opening before an undated one, the earlier window first. Undated openings,
+ * and ties, keep the existing order — fewest blanks, largest contribution,
+ * smallest capital at risk, oldest. No cap, gate or evidence bar moves.
+ */
+export function compareQuestionCandidates(a: QuestionCandidate, b: QuestionCandidate, now: string): number {
+  const da = questionDeadline(a.opportunity.expiresAt, now);
+  const db = questionDeadline(b.opportunity.expiresAt, now);
+  if (da !== null || db !== null) {
+    if (da === null) return 1;
+    if (db === null) return -1;
+    if (da !== db) return da - db;
+  }
+  return (
+    a.fields.length - b.fields.length ||
+    (b.contribution ?? -Infinity) - (a.contribution ?? -Infinity) ||
+    (a.opportunity.peakFundingCents ?? Infinity) - (b.opportunity.peakFundingCents ?? Infinity) ||
+    (a.opportunity.createdAt < b.opportunity.createdAt ? -1 : a.opportunity.createdAt > b.opportunity.createdAt ? 1 : 0)
+  );
+}
+
 /**
  * The qualification questions only a deep dive used to ask, asked one at a
  * time once an opening's dives for this epoch are spent.
@@ -635,7 +687,7 @@ export const MAX_OPEN_ENGINE_QUESTIONS = 12;
  * claim lands on the card (`answers.ts`). `disqualifiers` is never asked here
  * (`NEED_RESEARCHABLE_ENGINE_FIELDS`).
  *
- * Ordered by what a person would want answered first: openings nearest to
+ * Ordered by the earliest recorded window first (`compareQuestionCandidates`), then by what a person would want answered first: openings nearest to
  * qualifying, then the largest published contribution per sale, then the
  * smallest capital at risk. Unknown figures sort last, never first.
  */
@@ -674,7 +726,7 @@ export async function reconcileEngineGaps(projectId: string): Promise<Discoverab
   ).length;
   if (openEngine >= MAX_OPEN_ENGINE_QUESTIONS) return out;
 
-  const ranked: { opportunity: CashOpportunity; fields: string[]; contribution: number | null }[] = [];
+  const ranked: (QuestionCandidate & { opportunity: CashOpportunity })[] = [];
   for (const opportunity of await listOpportunities({ projectId, states: ['DISCOVERED', 'EVIDENCE_CARD'] })) {
     if (opportunity.duplicateOfId) continue;
     if (diveOwnsItsQuestions(opportunity)) continue;
@@ -698,13 +750,8 @@ export async function reconcileEngineGaps(projectId: string): Promise<Discoverab
     if (contribution !== null && contribution < 0) continue;
     ranked.push({ opportunity, fields, contribution });
   }
-  ranked.sort(
-    (a, b) =>
-      a.fields.length - b.fields.length ||
-      (b.contribution ?? -Infinity) - (a.contribution ?? -Infinity) ||
-      (a.opportunity.peakFundingCents ?? Infinity) - (b.opportunity.peakFundingCents ?? Infinity) ||
-      (a.opportunity.createdAt < b.opportunity.createdAt ? -1 : 1),
-  );
+  const rankedAt = cashNow();
+  ranked.sort((a, b) => compareQuestionCandidates(a, b, rankedAt));
 
   for (const { opportunity, fields } of ranked) {
     const card = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
