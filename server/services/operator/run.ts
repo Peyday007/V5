@@ -101,7 +101,12 @@ export async function ensureOperatorIdentity(): Promise<string> {
       createdById: 'operator',
     });
   }
+  // Only what is missing or narrower than OPERATOR_SCOPES: under a saturated pool every write is a checkout.
+  const { listMembershipsForPrincipal } = await import('../../repos/identity.ts');
+  const held = new Map((await listMembershipsForPrincipal('WORKER', worker.id)).map((m) => [m.projectId, m.scopes]));
   for (const project of await listProjects()) {
+    const scopes = held.get(project.id);
+    if (scopes && OPERATOR_SCOPES.every((one) => scopes.includes(one))) continue;
     await grantMembership({
       projectId: project.id,
       principalType: 'WORKER',
@@ -196,7 +201,8 @@ export function parseOperatorStream(text: string): OperatorResult {
 async function performRun(runId: string, config: OperatorConfig, models: OperatorModel[]): Promise<void> {
   let credentialId: string | null = null;
   try {
-    const workerId = await ensureOperatorIdentity();
+    const { withPoolRetry } = await import('./snapshot.ts');
+    const workerId = await withPoolRetry(() => ensureOperatorIdentity());
     const expiresAt = new Date(Date.now() + (OPERATOR_RUN_TIMEOUT_MINUTES + 5) * 60_000).toISOString();
     const issued = await issueWorkerCredential({ workerId, expiresAt, issuedByType: 'SYSTEM', issuedById: `operator:${runId}` });
     credentialId = issued.credential.id;

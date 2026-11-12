@@ -97,7 +97,17 @@ const goalTool: McpTool = {
     const snapshot = await operatorSnapshot(projects);
     const goalId = optionalString(args, 'goal_id') ?? urgencyOrder(snapshot.summaries)[0]?.id ?? null;
     const goal = snapshot.goals.find((one) => one.id === goalId);
-    if (!goal || !goal.projectId) throw notFoundError();
+    if (!goal || !goal.projectId) {
+      // A light reading (Brain was too busy to derive goals this run): the register and the requests.
+      const summary = snapshot.summaries.find((one) => one.id === goalId);
+      if (!summary || !summary.projectId) throw notFoundError();
+      await authorize(principal, summary.projectId, 'READ', 'project:read');
+      const lightRequests = snapshot.requests.get(summary.projectId) ?? [];
+      return {
+        projectId: summary.projectId,
+        value: { depth: 'LIGHT', goal: summary, requests: lightRequests, mootRequests: lightRequests.filter((one) => one.moot).length },
+      };
+    }
     await authorize(principal, goal.projectId, 'READ', 'project:read');
     const requests = snapshot.requests.get(goal.projectId) ?? (await readRequests(goal.projectId));
     return {
@@ -135,7 +145,7 @@ const planTool: McpTool = {
   annotations: { title: 'Operator: the goal plan', ...READ_ONLY },
   run: async (args, { principal }) => {
     const goalId = requiredString(args, 'goal_id');
-    const goal = (await operatorSnapshot(await readableProjects(principal))).goals.find((one) => one.id === goalId);
+    const goal = (await operatorSnapshot(await readableProjects(principal))).summaries.find((one) => one.id === goalId);
     if (!goal || !goal.projectId) throw notFoundError();
     await authorize(principal, goal.projectId, 'READ', 'project:read');
     return { projectId: goal.projectId, value: await readGoalPlanSummary(goalId) };

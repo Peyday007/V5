@@ -226,6 +226,7 @@ describe('the run reads the goals once and states them in the brief', () => {
     expect(urgencyOrder(summaries).map((g) => g.id)).toEqual(['wst_b', 'wst_a', 'wst_c']);
     const text = snapshotForBrief({
       takenAt: '2026-11-12T11:00:00Z',
+      depth: 'LIGHT',
       goals: [],
       summaries,
       requests: new Map([['prj_wst_b', [
@@ -243,8 +244,23 @@ describe('one snapshot, narrowed to what the caller may read', () => {
   it('keeps only the goals and requests of the projects named', async () => {
     const { narrow } = await import('../server/services/operator/snapshot.ts');
     const goal = (id: string, projectId: string) => ({ id, projectId, title: id, stateEvidence: '', waiting: { kind: 'PERSON', detail: '' }, next: { by: 'BRAIN', action: '' }, decisions: [], blockers: [], lifecycle: 'ACTIVE', state: 'BLOCKED', target: null, dueAt: null, priority: null }) as never;
-    const narrowed = narrow({ takenAt: 't', goals: [goal('wst_a', 'prj_a'), goal('wst_b', 'prj_b')], summaries: [], requests: new Map([['prj_a', []], ['prj_b', []]]) }, ['prj_a']);
+    const narrowed = narrow({ takenAt: 't', depth: 'FULL', goals: [goal('wst_a', 'prj_a'), goal('wst_b', 'prj_b')], summaries: [], requests: new Map([['prj_a', []], ['prj_b', []]]) }, ['prj_a']);
     expect(narrowed.goals.map((g) => g.id)).toEqual(['wst_a']);
     expect([...narrowed.requests.keys()]).toEqual(['prj_a']);
+  });
+
+  it('retries a read only while the pool is saturated', async () => {
+    const { withPoolRetry } = await import('../server/services/operator/snapshot.ts');
+    let calls = 0;
+    const busy = Object.assign(new Error('The database pool had no free connection within 10000ms'), { brainPool: { inUse: 8 } });
+    const value = await withPoolRetry(async () => {
+      calls += 1;
+      if (calls < 2) throw busy;
+      return 'read';
+    }, 3, 1);
+    expect(value).toBe('read');
+    let other = 0;
+    await expect(withPoolRetry(async () => { other += 1; throw new Error('a bug, not pressure'); }, 3, 1)).rejects.toThrow('a bug');
+    expect(other).toBe(1);
   });
 });

@@ -15664,6 +15664,18 @@ mission out of NEEDS_HUMAN); withdrawing it keeps the row, and a packet still
 parked is then reached by `answerUnaskedParks` / `concludeUnworkablePackets`,
 which act only on a park no open card covers.
 
+**What the first production day taught it** (each a row, each fixed in the owner
+named): a run that began during a deploy's restart reached nothing (a 12-minute
+boot grace); the GPU fallback answered HTTP 400 (no tool-call parser — the GPU
+stays out until `BRAIN_OPERATOR_GPU=on`); deriving every goal inside an MCP call
+ran past the 180 s limit and, with the pool at 8/8, could not check out a
+connection at all. So Brain reads the goals once per run in its own process —
+a light reading (register and requests, retried under pool pressure) always,
+the full derivation within a bound when it can — states every goal id and moot
+request id in the brief, and serves the read tools from that one reading.
+`operator show` prints the MCP audit rows (§17) and each failed tool's refusal
+line, which is how each of these was found.
+
 `npm run operator -- show | run | probe` (and `agents.yml operator-show |
 operator-run | operator-status`). Tests: `tests/operator.test.ts`,
 `operator/tests/test_server.py`.
