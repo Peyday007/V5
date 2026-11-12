@@ -4,6 +4,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
+import { createProject } from '../server/repos/projects.ts';
 import { recordBinEvent } from '../server/repos/bins.ts';
 import { getDb } from '../server/db/database.ts';
 import { BROWSER_WORKFLOW_RUN_EVENT } from '../server/services/sources/browserWorkflow.ts';
@@ -92,6 +93,21 @@ describe('claiming a mutation', () => {
     const later = await claimBrowserEffect({ projectId, capability: cap, approvedInput: input, actor: otherWorker });
     expect(later).toMatchObject({ claimed: false, reason: 'UNKNOWN' });
     expect((await readBrowserEffect(first.operationId))?.state).toBe('UNCERTAIN');
+  });
+
+  it('is one effect across projects: a second project cannot claim what the first performed or holds', async () => {
+    const other = (await createProject({ name: `Other ${Math.random().toString(36).slice(2, 8)}` })).id;
+    const [a, b] = await Promise.all([
+      claimBrowserEffect({ projectId, capability: cap, approvedInput: input, actor: worker }),
+      claimBrowserEffect({ projectId: other, capability: cap, approvedInput: input, actor: otherWorker }),
+    ]);
+    expect([a, b].filter((r) => r.claimed)).toHaveLength(1);
+    const winner = a.claimed ? a : b;
+    expect(a.effectKey).toBe(b.effectKey);
+    await settleBrowserEffect(winner.operationId, { result: 'COMPLETED', summary: 'submitted' });
+    for (const project of [projectId, other]) {
+      expect(await claimBrowserEffect({ projectId: project, capability: cap, approvedInput: input, actor: worker })).toMatchObject({ claimed: false, reason: 'COMPLETED' });
+    }
   });
 
   it('refuses a failed effect rather than repeating it', async () => {
