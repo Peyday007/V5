@@ -98,7 +98,7 @@ export const CONTINUITY_CLAUSE_OWNERS: readonly ClauseOwner[] = [
   {
     clause: 'preserve time-critical customer commitments',
     owner: 'server/services/effects/posture.ts (planContinuation: ESCALATE_TIME_CRITICAL), applied before every send by server/services/cash/perform.ts (performCommercialAction → decideCommitmentContinuation, the opportunity deadline)',
-    reader: 'cash_events CASH_CONTINUATION_DECIDED; continuity.ts continuation --project ID --namespace NS',
+    reader: 'cash_events CASH_CONTINUATION_DECIDED; cash_needs effect-continuation:<piece>:<action>:ESCALATE_TIME_CRITICAL (the review); continuity.ts continuation --project ID --namespace NS',
   },
   {
     clause: 'backup/restoration procedures for essential data and configurations, with verified restore behavior',

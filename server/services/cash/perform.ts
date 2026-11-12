@@ -114,6 +114,19 @@ export function failedEffectKey(
   return `effect-failed:${opportunityId}:${action}:${operationId}`;
 }
 
+/**
+ * The key a continuation decision a person must act on is raised under: one
+ * per piece, action and decision, so the tick deciding it again every pass
+ * reads the open need back rather than adding one per pass.
+ */
+export function continuationEffectKey(
+  opportunityId: string,
+  action: PerformableAction,
+  decision: 'ESCALATE_TIME_CRITICAL' | 'EXTERNAL_CONSTRAINT',
+): string {
+  return `effect-continuation:${opportunityId}:${action}:${decision}`;
+}
+
 /* ------------------------------------------------------------------------- */
 /* One outcome, one meaning                                                   */
 /* ------------------------------------------------------------------------- */
@@ -1032,6 +1045,38 @@ export async function continuationGate(
       ? `${continuation.reason}. Nothing was sent through ${continuation.namespace}.`
       : `Nothing was sent: ${continuation.reason}.`,
   );
+  /*
+   * "A person is told now" is a promise only a need keeps. The cash event below
+   * is history on the piece, which nobody is shown unless they open it; the
+   * review reads needs. A deadline a wait could miss, and a refusal no other
+   * service may be used to get past, are both things only a person can act
+   * on, so each raises one — the existing owner, deduplicated by key, and
+   * settled by reading whether the action has since been recorded.
+   */
+  if (continuation.action === 'ESCALATE_TIME_CRITICAL' || continuation.action === 'EXTERNAL_CONSTRAINT') {
+    const urgent = continuation.action === 'ESCALATE_TIME_CRITICAL';
+    await raiseNeed({
+      projectId: opportunity.projectId,
+      opportunityId: opportunity.id,
+      actorRef: BRAIN,
+      blockedAction: `${effect.doing[0]!.toUpperCase()}${effect.doing.slice(1)} for "${opportunity.title}"`,
+      whyItMatters: urgent
+        ? `This commitment is due ${opportunity.deadline ?? 'soon'} and Brain cannot keep it by waiting: ${continuation.reason}.`
+        : `Brain will not attempt it: ${continuation.reason}.`,
+      recommendedPath: urgent
+        ? `Do it another permitted way before ${opportunity.deadline ?? 'the deadline'}, or tell the counterparty ` +
+          'now and agree a new time; record what was done on this piece.'
+        : 'Resolve the refusal with the provider, or name a permitted alternative for this commitment; ' +
+          'Brain does not route around it on its own.',
+      setupEffort: urgent ? 'Today: the deadline is near.' : 'Depends on the refusal; nothing about it is guessed here.',
+      nextStep: urgent
+        ? `Reach the counterparty another permitted way, or renegotiate the deadline.`
+        : `Settle what ${continuation.namespace} refused, or record ${action} on this piece done another way.`,
+      completionCondition: `A ${action} is on the record for this piece after this need was raised.`,
+      blocksState: action === 'CONTACT_BUYER' ? 'EXECUTING' : null,
+      requestKey: continuationEffectKey(opportunity.id, action, continuation.action),
+    });
+  }
   /*
    * Recorded when the decision changes, not every time it is read. The tick
    * asks this of every held piece on every pass, and a hold waiting on a
