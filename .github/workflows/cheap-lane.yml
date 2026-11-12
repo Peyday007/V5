@@ -47,7 +47,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore'
+        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade'
         required: true
         default: deploy
       hours:
@@ -195,6 +195,11 @@ jobs:
               ;;
             runpod-report)
               gpu_report
+              ;;
+            runpod-survey)
+              # What the account holds and could rent, from RunPod itself (§108). Changes nothing.
+              [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
+              npx tsx scripts/runpod-survey.ts
               ;;
             runpod-restore)
               [ -n "${RUNPOD_API_KEY:-}" ] && [ -n "$RUNPOD_VLLM_KEY" ] || { echo "::error::Set the RUNPOD_API_KEY and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
