@@ -309,12 +309,23 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
       GROUP BY outcome, CASE WHEN reason LIKE '%model call failed%' THEN 1 ELSE 0 END`,
     [since, ...types],
   );
+  // A fact belongs to the one job that produced it: the claims a submitted item
+  // wrote are the ones on the pass its submission returned as `result_ref`
+  // (brain_submit_claims answers with that pass id). Joining on the fragment
+  // instead credited every claim of the fragment to every item that touched it
+  // — the RESEARCH_FRAGMENT that wrote them and the RESEARCH_VERIFY that judged
+  // them, in two stages — and claims an earlier attempt wrote as well. A
+  // verification item's pass records verdicts, not claims, so it produces no
+  // fact here and the gate's acceptance is counted once, at its producer.
+  // Usable means the gate accepted it; `sourced` only says a URL was valid.
   const facts = await db.get<{ n: number | string }>(
     `SELECT COUNT(DISTINCT c.id) AS n
-       FROM bin_events e JOIN work_items w ON w.id = e.work_item_id
-       JOIN research_claims c ON c.fragment_id = w.fragment_id
-      WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?
-        AND c.sourced = 1 AND e.workload_class IN (${placeholders(types)})`,
+       FROM research_claims c
+      WHERE c.accepted = 1
+        AND c.pass_id IN (
+          SELECT w.result_ref FROM bin_events e JOIN work_items w ON w.id = e.work_item_id
+           WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?
+             AND w.result_ref IS NOT NULL AND e.workload_class IN (${placeholders(types)}))`,
     [since, ...types],
   );
   const metered = await db.all<{ measures: string | Record<string, unknown> | null }>(
@@ -774,7 +785,7 @@ export function chooseConstraint(
  * (S-0171: "a measured expected gain in accepted commercially decisive facts per
  * hour and dollars spent"). Pure; exported for tests.
  *
- *  - Accepted facts are the stage's `uniqueUsableFacts` (distinct sourced claims
+ *  - Accepted facts are the stage's `uniqueUsableFacts` (distinct gate-accepted claims
  *    its accepted items produced), never its count of accepted items: an item
  *    the gate accepts can carry no usable fact, or several.
  *  - The replicas the stage ran are measured, not assumed: the item-time it
