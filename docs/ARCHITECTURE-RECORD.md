@@ -15796,7 +15796,7 @@ database pool (opr_8f2520b2), and by inventing a goal id (`wst_dummy`,
 opr_5334b9d8). The RunPod account held $15.48 at $0.196/h — about 79 hours
 of runway, on a pod RunPod deletes at zero (as it did 2026-11-10).
 
-**A model is measured on Brain's own work** (`cheap/modelBench.ts`). Seven
+**A model is measured on Brain's own work** (`cheap/modelBench.ts`). Nine
 tasks, built from those production rows and scored by code, not by another
 model's opinion: diagnosing the operator's real failed runs; a multi-step tool
 plan over the operator's real tools and real goal readings (read the goal,
@@ -15806,7 +15806,10 @@ argument; judging a real opening card with no payer and no price beside one
 with both; choosing between the $10K plan's real competing reconstructions
 and naming the test; catching "p50 $131,700, so $10K is likely" against a
 1.5% coverage reach; and answering a validator refusal seen seven times with
-an engineering fix rather than a retry. Each records score, tool calls made
+an engineering fix rather than a retry; finding the one pool-exhaustion run in
+~35K tokens of operator history (long context); and the SQLite-passes,
+Postgres-throws `SELECT DISTINCT … ORDER BY MAX(x)` defect the conventions
+record (code). Each records score, tool calls made
 and correct, latency, tokens and dollars per task at the measured parallel
 throughput. `chooseModel` gates on the tool tasks (an operator that cannot
 call tools directs nothing), then takes the cheapest within 0.05 of the best
