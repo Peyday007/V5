@@ -34,6 +34,8 @@
 #   operator-status — the machine, its log, and the probe from the Brain.
 #   operator-run    — one operator run now, from the Brain, waited on; prints
 #            what the operator did (scripts/operator.ts run).
+#   operator-prove  — one run, then the proof from its rows (§108): it read a real
+#            goal and plan, committed a decision, acted, observed, and learned.
 #   operator-show   — the operator's runs, memory, lessons and actions.
 #   operator-disconnect — remove both settings; the tick stops starting runs.
 name: Agents
@@ -42,7 +44,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prove | sales | sales-prove | disconnect | operator-deploy | operator-status | operator-run | operator-show | operator-engineering | operator-disconnect'
+        description: 'deploy | status | prove | sales | sales-prove | disconnect | operator-deploy | operator-status | operator-run | operator-prove | operator-show | operator-engineering | operator-disconnect'
         required: true
         default: status
 
@@ -189,6 +191,13 @@ jobs:
               on_brain "node --import tsx scripts/operator.ts run" 2>&1 | tee operator.txt
               set -e
               grep -q '^OPERATOR-RUN: OK' operator.txt
+              ;;
+            operator-prove)
+              # One run, then the proof from rows (§108): inspected, planned, decided, acted, observed, learned.
+              set +e
+              on_brain "node --import tsx scripts/operator.ts prove" 2>&1 | tee operator.txt
+              set -e
+              grep -q '^OPERATOR-PROOF: OK' operator.txt
               ;;
             operator-show)
               on_brain "node --import tsx scripts/operator.ts show 8"
