@@ -92,7 +92,14 @@ import { CAPTURE_INPUTS, cashTier } from './tier.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
-import { runValidations, whyNotDiving, type ValidationProgress } from './validation.ts';
+import {
+  CAPACITY_DEFERRALS_PER_PASS,
+  capacityDeferralCandidates,
+  recordCapacityDeferrals,
+  runValidations,
+  whyNotDiving,
+  type ValidationProgress,
+} from './validation.ts';
 import { enumeratePossibilities } from './monetization/enumerate.ts';
 import { recordMovements } from './monetization/movement.ts';
 import { composeLedger } from './monetization/ledger.ts';
@@ -117,7 +124,7 @@ import {
 import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
 import { decideOpenings, type DecideOpeningsPass } from './decisions.ts';
-import { describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
+import { closesWithin, closingInstant, describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
 import { orderFieldsByCost } from './infoValue.ts';
 import { recordQuestionsSkipped } from './screenMetrics.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
@@ -617,6 +624,53 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
  */
 export const MAX_OPEN_ENGINE_QUESTIONS = 12;
 
+/** One opening the engine-question pass may raise questions for. */
+export interface QuestionCandidate {
+  opportunity: Pick<CashOpportunity, 'expiresAt' | 'peakFundingCents' | 'createdAt'>;
+  fields: string[];
+  contribution: number | null;
+}
+
+/**
+ * When a recorded window closes, in epoch ms, or null when it is unrecorded,
+ * unparseable, or already inside the research runway — where no question could
+ * be answered in time and the existing order is left to decide.
+ */
+function questionDeadline(expiresAt: string | null, now: string): number | null {
+  const closes = closingInstant(expiresAt);
+  if (closes === null) return null;
+  if (closesWithin(expiresAt, now)) return null;
+  return closes;
+}
+
+/**
+ * The order engine questions are raised in, under MAX_OPEN_ENGINE_QUESTIONS.
+ *
+ * Production, 2026-11-12 (ORIGINATED:MISSED_OPPORTUNITY:DISCOVERED): 14 of 14
+ * openings whose window ended expired while still DISCOVERED. Federal
+ * solicitations carry a recorded response date, but this order never read it,
+ * so a dated opening with more blanks waited behind undated ones until its
+ * window shut. Earliest Deadline First goes ahead of the existing keys: a dated
+ * opening before an undated one, the earlier window first. Undated openings,
+ * and ties, keep the existing order — fewest blanks, largest contribution,
+ * smallest capital at risk, oldest. No cap, gate or evidence bar moves.
+ */
+export function compareQuestionCandidates(a: QuestionCandidate, b: QuestionCandidate, now: string): number {
+  const da = questionDeadline(a.opportunity.expiresAt, now);
+  const db = questionDeadline(b.opportunity.expiresAt, now);
+  if (da !== null || db !== null) {
+    if (da === null) return 1;
+    if (db === null) return -1;
+    if (da !== db) return da - db;
+  }
+  return (
+    a.fields.length - b.fields.length ||
+    (b.contribution ?? -Infinity) - (a.contribution ?? -Infinity) ||
+    (a.opportunity.peakFundingCents ?? Infinity) - (b.opportunity.peakFundingCents ?? Infinity) ||
+    (a.opportunity.createdAt < b.opportunity.createdAt ? -1 : a.opportunity.createdAt > b.opportunity.createdAt ? 1 : 0)
+  );
+}
+
 /**
  * The qualification questions only a deep dive used to ask, asked one at a
  * time once an opening's dives for this epoch are spent.
@@ -635,7 +689,7 @@ export const MAX_OPEN_ENGINE_QUESTIONS = 12;
  * claim lands on the card (`answers.ts`). `disqualifiers` is never asked here
  * (`NEED_RESEARCHABLE_ENGINE_FIELDS`).
  *
- * Ordered by what a person would want answered first: openings nearest to
+ * Ordered by the earliest recorded window first (`compareQuestionCandidates`), then by what a person would want answered first: openings nearest to
  * qualifying, then the largest published contribution per sale, then the
  * smallest capital at risk. Unknown figures sort last, never first.
  */
@@ -672,44 +726,78 @@ export async function reconcileEngineGaps(projectId: string): Promise<Discoverab
       one.requestKey?.startsWith('question:') &&
       engineKeys.has(one.requestKey.slice(one.requestKey.lastIndexOf(':') + 1)),
   ).length;
-  if (openEngine >= MAX_OPEN_ENGINE_QUESTIONS) return out;
 
-  const ranked: { opportunity: CashOpportunity; fields: string[]; contribution: number | null }[] = [];
-  for (const opportunity of await listOpportunities({ projectId, states: ['DISCOVERED', 'EVIDENCE_CARD'] })) {
-    if (opportunity.duplicateOfId) continue;
-    if (diveOwnsItsQuestions(opportunity)) continue;
-    if (await notWorthResearching(opportunity, { now: cashNow() })) continue;
+  type Ranked = QuestionCandidate & { opportunity: CashOpportunity };
+  const candidateFor = async (opportunity: CashOpportunity): Promise<Ranked | null> => {
+    if (opportunity.duplicateOfId) return null;
+    if (diveOwnsItsQuestions(opportunity)) return null;
+    if (await notWorthResearching(opportunity, { now: cashNow() })) return null;
     const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
-    if (engine.disqualifiedBy) continue;
+    if (engine.disqualifiedBy) return null;
     // Under a SQUEEZE goal only what a responsible offer needs is asked; the sale answers the rest.
     const reading = cashTier({ opportunity, card: engine, readiness: evidenceCard(opportunity).readiness, policy: await executionPolicyForProject(projectId) });
-    if (reading.tier !== 'CANDIDATE') continue;
+    if (reading.tier !== 'CANDIDATE') return null;
     const fields = reading.toAdvance
       .map((one) => one.key as string)
       .filter((key) => engineKeys.has(key) && !keys.has(questionKey(opportunity.id, key)));
-    if (fields.length === 0) continue;
+    if (fields.length === 0) return null;
     // Only once the deep dive cannot ask: a dive asks every one of these at once.
-    if ((await whyNotDiving(opportunity)).kind !== 'EPOCH_SPENT') continue;
+    if ((await whyNotDiving(opportunity)).kind !== 'EPOCH_SPENT') return null;
     const contribution =
       opportunity.priceCents !== null && opportunity.peakFundingCents !== null
         ? opportunity.priceCents - opportunity.peakFundingCents
         : null;
     // A published loss is not worth qualifying further.
-    if (contribution !== null && contribution < 0) continue;
-    ranked.push({ opportunity, fields, contribution });
+    if (contribution !== null && contribution < 0) return null;
+    return { opportunity, fields, contribution };
+  };
+  /*
+   * Evidence that the question cap decided, not an assertion of it (review of
+   * the EDF change, 2026-11-12): a dated opening an order could still save,
+   * left waiting because every question slot is held, gets a
+   * CAPACITY_DEFERRAL_EVENT row. At the cap only dated openings are examined,
+   * so a full cap costs one listing and a handful of reads, not a ranking.
+   */
+  const deferWaiting = async (waiting: readonly CashOpportunity[]): Promise<void> => {
+    const at = cashNow();
+    const chosen = capacityDeferralCandidates(waiting, new Set(), at);
+    if (chosen.length === 0) return;
+    await recordCapacityDeferrals({
+      projectId,
+      lane: 'ENGINE_QUESTION',
+      waiting: chosen,
+      now: at,
+      capacity: { openQuestions: openEngine, cap: MAX_OPEN_ENGINE_QUESTIONS },
+    }).catch(() => 0);
+  };
+  const discovered = await listOpportunities({ projectId, states: ['DISCOVERED', 'EVIDENCE_CARD'] });
+  if (openEngine >= MAX_OPEN_ENGINE_QUESTIONS) {
+    const dated: CashOpportunity[] = [];
+    const at = cashNow();
+    for (const opportunity of capacityDeferralCandidates(discovered, new Set(), at, Number.POSITIVE_INFINITY)) {
+      if (dated.length >= CAPACITY_DEFERRALS_PER_PASS) break;
+      if (await candidateFor(opportunity)) dated.push(opportunity);
+    }
+    await deferWaiting(dated);
+    return out;
   }
-  ranked.sort(
-    (a, b) =>
-      a.fields.length - b.fields.length ||
-      (b.contribution ?? -Infinity) - (a.contribution ?? -Infinity) ||
-      (a.opportunity.peakFundingCents ?? Infinity) - (b.opportunity.peakFundingCents ?? Infinity) ||
-      (a.opportunity.createdAt < b.opportunity.createdAt ? -1 : 1),
-  );
 
-  for (const { opportunity, fields } of ranked) {
+  const ranked: Ranked[] = [];
+  for (const opportunity of discovered) {
+    const candidate = await candidateFor(opportunity);
+    if (candidate) ranked.push(candidate);
+  }
+  const rankedAt = cashNow();
+  ranked.sort((a, b) => compareQuestionCandidates(a, b, rankedAt));
+
+  for (const [index, { opportunity, fields }] of ranked.entries()) {
     const card = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
     for (const field of fields) {
-      if (openEngine >= MAX_OPEN_ENGINE_QUESTIONS) return out;
+      if (openEngine >= MAX_OPEN_ENGINE_QUESTIONS) {
+        const raisedHere = out.some((one) => one.opportunityId === opportunity.id);
+        await deferWaiting(ranked.slice(raisedHere ? index + 1 : index).map((one) => one.opportunity));
+        return out;
+      }
       const entry = card.entries.find((one) => one.key === field);
       const key = questionKey(opportunity.id, field);
       const raised = await raiseNeed({
