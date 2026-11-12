@@ -20,6 +20,7 @@ import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { capture, fillCard } from '../server/services/cash/opportunities.ts';
 import { CAPTURE_KEY, qualificationKeys } from '../server/services/cash/tier.ts';
+import { DEADLINE_PRIORITY_HORIZON_MS } from '../server/services/cash/validation.ts';
 
 const NOW = '2026-11-12T12:00:00.000Z';
 const DAY = 24 * 60 * 60 * 1000;
@@ -94,6 +95,19 @@ describe('engine questions are raised Earliest Deadline First', () => {
     const undated = candidate('undated', 1, null);
     const sorted = [closing, garbage, undated].sort((x, y) => compareQuestionCandidates(x, y, NOW));
     expect(sorted[0]!.name).toBe('undated');
+  });
+
+  it('gives no deadline priority to a window months away: it keeps the existing order until the horizon', () => {
+    // A far-dated opening with more blanks must not jump undated ones with fewer.
+    const farDated = candidate('far-dated', 4, inDays(180));
+    const yearsOut = candidate('years-out', 3, inDays(3 * 365));
+    const undated = candidate('undated', 1, null);
+    const sorted = [farDated, yearsOut, undated].sort((x, y) => compareQuestionCandidates(x, y, NOW));
+    expect(sorted.map((one) => one.name)).toEqual(['undated', 'years-out', 'far-dated']);
+    // Once inside the horizon, the same window is promoted.
+    expect(DEADLINE_PRIORITY_HORIZON_MS).toBe(30 * DAY);
+    const near = candidate('near', 4, inDays(29));
+    expect([undated, near].sort((x, y) => compareQuestionCandidates(x, y, NOW))[0]!.name).toBe('near');
   });
 });
 

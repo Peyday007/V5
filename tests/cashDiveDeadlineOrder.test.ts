@@ -7,7 +7,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { CashOpportunity } from '../server/domain/types.ts';
-import { compareDiveValue, diveOrder, type DiveValueFacts } from '../server/services/cash/validation.ts';
+import { DEADLINE_PRIORITY_HORIZON_MS, compareDiveValue, diveOrder, type DiveValueFacts } from '../server/services/cash/validation.ts';
 import { DIVE_RUNWAY_MS, closesWithin } from '../server/services/cash/worthResearching.ts';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -119,6 +119,26 @@ describe('dive order reads a recorded closing date (EDF)', () => {
     const undated = row({ id: 'undated', createdAt: '2026-10-02T00:00:00.000Z', crossesTier: true });
     const order = diveOrder({ now: NOW, dropped: none, forGoal: none, shortWindow: none });
     expect(select([inside, undated], order, 2)).toEqual(['undated', 'inside']);
+  });
+
+  it('does not promote a far-dated opening: months or years out it keeps its decision-value place', () => {
+    expect(DEADLINE_PRIORITY_HORIZON_MS).toBe(10 * DIVE_RUNWAY_MS);
+    const high = row({ id: 'high', createdAt: '2026-09-01T00:00:00.000Z', crossesTier: true });
+    const farDated = row({ id: 'far-dated', createdAt: '2026-10-01T00:00:00.000Z', expiresAt: at(180 * DAY), crossesTier: false });
+    const yearsOut = row({ id: 'years-out', createdAt: '2026-09-15T00:00:00.000Z', expiresAt: '2029-06-30', crossesTier: false });
+    const order = diveOrder({ now: NOW, dropped: none, forGoal: none, shortWindow: none });
+    // Neither jumps band 2 nor reorders band 2 by its distant date: decision value decides.
+    expect(select([farDated, yearsOut, high], order, 3)).toEqual(['high', 'years-out', 'far-dated']);
+    expect(select([farDated, yearsOut, high], order, 3)).toEqual(select([farDated, yearsOut, high], oldOrder(), 3));
+  });
+
+  it('promotes a dated opening only while it closes within the horizon', () => {
+    const high = row({ id: 'high', createdAt: '2026-09-01T00:00:00.000Z', crossesTier: true });
+    const justInside = row({ id: 'inside-horizon', createdAt: '2026-10-01T00:00:00.000Z', expiresAt: at(DEADLINE_PRIORITY_HORIZON_MS - DAY), crossesTier: false });
+    const justOutside = row({ id: 'outside-horizon', createdAt: '2026-10-01T00:00:00.000Z', expiresAt: at(DEADLINE_PRIORITY_HORIZON_MS + DAY), crossesTier: false });
+    const order = diveOrder({ now: NOW, dropped: none, forGoal: none, shortWindow: none });
+    expect(select([high, justInside], order, 1)).toEqual(['inside-horizon']);
+    expect(select([high, justOutside], order, 1)).toEqual(['high']);
   });
 });
 

@@ -92,7 +92,7 @@ import { CAPTURE_INPUTS, cashTier } from './tier.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
-import { runValidations, whyNotDiving, type ValidationProgress } from './validation.ts';
+import { bindingDeadline, runValidations, whyNotDiving, type ValidationProgress } from './validation.ts';
 import { enumeratePossibilities } from './monetization/enumerate.ts';
 import { recordMovements } from './monetization/movement.ts';
 import { composeLedger } from './monetization/ledger.ts';
@@ -117,7 +117,7 @@ import {
 import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
 import { decideOpenings, type DecideOpeningsPass } from './decisions.ts';
-import { closesWithin, describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
+import { describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
 import { orderFieldsByCost } from './infoValue.ts';
 import { recordQuestionsSkipped } from './screenMetrics.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
@@ -626,19 +626,12 @@ export interface QuestionCandidate {
 
 /**
  * When a recorded window closes, in epoch ms, or null when it is unrecorded,
- * unparseable, or already inside the research runway — where no question could
- * be answered in time and the existing order is left to decide.
+ * unparseable, already inside the research runway — where no question could
+ * be answered in time — or beyond DEADLINE_PRIORITY_HORIZON_MS, where the
+ * deadline does not yet bind. In each case the existing order decides.
  */
 function questionDeadline(expiresAt: string | null, now: string): number | null {
-  if (!expiresAt) return null;
-  const value = expiresAt.trim();
-  let closes: number;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) closes = Date.parse(`${value}T23:59:59.999Z`);
-  else if (/^\d{4}-\d{2}-\d{2}T/.test(value)) closes = Date.parse(value);
-  else return null;
-  if (!Number.isFinite(closes)) return null;
-  if (closesWithin(expiresAt, now)) return null;
-  return closes;
+  return bindingDeadline(expiresAt, now);
 }
 
 /**

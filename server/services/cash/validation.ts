@@ -890,19 +890,48 @@ function closingInstant(expiresAt: string | null): number | null {
 }
 
 /**
+ * How far ahead a recorded closing date earns deadline priority: ten dive
+ * runways (30 days). The owner's quick-play rule (2026-10-22) is fast cash in a
+ * window of weeks; a window that closes months or years away is not a quick
+ * play, and letting it jump the queue would override the decision-value order
+ * for openings that have plenty of slack. EDF needs a deadline that binds — a
+ * far one does not, so beyond this horizon an opening is ordered as undated
+ * until its window comes inside it. Applies to the dive order and the
+ * engine-question order alike.
+ */
+export const DEADLINE_PRIORITY_HORIZON_MS = 10 * DIVE_RUNWAY_MS;
+
+/**
+ * A recorded closing instant that earns deadline priority now, in epoch ms:
+ * outside the dive runway (where it can still be worked) and inside
+ * DEADLINE_PRIORITY_HORIZON_MS (where the deadline actually binds). Null for an
+ * unrecorded, unparseable, too-soon or far-dated window. Pure.
+ */
+export function bindingDeadline(expiresAt: string | null, now: string): number | null {
+  const closes = closingInstant(expiresAt);
+  if (closes === null) return null;
+  if (closesWithin(expiresAt, now, DIVE_RUNWAY_MS)) return null;
+  const nowMs = Date.parse(now);
+  if (!Number.isFinite(nowMs) || closes - nowMs > DEADLINE_PRIORITY_HORIZON_MS) return null;
+  return closes;
+}
+
+/**
  * The band order of the dive queue, applied after the decision-value sort
  * (stable, so the decision-value order stands wherever this returns 0).
  *
  *   0. an approved goal's own openings (owner, 2026-11-03);
  *   1. quick plays (owner, 2026-10-22: fast cash, a window of weeks is fine) —
  *      a TEMPORARY_EXPLOIT, one a cheap screen read as a short window, or one
- *      whose closing date is recorded and still outside the dive runway;
+ *      whose closing date is recorded, still outside the dive runway and within
+ *      DEADLINE_PRIORITY_HORIZON_MS (a window of weeks, not months);
  *   2. everything else;
  *   3. junk a cheap screen dropped, always last.
  *
  * Within a band, dated openings go Earliest Deadline First: the opening whose
  * latest useful start (closing − DIVE_RUNWAY_MS) comes first is dived first,
- * and an undated one sorts after every dated one. Production, 2026-11: 14 of 14
+ * and an undated one — or one dated beyond the horizon — sorts after every
+ * dated one, in decision-value order. Production, 2026-11: 14 of 14
  * dated openings (federal solicitations N0010426QAC01, 140LL027Q0005) expired
  * DISCOVERED — the order never read `expiresAt`, so each waited behind older
  * undated openings until it entered the runway, where `notWorthResearching`
@@ -915,8 +944,7 @@ export function diveOrder(input: {
   forGoal: (opportunity: CashOpportunity) => boolean;
   shortWindow: (opportunity: CashOpportunity) => boolean;
 }): (a: CashOpportunity, b: CashOpportunity) => number {
-  const deadline = (opportunity: CashOpportunity): number | null =>
-    closesWithin(opportunity.expiresAt, input.now, DIVE_RUNWAY_MS) ? null : closingInstant(opportunity.expiresAt);
+  const deadline = (opportunity: CashOpportunity): number | null => bindingDeadline(opportunity.expiresAt, input.now);
   const band = (opportunity: CashOpportunity): number => {
     if (input.dropped(opportunity)) return 3;
     if (input.forGoal(opportunity)) return 0;
