@@ -461,3 +461,151 @@ describe('the manifest authorizes the command it gives', () => {
     expect(ignored).toContain('node_modules');
   });
 });
+
+/*
+ * Review finding: every test above that shows a change starts from a fleet
+ * that declares a browser, or from the manifest on its own. Here the test
+ * starts from the recorded state instead, and drives it through the real
+ * check-in, submission, completion and reconcile paths. The state: a render
+ * bin with three attempts, no Routine declaring a browser, and a session Brain
+ * fired from a plain Routine.
+ *
+ * The worker does what every worker is told to do: it runs only work its
+ * manifest's authorized actions cover, and where a prohibition conflicts with
+ * the work, the prohibition wins and it submits nothing. Its footprint is the
+ * command's own, stated here independently of either manifest. Against the
+ * manifest production issued before a72a4b3, the bin ends exactly as the six
+ * did. Against the manifest Brain issues now, the same worker on the same
+ * fleet completes it.
+ */
+describe('from the recorded state: a render bin, no declared browser, a worker that keeps to its authority', () => {
+  /** What running `npm ci` + the render command does, step by step; independent of any manifest. */
+  const FOOTPRINT: { step: string; authorizedBy: RegExp; writesRepositoryFiles: boolean }[] = [
+    { step: 'install the dependencies from the lockfile', authorizedBy: /npm ci/i, writesRepositoryFiles: true },
+    { step: 'build the client', authorizedBy: /building the client/i, writesRepositoryFiles: true },
+    { step: 'start a throwaway Brain', authorizedBy: /starting this product locally/i, writesRepositoryFiles: false },
+    { step: 'drive a browser against it', authorizedBy: /driving a browser/i, writesRepositoryFiles: false },
+    { step: 'write the captures', authorizedBy: /temporary directory/i, writesRepositoryFiles: false },
+    { step: 'submit the printed object', authorizedBy: /submitting one unit result/i, writesRepositoryFiles: false },
+  ];
+
+  /** The steps a worker keeping to `manifest` may not take, with why. Empty means it may run the command. */
+  function refusedSteps(manifest: BinManifest): string[] {
+    const authorized = manifest.authorizedActions.join('\n');
+    const forbidsAnyRepositoryWrite = manifest.prohibitedActions.includes('changing any file in the repository');
+    return FOOTPRINT.flatMap((one) => {
+      if (!one.authorizedBy.test(authorized)) return [`${one.step}: not authorized`];
+      if (one.writesRepositoryFiles && forbidsAnyRepositoryWrite) return [`${one.step}: prohibited`];
+      return [];
+    });
+  }
+
+  const surfaces = SEED_SURFACES.slice(0, 1).map((seed) => ({
+    ...seed, id: 'srf_home', registeredBy: 'test', retiredAt: null, retiredReason: null, createdAt: NOW, updatedAt: NOW,
+  })) as unknown as DesignSurface[];
+
+  /** The manifest Brain issued before a72a4b3: the same work, with the authority it had in production. */
+  const issuedBefore = (current: BinManifest): BinManifest => ({
+    ...current,
+    authorizedActions: ['starting this product locally', 'driving a browser against it', 'submitting one unit result'],
+    prohibitedActions: [
+      'changing any file in the repository',
+      'pushing anything anywhere',
+      'installing a paid service or a new credential',
+      'editing the printed submission by hand',
+    ],
+  });
+
+  /** Brain's recorded state, then the worker's attempts through the real paths, then the reconcile. */
+  async function drive(which: 'before' | 'now') {
+    const { checkIn, submitUnit, requestCompletion, release, reconcileBins } = await import('../server/services/bins/service.ts');
+    const { getBin } = await import('../server/repos/bins.ts');
+    const current = designRenderManifest({ cycle: { id: `dcy_${tag()}` } as DesignCycle, pass: 0, projectId, surfaces });
+    const account = await createAccount({ name: `recorded-${tag()}` });
+    // The recorded fleet: one enabled Routine, declaring nothing.
+    const plain = await createRoutine({
+      accountId: account.id, routineRef: `trig_plain_${tag()}`, name: `plain-${tag()}`, tokenSecretName: 'S_PLAIN',
+    });
+    expect(plain.capabilities).toEqual([]);
+    const bin = await createBin({
+      projectId,
+      kind: 'DESIGN_RENDER',
+      title: 'Design render: home',
+      objective: 'Render the home surface.',
+      manifest: which === 'before' ? issuedBefore(current) : current,
+      completionContract: 'DESIGN_RENDER_V1',
+      createdByType: 'SYSTEM',
+      createdById: `design:render:recorded:${tag()}`,
+      ready: true,
+      maxAttempts: 3,
+      workloadClass: 'GENERAL_DESIGN_RENDER',
+    });
+    const worker = await createWorker({ name: `render-worker-${tag()}`, createdByType: 'SYSTEM', createdById: 't' });
+    const principal = {
+      type: 'WORKER', id: worker.id, handle: `worker-${worker.id}`, displayName: 'Render worker',
+      isBrainAdmin: false, mustChangePassword: false, credentialId: `cred-${worker.id}`, authMethod: 'WORKER_BEARER',
+      memberships: [{ projectId, role: null, scopes: SCOPES, active: true }], requestId: 'test-request',
+    } as unknown as Principal;
+
+    const refusals: string[][] = [];
+    let completed: string | null = null;
+    for (let attempt = 1; attempt <= 3 && !completed; attempt += 1) {
+      // Each attempt is a session Brain fired from the plain Routine, for the bin's current generation.
+      const session = `cse_${tag()}${tag()}${tag()}`;
+      const at = new Date().toISOString();
+      const generation = (await getBin(bin.id))!.leaseGeneration;
+      await getDb().run(
+        `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count, max_attempts,
+           next_attempt_at, routine_id, routine_ref, session_ref, created_at, updated_at, sent_at)
+         VALUES (?, ?, ?, 'SENT', 1, 5, ?, ?, ?, ?, ?, ?, ?)`,
+        [newId('bdi'), bin.id, generation, at, plain.id, plain.routineRef, session, at, at, at],
+      );
+      const arrival = await checkIn({ principal, workerId: worker.id, sessionRef: session });
+      // No surface declares a browser, so the plain session is admitted (fail open), as in production.
+      expect(arrival.assigned).toBe(true);
+      if (!arrival.assigned) return null;
+      expect(arrival.assignment.binId).toBe(bin.id);
+      const proof = {
+        binId: arrival.assignment.binId, leaseId: arrival.assignment.leaseId,
+        leaseGeneration: arrival.assignment.leaseGeneration, workerId: worker.id,
+      };
+      const refused = refusedSteps(arrival.assignment.manifest);
+      refusals.push(refused);
+      if (refused.length > 0) {
+        // Keeping to its authority: nothing is run and nothing is submitted.
+        expect(await release(proof, `cannot run the command within the manifest: ${refused.join('; ')}`)).toBe('OK');
+        continue;
+      }
+      // Ran the command; submits the object it printed, verbatim.
+      const printed = JSON.stringify({
+        revision: 'abc1234', treeDirty: false,
+        captures: [{ surfaceKey: 'home', width: 1280, sha256: 'f'.repeat(64), engine: 'chromium', engineVersion: '131' }],
+      });
+      expect((await submitUnit({ workerId: worker.id, proof, unitKey: 'design_render', value: printed })).held).toBe(true);
+      const outcome = await requestCompletion({ workerId: worker.id, proof });
+      completed = outcome.state;
+    }
+    await reconcileBins(projectId);
+    return { bin: (await getBin(bin.id))!, refusals, completed };
+  }
+
+  it('reproduces the recorded failure: the manifest issued before ends NEEDS_HUMAN with "No render was submitted"', async () => {
+    const result = (await drive('before'))!;
+    expect(result.completed).toBeNull();
+    expect(result.refusals).toHaveLength(3);
+    for (const refused of result.refusals) {
+      expect(refused).toContain('install the dependencies from the lockfile: not authorized');
+      expect(refused).toContain('build the client: not authorized');
+    }
+    expect(result.bin.state).toBe('NEEDS_HUMAN');
+    expect(result.bin.terminalReason).toMatch(/used all 3 attempts without satisfying DESIGN_RENDER_V1/);
+    expect(result.bin.terminalReason).toContain('No render was submitted');
+  });
+
+  it('changes the outcome: the same worker on the same browserless fleet completes the manifest Brain issues now', async () => {
+    const result = (await drive('now'))!;
+    expect(result.refusals).toEqual([[]]);
+    expect(result.completed).toBe('COMPLETE');
+    expect(result.bin.state).toBe('COMPLETE');
+  });
+});
