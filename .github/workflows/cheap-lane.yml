@@ -47,7 +47,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade'
+        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose'
         required: true
         default: deploy
       recipes:
@@ -209,6 +209,21 @@ jobs:
               [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
               npx tsx scripts/runpod-survey.ts
               ;;
+            runpod-repurpose)
+              # Serve a recipe on the existing pod in place (§108): same host and GPU, no second pod.
+              [ -n "${RUNPOD_API_KEY:-}" ] && [ -n "$RUNPOD_VLLM_KEY" ] || { echo "::error::Set the RUNPOD_API_KEY and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
+              recipe=$(printf '%s' "$RECIPES_INPUT" | tr -cd 'a-z0-9.-')
+              rc=0; npx tsx scripts/runpod-repurpose.ts --recipe "$recipe" | tee repurpose.txt || rc=$?
+              RUNPOD_VLLM_URL=$(grep '^URL ' repurpose.txt | tail -1 | cut -d' ' -f2-)
+              RUNPOD_VLLM_MODEL=""
+              pod_id=$(grep '^POD ' repurpose.txt | cut -d' ' -f2)
+              fingerprint
+              # Connected either way: a reverted pod serves its old recipe and the Brain must point at what it serves.
+              probe || true
+              grep -q '^MODEL ' probe.txt && gpu_connect
+              [ $rc -eq 0 ] && grep -q '^TOOLS on' probe.txt || { echo "::error title=runpod::Recipe $recipe did not come up with tool calls; the previous recipe was put back."; exit 1; }
+              echo "::notice title=runpod::Pod $pod_id now serves $recipe with tool calls ($(grep '^CONTEXT ' probe.txt | cut -d' ' -f2) context)."
+              ;;
             runpod-upgrade)
               # Move the GPU to another recipe with no gap (§108): new pod beside the old, probe
               # (tool calls included), point the Brain at it, then retire the old one.
@@ -235,8 +250,8 @@ jobs:
               [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
               recipes=$(printf '%s' "$RECIPES_INPUT" | tr -cd 'a-z0-9.,-' | sed 's/baseline//; s/,,*/,/g; s/^,//; s/,$//')
               base=""; case "$RECIPES_INPUT" in *baseline*) base="--baseline" ;; esac
-              CHEAP_URL="https://$cheap.fly.dev/v1" timeout --signal=TERM --kill-after=60 6600 \
-                npx tsx scripts/runpod-bench.ts --recipes "$recipes" $base | tee bench.txt
+              timeout --signal=TERM --kill-after=60 6600 \
+                npx tsx scripts/runpod-bench.ts --recipes "$recipes" --switchboard "https://$cheap.fly.dev/v1" $base | tee bench.txt
               grep -q '^RUNPOD-BENCH: OK' bench.txt || { echo "::error title=runpod::The benchmark did not finish."; exit 1; }
               grep '^WINNER' bench.txt | sed 's/^/::notice title=runpod bench::/'
               ;;
