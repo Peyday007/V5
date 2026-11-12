@@ -14,7 +14,7 @@
  */
 import { addCollectSource } from '../../../repos/collectSources.ts';
 import type { CollectSource, SourceKind } from '../../../domain/collect.ts';
-import { SOURCE_ROWS, expandUrl } from '../../feeds/sources.ts';
+import { SOURCE_ROWS, expandUrl, type SourceRow } from '../../feeds/sources.ts';
 
 export interface SeedSource {
   slug: string;
@@ -32,14 +32,15 @@ export interface SeedSource {
 const HOUR = 3_600_000;
 const DEFAULT_RATE_PER_MIN = 10;
 const REGISTRY_KIND: Record<string, SourceKind> = { JSON_API: 'JSON_API', RSS_ATOM: 'RSS_ATOM', CSV: 'CSV_DATASET', PAGE_WATCH: 'PAGE_WATCH', OSM_OVERPASS: 'OVERPASS' };
-const KIND_PREFIX: Record<string, string> = { JSON_API: 'json', RSS_ATOM: 'rss', PAGE_WATCH: 'watch', CSV_DATASET: 'csv' };
+const KIND_PREFIX: Record<string, string> = { JSON_API: 'json', RSS_ATOM: 'rss', PAGE_WATCH: 'watch', CSV_DATASET: 'csv', OVERPASS: 'osm' };
 
 /**
  * There is one registry definition: `SOURCE_ROWS` in `feeds/sources.ts`, which is
  * what `pullDueFeeds` pulls. These seeds are a projection of its shared rows
  * into `collect_sources`, never a second list that can drift from it.
  */
-export const SEED_SOURCES: readonly SeedSource[] = SOURCE_ROWS.filter((r) => r.ownerProjectId === null).map((r) => ({
+export function seedFromRow(r: SourceRow): SeedSource {
+  return {
   slug: r.id,
   label: r.label,
   kind: REGISTRY_KIND[r.kind] ?? 'JSON_API',
@@ -48,7 +49,29 @@ export const SEED_SOURCES: readonly SeedSource[] = SOURCE_ROWS.filter((r) => r.o
   intervalMs: r.intervalHours * HOUR,
   hostRatePerMin: r.spacingMs ? Math.max(1, Math.floor(60_000 / r.spacingMs)) : DEFAULT_RATE_PER_MIN,
   basis: r.robots.note,
-}));
+  };
+}
+
+export const SEED_SOURCES: readonly SeedSource[] = SOURCE_ROWS.filter((r) => r.ownerProjectId === null).map(seedFromRow);
+
+/**
+ * The registry row for a source the pull is about to ask, written if it is not
+ * there yet (idempotent by slug), so the robots answer has a row to be recorded
+ * on. A source built without a registry row is registered under its own id.
+ */
+export async function ensureRegistered(source: { id: string; label: string; url: string; intervalMs: number; format?: 'json' | 'text'; row?: SourceRow }): Promise<CollectSource> {
+  if (source.row) {
+    const s = seedFromRow(source.row);
+    return addCollectSource({
+      projectId: source.row.ownerProjectId, slug: s.slug, label: s.label, kind: s.kind, urlTemplate: s.urlTemplate,
+      parserId: s.parserId, intervalMs: s.intervalMs, hostRatePerMin: s.hostRatePerMin,
+    });
+  }
+  return addCollectSource({
+    slug: source.id, label: source.label, kind: source.format === 'text' ? 'RSS_ATOM' : 'JSON_API', urlTemplate: source.url,
+    parserId: 'adhoc', intervalMs: source.intervalMs,
+  });
+}
 
 /** How the collectors read each parserId. Federal Register has a mapping; the rest read by their kind's default. */
 export const SEED_MAPPINGS: Record<string, Record<string, string>> = {

@@ -207,11 +207,135 @@ export function parseGdelt(body: unknown): FeedItem[] {
 }
 
 
+/**
+ * A body whose top-level shape is not the one a parser reads is not "no
+ * records": it is UNPARSEABLE, and saying so is how a changed publisher format
+ * shows up as a failure with a cause instead of as a quiet empty pull.
+ */
+export class UnparseableBody extends Error {
+  constructor(what: string) {
+    super(`UNPARSEABLE: ${what}`);
+    this.name = 'UnparseableBody';
+  }
+}
+
+const field = (obj: unknown, ...path: string[]): unknown => {
+  let at: unknown = obj;
+  for (const key of path) {
+    if (!at || typeof at !== 'object' || Array.isArray(at)) return null;
+    at = (at as Record<string, unknown>)[key];
+  }
+  return at;
+};
+
+/**
+ * UK Find a Tender's public OCDS release packages (`{ releases: [...] }`): a
+ * procurement notice per release, keyless. A release's `id` is the notice id
+ * the public notice page is addressed by.
+ */
+export function parseFindATender(body: unknown): FeedItem[] {
+  const releases = field(body, 'releases');
+  if (!Array.isArray(releases)) throw new UnparseableBody('no releases array in an OCDS release package');
+  const out: FeedItem[] = [];
+  for (const row of records(releases)) {
+    const id = text(row['id']);
+    const title = plain(field(row, 'tender', 'title'));
+    if (!id || !title) continue;
+    const amount = field(row, 'tender', 'value', 'amount');
+    const currency = text(field(row, 'tender', 'value', 'currency'));
+    const deadline = text(field(row, 'tender', 'tenderPeriod', 'endDate'));
+    const description = plain(field(row, 'tender', 'description'));
+    out.push({
+      externalId: (text(row['ocid']) ?? id).slice(0, 500),
+      url: `https://www.find-tender.service.gov.uk/Notice/${encodeURIComponent(id)}`,
+      title,
+      body: [
+        description,
+        typeof amount === 'number' && Number.isFinite(amount) ? `Value ${amount}${currency ? ` ${currency}` : ''}.` : null,
+        deadline ? `Tenders due ${deadline}.` : null,
+      ].filter(Boolean).join(' ') || null,
+      organization: text(field(row, 'buyer', 'name')),
+      publishedAt: isoOrNull(row['date']),
+    });
+  }
+  return out;
+}
+
+/**
+ * GLEIF's public LEI register (`{ data: [...] }`): newly registered legal
+ * entities, keyless and published as open data. The record's own API address
+ * is its URL, because GLEIF's search page addresses a record after `#`, and a
+ * fragment is exactly what URL canonicalisation drops.
+ */
+export function parseGleif(body: unknown): FeedItem[] {
+  const data = field(body, 'data');
+  if (!Array.isArray(data)) throw new UnparseableBody('no data array in a GLEIF response');
+  const out: FeedItem[] = [];
+  for (const row of records(data)) {
+    const lei = text(field(row, 'attributes', 'lei')) ?? text(row['id']);
+    const name = text(field(row, 'attributes', 'entity', 'legalName', 'name'));
+    if (!lei || !name) continue;
+    const city = text(field(row, 'attributes', 'entity', 'legalAddress', 'city'));
+    const country = text(field(row, 'attributes', 'entity', 'legalAddress', 'country'));
+    const status = text(field(row, 'attributes', 'entity', 'status'));
+    const category = text(field(row, 'attributes', 'entity', 'category'));
+    out.push({
+      externalId: lei,
+      url: `https://api.gleif.org/api/v1/lei-records/${encodeURIComponent(lei)}`,
+      title: `New legal entity registered: ${name}`,
+      body: [
+        [city, country].filter(Boolean).join(', ') || null,
+        category ? `Category ${category}.` : null,
+        status ? `Entity status ${status}.` : null,
+      ].filter(Boolean).join(' ') || null,
+      organization: name,
+      publishedAt: isoOrNull(field(row, 'attributes', 'registration', 'initialRegistrationDate')),
+    });
+  }
+  return out;
+}
+
+/**
+ * An OpenStreetMap category read through the public Overpass API
+ * (`{ elements: [...] }`): one item per named element, addressed by its OSM
+ * page. Mapped features carry no publication date, so none is invented.
+ */
+export function parseOverpassElements(body: unknown): FeedItem[] {
+  const elements = field(body, 'elements');
+  if (!Array.isArray(elements)) throw new UnparseableBody('no elements array in an Overpass response');
+  const out: FeedItem[] = [];
+  for (const row of records(elements)) {
+    const type = text(row['type']);
+    const id = row['id'];
+    const tags = field(row, 'tags');
+    const name = text(field(tags, 'name'));
+    if (!type || !['node', 'way', 'relation'].includes(type) || (typeof id !== 'number' && typeof id !== 'string') || !name) continue;
+    const place = [text(field(tags, 'addr:street')), text(field(tags, 'addr:city'))].filter(Boolean).join(', ');
+    out.push({
+      externalId: `${type}/${String(id)}`,
+      url: `https://www.openstreetmap.org/${type}/${String(id)}`,
+      title: name,
+      body: [
+        place || null,
+        text(field(tags, 'product')) ? `Product: ${text(field(tags, 'product'))}.` : null,
+        text(field(tags, 'operator')) ? `Operator: ${text(field(tags, 'operator'))}.` : null,
+        text(field(tags, 'website')) ? `Website: ${text(field(tags, 'website'))}.` : null,
+      ].filter(Boolean).join(' ') || null,
+      organization: text(field(tags, 'operator')) ?? name,
+      publishedAt: null,
+    });
+  }
+  return out;
+}
+
 const NAMED_PARSERS: Record<string, (body: unknown) => FeedItem[]> = {
   remoteok: parseRemoteOk,
   remotive: parseRemotive,
   'federal-register': parseFederalRegister,
   gdelt: parseGdelt,
+  'find-a-tender': parseFindATender,
+  gleif: parseGleif,
+  'overpass-elements': parseOverpassElements,
 };
 
 const decodeEntities = (v: string): string =>
@@ -273,8 +397,13 @@ export function parseCsvRows(body: string): string[][] {
 /** A dataset download: the header row names the columns the registry row maps. */
 export function parseCsv(body: unknown, fields: NonNullable<SourceRow['fields']>): FeedItem[] {
   if (typeof body !== 'string') return [];
-  const [header, ...rest] = parseCsvRows(body);
-  if (!header) return [];
+  const [rawHeader, ...rest] = parseCsvRows(body.replace(/^\uFEFF/, ''));
+  if (!rawHeader) return [];
+  const header = rawHeader.map((h) => h.trim());
+  // A mapped column the header does not have is a changed format, not an empty dataset.
+  for (const name of [fields.title, fields.url]) {
+    if (name && !header.includes(name)) throw new UnparseableBody(`CSV header has no column "${name}"`);
+  }
   const col = (name: string | undefined) => (name ? header.indexOf(name) : -1);
   const at = (r: string[], name: string | undefined) => { const i = col(name); return i >= 0 ? text(r[i]) : null; };
   const out: FeedItem[] = [];
@@ -372,7 +501,14 @@ export function sourceFromRow(row: SourceRow): FeedSource {
       break;
     }
     case 'PAGE_WATCH': parse = pageWatchParser(row.id, row.label, url); break;
-    case 'OSM_OVERPASS': throw new Error(`source ${row.id}: an OSM sweep is run by sites.ts, not pulled as a feed`);
+    case 'OSM_OVERPASS': {
+      // A category read (a named parser over one query) is pulled like any feed; the broken-site sweep is run by sites.ts.
+      const named = row.parserId ? NAMED_PARSERS[row.parserId] : undefined;
+      if (!named) throw new Error(`source ${row.id}: an OSM sweep is run by sites.ts, not pulled as a feed`);
+      parse = named;
+      format = 'json';
+      break;
+    }
   }
   return { id: row.id, label: row.label, url, intervalMs: row.intervalHours * HOUR, headers: row.headers, spacingMs: row.spacingMs, timeoutMs: row.timeoutMs, parse, format, row };
 }
@@ -401,6 +537,11 @@ export const SOURCE_ROWS: readonly SourceRow[] = [
   { id: 'fda-recalls-rss', label: 'FDA recalls and safety alerts', kind: 'RSS_ATOM', url: 'https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/recalls/rss.xml', intervalHours: 6, robots: R('ALLOWED_PUBLIC_FEED', 'US government public RSS feed'), ownerProjectId: null },
   { id: 'cisa-advisories-rss', label: 'CISA cybersecurity advisories', kind: 'RSS_ATOM', url: 'https://www.cisa.gov/cybersecurity-advisories/all.xml', intervalHours: 6, robots: R('ALLOWED_PUBLIC_FEED', 'US government public RSS feed'), ownerProjectId: null },
   { id: 'watch-dol-state-minimum-wage', label: 'US DOL: state minimum wage laws page', kind: 'PAGE_WATCH', url: 'https://www.dol.gov/agencies/whd/minimum-wage/state', intervalHours: 24, robots: R('ALLOWED_PUBLIC_PAGE', 'public US government page; read once a day'), ownerProjectId: null },
+  // Procurement, a dataset download, a business register and an OSM category, as data.
+  { id: 'canadabuys-new-tenders-csv', label: 'CanadaBuys: new federal tender notices (open data CSV)', kind: 'CSV', url: 'https://canadabuys.canada.ca/opendata/pub/newTenderNotice-nouvelAvisAppelOffres.csv', intervalHours: 24, fields: { id: 'referenceNumber-numeroReference', title: 'title-titre-eng', url: 'noticeURL-URLavis-eng', organization: 'contractingEntityName-nomEntitContractante-eng', publishedAt: 'publicationDate-datePublication', body: 'tenderDescription-descriptionAppelOffres-eng' }, timeoutMs: 60_000, robots: R('ALLOWED_PUBLIC_FEED', 'Government of Canada open-data download under the Open Government Licence, keyless'), ownerProjectId: null },
+  { id: 'find-a-tender-ocds', label: 'UK Find a Tender: new tender notices (OCDS API)', kind: 'JSON_API', url: 'https://www.find-tender.service.gov.uk/api/1.0/ocdsReleasePackages?stages={stage}&limit=100', params: { stage: 'tender' }, parserId: 'find-a-tender', intervalHours: 12, timeoutMs: 60_000, robots: R('ALLOWED_PUBLIC_API', 'UK government public OCDS API, keyless'), ownerProjectId: null },
+  { id: 'gleif-new-lei-registrations', label: 'GLEIF: newly registered legal entities (LEI register)', kind: 'JSON_API', url: 'https://api.gleif.org/api/v1/lei-records?sort=-registration.initialRegistrationDate&page%5Bsize%5D=100', parserId: 'gleif', intervalHours: 24, headers: { accept: 'application/vnd.api+json' }, robots: R('ALLOWED_PUBLIC_API', 'GLEIF public API; LEI data published as open data, keyless'), ownerProjectId: null },
+  { id: 'osm-houston-factories', label: 'OpenStreetMap: named factories and plants, Houston metro', kind: 'OSM_OVERPASS', url: 'https://overpass-api.de/api/interpreter?data={query}', params: { query: '[out:json][timeout:90];nwr["man_made"="works"]["name"](29.58,-95.65,29.96,-95.2);out tags 400;' }, parserId: 'overpass-elements', intervalHours: 7 * 24, timeoutMs: 120_000, robots: R('ALLOWED_PUBLIC_API', 'Overpass public API; one category query a week'), ownerProjectId: null },
 ];
 
 /** The rows a project may see: shared ones, and its own. */

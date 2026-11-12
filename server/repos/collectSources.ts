@@ -56,6 +56,12 @@ export async function addCollectSource(input: NewCollectSource): Promise<Collect
   return map(found);
 }
 
+/** One source by its slug, whoever owns it. For the pull itself, which already decided the source is visible. */
+export async function getCollectSourceBySlug(slug: string): Promise<CollectSource | null> {
+  const found = await getDb().get<Row>('SELECT * FROM collect_sources WHERE slug = ?', [slug]);
+  return found ? map(found) : null;
+}
+
 /** Public sources plus the viewer's own project's; another project's are not returned. */
 export async function listCollectSources(viewerProjectId: string | null): Promise<CollectSource[]> {
   const rows = await getDb().all<Row>(

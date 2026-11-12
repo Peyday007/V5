@@ -34,6 +34,9 @@ import { discoveryAllowed } from '../cash/lifecycle.ts';
 import { DELIVERABLE_LABEL } from '../cash/deliverables/spec.ts';
 import { HostLimiter, classifyFailure, hostOf, memoryCheckpoints, runCheckpointed, systemClock, withRetry, type Clock } from '../collect/runtime/index.ts';
 import { FEED_SOURCES, dedupeItems, type FeedSource } from './sources.ts';
+import { ensureRegistered } from '../collect/seeds/index.ts';
+import { httpRobotsFetcher, robotsGate, type RobotsFetcher } from '../collect/seeds/robots.ts';
+import type { CollectFailureCause } from '../../domain/collect.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
@@ -134,6 +137,13 @@ export async function pullDueFeeds(input: {
   sources?: readonly FeedSource[];
   /** Only sources this project may see: shared ones and its own. */
   projectId?: string | null;
+  /**
+   * How robots.txt is read before a source is asked. In production (no
+   * injected fetcher) it is always the real publisher's answer; a caller that
+   * injects a fake fetcher injects this too, or passes null to leave the
+   * check out of a test that is about something else.
+   */
+  robots?: RobotsFetcher | null;
 } = {}): Promise<{ source: string; inserted: number; error: string | null; outcome: 'COLLECTED' | 'NO_MATCHING_RECORDS' | 'SOURCE_UNREACHABLE'; duplicates: number }[]> {
   const now = input.now ?? new Date();
   const out: { source: string; inserted: number; error: string | null; outcome: 'COLLECTED' | 'NO_MATCHING_RECORDS' | 'SOURCE_UNREACHABLE'; duplicates: number }[] = [];
@@ -141,6 +151,7 @@ export async function pullDueFeeds(input: {
     (s) => input.projectId === undefined || !s.row || s.row.ownerProjectId === null || s.row.ownerProjectId === input.projectId,
   );
   let asked = 0;
+  const robots = robotsReaderFor(input);
   for (const source of list) {
     try {
       const state = await pullState(source.id);
@@ -157,6 +168,30 @@ export async function pullDueFeeds(input: {
     }
     const startedAt = Date.now();
     const method = source.row ? (METRIC_KIND[source.row.kind] ?? null) : null;
+    if (robots) {
+      // The publisher's robots.txt is read by the pull itself and recorded on the registry row; a refusal is recorded, never worked around.
+      let refusal: { cause: CollectFailureCause; message: string } | null = null;
+      try {
+        const gate = await robotsGate({ source, fetcher: robots, now, ensure: ensureRegistered });
+        if (!gate.allowed) {
+          refusal = gate.status === 'UNCHECKED'
+            // Unreadable is not a refusal: worded without "robots" so it is retried with backoff, not held for the interval.
+            ? { cause: 'SOURCE_UNREACHABLE', message: `access rules unreadable, not asked: ${gate.note.replace(/robots\.txt/gi, 'the rules file')}` }
+            : { cause: 'REFUSED', message: `${gate.status}: ${gate.note}` };
+        }
+      } catch (error) {
+        refusal = { cause: 'SOURCE_UNREACHABLE', message: `access rules not established, not asked: ${String(error instanceof Error ? error.message : error).replace(/robots/gi, 'rules')}` };
+      }
+      if (refusal) {
+        const message = refusal.message.slice(0, 300);
+        await recordPullMetrics(source.id, false, {
+          method, fetched: 0, inserted: 0, duplicates: null, relevant: null, signals: null, failureCause: refusal.cause,
+          wallMs: Date.now() - startedAt, bytes: null, memoryBytes: process.memoryUsage().rss, cheapCalls: null, claudeJobs: null,
+        }, message, now.toISOString());
+        out.push({ source: source.id, inserted: 0, error: message, outcome: 'SOURCE_UNREACHABLE', duplicates: 0 });
+        continue;
+      }
+    }
     try {
       const clock = input.clock ?? systemClock;
       const limiter = input.limiter ?? hostLimiter;
@@ -188,21 +223,43 @@ export async function pullDueFeeds(input: {
         batchSize: PULL_BATCH,
       });
       await recordPullMetrics(source.id, true, {
-        method, fetched: items.length, inserted, duplicates, relevant: null, signals: null, failureCause: null,
-        wallMs: Date.now() - startedAt, bytes: null, memoryBytes: null, cheapCalls: null, claudeJobs: null,
+        method, fetched: items.length, inserted, duplicates, relevant: null, signals: null,
+        failureCause: items.length === 0 ? 'NO_MATCHING_RECORDS' : null,
+        wallMs: Date.now() - startedAt,
+        // Measured only where the body is the text that arrived; a parsed JSON body's wire size is not known here.
+        bytes: typeof report.value === 'string' ? Buffer.byteLength(report.value) : null,
+        memoryBytes: process.memoryUsage().rss, cheapCalls: 0, claudeJobs: 0,
       }, null, now.toISOString());
       out.push({ source: source.id, inserted, error: null, outcome: items.length === 0 ? 'NO_MATCHING_RECORDS' : 'COLLECTED', duplicates });
     } catch (error) {
       const failure = classifyFailure(error);
       const message = failure.message.slice(0, 300);
       await recordPullMetrics(source.id, false, {
-        method, fetched: 0, inserted: 0, duplicates: null, relevant: null, signals: null, failureCause: 'SOURCE_UNREACHABLE',
-        wallMs: Date.now() - startedAt, bytes: null, memoryBytes: null, cheapCalls: null, claudeJobs: null,
+        method, fetched: 0, inserted: 0, duplicates: null, relevant: null, signals: null, failureCause: pullFailureCause(error, failure.cause),
+        wallMs: Date.now() - startedAt, bytes: null, memoryBytes: process.memoryUsage().rss, cheapCalls: 0, claudeJobs: 0,
       }, message, now.toISOString());
       out.push({ source: source.id, inserted: 0, error: message, outcome: 'SOURCE_UNREACHABLE', duplicates: 0 });
     }
   }
   return out;
+}
+
+/** Which robots.txt reader a pull uses: production always reads the publisher's real answer. Pure. */
+export function robotsReaderFor(input: { fetcher?: Fetcher; robots?: RobotsFetcher | null }): RobotsFetcher | null {
+  if (input.robots !== undefined) return input.robots;
+  return input.fetcher ? null : httpRobotsFetcher;
+}
+
+/** The stored cause of a failed pull, from what actually failed. Pure. */
+export function pullFailureCause(error: unknown, cause: string): CollectFailureCause {
+  if (error instanceof Error && /^UNPARSEABLE\b/.test(error.message)) return 'UNPARSEABLE';
+  switch (cause) {
+    case 'ROBOTS_DISALLOWED': case 'UNAUTHORIZED': case 'FORBIDDEN': case 'GONE': return 'REFUSED';
+    case 'RATE_LIMITED': return 'RATE_LIMITED';
+    case 'SERVER_ERROR': return 'SERVER_ERROR';
+    case 'TIMEOUT': return 'TIMEOUT';
+    default: return 'SOURCE_UNREACHABLE';
+  }
 }
 
 async function lastFailureMessage(source: string, failuresSince: number): Promise<string | null> {
