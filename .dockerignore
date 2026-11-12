@@ -25,3 +25,4 @@ docs
 *.log
 coverage
 .DS_Store
+agents/

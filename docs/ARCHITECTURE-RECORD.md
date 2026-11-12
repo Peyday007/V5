@@ -15455,3 +15455,58 @@ that no entry declares, so a future integration cannot be wired around it.
   from its last recorded row (deploys restart the process several times an
   hour). The workflows stay as a second door; credential repairs that write
   deployment secrets remain the workflow's, since the machine holds no Fly token.
+
+## 104. An open-source agent answers one narrow question, and Brain keeps the prospect, the decision and the record.
+
+**Owner's order, 2026-11-12.** "Install and operationalize proven open-source
+agents to accelerate Brain's revenue generation. Evaluate Hermes Agent,
+Sellbird (formerly Harvey), Skyvern, Browser Use, and OpenOutreach. Select
+complementary capabilities, not duplicate agents … Connect each agent through a
+narrow, callable interface to Brain. Give Brain ownership of opportunity state,
+task routing, results, and revenue records."
+
+**The evaluation** (each read at its repository's head, 2026-11-12):
+
+| agent | what it is | decision |
+|---|---|---|
+| Sellbird 0.4.0 (AGPL-3.0) | a prospecting pipeline: discover, read a business's own pages, find who decides, learn its address pattern, write and send | **Selected for its reading half only.** Its people and inbox finders (named owners from cards, prose and schema.org; hidden-address decoding; own-domain checks) are what the Neighbor Card's plain reader lacks. Its writer and sender are not used: Brain writes the copy and sends through Instantly under its own grants (§94). |
+| Browser Use 0.13.14 (MIT) | an LLM driving a real Chromium | **Selected, read-only,** for sites plain HTTP cannot read (a JavaScript shell, a challenge). 0.13 rather than 1.0: 1.0's engine has the model write Python in a REPL, which a 4B model on the existing GPU does badly and which cannot be restricted to reading. |
+| Skyvern | another LLM browser agent (vision, its own Postgres and server) | **Not selected:** it duplicates Browser Use and needs a vision model and a database Brain would not own. |
+| Hermes Agent | a general agent framework: memory, skills, schedules, messaging gateways | **Not selected:** Brain already owns orchestration, scheduling, memory and dispatch (§23, §56, §87); a second orchestrator is the duplicate the order forbids. |
+| OpenOutreach | LinkedIn automation through a logged-in browser | **Not selected:** LinkedIn's terms forbid automated use (`LEGAL_RISK`), it needs the owner's own login, and it would be a second outreach channel beside Instantly with none of its grants. |
+
+**The shape.**
+
+- **One private CPU app** (`agents/`, `northline-agents` on Fly, Flycast only,
+  stopped when idle): neither agent needs a GPU. Browser Use thinks with the
+  RunPod vLLM Brain already pays for (`browserModel`: the GPU, else the cheap
+  lane's named model), sent per request; the app holds no model key. Deployed by
+  `agents.yml` (`deploy`: build, run the service's tests inside the image, push,
+  replace the machine, a fresh key for both sides, one Brain restart).
+  Not `flyctl deploy`: one workflow ships the Brain.
+- **Two calls** (`server/services/agents/client.ts`), each a USAGE row under
+  `open-source-agents` in `integration_events` with addresses masked:
+  `POST /v1/sellbird/contacts {website}` and `POST /v1/browser/contact {website, llm}`.
+  Bearer key, compared in constant time, one refusal for every failure.
+  Unset, every call is a no-op and the callers are exactly as before.
+- **Brain takes only what a business published.** `pickSellbird` takes a named
+  owner's or manager's address only when it appears on the site's own pages
+  (then the greeting uses the first name), else the published inbox; a pattern
+  guess is never taken. The browser's claimed address is looked for again in
+  the HTML of the page it cites (`verify_on_page`) and taken only when found and
+  on the business's own domain — a small model invents plausible addresses.
+- **The browser agent cannot act.** Typing, keys, uploads, dropdowns, arbitrary
+  JavaScript, web search and files are removed from its tools; `allowed_domains`
+  is the business's own domain. Contacting, buying and committing stay behind
+  Brain's grants and the effects engine (§20, §94), unchanged.
+- **Where it runs in the revenue path.** The Neighbor Card refill (§103's hourly
+  pass, in-process and the workflow door) asks Sellbird only about a site the
+  plain reader found no address on (`BRAIN_AGENTS_SELLBIRD_PER_PASS`, default
+  40), and Browser Use only when Sellbird read one page or a challenge
+  (`BRAIN_AGENTS_BROWSER_PER_PASS`, default 2). The pass's line reports
+  `agents: Sellbird found/asked, Browser Use verified/asked`. What either finds
+  goes through the same mail-server check and `skip_if_in_workspace` as every
+  other address.
+- **Proof** is `agents.yml prove` (`scripts/agents-prove.ts`): Sellbird on real
+  businesses the plain reader missed, Browser Use on one site, from the deployed
+  Brain over the private network; it sends nothing.
