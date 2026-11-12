@@ -323,7 +323,11 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     name: 'Browser automation',
     purpose: 'A hosted browser Brain drives for pages that need one.',
     heldBy: 'BRAIN',
-    credentials: [fly('BRAIN_BROWSER_MCP_URL', ['WORKFLOW'], { required: false })],
+    credentials: [
+      fly('BRAIN_BROWSER_MCP_URL', ['WORKFLOW'], { required: false }),
+      // A browser signed in to an account Brain may operate (sources/browserWorkflow.ts); optional.
+      fly('BRAIN_BROWSER_SESSION_MCP_URL', ['OWNER'], { required: false }),
+    ],
     consumers: [{ component: 'Sources: browser reads', path: 'server/services/sources' }],
     capabilities: ['READ_SCRIPTED_PAGES'],
     probe: null,
