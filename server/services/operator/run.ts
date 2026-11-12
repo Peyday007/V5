@@ -78,9 +78,13 @@ export async function modelsFor(env: NodeJS.ProcessEnv = process.env): Promise<O
   const freeUrl = env['BRAIN_CHEAP_LLM_URL']?.trim() || null;
   // The switchboard's models, without the GPU's slot label `laneConfig` puts first.
   const freeModels = lane ? lane.models.filter((m) => !isRunpodSlot(m)) : [];
+  // The GPU only once its recipe serves tool calls in a window Hermes accepts (64K):
+  // production's pod runs Qwen3-4B at 32K without a tool-call parser, and a fallback
+  // to it failed every run it reached (HTTP 400, 2026-11-12 09:18).
+  const podReady = (env['BRAIN_OPERATOR_GPU'] ?? '').trim() === 'on';
   return operatorModels({
     lane: freeUrl ? { url: freeUrl, key: env['BRAIN_CHEAP_LLM_KEY']?.trim() || null, models: freeModels } : null,
-    pod: pod ? { url: pod.url, key: pod.key, model: pod.model } : null,
+    pod: pod && podReady ? { url: pod.url, key: pod.key, model: pod.model } : null,
     override: env['BRAIN_OPERATOR_MODEL'] ?? null,
   });
 }
@@ -169,7 +173,11 @@ export function parseOperatorStream(text: string): OperatorResult {
       continue;
     }
     if (event['type'] === 'tool' && typeof event['tool'] === 'string') {
-      calls.push({ tool: String(event['tool']).slice(0, 120), ok: event['ok'] !== false });
+      calls.push({
+        tool: String(event['tool']).slice(0, 120),
+        ok: event['ok'] !== false,
+        ...(typeof event['error'] === 'string' && event['error'] ? { error: event['error'].slice(0, 300) } : {}),
+      });
     } else if (event['type'] === 'result') {
       const memory = event['memory'] && typeof event['memory'] === 'object' ? (event['memory'] as Record<string, string>) : {};
       result = {

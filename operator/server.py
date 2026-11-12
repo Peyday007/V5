@@ -138,7 +138,13 @@ def translate(event: dict) -> dict | None:
     """Hermes' stream-json event → the line Brain reads. Tool inputs and outputs are not forwarded."""
     kind = event.get("type")
     if kind == "tool_result":
-        return {"type": "tool", "tool": str(event.get("name", ""))[:120], "ok": not event.get("is_error", False)}
+        ok = not event.get("is_error", False)
+        out = {"type": "tool", "tool": str(event.get("name", ""))[:120], "ok": ok}
+        if not ok:
+            # The refusal's first line, so a failed run names why. Brain's errors
+            # carry no payload or identifier the caller did not hold (invariant 30).
+            out["error"] = str(event.get("output", "")).strip().splitlines()[0][:300] if event.get("output") else ""
+        return out
     if kind == "system":
         return {"type": "system", "model": event.get("model")}
     return None
