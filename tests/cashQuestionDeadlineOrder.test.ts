@@ -87,4 +87,12 @@ describe('engine questions are raised Earliest Deadline First', () => {
     const sorted = [closing, garbage, undated].sort((x, y) => compareQuestionCandidates(x, y, NOW));
     expect(sorted[0]!.name).toBe('undated');
   });
+
+  it('gives no deadline priority to a window beyond the horizon: it keeps the existing order like an undated one', () => {
+    const far = candidate('far', 3, inDays(120));
+    const near = candidate('near', 3, inDays(10));
+    const undated = candidate('undated', 1, null);
+    const sorted = [far, near, undated].sort((x, y) => compareQuestionCandidates(x, y, NOW));
+    expect(sorted.map((one) => one.name)).toEqual(['near', 'undated', 'far']);
+  });
 });

@@ -7,7 +7,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { CashOpportunity } from '../server/domain/types.ts';
-import { compareDiveValue, diveOrder, type DiveValueFacts } from '../server/services/cash/validation.ts';
+import {
+  DEADLINE_PRIORITY_HORIZON_MS,
+  compareDiveValue,
+  diveOrder,
+  urgentClosing,
+  type DiveValueFacts,
+} from '../server/services/cash/validation.ts';
 import { DIVE_RUNWAY_MS, closesWithin } from '../server/services/cash/worthResearching.ts';
 
 const NOW = '2026-10-20T12:00:00.000Z';
@@ -113,5 +119,43 @@ describe('dive order reads a recorded closing date (EDF)', () => {
     const undated = row({ id: 'undated', createdAt: '2026-10-02T00:00:00.000Z', crossesTier: true });
     const order = diveOrder({ now: NOW, dropped: none, forGoal: none, shortWindow: none });
     expect(select([inside, undated], order, 2)).toEqual(['undated', 'inside']);
+  });
+});
+
+describe('a far-dated opening is not a quick play (review finding: unbounded band-1 promotion)', () => {
+  it('keeps an opening closing months away in band 2, in decision-value order behind higher-value undated ones', () => {
+    const undated = Array.from({ length: 3 }, (_, i) =>
+      row({ id: `ongoing-${i}`, createdAt: `2026-09-0${i + 1}T00:00:00.000Z`, crossesTier: true }),
+    );
+    const farDated = row({ id: 'far', createdAt: '2026-10-19T00:00:00.000Z', expiresAt: at(180 * DAY), crossesTier: false });
+    const yearsAway = row({ id: 'years', createdAt: '2026-10-19T00:00:00.000Z', expiresAt: '2029-01-31', crossesTier: false });
+    const order = diveOrder({ now: NOW, dropped: none, forGoal: none, shortWindow: none });
+    expect(select([...undated, farDated, yearsAway], order, 3)).toEqual(['ongoing-0', 'ongoing-1', 'ongoing-2']);
+  });
+
+  it('does not let a far date outrank a higher-value undated opening within band 2', () => {
+    const high = row({ id: 'high', createdAt: '2026-09-01T00:00:00.000Z', crossesTier: true });
+    const far = row({ id: 'far', createdAt: '2026-09-01T00:00:00.000Z', expiresAt: at(90 * DAY), crossesTier: false });
+    const order = diveOrder({ now: NOW, dropped: none, forGoal: none, shortWindow: none });
+    expect(select([far, high], order, 2)).toEqual(['high', 'far']);
+  });
+
+  it('promotes the same opening once its closing comes within the horizon, with slack left before the runway', () => {
+    expect(DEADLINE_PRIORITY_HORIZON_MS).toBe(10 * DIVE_RUNWAY_MS);
+    expect(DEADLINE_PRIORITY_HORIZON_MS - DIVE_RUNWAY_MS).toBeGreaterThanOrEqual(27 * DAY);
+    const high = row({ id: 'high', createdAt: '2026-09-01T00:00:00.000Z', crossesTier: true });
+    const edge = row({ id: 'edge', createdAt: '2026-10-19T00:00:00.000Z', expiresAt: at(DEADLINE_PRIORITY_HORIZON_MS), crossesTier: false });
+    const beyond = row({ id: 'beyond', createdAt: '2026-10-19T00:00:00.000Z', expiresAt: at(DEADLINE_PRIORITY_HORIZON_MS + DAY), crossesTier: false });
+    const order = diveOrder({ now: NOW, dropped: none, forGoal: none, shortWindow: none });
+    expect(select([high, beyond, edge], order, 3)).toEqual(['edge', 'high', 'beyond']);
+    expect(urgentClosing(edge.opportunity.expiresAt, NOW)).not.toBeNull();
+    expect(urgentClosing(beyond.opportunity.expiresAt, NOW)).toBeNull();
+  });
+
+  it('still orders a far-dated TEMPORARY_EXPLOIT by its band, without deadline priority over a near-dated one', () => {
+    const exploitFar = row({ id: 'exploit-far', createdAt: '2026-01-01T00:00:00.000Z', expiresAt: at(200 * DAY), mechanism: 'TEMPORARY_EXPLOIT', crossesTier: true });
+    const near = row({ id: 'near', createdAt: '2026-10-19T00:00:00.000Z', expiresAt: at(12 * DAY), crossesTier: false });
+    const order = diveOrder({ now: NOW, dropped: none, forGoal: none, shortWindow: none });
+    expect(select([exploitFar, near], order, 2)).toEqual(['near', 'exploit-far']);
   });
 });

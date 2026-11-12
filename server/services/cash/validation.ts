@@ -896,27 +896,57 @@ function closingInstant(expiresAt: string | null): number | null {
  *   0. an approved goal's own openings (owner, 2026-11-03);
  *   1. quick plays (owner, 2026-10-22: fast cash, a window of weeks is fine) —
  *      a TEMPORARY_EXPLOIT, one a cheap screen read as a short window, or one
- *      whose closing date is recorded and still outside the dive runway;
+ *      whose closing date is recorded, still outside the dive runway, and
+ *      within DEADLINE_PRIORITY_HORIZON_MS (a far-dated opening is not a quick
+ *      play and keeps its decision-value place in band 2);
  *   2. everything else;
  *   3. junk a cheap screen dropped, always last.
  *
- * Within a band, dated openings go Earliest Deadline First: the opening whose
- * latest useful start (closing − DIVE_RUNWAY_MS) comes first is dived first,
- * and an undated one sorts after every dated one. Production, 2026-11: 14 of 14
+ * Within a band, urgent dated openings go Earliest Deadline First: the one
+ * whose latest useful start (closing − DIVE_RUNWAY_MS) comes first is dived
+ * first, and one with no urgent date (undated, or beyond the horizon) sorts
+ * after them in decision-value order. Production, 2026-11: 14 of 14
  * dated openings (federal solicitations N0010426QAC01, 140LL027Q0005) expired
  * DISCOVERED — the order never read `expiresAt`, so each waited behind older
  * undated openings until it entered the runway, where `notWorthResearching`
  * correctly refuses it as CLOSES_TOO_SOON. No gate, runway or ceiling moves:
  * only which eligible opening takes a free slot first.
  */
+/**
+ * How far ahead a recorded closing date earns deadline priority.
+ *
+ * The owner's quick-play rule (2026-10-22) is fast cash, "a window of weeks".
+ * A date inside this horizon is urgent: the opening is a quick play and goes
+ * Earliest Deadline First. A date beyond it is not yet urgent, so it is ordered
+ * exactly like an undated opening, by decision value. Otherwise an opening that
+ * closes in months or years would jump ahead of every band-2 opening for no
+ * reason the owner gave. Ten runways (30 days) is weeks, and it leaves every
+ * such opening at least 27 days of slack before it enters the runway, so the
+ * miss it fixes cannot recur: it becomes urgent long before it is too late.
+ */
+export const DEADLINE_PRIORITY_HORIZON_MS = 10 * DIVE_RUNWAY_MS;
+
+/**
+ * The instant a recorded window closes, when that closing makes the opening
+ * urgent now: outside the dive runway (where it can no longer be dived) and
+ * inside the deadline-priority horizon (a window of weeks). Null otherwise —
+ * undated, unparseable, too close, or too far — and the decision-value order
+ * decides. Shared by the dive order and the engine-question order.
+ */
+export function urgentClosing(expiresAt: string | null, now: string): number | null {
+  if (closesWithin(expiresAt, now, DIVE_RUNWAY_MS)) return null;
+  const closes = closingInstant(expiresAt);
+  if (closes === null) return null;
+  return closes - Date.parse(now) <= DEADLINE_PRIORITY_HORIZON_MS ? closes : null;
+}
+
 export function diveOrder(input: {
   now: string;
   dropped: (opportunity: CashOpportunity) => boolean;
   forGoal: (opportunity: CashOpportunity) => boolean;
   shortWindow: (opportunity: CashOpportunity) => boolean;
 }): (a: CashOpportunity, b: CashOpportunity) => number {
-  const deadline = (opportunity: CashOpportunity): number | null =>
-    closesWithin(opportunity.expiresAt, input.now, DIVE_RUNWAY_MS) ? null : closingInstant(opportunity.expiresAt);
+  const deadline = (opportunity: CashOpportunity): number | null => urgentClosing(opportunity.expiresAt, input.now);
   const band = (opportunity: CashOpportunity): number => {
     if (input.dropped(opportunity)) return 3;
     if (input.forGoal(opportunity)) return 0;
