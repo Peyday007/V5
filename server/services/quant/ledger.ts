@@ -352,7 +352,7 @@ export function statesSame(held: PredictionRow, input: PredictionInput): boolean
  * the existing owner of the figures) is recorded as versioned predictions —
  * only when it states something new — and what each new version puts at risk
  * (the forecast's most cash out at once, or null when nobody stated it) is
- * recorded as its exposure. Then the whole ledger is read and judged:
+ * recorded as its exposure. Then this project's ledger, as held, is judged:
  * calibration, diagnoses, the smallest reusable causes and the plans to
  * recompute. No table, schedule or queue is added; the rows are `bin_events`.
  */
@@ -360,7 +360,14 @@ export async function keepCashLedger(
   projectId: string,
   currencies: readonly string[],
   deps: LedgerDeps & { forecast?: typeof cashForecast; measured?: (projectId: string) => Promise<CashOutcome[]> } = {},
-): Promise<{ written: PredictionRow[]; exposures: ExposureRow[]; outcomes: OutcomeRow[]; reading: ModelLearningReading }> {
+): Promise<{
+  written: PredictionRow[];
+  exposures: ExposureRow[];
+  outcomes: OutcomeRow[];
+  reading: ModelLearningReading;
+  /** This project's ledger as held after this refresh's own writes: what the refresh's learning step reads instead of reading again. */
+  ledger: { predictions: PredictionRow[]; exposures: ExposureRow[]; outcomes: OutcomeRow[] };
+}> {
   const written: PredictionRow[] = [];
   const exposures: ExposureRow[] = [];
   // One read per refresh, of this project's ledger only; what this refresh writes is added to it in memory,
@@ -384,7 +391,7 @@ export async function keepCashLedger(
   const measured = await (deps.measured ?? ((id: string) => outcomesFor({ projectId: id })))(projectId);
   const outcomes = await recordCashOutcomes(projectId, measured, scoped);
   ledger.outcomes.push(...outcomes);
-  return { written, exposures, outcomes, reading: await assessLedger({}, scoped) };
+  return { written, exposures, outcomes, reading: await assessLedger({}, scoped), ledger: await held() };
 }
 
 /** One ended deal's realized figures, read from its `cash_outcomes` rows. */

@@ -97,8 +97,10 @@ export async function loadCashKnowledge(projectId: string, now = Date.now()): Pr
   // Every refresh keeps the cash forecast's ledger and reads it back: the forecast's figures become
   // versioned claims when they change, and the knowledge carries the calibration reading.
   const currencies = opportunities.map((one) => one.currency).filter((one): one is string => typeof one === 'string' && one.length > 0);
+  // The learning step reads the ledger keepCashLedger already holds, writes included: one read of this
+  // project's ledger per refresh, never a second read and never one of every project's history (§61/§63).
   const learning = await keepCashLedger(projectId, currencies)
-    .then(() => learnFromCashLedger(projectId, currencies))
+    .then((kept) => learnFromCashLedger(projectId, currencies, { read: async () => kept.ledger }))
     .catch(() => null);
   const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, estimates: new Map(), learning };
   cache.set(projectId, { at: now, value });
@@ -227,7 +229,10 @@ async function alreadyRouted(goalId: string, key: string): Promise<boolean> {
  * read again on the next refresh is not.
  */
 export async function learnFromCashLedger(projectId: string, currencies: readonly string[], deps: LearningDeps = {}): Promise<ModelLearningReading> {
-  const rows = await (deps.read ?? readLedger)();
+  // Scoped to this project on purpose. Claim ids are per project (`cash:<project>:…`), every dependent goal
+  // is this project's, and a whole-ledger read here would also route other projects' corrections from this
+  // project's refresh. Calibration is pooled by comparableKey inside that one project's ledger, and nowhere else.
+  const rows = await (deps.read ?? (() => readLedger(projectId)))();
   const goals = await (deps.goals ?? dependentGoals)(projectId);
   const dependsOn = cashDependencyGraph(projectId, currencies, goals);
   const first = assessModelLearning({ ...rows, dependsOn });
