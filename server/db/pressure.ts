@@ -32,7 +32,7 @@
  * deferred pass derives from rows, so the next tick at NORMAL picks up exactly
  * where it would have.
  */
-import { databaseFailuresSince, statementTimesSince, type InfraFailureKind } from './infra.ts';
+import { databaseFailuresSince, stalledMsSince, statementTimesSince, type InfraFailureKind } from './infra.ts';
 
 export type DatabasePressure = 'NORMAL' | 'SHEDDING';
 
@@ -44,6 +44,18 @@ export const LEAVE_P90_MS = POOL_CHECKOUT_TIMEOUT_MS / 5;
 export const ENTER_FAILURES = 3;
 export const RECOVER_AFTER_MS = 5 * 60_000;
 export const MIN_SAMPLES = 20;
+/*
+ * The process's own event loop is the other half of "not keeping up". On
+ * 2026-11-12 (Deploy 43170557687, a5096e5) the database answered at a p90
+ * under the entry bound while this process stalled 2–12 s at a time — 42–55 s
+ * of CPU in every 60 s, a fifth of it garbage collection — and every caller
+ * queued behind the stalls, health checks included. Optional passes kept
+ * starting because only the database was read. Enter when the loop was held
+ * for as long as a queued caller may wait, summed over the window; leave only
+ * when the stalls are below the leave bound, under the same hysteresis.
+ */
+export const ENTER_STALLED_MS = POOL_CHECKOUT_TIMEOUT_MS;
+export const LEAVE_STALLED_MS = LEAVE_P90_MS;
 
 /**
  * The failures that mean the database is not keeping up. A lost connection is
@@ -77,6 +89,8 @@ export interface PressureReading {
 interface Window {
   times: number[];
   failures: number;
+  /** Event-loop stall time in the window (stalls of 2 s or more). */
+  stalledMs?: number;
   byKind?: Partial<Record<InfraFailureKind, number>>;
 }
 
@@ -89,6 +103,7 @@ function p90(times: number[]): number | null {
 /** Overloaded right now, by the entry rule. */
 export function overloaded(window: Window): boolean {
   if (window.failures >= ENTER_FAILURES) return true;
+  if ((window.stalledMs ?? 0) >= ENTER_STALLED_MS) return true;
   if (window.times.length < MIN_SAMPLES) return false;
   return (p90(window.times) ?? 0) >= ENTER_P90_MS;
 }
@@ -102,6 +117,7 @@ export function overloaded(window: Window): boolean {
  */
 export function healthy(window: Window): boolean {
   if (window.failures >= ENTER_FAILURES) return false;
+  if ((window.stalledMs ?? 0) >= LEAVE_STALLED_MS) return false;
   if (window.times.length < MIN_SAMPLES) return false;
   return (p90(window.times) ?? Infinity) < LEAVE_P90_MS;
 }
@@ -120,7 +136,7 @@ export function databasePressure(now = Date.now()): PressureReading {
   const byKind = databaseFailuresSince(now - WINDOW_MS);
   let failures = 0;
   for (const [kind, n] of Object.entries(byKind)) if (OVERLOAD_KINDS.has(kind as InfraFailureKind)) failures += n ?? 0;
-  return advance({ times: statementTimesSince(now - WINDOW_MS), failures, byKind }, now);
+  return advance({ times: statementTimesSince(now - WINDOW_MS), failures, stalledMs: stalledMsSince(now - WINDOW_MS), byKind }, now);
 }
 
 /** The state machine over one window. Exported for tests. */
@@ -142,7 +158,9 @@ export function advance(window: Window, now: number): PressureReading {
       reason =
         window.failures >= ENTER_FAILURES
           ? `${window.failures} statement(s) the database could not answer in the last ${WINDOW_MS / 1000}s`
-          : `90th-percentile statement time ${Math.round(p90(window.times)!)}ms over ${window.times.length} statements in the last ${WINDOW_MS / 1000}s, at or past the ${ENTER_P90_MS}ms a queued caller may wait`;
+          : (window.stalledMs ?? 0) >= ENTER_STALLED_MS
+            ? `this process's event loop was stalled ${Math.round(window.stalledMs! / 1000)}s of the last ${WINDOW_MS / 1000}s, at or past the ${ENTER_STALLED_MS}ms a queued caller may wait`
+            : `90th-percentile statement time ${Math.round(p90(window.times)!)}ms over ${window.times.length} statements in the last ${WINDOW_MS / 1000}s, at or past the ${ENTER_P90_MS}ms a queued caller may wait`;
       notify(reading());
     }
     return reading();
