@@ -590,14 +590,18 @@ export const PLACES_QUERIES: { query: string; key: keyof typeof CATEGORY; town: 
 );
 
 /**
- * Several Text Searches a pass, sent concurrently, rotating through every kind ×
+ * Several Text Searches a pass, beside the other sources, rotating through every kind ×
  * town. The registry's daily ceiling (the spend guard, invariant 38) is the
  * only limit on how many a day; a refused search ends that pass's searches.
  */
 export async function discoverPlaces(deps: Deps, slot: number, count = 1): Promise<{ found: Candidate[]; line: string }> {
   if (!deps.places) return { found: [], line: 'Places not used this pass' };
   const picks = Array.from({ length: Math.max(1, count) }, (_, i) => slot * count + i);
-  const results = await Promise.all(picks.map((n) => discoverOnePlace(deps, n)));
+  // One after another: each reads the meter after the last one recorded, so the
+  // ceiling is never overshot by searches that read it at the same moment.
+  // Every other source of the pass still runs beside them.
+  const results: { found: Candidate[]; line: string }[] = [];
+  for (const n of picks) results.push(await discoverOnePlace(deps, n));
   return { found: results.flatMap((r) => r.found), line: results.map((r) => r.line).join('; ') };
 }
 
