@@ -646,42 +646,49 @@ export async function readDeficiencies(): Promise<DeficiencyReading[]> {
   const projectIds = (await listProjects()).map((p) => p.id);
   const snapshot = await operatorSnapshot(projectIds);
   const goals = briefOrder(snapshot).slice(0, 6);
-  // 1. A goal held on a person by cards nobody can answer, and cards that keep coming back.
-  const reopened = await getDb()
-    .all<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM project_events WHERE event_type = 'OPERATOR_WITHDREW_MOOT_REQUEST' AND created_at >= ?`,
-      [new Date(Date.now() - 7 * 24 * 3_600_000).toISOString()],
+  // 1. A goal held on a person by cards nobody can answer, and cards that keep coming back. Counted
+  //    per project from the withdrawals already made, so withdrawing today's card does not hide the
+  //    recurrence that makes it an engineering defect rather than a chore.
+  const weekAgo = new Date(Date.now() - 7 * 24 * 3_600_000).toISOString();
+  const withdrawn = await getDb()
+    .all<{ project_id: string; n: number }>(
+      `SELECT project_id, COUNT(*) AS n FROM project_events WHERE event_type = 'OPERATOR_WITHDREW_MOOT_REQUEST' AND created_at >= ? GROUP BY project_id`,
+      [weekAgo],
     )
-    .then((rows) => Number(rows[0]?.n ?? 0))
-    .catch(() => 0);
+    .then((rows) => new Map(rows.map((r) => [r.project_id, Number(r.n)])))
+    .catch(() => new Map<string, number>());
   for (const goal of goals) {
     const requests = goal.projectId ? (snapshot.requests.get(goal.projectId) ?? []) : [];
     const moot = requests.filter((one) => one.moot);
-    if (moot.length > 0 && goal.waiting.startsWith('PERSON')) {
-      const recurrence = moot.length + reopened;
-      out.push(
-        reading({
-          goalId: goal.id,
-          deficiency: 'RECURRING_OPERATIONAL_FAILURE',
-          title: 'Answered research cards come back as moot person-requests and hold the goal on a person',
-          observed:
-            `Goal ${goal.id} reads ${goal.state}, waiting on a person ("${goal.waiting.slice(0, 160)}"), while ${moot.length} open request(s) are moot — ` +
-            `their missions already left NEEDS_HUMAN, so no answer can apply. ${reopened} moot card(s) were withdrawn in 7 days and new ones keep arriving.`,
-          evidence: moot.slice(0, 5).map((m) => `${m.requestId}: mission ${m.missionId} ${m.missionState}, packet ${m.packetStatus}; recommendation "${m.recommendation ?? ''}"`).join('; '),
-          cause:
-            "russell/loop.ts 'answered-requests' passes every failed resume to reopenAnswered, including 'the mission moved out of Needs You before the answer could be applied' — " +
-            'a failure that can never succeed, so the card is put back in front of the person for a decision nobody can make.',
-          ownerPaths: ['server/services/russell/needsHuman.ts', 'server/services/russell/loop.ts'],
-          recurrence,
-          expectedBenefit: `The goal stops reading BLOCKED on a person for nothing; Brain's own next action (research, construction) leads instead, and the owner's Needs You holds only real decisions.`,
-          acceptance: 'A test answers a request whose mission already left NEEDS_HUMAN and shows the card is withdrawn with the reason, not reopened, and a request whose mission still waits is reopened as before.',
-          metric: 'OWNER_INTERVENTIONS_PER_DAY',
-          blocksGoal: true,
-          share: 0.3,
-          proposed: null,
-        }),
-      );
-    }
+    const reopened = goal.projectId ? (withdrawn.get(goal.projectId) ?? 0) : 0;
+    const held = moot.length > 0 && goal.waiting.startsWith('PERSON');
+    if (!held && reopened < 2) continue;
+    const recurrence = moot.length + reopened;
+    out.push(
+      reading({
+        goalId: goal.id,
+        deficiency: 'RECURRING_OPERATIONAL_FAILURE',
+        title: 'Answered research cards come back as moot person-requests and hold the goal on a person',
+        observed:
+          `Goal ${goal.id} reads ${goal.state}, waiting on "${goal.waiting.slice(0, 160)}"; ${moot.length} open request(s) are moot — ` +
+          `their missions already left NEEDS_HUMAN, so no answer can apply — and ${reopened} moot card(s) were withdrawn in 7 days while new ones keep arriving.`,
+        evidence: [
+          ...moot.slice(0, 5).map((m) => `${m.requestId}: mission ${m.missionId} ${m.missionState}, packet ${m.packetStatus}; recommendation "${m.recommendation ?? ''}"`),
+          `${reopened} OPERATOR_WITHDREW_MOOT_REQUEST event(s) in this project since ${weekAgo}`,
+        ].join('; '),
+        cause:
+          "russell/loop.ts 'answered-requests' passes every failed resume to reopenAnswered (needsHuman.ts), including 'the mission moved out of Needs You before the answer could be applied' — " +
+          'a failure that can never succeed, so the card is put back in front of the person for a decision nobody can make.',
+        ownerPaths: ['server/services/russell/needsHuman.ts', 'server/services/russell/loop.ts'],
+        recurrence,
+        expectedBenefit: "The goal stops reading BLOCKED on a person for nothing; Brain's own next action (research, construction) leads instead, and the owner's Needs You holds only real decisions.",
+        acceptance: 'A test answers a request whose mission already left NEEDS_HUMAN and shows the card is withdrawn with the reason, not reopened, and a request whose mission still waits is reopened as before.',
+        metric: 'OWNER_INTERVENTIONS_PER_DAY',
+        blocksGoal: true,
+        share: held ? 0.3 : 0.15,
+        proposed: null,
+      }),
+    );
   }
   // 2. The operator itself: runs that failed on the model, not on Brain.
   const { recentOperatorRuns } = await import('../../repos/operator.ts');
