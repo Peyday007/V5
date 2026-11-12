@@ -168,6 +168,13 @@ export async function listLearnedSubjects(reader: SearchReader, opts: { includeR
   return rows.map(toSubject);
 }
 
+/** One learned subject the reader may see, retired or not; null when it is not there or not theirs. */
+export async function getLearnedSubject(reader: SearchReader, id: string): Promise<LearnedSubject | null> {
+  const vis = visibleSql(reader);
+  const row = await getDb().get<Row>(`SELECT * FROM learned_subjects WHERE id = ? AND ${vis.sql}`, [id, ...vis.params]);
+  return row ? toSubject(row) : null;
+}
+
 /**
  * A subject seen again is current: its `updated_at` moves, and a subject that
  * was retired only to make room is offered again. The label and the source it
@@ -238,6 +245,18 @@ export async function createSearchMethod(
     [input.scope, project ?? '', user ?? '', input.methodKey, version],
   );
   if (!row) throw new Error('A search method was not found after it was written.');
+  /*
+   * A method written before it knew its subject is linked to it now. Only an
+   * empty subject is filled: a method's subject, once stated, is never
+   * rewritten by a later caller naming another.
+   */
+  if (input.subjectId && row.subject_id == null) {
+    await db.run(`UPDATE search_methods SET subject_id = ?, updated_at = ? WHERE id = ? AND subject_id IS NULL`, [
+      input.subjectId, nowIso(), str(row.id),
+    ]);
+    const linked = await db.get<Row>(`SELECT * FROM search_methods WHERE id = ?`, [str(row.id)]);
+    if (linked) return toMethod(linked);
+  }
   return toMethod(row);
 }
 

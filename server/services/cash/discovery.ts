@@ -92,7 +92,7 @@ import {
 } from '../../repos/cashDiscovery.ts';
 import { listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
 import { discoveryYield, usefulOpeningIds, yieldGuidance } from './discoveryYield.ts';
-import { bucketGates, recordRoundAsRun, roundSourceAccess } from '../research/searchMethods/bucketMethods.ts';
+import { bucketGates, compareSubjectBuckets, recordRoundAsRun, roundSourceAccess, subjectOfBucket } from '../research/searchMethods/bucketMethods.ts';
 import { getClaim, signalledClaims } from '../../repos/research.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
@@ -1536,6 +1536,35 @@ async function closeEndedRounds(input: {
         ...(await roundSourceAccess(missions?.orchestrationIds ?? [])),
       });
     } catch { /* the round is closed; its run is an addition */ }
+    /*
+     * A round asked through a learned subject's lens is a run of a method for
+     * that subject, so every method this project asks for the same subject is
+     * compared on the openings their rounds filed — automatically, rather
+     * than only when somebody types a comparison. A failure here never undoes
+     * the close.
+     */
+    const subjectId = subjectOfBucket(entry.bucket.id);
+    if (subjectId) {
+      try {
+        const roundBucket = new Map((await listRounds(input.projectId)).map((r) => [r.id, r.bucketId]));
+        const byBucket = new Map<string, CashOpportunity[]>();
+        for (const one of opportunities) {
+          const bucketId = one.discoveryRoundId ? roundBucket.get(one.discoveryRoundId) : undefined;
+          if (!bucketId || !subjectOfBucket(bucketId)) continue;
+          byBucket.set(bucketId, [...(byBucket.get(bucketId) ?? []), one]);
+        }
+        const yields = new Map<string, { surfaced: string[]; confirmed: string[]; rejected: string[] }>();
+        for (const [bucketId, filed] of byBucket) {
+          const useful = await usefulOpeningIds(input.projectId, filed);
+          yields.set(bucketId, {
+            surfaced: filed.map((one) => one.id),
+            confirmed: filed.filter((one) => useful.has(one.id)).map((one) => one.id),
+            rejected: filed.filter((one) => one.duplicateOfId && !useful.has(one.id)).map((one) => one.id),
+          });
+        }
+        await compareSubjectBuckets(input.projectId, subjectId, yields);
+      } catch { /* the round is closed; its comparison is an addition */ }
+    }
     if (to === 'HARVESTED') continue;
     const why = mission
       ? `its research is ${mission.state.toLowerCase()}`

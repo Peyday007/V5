@@ -26,6 +26,9 @@ import type { RunOutcome, SearchMethod, SearchReader } from '../../../domain/sea
 import { decideMethod, type MethodDecision } from '../searchFailures/classify.ts';
 import { routeRequest, type Route } from '../searchRouting/route.ts';
 import { recordRunAndSettle } from './lifecycle.ts';
+import { autoCompareSubject, sameSubject, type SubjectMethodYield } from './compare.ts';
+import { SUBJECT_LENS_PREFIX } from '../../knowledge/subjects/subjects.ts';
+import type { CompareResult } from './compare.ts';
 import { currentFragments } from '../../../repos/research.ts';
 import { UNREADABLE_CAUSES, blockCauseOf } from '../gate.ts';
 
@@ -119,12 +122,26 @@ export function outcomeOfRound(ending: RoundEnding): { outcome: RunOutcome; fail
   return null;
 }
 
-/** The bucket's method, created on its first recorded run. */
+/**
+ * The subject a bucket searches for: the learned subject a lens was made from,
+ * or null for a bucket that asks a mechanism question about no one subject.
+ */
+export function subjectOfBucket(bucketId: string): string | null {
+  if (!bucketId.startsWith(SUBJECT_LENS_PREFIX)) return null;
+  return bucketId.slice(SUBJECT_LENS_PREFIX.length) || null;
+}
+
+/**
+ * The bucket's method, created on its first recorded run. A lens's method is
+ * linked to the learned subject it was asked through, and one recorded before
+ * that link existed is linked on its next run.
+ */
 export async function methodForBucket(projectId: string, bucket: BucketShape): Promise<SearchMethod> {
   return createSearchMethod({
     scope: 'PROJECT',
     projectId,
     methodKey: bucket.id,
+    subjectId: subjectOfBucket(bucket.id),
     finds: (bucket.question?.trim() || bucket.title).slice(0, 2_000),
     usefulWhen: bucket.mechanism ? `openings by the ${bucket.mechanism} mechanism` : null,
     sources: ['cash discovery round'],
@@ -200,4 +217,34 @@ export async function bucketGates(projectId: string, bucketIds: readonly string[
     out.set(id, { route, decision, mayOpen: decision.action === 'RUN' });
   }
   return out;
+}
+
+/**
+ * Compare every method this project asks for one subject, on what their rounds
+ * filed. `yieldsByBucket` is each bucket's openings — surfaced, confirmed
+ * (reached CANDIDATE) and rejected (duplicated one already held) — and only
+ * buckets whose method is for the same subject (`sameSubject`: the same
+ * learned subject, or one with the same key) take part. Recorded in the
+ * project through `autoCompareSubject`; null when there was nothing to compare
+ * or nothing new.
+ */
+export async function compareSubjectBuckets(
+  projectId: string,
+  subjectId: string,
+  yieldsByBucket: ReadonlyMap<string, Omit<SubjectMethodYield, 'methodId'>>,
+): Promise<CompareResult | null> {
+  const reader = readerForProject(projectId);
+  const latest = new Map<string, SearchMethod>();
+  for (const method of await listSearchMethods(reader)) {
+    if (method.scope !== 'PROJECT' || method.projectId !== projectId || !yieldsByBucket.has(method.methodKey)) continue;
+    const held = latest.get(method.methodKey);
+    if (!held || method.version > held.version) latest.set(method.methodKey, method);
+  }
+  const yields: SubjectMethodYield[] = [];
+  for (const [bucketId, method] of latest) {
+    if (method.trustState === 'RETIRED') continue;
+    if (!(await sameSubject(reader, method.subjectId, subjectId))) continue;
+    yields.push({ methodId: method.id, ...yieldsByBucket.get(bucketId)! });
+  }
+  return autoCompareSubject(reader, { subjectId, scope: { scope: 'PROJECT', projectId }, yields });
 }

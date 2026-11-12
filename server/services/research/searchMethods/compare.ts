@@ -16,7 +16,7 @@
  * the reader holds — its one project, else its user, else GENERAL. A GENERAL
  * comparison is refused if the shared data it names holds anything private.
  */
-import { getSearchMethod, recordMethodComparison } from '../../../repos/searchMethods.ts';
+import { getLearnedSubject, getSearchMethod, listMethodComparisons, recordMethodComparison } from '../../../repos/searchMethods.ts';
 import { scopeProblem, type ScopeRef, type SearchReader } from '../../../domain/searchIntelligence.ts';
 import { PrivateDataRefused } from '../../knowledge/scope/privacy.ts';
 import { rankByPrecision, type MethodMetrics } from './metrics.ts';
@@ -48,6 +48,20 @@ export function comparisonScopeFor(reader: SearchReader): ScopeRef {
   return { scope: 'GENERAL' };
 }
 
+/** The learned subject's key when the id names one the reader can see; otherwise null. */
+async function subjectKeyOf(reader: SearchReader, subjectId: string | null): Promise<string | null> {
+  if (!subjectId) return null;
+  return (await getLearnedSubject(reader, subjectId))?.subjectKey ?? null;
+}
+
+/** Whether a method stated for `methodSubject` is for the subject the caller named. */
+export async function sameSubject(reader: SearchReader, methodSubject: string | null, requested: string): Promise<boolean> {
+  if (!methodSubject) return false;
+  if (methodSubject === requested) return true;
+  const [a, b] = await Promise.all([subjectKeyOf(reader, methodSubject), subjectKeyOf(reader, requested)]);
+  return a !== null && a === b;
+}
+
 export async function compareMethods(
   reader: SearchReader,
   input: {
@@ -74,7 +88,7 @@ export async function compareMethods(
   for (const id of ids) {
     const method = await getSearchMethod(reader, id);
     if (!method) return { ok: false, reason: 'A compared method was not found.' };
-    if (method.subjectId !== input.subjectId) {
+    if (!(await sameSubject(reader, method.subjectId, input.subjectId))) {
       return { ok: false, reason: 'Every compared method must be for the same subject.' };
     }
     const r = input.results[id]!;
@@ -146,4 +160,53 @@ export async function compareMethods(
       decidedBy,
     },
   };
+}
+
+/** What one method filed from the shared data: the items it surfaced, and which of them were confirmed or rejected. */
+export interface SubjectMethodYield {
+  methodId: string;
+  surfaced: readonly string[];
+  confirmed: readonly string[];
+  rejected: readonly string[];
+}
+
+/**
+ * Compare, without anybody asking, every method for one subject on the data
+ * they share — called whenever a run of a subject's method is recorded.
+ *
+ * The shared data is the union of what the methods surfaced, so each is judged
+ * on the same items: what it confirmed and rejected among them, ranked by
+ * precision. Nothing is recorded unless at least two methods for the subject
+ * have surfaced something, or when the latest comparison for the subject in
+ * this scope already covered exactly these items and methods — a tick that
+ * learned nothing new writes nothing.
+ */
+export async function autoCompareSubject(
+  reader: SearchReader,
+  input: { subjectId: string; scope: ScopeRef; yields: readonly SubjectMethodYield[] },
+): Promise<CompareResult | null> {
+  const live = input.yields.filter((y) => y.surfaced.length > 0);
+  if (new Set(live.map((y) => y.methodId)).size < 2) return null;
+  const items = [...new Set(live.flatMap((y) => y.surfaced))].sort();
+  const results: Record<string, MethodResult> = {};
+  for (const y of live) {
+    const surfaced = new Set(y.surfaced);
+    results[y.methodId] = {
+      surfaced: [...surfaced],
+      confirmed: [...new Set(y.confirmed)].filter((x) => surfaced.has(x)),
+      rejected: [...new Set(y.rejected)].filter((x) => surfaced.has(x) && !y.confirmed.includes(x)),
+    };
+  }
+  const methodIds = Object.keys(results).sort();
+  const [latest] = await listMethodComparisons(reader, { subjectId: input.subjectId, limit: 1 });
+  if (
+    latest &&
+    latest.scope === input.scope.scope &&
+    (latest.projectId ?? null) === (input.scope.projectId ?? null) &&
+    [...latest.itemRefs].sort().join('\n') === items.join('\n') &&
+    latest.entries.map((e) => e.methodId).sort().join('\n') === methodIds.join('\n')
+  ) {
+    return null;
+  }
+  return compareMethods(reader, { subjectId: input.subjectId, items, results, scope: input.scope });
 }
