@@ -71,7 +71,10 @@ export async function opportunityPathsMarkedOnRows(): Promise<ProbeResult> {
     try {
       reading = await readGoalPlan({ goalId: goal.id, persist: false });
     } catch (error) {
-      return { ok: false, detail: `goal ${goal.id}: the plan could not be read (${error instanceof Error ? error.message.slice(0, 120) : 'error'})` };
+      // A read that did not complete (production 2026-11-12: the database pool had no free
+      // connection) says nothing about the pathways: UNKNOWN, asked again later, never a FAIL
+      // that reopens the requirement and queues a repair nobody can make.
+      return { ok: null, detail: `goal ${goal.id}: the plan could not be read (${error instanceof Error ? error.message.slice(0, 120) : 'error'})` };
     }
     for (const p of reading?.pathways?.pathways ?? []) {
       const problem = pathwayProblem(p);
