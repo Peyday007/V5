@@ -28,12 +28,15 @@ import {
   getHumanRequest,
   getMission,
   listOpenRequests,
+  reopenRequest,
   transitionMission,
 } from '../server/repos/russellMissions.ts';
 import {
   NEEDS_HUMAN_CHOICES,
   reopenAnswered,
   resumeAnsweredRequest,
+  unparkResolvedMissions,
+  withdrawMootBacklog,
 } from '../server/services/russell/needsHuman.ts';
 
 const MOVED_OUT = 'the mission moved out of Needs You before the answer could be applied';
@@ -173,5 +176,65 @@ describe('reopenAnswered and a mission that left Needs You', () => {
     expect(after.state).toBe('OPEN');
     expect(after.choices.map((choice) => choice.key)).toEqual(request.choices.map((choice) => choice.key));
     expect(after.whyNotRussell).toBe(request.whyNotRussell);
+  });
+});
+
+/**
+ * The backlog the fix above cannot reach: cards an earlier `reopenAnswered`
+ * already put back OPEN on "the mission moved out of Needs You". They are not
+ * ANSWERED, so the `answered-requests` pass never sees them again; the loop's
+ * `unpark-resolved` pass withdraws them.
+ */
+describe('the moot cards an earlier version already re-opened', () => {
+  /** What the old reopenAnswered did: answered, mission left Needs You, card re-opened OPEN. */
+  async function reopenedMootCard(missionTo: 'CANCELLED' | 'RUNNING', recommendation = MOVED_OUT) {
+    const missionId = await parkedMission();
+    const request = await answeredRequest(missionId, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    expect(await transitionMission({ missionId, from: 'NEEDS_HUMAN', to: missionTo, terminalReason: 'moved elsewhere' })).toBe(true);
+    expect(
+      await reopenRequest({ requestId: request.id, choices: request.choices, recommendation }),
+    ).toBe(true);
+    expect((await getHumanRequest(request.id))!.state).toBe('OPEN');
+    return { missionId, requestId: request.id };
+  }
+
+  const decisions = async (requestId: string) =>
+    (await listEventsByEntity('RUSSELL_HUMAN_REQUEST', requestId)).filter((event) => event.eventType === 'RUSSELL_ROUTINE_DECISION');
+
+  it('A01: withdraws an OPEN moot card whose mission is CANCELLED, once, on the loop\'s unpark pass', async () => {
+    const { missionId, requestId } = await reopenedMootCard('CANCELLED');
+
+    await unparkResolvedMissions(50);
+
+    const after = (await getHumanRequest(requestId))!;
+    expect(after.state).toBe('WITHDRAWN');
+    expect(after.whyNotRussell).toMatch(/CANCELLED/);
+    expect((await listOpenRequests(fixture.project.id)).map((r) => r.id)).not.toContain(requestId);
+    expect((await getMission(missionId))!.state).toBe('CANCELLED');
+    const events = await decisions(requestId);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.payload).toMatchObject({
+      choice: 'WITHDRAW_MOOT_ANSWER', requestId, missionId, missionState: 'CANCELLED', reason: MOVED_OUT, surface: 'RUSSELL',
+    });
+
+    // A second tick changes nothing and records nothing.
+    await unparkResolvedMissions(50);
+    expect((await getHumanRequest(requestId))!.state).toBe('WITHDRAWN');
+    expect(await decisions(requestId)).toHaveLength(1);
+  });
+
+  it('leaves the card OPEN when its mission came back to NEEDS_HUMAN, or when it was re-asked for another reason', async () => {
+    const back = await reopenedMootCard('RUNNING');
+    expect(await transitionMission({ missionId: back.missionId, from: 'RUNNING', to: 'NEEDS_HUMAN', waitingOn: 'a person to authorize the plan' })).toBe(true);
+    const other = await reopenedMootCard('CANCELLED', 'the person who answered cannot be resolved');
+
+    // The sweep alone: the unpark pass around it separately resumes a live
+    // packet's NEEDS_HUMAN mission, which is not what this pins.
+    expect(await withdrawMootBacklog(50)).toEqual([]);
+
+    expect((await getHumanRequest(back.requestId))!.state).toBe('OPEN');
+    expect((await getHumanRequest(other.requestId))!.state).toBe('OPEN');
+    expect(await decisions(back.requestId)).toHaveLength(0);
+    expect(await decisions(other.requestId)).toHaveLength(0);
   });
 });
