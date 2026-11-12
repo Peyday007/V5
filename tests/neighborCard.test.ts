@@ -60,6 +60,7 @@ describe('the campaign as written is the campaign as read back', () => {
     }
     const written = campaignDefinition(senders, 105);
     expect(shapeProblems(written, senders, 105)).toEqual([]);
+    expect(shapeProblems({ ...written, email_gap: undefined }, senders, 105).join()).toMatch(/send gap reads undefined, expected 4/);
   });
 
   it('names a blank body, a missing address and a throttling cap', () => {

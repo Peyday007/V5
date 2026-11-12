@@ -95,8 +95,19 @@ ${SIGN}<p><i>Reply "no thanks" to opt out.</i></p>`,
   },
 ];
 
+/**
+ * Minutes between two sends from one inbox. Left unset, Instantly's default gap
+ * held each 90/day inbox to about 42 sends in the 7-hour window (2026-11-12:
+ * 87 sent by 11:24 ET from 12 inboxes), so the healthy capacity sat idle while
+ * uncontacted leads waited. 420 minutes / 90 sends needs a gap of at most 4.
+ */
+export const SEND_GAP_MINUTES = 4;
+export const RANDOM_WAIT_MAX_MINUTES = 1;
+
 export function campaignDefinition(senders: string[], dailyLimit: number): Record<string, unknown> {
   return {
+    email_gap: SEND_GAP_MINUTES,
+    random_wait_max: RANDOM_WAIT_MAX_MINUTES,
     campaign_schedule: {
       schedules: [{ name: 'Weekdays ET', timing: { from: '09:00', to: '16:00' }, days: { '1': true, '2': true, '3': true, '4': true, '5': true }, timezone: 'America/Detroit' }],
     },
@@ -126,6 +137,7 @@ export function shapeProblems(campaign: Record<string, unknown>, senders: string
   const list = [...((campaign.email_list as string[] | undefined) ?? [])].sort();
   if (list.join(',') !== [...senders].sort().join(',')) problems.push(`senders read back as ${list.length}, expected ${senders.length}`);
   if (campaign.daily_limit !== dailyLimit) problems.push(`daily limit reads ${String(campaign.daily_limit)}, expected ${dailyLimit}`);
+  if (campaign.email_gap !== SEND_GAP_MINUTES) problems.push(`send gap reads ${String(campaign.email_gap)}, expected ${SEND_GAP_MINUTES} minutes`);
   return problems;
 }
 
