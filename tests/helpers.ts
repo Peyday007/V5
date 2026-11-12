@@ -2,6 +2,8 @@
  * Shared harness. Every test file gets its own data root (see tests/setup.ts), so
  * these helpers can freely create projects, layers, documents and real files.
  */
+import { resetStallLog } from '../server/db/infra.ts';
+import { resetPressure } from '../server/db/pressure.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
@@ -322,6 +324,11 @@ export async function freshProject(): Promise<TestProject> {
   await closeDatabase();
   fs.rmSync(path.join(DATA_ROOT, 'projects'), { recursive: true, force: true });
   await openTestDatabase();
+  // A fresh database starts unpressured. The stall log and the pressure state
+  // are module-global, so stalls an earlier, heavier test caused in this worker
+  // would otherwise hold this one in SHEDDING and defer its optional work (§63).
+  resetStallLog();
+  resetPressure();
   const { project, layers } = await seedDealDispatch();
   return {
     project,
