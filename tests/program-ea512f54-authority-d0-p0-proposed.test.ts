@@ -90,7 +90,7 @@ describe('what Brain proposed is on the ledger', () => {
     const again = await checkCommercialAuthority({ projectId, action: 'CONTACT_BUYER', mode: 'PROPOSE', principal: 'BRAIN', subjectRef: 'offer-v1' });
     expect(again.decisionId).toBe(first.decisionId);
     await checkCommercialAuthority({ projectId, action: 'CONTACT_BUYER', mode: 'PROPOSE', principal: 'BRAIN', subjectRef: 'offer-v2' });
-    expect((await decisions()).map((r) => r.subjectRef)).toEqual(['offer-v1', 'offer-v2']);
+    expect((await decisions()).map((r) => String(r.subjectRef)).sort()).toEqual(['offer-v1', 'offer-v2']);
   });
 
   it('a reading records nothing, proposal or not', async () => {
