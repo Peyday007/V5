@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
-import { parseResult, type Completer, type LaneConfig } from '../server/services/cheap/lane.ts';
+import { getDb } from '../server/db/database.ts';
+import { TASKS, type Completer, type LaneConfig } from '../server/services/cheap/lane.ts';
+import { createDetectorFromExamples } from '../server/services/feeds/learned.ts';
+import { pullDueFeeds, SCREENS_PER_PASS, screenFeedLeads } from '../server/services/feeds/run.ts';
+import type { FeedSource } from '../server/services/feeds/sources.ts';
 import {
   planExecution,
   routeRequest,
-  settleUncertain,
   type MethodResult,
 } from '../server/services/research/searchRouting/route.ts';
 
-const config: LaneConfig = { url: 'http://cheap.test/v1', key: null, models: ['m1'], dailyBudget: 100, timeoutMs: 1000 };
+const config: LaneConfig = { url: 'http://cheap.test/v1', key: null, models: ['m1'], dailyBudget: 1000, timeoutMs: 1000 };
 const method = { id: 'mth_1', looksFor: 'county RFQs for parcel data' };
 const result = (id: string, codeVerdict: MethodResult['codeVerdict']): MethodResult => ({
   id,
@@ -31,26 +34,51 @@ describe('search routing', () => {
     expect(routeRequest(method)).toBe('CODE');
   });
 
-  it('refuses off-shape lane answers', () => {
-    expect(parseResult('{"verdict":"KEEP","reason":"x"}')).toEqual({ verdict: 'KEEP', reason: 'x' });
-    expect(parseResult('{"verdict":"MAYBE"}')).toBeNull();
-    expect(parseResult('{"verdict":"KEEP","extra":1}')).toBeNull();
-  });
-
-  it('settles uncertain results through the lane and never turns silence into DROP', async () => {
+  it('executes a stored method\'s uncertain results through the lane task production already runs', async () => {
     await freshProject();
-    const calls: string[] = [];
-    const completer: Completer = async (_c, model) => {
-      calls.push(model);
-      return '{"verdict":"KEEP","reason":"looks right"}';
+    // One lane task per question: no second task for the same results.
+    expect(Object.keys(TASKS)).not.toContain('CLASSIFY_RESULT');
+
+    // A stored method's code check: a learned detector over one feed source.
+    const made = await createDetectorFromExamples({
+      scope: 'GENERAL',
+      detectorKey: 'parcel-rfq',
+      sources: ['routing'],
+      positives: ['County parcel data RFQ', 'Parcel data RFQ for county', 'RFQ county parcel data cleanup'],
+      negatives: ['Sales manager wanted'],
+      threshold: 0.8,
+    });
+    expect(made.ok).toBe(true);
+
+    // More items than one pass screens; the near-miss is the oldest, so arrival order alone never reaches it.
+    const now = new Date();
+    const published = new Date(now.getTime() - 86_400_000).toISOString();
+    const total = SCREENS_PER_PASS + 10;
+    const feed: FeedSource = {
+      id: 'routing',
+      label: 'routing',
+      url: 'https://example.test/routing',
+      intervalMs: 3_600_000,
+      parse: () =>
+        Array.from({ length: total }, (_, n) => ({
+          externalId: `r-${n}`,
+          url: `https://example.test/routing/${n}`,
+          title: n === 0 ? 'County parcel listing' : `Shop needs a pricing tracker ${n}`,
+          body: 'body',
+          organization: 'A shop',
+          publishedAt: published,
+        })),
     };
-    const settled = await settleUncertain(method, [result('a', 'MATCH'), result('c', 'UNCERTAIN')], { config, completer });
-    expect(calls).toEqual(['m1']);
-    expect(settled).toEqual([
-      { id: 'a', verdict: 'KEEP', by: 'CODE', reason: expect.any(String) },
-      { id: 'c', verdict: 'KEEP', by: 'CHEAP_LANE', reason: 'looks right' },
-    ]);
-    const off = await settleUncertain(method, [result('d', 'UNCERTAIN')], { config: null });
-    expect(off[0]).toMatchObject({ verdict: 'UNSURE', by: 'NONE' });
+    await pullDueFeeds({ now, sources: [feed], fetcher: async () => [] });
+    const near = await getDb().get<{ id: string }>("SELECT id FROM feed_items WHERE external_id = 'r-0'");
+    await getDb().run('UPDATE feed_items SET fetched_at = ? WHERE id = ?', [new Date(now.getTime() - 3_600_000).toISOString(), near!.id]);
+
+    const completer: Completer = async () =>
+      '{"verdict":"UNSURE","window":"UNKNOWN","deliverable":"NONE","need":"","payer":"","reason":"x"}';
+    const screened = await screenFeedLeads({ now, config, completer });
+    expect(screened).toBe(SCREENS_PER_PASS);
+
+    const kinds = await getDb().all<{ kind: string }>('SELECT DISTINCT kind FROM cheap_results WHERE subject_id = ?', [near!.id]);
+    expect(kinds.map((one) => one.kind)).toEqual(['SCREEN_LEAD']);
   });
 });

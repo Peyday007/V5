@@ -8,10 +8,15 @@
  * execution: the only Claude route it knows is `DEVELOP`, and `execute` never
  * returns it.
  *
- * Pure apart from the lane call in `settleUncertain`, which is injected.
+ * The CHEAP_LANE route has one executor, and it is the lane task that already
+ * runs on every feeds pass: a learned detector's near-miss (`escalate` in
+ * `feeds/learned.ts`, the UNCERTAIN verdict here) is screened first by
+ * `screenFeedLeads` in `feeds/run.ts` through SCREEN_LEAD, whose agreed answers
+ * the shortlist and detector learning already read. A second lane task for the
+ * same results would spend the same daily budget on answers nothing reads.
+ *
+ * Pure.
  */
-import { classifyResult, type LaneOptions, type ResultInput, type ResultOutput } from '../../cheap/lane.ts';
-
 /** What a stored method's own code check said about one result. */
 export type CodeVerdict = 'MATCH' | 'NO_MATCH' | 'UNCERTAIN';
 
@@ -61,51 +66,4 @@ export function planExecution(results: MethodResult[]): ExecutionPlan {
 /** Which route a request with no stored method takes: the method must be developed first. */
 export function routeRequest(method: ExecutableMethod | null): Route {
   return method ? 'CODE' : 'DEVELOP';
-}
-
-export type SettledVerdict = 'KEEP' | 'DROP' | 'UNSURE';
-
-export interface SettledResult {
-  id: string;
-  verdict: SettledVerdict;
-  by: 'CODE' | 'CHEAP_LANE' | 'NONE';
-  reason: string;
-}
-
-/**
- * Settle every result. Code verdicts stand as they are; uncertain ones go to
- * the cheap lane. A lane that is off, spent or failed gives no signal, which is
- * UNSURE and never DROP: the result is kept for a later look, not discarded.
- */
-export async function settleUncertain(
-  method: ExecutableMethod,
-  results: MethodResult[],
-  options: LaneOptions = {},
-): Promise<SettledResult[]> {
-  const plan = planExecution(results);
-  const out: SettledResult[] = [];
-  for (const { result, route } of plan.routed) {
-    if (route === 'CODE') {
-      out.push({
-        id: result.id,
-        verdict: result.codeVerdict === 'MATCH' ? 'KEEP' : 'DROP',
-        by: 'CODE',
-        reason: result.codeVerdict === 'MATCH' ? 'The method\'s check matched.' : 'The method\'s check did not match.',
-      });
-      continue;
-    }
-    const input: ResultInput = {
-      looksFor: method.looksFor,
-      source: result.source,
-      title: result.title,
-      body: result.body,
-    };
-    const answer: ResultOutput | null = await classifyResult(`${method.id}:${result.id}`, input, options);
-    out.push(
-      answer
-        ? { id: result.id, verdict: answer.verdict, by: 'CHEAP_LANE', reason: answer.reason }
-        : { id: result.id, verdict: 'UNSURE', by: 'NONE', reason: 'The cheap lane gave no signal.' },
-    );
-  }
-  return out;
 }
