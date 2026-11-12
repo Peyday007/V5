@@ -265,8 +265,11 @@ describe("the registry's own clock", () => {
     const { integrationsTick } = await import('../server/services/integrations/loop.ts');
     const now = Date.now();
     // No Instantly key: the mailer pass is not attempted, the health check is.
-    expect(await integrationsTick(now, {})).toEqual(['check']);
-    expect(await integrationsTick(now + 10 * 60_000, {})).toEqual([]);
-    expect(await integrationsTick(now + 61 * 60_000, {})).toEqual(['check']);
+    const up = 60 * 60_000;
+    // Nothing in a fresh process's warm-up, while Deploy verifies it.
+    expect(await integrationsTick(now, {}, 5 * 60_000)).toEqual([]);
+    expect(await integrationsTick(now, {}, up)).toEqual(['check']);
+    expect(await integrationsTick(now + 10 * 60_000, {}, up)).toEqual([]);
+    expect(await integrationsTick(now + 61 * 60_000, {}, up)).toEqual(['check']);
   });
 });
