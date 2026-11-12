@@ -356,7 +356,12 @@ export interface ContinuityCliDeps {
   account?: typeof effectContinuityAccount;
 }
 
-const CONTINUITY_USAGE = 'usage: continuity.ts account --project ID [--all] [--json]';
+const CONTINUITY_USAGE =
+  'usage: continuity.ts account --project ID [--all] [--json]\n' +
+  '       continuity.ts posture --project ID\n' +
+  '       continuity.ts snapshot --project ID\n' +
+  '       continuity.ts verify-restore --file PATH [--project ID]\n' +
+  '       continuity.ts drill --project ID';
 
 function cliFlag(argv: readonly string[], name: string): string | null {
   const at = argv.indexOf(`--${name}`);
@@ -368,6 +373,23 @@ function cliFlag(argv: readonly string[], name: string): string | null {
 export async function runContinuityCommand(argv: readonly string[], deps: ContinuityCliDeps = {}): Promise<{ code: number; out: string }> {
   const [command] = argv;
   const projectId = cliFlag(argv, 'project')?.trim() ?? '';
+  if (command === 'posture' || command === 'snapshot' || command === 'verify-restore' || command === 'drill') {
+    // S-0485: the degraded posture and the verified restore of this ledger live in posture.ts.
+    const posture = await import('./posture.ts');
+    if (command === 'verify-restore') {
+      const file = cliFlag(argv, 'file');
+      if (!file) return { code: 2, out: CONTINUITY_USAGE };
+      const { readFileSync } = await import('node:fs');
+      const live = projectId ? await listOperations(projectId, { limit: READ_LIMIT }) : undefined;
+      const result = posture.verifyContinuityRestore(readFileSync(file, 'utf8'), live);
+      return { code: result.verified ? 0 : 1, out: JSON.stringify(result, null, 2) };
+    }
+    if (!projectId) return { code: 2, out: CONTINUITY_USAGE };
+    if (command === 'posture') return { code: 0, out: JSON.stringify(await posture.continuityPosture(projectId), null, 2) };
+    if (command === 'snapshot') return { code: 0, out: JSON.stringify(await posture.continuitySnapshot(projectId)) };
+    const drill = await posture.runRestoreDrill(projectId);
+    return { code: drill.verified ? 0 : 1, out: JSON.stringify(drill, null, 2) };
+  }
   if (command !== 'account' || !projectId) return { code: 2, out: CONTINUITY_USAGE };
   const account = await (deps.account ?? effectContinuityAccount)(projectId);
   if (argv.includes('--json')) return { code: 0, out: JSON.stringify(account, null, 2) };
