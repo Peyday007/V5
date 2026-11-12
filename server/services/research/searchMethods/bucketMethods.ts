@@ -152,17 +152,6 @@ export function outcomeOfRound(ending: RoundEnding): { outcome: RunOutcome; fail
   return null;
 }
 
-/** The newest version of a bucket's method, whatever its trust state, or null when it has none. */
-export async function latestBucketMethod(projectId: string, bucketId: string): Promise<SearchMethod | null> {
-  let latest: SearchMethod | null = null;
-  for (const method of await listSearchMethods(readerForProject(projectId))) {
-    if (method.scope !== 'PROJECT' || method.projectId !== projectId || method.methodKey !== bucketId) continue;
-    if (!latest || method.version > latest.version) latest = method;
-  }
-  return latest;
-}
-
-
 /**
  * The learned subject a bucket asks about, or null for a constant bucket. A
  * learned subject reaches discovery as a lens whose id is the subject's id
@@ -198,6 +187,16 @@ export async function methodForBucket(projectId: string, bucket: BucketShape): P
     return { ...method, subjectId };
   }
   return method;
+}
+
+/** The newest version of a bucket's method, whatever its trust state, or null when it has none. */
+export async function latestBucketMethod(projectId: string, bucketId: string): Promise<SearchMethod | null> {
+  let latest: SearchMethod | null = null;
+  for (const method of await listSearchMethods(readerForProject(projectId))) {
+    if (method.scope !== 'PROJECT' || method.projectId !== projectId || method.methodKey !== bucketId) continue;
+    if (!latest || method.version > latest.version) latest = method;
+  }
+  return latest;
 }
 
 /** Revisions of one bucket's method before a further failure pauses it with a retry time instead. */
