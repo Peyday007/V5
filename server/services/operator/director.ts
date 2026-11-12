@@ -148,17 +148,32 @@ export async function goalMark(goalId: string | null): Promise<{ mark: GoalMark 
   const bestReach = typeof forecast?.['bestReach'] === 'number' ? (forecast['bestReach'] as number) : null;
   const requests = summary?.projectId ? (snapshot.requests.get(summary.projectId) ?? []) : [];
   const target = view?.target ?? null;
+  // A light reading (Brain too busy to derive goals) still knows the money target and the deadline
+  // from the register: read them there, so the priority is not computed as if nothing were at stake
+  // (production 2026-11-12: imp_02321af4 got priority 3 on the $10K goal from a light reading).
+  // What a light reading does not know — the derived state, blockers, what it waits on, settled
+  // cash — is recorded as unknown, never as 0 or NOT_DERIVED, so a later full reading is not
+  // compared against a placeholder.
+  let registerRemaining: number | null = null;
+  let registerDays: number | null = null;
+  if (!view) {
+    const { getWorkstream } = await import('../../repos/register.ts');
+    const row = await getWorkstream(goalId).catch(() => null);
+    const amount = (row?.target as { amountCents?: number } | null | undefined)?.amountCents ?? null;
+    registerRemaining = typeof amount === 'number' && amount > 0 ? amount : null;
+    registerDays = row?.dueAt ? Math.max(0, Math.ceil((Date.parse(row.dueAt) - Date.now()) / 86_400_000)) : null;
+  }
   return {
     title: (view?.title ?? summary?.title ?? null)?.slice(0, 200) ?? null,
     projectId: view?.projectId ?? summary?.projectId ?? null,
-    remainingCents: target ? target.remainingCents : null,
-    daysLeft: target ? target.daysLeft : null,
+    remainingCents: target ? target.remainingCents : registerRemaining,
+    daysLeft: target ? target.daysLeft : registerDays,
     mark: {
       at: new Date().toISOString(),
-      state: view?.state ?? summary?.state ?? null,
-      waitingOn: view ? `${view.waiting.kind}: ${view.waiting.detail}`.slice(0, 200) : (summary?.waiting ?? null),
+      state: view?.state ?? null,
+      waitingOn: view ? `${view.waiting.kind}: ${view.waiting.detail}`.slice(0, 200) : null,
       settledCents: target ? target.achievedCents : null,
-      blockers: view ? view.blockers.length : (summary?.blockers ?? null),
+      blockers: view ? view.blockers.length : null,
       verdict: typeof plan?.['verdict'] === 'string' ? (plan['verdict'] as string) : null,
       bestReachCents: bestReach === null ? null : Math.round(bestReach * 100),
       ladderAdvanced: ladder
@@ -376,6 +391,10 @@ async function engineerOrResearch(
     minimumModelClass: route.minimumModelClass,
     routeWhy: route.why,
     evaluation,
+    // The inputs the priority is recomputed from on every director pass, as the goal moves.
+    blocksGoal: d.blocksGoal,
+    share: d.share,
+    recurrence: d.recurrence,
   };
   if (candidate.decision === 'COMBINED' && candidate.combinedIntoId) {
     // Same owner, not yet engineered: the host carries it, and the host gets the directive.
@@ -592,6 +611,7 @@ export async function directorPass(): Promise<{ recorded: number; wake: number }
   let recorded = 0;
   let wake = 0;
   for (const outcome of await engineeringOutcomes({ limit: 25 })) {
+    if (!outcome.decision) await refreshPriority(outcome.candidateId).catch(() => undefined);
     const prior = (await listImprovementEvents({ candidateId: outcome.candidateId, kinds: ['OPERATOR_OUTCOME'], limit: 1 }))[0];
     const signature = `${outcome.status}|${outcome.factory?.status ?? '-'}|${outcome.decision ?? '-'}|${outcome.goal.effect}`;
     if (prior && prior.detail['signature'] === signature) continue;
@@ -621,6 +641,33 @@ export async function directorPass(): Promise<{ recorded: number; wake: number }
     if (prior && wakesOperator(outcome.status)) wake += 1;
   }
   return { recorded, wake };
+}
+
+/**
+ * Priorities are not fixed at commissioning: each pass recomputes a live commission's priority
+ * from the goal as it reads now (money left, days left) and the diagnosis it was given, and
+ * reorders its waiting work when that changed. Leased work keeps its place.
+ */
+export async function refreshPriority(candidateId: string): Promise<number | null> {
+  const candidate = await getCandidate(candidateId);
+  const directive = candidate?.evidence['directive'] as Record<string, unknown> | undefined;
+  if (!candidate || !directive || candidate.decision) return null;
+  const goal = await goalMark((directive['goalId'] as string | null) ?? null);
+  const next = engineeringPriority({
+    blocksGoal: directive['blocksGoal'] === undefined ? true : directive['blocksGoal'] === true,
+    remainingCents: goal.remainingCents,
+    daysLeft: goal.daysLeft,
+    share: typeof directive['share'] === 'number' ? (directive['share'] as number) : 0.3,
+    recurrence: typeof directive['recurrence'] === 'number' ? (directive['recurrence'] as number) : candidate.frequency,
+    deficiency: String(directive['deficiency'] ?? 'RECURRING_OPERATIONAL_FAILURE') as DeficiencyClass,
+  });
+  if (next.priority === directive['priority']) return null;
+  await patchCandidate(candidate.id, {
+    evidence: { ...candidate.evidence, directive: { ...directive, priority: next.priority, urgency: next.urgency, priorityWhy: `recomputed: ${next.why}` } },
+  });
+  const applied = candidate.campaignId ? await applyPriority(candidate.campaignId, next.priority) : 0;
+  await recordImprovementEvent({ candidateId: candidate.id, kind: 'OPERATOR_REPRIORITIZED', detail: { from: directive['priority'], to: next.priority, why: next.why, bins: applied } });
+  return next.priority;
 }
 
 /** Whether an engineering outcome the operator has not yet seen arrived after its last run started. */
