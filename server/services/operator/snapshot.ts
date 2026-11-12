@@ -29,34 +29,49 @@ export interface OperatorSnapshot {
 /** How long one reading serves the read tools: a run's budget plus its slack. */
 export const SNAPSHOT_TTL_MS = 25 * 60_000;
 
-let cached: { projectKey: string; at: number; snapshot: OperatorSnapshot } | null = null;
+let cached: { at: number; snapshot: OperatorSnapshot } | null = null;
 let building: Promise<OperatorSnapshot> | null = null;
 
+/**
+ * One reading of every goal Brain holds, shared by the run that built it and
+ * every read tool the run calls. Production, 2026-11-12 12:02: the run built it
+ * for every project and a tool asked for the credential's readable ones, the
+ * two keys differed, and the tool rebuilt it inside its call — past the limit.
+ * So there is one key, and a caller narrows the reading to what it may see.
+ */
 export async function operatorSnapshot(projectIds: string[], options: { fresh?: boolean; nowMs?: number } = {}): Promise<OperatorSnapshot> {
   const nowMs = options.nowMs ?? Date.now();
-  const projectKey = [...projectIds].sort().join(',');
-  if (!options.fresh && cached && cached.projectKey === projectKey && nowMs - cached.at < SNAPSHOT_TTL_MS) {
-    return cached.snapshot;
-  }
+  const whole = !options.fresh && cached && nowMs - cached.at < SNAPSHOT_TTL_MS ? cached.snapshot : await build(nowMs);
+  return narrow(whole, projectIds);
+}
+
+async function build(nowMs: number): Promise<OperatorSnapshot> {
   if (building) return building;
   building = (async () => {
-    const goals = await operatorGoals(projectIds);
+    const { listProjects } = await import('../../repos/projects.ts');
+    const goals = await operatorGoals((await listProjects()).map((p) => p.id));
     const requests = new Map<string, RequestReading[]>();
     for (const projectId of new Set(goals.map((g) => g.projectId).filter((id): id is string => Boolean(id)))) {
       requests.set(projectId, await readRequests(projectId));
     }
-    const snapshot: OperatorSnapshot = {
-      takenAt: new Date(nowMs).toISOString(),
-      goals,
-      summaries: goals.map(summarizeGoal),
-      requests,
-    };
-    cached = { projectKey, at: nowMs, snapshot };
+    const snapshot: OperatorSnapshot = { takenAt: new Date(nowMs).toISOString(), goals, summaries: goals.map(summarizeGoal), requests };
+    cached = { at: nowMs, snapshot };
     return snapshot;
   })().finally(() => {
     building = null;
   });
   return building;
+}
+
+export function narrow(snapshot: OperatorSnapshot, projectIds: string[]): OperatorSnapshot {
+  const allowed = new Set(projectIds);
+  const goals = snapshot.goals.filter((g) => g.projectId !== null && allowed.has(g.projectId));
+  return {
+    takenAt: snapshot.takenAt,
+    goals,
+    summaries: goals.map(summarizeGoal),
+    requests: new Map([...snapshot.requests].filter(([projectId]) => allowed.has(projectId))),
+  };
 }
 
 /** The snapshot's goals in the order the operator should take them: blocked and active first, then by rank. */
