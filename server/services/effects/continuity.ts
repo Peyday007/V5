@@ -32,6 +32,7 @@
  * - FAILED_EXTERNAL_CONSTRAINT: terminal. The refusal is final for this
  *   effect, and no retry under this key may bypass it.
  */
+import { closeDatabase, initDatabase } from '../../db/database.ts';
 import { getOperation, listAttempts, listOperations, operationNow } from '../../repos/idempotency.ts';
 import type { EffectAttempt, EffectFailureCategory, IdempotencyOperation, OperationState } from '../../domain/types.ts';
 
@@ -298,4 +299,90 @@ export async function operationContinuity(operationId: string): Promise<Continui
   if (!operation) return null;
   const attempts = await listAttempts(operation.id);
   return continuityReport(classifyOperation(operation, attempts));
+}
+
+/* ------------------------------------------------------------------------- */
+/* Where a person reads the account                                           */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The terminal where an operator reads a project's continuity account before
+ * reconciling or resolving anything (S-0486: report accurately what is known
+ * and what remains uncertain).
+ *
+ *   npx tsx server/services/effects/continuity.ts account --project prj_…  [--all] [--json]
+ *
+ * Invariant 35: an operator's part has no administration page; it is a
+ * terminal, and reaching the shell is the authentication. This is the account
+ * the RECONCILIATION_REQUIRED refusal in `http.ts` points to. It reads only;
+ * resolving stays with `external.ts`. By default it lists the entries a person
+ * must act on (unsettled, or retry-safe but not yet retried) with every total;
+ * `--all` lists every entry. A receipt is printed for a confirmed effect only
+ * under `--all`, and never a payload, a credential or a provider's raw answer:
+ * the entry carries none.
+ */
+export const CONTINUITY_CLI = 'npx tsx server/services/effects/continuity.ts account --project <id>';
+
+/** Entries a person must act on: an effect that may exist outside Brain, or one that may safely run again. */
+export function needsAttention(entry: Pick<ContinuityEntry, 'class'>): boolean {
+  return entry.class === 'MAY_HAVE_BEEN_ACCEPTED' || entry.class === 'UNKNOWN' || entry.class === 'ATTEMPTED_NOT_SENT' || entry.class === 'FAILED_RECOVERABLE';
+}
+
+/** The account in words: totals first, then what is known and what remains uncertain for each listed entry. */
+export function describeContinuityAccount(account: ContinuityAccount, options: { all?: boolean } = {}): string {
+  const lines: string[] = [];
+  lines.push(`${account.projectId}: ${account.entries.length} external operation(s) at ${account.at}${account.truncated ? ` (the newest ${account.entries.length} only; older operations are not in this account)` : ''}`);
+  lines.push(`  ${CONTINUITY_CLASSES.map((c) => `${c} ${account.totals[c]}`).join('  ')}`);
+  lines.push(
+    account.unsettled > 0
+      ? `  ${account.unsettled} unsettled: the outside world may hold these effects; reconcile each before anything is sent again.`
+      : '  Nothing unsettled: no effect is in doubt.',
+  );
+  const listed = options.all ? account.entries : account.entries.filter(needsAttention);
+  for (const entry of listed) {
+    const words = REPORT_WORDS[entry.class];
+    lines.push(`- ${entry.operationId}  ${entry.namespace}  ${entry.state} → ${entry.class}  (${entry.sentAttempts}/${entry.attempts} attempt(s) sent, updated ${entry.updatedAt})`);
+    lines.push(`    known: ${words.known}`);
+    if (words.uncertain) lines.push(`    uncertain: ${words.uncertain}`);
+    lines.push(`    why: ${entry.reason}`);
+    lines.push(`    next: ${entry.needsReconciliation ? 'reconcile with the outside world, or have a person establish the outcome; never resend' : entry.retrySafe ? 'an equivalent request may run it again; nothing can be duplicated' : 'nothing; it is settled'}`);
+    if (options.all && entry.receiptRef) lines.push(`    receipt: ${entry.receiptRef}`);
+  }
+  if (!options.all && listed.length === 0 && account.entries.length > 0) lines.push('  No entry needs a person. --all lists every entry.');
+  return lines.join('\n');
+}
+
+export interface ContinuityCliDeps {
+  account?: typeof effectContinuityAccount;
+}
+
+const CONTINUITY_USAGE = 'usage: continuity.ts account --project ID [--all] [--json]';
+
+function cliFlag(argv: readonly string[], name: string): string | null {
+  const at = argv.indexOf(`--${name}`);
+  const value = at < 0 ? undefined : argv[at + 1];
+  return value && !value.startsWith('--') ? value : null;
+}
+
+/** Run one command. Returns the exit code and the text to print; never throws for a usage error. */
+export async function runContinuityCommand(argv: readonly string[], deps: ContinuityCliDeps = {}): Promise<{ code: number; out: string }> {
+  const [command] = argv;
+  const projectId = cliFlag(argv, 'project')?.trim() ?? '';
+  if (command !== 'account' || !projectId) return { code: 2, out: CONTINUITY_USAGE };
+  const account = await (deps.account ?? effectContinuityAccount)(projectId);
+  if (argv.includes('--json')) return { code: 0, out: JSON.stringify(account, null, 2) };
+  return { code: 0, out: describeContinuityAccount(account, { all: argv.includes('--all') }) };
+}
+
+if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop() ?? '\u0000')) {
+  void (async () => {
+    await initDatabase();
+    try {
+      const { code, out } = await runContinuityCommand(process.argv.slice(2));
+      (code === 0 ? console.log : console.error)(out);
+      process.exitCode = code;
+    } finally {
+      await closeDatabase();
+    }
+  })();
 }

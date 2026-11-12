@@ -29,7 +29,7 @@ import {
   type ExecutionResult,
   type RunInput,
 } from './engine.ts';
-import { operationContinuity } from './continuity.ts';
+import { CONTINUITY_CLI, operationContinuity } from './continuity.ts';
 import type { IdempotencyOperation } from '../../domain/types.ts';
 
 export const IDEMPOTENCY_HEADER = 'idempotency-key';
@@ -106,7 +106,8 @@ export async function runIdempotentRequest<T>(
       case 'UNCERTAIN':
         throw conflict(
           'An earlier attempt at this operation had an unknown outcome. ' +
-            'It must be resolved by an administrator before it can be retried.',
+            'It must be resolved by an administrator before it can be retried. ' +
+            `The project's continuity account lists it with what is known and what remains uncertain (${CONTINUITY_CLI}).`,
           {
             reason: 'RECONCILIATION_REQUIRED',
             operationId: outcome.operation.id,
