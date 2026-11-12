@@ -21,7 +21,7 @@
  * it fits the calendar and is worth more than it costs.
  */
 
-import { listMoneyEntries } from '../../repos/cashLedger.ts';
+import { listMoneyEntriesByOpportunity } from '../../repos/cashLedger.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import type { CashMoneyEntry, CashOpportunity } from '../../domain/types.ts';
 
@@ -628,22 +628,18 @@ export async function readRouteMoney(input: {
   const leadAt = new Map(opportunities.map((o) => [o.id, o.createdAt] as const));
   const out: RouteMoneyVelocity[] = [];
   const ids = [...new Set(opportunities.map((o) => o.id))];
-  const BATCH = 16;
-  for (let i = 0; i < ids.length; i += BATCH) {
-    const reads = await Promise.all(
-      ids.slice(i, i + BATCH).map(async (opportunityId) => ({
-        opportunityId,
-        entries: await listMoneyEntries({ projectId: input.projectId, opportunityId, currency: input.currency, limit }),
-      })),
-    );
-    for (const { opportunityId, entries } of reads) {
-      if (entries.length === 0) continue;
-      if (entries.length >= limit) {
-        out.push(partialRouteMoney(opportunityId, entries.length));
-        continue;
-      }
-      out.push(...routeInputsFromEntries(entries, leadAt).map(quantifyRouteMoney));
+  // One bounded read for every route, never a statement per opening (the goal plan's budget).
+  const byOpportunity = await listMoneyEntriesByOpportunity({
+    projectId: input.projectId, currency: input.currency, opportunityIds: ids, perOpportunityLimit: limit,
+  });
+  for (const opportunityId of ids) {
+    const entries = byOpportunity.get(opportunityId) ?? [];
+    if (entries.length === 0) continue;
+    if (entries.length >= limit) {
+      out.push(partialRouteMoney(opportunityId, entries.length));
+      continue;
     }
+    out.push(...routeInputsFromEntries(entries, leadAt).map(quantifyRouteMoney));
   }
   return out;
 }

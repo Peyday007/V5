@@ -277,6 +277,46 @@ export async function listMoneyEntries(input: {
 }
 
 /**
+ * The newest entries of each of several opportunities, in one statement per
+ * few hundred ids rather than one per opportunity (production 2026-11-11: the
+ * money route read added a statement per opening to the goal plan, 159 for 40
+ * openings against a budget of 120, and #758 was reverted for it). Each
+ * opportunity keeps at most `perOpportunityLimit` rows, newest first, exactly
+ * as `listMoneyEntries` returns them for one.
+ */
+export async function listMoneyEntriesByOpportunity(input: {
+  projectId: string;
+  currency: string;
+  opportunityIds: readonly string[];
+  perOpportunityLimit: number;
+}): Promise<Map<string, CashMoneyEntry[]>> {
+  const out = new Map<string, CashMoneyEntry[]>();
+  const ids = [...new Set(input.opportunityIds)];
+  const limit = Math.max(1, Math.min(2000, Math.floor(input.perOpportunityLimit)));
+  const CHUNK = 400;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    const rows = await getDb().all<CashMoneyEntryRow>(
+      `SELECT * FROM (
+         SELECT e.*, ROW_NUMBER() OVER (PARTITION BY e.opportunity_id ORDER BY e.occurred_at DESC, e.id DESC) AS row_rank
+           FROM cash_money_entries e
+          WHERE e.project_id = ? AND e.currency = ? AND e.opportunity_id IN (${slice.map(() => '?').join(', ')})
+       ) ranked
+       WHERE ranked.row_rank <= ?
+       ORDER BY ranked.opportunity_id, ranked.occurred_at DESC, ranked.id DESC`,
+      [input.projectId, input.currency, ...slice, limit],
+    );
+    for (const row of rows) {
+      const entry = mapEntry(row);
+      const list = out.get(entry.opportunityId ?? '') ?? [];
+      list.push(entry);
+      out.set(entry.opportunityId ?? '', list);
+    }
+  }
+  return out;
+}
+
+/**
  * Every currency this project's ledger actually holds.
  *
  * The position filters by the sprint's currency, which is right — adding a
