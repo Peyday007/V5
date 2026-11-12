@@ -15885,6 +15885,24 @@ order); a weak model is demoted by its own run record and the benchmark; an
 underperforming approach is a `STOP_APPROACH` or `CHANGE_STRATEGY` decision
 whose prediction is judged later.
 
+**What was measured and chosen** (2026-11-12, runs 43285247214, 43289119187,
+43309470657; scores 0–1 by code):
+
+| model | where | quality | operator tool calls | median | cost |
+|---|---|---|---|---|---|
+| `auto/best-coding` | free switchboard | 0.98 | 15/15 correct, recovered from "busy", withdrew the moot request | 22 s | $0 |
+| Qwen3-4B, 32K, no parser | the pod as it was | 0.65 | 0 — HTTP 400 on every call | 16 s | $0.0006/task at $0.19/h |
+| `brain-a` (one provider's gpt-oss-120b) | free switchboard | 0 | HTTP 429 on every call | — | $0 |
+| gpt-oss-20b | new A5000 pod, $0.22/h | — | never served in 40 min; pod deleted | — | ~$0.15 spent |
+| Qwen3-8B-AWQ, FP8 KV, 64K | the pod, repurposed | — | listed its model, every chat HTTP 500; stepped down | — | — |
+| **Qwen3-4B-AWQ, 64K, hermes parser** | **the pod, repurposed** | probe: chat 5.1 s, tool call 2.5 s, 4/4 parallel, ~10K prompt 2.1 s | **structured tool call correct** | — | unchanged $0.19/h |
+
+The operator thinks first with the measured route (`auto/best-coding`, free),
+then the GPU (now tool-capable, 64K) as its fallback — ranked by their own run
+records from there on. No 24 GB card was in stock within the $0.24/h ceiling;
+a stronger GPU model is a re-run of `runpod-bench` when one is, and a 48 GB card
+is the owner's decision (see below).
+
 **Remaining limitations** (2026-11-12):
 
 - The RunPod balance ($15.48 at $0.196/h, ~79 h) is the binding constraint on

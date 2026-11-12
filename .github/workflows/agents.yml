@@ -197,7 +197,8 @@ jobs:
             operator-prove)
               # One run, then the proof from rows (§108): inspected, planned, decided, acted, observed, learned.
               set +e
-              on_brain "node --import tsx scripts/operator.ts prove" 2>&1 | tee operator.txt
+              # Brain's tick already ran the operator within the hour: judge that run rather than start a second.
+              on_brain "node --import tsx scripts/operator.ts prove latest" 2>&1 | tee operator.txt
               set -e
               grep -q '^OPERATOR-PROOF: OK' operator.txt
               ;;

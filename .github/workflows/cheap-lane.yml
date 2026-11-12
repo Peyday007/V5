@@ -212,7 +212,7 @@ jobs:
             runpod-repurpose)
               # Serve a recipe on the existing pod in place (§108): same host and GPU, no second pod.
               [ -n "${RUNPOD_API_KEY:-}" ] && [ -n "$RUNPOD_VLLM_KEY" ] || { echo "::error::Set the RUNPOD_API_KEY and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
-              recipe=$(printf '%s' "$RECIPES_INPUT" | tr -cd 'a-z0-9.-')
+              recipe=$(printf '%s' "$RECIPES_INPUT" | tr -cd 'a-z0-9.,-')
               rc=0; npx tsx scripts/runpod-repurpose.ts --recipe "$recipe" | tee repurpose.txt || rc=$?
               RUNPOD_VLLM_URL=$(grep '^URL ' repurpose.txt | tail -1 | cut -d' ' -f2-)
               RUNPOD_VLLM_MODEL=""

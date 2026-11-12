@@ -61,7 +61,8 @@ describe('recipes, benchmark pods and the account (§108)', () => {
       const cmd = podSpec('v', undefined, 'COMMUNITY', recipe)['dockerStartCmd'] as string[];
       expect(cmd).toContain('--enable-auto-tool-choice');
       expect(cmd[cmd.indexOf('--tool-call-parser') + 1]).toBeTruthy();
-      expect(Number(cmd[cmd.indexOf('--max-model-len') + 1])).toBeGreaterThanOrEqual(65536);
+      // Only the last fallback before a revert stays at the native 32K; it is never what the operator needs.
+      if (recipe.key !== 'qwen3-4b-tools-32k') expect(Number(cmd[cmd.indexOf('--max-model-len') + 1])).toBeGreaterThanOrEqual(65536);
       expect(cmd[cmd.indexOf('--served-model-name') + 1]).toBe(recipe.served);
     }
   });
