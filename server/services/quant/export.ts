@@ -14,7 +14,7 @@ import type { SourceRef, VariableProvenance, VariableSpec } from '../../domain/s
 
 /** Model learning (LEARN-15-1) is reached from the same entry the scenario engine uses for estimates. */
 export { assessModelLearning } from './learning.ts';
-export { forecastAndRecordCash, recordCashForecast, assessLedger, recordExposure, recordOutcome, recordPrediction } from './ledger.ts';
+export { forecastAndRecordCash, recordCashForecast, assessLedger, recordExposure, recordOutcome, recordPrediction, dealSignals, REASON_SIGNAL } from './ledger.ts';
 
 /** Quantiles kept when an estimate becomes an empirical distribution. */
 export const EXPORT_QUANTILES = 101;
