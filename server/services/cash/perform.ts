@@ -50,7 +50,7 @@
 import { getOpportunity } from '../../repos/cashPortfolio.ts';
 import { actionsFor, recordAction } from '../../repos/cashActions.ts';
 import { customerPaymentByReference, moneyEntryByKey } from '../../repos/cashLedger.ts';
-import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
+import { cashEventsOfKind, getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { getOperation, operationNow, resolveUncertain } from '../../repos/idempotency.ts';
 import { listNeeds, openNeedForKey } from '../../repos/cashPortfolio.ts';
 import { readNeedCondition } from './conditions.ts';
@@ -1027,6 +1027,33 @@ export async function continuationGate(
     deadline: opportunity.deadline,
   });
   if (continuation.action === 'PROCEED') return { ok: true, value: undefined, message: continuation.reason };
+  const refusal = refuse(
+    continuation.action === 'REROUTE'
+      ? `${continuation.reason}. Nothing was sent through ${continuation.namespace}.`
+      : `Nothing was sent: ${continuation.reason}.`,
+  );
+  /*
+   * Recorded when the decision changes, not every time it is read. The tick
+   * asks this of every held piece on every pass, and a hold waiting on a
+   * person persists until the person acts — one row per pass would bury the
+   * piece's real history under copies of one decision. What identifies the
+   * decision is what it decided and why it held, never the prose, which may
+   * name a time.
+   */
+  const signature = continuationSignature({
+    action,
+    occurrence,
+    decision: continuation.action,
+    to: continuation.to,
+    namespace: continuation.namespace,
+    health: continuation.health.status,
+    unsettled: continuation.unsettled,
+    timeCritical: continuation.timeCritical,
+  });
+  const previous = (await cashEventsOfKind(opportunity.id, 'CASH_CONTINUATION_DECIDED'))
+    .filter((event) => event.detail['action'] === action)
+    .at(-1);
+  if (previous && continuationSignature(previous.detail) === signature) return refusal;
   await recordCashEvent({
     projectId: opportunity.projectId,
     opportunityId: opportunity.id,
@@ -1047,11 +1074,21 @@ export async function continuationGate(
       timeCritical: continuation.timeCritical,
     },
   });
-  return refuse(
-    continuation.action === 'REROUTE'
-      ? `${continuation.reason}. Nothing was sent through ${continuation.namespace}.`
-      : `Nothing was sent: ${continuation.reason}.`,
-  );
+  return refusal;
+}
+
+/** The fields of a continuation decision that make it a different decision. */
+export function continuationSignature(detail: Record<string, unknown>): string {
+  return JSON.stringify([
+    detail['action'] ?? null,
+    detail['occurrence'] ?? null,
+    detail['decision'] ?? null,
+    detail['to'] ?? null,
+    detail['namespace'] ?? null,
+    detail['health'] ?? null,
+    detail['unsettled'] ?? null,
+    detail['timeCritical'] ?? null,
+  ]);
 }
 
 /**

@@ -1275,7 +1275,6 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
       });
       continue;
     }
-    sentThisPass += 1;
 
     /*
      * The same gate a person's press reads: nothing under way, nothing that
@@ -1334,6 +1333,15 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
       out.withheld.push({ opportunityId: opportunity.id, because: prepared.reason });
       continue;
     }
+    /*
+     * Counted here, at the send, and nowhere earlier: a piece every gate above
+     * held back — an unsettled attempt waiting on a person, a provider that is
+     * down, a refusal waiting on a press — wrote to nobody, and charging it
+     * against the pass would let held pieces starve the viable, unaffected
+     * buyers behind them (S-0486). A send that throws still counts: a throw
+     * is not evidence nothing left (§20).
+     */
+    sentThisPass += 1;
     let outcome: ExternalOutcome;
     try {
       outcome = await sendCommercialEffect({
