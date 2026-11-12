@@ -269,15 +269,25 @@ export async function brainUtilization(now = new Date()): Promise<PoolReading[]>
  * Each correction is the pool's own continuation, never a second scheduler:
  * routines get one guarded dispatch pass (`dispatchTickIfIdle`, which skips
  * when the loop is already running); the free lane gets its controller's step,
- * which tops up idle slots; research slots and the Factory line are continued
- * by their own passes on the next tick, so idleness there is recorded with
- * its reason. A pool idle for the same reason is recorded once per window.
+ * which tops up idle slots; the Factory line gets the same guarded dispatch
+ * pass, because Factory stage bins are fired by that tick — and the pass runs
+ * at most once per call even when routines and the Factory are both idle.
+ * Research slots are continued by the Russell loop's own launch pass, so
+ * idleness there is recorded with its reason. A pool idle for the same reason
+ * is recorded once per window.
+ *
+ * Production, 2026-11-12: "FACTORY: 1 piece(s) of executable work and 2 free
+ * surface(s), and nothing is running or arriving" recorded in 126 of 144
+ * ten-minute windows, each answered with "its own pass on the next tick" and
+ * nothing continued — a recorded fault the watchdog then left alone.
  */
 export async function watchUtilization(options: { continueWork?: boolean; now?: Date } = {}): Promise<{ pools: PoolReading[]; recorded: string[]; continued: string[] }> {
   const now = options.now ?? new Date();
   const pools = await brainUtilization(now);
   const recorded: string[] = [];
   const continued: string[] = [];
+  // The guarded dispatch pass is shared by every pool it feeds: run once, its answer reused.
+  let dispatched: boolean | null = null;
   const since = new Date(now.getTime() - IDLE_RECORD_WINDOW_MS).toISOString();
   for (const one of pools.filter((p) => p.idle)) {
     const recent = await getDb().get<{ n: number | string }>(
@@ -290,7 +300,7 @@ export async function watchUtilization(options: { continueWork?: boolean; now?: 
         rule: 'RULE_9_KEEP_CAPACITY_FED',
         attemptedAction: `${one.pool}: ${one.because}`,
         replacementAction:
-          one.pool === 'ROUTINES'
+          one.pool === 'ROUTINES' || one.pool === 'FACTORY'
             ? 'one guarded dispatch pass'
             : one.pool === 'FREE_LANE'
               ? "the free lane controller's step, which tops up idle slots"
@@ -301,9 +311,12 @@ export async function watchUtilization(options: { continueWork?: boolean; now?: 
       recorded.push(one.pool);
     }
     if (options.continueWork === false) continue;
-    if (one.pool === 'ROUTINES') {
-      const { dispatchTickIfIdle } = await import('../dispatch/loop.ts');
-      if (await dispatchTickIfIdle({})) continued.push(one.pool);
+    if (one.pool === 'ROUTINES' || one.pool === 'FACTORY') {
+      if (dispatched === null) {
+        const { dispatchTickIfIdle } = await import('../dispatch/loop.ts');
+        dispatched = await dispatchTickIfIdle({});
+      }
+      if (dispatched) continued.push(one.pool);
     } else if (one.pool === 'FREE_LANE') {
       const { controlStep } = await import('../freeLane/capacity.ts');
       await controlStep();

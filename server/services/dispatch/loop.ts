@@ -89,6 +89,7 @@ import {
 import { fleetSnapshot, NO_SHOW_WINDOW_MS } from './candidates.ts';
 import { shouldQuarantine } from './scaler.ts';
 import { routeBin } from './router.ts';
+import { rearmStrandedIntents } from './rearm.ts';
 import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator, type RoutingRefusal } from './router.ts';
 import { binNeedsWeb, markDispatchRoutine } from '../../repos/bins.ts';
 import {
@@ -186,6 +187,11 @@ export interface TickResult {
   abandonedNoShows: number;
   /** Abandoned intents asked once more after their cool-off (bounded per bin). */
   revivedAbandoned: number;
+  /**
+   * Intents abandoned for any other charged failure, re-armed after their
+   * cool-off because their bin is still executable (bounded per bin; `rearm.ts`).
+   */
+  revivedStranded: number;
   /** Surfaces taken out of routing this tick for not answering their fires. */
   quarantinedForNoShow: string[];
   /** Surfaces put back after their connector was re-authorized. */
@@ -256,6 +262,7 @@ export async function dispatchTick(
     reopenedNoShows: 0,
     abandonedNoShows: 0,
     revivedAbandoned: 0,
+    revivedStranded: 0,
     quarantinedForNoShow: [],
     recoveredAfterReauth: [],
     adoptedIdentities: [],
@@ -439,6 +446,16 @@ export async function dispatchTick(
    * so the revived intent is routed somewhere else, or deferred uncharged.
    */
   result.revivedAbandoned = (await reviveAbandonedNoShowDispatches(20)).length;
+
+  /*
+   * And every other abandonment the same way. An intent that ran out of charged
+   * fires left its bin READY at the same generation with attempts of its own,
+   * and since the intent is unique per (bin, generation) nothing ever fired for
+   * it again: the watchdog read executable work beside free surfaces for hours
+   * while the pass it asked for had nothing to send. Level-driven, not edge-
+   * driven: the tick asks of the state it sees, not of the transition it missed.
+   */
+  result.revivedStranded = (await rearmStrandedIntents(20)).length;
 
   /*
    * And a surface that has stopped answering stops being chosen.
