@@ -139,3 +139,62 @@ describe('the cash forecast is the ledger\'s producer', () => {
     expect(rows).toHaveLength(1);
   });
 });
+
+describe('production keeps the ledger: a cash knowledge refresh writes the forecast and reads the ledger back', () => {
+  it('loadCashKnowledge records the cash forecast as versioned predictions with exposure, only when it changes, and carries the reading', async () => {
+    const { createUser } = await import('../server/repos/identity.ts');
+    const { activate } = await import('../server/services/cash/lifecycle.ts');
+    const { createOpportunity, transitionOpportunity, updateOpportunity } = await import('../server/repos/cashPortfolio.ts');
+    const { forgetKnowledge, loadCashKnowledge } = await import('../server/services/quant/knowledge.ts');
+    const { project } = await freshProject();
+    const user = await createUser({ email: `ledger-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' });
+    const mode = await activate({ projectId: project.id, ownerUserId: user.id, actorUserId: user.id, objective: 'Maximize additional usable cash.' });
+    expect(mode.ok).toBe(true);
+    const { getCashMode } = await import('../server/repos/cashMode.ts');
+    const opening = await createOpportunity({
+      projectId: project.id, cashModeId: (await getCashMode(project.id))!.id,
+      ownerUserId: user.id, title: 'A priced opening', mechanism: 'EXPLICIT_PAID_REQUEST', currency: 'USD',
+    });
+    await transitionOpportunity({ id: opening.id, from: ['DISCOVERED'], to: 'EVIDENCE_CARD' });
+    await updateOpportunity(opening.id, { price_cents: 90_000, peak_funding_cents: 20_000 });
+
+    // The production entry point a goal reading calls (cash/goalScenario.ts).
+    forgetKnowledge();
+    const first = await loadCashKnowledge(project.id);
+    const claimId = `cash:${project.id}:USD:revenue`;
+    let ledger = await readLedger();
+    const revenue = ledger.predictions.filter((p) => p.claimId === claimId);
+    expect(revenue.map((p) => p.version)).toEqual([1]);
+    expect(revenue[0]!.outcome).toContain('90000 USD cents');
+    expect(ledger.exposures.find((e) => e.predictionId === revenue[0]!.id)?.atRiskCents).toBe(20_000);
+    // The reading is the consumer: the knowledge carries the ledger judged.
+    expect(first.learning).not.toBeNull();
+    expect(first.learning!.ledger.some((e) => e.prediction.claimId === claimId)).toBe(true);
+
+    // A refresh over unchanged rows states the same claim: no second version.
+    forgetKnowledge();
+    await loadCashKnowledge(project.id);
+    ledger = await readLedger();
+    expect(ledger.predictions.filter((p) => p.claimId === claimId)).toHaveLength(1);
+
+    // A changed figure is a revision: the next version supersedes without editing the first.
+    await updateOpportunity(opening.id, { price_cents: 120_000 });
+    forgetKnowledge();
+    await loadCashKnowledge(project.id);
+    ledger = await readLedger();
+    const versions = ledger.predictions.filter((p) => p.claimId === claimId);
+    expect(versions.map((p) => p.version)).toEqual([1, 2]);
+    expect(versions[0]!.outcome).toContain('90000');
+    expect(versions[1]!.outcome).toContain('120000');
+  });
+
+  it('a ledger failure never stops a knowledge read', async () => {
+    const { keepCashLedger } = await import('../server/services/quant/ledger.ts');
+    await expect(keepCashLedger('prj', ['USD'], { forecast: async () => { throw new Error('boom'); } })).rejects.toThrow('boom');
+    const { forgetKnowledge, loadCashKnowledge } = await import('../server/services/quant/knowledge.ts');
+    const { project } = await freshProject();
+    forgetKnowledge();
+    const k = await loadCashKnowledge(project.id);
+    expect(k.projectId).toBe(project.id);
+  });
+});

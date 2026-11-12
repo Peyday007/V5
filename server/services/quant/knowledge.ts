@@ -35,6 +35,8 @@ import { readMoneyFigures } from '../cash/figures.ts';
 import type { CashCardFact, CashOpportunity } from '../../domain/types.ts';
 import type { Estimate, Observation, QuantityNode } from '../../domain/quant.ts';
 import { reconstruct } from './reconstruct.ts';
+import { keepCashLedger } from './ledger.ts';
+import type { ModelLearningReading } from './learning.ts';
 
 /** The opportunity quantities this adapter can infer, and how each is measured. */
 export const CASH_QUANTITIES = {
@@ -65,6 +67,13 @@ export interface CashKnowledge {
   watermark: string;
   /** Estimates already made for one quantity in one context, reused across openings. */
   estimates: Map<string, Estimate | null>;
+  /**
+   * The forecast ledger as it stood when this knowledge was read (LEARN-15-1):
+   * calibration across comparable forecasts, the diagnosis of each contradicted
+   * one and the smallest reusable causes. Null when it could not be read — a
+   * ledger failure never stops a goal reading.
+   */
+  learning: ModelLearningReading | null;
 }
 
 const cache = new Map<string, { at: number; value: CashKnowledge }>();
@@ -81,7 +90,11 @@ export async function loadCashKnowledge(projectId: string, now = Date.now()): Pr
   const evidence = facts.filter((one) => one.kind === 'EVIDENCE');
   const sources = await claimSources(evidence.map((one) => one.claimId).filter((one): one is string => !!one));
   const watermark = facts.reduce((max, one) => (one.updatedAt > max ? one.updatedAt : max), '');
-  const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, estimates: new Map() };
+  // Every refresh keeps the cash forecast's ledger and reads it back: the forecast's figures become
+  // versioned claims when they change, and the knowledge carries the calibration reading.
+  const currencies = opportunities.map((one) => one.currency).filter((one): one is string => typeof one === 'string' && one.length > 0);
+  const learning = await keepCashLedger(projectId, currencies).then((kept) => kept.reading).catch(() => null);
+  const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, estimates: new Map(), learning };
   cache.set(projectId, { at: now, value });
   return value;
 }

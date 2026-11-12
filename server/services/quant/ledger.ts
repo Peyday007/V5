@@ -243,25 +243,71 @@ export async function recordCashForecast(
     ['contribution', forecast.contribution],
   ];
   const written: PredictionRow[] = [];
+  // Read once: the latest version of each claim decides whether this forecast revises it or repeats it.
+  const before = await (deps.read ?? readLedger)();
+  const latest = new Map<string, PredictionRow>();
+  for (const p of before.predictions) {
+    const held = latest.get(p.claimId);
+    if (!held || p.version > held.version) latest.set(p.claimId, p);
+  }
   for (const [name, est] of figures) {
     if (est.valueCents === null) continue;
-    written.push(
-      await recordPrediction(
-        {
-          claimId: `cash:${projectId}:${forecast.currency}:${name}`,
-          outcome: `${name} of ${est.valueCents} ${forecast.currency} cents (range ${est.lowCents}..${est.highCents})`,
-          horizonDays,
-          population: `${forecast.qualified} qualified of ${forecast.considered} opportunities in ${forecast.currency}`,
-          data: [est.basis],
-          assumptions: [`derived from ${est.fromRows} opportunity row(s)`],
-          probability: null,
-          comparableKey: `cash:${forecast.currency}:${name}`,
-        },
-        deps,
-      ),
-    );
+    const input: PredictionInput = {
+      claimId: `cash:${projectId}:${forecast.currency}:${name}`,
+      outcome: `${name} of ${est.valueCents} ${forecast.currency} cents (range ${est.lowCents}..${est.highCents})`,
+      horizonDays,
+      population: `${forecast.qualified} qualified of ${forecast.considered} opportunities in ${forecast.currency}`,
+      data: [est.basis],
+      assumptions: [`derived from ${est.fromRows} opportunity row(s)`],
+      probability: null,
+      comparableKey: `cash:${forecast.currency}:${name}`,
+    };
+    // A forecast recomputed from unchanged rows states the same claim: it is not a new version.
+    const held = latest.get(input.claimId);
+    if (held && statesSame(held, input)) continue;
+    written.push(await recordPrediction(input, { ...deps, read: async () => before }));
   }
   return written;
+}
+
+/** Whether a recorded version already states exactly this claim. */
+export function statesSame(held: PredictionRow, input: PredictionInput): boolean {
+  return held.outcome === input.outcome &&
+    held.horizonDays === input.horizonDays &&
+    held.population === input.population &&
+    held.probability === input.probability &&
+    held.comparableKey === input.comparableKey &&
+    JSON.stringify(held.data) === JSON.stringify([...input.data]) &&
+    JSON.stringify(held.assumptions) === JSON.stringify([...input.assumptions]);
+}
+
+/**
+ * Keep a project's cash ledger and read it back: the production path (LEARN-15-1).
+ *
+ * Called when a project's cash knowledge is refreshed (`knowledge.ts
+ * loadCashKnowledge`), which every goal plan reading does. For each currency
+ * the project's openings are priced in, the cash forecast (`cash/forecast.ts`,
+ * the existing owner of the figures) is recorded as versioned predictions —
+ * only when it states something new — and what each new version puts at risk
+ * (the forecast's most cash out at once, or null when nobody stated it) is
+ * recorded as its exposure. Then the whole ledger is read and judged:
+ * calibration, diagnoses, the smallest reusable causes and the plans to
+ * recompute. No table, schedule or queue is added; the rows are `bin_events`.
+ */
+export async function keepCashLedger(
+  projectId: string,
+  currencies: readonly string[],
+  deps: LedgerDeps & { forecast?: typeof cashForecast } = {},
+): Promise<{ written: PredictionRow[]; exposures: ExposureRow[]; reading: ModelLearningReading }> {
+  const written: PredictionRow[] = [];
+  const exposures: ExposureRow[] = [];
+  for (const currency of [...new Set(currencies.filter((c) => typeof c === 'string' && c.trim()))].sort()) {
+    const forecast = await (deps.forecast ?? cashForecast)({ projectId, currency });
+    const fresh = await recordCashForecast(projectId, forecast, deps);
+    written.push(...fresh);
+    for (const p of fresh) exposures.push(await recordExposure(p.id, forecast.upfrontCash.valueCents, deps));
+  }
+  return { written, exposures, reading: await assessLedger({}, deps) };
 }
 
 /** Run the cash forecast and record it: the cash forecast's output reaches the ledger through here. */
