@@ -18,7 +18,7 @@ import { maskEmail } from '../server/services/agents/client.ts';
 import { sellbirdReply, sellbirdResearch, sellbirdWrite } from '../server/services/agents/sellbird.ts';
 import { OSM_TILES, defaultDeps, discoverOsm, findPublishedEmail, instantly, itemsOf } from '../server/services/cash/neighborCard.ts';
 import { SALES_BUSINESSES } from '../server/services/sales/businesses.ts';
-import { promisesDeliverable, runSalesDesk, ungroundedFigures } from '../server/services/sales/desk.ts';
+import { automatedNotOptOut, promisesDeliverable, runSalesDesk, ungroundedFigures } from '../server/services/sales/desk.ts';
 
 const argv = process.argv.slice(2);
 const flag = (name: string, fallback: number) => {
@@ -77,7 +77,7 @@ for (const c of finished) {
       { email: lead, company: lead.split('@')[1] ?? '' }, { id: String(m.id), text }, [], { source: 'sales prove' });
     if (!d || d.error) continue;
     analysed += 1;
-    console.log(`REPLY ${String(c.name)} ${maskEmail(lead)}: "${text.split('\n')[0]!.slice(0, 90)}" -> ${d.intent}, stage ${d.stage}${d.optOut ? `, opt-out by ${d.optOut.rule}` : ''}${d.escalations.length ? ', to a person' : ''}${d.answer ? `; would answer${promisesDeliverable(d.answer) ? ' (held: promises a deliverable)' : ''}: "${d.answer.slice(0, 160).replace(/\n+/g, ' ')}"` : ''}`);
+    console.log(`REPLY ${String(c.name)} ${maskEmail(lead)}: "${text.split('\n')[0]!.slice(0, 90)}" -> ${d.intent}, stage ${d.stage}${d.intent === 'unsubscribe' ? (automatedNotOptOut(text, d.optOut?.rule) ? ', read as an opt-out by the model alone on automated wording: desk keeps it off the block list' : `, opt-out by ${d.optOut?.rule ?? 'model'}: desk block-lists it`) : ''}${d.escalations.length ? ', to a person' : ''}${d.answer ? `; would answer${promisesDeliverable(d.answer) ? ' (held: promises a deliverable)' : ''}: "${d.answer.slice(0, 160).replace(/\n+/g, ' ')}"` : ''}`);
   }
 }
 await closeDatabase();
