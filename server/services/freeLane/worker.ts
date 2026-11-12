@@ -36,6 +36,7 @@ import { findingTakesQualifier, isStructuralFinding } from '../../domain/industr
 import { createWorker, getWorkerByName, grantMembership, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import { CLAIMABLE_SQL, claimWork, queueNow } from '../../repos/workQueue.ts';
 import { completeUnleasedBin, getBin, recordBinEvent } from '../../repos/bins.ts';
+import { itemMeters, utf8Bytes, type ItemUsage } from './itemMeter.ts';
 import { evaluateContract } from '../bins/contracts.ts';
 import { findTool } from '../../mcp/tools.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
@@ -289,31 +290,46 @@ function principalFor(worker: FreeWorker, projectIds: string[], sessionRef: stri
 /* Which items are the free lane's                                            */
 /* ------------------------------------------------------------------------- */
 
-/** The newest bin owning an item, and its purpose. */
 /**
- * A work item's owning purpose, cached ten minutes. The claim window pages past
- * work the lane declines (`claimWork`), so an idle slot can ask about dozens of
- * items every pass; on a saturated database that must not be a query each.
+ * A work item's owning bin and its purpose, cached ten minutes. The claim window
+ * pages past work the lane declines (`claimWork`), so an idle slot can ask about
+ * dozens of items every pass; on a saturated database that must not be a query
+ * each.
+ *
+ * A research item usually carries no `bin_id` (`workQueue.ts`: `advancePacket`
+ * creates fragments, verifications and audits with no bin), so its owner is the
+ * newest bin of its orchestration. The same owner is what each `FREE_LANE_ITEM`
+ * row is written against, so stage capacity attributes a job to the purpose the
+ * lane admitted it for — never to UNATTRIBUTED because the item row had no bin.
  */
-const purposeCache = new Map<string, { at: number; purpose: string | null }>();
+interface OwningBin {
+  binId: string;
+  purpose: string | null;
+}
+const purposeCache = new Map<string, { at: number; owner: OwningBin }>();
 const PURPOSE_TTL_MS = 10 * 60_000;
 
-async function owningPurpose(item: Pick<WorkItemRow, 'bin_id' | 'orchestration_id'>): Promise<string | null> {
+export async function owningBin(item: Pick<WorkItemRow, 'bin_id' | 'orchestration_id'>): Promise<OwningBin | null> {
   const key = item.bin_id ?? item.orchestration_id ?? null;
   if (!key) return null;
   const cacheKey = `${item.bin_id ? 'b' : 'o'}:${key}`;
   const hit = purposeCache.get(cacheKey);
-  if (hit && Date.now() - hit.at < PURPOSE_TTL_MS) return hit.purpose;
+  if (hit && Date.now() - hit.at < PURPOSE_TTL_MS) return hit.owner;
   const owner = item.bin_id ? 'b.id = ?' : 'b.orchestration_id = ?';
-  const row = await getDb().get<{ purpose: string | null }>(
-    `SELECT b.purpose FROM bins b WHERE ${owner} ORDER BY b.created_at DESC LIMIT 1`,
+  const row = await getDb().get<{ id: string; purpose: string | null }>(
+    `SELECT b.id, b.purpose FROM bins b WHERE ${owner} ORDER BY b.created_at DESC LIMIT 1`,
     [key],
   );
-  const purpose = row?.purpose ?? null;
+  if (!row) return null;
+  const found: OwningBin = { binId: row.id, purpose: row.purpose ?? null };
   if (purposeCache.size > 5000) purposeCache.clear();
   // An item with no bin yet may get one: only a found purpose is remembered.
-  if (purpose !== null) purposeCache.set(cacheKey, { at: Date.now(), purpose });
-  return purpose;
+  if (found.purpose !== null) purposeCache.set(cacheKey, { at: Date.now(), owner: found });
+  return found;
+}
+
+async function owningPurpose(item: Pick<WorkItemRow, 'bin_id' | 'orchestration_id'>): Promise<string | null> {
+  return (await owningBin(item))?.purpose ?? null;
 }
 
 export function resetPurposeCache(): void {
@@ -411,7 +427,13 @@ async function ask(
     try {
       text = await completer({ ...config, timeoutMs: 180_000 }, model, SYSTEM, prompt, { maxTokens: 8000 });
     } catch (error) {
-      onFail(`model call failed: ${String((error as Error).message ?? error).slice(0, 200)}`);
+      const message = String((error as Error).message ?? error);
+      // On the GPU slot the error that reaches here is the fallback's: the GPU's
+      // own failure was swallowed when the call fell back. When the GPU's own
+      // calls are failing, that is the cause, and the reason says so.
+      const down = gpuDown(model);
+      const detail = down ? `GPU slot's own calls failing; the fallback then said: ${message}` : message;
+      onFail(`model call failed [${classifyRouteFailure(message, { gpuDown: down })}]: ${redactSecrets(detail).slice(0, 200)}`);
       continue;
     }
     const parsed = firstJson(text);
@@ -611,6 +633,39 @@ interface Ctx {
   why: string;
   /** How sources were found for a fragment: search results, and which of the read pages came from them. */
   discovery?: { searched: number; readFromSearch: number; readFromModel: number };
+  /** What the item used while it ran (itemMeter.ts); recorded on its `FREE_LANE_ITEM` row. */
+  usage?: ItemUsage;
+}
+
+/**
+ * The item's model route, page reader and search, each counting what crossed the
+ * network into the item's meter. The behaviour of each is unchanged.
+ */
+export function meteredIo(
+  usage: ItemUsage,
+  io: { completer: Completer; fetchSource: (url: string) => Promise<SourceFetch>; search: (query: string) => Promise<string[]> },
+): { completer: Completer; fetchSource: (url: string) => Promise<SourceFetch>; search: (query: string) => Promise<string[]> } {
+  return {
+    completer: (async (config, model, system, prompt, options) => {
+      usage.modelCalls += 1;
+      usage.networkBytesOut += utf8Bytes(system) + utf8Bytes(prompt);
+      const text = await io.completer(config, model, system, prompt, options);
+      usage.networkBytesIn += utf8Bytes(text);
+      return text;
+    }) as Completer,
+    fetchSource: async (url) => {
+      usage.networkBytesOut += utf8Bytes(url);
+      const page = await io.fetchSource(url);
+      usage.networkBytesIn += utf8Bytes(page?.readable ? page.text : '');
+      return page;
+    },
+    search: async (query) => {
+      usage.networkBytesOut += utf8Bytes(query);
+      const found = await io.search(query);
+      usage.networkBytesIn += utf8Bytes(found);
+      return found;
+    },
+  };
 }
 
 /** `ask` for one item, recording why on the item when the model gives nothing usable. */
@@ -644,8 +699,14 @@ export const NOT_REACHED_BACKOFF_MS = [1_000, 3_000, 9_000];
 async function call(ctx: Ctx, tool: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
   const found = findTool(tool);
   if (!found) throw new Error(`no tool ${tool}`);
-  const outcome = await retryNotReached(() => found.run(args, { principal: ctx.principal, requestId: `req_${Math.random().toString(36).slice(2)}` }));
-  return outcome.value;
+  const started = Date.now();
+  if (ctx.usage) ctx.usage.dbCalls += 1;
+  try {
+    const outcome = await retryNotReached(() => found.run(args, { principal: ctx.principal, requestId: `req_${Math.random().toString(36).slice(2)}` }));
+    return outcome.value;
+  } finally {
+    if (ctx.usage) ctx.usage.dbMs += Date.now() - started;
+  }
 }
 
 /** Run `fn`, waiting and running it again while Brain's database was not reached. Exported for tests. */
@@ -693,6 +754,8 @@ export async function submitDroppingRefusedClaims(ctx: Ctx, tool: string, args: 
       const at = index ? Number(index[1]) : -1;
       if (tool !== 'brain_submit_claims' || !claims || claims.length < 2 || at < 0 || at >= claims.length || dropped >= 5) throw error;
       current = { ...current, claims: claims.filter((_, i) => i !== at) };
+      // Dropping the refused claim stands in for the repair call that would otherwise have been asked.
+      if (ctx.usage) ctx.usage.modelCallsAvoided += 1;
     }
   }
 }
@@ -905,6 +968,9 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
         'sites over deep links. Reply as {"urls":["https://..."]}.',
     );
     await open(urlsOf(retry));
+  } else if (ctx.usage) {
+    // Enough pages were read on the first round, so the second round's model call was not needed.
+    ctx.usage.modelCallsAvoided += 1;
   }
   const readFromSearch = readable.filter((one) => fromSearch.has(one.url)).length;
   ctx.discovery = { searched: fromSearch.size, readFromSearch, readFromModel: readable.length - readFromSearch };
@@ -1125,6 +1191,8 @@ async function audit(ctx: Ctx, role: string): Promise<boolean> {
    */
   const struck = (transientStrikes.get(ctx.claimed.workItemId) ?? 0) > 0;
   let raw = struck ? null : await askFor(ctx, prompt);
+  // A struck audit is not asked the long way again: that call is avoided.
+  if (struck && ctx.usage) ctx.usage.modelCallsAvoided += 1;
   /*
    * A long brief is where free models stop answering in JSON. Production,
    * 2026-11-05 09:18–10:18Z: ANALYSIS.AUDIT 5/25 and six packets parked "an audit
@@ -1343,6 +1411,7 @@ let fitness: { at: number; unfit: Set<string> } | null = null;
 /** Tests: forget the cached fitness reading. */
 export function resetFreeLaneFitness(): void {
   fitness = null;
+  resetRouteHealth();
 }
 export async function unfitNow(models: readonly string[], now = Date.now(), fallbackModel: string | null = null): Promise<Set<string>> {
   if (fitness && now - fitness.at < 5 * 60_000) return fitness.unfit;
@@ -1509,12 +1578,142 @@ export function freeLaneSkips(): Record<string, number> {
   return Object.fromEntries([...skipTally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10));
 }
 
+/* ------------------------------------------------------------------------- */
+/* Route health: which cause, and which route to stop sending items to        */
+/* ------------------------------------------------------------------------- */
+
+/** The cause a failing model route reports, read from its own error, never a guess. */
+export type RouteFailureCause =
+  | 'credentials'
+  | 'task routing'
+  | 'broken GPU'
+  | 'provider availability'
+  | 'database'
+  | 'unclassified';
+
+export const ROUTE_FAILURE_CAUSES: readonly RouteFailureCause[] = [
+  'credentials',
+  'task routing',
+  'broken GPU',
+  'provider availability',
+  'database',
+  'unclassified',
+];
+
+/**
+ * Names the actual cause of a model-call failure so the recorded reason says which one it was.
+ * `gpuDown` is the GPU slot's own measured state (`gpuDown`): on that slot the
+ * message is usually the free fallback's error, because the GPU's own error
+ * was swallowed when the call fell back — 2026-11-09, run 42577770227, the pod
+ * had been deleted, every GPU call got a 404, and 325 failures were recorded
+ * as "cheap lane HTTP N", which named the fallback and hid the GPU.
+ */
+export function classifyRouteFailure(message: string, route: { gpuDown?: boolean } = {}): RouteFailureCause {
+  if (route.gpuDown || /\brunpod (?:HTTP|returned|unavailable)\b/i.test(message)) return 'broken GPU';
+  if (/\b(?:HTTP (?:401|403)|unauthori[sz]ed|forbidden|invalid[ _-]?api[ _-]?key|authentication|credential)/i.test(message)) return 'credentials';
+  if (/\b(?:HTTP 404|model[^.]{0,40}not (?:found|available|loaded)|no such model|unknown model|unsupported model)/i.test(message)) return 'task routing';
+  if (/\b(?:gpu|cuda|runpod|pod (?:not|is|has)|out of memory|OOM)\b/i.test(message)) return 'broken GPU';
+  if (BRAIN_UNAVAILABLE.test(message)) return 'database';
+  if (PROVIDER_BUSY.test(message)) return 'provider availability';
+  return 'unclassified';
+}
+
+/** A credential never reaches a recorded reason: bearer tokens and key-shaped strings are cut out. */
+export function redactSecrets(text: string): string {
+  return text
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/\b(?:sk|rpa|ghp|gho|ghs|xox[a-z])[-_][A-Za-z0-9_-]{12,}/g, '[redacted]')
+    .replace(/([?&](?:api[_-]?key|key|token|access_token)=)[^&\s]+/gi, '$1[redacted]');
+}
+
+/** How far back the GPU slot's own calls are read to say it is down. */
+export const GPU_DOWN_WINDOW_MS = 15 * 60_000;
+
+/**
+ * Whether a GPU slot's own calls are failing: in the window at least one GPU
+ * call failed and none answered. A pod paused on purpose is not down (its calls
+ * go to the fallback without touching the GPU), and a free-provider route never is.
+ */
+export function gpuDown(model: string, now = Date.now()): boolean {
+  if (!isRunpodSlot(model) || runpodPaused()) return false;
+  const window = runpodCallWindow(GPU_DOWN_WINDOW_MS, now);
+  return window.failed > 0 && window.ok === 0;
+}
+
+/**
+ * The cause a recorded reason names: the `[cause]` tag `ask` wrote when there
+ * is one (it was decided with the GPU's state in hand, which the text alone no
+ * longer carries), otherwise classified from the text. Null for a reason that
+ * is not a model-call failure.
+ */
+export function causeOfReason(reason: string | null): RouteFailureCause | null {
+  const text = reason ?? '';
+  if (!/model call failed/.test(text)) return null;
+  const tag = /model call failed \[([^\]]+)\]/.exec(text)?.[1];
+  const known = ROUTE_FAILURE_CAUSES.find((cause) => cause === tag);
+  return known ?? classifyRouteFailure(text);
+}
+
+/** Consecutive provider failures after which a route stops being offered items. */
+export const ROUTE_FAILURE_LIMIT = 3;
+const ROUTE_REPROBE_MS = 5 * 60_000;
+const routeHealth = new Map<string, { failures: number; cause: RouteFailureCause; nextProbeAt: number }>();
+
+/** Tests: forget every route's health. */
+export function resetRouteHealth(): void {
+  routeHealth.clear();
+}
+
+/**
+ * A failing route's standing: null when it is healthy or due its single re-probe item.
+ * It only reads: asking does not spend the re-probe slot, because the item being
+ * asked about may still be declined by a later filter (unfit, not free-lane work,
+ * the admission audit). The slot is spent by `takeRouteProbe`, once an item is
+ * actually admitted onto the route.
+ */
+export function routeHold(model: string, now = Date.now()): string | null {
+  const state = routeHealth.get(model);
+  if (!state || state.failures < ROUTE_FAILURE_LIMIT) return null;
+  if (now >= state.nextProbeAt) return null;
+  return `model route failing (${state.cause}); another model takes the work until it is re-probed`;
+}
+
+/**
+ * An item was admitted onto a held route that was due its re-probe: that item is
+ * the probe, and the next is held until it answers. A healthy route is untouched.
+ */
+export function takeRouteProbe(model: string, now = Date.now()): void {
+  const state = routeHealth.get(model);
+  if (!state || state.failures < ROUTE_FAILURE_LIMIT) return;
+  if (now >= state.nextProbeAt) state.nextProbeAt = now + ROUTE_REPROBE_MS;
+}
+
+/** A route that answered is healthy again; a route that did not is counted, with its cause. */
+export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: string }, now = Date.now()): void {
+  if (outcome.ok) {
+    routeHealth.delete(model);
+    return;
+  }
+  const why = outcome.why ?? '';
+  if (!/^model call failed/.test(why) && !BRAIN_UNAVAILABLE.test(why)) return;
+  const cause = causeOfReason(why) ?? classifyRouteFailure(why);
+  // Brain's own database being busy says nothing about the model route.
+  if (cause === 'database') return;
+  const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now + ROUTE_REPROBE_MS };
+  state.failures += 1;
+  state.cause = cause;
+  if (state.failures === ROUTE_FAILURE_LIMIT) state.nextProbeAt = now + ROUTE_REPROBE_MS;
+  routeHealth.set(model, state);
+}
+
 export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
   const { workers, worker, index, config } = input;
   const projectIds = await projectsFor(worker);
   if (projectIds.length === 0) return { claimed: null, ok: false, ms: 0 };
   let session = '';
   let one: ClaimedWork | undefined;
+  // The bin each admitted item belongs to, so its FREE_LANE_ITEM row names it.
+  const owners = new Map<string, string>();
   const unfit = await unfitNow(workers.map((w) => w.model), Date.now(), config.fallbackModel ?? null);
   const scopes = projectIds.map((projectId) => ({ projectId, scopes: [...CONNECTOR_SCOPES] }));
   const admit = async (item: WorkItemRow) => {
@@ -1522,10 +1721,17 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
       return { ok: false, reason: 'the other free worker takes this role' };
     }
     if ((cooldown.get(cooldownKey(worker.model, item.id)) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
+    const held = routeHold(worker.model);
+    if (held) return { ok: false, reason: held };
     if (unfit.has(`${worker.model}|${item.work_type}`)) return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
     if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
+    const owner = await owningBin(item);
+    if (owner) owners.set(item.id, owner.binId);
     session = sessionFor(worker, item);
-    return auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
+    const admitted = await auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
+    // Only an item that passed every filter spends a held route's re-probe slot.
+    if (admitted.ok) takeRouteProbe(worker.model);
+    return admitted;
   };
   const ask = async (types: FreeLaneWorkType[], orchestrationId: string | null): Promise<ClaimedWork | undefined> => {
     let declined = 0;
@@ -1563,15 +1769,19 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   }
   if (!one) return { claimed: null, ok: false, ms: 0 };
   const started = Date.now();
+  const meterKey = `${one.workItemId}:${one.leaseId}`;
+  const usage = itemMeters.open(meterKey);
+  const io = meteredIo(usage, { completer: input.completer, fetchSource: input.fetchSource, search: input.search });
   const ctx: Ctx = {
     worker,
     principal: principalFor(worker, projectIds, session),
     claimed: one,
-    completer: input.completer,
-    fetchSource: input.fetchSource,
-    search: input.search,
+    completer: io.completer,
+    fetchSource: io.fetchSource,
+    search: io.search,
     config,
     why: 'the model returned no usable JSON',
+    usage,
   };
   let ok = false;
   try {
@@ -1635,9 +1845,12 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
       // Lease already gone: the queue's expiry returns it.
     }
   }
+  recordRouteOutcome(worker.model, { ok, why: ctx.why });
   const ms = Date.now() - started;
+  const used = itemMeters.close(meterKey) ?? usage;
   await recordBinEvent({
     eventType: 'FREE_LANE_ITEM',
+    binId: owners.get(one.workItemId) ?? null,
     projectId: one.projectId,
     workItemId: one.workItemId,
     workerId: worker.workerId,
@@ -1647,7 +1860,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
     durationMs: ms,
     evidenceClass: 'MEASURED',
-    ...(ctx.discovery ? { measures: { discovery: ctx.discovery } } : {}),
+    measures: { usage: used, ...(ctx.discovery ? { discovery: ctx.discovery } : {}) },
   });
   return { claimed: one, ok, ms };
 }
@@ -1739,12 +1952,34 @@ export function startFreeLaneLoop(_intervalMs = 30_000, delayMs = 3 * 60_000): v
       .then(({ startAdaptivePool }) => startAdaptivePool())
       .catch((error) => console.warn('[free-lane] pool did not start:', (error as Error).message));
   };
-  const wait = setTimeout(begin, delayMs);
+  const wait = setTimeout(() => {
+    begin();
+    measureStages();
+    const every = setInterval(measureStages, STAGE_CAPACITY_INTERVAL_MS);
+    every.unref?.();
+    stageTimer = every;
+  }, delayMs);
   wait.unref?.();
   timer = wait as unknown as NodeJS.Timeout;
 }
 
+/** How often the lane records its per-stage capacity reading (CAP-16-3). */
+export const STAGE_CAPACITY_INTERVAL_MS = 60 * 60_000;
+let stageTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Record the per-stage capacity measurement (`stageCapacity.ts`) as a
+ * `bin_events` row. Background only: the web process never waits on it.
+ */
+function measureStages(): void {
+  void import('./stageCapacity.ts')
+    .then(({ recordStageCapacity }) => recordStageCapacity())
+    .catch((error) => console.warn('[free-lane] stage capacity not recorded:', (error as Error).message));
+}
+
 export function stopFreeLaneLoop(): void {
-  if (timer) clearInterval(timer);
+  if (timer) clearTimeout(timer);
+  if (stageTimer) clearInterval(stageTimer);
   timer = null;
+  stageTimer = null;
 }
