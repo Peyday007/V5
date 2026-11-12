@@ -38,9 +38,9 @@ import {
   createBoundaryContract,
   createRequirements,
   listCoverage,
+  listExistingClaims,
   listRequirements,
   type CreateRequirementInput,
-  listExistingClaimsForDocuments,
 } from '../../repos/reconciliation.ts';
 import { currentExtractionRunsFor } from '../../repos/extraction.ts';
 import { claimsForDocument } from './claims.ts';
@@ -133,25 +133,25 @@ export async function inventoryProject(projectId: string): Promise<{
   const claims: ExistingClaim[] = [];
 
   /*
-   * Two statements for the archive rather than two per document. Production,
-   * 2026-11-12: a project of 989 documents made this ~2,000 sequential reads,
-   * and on a loaded database `brain_propose_fragments` — which runs it inline —
-   * passed its time limit and failed the release's hosted verification three
-   * times running. Same rows, same order; a document with no stored claims is
-   * still inventoried on its own, exactly as before.
+   * Read in bulk, not per document. Production, 2026-11-12: two sequential
+   * queries for each of ~990 documents put brain_propose_fragments past the
+   * 180s tool-call limit on three Deploys in a row. One statement per 500
+   * documents reads the current runs, one reads the project's claims, and only
+   * a read document holding no claim yet is inventoried on its own.
    */
-  const documents = (await listDocuments(projectId)).filter(
-    (document) => document.filesystemPath && !document.fileMissing,
-  );
-  const runs = await currentExtractionRunsFor(documents.map((document) => document.id));
-  const storedClaims = await listExistingClaimsForDocuments(
-    documents
-      .filter((document) => {
-        const run = runs.get(document.id);
-        return run && (run.status === 'READY' || run.status === 'READY_WITH_WARNINGS');
-      })
-      .map((document) => document.id),
-  );
+  const documents = (await listDocuments(projectId)).filter((d) => d.filesystemPath && !d.fileMissing);
+  const runs = await currentExtractionRunsFor(documents.map((d) => d.id));
+  const held = new Map<string, ExistingClaim[]>();
+  for (const claim of await listExistingClaims(projectId)) {
+    const list = held.get(claim.documentId);
+    if (list) list.push(claim);
+    else held.set(claim.documentId, [claim]);
+  }
+  // The order a per-document read returned: page, then block, then insertion.
+  const position = (n: number | null) => (n === null ? -Infinity : n);
+  for (const list of held.values()) {
+    list.sort((a, b) => position(a.page) - position(b.page) || position(a.blockIndex) - position(b.blockIndex));
+  }
 
   for (const document of documents) {
     const run = runs.get(document.id) ?? null;
@@ -168,8 +168,8 @@ export async function inventoryProject(projectId: string): Promise<{
       continue;
     }
     read += 1;
-    const stored = storedClaims.get(document.id);
-    claims.push(...(stored && stored.length > 0 ? stored : await claimsForDocument(document.id)));
+    const own = held.get(document.id);
+    claims.push(...(own && own.length > 0 ? own : await claimsForDocument(document.id)));
   }
 
   return { claims, documentsRead: read, documentsUnreadable: unreadable, documentsPending: pending };

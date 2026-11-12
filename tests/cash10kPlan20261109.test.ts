@@ -27,7 +27,7 @@ describe('the 2026-11-09 $10K plan', () => {
   it('searches several industries, models and structures, and records why each excluded one is out', () => {
     const rows = doc.split('\n').filter((l) => /^\| \d+ \|/.test(l));
     expect(rows.length).toBeGreaterThanOrEqual(12);
-    expect(rows.filter((l) => /\| No/.test(l)).every((l) => /No[:,]? \S/.test(l))).toBe(true);
+    expect(rows.filter((l) => /\| No\b/.test(l)).every((l) => /No[:,]? \S/.test(l))).toBe(true);
     for (const word of ['broker', 'produce', 'pool', 'subcontract', 'arbitrage']) expect(doc.toLowerCase()).toContain(word);
   });
 

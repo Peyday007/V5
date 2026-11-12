@@ -101,6 +101,7 @@ import { getClaim, signalledClaims } from '../../repos/research.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
 import { mechanismForSignal } from '../../domain/opportunitySignals.ts';
+import { OPPORTUNITY_SIGNALS } from '../../domain/types.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { cashPosition } from './money.ts';
 import { proveCapabilities } from './deliverables/capabilities.ts';
@@ -717,6 +718,52 @@ export const REMOTE_AI_FOCUS =
   'Look for work this operation can run entirely online: work it fulfils with AI-produced digital output (documents, data, research, content, code, automations), and services that independent contractors or suppliers perform for businesses or households while this operation sells, books, refers or subcontracts them and coordinates them remotely (home services, local services, consumer services, small repeat purchases). Neither kind is preferred over the other. ' +
   'For each opening give: the kind of buyer and where they are found, a dated sign that buyers want it now, the price buyers are shown paying for it, how many such buyers there are and how often each buys, who performs or produces the work and how it is delivered, what it costs to get each customer, the cost per sale, and how quickly the money is collected.';
 
+/**
+ * How a goal lens's answer becomes an opening, said in the question.
+ *
+ * The harvest files only a claim whose reader set `opportunity_signal`
+ * (`signalledClaims`). A goal lens asks "which ways could bring this goal
+ * money" — an arrangement question, not "find a published request" — and the
+ * profile asks for a signal only on "a concrete opening", so workers answered
+ * with buyer, price and settlement claims and tagged none of them. Production
+ * read 0 of 18 goal rounds filing an opening, recorded as "round abandoned
+ * with nothing found": the research ran, the claims were gated, and nothing
+ * could be harvested. Constructed rounds met the same cause on 2026-11-02 and
+ * were fixed by naming the field (`construct.ts`, `OPENING_SENTENCE`); this is
+ * that fix for the lens rounds. The worker still decides whether a claim is
+ * an opening and which signal it is, from the whole closed set; a signalled
+ * claim passes the same gate, and the harvested piece is qualified like any
+ * other. No bar is lowered.
+ */
+export const GOAL_OPENING_SENTENCE =
+  'Report each way that a source shows a payer for as an opening, by setting opportunity_signal on the claim that names those buyers ' +
+  `to whichever of ${OPPORTUNITY_SIGNALS.join(', ')} the source shows. ` +
+  'A claim with no opportunity_signal is kept as evidence and never becomes an opening, so a way reported without one is lost to the goal.';
+
+/**
+ * A closed round that filed nothing, however it closed. This is what makes the
+ * next asking start from how such openings are found (`methodFirst`): a search
+ * that came back empty or stopped short is not repeated as it was.
+ */
+function roundFoundNothing(one: Pick<CashDiscoveryRound, 'state' | 'found'>): boolean {
+  return (one.state === 'ABANDONED' || one.state === 'HARVESTED') && one.found === 0;
+}
+
+/**
+ * A round whose research actually finished and filed nothing: evidence that
+ * this angle, asked this way, has nothing to find. Only `HARVESTED` says the
+ * research finished (its mission is DONE). `ABANDONED` means a mission that
+ * failed, was cancelled, expired unlaunched, was answered by the archive or
+ * parked at a decision. A round can end that way because Brain's own lane,
+ * model route or database was down, and then the angle was never searched.
+ * Brain's outage is nobody's no-show (§53), and a dead end is a watch, not a
+ * verdict (§65), so an ABANDONED round is no evidence either way. It neither
+ * lengthens a lens's wait nor erases the barren harvests before it.
+ */
+function roundSearchedAndFoundNothing(one: Pick<CashDiscoveryRound, 'state' | 'found'>): boolean {
+  return one.state === 'HARVESTED' && one.found === 0;
+}
+
 /** A barren goal lens waits longer each time, up to this, and is never retired. */
 export const GOAL_LENS_MAX_BACKOFF_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -734,7 +781,9 @@ export function nextGoalRoundFor(history: CashDiscoveryRound[], now: string): nu
   let barren = 0;
   for (let i = ordered.length - 1; i >= 0; i -= 1) {
     const one = ordered[i]!;
-    if (one.state === 'HARVESTED' && one.found === 0) barren += 1;
+    // A round that stopped before its research finished says nothing about the angle: skip it.
+    if (one.state === 'ABANDONED' && one.found === 0) continue;
+    if (roundSearchedAndFoundNothing(one)) barren += 1;
     else break;
   }
   const wait = Math.min(ROUND_COOL_OFF_MS * 2 ** barren, GOAL_LENS_MAX_BACKOFF_MS);
@@ -872,7 +921,7 @@ export async function openGoalDiscovery(input: {
    */
   const last = [...history].sort((a, b) => b.round - a.round)[0];
   const methodFirst =
-    last && (last.state === 'ABANDONED' || (last.state === 'HARVESTED' && last.found === 0))
+    last && roundFoundNothing(last)
       ? 'The last search from this angle found nothing usable, so start with how such openings are actually found: name the specific directories, public registers, feeds, trade associations and search terms where buyers of this kind publish what they need, open each, say which produced live openings and which did not, and report the openings found through the ones that worked. '
       : '';
   const learned = yieldGuidance(await discoveryYield(t.projectId));
@@ -887,6 +936,7 @@ export async function openGoalDiscovery(input: {
       'For each, name who pays, what buyers are published as actually paying, when the money would settle, ' +
       'what it needs up front, and what it would need that the operation does not have yet?' +
       ` ${REMOTE_AI_FOCUS}` +
+      ` ${GOAL_OPENING_SENTENCE}` +
       (input.diagnosis ? ` ${input.diagnosis}` : '') +
       (learned ? ` ${learned}` : '') +
       ' For each opening, say how it was found: the source and the search that led to it.',

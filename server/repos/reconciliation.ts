@@ -373,30 +373,6 @@ export async function listExistingClaimsForDocument(documentId: string): Promise
     .map(mapExistingClaim);
 }
 
-/**
- * `listExistingClaimsForDocument` for many documents, one statement per chunk,
- * each document's claims in the same order the single-document read gives.
- */
-export async function listExistingClaimsForDocuments(documentIds: string[]): Promise<Map<string, ExistingClaim[]>> {
-  const byDocument = new Map<string, ExistingClaim[]>();
-  const unique = [...new Set(documentIds)];
-  for (let start = 0; start < unique.length; start += 500) {
-    const slice = unique.slice(start, start + 500);
-    const rows = await getDb().all<ExistingClaimRow>(
-      `SELECT * FROM existing_claims WHERE document_id IN (${slice.map(() => '?').join(', ')})
-        ORDER BY document_id, page, block_index, rowid`,
-      slice,
-    );
-    for (const row of rows) {
-      const claim = mapExistingClaim(row);
-      const held = byDocument.get(row.document_id);
-      if (held) held.push(claim);
-      else byDocument.set(row.document_id, [claim]);
-    }
-  }
-  return byDocument;
-}
-
 /** Re-reading a document replaces its claims; the document is the source of truth. */
 export async function clearExistingClaims(documentId: string): Promise<void> {
   await getDb().run('DELETE FROM existing_claims WHERE document_id = ?', [documentId]);
