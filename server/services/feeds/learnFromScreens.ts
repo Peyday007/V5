@@ -48,6 +48,7 @@ import {
   recordDetectorExample,
 } from '../../repos/searchMethods.ts';
 import type { LearnedDetector } from '../../domain/searchIntelligence.ts';
+import { PrivateDataRefused } from '../knowledge/scope/privacy.ts';
 import { combineLeads, parseLead, type LeadOutput } from '../cheap/lane.ts';
 import { confidenceOf, defineFromExamples, FIRE_AT, type LearnedDefinition } from './learned.ts';
 import { FEED_READER } from './learnedRun.ts';
@@ -123,7 +124,10 @@ type StoredDefinition = LearnedDefinition & { trainedOn?: string[] };
  * The GENERAL search method a screen-proposed detector serves, keyed by the
  * detector's key so a second call returns the same row. Null when the
  * definition cannot be shared (the privacy guard refused it): the detector
- * still exists, it just records no run.
+ * still exists, it just records no run. Only that refusal is absorbed: any
+ * other failure (a database fault, a broken constraint) propagates, because
+ * swallowing it would leave the detector silently unlinked — no CODE run, no
+ * AI usage avoided, no pause/revise — which is the defect this rule exists for.
  */
 export async function methodForDetector(detectorKey: string, definition: Pick<LearnedDefinition, 'sources' | 'terms'>) {
   try {
@@ -138,8 +142,9 @@ export async function methodForDetector(detectorKey: string, definition: Pick<Le
       checkProcedure:
         'Each firing on an item the detector was not built from is judged by two agreeing cheap-lane screen answers; precision over judged firings decides ACTIVE or SHADOW.',
     });
-  } catch {
-    return null;
+  } catch (err) {
+    if (err instanceof PrivateDataRefused) return null;
+    throw err;
   }
 }
 
