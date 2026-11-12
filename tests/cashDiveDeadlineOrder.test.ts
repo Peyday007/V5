@@ -5,10 +5,16 @@
  * never read `expiresAt`, so a dated opening waited behind older undated ones
  * until it entered the 72h runway, where it can no longer be dived.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { CashOpportunity } from '../server/domain/types.ts';
 import { compareDiveValue, diveOrder, type DiveValueFacts } from '../server/services/cash/validation.ts';
 import { DIVE_RUNWAY_MS, closesWithin } from '../server/services/cash/worthResearching.ts';
+import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { activate } from '../server/services/cash/lifecycle.ts';
+import { createOpportunity, updateOpportunity } from '../server/repos/cashPortfolio.ts';
+import { startValidations } from '../server/services/cash/validation.ts';
 
 const NOW = '2026-10-20T12:00:00.000Z';
 const DAY = 24 * 60 * 60 * 1000;
@@ -113,5 +119,79 @@ describe('dive order reads a recorded closing date (EDF)', () => {
     const undated = row({ id: 'undated', createdAt: '2026-10-02T00:00:00.000Z', crossesTier: true });
     const order = diveOrder({ now: NOW, dropped: none, forGoal: none, shortWindow: none });
     expect(select([inside, undated], order, 2)).toEqual(['undated', 'inside']);
+  });
+});
+
+/*
+ * The same property through the production loop itself, against a database:
+ * `startValidations` reads the rows, applies `whyNotDiving`, spends its room and
+ * captures the dives. A later change to that loop — the room, the goal places
+ * beside it, a skip — is caught here, where the pure model above cannot see it.
+ */
+describe('startValidations dives a dated opening before the runway closes it', () => {
+  let projectId = '';
+  let modeId = '';
+  let ownerId = '';
+
+  beforeEach(async () => {
+    const fixture = await freshProject();
+    projectId = fixture.project.id;
+    await getDb().run('UPDATE projects SET slug = ? WHERE id = ?', [`edf-${projectId.slice(-6)}`, projectId]);
+    const owner = await createUser({
+      email: `edf-dive-${projectId.slice(-6)}@example.com`,
+      displayName: 'Owner',
+      password: 'a-long-enough-password',
+      isBrainAdmin: true,
+    });
+    ownerId = owner.id;
+    const started = await activate({ projectId, ownerUserId: owner.id, actorUserId: owner.id, objective: 'Usable cash, quickly.' });
+    if (!started.ok) throw new Error('could not activate');
+    modeId = started.mode.id;
+  });
+
+  async function opening(title: string, expiresAt: string | null = null): Promise<string> {
+    const made = await createOpportunity({
+      projectId,
+      cashModeId: modeId,
+      ownerUserId: ownerId,
+      title,
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+      expiresAt,
+    });
+    await updateOpportunity(made.id, { buying_signal: `A county published a paid request: ${title}.`, source: 'https://example.gov/rfp' });
+    return made.id;
+  }
+
+  const fromNow = (ms: number) => new Date(Date.now() + ms).toISOString();
+  const started = async (limit: number) => (await startValidations({ projectId, limit })).map((one) => one.opportunityId);
+
+  it('spends the one free dive on the solicitation closing in 10 days, not on older undated openings', async () => {
+    const older = [await opening('An ongoing request for parcel research'), await opening('An ongoing request for a traffic count')];
+    const solicitation = await opening("Solicitation N0010426QAC01 'DUST PLUG'", fromNow(10 * DAY));
+    const ids = await started(1);
+    expect(ids).toEqual([solicitation]);
+    for (const id of older) expect(ids).not.toContain(id);
+  });
+
+  it('dives the earlier window first, whatever its age, and skips one already inside the runway without spending the room', async () => {
+    const later = await opening('A solicitation closing in 20 days', fromNow(20 * DAY));
+    const undated = await opening('An ongoing request for bookkeeping');
+    // Ahead of everything in the order (an approved goal's own opening), but inside the
+    // runway, so whyNotDiving refuses it: the loop must skip it and still spend its room.
+    const inside = await opening('A goal-found solicitation closing tomorrow', fromNow(DAY));
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO cash_discovery_rounds (id, project_id, cash_mode_id, bucket_id, mechanism, round, candidate_id, state, opened_at, found, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, 'HARVESTED', ?, 1, ?, ?)`,
+      [`cdr_${projectId.slice(-6)}`, projectId, modeId, 'goal-wst_edf-open', 'OTHER', `rcn_${projectId.slice(-6)}`, at, at, at],
+    );
+    await getDb().run('UPDATE cash_opportunities SET discovery_round_id = ? WHERE id = ?', [`cdr_${projectId.slice(-6)}`, inside]);
+    const sooner = await opening('Solicitation 140LL027Q0005, signage project', fromNow(8 * DAY));
+    const ids = await started(1);
+    expect(ids).toEqual([sooner]);
+    expect(ids).not.toContain(inside);
+    expect(ids).not.toContain(later);
+    expect(ids).not.toContain(undated);
   });
 });
