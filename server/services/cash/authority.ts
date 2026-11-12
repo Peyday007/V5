@@ -182,7 +182,25 @@ export function actionContext(input: {
 /** The ledger cause for a spend authorized with no stated sum, whose ceilings are judged at the commitment. */
 export const AMOUNT_JUDGED_AT_COMMIT = 'AMOUNT_JUDGED_AT_COMMIT' as const;
 
-export async function checkCommercialAuthority(input: {
+export async function checkCommercialAuthority(input: CommercialCheckInput): Promise<CommercialDecision> {
+  return assessCommercialAuthority(input, true);
+}
+
+/**
+ * The same judgment as `checkCommercialAuthority`, for a reader that performs
+ * nothing: a screen asking which actions are open, a plan asking what a grant
+ * covers. It writes no AUTHORITY_DECISION row, raises no approval request and
+ * records no suspension — those belong to an action somebody is about to take.
+ * A view that ledgered its answers appended "authorized" rows for every page
+ * load, so the ledger no longer said what Brain did versus what it proposed,
+ * and a non-owner viewer could raise an owner approval request by reading.
+ * An owner's stored answer is still read, so the reading agrees with the act.
+ */
+export async function readCommercialAuthority(input: CommercialCheckInput): Promise<CommercialDecision> {
+  return assessCommercialAuthority(input, false);
+}
+
+export interface CommercialCheckInput {
   projectId: string;
   action: string;
   at?: string;
@@ -194,7 +212,9 @@ export async function checkCommercialAuthority(input: {
   principal?: string | null;
   /** READ_ONLY never reaches past internal work, whatever the grant says. */
   access?: AccessKind;
-}): Promise<CommercialDecision> {
+}
+
+async function assessCommercialAuthority(input: CommercialCheckInput, record: boolean): Promise<CommercialDecision> {
   if (!isCommercialAction(input.action)) {
     return {
       ok: false,
@@ -221,15 +241,18 @@ export async function checkCommercialAuthority(input: {
     // same words as a project with no grant (invariant 23), and nothing is written against an absent row.
     return { ok: false, authority: null, reason: 'no standing commercial authority exists for this project', policyVersion: null };
   }
-  let judged = await judgeLive({
-    projectId: input.projectId,
-    action: input.action,
-    at: input.at,
-    path: input.path ?? 'API',
-    amountCents: input.amountCents,
-    principal: input.principal,
-    access: input.access,
-  });
+  let judged = await judgeLive(
+    {
+      projectId: input.projectId,
+      action: input.action,
+      at: input.at,
+      path: input.path ?? 'API',
+      amountCents: input.amountCents,
+      principal: input.principal,
+      access: input.access,
+    },
+    record,
+  );
   // An owner's stored answer can cover a missing grant in the ledger's terms, but money is committed only
   // under a live grant row that callers read ceilings from: without one, the answer is recorded and the
   // action still refused, so the row says what happened rather than what the approval would have allowed.
@@ -265,7 +288,7 @@ export async function checkCommercialAuthority(input: {
       ledger: { ...judged.ledger, disposition: 'AUTHORIZED', cause: AMOUNT_JUDGED_AT_COMMIT },
     };
   }
-  const decisionId = await recordDecision(judged);
+  const decisionId = record ? await recordDecision(judged) : null;
   if (!judged.ok || !authority) {
     return { ok: false, authority, reason: judged.reason, policyVersion: authority?.policyVersion ?? null, decisionId };
   }
@@ -711,7 +734,7 @@ export async function answerApprovalRequest(input: {
   });
 }
 
-async function applyStoredApproval(input: JudgeInput, decision: ActionDecision): Promise<ActionDecision> {
+async function applyStoredApproval(input: JudgeInput, decision: ActionDecision, record = true): Promise<ActionDecision> {
   const needed = decision.neededApproval;
   const cause = decision.ledger.cause;
   if (decision.ok || !needed || !APPROVABLE_CAUSES.includes(cause)) return decision;
@@ -741,6 +764,8 @@ async function applyStoredApproval(input: JudgeInput, decision: ActionDecision):
   }
   const open = await openNeedForKey(input.projectId, key);
   if (open) return { ...decision, approvalNeedId: open.id };
+  // A reading asks nobody: the request is raised by the action that needs it, not by a view of it.
+  if (!record) return decision;
   const raised = await raiseNeed({
     projectId: input.projectId,
     actorRef: 'BRAIN',
@@ -927,7 +952,8 @@ export async function recordEffectReceipt(input: {
   return row.id;
 }
 
-async function judgeLive(input: JudgeInput): Promise<ActionDecision> {
+/** `record: false` judges without writing: no approval request and no suspension row (a reading). */
+async function judgeLive(input: JudgeInput, record = true): Promise<ActionDecision> {
   const klass = classifyAction(input.action);
   if (klass === 'INTERNAL' || !klass) return judgeAction({ ...input, emergencyStop: false }, { authority: null, revoked: false, heldCents: 0 });
   const stopped = await emergencyStopOn(input.projectId);
@@ -938,6 +964,7 @@ async function judgeLive(input: JudgeInput): Promise<ActionDecision> {
   const decision = await applyStoredApproval(
     input,
     judgeAction({ ...input, emergencyStop: stopped }, { authority, revoked, heldCents: held }),
+    record,
   );
   const cause = decision.ledger.cause;
   if (cause !== 'REVOKED' && cause !== 'EMERGENCY_STOP') return decision;
@@ -946,6 +973,6 @@ async function judgeLive(input: JudgeInput): Promise<ActionDecision> {
     ...decision,
     obligations: { heldCents: held, heldCommitmentIds: heldIds },
   };
-  await recordSuspension(input, out, heldIds);
+  if (record) await recordSuspension(input, out, heldIds);
   return out;
 }

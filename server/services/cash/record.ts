@@ -20,7 +20,7 @@ import { dealPosition } from './journey/position.ts';
 import { usableAdapter } from './effects.ts';
 import { actionsFor } from '../../repos/cashActions.ts';
 import { listMoneyEntries } from '../../repos/cashLedger.ts';
-import { BRAIN_PRINCIPAL, actionContext, checkCommercialAuthority } from './authority.ts';
+import { BRAIN_PRINCIPAL, actionContext, readCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
 import { COMMERCIAL_EFFECTS, PERFORMABLE_ACTIONS, type PerformableAction } from './effects.ts';
 import { effectAttemptsFor, sendGate, type EffectAttemptView } from './perform.ts';
@@ -138,7 +138,7 @@ export async function executionRecord(input: {
     if (!PERFORMABLE_FROM[action].includes(opportunity.state)) continue;
     const effect = COMMERCIAL_EFFECTS[action];
     const reading = await readCapability(effect.capability);
-    const decision = await checkCommercialAuthority({ projectId: opportunity.projectId, action, ...actionContext({ principal: BRAIN_PRINCIPAL }) });
+    const decision = await readCommercialAuthority({ projectId: opportunity.projectId, action, ...actionContext({ principal: BRAIN_PRINCIPAL }) });
     let reason: string | null = null;
     if (action === 'CONTACT_BUYER' && opportunity.state === 'READY' && actions.some((one) => one.action === action)) {
       reason = 'The buyer has already been reached; this waits to begin execution from that contact.';
