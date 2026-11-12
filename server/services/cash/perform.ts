@@ -193,6 +193,14 @@ export async function applyEffectOutcome(input: {
     };
   }
 
+  if (outcome.status === 'FAILED' && outcome.withheld) {
+    // The provider is down and its circuit is open: Brain did not send, so the
+    // provider refused nothing and there is nothing for a person to fix. The
+    // operation stays open and the next attempt after the circuit closes sends
+    // it; no need is raised for a wait that resolves itself.
+    return { kind: 'FAILED', operationId: outcome.operation.id, reason: outcome.withheld };
+  }
+
   if (outcome.status === 'FAILED') {
     const category = outcome.operation.failureCategory ?? 'unspecified';
     const providerSaid = outcome.operation.resultSummary;
