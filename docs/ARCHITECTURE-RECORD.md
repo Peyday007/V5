@@ -15679,3 +15679,100 @@ line, which is how each of these was found.
 `npm run operator -- show | run | probe` (and `agents.yml operator-show |
 operator-run | operator-status`). Tests: `tests/operator.test.ts`,
 `operator/tests/test_server.py`.
+
+## 107. Sellbird's whole sales mind works every business, and Brain still decides, sends through Instantly and keeps the record.
+
+**Owner's order, 2026-11-12.** "You installed Sellbird but only connected its
+contact-finding features. I want the COMPLETE Sellbird system integrated into
+Brain … Connect everything to Brain's existing systems. Instantly remains
+responsible for sending emails. Use our existing self-hosted/free AI
+resources … Make the capabilities available across ALL applicable Brain
+businesses … If a capability cannot be integrated, explain the specific
+reason."
+
+**The seam.** Sellbird thinks through `sellbird.brain.Brain`, which runs the
+Claude or Codex CLI — or any `transport(prompt, *, agent, task, timeout,
+expect_json)` it is given. `agents/brain_agents/sales.py` gives it one that
+calls Brain's own model (the RunPod vLLM; else the cheap lane's named free
+model, `browserModel`), with `/no_think` and any `<think>` block removed before
+Sellbird reads the answer. No paid model API exists anywhere in the path. Each
+request runs Sellbird's own classes against a throwaway state seeded with what
+Brain holds, and returns the answer; the agents app keeps and sends nothing.
+
+**Where each capability lives** (Sellbird at `25ec839`, every module read):
+
+| Sellbird capability | where it runs for Brain |
+|---|---|
+| Business research: `collectors/profile.ProfileCollector` (tools, ads, agency, schema, stale sitemap, robots, hiring boards via `collectors/ats`, YC/accelerator/funding), `site_facts`, `startups.startup_facts`, `integrations/tech_detect` | `/v1/sellbird/research`; every Neighbor Card lead the desk researches, recorded in `sales_leads` |
+| Decision makers and their published addresses: `Scout._scrape_team_page` / `collectors/people.find_people`, `_resolve_email`, `_find_inbox_address` | `/v1/sellbird/contacts` (§104) and inside research; the greeting uses a published decision maker's first name |
+| Qualification and prioritization: `fit.company_fit` (sector, decision maker, reachability, hiring) and the do-not-contact rule | research returns the 0-100 fit and its reasons; refill drops a refused lead and writes for the best fit first |
+| Personalized writing: `Writer._write_personal_email` (facts fenced as untrusted, the signal playbook's relevant part, the offer block, learned feedback), `humanize`, `Writer._keep_to_rules` / `email_style.style_problems`, `gate.autopilot_review` | `/v1/sellbird/write`; the Neighbor Card's personal variant (`… · personal`) carries it as `{{sb_subject}}` / `{{sb_body}}`; Brain also holds any draft quoting a figure the business never stated (`ungroundedFigures`) |
+| Sequences and follow-ups: `Writer._write_sequence` (3 steps, days 0/3/7, Instantly merge variables) | `/v1/sellbird/sequence`, for a campaign variant test; Instantly runs the sequence and stops on reply and for the company |
+| Reply analysis and handling: `Handler._process_reply` — `_opt_out_reason` (English, Spanish, French, Hebrew; before any model call), `_escalates`, `_classify_intent`, `_determine_stage`, `_generate_response` with objection handling, `booking_instruction`, its pre-send and autopilot gates | `/v1/sellbird/reply` with Sellbird's Instantly client replaced by a recorder; the sales desk acts on the decision (below) |
+| Engagement and sales progression: the stage machine (initial_outreach → engaged → qualifying → presenting → negotiating → closing / closed_lost), stop-the-company on reply, accepted-offer handoff | `sales_replies.stage`; Instantly's lead interest status set from the intent; an accepted offer is held for fulfilment (Brain's handoff) |
+| Suppression: `Handler._suppress`, `gate.do_not_contact_match` | the workspace block list in Instantly (every campaign), plus each business's `doNotContact` list in Sellbird's config |
+| Campaign optimization and performance learning: `agents/analyst._generate_insights`; Sellbird's writer feedback block | the desk's six-hourly `learn`: the analyst over Instantly's counts and Brain's intents (`sales_learnings` ANALYST), what prospects asked fed to the writer (WRITER_FEEDBACK), and the personal-vs-template split moved by positive replies per send (ALLOCATION) |
+| Product knowledge: `trainer.Trainer` (product facts, ICP, competition, objections and answers) | `/v1/sellbird/knowledge` over each business's own facts weekly (KNOWLEDGE); its objections reach the reply handler |
+| Offer design: `offer.suggest_offers` | `/v1/sellbird/offers` |
+| Deliverability: `deliverability.check_mx/spf/dmarc/dkim/check_domain_blocklists` | `/v1/sellbird/deliverability`, every sending domain daily (DELIVERABILITY) |
+| Prompt-injection defence: `untrusted.fence`, `UNTRUSTED_RULE` | inside every Sellbird prompt as Sellbird builds it |
+
+**Not integrated, and why.**
+
+- *Sending and the mailbox side* (`agents/sender.py`'s outbox and approval ladder, `integrations/gmail.py`, `microsoft.py`, `smtp_mail.py`, `mailboxes.py`, `send_window.py`, the warmup ramp, `trulyinbox.py`, bounce handling and the bounce kill switch, `signature.py`): Instantly sends, schedules, warms, tracks bounces and pauses on bounce protection; a second sender is what the owner ruled out.
+- *Discovery that costs money* (Serper, DataForSEO, Scavio, Hunter beyond its free tier, ZeroBounce, Reoon, Cloudflare Browser Rendering): no money is spent without the owner turning it on (invariant 18). Brain's own discovery (OpenStreetMap, chambers, Places within its ceiling) feeds the desk instead; Sellbird's free OSM provider would duplicate it.
+- *SMTP address verification and pattern guessing* (`email_finder.find_email`): port 25 is closed on cloud hosts and a guessed address is not one a business published (§104); Brain checks MX itself.
+- *LinkedIn* (`integrations/linkedin.py`, the LinkedIn scout strategies): automated use breaks LinkedIn's terms (`LEGAL_RISK`) and needs the owner's personal login.
+- *Precleared* (`integrations/precleared.py`, a cold-email legality API): paid beyond a small free allowance and written for native sends; every campaign here is US B2B under CAN-SPAM with the address and opt-out in every message.
+- *Calendar booking* (`integrations/calendar.py`): a placeholder in Sellbird that does nothing; replies use `booking_instruction`'s "ask preference".
+- *Handoff over MCP* (`handoff.py`): Brain's handoff is its own fulfilment record (`FULFILL`); a business whose deliverable is an image, a PDF or a generated sample cannot be sent in a text reply from Brain, and the expansion samples are built by `businesses/*/build` outside the Brain image (`operate.py fulfill`).
+- *Dashboard, tray, MCP server, CLI, setup wizard, export, extensions* (`dashboard*.py`, `web/`, `desktop/`, `mcp_server.py`, `cli.py`, `setup.py`, `export.py`, `extensions.py`): no administration page (invariant 35); Brain's own surfaces read `sales_*` rows.
+- *Claude/Codex runtimes and quota* (`claude_runtime.py`, `codex.py`, `integrations/quota.py`, `usage.py`): replaced by the transport to Brain's own model.
+
+**The rest of Sellbird, module by module.** Used in-process as the machinery
+the capabilities above stand on: `config` (`SellbirdConfig` built per business
+by `build_config`), `models/prospect`, `models/company`, `models/conversation`,
+`models/campaign`, `state` and `storage` (a throwaway SQLite per request),
+`signals` (the catalog seeded so observations validate), `paths`, `home`,
+`workspace_home`, `textio`, `logsafety`, `public_http` (the profile collector's
+public-address-only HTTP client). Replaced by Brain's own counterpart, because
+running both would give one job two owners: `main` and `pipeline` (Sellbird's
+heartbeat and stage loop — Brain's integrations tick runs the desk),
+`collectors/discover` (Brain's discovery), `integrations/instantly` (Brain's
+Instantly provider calls the API; Sellbird's client is the recorder in
+`handle_reply`), `integrations/mail_provider` (its `strip_quoted_reply` still
+runs inside the handler), `sending_mode`, `send_hooks` and `legacy` (Sellbird's
+approval and hold switches — Brain's rules decide what is sent),
+`agent_policy` and `mcp_install` (Sellbird's own agent door — Brain has its own,
+§21), `register` (Brain's `sales_leads` is the register), `secrets` and
+`pidfile` (a desktop keychain and process lock). The interactive surfaces —
+`dashboard`, `dashboard_auth`, `dashboard_instance`, `inbox_cli`,
+`inbox_routes`, `desktop/tray`, `desktop/login_item`, `desktop_cli`, `cli`,
+`setup` — are covered by invariant 35 above.
+
+**What Brain does with a reply** (`server/services/sales/desk.ts`, every
+quarter hour from the integrations tick, and `agents.yml sales`): read every
+received email on every business's campaigns once; Sellbird decides; then —
+opt-out: the workspace block list and interest −1, nothing sent; escalation or
+a person needed: left for the owner, nothing sent; accepted offer, or an answer
+promising what a text reply cannot carry: `FULFILL`, nothing promised; an
+answer for an interested lead, a question, an objection or a wrong person: sent
+in the thread from the mailbox that received the reply, signed with that
+account's own name — only when the business lets Brain answer (never the
+owner's own campaigns), nobody answered the thread already, and every figure in
+it is one the business states. One row per reply in `sales_replies`, keyed by
+Instantly's email id, so a second pass repeats nothing; a reply the model could
+not answer is left for the next pass, unrecorded.
+
+**Who is on the desk** (`server/services/sales/businesses.ts`): the Neighbor
+Card (template and personal variant), Brain's buyer outreach, Grant Prospects,
+Bid Digest and Accessibility Audit (answered by Brain), and the owner's AI
+Dispatch (read, suppressed, never answered). The expansion businesses' first
+emails already carry a finding computed for each prospect (`{{teaser}}`), so
+their personalization is that; Sellbird reads and answers their replies.
+
+**Records.** `sales_leads`, `sales_replies`, `sales_learnings` (migration 147 /
+pg 138); every agents call is a USAGE row under `open-source-agents`.
+
+`node --import tsx scripts/sales-desk.ts [--prove]`; `agents.yml sales |
+sales-prove`. Tests: `tests/salesDesk.test.ts`, `agents/tests/test_sales.py`.

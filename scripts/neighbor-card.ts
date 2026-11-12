@@ -17,6 +17,7 @@ import { countIntegrationUsage, recordIntegrationEvent } from '../server/repos/i
 import { defaultAgents, defaultDeps, runNeighborCard } from '../server/services/cash/neighborCard.ts';
 import { signingKey } from '../server/services/integrations/keys.ts';
 import { searchPlacesViaV2 } from '../server/services/integrations/v2Bridge.ts';
+import { personalDesk } from '../server/services/sales/desk.ts';
 
 const argv = process.argv.slice(2);
 const flag = (name: string) => {
@@ -46,6 +47,8 @@ if (signingKey()) {
     deps.places = (query) => searchPlacesViaV2(query, meter);
     // The open-source agents (§104) record every call, so they run only with the database open.
     deps.agents = defaultAgents();
+    // Sellbird's desk (§107): research, fit order and a written first email for the best new leads.
+    deps.personal = await personalDesk();
   } catch (error) {
     console.log(`  Places not metered this pass, so not used: ${error instanceof Error ? error.message : String(error)}`);
   }

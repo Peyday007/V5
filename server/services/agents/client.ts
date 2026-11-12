@@ -85,14 +85,14 @@ export interface AgentFinding {
   via: 'sellbird' | 'browser-use';
 }
 
-type Fetch = typeof fetch;
+export type Fetch = typeof fetch;
 
 /** A safe one-line form of an address for a record: the domain only. */
 export function maskEmail(email: string): string {
   return email.replace(/^[^@]+/, '…');
 }
 
-async function call<T>(cfg: AgentsConfig, path: string, body: unknown, timeoutMs: number, fetcher: Fetch): Promise<T> {
+export async function call<T>(cfg: AgentsConfig, path: string, body: unknown, timeoutMs: number, fetcher: Fetch): Promise<T> {
   const res = await fetcher(`${cfg.url}${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.key}` },
