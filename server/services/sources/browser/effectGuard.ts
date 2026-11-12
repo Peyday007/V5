@@ -21,7 +21,11 @@
  *     default, and the count is read from the host's recent
  *     `BROWSER_WORKFLOW_RUN` rows — the record every run already writes. A
  *     host at its limit is deferred, naming the limit and the rows counted,
- *     never exceeded.
+ *     never exceeded. Because a run row is written only when the run ends, the
+ *     rows cannot see a run still in flight, so "one more run" is not decided
+ *     by reading them: it is a request slot claimed in one conditional insert
+ *     (`claimRequestSlots`), keyed by host, bound and window, so two processes
+ *     or machines cannot both take the last slot.
  *
  * An outcome nobody knows — a run that timed out after it submitted, or an
  * executor that died holding the claim — is recorded as UNKNOWN (the
@@ -29,7 +33,7 @@
  * (invariant 26). Only a person or a verification that read the site's own
  * state resolves it, through `resolveUnknownBrowserEffect`.
  *
- * Reads are idempotent: they pass the request limit and are not claimed, so a
+ * Reads are idempotent: they take a request slot but no effect claim, so a
  * read can be repeated as often as the limit allows. Whether a capability
  * mutates is the capability's declaration, judged when it was approved; this
  * module does not guess it from the steps.
@@ -270,6 +274,156 @@ export async function readRequestBudget(
 }
 
 /* ------------------------------------------------------------------------- */
+/* Claiming a request slot (atomic, across processes)                         */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The run rows a budget is read from are written when a run *finishes*, so a
+ * budget alone cannot see a run still in flight: two processes (the server's
+ * tick and a terminal, or two server machines) would both read room and both
+ * reach the site. That is a read-then-write, which invariant 24 forbids.
+ *
+ * So the slot itself is claimed, before the run, in one statement: a
+ * `bin_events` row whose primary key is derived from the host, the bound, the
+ * window and the slot number, inserted with `ON CONFLICT DO NOTHING` — the
+ * once-only owner `creditBinAttempt` already uses, on the table the budget
+ * already reads. A bound of N runs per window is N possible ids; a run takes
+ * the first it can insert, and a window whose every id exists defers. (Not
+ * `idempotency_operations`: its rows require a project row, and the
+ * integrations tick runs Brain's own reads under `BRAIN_CAPABILITY_PROJECT`,
+ * which is not one — the claim would refuse exactly the runs it must bound.)
+ *
+ * The window is fixed (aligned to the clock); the id names the host, the bound
+ * and the window, and nothing a caller sends — not a project, worker or
+ * attempt (invariant 27). A slot spent by a run later refused (a duplicate
+ * mutation) stays spent: a bound is erred on the safe side, never exceeded.
+ * The bounds claimed are the ones the budget applies: the host's per-minute
+ * limit, and a capability's own hourly count and minimum interval.
+ */
+export const BROWSER_REQUEST_SLOT_EVENT = 'BROWSER_REQUEST_SLOT';
+
+type SlotBound = 'HOST' | 'CAPABILITY_HOURLY' | 'CAPABILITY_INTERVAL';
+
+export interface SlotWindow {
+  bound: SlotBound;
+  /** The capability the bound belongs to; null for the host's own limit. */
+  capability: string | null;
+  windowMs: number;
+  /** How many runs this window admits. */
+  slots: number;
+}
+
+export type SlotClaim =
+  | { claimed: true; slotIds: string[] }
+  | { claimed: false; bound: SlotBound; windowStart: string; retryAfter: string; slots: number };
+
+/** The windows a run must hold a slot in. Pure. */
+export function slotWindowsFor(limit: number, capabilityRate: CapabilityRate | null): SlotWindow[] {
+  const windows: SlotWindow[] = [{ bound: 'HOST', capability: null, windowMs: REQUEST_WINDOW_MS, slots: Math.max(0, Math.floor(limit)) }];
+  if (capabilityRate) {
+    const name = capabilityRate.name.trim().toLowerCase();
+    windows.push({ bound: 'CAPABILITY_HOURLY', capability: name, windowMs: CAPABILITY_RATE_WINDOW_MS, slots: Math.max(0, Math.floor(capabilityRate.maxRunsPerHour)) });
+    if (Number.isFinite(capabilityRate.minIntervalMs) && capabilityRate.minIntervalMs > 0) {
+      windows.push({ bound: 'CAPABILITY_INTERVAL', capability: name, windowMs: Math.floor(capabilityRate.minIntervalMs), slots: 1 });
+    }
+  }
+  return windows;
+}
+
+/** The window's identity: host, bound, capability, window length and index. Pure. */
+export function slotWindowKey(host: string, w: SlotWindow, nowMs: number): string {
+  const windowIndex = Math.floor(nowMs / w.windowMs);
+  return createHash('sha256')
+    .update(canonicalize({ v: 1, host: host.trim().toLowerCase(), bound: w.bound, cap: w.capability, ms: w.windowMs, i: windowIndex }), 'utf8')
+    .digest('hex')
+    .slice(0, 32);
+}
+
+/** Take one slot in one window, or say the window is full. */
+async function claimOneSlot(
+  host: string,
+  w: SlotWindow,
+  ctx: { projectId: string | null; actor: { type: ActorType; id: string | null }; nowMs: number },
+): Promise<string | null> {
+  if (w.slots <= 0) return null;
+  const db = getDb();
+  const windowKey = slotWindowKey(host, w, ctx.nowMs);
+  const windowStartMs = Math.floor(ctx.nowMs / w.windowMs) * w.windowMs;
+  // A hint where to start, not a decision: the insert below is the decision.
+  const taken = await db.all<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM bin_events WHERE event_type = ? AND at >= ? AND measures LIKE ?`,
+    [BROWSER_REQUEST_SLOT_EVENT, new Date(windowStartMs).toISOString(), `%"window":"${windowKey}"%`],
+  );
+  const start = Math.min(Number(taken[0]?.n ?? 0), w.slots);
+  const at = new Date(Math.max(ctx.nowMs, windowStartMs)).toISOString();
+  for (let slot = start; slot < w.slots; slot += 1) {
+    const id = `bev_bslot_${windowKey}_${slot}`;
+    const result = await db.run(
+      `INSERT INTO bin_events (id, event_type, at, project_id, worker_id, measures, outcome, reason, is_proxy)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+       ON CONFLICT DO NOTHING`,
+      [
+        id,
+        BROWSER_REQUEST_SLOT_EVENT,
+        at,
+        ctx.projectId,
+        ctx.actor.id,
+        JSON.stringify({ host, bound: w.bound, capability: w.capability, window: windowKey, windowStart: new Date(windowStartMs).toISOString(), windowMs: w.windowMs, slot: slot + 1, of: w.slots }),
+        'CLAIMED',
+        `request slot ${slot + 1}/${w.slots} for ${host} (${w.bound}${w.capability ? ` "${w.capability}"` : ''})`,
+      ],
+    );
+    if (Number(result.changes) === 1) return id;
+  }
+  return null;
+}
+
+/**
+ * Claim a request slot for one run against a host, in every window that bounds
+ * it. Exactly as many runs proceed in a window as it has slots, whichever
+ * process or machine they run in.
+ */
+export async function claimRequestSlots(input: {
+  host: string;
+  limit: number;
+  capabilityRate?: CapabilityRate | null;
+  projectId?: string | null;
+  actor: { type: ActorType; id: string | null };
+  now?: Date;
+}): Promise<SlotClaim> {
+  const host = input.host.trim().toLowerCase();
+  if (!host) throw new Error('A request slot names the host it is spent against.');
+  const nowMs = (input.now ?? new Date()).getTime();
+  const slotIds: string[] = [];
+  for (const w of slotWindowsFor(input.limit, input.capabilityRate ?? null)) {
+    const id = await claimOneSlot(host, w, { projectId: input.projectId ?? null, actor: input.actor, nowMs });
+    if (!id) {
+      const windowStartMs = Math.floor(nowMs / w.windowMs) * w.windowMs;
+      return {
+        claimed: false,
+        bound: w.bound,
+        windowStart: new Date(windowStartMs).toISOString(),
+        retryAfter: new Date(windowStartMs + w.windowMs).toISOString(),
+        slots: w.slots,
+      };
+    }
+    slotIds.push(id);
+  }
+  return { claimed: true, slotIds };
+}
+
+function deferredBySlot(budget: RequestBudget, slot: Extract<SlotClaim, { claimed: false }>): RequestBudget {
+  const what = slot.bound === 'HOST' ? `${budget.host}'s limit of ${budget.limit}/min` : slot.bound === 'CAPABILITY_HOURLY' ? `the capability's declared ${slot.slots}/hour` : "the capability's declared minimum interval";
+  return {
+    ...budget,
+    decision: 'DEFER',
+    bound: slot.bound,
+    retryAfter: slot.retryAfter,
+    reason: `every request slot under ${what} in the window from ${slot.windowStart} is already claimed, counting runs still in flight; deferred until ${slot.retryAfter}`,
+  };
+}
+
+/* ------------------------------------------------------------------------- */
 /* Claiming and settling a mutation                                           */
 /* ------------------------------------------------------------------------- */
 
@@ -445,6 +599,17 @@ export async function guardBrowserRun(input: GuardInput): Promise<GuardDecision>
     ...(input.rows ? { rows: input.rows } : {}),
   });
   if (budget.decision === 'DEFER') return { decision: 'DEFER', budget, claim: null };
+  // The rows say what has finished; the slot is what makes "one more" atomic,
+  // counting runs still in flight in this process or any other.
+  const slot = await claimRequestSlots({
+    host: input.capability.host,
+    limit: budget.limit,
+    capabilityRate: input.capabilityRate ?? null,
+    projectId: input.projectId ?? null,
+    actor: input.actor,
+    now,
+  });
+  if (!slot.claimed) return { decision: 'DEFER', budget: deferredBySlot(budget, slot), claim: null };
   if (input.effect === 'READ') return { decision: 'PROCEED', budget, claim: null };
   const claim = await claimBrowserEffect({ ...input, now });
   return claim.claimed ? { decision: 'PROCEED', budget, claim } : { decision: 'REFUSE', budget, claim };
