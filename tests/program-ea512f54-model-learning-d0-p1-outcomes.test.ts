@@ -3,12 +3,14 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
   claimedRange,
+  ledgerFromRows,
   readLedger,
   realizedDealsFrom,
   recordCashOutcomes,
 } from '../server/services/quant/ledger.ts';
 import type { CashOutcome } from '../server/domain/cashJourney.ts';
-import type { ExposureRow, OutcomeRow, PredictionRow } from '../server/services/quant/forecast.ts';
+import { MIN_CALIBRATION_SAMPLE, type ExposureRow, type OutcomeRow, type PredictionRow } from '../server/services/quant/forecast.ts';
+import { assessModelLearning } from '../server/services/quant/learning.ts';
 
 /*
  * F-NO-OUTCOME-PRODUCER: the outcome ledger has a production producer. A deal
@@ -96,23 +98,60 @@ describe('recordCashOutcomes judges each deal against the version exposed when i
   const ended = (id: string, opp: string, cents: number, at: string) =>
     outcome({ id, kind: 'REALIZED_CONTRIBUTION', opportunityId: opp, valueCents: cents, createdAt: at, requestKey: `outcome:${opp}:REALIZED_CONTRIBUTION:COLLECTED` });
 
-  it('records whether the realized figure landed in that version’s range, once per version, with the timing it measured', async () => {
+  it('records whether the realized figure landed in that version’s range, for every deal that ended under it, with the timing it measured', async () => {
     const l = ledger();
     const rows = [
       ended('a', 'o1', 900, '2026-01-20T00:00:00Z'), // v1 is current? no: v2 was made 01-10, so v2 judges it — inside 500..1500
       ended('b', 'o2', 50, '2026-01-05T00:00:00Z'), // v1 current; outside 100..800
-      ended('c', 'o3', 600, '2026-01-25T00:00:00Z'), // v2 already resolved: predicts nothing further
+      ended('c', 'o3', 600, '2026-01-25T00:00:00Z'), // v2 still current: a further observation of v2 — inside 500..1500
       ended('z', 'o0', 600, '2025-12-01T00:00:00Z'), // before any version was exposed
     ];
     const out = await recordCashOutcomes('p', rows, l.deps as never);
     expect(out.map((o) => [o.predictionId, o.occurred, o.realized, o.evidence])).toEqual([
       [`${claimId}@v1`, false, 50, 'cash_outcomes:b#contribution'],
       [`${claimId}@v2`, true, 900, 'cash_outcomes:a#contribution'],
+      [`${claimId}@v2`, true, 600, 'cash_outcomes:c#contribution'],
     ]);
-    // v2 was made 01-10 with a 10-day horizon; the deal ended 01-20: on time. v1's ended inside its horizon too.
-    expect(out.every((o) => !o.observedCauses?.includes('TIMING'))).toBe(true);
+    // v2 was made 01-10 with a 10-day horizon; deal a ended 01-20: on time. v1's ended inside its horizon too.
+    expect(out.slice(0, 2).every((o) => !o.observedCauses?.includes('TIMING'))).toBe(true);
+    // Deal c ended 01-25, past v2's horizon (01-20): a measured overrun on that observation alone.
+    expect(out[2]!.observedCauses).toContain('TIMING');
     expect(out[0]!.observedAt).toBe('2026-01-05T00:00:00Z');
-    expect(l.written.map((w) => w.measures.ledger)).toEqual(['OUTCOME', 'OUTCOME']);
+    expect(l.written.map((w) => w.measures.ledger)).toEqual(['OUTCOME', 'OUTCOME', 'OUTCOME']);
+  });
+
+  it('a stable forecast over many deals is judged on each deal, so calibration counts opportunities, not versions', async () => {
+    const l = ledger();
+    l.predictions.splice(1, 1); // only v1, never revised
+    const rows = Array.from({ length: MIN_CALIBRATION_SAMPLE + 5 }, (_, i) =>
+      ended(`d${i}`, `od${i}`, i % 2 === 0 ? 400 : 5_000, `2026-01-0${1 + (i % 9)}T${String(i % 24).padStart(2, '0')}:00:00Z`),
+    );
+    const out = await recordCashOutcomes('p', rows, l.deps as never);
+    expect(out).toHaveLength(rows.length);
+    expect(new Set(out.map((o) => o.predictionId))).toEqual(new Set([`${claimId}@v1`]));
+    expect(new Set(out.map((o) => o.evidence)).size).toBe(rows.length);
+
+    // Every observation reaches the ledger the reading is judged on, and the bucket reaches the sample bar.
+    const reading = assessModelLearning({ predictions: l.predictions, exposures: l.exposures, outcomes: out });
+    expect(reading.ledger.filter((e) => e.outcome)).toHaveLength(rows.length);
+    const bucket = reading.calibration.find((b) => b.comparableKey === 'cash:USD:contribution')!;
+    expect(bucket.n).toBe(rows.length);
+    expect(bucket.verdict).not.toBe('INSUFFICIENT');
+    expect(reading.diagnoses).toHaveLength(rows.length);
+
+    // Read back from rows, every observation survives; the same measured row is still recorded once.
+    const persisted = ledgerFromRows([
+      ...out.map((row) => ({ measures: JSON.stringify({ ledger: 'OUTCOME', row }) })),
+      { measures: JSON.stringify({ ledger: 'OUTCOME', row: { ...out[0]!, occurred: !out[0]!.occurred } }) },
+    ]);
+    expect(persisted.outcomes).toHaveLength(rows.length);
+    expect(persisted.outcomes[0]!.occurred).toBe(out[0]!.occurred);
+
+    // A further pass over the same rows records nothing twice.
+    const again = ledger();
+    again.predictions.splice(1, 1);
+    again.outcomes.push(...out);
+    expect(await recordCashOutcomes('p', rows, again.deps as never)).toEqual([]);
   });
 
   it('a deal that ended past the version’s horizon is a measured timing overrun', async () => {

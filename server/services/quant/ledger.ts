@@ -86,6 +86,16 @@ async function write(kind: LedgerKind, row: LedgerRow['row'], deps: LedgerDeps, 
   });
 }
 
+/**
+ * What makes an outcome one observation: the version it judges and the production row it was measured from.
+ * A version stays current across every deal that ends while the forecast is unchanged, so each of those deals
+ * is its own draw of the figure the version's range describes — keyed per version alone, all but the first
+ * would be dropped and calibration would count revisions instead of comparable opportunities.
+ */
+export function outcomeKey(o: Pick<OutcomeRow, 'predictionId' | 'evidence'>): string {
+  return `${o.predictionId}\u0000${o.evidence ?? ''}`;
+}
+
 /** Rebuild the three ledgers from the rows written, in the claims' own order; a row that does not parse is skipped, never guessed. */
 export function ledgerFromRows(rows: readonly { measures: string | null }[]): {
   predictions: PredictionRow[];
@@ -111,8 +121,11 @@ export function ledgerFromRows(rows: readonly { measures: string | null }[]): {
       if (typeof e.predictionId === 'string' && !exposures.has(e.predictionId)) exposures.set(e.predictionId, e);
     } else if (parsed.ledger === 'OUTCOME') {
       const o = parsed.row as OutcomeRow;
-      // An outcome is recorded once: the first stands, a later one never overwrites it.
-      if (typeof o.predictionId === 'string' && !outcomes.has(o.predictionId)) outcomes.set(o.predictionId, o);
+      // An outcome is recorded once per version and measured row (`outcomeKey`): the first stands, a later one
+      // never overwrites it. A version resolves every deal that ended under it, not only the first.
+      if (typeof o.predictionId !== 'string') continue;
+      const key = outcomeKey(o);
+      if (!outcomes.has(key)) outcomes.set(key, o);
     }
   }
   // Rows written in the same millisecond tie on `at` and the row id is random, so the order is the claim's own:
@@ -252,8 +265,10 @@ export function observedCausesOf(prediction: PredictionRow, signals: OutcomeSign
 
 /**
  * Record the actual outcome once, against the version that was exposed, with the
- * causes its signals support. A second outcome for the same version is refused:
- * new evidence is a new row somewhere else, never an overwrite of this one.
+ * causes its signals support. A second outcome for the same version and the same
+ * measured row (`outcomeKey`) is refused — an outcome is never overwritten — while
+ * a different measured row under the same version is a further observation of it.
+ * An outcome that names no measured row is the version's one outcome.
  */
 export async function recordOutcome(
   predictionId: string,
@@ -264,8 +279,9 @@ export async function recordOutcome(
   const ledger = await defaultRead(deps, predictionId)();
   const prediction = ledger.predictions.find((p) => p.id === predictionId);
   if (!prediction) throw new Error(`no prediction ${predictionId} is on the ledger: an outcome is recorded against a version that exists`);
-  if (ledger.outcomes.some((o) => o.predictionId === predictionId)) {
-    throw new Error(`an outcome is already recorded for ${predictionId}; it is not overwritten`);
+  const key = outcomeKey({ predictionId, ...(deps.evidence ? { evidence: deps.evidence } : {}) });
+  if (ledger.outcomes.some((o) => outcomeKey(o) === key)) {
+    throw new Error(`an outcome is already recorded for ${predictionId}${deps.evidence ? ` from ${deps.evidence}` : ''}; it is not overwritten`);
   }
   const causes = observedCausesOf(prediction, signals);
   const row: OutcomeRow = {
@@ -548,9 +564,12 @@ export function claimedRange(p: Pick<PredictionRow, 'outcome'>): { low: number; 
  * drawn from (`impliedProbability`). It is judged against the version of that
  * claim that was current — and exposed — when the deal ended, never against
  * today's model: `occurred` is whether the realized figure landed inside the
- * range that version stated. A version is resolved once (the ledger refuses a
- * second outcome), a deal resolves at most one version per claim, and a deal
- * that ended before any version was exposed predicts nothing. The measured
+ * range that version stated. Every deal that ended under a version is an
+ * outcome of it — a forecast that stays unchanged across many deals is judged
+ * on each of them, so calibration counts comparable opportunities rather than
+ * revisions — while one measured row is recorded once (the ledger refuses the
+ * same version and row twice), a deal resolves at most one version per claim,
+ * and a deal that ended before any version was exposed predicts nothing. The measured
  * timing is the one signal recorded: a deal that ended past the version's
  * stated horizon is a timing overrun, and every other signal is read from
  * the deal's own `cash_outcomes` rows by `dealSignals`. Nothing is written for
@@ -562,7 +581,6 @@ export async function recordCashOutcomes(
   deps: LedgerDeps = {},
 ): Promise<OutcomeRow[]> {
   const ledger = await defaultRead({ ...deps, projectId }, `cash:${projectId}:`)();
-  const resolved = new Set(ledger.outcomes.map((o) => o.predictionId));
   const used = new Set(ledger.outcomes.map((o) => o.evidence).filter((e): e is string => typeof e === 'string'));
   const exposedAt = new Map(ledger.exposures.map((e) => [e.predictionId, e.exposedAt]));
   const written: OutcomeRow[] = [];
@@ -575,7 +593,7 @@ export async function recordCashOutcomes(
       const tag = `${evidence}#${figure}`;
       if (used.has(tag)) continue;
       const version = versionAt(ledger.predictions, `cash:${projectId}:${deal.currency}:${figure}`, deal.endedAt);
-      if (!version || resolved.has(version.id)) continue;
+      if (!version) continue;
       const exposed = exposedAt.get(version.id);
       if (!exposed || exposed > deal.endedAt) continue;
       const range = claimedRange(version);
@@ -592,7 +610,6 @@ export async function recordCashOutcomes(
         realized,
       });
       written.push(row);
-      resolved.add(version.id);
       used.add(tag);
     }
   }

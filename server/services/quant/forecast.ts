@@ -81,14 +81,14 @@ export interface ExposureRow {
   atRiskCents: number | null;
 }
 
-/** What actually happened, recorded once, against the version exposed. */
+/** What actually happened, recorded once per measured row, against the version exposed. */
 export interface OutcomeRow {
   predictionId: string;
   observedAt: string;
   occurred: boolean;
   /** Evidence a person or a measurement gave for why, by cause class, when known. */
   observedCauses?: readonly MissCause[];
-  /** The production row the outcome was measured from (e.g. `cash_outcomes:<id>`); one row resolves at most one version. */
+  /** The production row the outcome was measured from (e.g. `cash_outcomes:<id>`); one row resolves at most one version, and a version may resolve many rows. */
   evidence?: string;
   /** The realized figure, in the claim's own unit, when the outcome is a measured figure. */
   realized?: number;
@@ -146,19 +146,25 @@ export function versionAt(predictions: readonly PredictionRow[], claimId: string
   return found;
 }
 
-/** Joins the three ledgers by the version exposed; an outcome with no such version is dropped, not guessed. */
+/**
+ * Joins the three ledgers by the version exposed; an outcome with no such version is dropped, not guessed.
+ * One entry per observation: a version resolved by several measured rows (every deal that ended while it was
+ * current) is one entry per row, in the order observed, and a version nothing has resolved yet is one entry
+ * with no outcome. Calibration then counts comparable opportunities, not revisions of the forecast.
+ */
 export function buildLedger(
   predictions: readonly PredictionRow[],
   exposures: readonly ExposureRow[],
   outcomes: readonly OutcomeRow[],
 ): LedgerEntry[] {
   const exposureOf = new Map(exposures.map((e) => [e.predictionId, e]));
-  const outcomeOf = new Map(outcomes.map((o) => [o.predictionId, o]));
-  return predictions.map((prediction) => ({
-    prediction,
-    exposure: exposureOf.get(prediction.id) ?? null,
-    outcome: outcomeOf.get(prediction.id) ?? null,
-  }));
+  const outcomesOf = new Map<string, OutcomeRow[]>();
+  for (const o of outcomes) outcomesOf.set(o.predictionId, [...(outcomesOf.get(o.predictionId) ?? []), o]);
+  return predictions.flatMap((prediction): LedgerEntry[] => {
+    const exposure = exposureOf.get(prediction.id) ?? null;
+    const resolved = [...(outcomesOf.get(prediction.id) ?? [])].sort((a, b) => a.observedAt.localeCompare(b.observedAt));
+    return resolved.length === 0 ? [{ prediction, exposure, outcome: null }] : resolved.map((outcome) => ({ prediction, exposure, outcome }));
+  });
 }
 
 export interface CalibrationBucket {
@@ -242,6 +248,9 @@ export interface MissDiagnosis {
   predictionId: string;
   claimId: string;
   version: number;
+  /** Which observation of the version this judges: when it was observed and the row it was measured from (null when unresolved / unstated). */
+  observedAt: string | null;
+  evidence: string | null;
   /** A contradicted forecast: the outcome occurred against a low probability, or failed against a high one. */
   contradicted: boolean;
   /** What the surprise was worth: the probability the forecast gave the outcome that actually happened. */
@@ -276,7 +285,7 @@ export interface MissDiagnosis {
  */
 export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket[], ledger: readonly LedgerEntry[] = [entry]): MissDiagnosis {
   const { prediction: p, outcome } = entry;
-  const base = { predictionId: p.id, claimId: p.claimId, version: p.version };
+  const base = { predictionId: p.id, claimId: p.claimId, version: p.version, observedAt: outcome?.observedAt ?? null, evidence: outcome?.evidence ?? null };
   if (!outcome) {
     return { ...base, contradicted: false, probabilityOfWhatHappened: null, surpriseBits: null, kind: 'UNJUDGED', causes: [], attribution: 'NONE', owner: null, owners: [], claimGaps: [], reason: 'no outcome has been recorded for this version' };
   }

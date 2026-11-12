@@ -179,13 +179,15 @@ function judgeableAt(ledger: ModelLearningReading['ledger'], comparableKey: stri
  * A claim not yet revised since its misses has no entry — nothing has changed to compare.
  */
 export function correctionRounds(reading: Pick<ModelLearningReading, 'ledger' | 'diagnoses' | 'corrections'>, predictions: readonly PredictionRow[]): Map<string, CorrectionRound> {
-  const entry = new Map(reading.ledger.map((e) => [e.prediction.id, e]));
+  // A version is resolved by every deal that ended under it, so a diagnosis is matched to its own observation.
+  const keyOf = (predictionId: string, observedAt: string | null | undefined, evidence: string | null | undefined): string => `${predictionId}\u0000${observedAt ?? ''}\u0000${evidence ?? ''}`;
+  const entry = new Map(reading.ledger.map((e) => [keyOf(e.prediction.id, e.outcome?.observedAt, e.outcome?.evidence), e]));
   const out = new Map<string, CorrectionRound>();
   for (const correction of reading.corrections) {
     for (const claimId of correction.claimIds) {
       const misses = reading.diagnoses
         .filter((d) => d.kind === 'SYSTEMATIC' && d.claimId === claimId && d.causes.includes(correction.cause))
-        .map((d) => entry.get(d.predictionId))
+        .map((d) => entry.get(keyOf(d.predictionId, d.observedAt, d.evidence)))
         .filter((e): e is NonNullable<typeof e> => !!e?.outcome)
         .sort((a, b) => a.outcome!.observedAt.localeCompare(b.outcome!.observedAt));
       const firstMiss = misses[0];
