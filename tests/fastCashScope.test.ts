@@ -50,20 +50,18 @@ describe('the goal question asks for brokered services and repeat small sales be
   });
 });
 
-describe('a place name is not a public buyer', () => {
-  it('keeps a consumer opening that names a city, and still excludes public contracts', () => {
-    const goal = ['GOVERNMENT_CONTRACTING'] as (keyof typeof EXCLUSION_CLASSES)[];
-    expect(excludedBy('Recurring house cleaning for households in the City of Austin', goal)).toBeNull();
-    expect(excludedBy('Procurement software consultancy for mid-size manufacturers', goal)).toBeNull();
-    expect(excludedBy('City of Austin purchasing RFP for janitorial services', goal)).toBe('GOVERNMENT_CONTRACTING');
-    expect(excludedBy("PA Department of Agriculture's Farm Vitality Planning Grant", goal)).toBe('GOVERNMENT_CONTRACTING');
-    expect(excludedBy('Listing at https://www.sam.gov/opp/123', goal)).toBe('GOVERNMENT_CONTRACTING');
-    // A county or city department is a public buyer without a buying word beside it (2026-11-07).
-    expect(excludedBy('county forestry/parks department (standing-timber purchaser via sealed bid)', goal)).toBe('GOVERNMENT_CONTRACTING');
-    expect(excludedBy("Burnett County, Wisconsin's Forest & Parks Department published a timber sale notice", goal)).toBe('GOVERNMENT_CONTRACTING');
-    expect(excludedBy('Parks and Recreation Department youth program booking', goal)).toBe('GOVERNMENT_CONTRACTING');
-    // A county as a place, and a company's own department, stay in scope.
-    expect(excludedBy('Dog groomers in Orange County who buy booking software', goal)).toBeNull();
-    expect(excludedBy('The marketing department of mid-size law firms', goal)).toBeNull();
+describe('a public buyer is a buyer (owner, 2026-11-12)', () => {
+  it('keeps government and public-sector openings in play under every exclusion a goal can hold', () => {
+    expect(EXCLUSION_CLASSES).not.toHaveProperty('GOVERNMENT_CONTRACTING');
+    const goal = Object.keys(EXCLUSION_CLASSES) as (keyof typeof EXCLUSION_CLASSES)[];
+    for (const opening of [
+      'City of Austin purchasing RFP for janitorial services',
+      "PA Department of Agriculture's Farm Vitality Planning Grant",
+      'Listing at https://www.sam.gov/opp/123',
+      'county forestry/parks department (standing-timber purchaser via sealed bid)',
+      'Recurring house cleaning for households in the City of Austin',
+    ]) {
+      expect(excludedBy(opening, goal)).toBeNull();
+    }
   });
 });

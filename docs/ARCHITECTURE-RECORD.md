@@ -15510,3 +15510,60 @@ task routing, results, and revenue records."
 - **Proof** is `agents.yml prove` (`scripts/agents-prove.ts`): Sellbird on real
   businesses the plain reader missed, Browser Use on one site, from the deployed
   Brain over the private network; it sends nothing.
+
+## 105. An industry is never excluded, and a goal's constraint ends with the goal.
+
+**Owner's order, 2026-11-12.** "Government contracts, federal opportunities,
+and other industries are NOT permanently excluded. The current $10K sprint
+prioritizes opportunities that can generate money within the 30-day window.
+Evaluate every opportunity by its actual economics, time to revenue, and
+feasibility — not by its industry. A government-related business that can
+generate revenue tomorrow is eligible. A business requiring 90 days may be
+unsuitable for this particular sprint but remains eligible for longer-term
+goals. Do not turn temporary goal constraints into permanent Brain-wide
+exclusions."
+
+What was wrong. The $10K goal's words ("no government contracts") switched on
+a `GOVERNMENT_CONTRACTING` class in `services/cash/exclusions.ts`, and from
+there the exclusion reached further than the goal:
+
+- **Every opening of a kind, not one goal's.** The class matched any
+  government buyer: SAM.gov, `.gov`, an RFP, a county department. That made it
+  an industry ban, when the sprint's real limit was time to cash, which
+  `isCompetitiveAward` and the goal's window already measure for any buyer.
+- **The project's shared discovery.** `unionOf` gave every discovery question
+  in the project the exclusions of *any* live goal, so one goal's constraint
+  narrowed what the whole project searched.
+- **After the sprint.** `goalExclusions` read the sprint's operator additions
+  whatever the sprint's state, so a wound-down sprint kept binding later goals.
+- **Called permanent.** `retireListings` filed a goal's exclusion among the
+  "reasons no later fact reverses".
+
+What it is now:
+
+- **No industry class.** `GOVERNMENT_CONTRACTING` is gone from the
+  vocabulary, so the $10K goal's stored government words exclude nothing. The
+  owner's text is kept as written (§5). A government opening is judged like any
+  other: its economics, when the money arrives, and whether Brain can deliver
+  it. A long award cycle ranks lower for this sprint by its timing and stays
+  eligible for longer goals. A regulated industry was already never a class
+  (COM-13-5); the rule is now general.
+- **A play a goal's owner names binds that goal only.** Website repair and
+  domain speculation remain classes because the $10K owner named them for that
+  goal. Discovery shares only what *every* live goal excludes (`commonTo`), the
+  same rule a dive already followed (`notWorthResearching`).
+- **A sprint's words bind only while it is ACTIVE.**
+- **Nothing was rewritten to correct the records.** Opening rows were never
+  moved out of play. An exclusion is re-read on every pass, so the openings it
+  had screened are judged afresh from this release. Research released earlier
+  stays released, with its history (§5). The opening is dived again when a
+  goal's plan or discovery reaches it.
+- **Preserved.** The Weekly Bid Digest (`businesses/bid-digest/`) is a federal
+  contracting business and stays in the portfolio.
+
+Recorded in the plans that state the old exclusion
+(`docs/CASH-10K-PLAN.md`, `docs/CASH-10K-PLAN-2026-11-09.md`,
+`docs/CASH-10K-BRAIN-PLAN.md`) and in the research notes under
+`fast-cash/10k/`. Tests: `tests/fastCashScope.test.ts`,
+`tests/goalDiscoveryBreadth.test.ts`, `tests/economicMechanisms.test.ts`,
+`tests/goalEstimatedArrangements.test.ts`.
