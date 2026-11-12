@@ -26,6 +26,18 @@
  *     `FIREABLE_SQL` and `workReadySql`, at the intent's own generation, with
  *     no recovery probe holding it.
  *
+ *   - and never an abandonment whose cause will repeat. A fire the provider
+ *     refused as not retryable (`NOT_CONFIGURED`, `AUTH`, `NOT_FOUND`,
+ *     `PAUSED` — `isRetryable` in `fire.ts` is the classification) gets the
+ *     same answer on every fire until a person writes to the fleet, so
+ *     re-arming it on the clock alone buys up to `STRANDED_REARM_CEILING - 5`
+ *     more charged fires that cannot succeed. Such an intent is re-armed only
+ *     once the fleet has been written since it was abandoned — the same
+ *     watermark `rearmSurfaceDeferredIntents` reads (`fleet_routines`,
+ *     `worker_routing`, `project_memberships`) — which is level-driven: the
+ *     condition it failed on may have changed, so it is asked again, and if
+ *     nothing changed it is not.
+ *
  * The re-armed intent then meets every gate a new one meets — the refire
  * guard, routing, audit fit, Brain-only admission and the fire-slot CAS. And
  * the change is one conditional UPDATE, so two dispatchers re-arm it once.
@@ -41,6 +53,40 @@ import {
   recordBinEvent,
   workReadySql,
 } from '../../repos/bins.ts';
+import { isRetryable, type FireErrorKind } from './fire.ts';
+
+/**
+ * Every fire failure kind, so the compiler refuses a kind `fire.ts` adds that
+ * this module has not classified — the classification itself is `isRetryable`.
+ */
+const FIRE_ERROR_KINDS: Record<FireErrorKind, true> = {
+  NOT_CONFIGURED: true,
+  AUTH: true,
+  NOT_FOUND: true,
+  PAUSED: true,
+  RATE_LIMIT: true,
+  SERVER: true,
+  NETWORK: true,
+};
+
+/** Abandonments whose cause repeats on every fire until a person changes the fleet. */
+export const DETERMINISTIC_ABANDONMENT_KINDS: readonly string[] = (
+  Object.keys(FIRE_ERROR_KINDS) as FireErrorKind[]
+).filter((kind) => !isRetryable(kind));
+
+/**
+ * The fleet's last write, or `''` when it has none (so nothing is newer than it).
+ * Read as three single-row reads rather than one aggregate over a UNION, for
+ * the dialect reason `rearmSurfaceDeferredIntents` records.
+ */
+async function fleetWatermark(): Promise<string> {
+  let latest = '';
+  for (const table of ['fleet_routines', 'worker_routing', 'project_memberships']) {
+    const row = await getDb().get<{ at: string | null }>(`SELECT MAX(updated_at) AS at FROM ${table}`);
+    if (row?.at && row.at > latest) latest = row.at;
+  }
+  return latest;
+}
 
 /** One re-arm adds one intent's worth of fires, as a revival does. */
 export const STRANDED_REARM_STEP = 5;
@@ -61,6 +107,8 @@ export async function rearmStrandedIntents(
 ): Promise<RearmedIntent[]> {
   const now = binNow();
   const before = new Date(Date.parse(now) - Math.max(0, afterMs)).toISOString();
+  const watermark = await fleetWatermark();
+  const deterministic = DETERMINISTIC_ABANDONMENT_KINDS.map(() => '?').join(', ');
   /*
    * The bin side is the dispatcher's own predicate, asked of `bins` alone so
    * its unqualified columns cannot be read against `bin_dispatch` (which has a
@@ -75,10 +123,21 @@ export async function rearmStrandedIntents(
           SELECT 1 FROM bin_dispatch d
            WHERE d.bin_id = bins.id AND d.lease_generation = bins.lease_generation
              AND d.state = 'ABANDONED' AND COALESCE(d.last_error_kind, '') <> 'NO_SHOW'
-             AND d.updated_at <= ? AND d.max_attempts < ?)
+             AND d.updated_at <= ? AND d.max_attempts < ?
+             AND (COALESCE(d.last_error_kind, '') NOT IN (${deterministic}) OR d.updated_at < ?))
       ORDER BY bins.priority DESC, bins.created_at, bins.id
       LIMIT ?`,
-    [now, now, now, now, before, STRANDED_REARM_CEILING, Math.max(1, limit)],
+    [
+      now,
+      now,
+      now,
+      now,
+      before,
+      STRANDED_REARM_CEILING,
+      ...DETERMINISTIC_ABANDONMENT_KINDS,
+      watermark,
+      Math.max(1, limit),
+    ],
   );
   const out: RearmedIntent[] = [];
   for (const bin of bins) {
@@ -93,8 +152,18 @@ export async function rearmStrandedIntents(
           SET state = 'PENDING', max_attempts = max_attempts + ?, next_attempt_at = ?, updated_at = ?,
               last_error = 'Re-armed: the bin is still executable and its only intent had given up, so nothing else would ever fire for it.'
         WHERE id = ? AND state = 'ABANDONED' AND COALESCE(last_error_kind, '') <> 'NO_SHOW'
-          AND updated_at <= ? AND max_attempts < ?`,
-      [STRANDED_REARM_STEP, now, now, intent.id, before, STRANDED_REARM_CEILING],
+          AND updated_at <= ? AND max_attempts < ?
+          AND (COALESCE(last_error_kind, '') NOT IN (${deterministic}) OR updated_at < ?)`,
+      [
+        STRANDED_REARM_STEP,
+        now,
+        now,
+        intent.id,
+        before,
+        STRANDED_REARM_CEILING,
+        ...DETERMINISTIC_ABANDONMENT_KINDS,
+        watermark,
+      ],
     );
     if (result.changes !== 1) continue;
     await recordBinEvent({

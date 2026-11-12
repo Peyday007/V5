@@ -210,3 +210,48 @@ describe('what is never re-armed', () => {
     expect(await rearmStrandedIntents(20)).toHaveLength(0);
   });
 });
+
+describe('an abandonment whose cause will repeat', () => {
+  // The fixture's fleet was written moments ago; in production the abandonment
+  // came after the fleet's last write, so put the fleet's writes before it.
+  beforeEach(async () => {
+    const earlier = new Date(Date.now() - pastCoolOff - 60 * 60_000).toISOString();
+    for (const table of ['fleet_routines', 'worker_routing', 'project_memberships']) {
+      await getDb().run(`UPDATE ${table} SET updated_at = ?`, [earlier]);
+    }
+  });
+
+  it('is not re-armed on the clock alone: a surface that refuses every fire is not asked again', async () => {
+    for (const kind of ['AUTH', 'NOT_FOUND', 'PAUSED', 'NOT_CONFIGURED']) {
+      const binId = await readyBin();
+      await abandon(binId, { agoMs: pastCoolOff, kind });
+      const rearmed = await rearmStrandedIntents(20);
+      expect(rearmed.map((r) => r.binId)).not.toContain(binId);
+    }
+    const tick = await dispatchTick({ burst: 4, projectIds: [projectId] });
+    expect(tick.revivedStranded).toBe(0);
+    expect(fires).toBe(0);
+  });
+
+  it('is re-armed once the fleet has been written since it was abandoned', async () => {
+    const binId = await readyBin();
+    const dispatchId = await abandon(binId, { agoMs: pastCoolOff, kind: 'AUTH' });
+    expect(await rearmStrandedIntents(20)).toHaveLength(0);
+
+    // A person corrects the surface: any write to the fleet after the abandonment.
+    await getDb().run('UPDATE fleet_routines SET updated_at = ?', [new Date().toISOString()]);
+
+    const rearmed = await rearmStrandedIntents(20);
+    expect(rearmed.map((r) => r.dispatchId)).toEqual([dispatchId]);
+    expect(rearmed[0]!.previousErrorKind).toBe('AUTH');
+  });
+
+  it('a transient failure is still re-armed without any fleet write', async () => {
+    for (const kind of ['SERVER', 'NETWORK', 'RATE_LIMIT', 'SUPERSEDED']) {
+      const binId = await readyBin();
+      await abandon(binId, { agoMs: pastCoolOff, kind });
+      const rearmed = await rearmStrandedIntents(20);
+      expect(rearmed.map((r) => r.binId)).toContain(binId);
+    }
+  });
+});
