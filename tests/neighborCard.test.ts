@@ -152,3 +152,13 @@ describe('the area searched and the capacity used', () => {
     expect(r.line).toBe('shared senders also carry: AI Dispatch 7/day');
   });
 });
+
+describe('chamber member pages', () => {
+  it('reads both GrowthZone layouts', async () => {
+    const { chamberMember } = await import('../server/services/cash/neighborCard.ts');
+    const older = '<h1 itemprop="name">Smile Dental</h1><a itemprop="url" href="http://smile.example">x</a><span class="mn-cityspan">Camp Hill</span>';
+    expect(chamberMember(older)).toEqual({ website: 'http://smile.example', town: 'Camp Hill', name: 'Smile Dental' });
+    const newer = '<a href="/" target="_self" itemprop="url"><img></a><meta itemprop="name" content="Neslund DMD" /><a href="http://www.neslund.example" onclick="MNI.Hit.MemberWebsite(5002925)" itemprop="url" class="card-link"><span class="gz-address-city" itemprop="addressLocality">Carlisle</span>';
+    expect(chamberMember(newer)).toEqual({ website: 'http://www.neslund.example', town: 'Carlisle', name: 'Neslund DMD' });
+  });
+});
