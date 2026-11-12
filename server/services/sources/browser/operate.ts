@@ -14,14 +14,17 @@
  * This module composes them into the one path a capability runs through, in
  * this order, and every refusal happens before any browser session opens:
  *
- *  1. load the capability's current version; only an APPROVED or ACTIVE
- *     version runs. REVIEW (the interface changed) and REAUTHORIZE (the
- *     signed-in session was rejected or aged out) are handoffs, never retried;
- *  2. check the inputs against the declared ones;
+ *  1. load the capability's current version and make the one pre-run
+ *     decision, `planCapabilityRun`: only an APPROVED or ACTIVE version runs
+ *     (REVIEW and REAUTHORIZE are handoffs, never retried), and a read
+ *     already fresh or backing off is deferred;
+ *  2. the inputs are exactly the declared ones (the same decision);
  *  3. classify the steps and require an approval bound to each effectful step
  *     — a CONSEQUENTIAL step without its approval is refused here;
- *  4. check the host's request limit and, for anything that changes state,
- *     claim the logical effect key so a second worker cannot repeat it;
+ *  4. check the one request budget — the host's limit and the capability's
+ *     declared rate, over the same run rows — and, for anything that changes
+ *     state, claim the logical effect key (`capabilityEffectKey`, the same key
+ *     the plan reports) so a second worker cannot repeat it;
  *  5. run through the existing owner, `operateWorkflow` → `runBrowserWorkflow`
  *     (its acquisition judgment, OPERATE_PERMISSION check, destination checks
  *     and browser slot are unchanged);
@@ -55,8 +58,11 @@ import type { ActorType } from '../../../domain/types.ts';
 import { authorizeActions, type ActionClass, type ApprovedAction, type WorkflowJudgment } from './actionClass.ts';
 import {
   BROWSER_CAPABILITY_EVENT,
+  effectSubject,
+  planCapabilityRun,
   readBrowserCapabilities,
   verifyObtained,
+  type PriorRun,
   type CapabilityDeps,
   type CapabilityRecord,
   type CapabilityStatus,
@@ -97,6 +103,8 @@ export type OperateFailureReason =
   | 'SESSION_EXPIRED'
   | 'BOUNDARY'
   | 'EXPECTED_STATE_MISSING'
+  | 'FRESH'
+  | 'RETRY_BACKOFF'
   | string;
 
 export interface OperateCapabilityInput {
@@ -111,6 +119,8 @@ export interface OperateCapabilityInput {
   expectation?: OutcomeExpectation;
   /** The request limit the site declares, per minute, when it declares one. */
   declaredPerMinute?: number | null;
+  /** This capability's earlier read results by effect key, for freshness and the retry bound. Never consulted for a mutation. */
+  priorReads?: readonly PriorRun[];
   actor: { type: ActorType; id: string | null };
   workItemId?: string | null;
 }
@@ -190,23 +200,22 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
     return result;
   };
 
-  // 1. Lifecycle: only an approved version runs; review and reauthorization are handoffs.
-  if (cap.status === 'RETIRED') return decided({ ...base, failureReason: 'RETIRED', detail: cap.why });
-  if (cap.status === 'DRAFT') return decided({ ...base, failureReason: 'NOT_APPROVED', detail: cap.why });
-  if (cap.status === 'REVIEW') return decided({ ...base, outcome: 'REVIEW', failureReason: 'INTERFACE_CHANGED', detail: cap.why });
-  if (cap.handoff === 'REAUTHORIZE') return decided({ ...base, outcome: 'REAUTHORIZE', failureReason: 'SESSION_EXPIRED', detail: cap.why });
-
-  // 2. Inputs are exactly the declared ones.
-  const missing = c.inputs.filter((f) => typeof input.inputs[f.name] !== 'string').map((f) => f.name);
-  const extra = Object.keys(input.inputs).filter((k) => !c.inputs.some((f) => f.name === k));
-  if (missing.length || extra.length) {
-    return decided({ ...base, failureReason: 'BAD_INPUT', detail: `inputs: missing ${missing.join(', ') || 'none'}; undeclared ${extra.join(', ') || 'none'}` });
+  // 1–2. The one pre-run decision: lifecycle (only an approved version runs; review and
+  // reauthorization are handoffs), exactly the declared inputs, and a read's freshness and retry bound.
+  const plan = planCapabilityRun(cap, input.inputs, input.priorReads ?? [], now.getTime());
+  const keyed = { ...base, effectKey: plan.key };
+  if (plan.decision === 'REFUSED') {
+    if (plan.reason === 'INTERFACE_CHANGED') return decided({ ...keyed, outcome: 'REVIEW', failureReason: plan.reason, detail: plan.detail });
+    if (plan.reason === 'SESSION_EXPIRED') return decided({ ...keyed, outcome: 'REAUTHORIZE', failureReason: plan.reason, detail: plan.detail });
+    return decided({ ...keyed, failureReason: plan.reason, detail: plan.detail });
   }
+  if (plan.decision === 'ALREADY_DONE') return decided({ ...keyed, outcome: 'DEFERRED', failureReason: 'FRESH', detail: plan.detail });
+  if (plan.decision === 'WAIT') return decided({ ...keyed, outcome: 'DEFERRED', failureReason: 'RETRY_BACKOFF', detail: `${plan.detail}; retry at ${plan.retryAt}` });
 
   // 3. Classify every step; each effectful step needs its own approval, bound to it.
   const auth = authorizeActions(c.workflow, input.approvals ?? []);
   const actionClass = auth.judgment.actionClass;
-  const classified = { ...base, actionClass, judgment: auth.judgment };
+  const classified = { ...keyed, actionClass, judgment: auth.judgment };
   if (!auth.permitted) {
     return decided({ ...classified, failureReason: 'APPROVAL_MISSING', detail: `refused before submission: ${auth.refusals.map((r) => r.reason).join('; ')}` });
   }
@@ -215,19 +224,21 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
   }
   const mutates = actionClass !== 'IDEMPOTENT_READ' || c.effect === 'MUTATION';
 
-  // 4. Request limit, then the effect claim.
+  // 4. The one request budget (the host's limit and this capability's declared rate), then the effect claim.
   const guard: GuardDecision = await (deps.guard ?? guardBrowserRun)({
     projectId: input.projectId,
-    capability: { host: cap.host, name: cap.name, version: `v${cap.current.version}:${cap.current.contentHash}` },
+    capability: effectSubject(cap),
     approvedInput: input.inputs,
     actor: input.actor,
     workItemId: input.workItemId ?? null,
     effect: mutates ? 'MUTATION' : 'READ',
     declaredPerMinute: input.declaredPerMinute ?? null,
+    capabilityRate: { name: cap.name, maxRunsPerHour: c.rateLimit.maxRunsPerHour, minIntervalMs: c.rateLimit.minIntervalMs },
     now,
     ...(deps.runRows ? { rows: deps.runRows } : {}),
   });
-  const effectKey = guard.claim?.effectKey ?? null;
+  // The claim derives its key with the same function as the plan; they are one key.
+  const effectKey = guard.claim?.effectKey ?? plan.key;
   const guarded = { ...classified, budget: guard.budget, effectKey };
   if (guard.decision === 'DEFER') return decided({ ...guarded, outcome: 'DEFERRED', failureReason: 'RATE_LIMITED', detail: guard.budget.reason });
   if (guard.decision === 'REFUSE') {

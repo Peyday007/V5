@@ -2,9 +2,9 @@
  * Browser routines as versioned reusable capabilities (ACQ-21-5): the module
  * surface callers and the program owner's probe import.
  *
- * `effectGuard.ts` names its own key input `BrowserCapability` (host, name,
- * version), which is not `capability.ts`'s definition of the same name, so it
- * is exported here under `EffectCapability`.
+ * There is one capability type (`capability.ts`'s `BrowserCapability`). The
+ * effect guard's key input is an `EffectSubject` (host, name, version), built
+ * from a capability record by `effectSubject`.
  */
 export * from './actionClass.ts';
 export * from './capability.ts';
@@ -26,7 +26,9 @@ export {
   requestBudgetFrom,
   resolveUnknownBrowserEffect,
   settleBrowserEffect,
-  type BrowserCapability as EffectCapability,
+  CAPABILITY_RATE_WINDOW_MS,
+  type CapabilityRate,
+  type EffectSubject,
   type ClaimInput,
   type ClaimResult,
   type EffectKeyInput,
