@@ -16019,3 +16019,29 @@ REVERTED, at most three attempts) and the operator did not use it.
 `npm run operator -- engineering` (and `agents.yml operator-engineering`) prints
 every commissioned intervention with its Factory facts, measurement and goal
 effect, and the deficiencies the rows show. Tests: `tests/engineeringDirector.test.ts`.
+
+**The owner is told when a cycle closes, once (owner's order, 2026-11-12).** "Add an
+automatic owner notification when Brain completes its first verified autonomous
+self-improvement cycle … Use existing Brain events and notification infrastructure.
+Do not build a second tracking system … only once per verified improvement … must
+distinguish a successful software release from a demonstrated improvement."
+`verifiedCycle` (pure, `domain/engineeringDirector.ts`) reads the five steps off rows
+this section already keeps, and refuses each with its reason: (1) the directive's
+origin is `OPERATOR` and the run it names made the commission call itself — Brain's
+standing director now writes `origin: STANDING_DIRECTOR`, which never qualifies;
+(2) an ENGINEERING intervention with a Factory campaign; (3) merged, deployed and LIVE;
+(4–5) §87 decided KEPT on an IMPROVED measurement (`RESOLVED`) and an operator run then
+recorded a lesson carrying `[evaluates <candidate>]` — the `candidate_id` argument of
+`brain_operator_record_learning`, which the brief asks for on every RESOLVED outcome.
+`notifyVerifiedImprovements` runs in `directorPass` and, so it is immediate, inside that
+tool call. The message (`improvementNotice`) has separate sections for the software
+release and for what was measured to improve, and the goal's effect stated as it is.
+It is sent through the connected channel — the owner's Instantly workspace (§94), one
+email from a healthy sending account through its single-send endpoint, never a lead or
+a campaign; Resend when that is what is configured — to the first Brain administrator's
+address, as an `EXTERNAL_OPAQUE` effect in namespace `brain.notify_owner` keyed by the
+candidate: the composed text is stored (`OWNER_NOTICE_INTENT`) before the first send so
+every attempt is the same request, an unknown outcome is recorded and never resent
+(invariant 26), and `OWNER_NOTIFIED` plus an `OWNER_IMPROVEMENT_NOTIFIED` project event
+close it. Each later verified improvement is its own message, numbered. Tests:
+`tests/improvementNotice.test.ts`.

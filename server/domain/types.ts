@@ -533,6 +533,8 @@ export const EVENT_TYPES = [
   'OPERATOR_ENGINEERING_COMMISSIONED',
   'OPERATOR_ENGINEERING_PRIORITIZED',
   'OPERATOR_ENGINEERING_OUTCOME',
+  // A verified autonomous self-improvement cycle, and the owner's one message about it (§109).
+  'OWNER_IMPROVEMENT_NOTIFIED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
