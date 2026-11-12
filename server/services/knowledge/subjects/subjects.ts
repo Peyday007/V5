@@ -111,6 +111,29 @@ export function subjectFromClaim(claim: string): string | null {
   return null;
 }
 
+/**
+ * What kind of thing a claim's subject is, read from the claim's own words.
+ *
+ * The harvest used to file every subject as a MARKET, so a claim about a
+ * public dataset, a supplier or a technology became a market lens and the
+ * same path never ran for any other kind of target. The kind is read from the
+ * subject phrase first and then the claim, by plain words; nothing here names
+ * a market, an industry or a goal, and a claim that matches none is a MARKET,
+ * which is what the harvest's claims (somebody asking to pay) usually are.
+ */
+const KIND_CUES: readonly [string, RegExp][] = [
+  ['DATASET', /\b(?:data ?sets?|open data|data portal|database|registry|public records|statistics|census|bulk download|data feed|api)\b/i],
+  ['SUPPLIER', /\b(?:suppliers?|manufacturers?|distributors?|wholesalers?|fabricators?|vendors? of|sourcing|supply of|bulk supply)\b/i],
+  ['TECHNOLOGY', /\b(?:software|platforms?|technolog(?:y|ies)|systems? integration|saas|algorithms?|machine learning|automation)\b/i],
+];
+
+export function subjectKindFromClaim(claim: string, subject: string | null = subjectFromClaim(claim)): (typeof SUBJECT_KINDS)[number] {
+  for (const text of [subject ?? '', claim]) {
+    for (const [kind, cue] of KIND_CUES) if (cue.test(text)) return kind as (typeof SUBJECT_KINDS)[number];
+  }
+  return 'MARKET';
+}
+
 export async function learnSubject(input: ScopeRef & {
   label: string; kind?: string; description?: string | null; origin: string; sourceRef: string;
 }): Promise<LearnedSubject> {
@@ -151,6 +174,10 @@ export const learnedLensesForProject = (projectId: string) =>
 /**
  * Learn the subject a harvested claim names, for one project.
  *
+ * Its kind (market, supplier, dataset, technology) is read from the claim, so
+ * a harvested claim about a public dataset or a supplier becomes that kind of
+ * lens and runs the same round, method and gate path as a market does.
+ *
  * The claim's subject phrase is the label, so near-duplicate claims about the
  * same thing re-observe one subject instead of each becoming a lens. A claim
  * that names no subject teaches nothing. Earlier sentence-shaped subjects from
@@ -160,9 +187,12 @@ export const learnedLensesForProject = (projectId: string) =>
  */
 export async function learnSubjectFromClaim(input: {
   projectId: string; claim: string; claimId: string; max?: number;
+  /** The subject's kind when the caller knows it; otherwise read from the claim (`subjectKindFromClaim`). */
+  kind?: string;
 }): Promise<LearnedSubject | null> {
   const label = subjectFromClaim(input.claim);
   if (!label) return null;
+  const kind = input.kind ?? subjectKindFromClaim(input.claim, label);
   const max = Math.max(1, input.max ?? MAX_LEARNED_SUBJECTS);
   const mine = (await listLearnedSubjects({ projectIds: [input.projectId], userId: null }))
     .filter((s) => s.scope === 'PROJECT' && s.projectId === input.projectId);
@@ -173,7 +203,7 @@ export async function learnSubjectFromClaim(input: {
   }
 
   const subject = await learnSubject({
-    scope: 'PROJECT', projectId: input.projectId, label, kind: 'MARKET',
+    scope: 'PROJECT', projectId: input.projectId, label, kind,
     origin: 'harvest', sourceRef: `claim:${input.claimId}`,
   });
   await reobserveLearnedSubject(subject.id);
