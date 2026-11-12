@@ -168,6 +168,19 @@ export async function listLearnedSubjects(reader: SearchReader, opts: { includeR
   return rows.map(toSubject);
 }
 
+/**
+ * A subject seen again is current: its `updated_at` moves, and a subject that
+ * was retired only to make room is offered again. The label and the source it
+ * was first learned from are never rewritten.
+ */
+export async function reobserveLearnedSubject(id: string): Promise<boolean> {
+  const r = await getDb().run(
+    `UPDATE learned_subjects SET state = 'ACTIVE', updated_at = ? WHERE id = ?`,
+    [nowIso(), id],
+  );
+  return (r.changes ?? 0) > 0;
+}
+
 export async function retireLearnedSubject(id: string): Promise<boolean> {
   const r = await getDb().run(
     `UPDATE learned_subjects SET state = 'RETIRED', updated_at = ? WHERE id = ? AND state = 'ACTIVE'`,

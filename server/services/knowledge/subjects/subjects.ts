@@ -10,7 +10,9 @@
  * technology as well as a market.
  */
 import type { SearchBucket } from '../../cash/discovery.ts';
-import { listLearnedSubjects, upsertLearnedSubject } from '../../../repos/searchMethods.ts';
+import {
+  listLearnedSubjects, reobserveLearnedSubject, retireLearnedSubject, upsertLearnedSubject,
+} from '../../../repos/searchMethods.ts';
 import type { LearnedSubject, ScopeRef, SearchReader } from '../../../domain/searchIntelligence.ts';
 
 export const SUBJECT_LENS_PREFIX = 'subject-';
@@ -26,10 +28,87 @@ const KIND_PHRASE: Record<string, string> = {
   OTHER: 'what is currently published about',
 };
 
-/** Case, spacing and punctuation never make two spellings two subjects. */
+/** Active learned subjects kept per project. Past it the stalest one is retired, never the newest refused. */
+export const MAX_LEARNED_SUBJECTS = 60;
+
+/** A subject is a short noun phrase, never a sentence. */
+const MAX_SUBJECT_WORDS = 6;
+
+/** Words that never distinguish one subject from another. */
+const KEY_NOISE = new Set([
+  'a', 'an', 'the', 'of', 'for', 'and', 'or', 'to', 'in', 'on', 'with', 'by', 'at', 'from',
+  'service', 'services', 'work', 'works', 'support', 'project', 'projects', 'related',
+]);
+
+function singular(word: string): string {
+  if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`;
+  if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss') && !word.endsWith('us') && !word.endsWith('is')) {
+    return word.slice(0, -1);
+  }
+  return word;
+}
+
+/**
+ * Case, spacing, punctuation, plurals, filler words and word order never make
+ * two spellings two subjects: "Parcel research services" and "research of
+ * parcels" are one key.
+ */
 export function subjectKeyFor(label: string, kind: string = 'OTHER'): string {
-  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const words = label.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const meaningful = [...new Set(words.filter((w) => !KEY_NOISE.has(w)).map(singular))].sort();
+  const slug = (meaningful.length > 0 ? meaningful : words).join('-');
   return `${kind.toLowerCase()}:${slug}`;
+}
+
+/** Whether a label reads as a subject (a short phrase) rather than a claim sentence. */
+export function isSubjectLabel(label: string): boolean {
+  const text = label.trim();
+  if (!text || /[0-9.,;:!?]/.test(text)) return false;
+  const words = text.split(/\s+/);
+  return words.length >= 1 && words.length <= MAX_SUBJECT_WORDS;
+}
+
+/** What somebody asked for follows one of these. */
+const ASK_CUE = new RegExp(
+  '\\b(?:rfps?|rfqs?|rfis?|requests? for (?:proposals?|quotes?|qualifications?|bids?|information)|' +
+  'invitations? to bid|solicitations?|tenders?|bids?|quotes?|proposals?|contracts?|grants?|funding|' +
+  'seeking|seeks|hiring|looking for|wants?|needs?|buying|buys|purchase of|procurement of|pays?|paying)\\b' +
+  '(?:\\s+(?:for|on|of|an?|to provide|to supply|to perform|to deliver|to buy|to hire|someone to|somebody to|' +
+  '(?:vendor|contractor|consultant|firm|provider|company|freelancer)s?))*\\s+',
+  'gi',
+);
+/** …or precedes one of these. */
+const ASKED_AFTER = /^(.{3,80}?)\s+(?:needed|wanted|required|sought)\b/i;
+/** Where the subject phrase ends: punctuation, or a word that starts a date, place, amount or condition. */
+const PHRASE_END =
+  /[,.;:()!?\u2013\u2014"]|\s-\s|\s(?:due|by|before|until|with|from|in|at|on|within|starting|closing|closes|worth|valued|budget|totaling|totalling|for|to|per|across|through|that|which|who|and is|are|is|was|were|will|has|have)\b/i;
+const LEADING_FILLER = /^(?:(?:a|an|the|some|its|their|his|her|our|new|additional|ongoing|several|multiple|various)\s+)+/i;
+
+function phraseFrom(raw: string): string | null {
+  const cut = raw.split(PHRASE_END)[0] ?? '';
+  const phrase = cut.replace(LEADING_FILLER, '').replace(/\s+/g, ' ').trim();
+  if (!phrase || !isSubjectLabel(phrase)) return null;
+  if (phrase.split(' ').every((w) => KEY_NOISE.has(w.toLowerCase()))) return null;
+  return phrase;
+}
+
+/**
+ * The subject a claim is about — what somebody asked to buy or be paid for —
+ * as a short phrase, or null when the claim does not name one plainly. A claim
+ * that names no subject teaches none: a sentence is not a lens.
+ */
+export function subjectFromClaim(claim: string): string | null {
+  const text = claim.replace(/\s+/g, ' ').trim();
+  for (const match of text.matchAll(ASK_CUE)) {
+    const phrase = phraseFrom(text.slice((match.index ?? 0) + match[0].length));
+    if (phrase) return phrase.toLowerCase();
+  }
+  const after = ASKED_AFTER.exec(text);
+  if (after?.[1]) {
+    const phrase = phraseFrom(after[1].replace(/^.*\b(?:for|of)\s+/i, ''));
+    if (phrase) return phrase.toLowerCase();
+  }
+  return null;
 }
 
 export async function learnSubject(input: ScopeRef & {
@@ -68,3 +147,42 @@ export async function learnedLenses(reader: SearchReader): Promise<SearchBucket[
 /** Lenses for one project: its own subjects plus GENERAL ones. */
 export const learnedLensesForProject = (projectId: string) =>
   learnedLenses({ projectIds: [projectId], userId: null });
+
+/**
+ * Learn the subject a harvested claim names, for one project.
+ *
+ * The claim's subject phrase is the label, so near-duplicate claims about the
+ * same thing re-observe one subject instead of each becoming a lens. A claim
+ * that names no subject teaches nothing. Earlier sentence-shaped subjects from
+ * the harvest are retired as they are met, and the set never freezes at its
+ * bound: past `MAX_LEARNED_SUBJECTS` the subject observed least recently is
+ * retired to make room, and is offered again if it is observed again.
+ */
+export async function learnSubjectFromClaim(input: {
+  projectId: string; claim: string; claimId: string; max?: number;
+}): Promise<LearnedSubject | null> {
+  const label = subjectFromClaim(input.claim);
+  if (!label) return null;
+  const max = Math.max(1, input.max ?? MAX_LEARNED_SUBJECTS);
+  const mine = (await listLearnedSubjects({ projectIds: [input.projectId], userId: null }))
+    .filter((s) => s.scope === 'PROJECT' && s.projectId === input.projectId);
+
+  // A claim sentence stored as a subject by the earlier harvest is not a subject.
+  for (const s of mine) {
+    if (s.origin === 'harvest' && !isSubjectLabel(s.label)) await retireLearnedSubject(s.id);
+  }
+
+  const subject = await learnSubject({
+    scope: 'PROJECT', projectId: input.projectId, label, kind: 'MARKET',
+    origin: 'harvest', sourceRef: `claim:${input.claimId}`,
+  });
+  await reobserveLearnedSubject(subject.id);
+
+  const active = (await listLearnedSubjects({ projectIds: [input.projectId], userId: null }))
+    .filter((s) => s.scope === 'PROJECT' && s.projectId === input.projectId && s.id !== subject.id)
+    .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt) || a.createdAt.localeCompare(b.createdAt));
+  for (const stale of active.slice(0, Math.max(0, active.length + 1 - max))) {
+    await retireLearnedSubject(stale.id);
+  }
+  return subject;
+}
