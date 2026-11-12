@@ -129,6 +129,29 @@ import type {
 /** Learned subjects kept per project as lenses; discovery never grows past it. */
 const MAX_LEARNED_SUBJECTS = 60;
 
+/*
+ * What kind of thing a harvested claim names, read from its own words.
+ *
+ * The harvest used to file every learned subject as a MARKET, so the only
+ * production writer of `learnSubject` could never teach the non-cash kinds the
+ * subject store exists for — a public dataset, a supplier class, a technology —
+ * and their lenses were reachable only from a test. The claim says which it is:
+ * one that names a dataset, a register or a records portal is about a DATASET,
+ * one that names suppliers or manufacturers is about a SUPPLIER, one that names
+ * software or a platform is about a TECHNOLOGY, and anything else stays a
+ * MARKET. First match wins, in that order. Pure, and it decides only which
+ * question the later lens asks — never what any answer concludes.
+ */
+const SUBJECT_KIND_RULES: readonly { kind: string; pattern: RegExp }[] = Object.freeze([
+  { kind: 'DATASET', pattern: /\b(?:data ?sets?|open data|databases?|data portals?|records? portals?|public records?|registers?|registr(?:y|ies)|bulk downloads?|csv|apis?)\b/i },
+  { kind: 'SUPPLIER', pattern: /\b(?:suppliers?|wholesal(?:e|ers?)|manufacturers?|distributors?|vendors?)\b/i },
+  { kind: 'TECHNOLOGY', pattern: /\b(?:software|platforms?|technolog(?:y|ies)|saas|toolkits?|open[- ]source)\b/i },
+]);
+
+export function subjectKindOf(text: string): string {
+  return SUBJECT_KIND_RULES.find((rule) => rule.pattern.test(text))?.kind ?? 'MARKET';
+}
+
 export interface SearchBucket {
   id: string;
   mechanism: CashMechanism;
@@ -1436,7 +1459,7 @@ export async function harvest(input: {
         if ((await learnedLensesForProject(input.projectId)).length < MAX_LEARNED_SUBJECTS) {
           await learnSubject({
             scope: 'PROJECT', projectId: input.projectId, label: clamp(claim.claim, 120),
-            kind: 'MARKET', origin: 'harvest', sourceRef: `claim:${claim.id}`,
+            kind: subjectKindOf(claim.claim), origin: 'harvest', sourceRef: `claim:${claim.id}`,
           });
         }
       } catch { /* the opening is filed; the lens is an addition */ }
