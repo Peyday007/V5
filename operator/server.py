@@ -144,8 +144,26 @@ def translate(event: dict) -> dict | None:
     return None
 
 
+def preflight(mcp: dict) -> str:
+    """Can this app reach Brain's MCP door with the run's credential? Said in the result, so a failed run names why."""
+    import urllib.request
+    payload = json.dumps({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
+        "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "brain-operator", "version": "1"}}}).encode()
+    request = urllib.request.Request(mcp["url"], data=payload, method="POST", headers={
+        "authorization": f"Bearer {mcp['token']}", "content-type": "application/json",
+        "accept": "application/json, text/event-stream"})
+    started = time.time()
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return f"HTTP {response.status} in {int((time.time() - started) * 1000)} ms"
+    except Exception as error:  # noqa: BLE001 — the reason is the answer
+        return f"unreachable after {int((time.time() - started) * 1000)} ms: {str(error)[:200]}"
+
+
 def run_operator(body: dict, emit) -> dict:
     home = Path(tempfile.mkdtemp(prefix="operator-"))
+    reached = preflight(body["mcp"])
+    emit({"type": "preflight", "mcp": reached})
     try:
         (home / "config.yaml").write_text(build_config(body), encoding="utf-8")
         write_memory(home, body.get("memory") or {})
@@ -206,7 +224,7 @@ def run_operator(body: dict, emit) -> dict:
         stderr = proc.stderr.read() if proc.stderr else ""
         if final is None and error is None:
             error = f"hermes exited {proc.returncode} without a result: {stderr[-400:]}"
-        return {"type": "result", "final": final, "error": error, "model": model, "memory": read_memory(home), "tools": len(tools)}
+        return {"type": "result", "final": final, "error": error, "model": model, "memory": read_memory(home), "tools": len(tools), "preflight": reached}
     finally:
         shutil.rmtree(home, ignore_errors=True)
 

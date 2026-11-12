@@ -111,6 +111,7 @@ export async function ensureOperatorIdentity(): Promise<string> {
 }
 
 let inFlight: Promise<void> | null = null;
+const processStartedMs = Date.now();
 
 /** The tick's call: start a run when one is due. Never awaits the run itself. */
 export async function operatorTickIfDue(nowMs = Date.now(), env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
@@ -119,7 +120,7 @@ export async function operatorTickIfDue(nowMs = Date.now(), env: NodeJS.ProcessE
   await failStaleOperatorRuns(new Date(nowMs - OPERATOR_RUN_TIMEOUT_MINUTES * 60_000).toISOString());
   const running = await runningOperatorRun();
   const last = (await recentOperatorRuns(1))[0] ?? null;
-  if (!operatorDue({ lastStartedAt: last?.startedAt ?? null, running: running !== null, nowMs, intervalMinutes: operatorIntervalMinutes(env) })) {
+  if (!operatorDue({ lastStartedAt: last?.startedAt ?? null, running: running !== null, nowMs, intervalMinutes: operatorIntervalMinutes(env), processStartedMs })) {
     return null;
   }
   const models = await modelsFor(env);
@@ -150,6 +151,8 @@ export interface OperatorResult {
   memory: Record<string, string>;
   model: string | null;
   error: string | null;
+  /** What the operator app saw when it first reached Brain's MCP door. */
+  preflight?: string | null;
 }
 
 /** The last `{"type":"result"}` line of the operator's NDJSON stream, with every tool event before it. */
@@ -175,6 +178,7 @@ export function parseOperatorStream(text: string): OperatorResult {
         memory,
         model: typeof event['model'] === 'string' ? event['model'] : null,
         error: typeof event['error'] === 'string' ? event['error'] : null,
+        preflight: typeof event['preflight'] === 'string' ? event['preflight'] : null,
       };
     }
   }
@@ -209,13 +213,18 @@ async function performRun(runId: string, config: OperatorConfig, models: Operato
     if (!res.ok) throw new Error(`operator answered HTTP ${res.status}: ${text.slice(0, 300)}`);
     const result = parseOperatorStream(text);
     const stored = await storeOperatorMemory(runId, result.memory);
+    // A run whose every Brain call failed directed nothing, whatever its report says.
+    const brainCalls = result.toolCalls.filter((c) => c.tool.includes('brain_operator_'));
+    if (result.error === null && brainCalls.length > 0 && brainCalls.every((c) => !c.ok)) {
+      result.error = `every Brain tool call failed (${brainCalls.length})${result.preflight ? `; preflight: ${result.preflight}` : ''}`;
+    }
     const ok = result.error === null && result.final !== null;
     await finishOperatorRun({ id: runId, state: ok ? 'DONE' : 'FAILED', summary: result.final, toolCalls: result.toolCalls, error: result.error });
     await recordIntegrationEvent({
       integrationId: OPERATOR_INTEGRATION,
       kind: 'USAGE',
       state: ok ? 'RUN_DONE' : 'RUN_FAILED',
-      detail: `run ${runId} on ${result.model ?? models[0]!.label}: ${result.toolCalls.length} tool call(s), ${stored} memory entr(ies)${result.error ? `; ${result.error}` : ''}`,
+      detail: `run ${runId} on ${result.model ?? models[0]!.label}: ${result.toolCalls.length} tool call(s), ${stored} memory entr(ies), MCP preflight ${result.preflight ?? 'not reported'}${result.error ? `; ${result.error}` : ''}`,
       source: 'operator tick',
     });
     const projects = await listProjects();

@@ -71,8 +71,17 @@ export function operatorIntervalMinutes(env: NodeJS.ProcessEnv): number {
   return Number.isFinite(raw) && raw >= 10 ? Math.trunc(raw) : OPERATOR_INTERVAL_MINUTES;
 }
 
-export function operatorDue(input: { lastStartedAt: string | null; running: boolean; nowMs: number; intervalMinutes: number }): boolean {
+/**
+ * No run in the first minutes after this process started. Production,
+ * 2026-11-12 (Deploy 43170557687): the first run began a minute after a
+ * deploy's restart, every Brain tool call it made timed out while the machine
+ * was being verified, and the post-restart verification was itself too slow.
+ */
+export const OPERATOR_BOOT_GRACE_MINUTES = 12;
+
+export function operatorDue(input: { lastStartedAt: string | null; running: boolean; nowMs: number; intervalMinutes: number; processStartedMs?: number }): boolean {
   if (input.running) return false;
+  if (input.processStartedMs !== undefined && input.nowMs - input.processStartedMs < OPERATOR_BOOT_GRACE_MINUTES * 60_000) return false;
   if (!input.lastStartedAt) return true;
   return input.nowMs - Date.parse(input.lastStartedAt) >= input.intervalMinutes * 60_000;
 }
@@ -133,6 +142,9 @@ export function operatorBrief(input: { nowIso: string; runId: string }): string 
     'Limits you keep: you never spend money, contact anyone, approve a plan, or claim something was answered that was',
     'not. A tool that refuses tells you why — read it and choose differently. A decision only the owner can make',
     '(spending over a ceiling, legal risk, a login) is reported in your summary, not worked around.',
+    '',
+    'Never ask the owner to do what Brain or the next run can: if a tool keeps failing, say which and why in your report;',
+    'Brain records it and starts you again on its own.',
     '',
     'End with a short report: per goal, what you found, what you did, what changed, and what you will do next run.',
   ].join('\n');
