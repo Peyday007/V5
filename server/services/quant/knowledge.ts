@@ -35,8 +35,12 @@ import { readMoneyFigures } from '../cash/figures.ts';
 import type { CashCardFact, CashOpportunity } from '../../domain/types.ts';
 import type { Estimate, Observation, QuantityNode } from '../../domain/quant.ts';
 import { reconstruct } from './reconstruct.ts';
-import { keepCashLedger } from './ledger.ts';
-import type { ModelLearningReading } from './learning.ts';
+import { keepCashLedger, readLedger } from './ledger.ts';
+import { assessModelLearning, type ModelLearningReading } from './learning.ts';
+import type { Correction, ExposureRow, OutcomeRow, PredictionRow } from './forecast.ts';
+import { getDb } from '../../db/database.ts';
+import { listWorkstreamEvents, recordWorkstreamEvent } from '../../repos/register.ts';
+import { upsertCandidate } from '../../repos/improvement.ts';
 
 /** The opportunity quantities this adapter can infer, and how each is measured. */
 export const CASH_QUANTITIES = {
@@ -93,10 +97,194 @@ export async function loadCashKnowledge(projectId: string, now = Date.now()): Pr
   // Every refresh keeps the cash forecast's ledger and reads it back: the forecast's figures become
   // versioned claims when they change, and the knowledge carries the calibration reading.
   const currencies = opportunities.map((one) => one.currency).filter((one): one is string => typeof one === 'string' && one.length > 0);
-  const learning = await keepCashLedger(projectId, currencies).then((kept) => kept.reading).catch(() => null);
+  const learning = await keepCashLedger(projectId, currencies)
+    .then(() => learnFromCashLedger(projectId, currencies))
+    .catch(() => null);
   const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, estimates: new Map(), learning };
   cache.set(projectId, { at: now, value });
   return value;
+}
+
+/* ------------------------------------------------------------------------- */
+/* The ledger reading has consumers (LEARN-15-1)                               */
+/* ------------------------------------------------------------------------- */
+
+/** A goal whose plan rests on this project's cash forecast. */
+export interface DependentGoal {
+  id: string;
+  currency: string | null;
+}
+
+/** The claim id a goal's plan has on the ledger's dependency graph. */
+export function planClaimId(goalId: string): string {
+  return `plan:${goalId}`;
+}
+
+function cashClaimId(projectId: string, currency: string, figure: 'revenue' | 'contribution'): string {
+  // The same id `ledger.ts recordCashForecast` writes, so the graph names the claims the ledger holds.
+  return `cash:${projectId}:${currency}:${figure}`;
+}
+
+/**
+ * What depends on what, read from the claims' own definitions. Pure.
+ *
+ * Contribution is revenue less direct cost, so it depends on that currency's
+ * revenue claim; a goal's plan is composed from the project's cash forecast in
+ * the goal's currency (every currency the project prices in when the goal names
+ * none), so it depends on both figures there. A correction touching a forecast
+ * claim therefore reaches every plan built on it.
+ */
+export function cashDependencyGraph(projectId: string, currencies: readonly string[], goals: readonly DependentGoal[]): Map<string, string[]> {
+  const unique = [...new Set(currencies.filter((c) => typeof c === 'string' && c.trim()))].sort();
+  const graph = new Map<string, string[]>();
+  for (const c of unique) graph.set(cashClaimId(projectId, c, 'contribution'), [cashClaimId(projectId, c, 'revenue')]);
+  for (const goal of goals) {
+    const in_ = goal.currency && goal.currency.trim() ? [goal.currency] : unique;
+    graph.set(planClaimId(goal.id), in_.flatMap((c) => [cashClaimId(projectId, c, 'revenue'), cashClaimId(projectId, c, 'contribution')]));
+  }
+  return graph;
+}
+
+/**
+ * When each correction took effect, per comparable bucket, read from the ledger. Pure.
+ *
+ * A correction takes effect when the model states a new version of a corrected
+ * claim after the last systematic miss that named the cause: that version is the
+ * corrected model, and only outcomes observed from then on say whether it helped.
+ * A claim not yet revised since its miss has no entry — nothing has changed to compare.
+ */
+export function correctionTimes(reading: Pick<ModelLearningReading, 'ledger' | 'diagnoses' | 'corrections'>, predictions: readonly PredictionRow[]): Map<string, string> {
+  const outcomeAt = new Map(reading.ledger.filter((e) => e.outcome).map((e) => [e.prediction.id, e.outcome!.observedAt]));
+  const out = new Map<string, string>();
+  for (const correction of reading.corrections) {
+    for (const claimId of correction.claimIds) {
+      const missedAt = reading.diagnoses
+        .filter((d) => d.kind === 'SYSTEMATIC' && d.claimId === claimId && d.causes.includes(correction.cause))
+        .map((d) => outcomeAt.get(d.predictionId) ?? '')
+        .reduce((max, at) => (at > max ? at : max), '');
+      if (!missedAt) continue;
+      const revised = predictions.filter((p) => p.claimId === claimId && p.madeAt > missedAt).sort((a, b) => a.madeAt.localeCompare(b.madeAt))[0];
+      if (!revised) continue;
+      const held = out.get(revised.comparableKey);
+      if (!held || revised.madeAt < held) out.set(revised.comparableKey, revised.madeAt);
+    }
+  }
+  return out;
+}
+
+/** The goals whose plans read this project's cash knowledge. */
+async function dependentGoals(projectId: string): Promise<DependentGoal[]> {
+  const rows = await getDb().all<{ id: string; target_currency: string | null }>(
+    `SELECT id, target_currency FROM workstreams
+      WHERE target_project_id = ? AND target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL
+      ORDER BY id`,
+    [projectId],
+  );
+  return rows.map((r) => ({ id: r.id, currency: r.target_currency }));
+}
+
+/** The key one correction is routed under: the same cause over the same claims and misses is routed once. */
+export function correctionKey(correction: Correction): string {
+  return `${correction.cause}|${correction.claimIds.join(',')}|${correction.misses}`;
+}
+
+export const CORRECTION_EVENT = 'FORECAST_CORRECTION';
+
+export interface LearningDeps {
+  read?: () => Promise<{ predictions: PredictionRow[]; exposures: ExposureRow[]; outcomes: OutcomeRow[] }>;
+  goals?: (projectId: string) => Promise<DependentGoal[]>;
+  /** Hand a goal's plan back for an immediate re-read; defaults to `goals/plan.ts requestGoalPlanPass`. */
+  replan?: (goalId: string, why: string) => Promise<void> | void;
+  /** Whether a correction is already on a goal's record; defaults to reading `workstream_events`. */
+  routed?: (goalId: string, key: string) => Promise<boolean>;
+  note?: typeof recordWorkstreamEvent;
+  /** Factory's intake for a software correction; defaults to the improvement register (§87). */
+  toFactory?: typeof upsertCandidate;
+}
+
+async function alreadyRouted(goalId: string, key: string): Promise<boolean> {
+  const events = await listWorkstreamEvents(goalId, 500);
+  return events.some((e) => e.kind === CORRECTION_EVENT && e.detail['key'] === key);
+}
+
+/**
+ * Read the forecast ledger with the dependency graph and correction times, and
+ * act on what it says (LEARN-15-1). The reading is not a report nobody reads:
+ *
+ *   * every correction is routed to its owner — a software cause to Factory
+ *     through the improvement register, the existing intake that engineers
+ *     Brain's own repository (§87); a research or commercial-operations cause to
+ *     the record of every goal whose plan rests on the corrected claim, which is
+ *     where that goal's research and operations read what to change;
+ *   * every dependent plan in `recompute` is handed back for an immediate re-read
+ *     (`requestGoalPlanPass`, the owner of plan recomputation), so the next plan
+ *     is built on the corrected claims;
+ *   * once a corrected claim has a new version, outcomes after it are compared
+ *     with the ones that exposed the cause (`comparisons`).
+ *
+ * Each correction is routed once per goal: the key is the cause, the claims and
+ * the misses it explains, so a new miss is new information and the same reading
+ * read again on the next refresh is not.
+ */
+export async function learnFromCashLedger(projectId: string, currencies: readonly string[], deps: LearningDeps = {}): Promise<ModelLearningReading> {
+  const rows = await (deps.read ?? readLedger)();
+  const goals = await (deps.goals ?? dependentGoals)(projectId);
+  const dependsOn = cashDependencyGraph(projectId, currencies, goals);
+  const first = assessModelLearning({ ...rows, dependsOn });
+  const correctedAt = correctionTimes(first, rows.predictions);
+  const reading = correctedAt.size ? assessModelLearning({ ...rows, dependsOn, correctedAt }) : first;
+  if (reading.corrections.length === 0) return reading;
+
+  const recompute = new Set(reading.recompute);
+  const note = deps.note ?? recordWorkstreamEvent;
+  const routed = deps.routed ?? alreadyRouted;
+  const replan =
+    deps.replan ??
+    (async (goalId: string, why: string) => {
+      const { requestGoalPlanPass } = await import('../goals/plan.ts');
+      requestGoalPlanPass(goalId, why);
+    });
+  for (const correction of reading.corrections) {
+    const key = correctionKey(correction);
+    if (correction.owner === 'FACTORY') {
+      // Idempotent by weakness key: the register refreshes a live candidate and never reopens a decided one.
+      await (deps.toFactory ?? upsertCandidate)({
+        weaknessKey: `FORECAST:${correction.cause}`,
+        kind: 'FORECAST_MISCALIBRATION',
+        title: 'The cash forecast is systematically miscalibrated by its own implementation',
+        problem:
+          `${correction.misses} systematic miss(es) on ${correction.claimIds.join(', ')}: the same inputs run through the model do not reproduce what the claim stated.`.slice(0, 1000),
+        metric: 'READY_OPPORTUNITIES_PER_DAY',
+        downstreamMetric: null,
+        ownerComponent: 'server/services/cash/forecast.ts',
+        frequency: correction.misses,
+        denominator: reading.ledger.filter((e) => e.outcome && correction.claimIds.includes(e.prediction.claimId)).length,
+        scope: 'LOCAL',
+        severity: correction.misses >= 5 ? 'HIGH' : 'MEDIUM',
+        evidence: {
+          samples: correction.claimIds,
+          mutationScope: ['server/services/cash/forecast.ts', 'server/services/quant/**', 'tests/**'],
+          researchQuestion: 'forecast calibration model implementation',
+          knownCause: `MODEL_IMPLEMENTATION on ${correction.claimIds.join(', ')} (forecast ledger)`,
+          observedAt: new Date().toISOString(),
+        },
+      });
+    }
+    for (const goal of goals) {
+      const claim = planClaimId(goal.id);
+      const reaches = (dependsOn.get(claim) ?? []).some((c) => correction.claimIds.includes(c));
+      if (!reaches || (await routed(goal.id, key))) continue;
+      await note({
+        workstreamId: goal.id,
+        kind: CORRECTION_EVENT,
+        summary: `The cash forecast missed systematically: ${correction.cause} on ${correction.claimIds.length} claim(s), corrected by ${correction.owner}.`.slice(0, 400),
+        detail: { key, cause: correction.cause, owner: correction.owner, claimIds: correction.claimIds, misses: correction.misses, recompute: recompute.has(claim) },
+        actorRef: 'BRAIN',
+      });
+      if (recompute.has(claim)) await replan(goal.id, `forecast correction ${correction.cause}`);
+    }
+  }
+  return reading;
 }
 
 export function priceBand(cents: number | null): string {
