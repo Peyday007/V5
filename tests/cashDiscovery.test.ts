@@ -1463,5 +1463,38 @@ describe('the wider economy (2026-10-28)', () => {
     });
     await harvest({ projectId });
     expect((await bucketRounds(figureOnly!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 0]]);
+
+    // Review finding F2: any digit is not the price the lens asked for. The profile holds a
+    // pattern to two dated examples, so a year or a count sits in nearly every pattern claim;
+    // an unpriced one carrying them is still context.
+    const dated = await openGoalDiscovery({ goal: w, target, bestReach: null });
+    expect(dated).not.toBeNull();
+    await finishedMission({
+      candidateId: dated!.candidateId,
+      claims: [{ claim: 'Dentists repeatedly pay outside firms for appointment reminders (examples posted March 2026 and May 2026, 3 practices).', lane: PATTERN_LANE, sourceUrl: 'https://example.test/goal-lens/dated-unpriced' }],
+    });
+    await harvest({ projectId });
+    expect((await bucketRounds(dated!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 0]]);
+    expect((await listOpportunities({ projectId })).some((one) => one.title.startsWith('Dentists repeatedly pay outside firms for appointment reminders (examples'))).toBe(false);
+
+    // A currency-first price files, as the trailing-currency one above did.
+    const dollars = await openGoalDiscovery({ goal: w, target, bestReach: null });
+    expect(dollars).not.toBeNull();
+    await finishedMission({
+      candidateId: dollars!.candidateId,
+      claims: [{ claim: 'Dental practices repeatedly pay outside firms $150 a month for appointment reminders (examples March 2026 and May 2026).', lane: PATTERN_LANE, sourceUrl: 'https://example.test/goal-lens/dated-priced' }],
+    });
+    await harvest({ projectId });
+    expect((await bucketRounds(dollars!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 1]]);
+  });
+
+  it('reads a price as a currency beside a number, never a bare date, year or count (F2)', async () => {
+    const { patternStatesPrice } = await import('../server/repos/research.ts');
+    for (const priced of ['$400 a month', 'USD 400 per job', '400 to 900 USD a month', '900 dollars', '€50 per visit', '50 EUR', '£ 75']) {
+      expect(patternStatesPrice(priced), priced).toBe(true);
+    }
+    for (const unpriced of ['examples posted March 2026 and May 2026', '3 practices hired a firm', 'in 2025 European clinics', '12,000 companies', 'Q4 2026']) {
+      expect(patternStatesPrice(unpriced), unpriced).toBe(false);
+    }
   });
 });

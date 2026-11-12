@@ -1513,12 +1513,34 @@ export const PATTERN_BUYING_WORDS = ['pay', 'purchas', 'buy', 'bought', 'hire', 
 const PATTERN_STATES_BUYING_SQL = `(${PATTERN_BUYING_WORDS.map((word) => `LOWER(c.claim) LIKE '%${word}%'`).join(' OR ')})`;
 
 /**
- * A claim that carries a figure — a price, a count, a range. What a goal lens
+ * A claim that states a price — a currency beside a number, in either order
+ * ("$400", "USD 400", "400 USD", "900 dollars", "€50"). What a goal lens
  * round's untagged pattern must state beside its buying words before the lane
- * makes it an opening (`signalledClaims`). Ten `LIKE`s rather than a character
- * class, because SQLite's `GLOB` and Postgres's `~` are not one statement.
+ * makes it an opening (`signalledClaims`): the lens asks for "the price buyers
+ * are shown paying". Any digit is not that — the profile holds a pattern to
+ * two dated examples, so a date, a year or a count is in nearly every pattern
+ * claim, priced or not, and "Dentists repeatedly pay outside firms for
+ * appointment reminders (examples posted March 2026 and May 2026)" would file.
+ * `LIKE`s rather than a character class, because SQLite's `GLOB` and
+ * Postgres's `~` are not one statement; lower-cased, because Postgres's `LIKE`
+ * is case-sensitive.
  */
-const PATTERN_STATES_FIGURE_SQL = `(${Array.from({ length: 10 }, (_, digit) => `c.claim LIKE '%${digit}%'`).join(' OR ')})`;
+export const PATTERN_PRICE_BEFORE = ['$', '€', '£', 'usd', 'eur', 'gbp'] as const;
+export const PATTERN_PRICE_AFTER = ['$', '€', '£', 'usd', 'eur ', 'euros', 'gbp', 'dollar'] as const;
+const DIGITS = Array.from({ length: 10 }, (_, digit) => String(digit));
+const PATTERN_PRICE_SHAPES = DIGITS.flatMap((digit) =>
+  ['', ' '].flatMap((gap) => [
+    ...PATTERN_PRICE_BEFORE.map((marker) => `${marker}${gap}${digit}`),
+    ...PATTERN_PRICE_AFTER.map((marker) => `${digit}${gap}${marker}`),
+  ]),
+);
+const PATTERN_STATES_PRICE_SQL = `(${PATTERN_PRICE_SHAPES.map((shape) => `(LOWER(c.claim) || ' ') LIKE '%${shape}%'`).join(' OR ')})`;
+
+/** The same price rule, for a reader holding a claim's text. */
+export function patternStatesPrice(text: string): boolean {
+  const lower = `${text.toLowerCase()} `;
+  return PATTERN_PRICE_SHAPES.some((shape) => lower.includes(shape));
+}
 
 /** The same rule, for a reader holding a claim's text. */
 export function patternStatesBuying(text: string): boolean {
@@ -1555,15 +1577,17 @@ export async function signalledClaims(input: {
            * which naming the field in the question (GOAL_OPENING_SENTENCE) did
            * not fix for constructed rounds either. A lens question is not about
            * one designed arrangement, so the lane alone does not say which
-           * thing the buyers pay for; the claim must also carry the figure the
-           * lens asked for ("the price buyers are shown paying"). "Dentists
-           * repeatedly pay for appointment reminders" stays context.
+           * thing the buyers pay for; the claim must also state the price the
+           * lens asked for ("the price buyers are shown paying") — a currency
+           * beside a number, not any digit, because the two dated examples put
+           * a year in every pattern. "Dentists repeatedly pay for appointment
+           * reminders (examples March 2026 and May 2026)" stays context.
            */
           OR (c.evidence_lane = ? AND ${PATTERN_STATES_BUYING_SQL} AND EXISTS (
                 SELECT 1 FROM russell_missions pm
                   JOIN cash_discovery_rounds pr ON pr.candidate_id = pm.candidate_id
                  WHERE pm.orchestration_id = o.id
-                   AND (pr.bucket_id LIKE ? OR (pr.bucket_id LIKE ? AND ${PATTERN_STATES_FIGURE_SQL}))))
+                   AND (pr.bucket_id LIKE ? OR (pr.bucket_id LIKE ? AND ${PATTERN_STATES_PRICE_SQL}))))
         )
         AND f.status IN ('ACCEPTED', 'BLOCKED')
         /*
