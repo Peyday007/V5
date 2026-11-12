@@ -82,27 +82,28 @@ export async function probeV2Places(options: { fetch?: FetchLike; env?: NodeJS.P
     if (json.placesKeyConfigured !== true) {
       return { bridge: 'VERIFIED', places: 'NOT_CONFIGURED', detail: 'V2 accepted the signed probe and has no GOOGLE_PLACES_API_KEY.' };
     }
-    const google = json.google as { accepted?: boolean; status?: number; reasons?: string[]; googleStatus?: string | null } | undefined;
+    const google = json.google as { accepted?: boolean; status?: number; reasons?: string[]; googleStatus?: string | null; message?: string | null } | undefined;
     if (!google) return { bridge: 'VERIFIED', places: 'VERIFIED', detail: 'V2 accepted the signed probe and holds a Places key.' };
     if (google.accepted) return { bridge: 'VERIFIED', places: 'VERIFIED', detail: 'V2 accepted the signed probe, and Google accepted its Places key.' };
     if (!google.status) return { bridge: 'VERIFIED', places: 'UNREACHABLE', detail: 'V2 could not reach Google.' };
-    return { bridge: 'VERIFIED', places: 'REFUSED', detail: `Google refused V2's Places key: ${googleRefusal(google.status, google.reasons ?? [], google.googleStatus ?? null)}` };
+    return { bridge: 'VERIFIED', places: 'REFUSED', detail: `Google refused V2's Places key: ${googleRefusal(google.status, google.reasons ?? [], google.googleStatus ?? null, google.message ?? null)}` };
   } catch (error) {
     return { bridge: 'UNREACHABLE', places: 'UNREACHABLE', detail: `V2 did not answer: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
 /** Google's own refusal codes, as the one setting to change. */
-export function googleRefusal(status: number, reasons: string[], googleStatus: string | null): string {
+export function googleRefusal(status: number, reasons: string[], googleStatus: string | null, message: string | null = null): string {
   const codes = [...reasons, ...(googleStatus ? [googleStatus] : [])];
-  const has = (re: RegExp) => codes.some((c) => re.test(c));
+  const said = typeof message === 'string' ? message.slice(0, 300) : '';
+  const has = (re: RegExp) => codes.some((c) => re.test(c)) || (said !== '' && re.test(said.toUpperCase().replace(/[\s-]+/g, '_')));
   const fix = has(/BILLING/) ? 'billing is not enabled on the Google Cloud project the key belongs to'
     : has(/SERVICE_DISABLED|API_NOT_ACTIVATED/) ? 'Places API (New) is not enabled on the key\'s Google Cloud project'
     : has(/SERVICE_BLOCKED/) ? 'the key\'s API restrictions do not include Places API (New)'
     : has(/REFERRER|IP_ADDRESS|ANDROID|IOS/) ? 'the key has an application restriction a server call cannot meet (set Application restrictions to None)'
     : has(/API_KEY_INVALID|INVALID_ARGUMENT/) ? 'the key is invalid or deleted'
     : 'see the codes';
-  return `HTTP ${status}${codes.length ? ` (${codes.join(', ')})` : ''}; ${fix}.`;
+  return `HTTP ${status}${codes.length ? ` (${codes.join(', ')})` : ''}${said ? ` — Google: "${said}"` : ''}; ${fix}.`;
 }
 
 /** One Text Search through V2, inside the daily ceiling. */
@@ -118,7 +119,7 @@ export async function searchPlacesViaV2(
   const { latitude, longitude, radiusM } = options;
   const { status, json } = await call({ textQuery, ...(latitude != null && longitude != null && radiusM ? { latitude, longitude, radiusM } : {}) }, options);
   if (status !== 200) {
-    const hint = typeof json.hint === 'string' && json.hint ? `: ${json.hint}` : '';
+    const hint = (typeof json.hint === 'string' && json.hint ? `: ${json.hint}` : '') + (typeof json.google === 'string' && json.google ? ` — Google: "${json.google.slice(0, 300)}"` : '');
     throw new Error(`V2 Places answered ${status} ${String(json.error ?? '')}${hint}`.trim());
   }
   return Array.isArray(json.places) ? (json.places as V2Place[]) : [];

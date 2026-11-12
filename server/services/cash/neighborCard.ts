@@ -471,27 +471,35 @@ const CHAMBER_CATEGORIES: [string, keyof typeof CATEGORY][] = [
   ['pets-veterinary-18', 'pets'], ['real-estate-moving-storage-20', 'realestate'], ['restaurants-food-beverages-22', 'restaurant'],
   ['shopping-specialty-retail-23', 'retail'], ['sports-recreation-24', 'fitness'],
 ];
-const CHAMBER = 'https://business.mechanicsburgchamber.org';
+/**
+ * Public GrowthZone chamber directories whose members sell to Camp Hill and
+ * Hampden households. Both use GrowthZone's shared category slugs, so one
+ * reader covers both; each pass reads several (chamber × category) pairs.
+ */
+export const CHAMBERS = ['https://business.mechanicsburgchamber.org', 'https://business.carlislechamber.org'];
+export const CHAMBER_PAIRS: { base: string; slug: string; key: keyof typeof CATEGORY }[] = CHAMBER_CATEGORIES.flatMap(([slug, key]) =>
+  CHAMBERS.map((base) => ({ base, slug, key })),
+);
 /** Towns whose businesses sell to Camp Hill & Hampden households. */
 const TOWNS = /camp hill|mechanicsburg|lemoyne|new cumberland|enola|wormleysburg|shiremanstown|harrisburg|hampden|summerdale|dillsburg|boiling springs|carlisle|hummelstown|linglestown|paxtang|penbrook|steelton|highspire|middletown|marysville|grantham|lewisberry|etters/i;
 
 const decode = (s: string) => s.replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
 
-export async function discoverChamber(deps: Deps, slug: string, key: keyof typeof CATEGORY): Promise<Candidate[]> {
-  const list = await getPage(deps, `${CHAMBER}/list/ql/${slug}`);
+export async function discoverChamber(deps: Deps, slug: string, key: keyof typeof CATEGORY, base: string = CHAMBERS[0]!): Promise<Candidate[]> {
+  const list = await getPage(deps, `${base}/list/ql/${slug}`);
   if (!list) return [];
-  const members = [...new Set([...list.html.matchAll(/href="(https:\/\/business\.mechanicsburgchamber\.org\/list\/member\/[^"]+)"/g)].map((m) => m[1]!))];
-  const out: Candidate[] = [];
-  for (const url of members) {
+  const prefix = `${base}/list/member/`;
+  const members = [...new Set([...list.html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]!).filter((u) => u.startsWith(prefix)))];
+  const rows = await pool(members, 6, async (url): Promise<Candidate | null> => {
     const page = await getPage(deps, url);
-    if (!page) continue;
+    if (!page) return null;
     const website = /itemprop="url" href="([^"]+)"/.exec(page.html)?.[1];
     const town = decode(/class="mn-cityspan">([^<]*)/.exec(page.html)?.[1] ?? '');
     const name = decode(/<h1 itemprop="name">([^<]*)/.exec(page.html)?.[1] ?? '');
-    if (!website || !name || !TOWNS.test(town)) continue;
-    out.push({ name, website: website.startsWith('http') ? website : `http://${website}`, category: key, town, sourceUrl: url });
-  }
-  return out;
+    if (!website || !name || !TOWNS.test(town)) return null;
+    return { name, website: website.startsWith('http') ? website : `http://${website}`, category: key, town, sourceUrl: url };
+  });
+  return rows.filter((r): r is Candidate => r !== null);
 }
 
 /** OpenStreetMap features with a website, in one West Shore tile; brand chains are left out (their sites answer for head office). */
@@ -559,16 +567,32 @@ const PLACES_KINDS: [string, keyof typeof CATEGORY][] = [
   ['dentist', 'dental'], ['chiropractor', 'health'], ['veterinarian', 'pets'], ['restaurant', 'restaurant'], ['hair salon', 'personal'],
   ['auto repair', 'auto'], ['gym', 'fitness'], ['HVAC contractor', 'contractor'], ['insurance agency', 'finance'], ['law firm', 'legal'],
   ['florist', 'retail'], ['plumber', 'home'], ['real estate agency', 'realestate'], ['day spa', 'personal'], ['optometrist', 'health'],
+  ['orthodontist', 'dental'], ['physical therapy', 'health'], ['med spa', 'personal'], ['nail salon', 'personal'], ['barber shop', 'personal'],
+  ['pet groomer', 'pets'], ['electrician', 'contractor'], ['roofing contractor', 'contractor'], ['landscaping', 'home'], ['house cleaning service', 'home'],
+  ['pest control', 'home'], ['accountant', 'finance'], ['financial advisor', 'finance'], ['bakery', 'restaurant'], ['cafe', 'restaurant'],
+  ['jewelry store', 'retail'], ['furniture store', 'retail'], ['yoga studio', 'fitness'], ['martial arts school', 'fitness'], ['tire shop', 'auto'],
 ];
 export const PLACES_QUERIES: { query: string; key: keyof typeof CATEGORY; town: string }[] = PLACES_KINDS.flatMap(([kind, key]) =>
   PLACES_TOWNS.map((town) => ({ query: `${kind} in ${town}, PA`, key, town })),
 );
 
-export async function discoverPlaces(deps: Deps, slot: number): Promise<{ found: Candidate[]; line: string }> {
+/**
+ * Several Text Searches a pass, sent concurrently, rotating through every kind ×
+ * town. The registry's daily ceiling (the spend guard, invariant 38) is the
+ * only limit on how many a day; a refused search ends that pass's searches.
+ */
+export async function discoverPlaces(deps: Deps, slot: number, count = 1): Promise<{ found: Candidate[]; line: string }> {
   if (!deps.places) return { found: [], line: 'Places not used this pass' };
-  // Interleave kinds and towns so consecutive passes differ in both.
+  const picks = Array.from({ length: Math.max(1, count) }, (_, i) => slot * count + i);
+  const results = await Promise.all(picks.map((n) => discoverOnePlace(deps, n)));
+  return { found: results.flatMap((r) => r.found), line: results.map((r) => r.line).join('; ') };
+}
+
+async function discoverOnePlace(deps: Deps, slot: number): Promise<{ found: Candidate[]; line: string }> {
+  // Interleave kinds and towns so consecutive searches differ in both (7 and the query count are coprime).
   const pick = PLACES_QUERIES[(slot * 7) % PLACES_QUERIES.length]!;
   try {
+    if (!deps.places) throw new Error('Places not connected');
     const places = await deps.places(pick.query);
     const found = places
       .filter((p) => p.website && p.name && (p.businessStatus ?? 'OPERATIONAL') === 'OPERATIONAL')
@@ -603,14 +627,17 @@ export interface RefillResult { discovered: number; fresh: number; found: number
  * record of what is already in, and `skip_if_in_workspace` keeps anyone the
  * owner's other campaigns hold from being mailed twice.
  */
+/** Sources one pass reads, all concurrently. A pass runs every quarter hour (loop.ts). */
+export const PER_PASS = { places: 3, chamber: 4, tiles: 6 };
+
 export async function refill(deps: Deps, campaignId: string, options: { slot?: number; maxSites?: number } = {}): Promise<RefillResult> {
-  const slot = options.slot ?? Math.floor(Date.now() / 3_600_000);
+  const slot = options.slot ?? Math.floor(Date.now() / 900_000);
   const known = await campaignLeads(deps, campaignId);
-  const chamber = [CHAMBER_CATEGORIES[slot % CHAMBER_CATEGORIES.length]!, CHAMBER_CATEGORIES[(slot + 6) % CHAMBER_CATEGORIES.length]!];
-  const tiles = [0, 1, 2].map((i) => OSM_TILES[(slot * 3 + i) % OSM_TILES.length]!);
+  const chamber = Array.from({ length: PER_PASS.chamber }, (_, i) => CHAMBER_PAIRS[(slot * PER_PASS.chamber + i) % CHAMBER_PAIRS.length]!);
+  const tiles = Array.from({ length: PER_PASS.tiles }, (_, i) => OSM_TILES[(slot * PER_PASS.tiles + i) % OSM_TILES.length]!);
   const [places, ...batches] = await Promise.all([
-    discoverPlaces(deps, slot),
-    ...chamber.map(([s, k]) => discoverChamber(deps, s, k).then((found) => ({ found, line: '' }))),
+    discoverPlaces(deps, slot, PER_PASS.places),
+    ...chamber.map((c) => discoverChamber(deps, c.slug, c.key, c.base).then((found) => ({ found, line: '' }))),
     ...tiles.map((t) => discoverOsm(deps, t).then((found) => ({ found, line: '' }))),
   ]).then((all) => [all[0]!, ...all.slice(1).map((b) => b.found)] as const);
   // Places first: its answers are the most complete, so a site it shares with the map is read once, as Places'.
@@ -621,7 +648,7 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
     if (!d || known.domains.has(d) || seen.has(d) || FOREIGN_DOMAINS.some((f) => d === f || d.endsWith(`.${f}`)) || /facebook|instagram|linkedin|yelp/.test(d)) return false;
     seen.add(d);
     return true;
-  }).slice(0, options.maxSites ?? 150);
+  }).slice(0, options.maxSites ?? 300);
   let found = 0;
   let noMx = 0;
   let unverified = 0;
@@ -630,7 +657,7 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
   let sellbirdLeft = agents?.sellbirdPerPass ?? 0;
   let browserLeft = agents?.browser ? agents.browserPerPass : 0;
   const viaAgents = { sellbirdAsked: 0, sellbirdFound: 0, browserAsked: 0, browserFound: 0 };
-  await pool(fresh, 10, async (c) => {
+  await pool(fresh, 20, async (c) => {
     let hit: Found | null = await findPublishedEmail(deps, c.website);
     let greeting = 'there';
     if (!hit && agents && sellbirdLeft > 0) {
@@ -677,7 +704,7 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
     }
   });
   const discovered = batches.reduce((n, b) => n + b.length, 0);
-  const sources = `${places.line}; ${chamber.map(([s]) => s).join(', ')}; map tiles ${tiles.join(', ')} (${batches.slice(1 + chamber.length).reduce((n, b) => n + b.length, 0)} on the map)`;
+  const sources = `${places.line}; ${chamber.map((c) => `${new URL(c.base).hostname.split('.')[1]}/${c.slug}`).join(', ')}; map tiles ${tiles.join(', ')} (${batches.slice(1 + chamber.length).reduce((n, b) => n + b.length, 0)} on the map)`;
   const line = fresh.length === 0
     ? `refill: nothing new to read this pass (${discovered} discovered from ${sources}, all already in the campaign or not usable)`
     : `refill: ${discovered} discovered from ${sources}; ${fresh.length} new sites read; ${found} published an address; ${noMx} refused for no mail server; ${unverified} left for the next pass (no resolver answered); ${added} added` +
