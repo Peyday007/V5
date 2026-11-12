@@ -15456,6 +15456,18 @@ that no entry declares, so a future integration cannot be wired around it.
   hour). The workflows stay as a second door; credential repairs that write
   deployment secrets remain the workflow's, since the machine holds no Fly token.
 
+**Owner's order, 2026-11-12: scale the Neighbor Card end to end.** The pass
+read one Places search, two chamber categories and three map tiles an hour,
+and found about six addresses a pass, while twelve healthy senders offered
+930 a day. The pass now runs every quarter hour (`NEIGHBOR_CARD_PERIOD_MS`),
+and reads three Places searches, four chamber × category pairs (the
+Mechanicsburg and Carlisle chambers share GrowthZone's slugs) and six map
+tiles at once (`PER_PASS`), rotating by the quarter hour over 600 Places
+queries; the Places daily ceiling stays the spend guard. Google's 403 on V2's
+key carried `PERMISSION_DENIED` and no reason code, which names no setting, so
+V2's bridge now passes on Google's one-line message (key and links removed)
+and `googleRefusal` prints it.
+
 ## 104. An open-source agent answers one narrow question, and Brain keeps the prospect, the decision and the record.
 
 **Owner's order, 2026-11-12.** "Install and operationalize proven open-source

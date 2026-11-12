@@ -152,3 +152,37 @@ describe('the area searched and the capacity used', () => {
     expect(r.line).toBe('shared senders also carry: AI Dispatch 7/day');
   });
 });
+
+describe('chamber member pages', () => {
+  it('reads both GrowthZone layouts', async () => {
+    const { chamberMember } = await import('../server/services/cash/neighborCard.ts');
+    const older = '<h1 itemprop="name">Smile Dental</h1><a itemprop="url" href="http://smile.example">x</a><span class="mn-cityspan">Camp Hill</span>';
+    expect(chamberMember(older)).toEqual({ website: 'http://smile.example', town: 'Camp Hill', name: 'Smile Dental' });
+    const newer = '<a href="/" target="_self" itemprop="url"><img></a><meta itemprop="name" content="Neslund DMD" /><a href="http://www.neslund.example" onclick="MNI.Hit.MemberWebsite(5002925)" itemprop="url" class="card-link"><span class="gz-address-city" itemprop="addressLocality">Carlisle</span>';
+    expect(chamberMember(newer)).toEqual({ website: 'http://www.neslund.example', town: 'Carlisle', name: 'Neslund DMD' });
+  });
+});
+
+describe('who is a neighborhood advertiser', () => {
+  it('refuses national brands, institutions and network location pages', async () => {
+    const { isChainOrInstitution, isNetworkPage } = await import('../server/services/cash/neighborCard.ts');
+    expect(isChainOrInstitution('www.geico.com')).toBe(true);
+    expect(isChainOrInstitution('agent@aflac.com')).toBe(true);
+    expect(isChainOrInstitution('wellness@dickinson.edu')).toBe(true);
+    expect(isChainOrInstitution('smiledentalcamphill.com')).toBe(false);
+    expect(isNetworkPage('https://www.athletico.com/locations/mechanicsburg-pa/')).toBe(true);
+    expect(isNetworkPage('https://www.geico.com/insurance-agents/pennsylvania/harrisburg/')).toBe(true);
+    expect(isNetworkPage('https://smile.example/contact-us/')).toBe(false);
+  });
+});
+
+describe('Places in one pass', () => {
+  it('stops sending searches once Google refuses one', async () => {
+    const { discoverPlaces } = await import('../server/services/cash/neighborCard.ts');
+    let calls = 0;
+    const deps = { places: async () => { calls += 1; throw new Error('V2 Places answered 502 places_error'); } } as unknown as Parameters<typeof discoverPlaces>[0];
+    const { line } = await discoverPlaces(deps, 0, 3);
+    expect(calls).toBe(1);
+    expect(line).toContain('not read');
+  });
+});

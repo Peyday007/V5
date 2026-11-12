@@ -116,14 +116,15 @@ export const OPERATOR_HERMES_TOOLSETS = ['memory', 'skills', 'todo'] as const;
 // The brief
 // ---------------------------------------------------------------------------
 
-export function operatorBrief(input: { nowIso: string; runId: string }): string {
+export function operatorBrief(input: { nowIso: string; runId: string; goals?: string }): string {
   return [
+    ...(input.goals ? [input.goals, ''] : []),
     `You are Brain's operator (run ${input.runId}, ${input.nowIso}). Brain is a research-operations platform that`,
     'pursues goals — the first is collecting $10,000 of settled cash. You direct its work through the brain_operator_*',
     'tools. They are your only hands: do not describe actions, take them.',
     '',
     'Each run, for every goal:',
-    '1. brain_operator_goals — understand the desired result and its state. Start with the most urgent.',
+    '1. The goals are listed above with their ids (brain_operator_goals returns the same list). Start with the first.',
     '2. brain_operator_goal {goal_id} — inspect what Brain already has: its blockers, open person-requests (each says',
     '   whether it is moot), linked work and the next action Brain itself recommends.',
     '   brain_operator_goal_plan {goal_id} — the quantitative plan: which strategy reaches the target, what fails, the next test.',

@@ -17,7 +17,6 @@ import { listProjects } from '../repos/projects.ts';
 import { runningOperatorRun } from '../repos/operator.ts';
 import {
   continueIdleCapacity,
-  operatorGoals,
   operatorHistory,
   operatorRecordLearning,
   readGoalPlanSummary,
@@ -27,6 +26,7 @@ import {
   withdrawMootRequest,
 } from '../services/operator/actions.ts';
 import { submitOperatorFix } from '../services/operator/factory.ts';
+import { operatorSnapshot, urgencyOrder } from '../services/operator/snapshot.ts';
 import { invalidInput, notFoundError } from './errors.ts';
 import { MUTATING, READ_ONLY, authorize, optionalString, requiredString, type McpTool } from './toolkit.ts';
 import type { Principal } from '../domain/types.ts';
@@ -72,8 +72,9 @@ const goalsTool: McpTool = {
   annotations: { title: 'Operator: goals', ...READ_ONLY },
   run: async (_args, { principal }) => {
     const projects = await readableProjects(principal);
-    const goals = projects.length ? await operatorGoals(projects) : [];
-    return { projectId: null, value: { goals: goals.map(summarizeGoal) } };
+    if (projects.length === 0) return { projectId: null, value: { goals: [] } };
+    const snapshot = await operatorSnapshot(projects);
+    return { projectId: null, value: { readAt: snapshot.takenAt, goals: urgencyOrder(snapshot.summaries) } };
   },
 };
 
@@ -82,21 +83,23 @@ const goalTool: McpTool = {
   title: 'Operator: one goal',
   description:
     'Inspect one goal: its blockers with remedies, its open person-requests (each with its mission and packet state ' +
-    'and whether it is moot — nobody can act on it any more), its linked work and evidence, and its next action.',
+    'and whether it is moot — nobody can act on it any more), its linked work and evidence, and its next action. ' +
+    'Without goal_id, the most urgent goal.',
   inputSchema: {
     type: 'object',
-    properties: { goal_id: { type: 'string', description: 'The goal id (wst_…) from brain_operator_goals.' } },
-    required: ['goal_id'],
+    properties: { goal_id: { type: 'string', description: 'The goal id (wst_…) from the brief or brain_operator_goals; omit for the most urgent.' } },
     additionalProperties: false,
   },
   annotations: { title: 'Operator: one goal', ...READ_ONLY },
   run: async (args, { principal }) => {
-    const goalId = requiredString(args, 'goal_id');
     const projects = await readableProjects(principal);
-    const goal = (await operatorGoals(projects)).find((one) => one.id === goalId);
+    if (projects.length === 0) throw notFoundError();
+    const snapshot = await operatorSnapshot(projects);
+    const goalId = optionalString(args, 'goal_id') ?? urgencyOrder(snapshot.summaries)[0]?.id ?? null;
+    const goal = snapshot.goals.find((one) => one.id === goalId);
     if (!goal || !goal.projectId) throw notFoundError();
     await authorize(principal, goal.projectId, 'READ', 'project:read');
-    const requests = await readRequests(goal.projectId);
+    const requests = snapshot.requests.get(goal.projectId) ?? (await readRequests(goal.projectId));
     return {
       projectId: goal.projectId,
       value: {
@@ -132,7 +135,7 @@ const planTool: McpTool = {
   annotations: { title: 'Operator: the goal plan', ...READ_ONLY },
   run: async (args, { principal }) => {
     const goalId = requiredString(args, 'goal_id');
-    const goal = (await operatorGoals(await readableProjects(principal))).find((one) => one.id === goalId);
+    const goal = (await operatorSnapshot(await readableProjects(principal))).goals.find((one) => one.id === goalId);
     if (!goal || !goal.projectId) throw notFoundError();
     await authorize(principal, goal.projectId, 'READ', 'project:read');
     return { projectId: goal.projectId, value: await readGoalPlanSummary(goalId) };
