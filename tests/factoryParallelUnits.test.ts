@@ -267,5 +267,25 @@ describe('independent units are separately claimable', () => {
     expect(tick.created.some((entry) => entry.startsWith('integrate:'))).toBe(true);
     // And beta was not handed out a second time beside its live bin.
     expect(tick.created.some((entry) => entry.startsWith('units:'))).toBe(false);
+
+    /*
+     * And once no unit is waiting for a report, a completed units bin costs
+     * nothing on later ticks: production read `bin_unit_results` 5,227 times
+     * in 50 minutes re-asking bins whose every unit had moved on.
+     */
+    await getDbForTest().run("UPDATE factory_work_units SET state = 'INTEGRATED' WHERE campaign_id = ?", [campaignId]);
+    const db = getDbForTest();
+    const realAll = db.all.bind(db);
+    let resultReads = 0;
+    db.all = (async (sql: string, params?: unknown[]) => {
+      if (/FROM bin_unit_results WHERE bin_id/.test(sql)) resultReads += 1;
+      return realAll(sql, params as never);
+    }) as typeof db.all;
+    try {
+      await tickRemoteCampaign(campaignId);
+    } finally {
+      db.all = realAll;
+    }
+    expect(resultReads).toBe(0);
   });
 });
