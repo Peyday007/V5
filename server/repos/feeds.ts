@@ -112,6 +112,35 @@ export async function pullsSince(
   return { ok: Number(counts?.ok ?? 0), failed: Number(counts?.failed ?? 0), lastError: last?.error ?? null };
 }
 
+/**
+ * For each detector rule (`rule_id@rule_version`), how many feed items its
+ * ACTIVE detections cover, and of those how many no free model was ever asked
+ * to screen: the screens that rule actually avoided. Rows only.
+ */
+export async function ruleCoverage(
+  rules: readonly { ruleId: string; version: number }[],
+): Promise<Map<string, { covered: number; unscreened: number }>> {
+  const out = new Map<string, { covered: number; unscreened: number }>();
+  if (rules.length === 0) return out;
+  const ids = [...new Set(rules.map((r) => r.ruleId))];
+  const rows = await getDb().all<{ rule_id: string; rule_version: number | string; covered: number | string; unscreened: number | string }>(
+    `SELECT d.rule_id, d.rule_version, COUNT(DISTINCT c.item_id) AS covered,
+            COUNT(DISTINCT CASE WHEN NOT EXISTS (
+              SELECT 1 FROM cheap_results r WHERE r.kind = 'SCREEN_LEAD' AND r.subject_id = c.item_id
+            ) THEN c.item_id END) AS unscreened
+       FROM feed_item_coverage c JOIN feed_detections d ON d.id = c.detection_id
+      WHERE d.rule_id IN (${ids.map(() => '?').join(',')})
+      GROUP BY d.rule_id, d.rule_version`,
+    ids,
+  );
+  const wanted = new Set(rules.map((r) => `${r.ruleId}@${r.version}`));
+  for (const row of rows) {
+    const key = `${row.rule_id}@${Number(row.rule_version)}`;
+    if (wanted.has(key)) out.set(key, { covered: Number(row.covered), unscreened: Number(row.unscreened) });
+  }
+  return out;
+}
+
 /** The last success, and the failures since it, for one source. */
 export async function pullState(source: string): Promise<{ lastSuccessAt: string | null; failuresSince: number; lastFailureAt: string | null }> {
   const db = getDb();

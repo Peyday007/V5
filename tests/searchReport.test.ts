@@ -61,7 +61,7 @@ describe('the search report', () => {
     await recordMethodRun({ methodId: a.id, executor: 'CLAUDE', outcome: 'SOURCE_UNAVAILABLE' });
     const report = await buildSearchReport(reader);
     expect(report.results).toEqual({ relevant: 5, verified: 3, falsePositives: 1 });
-    expect(report.aiUsage).toEqual({ avoided: 2, consumed: 1 });
+    expect(report.aiUsage).toEqual({ avoided: 2, consumed: 1, screensAvoided: 0 });
     expect(report.newOpportunities).toBeNull();
     const withDownstream = await buildSearchReport(reader, { downstream: new Map([['a', { useful: 4, qualified: 2 }]]) });
     expect(withDownstream.newOpportunities).toBe(2);

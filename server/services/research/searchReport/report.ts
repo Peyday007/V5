@@ -15,6 +15,14 @@
  *
  * Automatic is a separate axis from proven: a method can run without Claude and
  * still be unproven.
+ *
+ * AI usage avoided is read two ways, both from rows: runs a method recorded
+ * without Claude (`aiUsage.avoided`), and the free-model screens an ACTIVE
+ * learned detector actually skipped — feed items its detections cover that no
+ * screen was ever asked about (`aiUsage.screensAvoided`, the same count
+ * `detectionReading.coveredUnscreened` makes across every rule). The second is
+ * counted for every GENERAL learned detector the reader can see, whether or
+ * not it serves a method, so skipped screens are never reported as zero.
  */
 import {
   listLearnedDetectors,
@@ -23,6 +31,7 @@ import {
 } from '../../../repos/searchMethods.ts';
 import type { LearnedDetector, SearchMethod, SearchReader } from '../../../domain/searchIntelligence.ts';
 import { DEMOTE_PRECISION } from '../searchMethods/lifecycle.ts';
+import { ruleCoverage } from '../../../repos/feeds.ts';
 import { readMethodMetrics, type MethodReading } from '../searchMetrics/read.ts';
 
 export interface MethodLine {
@@ -41,6 +50,8 @@ export interface MethodLine {
   precision: number | null;
   aiJobsConsumed: number;
   aiJobsAvoided: number;
+  /** Free-model screens this method's ACTIVE learned detectors skipped. */
+  screensAvoided: number;
   outcomes: Record<string, number>;
   detectors: { key: string; mode: LearnedDetector['mode'] }[];
   proven: boolean;
@@ -72,8 +83,11 @@ export interface SearchReport {
   /** Methods with a learned detector, by detector mode. */
   turnedIntoCode: { methodKey: string; detectorKey: string; mode: LearnedDetector['mode'] }[];
   results: { relevant: number; verified: number; falsePositives: number };
-  /** Runs done without a Claude activation, against those that used one. */
-  aiUsage: { avoided: number; consumed: number };
+  /**
+   * Runs done without a Claude activation, against those that used one, and
+   * the free-model screens ACTIVE learned detectors skipped.
+   */
+  aiUsage: { avoided: number; consumed: number; screensAvoided: number };
   improved: string[];
   abandoned: string[];
   /** Opportunities that went on to qualify, where a downstream reading exists; null otherwise. */
@@ -85,6 +99,7 @@ function line(
   runs: { executor: string }[],
   detectors: LearnedDetector[],
   since: string | null,
+  screensAvoided: number,
 ): MethodLine {
   const { method, metrics, trust } = reading;
   const retired = method.trustState === 'RETIRED';
@@ -106,11 +121,12 @@ function line(
     precision: trust.precision,
     aiJobsConsumed: metrics.aiJobsConsumed,
     aiJobsAvoided: metrics.aiJobsAvoided,
+    screensAvoided,
     outcomes: { ...metrics.outcomes },
     detectors: detectors.map((d) => ({ key: d.detectorKey, mode: d.mode })),
     proven,
     stillLearning: !retired && !proven && (method.trustState === 'PROPOSED' || method.trustState === 'TESTING' || !trust.sufficient),
-    automatic: !retired && (active || noClaude),
+    automatic: !retired && (active || noClaude || screensAvoided > 0),
     improved: method.version > 1,
     abandoned: method.trustState === 'RETIRED' || method.trustState === 'DEMOTED',
     newSinceWindow: since !== null && method.createdAt >= since,
@@ -134,10 +150,16 @@ export async function buildSearchReport(
     if (!d.methodId) continue;
     byMethod.set(d.methodId, [...(byMethod.get(d.methodId) ?? []), d]);
   }
+  // Only GENERAL detectors run over the shared feed rows (`FEED_READER`), so
+  // only their rule ids name detections; a private key is never attributed.
+  const shared = detectors.filter((d) => d.scope === 'GENERAL');
+  const coverage = await ruleCoverage(shared.map((d) => ({ ruleId: `learned:${d.detectorKey}`, version: d.version })));
+  const skipped = (d: LearnedDetector) => (d.scope === 'GENERAL' ? coverage.get(`learned:${d.detectorKey}@${d.version}`)?.unscreened ?? 0 : 0);
   const methods: MethodLine[] = [];
   for (const reading of readings) {
     const runs = await listMethodRuns(reader, reading.method.id);
-    methods.push(line(reading, runs, byMethod.get(reading.method.id) ?? [], since));
+    const own = byMethod.get(reading.method.id) ?? [];
+    methods.push(line(reading, runs, own, since, own.reduce((n, d) => n + skipped(d), 0)));
   }
   const known = methods.filter((m) => m.trustState !== 'RETIRED');
   const keyOf = new Map(readings.map((r) => [r.method.id, r.method.methodKey]));
@@ -171,6 +193,7 @@ export async function buildSearchReport(
     aiUsage: {
       avoided: methods.reduce((n, m) => n + m.aiJobsAvoided, 0),
       consumed: methods.reduce((n, m) => n + m.aiJobsConsumed, 0),
+      screensAvoided: shared.reduce((n, d) => n + skipped(d), 0),
     },
     improved: methods.filter((m) => m.improved).map((m) => m.methodKey),
     abandoned: methods.filter((m) => m.abandoned).map((m) => m.methodKey),
@@ -191,7 +214,7 @@ export function renderSearchReport(report: SearchReport): string {
     `sources: ${report.sources.length ? report.sources.join(', ') : 'none'}`,
     `turned into code: ${report.turnedIntoCode.length ? report.turnedIntoCode.map((d) => `${d.detectorKey} [${d.mode}]`).join(', ') : 'none'}`,
     `results: ${report.results.relevant} surfaced, ${report.results.verified} verified, ${report.results.falsePositives} rejected`,
-    `Claude: ${report.aiUsage.consumed} runs used it, ${report.aiUsage.avoided} did not`,
+    `Claude: ${report.aiUsage.consumed} runs used it, ${report.aiUsage.avoided} did not · free-model screens skipped by active learned detectors: ${report.aiUsage.screensAvoided}`,
     `improved: ${report.improved.join(', ') || 'none'} · abandoned: ${report.abandoned.join(', ') || 'none'}`,
     `new opportunities: ${report.newOpportunities === null ? 'not measured' : report.newOpportunities}`,
   ];
