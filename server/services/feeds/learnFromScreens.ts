@@ -19,6 +19,10 @@
  *      created twice. Feed items are shared rows, so only GENERAL learning
  *      may act on them (`FEED_READER`). The items it was built from are kept
  *      in its definition (`trainedOn`).
+ *      Each detector is created with its own GENERAL search method (keyed
+ *      like the detector), so `recordLearnedPass` records its passes as CODE
+ *      runs and `installLearned` can pause or revise it from them. A detector
+ *      proposed before that link existed is linked on the next pass.
  *   2. judge — every GENERAL detector's firing on an agreed-labelled item it
  *      was *not* built from is recorded as a `detector_examples` row (fired,
  *      CONFIRMED or REJECTED). A miss is recorded too, as `fired: false`, which
@@ -33,8 +37,9 @@
  * Nothing here calls a model: it reads answers already given.
  */
 import { getDb } from '../../db/database.ts';
-import { createLearnedDetector, listLearnedDetectors, recordDetectorExample } from '../../repos/searchMethods.ts';
-import type { LearnedDetector } from '../../domain/searchIntelligence.ts';
+import { createLearnedDetector, createSearchMethod, listLearnedDetectors, recordDetectorExample } from '../../repos/searchMethods.ts';
+import type { LearnedDetector, SearchMethod } from '../../domain/searchIntelligence.ts';
+import { PrivateDataRefused } from '../knowledge/scope/privacy.ts';
 import { combineLeads, parseLead, type LeadOutput } from '../cheap/lane.ts';
 import { confidenceOf, defineFromExamples, FIRE_AT, type LearnedDefinition } from './learned.ts';
 import { FEED_READER } from './learnedRun.ts';
@@ -106,6 +111,59 @@ export function proposedKey(source: string, terms: readonly string[]): string {
 /** The definition a detector stores, with the items it was built from. */
 type StoredDefinition = LearnedDefinition & { trainedOn?: string[] };
 
+/** The GENERAL search method a screen-proposed detector executes. Pure. */
+export function proposedMethodDefinition(source: string, terms: readonly string[]): Parameters<typeof createSearchMethod>[0] {
+  return {
+    scope: 'GENERAL',
+    methodKey: proposedKey(source, terms),
+    finds: `items from the ${source} feed whose titles carry the terms the screen kept: ${[...terms].sort().join(', ')}`,
+    usefulWhen: `a fresh pull of the ${source} feed has landed`,
+    sources: [source],
+    requiredInputs: [],
+    query: [...terms].sort().join(' '),
+    checkProcedure: 'two cheap-lane models agree on a SCREEN_LEAD KEEP that names a deliverable (CONFIRMED) or a DROP (REJECTED)',
+    limits: 'learned from screen answers on recent titles only; measured on items it was not built from',
+  };
+}
+
+/**
+ * The method for a screen-proposed detector, created once and found again by
+ * its key. Null when its definition holds something that may not be shared:
+ * such a pattern is not made a GENERAL detector either.
+ */
+async function methodFor(source: string, terms: readonly string[]): Promise<SearchMethod | null> {
+  try {
+    return await createSearchMethod(proposedMethodDefinition(source, terms));
+  } catch (err) {
+    if (err instanceof PrivateDataRefused) return null;
+    throw err;
+  }
+}
+
+/**
+ * Link every screen-proposed detector that has no method to its method.
+ * Detectors proposed before the link existed carried none, so none of their
+ * passes was ever recorded. Guarded on the link still being absent. Returns
+ * how many were linked.
+ */
+export async function linkUnlinkedDetectors(existing: readonly LearnedDetector[]): Promise<number> {
+  let linked = 0;
+  for (const detector of existing) {
+    if (detector.methodId || detector.scope !== 'GENERAL' || !detector.detectorKey.startsWith('screen:')) continue;
+    const def = detector.definition as StoredDefinition | null;
+    if (!def || !Array.isArray(def.sources) || def.sources.length !== 1 || !Array.isArray(def.terms)) continue;
+    if (proposedKey(def.sources[0]!, def.terms) !== detector.detectorKey) continue;
+    const method = await methodFor(def.sources[0]!, def.terms);
+    if (!method) continue;
+    const r = await getDb().run(
+      `UPDATE learned_detectors SET method_id = ?, updated_at = ? WHERE id = ? AND method_id IS NULL`,
+      [method.id, new Date().toISOString(), detector.id],
+    );
+    if ((r.changes ?? 0) > 0) linked += 1;
+  }
+  return linked;
+}
+
 /**
  * Create one SHADOW detector per source whose agreed positives define a
  * pattern no existing detector already holds. Returns the detectors created.
@@ -122,8 +180,12 @@ export async function proposeDetectors(labels: readonly ScreenLabel[], existing:
     if (!built.ok) continue;
     const key = proposedKey(source, built.definition.terms);
     if (held.has(key)) continue;
+    const method = await methodFor(source, built.definition.terms);
+    if (!method) continue;
     const definition: StoredDefinition = { ...built.definition, trainedOn: [...positives, ...negatives].map((l) => l.id).sort() };
-    const detector = await createLearnedDetector({ scope: 'GENERAL', detectorKey: key, definition, threshold: PROPOSED_THRESHOLD });
+    const detector = await createLearnedDetector({
+      scope: 'GENERAL', detectorKey: key, methodId: method.id, definition, threshold: PROPOSED_THRESHOLD,
+    });
     held.add(key);
     created.push(detector);
   }
@@ -160,8 +222,13 @@ export interface LearnReport {
 /** One pass: read the agreed screen labels, propose what they define, judge every GENERAL detector on them. */
 export async function learnFromScreens(now: Date): Promise<LearnReport> {
   const labels = await screenLabels(now);
-  if (labels.length === 0) return { labelled: 0, proposed: 0, judged: 0 };
-  const proposed = await proposeDetectors(labels, await listLearnedDetectors(FEED_READER));
+  if (labels.length === 0) {
+    await linkUnlinkedDetectors(await listLearnedDetectors(FEED_READER));
+    return { labelled: 0, proposed: 0, judged: 0 };
+  }
+  const existing = await listLearnedDetectors(FEED_READER);
+  await linkUnlinkedDetectors(existing);
+  const proposed = await proposeDetectors(labels, existing);
   const judged = await judgeFirings(labels, await listLearnedDetectors(FEED_READER));
   return { labelled: labels.length, proposed: proposed.length, judged };
 }
