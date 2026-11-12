@@ -188,6 +188,10 @@ jobs:
           HAS_FOURTHWALL_API_PASSWORD: ${{ secrets.FOURTHWALL_API_PASSWORD != '' }}
           HAS_OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY != '' }}
           HAS_OMNIROUTE_PASSWORD: ${{ secrets.OMNIROUTE_PASSWORD != '' }}
+          # Whether each syncable credential has a GitHub secret to copy from.
+          GH_INSTANTLY_API_KEY: ${{ secrets.INSTANTLY_API_KEY != '' }}
+          GH_STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY != '' }}
+          GH_RESEND_API_KEY: ${{ secrets.RESEND_API_KEY != '' }}
         run: |
           set -euo pipefail
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
@@ -198,7 +202,7 @@ jobs:
             done < "$repairs"
           fi
           # Names of the repository secrets, so integrations that live in GitHub Actions read as present or missing.
-          names=$(python3 -c 'import os; print(",".join(sorted(k[4:] for k, v in os.environ.items() if k.startswith("HAS_") and v == "true")))')
+          names=$(python3 -c 'import os; print(",".join(sorted(k.split("_", 1)[1] for k, v in os.environ.items() if k.startswith(("HAS_", "GH_")) and v == "true")))')
           set +e
           timeout 600 flyctl ssh console --app "$app" -C "sh -c 'cd /app && nice -n 19 node --import tsx scripts/integrations.ts public-keys && nice -n 19 node --import tsx scripts/integrations.ts check --record integrations.yml --github-secrets $names'" < /dev/null 2>&1 | tee check.txt
           set -e

@@ -71,18 +71,38 @@ export async function probeV2Places(options: { fetch?: FetchLike; env?: NodeJS.P
     return { bridge: 'NOT_CONFIGURED', places: 'NOT_CONFIGURED', detail: 'BRAIN_INTEGRATION_SIGNING_KEY is not set on this deployment.' };
   }
   try {
-    const { status, json } = await call({ probe: true }, options);
+    // `verify` asks V2 to ask Google with an IDs-only search (no charge), so a
+    // key Google refuses reads as refused rather than as merely present.
+    const { status, json } = await call({ probe: true, verify: true }, options);
     if (status === 401) {
       return { bridge: 'REFUSED', places: 'REFUSED', detail: "V2 refused Brain's signature: the deployment's public key is not pinned in V2's src/lib/brainBridge.ts." };
     }
     if (status === 404) return { bridge: 'NOT_CONFIGURED', places: 'NOT_CONFIGURED', detail: 'V2 does not serve /api/brain/places yet (its bridge is not deployed).' };
     if (status !== 200) return { bridge: 'UNREACHABLE', places: 'UNREACHABLE', detail: `V2 answered ${status}.` };
-    return json.placesKeyConfigured === true
-      ? { bridge: 'VERIFIED', places: 'VERIFIED', detail: 'V2 accepted the signed probe and holds a Places key.' }
-      : { bridge: 'VERIFIED', places: 'NOT_CONFIGURED', detail: 'V2 accepted the signed probe and has no GOOGLE_PLACES_API_KEY.' };
+    if (json.placesKeyConfigured !== true) {
+      return { bridge: 'VERIFIED', places: 'NOT_CONFIGURED', detail: 'V2 accepted the signed probe and has no GOOGLE_PLACES_API_KEY.' };
+    }
+    const google = json.google as { accepted?: boolean; status?: number; reasons?: string[]; googleStatus?: string | null } | undefined;
+    if (!google) return { bridge: 'VERIFIED', places: 'VERIFIED', detail: 'V2 accepted the signed probe and holds a Places key.' };
+    if (google.accepted) return { bridge: 'VERIFIED', places: 'VERIFIED', detail: 'V2 accepted the signed probe, and Google accepted its Places key.' };
+    if (!google.status) return { bridge: 'VERIFIED', places: 'UNREACHABLE', detail: 'V2 could not reach Google.' };
+    return { bridge: 'VERIFIED', places: 'REFUSED', detail: `Google refused V2's Places key: ${googleRefusal(google.status, google.reasons ?? [], google.googleStatus ?? null)}` };
   } catch (error) {
     return { bridge: 'UNREACHABLE', places: 'UNREACHABLE', detail: `V2 did not answer: ${error instanceof Error ? error.message : String(error)}` };
   }
+}
+
+/** Google's own refusal codes, as the one setting to change. */
+export function googleRefusal(status: number, reasons: string[], googleStatus: string | null): string {
+  const codes = [...reasons, ...(googleStatus ? [googleStatus] : [])];
+  const has = (re: RegExp) => codes.some((c) => re.test(c));
+  const fix = has(/BILLING/) ? 'billing is not enabled on the Google Cloud project the key belongs to'
+    : has(/SERVICE_DISABLED|API_NOT_ACTIVATED/) ? 'Places API (New) is not enabled on the key\'s Google Cloud project'
+    : has(/SERVICE_BLOCKED/) ? 'the key\'s API restrictions do not include Places API (New)'
+    : has(/REFERRER|IP_ADDRESS|ANDROID|IOS/) ? 'the key has an application restriction a server call cannot meet (set Application restrictions to None)'
+    : has(/API_KEY_INVALID|INVALID_ARGUMENT/) ? 'the key is invalid or deleted'
+    : 'see the codes';
+  return `HTTP ${status}${codes.length ? ` (${codes.join(', ')})` : ''}; ${fix}.`;
 }
 
 /** One Text Search through V2, inside the daily ceiling. */
