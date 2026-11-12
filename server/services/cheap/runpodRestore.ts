@@ -58,7 +58,7 @@ export interface PodRecipe {
 
 /** 24 GB cards from cheapest measured community price (runpod-survey, 2026-11-12). */
 const GPUS_24 = ['NVIDIA RTX A5000', 'NVIDIA GeForce RTX 3090', 'NVIDIA GeForce RTX 3090 Ti'];
-const CUDA_129 = ['12.9', '13.0', '13.1', '13.2'];
+const CUDA_129 = ['12.9', '13.0'];
 const IMAGE_2026 = 'vllm/vllm-openai:v0.32.0-cu129';
 
 export const RECIPES: Record<string, PodRecipe> = {
@@ -259,7 +259,7 @@ export async function createPod(input: {
   for (const cloud of input.recipe.clouds) {
     const made = await call('POST', '/pods', podSpec(input.vllmKey, input.model ?? POD_MODEL, cloud, input.recipe, input.name));
     if (!made.ok) {
-      refusals.push(`${cloud}: HTTP ${made.status} ${made.text.replace(/\s+/g, ' ').slice(0, 200)}`);
+      refusals.push(`${cloud}: HTTP ${made.status} ${made.text.replace(/\s+/g, ' ').slice(0, 700)}`);
       continue;
     }
     const pod = JSON.parse(made.text) as Pod;

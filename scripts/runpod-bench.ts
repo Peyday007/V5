@@ -15,7 +15,7 @@
  * under 24 hours. Prints `BENCH-JSON <summary>` lines; prints no secret.
  */
 import { randomBytes } from 'node:crypto';
-import { BENCH_PREFIX, DEFAULT_MAX_USD_PER_HOUR, createPod, deletePod, recipeFor, sweepBenchPods } from '../server/services/cheap/runpodRestore.ts';
+import { BENCH_PREFIX, DEFAULT_MAX_USD_PER_HOUR, POD_NAME, createPod, deletePod, listPods, podUrl, recipeFor, sweepBenchPods } from '../server/services/cheap/runpodRestore.ts';
 import { chooseModel, runBench, type BenchEndpoint, type BenchSummary } from '../server/services/cheap/modelBench.ts';
 import { accountReading } from '../server/services/cheap/runpodAccount.ts';
 
@@ -95,19 +95,26 @@ async function main(): Promise<void> {
   if (swept.length) console.log(`SWEPT leftover benchmark pods: ${swept.join(', ')}`);
   const results: BenchSummary[] = [];
   if (arg('baseline') !== null) {
-    const podUrl = process.env['RUNPOD_VLLM_URL']?.trim();
+    // The production pod by name — the URL secret can name a pod RunPod already replaced.
+    const prod = (await listPods(apiKey)).find((p) => p.name === POD_NAME && p.desiredStatus === 'RUNNING');
     const podKey = process.env['RUNPOD_VLLM_KEY']?.trim() ?? null;
-    if (podUrl) {
-      const listed = await fetch(`${podUrl.replace(/\/+$/, '').replace(/\/v1$/, '')}/v1/models`, { headers: podKey ? { authorization: `Bearer ${podKey}` } : {}, signal: AbortSignal.timeout(30_000) }).then((r) => r.json()).catch(() => ({}));
+    if (prod) {
+      const base = podUrl(prod.id);
+      const listed = await fetch(`${base}/models`, { headers: podKey ? { authorization: `Bearer ${podKey}` } : {}, signal: AbortSignal.timeout(30_000) }).then((r) => r.json()).catch(() => ({}));
       const model = (listed as { data?: { id: string }[] }).data?.[0]?.id ?? 'unknown';
-      const summary = await runBench({ label: `gpu:production(${model})`, url: `${podUrl.replace(/\/+$/, '').replace(/\/v1$/, '')}/v1`, key: podKey, model, usdPerHour: 0.19 }, { reps, parallel: 6 });
+      const cost = Number(prod.adjustedCostPerHr ?? prod.costPerHr);
+      const summary = await runBench({ label: `gpu:production(${model})`, url: base, key: podKey, model, usdPerHour: Number.isFinite(cost) && cost > 0 ? cost : 0.19 }, { reps, parallel: 6 });
       print(summary);
       results.push(summary);
     }
     const freeUrl = process.env['CHEAP_URL']?.trim();
     const freeKey = process.env['OMNIROUTE_API_KEY']?.trim() ?? null;
     if (freeUrl && freeKey) {
-      const model = process.env['OMNIROUTE_MODEL']?.trim() || 'auto';
+      // The switchboard's own names: production sends the combo it lists (BRAIN_CHEAP_LLM_MODELS).
+      const listed = await fetch(`${freeUrl}/models`, { headers: { authorization: `Bearer ${freeKey}` }, signal: AbortSignal.timeout(30_000) }).then((r) => r.json()).catch(() => ({}));
+      const names = ((listed as { data?: { id: string }[] }).data ?? []).map((m) => m.id);
+      console.log(`SWITCHBOARD models: ${names.slice(0, 30).join(', ')}`);
+      const model = ['brain-a', process.env['OMNIROUTE_MODEL']?.trim() ?? ''].find((m) => m && names.includes(m)) ?? names[0] ?? 'auto';
       const summary = await runBench({ label: `free:${model}`, url: freeUrl, key: freeKey, model, usdPerHour: null }, { reps, parallel: 3 });
       print(summary);
       results.push(summary);
