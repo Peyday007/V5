@@ -532,9 +532,24 @@ function reconciliationNote(applied: boolean, why: string): string {
 
 const MAX_REASON_CHARS = 2000;
 
+/** Where the first reconciliation note begins in a reason this module wrote. */
+const NOTE_SEPARATOR = ' — reconciliation ';
+
+/**
+ * The reason an unknown carries: what made it unknown, then the latest
+ * decision to ask or not. A re-ask passes the stored reason back as `base`, so
+ * any earlier note is dropped here rather than appended — otherwise the reason
+ * grows each tick until the length cap cuts off the newest note, and the row
+ * stops saying when and why reconciliation was last applied (S-0484). When
+ * the cap binds, it is the original reason that is shortened, never the
+ * latest note.
+ */
 function joinReason(base: string, note: string): string {
-  const joined = `${base} — ${note}`;
-  return joined.length > MAX_REASON_CHARS ? joined.slice(0, MAX_REASON_CHARS) : joined;
+  const cut = base.indexOf(NOTE_SEPARATOR);
+  const original = cut >= 0 ? base.slice(0, cut) : base;
+  const room = MAX_REASON_CHARS - note.length - ' — '.length;
+  if (room <= 0) return note.slice(0, MAX_REASON_CHARS);
+  return `${original.slice(0, room)} — ${note}`;
 }
 
 /**
