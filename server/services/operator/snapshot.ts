@@ -1,25 +1,31 @@
 /**
  * The goal reading an operator run works from, built once per run (§106).
  *
- * Production, 2026-11-12 (run opr_5334b9d8, 37 refused calls): deriving every
- * goal from the register is heavy — `assembleGoals` reads every linked mission,
- * candidate, campaign and bin — and asking it through an MCP call ran into the
- * 180 s call limit (`TIMEOUT_OUTCOME_UNKNOWN`) and, under load, a pool that
- * could not check out a connection (`POOL_CHECKOUT_TIMEOUT`). The one call that
- * finished did so after the agent had already given up, and a model without the
- * goal list then guessed goal ids for the rest of the run.
+ * Production, 2026-11-12, in order:
+ *   - opr_5334b9d8 (37 refused calls): deriving every goal from the register is
+ *     heavy — `assembleGoals` reads every linked mission, candidate, campaign
+ *     and bin — and asking it inside an MCP call ran past the 180 s limit.
+ *   - 12:02: the run and its read tools keyed the cache differently, so a tool
+ *     rebuilt the whole reading inside its call.
+ *   - opr_8f2520b2: the build itself could not check out a connection (8/8 in
+ *     use, 3 waiting) and the run ended before the agent started.
  *
- * So Brain reads the goals once, in its own process and outside the call limit,
- * when it starts the run: the reading goes into the brief (with every goal's id
- * and every open request's id and moot reading), and the read tools answer from
- * the same reading for as long as the run lasts. A run that wants fresher state
- * calls the action tools, each of which re-reads its own rows.
+ * So a run always gets a *light* reading first — the goal register and each
+ * goal project's open requests with their moot reading, a handful of indexed
+ * reads — retried while the pool is saturated. The full derivation (state,
+ * blockers, next action) is then attempted once within a bound and, when it
+ * finishes, replaces the light one. Either way the brief names every goal id
+ * and every moot request id, which is what the action tools need. One reading
+ * is shared by the run and its read tools and narrowed to what a caller may see.
  */
 import type { GoalView } from '../goals/model.ts';
 import { operatorGoals, readRequests, summarizeGoal, type GoalSummary, type RequestReading } from './actions.ts';
 
 export interface OperatorSnapshot {
   takenAt: string;
+  /** FULL when every goal was derived; LIGHT when only the register and the requests were read. */
+  depth: 'FULL' | 'LIGHT';
+  /** Derived views, present only at FULL depth. */
   goals: GoalView[];
   summaries: GoalSummary[];
   /** Open requests by project id, each with its moot reading. */
@@ -28,17 +34,12 @@ export interface OperatorSnapshot {
 
 /** How long one reading serves the read tools: a run's budget plus its slack. */
 export const SNAPSHOT_TTL_MS = 25 * 60_000;
+/** The full derivation's bound; past it the light reading stands. */
+export const FULL_DERIVATION_BOUND_MS = 150_000;
 
 let cached: { at: number; snapshot: OperatorSnapshot } | null = null;
 let building: Promise<OperatorSnapshot> | null = null;
 
-/**
- * One reading of every goal Brain holds, shared by the run that built it and
- * every read tool the run calls. Production, 2026-11-12 12:02: the run built it
- * for every project and a tool asked for the credential's readable ones, the
- * two keys differed, and the tool rebuilt it inside its call — past the limit.
- * So there is one key, and a caller narrows the reading to what it may see.
- */
 export async function operatorSnapshot(projectIds: string[], options: { fresh?: boolean; nowMs?: number } = {}): Promise<OperatorSnapshot> {
   const nowMs = options.nowMs ?? Date.now();
   const whole = !options.fresh && cached && nowMs - cached.at < SNAPSHOT_TTL_MS ? cached.snapshot : await build(nowMs);
@@ -48,19 +49,74 @@ export async function operatorSnapshot(projectIds: string[], options: { fresh?: 
 async function build(nowMs: number): Promise<OperatorSnapshot> {
   if (building) return building;
   building = (async () => {
-    const { listProjects } = await import('../../repos/projects.ts');
-    const goals = await operatorGoals((await listProjects()).map((p) => p.id));
-    const requests = new Map<string, RequestReading[]>();
-    for (const projectId of new Set(goals.map((g) => g.projectId).filter((id): id is string => Boolean(id)))) {
-      requests.set(projectId, await readRequests(projectId));
-    }
-    const snapshot: OperatorSnapshot = { takenAt: new Date(nowMs).toISOString(), goals, summaries: goals.map(summarizeGoal), requests };
-    cached = { at: nowMs, snapshot };
-    return snapshot;
+    const light = await withPoolRetry(() => lightSnapshot(nowMs));
+    cached = { at: nowMs, snapshot: light };
+    const full = await bounded(fullSnapshot(nowMs, light.requests), FULL_DERIVATION_BOUND_MS).catch(() => null);
+    if (full) cached = { at: nowMs, snapshot: full };
+    return cached.snapshot;
   })().finally(() => {
     building = null;
   });
   return building;
+}
+
+/** The register and the requests: what the brief needs, in a handful of indexed reads. */
+async function lightSnapshot(nowMs: number): Promise<OperatorSnapshot> {
+  const { listWorkstreams } = await import('../../repos/register.ts');
+  const live = (await listWorkstreams({ projectIds: null })).filter((w) => !w.cancelledAt && w.projectId);
+  const requests = new Map<string, RequestReading[]>();
+  for (const projectId of new Set(live.map((w) => w.projectId!))) requests.set(projectId, await readRequests(projectId));
+  const summaries: GoalSummary[] = live.map((w) => {
+    const target = w.target as { amountCents?: number; currency?: string; metric?: string } | null;
+    return {
+      id: w.id,
+      title: w.title.slice(0, 200),
+      projectId: w.projectId,
+      state: 'NOT_DERIVED',
+      stateEvidence: 'read from the register only; Brain was too busy to derive the goal this run',
+      lifecycle: w.pausedAt ? 'PAUSED' : 'ACTIVE',
+      target: target?.amountCents ? `${target.metric ?? 'target'} ${(target.amountCents / 100).toFixed(0)} ${target.currency ?? ''}`.trim() : null,
+      dueAt: w.dueAt,
+      waiting: (requests.get(w.projectId!) ?? []).length ? `PERSON: ${(requests.get(w.projectId!) ?? []).length} open request(s) in its project` : 'not derived',
+      next: 'not derived',
+      openDecisions: (requests.get(w.projectId!) ?? []).length,
+      blockers: 0,
+      priority: null,
+    };
+  });
+  return { takenAt: new Date(nowMs).toISOString(), depth: 'LIGHT', goals: [], summaries, requests };
+}
+
+async function fullSnapshot(nowMs: number, requests: Map<string, RequestReading[]>): Promise<OperatorSnapshot> {
+  const { listProjects } = await import('../../repos/projects.ts');
+  const goals = await operatorGoals((await listProjects()).map((p) => p.id));
+  return { takenAt: new Date(nowMs).toISOString(), depth: 'FULL', goals, summaries: goals.map(summarizeGoal), requests };
+}
+
+/** Retry a read while the pool is saturated (§61, §63): three tries, twenty seconds apart. */
+export async function withPoolRetry<T>(work: () => Promise<T>, attempts = 3, spacingMs = 20_000): Promise<T> {
+  let last: unknown = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await work();
+    } catch (error) {
+      last = error;
+      const { classifyInfraFailure } = await import('../../db/infra.ts');
+      if (!classifyInfraFailure(error) || attempt === attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, spacingMs));
+    }
+  }
+  throw last;
+}
+
+function bounded<T>(work: Promise<T>, ms: number): Promise<T | null> {
+  let timer: NodeJS.Timeout | undefined;
+  return Promise.race([
+    work,
+    new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 export function narrow(snapshot: OperatorSnapshot, projectIds: string[]): OperatorSnapshot {
@@ -68,8 +124,9 @@ export function narrow(snapshot: OperatorSnapshot, projectIds: string[]): Operat
   const goals = snapshot.goals.filter((g) => g.projectId !== null && allowed.has(g.projectId));
   return {
     takenAt: snapshot.takenAt,
+    depth: snapshot.depth,
     goals,
-    summaries: goals.map(summarizeGoal),
+    summaries: snapshot.summaries.filter((s) => s.projectId !== null && allowed.has(s.projectId)),
     requests: new Map([...snapshot.requests].filter(([projectId]) => allowed.has(projectId))),
   };
 }
@@ -82,7 +139,7 @@ export function urgencyOrder(summaries: GoalSummary[]): GoalSummary[] {
 
 /** The goals as the brief states them: ids the agent can use, and what each is held on. */
 export function snapshotForBrief(snapshot: OperatorSnapshot): string {
-  const lines: string[] = [`Brain's goals as read at ${snapshot.takenAt}:`];
+  const lines: string[] = [`Brain's goals as read at ${snapshot.takenAt} (${snapshot.depth === 'FULL' ? 'fully derived' : 'register and requests only — Brain is busy'}):`];
   for (const goal of urgencyOrder(snapshot.summaries)) {
     lines.push(`- ${goal.id} [${goal.lifecycle}/${goal.state}] ${goal.title}`);
     if (goal.target) lines.push(`    target: ${goal.target}`);
