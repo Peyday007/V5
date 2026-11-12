@@ -451,7 +451,10 @@ async function ingestReviewBin(
   const already = reviews.some(
     (row) => row.reviewedSha === review.value.reviewedSha && row.verdict === review.value.verdict,
   );
-  if (already) return false;
+  if (already) {
+    rememberRecorded(bin);
+    return false;
+  }
 
   /*
    * Is the reviewer independent of the work, and how independent?
@@ -515,6 +518,7 @@ async function ingestReviewBin(
   }
   if (repairs.queued.length > 0) await promoteReadyUnits(campaign.id);
   report.ingested.push(`review:${bin.id}`);
+  rememberRecorded(bin);
   report.notes.push(
     `round ${round}: ${recorded.review.verdict}, ${recorded.findings.length} finding(s), ` +
       `${repairs.queued.length} repair(s) queued`,
@@ -933,6 +937,11 @@ async function ingestIntegrateBin(
     });
     return false;
   }
+  // The units before the report: nothing implemented means nothing to ingest,
+  // and the report is the large read (see `ingestUnitsBin`).
+  const units = await listUnits(campaign.id);
+  const implemented = units.filter((unit) => unit.state === 'IMPLEMENTED' && unit.headSha !== null);
+  if (implemented.length === 0) return false;
   const parsed = await readIntegrationReport(bin.id);
   if (!parsed.ok) {
     report.notes.push(`The integration bin ${bin.id} completed without a usable report.`);
@@ -941,8 +950,6 @@ async function ingestIntegrateBin(
     });
     return false;
   }
-  const units = await listUnits(campaign.id);
-  const implemented = units.filter((unit) => unit.state === 'IMPLEMENTED' && unit.headSha !== null);
   /*
    * Already ingested, asked two ways, and the second one is not redundant.
    *
@@ -955,8 +962,10 @@ async function ingestIntegrateBin(
    * is also asked of the bin, which cannot change. Same correction as the unit
    * ingest, at the stage above it.
    */
-  if (implemented.length === 0) return false;
-  if (await integrationAlreadyIngested(campaign.id, bin.id)) return false;
+  if (await integrationAlreadyIngested(campaign.id, bin.id)) {
+    rememberRecorded(bin);
+    return false;
+  }
   // Read only once the bin has something to ingest; see `ingestUnitsBin`.
   const who = await binIdentity(bin);
 
@@ -1449,6 +1458,32 @@ async function lastReauthorization(campaignId: string): Promise<string | null> {
 }
 
 /** Has this integration bin's report already become rows, either way? */
+/**
+ * Completed review and integration bins this process has seen recorded.
+ *
+ * A completed bin's report cannot change, and what says it was recorded — a
+ * review row with its sha and verdict, an integration event naming the bin — is
+ * append-only, so once a pass has seen that, every later pass would read the
+ * same large report to reach the same `false`. Production, 2026-11-12: every
+ * live campaign's finished bins re-read and re-parsed every 20 seconds, the
+ * event loop saturated, and the Deploy's verification after its restart could
+ * not get a goal read answered in 240s. Keyed on `updatedAt` as well, so a bin
+ * that moves again is read again. A restart empties it, and the first pass
+ * relearns it from the rows.
+ */
+const recordedBins = new Map<string, string>();
+const RECORDED_BINS_CEILING = 20_000;
+
+function rememberRecorded(bin: Bin): void {
+  if (recordedBins.size >= RECORDED_BINS_CEILING) recordedBins.clear();
+  recordedBins.set(bin.id, bin.updatedAt);
+}
+
+/** Tests: forget what this process has seen recorded, as a restart would. */
+export function forgetRecordedBins(): void {
+  recordedBins.clear();
+}
+
 async function integrationAlreadyIngested(campaignId: string, binId: string): Promise<boolean> {
   const events = await listFactoryEvents(campaignId, {
     kinds: [FACTORY_EVENT_KINDS.integrationRejected, FACTORY_EVENT_KINDS.integrationMerged],
@@ -1831,6 +1866,7 @@ async function runRemoteTick(
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))[0];
   for (const bin of bins) {
     if (bin.state !== 'COMPLETE') continue;
+    if (recordedBins.get(bin.id) === bin.updatedAt) continue;
     if (bin.kind === 'FACTORY_PLAN') {
       if (bin.id !== newestPlan?.id) continue;
       if (await ingestPlanBin(campaign, changeRequest, bin, report)) report.progress = true;
