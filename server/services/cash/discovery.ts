@@ -92,7 +92,13 @@ import {
 } from '../../repos/cashDiscovery.ts';
 import { listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
 import { discoveryYield, usefulOpeningIds, yieldGuidance } from './discoveryYield.ts';
-import { bucketGates, recordRoundAsRun, roundSourceAccess } from '../research/searchMethods/bucketMethods.ts';
+import {
+  bucketGates,
+  compileBucketMethod,
+  recordRoundAsRun,
+  roundSourceAccess,
+  type BucketGate,
+} from '../research/searchMethods/bucketMethods.ts';
 import { getClaim, signalledClaims } from '../../repos/research.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
@@ -556,11 +562,26 @@ export async function openDiscovery(input: {
    * cause is not simply asked again: it waits until its retry time, or is held
    * for revision, and the decision is read from its runs here. A read that
    * fails gates nothing, so discovery never stops on its own bookkeeping.
+   *
+   * The gate's route separates development from execution (gap 5). A Claude
+   * round is opened only on DEVELOP. A bucket on CODE has a compiled executor
+   * the feeds pass runs as code and the cheap lane, so asking Claude again
+   * would spend a round on a search code already does. A bucket whose method
+   * has earned PROVEN but has no executor yet is compiled here first, and is
+   * not asked if that succeeds. One whose executor is held for revision is
+   * back on DEVELOP and is asked, so Claude revises what code kept getting
+   * wrong.
    */
-  const gates = await bucketGates(input.projectId, offered.map((one) => one.id), now).catch(() => new Map<string, { mayOpen: boolean }>());
+  const gates: Map<string, BucketGate> = await bucketGates(input.projectId, offered.map((one) => one.id), now).catch(() => new Map<string, BucketGate>());
   for (const bucket of fairOrder(offered, rounds)) {
     if (out.length >= limit) break;
-    if (gates.get(bucket.id)?.mayOpen === false) continue;
+    const gate = gates.get(bucket.id);
+    if (gate && gate.route !== 'DEVELOP') continue;
+    if (gate?.proven && !gate.compiled) {
+      const compiled = await compileBucketMethod(input.projectId, bucket, await bucketExamples(input.projectId, bucket.id, rounds)).catch(() => null);
+      if (compiled?.compiled) continue;
+    }
+    if (gate?.mayOpen === false) continue;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);
     if (next === null) continue;
@@ -1479,6 +1500,27 @@ export async function harvest(input: {
 }
 
 /**
+ * A bucket's confirmed openings across all its rounds, as the examples its
+ * compiled detector is built from: an opening that reached CANDIDATE and was
+ * not a duplicate is a positive. Read from rows only.
+ */
+async function bucketExamples(
+  projectId: string,
+  bucketId: string,
+  rounds: readonly CashDiscoveryRound[],
+  opportunities?: CashOpportunity[],
+): Promise<{ positives: string[] }> {
+  const ids = new Set(rounds.filter((one) => one.bucketId === bucketId).map((one) => one.id));
+  if (ids.size === 0) return { positives: [] };
+  const mine = (opportunities ?? (await listOpportunities({ projectId }))).filter(
+    (one) => one.discoveryRoundId !== null && ids.has(one.discoveryRoundId) && !one.duplicateOfId,
+  );
+  if (mine.length === 0) return { positives: [] };
+  const useful = await usefulOpeningIds(projectId, mine);
+  return { positives: mine.filter((one) => useful.has(one.id)).map((one) => one.title) };
+}
+
+/**
  * Close every live round whose research has ended, so its bucket can be asked
  * again — and record what it found.
  *
@@ -1527,7 +1569,7 @@ async function closeEndedRounds(input: {
     try {
       const mine = opportunities.filter((one) => one.discoveryRoundId === entry.round.id);
       const useful = mine.length > 0 ? (await usefulOpeningIds(input.projectId, mine)).size : 0;
-      await recordRoundAsRun(input.projectId, entry.bucket, {
+      const recorded = await recordRoundAsRun(input.projectId, entry.bucket, {
         to,
         missionState: mission?.state ?? null,
         found,
@@ -1535,6 +1577,17 @@ async function closeEndedRounds(input: {
         duplicates: mine.filter((one) => one.duplicateOfId).length,
         ...(await roundSourceAccess(missions?.orchestrationIds ?? [])),
       });
+      /*
+       * The round that proves the method is the last one it needs: compile it
+       * into code now, so its next search is the feeds pass and not Claude.
+       */
+      if (recorded?.method.trustState === 'PROVEN') {
+        await compileBucketMethod(
+          input.projectId,
+          entry.bucket,
+          await bucketExamples(input.projectId, entry.bucket.id, await listRounds(input.projectId), opportunities),
+        );
+      }
     } catch { /* the round is closed; its run is an addition */ }
     if (to === 'HARVESTED') continue;
     const why = mission

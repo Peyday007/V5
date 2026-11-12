@@ -17,15 +17,33 @@
  * A bucket with no method yet is DEVELOP work by `routeRequest`: its first
  * round is what creates the method.
  *
+ * Development and execution are separate (gap 5). A Claude round is method
+ * development: it is how a bucket's method is created and measured. Once the
+ * method has earned PROVEN from those measured rounds it is compiled
+ * (`compileBucketMethod`) into a GENERAL learned detector over the feed
+ * sources, serving a privacy-checked GENERAL copy of the method. From then on
+ * the bucket's route is CODE: the feeds pass runs that detector on every tick
+ * (`feeds/learnedRun.ts`), its near-misses go to the cheap lane, its runs are
+ * recorded as CODE runs, and `openDiscovery` opens no Claude round for it. The
+ * bucket returns to DEVELOP only when its compiled executor needs revision or
+ * is retired. A PROVEN method that cannot be compiled (too few confirmed
+ * examples, no shared term, or examples holding private data) has no code
+ * executor and stays DEVELOP, with the refusal named on its gate.
+ *
  * Nothing here opens a round or decides what a round asks; `cash/discovery.ts`
  * stays the one owner of that, and calls in here at the two points where a
  * method's record changes.
  */
-import { createSearchMethod, listMethodRuns, listSearchMethods } from '../../../repos/searchMethods.ts';
-import type { RunOutcome, SearchMethod, SearchReader } from '../../../domain/searchIntelligence.ts';
+import { createSearchMethod, getSearchMethod, listLearnedDetectors, listMethodRuns, listSearchMethods } from '../../../repos/searchMethods.ts';
+import type { LearnedDetector, RunOutcome, SearchMethod, SearchReader } from '../../../domain/searchIntelligence.ts';
 import { decideMethod, type MethodDecision } from '../searchFailures/classify.ts';
 import { routeRequest, type Route } from '../searchRouting/route.ts';
-import { recordRunAndSettle } from './lifecycle.ts';
+import { PROVEN_PRECISION, provenMethods, recordRunAndSettle } from './lifecycle.ts';
+import { createDetectorFromExamples } from '../../feeds/learned.ts';
+import { FEED_READER } from '../../feeds/learnedRun.ts';
+import { FEED_SOURCES } from '../../feeds/sources.ts';
+import { privateDataIn } from '../../knowledge/scope/privacy.ts';
+import { shareAsGeneral } from '../../knowledge/scope/share.ts';
 import { currentFragments } from '../../../repos/research.ts';
 import { UNREADABLE_CAUSES, blockCauseOf } from '../gate.ts';
 
@@ -163,17 +181,124 @@ export async function recordRoundAsRun(
   return { method: settled.method, decision: decideMethod(await listMethodRuns(reader, method.id), now) };
 }
 
+/** The detector key a bucket's compiled code executor is stored under. */
+export function bucketDetectorKey(bucketId: string): string {
+  return `bucket:${bucketId}`;
+}
+
+/** A bucket's code executor: the compiled detector and the GENERAL method it serves. */
+export interface BucketExecutor {
+  detector: LearnedDetector;
+  method: SearchMethod;
+}
+
+/** The compiled executors of these buckets, newest version of each. */
+export async function bucketExecutors(bucketIds: readonly string[]): Promise<Map<string, BucketExecutor>> {
+  const keys = new Map(bucketIds.map((id) => [bucketDetectorKey(id), id] as const));
+  const newest = new Map<string, LearnedDetector>();
+  for (const detector of await listLearnedDetectors(FEED_READER)) {
+    const bucketId = keys.get(detector.detectorKey);
+    if (!bucketId || detector.scope !== 'GENERAL' || !detector.methodId) continue;
+    const held = newest.get(bucketId);
+    if (!held || detector.version > held.version) newest.set(bucketId, detector);
+  }
+  const out = new Map<string, BucketExecutor>();
+  for (const [bucketId, detector] of newest) {
+    const method = await getSearchMethod(FEED_READER, detector.methodId!);
+    if (method) out.set(bucketId, { detector, method });
+  }
+  return out;
+}
+
+export type CompileResult =
+  | { compiled: true; executor: BucketExecutor }
+  | { compiled: false; reason: string };
+
+/**
+ * Compile a PROVEN bucket method into code, so routine searching for it stops
+ * consuming Claude.
+ *
+ * The method must read as proven from its own runs (`provenMethods`, not the
+ * stored state alone). Its confirmed openings' titles are the detector's
+ * positive examples; titles that hold anything private are refused rather than
+ * shared, and the method itself is shared only through `shareAsGeneral`, which
+ * refuses a private definition. The detector is GENERAL because the feeds pass
+ * runs only GENERAL detectors over the shared feed items; it starts in SHADOW
+ * and goes ACTIVE only on measured precision, like every learned detector.
+ * Idempotent: a bucket already compiled returns its executor.
+ */
+export async function compileBucketMethod(
+  projectId: string,
+  bucket: BucketShape,
+  examples: { positives: readonly string[]; negatives?: readonly string[] },
+): Promise<CompileResult> {
+  const existing = (await bucketExecutors([bucket.id])).get(bucket.id);
+  if (existing) return { compiled: true, executor: existing };
+  const reader = readerForProject(projectId);
+  const method = (await provenMethods(reader)).find(
+    (one) => one.scope === 'PROJECT' && one.projectId === projectId && one.methodKey === bucket.id,
+  );
+  if (!method) return { compiled: false, reason: 'The bucket\'s method has not earned PROVEN from its measured rounds.' };
+  const positives = [...new Set(examples.positives.map((t) => t.trim()).filter(Boolean))];
+  const negatives = [...new Set((examples.negatives ?? []).map((t) => t.trim()).filter(Boolean))];
+  const leaked = privateDataIn(
+    { finds: [...positives, ...negatives].join('\n'), usefulWhen: null, sources: [], requiredInputs: [], query: null, checkProcedure: '', limits: null },
+    { projectIds: [projectId] },
+  );
+  if (leaked.length > 0) {
+    return { compiled: false, reason: `The confirmed openings hold ${leaked.join(', ')}, so they cannot become a shared detector.` };
+  }
+  let shared: Awaited<ReturnType<typeof shareAsGeneral>>;
+  try {
+    shared = await shareAsGeneral(reader, method.id, { projectIds: [projectId] });
+  } catch (error) {
+    return { compiled: false, reason: error instanceof Error ? error.message : 'The method could not be shared.' };
+  }
+  if (!shared.ok) return { compiled: false, reason: shared.reason };
+  const made = await createDetectorFromExamples({
+    scope: 'GENERAL',
+    detectorKey: bucketDetectorKey(bucket.id),
+    methodId: shared.method.id,
+    sources: FEED_SOURCES.map((one) => one.id),
+    positives,
+    negatives,
+    threshold: PROVEN_PRECISION,
+  });
+  if (!made.ok) return { compiled: false, reason: made.reason };
+  return { compiled: true, executor: { detector: made.detector, method: shared.method } };
+}
+
 export interface BucketGate {
+  /**
+   * DEVELOP while the bucket has no code executor that may run: a Claude round
+   * develops and measures its method. CODE once its PROVEN method is compiled:
+   * the feeds pass executes it and no Claude round is opened.
+   */
   route: Route;
   decision: MethodDecision | null;
-  /** Whether a round of this bucket may be opened now. */
+  /** Whether a Claude development round of this bucket may be opened now. Never true on CODE. */
   mayOpen: boolean;
+  /** Whether the bucket's own method reads as PROVEN from its runs, so it should be compiled. */
+  proven: boolean;
+  /** The compiled executor's detector, when the bucket routes to CODE. */
+  executorDetectorId: string | null;
+  /**
+   * Whether the bucket has a compiled executor at all, running or not. One
+   * held for revision or retired is not compiled again: its bucket is
+   * redeveloped by Claude rounds instead.
+   */
+  compiled: boolean;
 }
 
 /**
- * Whether each bucket may be asked now, from its method's recorded runs.
- * A bucket with no method may: its first round is the method's development.
- * A RETIRED method's bucket may not be asked again.
+ * Whether each bucket may be asked now, and by whom, from its method's runs.
+ *
+ * A bucket with a compiled executor that is not retired and not held for
+ * revision routes to CODE and may not open a Claude round; its decision is the
+ * executor's own (a paused executor waits; it is not handed back to Claude).
+ * Every other bucket routes to DEVELOP: one with no method may be asked, since
+ * its first round is the method's development; a RETIRED method's bucket may
+ * not be asked again; otherwise its recorded runs decide.
  */
 export async function bucketGates(projectId: string, bucketIds: readonly string[], now: string): Promise<Map<string, BucketGate>> {
   const reader = readerForProject(projectId);
@@ -184,20 +309,40 @@ export async function bucketGates(projectId: string, bucketIds: readonly string[
     const held = byKey.get(method.methodKey);
     if (!held || method.version > held.version) byKey.set(method.methodKey, method);
   }
+  const proven = new Set((await provenMethods(reader)).map((one) => one.id));
+  const executors = await bucketExecutors(bucketIds);
   const out = new Map<string, BucketGate>();
   for (const id of bucketIds) {
     const method = byKey.get(id) ?? null;
-    const route = routeRequest(method ? { id: method.id, looksFor: method.finds } : null);
+    const isProven = method !== null && proven.has(method.id);
+    const executor = executors.get(id);
+    if (executor && executor.method.trustState !== 'RETIRED') {
+      const decision = decideMethod(await listMethodRuns(FEED_READER, executor.method.id), now);
+      if (decision.action !== 'REVISE') {
+        out.set(id, {
+          route: routeRequest({ id: executor.method.id, looksFor: executor.method.finds }),
+          decision,
+          mayOpen: false,
+          proven: isProven,
+          executorDetectorId: executor.detector.id,
+          compiled: true,
+        });
+        continue;
+      }
+    }
+    // No code executor that may run: the method is (re)developed by a Claude round.
+    const route = routeRequest(null);
+    const compiled = executor !== undefined;
     if (!method) {
-      out.set(id, { route, decision: null, mayOpen: true });
+      out.set(id, { route, decision: null, mayOpen: true, proven: false, executorDetectorId: null, compiled });
       continue;
     }
     if (method.trustState === 'RETIRED') {
-      out.set(id, { route, decision: null, mayOpen: false });
+      out.set(id, { route, decision: null, mayOpen: false, proven: false, executorDetectorId: null, compiled });
       continue;
     }
     const decision = decideMethod(await listMethodRuns(reader, method.id), now);
-    out.set(id, { route, decision, mayOpen: decision.action === 'RUN' });
+    out.set(id, { route, decision, mayOpen: decision.action === 'RUN', proven: isProven, executorDetectorId: null, compiled });
   }
   return out;
 }
