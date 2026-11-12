@@ -164,7 +164,36 @@ export function lensFor(subject: LearnedSubject): SearchBucket {
 
 /** The lenses a reader may see, learned subjects merged in at read time. */
 export async function learnedLenses(reader: SearchReader): Promise<SearchBucket[]> {
-  return (await listLearnedSubjects(reader)).map(lensFor);
+  // A feed source's subject is searched by the feeds pass itself; offering it
+  // as a discovery lens too would ask Claude for what plain code already pulls.
+  return (await listLearnedSubjects(reader)).filter((s) => s.origin !== FEED_SOURCE_ORIGIN).map(lensFor);
+}
+
+/** The learned subject a discovery bucket searches, when the bucket is a learned-subject lens. Pure. */
+export function subjectIdOfBucket(bucketId: string): string | null {
+  if (!bucketId.startsWith(SUBJECT_LENS_PREFIX)) return null;
+  const id = bucketId.slice(SUBJECT_LENS_PREFIX.length).trim();
+  return id || null;
+}
+
+/** The origin of a subject learned from a feed source. */
+export const FEED_SOURCE_ORIGIN = 'feed-source';
+
+/**
+ * The subject of one feed source: what that source publishes. GENERAL, because
+ * feed items are shared rows and the methods searching them are GENERAL, so
+ * every detector built over the same source is a method for the same subject
+ * and can be compared with the others on the items they were all judged on.
+ * It is never offered as a discovery lens (`learnedLenses`).
+ */
+export async function subjectForFeedSource(source: string): Promise<LearnedSubject> {
+  // Keyed by the source id exactly: two sources are never one subject because
+  // their names share words (`subjectKeyFor` folds word order and plurals).
+  return upsertLearnedSubject({
+    scope: 'GENERAL', subjectKey: `dataset:feed:${source}`, label: `feed ${source}`,
+    description: `items published by the ${source} feed`,
+    origin: FEED_SOURCE_ORIGIN, sourceRef: `feed:${source}`,
+  });
 }
 
 /** Lenses for one project: its own subjects plus GENERAL ones. */

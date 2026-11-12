@@ -37,6 +37,14 @@
  * did — the runs done without Claude, the screens its ACTIVE coverage skipped —
  * could reach the search report as automatic or as AI usage avoided.
  *
+ * Every such method names its feed source's subject (`subjectForFeedSource`),
+ * so the detectors built over one source are methods for one subject. After
+ * the judging, `compareDetectorMethods` compares those methods on the items
+ * every one of them was judged on — identical data — and records the
+ * comparison (`compareMethods`) whenever that data or the set of methods has
+ * changed, so which method outranks which is read from a row rather than
+ * asked of a person.
+ *
  * Nothing here calls a model: it reads answers already given.
  */
 import { getDb } from '../../db/database.ts';
@@ -44,10 +52,16 @@ import {
   attachDetectorMethod,
   createLearnedDetector,
   createSearchMethod,
+  getSearchMethod,
+  linkMethodSubject,
+  listDetectorExamples,
   listLearnedDetectors,
+  listMethodComparisons,
   recordDetectorExample,
 } from '../../repos/searchMethods.ts';
-import type { LearnedDetector } from '../../domain/searchIntelligence.ts';
+import type { DetectorExample, LearnedDetector, SearchMethod } from '../../domain/searchIntelligence.ts';
+import { subjectForFeedSource } from '../knowledge/subjects/subjects.ts';
+import { compareMethods, type MethodResult } from '../research/searchMethods/compare.ts';
 import { combineLeads, parseLead, type LeadOutput } from '../cheap/lane.ts';
 import { confidenceOf, defineFromExamples, FIRE_AT, type LearnedDefinition } from './learned.ts';
 import { FEED_READER } from './learnedRun.ts';
@@ -127,9 +141,11 @@ type StoredDefinition = LearnedDefinition & { trainedOn?: string[] };
  */
 export async function methodForDetector(detectorKey: string, definition: Pick<LearnedDefinition, 'sources' | 'terms'>) {
   try {
-    return await createSearchMethod({
+    const subjectId = await feedSubjectOf(definition.sources);
+    const method = await createSearchMethod({
       scope: 'GENERAL',
       methodKey: detectorKey,
+      subjectId,
       finds: `feed items from ${definition.sources.join(', ')} whose titles carry ${definition.terms.join(' ')}`.slice(0, 2_000),
       usefulWhen: 'a feeds pass over items newly pulled from those sources',
       sources: [...definition.sources],
@@ -138,18 +154,42 @@ export async function methodForDetector(detectorKey: string, definition: Pick<Le
       checkProcedure:
         'Each firing on an item the detector was not built from is judged by two agreeing cheap-lane screen answers; precision over judged firings decides ACTIVE or SHADOW.',
     });
+    return await withSubject(method, subjectId);
   } catch {
     return null;
   }
+}
+
+/**
+ * The subject a detector over these sources searches: its one feed source's.
+ * A detector over several sources has no single subject and names none.
+ */
+async function feedSubjectOf(sources: readonly string[]): Promise<string | null> {
+  const distinct = [...new Set(sources)];
+  if (distinct.length !== 1) return null;
+  return (await subjectForFeedSource(distinct[0]!)).id;
+}
+
+/** Name a method's subject when it was written before it carried one. */
+async function withSubject(method: SearchMethod, subjectId: string | null): Promise<SearchMethod> {
+  if (!subjectId || method.subjectId !== null) return method;
+  await linkMethodSubject(method.id, subjectId);
+  return (await getSearchMethod(FEED_READER, method.id)) ?? method;
 }
 
 /** Link every GENERAL detector that serves no method to one. Returns how many were linked. */
 export async function linkDetectorMethods(detectors: readonly LearnedDetector[]): Promise<number> {
   let linked = 0;
   for (const detector of detectors) {
-    if (detector.scope !== 'GENERAL' || detector.methodId) continue;
+    if (detector.scope !== 'GENERAL') continue;
     const def = detector.definition as StoredDefinition | null;
     if (!def || !Array.isArray(def.sources) || !Array.isArray(def.terms)) continue;
+    if (detector.methodId) {
+      // Linked before methods named their subject: name it now, once.
+      const method = await getSearchMethod(FEED_READER, detector.methodId);
+      if (method && method.subjectId === null) await withSubject(method, await feedSubjectOf(def.sources));
+      continue;
+    }
     const method = await methodForDetector(detector.detectorKey, def);
     if (method && (await attachDetectorMethod(detector.id, method.id))) linked += 1;
   }
@@ -202,20 +242,111 @@ export async function judgeFirings(labels: readonly ScreenLabel[], detectors: re
   return recorded;
 }
 
+/** The most items one comparison is recorded over: the newest judged ones. */
+export const MAX_COMPARED_ITEMS = 2_000;
+
+export interface DetectorComparisonInput {
+  subjectId: string;
+  items: string[];
+  results: Record<string, MethodResult>;
+}
+
+/**
+ * What the methods of one subject did on the items every one of them was
+ * judged on. Pure. Each method's firings are the union over its detectors; an
+ * item it did not fire on is not surfaced, and a judged firing is CONFIRMED or
+ * REJECTED by the screen's agreed label. Null when fewer than two methods, or
+ * no item, are shared.
+ */
+export function detectorComparison(
+  subjectId: string,
+  byMethod: ReadonlyMap<string, readonly DetectorExample[]>,
+  max = MAX_COMPARED_ITEMS,
+): DetectorComparisonInput | null {
+  if (byMethod.size < 2) return null;
+  // An item is shared when every method was judged on it.
+  const judgedBy = new Map<string, number>();
+  const newest = new Map<string, string>();
+  for (const examples of byMethod.values()) {
+    for (const item of new Set(examples.map((e) => e.itemRef))) judgedBy.set(item, (judgedBy.get(item) ?? 0) + 1);
+    for (const e of examples) if ((newest.get(e.itemRef) ?? '') < e.createdAt) newest.set(e.itemRef, e.createdAt);
+  }
+  const shared = [...judgedBy].filter(([, n]) => n === byMethod.size).map(([item]) => item);
+  if (shared.length === 0) return null;
+  const items = shared
+    .sort((a, b) => (newest.get(b) ?? '').localeCompare(newest.get(a) ?? '') || a.localeCompare(b))
+    .slice(0, max)
+    .sort();
+  const inSet = new Set(items);
+  const results: Record<string, MethodResult> = {};
+  for (const [methodId, examples] of byMethod) {
+    const surfaced = new Set<string>();
+    const confirmed = new Set<string>();
+    const rejected = new Set<string>();
+    for (const e of examples) {
+      if (!e.fired || !inSet.has(e.itemRef)) continue;
+      surfaced.add(e.itemRef);
+      (e.verdict === 'CONFIRMED' ? confirmed : rejected).add(e.itemRef);
+    }
+    // One item, two labels across detectors: the first label stands per detector, so take CONFIRMED only when no detector saw it REJECTED.
+    for (const x of rejected) confirmed.delete(x);
+    results[methodId] = { surfaced: [...surfaced].sort(), confirmed: [...confirmed].sort(), rejected: [...rejected].sort() };
+  }
+  return { subjectId, items, results };
+}
+
+/**
+ * Compare, for each feed subject, the methods its detectors serve on the
+ * items all of them were judged on, and record the comparison when that data
+ * or the set of methods changed since the last one. Returns how many were
+ * recorded. A refusal records nothing and stops no other subject.
+ */
+export async function compareDetectorMethods(detectors: readonly LearnedDetector[]): Promise<number> {
+  const bySubject = new Map<string, Map<string, DetectorExample[]>>();
+  for (const detector of detectors) {
+    if (detector.scope !== 'GENERAL' || !detector.methodId) continue;
+    const method = await getSearchMethod(FEED_READER, detector.methodId);
+    if (!method?.subjectId || method.trustState === 'RETIRED') continue;
+    const methods = bySubject.get(method.subjectId) ?? new Map<string, DetectorExample[]>();
+    methods.set(method.id, [...(methods.get(method.id) ?? []), ...(await listDetectorExamples(FEED_READER, detector.id))]);
+    bySubject.set(method.subjectId, methods);
+  }
+  let recorded = 0;
+  for (const [subjectId, byMethod] of bySubject) {
+    const input = detectorComparison(subjectId, byMethod);
+    if (!input) continue;
+    const [last] = await listMethodComparisons(FEED_READER, { subjectId, limit: 1 });
+    if (last && sameList(last.itemRefs, input.items) && sameList(last.entries.map((e) => e.methodId), Object.keys(input.results))) continue;
+    const compared = await compareMethods(FEED_READER, { ...input, scope: { scope: 'GENERAL' } });
+    if (compared.ok) recorded += 1;
+  }
+  return recorded;
+}
+
+function sameList(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const x = [...a].sort();
+  const y = [...b].sort();
+  return x.every((v, i) => v === y[i]);
+}
+
 export interface LearnReport {
   labelled: number;
   proposed: number;
   judged: number;
   /** Detectors proposed before they carried a method, linked to one this pass. */
   linked: number;
+  /** Comparisons recorded this pass between methods for one feed subject on identical items. */
+  compared: number;
 }
 
 /** One pass: read the agreed screen labels, propose what they define, judge every GENERAL detector on them. */
 export async function learnFromScreens(now: Date): Promise<LearnReport> {
   const linked = await linkDetectorMethods(await listLearnedDetectors(FEED_READER));
   const labels = await screenLabels(now);
-  if (labels.length === 0) return { labelled: 0, proposed: 0, judged: 0, linked };
+  if (labels.length === 0) return { labelled: 0, proposed: 0, judged: 0, linked, compared: 0 };
   const proposed = await proposeDetectors(labels, await listLearnedDetectors(FEED_READER));
   const judged = await judgeFirings(labels, await listLearnedDetectors(FEED_READER));
-  return { labelled: labels.length, proposed: proposed.length, judged, linked };
+  const compared = await compareDetectorMethods(await listLearnedDetectors(FEED_READER));
+  return { labelled: labels.length, proposed: proposed.length, judged, linked, compared };
 }

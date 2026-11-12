@@ -7,7 +7,7 @@
  * on measured results and does not travel with the copy. The original is left
  * exactly as it was, and reads stay filtered by scope in the repository.
  */
-import { createSearchMethod, getSearchMethod } from '../../../repos/searchMethods.ts';
+import { createSearchMethod, getSearchMethod, listLearnedSubjects } from '../../../repos/searchMethods.ts';
 import type { SearchMethod, SearchReader } from '../../../domain/searchIntelligence.ts';
 import { privateDataIn } from './privacy.ts';
 
@@ -35,7 +35,7 @@ export async function shareAsGeneral(
   const method = await createSearchMethod({
     scope: 'GENERAL',
     methodKey: source.methodKey,
-    subjectId: null,
+    subjectId: await sharedSubjectOf(source),
     finds: source.finds,
     usefulWhen: source.usefulWhen,
     sources: source.sources,
@@ -46,4 +46,17 @@ export async function shareAsGeneral(
     version: source.version,
   });
   return { ok: true, method };
+}
+
+/**
+ * The subject a GENERAL copy may carry: the source's own subject when every
+ * project and user can read it (a GENERAL subject), so the copy and the
+ * original stay comparable as methods for one subject. A subject private to a
+ * project or user is not carried — a GENERAL row naming it would point every
+ * reader at something only its owner may see.
+ */
+async function sharedSubjectOf(source: SearchMethod): Promise<string | null> {
+  if (!source.subjectId) return null;
+  const general = await listLearnedSubjects({ projectIds: [], userId: null }, { includeRetired: true });
+  return general.some((s) => s.id === source.subjectId && s.scope === 'GENERAL') ? source.subjectId : null;
 }

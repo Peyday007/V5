@@ -241,6 +241,19 @@ export async function createSearchMethod(
   return toMethod(row);
 }
 
+/**
+ * Name the subject a method searches for, once. Guarded on its having none, so
+ * a method is never moved from one subject to another and the comparisons
+ * already recorded for it stay true.
+ */
+export async function linkMethodSubject(methodId: string, subjectId: string): Promise<boolean> {
+  const r = await getDb().run(
+    `UPDATE search_methods SET subject_id = ?, updated_at = ? WHERE id = ? AND subject_id IS NULL`,
+    [subjectId, nowIso(), methodId],
+  );
+  return (r.changes ?? 0) > 0;
+}
+
 export async function getSearchMethod(reader: SearchReader, id: string): Promise<SearchMethod | null> {
   const vis = visibleSql(reader);
   const row = await getDb().get<Row>(`SELECT * FROM search_methods WHERE id = ? AND ${vis.sql}`, [id, ...vis.params]);
