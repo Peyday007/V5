@@ -33,7 +33,9 @@ import { openingSourceKey } from '../cash/duplicates.ts';
 import { discoveryAllowed } from '../cash/lifecycle.ts';
 import { DELIVERABLE_LABEL } from '../cash/deliverables/spec.ts';
 import { HostLimiter, classifyFailure, hostOf, memoryCheckpoints, runCheckpointed, systemClock, withRetry, type Clock } from '../collect/runtime/index.ts';
-import { FEED_SOURCES, dedupeItems, type FeedSource } from './sources.ts';
+import { FEED_SOURCES, dedupeItems, sourceFromRegistry, type FeedSource } from './sources.ts';
+import { listCollectSources } from '../../repos/collectSources.ts';
+import type { CollectSource } from '../../domain/collect.ts';
 import { ensureRegistered } from '../collect/seeds/index.ts';
 import { httpRobotsFetcher, robotsGate, type RobotsFetcher } from '../collect/seeds/robots.ts';
 import type { CollectFailureCause } from '../../domain/collect.ts';
@@ -147,9 +149,20 @@ export async function pullDueFeeds(input: {
 } = {}): Promise<{ source: string; inserted: number; error: string | null; outcome: 'COLLECTED' | 'NO_MATCHING_RECORDS' | 'SOURCE_UNREACHABLE'; duplicates: number }[]> {
   const now = input.now ?? new Date();
   const out: { source: string; inserted: number; error: string | null; outcome: 'COLLECTED' | 'NO_MATCHING_RECORDS' | 'SOURCE_UNREACHABLE'; duplicates: number }[] = [];
-  const list = (input.sources ?? FEED_SOURCES).filter(
+  const code = (input.sources ?? FEED_SOURCES).filter(
     (s) => input.projectId === undefined || !s.row || s.row.ownerProjectId === null || s.row.ownerProjectId === input.projectId,
   );
+  // Without an injected list, the registry is what is pulled: the code rows, plus every enabled
+  // `collect_sources` row the scope may see, so adding a database row alone makes it pulled.
+  let list: readonly FeedSource[] = code;
+  if (!input.sources) {
+    try {
+      list = [...code, ...registrySources(await readRegistryRows(input.projectId), new Set(code.map((s) => s.id)))];
+    } catch (error) {
+      // The registry being unreadable never stops the code rows; it is reported, not hidden.
+      out.push({ source: 'collect_sources', inserted: 0, error: `registry unreadable: ${String(error instanceof Error ? error.message : error)}`.slice(0, 300), outcome: 'SOURCE_UNREACHABLE', duplicates: 0 });
+    }
+  }
   let asked = 0;
   const robots = robotsReaderFor(input);
   for (const source of list) {
@@ -167,7 +180,7 @@ export async function pullDueFeeds(input: {
       continue;
     }
     const startedAt = Date.now();
-    const method = source.row ? (METRIC_KIND[source.row.kind] ?? null) : null;
+    const method = source.row ? (METRIC_KIND[source.row.kind] ?? null) : (source.registry?.kind ?? null);
     if (robots) {
       // The publisher's robots.txt is read by the pull itself and recorded on the registry row; a refusal is recorded, never worked around.
       let refusal: { cause: CollectFailureCause; message: string } | null = null;
@@ -242,6 +255,27 @@ export async function pullDueFeeds(input: {
     }
   }
   return out;
+}
+
+/**
+ * The `collect_sources` rows a pull covers. A project's pull sees the shared rows
+ * and its own (the repository's filter); the unscoped loop pulls every row, each
+ * project's private rows included, as it pulls every code row.
+ */
+export async function readRegistryRows(projectId: string | null | undefined): Promise<CollectSource[]> {
+  if (projectId !== undefined) return listCollectSources(projectId);
+  const rows = await listCollectSources(null);
+  const owners = await getDb().all<{ project_id: string }>('SELECT DISTINCT project_id FROM collect_sources WHERE project_id IS NOT NULL ORDER BY project_id');
+  const seen = new Set(rows.map((r) => r.id));
+  for (const { project_id } of owners) {
+    for (const r of await listCollectSources(project_id)) if (!seen.has(r.id)) { seen.add(r.id); rows.push(r); }
+  }
+  return rows;
+}
+
+/** Registry rows as runnable sources: enabled ones, a slug a code row already defines left to that row. Pure. */
+export function registrySources(rows: readonly CollectSource[], codeIds: ReadonlySet<string>): FeedSource[] {
+  return rows.filter((r) => r.enabled && !codeIds.has(r.slug)).map(sourceFromRegistry);
 }
 
 /** Which robots.txt reader a pull uses: production always reads the publisher's real answer. Pure. */

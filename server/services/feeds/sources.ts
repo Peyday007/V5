@@ -12,6 +12,9 @@
  * forums are left out because nothing proves a business or a budget behind them. It is a raw lead, never evidence.
  */
 
+import type { CollectSource } from '../../domain/collect.ts';
+import { collect, type CollectorKind } from '../collect/collectors/index.ts';
+
 export interface FeedItem {
   externalId: string;
   url: string;
@@ -37,6 +40,8 @@ export interface FeedSource {
   format?: 'json' | 'text';
   /** The registry row this source was built from, when it was. */
   row?: SourceRow;
+  /** The `collect_sources` row this source was built from, when it came from the database. */
+  registry?: { slug: string; kind: CollectSource['kind']; projectId: string | null };
 }
 
 /** The kinds of source a registry row may name. */
@@ -550,3 +555,70 @@ export function rowsVisibleTo(projectId: string | null, rows: readonly SourceRow
 }
 
 export const FEED_SOURCES: readonly FeedSource[] = SOURCE_ROWS.map(sourceFromRow);
+
+/** How each `collect_sources` kind is read by the generic collectors. */
+const REGISTRY_COLLECTOR: Record<CollectSource['kind'], CollectorKind> = {
+  RSS_ATOM: 'RSS_ATOM', JSON_API: 'JSON_API', CSV_DATASET: 'CSV', SITEMAP: 'SITEMAP', HTML_LIST: 'HTML_LIST', OVERPASS: 'OVERPASS', PAGE_WATCH: 'PAGE_WATCH',
+};
+
+/**
+ * What a registry row's `parser_id` says about reading its body. The part after
+ * the first `:` is either the name of a parser this module already has
+ * (`json:remoteok`), or a field mapping for the generic collector written as a
+ * query string (`csv:title=Name&url=Link`). Anything else reads by the kind's
+ * default mapping. Pure.
+ */
+export function registryReading(parserId: string): { name: string | null; mapping: Record<string, string> } {
+  const suffix = parserId.includes(':') ? parserId.slice(parserId.indexOf(':') + 1) : parserId;
+  if (!suffix.includes('=')) return { name: suffix && NAMED_PARSERS[suffix] ? suffix : null, mapping: {} };
+  return { name: null, mapping: Object.fromEntries(new URLSearchParams(suffix)) };
+}
+
+/** A generic collector's records as feed items; a refusal the body shows is thrown, so the pull records it. */
+function collectedItems(kind: CollectorKind, body: unknown, url: string, mapping: Record<string, string>): FeedItem[] {
+  if (typeof body !== 'string') return [];
+  const outcome = collect(kind, { status: 200, body }, { url, mapping });
+  if (outcome.kind === 'REFUSED') throw new Error(`${outcome.refusal.reason}: ${outcome.refusal.detail}`.slice(0, 300));
+  if (outcome.kind !== 'RECORDS') return [];
+  const out: FeedItem[] = [];
+  for (const r of outcome.records) {
+    if (!r.title || !isHttpUrl(r.url)) continue;
+    out.push({ externalId: r.externalId.slice(0, 500), url: r.url, title: r.title, body: plain(r.body), organization: r.organization, publishedAt: r.publishedAt });
+  }
+  return out;
+}
+
+/**
+ * The runnable source for a `collect_sources` row: what makes a database row
+ * alone something `pullDueFeeds` pulls. A row naming one of this module's
+ * parsers reads exactly as the code row with that parser does; every other row
+ * reads through the generic collector for its kind. Never throws.
+ */
+export function sourceFromRegistry(r: CollectSource): FeedSource {
+  const url = r.urlTemplate;
+  const { name, mapping } = registryReading(r.parserId);
+  const named = name ? NAMED_PARSERS[name] : undefined;
+  let parse: (body: unknown) => FeedItem[];
+  let format: 'json' | 'text' = 'text';
+  if (named && (r.kind === 'JSON_API' || r.kind === 'OVERPASS')) {
+    parse = named;
+    format = 'json';
+  } else if (r.kind === 'RSS_ATOM' && Object.keys(mapping).length === 0) {
+    parse = parseRssAtom;
+  } else if (r.kind === 'PAGE_WATCH') {
+    parse = pageWatchParser(r.slug, r.label, url);
+  } else {
+    const kind = REGISTRY_COLLECTOR[r.kind];
+    parse = (body) => collectedItems(kind, body, url, mapping);
+  }
+  return {
+    id: r.slug,
+    label: r.label,
+    url,
+    intervalMs: r.intervalMs,
+    ...(r.hostRatePerMin ? { spacingMs: Math.ceil(60_000 / r.hostRatePerMin) } : {}),
+    parse,
+    format,
+    registry: { slug: r.slug, kind: r.kind, projectId: r.projectId },
+  };
+}
