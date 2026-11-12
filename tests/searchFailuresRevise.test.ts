@@ -71,6 +71,8 @@ describe('a method flagged for revision is revised, not closed', () => {
 
     const gate = (await bucketGates(projectId, [bucket.id], new Date().toISOString())).get(bucket.id)!;
     expect(gate.mayOpen).toBe(true);
+    // A revised method has no code executor, so a Claude development round asks it.
+    expect(gate.route).toBe('DEVELOP');
     expect(gate.revision).toBe(v2!.limits);
 
     // The next round's runs belong to the revised version, and start a fresh streak.
@@ -102,6 +104,9 @@ describe('a method flagged for revision is revised, not closed', () => {
     expect((await versions(bucket.id)).map((m) => m.version)).toEqual([1]);
     const gate = (await bucketGates(projectId, [bucket.id], new Date().toISOString())).get(bucket.id)!;
     expect(gate.mayOpen).toBe(true);
+    // openDiscovery opens only DEVELOP buckets; a revision routed to CODE would still be shut.
+    expect(gate.route).toBe('DEVELOP');
+    expect(gate.revision).toContain('Revision 2 (HIGH_FALSE_POSITIVES)');
     expect((await versions(bucket.id)).map((m) => m.version)).toEqual([1, 2]);
   });
 
