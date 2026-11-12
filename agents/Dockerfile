@@ -17,7 +17,9 @@ ARG SELLBIRD_SHA=25ec83978b21d16ae20779d09bfea113f37f0ef8
 
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install -r requirements.txt \
+# Playwright's bundled driver needs libatomic, which the slim base lacks.
+RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 \
+ && pip install -r requirements.txt \
  && pip install --no-deps "https://github.com/ethanplusai/sellbird/archive/${SELLBIRD_SHA}.tar.gz" \
  && python -m playwright install --with-deps chromium \
  && rm -rf /var/lib/apt/lists/* /root/.cache
