@@ -50,6 +50,10 @@ import { approveObjective, submitObjective } from '../server/services/factory/co
 import { run } from '../server/services/factory/git.ts';
 import { ensureCampaign } from '../server/repos/factory.ts';
 import { advanceRun, grantRelease, openRun } from '../server/repos/factoryRelease.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createOrchestration } from '../server/repos/research.ts';
+import { createCandidate as createIdea } from '../server/repos/russellCandidates.ts';
+import { recordCashEvent } from '../server/repos/cashMode.ts';
 
 const empty = (gapKey = 'GAP:X'): GapLoopState => gapStateFrom(gapKey, []);
 
@@ -486,6 +490,88 @@ describe('readGapMeasures: gaps identified and closed, counted from improvement 
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it('reads a gap closed by a hand-off to a non-software owner from its own rows, and costs it through the work it was given (F1-HANDOFF-CLOSURE-ALWAYS-UNMEASURED)', async () => {
+    const fixture = await freshProject();
+    const projectId = fixture.project.id;
+    const layerId = (await fixture.layerByName('Monetization Logic')).id;
+    const DELIVERED_AT = '2026-10-02T12:00:00.000Z';
+    // As handToOwner writes it: deliveredRef OWNER:<route>:<owner>, no campaign, and a DELIVERED event naming the work given.
+    const handoff = async (key: string, work: Record<string, unknown>[] | null) => {
+      const id = await candidate(key, { created: '2026-10-02T00:00:00.000Z', decision: 'KEPT', decided: '2026-10-04T00:00:00.000Z', delivered: DELIVERED_AT });
+      await getDb().run('UPDATE improvement_candidates SET delivered_ref = ? WHERE id = ?', ['OWNER:CONNECTOR:research pipeline', id]);
+      if (work) {
+        await recordImprovementEvent({
+          candidateId: id,
+          kind: 'DELIVERED',
+          detail: { handedTo: 'research pipeline', route: 'CONNECTOR', handed: work.length, family: 'UNMET_NEED', work, refused: [] },
+          at: DELIVERED_AT,
+        });
+      }
+      return id;
+    };
+    const routed = async (gapKey: string, route: string, needId: string, at: string) => {
+      const event = await recordCashEvent({ projectId, kind: 'CASH_NEED_ROUTED', actorRef: 'improvement loop', summary: 's', detail: { needId, gapKey, route, owner: route === 'PERSON' ? 'a person' : 'research pipeline', work: { kind: route } } });
+      await getDb().run('UPDATE cash_events SET created_at = ? WHERE id = ?', [at, event.id]);
+    };
+
+    // Handed to research, a worker given the need, and nobody else on record: closed without owner input.
+    const idea = await createIdea({ projectId, title: 'find the supplier', statement: 'find the supplier' });
+    await handoff('HOFF_NONE', [{ needId: 'need_a', route: 'CONNECTOR', owner: 'research pipeline', kind: 'ALLOCATED', candidateId: idea.id, reused: false }]);
+    await routed('HOFF_NONE', 'CONNECTOR', 'need_a', DELIVERED_AT);
+    // A PERSON route for some other gap, or for this gap outside its lifetime, says nothing about this one.
+    await routed('SOME_OTHER_GAP', 'PERSON', 'need_x', DELIVERED_AT);
+    await routed('HOFF_NONE', 'PERSON', 'need_old', '2026-09-01T00:00:00.000Z');
+    // One of its pieces was left for a person's review.
+    await handoff('HOFF_PERSON_WORK', [
+      { needId: 'need_b', route: 'CONNECTOR', owner: 'research pipeline', kind: 'ALLOCATED', candidateId: 'idea_unlaunched', reused: false },
+      { needId: 'need_p', route: 'PERSON', owner: 'a person', kind: 'PERSON' },
+    ]);
+    // Its own DELIVERED record shows only the watch, but the cash events say a need of this gap was routed to a person.
+    await handoff('HOFF_PERSON_ROUTED', [{ needId: 'need_w', route: 'WATCH', owner: 'reconsideration', kind: 'WATCH' }]);
+    await routed('HOFF_PERSON_ROUTED', 'PERSON', 'need_q', '2026-10-02T06:00:00.000Z');
+    // It was held for a person before it was handed off.
+    const held = await handoff('HOFF_HELD', [{ needId: 'need_h', route: 'CONNECTOR', owner: 'research pipeline', kind: 'ALLOCATED', candidateId: 'idea_h', reused: true }]);
+    await recordImprovementEvent({ candidateId: held, kind: 'DECIDED', detail: { decision: 'HELD', needsPerson: true, personAction: 'a person supplies the credential' }, at: '2026-10-02T01:00:00.000Z' });
+    // Marked handed off, but no DELIVERED record says what was given: the rows cannot say.
+    await handoff('HOFF_NORECORD', null);
+
+    // The research the first hand-off was given: its idea's mission, that mission's packet, and the bin that worked it.
+    const run = await createRun({ projectId, layerId, runType: 'FOUNDATION', provider: 'WORKER' });
+    const orchestration = await createOrchestration({ projectId, layerId, runId: run.id, title: 'supplier', assignment: 'find it', provider: 'WORKER' });
+    await getDb().run(
+      `INSERT INTO russell_missions (id, project_id, candidate_id, objective, why_now, state, orchestration_id, idempotency_key, created_at, updated_at)
+       VALUES (?, ?, ?, 'o', 'w', 'DONE', ?, ?, ?, ?)`,
+      ['rmi_hoff', projectId, idea.id, orchestration.id, 'hoff-mission', DELIVERED_AT, DELIVERED_AT],
+    );
+    await getDb().run(
+      `INSERT INTO bins (id, project_id, kind, title, objective, completion_contract, state, created_by_type, created_at, updated_at, orchestration_id)
+       VALUES ('bin_hoff', ?, 'FACTORY_UNITS', 'research', 'o', 'FACTORY_UNITS_V1', 'COMPLETE', 'SYSTEM', ?, ?, ?)`,
+      [projectId, DELIVERED_AT, DELIVERED_AT, orchestration.id],
+    );
+    await recordBinEvent({ eventType: 'BIN_TERMINAL', binId: 'bin_hoff', leaseId: 'lh', leaseGeneration: 1, durationMs: 45_000, outcome: 'COMPLETE' });
+
+    const m = await readGapMeasures(FROM, TO);
+    const finding = Object.fromEntries(m.ownerInput.perGap.map((g) => [g.weaknessKey, g.finding]));
+    expect(finding).toEqual({
+      HOFF_NONE: 'NONE',
+      HOFF_PERSON_WORK: 'OWNER_INPUT',
+      HOFF_PERSON_ROUTED: 'OWNER_INPUT',
+      HOFF_HELD: 'OWNER_INPUT',
+      HOFF_NORECORD: 'UNMEASURED',
+    });
+    expect(m.closed).toBe(5);
+    expect(m.closedWithoutOwnerInput).toBe(1);
+    expect(m.ownerInput).toMatchObject({ gaps: 5, withoutOwnerInput: 1, withOwnerInput: 3, unmeasured: 1 });
+    const reason = Object.fromEntries(m.ownerInput.perGap.map((g) => [g.weaknessKey, g.reason]));
+    expect(reason['HOFF_NONE']).toMatch(/handed by Brain to research pipeline \(CONNECTOR\): 1 piece\(s\) given to workers, no person on record/);
+    expect(reason['HOFF_PERSON_WORK']).toMatch(/need_p was left for a person's review/);
+    expect(reason['HOFF_PERSON_ROUTED']).toMatch(/need_q was routed to a person/);
+    expect(reason['HOFF_HELD']).toMatch(/held for a person: a person supplies the credential/);
+    expect(reason['HOFF_NORECORD']).toMatch(/no readable DELIVERED record/);
+    // Only the hand-off whose research ran on a bin is attributed; its lease is the cost.
+    expect(m.cost).toEqual({ status: 'MEASURED', gaps: 5, attributed: 1, bins: 1, leases: 1, leasesUntimed: 0, workerMs: 45_000 });
   });
 
   it('averages the middle two for an even count, and says unmeasured when nothing closed', async () => {

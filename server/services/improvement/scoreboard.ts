@@ -276,8 +276,21 @@ export interface GapMeasures {
  *    no such run was merged outside Brain's release — by hand — and a run under
  *    a grant a person gave for that change is that person's decision.
  *
- * A gap with no campaign, or with a Factory stop recorded before the loop
- * carried `needsPerson`, cannot be answered from rows and is UNMEASURED.
+ * A gap the loop handed to a non-software owner (`deliveredRef` OWNER:<route>:<owner>,
+ * written by `handToOwner`) has no campaign and was never merged; it is read from its
+ * own rows instead (F1-HANDOFF-CLOSURE-ALWAYS-UNMEASURED):
+ *
+ *  - the DELIVERED event's detail (`handedTo`, `work`, `refused`): a piece whose
+ *    route or work is PERSON was left for a person's review;
+ *  - the `CASH_NEED_ROUTED` cash events that name the gap (`gapKey`): a need
+ *    routed to PERSON is a person's;
+ *  - any OWNER_* event, and any event whose detail says `needsPerson: true` (the
+ *    loop's DECIDED HELD for a person).
+ *
+ * A hand-off with no person anywhere on record is NONE. A hand-off whose
+ * DELIVERED detail is missing or unreadable cannot be answered and is UNMEASURED,
+ * as is a gap with no campaign and no hand-off, or one with a Factory stop
+ * recorded before the loop carried `needsPerson`.
  */
 export interface OwnerInputMeasure {
   status: 'MEASURED';
@@ -292,6 +305,78 @@ export interface OwnerInputMeasure {
 /** The `executed_by_ref` the improvement loop writes on the release grant it gives under the standing order. */
 const LOOP_GRANT_REF = 'improvement-loop';
 
+/** The `deliveredRef` prefix `handToOwner` (loop.ts `OWNER_HANDOFF_PREFIX`) records a hand-off to a non-software owner under. */
+const HANDOFF_REF_PREFIX = 'OWNER:';
+
+function isHandoff(gap: Pick<DecidedGap, 'campaignId' | 'deliveredRef'>): boolean {
+  return !gap.campaignId && typeof gap.deliveredRef === 'string' && gap.deliveredRef.startsWith(HANDOFF_REF_PREFIX);
+}
+
+function parseDetail(text: string | null | undefined): Record<string, unknown> | null {
+  if (!text) return null;
+  try {
+    const value = JSON.parse(text) as unknown;
+    return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** What the loop recorded when it handed a gap to its owner: the latest DELIVERED event that names who it went to. */
+interface HandoffRecord {
+  handedTo: string;
+  route: string;
+  work: Record<string, unknown>[];
+  refused: string[];
+}
+
+/** The hand-off record of each gap whose delivery was a hand-off, read from its DELIVERED events; absent when none is readable. */
+async function readHandoffs(gaps: readonly DecidedGap[]): Promise<Map<string, HandoffRecord>> {
+  const out = new Map<string, HandoffRecord>();
+  const ids = gaps.filter(isHandoff).map((g) => g.id);
+  if (ids.length === 0) return out;
+  const rows = await getDb().all<{ candidate_id: string; detail: string; at: string }>(
+    `SELECT candidate_id, detail, at FROM improvement_events
+      WHERE kind = 'DELIVERED' AND candidate_id IN (${ids.map(() => '?').join(', ')}) ORDER BY at ASC`,
+    ids,
+  );
+  for (const row of rows) {
+    const d = parseDetail(row.detail);
+    if (!d || typeof d['handedTo'] !== 'string') continue;
+    const list = (v: unknown) => (Array.isArray(v) ? v : []);
+    out.set(row.candidate_id, {
+      handedTo: d['handedTo'] as string,
+      route: typeof d['route'] === 'string' ? (d['route'] as string) : '',
+      work: list(d['work']).filter((w): w is Record<string, unknown> => Boolean(w) && typeof w === 'object' && !Array.isArray(w)),
+      refused: list(d['refused']).filter((r): r is string => typeof r === 'string'),
+    });
+  }
+  return out;
+}
+
+/** The needs each hand-off gap routed to PERSON, from the `CASH_NEED_ROUTED` events naming it, inside the gap's own lifetime. */
+async function readPersonRoutedNeeds(gaps: readonly DecidedGap[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  const handoffs = gaps.filter(isHandoff);
+  if (handoffs.length === 0) return out;
+  const since = handoffs.map((g) => g.createdAt).sort()[0]!;
+  const rows = await getDb().all<{ detail: string | null; created_at: string }>(
+    "SELECT detail, created_at FROM cash_events WHERE kind = 'CASH_NEED_ROUTED' AND created_at >= ? ORDER BY created_at ASC LIMIT 20000",
+    [since],
+  );
+  for (const row of rows) {
+    const d = parseDetail(row.detail);
+    if (!d || d['route'] !== 'PERSON' || typeof d['gapKey'] !== 'string') continue;
+    for (const gap of handoffs) {
+      if (gap.weaknessKey !== d['gapKey'] || row.created_at < gap.createdAt || row.created_at > gap.decidedAt) continue;
+      const list = out.get(gap.id) ?? [];
+      list.push(typeof d['needId'] === 'string' ? (d['needId'] as string) : 'a need');
+      out.set(gap.id, list);
+    }
+  }
+  return out;
+}
+
 async function readOwnerInput(kept: DecidedGap[]): Promise<OwnerInputMeasure> {
   const db = getDb();
   const perGap: OwnerInputMeasure['perGap'] = [];
@@ -299,9 +384,10 @@ async function readOwnerInput(kept: DecidedGap[]): Promise<OwnerInputMeasure> {
   const ids = kept.map((g) => g.id);
   const events = await db.all<{ candidate_id: string; kind: string; detail: string }>(
     `SELECT candidate_id, kind, detail FROM improvement_events
-      WHERE candidate_id IN (${ids.map(() => '?').join(', ')}) AND (kind LIKE 'OWNER_%' OR kind = 'FACTORY_BLOCKED')`,
+      WHERE candidate_id IN (${ids.map(() => '?').join(', ')}) AND (kind LIKE 'OWNER_%' OR kind IN ('FACTORY_BLOCKED', 'DECIDED'))`,
     ids,
   );
+  const [handoffs, personNeeds] = await Promise.all([readHandoffs(kept), readPersonRoutedNeeds(kept)]);
   const campaigns = [...new Set(kept.map((g) => g.campaignId).filter((c): c is string => Boolean(c)))];
   const runs = campaigns.length
     ? await db.all<{ campaign_id: string; merge_sha: string | null; executed_by_ref: string | null }>(
@@ -315,20 +401,36 @@ async function readOwnerInput(kept: DecidedGap[]): Promise<OwnerInputMeasure> {
     const owner: string[] = [];
     const unknown: string[] = [];
     for (const event of events.filter((e) => e.candidate_id === gap.id)) {
+      if (event.kind === 'DECIDED') {
+        // A decision held for a person (the loop writes `needsPerson: true` with what it asked) is a person's input.
+        const detail = parseDetail(event.detail);
+        if (detail?.['needsPerson'] === true) owner.push(`held for a person: ${String(detail['personAction'] ?? '')}`.trim());
+        continue;
+      }
       if (event.kind !== 'FACTORY_BLOCKED') {
         owner.push(`recorded ${event.kind}`);
         continue;
       }
-      let detail: Record<string, unknown> = {};
-      try {
-        detail = JSON.parse(event.detail) as Record<string, unknown>;
-      } catch {
-        /* unreadable: treated as unrecorded below */
-      }
+      const detail = parseDetail(event.detail) ?? {};
       if (detail['needsPerson'] === true) owner.push(`Factory stopped for a person: ${String(detail['personAction'] ?? detail['detail'] ?? '')}`.trim());
       else if (typeof detail['needsPerson'] !== 'boolean') unknown.push('a Factory stop recorded without saying whether it waited on a person');
     }
-    if (!gap.campaignId) {
+    let handedNoPerson: string | null = null;
+    if (isHandoff(gap)) {
+      // Closed by handing it to a non-software owner: no merge to read, so the hand-off's own rows say who acted.
+      const handoff = handoffs.get(gap.id);
+      if (!handoff) {
+        unknown.push(`handed off (${gap.deliveredRef}) but no readable DELIVERED record says what the owner was given`);
+      } else {
+        const toPerson = handoff.work.filter((w) => w['route'] === 'PERSON' || w['kind'] === 'PERSON');
+        for (const w of toPerson) owner.push(`${String(w['needId'] ?? w['opportunityId'] ?? 'a piece')} was left for a person's review`);
+        for (const needId of personNeeds.get(gap.id) ?? []) {
+          if (!toPerson.some((w) => w['needId'] === needId)) owner.push(`${needId} was routed to a person (CASH_NEED_ROUTED)`);
+        }
+        const given = handoff.work.filter((w) => w['kind'] === 'ALLOCATED' || w['kind'] === 'DIVE' || w['kind'] === 'WATCH').length;
+        handedNoPerson = `handed by Brain to ${handoff.handedTo} (${handoff.route}): ${given} piece(s) given to workers, no person on record`;
+      }
+    } else if (!gap.campaignId) {
       unknown.push('no Factory campaign links the delivery, so how it was merged is not on record');
     } else {
       // The loop records the change request id as the ref when the outcome named no merge; then any LIVE run of the campaign is its delivery.
@@ -338,7 +440,11 @@ async function readOwnerInput(kept: DecidedGap[]): Promise<OwnerInputMeasure> {
       else if (!live.some((r) => r.executed_by_ref === LOOP_GRANT_REF)) owner.push('released under a grant a person gave for this change');
     }
     const finding = owner.length ? 'OWNER_INPUT' : unknown.length ? 'UNMEASURED' : 'NONE';
-    const reason = owner.length ? owner.join('; ') : unknown.length ? unknown.join('; ') : "released by Brain's own automatic release under the standing improvement grant, with no stop for a person";
+    const reason = owner.length
+      ? owner.join('; ')
+      : unknown.length
+        ? unknown.join('; ')
+        : (handedNoPerson ?? "released by Brain's own automatic release under the standing improvement grant, with no stop for a person");
     perGap.push({ weaknessKey: gap.weaknessKey, finding, reason });
   }
   return {
@@ -383,8 +489,12 @@ export interface ProductiveWorkResumed {
  * effect and reverted alike — because a failed attempt was paid for too. Worker
  * time is the sum of `duration_ms` the lease recorded when it ended; a lease
  * that ended without a duration (released, expired) is counted in
- * `leasesUntimed` rather than timed from a guess. A gap worked by research
- * rather than a campaign has no bin link and is counted as unattributed. Brain
+ * `leasesUntimed` rather than timed from a guess. A gap handed to a non-software
+ * owner is costed through the work it was given: each research idea its
+ * DELIVERED record names (`work[].candidateId`) → that idea's missions →
+ * their orchestrations → the bins that worked them (`bins.orchestration_id`).
+ * A gap with neither link (a dive or the standing watch, which no bin row names)
+ * is counted as unattributed rather than guessed. Brain
  * workers run on subscription capacity; paid model spend is not attributed to a
  * bin by any row, so it is not reported here.
  */
@@ -533,42 +643,72 @@ async function readProductiveWorkResumed(kept: readonly DecidedGap[]): Promise<P
 
 /** What the measured attempts in the window cost, from the bin rows of the Factory campaigns they were handed to. */
 async function readGapCost(decided: readonly DecidedGap[]): Promise<GapCost> {
+  const db = getDb();
   const campaigns = [...new Set(decided.map((g) => g.campaignId).filter((id): id is string => typeof id === 'string' && id.length > 0))];
-  let bins = 0;
   let leases = 0;
   let leasesUntimed = 0;
   let workerMs = 0;
-  const linked = new Set<string>();
+  const binIds = new Set<string>();
+  const attributedGaps = new Set<string>();
   if (campaigns.length > 0) {
-    const marks = campaigns.map(() => '?').join(', ');
-    const binRows = await getDb().all<{ id: string; factory_campaign_id: string }>(
-      `SELECT id, factory_campaign_id FROM bins WHERE factory_campaign_id IN (${marks})`,
+    const binRows = await db.all<{ id: string; factory_campaign_id: string }>(
+      `SELECT id, factory_campaign_id FROM bins WHERE factory_campaign_id IN (${campaigns.map(() => '?').join(', ')})`,
       campaigns,
     );
-    bins = binRows.length;
-    for (const row of binRows) linked.add(row.factory_campaign_id);
-    if (binRows.length > 0) {
-      const ended = await getDb().all<{ bin_id: string; lease_generation: number | null; duration_ms: number | null }>(
-        `SELECT bin_id, lease_generation, duration_ms FROM bin_events
-          WHERE event_type IN ('BIN_TERMINAL', 'BIN_RELEASED', 'BIN_LEASE_EXPIRED') AND lease_id IS NOT NULL
-            AND bin_id IN (${binRows.map(() => '?').join(', ')})`,
-        binRows.map((r) => r.id),
-      );
-      const seen = new Set<string>();
-      for (const event of ended) {
-        const lease = `${event.bin_id}#${event.lease_generation ?? ''}`;
-        if (seen.has(lease)) continue;
-        seen.add(lease);
-        leases += 1;
-        if (typeof event.duration_ms === 'number' && event.duration_ms >= 0) workerMs += Number(event.duration_ms);
-        else leasesUntimed += 1;
-      }
+    const linked = new Set(binRows.map((r) => r.factory_campaign_id));
+    for (const row of binRows) binIds.add(row.id);
+    for (const gap of decided) if (gap.campaignId && linked.has(gap.campaignId)) attributedGaps.add(gap.id);
+  }
+  // A hand-off's cost is the research its owner was given: idea → missions → orchestrations → bins.
+  const handoffs = await readHandoffs(decided);
+  const ideasByGap = new Map<string, string[]>();
+  for (const [gapId, handoff] of handoffs) {
+    const ideas = handoff.work.filter((w) => w['kind'] === 'ALLOCATED' && typeof w['candidateId'] === 'string').map((w) => w['candidateId'] as string);
+    if (ideas.length > 0) ideasByGap.set(gapId, [...new Set(ideas)]);
+  }
+  const ideas = [...new Set([...ideasByGap.values()].flat())];
+  if (ideas.length > 0) {
+    const missions = await db.all<{ candidate_id: string; orchestration_id: string }>(
+      `SELECT candidate_id, orchestration_id FROM russell_missions
+        WHERE orchestration_id IS NOT NULL AND candidate_id IN (${ideas.map(() => '?').join(', ')})`,
+      ideas,
+    );
+    const orchestrations = [...new Set(missions.map((m) => m.orchestration_id))];
+    const binRows = orchestrations.length
+      ? await db.all<{ id: string; orchestration_id: string }>(
+          `SELECT id, orchestration_id FROM bins WHERE orchestration_id IN (${orchestrations.map(() => '?').join(', ')})`,
+          orchestrations,
+        )
+      : [];
+    const workedOrchestrations = new Set(binRows.map((r) => r.orchestration_id));
+    for (const row of binRows) binIds.add(row.id);
+    for (const [gapId, gapIdeas] of ideasByGap) {
+      if (missions.some((m) => gapIdeas.includes(m.candidate_id) && workedOrchestrations.has(m.orchestration_id))) attributedGaps.add(gapId);
+    }
+  }
+  const bins = binIds.size;
+  const binList = [...binIds];
+  if (binList.length > 0) {
+    const ended = await db.all<{ bin_id: string; lease_generation: number | null; duration_ms: number | null }>(
+      `SELECT bin_id, lease_generation, duration_ms FROM bin_events
+        WHERE event_type IN ('BIN_TERMINAL', 'BIN_RELEASED', 'BIN_LEASE_EXPIRED') AND lease_id IS NOT NULL
+          AND bin_id IN (${binList.map(() => '?').join(', ')})`,
+      binList,
+    );
+    const seen = new Set<string>();
+    for (const event of ended) {
+      const lease = `${event.bin_id}#${event.lease_generation ?? ''}`;
+      if (seen.has(lease)) continue;
+      seen.add(lease);
+      leases += 1;
+      if (typeof event.duration_ms === 'number' && event.duration_ms >= 0) workerMs += Number(event.duration_ms);
+      else leasesUntimed += 1;
     }
   }
   return {
     status: 'MEASURED',
     gaps: decided.length,
-    attributed: decided.filter((g) => g.campaignId && linked.has(g.campaignId)).length,
+    attributed: attributedGaps.size,
     bins,
     leases,
     leasesUntimed,
