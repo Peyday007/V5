@@ -2078,6 +2078,63 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
       }
 
       /*
+       * A review this session already had a go at is somebody else's now.
+       *
+       * The review stage creates one bin per round, named
+       * `factory:review:<campaign>:<round>`, and the round only advances when a
+       * verdict is accepted. So a second bin with the same name exists only
+       * because an earlier one ended — failed, expired, handed back or its report
+       * refused — with nothing recorded. Offered again to the session that held
+       * that earlier bin, the same session meets the same obstacle and the stage
+       * spends its bins on one reviewer: production handed one session four
+       * "Review round 3" bins against one SHA, and no independent review could
+       * ever be gathered from it. The replacement is for a different session.
+       *
+       * Restrictive only, and only for a factory review the arriving session
+       * demonstrably held before: nothing here offers anybody a bin they were not
+       * already eligible for. Skipped as cheaply as the pin above — no attempt,
+       * no lease, no generation, no refusal row and no fire deferral, because the
+       * bin is not the problem and must still be fired at the next session — and
+       * said, so the wait is diagnosable.
+       */
+      if (row.kind === 'FACTORY_REVIEW' && row.created_by_id && input.sessionRef) {
+        const spellings = sessionSpellings(input.sessionRef);
+        const earlier =
+          spellings.length === 0
+            ? undefined
+            : await db.get<{ id: string; state: string }>(
+                `SELECT id, state FROM bins
+                  WHERE kind = 'FACTORY_REVIEW'
+                    AND created_by_id = ?
+                    AND id <> ?
+                    AND state IN ('COMPLETE', 'FAILED', 'CANCELLED')
+                    AND lease_session_ref IN (${spellings.map(() => '?').join(', ')})
+                  ORDER BY created_at DESC
+                  LIMIT 1`,
+                [row.created_by_id, row.id, ...spellings],
+              );
+        if (earlier) {
+          await recordBinEvent({
+            eventType: 'BIN_ASSIGNMENT_REFUSED',
+            binId: row.id,
+            projectId: row.project_id,
+            orchestrationId: row.orchestration_id,
+            leaseGeneration: row.lease_generation,
+            workerId: input.workerId,
+            sessionRef: input.sessionRef,
+            workloadClass: row.workload_class,
+            outcome: 'REVIEW_ALREADY_ATTEMPTED_BY_SESSION',
+            reason:
+              `This session already held ${earlier.id}, an earlier bin for the same review ` +
+              `(${row.created_by_id}), which ended ${earlier.state} without an accepted verdict. ` +
+              'The replacement is offered to a different session.',
+            evidenceClass: 'MEASURED',
+          });
+          continue;
+        }
+      }
+
+      /*
        * Eligibility first, accounting second. This ordering is the whole fix.
        *
        * `attempt_count = attempt_count + 1` lives in the swap below, so asking
