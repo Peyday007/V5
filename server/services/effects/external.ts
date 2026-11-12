@@ -56,6 +56,7 @@ import {
   type OperationNamespace,
 } from './engine.ts';
 import { getDb } from '../../db/database.ts';
+import { openCircuit, withheldReason } from './posture.ts';
 import type { ActorType, EffectAttempt, IdempotencyOperation } from '../../domain/types.ts';
 
 export interface ExternalRunInput {
@@ -151,7 +152,13 @@ export type ExternalOutcome =
   | { status: 'CONFIRMED'; operation: IdempotencyOperation; receiptRef: string }
   | { status: 'REPLAYED'; operation: IdempotencyOperation }
   | { status: 'RECONCILED'; operation: IdempotencyOperation; receiptRef: string }
-  | { status: 'FAILED'; operation: IdempotencyOperation }
+  /**
+   * Nothing happened. `withheld` is set when Brain itself did not send because
+   * the namespace's circuit is open (`posture.ts openCircuit`): the provider
+   * was never asked, the operation stays open, and a later attempt under the
+   * same key runs once the circuit closes.
+   */
+  | { status: 'FAILED'; operation: IdempotencyOperation; withheld?: string }
   /**
    * The outcome is unknown and will stay unknown until somebody establishes it.
    * Nothing automatic will resend. This is a successful *run* — it is the
@@ -255,6 +262,24 @@ export async function runExternalEffect(input: ExternalRunInput): Promise<Extern
   }
 
   const operation = reserved.operation;
+
+  // The circuit breaker (CONT-35, S-0484). A namespace whose recent definite
+  // outcomes say it is down is not sent to again: this is the one place a new
+  // attempt leaves Brain, so it is the one place the open circuit is enforced.
+  // Replays, reconciliations and uncertain resumes above never send, and are
+  // not held back. A withheld attempt opens no attempt row, so the provider was
+  // never asked and the circuit is not held open by its own refusals; the
+  // operation stays open (non-terminal) for a later attempt under this key.
+  const circuit = await openCircuit(input.projectId, input.namespace.name);
+  if (circuit) {
+    await failOperation(operation.id, { category: 'DEPENDENCY_UNAVAILABLE', terminal: false, detail: null });
+    return {
+      status: 'FAILED',
+      operation: (await getOperation(operation.id)) ?? operation,
+      withheld: withheldReason(circuit),
+    };
+  }
+
   const attemptNumber = await beginAttemptOn(operation.id);
   // If this process dies between here and recording what came back, the next
   // caller must be able to take over and ask the provider — never wait for

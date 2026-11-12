@@ -54,6 +54,7 @@
 import crypto from 'node:crypto';
 import { listAttempts, listOperations, operationNow } from '../../repos/idempotency.ts';
 import { recordEvent } from '../../repos/events.ts';
+import { getDb } from '../../db/database.ts';
 import { classifyOperation, effectContinuityAccount, type ContinuityAccount, type ContinuityClass } from './continuity.ts';
 import type { EffectAttempt, EffectFailureCategory, IdempotencyOperation } from '../../domain/types.ts';
 
@@ -184,7 +185,9 @@ export function judgeDependency(namespace: string, outcomes: readonly NamespaceO
       ...base,
       status: 'OUTAGE',
       recoverable: true,
-      reason: `${run} consecutive refusals said it was unavailable: a recoverable outage, so the circuit is open and it is not sent to again until it recovers`,
+      reason:
+        `${run} consecutive refusals said it was unavailable: a recoverable outage, so the circuit is open and no new attempt is sent to it ` +
+        `(runExternalEffect and runIdempotentRequest withhold it) until those refusals are more than ${HEALTH_WINDOW_MS / 60_000} minutes old, when the next attempt probes it again`,
     };
   }
   return { ...base, status: 'HEALTHY', recoverable: null, reason: `its latest outcome was refused (${latest.category ?? 'no category'}) but not often enough to call it down` };
@@ -200,6 +203,64 @@ export async function dependencyHealth(projectId: string, now: string = operatio
     byNamespace.set(operation.namespace, list);
   }
   return [...byNamespace.entries()].map(([ns, outcomes]) => judgeDependency(ns, outcomes, now)).sort((a, b) => a.namespace.localeCompare(b.namespace));
+}
+
+/**
+ * The health of one namespace, read from the definite outcomes of its attempts
+ * inside the health window only.
+ *
+ * This is what a send path asks before an attempt leaves Brain, so it reads
+ * one namespace's recent attempts in one statement rather than the project's
+ * whole ledger the way `dependencyHealth` does for the posture page. Same rows,
+ * same judge: the page and the send path cannot disagree about whether a
+ * dependency is down.
+ */
+export async function namespaceHealth(projectId: string, namespace: string, now: string = operationNow()): Promise<DependencyHealth> {
+  const since = new Date(Date.parse(now) - HEALTH_WINDOW_MS).toISOString();
+  const rows = await getDb().all<{ ended_at: string; outcome: string | null; failure_category: string | null }>(
+    `SELECT a.ended_at AS ended_at, a.outcome AS outcome, o.failure_category AS failure_category
+       FROM effect_attempts a
+       JOIN idempotency_operations o ON o.id = a.operation_id
+      WHERE o.project_id = ? AND o.namespace = ?
+        AND a.phase <> 'INTENT' AND a.ended_at IS NOT NULL AND a.ended_at >= ?
+        AND a.outcome IN ('SUCCEEDED', 'FAILED')
+      ORDER BY a.ended_at DESC
+      LIMIT 50`,
+    [projectId, namespace, since],
+  );
+  const outcomes: NamespaceOutcome[] = rows.map((row) => ({
+    at: row.ended_at,
+    succeeded: row.outcome === 'SUCCEEDED',
+    category: row.outcome === 'SUCCEEDED' ? null : ((row.failure_category as EffectFailureCategory | null) ?? null),
+  }));
+  return judgeDependency(namespace, outcomes, now);
+}
+
+/**
+ * The circuit breaker every send path consults before a new attempt leaves
+ * Brain: the namespace's health when it is an OUTAGE, otherwise null.
+ *
+ * Only an OUTAGE is withheld. A CONSTRAINED namespace's next attempt is left
+ * to the provider, which refuses it NOT_AUTHORIZED again without effect, and
+ * an UNKNOWN or HEALTHY one is sent. A withheld attempt opens no attempt row,
+ * so it is not itself an outcome: the circuit closes because the refusals that
+ * opened it age out of the window, and the attempt after that is the probe.
+ * A read that fails withholds nothing — the circuit is a courtesy to a
+ * provider that is down, and a ledger that cannot be read is not evidence
+ * that it is.
+ */
+export async function openCircuit(projectId: string, namespace: string, now: string = operationNow()): Promise<DependencyHealth | null> {
+  try {
+    const health = await namespaceHealth(projectId, namespace, now);
+    return health.status === 'OUTAGE' ? health : null;
+  } catch {
+    return null;
+  }
+}
+
+/** What a send that the open circuit withheld says about itself. */
+export function withheldReason(health: Pick<DependencyHealth, 'namespace' | 'reason'>): string {
+  return `Not sent: ${health.namespace} is down and its circuit is open (${health.reason}). Nothing left Brain, so nothing can have happened.`;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -306,7 +367,9 @@ export function planContinuation(input: ContinuationInput): ContinuationDecision
     return {
       action: 'WAIT_RECOVERABLE',
       to: null,
-      reason: `${input.namespace} is down, which is recoverable; it is retried with backoff once it answers again, and unaffected work continues`,
+      reason:
+        `${input.namespace} is down, which is recoverable; while the circuit is open every new attempt on it is withheld unsent, ` +
+        `the next attempt after the refusals age out probes it again, and unaffected work continues`,
       skipped,
     };
   }

@@ -79,8 +79,12 @@ describe('dependency health', () => {
   });
 
   it('reads an outage from real refusals and never counts an unknown outcome as one', async () => {
-    for (let i = 0; i < OUTAGE_THRESHOLD; i += 1) await runWith('REJECT_RETRYABLE', `biz-down-${i}`);
+    // The unknown is sent first: once the refusals open the circuit, a further
+    // send on this namespace is withheld unsent (repair-F-CIRCUIT-CLAIM-UNENFORCED,
+    // tests/program-ea512f54-continuity-d3-circuit.test.ts), so it could not
+    // become an unknown at all. An unknown before the refusals is still not one.
     await runWith('THROW', 'biz-unknown');
+    for (let i = 0; i < OUTAGE_THRESHOLD; i += 1) await runWith('REJECT_RETRYABLE', `biz-down-${i}`);
     const [health] = await dependencyHealth(projectId);
     expect(health).toMatchObject({ namespace: NS.name, status: 'OUTAGE', recoverable: true, observed: OUTAGE_THRESHOLD });
 
