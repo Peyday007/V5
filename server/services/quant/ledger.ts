@@ -25,6 +25,7 @@ import {
 } from './learning.ts';
 import { cashForecast, type CashForecast, type Estimate } from '../cash/forecast.ts';
 import { outcomesFor } from '../../repos/cashJourney.ts';
+import { getCashMode } from '../../repos/cashMode.ts';
 import type { CashOutcome } from '../../domain/cashJourney.ts';
 import { asReason, type OutcomeReason } from '../../domain/cashOutcomeReasons.ts';
 import { versionAt, type ExposureRow, type MissCause, type OutcomeRow, type PredictionRow } from './forecast.ts';
@@ -300,9 +301,10 @@ export async function assessLedger(
 export async function recordCashForecast(
   projectId: string,
   forecast: CashForecast,
-  deps: LedgerDeps = {},
+  deps: LedgerDeps & { sprintHorizon?: typeof sprintHorizonOf } = {},
 ): Promise<PredictionRow[]> {
-  const horizonDays = forecast.timeToFirstDollar.days;
+  const horizon = await claimHorizon(projectId, forecast, deps.sprintHorizon ?? sprintHorizonOf);
+  const horizonDays = horizon?.days ?? null;
   const figures: [string, Estimate][] = [
     ['revenue', forecast.revenue],
     ['contribution', forecast.contribution],
@@ -323,7 +325,7 @@ export async function recordCashForecast(
       horizonDays,
       population: `${forecast.qualified} qualified of ${forecast.considered} opportunities in ${forecast.currency}`,
       data: [est.basis],
-      assumptions: [`derived from ${est.fromRows} opportunity row(s)`],
+      assumptions: [`derived from ${est.fromRows} opportunity row(s)`, ...(horizon ? [horizon.basis] : [])],
       probability: null,
       comparableKey: `cash:${forecast.currency}:${name}`,
     };
@@ -333,6 +335,44 @@ export async function recordCashForecast(
     written.push(await recordPrediction(input, { ...deps, projectId, read: async () => before }));
   }
   return written;
+}
+
+/**
+ * The horizon a cash claim is stated over (F-HORIZON-ALWAYS-NULL).
+ *
+ * A prediction is a claim about an outcome over a defined horizon. The cash
+ * forecast withholds `timeToFirstDollar` on every production row — it will not
+ * read free-text payment terms or an opening's deadline as a cash date — so
+ * taking the horizon from it alone left every recorded claim with none, and
+ * every diagnosis said "the claim states no horizon". When the forecast does
+ * state a time to first dollar, that is the horizon. Otherwise the horizon is
+ * the one a person set for the operation: the project's Cash Mode sprint
+ * horizon (`cash_modes.horizon_days`, chosen at activation), the window inside
+ * which this operation's deals are meant to produce cash. A deal that ends
+ * past it is a measured timing overrun (`recordCashOutcomes`). Where neither
+ * exists the horizon stays null and the claim gap stays true: a horizon nobody
+ * stated is never invented. The source is recorded as an assumption, so the
+ * claim says where its horizon came from.
+ */
+export async function claimHorizon(
+  projectId: string,
+  forecast: CashForecast,
+  sprintHorizon: typeof sprintHorizonOf = sprintHorizonOf,
+): Promise<{ days: number; basis: string } | null> {
+  const stated = forecast.timeToFirstDollar.days;
+  if (typeof stated === 'number' && Number.isFinite(stated) && stated > 0) {
+    return { days: stated, basis: `horizon: ${stated} day(s), the forecast's time to first dollar` };
+  }
+  const sprint = await sprintHorizon(projectId);
+  if (typeof sprint === 'number' && Number.isInteger(sprint) && sprint > 0) {
+    return { days: sprint, basis: `horizon: ${sprint} day(s), the cash sprint horizon set when Cash Mode was activated` };
+  }
+  return null;
+}
+
+/** The project's Cash Mode sprint horizon in days, or null when the project runs no cash sprint. */
+export async function sprintHorizonOf(projectId: string): Promise<number | null> {
+  return (await getCashMode(projectId))?.horizonDays ?? null;
 }
 
 /** Whether a recorded version already states exactly this claim. */
@@ -362,7 +402,7 @@ export function statesSame(held: PredictionRow, input: PredictionInput): boolean
 export async function keepCashLedger(
   projectId: string,
   currencies: readonly string[],
-  deps: LedgerDeps & { forecast?: typeof cashForecast; measured?: (projectId: string) => Promise<CashOutcome[]> } = {},
+  deps: LedgerDeps & { forecast?: typeof cashForecast; measured?: (projectId: string) => Promise<CashOutcome[]>; sprintHorizon?: typeof sprintHorizonOf } = {},
 ): Promise<{
   written: PredictionRow[];
   exposures: ExposureRow[];
@@ -380,7 +420,7 @@ export async function keepCashLedger(
   const scoped: LedgerDeps = { ...deps, projectId, read: held };
   for (const currency of [...new Set(currencies.filter((c) => typeof c === 'string' && c.trim()))].sort()) {
     const forecast = await (deps.forecast ?? cashForecast)({ projectId, currency });
-    const fresh = await recordCashForecast(projectId, forecast, scoped);
+    const fresh = await recordCashForecast(projectId, forecast, { ...scoped, ...(deps.sprintHorizon ? { sprintHorizon: deps.sprintHorizon } : {}) });
     written.push(...fresh);
     ledger.predictions.push(...fresh);
     for (const p of fresh) {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { recordCashOutcomes } from '../server/services/quant/ledger.ts';
+import { claimHorizon, recordCashForecast, recordCashOutcomes } from '../server/services/quant/ledger.ts';
+import type { CashForecast } from '../server/services/cash/forecast.ts';
 import { assessModelLearning } from '../server/services/quant/export.ts';
 import { learnFromCashLedger } from '../server/services/quant/knowledge.ts';
 import { claimCausesOf, statedFigures, type ExposureRow, type OutcomeRow, type PredictionRow } from '../server/services/quant/forecast.ts';
@@ -175,5 +176,75 @@ describe('a correction always produces work', () => {
     expect(reading.corrections[0]?.cause).toBe('PARAMETER_ESTIMATE');
     expect(register.map((c) => c.weaknessKey)).toEqual(['FORECAST:PARAMETER_ESTIMATE']);
     expect(register[0]!.evidence['correctionOwner']).toBe('RESEARCH');
+  });
+});
+
+/*
+ * F-HORIZON-ALWAYS-NULL: the cash forecast withholds `timeToFirstDollar` on every
+ * production row, and the ledger took the claim's horizon from it alone, so every
+ * production prediction stated no horizon. The forecast below is the shape
+ * `cashForecast` returns in production — time to first dollar withheld.
+ */
+describe('a production cash claim states its horizon', () => {
+  const withheldDays = { days: null, lowDays: null, highDays: null, fromRows: 0, confidence: 'NONE' as const, basis: 'cash dates', unknown: ['Cash dates'], blocking: 'No opportunity yet states when cash would arrive.' };
+  const est = (v: number | null, low = v, high = v, rows = v === null ? 0 : 9) => ({ valueCents: v, lowCents: low, highCents: high, fromRows: rows, confidence: rows === 0 ? 'NONE' as const : 'SEVERAL_ROWS' as const, basis: 'The prices stated on qualified opportunities.', unknown: [], blocking: '' });
+  const productionForecast: CashForecast = {
+    currency: 'USD', qualified: 9, considered: 11,
+    upfrontCash: est(500), ongoingCosts: est(null), revenue: est(9000, 1000, 5000), contribution: est(null),
+    timeToFirstDollar: withheldDays, breakEven: withheldDays,
+    humanHours: { total: null, fromRows: 0, unknown: [] },
+  };
+  const empty = async () => ({ predictions: [] as PredictionRow[], exposures: [] as ExposureRow[], outcomes: [] as OutcomeRow[] });
+  const sink = async () => undefined;
+
+  it('takes the horizon a person set for the cash sprint when the forecast withholds time to first dollar', async () => {
+    const written = await recordCashForecast('p', productionForecast, { read: empty, record: sink as never, now: () => at(0), sprintHorizon: async () => 7 });
+    expect(written).toHaveLength(1);
+    expect(written[0]!.horizonDays).toBe(7);
+    expect(written[0]!.assumptions).toContain('horizon: 7 day(s), the cash sprint horizon set when Cash Mode was activated');
+    // The horizon assumption does not disturb the figures the claim's own causes are read from.
+    expect(statedFigures(written[0]!)).toMatchObject({ value: 9000, low: 1000, high: 5000, rows: 9, population: 9 });
+  });
+
+  it('a diagnosis of a production claim no longer says the claim states no horizon', async () => {
+    const [p] = await recordCashForecast('p', productionForecast, { read: empty, record: sink as never, now: () => at(0), sprintHorizon: async () => 7 });
+    const reading = assessModelLearning({
+      predictions: [p!],
+      exposures: [{ predictionId: p!.id, exposedAt: at(0), atRiskCents: 500 }],
+      outcomes: [{ predictionId: p!.id, observedAt: at(3), occurred: false, realized: 9999 }],
+    });
+    expect(reading.diagnoses.length).toBeGreaterThan(0);
+    for (const d of reading.diagnoses) expect(d.claimGaps).not.toContain('the claim states no horizon');
+  });
+
+  it('the stated horizon is what a deal is measured late against: a deal past it is a timing overrun', async () => {
+    const margins: CashForecast = { ...productionForecast, revenue: est(null), contribution: { ...est(4500, 100, 1000), basis: 'Price minus exposure, on the opportunities that answer both.' } };
+    const record = async (sprint: number | null) => {
+      const [p] = await recordCashForecast('p', margins, { read: empty, record: sink as never, now: () => at(0), sprintHorizon: async () => sprint });
+      const exposures: ExposureRow[] = [{ predictionId: p!.id, exposedAt: at(0), atRiskCents: 500 }];
+      // One deal, inside the claimed range, that ended ten and a half days after the claim.
+      return recordCashOutcomes('p', [ended(10, 'REALIZED_CONTRIBUTION', 500)], { projectId: 'p', read: async () => ({ predictions: [p!], exposures, outcomes: [] }), record: sink as never });
+    };
+    const [onSprint] = await record(7);
+    expect(onSprint).toMatchObject({ occurred: true, observedCauses: ['TIMING'] });
+    // Without a stated horizon the same deal could not be measured late at all.
+    const [unstated] = await record(null);
+    expect(unstated!.observedCauses).toBeUndefined();
+  });
+
+  it('a stated time to first dollar still wins, and a project with no cash sprint is never given an invented horizon', async () => {
+    const stated: CashForecast = { ...productionForecast, timeToFirstDollar: { ...withheldDays, days: 14 } };
+    expect(await claimHorizon('p', stated, async () => 7)).toMatchObject({ days: 14 });
+    expect(await claimHorizon('p', productionForecast, async () => null)).toBeNull();
+    const written = await recordCashForecast('p', productionForecast, { read: empty, record: sink as never, sprintHorizon: async () => null });
+    expect(written[0]!.horizonDays).toBeNull();
+  });
+
+  it('a claim recorded before the fix, with no horizon, is revised by the next forecast rather than repeated', async () => {
+    const [old] = await recordCashForecast('p', productionForecast, { read: empty, record: sink as never, now: () => at(0), sprintHorizon: async () => null });
+    const revised = await recordCashForecast('p', productionForecast, {
+      read: async () => ({ predictions: [old!], exposures: [], outcomes: [] }), record: sink as never, now: () => at(1), sprintHorizon: async () => 7,
+    });
+    expect(revised.map((r) => [r.version, r.horizonDays])).toEqual([[2, 7]]);
   });
 });
