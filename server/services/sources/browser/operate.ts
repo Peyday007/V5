@@ -53,7 +53,7 @@
  * names a host, category or industry.
  */
 import { recordBinEvent, type RecordBinEventInput } from '../../../repos/bins.ts';
-import { BROWSER_WORKFLOW_RUN_EVENT, operateWorkflow, type OperateDeps, type OperateResult, type WorkflowRun } from '../browserWorkflow.ts';
+import { BROWSER_WORKFLOW_RUN_EVENT, operateWorkflow, readBrowserWorkflows, type OperateDeps, type OperateResult, type WorkflowRecord, type WorkflowRun } from '../browserWorkflow.ts';
 import type { ActorType } from '../../../domain/types.ts';
 import { authorizeActions, type ActionClass, type ApprovedAction, type WorkflowJudgment } from './actionClass.ts';
 import {
@@ -249,12 +249,30 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
   const operationId = guard.claim?.claimed ? guard.claim.operationId : null;
 
   // 5. Run through the existing owner. Its run row is captured here and written once, enriched, below.
+  // The owner is pinned to the approved version's step list: the steps classified and
+  // authorized above are the steps that run. The newest BROWSER_WORKFLOW row for this
+  // host/name is written separately (and `recordBrowserWorkflow` is callable on its own),
+  // so reading it here would let a step list nobody approved run under this approval.
+  // Only its lifecycle (retired, interface changed, draft) is taken from the store.
+  const approvedWorkflow = c.workflow;
+  const readStored = deps.operateDeps?.workflows ?? readBrowserWorkflows;
+  const pinnedWorkflows = async (h: string): Promise<Map<string, WorkflowRecord>> => {
+    const stored = await readStored(h);
+    const pinned = new Map<string, WorkflowRecord>();
+    for (const [key, r] of stored) {
+      if (r.workflow.host.trim().toLowerCase() === cap.host.toLowerCase() && r.workflow.name.trim().toLowerCase() === cap.name.trim().toLowerCase()) {
+        pinned.set(key, { ...r, workflow: approvedWorkflow });
+      }
+    }
+    return pinned;
+  };
   let captured: RecordBinEventInput | null = null;
   let result: OperateResult | null = null;
   let thrown: string | null = null;
   try {
     result = await (deps.operate ?? operateWorkflow)(cap.host, cap.name, {
       ...(deps.operateDeps ?? {}),
+      workflows: pinnedWorkflows,
       record: async (e: RecordBinEventInput) => {
         captured = e;
       },
