@@ -752,19 +752,57 @@ async function handToOwner(
 ): Promise<string | null> {
   const { recordGapStep } = await import('../selfmodel/gapLoop.ts');
   const at = now.toISOString();
+  // A hand-off counts only where the owner was given work: an idea the research pipeline runs, a live
+  // dive, or the standing watch (S-0249: allocate actual workers and time, not a routed event).
   let handed = 0;
   let personOnly = false;
+  const refused: string[] = [];
+  const work: Record<string, unknown>[] = [];
   if (route.family === 'UNMET_NEED') {
-    const { handNeedsToOwners } = await import('../cash/needs.ts');
+    const { handNeedsToOwners, handoffAllocated } = await import('../cash/needs.ts');
     const result = await handNeedsToOwners({ needIds: route.observed, gapKey: candidate.weaknessKey, actorRef: 'improvement loop', now: at });
-    handed = result.handed.length;
-    personOnly = handed > 0 && result.handed.every((h) => h.route === 'PERSON');
+    handed = result.handed.filter(handoffAllocated).length;
+    personOnly = result.handed.length > 0 && result.handed.every((h) => h.route === 'PERSON');
+    for (const one of result.handed) {
+      work.push({ needId: one.needId, route: one.route, owner: one.owner, ...one.work });
+      if (one.work.kind === 'REFUSED') refused.push(`${one.needId}: ${one.work.reason}`);
+    }
   } else {
     const { getOpportunity } = await import('../../repos/cashPortfolio.ts');
     const { requestDecisionRecompute } = await import('../../repos/cashDecisions.ts');
+    const { raiseNeed } = await import('../cash/needs.ts');
+    const { startNeedWork } = await import('../cash/operate.ts');
+    const family = candidate.weaknessKey.split('#')[0]!;
     for (const id of new Set(route.observed)) {
       const opening = await getOpportunity(id);
       if (!opening || (opening.expiresAt && opening.expiresAt <= at)) continue;
+      // The opening's missing facts become one need with a worker on it, so the lifecycle has something
+      // to re-decide it on before its window closes, rather than only a recompute request.
+      const by = opening.expiresAt ? ` before ${opening.expiresAt}` : '';
+      const raised = await raiseNeed({
+        projectId: opening.projectId,
+        opportunityId: opening.id,
+        actorRef: 'improvement loop',
+        blockedAction: `Decide "${opening.title}"${by}`.slice(0, 300),
+        whyItMatters: candidate.problem.slice(0, 600),
+        recommendedPath: 'Research the facts its card still lacks from published sources, then let the cash lifecycle re-decide it.',
+        setupEffort: 'one research mission',
+        nextStep:
+          `Establish from published sources, for this opening, who pays, what it pays, what it costs to deliver and what would rule it out${by}: ` +
+          'the facts its card still lacks to be decided.',
+        completionCondition: 'The opening is READY or later, or its window has ended.',
+        requestKey: `gap:${family}:${opening.id}`,
+      });
+      if (!raised.ok) {
+        refused.push(`${id}: ${raised.reason}`);
+        continue;
+      }
+      const started = await startNeedWork(raised.value, 'RESEARCH');
+      work.push({ opportunityId: id, ...started });
+      if (started.kind === 'REFUSED') {
+        refused.push(`${id}: ${started.reason}`);
+        continue;
+      }
       await requestDecisionRecompute(id, `GAP_ROUTED:${candidate.weaknessKey}`, at);
       handed += 1;
     }
@@ -787,7 +825,13 @@ async function handToOwner(
       handed,
     },
   });
-  if (handed === 0) {
+  if (handed === 0 && refused.length > 0 && !personOnly) {
+    // The owner could not be given work for any row: the route did not acquire anything, so it is set
+    // aside (once) and the gap is valued like any other on the next pass, instead of being marked delivered.
+    await recordRouteRefused(candidate, route, refused);
+    return NOT_ALLOCATED;
+  }
+  if (handed === 0 && !personOnly) {
     const reason = `Every row this gap was noticed from (${route.observed.length}) has settled or its window has closed; there is nothing left for ${route.owner} to acquire.`;
     await decideCandidate(candidate.id, 'REJECTED', reason);
     await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'REJECTED', route: route.kind, owner: route.owner, reason } });
@@ -803,8 +847,33 @@ async function handToOwner(
   }
   const ref = ownerHandoffRef(route);
   await patchCandidate(candidate.id, { deliveredAt: at, deliveredRef: ref });
-  await recordImprovementEvent({ candidateId: candidate.id, kind: 'DELIVERED', detail: { handedTo: route.owner, route: route.kind, handed, family: route.family } });
+  await recordImprovementEvent({
+    candidateId: candidate.id,
+    kind: 'DELIVERED',
+    detail: { handedTo: route.owner, route: route.kind, handed, family: route.family, work: work.slice(0, 50), refused: refused.slice(0, 20) },
+  });
   return `handed ${handed} row(s) to ${route.owner} (${route.kind})`;
+}
+
+/** handToOwner's answer when the owner could be given no work at all: the route is set aside and valuation runs. */
+export const NOT_ALLOCATED = 'NOT_ALLOCATED' as const;
+
+/** Record, once per candidate, that its execution route could allocate no work and was set aside. */
+async function recordRouteRefused(
+  candidate: ImprovementCandidate,
+  route: NonNullable<ReturnType<typeof executionRouteOf>>,
+  refused: readonly string[],
+): Promise<void> {
+  if (candidate.evidence['routeRefused']) return;
+  const judgment =
+    `Handing this gap to ${route.owner} (${route.kind}) could give no worker any of its rows (${refused.slice(0, 5).join('; ')}). ` +
+    'A route that allocates nothing acquires nothing, so it is not recorded as delivered; the next step is valued among research, ' +
+    'a Factory change to the owner of the behaviour, a credential or abandoning.';
+  const routeRefused = { kind: route.kind, owner: route.owner, refused: refused.slice(0, 20), judgment };
+  const evidence = { ...candidate.evidence, routeRefused };
+  await patchCandidate(candidate.id, { evidence });
+  candidate.evidence = evidence;
+  await recordImprovementEvent({ candidateId: candidate.id, kind: 'ROUTE_SET_ASIDE', detail: routeRefused });
 }
 
 /** The ref a hand-off by one route is recorded under, so a later attempt can recognise the same route. */
@@ -869,10 +938,12 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
       // The route is set aside and the gap is valued like any other, so research or a Factory change to the
       // owner of the behaviour (the routing itself included) competes for it (step 4).
       const route = executionRouteOf(candidate);
-      if (route) {
+      if (route && !candidate.evidence['routeRefused']) {
         const failed = await failedHandOffs(candidate, route);
-        if (failed.length === 0) return handToOwner(candidate, route, now, report);
-        await recordRouteSetAside(candidate, route, failed);
+        if (failed.length === 0) {
+          const handedOff = await handToOwner(candidate, route, now, report);
+          if (handedOff !== NOT_ALLOCATED) return handedOff;
+        } else await recordRouteSetAside(candidate, route, failed);
       }
       // Then the next step is valued (step 4): every option the existing owners can carry out, compared on
       // expected value, cost, latency, opportunity cost and dependencies, and the best one is taken.
