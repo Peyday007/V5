@@ -20,8 +20,8 @@ import { NEEDS_HUMAN_CHOICES } from '../server/services/russell/needsHuman.ts';
 import { moot, operatorBrief, operatorDue, operatorModels, OPERATOR_TOOL_NAMES } from '../server/domain/operator.ts';
 import { readRequests, withdrawMootRequest } from '../server/services/operator/actions.ts';
 import { validateFix } from '../server/services/operator/factory.ts';
-import { isMemoryName, readOperatorMemory, storeOperatorMemory, startOperatorRun } from '../server/repos/operator.ts';
-import { ensureOperatorIdentity, parseOperatorStream } from '../server/services/operator/run.ts';
+import { isMemoryName, listOperatorLearnings, readOperatorMemory, storeOperatorMemory, startOperatorRun } from '../server/repos/operator.ts';
+import { carriedMemory, ensureOperatorIdentity, parseOperatorStream } from '../server/services/operator/run.ts';
 import { findTool } from '../server/mcp/tools.ts';
 import { OPERATOR_SCOPES, type Principal } from '../server/domain/types.ts';
 
@@ -222,6 +222,26 @@ describe('with a database', () => {
     await storeOperatorMemory(run.id, { 'memories/MEMORY.md': 'c' });
     expect(await readOperatorMemory()).toEqual({ 'memories/MEMORY.md': 'c' });
     expect(isMemoryName('skills/../x/SKILL.md')).toBe(false);
+  });
+
+  it('a run that acted and wrote no lesson keeps its report as one, and as the next run\'s memory (opr_516308bd)', async () => {
+    const run = await startOperatorRun('m');
+    await storeOperatorMemory(run.id, { 'memories/MEMORY.md': 'durable fact', 'skills/withdraw-moot/SKILL.md': 'b' });
+    const result = {
+      final: 'Withdrew 15 moot requests; commissioned a fix.',
+      toolCalls: [{ tool: 'mcp__brain__brain_operator_withdraw_moot_request', ok: true }],
+      memory: {},
+      model: 'm',
+      error: null,
+    };
+    const memory = await carriedMemory(run.id, result);
+    expect(memory['skills/withdraw-moot/SKILL.md']).toBe('b');
+    expect(memory['memories/MEMORY.md']).toBe(`durable fact\n\n## Last run (${run.id})\nWithdrew 15 moot requests; commissioned a fix.`);
+    expect((await listOperatorLearnings()).some((l) => l.runId === run.id && l.lesson.includes('Withdrew 15'))).toBe(true);
+    // A second run replaces the last-run section rather than piling it up, and a run that wrote its own lesson gets no copy.
+    const again = await carriedMemory('opr_next', { ...result, final: 'Nothing moved.', toolCalls: [...result.toolCalls, { tool: 'mcp__brain__brain_operator_record_learning', ok: true }], memory });
+    expect(again['memories/MEMORY.md']).toBe('durable fact\n\n## Last run (opr_next)\nNothing moved.');
+    expect((await listOperatorLearnings()).some((l) => l.runId === 'opr_next')).toBe(false);
   });
 });
 
