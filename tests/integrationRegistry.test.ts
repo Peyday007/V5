@@ -72,6 +72,8 @@ describe('the registry is the only way in', () => {
     const present = [...yml.matchAll(/HAS_([A-Z0-9_]+): \$\{\{ secrets\.([A-Z0-9_]+) != '' \}\}/g)].map((m) => { expect(m[1]).toBe(m[2]); return m[1]!; });
     const actionsCredentials = [...new Set(INTEGRATIONS.flatMap((i) => i.credentials).filter((c) => c.where === 'GITHUB_ACTIONS').map((c) => c.name))].sort();
     expect(present.sort()).toEqual(actionsCredentials);
+    const copyable = [...yml.matchAll(/GH_([A-Z0-9_]+): \$\{\{ secrets\.([A-Z0-9_]+) != '' \}\}/g)].map((m) => { expect(m[1]).toBe(m[2]); return m[1]!; });
+    expect(copyable.sort()).toEqual(githubSyncable());
   });
 
   it('lets a connector deliver Instantly, and a GitHub secret supply Instantly and Stripe', () => {
@@ -121,6 +123,15 @@ describe('health is read the same way for every integration', () => {
     expect(JSON.stringify(readings)).not.toContain('SECRETVALUE');
   });
 
+  it('asks the owner for a key the repository holds no GitHub secret for', async () => {
+    const readings = await readIntegrations({ env: {}, githubSecrets: new Set(['FLY_API_TOKEN']) });
+    const stripe = readings.find((r) => r.id === 'stripe')!;
+    expect(stripe.state).toBe('NEEDS_OWNER');
+    expect(stripe.ownerAction).toContain('STRIPE_SECRET_KEY');
+    // Instantly can still arrive sealed from a connector, so it stays Brain's repair.
+    expect(readings.find((r) => r.id === 'instantly')!.state).toBe('REPAIRING');
+  });
+
   it('flags a malformed credential as refused, not missing', async () => {
     const readings = await readIntegrations({ env: { STRIPE_SECRET_KEY: 'not-a-key' } });
     expect(readings.find((r) => r.id === 'stripe')!.state).toBe('REFUSED');
@@ -167,6 +178,14 @@ describe('Google Places through V2', () => {
     expect(refused.bridge).toBe('REFUSED');
     expect(refused.detail).toContain('pinned');
     expect((await probeV2Places({ env: {} })).bridge).toBe('NOT_CONFIGURED');
+  });
+
+  it('reads a key Google refuses as refused, naming the setting', async () => {
+    const refused = await probeV2Places({ env, fetch: answer(200, { ok: true, placesKeyConfigured: true, google: { accepted: false, status: 403, reasons: ['BILLING_DISABLED'], googleStatus: 'PERMISSION_DENIED' } }) });
+    expect(refused.bridge).toBe('VERIFIED');
+    expect(refused.places).toBe('REFUSED');
+    expect(refused.detail).toContain('billing is not enabled');
+    expect((await probeV2Places({ env, fetch: answer(200, { ok: true, placesKeyConfigured: true, google: { accepted: true, status: 200 } }) })).places).toBe('VERIFIED');
   });
 
   it("reads an unpinned bridge as Brain's repair, not the owner's", async () => {

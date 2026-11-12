@@ -80,7 +80,10 @@ function readCredential(
   env: NodeJS.ProcessEnv,
   githubSecrets: Set<string> | null,
 ): CredentialReading {
-  const repair = spec.delivery.find((d) => AUTOMATIC.includes(d)) ?? null;
+  // A GitHub secret supplies nothing when the repository holds none of that
+  // name, so with the workflow's list in hand that path is not counted.
+  const usable = (d: CredentialDelivery) => AUTOMATIC.includes(d) && !(d === 'GITHUB_SECRET' && githubSecrets && !githubSecrets.has(spec.name));
+  const repair = spec.delivery.find(usable) ?? null;
   const base = { name: spec.name, where: spec.where, required: spec.required, repair };
   if (spec.where === 'CONNECTED_PROJECT') return { ...base, state: 'ELSEWHERE' };
   if (spec.where === 'GITHUB_ACTIONS') {
