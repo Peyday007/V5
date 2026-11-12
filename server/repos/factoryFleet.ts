@@ -512,6 +512,30 @@ export async function recordObservedSession(input: {
   return result.changes === 1;
 }
 
+/**
+ * For each bin of a campaign, how many observed sessions are on record and when
+ * the last of them was written.
+ *
+ * What lets the session sweep survive a restart without re-reading every
+ * finished bin's whole history: a finished bin whose newest recorded session was
+ * written after the bin row last changed has nothing new to find. One grouped
+ * read per campaign, on `idx_factory_sessions_campaign`.
+ */
+export async function recordedSessionsByBin(
+  campaignId: string,
+): Promise<Map<string, { count: number; lastRecordedAt: string }>> {
+  const rows = await getDb().all<{ bin_id: string; n: number | string; last_at: string }>(
+    `SELECT bin_id, COUNT(*) AS n, MAX(created_at) AS last_at
+       FROM factory_sessions
+      WHERE campaign_id = ? AND bin_id IS NOT NULL
+      GROUP BY bin_id`,
+    [campaignId],
+  );
+  const out = new Map<string, { count: number; lastRecordedAt: string }>();
+  for (const row of rows) out.set(row.bin_id, { count: Number(row.n), lastRecordedAt: row.last_at });
+  return out;
+}
+
 export interface CloseSessionInput {
   state: Exclude<FactorySessionState, 'RUNNING'>;
   exitReason?: string | null;
