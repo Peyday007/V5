@@ -88,6 +88,10 @@ export interface OutcomeRow {
   occurred: boolean;
   /** Evidence a person or a measurement gave for why, by cause class, when known. */
   observedCauses?: readonly MissCause[];
+  /** The production row the outcome was measured from (e.g. `cash_outcomes:<id>`); one row resolves at most one version. */
+  evidence?: string;
+  /** The realized figure, in the claim's own unit, when the outcome is a measured figure. */
+  realized?: number;
 }
 
 export interface LedgerEntry {

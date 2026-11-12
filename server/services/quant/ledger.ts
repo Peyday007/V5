@@ -24,7 +24,9 @@ import {
   type ModelLearningReading,
 } from './learning.ts';
 import { cashForecast, type CashForecast, type Estimate } from '../cash/forecast.ts';
-import type { ExposureRow, MissCause, OutcomeRow, PredictionRow } from './forecast.ts';
+import { outcomesFor } from '../../repos/cashJourney.ts';
+import type { CashOutcome } from '../../domain/cashJourney.ts';
+import { versionAt, type ExposureRow, type MissCause, type OutcomeRow, type PredictionRow } from './forecast.ts';
 
 export const LEDGER_EVENTS = {
   PREDICTION: 'FORECAST_PREDICTION',
@@ -253,7 +255,7 @@ export async function recordOutcome(
   predictionId: string,
   occurred: boolean,
   signals: OutcomeSignals = {},
-  deps: LedgerDeps = {},
+  deps: LedgerDeps & { evidence?: string; realized?: number } = {},
 ): Promise<OutcomeRow> {
   const ledger = await defaultRead(deps, predictionId)();
   const prediction = ledger.predictions.find((p) => p.id === predictionId);
@@ -267,6 +269,8 @@ export async function recordOutcome(
     observedAt: (deps.now ?? (() => new Date().toISOString()))(),
     occurred,
     ...(causes.length ? { observedCauses: causes } : {}),
+    ...(deps.evidence ? { evidence: deps.evidence } : {}),
+    ...(deps.realized !== undefined ? { realized: deps.realized } : {}),
   };
   await write('OUTCOME', row, deps, `${predictionId} ${occurred ? 'occurred' : 'did not occur'}`);
   return row;
@@ -355,8 +359,8 @@ export function statesSame(held: PredictionRow, input: PredictionInput): boolean
 export async function keepCashLedger(
   projectId: string,
   currencies: readonly string[],
-  deps: LedgerDeps & { forecast?: typeof cashForecast } = {},
-): Promise<{ written: PredictionRow[]; exposures: ExposureRow[]; reading: ModelLearningReading }> {
+  deps: LedgerDeps & { forecast?: typeof cashForecast; measured?: (projectId: string) => Promise<CashOutcome[]> } = {},
+): Promise<{ written: PredictionRow[]; exposures: ExposureRow[]; outcomes: OutcomeRow[]; reading: ModelLearningReading }> {
   const written: PredictionRow[] = [];
   const exposures: ExposureRow[] = [];
   // One read per refresh, of this project's ledger only; what this refresh writes is added to it in memory,
@@ -375,7 +379,122 @@ export async function keepCashLedger(
       ledger.exposures.push(exposure);
     }
   }
-  return { written, exposures, reading: await assessLedger({}, scoped) };
+  // What actually happened: every deal that ended since a version was exposed is a measured draw of the
+  // figure that version claimed, and it is recorded against that version once (the outcome producer).
+  const measured = await (deps.measured ?? ((id: string) => outcomesFor({ projectId: id })))(projectId);
+  const outcomes = await recordCashOutcomes(projectId, measured, scoped);
+  ledger.outcomes.push(...outcomes);
+  return { written, exposures, outcomes, reading: await assessLedger({}, scoped) };
+}
+
+/** One ended deal's realized figures, read from its `cash_outcomes` rows. */
+export interface RealizedDeal {
+  opportunityId: string;
+  currency: string;
+  /** When the deal's end was measured: the REALIZED_CONTRIBUTION row's own time. */
+  endedAt: string;
+  /** Payments − refunds − costs − owed (`money.ts contributionFrom`), the realized counterpart of the contribution claim. */
+  contributionCents: number;
+  /** Payments − refunds: contribution plus the actual cost written beside it, the realized counterpart of the revenue claim. */
+  revenueCents: number | null;
+  /** The row each figure was read from. */
+  evidence: { contribution: string; revenue: string | null };
+}
+
+/**
+ * The deals that ended, from `cash_outcomes` rows. Pure.
+ *
+ * A deal's end is the first REALIZED_CONTRIBUTION written for it (a later one is
+ * a refund or cost landing afterwards, and the draw a forecast is judged on is
+ * the deal as it ended). Revenue is that contribution plus the ACTUAL_COST
+ * written at the same end (same request-key suffix); with no such cost row it is
+ * null — never the contribution standing in for it.
+ */
+export function realizedDealsFrom(rows: readonly CashOutcome[]): RealizedDeal[] {
+  const deals = new Map<string, RealizedDeal>();
+  const suffix = (row: CashOutcome) => row.requestKey.split(':').at(-1) ?? '';
+  const ordered = [...rows].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  for (const row of ordered) {
+    if (row.kind !== 'REALIZED_CONTRIBUTION' || row.valueCents === null || !row.currency || deals.has(row.opportunityId)) continue;
+    const cost = ordered.find(
+      (one) => one.kind === 'ACTUAL_COST' && one.opportunityId === row.opportunityId && suffix(one) === suffix(row) && one.valueCents !== null,
+    );
+    deals.set(row.opportunityId, {
+      opportunityId: row.opportunityId,
+      currency: row.currency,
+      endedAt: row.createdAt,
+      contributionCents: row.valueCents,
+      revenueCents: cost ? row.valueCents + cost.valueCents! : null,
+      evidence: { contribution: `cash_outcomes:${row.id}`, revenue: cost ? `cash_outcomes:${row.id}+${cost.id}` : null },
+    });
+  }
+  return [...deals.values()].sort((a, b) => a.endedAt.localeCompare(b.endedAt) || a.opportunityId.localeCompare(b.opportunityId));
+}
+
+/** The interval a cash claim states, read from its own outcome text; null when it states none. */
+export function claimedRange(p: Pick<PredictionRow, 'outcome'>): { low: number; high: number } | null {
+  const m = /\(range (-?\d+(?:\.\d+)?)\.\.(-?\d+(?:\.\d+)?)\)/.exec(p.outcome);
+  if (!m) return null;
+  const low = Number(m[1]);
+  const high = Number(m[2]);
+  return Number.isFinite(low) && Number.isFinite(high) && high >= low ? { low, high } : null;
+}
+
+/**
+ * Record the actual outcome of the cash forecast's claims from the deals that
+ * ended: the production producer of the outcome ledger (LEARN-15-1).
+ *
+ * Each ended deal is one draw of the per-deal figure a cash claim's range was
+ * drawn from (`impliedProbability`). It is judged against the version of that
+ * claim that was current — and exposed — when the deal ended, never against
+ * today's model: `occurred` is whether the realized figure landed inside the
+ * range that version stated. A version is resolved once (the ledger refuses a
+ * second outcome), a deal resolves at most one version per claim, and a deal
+ * that ended before any version was exposed predicts nothing. The measured
+ * timing is the one signal recorded: a deal that ended past the version's
+ * stated horizon is a timing overrun. Nothing is written for a figure no row
+ * states.
+ */
+export async function recordCashOutcomes(
+  projectId: string,
+  measured: readonly CashOutcome[],
+  deps: LedgerDeps = {},
+): Promise<OutcomeRow[]> {
+  const ledger = await defaultRead({ ...deps, projectId }, `cash:${projectId}:`)();
+  const resolved = new Set(ledger.outcomes.map((o) => o.predictionId));
+  const used = new Set(ledger.outcomes.map((o) => o.evidence).filter((e): e is string => typeof e === 'string'));
+  const exposedAt = new Map(ledger.exposures.map((e) => [e.predictionId, e.exposedAt]));
+  const written: OutcomeRow[] = [];
+  const held = async () => ({ predictions: ledger.predictions, exposures: ledger.exposures, outcomes: [...ledger.outcomes, ...written] });
+  for (const deal of realizedDealsFrom(measured)) {
+    for (const figure of ['revenue', 'contribution'] as const) {
+      const realized = figure === 'revenue' ? deal.revenueCents : deal.contributionCents;
+      const evidence = figure === 'revenue' ? deal.evidence.revenue : deal.evidence.contribution;
+      if (realized === null || evidence === null) continue;
+      const tag = `${evidence}#${figure}`;
+      if (used.has(tag)) continue;
+      const version = versionAt(ledger.predictions, `cash:${projectId}:${deal.currency}:${figure}`, deal.endedAt);
+      if (!version || resolved.has(version.id)) continue;
+      const exposed = exposedAt.get(version.id);
+      if (!exposed || exposed > deal.endedAt) continue;
+      const range = claimedRange(version);
+      if (!range) continue;
+      const horizonEnd = version.horizonDays === null ? null : Date.parse(version.madeAt) + version.horizonDays * 86_400_000;
+      const lateByDays = horizonEnd === null || !Number.isFinite(horizonEnd) ? 0 : Math.floor((Date.parse(deal.endedAt) - horizonEnd) / 86_400_000);
+      const row = await recordOutcome(version.id, realized >= range.low && realized <= range.high, lateByDays > 0 ? { lateByDays } : {}, {
+        ...deps,
+        projectId,
+        read: held,
+        now: () => deal.endedAt,
+        evidence: tag,
+        realized,
+      });
+      written.push(row);
+      resolved.add(version.id);
+      used.add(tag);
+    }
+  }
+  return written;
 }
 
 /** Run the cash forecast and record it: the cash forecast's output reaches the ledger through here. */
