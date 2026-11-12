@@ -52,6 +52,7 @@ import type { McpTool } from './toolkit.ts';
 import { RESEARCH_TOOLS } from './researchTools.ts';
 import { BIN_TOOLS } from './binTools.ts';
 import { ENGINEERING_TOOLS } from './engineeringTools.ts';
+import { OPERATOR_TOOLS } from './operatorTools.ts';
 import { fetchSourceTool } from './sourceTools.ts';
 import { activeBinForWorker, confinementFor } from '../repos/bins.ts';
 import { RESEARCH_METHOD, RESEARCH_METHOD_VERSION } from '../services/research/method.ts';
@@ -981,6 +982,9 @@ export const TOOLS: readonly McpTool[] = [
   // evidence, test policy, existing owners, next action, blockers. Same array,
   // same reason as the two above.
   ...ENGINEERING_TOOLS,
+  // §106 — the operator directs every goal through these. Same array, same
+  // reason: who may *succeed* with them is `operator:act`, decided at execution.
+  ...OPERATOR_TOOLS,
 ];
 
 const BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));

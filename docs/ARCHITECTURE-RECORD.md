@@ -15567,3 +15567,89 @@ Recorded in the plans that state the old exclusion
 `fast-cash/10k/`. Tests: `tests/fastCashScope.test.ts`,
 `tests/goalDiscoveryBreadth.test.ts`, `tests/economicMechanisms.test.ts`,
 `tests/goalEstimatedArrangements.test.ts`.
+
+## 106. Brain has one general operator, and its hands are Brain's own operations.
+
+**Owner's order, 2026-11-12.** "Give Brain an autonomous AI operator that directs
+ALL its goals and businesses. Do not build a new agent framework from scratch …
+Start with OpenClaw and compare other suitable alternatives … No paid model APIs
+… The agent must use Brain's EXISTING systems … Do not give the agent
+unrestricted production or financial authority."
+
+**This is a recorded correction to §104,** which declined Hermes Agent the same
+morning because "Brain already owns orchestration … a second orchestrator is
+the duplicate the order forbids". The owner now asks for exactly one agent that
+*directs*. It is admitted on §104's own terms: it owns no schedule, queue,
+state or authority. Brain's tick starts it, its memory is Brain's rows, and its
+only hands are Brain's operations behind Brain's policy.
+
+**The evaluation** (each read at its repository's head, 2026-11-12; source cloned and run, not read about):
+
+| agent | what it is | decision |
+|---|---|---|
+| **Hermes Agent** v0.23.1 (Nous Research, MIT) | an agent runtime: tool-calling loop over any OpenAI-compatible endpoint, MCP client (HTTP + headers, per-server tool filter), persistent memory (`MEMORY.md`/`USER.md`) and self-written skills (procedural memory), fallback providers, a scripted one-shot (`chat --oneshot --format stream-json`), a published image pinned by digest with exact-pinned dependencies | **Selected.** Planning and execution, tool use through MCP, memory and continuation, and a one-shot mode Brain can schedule are all demonstrated in its own tree and were run here end to end against a real Brain. Python, like `agents/`. |
+| OpenClaw 2026.11.3 (MIT) | a multi-channel personal-assistant *gateway* (WhatsApp/Telegram/…), its own Postgres state families, cron, a skills marketplace | **Not selected.** Its centre is messaging channels and its own state store — a second database and scheduler Brain would not own, and a published CVE let external sites hijack a local gateway over WebSocket. Nothing it adds over Hermes is something Brain needs. |
+| Goose (Block) | MCP-native CLI agent, recipes, headless runs | Close second; no first-class persistent memory or self-written skills — the "preserve what it learns" requirement would have been built by hand. |
+| OpenHands | a software-engineering agent in a sandbox | Duplicates Factory (§27, §58), which already builds, reviews and releases Brain. |
+| Letta | a memory-first agent server with its own Postgres | Its memory is its database, not Brain's; a second state store (invariant 12). |
+
+**No paid model API.** The operator thinks with capacity Brain already has
+(`operatorModels`): the free-provider switchboard (OmniRoute, §85) first, the
+RunPod GPU last, each the next one's fallback, sent per run — the app holds no
+model key. Hermes refuses a window under 64K tokens; the GPU serves Qwen3-4B at
+32K with no tool-call parser, so until its recipe changes it is a fallback only.
+No Claude, OpenAI or Perplexity API is called.
+
+**The shape.**
+
+- **One private CPU app** (`operator/`, `northline-operator`, Flycast only,
+  stopped when idle): the published Hermes image by digest plus
+  `operator/server.py` (standard library). `POST /v1/operator/run` writes a
+  throwaway `HERMES_HOME` (config, memory, a `.env` for the run's keys), runs
+  `hermes chat --oneshot --format stream-json` and streams NDJSON back so the
+  request stays live; the home is deleted after. Deployed by `agents.yml
+  operator-deploy` (tests inside the image, fresh key for both sides).
+- **Brain starts every run** (`services/operator/run.ts`, the Russell tick's
+  `operator` pass, hourly, `BRAIN_OPERATOR_INTERVAL_MINUTES`): never overlapping,
+  a run left RUNNING by a restart is finished FAILED after 30 minutes. Hermes'
+  cron, gateway and dashboard are not run.
+- **A credential per run.** The `brain-operator` worker holds `OPERATOR_SCOPES`
+  (`project:read`, `research:read`, `queue:read`, `operator:act`) on every
+  project; Brain mints a `brnw_` credential that expires with the run and
+  revokes it when the run ends. The agent reaches Brain only through `/mcp`
+  over the private network, authenticated and authorized like any worker (§17,
+  §21). It holds nothing between runs.
+- **Its hands are eight tools** (`mcp/operatorTools.ts`, in the one registry),
+  filtered by name in Hermes' config and kept eager (no tool-search bridge):
+  read — `brain_operator_goals`, `_goal` (blockers, open requests with their
+  mission and packet state and a `moot` reading), `_capacity` (§98's pools),
+  `_history` (its runs, actions and lessons); act — `_withdraw_moot_request`,
+  `_continue_idle` (§98's continuation), `_submit_fix` (Factory on the owner's
+  standing improvement order, §87, with §58's LOW-risk release when a person
+  set that order; `RELEASE_EXCLUDED_PATHS`, review and the gate unchanged),
+  `_record_learning`. Each action re-checks its own rule; a wrong choice is
+  refused with why. Hermes' own toolsets are memory, skills and a task list —
+  no shell, files, browser, web or code execution.
+- **Memory is rows.** `operator_memory` (migration 146 / pg 137) holds the
+  memory files and skills Hermes wrote; sent with every run, replaced by what
+  it returns, bounded and path-checked. `operator_learnings` is append-only.
+  `operator_runs` records each run's model, tools called and report, and an
+  `OPERATOR_RUN_FINISHED` event sits beside it.
+- **What it may never do:** spend, contact anyone, approve a plan, publish,
+  merge outside §58's grant, or change a permission. Those stay behind the
+  grants, the effects engine and a person, unchanged.
+
+**The first blocker it was built against.** The $10K goal read BLOCKED on four
+"accept a report with unresolved questions" cards since 2026-11-08. Each was
+answered by §80's routine decision, the answer failed because the mission had
+already left NEEDS_HUMAN, `answered-requests` reopened it, and the next tick
+answered it again — a loop holding a goal on a decision nobody can make.
+`moot()` names that state from the rows (a research card whose mission is not
+NEEDS_HUMAN can never be applied, since every answer begins by moving the
+mission out of NEEDS_HUMAN); withdrawing it keeps the row, and a packet still
+parked is then reached by `answerUnaskedParks` / `concludeUnworkablePackets`,
+which act only on a park no open card covers.
+
+`npm run operator -- show | run | probe` (and `agents.yml operator-show |
+operator-run | operator-status`). Tests: `tests/operator.test.ts`,
+`operator/tests/test_server.py`.

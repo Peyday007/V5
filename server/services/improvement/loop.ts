@@ -414,7 +414,7 @@ export function composeObjective(candidate: ImprovementCandidate, link: Linked, 
   };
 }
 
-async function brainFactoryProject(): Promise<string | null> {
+export async function brainFactoryProject(): Promise<string | null> {
   const row = await getDb().get<{ project_id: string }>(
     "SELECT project_id FROM factory_project_repositories WHERE grant_id = 'brain' ORDER BY created_at LIMIT 1",
     [],
