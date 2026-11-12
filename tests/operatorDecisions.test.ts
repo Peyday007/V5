@@ -151,7 +151,7 @@ describe('acting is gated on a committed decision', () => {
   it('refuses withdraw, commission and submit_fix without a decision id, and names the way past', async () => {
     const { OPERATOR_TOOLS } = await import('../server/mcp/operatorTools.ts');
     const { OPERATOR_SCOPES } = await import('../server/domain/types.ts');
-    const { projectId } = await freshProject();
+    const projectId = (await freshProject()).project.id;
     const principal = {
       type: 'WORKER', id: 'wkr_operator', handle: 'operator', displayName: 'operator', isBrainAdmin: false, mustChangePassword: false,
       credentialId: 'cred_x', authMethod: 'OAUTH_BEARER', requestId: 'req_x',

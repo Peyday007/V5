@@ -292,11 +292,15 @@ export function compareGoal(before: GoalMark | null, after: GoalMark | null): { 
   num('openings at C+', before.ladderAdvanced, after.ladderAdvanced, true);
   num('blockers', before.blockers, after.blockers, false);
   num('moot requests', before.mootRequests, after.mootRequests, false);
-  const personBefore = (before.waitingOn ?? '').startsWith('PERSON');
-  const personAfter = (after.waitingOn ?? '').startsWith('PERSON');
-  if (personBefore && !personAfter) better.push(`no longer waiting on a person (${after.waitingOn ?? 'nothing'})`);
-  if (!personBefore && personAfter) worse.push(`now waiting on a person (${after.waitingOn})`);
-  if (before.state !== after.state && before.state && after.state) {
+  // What a goal waits on is compared only when both readings derived it.
+  if (before.waitingOn !== null && after.waitingOn !== null) {
+    const personBefore = before.waitingOn.startsWith('PERSON');
+    const personAfter = after.waitingOn.startsWith('PERSON');
+    if (personBefore && !personAfter) better.push(`no longer waiting on a person (${after.waitingOn})`);
+    if (!personBefore && personAfter) worse.push(`now waiting on a person (${after.waitingOn})`);
+  }
+  const derived = (state: string | null): state is string => Boolean(state) && state !== 'NOT_DERIVED';
+  if (before.state !== after.state && derived(before.state) && derived(after.state)) {
     const rank = (s: string): number => (s === 'BLOCKED' ? 0 : s === 'STALLED' ? 1 : s === 'DONE' || s === 'MET' ? 3 : 2);
     (rank(after.state) > rank(before.state) ? better : rank(after.state) < rank(before.state) ? worse : []).push(`state ${before.state} → ${after.state}`);
   }

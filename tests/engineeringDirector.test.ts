@@ -166,6 +166,9 @@ describe('the result: a merged pull request is not the improvement', () => {
     expect(compareGoal(mark({}), mark({ waitingOn: 'BRAIN: research', mootRequests: 0, state: 'ACTIVE' })).effect).toBe('IMPROVED');
     expect(compareGoal(mark({}), mark({})).effect).toBe('UNCHANGED');
     expect(compareGoal(null, mark({})).effect).toBe('UNKNOWN');
+    // A light reading's unknowns are never compared against a full reading as if they were facts.
+    const light = mark({ state: 'NOT_DERIVED', waitingOn: null, blockers: null, settledCents: null });
+    expect(compareGoal(light, mark({ mootRequests: 1 })).effect).toBe('UNCHANGED');
   });
 });
 
