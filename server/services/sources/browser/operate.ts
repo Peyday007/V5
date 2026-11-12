@@ -60,6 +60,7 @@ import {
   BROWSER_CAPABILITY_EVENT,
   effectSubject,
   planCapabilityRun,
+  outcomeExpectationFor,
   readBrowserCapabilities,
   verifyObtained,
   type PriorRun,
@@ -115,7 +116,10 @@ export interface OperateCapabilityInput {
   inputs: Record<string, string>;
   /** Approvals recorded for this capability's effectful steps, each bound to a step fingerprint. */
   approvals?: readonly ApprovedAction[];
-  /** Expected page state, datasets, downloads and freshness, verified after the run. */
+  /**
+   * Expected page state, datasets, downloads and freshness, verified after the run.
+   * When omitted, the run is verified against `outcomeExpectationFor` of the approved version.
+   */
   expectation?: OutcomeExpectation;
   /** The request limit the site declares, per minute, when it declares one. */
   declaredPerMinute?: number | null;
@@ -290,7 +294,9 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
 
   // 6. Verify.
   const obtained = verifyObtained(c, run);
-  const verification = input.expectation ? verifyOutcome(run, input.expectation, { now, ...(deps.finalPage ? { finalPage: deps.finalPage } : {}) }) : null;
+  // Always judged: the caller's expectation when it states one, otherwise what the approved version promises.
+  const expectation = input.expectation ?? outcomeExpectationFor(c);
+  const verification: OutcomeVerification | null = verifyOutcome(run, expectation, { now, ...(deps.finalPage ? { finalPage: deps.finalPage } : {}) });
   const verified = run.outcome === 'COMPLETED' && obtained.ok && (verification?.verified ?? true);
 
   let outcome: OperateOutcome;
