@@ -113,6 +113,14 @@ export const MAX_SUMMARY_CHARS = 2000;
 export const MAX_RESULT_REF_CHARS = 512;
 export const MAX_CLAIM_BATCH = 25;
 
+/**
+ * Rows one claim may read in all. A bound on a single call's work, not a
+ * window: `claimWork` under an `admit` rule pages to the end of the claimable
+ * set, and this is set far above any queue Brain holds so that a lane's
+ * declined rows can never hide claimable work behind them (rule 9).
+ */
+export const CLAIM_SCAN_CEILING = 20_000;
+
 /** Bounded so a caller cannot ask for a lease that never expires. */
 export const MIN_LEASE_MS = 5_000;
 export const MAX_LEASE_MS = 60 * 60 * 1000;
@@ -533,8 +541,26 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
    * what it saw and reads a page twice as large, so declined work at the head
    * of the queue cannot hide claimable work behind it.
    */
-  const seen: string[] = [];
-  for (let round = 0; round < 3 && claimed.length < limit; round += 1) {
+  /*
+   * Attempt 3 (CAPABILITY:RESEARCH.RECOVERY.IDLE_CAPACITY): the window above
+   * was still a window. Three rounds of 8 + 16 + 32 rows is 56, so a lane
+   * whose rule declines more than 56 rows at the head of its ask was never
+   * offered the claimable row behind them, however long it waited — "a claim
+   * window full of work the lane declines", recorded verbatim. Callers worked
+   * around it one level up (one ask per type, then one per packet, bounded at
+   * ten packets), each of which only moved the edge of the same window.
+   *
+   * The cause is here, so the fix is here: under an `admit` rule the claim
+   * reads page after page, by a keyset cursor on the sort order, until it has
+   * what it asked for or there is no claimable row left. A claimable row is
+   * therefore always offered on the very next ask, never an hour later.
+   * `CLAIM_SCAN_CEILING` is a bound on one call's work, not a window: it is
+   * far above any queue this Brain holds, and the cursor (not an ever-growing
+   * `NOT IN` list) keeps each page an indexed range read.
+   */
+  let cursor: Pick<WorkItemRow, 'priority' | 'available_at' | 'created_at' | 'id'> | null = null;
+  let scanned = 0;
+  for (let round = 0; claimed.length < limit && scanned < CLAIM_SCAN_CEILING; round += 1) {
     const now = queueNow();
     const params: SqlParam[] = [now, now, ...projectIds];
     let typeClause = '';
@@ -567,9 +593,22 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
       params.push(...scope.params);
     }
     params.push(input.workerId);
-    const seenClause = seen.length > 0 ? ` AND id NOT IN (${seen.map(() => '?').join(', ')})` : '';
-    params.push(...seen);
-    const pageLimit = Math.min(200, candidateLimit * 2 ** round);
+    let seenClause = '';
+    if (cursor) {
+      // Strictly after the last row read, in `ORDER BY priority DESC,
+      // available_at, created_at, id` order.
+      seenClause = ` AND ( priority < ?
+         OR (priority = ? AND ( available_at > ?
+           OR (available_at = ? AND ( created_at > ?
+             OR (created_at = ? AND id > ?) )) )) )`;
+      params.push(
+        cursor.priority, cursor.priority,
+        cursor.available_at, cursor.available_at,
+        cursor.created_at, cursor.created_at,
+        cursor.id,
+      );
+    }
+    const pageLimit = Math.min(200, candidateLimit * 2 ** Math.min(round, 8));
 
     // An expired lease is claimable work. That is what makes recovery
     // independent of any process staying alive: the next worker to ask picks it
@@ -592,7 +631,9 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
       params,
     );
     if (candidates.length === 0) break;
-    for (const candidate of candidates) seen.push(candidate.id);
+    const last = candidates[candidates.length - 1]!;
+    cursor = { priority: last.priority, available_at: last.available_at, created_at: last.created_at, id: last.id };
+    scanned += candidates.length;
 
     let wonThisRound = 0;
     for (const candidate of candidates) {
@@ -724,6 +765,8 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
     // Without an admit rule, a round that won nothing lost every row to other
     // workers or to scope, and the next page is as contended: stop, as before.
     if (wonThisRound === 0 && !input.admit) break;
+    // Without an admit rule, the original three rounds remain the bound.
+    if (!input.admit && round >= 2) break;
   }
 
   return claimed;

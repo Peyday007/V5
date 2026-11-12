@@ -37,6 +37,7 @@ import {
   closeFiledFreeLaneBins,
   coolingForEveryModel,
   ensureFreeWorkers,
+  resetFreeLaneMemberships,
   takeOne,
   discoverCandidates,
   freeLaneSkips,
@@ -49,6 +50,13 @@ const START_TARGET = 2;
 const WINDOW_MS = 3 * 60_000;
 const CONTROL_MS = 30_000;
 const IDLE_SLEEP_MS = 20_000;
+/**
+ * How long a slot that ended while still wanted waits before the pool restarts
+ * it itself. Short against CONTROL_MS, and independent of the control step: a
+ * step that throws (the database the slots just failed against) never reached
+ * `fill`, so the pool stayed short for as long as the step kept failing.
+ */
+const SLOT_RESTART_MS = 5_000;
 
 export interface Window {
   ok: number;
@@ -250,6 +258,12 @@ interface ModelPool {
   busy: number;
   /** The most slots busy at once since the last control step: simultaneous jobs, measured. */
   peakBusy: number;
+  /** Jobs this pool's slots claimed since the last control step. */
+  claimed: number;
+  /** Slots that ended while the pool still wanted them (an exception, not a shrink or a stop) since the last step. */
+  exited: number;
+  /** The pool's own pending refill after a slot exited, so one is scheduled at a time and a stop can cancel it. */
+  restart: NodeJS.Timeout | null;
 }
 
 const pools = new Map<string, ModelPool>();
@@ -267,11 +281,22 @@ export interface PoolOptions {
 }
 let poolOptions: PoolOptions = {};
 
+/** Slots sleeping after an empty claim. A heal wakes them, so a repaired lane claims on this step, not in twenty seconds. */
+const sleepers = new Set<() => void>();
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => {
-    const t = setTimeout(resolve, ms);
+    const done = (): void => {
+      clearTimeout(t);
+      sleepers.delete(done);
+      resolve();
+    };
+    const t = setTimeout(done, ms);
     t.unref?.();
+    sleepers.add(done);
   });
+function wakeIdleSlots(): void {
+  for (const wake of [...sleepers]) wake();
+}
 
 /** One slot: take jobs until the pool's target no longer includes it. */
 async function slot(pool: ModelPool, k: number, config: LaneConfig): Promise<void> {
@@ -300,15 +325,42 @@ async function slot(pool: ModelPool, k: number, config: LaneConfig): Promise<voi
       } finally {
         pool.busy -= 1;
       }
-      if (!result.claimed) await sleep(IDLE_SLEEP_MS);
+      if (result.claimed) pool.claimed += 1;
+      else await sleep(IDLE_SLEEP_MS);
     }
   } finally {
     pool.running -= 1;
+    // Ended while still wanted: not a shrink and not a stop. The pool refills itself after
+    // SLOT_RESTART_MS without waiting on the control step, and the next step records it.
+    if (!stopped && k < pool.target) {
+      pool.exited += 1;
+      scheduleRefill(pool, config);
+    }
   }
 }
 
+/**
+ * Refill a pool whose slot exited, from the pool itself. Before this the only
+ * refill was `fill` inside controlStep, so a slot lost while the control step
+ * was failing (the same database fault that ended the slot makes readCapacity,
+ * waitingNow or writeCapacity throw before `fill`) stayed lost until a step got
+ * all the way through: the lane pool stopped beside waiting work (rule 9).
+ */
+function scheduleRefill(pool: ModelPool, config: LaneConfig): void {
+  if (pool.restart) return;
+  pool.restart = setTimeout(() => {
+    pool.restart = null;
+    // Only the live pool: a stopped lane, or a pool replaced by a restart, is not refilled.
+    if (!stopped && pools.get(pool.worker.model) === pool) fill(pool, config);
+  }, SLOT_RESTART_MS);
+  pool.restart.unref?.();
+}
+
 function fill(pool: ModelPool, config: LaneConfig): void {
-  for (let k = pool.running; k < pool.target; k += 1) void slot(pool, k, config);
+  for (let k = pool.running; k < pool.target; k += 1) {
+    // A slot that throws ends and the pool refills it (scheduleRefill). It never becomes an unhandled rejection.
+    void slot(pool, k, config).catch((error) => console.warn('[free-lane] slot ended:', (error as Error).message));
+  }
 }
 
 export interface ControlReading {
@@ -331,6 +383,10 @@ const IDLE_RECORD_MS = 10 * 60_000;
 const BOOT_GRACE_MS = 10 * 60_000;
 let poolStartedAt = 0;
 let lastIdleRecord = 0;
+/** When the control step last repaired the lane (memberships re-read, exited slots refilled). */
+let lastHeal = 0;
+/** Control steps since the pool started: the first has no interval behind it to judge. */
+let stepsSinceStart = 0;
 export function lastControlReading(): ControlReading | null {
   return lastReading;
 }
@@ -346,12 +402,17 @@ export async function controlStep(): Promise<ControlReading | null> {
       const saved = persisted.get(worker.model);
       // After a restart, resume at half of what was learned: fast to regain, gentle on a cold machine.
       const target = saved ? Math.max(START_TARGET, Math.floor(saved.target / 2)) : START_TARGET;
-      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0 });
+      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0, claimed: 0, exited: 0, restart: null });
     }
   }
   const waiting = await waitingNow();
   const pressure = poolOptions.pressure ? poolOptions.pressure() : readPressure();
   const reading: ControlReading = { waiting, pressure, models: [] };
+  stepsSinceStart += 1;
+  /** What this step found broken in the pool itself, for the heal below (rule 9). */
+  const healed: string[] = [];
+  let claimedSinceStep = 0;
+  let idleSlots = 0;
   for (const pool of pools.values()) {
     const gpu = config.runpod && isRunpodSlot(pool.worker.model);
     const window = gpu ? gpuWindow(await windowFor(pool.worker.model)) : await windowFor(pool.worker.model);
@@ -383,7 +444,15 @@ export async function controlStep(): Promise<ControlReading | null> {
     }
     pool.target = decision.target;
     await writeCapacity(pool.worker.model, pool.target, pool.stableHigh, decision.reason);
+    claimedSinceStep += pool.claimed;
+    pool.claimed = 0;
+    idleSlots += Math.max(0, pool.running - pool.busy);
+    const runningBefore = pool.running;
+    const exited = pool.exited;
+    pool.exited = 0;
     fill(pool, config);
+    // A slot that ended on an exception is not a decision: the pool is refilled now, and the repair recorded.
+    if (exited > 0) healed.push(`${pool.worker.model}: ${exited} slot(s) had exited (${runningBefore} of ${pool.target} running); refilled to ${pool.running}`);
     reading.models.push({
       model: pool.worker.model,
       target: pool.target,
@@ -413,6 +482,37 @@ export async function controlStep(): Promise<ControlReading | null> {
       evidenceClass: 'MEASURED',
     }).catch(() => undefined);
   }
+  /*
+   * Membership lost (rule 9): work waits, a slot is free to take it, and the
+   * whole interval claimed nothing. The memberships a slot reads are cached and
+   * were only re-read by the hourly improvement-research recovery, so a lane
+   * whose grant went stale sat idle beside commercial work too. Re-read them,
+   * re-read the workers, and wake the idle slots so they claim on this step.
+   */
+  const membershipLost = waiting > 0 && stepsSinceStart > 1 && claimedSinceStep === 0 && idleSlots > 0;
+  if ((membershipLost || healed.length > 0) && Date.now() - lastHeal >= IDLE_RECORD_MS) {
+    lastHeal = Date.now();
+    if (membershipLost) {
+      resetFreeLaneMemberships();
+      workersCache = await ensureFreeWorkers(config);
+      for (const [index, worker] of workersCache.entries()) {
+        const pool = pools.get(worker.model);
+        if (pool) {
+          pool.worker = worker;
+          pool.index = index;
+        }
+      }
+      healed.push(`memberships re-read: ${waiting} item(s) waiting, ${idleSlots} slot(s) idle, nothing claimed since the last step`);
+    }
+    wakeIdleSlots();
+    await recordBinEvent({
+      eventType: 'FREE_LANE_CAPACITY',
+      outcome: 'HEALED',
+      reason: healed.join('; ').slice(0, 400),
+      measures: { waiting, idleSlots, claimed: claimedSinceStep, declined: freeLaneSkips() },
+      evidenceClass: 'MEASURED',
+    }).catch(() => undefined);
+  }
   try {
     await closeFiledFreeLaneBins();
   } catch (error) {
@@ -432,6 +532,8 @@ export function startAdaptivePool(options: PoolOptions = {}, intervalMs = CONTRO
   if (controlTimer) return;
   poolOptions = options;
   stopped = false;
+  stepsSinceStart = 0;
+  lastHeal = 0;
   poolStartedAt = options.pressure ? 0 : Date.now();
   // A search endpoint that refuses is a row, not a silence (§88, DISCOVERY.SEARCH).
   setSearchRefusalRecorder((endpoint, status) => {
@@ -455,8 +557,13 @@ export function stopAdaptivePool(): void {
   stopped = true;
   if (controlTimer) clearInterval(controlTimer);
   controlTimer = null;
+  for (const pool of pools.values()) {
+    if (pool.restart) clearTimeout(pool.restart);
+    pool.restart = null;
+  }
   pools.clear();
   workersCache = [];
+  wakeIdleSlots();
 }
 
 /**
