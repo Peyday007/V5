@@ -38,6 +38,25 @@ LOCK = threading.Lock()
 # Finished results by run id, so a Brain that restarted mid-run can collect one.
 RESULTS: dict[str, dict] = {}
 RESULTS_KEPT = 8
+# The machine stops itself, never mid-run (§106). Fly's proxy autostop counts
+# connections, and a Brain that restarted mid-run drops the only one: at 20:56
+# on 2026-11-12 it stopped this machine under opr_59db70fd and the run and its
+# result were lost. So the app is deployed with autostop off and exits when no
+# run holds LOCK and nothing has asked for anything for IDLE_STOP_SECONDS —
+# long enough for a restarted Brain to collect a finished result.
+IDLE_STOP_SECONDS = int(os.environ.get("BRAIN_OPERATOR_IDLE_STOP_SECONDS", "1200"))
+ACTIVITY = {"at": time.monotonic()}
+
+
+def touch() -> None:
+    ACTIVITY["at"] = time.monotonic()
+
+
+def idle_for(now: float | None = None) -> float | None:
+    """Seconds idle, or None while a run holds the lock."""
+    if LOCK.locked():
+        return None
+    return (time.monotonic() if now is None else now) - ACTIVITY["at"]
 
 
 def yaml_str(value: str) -> str:
@@ -243,6 +262,7 @@ def run_operator(body: dict, emit) -> dict:
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:  # one line per request, never a body
+        touch()
         print(f"{self.command} {self.path} -> {args[1] if len(args) > 1 else ''}", flush=True)
 
     def _json(self, status: int, payload: dict) -> None:
@@ -327,6 +347,7 @@ class Handler(BaseHTTPRequestHandler):
                     RESULTS.pop(next(iter(RESULTS)))
             emit(result)
         finally:
+            touch()
             LOCK.release()
 
 
@@ -347,6 +368,17 @@ def main() -> None:
     except OSError:  # a host without IPv6; Fly's private network has it
         server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
         server.daemon_threads = True
+
+    def stop_when_idle() -> None:
+        while True:
+            time.sleep(30)
+            idle = idle_for()
+            if idle is not None and idle > IDLE_STOP_SECONDS:
+                print(f"idle {int(idle)}s with no run in progress; stopping the machine", flush=True)
+                server.shutdown()
+                return
+
+    threading.Thread(target=stop_when_idle, daemon=True).start()
     server.serve_forever()
 
 

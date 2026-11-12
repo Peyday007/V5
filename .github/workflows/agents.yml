@@ -167,12 +167,14 @@ jobs:
               if [ -n "$machine" ]; then
                 flyctl machine destroy "$machine" --app "$op" --force
               fi
-              # Stopped when idle; Fly's proxy starts it for the next run. A run
-              # streams NDJSON, so the request stays live while the agent works.
+              # The app stops itself when no run is in progress (server.py,
+              # stop_when_idle); Fly's proxy starts it for the next run. Proxy
+              # autostop is off: it counts connections, and a Brain restart drops
+              # the only one, which stopped the machine under a live run (§106).
               flyctl machine run "$optag" --app "$op" --region iad --name operator \
                 --vm-size shared-cpu-1x --vm-memory 2048 \
                 --port 80:8080/tcp:http \
-                --autostop=stop --autostart=true \
+                --autostop=off --autostart=true \
                 --restart on-fail
               flyctl machine list --app "$op"
               export FLY_API_TOKEN="$brain_token"

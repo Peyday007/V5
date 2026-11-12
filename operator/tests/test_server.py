@@ -80,6 +80,14 @@ class Results(unittest.TestCase):
         self.assertEqual(len(server.RESULTS), server.RESULTS_KEPT)
         self.assertNotIn("opr_0", server.RESULTS)
 
+    def test_the_machine_never_counts_as_idle_while_a_run_holds_the_lock(self):
+        server.touch()
+        start = server.ACTIVITY["at"]
+        self.assertLess(server.idle_for(start + 5), 6)
+        self.assertGreater(server.idle_for(start + server.IDLE_STOP_SECONDS + 1), server.IDLE_STOP_SECONDS)
+        with server.LOCK:
+            self.assertIsNone(server.idle_for(start + 10 * server.IDLE_STOP_SECONDS))
+
 
 if __name__ == "__main__":
     unittest.main()

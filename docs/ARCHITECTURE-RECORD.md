@@ -15676,6 +15676,14 @@ request id in the brief, and serves the read tools from that one reading.
 `operator show` prints the MCP audit rows (§17) and each failed tool's refusal
 line, which is how each of these was found.
 
+A run that outlived a Brain restart was still lost: Fly's proxy autostop counts
+connections, the restart dropped the only one, and at 20:56 the proxy stopped
+the operator machine under opr_59db70fd — the run and its kept result with it
+(the collector's `GET /v1/operator/runs/:id` answered 404 on the fresh boot). So
+the operator app is deployed with proxy autostop off and stops itself
+(`stop_when_idle`) only when no run holds its lock and nothing has asked it for
+anything for 20 minutes — long enough for a restarted Brain to collect.
+
 `npm run operator -- show | run | probe` (and `agents.yml operator-show |
 operator-run | operator-status`). Tests: `tests/operator.test.ts`,
 `operator/tests/test_server.py`.
