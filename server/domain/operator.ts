@@ -90,7 +90,9 @@ export function operatorDue(input: { lastStartedAt: string | null; running: bool
 export const OPERATOR_TOOL_NAMES = [
   'brain_operator_goals',
   'brain_operator_goal',
+  'brain_operator_goal_plan',
   'brain_operator_capacity',
+  'brain_operator_integrations',
   'brain_operator_history',
   'brain_operator_withdraw_moot_request',
   'brain_operator_continue_idle',
@@ -115,6 +117,8 @@ export function operatorBrief(input: { nowIso: string; runId: string }): string 
     '1. brain_operator_goals — understand the desired result and its state. Start with the most urgent.',
     '2. brain_operator_goal {goal_id} — inspect what Brain already has: its blockers, open person-requests (each says',
     '   whether it is moot), linked work and the next action Brain itself recommends.',
+    '   brain_operator_goal_plan {goal_id} — the quantitative plan: which strategy reaches the target, what fails, the next test.',
+    '   brain_operator_integrations — which services Brain can use right now.',
     '3. brain_operator_history — what you did before and what you learned. Do not repeat a strategy that already failed.',
     '4. Act on what can be fixed now:',
     '   - a request marked moot=true holds the goal on a decision nobody can make: brain_operator_withdraw_moot_request.',

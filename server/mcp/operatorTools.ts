@@ -20,6 +20,8 @@ import {
   operatorGoals,
   operatorHistory,
   operatorRecordLearning,
+  readGoalPlanSummary,
+  readIntegrations,
   readRequests,
   summarizeGoal,
   withdrawMootRequest,
@@ -111,6 +113,43 @@ const goalTool: McpTool = {
         obligations: goal.obligations,
       },
     };
+  },
+};
+
+const planTool: McpTool = {
+  name: 'brain_operator_goal_plan',
+  title: 'Operator: the goal plan',
+  description:
+    "A goal's quantitative plan as Brain's planner last read it: verdict, the chosen strategy, each strategy's " +
+    'simulated reach, conservative settled cash and failed constraints, and the next test that would change it. ' +
+    'Use it to decide which strategy to push and what research or work would move the number.',
+  inputSchema: {
+    type: 'object',
+    properties: { goal_id: { type: 'string' } },
+    required: ['goal_id'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Operator: the goal plan', ...READ_ONLY },
+  run: async (args, { principal }) => {
+    const goalId = requiredString(args, 'goal_id');
+    const goal = (await operatorGoals(await readableProjects(principal))).find((one) => one.id === goalId);
+    if (!goal || !goal.projectId) throw notFoundError();
+    await authorize(principal, goal.projectId, 'READ', 'project:read');
+    return { projectId: goal.projectId, value: await readGoalPlanSummary(goalId) };
+  },
+};
+
+const integrationsTool: McpTool = {
+  name: 'brain_operator_integrations',
+  title: 'Operator: integrations',
+  description:
+    'Every external service Brain is connected to (outreach, discovery, models, agents, Factory, payments), what each ' +
+    'lets Brain do, and its latest health reading. Credentials are never shown; Brain supplies them itself.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  annotations: { title: 'Operator: integrations', ...READ_ONLY },
+  run: async (_args, { principal }) => {
+    requireOperator(principal);
+    return { projectId: null, value: { integrations: await readIntegrations() } };
   },
 };
 
@@ -247,7 +286,9 @@ const learnTool: McpTool = {
 export const OPERATOR_TOOLS: readonly McpTool[] = [
   goalsTool,
   goalTool,
+  planTool,
   capacityTool,
+  integrationsTool,
   historyTool,
   withdrawTool,
   continueTool,
