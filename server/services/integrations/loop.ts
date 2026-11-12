@@ -23,6 +23,13 @@ import { searchPlacesViaV2 } from './v2Bridge.ts';
 export const INTEGRATIONS_TICK_MS = 5 * 60_000;
 export const CHECK_PERIOD_MS = 60 * 60_000;
 export const NEIGHBOR_CARD_PERIOD_MS = 60 * 60_000;
+/**
+ * Nothing runs in a process's first twenty minutes: Deploy restarts the Brain
+ * and then verifies it end to end, and a crawl beside that verification is load
+ * it did not ask for (Deploy 958's post-restart pass timed out on a research
+ * call while the first Neighbor Card pass ran).
+ */
+export const WARMUP_MS = 20 * 60_000;
 
 const PASS_STATE = 'NEIGHBOR_CARD_PASS';
 
@@ -42,8 +49,9 @@ export function placesMeter(source: string) {
 }
 
 /** One tick: whichever of the two jobs is due. */
-export async function integrationsTick(now = Date.now(), env: NodeJS.ProcessEnv = process.env): Promise<string[]> {
+export async function integrationsTick(now = Date.now(), env: NodeJS.ProcessEnv = process.env, uptimeMs = process.uptime() * 1000): Promise<string[]> {
   const done: string[] = [];
+  if (uptimeMs < WARMUP_MS) return done;
   if (await due('instantly', 'CHECK', null, CHECK_PERIOD_MS, now)) {
     await checkAndRecord({ env, source: 'brain tick' });
     done.push('check');
