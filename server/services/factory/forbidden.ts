@@ -26,6 +26,8 @@
  *   ownership check, so a plan that slipped past the first question by any route
  *   still cannot deliver a forbidden change.
  */
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { pathsOverlap } from '../../repos/factory.ts';
 import { matchesGlob } from './glob.ts';
 import { UNIVERSAL_FORBIDDEN_PATHS, decideRepository } from './repositoryEnvelope.ts';
@@ -86,4 +88,64 @@ export function scopeOnlyForbidden(scope: string[], forbidden: string[]): string
 
 function isTestGlob(glob: string): boolean {
   return /(^|\/)(tests?|__tests__)\//.test(glob) || /\.(test|spec)\.[^/]*$/.test(glob);
+}
+
+/** The most files one owned glob is expanded into; past it the glob stays as written (and is refused). */
+const MAX_EXPANSION = 200;
+
+/** Repository files under a glob's fixed prefix that match it, read from the repository root. */
+function filesMatching(glob: string, root: string): string[] | null {
+  const fixed: string[] = [];
+  for (const part of glob.split('/')) {
+    if (/[*?[{]/.test(part)) break;
+    fixed.push(part);
+  }
+  const base = fixed.join('/');
+  const start = `${root}${base}`;
+  if (!base || !existsSync(start) || !statSync(start).isDirectory()) return null;
+  const out: string[] = [];
+  const walk = (dir: string, rel: string): boolean => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+      const path = `${rel}/${entry.name}`;
+      if (entry.isDirectory()) {
+        if (!walk(`${dir}/${entry.name}`, path)) return false;
+      } else if (matchesGlob(path, glob)) {
+        out.push(path);
+        if (out.length > MAX_EXPANSION) return false;
+      }
+    }
+    return true;
+  };
+  return walk(start, base) ? out.sort() : null;
+}
+
+/**
+ * Owned paths held clear of the forbidden ones. A repair inherits its units'
+ * globs, and a glob such as `server/repos/**` also reaches a file the grant puts
+ * out of every worker's reach (production 2026-11-12, authority-d0-p0:
+ * `server/repos/factoryRelease.ts`), so the repair was refused outright and the
+ * campaign stopped. Such a glob is replaced by the files it matches today, less
+ * the forbidden ones; a glob too wide to list, or one with nothing under it,
+ * stays as written and the validator says why.
+ */
+export function ownedPathsClearOf(
+  ownedPaths: readonly string[],
+  forbidden: readonly string[],
+  root: string = fileURLToPath(new URL('../../../', import.meta.url)),
+): string[] {
+  const out: string[] = [];
+  for (const path of ownedPaths) {
+    if (!ownershipReachesForbidden(path, [...forbidden]) || !/[*?[{]/.test(path)) {
+      out.push(path);
+      continue;
+    }
+    const files = filesMatching(path, root);
+    if (files === null) {
+      out.push(path);
+      continue;
+    }
+    out.push(...files.filter((file) => forbiddenIn([file], [...forbidden]).length === 0));
+  }
+  return [...new Set(out)];
 }
