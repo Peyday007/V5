@@ -1412,6 +1412,17 @@ async function tickOnce(owner: string): Promise<TickReport> {
     });
 
     /*
+     * Brain's operator (§106): Hermes Agent directs every goal through the
+     * operator tools. Started here when due (hourly by default) and never
+     * awaited — the run streams back on its own and is recorded when it ends.
+     * Does nothing until the operator app is deployed and connected.
+     */
+    await runPass(report, 'operator', async () => {
+      const { operatorTickIfDue } = await import('../operator/run.ts');
+      await operatorTickIfDue();
+    });
+
+    /*
      * And the self-model, when the last reading has stopped being about this
      * system.
      *

@@ -351,6 +351,26 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     ownerAction: 'Nothing: the Agents workflow deploys the service and writes both settings.',
   },
   {
+    id: 'operator',
+    name: 'Operator (Hermes Agent)',
+    purpose:
+      "Brain's general operator (§106): Hermes Agent on a private app directs every goal through Brain's operator " +
+      "tools, thinking with the free switchboard and the RunPod GPU, with a credential Brain mints for each run.",
+    heldBy: 'BRAIN',
+    credentials: [
+      fly('BRAIN_OPERATOR_URL', ['WORKFLOW'], { required: false, shape: /^http:\/\/[a-z0-9-]+\.flycast(:\d+)?$/ }),
+      fly('BRAIN_OPERATOR_KEY', ['WORKFLOW'], { required: false, shape: /^[0-9a-f]{64}$/ }),
+    ],
+    consumers: [
+      { component: 'Operator runs, started by the durable tick', path: 'server/services/operator/run.ts' },
+      { component: 'Operator tools on the MCP door', path: 'server/mcp/operatorTools.ts' },
+    ],
+    capabilities: ['DIRECT_GOALS', 'SEND_FIXES_TO_FACTORY'],
+    probe: null,
+    dailyCeiling: null,
+    ownerAction: 'Nothing: the Agents workflow (operator-deploy) deploys the service and writes both settings.',
+  },
+  {
     id: 'etsy',
     name: 'Etsy',
     purpose: 'The puzzle shop listings (launch).',
