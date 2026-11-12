@@ -162,3 +162,16 @@ describe('chamber member pages', () => {
     expect(chamberMember(newer)).toEqual({ website: 'http://www.neslund.example', town: 'Carlisle', name: 'Neslund DMD' });
   });
 });
+
+describe('who is a neighborhood advertiser', () => {
+  it('refuses national brands, institutions and network location pages', async () => {
+    const { isChainOrInstitution, isNetworkPage } = await import('../server/services/cash/neighborCard.ts');
+    expect(isChainOrInstitution('www.geico.com')).toBe(true);
+    expect(isChainOrInstitution('agent@aflac.com')).toBe(true);
+    expect(isChainOrInstitution('wellness@dickinson.edu')).toBe(true);
+    expect(isChainOrInstitution('smiledentalcamphill.com')).toBe(false);
+    expect(isNetworkPage('https://www.athletico.com/locations/mechanicsburg-pa/')).toBe(true);
+    expect(isNetworkPage('https://www.geico.com/insurance-agents/pennsylvania/harrisburg/')).toBe(true);
+    expect(isNetworkPage('https://smile.example/contact-us/')).toBe(false);
+  });
+});
