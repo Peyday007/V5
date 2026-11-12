@@ -852,6 +852,13 @@ async function resumeCapabilityAuthority(request: RussellHumanRequest): Promise<
  * an orchestration; a replacement would fail condition 17 outright and would
  * also throw away the packet's accepted work.
  */
+/**
+ * What a resume says when the mission left `NEEDS_HUMAN` underneath the
+ * answer. One string, two readers: the two resumes that write it, and
+ * `reopenAnswered`, which withdraws rather than re-asks on it.
+ */
+const MOVED_OUT_OF_NEEDS_YOU = 'the mission moved out of Needs You before the answer could be applied';
+
 export async function resumeAnsweredRequest(
   request: RussellHumanRequest,
 ): Promise<ResumeResult> {
@@ -997,7 +1004,25 @@ export async function reopenAnswered(
   }
 
   const mission = await getMission(request.missionId);
-  const orchestrationId = mission?.orchestrationId ?? null;
+  /*
+   * A mission that is gone, or one the resume found had already left Needs
+   * You and still has not come back, cannot take this answer, and no later
+   * answer can change that: `resumeAnsweredRequest` only ever applies a
+   * decision through a transition guarded on `NEEDS_HUMAN`. An answer that
+   * failed for any other reason is still re-asked below, exactly as before. Putting the card
+   * back in front of the person would ask them for a decision nobody can carry
+   * out — the operator measured 31 such cards holding a goal on "PERSON".
+   *
+   * So the card is withdrawn instead, through the same two guarded
+   * transitions a reopen and a withdrawal already use: `ANSWERED -> OPEN`,
+   * then `OPEN -> WITHDRAWN`. A concurrent writer that moved the row first wins
+   * either step, and nothing it wrote is clobbered. The row is kept (history is
+   * never destroyed) and the event records the answer that could not apply.
+   */
+  if (!mission || (mission.state !== 'NEEDS_HUMAN' && reason === MOVED_OUT_OF_NEEDS_YOU)) {
+    return withdrawMootAnswer(request, mission, reason);
+  }
+  const orchestrationId = mission.orchestrationId;
   const shape = orchestrationId
     ? await packetShape(orchestrationId)
     : { awaitingApproval: 0, accepted: 0, researched: 0 };
@@ -1024,6 +1049,52 @@ export async function reopenAnswered(
     authorityNeeded: words.authorityNeeded,
     whyNotRussell: words.whyNotRussell,
   });
+}
+
+async function withdrawMootAnswer(
+  request: RussellHumanRequest,
+  mission: RussellMission | null,
+  reason: string,
+): Promise<boolean> {
+  const missionState = mission?.state ?? 'GONE';
+  const why = mission
+    ? `Withdrawn: the mission is now ${missionState}, so this answer can no longer be applied ` +
+      `(${reason}) and there is nothing left for you to decide here.`
+    : `Withdrawn: the mission no longer exists, so this answer can no longer be applied ` +
+      `(${reason}) and there is nothing left for you to decide here.`;
+  const reopened = await reopenRequest({
+    requestId: request.id,
+    choices: request.choices,
+    recommendation: reason,
+    authorityNeeded: request.authorityNeeded,
+    whyNotRussell: request.whyNotRussell,
+  });
+  if (!reopened) return false;
+  const withdrawn = await withdrawRequest({ requestId: request.id, reason: why });
+  if (!withdrawn) return false;
+  await recordEvent({
+    projectId: request.projectId,
+    entityType: 'RUSSELL_HUMAN_REQUEST',
+    entityId: request.id,
+    /*
+     * The closed event list's existing name for a decision Brain made itself.
+     * Deliberately not `OPERATOR_WITHDREW_MOOT_REQUEST`: the operator counts
+     * those as evidence this very defect recurs, and this is the fix.
+     */
+    eventType: 'RUSSELL_ROUTINE_DECISION',
+    payload: {
+      choice: 'WITHDRAW_MOOT_ANSWER',
+      decidedBy: 'BRAIN',
+      requestId: request.id,
+      missionId: request.missionId,
+      missionState,
+      answeredChoice: request.answeredChoice,
+      answeredByUserId: request.answeredByUserId,
+      reason,
+      surface: 'RUSSELL',
+    },
+  });
+  return true;
 }
 
 async function stop(mission: RussellMission): Promise<boolean> {
@@ -1105,7 +1176,7 @@ async function authorizePlan(
   if (!moved) {
     return {
       ok: false,
-      reason: 'the mission moved out of Needs You before the answer could be applied',
+      reason: MOVED_OUT_OF_NEEDS_YOU,
       missionId: mission.id,
       settled: false,
     };
@@ -1225,7 +1296,7 @@ async function recordGaps(
   if (!moved) {
     return {
       ok: false,
-      reason: 'the mission moved out of Needs You before the answer could be applied',
+      reason: MOVED_OUT_OF_NEEDS_YOU,
       missionId: mission.id,
       settled: false,
     };
