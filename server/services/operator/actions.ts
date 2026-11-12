@@ -105,7 +105,7 @@ export async function operatorHistory(goalId: string | null): Promise<Record<str
   const learnings = await listOperatorLearnings({ goalId, limit: 15 });
   const events = await getDb().all<{ event_type: string; payload: string; created_at: string }>(
     `SELECT event_type, payload, created_at FROM project_events
-      WHERE event_type LIKE 'OPERATOR_%' ORDER BY created_at DESC LIMIT 20`,
+      WHERE event_type IN ('OPERATOR_WITHDREW_MOOT_REQUEST', 'OPERATOR_FIX_SUBMITTED', 'OPERATOR_FIX_NOT_STARTED', 'OPERATOR_RUN_FINISHED') ORDER BY created_at DESC LIMIT 20`,
     [],
   );
   return {

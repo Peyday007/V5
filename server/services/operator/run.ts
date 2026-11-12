@@ -201,9 +201,13 @@ async function performRun(runId: string, config: OperatorConfig, models: Operato
     const issued = await issueWorkerCredential({ workerId, expiresAt, issuedByType: 'SYSTEM', issuedById: `operator:${runId}` });
     credentialId = issued.credential.id;
     const memory = await readOperatorMemory();
+    // The goals, read once here — outside the MCP call limit — and served to the run's read tools.
+    const { operatorSnapshot, snapshotForBrief } = await import('./snapshot.ts');
+    const projectIds = (await listProjects()).map((p) => p.id);
+    const snapshot = await operatorSnapshot(projectIds, { fresh: true });
     const body = {
       runId,
-      prompt: operatorBrief({ nowIso: new Date().toISOString(), runId }),
+      prompt: operatorBrief({ nowIso: new Date().toISOString(), runId, goals: snapshotForBrief(snapshot) }),
       models: models.map((m) => ({ baseUrl: m.baseUrl, model: m.model, apiKey: m.apiKey })),
       mcp: { url: `${config.brainUrl}/mcp`, token: issued.plaintext, tools: [...OPERATOR_TOOL_NAMES] },
       toolsets: [...OPERATOR_HERMES_TOOLSETS],
