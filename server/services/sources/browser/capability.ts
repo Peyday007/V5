@@ -20,7 +20,8 @@
  *    policy** (a read may retry within a bound; a mutation is never retried
  *    automatically, and an unknown outcome stays UNKNOWN — invariant 26), a
  *    **freshness window**, a **failure-reason vocabulary**, **test fixtures**,
- *    a **maintenance owner**, a **request-rate bound**, and the **session rule**
+ *    a **maintenance owner**, a **request-rate bound** (enforced by
+ *    `effectGuard`'s one request budget), and the **session rule**
  *    (whether a granted account is used and when it must be reauthorized).
  *
  * Lifecycle DRAFT → APPROVED → ACTIVE → REVIEW → RETIRED is never stored as a
@@ -59,6 +60,7 @@ import { getDb } from '../../../db/database.ts';
 import { recordBinEvent } from '../../../repos/bins.ts';
 import { hostMeasuresPattern } from '../acquisition.ts';
 import { redactText } from './redaction.ts';
+import { browserEffectKey, type EffectSubject } from './effectGuard.ts';
 import {
   BROWSER_WORKFLOW_RUN_EVENT,
   MAX_WORKFLOW_STEPS,
@@ -444,16 +446,26 @@ export function capabilitiesFrom(capRows: readonly CapabilityRow[], runRows: rea
 }
 
 /* ------------------------------------------------------------------------- */
-/* Running: retry, idempotency and rate bounds (pure decision)                */
+/* Running: the pre-run decision (pure)                                       */
 /* ------------------------------------------------------------------------- */
 
 /**
- * The logical key of one effect: the version's content hash and the inputs.
- * Nothing about the attempt, the worker or the time is in it, so every attempt
- * at the same mutation has the same key (invariant 27). Pure.
+ * The subject a capability's effects are performed by: its host, name and the
+ * exact version (number and content hash) being run. Pure.
  */
-export function effectKey(contentHash: string, inputs: Record<string, string>): string {
-  return createHash('sha256').update(JSON.stringify([contentHash, canonical(inputs)])).digest('hex');
+export function effectSubject(record: Pick<CapabilityRecord, 'host' | 'name' | 'current'>): EffectSubject {
+  return { host: record.host, name: record.name, version: `v${record.current.version}:${record.current.contentHash}` };
+}
+
+/**
+ * The logical key of one effect of this capability: `effectGuard`'s
+ * `browserEffectKey` over the capability's subject and the inputs. There is
+ * one key derivation; this names it from a capability record, so the key a plan
+ * reports is the key `operateCapability` claims. Nothing about the attempt, the
+ * worker or the time is in it (invariant 27). Pure.
+ */
+export function capabilityEffectKey(record: Pick<CapabilityRecord, 'host' | 'name' | 'current'>, inputs: Record<string, string>): string {
+  return browserEffectKey({ capability: effectSubject(record), approvedInput: inputs });
 }
 
 export interface PriorRun {
@@ -471,6 +483,7 @@ export type RunDecision =
    */
   | { decision: 'RUN'; key: string; attempt: number; claim: 'REQUIRED' | 'NONE' }
   | { decision: 'ALREADY_DONE'; key: string; detail: string }
+  /** A read that failed is backing off before its next attempt. */
   | { decision: 'WAIT'; key: string; retryAt: string; detail: string }
   | { decision: 'REFUSED'; key: string; reason: (typeof BASE_FAILURE_REASONS)[number] | 'NOT_APPROVED' | 'RETIRED' | 'BAD_INPUT'; detail: string };
 
@@ -478,10 +491,16 @@ export type RunDecision =
  * Whether this capability may be attempted now with these inputs, from its
  * record and, for a READ, its recorded runs. Pure.
  *
- * A read already obtained within its freshness window is not run again, and a
- * failed read retries within its bound and backoff; every run stays inside the
- * capability's rate bound. These are pacing decisions over idempotent work, so
- * a stale view of the rows costs at most one extra read.
+ * This is the one pre-run decision `operateCapability` makes: lifecycle,
+ * inputs, and — for a READ — freshness and the retry bound. A read already
+ * obtained within its freshness window is not run again, and a failed read
+ * retries within its bound and backoff. These are pacing decisions over
+ * idempotent work, so a stale view of the rows costs at most one extra read.
+ *
+ * The capability's declared request rate (`rateLimit`) is not decided here:
+ * it is enforced by the one request budget, `effectGuard`'s
+ * `requestBudgetFrom`, together with the host's limit, over the
+ * BROWSER_WORKFLOW_RUN rows every run writes.
  *
  * Whether a MUTATION was already performed, is in flight, or has an unknown
  * outcome is deliberately **not** decided here: a list of rows read earlier
@@ -492,7 +511,7 @@ export type RunDecision =
  */
 export function planCapabilityRun(record: CapabilityRecord, inputs: Record<string, string>, prior: readonly PriorRun[], now: number = Date.now()): RunDecision {
   const c = record.current.capability;
-  const key = effectKey(record.current.contentHash, inputs);
+  const key = capabilityEffectKey(record, inputs);
   const missing = c.inputs.filter((f) => typeof inputs[f.name] !== 'string').map((f) => f.name);
   const extra = Object.keys(inputs).filter((k) => !c.inputs.some((f) => f.name === k));
   if (missing.length || extra.length) return { decision: 'REFUSED', key, reason: 'BAD_INPUT', detail: `inputs: missing ${missing.join(', ') || 'none'}; undeclared ${extra.join(', ') || 'none'}` };
@@ -513,15 +532,6 @@ export function planCapabilityRun(record: CapabilityRecord, inputs: Record<strin
     if (last && now < Date.parse(last.at) + c.retry.backoffMs) return { decision: 'WAIT', key, retryAt: new Date(Date.parse(last.at) + c.retry.backoffMs).toISOString(), detail: 'backing off before the next read attempt' };
   }
 
-  const hourAgo = now - 3_600_000;
-  const recent = prior.filter((p) => Date.parse(p.at) > hourAgo).map((p) => Date.parse(p.at)).sort((a, b) => a - b);
-  if (recent.length >= c.rateLimit.maxRunsPerHour) {
-    return { decision: 'WAIT', key, retryAt: new Date(recent[recent.length - c.rateLimit.maxRunsPerHour]! + 3_600_000).toISOString(), detail: `the site's bound is ${c.rateLimit.maxRunsPerHour} runs an hour` };
-  }
-  const newest = recent[recent.length - 1];
-  if (newest !== undefined && now - newest < c.rateLimit.minIntervalMs) {
-    return { decision: 'WAIT', key, retryAt: new Date(newest + c.rateLimit.minIntervalMs).toISOString(), detail: `at least ${c.rateLimit.minIntervalMs} ms between runs` };
-  }
   return { decision: 'RUN', key, attempt: mine.length + 1, claim: mutation ? 'REQUIRED' : 'NONE' };
 }
 

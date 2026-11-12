@@ -18,10 +18,10 @@ import {
   requestBudgetFrom,
   resolveUnknownBrowserEffect,
   settleBrowserEffect,
-  type BrowserCapability,
+  type EffectSubject,
 } from '../server/services/sources/browser/effectGuard.ts';
 
-const cap: BrowserCapability = { host: 'portal.example.org', name: 'Submit renewal', version: '2026-11-01T00:00:00.000Z' };
+const cap: EffectSubject = { host: 'portal.example.org', name: 'Submit renewal', version: '2026-11-01T00:00:00.000Z' };
 const input = { form: { reference: 'R-1001', quantity: 2 } };
 const worker = { type: 'WORKER' as const, id: 'wrk_a' };
 const otherWorker = { type: 'WORKER' as const, id: 'wrk_b' };
@@ -117,6 +117,21 @@ describe('the request limit', () => {
   it('never lets a site-declared limit raise Brain\'s own ceiling, and proceeds under it', () => {
     const budget = requestBudgetFrom('portal.example.org', [rowAt(5)], { now, declaredPerMinute: 1000 });
     expect(budget).toMatchObject({ decision: 'PROCEED', limit: DEFAULT_HOST_RUNS_PER_MINUTE, limitSource: 'BRAIN_DEFAULT', counted: 1 });
+  });
+
+  it('applies a capability\'s declared rate in the same budget as the host limit, attributing rows by name', () => {
+    const named = (secondsAgo: number, name: string) => ({ ...rowAt(secondsAgo), measures: JSON.stringify({ host: 'portal.example.org', name }) });
+    const rate = { name: 'Submit renewal', maxRunsPerHour: 2, minIntervalMs: 0 };
+    const hourly = requestBudgetFrom('portal.example.org', [named(600, 'Submit renewal'), named(1200, 'submit renewal'), named(30, 'Other')], { now, capability: rate });
+    expect(hourly).toMatchObject({ decision: 'DEFER', bound: 'CAPABILITY_HOURLY' });
+    expect(hourly.retryAfter).toBe(new Date(now.getTime() - 1200_000 + 3_600_000).toISOString());
+    expect(requestBudgetFrom('portal.example.org', [named(600, 'Submit renewal'), named(30, 'Other')], { now, capability: rate })).toMatchObject({ decision: 'PROCEED', bound: null });
+    // A row that cannot be attributed counts against the bound rather than being assumed someone else's.
+    expect(requestBudgetFrom('portal.example.org', [rowAt(600), rowAt(1200)], { now, capability: rate }).decision).toBe('DEFER');
+    const spaced = requestBudgetFrom('portal.example.org', [named(5, 'Submit renewal')], { now, capability: { ...rate, maxRunsPerHour: 10, minIntervalMs: 30_000 } });
+    expect(spaced).toMatchObject({ decision: 'DEFER', bound: 'CAPABILITY_INTERVAL', retryAfter: new Date(now.getTime() + 25_000).toISOString() });
+    // The host's own limit is still checked first.
+    expect(requestBudgetFrom('portal.example.org', [rowAt(5), rowAt(6)], { now, declaredPerMinute: 2, capability: rate })).toMatchObject({ decision: 'DEFER', bound: 'HOST' });
   });
 
   it('defers a host that answered it is rate limited', () => {
