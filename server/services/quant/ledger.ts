@@ -17,6 +17,7 @@
  * names no cause, and a signal nobody measured names none.
  */
 import { getDb } from '../../db/database.ts';
+import type { SqlParam } from '../../db/types.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import {
   assessModelLearning,
@@ -44,6 +45,24 @@ export interface LedgerDeps {
   read?: () => Promise<{ predictions: PredictionRow[]; exposures: ExposureRow[]; outcomes: OutcomeRow[] }>;
   now?: () => string;
   caller?: string;
+  /**
+   * The project the rows belong to. Written to `bin_events.project_id`, and the
+   * default read is scoped to it, so one project's refresh never reads another's
+   * ledger. When absent it is taken from a cash claim id (`cash:<project>:…`).
+   */
+  projectId?: string | null;
+}
+
+/** The project a cash claim (or a version of one) belongs to, read from its id; null for any other claim. */
+export function projectOfClaim(id: string): string | null {
+  if (!id.startsWith('cash:')) return null;
+  const project = id.split(':')[1];
+  return project ? project : null;
+}
+
+/** The row's own claim or version id, which is where its project is read from. */
+function idOf(row: LedgerRow['row']): string {
+  return 'claimId' in row ? row.claimId : row.predictionId;
 }
 
 /** The id a version of a claim has: stable, so recording it again is the same row, not a second one. */
@@ -54,6 +73,7 @@ export function predictionIdOf(claimId: string, version: number): string {
 async function write(kind: LedgerKind, row: LedgerRow['row'], deps: LedgerDeps, reason: string): Promise<void> {
   await (deps.record ?? recordBinEvent)({
     eventType: LEDGER_EVENTS[kind],
+    projectId: deps.projectId ?? projectOfClaim(idOf(row)),
     workloadClass: deps.caller ?? 'forecast-ledger',
     outcome: kind,
     reason: reason.slice(0, 480),
@@ -97,12 +117,50 @@ export function ledgerFromRows(rows: readonly { measures: string | null }[]): {
   return { predictions: ordered, exposures: [...exposures.values()], outcomes: [...outcomes.values()] };
 }
 
-export async function readLedger(): Promise<{ predictions: PredictionRow[]; exposures: ExposureRow[]; outcomes: OutcomeRow[] }> {
-  const rows = await getDb().all<{ measures: string | null }>(
-    `SELECT measures FROM bin_events WHERE event_type IN (?, ?, ?) ORDER BY at ASC, id ASC LIMIT 50000`,
-    [LEDGER_EVENTS.PREDICTION, LEDGER_EVENTS.EXPOSURE, LEDGER_EVENTS.OUTCOME],
-  );
+/** Rows fetched per round trip. A page size, never a cap: the read continues until the ledger is exhausted. */
+export const LEDGER_PAGE_ROWS = 5000;
+
+/**
+ * Read the ledger back, every row of it, oldest first. Scoped to one project when
+ * one is named (the per-project claims a refresh versions and judges), the whole
+ * ledger otherwise. It is paged on `(at, id)` rather than capped: a fixed LIMIT
+ * on an oldest-first read would make every row past it — the newest predictions,
+ * exposures and outcomes — silently invisible.
+ */
+export async function readLedger(
+  projectId: string | null = null,
+  pageRows = LEDGER_PAGE_ROWS,
+): Promise<{ predictions: PredictionRow[]; exposures: ExposureRow[]; outcomes: OutcomeRow[] }> {
+  const rows: { measures: string | null }[] = [];
+  const size = Math.max(1, Math.floor(pageRows));
+  let after: { at: string; id: string } | null = null;
+  for (;;) {
+    const params: SqlParam[] = [LEDGER_EVENTS.PREDICTION, LEDGER_EVENTS.EXPOSURE, LEDGER_EVENTS.OUTCOME];
+    let where = 'event_type IN (?, ?, ?)';
+    if (projectId !== null) {
+      where += ' AND project_id = ?';
+      params.push(projectId);
+    }
+    if (after) {
+      where += ' AND (at > ? OR (at = ? AND id > ?))';
+      params.push(after.at, after.at, after.id);
+    }
+    params.push(size);
+    const page: { id: string; at: string; measures: string | null }[] = await getDb().all<{ id: string; at: string; measures: string | null }>(
+      `SELECT id, at, measures FROM bin_events WHERE ${where} ORDER BY at ASC, id ASC LIMIT ?`,
+      params,
+    );
+    rows.push(...page);
+    const last = page[page.length - 1];
+    if (page.length < size || !last) break;
+    after = { at: last.at, id: last.id };
+  }
   return ledgerFromRows(rows);
+}
+
+/** The read a write uses when none is injected: the project's own ledger when the claim names one. */
+function defaultRead(deps: LedgerDeps, id: string): () => ReturnType<typeof readLedger> {
+  return deps.read ?? (() => readLedger(deps.projectId ?? projectOfClaim(id)));
 }
 
 export interface PredictionInput {
@@ -122,7 +180,7 @@ export async function recordPrediction(input: PredictionInput, deps: LedgerDeps 
   if (input.probability !== null && !(input.probability >= 0 && input.probability <= 1)) {
     throw new Error('a stated probability is between 0 and 1');
   }
-  const existing = (await (deps.read ?? readLedger)()).predictions.filter((p) => p.claimId === input.claimId);
+  const existing = (await defaultRead(deps, input.claimId)()).predictions.filter((p) => p.claimId === input.claimId);
   const version = existing.reduce((m, p) => Math.max(m, p.version), 0) + 1;
   const row: PredictionRow = {
     id: predictionIdOf(input.claimId, version),
@@ -197,7 +255,7 @@ export async function recordOutcome(
   signals: OutcomeSignals = {},
   deps: LedgerDeps = {},
 ): Promise<OutcomeRow> {
-  const ledger = await (deps.read ?? readLedger)();
+  const ledger = await defaultRead(deps, predictionId)();
   const prediction = ledger.predictions.find((p) => p.id === predictionId);
   if (!prediction) throw new Error(`no prediction ${predictionId} is on the ledger: an outcome is recorded against a version that exists`);
   if (ledger.outcomes.some((o) => o.predictionId === predictionId)) {
@@ -217,9 +275,9 @@ export async function recordOutcome(
 /** Judge the ledger as it stands: calibration, diagnoses, the smallest reusable causes and the plans to recompute. */
 export async function assessLedger(
   input: Omit<Parameters<typeof assessModelLearning>[0], 'predictions' | 'exposures' | 'outcomes'> = {},
-  deps: Pick<LedgerDeps, 'read'> = {},
+  deps: Pick<LedgerDeps, 'read' | 'projectId'> = {},
 ): Promise<ModelLearningReading> {
-  return assessModelLearning({ ...(await (deps.read ?? readLedger)()), ...input });
+  return assessModelLearning({ ...(await (deps.read ?? (() => readLedger(deps.projectId ?? null)))()), ...input });
 }
 
 /**
@@ -244,7 +302,7 @@ export async function recordCashForecast(
   ];
   const written: PredictionRow[] = [];
   // Read once: the latest version of each claim decides whether this forecast revises it or repeats it.
-  const before = await (deps.read ?? readLedger)();
+  const before = await (deps.read ?? (() => readLedger(projectId)))();
   const latest = new Map<string, PredictionRow>();
   for (const p of before.predictions) {
     const held = latest.get(p.claimId);
@@ -265,7 +323,7 @@ export async function recordCashForecast(
     // A forecast recomputed from unchanged rows states the same claim: it is not a new version.
     const held = latest.get(input.claimId);
     if (held && statesSame(held, input)) continue;
-    written.push(await recordPrediction(input, { ...deps, read: async () => before }));
+    written.push(await recordPrediction(input, { ...deps, projectId, read: async () => before }));
   }
   return written;
 }
@@ -301,13 +359,23 @@ export async function keepCashLedger(
 ): Promise<{ written: PredictionRow[]; exposures: ExposureRow[]; reading: ModelLearningReading }> {
   const written: PredictionRow[] = [];
   const exposures: ExposureRow[] = [];
+  // One read per refresh, of this project's ledger only; what this refresh writes is added to it in memory,
+  // so the versions it compares against and the reading it returns include its own rows without reading again.
+  const ledger = await (deps.read ?? (() => readLedger(projectId)))();
+  const held = async () => ({ predictions: [...ledger.predictions], exposures: [...ledger.exposures], outcomes: [...ledger.outcomes] });
+  const scoped: LedgerDeps = { ...deps, projectId, read: held };
   for (const currency of [...new Set(currencies.filter((c) => typeof c === 'string' && c.trim()))].sort()) {
     const forecast = await (deps.forecast ?? cashForecast)({ projectId, currency });
-    const fresh = await recordCashForecast(projectId, forecast, deps);
+    const fresh = await recordCashForecast(projectId, forecast, scoped);
     written.push(...fresh);
-    for (const p of fresh) exposures.push(await recordExposure(p.id, forecast.upfrontCash.valueCents, deps));
+    ledger.predictions.push(...fresh);
+    for (const p of fresh) {
+      const exposure = await recordExposure(p.id, forecast.upfrontCash.valueCents, scoped);
+      exposures.push(exposure);
+      ledger.exposures.push(exposure);
+    }
   }
-  return { written, exposures, reading: await assessLedger({}, deps) };
+  return { written, exposures, reading: await assessLedger({}, scoped) };
 }
 
 /** Run the cash forecast and record it: the cash forecast's output reaches the ledger through here. */
@@ -316,5 +384,5 @@ export async function forecastAndRecordCash(
   deps: LedgerDeps = {},
 ): Promise<{ forecast: CashForecast; predictions: PredictionRow[] }> {
   const forecast = await cashForecast(input);
-  return { forecast, predictions: await recordCashForecast(input.projectId, forecast, deps) };
+  return { forecast, predictions: await recordCashForecast(input.projectId, forecast, { ...deps, projectId: input.projectId }) };
 }
