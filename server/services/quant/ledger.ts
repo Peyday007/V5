@@ -26,6 +26,7 @@ import {
 import { cashForecast, type CashForecast, type Estimate } from '../cash/forecast.ts';
 import { outcomesFor } from '../../repos/cashJourney.ts';
 import type { CashOutcome } from '../../domain/cashJourney.ts';
+import { asReason, type OutcomeReason } from '../../domain/cashOutcomeReasons.ts';
 import { versionAt, type ExposureRow, type MissCause, type OutcomeRow, type PredictionRow } from './forecast.ts';
 
 export const LEDGER_EVENTS = {
@@ -212,6 +213,8 @@ export async function recordExposure(predictionId: string, atRiskCents: number |
 export interface OutcomeSignals {
   /** Days past the stated horizon the outcome arrived (positive) — a timing overrun. */
   lateByDays?: number;
+  /** The outcome was measured to arrive too late, though the claim stated no horizon to count days against. */
+  arrivedLate?: boolean;
   /** Demand the operation could not serve, measured against capacity. */
   capacityShortfall?: boolean;
   /** A condition the claim assumed no longer held when the outcome arrived. */
@@ -240,7 +243,7 @@ export function observedCausesOf(prediction: PredictionRow, signals: OutcomeSign
   if (signals.selectedSample) causes.push('SELECTION_BIAS');
   if (signals.calculationDisagrees) causes.push('MODEL_IMPLEMENTATION');
   if (signals.capacityShortfall) causes.push('CAPACITY');
-  if ((signals.lateByDays ?? 0) > 0) causes.push('TIMING');
+  if ((signals.lateByDays ?? 0) > 0 || signals.arrivedLate) causes.push('TIMING');
   if (signals.executionDeviated) causes.push('EXECUTION_BEHAVIOR');
   if (signals.assumptionBroke) causes.push('CHANGED_CONDITIONS');
   return causes;
@@ -438,6 +441,56 @@ export function realizedDealsFrom(rows: readonly CashOutcome[]): RealizedDeal[] 
   return [...deals.values()].sort((a, b) => a.endedAt.localeCompare(b.endedAt) || a.opportunityId.localeCompare(b.opportunityId));
 }
 
+/** Which signal a closed failure reason measures. A reason not listed (or free text) names no cause. */
+export const REASON_SIGNAL: Readonly<Partial<Record<OutcomeReason, Exclude<keyof OutcomeSignals, 'lateByDays'>>>> = {
+  // The money or the delivery arrived after it was needed: a timing overrun, horizon stated or not.
+  PAID_TOO_LATE: 'arrivedLate',
+  // The opening stopped existing before the work finished: a condition the claim assumed no longer held.
+  EXPIRED: 'assumptionBroke',
+  // The operation could not serve it — not with the work it can do, nor the cash it can put in.
+  DELIVERY_INFEASIBLE: 'capacityShortfall',
+  CAPITAL_TOO_HIGH: 'capacityShortfall',
+  // Nobody would buy: the step from opening to paying buyer was not in the claim's mechanism.
+  NO_BUYER_FOUND: 'mechanismMissing',
+  // The opportunity was not of the population the claim's figures were drawn from.
+  NOT_ELIGIBLE: 'dataFromOtherPopulation',
+};
+
+/**
+ * The measured signals one ended deal gives, read from its own `cash_outcomes`
+ * rows. Pure. This is what lets every cause class have a production producer:
+ * the cash journey (`cash/journey/learning.ts`) already writes why a deal ended,
+ * whether a person failed or abandoned its fulfillment, whether an agreement
+ * was released and whether money was refunded, and each of those is a
+ * measurement of one part of the claim.
+ *
+ * - a closed failure reason (`cashOutcomeReasons.ts`) maps by `REASON_SIGNAL`;
+ * - a fulfillment a person recorded as failed (`FAILURE_REASON:obligation-…`)
+ *   or a refund (`REFUNDED` above zero) is execution that deviated from what
+ *   the claim assumed would be delivered;
+ * - an agreement released after it was made (`FAILURE_REASON:agreement-…`) is a
+ *   condition the claim relied on that stopped holding.
+ *
+ * Free-text reasons name no cause, and neither does an unclassified mechanism
+ * (`mechanism: null` says nobody classified the deal, not that a step was
+ * missing): prose and blanks are not measurements.
+ */
+export function dealSignals(opportunityId: string, measured: readonly CashOutcome[]): OutcomeSignals {
+  const rows = measured.filter((row) => row.opportunityId === opportunityId);
+  const signals: OutcomeSignals = {};
+  for (const row of rows) {
+    if (row.kind === 'FAILURE_REASON') {
+      const reason = asReason(row.valueText);
+      const signal = reason ? REASON_SIGNAL[reason] : undefined;
+      if (signal) signals[signal] = true;
+      if (row.requestKey.includes(':FAILURE_REASON:obligation-')) signals.executionDeviated = true;
+      if (row.requestKey.includes(':FAILURE_REASON:agreement-')) signals.assumptionBroke = true;
+    }
+    if (row.kind === 'REFUNDED' && (row.valueCents ?? 0) > 0) signals.executionDeviated = true;
+  }
+  return signals;
+}
+
 /** The interval a cash claim states, read from its own outcome text; null when it states none. */
 export function claimedRange(p: Pick<PredictionRow, 'outcome'>): { low: number; high: number } | null {
   const m = /\(range (-?\d+(?:\.\d+)?)\.\.(-?\d+(?:\.\d+)?)\)/.exec(p.outcome);
@@ -459,8 +512,9 @@ export function claimedRange(p: Pick<PredictionRow, 'outcome'>): { low: number; 
  * second outcome), a deal resolves at most one version per claim, and a deal
  * that ended before any version was exposed predicts nothing. The measured
  * timing is the one signal recorded: a deal that ended past the version's
- * stated horizon is a timing overrun. Nothing is written for a figure no row
- * states.
+ * stated horizon is a timing overrun, and every other signal is read from
+ * the deal's own `cash_outcomes` rows by `dealSignals`. Nothing is written for
+ * a figure no row states.
  */
 export async function recordCashOutcomes(
   projectId: string,
@@ -488,7 +542,8 @@ export async function recordCashOutcomes(
       if (!range) continue;
       const horizonEnd = version.horizonDays === null ? null : Date.parse(version.madeAt) + version.horizonDays * 86_400_000;
       const lateByDays = horizonEnd === null || !Number.isFinite(horizonEnd) ? 0 : Math.floor((Date.parse(deal.endedAt) - horizonEnd) / 86_400_000);
-      const row = await recordOutcome(version.id, realized >= range.low && realized <= range.high, lateByDays > 0 ? { lateByDays } : {}, {
+      const signals: OutcomeSignals = { ...dealSignals(deal.opportunityId, measured), ...(lateByDays > 0 ? { lateByDays } : {}) };
+      const row = await recordOutcome(version.id, realized >= range.low && realized <= range.high, signals, {
         ...deps,
         projectId,
         read: held,
