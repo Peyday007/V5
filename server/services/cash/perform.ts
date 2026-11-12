@@ -56,7 +56,7 @@ import { listNeeds, openNeedForKey } from '../../repos/cashPortfolio.ts';
 import { readNeedCondition } from './conditions.ts';
 import { OperationConflict, OperationInProgress } from '../effects/engine.ts';
 import { recoverExternalEffect, type ExternalOutcome } from '../effects/external.ts';
-import { actionContext, checkCommercialAuthority } from './authority.ts';
+import { actionContext, checkCommercialAuthority, recordEffectReceipt, type EffectDisposition } from './authority.ts';
 import { readCapability } from './capabilities.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import {
@@ -1002,6 +1002,24 @@ export async function performCommercialAction(input: {
         'account this is.',
     );
   }
+  /*
+   * The decision above is an authorization, not an effect: it is recorded as
+   * AUTHORIZED. What an attempt then actually did — performed, replayed,
+   * failed or unknown — is recorded from the effect's own record once it is
+   * known, beside the decision that allowed it. A refusal below that stops
+   * before anything is attempted leaves no receipt, because nothing was done.
+   */
+  const receipt = (disposition: EffectDisposition, refs: { receiptRef?: string | null; operationId?: string | null } = {}) =>
+    recordEffectReceipt({
+      projectId: opportunity.projectId,
+      opportunityId: opportunity.id,
+      action,
+      decisionId: decision.decisionId,
+      disposition,
+      receiptRef: refs.receiptRef ?? null,
+      operationId: refs.operationId ?? null,
+      actorRef: input.actorRef,
+    });
 
   const reading = await readCapability(effect.capability);
   if (reading.state !== 'PRESENT') {
@@ -1033,6 +1051,7 @@ export async function performCommercialAction(input: {
     }
     const pass = emptyInvoicingPass();
     await issueOne(pending, pass);
+    // The invoice row is this effect's record.
     const after = (await listInvoices({ projectId: opportunity.projectId, opportunityId: opportunity.id })).find(
       (one) => one.id === pending.id,
     )!;
@@ -1050,6 +1069,11 @@ export async function performCommercialAction(input: {
           : after.state === 'FAILED'
             ? { kind: 'FAILED', operationId: after.id, reason: after.stateReason ?? 'The provider refused it.' }
             : { kind: 'FAILED', operationId: after.id, reason: pass.withheld[0]?.because ?? 'It was not issued.' };
+    // Issued is performed, uncertain is unknown, and an invoice still drafted or failed was not issued.
+    await receipt(
+      result.kind === 'RECORDED' ? 'PERFORMED' : result.kind === 'UNCERTAIN' ? 'UNKNOWN' : 'FAILED',
+      result.kind === 'RECORDED' ? { receiptRef: result.receiptRef, operationId: after.id } : { operationId: after.id },
+    );
     if (result.kind === 'FAILED' && after.state === 'DRAFTED') return refuse(result.reason);
     return { ok: true, value: result, message: messageFor(result) };
   }
@@ -1102,12 +1126,18 @@ export async function performCommercialAction(input: {
           'settled. Settle it before asking again.',
       );
     }
+    // A late error is not evidence the effect did not happen (invariant 26): it is recorded as unknown.
+    await receipt('UNKNOWN');
     return refuse(
       `Brain could not attempt ${effect.doing}: ${error instanceof Error ? error.message : String(error)}. ` +
         'Nothing here says it happened.',
     );
   }
 
+  await receipt(effectDispositionOf(outcome), {
+    receiptRef: outcome.status === 'CONFIRMED' || outcome.status === 'RECONCILED' ? outcome.receiptRef : null,
+    operationId: outcome.operation.id,
+  });
   const result = await applyEffectOutcome({
     opportunity,
     action,
@@ -1125,6 +1155,21 @@ export async function performCommercialAction(input: {
     detail: { action, occurrence, operationId: outcome.operation.id, result: result.kind },
   });
   return { ok: true, value: result, message: messageFor(result) };
+}
+
+/** What the effect record says an attempt did. A replay did nothing new; an uncertain outcome is unknown. */
+export function effectDispositionOf(outcome: Pick<ExternalOutcome, 'status'>): EffectDisposition {
+  switch (outcome.status) {
+    case 'CONFIRMED':
+    case 'RECONCILED':
+      return 'PERFORMED';
+    case 'REPLAYED':
+      return 'REPLAYED';
+    case 'FAILED':
+      return 'FAILED';
+    case 'UNCERTAIN':
+      return 'UNKNOWN';
+  }
 }
 
 function messageFor(result: EffectResult): string {

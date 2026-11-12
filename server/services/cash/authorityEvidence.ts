@@ -30,6 +30,7 @@ import { listAuthorities } from '../../repos/cashAuthority.ts';
 import {
   ALWAYS_PROHIBITED_COMMERCIAL,
   AUTHORITY_DECISION_KIND,
+  AUTHORITY_EFFECT_KIND,
   COMMERCIAL_ACTIONS,
   CONSEQUENCE_CLASSES,
   EMERGENCY_RESUME_KIND,
@@ -232,9 +233,11 @@ export function policyToActionRule(): Failure {
       if (expired.ok || expired.ledger.cause !== 'EXPIRED_OR_NOT_STARTED') return 'an expired grant authorized a mutation';
       const proposed = judge({ action: 'SEND_OUTREACH', mode: 'PROPOSE' }, live(null));
       if (!proposed.ok || proposed.ledger.disposition !== 'PROPOSED') return 'a proposal was not recorded as proposed';
-      const performed = judge({ action: 'QUOTE_AND_INVOICE' });
-      if (performed.ledger.disposition !== 'PERFORMED') return 'a performed action was not recorded as performed';
-      if (performed.ledger.principal !== 'usr_owner' || performed.ledger.scope.projectId !== SCENARIO_PROJECT) return 'the ledger lost the principal or the scope';
+      // An allowed action is authorized, not performed: the decision precedes the effect, which can still fail,
+      // come back unknown or be a replay, so "performed" is only ever the effect's own receipt.
+      const allowed = judge({ action: 'QUOTE_AND_INVOICE' });
+      if (allowed.ledger.disposition !== 'AUTHORIZED') return 'an allowed action was recorded as performed before any effect was attempted';
+      if (allowed.ledger.principal !== 'usr_owner' || allowed.ledger.scope.projectId !== SCENARIO_PROJECT) return 'the ledger lost the principal or the scope';
       return null;
     },
   ]);
@@ -260,7 +263,17 @@ interface Decision {
   detail: Record<string, unknown>;
 }
 
-const DISPOSITIONS = new Set(['PERFORMED', 'PROPOSED', 'REFUSED']);
+/**
+ * A decision's disposition. PERFORMED is accepted only as history: rows written
+ * before a decision and its effect were told apart labelled an authorization
+ * PERFORMED, and they are read as what they were — an authorization.
+ */
+const DISPOSITIONS = new Set(['AUTHORIZED', 'PROPOSED', 'REFUSED', 'PERFORMED']);
+
+/** A decision that let the action go ahead (an authorization, including the legacy PERFORMED label). */
+function granted(d: Decision): boolean {
+  return d.detail.disposition === 'AUTHORIZED' || d.detail.disposition === 'PERFORMED';
+}
 const PATHS = new Set(['API', 'BROWSER', 'INTERNAL']);
 const NON_INTERNAL = new Set<string>(CONSEQUENCE_CLASSES.filter((k) => k !== 'INTERNAL'));
 /** Shapes a credential takes. A row matching one is a leak, whatever field it is in. */
@@ -305,7 +318,7 @@ function incomplete(d: Decision): Failure {
   const scope = x.scope as { projectId?: unknown } | undefined;
   if (!scope || scope.projectId !== d.projectId) return `decision ${d.id} records no scope for its own project`;
   if (!('policyVersion' in x) || !('amountCents' in x)) return `decision ${d.id} omits the grant version or the amount`;
-  if (x.disposition === 'PERFORMED' && x.ok !== true) return `decision ${d.id} is recorded as performed and refused at once`;
+  if ((x.disposition === 'AUTHORIZED' || x.disposition === 'PERFORMED') && x.ok !== true) return `decision ${d.id} is recorded as authorized and refused at once`;
   if (x.disposition === 'REFUSED' && x.ok !== false) return `decision ${d.id} is recorded as refused and allowed at once`;
   return null;
 }
@@ -370,12 +383,41 @@ export async function graduatedAuthorityEvidence(): Promise<AuthorityEvidence> {
     if (missing) return { ok: false, detail: `approval request ${missing} is not a stored, scope-keyed need` };
   }
   const classes = new Set(all.map((d) => String(d.detail.consequenceClass)));
-  const performed = all.filter((d) => d.detail.disposition === 'PERFORMED').length;
+  const authorized = all.filter(granted).length;
   const refused = all.filter((d) => d.detail.disposition === 'REFUSED').length;
+  const { failure: effectFailure, effects } = await effectSummary(all);
+  if (effectFailure) return { ok: false, detail: effectFailure };
+  const performed = effects.filter((e) => e.detail.disposition === 'PERFORMED').length;
   return {
     ok: true,
-    detail: `${all.length} ledger decision(s) across ${new Set(all.map((d) => d.projectId)).size} project(s) (${performed} performed, ${refused} refused; classes ${[...classes].sort().join(', ')}); ${asked.length} smallest-approval request(s) stored`,
+    detail: `${all.length} ledger decision(s) across ${new Set(all.map((d) => d.projectId)).size} project(s) (${authorized} authorized, ${refused} refused; classes ${[...classes].sort().join(', ')}); ${effects.length} effect receipt(s), ${performed} performed; ${asked.length} smallest-approval request(s) stored`,
   };
+}
+
+const EFFECT_DISPOSITIONS = new Set(['PERFORMED', 'REPLAYED', 'FAILED', 'UNKNOWN']);
+
+/**
+ * The effect receipts: what Brain actually did, each beside the authorization it
+ * followed. A receipt must say one of the four outcomes, and one that says
+ * PERFORMED must name a decision on this ledger, for the same project and
+ * action, that allowed it — a performed effect with no authorization, or after
+ * a refusal, is exactly the contradiction the ledger exists to expose.
+ */
+async function effectSummary(all: readonly Decision[]): Promise<{ failure: Failure; effects: Array<{ id: string; projectId: string; detail: Record<string, unknown> }> }> {
+  const effects = (await rowsOfKinds([AUTHORITY_EFFECT_KIND])).map((r) => ({ id: r.id, projectId: r.project_id, detail: parse(r.detail) }));
+  const byId = new Map(all.map((d) => [d.id, d]));
+  for (const e of effects) {
+    const x = e.detail;
+    if (typeof x.disposition !== 'string' || !EFFECT_DISPOSITIONS.has(x.disposition)) return { failure: `effect ${e.id} does not say what happened`, effects };
+    if (x.disposition !== 'PERFORMED') continue;
+    const decision = typeof x.decisionId === 'string' ? byId.get(x.decisionId) : undefined;
+    if (!decision) return { failure: `effect ${e.id} was performed with no authorization decision on the ledger`, effects };
+    if (!granted(decision) || decision.projectId !== e.projectId || decision.detail.action !== x.action) {
+      return { failure: `effect ${e.id} was performed under decision ${decision.id}, which did not authorize it`, effects };
+    }
+  }
+  const leak = leaks(effects);
+  return { failure: leak, effects };
 }
 
 /** Refusal causes that may never sit beside a performed effect. */
@@ -391,7 +433,7 @@ export async function readOnlyLearningEvidence(): Promise<AuthorityEvidence> {
   if (rule) return { ok: false, detail: `the rule does not hold: ${rule}` };
   const { failure, all } = await ledgerSummary();
   if (failure) return { ok: false, detail: failure };
-  const contradiction = all.find((d) => d.detail.disposition === 'PERFORMED' && NEVER_PERFORMED_UNDER.has(String(d.detail.cause)));
+  const contradiction = all.find((d) => granted(d) && NEVER_PERFORMED_UNDER.has(String(d.detail.cause)));
   if (contradiction) return { ok: false, detail: `decision ${contradiction.id} performed ${String(contradiction.detail.action)} under ${String(contradiction.detail.cause)}` };
   const readOnly = all.filter((d) => d.detail.cause === 'READ_ONLY_GRANT');
   const silent = readOnly.find((d) => typeof d.detail.neededApproval !== 'string');
@@ -399,7 +441,7 @@ export async function readOnlyLearningEvidence(): Promise<AuthorityEvidence> {
   const agency = new Set<string>(READ_ONLY_NEVER_AUTHORIZES);
   const grants = new Map<string, CashAuthority[]>();
   for (const d of all) {
-    if (d.detail.disposition !== 'PERFORMED' || !agency.has(String(d.detail.action)) || d.detail.cause === 'OWNER_APPROVED') continue;
+    if (!granted(d) || !agency.has(String(d.detail.action)) || d.detail.cause === 'OWNER_APPROVED') continue;
     if (!grants.has(d.projectId)) grants.set(d.projectId, await listAuthorities(d.projectId));
     if (!grantInForce(grants.get(d.projectId) ?? [], d.at)) return { ok: false, detail: `decision ${d.id} performed ${String(d.detail.action)} with no grant in force` };
   }
@@ -421,7 +463,7 @@ export async function policyToActionEvidence(): Promise<AuthorityEvidence> {
   const controls = await rowsOfKinds([EMERGENCY_STOP_KIND, EMERGENCY_RESUME_KIND]);
   const grants = new Map<string, CashAuthority[]>();
   for (const d of all) {
-    if (d.detail.disposition !== 'PERFORMED' || d.detail.consequenceClass !== 'EXTERNALLY_CONSEQUENTIAL') continue;
+    if (!granted(d) || d.detail.consequenceClass !== 'EXTERNALLY_CONSEQUENTIAL') continue;
     if (stoppedAt(controls, d.projectId, d.at)) return { ok: false, detail: `decision ${d.id} performed ${String(d.detail.action)} while the emergency stop was on` };
     if (d.detail.cause === 'OWNER_APPROVED') continue;
     if (!grants.has(d.projectId)) grants.set(d.projectId, await listAuthorities(d.projectId));
@@ -436,10 +478,12 @@ export async function policyToActionEvidence(): Promise<AuthorityEvidence> {
   }
   const leak = leaks(suspensions);
   if (leak) return { ok: false, detail: leak };
+  const { failure: effectFailure, effects } = await effectSummary(all);
+  if (effectFailure) return { ok: false, detail: effectFailure };
   const browser = all.filter((d) => d.detail.path === 'BROWSER').length;
   const proposed = all.filter((d) => d.detail.disposition === 'PROPOSED').length;
   return {
     ok: true,
-    detail: `${all.length} ledger decision(s) (${browser} on a browser path, ${proposed} proposed only), each with principal, scope, class and grant version; no consequential effect under a stop or outside a grant; ${suspensions.length} suspension(s), each keeping its obligations and naming the renewal`,
+    detail: `${all.length} ledger decision(s) (${browser} on a browser path, ${proposed} proposed only), each with principal, scope, class and grant version; no consequential effect under a stop or outside a grant; ${effects.length} effect receipt(s) (${effects.filter((e) => e.detail.disposition === 'PERFORMED').length} performed), each naming the authorization it followed; ${suspensions.length} suspension(s), each keeping its obligations and naming the renewal`,
   };
 }

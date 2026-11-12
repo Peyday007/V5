@@ -120,6 +120,13 @@ export interface CommercialDecision {
   /** Safe to show a person. Names the rule, never a credential or an id. */
   reason: string;
   policyVersion: number | null;
+  /**
+   * The AUTHORITY_DECISION row this judgment wrote, when it wrote one. An
+   * action path that goes on to attempt the effect passes it to
+   * `recordEffectReceipt`, so the ledger's "what Brain did" is the effect's own
+   * outcome and never the permission that preceded it.
+   */
+  decisionId?: string | null;
 }
 
 /** The principal Brain acts as when its own loop or tick takes an action: not a person, and never a credential. */
@@ -231,18 +238,19 @@ export async function checkCommercialAuthority(input: {
       ledger: { ...judged.ledger, disposition: 'REFUSED', cause: 'NO_AUTHORITY' },
     };
   }
-  await recordDecision(judged);
+  const decisionId = await recordDecision(judged);
   // A caller that states no amount has its sum bounded by its own path's ceilings (the per-action and committed
   // limits are read where the money is committed); that alone is not a refusal here. Every other cause is.
   const amountOnly = !judged.ok && judged.ledger.cause === 'AMOUNT_UNKNOWN' && (input.amountCents === undefined || input.amountCents === null);
   if ((!judged.ok && !amountOnly) || !authority) {
-    return { ok: false, authority, reason: judged.reason, policyVersion: authority?.policyVersion ?? null };
+    return { ok: false, authority, reason: judged.reason, policyVersion: authority?.policyVersion ?? null, decisionId };
   }
   return {
     ok: true,
     authority,
     reason: judged.ledger.cause === 'OWNER_APPROVED' ? judged.reason : 'within the standing commercial authority',
     policyVersion: authority.policyVersion,
+    decisionId,
   };
 }
 
@@ -381,8 +389,16 @@ export interface AuthorityLedgerRecord {
   principal: string | null;
   /** The project, and the third-party account the action is scoped to, when it has one. */
   scope: { projectId: string; accountRef: string | null };
-  /** What Brain did, versus what it only proposed. */
-  disposition: 'PERFORMED' | 'PROPOSED' | 'REFUSED';
+  /**
+   * What the judgment decided: allowed to go ahead, recorded as a draft only,
+   * or refused. A decision is made before any effect is attempted, so it never
+   * says PERFORMED — the attempt can still fail, come back unknown, or be a
+   * replay of an earlier one. What Brain actually did is the effect's own
+   * receipt (`recordEffectReceipt`, an AUTHORITY_EFFECT row naming this one).
+   * Rows written before this distinction existed say PERFORMED for what was
+   * only an authorization; they are history and are read as AUTHORIZED.
+   */
+  disposition: 'AUTHORIZED' | 'PROPOSED' | 'REFUSED';
   /** Machine-readable cause; a person's words are in `reason`. */
   cause:
     | 'ALLOWED'
@@ -422,6 +438,8 @@ export interface ActionDecision {
   approvalNeedId?: string | null;
   /** Ready for `project_events`. Carries no credential and no free text from a caller. */
   ledger: AuthorityLedgerRecord;
+  /** The AUTHORITY_DECISION row `decideAction` wrote, when it wrote one: what an effect receipt names. */
+  decisionId?: string | null;
 }
 
 export interface JudgeInput {
@@ -508,7 +526,7 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
         path,
         principal: input.principal?.trim() ? input.principal.trim().slice(0, 120) : null,
         scope: { projectId: input.projectId, accountRef: input.account?.ref ?? null },
-        disposition: !ok ? 'REFUSED' : proposed ? 'PROPOSED' : 'PERFORMED',
+        disposition: !ok ? 'REFUSED' : proposed ? 'PROPOSED' : 'AUTHORIZED',
         cause,
         policyVersion: state.authority?.policyVersion ?? null,
         amountCents: amount,
@@ -684,7 +702,7 @@ async function applyStoredApproval(input: JudgeInput, decision: ActionDecision):
       obligations: null,
       remainingSafeWork: [],
       approvalNeedId: latest.id,
-      ledger: { ...decision.ledger, disposition: 'PERFORMED', cause: 'OWNER_APPROVED' },
+      ledger: { ...decision.ledger, disposition: 'AUTHORIZED', cause: 'OWNER_APPROVED' },
     };
   }
   if (latest?.state === 'WITHDRAWN' && approvalCovers(latest, amount)) {
@@ -794,24 +812,25 @@ async function recordSuspension(input: JudgeInput, decision: ActionDecision, hel
  */
 export async function decideAction(input: JudgeInput): Promise<ActionDecision> {
   const decision = await judgeLive(input);
-  await recordDecision(decision);
-  return decision;
+  const decisionId = await recordDecision(decision);
+  return { ...decision, decisionId };
 }
 
 export const AUTHORITY_DECISION_KIND = 'AUTHORITY_DECISION';
 
 /**
  * Append the decision's ledger record to `cash_events`, the project's append-only history, so what
- * Brain performed, proposed or was refused is inspectable later and not only returned to a caller.
+ * Brain was authorized to do, proposed or was refused is inspectable later and not only returned to a
+ * caller. What it then actually did is a separate AUTHORITY_EFFECT row (`recordEffectReceipt`).
  * Every consequential decision leaves a row, allowed or refused, one per attempt; routine internal
  * actions leave none (a presentation choice: they are reversible and inside authorized scope).
  * The row carries references and machine causes only — never a credential or a caller's free text.
  * If the row cannot be written the error propagates, so no effect follows an unrecorded decision.
  */
-async function recordDecision(decision: ActionDecision): Promise<void> {
+async function recordDecision(decision: ActionDecision): Promise<string | null> {
   const l = decision.ledger;
-  if (decision.consequenceClass === null || decision.consequenceClass === 'INTERNAL') return;
-  await recordCashEvent({
+  if (decision.consequenceClass === null || decision.consequenceClass === 'INTERNAL') return null;
+  const row = await recordCashEvent({
     projectId: l.projectId,
     kind: AUTHORITY_DECISION_KIND,
     actorRef: 'BRAIN',
@@ -832,6 +851,54 @@ async function recordDecision(decision: ActionDecision): Promise<void> {
       neededApproval: decision.neededApproval?.description ?? null,
     },
   });
+  return row.id;
+}
+
+export const AUTHORITY_EFFECT_KIND = 'AUTHORITY_EFFECT';
+
+/**
+ * What an attempted effect actually did, as its own receipt says.
+ *
+ *  - PERFORMED: the provider confirmed it (or reconciliation found it), with a reference.
+ *  - REPLAYED: the idempotency record already held this occurrence; nothing new happened.
+ *  - FAILED: the provider refused it, or it was never sent.
+ *  - UNKNOWN: the outcome is not established (invariant 26); it is never read as done or not done.
+ */
+export type EffectDisposition = 'PERFORMED' | 'REPLAYED' | 'FAILED' | 'UNKNOWN';
+
+/**
+ * Append the effect's outcome beside the decision that allowed it, so the ledger
+ * says what Brain did rather than what it was permitted to do. Called by the
+ * action path after the attempt, from the effect record (the idempotency
+ * operation and its receipt), never from the authorization. It carries
+ * references only: a provider's receipt reference and an operation id, never a
+ * payload or a credential.
+ */
+export async function recordEffectReceipt(input: {
+  projectId: string;
+  opportunityId?: string | null;
+  action: string;
+  decisionId: string | null | undefined;
+  disposition: EffectDisposition;
+  receiptRef?: string | null;
+  operationId?: string | null;
+  actorRef: string;
+}): Promise<string> {
+  const row = await recordCashEvent({
+    projectId: input.projectId,
+    opportunityId: input.opportunityId ?? null,
+    kind: AUTHORITY_EFFECT_KIND,
+    actorRef: input.actorRef,
+    summary: `${input.action}: ${input.disposition}`,
+    detail: {
+      action: input.action,
+      decisionId: input.decisionId ?? null,
+      disposition: input.disposition,
+      receiptRef: input.receiptRef ?? null,
+      operationId: input.operationId ?? null,
+    },
+  });
+  return row.id;
 }
 
 async function judgeLive(input: JudgeInput): Promise<ActionDecision> {

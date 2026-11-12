@@ -99,13 +99,14 @@ import { runCommissions, type CommissionPass } from './monetization/commissionPa
 import { recordWorkModelReclassification, type Reclassification } from './reclassify.ts';
 import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
-import { actionContext, checkCommercialAuthority } from './authority.ts';
+import { actionContext, checkCommercialAuthority, recordEffectReceipt } from './authority.ts';
 import { commercialOperationsFor, sendCommercialEffect } from './effects.ts';
 import { composeBuyerMessage } from './outreach.ts';
 import { runInvoicing, type InvoicingPass } from './invoicing.ts';
 import {
   alreadyContacted,
   applyEffectOutcome,
+  effectDispositionOf,
   reconcileConfirmedEffects,
   recoverAbandonedEffects,
   sendGate,
@@ -1332,6 +1333,8 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
         subjectRef: prepared.value.subjectRef,
       });
     } catch (error) {
+      // A late error is not evidence nobody was contacted (invariant 26): the receipt says unknown.
+      await recordEffectReceipt({ projectId: opportunity.projectId, opportunityId: opportunity.id, action: CONTACT_ACTION, decisionId: decision.decisionId, disposition: 'UNKNOWN', actorRef: BRAIN });
       out.withheld.push({
         opportunityId: opportunity.id,
         because:
@@ -1350,6 +1353,17 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
      * FAILED keeps the provider's refusal on a need rather than only in this
      * report; a receipt is the only thing that begins execution.
      */
+    // The decision was an authorization; what the attempt did is the effect record's to say.
+    await recordEffectReceipt({
+      projectId: opportunity.projectId,
+      opportunityId: opportunity.id,
+      action: CONTACT_ACTION,
+      decisionId: decision.decisionId,
+      disposition: effectDispositionOf(outcome),
+      receiptRef: outcome.status === 'CONFIRMED' || outcome.status === 'RECONCILED' ? outcome.receiptRef : null,
+      operationId: outcome.operation.id,
+      actorRef: BRAIN,
+    });
     const result = await applyEffectOutcome({
       opportunity,
       action: CONTACT_ACTION,
