@@ -50,6 +50,10 @@ on:
         description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade'
         required: true
         default: deploy
+      recipes:
+        description: 'For runpod-bench: comma-separated pod recipes (server/services/cheap/runpodRestore.ts RECIPES) to benchmark on temporary pods; add "baseline" to measure production too. For runpod-upgrade: the one recipe to serve.'
+        required: false
+        default: ''
       hours:
         description: 'For runpod-report: the window in hours (1-48). The report also prints the equal window before it, for a before/after reading.'
         required: false
@@ -105,6 +109,7 @@ jobs:
           RUNPOD_MAX_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_USD_PER_HOUR }}
           ACTION: ${{ inputs.action || 'runpod-auto' }}
           HOURS_INPUT: ${{ inputs.hours || '6' }}
+          RECIPES_INPUT: ${{ inputs.recipes || '' }}
         run: |
           set -eu
           exec > >(tee cheap.txt) 2>&1
@@ -200,6 +205,16 @@ jobs:
               # What the account holds and could rent, from RunPod itself (§108). Changes nothing.
               [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
               npx tsx scripts/runpod-survey.ts
+              ;;
+            runpod-bench)
+              # Candidate models on Brain's own tasks, each on a temporary pod deleted after (§108).
+              [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
+              recipes=$(printf '%s' "$RECIPES_INPUT" | tr -cd 'a-z0-9.,-' | sed 's/baseline//; s/,,*/,/g; s/^,//; s/,$//')
+              base=""; case "$RECIPES_INPUT" in *baseline*) base="--baseline" ;; esac
+              CHEAP_URL="https://$cheap.fly.dev/v1" timeout --signal=TERM --kill-after=60 6600 \
+                npx tsx scripts/runpod-bench.ts --recipes "$recipes" $base | tee bench.txt
+              grep -q '^RUNPOD-BENCH: OK' bench.txt || { echo "::error title=runpod::The benchmark did not finish."; exit 1; }
+              grep '^WINNER' bench.txt | sed 's/^/::notice title=runpod bench::/'
               ;;
             runpod-restore)
               [ -n "${RUNPOD_API_KEY:-}" ] && [ -n "$RUNPOD_VLLM_KEY" ] || { echo "::error::Set the RUNPOD_API_KEY and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
