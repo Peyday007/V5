@@ -38,7 +38,13 @@
  */
 import { latestScreens, laneConfig, screenOpening, type ScreenOutput } from '../cheap/lane.ts';
 import { closedBy } from './closing.ts';
-import { describeNotWorthResearching, notWorthResearching, type NotWorthResearching } from './worthResearching.ts';
+import {
+  DIVE_RUNWAY_MS,
+  closesWithin,
+  describeNotWorthResearching,
+  notWorthResearching,
+  type NotWorthResearching,
+} from './worthResearching.ts';
 import { getDb } from '../../db/database.ts';
 import {
   cashEventsOfKind,
@@ -866,6 +872,69 @@ export function compareDiveValue(a: DiveValueFacts, b: DiveValueFacts): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
+/**
+ * When a dated opening closes, as an instant. The same reading `closesWithin`
+ * and `closedBy` make of the free-text column (an ISO date closes at the end of
+ * that UTC day; anything else is unknown), so the order can never call a date
+ * known that the runway check calls unknown. Null is "no recorded deadline".
+ */
+function closingInstant(expiresAt: string | null): number | null {
+  if (!expiresAt) return null;
+  const value = expiresAt.trim();
+  const closes = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? Date.parse(`${value}T23:59:59.999Z`)
+    : /^\d{4}-\d{2}-\d{2}T/.test(value)
+      ? Date.parse(value)
+      : Number.NaN;
+  return Number.isFinite(closes) ? closes : null;
+}
+
+/**
+ * The band order of the dive queue, applied after the decision-value sort
+ * (stable, so the decision-value order stands wherever this returns 0).
+ *
+ *   0. an approved goal's own openings (owner, 2026-11-03);
+ *   1. quick plays (owner, 2026-10-22: fast cash, a window of weeks is fine) —
+ *      a TEMPORARY_EXPLOIT, one a cheap screen read as a short window, or one
+ *      whose closing date is recorded and still outside the dive runway;
+ *   2. everything else;
+ *   3. junk a cheap screen dropped, always last.
+ *
+ * Within a band, dated openings go Earliest Deadline First: the opening whose
+ * latest useful start (closing − DIVE_RUNWAY_MS) comes first is dived first,
+ * and an undated one sorts after every dated one. Production, 2026-11: 14 of 14
+ * dated openings (federal solicitations N0010426QAC01, 140LL027Q0005) expired
+ * DISCOVERED — the order never read `expiresAt`, so each waited behind older
+ * undated openings until it entered the runway, where `notWorthResearching`
+ * correctly refuses it as CLOSES_TOO_SOON. No gate, runway or ceiling moves:
+ * only which eligible opening takes a free slot first.
+ */
+export function diveOrder(input: {
+  now: string;
+  dropped: (opportunity: CashOpportunity) => boolean;
+  forGoal: (opportunity: CashOpportunity) => boolean;
+  shortWindow: (opportunity: CashOpportunity) => boolean;
+}): (a: CashOpportunity, b: CashOpportunity) => number {
+  const deadline = (opportunity: CashOpportunity): number | null =>
+    closesWithin(opportunity.expiresAt, input.now, DIVE_RUNWAY_MS) ? null : closingInstant(opportunity.expiresAt);
+  const band = (opportunity: CashOpportunity): number => {
+    if (input.dropped(opportunity)) return 3;
+    if (input.forGoal(opportunity)) return 0;
+    if (opportunity.mechanism === 'TEMPORARY_EXPLOIT' || input.shortWindow(opportunity)) return 1;
+    return deadline(opportunity) !== null ? 1 : 2;
+  };
+  return (a, b) => {
+    const byBand = band(a) - band(b);
+    if (byBand !== 0) return byBand;
+    const da = deadline(a);
+    const db = deadline(b);
+    if (da === db) return 0;
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return da - db;
+  };
+}
+
 /** The facts the order compares, for one opening. Pure. */
 export function diveValueFacts(input: {
   opportunity: CashOpportunity;
@@ -1048,20 +1117,19 @@ export async function startValidations(input: {
   );
   const dropped = (id: string) => screens.get(id)?.verdict === 'DROP';
   /*
-   * Quick plays first among the rest (the owner, 2026-10-22: fast cash, a
-   * window of weeks is fine): a time-bounded opening, or one a cheap screen
-   * read as a short window, is dived before ongoing ones. Junk still last.
-   */
-  const quick = (opportunity: CashOpportunity) =>
-    opportunity.mechanism === 'TEMPORARY_EXPLOIT' || screens.get(opportunity.id)?.window === 'SHORT';
-  /*
    * An opening an approved goal's own search found comes first (owner,
    * 2026-11-03: construction must reach the goal's plan). Production: seven
    * openings filed from constructed rounds sat NOT_STARTED behind 68 older
    * ones while the plan they were built for read NOT_VIABLE. Junk still last.
    */
-  const band = (opportunity: CashOpportunity) => (dropped(opportunity.id) ? 3 : forGoal(opportunity) ? 0 : quick(opportunity) ? 1 : 2);
-  valued.sort((a, b) => band(a.opportunity) - band(b.opportunity));
+  const now = cashNow();
+  const order = diveOrder({
+    now,
+    dropped: (opportunity) => dropped(opportunity.id),
+    forGoal,
+    shortWindow: (opportunity) => screens.get(opportunity.id)?.window === 'SHORT',
+  });
+  valued.sort((a, b) => order(a.opportunity, b.opportunity));
 
   const out: StartedValidation[] = [];
   for (const { opportunity, value } of valued) {
