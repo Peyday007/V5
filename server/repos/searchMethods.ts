@@ -241,6 +241,22 @@ export async function createSearchMethod(
   return toMethod(row);
 }
 
+/**
+ * Record which learned subject a method searches for. One-way: a method with
+ * no subject gains one, and a method already linked to a subject is never
+ * moved to another (a comparison already recorded for it would then name the
+ * wrong subject). Returns whether the row now carries `subjectId`.
+ */
+export async function linkMethodSubject(id: string, subjectId: string): Promise<boolean> {
+  const db = getDb();
+  await db.run(
+    `UPDATE search_methods SET subject_id = ?, updated_at = ? WHERE id = ? AND subject_id IS NULL`,
+    [subjectId, nowIso(), id],
+  );
+  const row = await db.get<Row>(`SELECT subject_id FROM search_methods WHERE id = ?`, [id]);
+  return row !== undefined && row !== null && optStr(row.subject_id) === subjectId;
+}
+
 export async function getSearchMethod(reader: SearchReader, id: string): Promise<SearchMethod | null> {
   const vis = visibleSql(reader);
   const row = await getDb().get<Row>(`SELECT * FROM search_methods WHERE id = ? AND ${vis.sql}`, [id, ...vis.params]);

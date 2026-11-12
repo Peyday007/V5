@@ -35,7 +35,11 @@ export async function shareAsGeneral(
   const method = await createSearchMethod({
     scope: 'GENERAL',
     methodKey: source.methodKey,
-    subjectId: null,
+    // The subject it searches for travels with the copy, so the shared method and
+    // the original are still two methods for one subject and can be compared.
+    // Only the subject's id moves: the subject row stays readable only in its own
+    // scope, and the definition above was checked for private data.
+    subjectId: source.subjectId,
     finds: source.finds,
     usefulWhen: source.usefulWhen,
     sources: source.sources,

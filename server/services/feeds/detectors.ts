@@ -273,6 +273,8 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
       /* the code rules still run */
     }
   }
+  // Every learned detector's pass, so methods for one subject are compared on the same data afterwards.
+  const learnedPasses: { learned: LearnedDetector; records: DetectorRecord[]; signals: DetectedSignal[] }[] = [];
   for (const detector of installed) {
     const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
     const rows = await db.all<{ id: string; source: string; url: string; title: string; organization: string | null; published_at: string | null; fetched_at: string }>(
@@ -372,6 +374,7 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
     }
     const learned = learnedById.get(detector.id);
     if (learned) {
+      learnedPasses.push({ learned, records, signals });
       try {
         const { recordLearnedPass } = await import('./learnedRun.ts');
         await recordLearnedPass({ learned, records, signals });
@@ -380,6 +383,14 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
       }
     }
     reports.push(report);
+  }
+  if (learnedPasses.length > 1) {
+    try {
+      const { compareSubjectPasses } = await import('./learnedRun.ts');
+      await compareSubjectPasses(learnedPasses);
+    } catch {
+      /* a comparison is an addition; the detection rows and runs above already stand */
+    }
   }
   return reports;
 }

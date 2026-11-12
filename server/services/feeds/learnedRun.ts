@@ -30,7 +30,8 @@
  *
  * Nothing here calls a model.
  */
-import { listDetectorExamples, listLearnedDetectors, listMethodRuns } from '../../repos/searchMethods.ts';
+import { getSearchMethod, listDetectorExamples, listLearnedDetectors, listMethodComparisons, listMethodRuns } from '../../repos/searchMethods.ts';
+import { compareMethods, type MethodComparison, type MethodResult } from '../research/searchMethods/compare.ts';
 import type { LearnedDetector, SearchReader } from '../../domain/searchIntelligence.ts';
 import { decideMethod, type MethodDecision } from '../research/searchFailures/classify.ts';
 import { recordRunAndSettle } from '../research/searchMethods/lifecycle.ts';
@@ -153,4 +154,71 @@ export async function recordLearnedPass(input: {
     rejected,
   });
   return recorded !== null;
+}
+
+/** One learned detector's pass, as `runDetectors` ran it. */
+export interface LearnedPass {
+  learned: LearnedDetector;
+  records: readonly DetectorRecord[];
+  signals: readonly { memberIds: readonly string[] }[];
+}
+
+/**
+ * Compare, on the same data, every method for one subject that ran in this
+ * pass. Nothing here is asked for: whenever two or more learned detectors serve
+ * different methods linked to one learned subject, their pass is a comparison.
+ *
+ * The shared data is the items every one of those detectors read that arrived
+ * after the subject's last recorded comparison, so a pass never re-compares
+ * items an earlier comparison already judged, and a second pass with nothing
+ * new records nothing. Each method's result is what its detector surfaced from
+ * those items and the judged firings among them (`CONFIRMED` or not), so
+ * methods are ranked by measured precision on identical items through
+ * `compareMethods`, which records the comparison. A subject whose methods
+ * surfaced nothing new records nothing: there is nothing to rank.
+ *
+ * GENERAL only, like the rest of the feeds pass. Nothing here calls a model.
+ */
+export async function compareSubjectPasses(passes: readonly LearnedPass[]): Promise<MethodComparison[]> {
+  const bySubject = new Map<string, Map<string, LearnedPass>>();
+  for (const pass of passes) {
+    const methodId = pass.learned.methodId;
+    if (!methodId) continue;
+    const method = await getSearchMethod(FEED_READER, methodId);
+    if (!method?.subjectId) continue;
+    const methods = bySubject.get(method.subjectId) ?? new Map<string, LearnedPass>();
+    // One pass per method: a second detector of the same method is the same method.
+    if (!methods.has(methodId)) methods.set(methodId, pass);
+    bySubject.set(method.subjectId, methods);
+  }
+  const out: MethodComparison[] = [];
+  for (const [subjectId, methods] of bySubject) {
+    if (methods.size < 2) continue;
+    const last = (await listMethodComparisons(FEED_READER, { subjectId, limit: 1 }))[0]?.createdAt ?? null;
+    const readBy = [...methods.values()].map(
+      (pass) => new Set(pass.records.filter((r) => last === null || r.fetchedAt > last).map((r) => r.id)),
+    );
+    const shared = [...readBy[0]!].filter((id) => readBy.every((one) => one.has(id))).sort();
+    if (shared.length === 0) continue;
+    const items = new Set(shared);
+    const results: Record<string, MethodResult> = {};
+    let anySurfaced = false;
+    for (const [methodId, pass] of methods) {
+      const surfaced = [...new Set(pass.signals.flatMap((s) => s.memberIds.filter((id) => items.has(id))))];
+      const fired = new Set(surfaced);
+      const confirmed: string[] = [];
+      const rejected: string[] = [];
+      for (const e of await listDetectorExamples(FEED_READER, pass.learned.id)) {
+        if (!e.fired || !fired.has(e.itemRef)) continue;
+        if (confirmed.includes(e.itemRef) || rejected.includes(e.itemRef)) continue;
+        (e.verdict === 'CONFIRMED' ? confirmed : rejected).push(e.itemRef);
+      }
+      if (surfaced.length > 0) anySurfaced = true;
+      results[methodId] = { surfaced, confirmed, rejected };
+    }
+    if (!anySurfaced) continue;
+    const compared = await compareMethods(FEED_READER, { subjectId, items: shared, results, scope: { scope: 'GENERAL' } });
+    if (compared.ok) out.push(compared.comparison);
+  }
+  return out;
 }
