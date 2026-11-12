@@ -1498,6 +1498,8 @@ export async function claimedMethods(input: {
 
 /** The lane a goal round's repeating-buyer pattern is filed under (`compilerProfiles.ts`). */
 export const PATTERN_LANE = 'demand_pattern';
+/** The lane a goal round's specific open request is filed in (MARKET_DISCOVERY's `demand_signal`). */
+export const GOAL_REQUEST_LANE = 'demand_signal';
 
 /**
  * Words a repeating-buyer pattern has to use: somebody paying, buying, hiring
@@ -1588,6 +1590,31 @@ export async function signalledClaims(input: {
                   JOIN cash_discovery_rounds pr ON pr.candidate_id = pm.candidate_id
                  WHERE pm.orchestration_id = o.id
                    AND (pr.bucket_id LIKE ? OR (pr.bucket_id LIKE ? AND ${PATTERN_STATES_PRICE_SQL}))))
+          /*
+           * And one specific open request from a goal's own round
+           * (GOAL_PLAN.OPENINGS.ROUNDS_FILE, 2026-11-12). Production read 2 of
+           * 39 settled goal rounds filing an opening: the rounds settled
+           * correctly and the harvest attributed and counted every signalled
+           * claim on them, but the gated demand_signal claims those rounds
+           * found carried no opportunity_signal, so none was read here —
+           * the same untagged class as the two rules above, in the lane
+           * GOAL_MECHANISM inherits from MARKET_DISCOVERY. That lane is
+           * defined as an opening: "the specific published request ... it is
+           * open ... everything filed here becomes a piece of work", held to
+           * SPECIFIC_INSTANCE by the gate, and a closed request or a
+           * documented absence has a lane of its own. So the lane says what
+           * the claim is, and it is read as ACTIVE_BUYER_DEMAND (below). Only
+           * for a goal's own rounds, where the question is "which ways reach
+           * this goal" and a worker reports the request without restating its
+           * kind; a broad bucket's worker is asked for the request itself and
+           * still files only what it tagged. The gate, the fragment's own
+           * verdict (ACCEPTED or BLOCKED, below) and every exclusion are
+           * unchanged.
+           */
+          OR (c.evidence_lane = ? AND EXISTS (
+                SELECT 1 FROM russell_missions gm
+                  JOIN cash_discovery_rounds gr ON gr.candidate_id = gm.candidate_id
+                 WHERE gm.orchestration_id = o.id AND gr.bucket_id LIKE ?))
         )
         AND f.status IN ('ACCEPTED', 'BLOCKED')
         /*
@@ -1651,11 +1678,18 @@ export async function signalledClaims(input: {
         )
       ORDER BY c.created_at, c.rowid
       LIMIT ?`,
-    [input.projectId, PATTERN_LANE, 'goal-%-mx-%', 'goal-%', Math.max(1, input.limit ?? 50)],
+    [input.projectId, PATTERN_LANE, 'goal-%-mx-%', 'goal-%', GOAL_REQUEST_LANE, 'goal-%', Math.max(1, input.limit ?? 50)],
   );
   return rows.map((row) => {
     const mapped = mapClaim(row);
-    const claim = mapped.opportunitySignal || mapped.evidenceLane !== PATTERN_LANE ? mapped : { ...mapped, opportunitySignal: 'RECURRING_OUTSOURCED_WORK' as const };
+    // An untagged claim is only returned by the two lane rules above, so its lane names its kind.
+    const claim = mapped.opportunitySignal
+      ? mapped
+      : mapped.evidenceLane === PATTERN_LANE
+        ? { ...mapped, opportunitySignal: 'RECURRING_OUTSOURCED_WORK' as const }
+        : mapped.evidenceLane === GOAL_REQUEST_LANE
+          ? { ...mapped, opportunitySignal: 'ACTIVE_BUYER_DEMAND' as const }
+          : mapped;
     return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
   });
 }
