@@ -103,6 +103,44 @@ export const RECIPES: Record<string, PodRecipe> = {
     clouds: ['SECURE', 'COMMUNITY'],
     note: 'Qwen3-8B AWQ on the existing 16 GB pod: tool calls (hermes parser), 64K by YaRN, FP8 KV',
   },
+  /**
+   * The 4B at 4 bits on the same pod: weights ~2.5 GB leave room for a full
+   * 64K bf16 KV cache (64K × 144 KiB ≈ 9.4 GB) with no FP8 KV — the 8B with FP8 KV
+   * served /v1/models and answered every chat HTTP 500 on this vLLM build (2026-11-12 21:17).
+   */
+  'qwen3-4b-awq-tools': {
+    key: 'qwen3-4b-awq-tools',
+    model: 'Qwen/Qwen3-4B-AWQ',
+    served: 'Qwen/Qwen3-4B-AWQ',
+    gpus: POD_GPUS,
+    image: POD_IMAGE,
+    cuda: ['12.4', '12.5', '12.6', '12.7', '12.8', '12.9', '13.0'],
+    maxModelLen: 65536,
+    args: [
+      '--gpu-memory-utilization', '0.92', '--max-num-seqs', '8',
+      '--rope-scaling', '{"rope_type":"yarn","factor":2.0,"original_max_position_embeddings":32768}',
+      '--enable-auto-tool-choice', '--tool-call-parser', 'hermes',
+    ],
+    containerDiskInGb: 40,
+    minGpuGb: 16,
+    clouds: ['SECURE', 'COMMUNITY'],
+    note: 'Qwen3-4B AWQ on the existing 16 GB pod: tool calls, 64K by YaRN, bf16 KV',
+  },
+  /** The production model with only the missing parser added, at its native 32K: the last step before reverting. */
+  'qwen3-4b-tools-32k': {
+    key: 'qwen3-4b-tools-32k',
+    model: POD_MODEL,
+    served: POD_MODEL,
+    gpus: POD_GPUS,
+    image: POD_IMAGE,
+    cuda: ['12.4', '12.5', '12.6', '12.7', '12.8', '12.9', '13.0'],
+    maxModelLen: 32768,
+    args: ['--gpu-memory-utilization', '0.92', '--max-num-seqs', '16', '--enable-auto-tool-choice', '--tool-call-parser', 'hermes'],
+    containerDiskInGb: 40,
+    minGpuGb: 16,
+    clouds: ['SECURE', 'COMMUNITY'],
+    note: 'production 4B plus the hermes tool-call parser, 32K: research and tools, under Hermes 64K',
+  },
   'gpt-oss-20b': {
     key: 'gpt-oss-20b',
     model: 'openai/gpt-oss-20b',
