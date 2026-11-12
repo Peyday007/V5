@@ -1403,4 +1403,65 @@ describe('the wider economy (2026-10-28)', () => {
     await harvest({ projectId });
     expect((await bucketRounds(tagged!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 1]]);
   });
+
+  it('files a goal lens round\'s untagged, priced demand_pattern claim as RECURRING_OUTSOURCED_WORK, and keeps an unpriced one as context (d104f93)', async () => {
+    const { openGoalDiscovery } = await import('../server/services/cash/discovery.ts');
+    const { PATTERN_LANE } = await import('../server/repos/research.ts');
+    const { listOpportunities } = await import('../server/repos/cashPortfolio.ts');
+    const { createWorkstream, getWorkstream } = await import('../server/repos/register.ts');
+    const { setTerms } = await import('../server/services/goals/decide.ts');
+    const { setTarget } = await import('../server/services/goals/target.ts');
+    const { forgetGoalReadings, readGoalPlan } = await import('../server/services/goals/plan.ts');
+    const day = 24 * 60 * 60 * 1000;
+    forgetGoalReadings();
+    await activated();
+    const g = await createWorkstream({ projectId, title: 'Collect cash fast', intent: 'Collect settled cash.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: new Date(Date.now() + 25 * day).toISOString(), ownerUserId: userId }, `person:${userId}`);
+    expect(
+      (await setTarget({
+        goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId,
+        capitalCeilingCents: 300_000, hoursCeiling: 200, now: new Date(Date.now() - 60_000),
+      } as Parameters<typeof setTarget>[0])).ok,
+    ).toBe(true);
+    const w = (await getWorkstream(g.id))!;
+    const target = (await readGoalPlan({ goalId: g.id, evaluations: 200 }))!.target;
+    const bucketRounds = async (bucketId: string) => (await listRounds(projectId)).filter((one) => one.bucketId === bucketId);
+
+    // The recorded class: a lens round (bucket goal-<id>, not a constructed goal-<id>-mx-<key>)
+    // whose worker answered with an accepted, sourced repeating-buyer pattern and no signal.
+    const priced = await openGoalDiscovery({ goal: w, target, bestReach: null });
+    expect(priced).not.toBeNull();
+    expect(priced!.bucketId).toMatch(/^goal-/);
+    expect(priced!.bucketId).not.toContain('-mx-');
+    await finishedMission({
+      candidateId: priced!.candidateId,
+      claims: [{ claim: 'Property managers repeatedly pay bookkeeping firms 400 to 900 USD a month for rent-roll reconciliation.', lane: PATTERN_LANE, sourceUrl: 'https://example.test/goal-lens/priced-pattern' }],
+    });
+    await harvest({ projectId });
+    expect((await bucketRounds(priced!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 1]]);
+    const filed = (await listOpportunities({ projectId })).find((one) => one.title.startsWith('Property managers repeatedly pay bookkeeping firms'));
+    expect(filed?.opportunitySignal).toBe('RECURRING_OUTSOURCED_WORK');
+
+    // The lane alone does not say what a lens round's buyers pay for: without the figure the
+    // lens asked for, the same untagged pattern stays context and files nothing.
+    const unpriced = await openGoalDiscovery({ goal: w, target, bestReach: null });
+    expect(unpriced).not.toBeNull();
+    await finishedMission({
+      candidateId: unpriced!.candidateId,
+      claims: [{ claim: 'Dentists repeatedly pay outside firms for appointment reminders.', lane: PATTERN_LANE, sourceUrl: 'https://example.test/goal-lens/unpriced-pattern' }],
+    });
+    await harvest({ projectId });
+    expect((await bucketRounds(unpriced!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 0]]);
+    expect((await listOpportunities({ projectId })).some((one) => one.title.startsWith('Dentists'))).toBe(false);
+
+    // A figure with no buyer paying is not a pattern of buyers paying.
+    const figureOnly = await openGoalDiscovery({ goal: w, target, bestReach: null });
+    expect(figureOnly).not.toBeNull();
+    await finishedMission({
+      candidateId: figureOnly!.candidateId,
+      claims: [{ claim: 'There are 12,000 property management companies in Texas.', lane: PATTERN_LANE, sourceUrl: 'https://example.test/goal-lens/figure-only' }],
+    });
+    await harvest({ projectId });
+    expect((await bucketRounds(figureOnly!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 0]]);
+  });
 });
