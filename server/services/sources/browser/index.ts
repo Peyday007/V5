@@ -11,6 +11,7 @@ export * from './capability.ts';
 export * from './redaction.ts';
 export * from './verifyOutcome.ts';
 export * from './operate.ts';
+export * from './schedule.ts';
 export {
   BROWSER_EFFECT_NAMESPACE,
   BROWSER_EFFECT_NAMESPACE_VERSION,
