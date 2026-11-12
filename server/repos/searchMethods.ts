@@ -351,6 +351,18 @@ export async function listLearnedDetectors(reader: SearchReader, opts: { mode?: 
   return rows.map(toDetector);
 }
 
+/**
+ * Give a detector the search method it serves. Guarded on its having none, so
+ * a detector already linked is never re-pointed at another method.
+ */
+export async function attachDetectorMethod(id: string, methodId: string): Promise<boolean> {
+  const r = await getDb().run(
+    `UPDATE learned_detectors SET method_id = ?, updated_at = ? WHERE id = ? AND method_id IS NULL`,
+    [methodId, nowIso(), id],
+  );
+  return (r.changes ?? 0) > 0;
+}
+
 /** Change a detector's mode; guarded on the mode the caller read. */
 export async function setDetectorMode(id: string, from: DetectorMode, to: DetectorMode): Promise<boolean> {
   const r = await getDb().run(

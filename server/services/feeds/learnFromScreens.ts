@@ -30,10 +30,23 @@
  * judgments only from items it came close on or missed. A demotion therefore
  * needs judged firings recorded while it was still in SHADOW, or later ones.
  *
+ * Every screen-proposed detector serves a GENERAL search method keyed by its
+ * detector key (`methodForDetector`), created with it, and a detector proposed
+ * before that rule is linked on the next pass (`linkDetectorMethods`). Without
+ * the method, `recordLearnedPass` records no CODE run, so nothing the detector
+ * did — the runs done without Claude, the screens its ACTIVE coverage skipped —
+ * could reach the search report as automatic or as AI usage avoided.
+ *
  * Nothing here calls a model: it reads answers already given.
  */
 import { getDb } from '../../db/database.ts';
-import { createLearnedDetector, listLearnedDetectors, recordDetectorExample } from '../../repos/searchMethods.ts';
+import {
+  attachDetectorMethod,
+  createLearnedDetector,
+  createSearchMethod,
+  listLearnedDetectors,
+  recordDetectorExample,
+} from '../../repos/searchMethods.ts';
 import type { LearnedDetector } from '../../domain/searchIntelligence.ts';
 import { combineLeads, parseLead, type LeadOutput } from '../cheap/lane.ts';
 import { confidenceOf, defineFromExamples, FIRE_AT, type LearnedDefinition } from './learned.ts';
@@ -107,6 +120,43 @@ export function proposedKey(source: string, terms: readonly string[]): string {
 type StoredDefinition = LearnedDefinition & { trainedOn?: string[] };
 
 /**
+ * The GENERAL search method a screen-proposed detector serves, keyed by the
+ * detector's key so a second call returns the same row. Null when the
+ * definition cannot be shared (the privacy guard refused it): the detector
+ * still exists, it just records no run.
+ */
+export async function methodForDetector(detectorKey: string, definition: Pick<LearnedDefinition, 'sources' | 'terms'>) {
+  try {
+    return await createSearchMethod({
+      scope: 'GENERAL',
+      methodKey: detectorKey,
+      finds: `feed items from ${definition.sources.join(', ')} whose titles carry ${definition.terms.join(' ')}`.slice(0, 2_000),
+      usefulWhen: 'a feeds pass over items newly pulled from those sources',
+      sources: [...definition.sources],
+      requiredInputs: [],
+      query: definition.terms.join(' '),
+      checkProcedure:
+        'Each firing on an item the detector was not built from is judged by two agreeing cheap-lane screen answers; precision over judged firings decides ACTIVE or SHADOW.',
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Link every GENERAL detector that serves no method to one. Returns how many were linked. */
+export async function linkDetectorMethods(detectors: readonly LearnedDetector[]): Promise<number> {
+  let linked = 0;
+  for (const detector of detectors) {
+    if (detector.scope !== 'GENERAL' || detector.methodId) continue;
+    const def = detector.definition as StoredDefinition | null;
+    if (!def || !Array.isArray(def.sources) || !Array.isArray(def.terms)) continue;
+    const method = await methodForDetector(detector.detectorKey, def);
+    if (method && (await attachDetectorMethod(detector.id, method.id))) linked += 1;
+  }
+  return linked;
+}
+
+/**
  * Create one SHADOW detector per source whose agreed positives define a
  * pattern no existing detector already holds. Returns the detectors created.
  */
@@ -123,7 +173,8 @@ export async function proposeDetectors(labels: readonly ScreenLabel[], existing:
     const key = proposedKey(source, built.definition.terms);
     if (held.has(key)) continue;
     const definition: StoredDefinition = { ...built.definition, trainedOn: [...positives, ...negatives].map((l) => l.id).sort() };
-    const detector = await createLearnedDetector({ scope: 'GENERAL', detectorKey: key, definition, threshold: PROPOSED_THRESHOLD });
+    const method = await methodForDetector(key, built.definition);
+    const detector = await createLearnedDetector({ scope: 'GENERAL', detectorKey: key, methodId: method?.id ?? null, definition, threshold: PROPOSED_THRESHOLD });
     held.add(key);
     created.push(detector);
   }
@@ -155,13 +206,16 @@ export interface LearnReport {
   labelled: number;
   proposed: number;
   judged: number;
+  /** Detectors proposed before they carried a method, linked to one this pass. */
+  linked: number;
 }
 
 /** One pass: read the agreed screen labels, propose what they define, judge every GENERAL detector on them. */
 export async function learnFromScreens(now: Date): Promise<LearnReport> {
+  const linked = await linkDetectorMethods(await listLearnedDetectors(FEED_READER));
   const labels = await screenLabels(now);
-  if (labels.length === 0) return { labelled: 0, proposed: 0, judged: 0 };
+  if (labels.length === 0) return { labelled: 0, proposed: 0, judged: 0, linked };
   const proposed = await proposeDetectors(labels, await listLearnedDetectors(FEED_READER));
   const judged = await judgeFirings(labels, await listLearnedDetectors(FEED_READER));
-  return { labelled: labels.length, proposed: proposed.length, judged };
+  return { labelled: labels.length, proposed: proposed.length, judged, linked };
 }
