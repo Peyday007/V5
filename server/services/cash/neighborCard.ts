@@ -485,6 +485,21 @@ const TOWNS = /camp hill|mechanicsburg|lemoyne|new cumberland|enola|wormleysburg
 
 const decode = (s: string) => s.replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
 
+/**
+ * A GrowthZone member page, in either of its two layouts: the older one
+ * (`itemprop="url" href`, `mn-cityspan`, `<h1 itemprop="name">`, Mechanicsburg)
+ * and the newer one (an anchor whose click is `MemberWebsite`, `addressLocality`,
+ * `<meta itemprop="name">`, Carlisle). Reading only the first found nobody in
+ * the second.
+ */
+export function chamberMember(html: string): { website?: string; town: string; name: string } {
+  const anchor = [...html.matchAll(/<a\s[^>]*>/g)].map((m) => m[0]).find((tag) => /MemberWebsite|itemprop="url"/.test(tag) && /href="https?:\/\/|href="www\./.test(tag));
+  const website = anchor ? /href="([^"]+)"/.exec(anchor)?.[1] : undefined;
+  const town = decode(/class="mn-cityspan">([^<]*)/.exec(html)?.[1] ?? /itemprop="addressLocality">([^<]*)/.exec(html)?.[1] ?? '');
+  const name = decode(/<h1 itemprop="name">([^<]*)/.exec(html)?.[1] ?? /<meta itemprop="name" content="([^"]*)"/.exec(html)?.[1] ?? '');
+  return { website, town, name };
+}
+
 export async function discoverChamber(deps: Deps, slug: string, key: keyof typeof CATEGORY, base: string = CHAMBERS[0]!): Promise<Candidate[]> {
   const list = await getPage(deps, `${base}/list/ql/${slug}`);
   if (!list) return [];
@@ -493,9 +508,7 @@ export async function discoverChamber(deps: Deps, slug: string, key: keyof typeo
   const rows = await pool(members, 6, async (url): Promise<Candidate | null> => {
     const page = await getPage(deps, url);
     if (!page) return null;
-    const website = /itemprop="url" href="([^"]+)"/.exec(page.html)?.[1];
-    const town = decode(/class="mn-cityspan">([^<]*)/.exec(page.html)?.[1] ?? '');
-    const name = decode(/<h1 itemprop="name">([^<]*)/.exec(page.html)?.[1] ?? '');
+    const { website, town, name } = chamberMember(page.html);
     if (!website || !name || !TOWNS.test(town)) return null;
     return { name, website: website.startsWith('http') ? website : `http://${website}`, category: key, town, sourceUrl: url };
   });
