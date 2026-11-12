@@ -306,25 +306,32 @@ interface OwningBin {
   binId: string;
   purpose: string | null;
 }
-const purposeCache = new Map<string, { at: number; owner: OwningBin }>();
+const purposeCache = new Map<string, { at: number; owner: OwningBin | null }>();
 const PURPOSE_TTL_MS = 10 * 60_000;
+/*
+ * An unanswered owner — no bin yet, or a bin with no purpose — is remembered
+ * too, for a minute. Only found purposes were, and production 2026-11-12 asked
+ * this query 3,057 times in 23 minutes for the same handful of unowned items
+ * while the event loop stalled for seconds. A minute is the most an item that
+ * just gained a bin waits to be seen as owned.
+ */
+const UNOWNED_TTL_MS = 60_000;
 
 export async function owningBin(item: Pick<WorkItemRow, 'bin_id' | 'orchestration_id'>): Promise<OwningBin | null> {
   const key = item.bin_id ?? item.orchestration_id ?? null;
   if (!key) return null;
   const cacheKey = `${item.bin_id ? 'b' : 'o'}:${key}`;
   const hit = purposeCache.get(cacheKey);
-  if (hit && Date.now() - hit.at < PURPOSE_TTL_MS) return hit.owner;
+  if (hit && Date.now() - hit.at < (hit.owner?.purpose ? PURPOSE_TTL_MS : UNOWNED_TTL_MS)) return hit.owner;
   const owner = item.bin_id ? 'b.id = ?' : 'b.orchestration_id = ?';
   const row = await getDb().get<{ id: string; purpose: string | null }>(
     `SELECT b.id, b.purpose FROM bins b WHERE ${owner} ORDER BY b.created_at DESC LIMIT 1`,
     [key],
   );
-  if (!row) return null;
-  const found: OwningBin = { binId: row.id, purpose: row.purpose ?? null };
+  const found: OwningBin | null = row ? { binId: row.id, purpose: row.purpose ?? null } : null;
   if (purposeCache.size > 5000) purposeCache.clear();
-  // An item with no bin yet may get one: only a found purpose is remembered.
-  if (found.purpose !== null) purposeCache.set(cacheKey, { at: Date.now(), owner: found });
+  // An item with no bin yet may get one, so an unowned answer expires sooner.
+  purposeCache.set(cacheKey, { at: Date.now(), owner: found });
   return found;
 }
 

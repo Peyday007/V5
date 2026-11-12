@@ -36,6 +36,7 @@ import type {
   FactoryCampaign,
   FactoryCampaignState,
   FactoryChangeRequest,
+  FactoryWorkUnit,
 } from '../../domain/factory.ts';
 import {
   chargeAndReopenUnit,
@@ -1864,16 +1865,36 @@ async function runRemoteTick(
   const newestPlan = bins
     .filter((one) => one.kind === 'FACTORY_PLAN' && one.state === 'COMPLETE')
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))[0];
+  /*
+   * The campaign's units, read once for the whole loop rather than once per
+   * completed bin, and read again only after an ingest that ran past its cheap
+   * test (it may have moved a unit). A live campaign keeps every units and
+   * integration bin it ever completed, and each asked `listUnits` on every tick
+   * only to learn nothing was READY or IMPLEMENTED. Production, 2026-11-12 after
+   * the recorded-bin skip: 3,890 `factory_work_units` reads in 23 minutes, the
+   * most expensive statement on the process, and a goal read taking 214s.
+   *
+   * The test here only skips. A bin skipped on a stale read is offered again on
+   * the next tick, so the cost of a stale answer is one tick, never a lost ingest.
+   */
+  let tickUnits: FactoryWorkUnit[] | null = null;
+  const unitsThisPass = async (): Promise<FactoryWorkUnit[]> => (tickUnits ??= await listUnits(campaign.id));
   for (const bin of bins) {
     if (bin.state !== 'COMPLETE') continue;
     if (recordedBins.get(bin.id) === bin.updatedAt) continue;
     if (bin.kind === 'FACTORY_PLAN') {
       if (bin.id !== newestPlan?.id) continue;
       if (await ingestPlanBin(campaign, changeRequest, bin, report)) report.progress = true;
+      tickUnits = null;
     } else if (bin.kind === 'FACTORY_UNITS') {
+      if (!(await unitsThisPass()).some((unit) => unit.state === 'READY')) continue;
       if (await ingestUnitsBin(campaign, changeRequest, bin, report)) report.progress = true;
+      tickUnits = null;
     } else if (bin.kind === 'FACTORY_INTEGRATE') {
+      const units = await unitsThisPass();
+      if (!units.some((unit) => unit.state === 'IMPLEMENTED' && unit.headSha !== null)) continue;
       if (await ingestIntegrateBin(campaign, changeRequest, bin, report)) report.progress = true;
+      tickUnits = null;
     } else if (bin.kind === 'FACTORY_REVIEW') {
       if (await ingestReviewBin(campaign, changeRequest, bin, report)) report.progress = true;
     } else if (bin.kind === 'FACTORY_DELIVER') {

@@ -274,11 +274,19 @@ describe('independent units are separately claimable', () => {
      * in 50 minutes re-asking bins whose every unit had moved on.
      */
     await getDbForTest().run("UPDATE factory_work_units SET state = 'INTEGRATED' WHERE campaign_id = ?", [campaignId]);
+    // Every bin finished: the unit list must be read once for all of them,
+    // not once per bin (3,890 reads in 23 minutes on production, 2026-11-12).
+    await getDbForTest().run("UPDATE bins SET state = 'COMPLETE' WHERE factory_campaign_id = ?", [campaignId]);
+    const completed = (
+      await getDbForTest().all<{ id: string }>('SELECT id FROM bins WHERE factory_campaign_id = ?', [campaignId])
+    ).length;
     const db = getDbForTest();
     const realAll = db.all.bind(db);
     let resultReads = 0;
+    let unitReads = 0;
     db.all = (async (sql: string, params?: unknown[]) => {
       if (/FROM bin_unit_results WHERE bin_id/.test(sql)) resultReads += 1;
+      if (/FROM factory_work_units WHERE campaign_id/.test(sql)) unitReads += 1;
       return realAll(sql, params as never);
     }) as typeof db.all;
     try {
@@ -287,5 +295,9 @@ describe('independent units are separately claimable', () => {
       db.all = realAll;
     }
     expect(resultReads).toBe(0);
+    // One read for the whole ingest loop, two for the stage decision after it —
+    // and not one more for each of the finished bins.
+    expect(completed).toBe(3);
+    expect(unitReads).toBeLessThanOrEqual(3);
   });
 });
