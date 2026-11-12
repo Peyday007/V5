@@ -24,9 +24,9 @@ and runway and warns under 72 hours: RunPod deletes every pod at zero.
 
 | | |
 |---|---|
-| GPU | RTX 2000 Ada, 16 GB |
-| Server | vLLM (`vllm-latest` template, OpenAI-compatible, port 8000) |
-| Model | `Qwen/Qwen3-4B` (what production ran from 2026-11-05; ~8 GB bf16). `Qwen/Qwen3-8B-AWQ` also fits. |
+| GPU | RTX 2000 Ada, 16 GB (pod `odsft6ptpi2reh`, repurposed in place 2026-11-12) |
+| Server | vLLM 0.8.5.post1 (OpenAI-compatible, port 8000), `--enable-auto-tool-choice --tool-call-parser hermes` |
+| Model | `Qwen/Qwen3-4B-AWQ` at 64K (YaRN ×2, bf16 KV) — recipe `qwen3-4b-awq-tools`, `ACTIVE_RECIPE`. Until 2026-11-12 it was `Qwen/Qwen3-4B` at 32K with no tool-call parser, which failed every operator call (HTTP 400). `Qwen/Qwen3-8B-AWQ` with an FP8 KV cache listed its model at 64K and answered every chat HTTP 500 on this build. |
 | Price | measured $0.24/h; a recreated pod above `RUNPOD_MAX_USD_PER_HOUR` (default 0.24) is deleted at once |
 | Code | `server/services/cheap/runpod.ts`, wired in `cheap/lane.ts` |
 | Workflow | `Cheap lane` (`.github/workflows/cheap-lane.yml`), `runpod-*` actions + an hourly `runpod-auto` |

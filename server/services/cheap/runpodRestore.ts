@@ -197,8 +197,12 @@ export const RECIPES: Record<string, PodRecipe> = {
   },
 };
 
-/** The recipe production serves. Chosen by measurement (docs/RUNPOD.md, §108), changed only with a benchmark behind it. */
-export const ACTIVE_RECIPE = 'qwen3-4b-legacy';
+/**
+ * The recipe production serves, and the one a lost pod is recreated from. 2026-11-12 21:25
+ * (run 43309470657): served on pod odsft6ptpi2reh in place, chat 5.1 s, a structured operator
+ * tool call 2.5 s, 4/4 in parallel, 64K — the 8B with FP8 KV answered HTTP 500 on this build.
+ */
+export const ACTIVE_RECIPE = 'qwen3-4b-awq-tools';
 
 export function recipeFor(key?: string | null): PodRecipe {
   const recipe = RECIPES[(key ?? '').trim() || ACTIVE_RECIPE];
