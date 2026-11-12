@@ -10,7 +10,7 @@ import {
 } from '../server/services/cash/neighborCard.ts';
 import { SALES_BUSINESSES, salesBusiness } from '../server/services/sales/businesses.ts';
 import {
-  handleOneReply, learn, personalDesk, personalShare, promisesDeliverable, textToHtml, ungroundedFigures, workReplies,
+  automatedNotOptOut, handleOneReply, learn, personalDesk, personalShare, promisesDeliverable, textToHtml, ungroundedFigures, workReplies,
 } from '../server/services/sales/desk.ts';
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -115,6 +115,20 @@ describe('a reply on a business campaign', () => {
     expect(posted(calls, '/block-lists-entries')[0]!.body).toEqual({ bl_value: 'kathy@clubpilates.example' });
     expect(posted(calls, '/emails/reply')).toHaveLength(0);
     expect(posted(calls, '/leads/update-interest-status')[0]!.body).toMatchObject({ interest_value: -1 });
+  });
+
+  it('keeps an auto-responder the model read as an opt-out off the block list, and honours a phrase opt-out inside one', async () => {
+    // Production 2026-11-12 (agents.yml 43314478906): "no longer monitored" and
+    // "automatic reply" came back unsubscribe, by the model alone.
+    const dead = world({ decision: { intent: 'unsubscribe', stage: 'closed_lost', status: 'closed', answer: '', optOut: { rule: 'model', matched: '' } } });
+    dead.reply.body = { text: 'Thank you for reaching out. This email address is no longer monitored.' };
+    const out = await handleOneReply(dead.deps, salesBusiness('neighbor-card')!, mail(dead.reply), [mail(dead.reply)]);
+    expect(out?.action).toBe('RECORDED');
+    expect(posted(dead.calls, '/block-lists-entries')).toHaveLength(0);
+    expect(posted(dead.calls, '/leads/update-interest-status')).toHaveLength(0);
+
+    expect(automatedNotOptOut('This is an automatic reply. Please remove me from your list.', 'phrase')).toBe(false);
+    expect(automatedNotOptOut('Please stop emailing me.', 'model')).toBe(false);
   });
 
   it('holds an answer quoting a price the business never stated', async () => {

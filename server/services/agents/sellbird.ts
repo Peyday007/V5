@@ -35,6 +35,8 @@ export interface SalesOffer {
   phoneNumbers?: string[];
   linkDomains?: string[];
   doNotContact?: string[];
+  /** Whether the writer may lead with what the prospect's website lacks; true for a web service, false for the postcard. */
+  siteFacts?: boolean;
   /** Product knowledge and competition: the trainer's skills, from the business's own documents. */
   knowledge?: string;
   competition?: string;

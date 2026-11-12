@@ -143,7 +143,10 @@ def build_config(offer: dict, titles: list[str] | None = None):
             "opt_out_line": str(offer.get("optOutLine") or 'Reply "no thanks" and we won\'t contact you again.'),
             "do_not_contact": [str(d) for d in (offer.get("doNotContact") or [])],
         },
-        writer={"humanizer": True, "site_facts": True},
+        # Website gaps (no schema markup, no booking page) are a reason to buy a
+        # web service, and no reason at all to buy a postcard: a business says
+        # whether its writer may lead with them (production 2026-11-12).
+        writer={"humanizer": True, "site_facts": bool(offer.get("siteFacts", True))},
     )
 
 
@@ -291,6 +294,13 @@ async def research(website: str, offer: dict | None = None, titles: list[str] | 
 # Writing                                                                     #
 # --------------------------------------------------------------------------- #
 
+def _lead_for(offer: dict, lead: dict) -> dict:
+    """Nothing about the prospect's website reaches a writer whose offer is not about it."""
+    if offer.get("siteFacts", True):
+        return lead
+    return {k: v for k, v in lead.items() if k not in ("techStack", "observations", "signals")}
+
+
 def _call_summary(calls: list) -> str:
     """Why a write produced nothing, from the model calls themselves: an HTTP
     refusal (a model name the server does not serve) and an empty answer are
@@ -326,6 +336,7 @@ async def write_first_email(offer: dict, lead: dict, llm: dict) -> dict:
 
     calls: list = []
     config = build_config(offer)
+    lead = _lead_for(offer, lead)
     with tempfile.TemporaryDirectory(prefix="sellbird-") as tmp:
         state = await _state(tmp)
         cid = await _company(state, lead)
@@ -374,7 +385,8 @@ async def write_sequence(offer: dict, sample: list[dict], llm: dict) -> dict:
     with tempfile.TemporaryDirectory(prefix="sellbird-") as tmp:
         state = await _state(tmp)
         prospects = []
-        for lead in sample[:5]:
+        for raw in sample[:5]:
+            lead = _lead_for(offer, raw)
             cid = await _company(state, lead)
             prospects.append(await _prospect(state, lead, cid))
         brain = _brain(state, llm, offer, calls)
