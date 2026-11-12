@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import * as capabilityModule from '../server/services/sources/browser/capability.ts';
+import { classifyWorkflow } from '../server/services/sources/browser/actionClass.ts';
+import { operateCapability } from '../server/services/sources/browser/operate.ts';
 import {
   BROWSER_CAPABILITY_EVENT,
   capabilitiesFrom,
@@ -6,11 +10,9 @@ import {
   consequentialSteps,
   effectKey,
   planCapabilityRun,
-  priorRunsFrom,
   readBrowserCapabilities,
   recordBrowserCapability,
   recordCapabilityDecision,
-  runBrowserCapability,
   validateCapability,
   type BrowserCapability,
   type CapabilityRow,
@@ -129,7 +131,7 @@ describe("a mutation's retry policy never allows an automatic retry after an unk
     expect(validateCapability(c).some((x) => x.includes('never retried automatically'))).toBe(true);
   });
 
-  it('plans: an UNKNOWN or in-flight attempt is refused, a completed one is not repeated', async () => {
+  it('plans: rows read before a run never decide a mutation; only the effect claim does', async () => {
     const s = store();
     const v = await recordBrowserCapability(mutation(), 'a person', s.deps);
     await recordCapabilityDecision({ host: 'records.example.org', name: 'publish listing', contentHash: v.contentHash, decision: 'APPROVED', by: 'a person' }, s.deps);
@@ -137,31 +139,64 @@ describe("a mutation's retry policy never allows an automatic retry after an unk
     const inputs = { month: '2026-10' };
     const key = effectKey(v.contentHash, inputs);
     expect(effectKey(v.contentHash, { month: '2026-10' })).toBe(key);
+    // The planner still refuses what it can know without racing anyone…
+    expect(planCapabilityRun(record, { nope: '1' }, [], s.now())).toMatchObject({ decision: 'REFUSED', reason: 'BAD_INPUT' });
+    // …but does not answer "already done / in flight / unknown" for a mutation from a row scan:
+    // that answer is the claim's, taken in one statement by operateCapability (invariant 24).
     const at = new Date(s.now()).toISOString();
-    expect(planCapabilityRun(record, inputs, [], s.now()).decision).toBe('RUN');
-    expect(planCapabilityRun(record, inputs, [{ key, outcome: 'STARTED', at }], s.now() + 3_600_000)).toMatchObject({ decision: 'REFUSED', reason: 'OUTCOME_UNKNOWN' });
-    expect(planCapabilityRun(record, inputs, [{ key, outcome: 'UNKNOWN', at }], s.now() + 3_600_000)).toMatchObject({ decision: 'REFUSED', reason: 'OUTCOME_UNKNOWN' });
-    expect(planCapabilityRun(record, inputs, [{ key, outcome: 'COMPLETED', at }], s.now() + 3_600_000).decision).toBe('ALREADY_DONE');
+    for (const outcome of ['STARTED', 'UNKNOWN', 'COMPLETED']) {
+      expect(planCapabilityRun(record, inputs, [{ key, outcome, at }], s.now() + 3_600_000).decision).toBe('RUN');
+    }
+    // And there is no second run path that acts on such a scan.
+    expect('runBrowserCapability' in capabilityModule).toBe(false);
   });
 
-  it('runs: a mutation that does not verify is recorded UNKNOWN, and a second worker refuses it', async () => {
+  it('runs: concurrent workers that all read before any writes perform the mutation once, and an UNKNOWN is never re-performed', async () => {
+    const projectId = (await freshProject()).project.id;
     const s = store();
-    const v = await recordBrowserCapability(mutation(), 'a person', s.deps);
+    const c = mutation();
+    const v = await recordBrowserCapability(c, 'a person', { ...s.deps, recordWorkflow: (async (w: unknown) => w) as never });
     await recordCapabilityDecision({ host: 'records.example.org', name: 'publish listing', contentHash: v.contentHash, decision: 'APPROVED', by: 'a person' }, s.deps);
-    const failed: OperateResult = {
+    const j = classifyWorkflow(c.workflow);
+    const approvals = j.effectSteps.map((i) => ({ stepIndex: i, fingerprint: j.steps[i]!.fingerprint, actionClass: j.steps[i]!.actionClass, approvedBy: 'a person', approvedAt: new Date().toISOString() }));
+    let operated = 0;
+    // Every worker has read the rows (nothing in flight) before the first one acts.
+    let release!: () => void;
+    const allRead = new Promise<void>((r) => (release = r));
+    let reads = 0;
+    const workers = 5;
+    const capabilities = async (host: string) => {
+      const records = await readBrowserCapabilities(host, s.deps);
+      if (++reads === workers) release();
+      await allRead;
+      return records;
+    };
+    const timedOut: OperateResult = {
       run: { host: 'records.example.org', name: 'publish listing', outcome: 'FAILED', steps: [{ index: 1, kind: 'navigate', ok: true, detail: '' }], extracted: [], downloads: [], finalUrl: null, boundary: null, interfaceChanged: false, detail: 'timed out' },
       judgment: null,
       record: null,
     };
-    let operated = 0;
-    const deps = { ...s.deps, operate: (async () => (operated += 1, failed)) as never };
-    const first = await runBrowserCapability('records.example.org', 'publish listing', { month: '2026-10' }, [], deps);
-    expect(first.outcome).toBe('UNKNOWN');
-    const prior = priorRunsFrom(s.rows.filter((r) => r.eventType === BROWSER_CAPABILITY_EVENT));
-    expect(prior.map((p) => p.outcome)).toEqual(['STARTED', 'UNKNOWN']);
+    const deps = {
+      capabilities,
+      record: s.deps.record,
+      runRows: async () => [],
+      operate: (async () => {
+        operated += 1;
+        await new Promise((r) => setTimeout(r, 20));
+        return timedOut;
+      }) as never,
+    };
+    const run = (id: string) => operateCapability({ projectId, host: 'records.example.org', name: 'publish listing', inputs: { month: '2026-10' }, approvals, actor: { type: 'WORKER', id } }, deps);
+    const results = await Promise.all(Array.from({ length: workers }, (_, i) => run(`wrk_${i}`)));
+    expect(operated).toBe(1);
+    expect(results.filter((r) => r.sessionOpened)).toHaveLength(1);
+    expect(results.find((r) => r.sessionOpened)).toMatchObject({ outcome: 'UNKNOWN', failureReason: 'OUTCOME_UNKNOWN' });
+    for (const r of results.filter((x) => !x.sessionOpened)) expect(r).toMatchObject({ outcome: 'REFUSED', failureReason: 'DUPLICATE_EFFECT' });
+    // No in-flight marker row stands in for the claim.
+    expect(s.rows.some((r) => r.outcome === 'RUN_STARTED')).toBe(false);
+    // An hour later, a fresh worker still does not re-perform an unknown outcome.
     s.advance(3_600_000);
-    const second = await runBrowserCapability('records.example.org', 'publish listing', { month: '2026-10' }, prior, deps);
-    expect(second.decision).toMatchObject({ decision: 'REFUSED', reason: 'OUTCOME_UNKNOWN' });
+    expect(await run('wrk_late')).toMatchObject({ outcome: 'REFUSED', failureReason: 'OUTCOME_UNKNOWN', sessionOpened: false });
     expect(operated).toBe(1);
   });
 });

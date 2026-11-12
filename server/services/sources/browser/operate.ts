@@ -37,9 +37,13 @@
  *     lifecycle derived from these rows never counts it as a success.
  *
  * A refusal or deferral that never reached the site is recorded as a
- * BROWSER_CAPABILITY `RUN_*` row, the same place `runBrowserCapability`
- * records its decisions, so it does not disturb the run history the lifecycle
- * is derived from.
+ * BROWSER_CAPABILITY `RUN_*` row, beside the capability's own decisions, so it
+ * does not disturb the run history the lifecycle is derived from.
+ *
+ * This is the only path a capability runs through. A mutation is performed
+ * only by the worker whose effect claim won `reserveOperation`'s single
+ * conditional INSERT (step 4); rows read before a run are never what permits
+ * it, because two workers can both read before either writes (invariant 24).
  *
  * No table, queue, scheduler or authority path is added, and nothing here
  * names a host, category or industry.

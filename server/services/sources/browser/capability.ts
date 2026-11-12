@@ -23,6 +23,12 @@
  *    a **maintenance owner**, a **request-rate bound**, and the **session rule**
  *    (whether a granted account is used and when it must be reauthorized).
  *
+ * Running a capability is `operate.ts`'s `operateCapability`, the one path:
+ * its effect claim (`reserveOperation`, a single conditional INSERT) is what
+ * lets exactly one worker perform a mutation. Nothing here permits a mutation
+ * from rows read earlier, because two workers can both read before either
+ * writes (invariant 24).
+ *
  * Lifecycle DRAFT → APPROVED → ACTIVE → REVIEW → RETIRED is never stored as a
  * status: it is derived by reading BROWSER_CAPABILITY rows and the existing
  * BROWSER_WORKFLOW_RUN rows, all written through `recordBinEvent` (no table,
@@ -47,12 +53,10 @@ import {
   BROWSER_WORKFLOW_RUN_EVENT,
   MAX_WORKFLOW_STEPS,
   WORKFLOW_TIMEOUT_MS,
-  operateWorkflow,
   recordBrowserWorkflow,
   validateWorkflow,
   type BrowserWorkflow,
   type Locator,
-  type OperateDeps,
   type OperateResult,
 } from '../browserWorkflow.ts';
 
@@ -455,9 +459,11 @@ export type RunDecision =
  * Whether this capability may run now with these inputs, from its record and
  * its recorded runs. Pure.
  *
- * A mutation that already completed is not performed again; one whose outcome
- * is unknown stays UNKNOWN and is refused rather than retried. A read retries
- * within its bound. Every run, read or mutation, stays inside the rate bound.
+ * A read inside its freshness window is not run again and retries within its
+ * bound. Every run, read or mutation, stays inside the rate bound. Whether a
+ * mutation was already performed, is in flight or has an unknown outcome is
+ * deliberately not decided here: that is the effect claim's, made atomically
+ * by `operateCapability`, so a RUN for a mutation is never permission to act.
  */
 export function planCapabilityRun(record: CapabilityRecord, inputs: Record<string, string>, prior: readonly PriorRun[], now: number = Date.now()): RunDecision {
   const c = record.current.capability;
@@ -471,13 +477,11 @@ export function planCapabilityRun(record: CapabilityRecord, inputs: Record<strin
   if (record.handoff === 'REAUTHORIZE') return { decision: 'REFUSED', key, reason: 'SESSION_EXPIRED', detail: record.why };
 
   const mine = prior.filter((p) => p.key === key).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
-  if (c.effect === 'MUTATION') {
-    if (mine.some((p) => p.outcome === 'COMPLETED')) return { decision: 'ALREADY_DONE', key, detail: 'this mutation already completed; it is not performed twice' };
-    const latest = mine[mine.length - 1];
-    if (mine.some((p) => p.outcome === 'UNKNOWN') || latest?.outcome === 'STARTED') {
-      return { decision: 'REFUSED', key, reason: 'OUTCOME_UNKNOWN', detail: 'an earlier attempt at this mutation has no known outcome; it is recorded as UNKNOWN and never retried automatically' };
-    }
-  } else {
+  // A mutation's once-only guarantee is not read from rows here: rows read
+  // before a run cannot prove that no other worker is about to act. It is the
+  // effect claim's (`claimBrowserEffect` → `reserveOperation`, one conditional
+  // INSERT — invariant 24), taken by `operateCapability`, the only run path.
+  if (c.effect !== 'MUTATION') {
     const failed = mine.filter((p) => p.outcome !== 'COMPLETED');
     const lastDone = mine.filter((p) => p.outcome === 'COMPLETED').pop();
     if (lastDone && now - Date.parse(lastDone.at) <= c.freshnessMs) return { decision: 'ALREADY_DONE', key, detail: `obtained at ${lastDone.at}, still within its freshness window` };
@@ -515,8 +519,6 @@ export interface CapabilityDeps {
   record?: typeof recordBinEvent;
   rows?: (host: string) => Promise<{ capabilities: CapabilityRow[]; runs: CapabilityRow[] }>;
   recordWorkflow?: typeof recordBrowserWorkflow;
-  operate?: typeof operateWorkflow;
-  operateDeps?: OperateDeps;
   now?: () => number;
 }
 
@@ -594,55 +596,6 @@ export async function recordCapabilityDecision(
     measures: { host, name: record.name, version: record.current.version, contentHash: record.current.contentHash, by: input.by.trim() },
   });
   return record;
-}
-
-export interface CapabilityRunResult {
-  decision: RunDecision;
-  result: OperateResult | null;
-  /** COMPLETED only when every declared output was obtained. */
-  outcome: 'COMPLETED' | 'FAILED' | 'UNKNOWN' | 'HANDOFF' | 'REFUSED' | 'SKIPPED';
-  missing: string[];
-}
-
-/**
- * Run a capability once, through the workflow owner. Decided first from the
- * rows (approval, review, reauthorization, idempotency, retry and rate bounds);
- * a mutation records STARTED before it acts, so a second worker reading the
- * rows sees it in flight and refuses rather than repeating it. A mutation whose
- * run did not complete is recorded as UNKNOWN, never as not having happened.
- */
-export async function runBrowserCapability(host: string, name: string, inputs: Record<string, string>, prior: readonly PriorRun[], deps: CapabilityDeps = {}): Promise<CapabilityRunResult> {
-  const now = (deps.now ?? Date.now)();
-  const record = (await readBrowserCapabilities(host, deps)).get(capKey(host, name));
-  if (!record) return { decision: { decision: 'REFUSED', key: '', reason: 'NOT_APPROVED', detail: `no capability "${name}" on ${host}` }, result: null, outcome: 'REFUSED', missing: [] };
-  const decision = planCapabilityRun(record, inputs, prior, now);
-  const c = record.current.capability;
-  const write = (outcome: string, detail: string, extra: Record<string, unknown> = {}) =>
-    (deps.record ?? recordBinEvent)({
-      eventType: BROWSER_CAPABILITY_EVENT,
-      provider: 'BROWSER',
-      workloadClass: 'acquisition',
-      outcome: `RUN_${outcome}`,
-      reason: detail.slice(0, 480),
-      evidenceClass: 'MEASURED',
-      routineVersion: String(record.current.version),
-      measures: { host: record.host, name: record.name, version: record.current.version, contentHash: record.current.contentHash, effect: c.effect, key: decision.key, ...extra },
-    });
-  if (decision.decision !== 'RUN') {
-    await write(decision.decision, decision.detail);
-    return { decision, result: null, outcome: decision.decision === 'ALREADY_DONE' ? 'SKIPPED' : decision.decision === 'WAIT' ? 'SKIPPED' : 'REFUSED', missing: [] };
-  }
-  if (c.effect === 'MUTATION') await write('STARTED', `mutation attempt ${decision.attempt} started`, { attempt: decision.attempt });
-  const result = await (deps.operate ?? operateWorkflow)(record.host, record.name, { ...(deps.operateDeps ?? {}), options: { ...(deps.operateDeps?.options ?? {}), timeoutMs: c.timeoutMs } });
-  const verified = verifyObtained(c, result.run);
-  let outcome: CapabilityRunResult['outcome'];
-  if (verified.ok) outcome = 'COMPLETED';
-  else if (result.run.steps.length === 0 && (result.run.outcome === 'HANDOFF' || result.run.outcome === 'REFUSED')) outcome = result.run.outcome;
-  // Once any step ran, a mutation that did not verify may or may not have happened.
-  else outcome = c.effect === 'MUTATION' ? 'UNKNOWN' : result.run.outcome === 'HANDOFF' ? 'HANDOFF' : 'FAILED';
-  const reason = result.run.interfaceChanged ? 'INTERFACE_CHANGED' : result.run.boundary === 'AUTHENTICATION' && c.session.account ? 'SESSION_EXPIRED' : result.run.boundary ? 'BOUNDARY' : verified.ok ? null : 'EXPECTED_STATE_MISSING';
-  await write(outcome, `${outcome}${reason ? ` (${reason})` : ''}: ${result.run.detail}`, { attempt: decision.attempt, failureReason: reason, missing: verified.missing });
-  return { decision, result, outcome, missing: verified.missing };
 }
 
 /** Prior runs of a capability, read from its RUN_* rows, for `planCapabilityRun`. Pure. */
