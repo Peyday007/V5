@@ -483,7 +483,11 @@ export async function findPublishedEmail(deps: Deps, website: string): Promise<F
 /* Discovery                                                          */
 /* ------------------------------------------------------------------ */
 
-export interface Candidate { name: string; website: string; category: string; town: string; sourceUrl: string }
+export interface Candidate {
+  name: string; website: string; category: string; town: string; sourceUrl: string;
+  /** An address the source itself publishes for this business (a chamber listing), checked like any other. */
+  email?: string;
+}
 
 /** Card category label, and the two lines the sequence fills in for it. */
 const CATEGORY: Record<string, { label: string; payback: string; angle: string }> = {
@@ -607,6 +611,79 @@ export async function discoverOsm(deps: Deps, tile: string): Promise<Candidate[]
 }
 
 /**
+ * The West Shore Chamber of Commerce (Camp Hill's own chamber): a WebLink
+ * Atlas directory whose public pages are rendered from a JSON listing search.
+ * The page fetches an anonymous visitor token and then the listings; Brain
+ * makes the same two calls a visitor's browser makes. Each listing carries the
+ * address its member page publishes, so most need no site read at all.
+ */
+const WEST_SHORE = { api: 'https://api-internal.weblinkconnect.com/api', host: 'westshorepacoc.weblinkconnect.com', tenant: 'WestShorePACOC' };
+const WEST_SHORE_CATEGORY: [RegExp, keyof typeof CATEGORY][] = [
+  [/^dental|orthodont/i, 'dental'], [/automo|auto |tire|collision/i, 'auto'],
+  [/roofing|electrical|painting|flooring|contractor|construction|remodel|plumbing|hvac|masonry|paving/i, 'contractor'],
+  [/home and garden|landscap|decorat|cleaning|pest|home improvement|window|moving/i, 'home'],
+  [/attorney|legal/i, 'legal'], [/financial services|accounting|insurance|mortgage|tax/i, 'finance'],
+  [/health|chiroprac|optom|therap|counsel|home care|medical|pharmac|wellness/i, 'health'],
+  [/salon|spa|beauty|barber|photograph/i, 'personal'], [/pet|veterin/i, 'pets'], [/real estate/i, 'realestate'],
+  [/restaurant|cater|food|brewery|winery|distill|bakery|coffee/i, 'restaurant'], [/retail|florist|jewel|gift|furniture|boutique/i, 'retail'],
+  [/fitness|recreation|martial|dance|golf|sport/i, 'fitness'],
+];
+
+export function westShoreCandidate(row: Record<string, unknown>): Candidate | null {
+  const category = String(row.ListingCategory ?? '');
+  const key = WEST_SHORE_CATEGORY.find(([re]) => re.test(category))?.[1];
+  const website = String(row.Website ?? '').trim();
+  const name = decode(String(row.DisplayName ?? ''));
+  const town = String(row.City ?? '').trim();
+  if (!key || !website || !name || !TOWNS.test(town) || row.Member === false) return null;
+  const email = String(row.Email ?? '').trim().toLowerCase();
+  return {
+    name, town, category: key,
+    website: website.startsWith('http') ? website : `http://${website}`,
+    sourceUrl: `https://${WEST_SHORE.host}/atlas/directory/category/${String(row.CategoryUrlName ?? '')}/${String(row.ListingUrlName ?? '')}`,
+    ...(email ? { email } : {}),
+  };
+}
+
+export async function discoverWestShore(deps: Deps): Promise<Candidate[]> {
+  try {
+    const headers = { accept: 'application/json', 'content-type': 'application/json', referer: `https://${WEST_SHORE.host}/` };
+    const t = await deps.fetch(`${WEST_SHORE.api}/Security/Public/AtlasMemberPortalSpa/Tenant/Current`, { headers: { ...headers, 'x-tenant-hostname': WEST_SHORE.host }, signal: AbortSignal.timeout(30_000) });
+    if (!t.ok) return [];
+    const token = String(((await t.json()) as { AccessToken?: string }).AccessToken ?? '');
+    if (!token) return [];
+    const rows = new Map<string, Record<string, unknown>>();
+    for (let page = 1; page <= 10; page += 1) {
+      const res = await deps.fetch(`${WEST_SHORE.api}/website/v2/listing/search`, {
+        method: 'POST',
+        headers: { ...headers, authorization: `Bearer ${token}`, 'x-tenant': WEST_SHORE.tenant },
+        body: JSON.stringify({ PageNumber: page, PageSize: 500, OrderBy: '', Object: null, DirectorySearchOrder: 0, CategoryIds: [], SettingBatch: '' }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!res.ok) break;
+      const result = ((await res.json()) as { Result?: Record<string, unknown>[] }).Result ?? [];
+      const before = rows.size;
+      for (const r of result) rows.set(String(r.ListingId), r);
+      if (result.length < 500 || rows.size === before) break;
+    }
+    return [...rows.values()].map(westShoreCandidate).filter((c): c is Candidate => c !== null);
+  } catch {
+    return [];
+  }
+}
+
+/** A directory's published address, usable when it is on the business's own domain or a personal mailbox. */
+export function directoryEmail(c: Candidate): Found | null {
+  const email = c.email;
+  if (!email || !isPlausibleEmail(email)) return null;
+  const domain = email.slice(email.indexOf('@') + 1);
+  const own = rootDomain(domain) === rootDomain(c.website);
+  const personalMailbox = /^(gmail|yahoo|aol|outlook|hotmail|icloud|comcast|verizon|msn|live|me)\.(com|net)$/.test(domain);
+  if (!own && !personalMailbox) return null;
+  return { email, kind: kindOf(email.slice(0, email.indexOf('@'))), confidence: 0.9, sourceUrl: c.sourceUrl };
+}
+
+/**
  * Google Places through V2 (§103): one Text Search a pass, rotating category ×
  * town across the card's whole shopping area, so a day of hourly passes reads
  * 24 different searches inside the registry's ceiling. Places answers chains
@@ -700,6 +777,7 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
     discoverPlaces(deps, slot, PER_PASS.places),
     ...chamber.map((c) => discoverChamber(deps, c.slug, c.key, c.base).then((found) => ({ found, line: '' }))),
     ...tiles.map((t) => discoverOsm(deps, t).then((found) => ({ found, line: '' }))),
+    discoverWestShore(deps).then((found) => ({ found, line: '' })),
   ]).then((all) => [all[0]!, ...all.slice(1).map((b) => b.found)] as const);
   // Places first: its answers are the most complete, so a site it shares with the map is read once, as Places'.
   batches.unshift(places.found);
@@ -720,7 +798,7 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
   let browserLeft = agents?.browser ? agents.browserPerPass : 0;
   const viaAgents = { sellbirdAsked: 0, sellbirdFound: 0, browserAsked: 0, browserFound: 0 };
   await pool(fresh, 20, async (c) => {
-    let hit: Found | null = await findPublishedEmail(deps, c.website);
+    let hit: Found | null = directoryEmail(c) ?? await findPublishedEmail(deps, c.website);
     let greeting = 'there';
     if (!hit && agents && sellbirdLeft > 0) {
       sellbirdLeft -= 1;
@@ -767,7 +845,7 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
     }
   });
   const discovered = batches.reduce((n, b) => n + b.length, 0);
-  const sources = `${places.line}; ${chamber.map((c) => `${new URL(c.base).hostname.split('.')[1]}/${c.slug}`).join(', ')}; map tiles ${tiles.join(', ')} (${batches.slice(1 + chamber.length).reduce((n, b) => n + b.length, 0)} on the map)`;
+  const sources = `${places.line}; ${chamber.map((c) => `${new URL(c.base).hostname.split('.')[1]}/${c.slug}`).join(', ')}; map tiles ${tiles.join(', ')} (${batches.slice(1 + chamber.length, 1 + chamber.length + tiles.length).reduce((n, b) => n + b.length, 0)} on the map); West Shore Chamber ${batches[batches.length - 1]!.length}`;
   const line = fresh.length === 0
     ? `refill: nothing new to read this pass (${discovered} discovered from ${sources}, all already in the campaign or not usable)`
     : `refill: ${discovered} discovered from ${sources}; ${fresh.length} new sites read; ${found} published an address; ${noMx} refused for no mail server; ${unverified} left for the next pass (no resolver answered); ${added} added` +
