@@ -12,6 +12,7 @@
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { createProject } from '../server/repos/projects.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -176,6 +177,27 @@ describe('the terminal writes real capability rows through the one writer', () =
     const runs = await rowsOf(BROWSER_WORKFLOW_RUN_EVENT, host);
     expect(runs).toHaveLength(1);
     expect(JSON.parse(runs[0]!.measures).capability.contentHash).toBe(hash);
+  });
+
+  it('performs an approved mutation once even when a second run names a different --project', async () => {
+    const c = publishCap(host);
+    const hash = await define(c);
+    await approve(c, hash);
+    const browser = fakeBrowser();
+    const deps = { operateDeps: { operate: browser.operate, runRows: async () => [] } };
+    const other = await createProject({ name: `Other ${Math.random().toString(36).slice(2, 8)}` });
+    const run = (project: string) =>
+      ['run', '--host', host, '--name', c.workflow.name, '--project', project, '--by', 'a person', '--approve-steps', '1'];
+
+    const done = await runCapabilityCommand(run(projectId), deps);
+    expect(done.code, done.out).toBe(0);
+    expect(browser.calls()).toBe(1);
+
+    // The project is a flag the caller types; it must not make the same effect a new one.
+    const elsewhere = await runCapabilityCommand(run(other.id), deps);
+    expect(elsewhere.code).toBe(1);
+    expect(elsewhere.out).toContain('DUPLICATE_EFFECT');
+    expect(browser.calls()).toBe(1);
   });
 });
 

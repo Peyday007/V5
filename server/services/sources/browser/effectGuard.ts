@@ -274,7 +274,10 @@ export async function readRequestBudget(
 /* ------------------------------------------------------------------------- */
 
 export interface ClaimInput extends EffectKeyInput {
-  /** The project the work belongs to, from the server's own record of the work. */
+  /**
+   * The project the work is recorded against. It is written on the operation
+   * row and never scopes the claim: see `BROWSER_EFFECT_SCOPE`.
+   */
   projectId: string;
   actor: { type: ActorType; id: string | null };
   workItemId?: string | null;
@@ -292,12 +295,27 @@ export type ClaimResult =
       detail: string;
     };
 
-function scopeFor(projectId: string): string {
-  // PROJECT scope: two workers performing the same approved submission are one
-  // intent, so the second finds the first rather than repeating it.
+/**
+ * The scope every browser effect is claimed in: the whole Brain, never a
+ * project.
+ *
+ * A site effect is one thing in the world whichever project asked for it. The
+ * first version scoped the claim by the caller's `projectId`, which reaches
+ * `operateCapability` from the free-text `--project` flag with nothing checking
+ * it against a record of the work — so the same approved submission, claimed
+ * under a second project, found an empty scope, was claimed again, and the
+ * browser pressed the button twice. That is a scope the caller sent (invariant
+ * 27) and two workers performing one mutation (ACQ-21-5). The key already names
+ * the effect completely — capability, version, approved input — so the scope
+ * carries nothing a caller supplies. The project is still recorded on the
+ * operation row, as who claimed it; it no longer decides whether it may happen.
+ */
+export const BROWSER_EFFECT_SCOPE = 'brain-wide:browser-site-effect';
+
+function scopeFor(): string {
   return scopeHash({
     boundary: BRAIN_BOUNDARY,
-    projectId,
+    projectId: BROWSER_EFFECT_SCOPE,
     namespace: BROWSER_EFFECT_NAMESPACE,
     namespaceVersion: BROWSER_EFFECT_NAMESPACE_VERSION,
     principalScope: 'PROJECT',
@@ -316,7 +334,7 @@ export async function claimBrowserEffect(input: ClaimInput): Promise<ClaimResult
   const effectKey = browserEffectKey(input);
   const now = input.now ?? new Date();
   const reserved = await reserveOperation({
-    scopeHash: scopeFor(input.projectId),
+    scopeHash: scopeFor(),
     keyFingerprint: fingerprintKey(effectKey),
     namespace: BROWSER_EFFECT_NAMESPACE,
     namespaceVersion: BROWSER_EFFECT_NAMESPACE_VERSION,
@@ -324,7 +342,9 @@ export async function claimBrowserEffect(input: ClaimInput): Promise<ClaimResult
     requestFingerprint: fingerprintRequest({
       namespace: BROWSER_EFFECT_NAMESPACE,
       namespaceVersion: BROWSER_EFFECT_NAMESPACE_VERSION,
-      projectId: input.projectId,
+      // Not the caller's project: a second project claiming the same effect is
+      // the same request, answered by the first claim's state, not a conflict.
+      projectId: BROWSER_EFFECT_SCOPE,
       payload: { cap: capabilityId(input.capability), ver: input.capability.version.trim(), input: input.approvedInput ?? null },
     }),
     fingerprintVersion: FINGERPRINT_VERSION,
