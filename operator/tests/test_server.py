@@ -65,6 +65,10 @@ class Translate(unittest.TestCase):
         self.assertNotIn("secret", json.dumps(line))
         self.assertIsNone(server.translate({"type": "text", "text": "x"}))
 
+    def test_a_failed_tool_says_why_in_one_line(self):
+        line = server.translate({"type": "tool_result", "name": "t", "output": "Not found.\nmore", "is_error": True})
+        self.assertEqual(line["error"], "Not found.")
+
 
 if __name__ == "__main__":
     unittest.main()

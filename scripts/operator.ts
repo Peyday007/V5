@@ -19,7 +19,7 @@ async function show(): Promise<void> {
   console.log(`OPERATOR ${operatorConfig() ? 'connected' : 'not connected'} · models: ${(await modelsFor()).map((m) => m.label).join(' → ') || 'none'}`);
   for (const run of runs) {
     console.log(`RUN ${run.id} ${run.state} ${run.startedAt} → ${run.finishedAt ?? '…'} on ${run.model}`);
-    console.log(`  tools  ${run.toolCalls.map((c) => `${c.tool.replace(/^mcp__brain__/, '')}${c.ok ? '' : '(failed)'}`).join(', ') || 'none'}`);
+    console.log(`  tools  ${run.toolCalls.map((c) => `${c.tool.replace(/^mcp__brain__/, '')}${c.ok ? '' : `(failed: ${c.error ?? '?'})`}`).join(', ') || 'none'}`);
     if (run.error) console.log(`  error  ${run.error}`);
     if (run.summary) console.log(`  report ${run.summary.replace(/\n/g, '\n         ')}`);
   }
@@ -34,6 +34,20 @@ async function show(): Promise<void> {
     [],
   );
   for (const action of actions) console.log(`ACTION ${action.created_at} ${action.event_type} ${action.payload.slice(0, 500)}`);
+  // What Brain's MCP door answered the operator, call by call (the audit rows §17 writes).
+  const calls = await getDb().all<{ created_at: string; target_id: string | null; result: string; reason: string | null; metadata: string | null }>(
+    `SELECT e.created_at, e.target_id, e.result, e.reason, e.metadata FROM identity_events e
+       JOIN workers w ON w.id = e.actor_id
+      WHERE e.action = 'MCP_TOOL_CALL' AND w.name = 'brain-operator'
+      ORDER BY e.created_at DESC LIMIT 25`,
+    [],
+  ).catch(() => []);
+  for (const call of calls) console.log(`MCP ${call.created_at} ${call.target_id} ${call.result} ${call.reason ?? ''} ${(call.metadata ?? '').slice(0, 300)}`);
+  const usage = await getDb().all<{ recorded_at: string; state: string; detail: string }>(
+    "SELECT recorded_at, state, detail FROM integration_events WHERE integration_id = 'operator' ORDER BY recorded_at DESC LIMIT 6",
+    [],
+  );
+  for (const one of usage) console.log(`USAGE ${one.recorded_at} ${one.state} ${one.detail}`);
 }
 
 async function probe(): Promise<void> {

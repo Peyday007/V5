@@ -13,6 +13,8 @@ import { newId, nowIso, parseJson, toJson } from './util.ts';
 export interface OperatorToolCall {
   tool: string;
   ok: boolean;
+  /** The first line of a failed call's refusal. */
+  error?: string;
 }
 
 export interface OperatorRun {
