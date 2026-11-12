@@ -56,7 +56,7 @@ import { listNeeds, openNeedForKey } from '../../repos/cashPortfolio.ts';
 import { readNeedCondition } from './conditions.ts';
 import { OperationConflict, OperationInProgress } from '../effects/engine.ts';
 import { recoverExternalEffect, type ExternalOutcome } from '../effects/external.ts';
-import { checkCommercialAuthority } from './authority.ts';
+import { actionContext, checkCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import {
@@ -329,7 +329,7 @@ export async function recordConfirmedEffect(input: {
    */
   let authorityId = intent?.authorityId ?? null;
   if (!authorityId) {
-    const decision = await checkCommercialAuthority({ projectId: opportunity.projectId, action });
+    const decision = await checkCommercialAuthority({ projectId: opportunity.projectId, action, ...actionContext({ principal: BRAIN }) });
     authorityId = decision.ok && decision.authority ? decision.authority.id : null;
   }
   if (!authorityId) {
@@ -989,8 +989,13 @@ export async function performCommercialAction(input: {
     );
   }
 
-  // Deny by default, the person's decision first.
-  const decision = await checkCommercialAuthority({ projectId: opportunity.projectId, action });
+  // Deny by default, the person's decision first. The person who pressed is the principal;
+  // Brain performs it through the registered provider adapter.
+  const decision = await checkCommercialAuthority({
+    projectId: opportunity.projectId,
+    action,
+    ...actionContext({ principal: input.actorRef, performedBy: 'BRAIN' }),
+  });
   if (!decision.ok) {
     return refuse(
       `Not authorized to ${action}: ${decision.reason}. That is a decision for the person whose ` +

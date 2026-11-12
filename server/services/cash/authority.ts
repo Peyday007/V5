@@ -122,6 +122,49 @@ export interface CommercialDecision {
   policyVersion: number | null;
 }
 
+/** The principal Brain acts as when its own loop or tick takes an action: not a person, and never a credential. */
+export const BRAIN_PRINCIPAL = 'BRAIN';
+
+/**
+ * Who stands behind an action and how it reaches the world, as a production
+ * caller states it to `checkCommercialAuthority` (F-CALLERS-PASS-NO-PATH-ACCESS-PRINCIPAL).
+ *
+ * Every caller used to pass only `{ projectId, action }`, so the ledger said
+ * `principal: null` and `path: 'API'` for every row whoever acted and however.
+ * This is the one place the facts are composed, from what the caller actually
+ * knows:
+ *
+ *  - `principal` is the authenticated actor the caller already holds (`actorRef`,
+ *    a viewer's user id) or `BRAIN_PRINCIPAL` for Brain's own loops.
+ *  - `path`: Brain performs a commercial effect only through a registered
+ *    provider adapter (`effects.ts`), which is an API call made with Brain's
+ *    operating credential — `API`, `OPERATE`. A person's own act that Brain
+ *    only records reached the world through that person and operated nothing
+ *    of Brain's — `INTERNAL`. A browser automation states `BROWSER` itself; a
+ *    browser is a path, never an exemption.
+ *  - `access`: `READ_ONLY` when the caller holds only read access (learning
+ *    from a site, viewing a portal); it never reaches consequential agency.
+ *  - `amountCents` when the action commits a known sum, so ceilings are judged
+ *    on it rather than deferred.
+ */
+export function actionContext(input: {
+  principal: string;
+  performedBy?: 'BRAIN' | 'PERSON';
+  path?: ActionPath;
+  access?: AccessKind;
+  amountCents?: number | null;
+}): { principal: string | null; path: ActionPath; access: AccessKind; amountCents: number | null } {
+  // An empty principal is not a principal: it stays unknown, never quietly read as Brain or as anybody else.
+  const principal = input.principal.trim() || null;
+  const path: ActionPath = input.path ?? (input.performedBy === 'PERSON' ? 'INTERNAL' : 'API');
+  return {
+    principal,
+    path,
+    access: input.access ?? 'OPERATE',
+    amountCents: typeof input.amountCents === 'number' && Number.isFinite(input.amountCents) ? input.amountCents : null,
+  };
+}
+
 /**
  * May this project take this commercial action, right now, under a live grant?
  *

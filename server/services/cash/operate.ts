@@ -99,7 +99,7 @@ import { runCommissions, type CommissionPass } from './monetization/commissionPa
 import { recordWorkModelReclassification, type Reclassification } from './reclassify.ts';
 import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
-import { checkCommercialAuthority } from './authority.ts';
+import { actionContext, checkCommercialAuthority } from './authority.ts';
 import { commercialOperationsFor, sendCommercialEffect } from './effects.ts';
 import { composeBuyerMessage } from './outreach.ts';
 import { runInvoicing, type InvoicingPass } from './invoicing.ts';
@@ -1161,7 +1161,7 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
     // The person's decision first, because it is the authorization and the
     // other is an operational fact: deny-by-default asks whether this may
     // happen before it asks whether it could.
-    const decision = await checkCommercialAuthority({ projectId, action: CONTACT_ACTION });
+    const decision = await checkCommercialAuthority({ projectId, action: CONTACT_ACTION, ...actionContext({ principal: BRAIN }) });
     if (!decision.ok) {
       out.withheld.push({
         opportunityId: opportunity.id,
