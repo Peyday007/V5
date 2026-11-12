@@ -58,6 +58,7 @@ import { getDb } from '../db/database.ts';
 import { recordEvent } from './events.ts';
 import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
+import { CLAIM_OUTCOMES, recordClaimRouting, settleClaimRouting } from './workRouting.ts';
 import type {
   ActorType,
   ClaimedWork,
@@ -689,6 +690,9 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
         leaseExpiresAt: expiresAt,
         correlationId: candidate.correlation_id,
       });
+      // The claim decides which resource runs the unit, so the routing ledger
+      // is written here, from who won it. Advisory: it never fails the claim.
+      await recordClaimRouting(candidate, input.workerId);
       wonThisRound += 1;
     }
     // Every candidate was taken by somebody else or filtered out. Another round
@@ -854,7 +858,11 @@ export async function completeWork(
       ...ownedParams(proof, now),
     ],
   );
-  if (updated.changes === 1) await endLease(proof, now, 'SUCCEEDED', result.summary ?? null);
+  if (updated.changes === 1) {
+    await endLease(proof, now, 'SUCCEEDED', result.summary ?? null);
+    const item = await getDb().get<WorkItemRow>('SELECT * FROM work_items WHERE id = ?', [proof.workItemId]);
+    if (item) await settleClaimRouting(item, CLAIM_OUTCOMES.SUCCEEDED, null);
+  }
   return await settle(proof, updated.changes);
 }
 
@@ -910,7 +918,10 @@ export async function failWork(proof: OwnershipProof, input: FailInput): Promise
         ],
       );
 
-  if (updated.changes === 1) await endLease(proof, now, 'FAILED', input.detail ?? null);
+  if (updated.changes === 1) {
+    await endLease(proof, now, 'FAILED', input.detail ?? null);
+    await settleClaimRouting(current, CLAIM_OUTCOMES.FAILED, input.category);
+  }
   return await settle(proof, updated.changes);
 }
 

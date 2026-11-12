@@ -56,6 +56,7 @@ import { advancePacket, refusedByBudget, type AdvanceResult } from './packetRunn
 import { getApprovalEnvelope } from './approvalEnvelope.ts';
 import { decideReuse } from '../routing/reuse/reuse.ts';
 import { toDependencies } from '../../domain/dependencies.ts';
+import { CLAIM_ROUTED_WORK_KIND, fragmentWorkRef, measuredRecord } from '../../repos/workRouting.ts';
 import { classifyAndRecord } from '../routing/classify/index.ts';
 import { sharedClaimsForProject } from '../knowledge/shared.ts';
 
@@ -662,18 +663,27 @@ export async function placePlan(
   }
   const toCreate = withoutReusedFragments(plan, reused);
 
-  // Route every fragment that survives reuse through the classifier, so the
-  // ledger records which resource runs it and why. A researched question reads
-  // sources on the internet and its claims must pass the evidence gate, so no
-  // algorithm or ACTIVE detector declared for it exists and the free lane is
-  // not eligible: the honest answer is STRONG, with the alternatives written
-  // down. A ledger failure never blocks creating the fragment.
+  // Write each fragment that survives reuse to the routing ledger under the
+  // handle the claim will use. This row is only the classifier's reading at
+  // creation: the resource that runs a fragment is whichever worker wins its
+  // claim from the queue — the free lane or a Claude session — and `claimWork`
+  // rewrites this row to that resource with each resource's measured record
+  // (`recordClaimRouting`), then settles it with the attempt's outcome. The
+  // free lane's measured record is passed here too, never assumed. A ledger
+  // failure never blocks creating the fragment.
+  let cheapMeasure: Awaited<ReturnType<typeof measuredRecord>> | null = null;
+  try {
+    const measured = await measuredRecord(orchestration.projectId, CLAIM_ROUTED_WORK_KIND, 'CHEAP');
+    cheapMeasure = measured.attempts > 0 ? measured : null;
+  } catch {
+    cheapMeasure = null;
+  }
   for (const fragment of toCreate) {
     try {
       await classifyAndRecord({
         projectId: orchestration.projectId,
         workKind: 'RESEARCH_FRAGMENT',
-        workRef: `${orchestration.id}:${fragment.fragmentKey}`,
+        workRef: fragmentWorkRef(orchestration.id, fragment.fragmentKey),
         requirements: {
           algorithmAvailable: false,
           activeDetectorId: null,
@@ -683,7 +693,7 @@ export async function placePlan(
           closedAnswerSet: false,
           verification: 'EVIDENCE_GATE',
         },
-        cheapMeasure: null,
+        cheapMeasure,
         cheapThreshold: 1,
       });
     } catch {
