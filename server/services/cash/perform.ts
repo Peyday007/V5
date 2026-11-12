@@ -55,7 +55,11 @@ import { getOperation, operationNow, resolveUncertain } from '../../repos/idempo
 import { listNeeds, openNeedForKey } from '../../repos/cashPortfolio.ts';
 import { readNeedCondition } from './conditions.ts';
 import { OperationConflict, OperationInProgress } from '../effects/engine.ts';
-import { recoverExternalEffect, type ExternalOutcome } from '../effects/external.ts';
+import {
+  reconcileInterruptedEffect,
+  recoverExternalEffect,
+  type ExternalOutcome,
+} from '../effects/external.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
@@ -535,6 +539,9 @@ export async function recordConfirmedEffect(input: {
   };
 }
 
+/** How long an UNCERTAIN operation sits unchanged before the tick asks its provider again. */
+export const UNCERTAIN_REASK_AFTER_MS = 5 * 60_000;
+
 /**
  * Ask the provider about every attempt whose executor stopped mid-send.
  *
@@ -548,26 +555,50 @@ export async function recordConfirmedEffect(input: {
  * recorded once through `applyEffectOutcome`; an unknown becomes a need a
  * person settles; and only "nothing was sent" or the provider saying it did
  * nothing closes it, so a later send runs under a new key.
+ *
+ * An operation already UNCERTAIN — a send that timed out or threw after the
+ * provider may have accepted it, then interrupted — is asked again here too,
+ * through `reconcileInterruptedEffect`, so Brain re-reconciles it on its own
+ * rather than only when somebody re-runs the same request (CONT-35). Asking is
+ * not sending: only the provider's receipt settles it, and anything else
+ * leaves it UNCERTAIN with why written on the row and its need still open.
  */
 export async function recoverAbandonedEffects(projectId: string): Promise<ReconciledEffect[]> {
   const out: ReconciledEffect[] = [];
   for (const one of await commercialOperationsInProject(projectId)) {
     const { operation } = one;
-    if (operation.state !== 'RESERVED' || operation.failureCategory) continue;
+    const uncertain = operation.state === 'UNCERTAIN';
+    if (!uncertain && (operation.state !== 'RESERVED' || operation.failureCategory)) continue;
     const adapter = adapterFor(one.action);
     // No adapter on this process: it cannot be asked, so it waits for one.
     if (!adapter) continue;
+    // An unknown an adapter cannot be asked about is a person's to settle: the
+    // pass that made it UNCERTAIN already wrote why on the row and opened a
+    // need, and asking nobody again on every tick would only churn that row.
+    if (uncertain && !adapter.reconcile) continue;
+    // Backoff: an unknown is asked about again only once it has sat unchanged
+    // for `UNCERTAIN_REASK_AFTER_MS`. Every ask that does not settle it
+    // rewrites its reason, which moves `updatedAt`, so one operation is asked
+    // at most once per interval rather than on every tick — and a send that
+    // has only just gone unanswered gets time to become visible first.
+    if (uncertain && Date.now() - Date.parse(operation.updatedAt) < UNCERTAIN_REASK_AFTER_MS) continue;
+    const businessId = operation.correlationId ?? one.opportunityId;
     let outcome: ExternalOutcome | null;
     try {
-      outcome = await recoverExternalEffect({
-        adapter,
-        operation,
-        businessId: operation.correlationId ?? one.opportunityId,
-      });
+      outcome = uncertain
+        ? // CONT-35: a send interrupted after the provider may have accepted
+          // it is reconciled by asking, never by sending; FOUND settles it on
+          // the provider's receipt, anything else stays UNCERTAIN with the
+          // reason recorded on the row.
+          await reconcileInterruptedEffect({ adapter, operation, businessId })
+        : await recoverExternalEffect({ adapter, operation, businessId });
     } catch {
-      continue; // asking failed; still reserved and expired, so the next pass asks again
+      continue; // asking failed; the operation is unchanged, so the next pass asks again
     }
     if (!outcome) continue;
+    // Still unknown: the open need already names it, and nothing was sent.
+    // Only the provider's receipt moves an UNCERTAIN operation on.
+    if (uncertain && outcome.status !== 'RECONCILED') continue;
     const opportunity = await getOpportunity(one.opportunityId);
     if (!opportunity) continue;
     let result: EffectResult['kind'] | 'CLOSED_UNSENT' = 'CLOSED_UNSENT';
@@ -599,8 +630,15 @@ export async function recoverAbandonedEffects(projectId: string): Promise<Reconc
         actorRef: BRAIN,
         summary:
           `Brain asked the provider about an attempt at ${COMMERCIAL_EFFECTS[one.action].doing} ` +
-          `whose executor stopped: ${result.toLowerCase().replace(/_/g, ' ')}. Nothing was sent again.`,
-        detail: { operationId: operation.id, action: one.action, occurrence: one.occurrence, result },
+          `${uncertain ? 'whose outcome was unknown' : 'whose executor stopped'}: ` +
+          `${result.toLowerCase().replace(/_/g, ' ')}. Nothing was sent again.`,
+        detail: {
+          operationId: operation.id,
+          action: one.action,
+          occurrence: one.occurrence,
+          result,
+          from: uncertain ? 'UNCERTAIN' : 'RESERVED',
+        },
       });
     }
     out.push({
