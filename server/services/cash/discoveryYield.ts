@@ -139,31 +139,6 @@ async function sourceHosts(projectId: string): Promise<Map<string, string>> {
 }
 
 /**
- * What discovery has learned about where to look, in a sentence a search
- * question can carry. The sources that produced useful openings, so the next
- * search starts from them; and the ways of looking that keep producing nothing
- * usable, so it does not repeat them.
- */
-export function yieldGuidance(reading: DiscoveryYield): string {
-  const good = reading.bySource.filter((one) => one.useful > 0 && one.key !== 'unknown source').slice(0, 6);
-  const noisy = reading.bySource
-    .filter((one) => one.key !== 'unknown source' && one.openings >= 3 && one.useful === 0)
-    .slice(0, 6);
-  const parts: string[] = [];
-  if (good.length > 0) {
-    parts.push(
-      `Sources that have produced openings with a known payer before: ${good.map((one) => `${one.key} (${one.useful} of ${one.openings})`).join(', ')} — similar sources are worth checking first.`,
-    );
-  }
-  if (noisy.length > 0) {
-    parts.push(
-      `Sources that produced many openings and none with a known payer: ${noisy.map((one) => `${one.key} (0 of ${one.openings})`).join(', ')} — do not rely on them.`,
-    );
-  }
-  return parts.join(' ');
-}
-
-/**
  * Which of these openings have reached CANDIDATE or above — the same tier rule
  * `discoveryYield` counts as useful — for a caller that settles one round's
  * outcome (a search-method run) at the moment the round closes. A duplicate is
@@ -212,4 +187,29 @@ export async function discoveryMethodMetrics(projectId: string, reader: SearchRe
     throw new Error(`discoveryMethodMetrics for ${projectId} may read only that project's methods; the reader also names ${foreign.length} other project(s).`);
   }
   return readMethodMetrics(reader, { downstream: await methodDownstream(projectId) });
+}
+
+/**
+ * What discovery has learned about where to look, in a sentence a search
+ * question can carry. The sources that produced useful openings, so the next
+ * search starts from them; and the ways of looking that keep producing nothing
+ * usable, so it does not repeat them.
+ */
+export function yieldGuidance(reading: DiscoveryYield): string {
+  const good = reading.bySource.filter((one) => one.useful > 0 && one.key !== 'unknown source').slice(0, 6);
+  const noisy = reading.bySource
+    .filter((one) => one.key !== 'unknown source' && one.openings >= 3 && one.useful === 0)
+    .slice(0, 6);
+  const parts: string[] = [];
+  if (good.length > 0) {
+    parts.push(
+      `Sources that have produced openings with a known payer before: ${good.map((one) => `${one.key} (${one.useful} of ${one.openings})`).join(', ')} — similar sources are worth checking first.`,
+    );
+  }
+  if (noisy.length > 0) {
+    parts.push(
+      `Sources that produced many openings and none with a known payer: ${noisy.map((one) => `${one.key} (0 of ${one.openings})`).join(', ')} — do not rely on them.`,
+    );
+  }
+  return parts.join(' ');
 }

@@ -69,6 +69,14 @@
  */
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 import { learnedLensesForProject, learnSubjectFromClaim, SUBJECT_LENS_PREFIX } from '../knowledge/subjects/subjects.ts';
+import { usefulOpeningIds } from './discoveryYield.ts';
+import {
+  bucketGates,
+  compileBucketMethod,
+  recordRoundAsRun,
+  roundSourceAccess,
+  type BucketGate,
+} from '../research/searchMethods/bucketMethods.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -91,14 +99,7 @@ import {
   openRoundsByCandidate,
 } from '../../repos/cashDiscovery.ts';
 import { listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
-import { discoveryYield, usefulOpeningIds, yieldGuidance } from './discoveryYield.ts';
-import {
-  bucketGates,
-  compileBucketMethod,
-  recordRoundAsRun,
-  roundSourceAccess,
-  type BucketGate,
-} from '../research/searchMethods/bucketMethods.ts';
+import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
 import { getClaim, signalledClaims } from '../../repos/research.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
@@ -573,9 +574,11 @@ export async function openDiscovery(input: {
    * wrong.
    */
   const gates: Map<string, BucketGate> = await bucketGates(input.projectId, offered.map((one) => one.id), now).catch(() => new Map<string, BucketGate>());
-  for (const bucket of fairOrder(offered, rounds)) {
+  for (const listed of fairOrder(offered, rounds)) {
     if (out.length >= limit) break;
-    const gate = gates.get(bucket.id);
+    const gate = gates.get(listed.id);
+    // A revised search method says what its earlier rounds got wrong; the round asks differently.
+    const bucket = withRevision(listed, gate?.revision ?? null);
     if (gate && gate.route !== 'DEVELOP') continue;
     if (gate?.proven && !gate.compiled) {
       const compiled = await compileBucketMethod(input.projectId, bucket, await bucketExamples(input.projectId, bucket.id, rounds)).catch(() => null);
@@ -605,7 +608,7 @@ export async function openDiscovery(input: {
       mode,
       bucket,
       next,
-      statement: questionFor(bucket, mode.objective, next, history, held, frame, gates.get(bucket.id)?.revision ?? null),
+      statement: questionFor(bucket, mode.objective, next, history, held, frame),
     });
     if (!round) continue;
     out.push({ bucketId: bucket.id, candidateId: round.candidateId, round: next });
@@ -1026,11 +1029,8 @@ export function questionFor(
   history: readonly CashDiscoveryRound[],
   held: HeldExclusions = { lines: [], omitted: 0 },
   frame: ExecutionFrame | null = null,
-  revision: string | null = null,
 ): string {
   const parts = [bucket.question, `This is for a short cash sprint whose goal is: ${objective}`];
-  // A revised search method says what its earlier rounds got wrong; the round asks differently.
-  if (revision) parts.push(revision);
   if (frame) parts.push(executionFrameSentence(frame));
   if (round > 1) {
     const found = history.reduce((total, one) => total + one.found, 0);
@@ -1221,7 +1221,7 @@ async function liveRounds(
   // Trigger buckets always resolve, so a round opened while triggers were on is
   // still harvested after they are switched off.
   const byId = new Map(
-    [...SEARCH_BUCKETS, ...TRIGGER_BUCKETS, FEED_SHORTLIST_BUCKET, ...(await learnedLensesForProject(projectId))].map((bucket) => [bucket.id, bucket]),
+    [...SEARCH_BUCKETS, ...TRIGGER_BUCKETS, FEED_SHORTLIST_BUCKET].map((bucket) => [bucket.id, bucket]),
   );
   const out = new Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>();
   for (const [candidateId, round] of await openRoundsByCandidate(projectId)) {
@@ -1229,6 +1229,19 @@ async function liveRounds(
       byId.get(round.bucketId) ??
       (round.bucketId.startsWith(GOAL_BUCKET_PREFIX) ? goalBucket(round.bucketId.slice(GOAL_BUCKET_PREFIX.length), 'a goal') : undefined);
     if (bucket) out.set(candidateId, { round, bucket });
+  }
+  /*
+   * A round asked through a subject Brain learned resolves too, so it is
+   * harvested like any listed bucket. Read apart from the listed buckets so
+   * the lookup above stays exactly the listed set.
+   */
+  const learned = await learnedLensesForProject(projectId);
+  if (learned.length > 0) {
+    const byLens = new Map(learned.map((bucket) => [bucket.id, bucket]));
+    for (const [candidateId, round] of await openRoundsByCandidate(projectId)) {
+      const bucket = byLens.get(round.bucketId);
+      if (bucket && !out.has(candidateId)) out.set(candidateId, { round, bucket });
+    }
   }
   return out;
 }
@@ -1500,6 +1513,15 @@ export async function harvest(input: {
     await closeEndedRounds({ projectId: input.projectId, live, roundMissions });
   }
   return out;
+}
+
+/**
+ * The bucket as a revised search method asks it: the revision (what earlier
+ * rounds got wrong) is carried in the bucket's own question, so every caller
+ * of `questionFor` asks the revised round without a parameter of its own.
+ */
+export function withRevision(bucket: SearchBucket, revision: string | null): SearchBucket {
+  return revision ? { ...bucket, question: `${bucket.question} ${revision}` } : bucket;
 }
 
 /**
