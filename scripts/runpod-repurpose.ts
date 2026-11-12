@@ -56,8 +56,8 @@ async function main(): Promise<void> {
   const pod = (await listPods(apiKey)).find((p) => p.name === POD_NAME && p.desiredStatus !== 'TERMINATED');
   if (!pod) throw new Error(`no pod named ${POD_NAME}`);
   const before = podServedModel(pod);
-  // What to fall back to: the recipe that last served, never one of the candidates that just failed.
-  const previous = Object.values(RECIPES).find((r) => r.served === before && !recipes.includes(r)) ?? RECIPES['qwen3-4b-legacy']!;
+  // What to fall back to: the recipe production ran for a week, known to serve research on this pod.
+  const previous = RECIPES['qwen3-4b-legacy']!;
   const url = podUrl(pod.id);
   console.log(`POD ${pod.id} ${pod.desiredStatus} serving ${before ?? 'unknown'}`);
   for (const recipe of recipes) {
