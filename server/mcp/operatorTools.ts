@@ -26,7 +26,7 @@ import {
   withdrawMootRequest,
 } from '../services/operator/actions.ts';
 import { submitOperatorFix } from '../services/operator/factory.ts';
-import { operatorSnapshot, urgencyOrder } from '../services/operator/snapshot.ts';
+import { briefOrder, operatorSnapshot } from '../services/operator/snapshot.ts';
 import { invalidInput, notFoundError } from './errors.ts';
 import { MUTATING, READ_ONLY, authorize, optionalString, requiredString, type McpTool } from './toolkit.ts';
 import type { Principal } from '../domain/types.ts';
@@ -74,7 +74,9 @@ const goalsTool: McpTool = {
     const projects = await readableProjects(principal);
     if (projects.length === 0) return { projectId: null, value: { goals: [] } };
     const snapshot = await operatorSnapshot(projects);
-    return { projectId: null, value: { readAt: snapshot.takenAt, goals: urgencyOrder(snapshot.summaries) } };
+    // Bounded: a small model's window is the limit (opr_1184fee7), and the most relevant come first.
+    const ordered = briefOrder(snapshot);
+    return { projectId: null, value: { readAt: snapshot.takenAt, total: ordered.length, goals: ordered.slice(0, 15) } };
   },
 };
 
@@ -95,7 +97,7 @@ const goalTool: McpTool = {
     const projects = await readableProjects(principal);
     if (projects.length === 0) throw notFoundError();
     const snapshot = await operatorSnapshot(projects);
-    const goalId = optionalString(args, 'goal_id') ?? urgencyOrder(snapshot.summaries)[0]?.id ?? null;
+    const goalId = optionalString(args, 'goal_id') ?? briefOrder(snapshot)[0]?.id ?? null;
     const goal = snapshot.goals.find((one) => one.id === goalId);
     if (!goal || !goal.projectId) {
       // A light reading (Brain was too busy to derive goals this run): the register and the requests.
@@ -105,7 +107,7 @@ const goalTool: McpTool = {
       const lightRequests = snapshot.requests.get(summary.projectId) ?? [];
       return {
         projectId: summary.projectId,
-        value: { depth: 'LIGHT', goal: summary, requests: lightRequests, mootRequests: lightRequests.filter((one) => one.moot).length },
+        value: { depth: 'LIGHT', goal: summary, requests: lightRequests.slice(0, 15), openRequests: lightRequests.length, mootRequests: lightRequests.filter((one) => one.moot).length },
       };
     }
     await authorize(principal, goal.projectId, 'READ', 'project:read');
@@ -117,7 +119,8 @@ const goalTool: McpTool = {
         intent: goal.intent.slice(0, 600),
         outcome: goal.outcome,
         authority: goal.authority,
-        requests,
+        requests: requests.slice(0, 15),
+        openRequests: requests.length,
         mootRequests: requests.filter((one) => one.moot).length,
         blockers: goal.blockers.slice(0, 15).map((b) => ({ text: b.text.slice(0, 400), remedy: b.remedy.slice(0, 200), by: b.by, ref: b.ref, ageHours: b.ageHours })),
         blockersNotShown: Math.max(0, goal.blockers.length - 15),
