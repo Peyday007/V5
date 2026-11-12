@@ -385,7 +385,9 @@ export async function controlStep(): Promise<ControlReading | null> {
     // lane's slots together stay within a multiple of the pool's own ceiling.
     const share = slotShare(pools.size);
     if (share !== null && decision.target > share) {
-      decision = { ...decision, target: share, reason: `held to its share of the database pool (${share} of ${share * pools.size} slots)`, stable: false };
+      // The cap bounds the step; it does not erase why the step was taken (the gate's
+      // measured constraint stays on the record beside it).
+      decision = { ...decision, target: share, reason: `${decision.reason}; held to its share of the database pool (${share} of ${share * pools.size} slots)`, stable: false };
     }
     if (decision.stable) pool.stableHigh = Math.max(pool.stableHigh, peak);
     pool.peakBusy = pool.busy;
