@@ -18,7 +18,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createWorker, grantMembership } from '../server/repos/identity.ts';
 import { createAccount, createRoutine, bindRoutineWorker } from '../server/repos/fleet.ts';
-import { createBin, ensureDispatchIntent, getBin, listBinEvents, listDispatchesForBin } from '../server/repos/bins.ts';
+import {
+  createBin,
+  ensureDispatchIntent,
+  getBin,
+  listBinEvents,
+  listDispatchesForBin,
+  recordSessionRefusal,
+} from '../server/repos/bins.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import {
   rearmStrandedIntents,
@@ -126,6 +133,89 @@ async function abandon(
 }
 
 const pastCoolOff = STRANDED_REARM_AFTER_MS + 60_000;
+
+/*
+ * The production path that strands a bin, driven through Brain's own writers
+ * rather than a hand-written row.
+ *
+ * A session the bin refuses at admission is written down by
+ * `recordSessionRefusal`, which also defers the bin's fires (`deferFire`) and
+ * leaves its PENDING intent due. `supersedeStaleIntents` asks `DISPATCHABLE_SQL`,
+ * which a fire backoff does not fail, so the intent survives; the tick then
+ * claims it, re-reads the bin, finds `isDispatchable` false on
+ * `dispatch_not_before`, and charges it `SUPERSEDED` with a backoff of seconds.
+ * Five ticks inside one refusal backoff abandon it. When the backoff ends the
+ * bin is READY, fireable, at the same generation, with its attempts intact —
+ * and its one intent per (bin, generation) is ABANDONED for a reason that was
+ * never about the work.
+ *
+ * Only the clock is moved here: each tick is made due by advancing the intent's
+ * own `next_attempt_at`, and the backoff's end by advancing the bin's.
+ */
+async function strandThroughRefusal(binId: string): Promise<string> {
+  const bin = (await getBin(binId))!;
+  await ensureDispatchIntent(bin);
+  const intent = (await listDispatchesForBin(binId)).find((d) => d.leaseGeneration === bin.leaseGeneration)!;
+  await recordSessionRefusal({
+    binId,
+    sessionRef: 'cse_refusedsession01',
+    reason: 'admission refused this session',
+    projectId,
+  });
+  for (let tick = 0; tick < 6; tick += 1) {
+    const now = new Date(Date.now() - 1_000).toISOString();
+    await getDb().run(`UPDATE bin_dispatch SET next_attempt_at = ? WHERE id = ? AND state = 'PENDING'`, [now, intent.id]);
+    await dispatchTick({ burst: 4, projectIds: [projectId] });
+  }
+  // The refusal backoff ends.
+  await getDb().run('UPDATE bins SET dispatch_not_before = ? WHERE id = ?', [
+    new Date(Date.now() - 1_000).toISOString(),
+    binId,
+  ]);
+  return intent.id;
+}
+
+describe('the stranding path production takes', () => {
+  it('abandons the only intent through the tick itself while the bin stays executable', async () => {
+    const binId = await readyBin();
+    const dispatchId = await strandThroughRefusal(binId);
+
+    const intent = (await listDispatchesForBin(binId)).find((d) => d.id === dispatchId)!;
+    expect(intent.state).toBe('ABANDONED');
+    expect(intent.lastErrorKind).toBe('SUPERSEDED');
+    expect(fires).toBe(0);
+    const bin = (await getBin(binId))!;
+    expect(bin.state).toBe('READY');
+    expect(bin.attemptCount).toBeLessThan(bin.maxAttempts);
+
+    // Inside the re-arm cool-off: the recorded idle class, exactly.
+    const tick = await dispatchTick({ burst: 4, projectIds: [projectId] });
+    expect(tick.intentsCreated).toBe(0);
+    expect(tick.fired).toBe(0);
+    const reading = await watchIdle({ continueWork: false });
+    expect(reading.executableWork).toBeGreaterThanOrEqual(1);
+    expect(reading.eligibleCapacity).toBeGreaterThanOrEqual(1);
+    expect(reading.idle).toBe(true);
+  });
+
+  it('is fired again by the ordinary tick once the cool-off passes', async () => {
+    const binId = await readyBin();
+    const dispatchId = await strandThroughRefusal(binId);
+    // Age the abandonment past the cool-off; nothing else about the row changes.
+    await getDb().run('UPDATE bin_dispatch SET updated_at = ? WHERE id = ?', [
+      new Date(Date.now() - pastCoolOff).toISOString(),
+      dispatchId,
+    ]);
+
+    const tick = await dispatchTick({ burst: 4, projectIds: [projectId] });
+    expect(tick.revivedStranded).toBe(1);
+    expect(tick.fired).toBe(1);
+    expect(fires).toBe(1);
+    const events = await listBinEvents(binId);
+    const rearmed = events.find((e) => e.eventType === 'DISPATCH_REARMED');
+    expect(rearmed?.reason).toContain('SUPERSEDED');
+  });
+});
 
 describe('a READY bin whose only intent was abandoned', () => {
   it('reproduces the idle class: executable work, a free surface, and the tick fires nothing', async () => {

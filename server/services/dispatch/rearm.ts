@@ -13,6 +13,27 @@
  * nothing to send (ORIGINATED:IDLE_CAPACITY:engineering-watchdog, 126 of 144
  * windows in 24 h).
  *
+ * How a READY bin's intent comes to be abandoned without anything being wrong
+ * with the work — the path, through Brain's own writers, that
+ * `tests/dispatchRearmStranded.test.ts` drives end to end:
+ *
+ *   1. a session is refused at admission; `recordSessionRefusal` defers the
+ *      bin's fires (`dispatch_not_before`) and leaves its PENDING intent due;
+ *   2. `supersedeStaleIntents` asks `DISPATCHABLE_SQL`, which a fire backoff
+ *      does not fail, so the intent survives the top of the tick;
+ *   3. the tick claims it (charging an attempt), re-reads the bin, finds
+ *      `isDispatchable` false on that backoff, and records `SUPERSEDED` with a
+ *      backoff of seconds — so five ticks inside one refusal backoff abandon it;
+ *   4. the backoff ends: the bin is READY, fireable, same generation, attempts
+ *      intact, and its one intent is ABANDONED for a reason that was never
+ *      about the work.
+ *
+ * Every fire a *chosen surface* refuses is refunded (`refundAttempt`), so the
+ * charged abandonments are the ones whose cause was the bin's momentary state
+ * or a missing trigger — which is why they are re-armed rather than escalated.
+ * This names the mechanism that produces the state; it is not a reading of
+ * which production rows were in it, which this module cannot see.
+ *
  * `reviveAbandonedNoShowDispatches` already answers this for intents that gave
  * up on unanswered fires (`last_error_kind = 'NO_SHOW'`). This answers every
  * other abandonment the same way, with the same bound, so the two together
