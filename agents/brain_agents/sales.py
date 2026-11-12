@@ -76,8 +76,12 @@ def transport_for(llm: dict, calls: list | None = None):
         }
         entry = {"agent": agent, "task": task, "ok": False}
         log.append(entry)
-        async with httpx.AsyncClient(timeout=min(float(timeout or 120), 150.0)) as client:
-            res = await client.post(f"{base}/chat/completions", json=body, headers=headers)
+        try:
+            async with httpx.AsyncClient(timeout=min(float(timeout or 120), 150.0)) as client:
+                res = await client.post(f"{base}/chat/completions", json=body, headers=headers)
+        except httpx.HTTPError as error:
+            entry["status"] = type(error).__name__
+            return ""
         if res.status_code >= 400:
             entry["status"] = res.status_code
             return ""
@@ -287,6 +291,22 @@ async def research(website: str, offer: dict | None = None, titles: list[str] | 
 # Writing                                                                     #
 # --------------------------------------------------------------------------- #
 
+def _call_summary(calls: list) -> str:
+    """Why a write produced nothing, from the model calls themselves: an HTTP
+    refusal (a model name the server does not serve) and an empty answer are
+    different repairs, and "no usable draft" alone named neither."""
+    if not calls:
+        return " (no model call was made)"
+    refused = [str(c.get("status")) for c in calls if c.get("status")]
+    empty = sum(1 for c in calls if not c.get("ok") and not c.get("status"))
+    parts = []
+    if refused:
+        parts.append(f"model server answered HTTP {', '.join(sorted(set(refused)))} on {len(refused)} call(s)")
+    if empty:
+        parts.append(f"{empty} call(s) came back empty")
+    return f" ({'; '.join(parts)} of {len(calls)})" if parts else f" ({len(calls)} call(s) answered)"
+
+
 def _strip_sign_off(body: str, names: list[str]) -> str:
     """Sellbird signs with the persona's first name; Instantly's sending
     account signs instead (the sender identity is the account's own)."""
@@ -326,7 +346,8 @@ async def write_first_email(offer: dict, lead: dict, llm: dict) -> dict:
         tip = await writer._has_tip_basis(prospect)
         draft = await writer._write_personal_email(prospect)
         if not draft:
-            return {"ok": False, "reason": "the model wrote no usable draft", "tipBasis": tip, "calls": calls}
+            return {"ok": False, "reason": "the model wrote no usable draft" + _call_summary(calls),
+                    "tipBasis": tip, "calls": calls}
         polished = (await humanize(brain, [draft], agent="writer", enabled=humanizer_enabled(config)))[0]
         kept = await writer._keep_to_rules(polished, step=1, names=_names(prospect))
         if kept is None:

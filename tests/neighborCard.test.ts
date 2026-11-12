@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   STEPS, PUBLISHER_ADDRESS, bestEmail, hasMailServer, campaignDefinition, extractEmails, isLocationSubpage, isPlausibleEmail,
-  shapeProblems, syncCampaign, OSM_TILES, committedElsewhere, type Deps,
+  shapeProblems, syncCampaign, OSM_TILES, committedElsewhere, instantly, RATE_WINDOW_MS, type Deps,
 } from '../server/services/cash/neighborCard.ts';
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -199,5 +199,17 @@ describe('West Shore Chamber listings', () => {
     expect(westShoreCandidate({ ...row, City: 'Pittsburgh' })).toBeNull();
     expect(directoryEmail({ ...c, email: 'sales@agency-elsewhere.com' })).toBeNull();
     expect(directoryEmail({ ...c, email: 'bob.daflure@gmail.com' })).not.toBeNull();
+  });
+});
+
+describe("Instantly's per-minute limit", () => {
+  it('waits out the one-minute window after a 429 that carries no retry-after, instead of retrying inside it', async () => {
+    let tries = 0;
+    const slept: number[] = [];
+    const d = deps(() => (++tries <= 2 ? json({ message: 'Rate limit exceeded. Maximum 20 requests per minute allowed.' }, 429) : json({ items: [] })));
+    d.sleep = async (ms: number) => { slept.push(ms); };
+    await expect(instantly(d, 'GET', '/emails?thread_id=t')).resolves.toEqual({ items: [] });
+    expect(slept).toEqual([RATE_WINDOW_MS, RATE_WINDOW_MS * 2]);
+    expect(slept.reduce((a, b) => a + b, 0)).toBeGreaterThanOrEqual(60_000);
   });
 });
