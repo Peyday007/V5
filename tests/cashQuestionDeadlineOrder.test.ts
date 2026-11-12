@@ -20,6 +20,8 @@ import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { capture, fillCard } from '../server/services/cash/opportunities.ts';
 import { CAPTURE_KEY, qualificationKeys } from '../server/services/cash/tier.ts';
+import { CAPACITY_DEFERRAL_EVENT } from '../server/services/cash/validation.ts';
+import { cashEventsOfKind } from '../server/repos/cashMode.ts';
 
 const NOW = '2026-11-12T12:00:00.000Z';
 const DAY = 24 * 60 * 60 * 1000;
@@ -179,5 +181,40 @@ describe('reconcileEngineGaps raises a dated opening\'s questions inside the cap
     expect(askedFor(raised, undated)).toBe(MAX_OPEN_ENGINE_QUESTIONS - 10);
     // One blank, so the old fewest-blanks order would have asked it first; its window is inside the runway.
     expect(askedFor(raised, inside)).toBe(0);
+  });
+  /*
+   * Review of the EDF change (2026-11-12): "they waited for a slot" must be read
+   * from rows, not asserted. Through the production pass: a dated opening an
+   * order could still save, left with blanks because the cap is full, gets one
+   * CAPACITY_DEFERRAL_EVENT row carrying the cap reading; an undated opening and
+   * one already inside the runway get none, and repeating the pass adds nothing.
+   */
+  it('records a capacity row for a dated opening the full cap leaves waiting, and only for it', async () => {
+    const sooner = await spentCandidate('Solicitation 140LL027Q0005, signage project', 5, fromNow(8 * DAY));
+    const middle = await spentCandidate('A solicitation closing in 15 days', 5, fromNow(15 * DAY));
+    const later = await spentCandidate("Solicitation N0010426QAC01 'DUST PLUG'", 5, fromNow(20 * DAY));
+    const undated = await spentCandidate('Ongoing bookkeeping request', 2, null);
+    const inside = await spentCandidate('A solicitation closing tomorrow', 1, fromNow(24 * 60 * 60 * 1000));
+
+    const first = await reconcileEngineGaps(projectId);
+    expect(first.length).toBe(MAX_OPEN_ENGINE_QUESTIONS);
+    expect(askedFor(first, sooner) + askedFor(first, middle)).toBe(10);
+    expect(askedFor(first, later)).toBe(MAX_OPEN_ENGINE_QUESTIONS - 10);
+
+    // The cap is full and `later` still has blanks: this pass is where it waits.
+    expect(await reconcileEngineGaps(projectId)).toEqual([]);
+    const rows = await cashEventsOfKind(later, CAPACITY_DEFERRAL_EVENT);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.detail).toMatchObject({
+      lane: 'ENGINE_QUESTION',
+      atDiscovery: 'ORDERABLE',
+      openQuestions: MAX_OPEN_ENGINE_QUESTIONS,
+      cap: MAX_OPEN_ENGINE_QUESTIONS,
+    });
+    for (const id of [sooner, middle, undated, inside]) expect(await cashEventsOfKind(id, CAPACITY_DEFERRAL_EVENT)).toEqual([]);
+
+    // The same contention on the next tick is not new evidence.
+    await reconcileEngineGaps(projectId);
+    expect(await cashEventsOfKind(later, CAPACITY_DEFERRAL_EVENT)).toHaveLength(1);
   });
 });

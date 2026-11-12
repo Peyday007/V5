@@ -7,7 +7,16 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { CashOpportunity } from '../server/domain/types.ts';
-import { compareDiveValue, diveOrder, type DiveValueFacts } from '../server/services/cash/validation.ts';
+import {
+  CAPACITY_DEFERRAL_EVENT,
+  capacityDeferralCandidates,
+  compareDiveValue,
+  deadlineAtDiscovery,
+  diveOrder,
+  recordCapacityDeferrals,
+  type DiveValueFacts,
+} from '../server/services/cash/validation.ts';
+import { cashEventsOfKind } from '../server/repos/cashMode.ts';
 import { DIVE_RUNWAY_MS, closesWithin } from '../server/services/cash/worthResearching.ts';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -193,5 +202,74 @@ describe('startValidations dives a dated opening before the runway closes it', (
     expect(ids).not.toContain(inside);
     expect(ids).not.toContain(later);
     expect(ids).not.toContain(undated);
+  });
+});
+
+/**
+ * Review of the EDF change (2026-11-12): the diagnosis "they waited behind
+ * undated openings for a slot" was asserted without rows. N0010426QAC01 was
+ * posted 2026-10-19 and changed on 2026-10-22, inside the 72h runway from the
+ * day it was filed: no order could have saved it. These pin the two facts the
+ * diagnosis needs — which misses an order could have prevented at all, and a
+ * row showing a slot was actually contended while one of those waited.
+ */
+describe('a deadline miss is attributed to capacity only when a row shows it', () => {
+  const opening = (id: string, createdAt: string, expiresAt: string | null) =>
+    ({ id, title: id, createdAt, expiresAt, mechanism: null, discoveryRoundId: null }) as unknown as CashOpportunity;
+
+  it('calls an opening filed inside its own runway unsaveable by any order', () => {
+    // Filed 2026-10-19, closing 2026-10-22 (end of day): under 72h of slack once the runway is subtracted.
+    const navy = opening('N0010426QAC01', '2026-10-19T18:00:00.000Z', '2026-10-21');
+    expect(deadlineAtDiscovery(navy).kind).toBe('INSIDE_RUNWAY_AT_DISCOVERY');
+    // It never gets an EDF key, so no order could have moved it ahead.
+    expect(capacityDeferralCandidates([navy], new Set(), navy.createdAt)).toEqual([]);
+  });
+
+  it('calls an opening filed with time to spare orderable, with its slack', () => {
+    const blm = opening('140LL027Q0005', '2026-10-15T00:00:00.000Z', '2026-10-30');
+    const reading = deadlineAtDiscovery(blm);
+    expect(reading.kind).toBe('ORDERABLE');
+    if (reading.kind !== 'ORDERABLE') throw new Error('unreachable');
+    expect(reading.slackMs).toBe(Date.parse('2026-10-30T23:59:59.999Z') - DIVE_RUNWAY_MS - Date.parse(blm.createdAt));
+    expect(deadlineAtDiscovery(opening('undated', blm.createdAt, null)).kind).toBe('UNDATED');
+  });
+
+  it('picks only dated, saveable, unstarted openings as deferred, earliest deadline first', () => {
+    const now = '2026-10-16T00:00:00.000Z';
+    const rows = [
+      opening('later', '2026-10-01T00:00:00.000Z', '2026-11-20'),
+      opening('undated', '2026-10-01T00:00:00.000Z', null),
+      opening('inside', '2026-10-01T00:00:00.000Z', '2026-10-17'),
+      opening('started', '2026-10-01T00:00:00.000Z', '2026-10-25'),
+      opening('sooner', '2026-10-01T00:00:00.000Z', '2026-10-30'),
+    ];
+    expect(capacityDeferralCandidates(rows, new Set(['started']), now).map((one) => one.id)).toEqual(['sooner', 'later']);
+    expect(capacityDeferralCandidates(rows, new Set(), now, 1).map((one) => one.id)).toEqual(['started']);
+  });
+
+  it('records one deferral row per opening, lane and close, and a changed close is a new row', async () => {
+    const { project } = await freshProject();
+    const now = '2026-10-16T00:00:00.000Z';
+    const blm = opening('cop_blm_test', '2026-10-15T00:00:00.000Z', '2026-10-30');
+    const capacity = { room: 0, limitedBy: 'OPERATOR' };
+    expect(await recordCapacityDeferrals({ projectId: project.id, lane: 'DIVE', waiting: [blm], now, capacity })).toBe(1);
+    expect(await recordCapacityDeferrals({ projectId: project.id, lane: 'DIVE', waiting: [blm], now, capacity })).toBe(0);
+    expect(
+      await recordCapacityDeferrals({ projectId: project.id, lane: 'ENGINE_QUESTION', waiting: [blm], now, capacity: {} }),
+    ).toBe(1);
+    const amended = { ...blm, expiresAt: '2026-11-06' } as CashOpportunity;
+    expect(await recordCapacityDeferrals({ projectId: project.id, lane: 'DIVE', waiting: [amended], now, capacity })).toBe(1);
+
+    const rows = await cashEventsOfKind(blm.id, CAPACITY_DEFERRAL_EVENT);
+    expect(rows).toHaveLength(3);
+    const dive = rows.find((one) => (one.detail as { lane?: string; expiresAt?: string }).expiresAt === '2026-10-30' && (one.detail as { lane?: string }).lane === 'DIVE');
+    expect(dive?.detail).toMatchObject({
+      lane: 'DIVE',
+      expiresAt: '2026-10-30',
+      atDiscovery: 'ORDERABLE',
+      room: 0,
+      limitedBy: 'OPERATOR',
+      latestStart: new Date(Date.parse('2026-10-30T23:59:59.999Z') - DIVE_RUNWAY_MS).toISOString(),
+    });
   });
 });
