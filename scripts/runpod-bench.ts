@@ -67,7 +67,19 @@ async function benchRecipe(key: string): Promise<BenchSummary | null> {
   let podId: string | null = null;
   const started = Date.now();
   try {
-    const pod = await createPod({ apiKey, vllmKey, recipe, name: `${BENCH_PREFIX}${key}`, maxUsdPerHour: ceiling });
+    // RunPod's stock of a card comes and goes by the minute (2026-11-12 19:00: none of the 24 GB cards on
+    // either cloud); keep asking for up to 20 minutes before calling the recipe unavailable.
+    let pod: Awaited<ReturnType<typeof createPod>> | null = null;
+    for (;;) {
+      try {
+        pod = await createPod({ apiKey, vllmKey, recipe, name: `${BENCH_PREFIX}${key}`, maxUsdPerHour: ceiling });
+        break;
+      } catch (error) {
+        if (Date.now() - started > 20 * 60_000) throw error;
+        console.log(`no GPU yet for ${key}, retrying in 2 min: ${(error as Error).message.slice(0, 160)}`);
+        await new Promise((resolve) => setTimeout(resolve, 120_000));
+      }
+    }
     podId = pod.podId;
     pod.log.forEach((l) => console.log(l));
     const ready = await waitReady(pod.url, vllmKey, 30);
@@ -110,14 +122,12 @@ async function main(): Promise<void> {
     const freeUrl = process.env['CHEAP_URL']?.trim();
     const freeKey = process.env['OMNIROUTE_API_KEY']?.trim() ?? null;
     if (freeUrl && freeKey) {
-      // The switchboard's own names: production sends the combo it lists (BRAIN_CHEAP_LLM_MODELS).
-      const listed = await fetch(`${freeUrl}/models`, { headers: { authorization: `Bearer ${freeKey}` }, signal: AbortSignal.timeout(30_000) }).then((r) => r.json()).catch(() => ({}));
-      const names = ((listed as { data?: { id: string }[] }).data ?? []).map((m) => m.id);
-      console.log(`SWITCHBOARD models: ${names.slice(0, 30).join(', ')}`);
-      const model = ['brain-a', process.env['OMNIROUTE_MODEL']?.trim() ?? ''].find((m) => m && names.includes(m)) ?? names[0] ?? 'auto';
-      const summary = await runBench({ label: `free:${model}`, url: freeUrl, key: freeKey, model, usdPerHour: null }, { reps, parallel: 3 });
-      print(summary);
-      results.push(summary);
+      // Production's operator combo (BRAIN_CHEAP_LLM_MODELS, not listed by /models) and the switchboard's own tool-capable route.
+      for (const model of ['brain-a', 'auto/best-coding']) {
+        const summary = await runBench({ label: `free:${model}`, url: freeUrl, key: freeKey, model, usdPerHour: null }, { reps, parallel: 3 });
+        print(summary);
+        results.push(summary);
+      }
     }
   }
   for (const key of (arg('recipes') ?? '').split(',').map((k) => k.trim()).filter(Boolean)) {

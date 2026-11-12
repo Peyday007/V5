@@ -58,6 +58,8 @@ export interface PodRecipe {
 
 /** 24 GB cards from cheapest measured community price (runpod-survey, 2026-11-12). */
 const GPUS_24 = ['NVIDIA RTX A5000', 'NVIDIA GeForce RTX 3090', 'NVIDIA GeForce RTX 3090 Ti'];
+/** 20 GB and up, for a model whose weights and 64K window fit 20 GB: more cards, so more stock. */
+const GPUS_20 = ['NVIDIA RTX A5000', 'NVIDIA RTX A4500', 'NVIDIA RTX 4000 Ada Generation', 'NVIDIA GeForce RTX 3090', 'NVIDIA GeForce RTX 3090 Ti'];
 const CUDA_129 = ['12.9', '13.0'];
 const IMAGE_2026 = 'vllm/vllm-openai:v0.32.0-cu129';
 
@@ -80,18 +82,19 @@ export const RECIPES: Record<string, PodRecipe> = {
     key: 'gpt-oss-20b',
     model: 'openai/gpt-oss-20b',
     served: 'openai/gpt-oss-20b',
-    gpus: GPUS_24,
+    gpus: GPUS_20,
     image: IMAGE_2026,
     cuda: CUDA_129,
-    maxModelLen: 131072,
+    // 64K fits a 20 GB card beside the 14 GB of weights; the operator needs 64K, not 128K.
+    maxModelLen: 65536,
     args: [
       '--gpu-memory-utilization', '0.92', '--max-num-seqs', '16',
       '--enable-auto-tool-choice', '--tool-call-parser', 'openai', '--reasoning-parser', 'openai_gptoss',
     ],
     containerDiskInGb: 60,
-    minGpuGb: 24,
+    minGpuGb: 20,
     clouds: ['COMMUNITY', 'SECURE'],
-    note: 'MoE 21B/3.6B active, MXFP4 ~14 GB, 128K native; the free lane already runs its 120B sibling',
+    note: 'MoE 21B/3.6B active, MXFP4 ~14 GB, 128K native served at 64K; the free lane already runs its 120B sibling',
   },
   'qwen3.8-27b-awq': {
     key: 'qwen3.8-27b-awq',
