@@ -79,10 +79,14 @@ describe('the interface and its record', () => {
   });
 
   it('records a failed call and returns nothing rather than throwing', async () => {
+    // Counted, not read as rows[0]: an earlier test's row can share this one's
+    // millisecond, and then the newest-first order between them is the backend's.
+    const failed = async () =>
+      (await listIntegrationEvents('USAGE')).filter((e) => e.integrationId === 'open-source-agents' && e.state === 'SELLBIRD_FAILED').length;
+    const before = await failed();
     const out = await sellbirdContacts('harborplumbing.com', { env: ENV, source: 'test', fetch: (async () => json({ detail: 'unauthorized' }, 401)) as typeof fetch });
     expect(out).toBeNull();
-    const rows = (await listIntegrationEvents('USAGE')).filter((e) => e.integrationId === 'open-source-agents');
-    expect(rows[0]?.state).toBe('SELLBIRD_FAILED');
+    expect(await failed()).toBe(before + 1);
   });
 
   it("reads a refused key as Brain's own repair, never the owner's", async () => {
