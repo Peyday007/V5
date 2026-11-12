@@ -14,6 +14,7 @@
  * a RUSSELL_ROUTINE_DECISION event recorded, once; a live mission's card and a missionless card are
  * still reopened exactly as before.
  */
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -173,5 +174,40 @@ describe('reopenAnswered and a mission that left Needs You', () => {
     expect(after.state).toBe('OPEN');
     expect(after.choices.map((choice) => choice.key)).toEqual(request.choices.map((choice) => choice.key));
     expect(after.whyNotRussell).toBe(request.whyNotRussell);
+  });
+});
+
+describe('the source keeps each doc comment on what it describes', () => {
+  /** The `/** … *\/` block that ends immediately before `declaration`, or null. */
+  function docCommentBefore(source: string, declaration: string): string | null {
+    const at = source.indexOf(declaration);
+    if (at < 0) return null;
+    const before = source.slice(0, at).trimEnd();
+    if (!before.endsWith('*/')) return null;
+    const start = before.lastIndexOf('/**');
+    return start < 0 ? null : before.slice(start);
+  }
+
+  it('A02: resumeAnsweredRequest carries its own doc comment, and the moot-reason constant carries its own', () => {
+    const source = readFileSync(
+      new URL('../server/services/russell/needsHuman.ts', import.meta.url),
+      'utf8',
+    );
+    const fnDoc = docCommentBefore(source, 'export async function resumeAnsweredRequest(');
+    expect(fnDoc).not.toBeNull();
+    expect(fnDoc!).toMatch(/^\/\*\*\s*\n\s*\* Carry out what a person decided\./);
+    const constDoc = docCommentBefore(source, 'const MOVED_OUT_OF_NEEDS_YOU =');
+    expect(constDoc).not.toBeNull();
+    expect(constDoc!).toContain('What a resume says when the mission left `NEEDS_HUMAN`');
+    // Neither block is orphaned: the constant's comment is followed by the
+    // constant, not by the function's comment.
+    const between = source.slice(
+      source.indexOf('const MOVED_OUT_OF_NEEDS_YOU ='),
+      source.indexOf('export async function resumeAnsweredRequest('),
+    );
+    expect(between.match(/\/\*\*/g) ?? []).toHaveLength(1);
+    expect(source.indexOf('const MOVED_OUT_OF_NEEDS_YOU =')).toBeLessThan(
+      source.indexOf('export async function resumeAnsweredRequest('),
+    );
   });
 });
