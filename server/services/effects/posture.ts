@@ -98,7 +98,7 @@ export const CONTINUITY_CLAUSE_OWNERS: readonly ClauseOwner[] = [
   {
     clause: 'preserve time-critical customer commitments',
     owner: 'server/services/effects/posture.ts (planContinuation: ESCALATE_TIME_CRITICAL), applied before every send by server/services/cash/perform.ts (performCommercialAction → decideCommitmentContinuation, the opportunity deadline)',
-    reader: 'cash_events CASH_CONTINUATION_DECIDED; continuity.ts continuation --project ID --namespace NS',
+    reader: 'cash_events CASH_CONTINUATION_DECIDED; the OPEN cash_needs row it raises (request_key continuation:<opportunity>:<action>:ESCALATE_TIME_CRITICAL); continuity.ts continuation --project ID --namespace NS',
   },
   {
     clause: 'backup/restoration procedures for essential data and configurations, with verified restore behavior',
@@ -108,7 +108,7 @@ export const CONTINUITY_CLAUSE_OWNERS: readonly ClauseOwner[] = [
   {
     clause: 'distinguish recoverable operational failure from an external constraint no alternate service can legitimately bypass',
     owner: 'server/services/effects/posture.ts (OUTAGE vs CONSTRAINED; WAIT_RECOVERABLE vs EXTERNAL_CONSTRAINT)',
-    reader: 'failure_category on idempotency_operations',
+    reader: 'failure_category on idempotency_operations; the OPEN cash_needs row an EXTERNAL_CONSTRAINT continuation raises',
   },
 ];
 

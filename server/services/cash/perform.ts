@@ -1053,7 +1053,30 @@ export async function continuationGate(
   const previous = (await cashEventsOfKind(opportunity.id, 'CASH_CONTINUATION_DECIDED'))
     .filter((event) => event.detail['action'] === action)
     .at(-1);
-  if (previous && continuationSignature(previous.detail) === signature) return refusal;
+  const escalates = continuationNeedsAPerson(continuation.action);
+  /*
+   * A decision recorded before escalations raised needs carries no `needId`,
+   * and is treated as a changed decision once so the person it promised to
+   * tell is actually told. After that the signature governs as before: a need
+   * a person withdrew is not raised again on every tick while the same
+   * decision holds.
+   */
+  if (
+    previous &&
+    continuationSignature(previous.detail) === signature &&
+    (!escalates || typeof previous.detail['needId'] === 'string')
+  ) {
+    return refusal;
+  }
+  /*
+   * "A person is told now" is a need, never a history row. The cash event is
+   * the record of the decision; the need is what reaches the review a person
+   * already reads, with the way forward, and what a time-critical commitment
+   * or an external constraint is waiting on.
+   */
+  const needId = continuationNeedsAPerson(continuation.action)
+    ? await raiseContinuationNeed(opportunity, action, continuation.action, continuation.reason, continuation.skipped)
+    : null;
   await recordCashEvent({
     projectId: opportunity.projectId,
     opportunityId: opportunity.id,
@@ -1072,9 +1095,58 @@ export async function continuationGate(
       healthReason: continuation.health.reason,
       unsettled: continuation.unsettled,
       timeCritical: continuation.timeCritical,
+      needId,
     },
   });
   return refusal;
+}
+
+/** The continuation decisions a person must act on: everything else resolves itself or is reconciled by Brain. */
+export function continuationNeedsAPerson(decision: string): decision is 'ESCALATE_TIME_CRITICAL' | 'EXTERNAL_CONSTRAINT' {
+  return decision === 'ESCALATE_TIME_CRITICAL' || decision === 'EXTERNAL_CONSTRAINT';
+}
+
+/** What makes an escalated continuation the same need: one per piece, action and decision. */
+export function continuationNeedKey(opportunityId: string, action: PerformableAction, decision: string): string {
+  return `continuation:${opportunityId}:${action}:${decision}`;
+}
+
+async function raiseContinuationNeed(
+  opportunity: CashOpportunity,
+  action: PerformableAction,
+  decision: 'ESCALATE_TIME_CRITICAL' | 'EXTERNAL_CONSTRAINT',
+  reason: string,
+  skipped: { namespace: string; why: string }[],
+): Promise<string | null> {
+  const effect = COMMERCIAL_EFFECTS[action];
+  const alternatives = skipped.length
+    ? ` Alternatives considered and not taken: ${skipped.map((one) => `${one.namespace} (${one.why})`).join('; ')}.`
+    : ' No alternative is registered for it.';
+  const timeCritical = decision === 'ESCALATE_TIME_CRITICAL';
+  const raised = await raiseNeed({
+    projectId: opportunity.projectId,
+    opportunityId: opportunity.id,
+    actorRef: BRAIN,
+    blockedAction: `${effect.doing[0]!.toUpperCase()}${effect.doing.slice(1)} for "${opportunity.title}"`,
+    whyItMatters:
+      (timeCritical
+        ? `This commitment is due ${opportunity.deadline ?? 'soon'} and waiting out the outage could miss it. `
+        : 'The dependency refused for good, and no other service may be used to get past that refusal. ') +
+      `Brain sent nothing: ${reason}.${alternatives}`,
+    recommendedPath: timeCritical
+      ? 'Do it yourself outside Brain before the deadline and record it on this piece with its reference, ' +
+        'or tell the counterparty now and agree a new date.'
+      : 'Restore the account or integration that refused, or permit an alternative channel or supplier for ' +
+        'this commitment; otherwise do it yourself outside Brain and record it on this piece.',
+    setupEffort: 'Depends on the dependency; nothing about it is guessed here.',
+    nextStep: timeCritical
+      ? 'Preserve the commitment before its deadline, then record what was done.'
+      : 'Restore or replace the refusing dependency, or record the commitment done another way.',
+    completionCondition: `A ${action} is on the record for this piece, or its commitment is explicitly renegotiated.`,
+    blocksState: action === 'CONTACT_BUYER' ? 'EXECUTING' : null,
+    requestKey: continuationNeedKey(opportunity.id, action, decision),
+  });
+  return raised.ok ? raised.value.id : null;
 }
 
 /** The fields of a continuation decision that make it a different decision. */
