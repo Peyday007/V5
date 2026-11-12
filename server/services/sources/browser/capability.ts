@@ -30,9 +30,24 @@
  * changed moves an ACTIVE capability to REVIEW instead of guessing; a run that
  * met an expired or rejected session yields a REAUTHORIZE handoff.
  *
- * Session material is never held by Brain. The account is used through the
- * browser server's own signed-in session (`BRAIN_BROWSER_SESSION_MCP_URL`), so
- * a capability record carries only the rule, never a cookie, token or password;
+ * **Discover once, run thousands of times.** `discoverBrowserCapability` is the
+ * producer: it takes a workflow a model (or a person) recorded through the
+ * workflow owner, runs it once through `operateWorkflow`, and — only when that
+ * run completed, found the interface unchanged and obtained every output —
+ * records it as a DRAFT capability (`draftCapabilityFromRun` decides the
+ * definition from the run; `capabilityFromSuccessfulRun` records it from a run
+ * a caller already holds). The draft runs again only after a person approves
+ * that exact content hash; from then on ordinary code runs it.
+ *
+ * Session material is never held by Brain, and this module relies on the
+ * browser server as its owner. An account workflow is run only through the
+ * browser server's own signed-in session (`BRAIN_BROWSER_SESSION_MCP_URL`,
+ * chosen by `runBrowserWorkflow`), which keeps the encrypted session outside
+ * the repository and Brain's rows. Reauthorization is modelled here as the rule
+ * that decides when a person must sign in again: the session's age since the
+ * approval (`reauthorizeAfterMs`) and a run the session server sent to an
+ * AUTHENTICATION boundary both yield a REAUTHORIZE handoff. A capability record
+ * carries only that rule, never a cookie, token or password;
  * `validateCapability` refuses any definition shaped like one.
  *
  * Nothing here names a host, category or industry, and no list is a whitelist:
@@ -43,11 +58,13 @@ import { createHash } from 'node:crypto';
 import { getDb } from '../../../db/database.ts';
 import { recordBinEvent } from '../../../repos/bins.ts';
 import { hostMeasuresPattern } from '../acquisition.ts';
+import { redactText } from './redaction.ts';
 import {
   BROWSER_WORKFLOW_RUN_EVENT,
   MAX_WORKFLOW_STEPS,
   WORKFLOW_TIMEOUT_MS,
   operateWorkflow,
+  readBrowserWorkflows,
   recordBrowserWorkflow,
   validateWorkflow,
   type BrowserWorkflow,
@@ -656,4 +673,176 @@ export function priorRunsFrom(capRows: readonly CapabilityRow[]): PriorRun[] {
     out.push({ key: m.key, outcome: o, at: r.at });
   }
   return out;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Discovery: the first successful run becomes a DRAFT capability             */
+/* ------------------------------------------------------------------------- */
+
+/** What a discovery cannot read from the run itself: who maintains it, and what it is given. */
+export interface DiscoverySpec {
+  maintenanceOwner: string;
+  /** The inputs the workflow was given on this run; they become the first fixture. */
+  inputs?: CapabilityField[];
+  fixtureInputs?: Record<string, string>;
+  /** Output name → description; an output without one is described by the workflow's purpose. */
+  outputDescriptions?: Record<string, string>;
+  timeoutMs?: number;
+  freshnessMs?: number;
+  /** How long an account session is trusted before a person reauthorizes it. */
+  reauthorizeAfterMs?: number;
+  rateLimit?: RateLimit;
+  failureReasons?: string[];
+}
+
+/** Conservative defaults for a first draft; the approver sees and may change every one. */
+export const DISCOVERY_DEFAULTS = {
+  freshnessMs: 24 * 3_600_000,
+  reauthorizeAfterMs: 7 * 24 * 3_600_000,
+  rateLimit: { maxRunsPerHour: 6, minIntervalMs: 60_000 } as RateLimit,
+  readRetry: { maxAttempts: 3, backoffMs: 30_000, retryAfterUnknown: true } as RetryPolicy,
+  mutationRetry: { maxAttempts: 1, backoffMs: 0, retryAfterUnknown: false } as RetryPolicy,
+  fixtureChars: 60,
+};
+
+export type DraftDecision = { drafted: true; capability: BrowserCapability } | { drafted: false; reason: string };
+
+/** A short, secret-free excerpt of what a run obtained, used as the fixture's expectation. */
+function fixtureExcerpt(text: string): string {
+  const line = text.split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0) ?? '';
+  return redactText(line.slice(0, DISCOVERY_DEFAULTS.fixtureChars)).trim();
+}
+
+/**
+ * The capability a successful run proves, or why that run proves none. Pure.
+ *
+ * Only a COMPLETED run that found the interface unchanged and obtained every
+ * extract and download the workflow declares can be drafted. The effect is
+ * MUTATION when any step presses a consequential control, else READ; expected
+ * page states are the workflow's own `expect` steps (or, when it has none, the
+ * URL the run ended on); the first fixture is what this run actually obtained.
+ */
+export function draftCapabilityFromRun(workflow: BrowserWorkflow, run: OperateResult['run'], spec: DiscoverySpec): DraftDecision {
+  const host = workflow.host.trim().toLowerCase();
+  if (run.host.trim().toLowerCase() !== host || run.name.trim().toLowerCase() !== workflow.name.trim().toLowerCase()) {
+    return { drafted: false, reason: `the run is of "${run.name}" on ${run.host}, not "${workflow.name}" on ${host}` };
+  }
+  if (run.outcome !== 'COMPLETED') return { drafted: false, reason: `the run ended ${run.outcome}: ${redactText(run.detail)}`.slice(0, 400) };
+  if (run.interfaceChanged) return { drafted: false, reason: 'the run found the interface changed; nothing is drafted from a guess' };
+  if (!spec.maintenanceOwner?.trim()) return { drafted: false, reason: 'a draft names a maintenance owner' };
+
+  const steps = workflow.steps ?? [];
+  const captured = steps.flatMap((s) => (s.kind === 'extract' || s.kind === 'download' ? [s.name] : []));
+  if (captured.length === 0) return { drafted: false, reason: 'the workflow obtains nothing (no extract or download step)' };
+  const obtained = new Map<string, string>();
+  for (const e of run.extracted) if (e.text.trim()) obtained.set(e.name, e.text);
+  for (const d of run.downloads) if (d.chars > 0) obtained.set(d.name, d.text);
+  const missing = captured.filter((n) => !obtained.has(n));
+  if (missing.length > 0) return { drafted: false, reason: `the run did not obtain ${missing.join(', ')}; only a run that obtained every output is drafted` };
+
+  const expectedStates: ExpectedState[] = [];
+  steps.forEach((s, i) => {
+    if (s.kind !== 'expect') return;
+    const e: ExpectedState = { afterStep: i + 1 };
+    if (s.text) e.text = s.text;
+    if (s.absentText) e.absentText = s.absentText;
+    if (s.urlIncludes) e.urlIncludes = s.urlIncludes;
+    if (s.locator) e.locator = s.locator;
+    expectedStates.push(e);
+  });
+  if (expectedStates.length === 0 && run.finalUrl) {
+    try {
+      const path = new URL(run.finalUrl).pathname;
+      if (path && path !== '/') expectedStates.push({ afterStep: steps.length, urlIncludes: path });
+    } catch {
+      /* an unparseable final URL proves no page state */
+    }
+  }
+  if (expectedStates.length === 0) return { drafted: false, reason: 'the run proves no page state (no expect step and no final URL path); a person adds one' };
+
+  const expect: Record<string, string> = {};
+  for (const n of captured) {
+    const excerpt = fixtureExcerpt(obtained.get(n) ?? '');
+    if (excerpt) expect[n] = excerpt;
+  }
+  const mutates = consequentialSteps(workflow).length > 0;
+  const fixtureInputs = spec.fixtureInputs ?? {};
+  const capability: BrowserCapability = {
+    workflow: { ...workflow, host, name: workflow.name.trim() },
+    inputs: spec.inputs ?? [],
+    outputs: captured.map((n) => ({ name: n, description: spec.outputDescriptions?.[n] ?? `${n}, obtained by: ${workflow.purpose}`.slice(0, 200) })),
+    effect: mutates ? 'MUTATION' : 'READ',
+    expectedStates,
+    timeoutMs: spec.timeoutMs ?? MAX_CAPABILITY_TIMEOUT_MS,
+    retry: mutates ? { ...DISCOVERY_DEFAULTS.mutationRetry } : { ...DISCOVERY_DEFAULTS.readRetry },
+    freshnessMs: spec.freshnessMs ?? DISCOVERY_DEFAULTS.freshnessMs,
+    failureReasons: spec.failureReasons ?? [],
+    fixtures: [{ name: 'discovered run', inputs: { ...fixtureInputs }, expect }],
+    maintenanceOwner: spec.maintenanceOwner.trim(),
+    session: { account: Boolean(workflow.account), reauthorizeAfterMs: workflow.account ? (spec.reauthorizeAfterMs ?? DISCOVERY_DEFAULTS.reauthorizeAfterMs) : null },
+    rateLimit: spec.rateLimit ?? { ...DISCOVERY_DEFAULTS.rateLimit },
+  };
+  const problems = validateCapability(capability);
+  if (problems.length > 0) return { drafted: false, reason: `the run's definition is not a capability yet: ${problems.join('; ')}`.slice(0, 600) };
+  return { drafted: true, capability };
+}
+
+export interface DiscoveryResult {
+  outcome: 'DRAFTED' | 'NOT_DRAFTED' | 'REFUSED';
+  reason: string;
+  version: CapabilityVersion | null;
+  run: OperateResult['run'] | null;
+}
+
+/**
+ * Turn a run a caller already holds into a DRAFT capability record. The
+ * capability's lifecycle reads DRAFT until a person approves this exact
+ * content hash; nothing here approves anything.
+ */
+export async function capabilityFromSuccessfulRun(
+  workflow: BrowserWorkflow,
+  run: OperateResult['run'],
+  spec: DiscoverySpec,
+  recordedBy: string,
+  deps: CapabilityDeps = {},
+): Promise<DiscoveryResult> {
+  const draft = draftCapabilityFromRun(workflow, run, spec);
+  if (!draft.drafted) return { outcome: 'NOT_DRAFTED', reason: draft.reason, version: null, run };
+  const version = await recordBrowserCapability(draft.capability, recordedBy, deps);
+  return { outcome: 'DRAFTED', reason: `recorded as DRAFT v${version.version} (${version.contentHash.slice(0, 12)}); it runs again once a person approves it`, version, run };
+}
+
+/**
+ * The producer for "the model discovers once": run a recorded workflow once
+ * through the workflow owner (its judgment, permission and session handling
+ * unchanged) and, if that run succeeded, record it as a DRAFT capability.
+ *
+ * A workflow that presses a consequential control is never run to discover it
+ * — discovery must not perform a purchase, publication or deletion. Such a
+ * workflow is drafted from a run that was already approved and performed,
+ * through `capabilityFromSuccessfulRun`.
+ */
+export async function discoverBrowserCapability(
+  hostIn: string,
+  name: string,
+  spec: DiscoverySpec,
+  recordedBy: string,
+  deps: CapabilityDeps & { workflows?: OperateDeps['workflows'] } = {},
+): Promise<DiscoveryResult> {
+  const host = hostIn.trim().toLowerCase();
+  if (!recordedBy.trim()) return { outcome: 'REFUSED', reason: 'a discovery names who recorded it', version: null, run: null };
+  // Read the definition before anything runs: a consequential workflow is refused without opening a browser.
+  const workflows = deps.workflows ?? deps.operateDeps?.workflows ?? readBrowserWorkflows;
+  const known = (await workflows(host)).get(capKey(host, name)) ?? null;
+  if (!known) return { outcome: 'NOT_DRAFTED', reason: `no workflow "${name}" is recorded for ${host}`, version: null, run: null };
+  if (consequentialSteps(known.workflow).length > 0) {
+    return { outcome: 'REFUSED', reason: `"${name}" presses a consequential control (${consequentialSteps(known.workflow).map((x) => `step ${x.step} ${x.why}`).join('; ')}); it is not run to discover it`, version: null, run: null };
+  }
+  const result = await (deps.operate ?? operateWorkflow)(host, name, { ...(deps.operateDeps ?? {}), workflows });
+  const workflow = result.record?.workflow ?? known.workflow;
+  // The owner ran whatever definition was newest at that moment; it is re-checked, never assumed.
+  if (consequentialSteps(workflow).length > 0) {
+    return { outcome: 'REFUSED', reason: `"${name}" presses a consequential control; it is drafted only from an approved run`, version: null, run: result.run };
+  }
+  return capabilityFromSuccessfulRun(workflow, result.run, spec, recordedBy, deps);
 }
