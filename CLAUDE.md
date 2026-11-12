@@ -290,8 +290,11 @@ There must be no workflow where the user has to remember "now go update the data
 47. No possibility discarded for ranking poorly — a rank is a view of the space
     and never the space, simplification happens in the presentation, and what
     is not in the top five is not thereby worthless.
+48. No industry excluded by Brain — an opening is judged on its economics, its
+    time to revenue and whether it can be done, and a goal's constraint binds
+    that goal, only while it runs.
 
-## 8–104. The architecture record
+## 8–105. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -397,6 +400,7 @@ resolves. Read the section for the area you are changing before you change it
 - §102. A plan's variables are swept by ordinary code, and only the strongest strategies cost an engine read.
 - §103. An integration is declared once, and Brain supplies its credentials itself wherever it is authorized.
 - §104. An open-source agent answers one narrow question, and Brain keeps the prospect, the decision and the record.
+- §105. An industry is never excluded, and a goal's constraint ends with the goal.
 
 ## Conventions
 

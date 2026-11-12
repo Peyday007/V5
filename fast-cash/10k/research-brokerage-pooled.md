@@ -1,5 +1,7 @@
 # Brokerage, pooled-demand and subcontracting options — cash collected by 2026-11-27
 
+> **Corrected 2026-11-12 (§105):** government and federal work is not excluded. Every opening is judged on its economics, its time to revenue and feasibility, never its industry. A long award cycle may not suit a 30-day sprint, and it stays eligible for longer goals.
+
 Researched 2026-11-02 with web search. **PUBLISHED** means the figure appears at the
 cited URL. **ESTIMATE** means my own arithmetic or judgment, built from the published
 figures it names. Many cost-guide pages in this niche are SEO content farms. Those are

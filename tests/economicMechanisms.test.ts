@@ -322,29 +322,33 @@ describe('forward construction and transfer', () => {
 });
 
 describe('what the goal’s owner left out', () => {
-  it('reads an exclusion only where a negator governs it', () => {
-    expect(exclusionsIn('Avoid government/federal contracts and broken-website plays for this goal.')).toEqual(['GOVERNMENT_CONTRACTING', 'WEBSITE_REPAIR']);
-    expect(exclusionsIn('No federal work.')).toEqual(['GOVERNMENT_CONTRACTING']);
-    expect(exclusionsIn('Subcontract work that government buyers pay for.')).toEqual([]);
-    expect(excludedBy('Market: US federal procurement (SAM.gov) solicitation', ['GOVERNMENT_CONTRACTING'])).toBe('GOVERNMENT_CONTRACTING');
+  it('reads an exclusion only where a negator governs it, and never excludes an industry', () => {
+    expect(exclusionsIn('Avoid government/federal contracts and broken-website plays for this goal.')).toEqual(['WEBSITE_REPAIR']);
+    expect(exclusionsIn('No federal work.')).toEqual([]);
+    expect(exclusionsIn('Fix broken-website leads for dentists.')).toEqual([]);
     expect(excludedBy('Fix the broken website of a dental practice', ['WEBSITE_REPAIR'])).toBe('WEBSITE_REPAIR');
-    expect(excludedBy('Independent restaurants', ['GOVERNMENT_CONTRACTING', 'WEBSITE_REPAIR'])).toBeNull();
+    expect(excludedBy('Market: US federal procurement (SAM.gov) solicitation', ['WEBSITE_REPAIR', 'DOMAIN_SPECULATION'])).toBeNull();
+    expect(excludedBy('Independent restaurants', ['WEBSITE_REPAIR'])).toBeNull();
   });
 
-  it('leaves excluded openings out of the plan and excluded parts out of construction, from the sprint’s own additions', async () => {
+  it('leaves the excluded play out of the plan and construction, from the sprint’s own additions, and keeps government buyers in', async () => {
     await sector('Public procurement', { buyer: 'Federal agencies', bottleneck: 'Document scanning backlogs', supply: 'Records scanning vendors' });
     await sector('Commercial kitchens', { buyer: 'Independent restaurants', bottleneck: 'Hood and duct cleaning compliance', supply: 'Certified hood cleaning crews' });
     const federal = await opening({ title: 'Market: US federal procurement (SAM.gov). Records scanning RFQ', priceCents: 900_000, payer: 'A federal agency' });
+    const repair = await opening({ title: 'Fix the broken website of a dental practice', priceCents: 90_000, payer: 'A dental practice' });
     expect((await setConstraints({ projectId, actorUserId: userId, constraints: 'Avoid government and federal contracts and broken-website plays.' })).ok).toBe(true);
     const id = await goal(1_000_000, { capitalCents: 300_000, beforeProofCents: 30_000 });
     const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000 }))!;
-    expect(reading.excluded.find((one) => one.opportunityId === federal.id)!.reason).toMatch(/left out by the goal: government/);
+    // Owner, 2026-11-12: an industry is never excluded, so the old government words leave the federal opening in.
+    expect(reading.excluded.find((one) => one.opportunityId === federal.id)?.reason ?? '').not.toMatch(/left out by the goal/);
+    expect(reading.excluded.find((one) => one.opportunityId === repair.id)!.reason).toMatch(/left out by the goal: broken-website/);
     const opened = await askConstructedArrangements((await getWorkstream(id))!, reading, now, 20, 20);
     const statements = await Promise.all(opened.map(async (c) => (await getCandidate(c))!.statement));
     expect(statements.length).toBeGreaterThan(0);
-    expect(statements.some((s) => s.includes('Federal agencies'))).toBe(false);
-    expect(statements.every((s) => /Leave out government and public-sector contracts and broken-website and website-repair plays/.test(s))).toBe(true);
+    expect(statements.every((s) => /Leave out broken-website and website-repair plays/.test(s))).toBe(true);
+    expect(statements.some((s) => /Leave out government/.test(s))).toBe(false);
   });
+
 });
 
 describe('the live goal: a structurally new arrangement becomes an opening and moves the plan', () => {

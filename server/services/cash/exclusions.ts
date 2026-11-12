@@ -14,6 +14,18 @@
  * has asked to leave something out and the existing words cannot say it; each
  * says what text it recognises in an opening, so an exclusion applies to rows
  * by matching, never by a model deciding what a person meant.
+ *
+ * **An industry is never an exclusion class (owner's order, 2026-11-12, §105).**
+ * "Government contracts, federal opportunities, and other industries are NOT
+ * permanently excluded": an opening is judged on its economics, its time to
+ * revenue and whether Brain can do it, and a government buyer that pays
+ * tomorrow is as eligible as any other. Long award cycles already rank lower
+ * by their own timing (`isCompetitiveAward`, the goal's window). The
+ * government class that the $10K goal's words switched on is gone, so those
+ * words now exclude nothing. What remains is a goal's own instruction about a
+ * play, and it binds that goal only: never another goal, never the project's
+ * shared discovery while another live goal may use it, and never once its goal
+ * or its sprint has ended.
  */
 import { clauseBefore, NEGATORS } from '../russell/negation.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
@@ -21,25 +33,6 @@ import { listCapitalFor, listConstraintsForProject } from '../../repos/industry.
 import type { CapitalStructure, OpportunityConstraint } from '../../domain/types.ts';
 
 export const EXCLUSION_CLASSES = {
-  GOVERNMENT_CONTRACTING: {
-    label: 'government and public-sector contracts',
-    triggers: /\b(?:government|federal|public[- ]sector|public procurement|state agenc(?:y|ies)|municipal)\b/i,
-    /*
-     * A place name is not a public buyer. "City of", "department of", "bureau
-     * of" and a bare "procurement" matched consumer and business openings that
-     * merely named a city or a corporate procurement team (2026-11-07), so they
-     * count only beside a public body or a public buying word.
-     */
-    /*
-     * A county or city department is a public buyer even with no buying word
-     * beside it. Production, 2026-11-07: the industry map held "county
-     * forestry/parks department (standing-timber purchaser via sealed bid)" as a
-     * buyer type, construction paired it with Brain's deliverables, and a
-     * research round was queued to confirm that county parks departments buy
-     * spreadsheets — for a goal that excludes public-sector work.
-     */
-    matches: /\b(?:government|federal|sam\.gov|public[- ]sector|public procurement|government procurement|solicitation|rfp|rfq|rfi|tender|state agenc(?:y|ies)|municipal|county (?:commission|board|government)|county[a-z ,&/'-]{0,40}\b(?:department|dept|office|agency|commission|board)|(?:forest(?:ry)?|parks?|recreation|public works|sheriff'?s?|assessor'?s?|treasurer'?s?)(?: ?(?:and|&|\/) ?(?:forest(?:ry)?|parks?|recreation))? (?:department|dept|office|division)|department of (?:parks|forestry|public works|natural resources)|city council|public works|city of [a-z .'-]{2,30}(?:council|contracts?|bids?|purchasing|procurement)|department of (?:agriculture|defen[cs]e|education|transportation|health|labor|commerce|energy|the interior|justice|state|the treasury|veterans|homeland|housing|environmental|natural resources|corrections)|commonwealth of (?:pennsylvania|massachusetts|virginia|kentucky)|navy|army|air force|veterans affairs|bureau of (?:land|indian|reclamation|prisons|abandoned|labor|the census)|school district|public school|rfpmart|publicsurplus|govdeals|bidnet|[a-z0-9-]+\.gov|[a-z0-9-]+\.mil)\b/i,
-  },
   WEBSITE_REPAIR: {
     label: 'broken-website and website-repair plays',
     triggers: /\b(?:broken[- ]website|website[- ](?:repair|fix)|broken site)/i,
@@ -82,10 +75,16 @@ export function excludedBy(text: string | null | undefined, classes: readonly Ex
   return classes.find((key) => EXCLUSION_CLASSES[key].matches.test(text)) ?? null;
 }
 
-/** The classes any live goal in a project excludes, for project-wide discovery questions. */
-export function unionOf(goals: ReadonlyArray<{ exclusions: readonly ExclusionClass[] }>): ExclusionClass[] {
-  const all = new Set(goals.flatMap((one) => one.exclusions));
-  return EXCLUSION_KEYS.filter((key) => all.has(key));
+/**
+ * The classes every live goal in a project excludes, for project-wide discovery
+ * questions. An intersection, not a union: discovery is shared, and an opening
+ * one live goal may use is worth finding even when another goal's owner left
+ * it out (the same rule `notWorthResearching` applies to a dive). One goal's
+ * constraint never narrows what the project as a whole searches.
+ */
+export function commonTo(goals: ReadonlyArray<{ exclusions: readonly ExclusionClass[] }>): ExclusionClass[] {
+  if (goals.length === 0) return [];
+  return EXCLUSION_KEYS.filter((key) => goals.every((one) => one.exclusions.includes(key)));
 }
 
 /** A sentence for a research question, naming what to leave out. */
@@ -103,7 +102,8 @@ export async function goalExclusions(goal: { title: string; intent: string; outc
   if (goal.target?.projectId) {
     const mode = await getCashMode(goal.target.projectId);
     // The whole stored objective: the canonical mandate excludes nothing, and the operator's additions follow it.
-    if (mode) parts.push(mode.objective);
+    // A sprint's additions are temporary: they bind only while that sprint runs, never after it winds down.
+    if (mode && mode.state === 'ACTIVE') parts.push(mode.objective);
   }
   return exclusionsIn(parts.filter(Boolean).join('\n'));
 }
