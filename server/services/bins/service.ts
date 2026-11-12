@@ -300,6 +300,55 @@ export interface BinAdmissionVerdict {
 
 export type BinAdmission = (bin: Bin) => Promise<BinAdmissionVerdict>;
 
+/*
+ * Which capabilities some enabled Routine on an enabled account declares — the
+ * fleet half of `effectiveCapabilities`, asked on the claim path. Read once per
+ * short window and shared, rather than as two full-table reads on every
+ * admission (§61/§63: the claim path is the first thing database pressure
+ * reaches). Staleness only reaches a derived capability, which fails open by
+ * §27's rule, so a declaration made inside the window costs at most a fire a
+ * surface could not use — the behaviour before the capability existed — and
+ * Brain's own writer (`recordDemonstratedCapabilities`) clears the window.
+ */
+export const FLEET_DECLARATIONS_TTL_MS = 30_000;
+let fleetDeclarations: { readAt: number; set: Promise<ReadonlySet<string>> } | null = null;
+let fleetDeclarationScans = 0;
+
+export function forgetFleetDeclarations(): void {
+  fleetDeclarations = null;
+}
+
+/** How many times the fleet has actually been scanned for declarations; for tests. */
+export function fleetDeclarationScanCount(): number {
+  return fleetDeclarationScans;
+}
+
+async function declaredFleetCapabilities(nowMs: number = Date.now()): Promise<ReadonlySet<string>> {
+  if (fleetDeclarations && nowMs - fleetDeclarations.readAt < FLEET_DECLARATIONS_TTL_MS) {
+    return fleetDeclarations.set;
+  }
+  fleetDeclarationScans += 1;
+  const set = (async () => {
+    const { listRoutines, listAccounts } = await import('../../repos/fleet.ts');
+    const [routines, accounts] = await Promise.all([listRoutines(), listAccounts()]);
+    const enabledAccounts = new Set(
+      accounts.filter((account) => account.state === 'ENABLED').map((account) => account.id),
+    );
+    const declared = new Set<string>();
+    for (const routine of routines) {
+      if (routine.state !== 'ENABLED' || !enabledAccounts.has(routine.accountId)) continue;
+      for (const capability of routine.capabilities) declared.add(capability);
+    }
+    return declared as ReadonlySet<string>;
+  })();
+  const entry = { readAt: nowMs, set };
+  fleetDeclarations = entry;
+  set.catch(() => {
+    if (fleetDeclarations === entry) fleetDeclarations = null;
+  });
+  return set;
+}
+
 export async function binAdmission(input: {
   workerId: string;
   principal: Principal;
@@ -314,6 +363,19 @@ export async function binAdmission(input: {
   });
   const admit = auditAdmission(lineage);
   const routing = input.routing ?? (await workerRoutingFor(input.workerId, input.principal));
+  /* The session is fixed for this admission, so the Routines Brain fired it from are read once. */
+  let refsOnce: Promise<string[]> | null = null;
+  const sessionRoutineRefs = (): Promise<string[]> => {
+    if (!input.sessionRef) return Promise.resolve([]);
+    if (!refsOnce) {
+      const sessionRef = input.sessionRef;
+      refsOnce = import('../../repos/bins.ts').then(({ routineRefsForSession }) => routineRefsForSession(sessionRef));
+      refsOnce.catch(() => {
+        refsOnce = null;
+      });
+    }
+    return refsOnce;
+  };
   return async (bin: Bin): Promise<BinAdmissionVerdict> => {
     /*
      * Scope first, and every dimension of it, before anything else is asked.
@@ -370,31 +432,49 @@ export async function binAdmission(input: {
      * bins were handed to sessions with no browser, none could submit a render,
      * and each spent all three attempts and went to a person.
      */
-    const needed =
-      input.sessionRef && contractCapabilities(bin.completionContract).length > 0
-        ? await (async () => {
-            const { listRoutines, listAccounts } = await import('../../repos/fleet.ts');
-            const [routines, accounts] = await Promise.all([listRoutines(), listAccounts()]);
-            const enabledAccounts = new Set(
-              accounts.filter((account) => account.state === 'ENABLED').map((account) => account.id),
-            );
-            return effectiveCapabilities(bin, (capability) =>
-              routines.some(
-                (routine) =>
-                  routine.state === 'ENABLED' &&
-                  enabledAccounts.has(routine.accountId) &&
-                  routine.capabilities.includes(capability),
-              ),
-            );
-          })()
-        : (bin.requiredCapabilities ?? []);
-    if (needed.length > 0 && input.sessionRef) {
-      const { routineRefsForSession } = await import('../../repos/bins.ts');
-      const { getRoutineByRef } = await import('../../repos/fleet.ts');
-      const refs = await routineRefsForSession(input.sessionRef);
+    /*
+     * Ordered so the fleet is read only when its answer can change the verdict,
+     * because this runs on the claim path, which §61/§63 treat as
+     * pressure-sensitive (it used to read every Routine and every Account on
+     * each admission of a render bin). Nothing is checked for a session Brain
+     * did not fire, so the session's own Routines are read first and once per
+     * admission; a fired session whose Routines already declare everything the
+     * contract could add is able whatever the fleet declares; and only
+     * otherwise is the fleet asked, through `declaredFleetCapabilities`, which
+     * every candidate bin of a check-in — and every check-in inside its short
+     * window — shares.
+     */
+    const own = bin.requiredCapabilities ?? [];
+    const derivable = input.sessionRef ? contractCapabilities(bin.completionContract) : [];
+    if ((own.length > 0 || derivable.length > 0) && input.sessionRef) {
+      const refs = await sessionRoutineRefs();
       if (refs.length > 0) {
+        const { getRoutineByRef } = await import('../../repos/fleet.ts');
         const routines = await Promise.all(refs.map((ref) => getRoutineByRef(ref)));
         const known = routines.filter((routine): routine is NonNullable<typeof routine> => routine !== null);
+        /*
+         * When one of the session's own Routines is enabled, on an enabled
+         * account, and declares every derivable capability, the fleet declares
+         * them by that row alone — the same answer the scan would give, read by
+         * primary key. Only otherwise is the fleet asked.
+         */
+        let declaredByOwnRoutine = false;
+        if (derivable.length > 0) {
+          const { getAccount } = await import('../../repos/fleet.ts');
+          for (const routine of known) {
+            if (routine.state !== 'ENABLED') continue;
+            if (!derivable.every((cap) => routine.capabilities.includes(cap))) continue;
+            if ((await getAccount(routine.accountId))?.state === 'ENABLED') {
+              declaredByOwnRoutine = true;
+              break;
+            }
+          }
+        }
+        const fleet =
+          derivable.length === 0 || declaredByOwnRoutine ? null : await declaredFleetCapabilities();
+        const needed = effectiveCapabilities(bin, (capability) =>
+          declaredByOwnRoutine ? true : (fleet?.has(capability) ?? false),
+        );
         const { DELIVERY_PROBE_CLASS, WRITE_CAPABILITY } = await import('../dispatch/router.ts');
         const { repositoryIdOf } = await import('./routing.ts');
         /*
@@ -437,8 +517,8 @@ export async function binAdmission(input: {
      * offered the audits and syntheses it can do. Open wherever it cannot tell.
      */
     if (input.sessionRef && familyOf(bin) === 'RESEARCH') {
-      const { routineRefsForSession, binNeedsWeb } = await import('../../repos/bins.ts');
-      const refs = await routineRefsForSession(input.sessionRef).catch(() => [] as string[]);
+      const { binNeedsWeb } = await import('../../repos/bins.ts');
+      const refs = await sessionRoutineRefs().catch(() => [] as string[]);
       if (refs.length > 0) {
         const { getRoutineByRef } = await import('../../repos/fleet.ts');
         const { networkBlockedRoutines } = await import('../dispatch/candidates.ts');
@@ -1643,6 +1723,7 @@ export async function recordDemonstratedCapabilities(
     });
     changed.push(routine.id);
   }
+  if (changed.length > 0) forgetFleetDeclarations();
   return changed;
 }
 
