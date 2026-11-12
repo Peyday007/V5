@@ -14,7 +14,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
-import { createBin } from '../server/repos/bins.ts';
+import { createBin, getBin } from '../server/repos/bins.ts';
 import { createAccount, createRoutine, getRoutine, setRoutineCapabilities } from '../server/repos/fleet.ts';
 import { createWorker } from '../server/repos/identity.ts';
 import { getDb } from '../server/db/database.ts';
@@ -24,7 +24,13 @@ import {
   effectiveCapabilities,
   evaluateContract,
 } from '../server/services/bins/contracts.ts';
-import { binAdmission, recordDemonstratedCapabilities } from '../server/services/bins/service.ts';
+import {
+  binAdmission,
+  checkIn,
+  recordDemonstratedCapabilities,
+  release,
+  routinesThatTriedBin,
+} from '../server/services/bins/service.ts';
 import { routeBin, type RoutingCandidate } from '../server/services/dispatch/router.ts';
 import type { Bin, BinManifest, FleetAccount, FleetRoutine, Principal, WorkerScope } from '../server/domain/types.ts';
 
@@ -337,5 +343,144 @@ describe('a surface that renders declares the browser it proved it has', () => {
       await recordDemonstratedCapabilities({ id: 'b', completionContract: 'DESIGN_RENDER_V1', leaseSessionRef: null } as Bin),
     ).toEqual([]);
     expect((await getRoutine(routine.id))!.capabilities).toEqual([]);
+  });
+});
+
+/*
+ * The recorded state itself, walked end to end through check-in.
+ *
+ * Production, 7 days to 2026-11-12: a fleet in which **no Routine declares
+ * `browser`**, a render bin, a session that takes it and submits nothing, and
+ * the retry handed back to the same surface until all three attempts are spent.
+ * Nothing above changes that state — with no declared browser the capability
+ * rule fails open, by design — so these start from exactly it and show what
+ * changes: the next attempt goes to a surface that has not already shown, on
+ * this bin, that it leaves it unanswered.
+ */
+describe('a render retry from the recorded state: no surface declares a browser', () => {
+  const workerManifest = (): BinManifest =>
+    ({
+      objective: 'Render the registered surfaces and report what was measured in the page.',
+      why: 'Brain has no browser.',
+      lineage: { projectId, layerId: null, goal: null, orchestrationId: null },
+      units: [{ key: 'design_render', establishes: 'a render', input: 'npm run design -- render', transform: 'NONE', dependsOn: [] }],
+      acceptableSources: [],
+      excludedSources: [],
+      evidence: [],
+      outputs: [],
+      authorizedActions: ['starting this product locally'],
+      prohibitedActions: ['pushing anything anywhere'],
+      budgetUnits: 1,
+      retry: { maxAttempts: 2, backoffSeconds: 120 },
+      stoppingConditions: ['the submission has been made'],
+    }) as unknown as BinManifest;
+
+  let workerId = '';
+  const principalFor = (credentialId: string) =>
+    ({
+      type: 'WORKER',
+      id: workerId,
+      handle: `worker-${workerId}`,
+      displayName: 'Render worker',
+      isBrainAdmin: false,
+      mustChangePassword: false,
+      credentialId,
+      authMethod: 'WORKER_BEARER',
+      memberships: [{ projectId, role: null, scopes: SCOPES, active: true }],
+      requestId: `req-${credentialId}`,
+    }) as unknown as Principal;
+
+  /** Brain fired `session` from `routine` for this bin — the row `routineRefsForSession` reads. */
+  async function fired(binId: string, routine: { id: string; routineRef: string }, session: string, generation: number) {
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count, max_attempts,
+         next_attempt_at, routine_id, routine_ref, session_ref, created_at, updated_at, sent_at)
+       VALUES (?, ?, ?, 'SENT', 1, 5, ?, ?, ?, ?, ?, ?, ?)`,
+      [newId('bdi'), binId, generation, at, routine.id, routine.routineRef, session, at, at, at],
+    );
+  }
+
+  async function recordedState(surfaces: number) {
+    const account = await createAccount({ name: `render-${tag()}` });
+    const routines = [];
+    for (let i = 0; i < surfaces; i += 1) {
+      // No capabilities declared on any of them: the production fleet.
+      routines.push(
+        await createRoutine({
+          accountId: account.id, routineRef: `trig_${i}_${tag()}`, name: `surface-${i}-${tag()}`, tokenSecretName: `S_${i}`,
+        }),
+      );
+    }
+    const bin = await createBin({
+      projectId,
+      kind: 'DESIGN_RENDER',
+      title: 'Design render: home',
+      objective: 'Render the home surface.',
+      manifest: workerManifest(),
+      completionContract: 'DESIGN_RENDER_V1',
+      createdByType: 'SYSTEM',
+      createdById: `design:render:recorded:${tag()}`,
+      ready: true,
+      maxAttempts: 3,
+      workloadClass: 'GENERAL_DESIGN_RENDER',
+    });
+    workerId = (await createWorker({ name: `render-worker-${tag()}`, createdByType: 'SYSTEM', createdById: 't' })).id;
+
+    // Attempt 1: a session of the first surface takes the bin and submits nothing.
+    const first = `cse_${tag()}${tag()}${tag()}`;
+    await fired(bin.id, routines[0]!, first, 0);
+    const arrival = await checkIn({ principal: principalFor(first), workerId, sessionRef: first });
+    expect(arrival.assigned).toBe(true);
+    if (!arrival.assigned) throw new Error('unreachable');
+    expect(arrival.assignment.binId).toBe(bin.id);
+    const proof = {
+      binId: bin.id,
+      leaseId: arrival.assignment.leaseId,
+      leaseGeneration: arrival.assignment.leaseGeneration,
+      workerId,
+    };
+    const verdict = await evaluateContract((await getBin(bin.id))!);
+    expect(verdict.reasons.join(' ')).toContain('No render was submitted');
+    await release(proof, 'no browser here; nothing rendered');
+    const after = (await getBin(bin.id))!;
+    expect(after.state).toBe('READY');
+    expect(after.attemptCount).toBe(1);
+    return { bin, routines, generation: after.leaseGeneration };
+  }
+
+  it('does not hand the retry back to the surface that left it unanswered while another has not tried', async () => {
+    const { bin, routines, generation } = await recordedState(2);
+
+    // The same surface fires again: before this change it took attempt 2 too.
+    const again = `cse_${tag()}${tag()}${tag()}`;
+    await fired(bin.id, routines[0]!, again, generation);
+    const refused = await checkIn({ principal: principalFor(again), workerId, sessionRef: again });
+    expect(refused.assigned && refused.assignment.binId === bin.id).toBe(false);
+    expect((await getBin(bin.id))!.attemptCount).toBe(1);
+
+    // A surface that has not tried gets it, and the attempt is the second, not the third.
+    const other = `cse_${tag()}${tag()}${tag()}`;
+    // A fresh intent, since the refused fire's row already holds this generation.
+    await fired(bin.id, routines[1]!, other, generation + 1);
+    const taken = await checkIn({ principal: principalFor(other), workerId, sessionRef: other });
+    expect(taken.assigned).toBe(true);
+    if (taken.assigned) expect(taken.assignment.binId).toBe(bin.id);
+    expect((await getBin(bin.id))!.attemptCount).toBe(2);
+  });
+
+  it('is never stranded: once every enabled surface has tried, the retry is admitted as before', async () => {
+    const { bin, routines, generation } = await recordedState(1);
+    const again = `cse_${tag()}${tag()}${tag()}`;
+    await fired(bin.id, routines[0]!, again, generation);
+    const taken = await checkIn({ principal: principalFor(again), workerId, sessionRef: again });
+    expect(taken.assigned).toBe(true);
+    if (taken.assigned) expect(taken.assignment.binId).toBe(bin.id);
+  });
+
+  it('names the surfaces that tried from the lease rows', async () => {
+    const { bin, routines } = await recordedState(2);
+    const tried = await routinesThatTriedBin(bin.id);
+    expect([...tried]).toEqual([routines[0]!.routineRef]);
   });
 });
