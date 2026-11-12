@@ -50,6 +50,7 @@ import {
   operatorIntervalMinutes,
   operatorModels,
   rankOperatorModels,
+  OPERATOR_FREE_ROUTE,
   type OperatorModel,
 } from '../../domain/operator.ts';
 
@@ -88,7 +89,7 @@ export async function modelsFor(env: NodeJS.ProcessEnv = process.env): Promise<O
   const models = operatorModels({
     lane: freeUrl ? { url: freeUrl, key: env['BRAIN_CHEAP_LLM_KEY']?.trim() || null, models: freeModels } : null,
     pod: pod && podReady ? { url: pod.url, key: pod.key, model: pod.model, contextLength: Number.isFinite(context) && context > 0 ? context : null } : null,
-    override: env['BRAIN_OPERATOR_MODEL'] ?? null,
+    override: env['BRAIN_OPERATOR_MODEL'] ?? OPERATOR_FREE_ROUTE,
   });
   return rankOperatorModels(models, await operatorModelRecord().catch(() => new Map()), benchmarkToolScores(env));
 }

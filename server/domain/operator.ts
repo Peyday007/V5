@@ -218,6 +218,15 @@ export function rankOperatorModels(
 }
 
 /**
+ * The switchboard route the benchmark measured best for the operator's tool loop
+ * (§108, run 43285247214, 2026-11-12): `auto/best-coding` made 12 of 12 operator
+ * tool calls correctly, recovered from "temporarily busy", and withdrew the moot
+ * request; production's `brain-a` combo is one provider's gpt-oss-120b, whose
+ * per-minute token limit failed whole runs (HTTP 429, opr_7af304c3).
+ */
+export const OPERATOR_FREE_ROUTE = 'auto/best-coding';
+
+/**
  * Which model the operator thinks with: capacity Brain already has, never a
  * paid frontier API. The free-provider switchboard first (its free models are
  * larger than the GPU's, and Hermes needs a 64K window the GPU's 32K does not
@@ -233,9 +242,10 @@ export function operatorModels(input: {
   const out: OperatorModel[] = [];
   // The switchboard's own names, `auto` included: OmniRoute routes `auto` to whichever free
   // provider is healthy, exactly as the free lane sends it.
-  const laneModels = input.override?.trim() ? [input.override.trim()] : (input.lane?.models ?? []);
+  const named = (input.override ?? '').split(',').map((m) => m.trim()).filter(Boolean);
+  const laneModels = named.length ? [...named, ...(input.lane?.models ?? [])] : (input.lane?.models ?? []);
   if (input.lane) {
-    for (const model of laneModels.filter(Boolean).slice(0, 2)) {
+    for (const model of [...new Set(laneModels.filter(Boolean))].slice(0, 2)) {
       // The switchboard's free providers cap a request near 64K; Hermes compresses to fit.
       out.push({ baseUrl: withV1(input.lane.url), model, apiKey: input.lane.key, label: `free:${model}`, contextLength: 65536 });
     }
