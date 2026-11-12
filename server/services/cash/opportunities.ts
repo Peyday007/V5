@@ -65,6 +65,7 @@ import { getOperation } from '../../repos/idempotency.ts';
 import { COMMERCIAL_EFFECTS } from './effects.ts';
 import {
   COMMERCIAL_ACTIONS,
+  actionContext,
   checkCommercialAuthority,
   isCommercialAction,
 } from './authority.ts';
@@ -553,6 +554,7 @@ export async function beginExecution(input: {
   const decision = await checkCommercialAuthority({
     projectId: opportunity.projectId,
     action: performed,
+    ...actionContext({ principal: input.actorRef, performedBy: input.firstAction?.performedBy ?? 'PERSON' }),
   });
   if (!decision.ok || !decision.authority) {
     return refuse(
@@ -1295,6 +1297,9 @@ export async function commitSpend(input: {
   const decision = await checkCommercialAuthority({
     projectId: input.projectId,
     action: input.action,
+    // The amount is judged against the ceilings inside `commitCents`'s own transaction, where a replay
+    // returns before any ceiling is read (§20). Stating it here would judge a retry as a second commitment.
+    ...actionContext({ principal: input.actorRef }),
   });
   if (!decision.ok || !decision.authority) return refuse(decision.reason);
 
@@ -1556,9 +1561,11 @@ export async function recordMoneyEvent(input: {
     takenByBrain = confirmed && !paidInvoice;
     readOfInvoice = paidInvoice;
     if (!confirmed && !paidInvoice) {
+      // Recording money a person says arrived: Brain operated nothing to take it.
       const decision = await checkCommercialAuthority({
         projectId: input.projectId,
         action: 'ACCEPT_PAYMENT',
+        ...actionContext({ principal: input.actorRef, performedBy: 'PERSON', amountCents: input.amountCents }),
       });
       if (!decision.ok) return refuse(decision.reason);
     }
