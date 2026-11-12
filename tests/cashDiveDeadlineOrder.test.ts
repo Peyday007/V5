@@ -17,7 +17,8 @@ import {
   type DiveValueFacts,
 } from '../server/services/cash/validation.ts';
 import { cashEventsOfKind } from '../server/repos/cashMode.ts';
-import { DIVE_RUNWAY_MS, closesWithin } from '../server/services/cash/worthResearching.ts';
+import { DIVE_RUNWAY_MS, closesWithin, closingInstant } from '../server/services/cash/worthResearching.ts';
+import { readFileSync } from 'node:fs';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
@@ -271,5 +272,36 @@ describe('a deadline miss is attributed to capacity only when a row shows it', (
       limitedBy: 'OPERATOR',
       latestStart: new Date(Date.parse('2026-10-30T23:59:59.999Z') - DIVE_RUNWAY_MS).toISOString(),
     });
+  });
+});
+
+/*
+ * One reader of a recorded closing date. The parse (an ISO date closes at the
+ * end of that UTC day, an ISO date-time at that instant, anything else is
+ * unknown) once lived three times — closesWithin, the dive order's own
+ * closingInstant and the question order's questionDeadline — so two orders
+ * could disagree with the runway about whether a date is known.
+ */
+describe('a recorded closing date has one reader', () => {
+  it('reads an ISO date as the end of that UTC day, a date-time as itself, and anything else as unknown', () => {
+    expect(closingInstant('2026-10-28')).toBe(Date.parse('2026-10-28T23:59:59.999Z'));
+    expect(closingInstant(' 2026-10-28 ')).toBe(Date.parse('2026-10-28T23:59:59.999Z'));
+    expect(closingInstant('2026-10-28T15:00:00.000Z')).toBe(Date.parse('2026-10-28T15:00:00.000Z'));
+    for (const unknown of [null, '', 'next Tuesday', '10/28/2026', '2026-13-45']) expect(closingInstant(unknown)).toBeNull();
+  });
+
+  it('is the reading the runway check makes', () => {
+    for (const value of ['2026-10-21', '2026-10-23', `${at(2 * DAY)}`, `${at(4 * DAY)}`, 'next Tuesday', null]) {
+      const closes = closingInstant(value);
+      expect(closesWithin(value, NOW)).toBe(closes !== null && closes - Date.parse(NOW) < DIVE_RUNWAY_MS);
+    }
+  });
+
+  it('is not parsed again by the dive order or the question order', () => {
+    const parse = /\\d\{4\}-\\d\{2\}-\\d\{2\}/;
+    for (const file of ['server/services/cash/validation.ts', 'server/services/cash/operate.ts']) {
+      expect(readFileSync(file, 'utf8')).not.toMatch(parse);
+    }
+    expect(readFileSync('server/services/cash/worthResearching.ts', 'utf8')).toMatch(parse);
   });
 });

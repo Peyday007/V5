@@ -41,6 +41,7 @@ import { closedBy } from './closing.ts';
 import {
   DIVE_RUNWAY_MS,
   closesWithin,
+  closingInstant,
   describeNotWorthResearching,
   notWorthResearching,
   type NotWorthResearching,
@@ -870,23 +871,6 @@ export function compareDiveValue(a: DiveValueFacts, b: DiveValueFacts): number {
   if (a.answered !== b.answered) return b.answered - a.answered;
   if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-}
-
-/**
- * When a dated opening closes, as an instant. The same reading `closesWithin`
- * and `closedBy` make of the free-text column (an ISO date closes at the end of
- * that UTC day; anything else is unknown), so the order can never call a date
- * known that the runway check calls unknown. Null is "no recorded deadline".
- */
-function closingInstant(expiresAt: string | null): number | null {
-  if (!expiresAt) return null;
-  const value = expiresAt.trim();
-  const closes = /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? Date.parse(`${value}T23:59:59.999Z`)
-    : /^\d{4}-\d{2}-\d{2}T/.test(value)
-      ? Date.parse(value)
-      : Number.NaN;
-  return Number.isFinite(closes) ? closes : null;
 }
 
 /**

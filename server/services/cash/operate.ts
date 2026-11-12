@@ -124,7 +124,7 @@ import {
 import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
 import { decideOpenings, type DecideOpeningsPass } from './decisions.ts';
-import { closesWithin, describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
+import { closesWithin, closingInstant, describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
 import { orderFieldsByCost } from './infoValue.ts';
 import { recordQuestionsSkipped } from './screenMetrics.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
@@ -637,13 +637,8 @@ export interface QuestionCandidate {
  * be answered in time and the existing order is left to decide.
  */
 function questionDeadline(expiresAt: string | null, now: string): number | null {
-  if (!expiresAt) return null;
-  const value = expiresAt.trim();
-  let closes: number;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) closes = Date.parse(`${value}T23:59:59.999Z`);
-  else if (/^\d{4}-\d{2}-\d{2}T/.test(value)) closes = Date.parse(value);
-  else return null;
-  if (!Number.isFinite(closes)) return null;
+  const closes = closingInstant(expiresAt);
+  if (closes === null) return null;
   if (closesWithin(expiresAt, now)) return null;
   return closes;
 }
