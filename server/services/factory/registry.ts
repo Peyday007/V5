@@ -35,6 +35,7 @@ import {
   recordFactoryEvent,
   setWorkerAvailability,
   workerLoad,
+  workerTrackRecord,
   type RegisterWorkerInput,
 } from '../../repos/factoryFleet.ts';
 import { factoryNow } from '../../repos/factory.ts';
@@ -235,6 +236,8 @@ export interface WorkerSlot {
   running: number;
   availability: FactoryWorker['availability'];
   rateLimitedUntil: string | null;
+  /** Sessions this worker finished and failed in the last 30 days (§109): its demonstrated capability. */
+  track?: { finished: number; failed: number };
 }
 
 export interface CapacitySnapshot {
@@ -263,6 +266,7 @@ export async function capacity(repository?: string): Promise<CapacitySnapshot> {
   const at = factoryNow();
   const workers = await listWorkers();
   const load = await workerLoad();
+  const track = await workerTrackRecord(new Date(Date.parse(at) - 30 * 24 * 3_600_000).toISOString()).catch(() => new Map<string, { finished: number; failed: number }>());
 
   const slots: WorkerSlot[] = [];
   let rateLimited = 0;
@@ -300,6 +304,7 @@ export async function capacity(repository?: string): Promise<CapacitySnapshot> {
       running,
       availability: worker.availability,
       rateLimitedUntil: worker.rateLimitedUntil,
+      track: track.get(worker.id) ?? { finished: 0, failed: 0 },
     });
   }
 

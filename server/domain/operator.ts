@@ -79,6 +79,9 @@ export function operatorIntervalMinutes(env: NodeJS.ProcessEnv): number {
  */
 export const OPERATOR_BOOT_GRACE_MINUTES = 12;
 
+/** The least time after a run starts before an engineering outcome it has not seen starts the next one. */
+export const OPERATOR_OUTCOME_WAKE_MINUTES = 10;
+
 /** A run that ended before it could act (a busy model, an unreachable door) is retried sooner. */
 export const OPERATOR_RETRY_MINUTES = 15;
 
@@ -90,10 +93,14 @@ export function operatorDue(input: {
   processStartedMs?: number;
   /** The last run failed without one successful Brain tool call. */
   lastActedNothing?: boolean;
+  /** Factory delivered, failed or blocked engineering the operator commissioned since its last run (§109). */
+  outcomeWaiting?: boolean;
 }): boolean {
   if (input.running) return false;
   if (input.processStartedMs !== undefined && input.nowMs - input.processStartedMs < OPERATOR_BOOT_GRACE_MINUTES * 60_000) return false;
   if (!input.lastStartedAt) return true;
+  // A result the operator has not seen continues it within minutes, not at the next hour (§109).
+  if (input.outcomeWaiting && input.nowMs - Date.parse(input.lastStartedAt) >= OPERATOR_OUTCOME_WAKE_MINUTES * 60_000) return true;
   const interval = input.lastActedNothing ? Math.min(OPERATOR_RETRY_MINUTES, input.intervalMinutes) : input.intervalMinutes;
   return input.nowMs - Date.parse(input.lastStartedAt) >= interval * 60_000;
 }
@@ -123,6 +130,11 @@ export const OPERATOR_TOOL_NAMES = [
   'brain_operator_decide',
   'brain_operator_verify',
   'brain_operator_set_goal_focus',
+  // §109: the engineering director.
+  'brain_operator_deficiencies',
+  'brain_operator_commission',
+  'brain_operator_engineering',
+  'brain_operator_prioritize_engineering',
 ] as const;
 
 /** Hermes' own toolsets the operator keeps: its memory, its skills and a task list. No shell, files, browser or web. */
@@ -132,9 +144,10 @@ export const OPERATOR_HERMES_TOOLSETS = ['memory', 'skills', 'todo'] as const;
 // The brief
 // ---------------------------------------------------------------------------
 
-export function operatorBrief(input: { nowIso: string; runId: string; goals?: string }): string {
+export function operatorBrief(input: { nowIso: string; runId: string; goals?: string; engineering?: string }): string {
   return [
     ...(input.goals ? [input.goals, ''] : []),
+    ...(input.engineering ? [input.engineering, ''] : []),
     `You are Brain's operator (run ${input.runId}, ${input.nowIso}). Brain is a research-operations platform that`,
     'pursues goals — the first is collecting $10,000 of settled cash. You direct its work through the brain_operator_*',
     'tools. They are your only hands: do not describe actions, take them.',
@@ -162,6 +175,14 @@ export function operatorBrief(input: { nowIso: string; runId: string; goals?: st
     '     brain_operator_set_goal_focus with the decision id.',
     '   - a software defect or a missing capability that keeps costing the goal (the same failure in the rows, every',
     '     run): brain_operator_submit_fix, with the evidence (row ids, verbatim reasons) and the files that own it.',
+    '   - a deficiency in Brain itself (its reasoning, planning, strategy, allocation, a missing capability, a broken',
+    '     integration, a slow algorithm, a recurring failure): brain_operator_deficiencies lists what the rows already',
+    '     show, each with an id and the intervention Brain gives it. brain_operator_commission {deficiency_id} acts on',
+    '     one — engineering goes to Factory at once with a priority and a worker class; the rest is a model, strategy,',
+    '     evidence, capacity or person remedy, not code. You may also describe your own diagnosis to the same tool.',
+    '   - brain_operator_engineering: what Factory did with what you commissioned — code changed, tests, merge, deploy,',
+    '     the measured effect and the goal read again. A merged pull request is not the improvement; act on `next`',
+    '     (NEW_ATTEMPT, CHANGE_STRATEGY, UNBLOCK). brain_operator_prioritize_engineering when what matters changed.',
     '6. brain_operator_capacity and the goal again — observe the actual result. If nothing moved since your last run,',
     '   find the cause and change strategy rather than repeating it.',
     '7. brain_operator_record_learning — one lesson per thing you found, with its evidence, so it is not rediscovered.',

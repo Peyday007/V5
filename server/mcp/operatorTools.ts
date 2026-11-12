@@ -238,6 +238,162 @@ const continueTool: McpTool = {
   },
 };
 
+function optionalStringArray(args: Record<string, unknown>, field: string): string[] {
+  return args[field] === undefined ? [] : stringArray(args, field);
+}
+
+function optionalNumber(args: Record<string, unknown>, field: string): number | null {
+  const value = args[field];
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw invalidInput(`${field} must be a number.`);
+  return value;
+}
+
+function optionalBoolean(args: Record<string, unknown>, field: string): boolean {
+  const value = args[field];
+  if (value === undefined || value === null) return false;
+  if (typeof value !== 'boolean') throw invalidInput(`${field} must be true or false.`);
+  return value;
+}
+
+const deficienciesTool: McpTool = {
+  name: 'brain_operator_deficiencies',
+  title: 'Operator: deficiencies',
+  description:
+    "What Brain's rows already show is weak in Brain itself — reasoning, planning, strategy, resource allocation, " +
+    'capabilities, integrations, algorithms, recurring failures — each as a ready-made diagnosis with an id (dfx_…), ' +
+    'the intervention Brain\'s rules give it (ENGINEERING, MODEL, STRATEGY, EVIDENCE, CAPACITY, PERSON, WATCH) and why. ' +
+    'Pass an id to brain_operator_commission to act on it as it stands.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  annotations: { title: 'Operator: deficiencies', ...READ_ONLY },
+  run: async (_args, { principal }) => {
+    requireOperator(principal);
+    const { readDeficiencies, readingId } = await import('../services/operator/director.ts');
+    const found = await readDeficiencies();
+    return { projectId: null, value: { deficiencies: found.map((one) => ({ id: readingId(one), intervention: one.intervention, why: one.why, ...one.diagnosis })) } };
+  },
+};
+
+const commissionTool: McpTool = {
+  name: 'brain_operator_commission',
+  title: 'Operator: commission an intervention',
+  description:
+    'Act on a deficiency in Brain. Either pass deficiency_id (dfx_… from brain_operator_deficiencies) alone, or describe ' +
+    "your own diagnosis. Brain decides the intervention from what you state — engineering only when the cause is " +
+    'established, owner files are named and it recurred; otherwise a model, strategy, evidence, capacity, person or ' +
+    'watch — and acknowledges at once. Engineering goes to Factory now: an objective with the goal, evidence, expected ' +
+    'benefit, acceptance, priority and evaluation, a campaign, a priority set from what the defect holds back, and a ' +
+    'worker class set from its complexity. The same defect again reaches the same campaign.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      deficiency_id: { type: 'string', description: 'A dfx_… id from brain_operator_deficiencies; the rest may then be omitted.' },
+      goal_id: { type: 'string', description: 'The goal it holds back (wst_…).' },
+      deficiency: { type: 'string', enum: ['ECONOMIC_REASONING', 'PLANNING_ASSUMPTION', 'REPEATED_STRATEGIC_MISTAKE', 'RESOURCE_ALLOCATION', 'MISSING_CAPABILITY', 'BROKEN_INTEGRATION', 'INEFFICIENT_ALGORITHM', 'RECURRING_OPERATIONAL_FAILURE'] },
+      title: { type: 'string' },
+      observed: { type: 'string', description: 'What is wrong and what it costs the goal, in production terms.' },
+      evidence: { type: 'string', description: 'Row ids and verbatim reasons from Brain.' },
+      cause: { type: 'string', description: 'The cause, when the rows or the code state it. Omit when it is not established.' },
+      owner_paths: { type: 'array', items: { type: 'string' }, description: 'Repository paths that own the behaviour.' },
+      recurrence: { type: 'number', description: 'How many times it was observed.' },
+      expected_benefit: { type: 'string' },
+      acceptance: { type: 'string', description: 'What a test proves once it is fixed.' },
+      metric: { type: 'string', description: "The scoreboard metric its real effect is measured on (Brain chooses one when omitted)." },
+      blocks_goal: { type: 'boolean' },
+      share: { type: 'number', description: "Share 0..1 of the goal's remaining value it holds back." },
+      intervention: { type: 'string', enum: ['ENGINEERING', 'MODEL', 'STRATEGY', 'EVIDENCE', 'CAPACITY', 'PERSON', 'WATCH'], description: 'What you propose; Brain\'s rules decide.' },
+      model_limited: { type: 'boolean' },
+      person_only: { type: 'boolean' },
+      capacity_idle: { type: 'boolean' },
+    },
+    additionalProperties: false,
+  },
+  annotations: { title: 'Operator: commission an intervention', ...MUTATING },
+  run: async (args, { principal }) => {
+    requireOperator(principal);
+    const director = await import('../services/operator/director.ts');
+    const runId = await currentRunId();
+    const id = optionalString(args, 'deficiency_id');
+    if (id) {
+      const found = (await director.readDeficiencies()).find((one) => director.readingId(one) === id);
+      if (!found) return { projectId: null, value: { ok: false, reason: `no current deficiency ${id}: read brain_operator_deficiencies again (it may already be fixed)` } };
+      return { projectId: null, value: { ...(await director.commission({ ...found.diagnosis, runId })) } };
+    }
+    const result = await director.commission({
+      goalId: optionalString(args, 'goal_id'),
+      deficiency: requiredString(args, 'deficiency'),
+      title: requiredString(args, 'title'),
+      observed: requiredString(args, 'observed'),
+      evidence: requiredString(args, 'evidence'),
+      cause: optionalString(args, 'cause'),
+      ownerPaths: optionalStringArray(args, 'owner_paths'),
+      recurrence: optionalNumber(args, 'recurrence') ?? 1,
+      expectedBenefit: requiredString(args, 'expected_benefit'),
+      acceptance: requiredString(args, 'acceptance'),
+      metric: optionalString(args, 'metric'),
+      blocksGoal: optionalBoolean(args, 'blocks_goal'),
+      share: optionalNumber(args, 'share'),
+      proposed: optionalString(args, 'intervention'),
+      modelLimited: optionalBoolean(args, 'model_limited'),
+      personOnly: optionalBoolean(args, 'person_only'),
+      capacityIdle: optionalBoolean(args, 'capacity_idle'),
+      runId,
+    });
+    return { projectId: null, value: { ...result } };
+  },
+};
+
+const engineeringTool: McpTool = {
+  name: 'brain_operator_engineering',
+  title: 'Operator: engineering results',
+  description:
+    'Every intervention you commissioned and what became of it: Factory status, the pull request, the code it changed, ' +
+    "whether tests and review passed, merge, deploy and live verification, the improvement loop's measurement and " +
+    'decision, and the goal read again against the reading taken when you commissioned it. A merged pull request is ' +
+    'never counted as the improvement. next says what to do: WAIT, UNBLOCK, NEW_ATTEMPT, CHANGE_STRATEGY or DONE.',
+  inputSchema: {
+    type: 'object',
+    properties: { include_closed: { type: 'boolean', description: 'Also the decided ones (default true).' } },
+    additionalProperties: false,
+  },
+  annotations: { title: 'Operator: engineering results', ...READ_ONLY },
+  run: async (args, { principal }) => {
+    requireOperator(principal);
+    const { engineeringOutcomes } = await import('../services/operator/director.ts');
+    const includeClosed = args['include_closed'] === undefined ? true : optionalBoolean(args, 'include_closed');
+    return { projectId: null, value: { engineering: (await engineeringOutcomes({ includeClosed, limit: 10 })).map((one) => ({ ...one })) } };
+  },
+};
+
+const prioritizeTool: McpTool = {
+  name: 'brain_operator_prioritize_engineering',
+  title: 'Operator: re-prioritize engineering',
+  description:
+    'Change the priority (1..9) of engineering you commissioned, with the reason. Its waiting Factory work is reordered ' +
+    'at once; work already in progress keeps its place, because interrupting it would waste more than it saves.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      candidate_id: { type: 'string', description: 'The candidateId from brain_operator_engineering (imp_…).' },
+      priority: { type: 'number' },
+      reason: { type: 'string' },
+    },
+    required: ['candidate_id', 'priority', 'reason'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Operator: re-prioritize engineering', ...MUTATING },
+  run: async (args, { principal }) => {
+    requireOperator(principal);
+    const { reprioritize } = await import('../services/operator/director.ts');
+    const priority = optionalNumber(args, 'priority');
+    if (priority === null) throw invalidInput('priority is required.');
+    return {
+      projectId: null,
+      value: await reprioritize({ candidateId: requiredString(args, 'candidate_id'), priority, reason: requiredString(args, 'reason'), runId: await currentRunId() }),
+    };
+  },
+};
+
 const fixTool: McpTool = {
   name: 'brain_operator_submit_fix',
   title: 'Operator: send a defect to Factory',
@@ -254,6 +410,7 @@ const fixTool: McpTool = {
       evidence: { type: 'string', description: 'Row ids and verbatim reasons from Brain that show it.' },
       owner_paths: { type: 'array', items: { type: 'string' }, description: 'Repository paths that own the behaviour, e.g. server/services/russell/needsHuman.ts' },
       acceptance: { type: 'string', description: 'What a test proves once it is fixed.' },
+      goal_id: { type: 'string', description: 'The goal the defect holds back, so its effect on the goal is measured.' },
     },
     required: ['title', 'problem', 'evidence', 'owner_paths', 'acceptance'],
     additionalProperties: false,
@@ -268,6 +425,7 @@ const fixTool: McpTool = {
       ownerPaths: stringArray(args, 'owner_paths'),
       acceptance: requiredString(args, 'acceptance'),
       runId: await currentRunId(),
+      goalId: optionalString(args, 'goal_id'),
     });
     return { projectId: null, value: result };
   },
@@ -499,4 +657,8 @@ export const OPERATOR_TOOLS: readonly McpTool[] = [
   decideTool,
   verifyTool,
   focusTool,
+  deficienciesTool,
+  commissionTool,
+  engineeringTool,
+  prioritizeTool,
 ];
