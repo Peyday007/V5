@@ -268,6 +268,9 @@ export async function hasMailServer(domain: string, fetcher: Fetch = fetch): Pro
 class InstantlyError extends Error {}
 
 /** 429 and 5xx and network errors are retried with backoff (Retry-After honoured); other refusals are not. */
+/** How long a 429 waits before the next try: a third of Instantly's one-minute window, doubling after. */
+export const RATE_WINDOW_MS = 20_000;
+
 export async function instantly(deps: Deps, method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown): Promise<Record<string, unknown>> {
   const key = secretValue('INSTANTLY_API_KEY', deps.env);
   if (!key) throw new InstantlyError('INSTANTLY_API_KEY is not configured');
@@ -292,6 +295,11 @@ export async function instantly(deps: Deps, method: 'GET' | 'POST' | 'PATCH', pa
     }
     const retryable = status === 0 || status === 429 || status >= 500;
     if (!retryable || attempt >= 5) throw new InstantlyError(`${method} ${path}: ${status || 'no answer'} ${text.slice(0, 200)}`);
+    // Instantly limits a workspace to 20 requests a minute and sends no
+    // retry-after with it. Backing off 2s, 4s, 8s, 16s spends all five tries
+    // inside the same minute (production 2026-11-12: the sales desk's reply
+    // pass lost every thread read to one 429). A 429 waits out the window.
+    if (status === 429) wait = Math.max(wait, RATE_WINDOW_MS);
     await deps.sleep(Math.max(retryAfter, wait));
     wait *= 2;
   }

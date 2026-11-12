@@ -132,3 +132,33 @@ def test_every_sales_route_refuses_a_wrong_key(monkeypatch, path, body):
     monkeypatch.setenv("BRAIN_AGENTS_KEY", KEY)
     answer = TestClient(app_mod.app).post(path, json=body, headers={"authorization": "Bearer wrong"})
     assert answer.status_code == 401 and answer.json() == {"detail": "unauthorized"}
+
+
+def test_a_refused_model_name_is_named_in_the_reason_not_hidden_as_no_draft():
+    """Production 2026-11-12: the pod moved to another model while Brain still
+    named the old one, every call came back 404, and the reason said only
+    "no usable draft"."""
+    class _Gone(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *_a):
+            pass
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers["content-length"]))
+            self.send_response(404)
+            self.send_header("content-length", "0")
+            self.end_headers()
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Gone)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        out = run(sales.write_first_email(OFFER, {"email": "info@harbor.example", "company": "Harbor Pizza"},
+                                          {"baseUrl": f"http://127.0.0.1:{server.server_address[1]}/v1", "model": "old"}))
+    finally:
+        server.shutdown()
+    assert out["ok"] is False and "HTTP 404" in out["reason"]
+
+
+def test_an_unreachable_model_is_a_reason_not_a_crash():
+    out = run(sales.write_first_email(OFFER, {"email": "info@harbor.example", "company": "Harbor Pizza"},
+                                      {"baseUrl": "http://127.0.0.1:9/v1", "model": "none"}))
+    assert out["ok"] is False and "ConnectError" in out["reason"]
