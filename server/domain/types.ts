@@ -514,6 +514,14 @@ export const EVENT_TYPES = [
   'MEMORY_SECTION_CREATED',
   /** A hub prepared from a sustained commitment in the owner's history was accepted as this project. */
   'MEMORY_HUB_ACCEPTED',
+  /** The operator withdrew a person-request its mission no longer waits on (§106). */
+  'OPERATOR_WITHDREW_MOOT_REQUEST',
+  /** The operator sent a defect to Factory on the standing improvement order (§106). */
+  'OPERATOR_FIX_SUBMITTED',
+  /** The operator's fix was submitted and Factory refused to start it, with why (§106). */
+  'OPERATOR_FIX_NOT_STARTED',
+  /** An operator run finished; its report and the tools it called (§106). */
+  'OPERATOR_RUN_FINISHED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -4006,8 +4014,27 @@ export const WORKER_SCOPES = [
   // membership, no approval, no research write — so a stolen site credential
   // reaches exactly the surface a site already had.
   'external:sync',
+
+  // §106 — the operator. One scope for the bounded actions the operator's
+  // tools perform (settle a request its mission no longer waits on, continue
+  // idle capacity, send a defect to Factory on the owner's standing improvement
+  // order, record a lesson). Each action re-checks its own rule; the scope only
+  // says this credential is the operator's.
+  'operator:act',
 ] as const;
 export type WorkerScope = (typeof WORKER_SCOPES)[number];
+
+/**
+ * What the operator's per-run credential gets (§106): read every project it
+ * directs, and act through the operator tools. No queue claiming, no research
+ * writes — it directs the workers that do those, it is not one of them.
+ */
+export const OPERATOR_SCOPES: readonly WorkerScope[] = [
+  'project:read',
+  'research:read',
+  'queue:read',
+  'operator:act',
+];
 
 /**
  * What a remote worker gets, decided here rather than by a person ticking boxes.
@@ -11249,5 +11276,36 @@ export interface IntegrationEventRow {
   state: string;
   detail: string;
   source: string;
+  recorded_at: string;
+}
+
+/** One operator run (§106, migration 146 / pg 137). */
+export interface OperatorRunRow {
+  id: string;
+  state: 'RUNNING' | 'DONE' | 'FAILED';
+  model: string;
+  started_at: string;
+  finished_at: string | null;
+  summary: string | null;
+  /** JSON array of `{ tool, ok }`, in call order. */
+  tool_calls: string;
+  error: string | null;
+}
+
+/** The operator's current memory file or skill, by name (§106). */
+export interface OperatorMemoryRow {
+  name: string;
+  body: string;
+  updated_at: string;
+  run_id: string | null;
+}
+
+/** A lesson the operator recorded, append-only (§106). */
+export interface OperatorLearningRow {
+  id: string;
+  goal_id: string | null;
+  run_id: string | null;
+  lesson: string;
+  evidence: string;
   recorded_at: string;
 }
