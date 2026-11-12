@@ -7,13 +7,12 @@ import {
   consequentialSteps,
   discoverBrowserCapability,
   draftCapabilityFromRun,
-  effectKey,
+  capabilityEffectKey,
+  capabilityEffectSubject,
   planCapabilityRun,
-  priorRunsFrom,
   readBrowserCapabilities,
   recordBrowserCapability,
   recordCapabilityDecision,
-  runBrowserCapability,
   validateCapability,
   type BrowserCapability,
   type CapabilityRow,
@@ -28,6 +27,7 @@ import {
   type WorkflowRecord,
   type WorkflowRun,
 } from '../server/services/sources/browserWorkflow.ts';
+import { browserEffectKey, requestBudgetFrom } from '../server/services/sources/browser/effectGuard.ts';
 
 /*
  * ACQ-21-5: a browser routine is a versioned reusable capability. These tests
@@ -141,40 +141,25 @@ describe("a mutation's retry policy never allows an automatic retry after an unk
     expect(validateCapability(c).some((x) => x.includes('never retried automatically'))).toBe(true);
   });
 
-  it('plans: an UNKNOWN or in-flight attempt is refused, a completed one is not repeated', async () => {
+  it('plans one key with the effect claim, and leaves whether a mutation happened to that claim alone', async () => {
     const s = store();
     const v = await recordBrowserCapability(mutation(), 'a person', s.deps);
     await recordCapabilityDecision({ host: 'records.example.org', name: 'publish listing', contentHash: v.contentHash, decision: 'APPROVED', by: 'a person' }, s.deps);
     const record = (await readBrowserCapabilities('records.example.org', s.deps)).get('records.example.org\u0000publish listing')!;
     const inputs = { month: '2026-10' };
-    const key = effectKey(v.contentHash, inputs);
-    expect(effectKey(v.contentHash, { month: '2026-10' })).toBe(key);
+    const key = capabilityEffectKey(record, inputs);
+    // The plan's key is exactly the key the effect claim is made under: one effect, one key.
+    expect(key).toBe(browserEffectKey({ capability: { host: 'records.example.org', name: 'publish listing', version: `v${v.version}:${v.contentHash}` }, approvedInput: { month: '2026-10' } }));
+    expect(capabilityEffectSubject(record)).toEqual({ host: 'records.example.org', name: 'publish listing', version: `v${v.version}:${v.contentHash}` });
+    expect(capabilityEffectKey(record, { month: '2026-11' })).not.toBe(key);
     const at = new Date(s.now()).toISOString();
-    expect(planCapabilityRun(record, inputs, [], s.now()).decision).toBe('RUN');
-    expect(planCapabilityRun(record, inputs, [{ key, outcome: 'STARTED', at }], s.now() + 3_600_000)).toMatchObject({ decision: 'REFUSED', reason: 'OUTCOME_UNKNOWN' });
-    expect(planCapabilityRun(record, inputs, [{ key, outcome: 'UNKNOWN', at }], s.now() + 3_600_000)).toMatchObject({ decision: 'REFUSED', reason: 'OUTCOME_UNKNOWN' });
-    expect(planCapabilityRun(record, inputs, [{ key, outcome: 'COMPLETED', at }], s.now() + 3_600_000).decision).toBe('ALREADY_DONE');
-  });
-
-  it('runs: a mutation that does not verify is recorded UNKNOWN, and a second worker refuses it', async () => {
-    const s = store();
-    const v = await recordBrowserCapability(mutation(), 'a person', s.deps);
-    await recordCapabilityDecision({ host: 'records.example.org', name: 'publish listing', contentHash: v.contentHash, decision: 'APPROVED', by: 'a person' }, s.deps);
-    const failed: OperateResult = {
-      run: { host: 'records.example.org', name: 'publish listing', outcome: 'FAILED', steps: [{ index: 1, kind: 'navigate', ok: true, detail: '' }], extracted: [], downloads: [], finalUrl: null, boundary: null, interfaceChanged: false, detail: 'timed out' },
-      judgment: null,
-      record: null,
-    };
-    let operated = 0;
-    const deps = { ...s.deps, operate: (async () => (operated += 1, failed)) as never };
-    const first = await runBrowserCapability('records.example.org', 'publish listing', { month: '2026-10' }, [], deps);
-    expect(first.outcome).toBe('UNKNOWN');
-    const prior = priorRunsFrom(s.rows.filter((r) => r.eventType === BROWSER_CAPABILITY_EVENT));
-    expect(prior.map((p) => p.outcome)).toEqual(['STARTED', 'UNKNOWN']);
-    s.advance(3_600_000);
-    const second = await runBrowserCapability('records.example.org', 'publish listing', { month: '2026-10' }, prior, deps);
-    expect(second.decision).toMatchObject({ decision: 'REFUSED', reason: 'OUTCOME_UNKNOWN' });
-    expect(operated).toBe(1);
+    expect(planCapabilityRun(record, inputs, [], s.now())).toMatchObject({ decision: 'RUN', key });
+    // Rows read here can be stale before a second worker acts (invariant 24): the
+    // at-most-once decision is the claim's single conditional INSERT, exercised in
+    // the operate suite ("refuses a duplicate mutation claim", "never re-performs it").
+    for (const outcome of ['STARTED', 'UNKNOWN', 'COMPLETED']) {
+      expect(planCapabilityRun(record, inputs, [{ key, outcome, at }], s.now() + 3_600_000)).toMatchObject({ decision: 'RUN', key });
+    }
   });
 });
 
@@ -259,13 +244,16 @@ describe('lifecycle is derived only from recorded rows', () => {
     const v = await recordBrowserCapability(base(), 'a person', s.deps);
     await recordCapabilityDecision({ host: 'records.example.org', name: 'monthly report', contentHash: v.contentHash, decision: 'APPROVED', by: 'a person' }, s.deps);
     const record = (await readBrowserCapabilities('records.example.org', s.deps)).get('records.example.org\u0000monthly report')!;
-    const key = effectKey(v.contentHash, { month: '2026-10' });
+    const key = capabilityEffectKey(record, { month: '2026-10' });
     const now = s.now();
     const at = (ms: number) => new Date(now - ms).toISOString();
     expect(planCapabilityRun(record, { month: '2026-10' }, [{ key, outcome: 'COMPLETED', at: at(60_000) }], now).decision).toBe('ALREADY_DONE');
+    // The capability's rate bound is applied by the one request budget, over its own run rows.
+    const routine = (rows: { outcome: string; at: string }[]) => ({ ...record.current.capability.rateLimit, rows });
     const busy = Array.from({ length: 6 }, (_, i) => ({ key: `other-${i}`, outcome: 'COMPLETED', at: at(50 * 60_000 - i * 60_000) }));
-    expect(planCapabilityRun(record, { month: '2026-11' }, busy, now).decision).toBe('WAIT');
-    expect(planCapabilityRun(record, { month: '2026-11' }, [{ key: 'x', outcome: 'COMPLETED', at: at(10_000) }], now).decision).toBe('WAIT');
+    expect(requestBudgetFrom('records.example.org', [], { now: new Date(now), routine: routine(busy) })).toMatchObject({ decision: 'DEFER', deferredBy: 'ROUTINE_HOURLY' });
+    expect(requestBudgetFrom('records.example.org', [], { now: new Date(now), routine: routine([{ outcome: 'COMPLETED', at: at(10_000) }]) })).toMatchObject({ decision: 'DEFER', deferredBy: 'ROUTINE_INTERVAL' });
+    expect(requestBudgetFrom('records.example.org', [], { now: new Date(now), routine: routine([{ outcome: 'COMPLETED', at: at(2 * 3_600_000) }]) }).decision).toBe('PROCEED');
     expect(planCapabilityRun(record, { nope: '1' }, [], now)).toMatchObject({ decision: 'REFUSED', reason: 'BAD_INPUT' });
   });
 });

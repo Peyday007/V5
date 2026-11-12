@@ -23,6 +23,16 @@
  *    a **maintenance owner**, a **request-rate bound**, and the **session rule**
  *    (whether a granted account is used and when it must be reauthorized).
  *
+ * Running a capability has exactly one path, `operate.ts`'s `operateCapability`.
+ * This module contributes only the pure pre-run policy it consults,
+ * `planCapabilityRun` (lifecycle, inputs, a read's freshness and retry bound),
+ * and the one effect key, `capabilityEffectKey`, which is `effectGuard.ts`'s
+ * `browserEffectKey` over this version — so a mutation claimed by that path and
+ * a run row it writes name the same effect. Whether a mutation already happened
+ * is decided only by the effect claim (`idempotency_operations`), and every
+ * request bound — the host's and this capability's own `rateLimit` — only by
+ * the guard's request budget. Nothing here runs a capability a second way.
+ *
  * Lifecycle DRAFT → APPROVED → ACTIVE → REVIEW → RETIRED is never stored as a
  * status: it is derived by reading BROWSER_CAPABILITY rows and the existing
  * BROWSER_WORKFLOW_RUN rows, all written through `recordBinEvent` (no table,
@@ -59,6 +69,7 @@ import { getDb } from '../../../db/database.ts';
 import { recordBinEvent } from '../../../repos/bins.ts';
 import { hostMeasuresPattern } from '../acquisition.ts';
 import { redactText } from './redaction.ts';
+import { browserEffectKey, type EffectSubject } from './effectGuard.ts';
 import {
   BROWSER_WORKFLOW_RUN_EVENT,
   MAX_WORKFLOW_STEPS,
@@ -303,6 +314,7 @@ export function capabilityHash(c: BrowserCapability): string {
 const capKey = (host: string, name: string) => `${host.trim().toLowerCase()}\u0000${name.trim().toLowerCase()}`;
 
 export interface CapabilityRow {
+  id?: string | null;
   measures: string | null;
   outcome: string | null;
   at: string | null;
@@ -328,6 +340,12 @@ export interface CapabilityRecord {
   lastCompletedAt: string | null;
   fresh: boolean;
   why: string;
+  /**
+   * Every recorded run of this capability (any version), oldest first, read
+   * from its BROWSER_WORKFLOW_RUN rows. `key` is the effect key the run row
+   * carries (`capabilityEffectKey`), null for a row written without one.
+   */
+  runs: PriorRun[];
 }
 
 const parse = <T>(raw: string | null): T | null => {
@@ -350,6 +368,7 @@ interface CapMeasures {
 interface RunMeasures {
   host?: string;
   name?: string;
+  effectKey?: string | null;
   interfaceChanged?: boolean;
   boundary?: string | null;
 }
@@ -438,6 +457,11 @@ export function capabilitiesFrom(capRows: readonly CapabilityRow[], runRows: rea
       lastCompletedAt,
       fresh: lastCompletedAt !== null && now - Date.parse(lastCompletedAt) <= current.capability.freshnessMs,
       why,
+      runs: runRows
+        .map((r) => ({ r, m: parse<RunMeasures>(r.measures), t: timeOf(r.at) }))
+        .filter((x) => x.m && capKey(x.m.host ?? '', x.m.name ?? '') === key && Number.isFinite(x.t))
+        .sort((a, b) => a.t - b.t)
+        .map((x) => ({ id: x.r.id ?? null, key: typeof x.m!.effectKey === 'string' ? x.m!.effectKey : null, outcome: x.r.outcome ?? '', at: x.r.at! })),
     });
   }
   return out;
@@ -448,16 +472,27 @@ export function capabilitiesFrom(capRows: readonly CapabilityRow[], runRows: rea
 /* ------------------------------------------------------------------------- */
 
 /**
- * The logical key of one effect: the version's content hash and the inputs.
- * Nothing about the attempt, the worker or the time is in it, so every attempt
- * at the same mutation has the same key (invariant 27). Pure.
+ * What a capability version is, as the effect guard names it: host, workflow
+ * name and `v<version>:<contentHash>`. Pure. The one place this identity is
+ * built, so the claim, the run row and the plan cannot disagree.
  */
-export function effectKey(contentHash: string, inputs: Record<string, string>): string {
-  return createHash('sha256').update(JSON.stringify([contentHash, canonical(inputs)])).digest('hex');
+export function capabilityEffectSubject(record: Pick<CapabilityRecord, 'host' | 'name' | 'current'>): EffectSubject {
+  return { host: record.host, name: record.name, version: `v${record.current.version}:${record.current.contentHash}` };
+}
+
+/**
+ * The logical key of one effect of this version with these inputs: exactly
+ * `browserEffectKey`, the key the effect claim is made under. Nothing about the
+ * attempt, the worker or the time is in it (invariant 27). Pure.
+ */
+export function capabilityEffectKey(record: Pick<CapabilityRecord, 'host' | 'name' | 'current'>, inputs: Record<string, string>): string {
+  return browserEffectKey({ capability: capabilityEffectSubject(record), approvedInput: inputs });
 }
 
 export interface PriorRun {
-  key: string;
+  id?: string | null;
+  /** The effect key the run row carries; null for a run recorded without one. */
+  key: string | null;
   outcome: string;
   at: string;
 }
@@ -469,49 +504,37 @@ export type RunDecision =
   | { decision: 'REFUSED'; key: string; reason: (typeof BASE_FAILURE_REASONS)[number] | 'NOT_APPROVED' | 'RETIRED' | 'BAD_INPUT'; detail: string };
 
 /**
- * Whether this capability may run now with these inputs, from its record and
- * its recorded runs. Pure.
+ * The capability's own pre-run policy, from its record and its recorded runs
+ * (by default `record.runs`). Pure. `operateCapability` consults it; it is not
+ * a run path of its own.
  *
- * A mutation that already completed is not performed again; one whose outcome
- * is unknown stays UNKNOWN and is refused rather than retried. A read retries
- * within its bound. Every run, read or mutation, stays inside the rate bound.
+ * It decides lifecycle (only APPROVED or ACTIVE runs; REVIEW and REAUTHORIZE
+ * are handoffs), the declared inputs, and for a read its freshness window and
+ * retry bound. It deliberately does not decide whether a mutation already
+ * happened — that is the effect claim's alone, in one conditional INSERT,
+ * because rows read here can be stale by the time a second worker acts
+ * (invariant 24) — nor any request bound, which is the guard's request budget.
  */
-export function planCapabilityRun(record: CapabilityRecord, inputs: Record<string, string>, prior: readonly PriorRun[], now: number = Date.now()): RunDecision {
+export function planCapabilityRun(record: CapabilityRecord, inputs: Record<string, string>, prior: readonly PriorRun[] = record.runs, now: number = Date.now()): RunDecision {
   const c = record.current.capability;
-  const key = effectKey(record.current.contentHash, inputs);
-  const missing = c.inputs.filter((f) => typeof inputs[f.name] !== 'string').map((f) => f.name);
-  const extra = Object.keys(inputs).filter((k) => !c.inputs.some((f) => f.name === k));
-  if (missing.length || extra.length) return { decision: 'REFUSED', key, reason: 'BAD_INPUT', detail: `inputs: missing ${missing.join(', ') || 'none'}; undeclared ${extra.join(', ') || 'none'}` };
+  const key = capabilityEffectKey(record, inputs);
   if (record.status === 'RETIRED') return { decision: 'REFUSED', key, reason: 'RETIRED', detail: record.why };
   if (record.status === 'DRAFT') return { decision: 'REFUSED', key, reason: 'NOT_APPROVED', detail: record.why };
   if (record.status === 'REVIEW') return { decision: 'REFUSED', key, reason: 'INTERFACE_CHANGED', detail: record.why };
   if (record.handoff === 'REAUTHORIZE') return { decision: 'REFUSED', key, reason: 'SESSION_EXPIRED', detail: record.why };
+  const missing = c.inputs.filter((f) => typeof inputs[f.name] !== 'string').map((f) => f.name);
+  const extra = Object.keys(inputs).filter((k) => !c.inputs.some((f) => f.name === k));
+  if (missing.length || extra.length) return { decision: 'REFUSED', key, reason: 'BAD_INPUT', detail: `inputs: missing ${missing.join(', ') || 'none'}; undeclared ${extra.join(', ') || 'none'}` };
 
   const mine = prior.filter((p) => p.key === key).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
-  if (c.effect === 'MUTATION') {
-    if (mine.some((p) => p.outcome === 'COMPLETED')) return { decision: 'ALREADY_DONE', key, detail: 'this mutation already completed; it is not performed twice' };
-    const latest = mine[mine.length - 1];
-    if (mine.some((p) => p.outcome === 'UNKNOWN') || latest?.outcome === 'STARTED') {
-      return { decision: 'REFUSED', key, reason: 'OUTCOME_UNKNOWN', detail: 'an earlier attempt at this mutation has no known outcome; it is recorded as UNKNOWN and never retried automatically' };
-    }
-  } else {
-    const failed = mine.filter((p) => p.outcome !== 'COMPLETED');
+  if (c.effect === 'READ') {
+    const failed = mine.filter((p) => p.outcome !== 'COMPLETED' && p.outcome !== 'REFUSED' && p.outcome !== 'DEFERRED');
     const lastDone = mine.filter((p) => p.outcome === 'COMPLETED').pop();
     if (lastDone && now - Date.parse(lastDone.at) <= c.freshnessMs) return { decision: 'ALREADY_DONE', key, detail: `obtained at ${lastDone.at}, still within its freshness window` };
     const sinceDone = lastDone ? failed.filter((p) => Date.parse(p.at) > Date.parse(lastDone.at)) : failed;
     if (sinceDone.length >= c.retry.maxAttempts) return { decision: 'REFUSED', key, reason: 'EXPECTED_STATE_MISSING', detail: `${sinceDone.length} attempts failed; the retry bound is ${c.retry.maxAttempts}` };
     const last = sinceDone[sinceDone.length - 1];
     if (last && now < Date.parse(last.at) + c.retry.backoffMs) return { decision: 'WAIT', key, retryAt: new Date(Date.parse(last.at) + c.retry.backoffMs).toISOString(), detail: 'backing off before the next read attempt' };
-  }
-
-  const hourAgo = now - 3_600_000;
-  const recent = prior.filter((p) => Date.parse(p.at) > hourAgo).map((p) => Date.parse(p.at)).sort((a, b) => a - b);
-  if (recent.length >= c.rateLimit.maxRunsPerHour) {
-    return { decision: 'WAIT', key, retryAt: new Date(recent[recent.length - c.rateLimit.maxRunsPerHour]! + 3_600_000).toISOString(), detail: `the site's bound is ${c.rateLimit.maxRunsPerHour} runs an hour` };
-  }
-  const newest = recent[recent.length - 1];
-  if (newest !== undefined && now - newest < c.rateLimit.minIntervalMs) {
-    return { decision: 'WAIT', key, retryAt: new Date(newest + c.rateLimit.minIntervalMs).toISOString(), detail: `at least ${c.rateLimit.minIntervalMs} ms between runs` };
   }
   return { decision: 'RUN', key, attempt: mine.length + 1 };
 }
@@ -532,6 +555,7 @@ export interface CapabilityDeps {
   record?: typeof recordBinEvent;
   rows?: (host: string) => Promise<{ capabilities: CapabilityRow[]; runs: CapabilityRow[] }>;
   recordWorkflow?: typeof recordBrowserWorkflow;
+  /** Discovery's one run of a not-yet-capability workflow; capabilities themselves run only through `operateCapability`. */
   operate?: typeof operateWorkflow;
   operateDeps?: OperateDeps;
   now?: () => number;
@@ -545,7 +569,7 @@ async function readCapabilityRows(host: string): Promise<{ capabilities: Capabil
       [BROWSER_CAPABILITY_EVENT, pattern],
     );
     const runs = await getDb().all<CapabilityRow>(
-      `SELECT measures, outcome, at FROM bin_events WHERE event_type = ? AND measures LIKE ? ESCAPE '\\' ORDER BY at DESC LIMIT 500`,
+      `SELECT id, measures, outcome, at FROM bin_events WHERE event_type = ? AND measures LIKE ? ESCAPE '\\' ORDER BY at DESC LIMIT 500`,
       [BROWSER_WORKFLOW_RUN_EVENT, pattern],
     );
     return { capabilities, runs };
@@ -611,68 +635,6 @@ export async function recordCapabilityDecision(
     measures: { host, name: record.name, version: record.current.version, contentHash: record.current.contentHash, by: input.by.trim() },
   });
   return record;
-}
-
-export interface CapabilityRunResult {
-  decision: RunDecision;
-  result: OperateResult | null;
-  /** COMPLETED only when every declared output was obtained. */
-  outcome: 'COMPLETED' | 'FAILED' | 'UNKNOWN' | 'HANDOFF' | 'REFUSED' | 'SKIPPED';
-  missing: string[];
-}
-
-/**
- * Run a capability once, through the workflow owner. Decided first from the
- * rows (approval, review, reauthorization, idempotency, retry and rate bounds);
- * a mutation records STARTED before it acts, so a second worker reading the
- * rows sees it in flight and refuses rather than repeating it. A mutation whose
- * run did not complete is recorded as UNKNOWN, never as not having happened.
- */
-export async function runBrowserCapability(host: string, name: string, inputs: Record<string, string>, prior: readonly PriorRun[], deps: CapabilityDeps = {}): Promise<CapabilityRunResult> {
-  const now = (deps.now ?? Date.now)();
-  const record = (await readBrowserCapabilities(host, deps)).get(capKey(host, name));
-  if (!record) return { decision: { decision: 'REFUSED', key: '', reason: 'NOT_APPROVED', detail: `no capability "${name}" on ${host}` }, result: null, outcome: 'REFUSED', missing: [] };
-  const decision = planCapabilityRun(record, inputs, prior, now);
-  const c = record.current.capability;
-  const write = (outcome: string, detail: string, extra: Record<string, unknown> = {}) =>
-    (deps.record ?? recordBinEvent)({
-      eventType: BROWSER_CAPABILITY_EVENT,
-      provider: 'BROWSER',
-      workloadClass: 'acquisition',
-      outcome: `RUN_${outcome}`,
-      reason: detail.slice(0, 480),
-      evidenceClass: 'MEASURED',
-      routineVersion: String(record.current.version),
-      measures: { host: record.host, name: record.name, version: record.current.version, contentHash: record.current.contentHash, effect: c.effect, key: decision.key, ...extra },
-    });
-  if (decision.decision !== 'RUN') {
-    await write(decision.decision, decision.detail);
-    return { decision, result: null, outcome: decision.decision === 'ALREADY_DONE' ? 'SKIPPED' : decision.decision === 'WAIT' ? 'SKIPPED' : 'REFUSED', missing: [] };
-  }
-  if (c.effect === 'MUTATION') await write('STARTED', `mutation attempt ${decision.attempt} started`, { attempt: decision.attempt });
-  const result = await (deps.operate ?? operateWorkflow)(record.host, record.name, { ...(deps.operateDeps ?? {}), options: { ...(deps.operateDeps?.options ?? {}), timeoutMs: c.timeoutMs } });
-  const verified = verifyObtained(c, result.run);
-  let outcome: CapabilityRunResult['outcome'];
-  if (verified.ok) outcome = 'COMPLETED';
-  else if (result.run.steps.length === 0 && (result.run.outcome === 'HANDOFF' || result.run.outcome === 'REFUSED')) outcome = result.run.outcome;
-  // Once any step ran, a mutation that did not verify may or may not have happened.
-  else outcome = c.effect === 'MUTATION' ? 'UNKNOWN' : result.run.outcome === 'HANDOFF' ? 'HANDOFF' : 'FAILED';
-  const reason = result.run.interfaceChanged ? 'INTERFACE_CHANGED' : result.run.boundary === 'AUTHENTICATION' && c.session.account ? 'SESSION_EXPIRED' : result.run.boundary ? 'BOUNDARY' : verified.ok ? null : 'EXPECTED_STATE_MISSING';
-  await write(outcome, `${outcome}${reason ? ` (${reason})` : ''}: ${result.run.detail}`, { attempt: decision.attempt, failureReason: reason, missing: verified.missing });
-  return { decision, result, outcome, missing: verified.missing };
-}
-
-/** Prior runs of a capability, read from its RUN_* rows, for `planCapabilityRun`. Pure. */
-export function priorRunsFrom(capRows: readonly CapabilityRow[]): PriorRun[] {
-  const out: PriorRun[] = [];
-  for (const r of capRows) {
-    const m = parse<{ key?: string }>(r.measures);
-    if (!m?.key || !r.at || !r.outcome?.startsWith('RUN_')) continue;
-    const o = r.outcome.slice(4);
-    if (o === 'ALREADY_DONE' || o === 'WAIT' || o === 'REFUSED') continue;
-    out.push({ key: m.key, outcome: o, at: r.at });
-  }
-  return out;
 }
 
 /* ------------------------------------------------------------------------- */

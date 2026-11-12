@@ -14,14 +14,18 @@
  * This module composes them into the one path a capability runs through, in
  * this order, and every refusal happens before any browser session opens:
  *
- *  1. load the capability's current version; only an APPROVED or ACTIVE
- *     version runs. REVIEW (the interface changed) and REAUTHORIZE (the
- *     signed-in session was rejected or aged out) are handoffs, never retried;
- *  2. check the inputs against the declared ones;
+ *  1. load the capability's current version and consult its pure pre-run
+ *     policy, `planCapabilityRun`: only an APPROVED or ACTIVE version runs —
+ *     REVIEW (the interface changed) and REAUTHORIZE (the signed-in session
+ *     was rejected or aged out) are handoffs, never retried;
+ *  2. the inputs are exactly the declared ones, and a read still inside its
+ *     freshness window is not run again, nor past its retry bound;
  *  3. classify the steps and require an approval bound to each effectful step
  *     — a CONSEQUENTIAL step without its approval is refused here;
- *  4. check the host's request limit and, for anything that changes state,
- *     claim the logical effect key so a second worker cannot repeat it;
+ *  4. check the one request budget — the host's limit and the capability's
+ *     own declared `rateLimit` — and, for anything that changes state, claim
+ *     the logical effect key (`capabilityEffectKey`, the same key every run
+ *     row carries) so a second worker cannot repeat it;
  *  5. run through the existing owner, `operateWorkflow` → `runBrowserWorkflow`
  *     (its acquisition judgment, OPERATE_PERMISSION check, destination checks
  *     and browser slot are unchanged);
@@ -36,10 +40,10 @@
  *     completed run that did not verify is recorded as FAILED so the
  *     lifecycle derived from these rows never counts it as a success.
  *
- * A refusal or deferral that never reached the site is recorded as a
- * BROWSER_CAPABILITY `RUN_*` row, the same place `runBrowserCapability`
- * records its decisions, so it does not disturb the run history the lifecycle
- * is derived from.
+ * This is the only path a capability runs through: there is no second runner
+ * with its own key, idempotency record or rate bound. A refusal or deferral
+ * that never reached the site is recorded as a BROWSER_CAPABILITY `RUN_*` row,
+ * so it does not disturb the run history the lifecycle is derived from.
  *
  * No table, queue, scheduler or authority path is added, and nothing here
  * names a host, category or industry.
@@ -50,6 +54,8 @@ import type { ActorType } from '../../../domain/types.ts';
 import { authorizeActions, type ActionClass, type ApprovedAction, type WorkflowJudgment } from './actionClass.ts';
 import {
   BROWSER_CAPABILITY_EVENT,
+  capabilityEffectSubject,
+  planCapabilityRun,
   readBrowserCapabilities,
   verifyObtained,
   type CapabilityDeps,
@@ -73,8 +79,10 @@ export type OperateOutcome =
   | 'REAUTHORIZE'
   /** A boundary (sign-in wall, challenge, judgment) handed the run to a person. */
   | 'HANDOFF'
-  /** The host is at its request limit: tried later, never exceeded. */
+  /** The host or the capability is at a request bound, or a read is backing off: tried later, never exceeded. */
   | 'DEFERRED'
+  /** A read already obtained inside its freshness window: not run again. */
+  | 'ALREADY_DONE'
   /** Refused before any browser session opened. */
   | 'REFUSED';
 
@@ -88,6 +96,8 @@ export type OperateFailureReason =
   | 'DUPLICATE_EFFECT'
   | 'OUTCOME_UNKNOWN'
   | 'RATE_LIMITED'
+  | 'BACKOFF'
+  | 'FRESH'
   | 'INTERFACE_CHANGED'
   | 'SESSION_EXPIRED'
   | 'BOUNDARY'
@@ -185,23 +195,21 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
     return result;
   };
 
-  // 1. Lifecycle: only an approved version runs; review and reauthorization are handoffs.
-  if (cap.status === 'RETIRED') return decided({ ...base, failureReason: 'RETIRED', detail: cap.why });
-  if (cap.status === 'DRAFT') return decided({ ...base, failureReason: 'NOT_APPROVED', detail: cap.why });
-  if (cap.status === 'REVIEW') return decided({ ...base, outcome: 'REVIEW', failureReason: 'INTERFACE_CHANGED', detail: cap.why });
-  if (cap.handoff === 'REAUTHORIZE') return decided({ ...base, outcome: 'REAUTHORIZE', failureReason: 'SESSION_EXPIRED', detail: cap.why });
-
-  // 2. Inputs are exactly the declared ones.
-  const missing = c.inputs.filter((f) => typeof input.inputs[f.name] !== 'string').map((f) => f.name);
-  const extra = Object.keys(input.inputs).filter((k) => !c.inputs.some((f) => f.name === k));
-  if (missing.length || extra.length) {
-    return decided({ ...base, failureReason: 'BAD_INPUT', detail: `inputs: missing ${missing.join(', ') || 'none'}; undeclared ${extra.join(', ') || 'none'}` });
+  // 1–2. The capability's own policy: lifecycle, inputs, a read's freshness and retry bound.
+  const plan = planCapabilityRun(cap, input.inputs, cap.runs, now.getTime());
+  const keyed = { ...base, effectKey: plan.key };
+  if (plan.decision === 'REFUSED') {
+    if (plan.reason === 'INTERFACE_CHANGED') return decided({ ...keyed, outcome: 'REVIEW', failureReason: 'INTERFACE_CHANGED', detail: plan.detail });
+    if (plan.reason === 'SESSION_EXPIRED') return decided({ ...keyed, outcome: 'REAUTHORIZE', failureReason: 'SESSION_EXPIRED', detail: plan.detail });
+    return decided({ ...keyed, failureReason: plan.reason, detail: plan.detail });
   }
+  if (plan.decision === 'ALREADY_DONE') return decided({ ...keyed, outcome: 'ALREADY_DONE', failureReason: 'FRESH', detail: plan.detail });
+  if (plan.decision === 'WAIT') return decided({ ...keyed, outcome: 'DEFERRED', failureReason: 'BACKOFF', detail: `${plan.detail}; retry after ${plan.retryAt}` });
 
   // 3. Classify every step; each effectful step needs its own approval, bound to it.
   const auth = authorizeActions(c.workflow, input.approvals ?? []);
   const actionClass = auth.judgment.actionClass;
-  const classified = { ...base, actionClass, judgment: auth.judgment };
+  const classified = { ...keyed, actionClass, judgment: auth.judgment };
   if (!auth.permitted) {
     return decided({ ...classified, failureReason: 'APPROVAL_MISSING', detail: `refused before submission: ${auth.refusals.map((r) => r.reason).join('; ')}` });
   }
@@ -210,19 +218,23 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
   }
   const mutates = actionClass !== 'IDEMPOTENT_READ' || c.effect === 'MUTATION';
 
-  // 4. Request limit, then the effect claim.
+  // 4. The one request budget (host and capability bounds), then the effect claim — under the plan's key.
   const guard: GuardDecision = await (deps.guard ?? guardBrowserRun)({
     projectId: input.projectId,
-    capability: { host: cap.host, name: cap.name, version: `v${cap.current.version}:${cap.current.contentHash}` },
+    capability: capabilityEffectSubject(cap),
     approvedInput: input.inputs,
     actor: input.actor,
     workItemId: input.workItemId ?? null,
     effect: mutates ? 'MUTATION' : 'READ',
     declaredPerMinute: input.declaredPerMinute ?? null,
+    routine: { maxRunsPerHour: c.rateLimit.maxRunsPerHour, minIntervalMs: c.rateLimit.minIntervalMs, rows: cap.runs },
     now,
     ...(deps.runRows ? { rows: deps.runRows } : {}),
   });
-  const effectKey = guard.claim?.effectKey ?? null;
+  if (guard.claim && guard.claim.effectKey !== plan.key) {
+    throw new Error(`the effect claim key ${guard.claim.effectKey} is not the capability's key ${plan.key}; one effect has one key`);
+  }
+  const effectKey = plan.key;
   const guarded = { ...classified, budget: guard.budget, effectKey };
   if (guard.decision === 'DEFER') return decided({ ...guarded, outcome: 'DEFERRED', failureReason: 'RATE_LIMITED', detail: guard.budget.reason });
   if (guard.decision === 'REFUSE') {

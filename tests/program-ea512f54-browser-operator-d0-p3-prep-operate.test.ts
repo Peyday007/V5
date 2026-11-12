@@ -4,11 +4,14 @@
  * redacted and recorded as one run row. No browser is opened: the workflow
  * owner's `operateWorkflow` is replaced by a fake that reports a run.
  */
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
+import * as browserModule from '../server/services/sources/browser/index.ts';
 import { freshProject } from './helpers.ts';
 import { BROWSER_WORKFLOW_RUN_EVENT, type OperateDeps, type OperateResult, type WorkflowRun } from '../server/services/sources/browserWorkflow.ts';
 import {
   BROWSER_CAPABILITY_EVENT,
+  capabilityEffectKey,
   classifyWorkflow,
   operateCapability,
   readBrowserCapabilities,
@@ -227,5 +230,77 @@ describe('operating an approved capability', () => {
     expect(out).toMatchObject({ outcome: 'DEFERRED', failureReason: 'RATE_LIMITED', sessionOpened: false });
     expect(out.budget).toMatchObject({ limit: 3, counted: 3 });
     expect(h.calls()).toBe(0);
+  });
+});
+
+describe('one run path: a capability runs only through operateCapability, under one key and one budget', () => {
+  it('exports no second runner, key or capability type', () => {
+    const surface = browserModule as Record<string, unknown>;
+    for (const gone of ['runBrowserCapability', 'priorRunsFrom', 'effectKey']) expect(surface[gone]).toBeUndefined();
+    expect(typeof surface.operateCapability).toBe('function');
+    const index = readFileSync(new URL('../server/services/sources/browser/index.ts', import.meta.url), 'utf8');
+    expect(index).not.toMatch(/as EffectCapability/);
+    const capability = readFileSync(new URL('../server/services/sources/browser/capability.ts', import.meta.url), 'utf8');
+    // capability.ts never runs a capability itself: its only operateWorkflow call is discovery's one run.
+    expect(capability.match(/\(deps\.operate \?\? operateWorkflow\)/g) ?? []).toHaveLength(1);
+    expect(capability).not.toMatch(/RUN_STARTED|write\('STARTED'/);
+  });
+
+  it('a read run row and a mutation claim carry the capability key, so both name the same effect', async () => {
+    const h = harness();
+    await h.define(readCap());
+    const read = await operateCapability({ projectId, host: HOST, name: 'monthly report', inputs: { month: '2026-10' }, actor: worker }, h.deps());
+    const readRecord = (await readBrowserCapabilities(HOST, h.capabilityDeps)).get(`${HOST}\u0000monthly report`)!;
+    expect(read.effectKey).toBe(capabilityEffectKey(readRecord, { month: '2026-10' }));
+    expect(JSON.parse(h.runRows()[0]!.measures).effectKey).toBe(read.effectKey);
+
+    const c = publishCap();
+    await h.define(c);
+    h.setRun({ extracted: [{ name: 'report', text: 'Published listing 42', truncated: false }] });
+    const done = await operateCapability({ projectId, host: HOST, name: 'publish listing', inputs: { month: '2026-10' }, approvals: approvalsFor(c), actor: worker }, h.deps());
+    const pubRecord = (await readBrowserCapabilities(HOST, h.capabilityDeps)).get(`${HOST}\u0000publish listing`)!;
+    expect(done.outcome).toBe('COMPLETED');
+    expect(done.effectKey).toBe(capabilityEffectKey(pubRecord, { month: '2026-10' }));
+  });
+
+  it('a mutation that ran but did not verify is UNKNOWN, and a second worker refuses it without opening a session', async () => {
+    const h = harness();
+    const c = publishCap();
+    await h.define(c);
+    const approvals = approvalsFor(c);
+    h.setRun({ outcome: 'FAILED', extracted: [], detail: 'timed out' });
+    const first = await operateCapability({ projectId, host: HOST, name: 'publish listing', inputs: { month: '2026-10' }, approvals, actor: worker }, h.deps());
+    expect(first).toMatchObject({ outcome: 'UNKNOWN', failureReason: 'OUTCOME_UNKNOWN' });
+    h.setRun({ extracted: [{ name: 'report', text: 'Published listing 42', truncated: false }] });
+    const second = await operateCapability({ projectId, host: HOST, name: 'publish listing', inputs: { month: '2026-10' }, approvals, actor: otherWorker }, h.deps());
+    expect(second).toMatchObject({ outcome: 'REFUSED', failureReason: 'OUTCOME_UNKNOWN', sessionOpened: false, effectKey: first.effectKey });
+    expect(h.calls()).toBe(1);
+  });
+
+  it('a read inside its freshness window is not run again through the one path', async () => {
+    const h = harness();
+    await h.define(readCap());
+    const first = await operateCapability({ projectId, host: HOST, name: 'monthly report', inputs: { month: '2026-10' }, actor: worker }, h.deps());
+    expect(first.outcome).toBe('COMPLETED');
+    const again = await operateCapability({ projectId, host: HOST, name: 'monthly report', inputs: { month: '2026-10' }, actor: otherWorker }, h.deps());
+    expect(again).toMatchObject({ outcome: 'ALREADY_DONE', failureReason: 'FRESH', sessionOpened: false });
+    expect(h.calls()).toBe(1);
+    const other = await operateCapability({ projectId, host: HOST, name: 'monthly report', inputs: { month: '2026-11' }, actor: otherWorker }, h.deps());
+    expect(other.outcome).toBe('COMPLETED');
+    expect(h.calls()).toBe(2);
+  });
+
+  it("the capability's own rate bound is enforced by the same budget as the host limit", async () => {
+    const h = harness();
+    const c = readCap();
+    c.rateLimit = { maxRunsPerHour: 2, minIntervalMs: 0 };
+    await h.define(c);
+    for (const month of ['2026-08', '2026-09']) {
+      expect((await operateCapability({ projectId, host: HOST, name: 'monthly report', inputs: { month }, actor: worker }, h.deps())).outcome).toBe('COMPLETED');
+    }
+    const third = await operateCapability({ projectId, host: HOST, name: 'monthly report', inputs: { month: '2026-10' }, actor: otherWorker }, h.deps());
+    expect(third).toMatchObject({ outcome: 'DEFERRED', failureReason: 'RATE_LIMITED', sessionOpened: false });
+    expect(third.budget?.deferredBy).toBe('ROUTINE_HOURLY');
+    expect(h.calls()).toBe(2);
   });
 });

@@ -20,8 +20,11 @@
  *     run against is the lower of what the site declares and Brain's own
  *     default, and the count is read from the host's recent
  *     `BROWSER_WORKFLOW_RUN` rows — the record every run already writes. A
- *     host at its limit is deferred, naming the limit and the rows counted,
- *     never exceeded.
+ *     capability's own declared bound (`rateLimit`: runs per hour and the
+ *     interval between runs) is applied here too, over that capability's run
+ *     rows, so there is one request budget and not one per run path. A run
+ *     over any bound is deferred, naming the limit and the rows counted, never
+ *     exceeded.
  *
  * An outcome nobody knows — a run that timed out after it submitted, or an
  * executor that died holding the claim — is recorded as UNKNOWN (the
@@ -67,7 +70,12 @@ const DID_NOT_REACH_SITE = new Set(['REFUSED', 'DEFERRED']);
 /* The logical effect key (pure)                                              */
 /* ------------------------------------------------------------------------- */
 
-export interface BrowserCapability {
+/**
+ * What an effect is performed by: a capability version as the guard names it.
+ * `capability.ts`'s `capabilityEffectSubject` builds it for a recorded
+ * capability version, so every caller derives the same key.
+ */
+export interface EffectSubject {
   /** The host the workflow operates. */
   host: string;
   /** The workflow's name on that host. */
@@ -77,12 +85,12 @@ export interface BrowserCapability {
 }
 
 export interface EffectKeyInput {
-  capability: BrowserCapability;
+  capability: EffectSubject;
   /** The input a person or the capability's approval fixed: what will be submitted. */
   approvedInput: unknown;
 }
 
-const capabilityId = (c: BrowserCapability): string => `${c.host.trim().toLowerCase()}/${c.name.trim().toLowerCase()}`;
+const capabilityId = (c: EffectSubject): string => `${c.host.trim().toLowerCase()}/${c.name.trim().toLowerCase()}`;
 
 /**
  * The logical effect key for one approved browser mutation. Pure.
@@ -114,12 +122,24 @@ export interface RunRow {
   at: string | null;
 }
 
+/** A capability's own declared bound, counted over that capability's run rows. */
+export interface RoutineBound {
+  maxRunsPerHour: number;
+  minIntervalMs: number;
+  /** The capability's recorded runs (any version). */
+  rows: readonly RunRow[];
+}
+
+export const ROUTINE_WINDOW_MS = 3_600_000;
+
 export interface RequestBudget {
   decision: 'PROCEED' | 'DEFER';
   host: string;
-  /** The limit applied: the lower of the site's declared limit and Brain's default. */
+  /** The per-minute host limit applied: the lower of the site's declared limit and Brain's default. */
   limit: number;
   limitSource: 'SITE_DECLARED' | 'BRAIN_DEFAULT';
+  /** Which bound deferred the run, when one did. */
+  deferredBy: 'RATE_LIMITED' | 'HOST_LIMIT' | 'ROUTINE_HOURLY' | 'ROUTINE_INTERVAL' | null;
   /** Runs that reached the site inside the window. */
   counted: number;
   countedRowIds: string[];
@@ -139,7 +159,7 @@ export interface RequestBudget {
 export function requestBudgetFrom(
   hostIn: string,
   rows: readonly RunRow[],
-  options: { now: Date; declaredPerMinute?: number | null; rateLimited?: boolean } ,
+  options: { now: Date; declaredPerMinute?: number | null; rateLimited?: boolean; routine?: RoutineBound | null },
 ): RequestBudget {
   const host = hostIn.trim().toLowerCase();
   const nowMs = options.now.getTime();
@@ -160,6 +180,7 @@ export function requestBudgetFrom(
     return {
       ...base,
       decision: 'DEFER',
+      deferredBy: 'RATE_LIMITED',
       retryAfter: new Date(nowMs + REQUEST_WINDOW_MS).toISOString(),
       reason: `${host} answered that it is rate limited; deferred for ${REQUEST_WINDOW_MS / 1000}s (${counted} run(s) counted since ${windowStart}, limit ${limit}/min)`,
     };
@@ -171,13 +192,32 @@ export function requestBudgetFrom(
     return {
       ...base,
       decision: 'DEFER',
+      deferredBy: 'HOST_LIMIT',
       retryAfter,
       reason: `${host} is at its request limit: ${counted} run(s) counted since ${windowStart} against a limit of ${limit}/min (${limitSource === 'SITE_DECLARED' ? 'declared by the site' : 'Brain default'}); deferred until ${retryAfter}`,
     };
   }
+  const routine = options.routine;
+  if (routine) {
+    const reached = routine.rows
+      .map((r) => (r.at ? Date.parse(r.at) : Number.NaN))
+      .filter((t, i) => Number.isFinite(t) && t <= nowMs && !DID_NOT_REACH_SITE.has(routine.rows[i]!.outcome ?? ''))
+      .sort((a, b) => a - b);
+    const lastHour = reached.filter((t) => t > nowMs - ROUTINE_WINDOW_MS);
+    if (lastHour.length >= routine.maxRunsPerHour) {
+      const retryAfter = new Date(lastHour[lastHour.length - routine.maxRunsPerHour]! + ROUTINE_WINDOW_MS).toISOString();
+      return { ...base, decision: 'DEFER', deferredBy: 'ROUTINE_HOURLY', retryAfter, reason: `the capability's bound is ${routine.maxRunsPerHour} runs an hour and ${lastHour.length} ran in the last hour; deferred until ${retryAfter}` };
+    }
+    const newest = reached[reached.length - 1];
+    if (newest !== undefined && nowMs - newest < routine.minIntervalMs) {
+      const retryAfter = new Date(newest + routine.minIntervalMs).toISOString();
+      return { ...base, decision: 'DEFER', deferredBy: 'ROUTINE_INTERVAL', retryAfter, reason: `the capability asks at least ${routine.minIntervalMs} ms between runs; deferred until ${retryAfter}` };
+    }
+  }
   return {
     ...base,
     decision: 'PROCEED',
+    deferredBy: null,
     retryAfter: null,
     reason: `${host}: ${counted} of ${limit} run(s) used in the window since ${windowStart}`,
   };
@@ -197,11 +237,11 @@ export async function readRecentRunRows(host: string, now: Date = new Date()): P
 /** The request budget for a host, read from its recorded runs. */
 export async function readRequestBudget(
   host: string,
-  options: { now?: Date; declaredPerMinute?: number | null; rateLimited?: boolean; rows?: (host: string, now: Date) => Promise<RunRow[]> } = {},
+  options: { now?: Date; declaredPerMinute?: number | null; rateLimited?: boolean; routine?: RoutineBound | null; rows?: (host: string, now: Date) => Promise<RunRow[]> } = {},
 ): Promise<RequestBudget> {
   const now = options.now ?? new Date();
   const rows = await (options.rows ?? readRecentRunRows)(host, now);
-  return requestBudgetFrom(host, rows, { now, declaredPerMinute: options.declaredPerMinute ?? null, rateLimited: options.rateLimited ?? false });
+  return requestBudgetFrom(host, rows, { now, declaredPerMinute: options.declaredPerMinute ?? null, rateLimited: options.rateLimited ?? false, routine: options.routine ?? null });
 }
 
 /* ------------------------------------------------------------------------- */
@@ -335,6 +375,8 @@ export interface GuardInput extends ClaimInput {
   effect: 'READ' | 'MUTATION';
   declaredPerMinute?: number | null;
   rateLimited?: boolean;
+  /** The capability's own declared bound and its run rows. */
+  routine?: RoutineBound | null;
   rows?: (host: string, now: Date) => Promise<RunRow[]>;
 }
 
@@ -354,6 +396,7 @@ export async function guardBrowserRun(input: GuardInput): Promise<GuardDecision>
     now,
     declaredPerMinute: input.declaredPerMinute ?? null,
     rateLimited: input.rateLimited ?? false,
+    routine: input.routine ?? null,
     ...(input.rows ? { rows: input.rows } : {}),
   });
   if (budget.decision === 'DEFER') return { decision: 'DEFER', budget, claim: null };

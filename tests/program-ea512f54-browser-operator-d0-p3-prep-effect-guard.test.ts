@@ -18,10 +18,10 @@ import {
   requestBudgetFrom,
   resolveUnknownBrowserEffect,
   settleBrowserEffect,
-  type BrowserCapability,
+  type EffectSubject,
 } from '../server/services/sources/browser/effectGuard.ts';
 
-const cap: BrowserCapability = { host: 'portal.example.org', name: 'Submit renewal', version: '2026-11-01T00:00:00.000Z' };
+const cap: EffectSubject = { host: 'portal.example.org', name: 'Submit renewal', version: '2026-11-01T00:00:00.000Z' };
 const input = { form: { reference: 'R-1001', quantity: 2 } };
 const worker = { type: 'WORKER' as const, id: 'wrk_a' };
 const otherWorker = { type: 'WORKER' as const, id: 'wrk_b' };
