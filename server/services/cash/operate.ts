@@ -112,6 +112,7 @@ import {
   sendGate,
   type ReconciledEffect,
   prepare,
+  continuationGate,
 } from './perform.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
@@ -1376,7 +1377,6 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
       });
       continue;
     }
-    sentThisPass += 1;
 
     /*
      * The same gate a person's press reads: nothing under way, nothing that
@@ -1423,11 +1423,27 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
      * reached the buyer names the words that reached them. A card whose offer
      * cannot be drafted is not contacted at all.
      */
+    // S-0485: a dependency that is down or suspended, or an unsettled earlier
+    // attempt, is decided before anything is sent — the same gate a press reads.
+    const continuing = await continuationGate(opportunity, CONTACT_ACTION, occurrence, BRAIN);
+    if (!continuing.ok) {
+      out.withheld.push({ opportunityId: opportunity.id, because: continuing.reason });
+      continue;
+    }
     const prepared = await prepare(CONTACT_ACTION, opportunity);
     if (!prepared.ok) {
       out.withheld.push({ opportunityId: opportunity.id, because: prepared.reason });
       continue;
     }
+    /*
+     * Counted here, at the send, and nowhere earlier: a piece every gate above
+     * held back — an unsettled attempt waiting on a person, a provider that is
+     * down, a refusal waiting on a press — wrote to nobody, and charging it
+     * against the pass would let held pieces starve the viable, unaffected
+     * buyers behind them (S-0486). A send that throws still counts: a throw
+     * is not evidence nothing left (§20).
+     */
+    sentThisPass += 1;
     let outcome: ExternalOutcome;
     try {
       outcome = await sendCommercialEffect({
@@ -1441,6 +1457,7 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
         amountCents: null,
         stateAtSend: opportunity.state,
         subjectRef: prepared.value.subjectRef,
+        via: continuing.value.via,
       });
     } catch (error) {
       out.withheld.push({

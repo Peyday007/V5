@@ -55,7 +55,9 @@ import {
   OperationInProgress,
   type OperationNamespace,
 } from './engine.ts';
-import type { ActorType, IdempotencyOperation } from '../../domain/types.ts';
+import { getDb } from '../../db/database.ts';
+import { openCircuit, withheldReason } from './posture.ts';
+import type { ActorType, EffectAttempt, IdempotencyOperation } from '../../domain/types.ts';
 
 export interface ExternalRunInput {
   adapter: EffectAdapter;
@@ -150,7 +152,13 @@ export type ExternalOutcome =
   | { status: 'CONFIRMED'; operation: IdempotencyOperation; receiptRef: string }
   | { status: 'REPLAYED'; operation: IdempotencyOperation }
   | { status: 'RECONCILED'; operation: IdempotencyOperation; receiptRef: string }
-  | { status: 'FAILED'; operation: IdempotencyOperation }
+  /**
+   * Nothing happened. `withheld` is set when Brain itself did not send because
+   * the namespace's circuit is open (`posture.ts openCircuit`): the provider
+   * was never asked, the operation stays open, and a later attempt under the
+   * same key runs once the circuit closes.
+   */
+  | { status: 'FAILED'; operation: IdempotencyOperation; withheld?: string }
   /**
    * The outcome is unknown and will stay unknown until somebody establishes it.
    * Nothing automatic will resend. This is a successful *run* — it is the
@@ -254,6 +262,24 @@ export async function runExternalEffect(input: ExternalRunInput): Promise<Extern
   }
 
   const operation = reserved.operation;
+
+  // The circuit breaker (CONT-35, S-0484). A namespace whose recent definite
+  // outcomes say it is down is not sent to again: this is the one place a new
+  // attempt leaves Brain, so it is the one place the open circuit is enforced.
+  // Replays, reconciliations and uncertain resumes above never send, and are
+  // not held back. A withheld attempt opens no attempt row, so the provider was
+  // never asked and the circuit is not held open by its own refusals; the
+  // operation stays open (non-terminal) for a later attempt under this key.
+  const circuit = await openCircuit(input.projectId, input.namespace.name);
+  if (circuit) {
+    await failOperation(operation.id, { category: 'DEPENDENCY_UNAVAILABLE', terminal: false, detail: null });
+    return {
+      status: 'FAILED',
+      operation: (await getOperation(operation.id)) ?? operation,
+      withheld: withheldReason(circuit),
+    };
+  }
+
   const attemptNumber = await beginAttemptOn(operation.id);
   // If this process dies between here and recording what came back, the next
   // caller must be able to take over and ask the provider — never wait for
@@ -349,14 +375,16 @@ export async function runExternalEffect(input: ExternalRunInput): Promise<Extern
   // After a timeout the request may still be on its way, so the provider
   // saying it has not seen it is not yet evidence that nothing was sent —
   // the same rule `resumeAfterCrash` applies to a send nobody saw return.
-  const reconciled = await tryReconcile(input.adapter, operation, input.businessId, !timedOut);
+  const asked: { why: string; applied: boolean } = { why: '', applied: false };
+  const reconciled = await tryReconcile(input.adapter, operation, input.businessId, !timedOut, asked);
   if (reconciled) return reconciled;
 
-  await markUncertain(operation.id, outcome.reason);
+  const reason = joinReason(outcome.reason, reconciliationNote(asked.applied, asked.why));
+  await markUncertain(operation.id, reason);
   return {
     status: 'UNCERTAIN',
     operation: (await getOperation(operation.id)) ?? operation,
-    reason: outcome.reason,
+    reason,
   };
 }
 
@@ -401,8 +429,14 @@ export async function recoverExternalEffect(input: {
   const mayHaveSent =
     attempt !== null && !confirmed && !(attempt.endedAt !== null && attempt.outcome === 'FAILED');
   if (mayHaveSent && input.adapter.effectClass === 'EXTERNAL_IDEMPOTENT') {
-    const reason = 'an earlier attempt sent this and did not record an outcome';
-    await markUncertain(operation.id, reason);
+    const reason = joinReason(
+      'an earlier attempt sent this and did not record an outcome',
+      reconciliationNote(
+        false,
+        'recovery never sends, and the provider de-duplicates only a resend under the same key, which a person or a retry must decide',
+      ),
+    );
+    await recordStillUncertain(operation, attempt, reason);
     return { status: 'UNCERTAIN', operation: (await getOperation(operation.id)) ?? operation, reason };
   }
   const resumed = await resumeAfterCrash(input.adapter, operation, input.businessId);
@@ -428,16 +462,22 @@ async function tryReconcile(
   operation: IdempotencyOperation,
   businessId: string,
   absentMeansNothingSent = true,
+  asked: { why: string; applied: boolean } = { why: '', applied: false },
 ): Promise<ExternalOutcome | null> {
-  if (!adapter.reconcile) return null;
+  if (!adapter.reconcile) {
+    asked.why = `the ${adapter.effectClass} adapter ${adapter.name} cannot be asked what it did, so a person must establish it`;
+    return null;
+  }
 
   let answer: ReconcileOutcome;
   try {
     answer = await boundedReconcile(adapter, businessId);
   } catch (error) {
     // Failing to reconcile is not evidence either way. Stop.
+    asked.why = `asking the provider failed (${error instanceof Error ? error.message : 'unknown error'}), which is not evidence either way`;
     return null;
   }
+  asked.applied = true;
 
   if (answer.kind === 'FOUND') {
     const safe = adapter.redactReceipt
@@ -482,6 +522,10 @@ async function tryReconcile(
     return { status: 'FAILED', operation: (await getOperation(operation.id)) ?? operation };
   }
 
+  asked.why =
+    answer.kind === 'ABSENT'
+      ? 'the provider has no record of it, but the send timed out and may still arrive, so that is not proof nothing was sent'
+      : 'the provider could not say whether it happened';
   return null; // INCONCLUSIVE — leave it uncertain
 }
 
@@ -491,39 +535,181 @@ async function resumeUncertain(
   operation: IdempotencyOperation,
   businessId: string,
 ): Promise<ExternalOutcome> {
-  // One more attempt to reconcile is safe — asking is not sending.
+  // One more attempt to reconcile is safe — asking is not sending. After a
+  // send nobody saw return, only FOUND settles it (invariant 26), so ABSENT
+  // is recorded as an answer that could not settle it, never as a failure.
   const attempt = await latestSentAttempt(operation.id);
-  if (adapter.reconcile && attempt) {
-    const answer = await boundedReconcile(adapter, businessId).catch(() => null);
-    if (answer && answer.kind === 'FOUND') {
-      const safe = adapter.redactReceipt
-        ? adapter.redactReceipt(answer.receiptMeta ?? {})
-        : (answer.receiptMeta ?? {});
-      await closeAttempt(attempt.id, {
-        phase: 'CONFIRMED',
-        outcome: 'SUCCEEDED',
-        receiptRef: answer.receiptRef,
-        receiptMeta: safe,
-        detail: 'reconciled on a later attempt',
-      });
-      await resolveUncertain(operation.id, {
-        as: 'SUCCEEDED',
-        resultRef: answer.receiptRef,
-        summary: 'reconciled with the provider on a later attempt',
-      });
-      return {
-        status: 'RECONCILED',
-        operation: (await getOperation(operation.id)) ?? operation,
-        receiptRef: answer.receiptRef,
-      };
+  return await askAboutUnknown(adapter, operation, attempt, businessId, {
+    baseReason: operation.uncertaintyReason ?? 'the outcome of an earlier send is unknown',
+    foundDetail: 'reconciled on a later attempt',
+    foundSummary: 'reconciled with the provider on a later attempt',
+  });
+}
+
+/* ------------------------------------------------------------------------- */
+/* Reconciliation, and the record of when and why it was applied or skipped    */
+/* ------------------------------------------------------------------------- */
+
+/** A note, written on the rows, of one decision to ask the provider or not. */
+function reconciliationNote(applied: boolean, why: string): string {
+  return `reconciliation ${applied ? 'applied' : 'skipped'} at ${operationNow()}: ${why}; nothing was resent`;
+}
+
+const MAX_REASON_CHARS = 2000;
+
+/** Where the first reconciliation note begins in a reason this module wrote. */
+const NOTE_SEPARATOR = ' — reconciliation ';
+
+/**
+ * The reason an unknown carries: what made it unknown, then the latest
+ * decision to ask or not. A re-ask passes the stored reason back as `base`, so
+ * any earlier note is dropped here rather than appended — otherwise the reason
+ * grows each tick until the length cap cuts off the newest note, and the row
+ * stops saying when and why reconciliation was last applied (S-0484). When
+ * the cap binds, it is the original reason that is shortened, never the
+ * latest note.
+ */
+function joinReason(base: string, note: string): string {
+  const cut = base.indexOf(NOTE_SEPARATOR);
+  const original = cut >= 0 ? base.slice(0, cut) : base;
+  const room = MAX_REASON_CHARS - note.length - ' — '.length;
+  if (room <= 0) return note.slice(0, MAX_REASON_CHARS);
+  return `${original.slice(0, room)} — ${note}`;
+}
+
+/**
+ * Write why an unknown is still unknown onto the operation (and its sent
+ * attempt), so a person or a later tick reads what was tried and what was not
+ * (S-0484: Brain records when and why reconciliation was applied or skipped).
+ *
+ * An operation still RESERVED moves to UNCERTAIN through the repository's
+ * compare-and-swap. One already UNCERTAIN only has its reason replaced, and
+ * only while it is still UNCERTAIN — a settlement that raced this is never
+ * reopened.
+ */
+async function recordStillUncertain(
+  operation: IdempotencyOperation,
+  attempt: EffectAttempt | null,
+  reason: string,
+): Promise<void> {
+  if (attempt && attempt.outcome !== 'SUCCEEDED' && attempt.outcome !== 'FAILED') {
+    await closeAttempt(attempt.id, { phase: 'UNCERTAIN', outcome: 'UNCERTAIN', detail: reason });
+  }
+  if (await markUncertain(operation.id, reason)) return;
+  await getDb().run(
+    `UPDATE idempotency_operations SET uncertainty_reason = ?, updated_at = ?
+      WHERE id = ? AND state = 'UNCERTAIN'`,
+    [reason, operationNow(), operation.id],
+  );
+}
+
+/**
+ * Ask the provider about an effect whose outcome nobody observed, and settle
+ * it only on the provider's own receipt. Never sends.
+ */
+async function askAboutUnknown(
+  adapter: EffectAdapter,
+  operation: IdempotencyOperation,
+  attempt: EffectAttempt | null,
+  businessId: string,
+  words: { baseReason: string; foundDetail: string; foundSummary: string },
+): Promise<ExternalOutcome> {
+  let why: string;
+  let applied = false;
+  if (!attempt) {
+    why = 'no sent attempt is on record to ask about';
+  } else if (!adapter.reconcile) {
+    why = `the ${adapter.effectClass} adapter ${adapter.name} cannot be asked what it did, so a person must establish it`;
+  } else {
+    let answer: ReconcileOutcome | null = null;
+    try {
+      answer = await boundedReconcile(adapter, businessId);
+    } catch (error) {
+      why = `asking the provider failed (${error instanceof Error ? error.message : 'unknown error'}), which is not evidence either way`;
+    }
+    if (answer) {
+      applied = true;
+      if (answer.kind === 'FOUND') {
+        const safe = adapter.redactReceipt
+          ? adapter.redactReceipt(answer.receiptMeta ?? {})
+          : (answer.receiptMeta ?? {});
+        await closeAttempt(attempt.id, {
+          phase: 'CONFIRMED',
+          outcome: 'SUCCEEDED',
+          receiptRef: answer.receiptRef,
+          receiptMeta: safe,
+          detail: `${words.foundDetail} (${reconciliationNote(true, 'the provider returned its receipt')})`,
+        });
+        // RESERVED (an executor stopped) settles through the reservation;
+        // UNCERTAIN through the only way out of an unknown.
+        if (
+          !(await succeedOperation(operation.id, {
+            resultRef: answer.receiptRef,
+            resultSummary: words.foundSummary,
+          }))
+        ) {
+          await resolveUncertain(operation.id, {
+            as: 'SUCCEEDED',
+            resultRef: answer.receiptRef,
+            summary: words.foundSummary,
+          });
+        }
+        return {
+          status: 'RECONCILED',
+          operation: (await getOperation(operation.id)) ?? operation,
+          receiptRef: answer.receiptRef,
+        };
+      }
+      why =
+        answer.kind === 'ABSENT'
+          ? 'the provider has no record of it, but a send nobody saw return may not be visible yet, so that is not proof nothing was sent'
+          : 'the provider could not say whether it happened';
     }
   }
-  // Still unknown. It stays unknown, and nothing here resends it.
+  const reason = joinReason(words.baseReason, reconciliationNote(applied, why!));
+  await recordStillUncertain(operation, attempt, reason);
   return {
     status: 'UNCERTAIN',
-    operation,
-    reason: operation.uncertaintyReason ?? 'the outcome of an earlier send is unknown',
+    operation: (await getOperation(operation.id)) ?? operation,
+    reason,
   };
+}
+
+/**
+ * Resume an effect a transaction was interrupted on, by asking and never by
+ * sending (CONT-35: interrupt at a dangerous boundary, reconcile, do not
+ * duplicate the commitment).
+ *
+ * - SUCCEEDED / FAILED: already settled; reported as it stands.
+ * - UNCERTAIN (a send timed out or threw after the provider may have
+ *   accepted it): the provider is asked; FOUND settles it SUCCEEDED with the
+ *   receipt, anything else leaves it UNCERTAIN with the reason recorded.
+ * - RESERVED past `recoverAfter` (the executor died after `markAttemptSent`):
+ *   taken over and resolved through `recoverExternalEffect`'s rules, which
+ *   ask the provider and never send.
+ * - RESERVED with a live lease: another executor holds it; null.
+ *
+ * Every path that leaves an unknown records on the operation and its attempt
+ * when and why reconciliation was applied or skipped.
+ */
+export async function reconcileInterruptedEffect(input: {
+  adapter: EffectAdapter;
+  operation: IdempotencyOperation;
+  businessId: string;
+}): Promise<ExternalOutcome | null> {
+  const current = (await getOperation(input.operation.id)) ?? input.operation;
+  switch (current.state) {
+    case 'SUCCEEDED':
+      return { status: 'REPLAYED', operation: current };
+    case 'FAILED':
+      return { status: 'FAILED', operation: current };
+    case 'UNCERTAIN':
+      return await resumeUncertain(input.adapter, current, input.businessId);
+    case 'RESERVED':
+      return await recoverExternalEffect({ ...input, operation: current });
+    default:
+      return null;
+  }
 }
 
 /**
@@ -572,25 +758,18 @@ async function resumeAfterCrash(
     return null;
   }
 
-  // `absentMeansNothingSent` is false here on purpose, and it is the stated
-  // rule rather than an oversight: on the first pass the send itself returned
-  // and a provider's ABSENT is its answer about that send, but here an
-  // executor died mid-send, so an ABSENT may be a provider that has not yet
-  // made the request visible. Invariant 26: an unknown outcome is recorded as
-  // unknown and never auto-retried. Only FOUND resolves this path; anything
-  // else stays UNCERTAIN for a person.
-  const reconciled = await tryReconcile(adapter, operation, businessId, false);
-  if (reconciled) return reconciled;
-
-  const reason = adapter.reconcile
-    ? 'an earlier attempt sent this and did not record an outcome, and the provider could not confirm it'
-    : 'an earlier attempt sent this and did not record an outcome, and the provider cannot be asked';
-  await markUncertain(operation.id, reason);
-  return {
-    status: 'UNCERTAIN',
-    operation: (await getOperation(operation.id)) ?? operation,
-    reason,
-  };
+  // ABSENT does not settle this path, on purpose, and it is the stated rule
+  // rather than an oversight: on the first pass the send itself returned and
+  // a provider's ABSENT is its answer about that send, but here an executor
+  // died mid-send, so an ABSENT may be a provider that has not yet made the
+  // request visible. Invariant 26: an unknown outcome is recorded as unknown
+  // and never auto-retried. Only FOUND resolves this path; anything else
+  // stays UNCERTAIN for a person, with why written on the rows.
+  return await askAboutUnknown(adapter, operation, attempt, businessId, {
+    baseReason: 'an earlier attempt sent this and did not record an outcome',
+    foundDetail: 'reconciled with the provider after its executor stopped',
+    foundSummary: 'reconciled with the provider after an executor stopped mid-send',
+  });
 }
 
 /**

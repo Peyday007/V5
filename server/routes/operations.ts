@@ -21,6 +21,7 @@ import {
   resolveUncertain,
 } from '../repos/idempotency.ts';
 import { EFFECT_FAILURE_CATEGORIES, OPERATION_STATES } from '../domain/types.ts';
+import { continuityPosture, unreadablePosture } from '../services/effects/posture.ts';
 import type {
   EffectFailureCategory,
   IdempotencyOperation,
@@ -129,6 +130,26 @@ operationsRouter.get(
       limit: optionalInteger(req.query['limit'], 'limit', { min: 1, max: 500 }),
     });
     return { operations: operations.map(publicOperation) };
+  }),
+);
+
+/**
+ * The project's continuity posture (CONT-35, S-0485): which dependencies are
+ * down or constrained, which work is unaffected, what is known and what
+ * remains uncertain. Degraded but truthful — when the ledger cannot be read
+ * the answer is a 503 saying so, never an empty account that reads as
+ * "nothing in doubt".
+ */
+operationsRouter.get(
+  '/projects/:projectId/continuity',
+  handler(async (req, res) => {
+    const project = await requireProject(pathId(req, 'projectId'));
+    try {
+      return { posture: await continuityPosture(project.id) };
+    } catch {
+      res.status(503);
+      return { posture: unreadablePosture(project.id) };
+    }
   }),
 );
 

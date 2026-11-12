@@ -315,7 +315,9 @@ async function settleIssue(
     }
     await holdWithReason(
       current,
-      `The provider did not process this yet (${outcome.operation.failureCategory ?? 'refused'}); Brain tries again on a later pass.`,
+      outcome.withheld
+        ? `${outcome.withheld} Brain tries again on a later pass.`
+        : `The provider did not process this yet (${outcome.operation.failureCategory ?? 'refused'}); Brain tries again on a later pass.`,
       pass,
     );
     return;
