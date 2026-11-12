@@ -1596,7 +1596,54 @@ export async function requestCompletion(input: {
    * so nothing here can make the bin's own outcome depend on it.
    */
   await advanceFactoryAfter(bin);
+  await recordDemonstratedCapabilities(bin).catch(() => [] as string[]);
   return { held: true, terminal: true, state: 'COMPLETE', verdict, signals };
+}
+
+/**
+ * A surface that satisfied a contract only a capability can satisfy has that
+ * capability, and the fleet is told so by the event that proved it.
+ *
+ * `effectiveCapabilities` routes a render bin to a surface that declares
+ * `browser` while one exists — and nothing ever declared it: the only writer
+ * of `fleet_routines.capabilities` is a person's `setRoutineCapabilities`, and
+ * the render stage recorded that declaration as a pending operator step. So the
+ * derived requirement had a consumer (the router and the assigner) and no
+ * producer, and every render bin was routed exactly as before. The producer is
+ * the one fact Brain itself holds: a `DESIGN_RENDER_V1` verdict is satisfied
+ * only by captures whose hashes Brain checked, which no browserless session
+ * can produce. The Routines that session was fired from (`routineRefsForSession`
+ * — the dispatch row Brain wrote, never the worker's say-so) gain the
+ * contract's capabilities, audited through the same writer a person uses.
+ *
+ * It only ever adds, and only on a satisfied verdict: a refusal, a blocker or a
+ * session Brain did not fire changes nothing, and a person's declaration is
+ * never removed. Best-effort: the bin's own completion is already recorded.
+ */
+export async function recordDemonstratedCapabilities(
+  bin: Pick<Bin, 'id' | 'completionContract' | 'leaseSessionRef'>,
+): Promise<string[]> {
+  const demonstrated = contractCapabilities(bin.completionContract);
+  if (demonstrated.length === 0 || !bin.leaseSessionRef) return [];
+  const { routineRefsForSession } = await import('../../repos/bins.ts');
+  const { getRoutineByRef, setRoutineCapabilities } = await import('../../repos/fleet.ts');
+  const changed: string[] = [];
+  for (const ref of await routineRefsForSession(bin.leaseSessionRef)) {
+    const routine = await getRoutineByRef(ref);
+    if (!routine) continue;
+    const missing = demonstrated.filter((capability) => !routine.capabilities.includes(capability));
+    if (missing.length === 0) continue;
+    await setRoutineCapabilities({
+      routineId: routine.id,
+      capabilities: [...routine.capabilities, ...missing],
+      actor: 'brain:contract-demonstrated',
+      reason:
+        `A session fired from this Routine satisfied ${bin.completionContract} on ${bin.id}, ` +
+        `which only a surface with ${missing.join(', ')} can satisfy.`,
+    });
+    changed.push(routine.id);
+  }
+  return changed;
 }
 
 /**
