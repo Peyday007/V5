@@ -64,6 +64,21 @@ const INTEREST: Record<string, number> = {
   ooo: 0, not_interested: -1, unsubscribe: -1, wrong_person: -2,
 };
 
+/*
+ * An auto-responder or a dead mailbox is not a person opting out. Production
+ * 2026-11-12 (agents.yml 43314478906): Sellbird's classifier read "This email
+ * address is no longer monitored" and "I apologize for this automatic reply"
+ * as unsubscribe, which would have put four addresses on the workspace block
+ * list. Sellbird's own phrase rules ("unsubscribe", "remove me", "no thanks",
+ * …) still suppress whatever the text around them; only an opt-out the model
+ * alone inferred from automated wording is withheld.
+ */
+const AUTOMATED = /\b(automatic(?:ally)? (?:reply|response|generated)|auto[- ]?(?:reply|response|responder)|no longer (?:monitored|employed|with|at|in use|active|checked)|not (?:being )?monitored|out of (?:the )?office|this (?:mailbox|inbox|email address|account) is (?:no longer|not)|has (?:left|decided to pursue)|is no longer (?:with|employed))/i;
+
+export function automatedNotOptOut(text: string, optOutRule: string | null | undefined): boolean {
+  return (!optOutRule || optOutRule === 'model') && AUTOMATED.test(text);
+}
+
 /* ------------------------------------------------------------------------- */
 /* Checks Brain applies to every answer on top of Sellbird's own gate        */
 /* ------------------------------------------------------------------------- */
@@ -200,7 +215,8 @@ export async function handleOneReply(deps: Deps, business: SalesBusiness, reply:
     email: reply.lead,
     company: String(known?.research['siteName'] ?? '') || rootDomain(reply.lead.split('@')[1] ?? ''),
     website: known ? `https://${known.domain}` : `https://${reply.lead.split('@')[1] ?? ''}`,
-    optedOut: past.some((r) => r.intent === 'unsubscribe'),
+    // A withheld automated "opt-out" (RECORDED) is not one; a failed block-list write still is.
+    optedOut: past.some((r) => r.intent === 'unsubscribe' && r.action !== 'RECORDED'),
     stage: past.at(-1)?.stage ?? 'initial_outreach',
     withPerson: past.some((r) => r.status === 'needs_human'),
   };
@@ -208,7 +224,8 @@ export async function handleOneReply(deps: Deps, business: SalesBusiness, reply:
   if (!decision || decision.error) return null;
 
   const answeredAlready = thread.some((m) => m.ours && m.at > reply.at);
-  const interest = INTEREST[decision.intent];
+  const automated = decision.intent === 'unsubscribe' && automatedNotOptOut(reply.text, decision.optOut?.rule);
+  const interest = automated ? undefined : INTEREST[decision.intent];
   let action = 'RECORDED';
   let detail = '';
   let answerEmailId: string | null = null;
@@ -220,7 +237,9 @@ export async function handleOneReply(deps: Deps, business: SalesBusiness, reply:
       detail += `interest status not set (${error instanceof Error ? error.message : String(error)}); `;
     }
   }
-  if (decision.intent === 'unsubscribe') {
+  if (automated) {
+    detail += 'an automated or unmonitored mailbox, not an opt-out: kept off the block list and its interest left unchanged';
+  } else if (decision.intent === 'unsubscribe') {
     try {
       await instantly(deps, 'POST', '/block-lists-entries', { bl_value: reply.lead });
       action = 'SUPPRESSED';

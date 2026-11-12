@@ -83,6 +83,7 @@ export const SALES_BUSINESSES: SalesBusiness[] = [
       optOutLine: OPT_OUT,
       phoneNumbers: [PUBLISHER_PHONE],
       knowledge: NEIGHBOR_CARD_KNOWLEDGE,
+      siteFacts: false,
     },
   },
   {

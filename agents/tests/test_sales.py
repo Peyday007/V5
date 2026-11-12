@@ -162,3 +162,25 @@ def test_an_unreachable_model_is_a_reason_not_a_crash():
     out = run(sales.write_first_email(OFFER, {"email": "info@harbor.example", "company": "Harbor Pizza"},
                                       {"baseUrl": "http://127.0.0.1:9/v1", "model": "none"}))
     assert out["ok"] is False and "ConnectError" in out["reason"]
+
+
+def test_a_postcard_writer_hears_nothing_about_the_prospects_website(llm):
+    """Production 2026-11-12: the Neighbor Card's first email led with "no
+    JSON-LD on your homepage" and "uses squarespace" — true, and no reason to
+    buy a postcard."""
+    _Model.prompts.clear()
+    lead = {"email": "info@harbor.example", "company": "Harbor Pizza", "website": "https://harbor.example",
+            "description": "Family pizza in Camp Hill", "techStack": ["Squarespace"],
+            "observations": [{"signal_code": "no_structured_data", "value_text": "no JSON-LD", "confidence": 0.9}]}
+    run(sales.write_first_email({**OFFER, "siteFacts": False}, lead, llm))
+    writer_prompt = next(p for p in _Model.prompts if "Write ONE cold email" in p)
+    assert "Squarespace" not in writer_prompt and "JSON-LD" not in writer_prompt
+    assert "Family pizza in Camp Hill" in writer_prompt
+    assert sales.build_config({**OFFER, "siteFacts": False}).writer.site_facts is False
+    assert sales.build_config(OFFER).writer.site_facts is True
+
+
+def test_the_sequence_writer_runs_for_a_postcard_offer(llm):
+    out = run(sales.write_sequence({**OFFER, "siteFacts": False},
+                                   [{"email": "info@harbor.example", "company": "Harbor Pizza", "techStack": ["Squarespace"]}], llm))
+    assert "steps" in out and isinstance(out["calls"], list)

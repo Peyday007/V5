@@ -15785,6 +15785,20 @@ pg 138); every agents call is a USAGE row under `open-source-agents`.
 `node --import tsx scripts/sales-desk.ts [--prove]`; `agents.yml sales |
 sales-prove`. Tests: `tests/salesDesk.test.ts`, `agents/tests/test_sales.py`.
 
+**What the first production runs corrected (2026-11-12).** Three defects
+showed only on real data. Instantly allows 20 requests a minute with no
+`retry-after`, and the shared client's 2–16s backoff spent all five tries
+inside one minute, so the reply pass lost every thread read: a 429 now waits
+20s, doubling. Sellbird's classifier read auto-responders ("no longer
+monitored", "automatic reply") as unsubscribes; an opt-out the model alone
+inferred from automated wording is now recorded and kept off the block list,
+while Sellbird's phrase rules still suppress whatever surrounds them. And the
+Neighbor Card's writer led with website gaps (no JSON-LD, Squarespace) that are
+no reason to buy a postcard: a business's `siteFacts` says whether its writer
+hears anything about the prospect's website. A failed draft's reason now names
+what the model calls returned, because "no usable draft" hid a 404 from a model
+name the pod had stopped serving.
+
 ## 108. A model is chosen by what it does on Brain's work, and a decision is judged by what it predicted.
 
 **Owner's order, 2026-11-12.** "Make Hermes fully operational … automatically
