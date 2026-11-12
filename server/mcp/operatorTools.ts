@@ -203,6 +203,25 @@ const historyTool: McpTool = {
   },
 };
 
+
+/**
+ * Acting is gated on a committed decision (§108): the operator states the alternatives and a
+ * checkable prediction before it changes anything, so every effect can be judged later. A
+ * refusal names the way past it rather than failing the run.
+ */
+async function decisionGate(args: Record<string, unknown>): Promise<{ ok: true; decisionId: string } | { ok: false; refused: true; reason: string }> {
+  const id = optionalString(args, 'decision_id');
+  if (!id) return { ok: false, refused: true, reason: 'Decide first: call brain_operator_decide (two or more options, assumptions, a prediction), then pass its decision_id here. One decision may cover a batch of the same action.' };
+  const { readDecision } = await import('../services/operator/decisions.ts');
+  if (!(await readDecision(id))) return { ok: false, refused: true, reason: `no committed decision ${id}: brain_operator_decide returns decisionId only when it commits (answer a REVISE challenge first).` };
+  return { ok: true, decisionId: id };
+}
+
+/** What every action result tells the operator to do next: observe, then keep the lesson. */
+const AFTER_ACTING = 'Observe: read brain_operator_goal {goal_id} (or brain_operator_capacity) again to see what actually changed, then brain_operator_record_learning with the result — and brain_operator_verify the decision when its horizon passes.';
+
+const DECISION_ID_PROPERTY = { type: 'string', description: 'The decisionId brain_operator_decide returned for this action (required: decide before acting).' } as const;
+
 const withdrawTool: McpTool = {
   name: 'brain_operator_withdraw_moot_request',
   title: 'Operator: withdraw a moot request',
@@ -212,15 +231,17 @@ const withdrawTool: McpTool = {
     'kept as WITHDRAWN with the reason.',
   inputSchema: {
     type: 'object',
-    properties: { request_id: { type: 'string', description: 'The request id (rhr_…).' } },
-    required: ['request_id'],
+    properties: { request_id: { type: 'string', description: 'The request id (rhr_…).' }, decision_id: DECISION_ID_PROPERTY },
+    required: ['request_id', 'decision_id'],
     additionalProperties: false,
   },
   annotations: { title: 'Operator: withdraw a moot request', ...MUTATING },
   run: async (args, { principal }) => {
     const projects = requireOperator(principal);
+    const gate = await decisionGate(args);
+    if (!gate.ok) return { projectId: null, value: gate };
     const result = await withdrawMootRequest({ requestId: requiredString(args, 'request_id'), runId: await currentRunId(), projectIds: projects });
-    return { projectId: null, value: result };
+    return { projectId: null, value: { ...result, decisionId: gate.decisionId, next: AFTER_ACTING } };
   },
 };
 
@@ -288,6 +309,7 @@ const commissionTool: McpTool = {
     type: 'object',
     properties: {
       deficiency_id: { type: 'string', description: 'A dfx_… id from brain_operator_deficiencies; the rest may then be omitted.' },
+      decision_id: DECISION_ID_PROPERTY,
       goal_id: { type: 'string', description: 'The goal it holds back (wst_…).' },
       deficiency: { type: 'string', enum: ['ECONOMIC_REASONING', 'PLANNING_ASSUMPTION', 'REPEATED_STRATEGIC_MISTAKE', 'RESOURCE_ALLOCATION', 'MISSING_CAPABILITY', 'BROKEN_INTEGRATION', 'INEFFICIENT_ALGORITHM', 'RECURRING_OPERATIONAL_FAILURE'] },
       title: { type: 'string' },
@@ -311,13 +333,15 @@ const commissionTool: McpTool = {
   annotations: { title: 'Operator: commission an intervention', ...MUTATING },
   run: async (args, { principal }) => {
     requireOperator(principal);
+    const gate = await decisionGate(args);
+    if (!gate.ok) return { projectId: null, value: gate };
     const director = await import('../services/operator/director.ts');
     const runId = await currentRunId();
     const id = optionalString(args, 'deficiency_id');
     if (id) {
       const found = (await director.readDeficiencies()).find((one) => director.readingId(one) === id);
       if (!found) return { projectId: null, value: { ok: false, reason: `no current deficiency ${id}: read brain_operator_deficiencies again (it may already be fixed)` } };
-      return { projectId: null, value: { ...(await director.commission({ ...found.diagnosis, runId })) } };
+      return { projectId: null, value: { ...(await director.commission({ ...found.diagnosis, runId })), decisionId: gate.decisionId, next: AFTER_ACTING } };
     }
     const result = await director.commission({
       goalId: optionalString(args, 'goal_id'),
@@ -339,7 +363,7 @@ const commissionTool: McpTool = {
       capacityIdle: optionalBoolean(args, 'capacity_idle'),
       runId,
     });
-    return { projectId: null, value: { ...result } };
+    return { projectId: null, value: { ...result, decisionId: gate.decisionId, next: AFTER_ACTING } };
   },
 };
 
@@ -411,13 +435,16 @@ const fixTool: McpTool = {
       owner_paths: { type: 'array', items: { type: 'string' }, description: 'Repository paths that own the behaviour, e.g. server/services/russell/needsHuman.ts' },
       acceptance: { type: 'string', description: 'What a test proves once it is fixed.' },
       goal_id: { type: 'string', description: 'The goal the defect holds back, so its effect on the goal is measured.' },
+      decision_id: DECISION_ID_PROPERTY,
     },
-    required: ['title', 'problem', 'evidence', 'owner_paths', 'acceptance'],
+    required: ['title', 'problem', 'evidence', 'owner_paths', 'acceptance', 'decision_id'],
     additionalProperties: false,
   },
   annotations: { title: 'Operator: send a defect to Factory', ...MUTATING },
   run: async (args, { principal }) => {
     requireOperator(principal);
+    const gate = await decisionGate(args);
+    if (!gate.ok) return { projectId: null, value: gate };
     const result = await submitOperatorFix({
       title: requiredString(args, 'title'),
       problem: requiredString(args, 'problem'),
@@ -427,7 +454,7 @@ const fixTool: McpTool = {
       runId: await currentRunId(),
       goalId: optionalString(args, 'goal_id'),
     });
-    return { projectId: null, value: result };
+    return { projectId: null, value: { ...result, decisionId: gate.decisionId, next: AFTER_ACTING } };
   },
 };
 

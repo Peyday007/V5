@@ -146,3 +146,29 @@ describe('the brief holds the money line', () => {
     for (const tool of ['brain_operator_allocation', 'brain_operator_decide', 'brain_operator_verify', 'brain_operator_set_goal_focus', 'brain_operator_submit_fix']) expect(brief).toContain(tool);
   });
 });
+
+describe('acting is gated on a committed decision', () => {
+  it('refuses withdraw, commission and submit_fix without a decision id, and names the way past', async () => {
+    const { OPERATOR_TOOLS } = await import('../server/mcp/operatorTools.ts');
+    const { OPERATOR_SCOPES } = await import('../server/domain/types.ts');
+    const { projectId } = await freshProject();
+    const principal = {
+      type: 'WORKER', id: 'wkr_operator', handle: 'operator', displayName: 'operator', isBrainAdmin: false, mustChangePassword: false,
+      credentialId: 'cred_x', authMethod: 'OAUTH_BEARER', requestId: 'req_x',
+      memberships: [{ projectId, principalType: 'WORKER', principalId: 'wkr_operator', role: 'MEMBER', scopes: OPERATOR_SCOPES, active: true }],
+    } as unknown as import('../server/domain/types.ts').Principal;
+    const tool = (name: string) => OPERATOR_TOOLS.find((t) => t.name === name)!;
+    for (const [name, args] of [
+      ['brain_operator_withdraw_moot_request', { request_id: 'rhr_none' }],
+      ['brain_operator_commission', { deficiency_id: 'dfx_none' }],
+      ['brain_operator_submit_fix', { title: 't', problem: 'p', evidence: 'e', owner_paths: ['a.ts'], acceptance: 'x' }],
+    ] as const) {
+      const out = (await tool(name).run({ ...args }, { principal } as never)).value as { refused?: boolean; reason?: string };
+      expect(out.refused, name).toBe(true);
+      expect(out.reason).toMatch(/brain_operator_decide/);
+      const unknown = (await tool(name).run({ ...args, decision_id: 'dec_missing' }, { principal } as never)).value as { refused?: boolean; reason?: string };
+      expect(unknown.refused, name).toBe(true);
+      expect(unknown.reason).toMatch(/no committed decision/);
+    }
+  });
+});

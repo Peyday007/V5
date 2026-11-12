@@ -65,8 +65,9 @@ async function probe(): Promise<void> {
   console.log(`OPERATOR-PROBE: app ${health} · brain ${config.brainUrl} · models ${models.map((m) => m.label).join(' → ') || 'none'}`);
 }
 
-const ACTS = ['brain_operator_withdraw_moot_request', 'brain_operator_continue_idle', 'brain_operator_submit_fix', 'brain_operator_set_goal_focus', 'brain_operator_verify'];
-const READS = ['brain_operator_goal', 'brain_operator_goal_plan', 'brain_operator_capacity', 'brain_operator_goals', 'brain_operator_allocation'];
+// Judging a past decision (verify) is not an action on the world; Factory work is.
+const ACTS = ['brain_operator_withdraw_moot_request', 'brain_operator_continue_idle', 'brain_operator_submit_fix', 'brain_operator_set_goal_focus', 'brain_operator_commission', 'brain_operator_prioritize_engineering'];
+const READS = ['brain_operator_goal', 'brain_operator_goal_plan', 'brain_operator_capacity', 'brain_operator_goals', 'brain_operator_allocation', 'brain_operator_engineering'];
 
 async function prove(): Promise<void> {
   // `prove latest` judges the newest finished run Brain's own tick started — the autonomous one —
