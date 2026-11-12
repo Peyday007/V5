@@ -331,6 +331,26 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     ownerAction: 'Nothing: the Browser workflow writes the URL.',
   },
   {
+    id: 'open-source-agents',
+    name: 'Open-source agents (Sellbird, Browser Use)',
+    purpose:
+      "Prospect contact research on a private CPU app (§104): Sellbird reads who decides and the addresses a business " +
+      'publishes; Browser Use reads JavaScript-only sites with the RunPod model, read-only and checked against the page.',
+    heldBy: 'BRAIN',
+    credentials: [
+      fly('BRAIN_AGENTS_URL', ['WORKFLOW'], { required: false, shape: /^http:\/\/[a-z0-9-]+\.flycast(:\d+)?$/ }),
+      fly('BRAIN_AGENTS_KEY', ['WORKFLOW'], { required: false, shape: /^[0-9a-f]{64}$/ }),
+    ],
+    consumers: [
+      { component: 'Neighbor Card refill: addresses the plain reader missed', path: 'server/services/cash/neighborCard.ts' },
+      { component: 'Agents client and records', path: 'server/services/agents/client.ts' },
+    ],
+    capabilities: ['FIND_DECISION_MAKERS', 'FIND_PUBLISHED_CONTACTS', 'READ_SCRIPTED_SITES'],
+    probe: 'agents',
+    dailyCeiling: null,
+    ownerAction: 'Nothing: the Agents workflow deploys the service and writes both settings.',
+  },
+  {
     id: 'etsy',
     name: 'Etsy',
     purpose: 'The puzzle shop listings (launch).',

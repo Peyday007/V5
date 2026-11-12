@@ -8,11 +8,13 @@
  *
  * Discovery includes Google Places through V2's signed bridge when the
  * deployment holds its signing key (§103); each search is recorded before it is
- * sent and refused past the registry's daily ceiling.
+ * sent and refused past the registry's daily ceiling. With the agents app
+ * connected (§104), sites with no address the plain reader found go to
+ * Sellbird, then (shells only) to Browser Use.
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { countIntegrationUsage, recordIntegrationEvent } from '../server/repos/integrationEvents.ts';
-import { defaultDeps, runNeighborCard } from '../server/services/cash/neighborCard.ts';
+import { defaultAgents, defaultDeps, runNeighborCard } from '../server/services/cash/neighborCard.ts';
 import { signingKey } from '../server/services/integrations/keys.ts';
 import { searchPlacesViaV2 } from '../server/services/integrations/v2Bridge.ts';
 
@@ -42,6 +44,8 @@ if (signingKey()) {
       },
     };
     deps.places = (query) => searchPlacesViaV2(query, meter);
+    // The open-source agents (§104) record every call, so they run only with the database open.
+    deps.agents = defaultAgents();
   } catch (error) {
     console.log(`  Places not metered this pass, so not used: ${error instanceof Error ? error.message : String(error)}`);
   }
