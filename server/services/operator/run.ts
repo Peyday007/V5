@@ -131,7 +131,8 @@ export async function operatorTickIfDue(nowMs = Date.now(), env: NodeJS.ProcessE
   await failStaleOperatorRuns(new Date(nowMs - OPERATOR_RUN_TIMEOUT_MINUTES * 60_000).toISOString());
   const running = await runningOperatorRun();
   const last = (await recentOperatorRuns(1))[0] ?? null;
-  if (!operatorDue({ lastStartedAt: last?.startedAt ?? null, running: running !== null, nowMs, intervalMinutes: operatorIntervalMinutes(env), processStartedMs })) {
+  const lastActedNothing = last !== null && last.state === 'FAILED' && !last.toolCalls.some((c) => c.ok && c.tool.includes('brain_operator_'));
+  if (!operatorDue({ lastStartedAt: last?.startedAt ?? null, running: running !== null, nowMs, intervalMinutes: operatorIntervalMinutes(env), processStartedMs, lastActedNothing })) {
     return null;
   }
   const models = await modelsFor(env);

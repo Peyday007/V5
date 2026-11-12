@@ -51,6 +51,12 @@ describe('cadence, models, brief', () => {
     expect(operatorDue({ lastStartedAt: '2026-11-12T08:59:00Z', running: false, nowMs: now, intervalMinutes: 60 })).toBe(true);
     expect(operatorDue({ lastStartedAt: null, running: true, nowMs: now, intervalMinutes: 60 })).toBe(false);
   });
+  it('retries sooner after a run that never got to act', () => {
+    const now = Date.parse('2026-11-12T10:00:00Z');
+    const last = '2026-11-12T09:44:00Z';
+    expect(operatorDue({ lastStartedAt: last, running: false, nowMs: now, intervalMinutes: 60 })).toBe(false);
+    expect(operatorDue({ lastStartedAt: last, running: false, nowMs: now, intervalMinutes: 60, lastActedNothing: true })).toBe(true);
+  });
   it('waits out the minutes after a restart, when a deploy is still verifying the machine', () => {
     const now = Date.parse('2026-11-12T10:00:00Z');
     expect(operatorDue({ lastStartedAt: null, running: false, nowMs: now, intervalMinutes: 60, processStartedMs: now - 60_000 })).toBe(false);
