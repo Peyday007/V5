@@ -127,6 +127,56 @@ describe('atomic claiming', () => {
     expect(row).toMatchObject({ state: 'QUEUED', attempt_count: 0 });
   });
 
+  it('reaches claimable work behind more declined rows than the old three-round window (56) held', async () => {
+    // Recorded failure, verbatim: "a claim window full of work the lane declines". The claim
+    // used to read at most 8 + 16 + 32 = 56 rows, so a lane whose admit rule declined more than
+    // that at the head of its ask was never offered the claimable row behind them.
+    const declined = new Set<string>();
+    // Priorities are 0-9; the declined head outranks the claimable row, so it is read first.
+    for (let i = 0; i < 120; i += 1) declined.add(await add(projectA, { priority: 9 }));
+    const mine = await add(projectA, { priority: 1 });
+    const skipped: string[] = [];
+    const claims = await claimWork({
+      workerId: workerOne,
+      scopes: scopesFor([projectA]),
+      limit: 1,
+      admit: async (item) => (declined.has(item.id) ? { ok: false, reason: 'not mine' } : { ok: true }),
+      onSkip: (item) => skipped.push(item.id),
+    });
+    expect(claims.map((c) => c.workItemId)).toEqual([mine]);
+    // Every declined row was read once, past the old 56-row window, and none was claimed.
+    expect(new Set(skipped).size).toBe(120);
+    const touched = await getDb().get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM work_items WHERE project_id = ? AND (state <> 'QUEUED' OR attempt_count <> 0) AND id <> ?`,
+      [projectA, mine],
+    );
+    expect(Number(touched?.n)).toBe(0);
+  });
+
+  it('pages past a declined window of equal priority without skipping or repeating a row', async () => {
+    // The page cursor breaks ties on available_at, created_at and id; equal priorities
+    // are the case where a wrong tie-break would skip the claimable row or loop on a page.
+    const declined = new Set<string>();
+    for (let i = 0; i < 70; i += 1) declined.add(await add(projectA, { priority: 5 }));
+    const mine = await add(projectA, { priority: 5 });
+    const skipped: string[] = [];
+    const claims = await claimWork({
+      workerId: workerOne,
+      scopes: scopesFor([projectA]),
+      limit: 1,
+      admit: async (item) => (declined.has(item.id) ? { ok: false, reason: 'not mine' } : { ok: true }),
+      onSkip: (item) => skipped.push(item.id),
+    });
+    expect(claims.map((c) => c.workItemId)).toEqual([mine]);
+    // Exactly the declined rows that sort ahead of the claimable one, in order, each once.
+    const order = await getDb().all<{ id: string }>(
+      'SELECT id FROM work_items WHERE project_id = ? ORDER BY priority DESC, available_at, created_at, id',
+      [projectA],
+    );
+    const ahead = order.map((r) => r.id).slice(0, order.findIndex((r) => r.id === mine));
+    expect(skipped).toEqual(ahead);
+  });
+
   it('gives one item to exactly one of two workers racing for it', async () => {
     await add(projectA);
     const [one, two] = await Promise.all([
