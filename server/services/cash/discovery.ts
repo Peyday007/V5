@@ -97,7 +97,7 @@ import { listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.t
 import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
 import { commonTo, exclusionSentence, type ExclusionClass } from './exclusions.ts';
 import { liveGoalLimits } from './worthResearching.ts';
-import { getClaim, signalledClaims } from '../../repos/research.ts';
+import { GOAL_REQUEST_LANE, getClaim, signalledClaims } from '../../repos/research.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
 import { mechanismForSignal } from '../../domain/opportunitySignals.ts';
@@ -485,8 +485,15 @@ const HARVESTED = 'CASH_OPPORTUNITY_HARVESTED';
  * one entry and a comment saying it decided that; it was read by nothing once
  * the signal arrived, and a constant that claims to be a rule while nothing
  * calls it is worse than no rule at all.
+ *
+ * One lane id, one definition. `signalledClaims` (repos/research.ts) reads a
+ * goal round's untagged claim in this lane as ACTIVE_BUYER_DEMAND, and it
+ * declares the literal there because a repository does not import the
+ * service that calls it. This name is that constant, not a second spelling of
+ * it, so the lane the harvest reads and the lane discovery declares cannot
+ * drift apart.
  */
-export const SIGNAL_LANE = 'demand_signal';
+export const SIGNAL_LANE = GOAL_REQUEST_LANE;
 
 export interface OpenedDiscovery {
   bucketId: string;
