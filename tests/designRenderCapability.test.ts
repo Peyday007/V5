@@ -223,7 +223,11 @@ describe('the assigner leaves a render for a surface that can render', () => {
   it('admits the same session when no surface declares a browser (fail open, as before)', async () => {
     const { bin, admit } = await setup(false);
     const verdict = await admit(bin);
-    if (!verdict.ok) expect(verdict.reason).not.toContain('does not declare browser');
+    // Fail open means admitted: an unconditional assertion, so a refusal of any
+    // kind — not only one worded about a browser — fails this test.
+    expect(verdict.reason ?? null).toBeNull();
+    expect(verdict.ok).toBe(true);
+    expect(verdict.quiet).toBeUndefined();
   });
 
   it('keeps the evidence bar: an unanswered render is still refused', async () => {
