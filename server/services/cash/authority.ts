@@ -220,6 +220,26 @@ export async function checkCommercialAuthority(input: {
     principal: input.principal,
     access: input.access,
   });
+  /*
+   * A caller that states no amount has its sum judged against the per-action and committed ceilings where
+   * the money is committed (`commitCents`, inside its own transaction, so a replay is not judged as a second
+   * commitment). `judgeAction` refuses AMOUNT_UNKNOWN only after every grant check has passed, so that cause
+   * means "allowed, ceilings pending" here. It used to be recorded as REFUSED and then returned as allowed,
+   * which left a refusal row beside every real spend and hid committed money from the ledger
+   * (F-AMOUNT-UNKNOWN-RECORDED-REFUSED-BUT-ALLOWED). The row now says what happens: performed, with the
+   * ceiling check deferred to the commit.
+   */
+  const amountUnstated = input.amountCents === undefined || input.amountCents === null;
+  if (!judged.ok && judged.ledger.cause === 'AMOUNT_UNKNOWN' && amountUnstated && authority) {
+    judged = {
+      ...judged,
+      ok: true,
+      neededApproval: null,
+      approvalNeedId: null,
+      reason: 'within the standing commercial authority; the amount is judged against its ceilings where it is committed',
+      ledger: { ...judged.ledger, disposition: 'PERFORMED', cause: 'CEILING_AT_COMMIT' },
+    };
+  }
   // An owner's stored answer can cover a missing grant in the ledger's terms, but money is committed only
   // under a live grant row that callers read ceilings from: without one, the answer is recorded and the
   // action still refused, so the row says what happened rather than what the approval would have allowed.
@@ -232,10 +252,8 @@ export async function checkCommercialAuthority(input: {
     };
   }
   await recordDecision(judged);
-  // A caller that states no amount has its sum bounded by its own path's ceilings (the per-action and committed
-  // limits are read where the money is committed); that alone is not a refusal here. Every other cause is.
-  const amountOnly = !judged.ok && judged.ledger.cause === 'AMOUNT_UNKNOWN' && (input.amountCents === undefined || input.amountCents === null);
-  if ((!judged.ok && !amountOnly) || !authority) {
+  // What is recorded is what is returned: no row says REFUSED beside an allowed action.
+  if (!judged.ok || !authority) {
     return { ok: false, authority, reason: judged.reason, policyVersion: authority?.policyVersion ?? null };
   }
   return {
@@ -395,6 +413,8 @@ export interface AuthorityLedgerRecord {
     | 'EXPIRED_OR_NOT_STARTED'
     | 'NOT_COVERED'
     | 'AMOUNT_UNKNOWN'
+    /** Allowed with no amount stated: the ceilings are judged where the money is committed. Never a refusal. */
+    | 'CEILING_AT_COMMIT'
     | 'OVER_PER_ACTION_CEILING'
     | 'OVER_COMMITTED_CEILING'
     | 'RELEASE_ENVELOPE'
