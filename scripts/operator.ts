@@ -30,7 +30,7 @@ async function show(): Promise<void> {
     console.log(`LESSON ${one.recordedAt} ${one.goalId ?? '-'}: ${one.lesson} [${one.evidence}]`);
   }
   const actions = await getDb().all<{ event_type: string; payload: string; created_at: string }>(
-    "SELECT event_type, payload, created_at FROM project_events WHERE event_type LIKE 'OPERATOR_%' ORDER BY created_at DESC LIMIT 20",
+    "SELECT event_type, payload, created_at FROM project_events WHERE event_type IN ('OPERATOR_WITHDREW_MOOT_REQUEST', 'OPERATOR_FIX_SUBMITTED', 'OPERATOR_FIX_NOT_STARTED', 'OPERATOR_RUN_FINISHED') ORDER BY created_at DESC LIMIT 20",
     [],
   );
   for (const action of actions) console.log(`ACTION ${action.created_at} ${action.event_type} ${action.payload.slice(0, 500)}`);

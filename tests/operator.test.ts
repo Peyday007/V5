@@ -214,3 +214,27 @@ describe('with a database', () => {
     expect(isMemoryName('skills/../x/SKILL.md')).toBe(false);
   });
 });
+
+describe('the run reads the goals once and states them in the brief', () => {
+  it('names every goal id and every moot request id, blocked active goals first', async () => {
+    const { snapshotForBrief, urgencyOrder } = await import('../server/services/operator/snapshot.ts');
+    const summary = (id: string, state: string, lifecycle = 'ACTIVE') => ({
+      id, title: `goal ${id}`, projectId: `prj_${id}`, state, stateEvidence: '', lifecycle, target: null, dueAt: null,
+      waiting: 'PERSON: x', next: '[PERSON] y', openDecisions: 1, blockers: 2, priority: null,
+    });
+    const summaries = [summary('wst_a', 'ON_TRACK'), summary('wst_b', 'BLOCKED'), summary('wst_c', 'BLOCKED', 'PAUSED')];
+    expect(urgencyOrder(summaries).map((g) => g.id)).toEqual(['wst_b', 'wst_a', 'wst_c']);
+    const text = snapshotForBrief({
+      takenAt: '2026-11-12T11:00:00Z',
+      goals: [],
+      summaries,
+      requests: new Map([['prj_wst_b', [
+        { requestId: 'rhr_moot', question: 'q', recommendation: null, since: '', missionId: 'rms', missionState: 'RUNNING', packetStatus: null, moot: true, why: '' },
+        { requestId: 'rhr_live', question: 'q', recommendation: null, since: '', missionId: 'rms', missionState: 'NEEDS_HUMAN', packetStatus: null, moot: false, why: '' },
+      ]]]),
+    });
+    for (const id of ['wst_a', 'wst_b', 'wst_c', 'rhr_moot']) expect(text).toContain(id);
+    expect(text).not.toContain('rhr_live');
+    expect(operatorBrief({ nowIso: 'x', runId: 'r', goals: text }).startsWith("Brain's goals as read at")).toBe(true);
+  });
+});
