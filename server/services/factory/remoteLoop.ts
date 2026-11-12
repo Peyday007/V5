@@ -277,6 +277,8 @@ async function ingestUnitsBin(
   const units = await listUnits(campaign.id);
   if (!units.some((unit) => unit.state === 'READY')) return false;
   const { reports, problems } = await readUnitReports(bin.id);
+  // Only a clean read is remembered: a report with problems is read again.
+  if (problems.length === 0) rememberReportedKeys(bin, reports.keys());
   for (const problem of problems) report.notes.push(problem);
   if (reports.size === 0) return false;
   const who = await binIdentity(bin);
@@ -1483,6 +1485,27 @@ function rememberRecorded(bin: Bin): void {
 /** Tests: forget what this process has seen recorded, as a restart would. */
 export function forgetRecordedBins(): void {
   recordedBins.clear();
+  reportedUnitKeys.clear();
+}
+
+/*
+ * The unit keys a completed units bin reported, by bin and `updatedAt`. A
+ * complete bin's results cannot change, so once read they decide, with no
+ * statement, whether any unit this bin speaks for is still READY. Without it,
+ * one READY unit anywhere in a campaign had every finished units bin of that
+ * campaign re-read on every tick (production 2026-11-12: 1,152
+ * `bin_unit_results` reads in 15 minutes after the per-tick unit read was
+ * already fixed).
+ */
+const reportedUnitKeys = new Map<string, { updatedAt: string; keys: Set<string> }>();
+function rememberReportedKeys(bin: Bin, keys: Iterable<string>): void {
+  if (reportedUnitKeys.size >= RECORDED_BINS_CEILING) reportedUnitKeys.clear();
+  reportedUnitKeys.set(bin.id, { updatedAt: bin.updatedAt, keys: new Set(keys) });
+}
+function reportsNoReadyUnit(bin: Bin, units: FactoryWorkUnit[]): boolean {
+  const held = reportedUnitKeys.get(bin.id);
+  if (!held || held.updatedAt !== bin.updatedAt) return false;
+  return !units.some((unit) => unit.state === 'READY' && held.keys.has(unit.unitKey));
 }
 
 async function integrationAlreadyIngested(campaignId: string, binId: string): Promise<boolean> {
@@ -1887,7 +1910,9 @@ async function runRemoteTick(
       if (await ingestPlanBin(campaign, changeRequest, bin, report)) report.progress = true;
       tickUnits = null;
     } else if (bin.kind === 'FACTORY_UNITS') {
-      if (!(await unitsThisPass()).some((unit) => unit.state === 'READY')) continue;
+      const units = await unitsThisPass();
+      if (!units.some((unit) => unit.state === 'READY')) continue;
+      if (reportsNoReadyUnit(bin, units)) continue;
       if (await ingestUnitsBin(campaign, changeRequest, bin, report)) report.progress = true;
       tickUnits = null;
     } else if (bin.kind === 'FACTORY_INTEGRATE') {
