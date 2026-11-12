@@ -33,7 +33,6 @@ import {
   binAdmission,
   fleetDeclarationScanCount,
   forgetFleetDeclarations,
-  recordDemonstratedCapabilities,
 } from '../server/services/bins/service.ts';
 import { routeBin, type RoutingCandidate } from '../server/services/dispatch/router.ts';
 import { designRenderManifest, renderCommand } from '../server/services/design/render.ts';
@@ -254,64 +253,106 @@ describe('the assigner leaves a render for a surface that can render', () => {
   });
 });
 
-describe('a surface that renders declares the browser it proved it has', () => {
+describe('a satisfied render is not evidence of a browser, so Brain never declares one', () => {
   /*
-   * The derived requirement had a consumer and no producer: only a person wrote
-   * `capabilities`, nobody had written `browser`, and so every render bin was
-   * routed exactly as before. A satisfied render is the proof, and Brain writes
-   * it to the Routine it fired.
+   * Review finding: Brain wrote `browser` onto the Routine whose session
+   * satisfied DESIGN_RENDER_V1, on the premise that only a browser could
+   * satisfy it. `evaluateDesignRender` checks only that `captures` is a
+   * non-empty array — no hash is checked against any bytes — so a browserless
+   * session satisfies it with a fabricated capture, and the write recorded, in a
+   * field a person owns, a capability nothing verified. The declaration's only
+   * producer is now a person.
    */
-  async function fired(account: string, session: string) {
-    const binId = (
-      await createBin({
-        projectId,
-        kind: 'DESIGN_RENDER',
-        title: 'Design render: proof',
-        objective: 'Render the home surface.',
-        manifest: manifest(),
-        completionContract: 'DESIGN_RENDER_V1',
-        createdByType: 'SYSTEM',
-        createdById: `design:render:proof:${tag()}`,
-        ready: true,
-        maxAttempts: 3,
-        workloadClass: 'GENERAL_DESIGN_RENDER',
-      })
-    ).id;
-    const routine = await createRoutine({
-      accountId: account, routineRef: `trig_${tag()}`, name: `r-${tag()}`, tokenSecretName: `S_${tag()}`,
+
+  /** A render bin Brain fired at `routine` as `session`, taken through check-in, submission and completion. */
+  async function completeRenderFrom(routineId: string, routineRef: string) {
+    const { checkIn, submitUnit, requestCompletion } = await import('../server/services/bins/service.ts');
+    const bin = await createBin({
+      projectId,
+      kind: 'DESIGN_RENDER',
+      title: 'Design render: proof',
+      objective: 'Render the home surface.',
+      manifest: manifest(),
+      completionContract: 'DESIGN_RENDER_V1',
+      createdByType: 'SYSTEM',
+      createdById: `design:render:proof:${tag()}`,
+      ready: true,
+      maxAttempts: 3,
+      workloadClass: 'GENERAL_DESIGN_RENDER',
     });
+    const session = `cse_${tag()}${tag()}${tag()}`;
     const at = new Date().toISOString();
     await getDb().run(
       `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count, max_attempts,
          next_attempt_at, routine_id, routine_ref, session_ref, created_at, updated_at, sent_at)
        VALUES (?, ?, 0, 'SENT', 1, 5, ?, ?, ?, ?, ?, ?, ?)`,
-      [newId('bdi'), binId, at, routine.id, routine.routineRef, session, at, at, at],
+      [newId('bdi'), bin.id, at, routineId, routineRef, session, at, at, at],
     );
-    return routine;
+    const worker = await createWorker({ name: `render-worker-${tag()}`, createdByType: 'SYSTEM', createdById: 't' });
+    const principal = {
+      type: 'WORKER', id: worker.id, handle: `worker-${worker.id}`, displayName: 'Render worker',
+      isBrainAdmin: false, mustChangePassword: false, credentialId: `cred-${worker.id}`, authMethod: 'WORKER_BEARER',
+      memberships: [{ projectId, role: null, scopes: SCOPES, active: true }], requestId: 'test-request',
+    } as unknown as Principal;
+    const arrival = await checkIn({ principal, workerId: worker.id, sessionRef: session });
+    expect(arrival.assigned).toBe(true);
+    if (!arrival.assigned) throw new Error('not assigned');
+    expect(arrival.assignment.binId).toBe(bin.id);
+    const proof = {
+      binId: arrival.assignment.binId, leaseId: arrival.assignment.leaseId,
+      leaseGeneration: arrival.assignment.leaseGeneration, workerId: worker.id,
+    };
+    // A capture no browser drew: the hash is not of any bytes.
+    const fabricated = JSON.stringify({
+      revision: 'abc1234', treeDirty: false,
+      captures: [{ surfaceKey: 'home', width: 1280, sha256: 'f'.repeat(64), engine: 'chromium', engineVersion: '131' }],
+    });
+    expect((await submitUnit({ workerId: worker.id, proof, unitKey: 'design_render', value: fabricated })).held).toBe(true);
+    return (await requestCompletion({ workerId: worker.id, proof })).state;
   }
 
   it('reproduces the gap: with nobody declaring a browser, a browserless session is admitted to a render', async () => {
-    const account = await createAccount({ name: `gap-${tag()}` });
-    const session = `cse_${tag()}${tag()}${tag()}`;
     const bin = renderLike({ id: `bin_${tag()}` });
-    await fired(account.id, session);
     expect(effectiveCapabilities(bin, () => false)).toEqual([]);
+    // Through the real admission, not only the pure function.
+    const { bin: real, admit } = await setup(false);
+    expect((await admit(real)).ok).toBe(true);
   });
 
-  it('writes the capability to the Routine whose session satisfied the render, and the gates then use it', async () => {
+  it('the contract is satisfied by a capture no browser drew — so a satisfied verdict cannot be the proof', async () => {
+    const account = await createAccount({ name: `fabricated-${tag()}` });
+    const routine = await createRoutine({
+      accountId: account.id, routineRef: `trig_${tag()}`, name: `r-${tag()}`, tokenSecretName: `S_${tag()}`,
+    });
+    expect(await completeRenderFrom(routine.id, routine.routineRef)).toBe('COMPLETE');
+  });
+
+  it('writes nothing to the Routine whose session satisfied the render', async () => {
     const account = await createAccount({ name: `proof-${tag()}` });
-    const session = `cse_${tag()}${tag()}${tag()}`;
-    const renderer = await fired(account.id, session);
-    expect(renderer.capabilities).toEqual([]);
+    const routine = await createRoutine({
+      accountId: account.id, routineRef: `trig_${tag()}`, name: `r-${tag()}`, tokenSecretName: `S_${tag()}`,
+    });
+    expect(routine.capabilities).toEqual([]);
+    expect(await completeRenderFrom(routine.id, routine.routineRef)).toBe('COMPLETE');
+    expect((await getRoutine(routine.id))!.capabilities).toEqual([]);
+    // And so the fleet still declares no browser: the next render fails open, as before.
+    forgetFleetDeclarations();
+    const { bin, admit } = await setup(false);
+    expect((await admit(bin)).ok).toBe(true);
+  });
 
-    const changed = await recordDemonstratedCapabilities({
-      id: 'bin_rendered', completionContract: 'DESIGN_RENDER_V1', leaseSessionRef: session,
-    } as Bin);
-    expect(changed).toEqual([renderer.id]);
-    expect((await getRoutine(renderer.id))!.capabilities).toEqual(['browser']);
+  it('keeps exactly what a person declared, and the gates use that declaration', async () => {
+    const account = await createAccount({ name: `keep-${tag()}` });
+    const routine = await createRoutine({
+      accountId: account.id, routineRef: `trig_${tag()}`, name: `r-${tag()}`, tokenSecretName: `S_${tag()}`,
+    });
+    await setRoutineCapabilities({ routineId: routine.id, capabilities: ['repository'], actor: 'test', reason: 'checkout' });
+    expect(await completeRenderFrom(routine.id, routine.routineRef)).toBe('COMPLETE');
+    expect((await getRoutine(routine.id))!.capabilities).toEqual(['repository']);
 
-    // Producer reaches consumer: a browserless session is now left the render
-    // for the surface that proved it can do it.
+    // A person's declaration of a browser is what moves the gates.
+    await setRoutineCapabilities({ routineId: routine.id, capabilities: ['repository', 'browser'], actor: 'test', reason: 'has Chromium' });
+    forgetFleetDeclarations();
     const { bin, admit } = await setup(false);
     const verdict = await admit(bin);
     expect(verdict.ok).toBe(false);
@@ -320,39 +361,17 @@ describe('a surface that renders declares the browser it proved it has', () => {
     expect(verdict.reason).toContain('browser');
     const routed = routeBin({
       bin: renderLike(),
-      candidates: [candidate('plain', []), candidate(renderer.id, (await getRoutine(renderer.id))!.capabilities)],
+      candidates: [candidate('plain', []), candidate(routine.id, (await getRoutine(routine.id))!.capabilities)],
       fleetPolicy: null,
       fleetInFlight: 0,
       now: NOW,
     });
-    expect(routed.ok && routed.routine.id).toBe(renderer.id);
+    expect(routed.ok && routed.routine.id).toBe(routine.id);
   });
 
-  it('is idempotent and never removes what a person declared', async () => {
-    const account = await createAccount({ name: `keep-${tag()}` });
-    const session = `cse_${tag()}${tag()}${tag()}`;
-    const routine = await fired(account.id, session);
-    await setRoutineCapabilities({ routineId: routine.id, capabilities: ['repository'], actor: 'test', reason: 'checkout' });
-    const bin = { id: 'bin_x', completionContract: 'DESIGN_RENDER_V1', leaseSessionRef: session } as Bin;
-    expect(await recordDemonstratedCapabilities(bin)).toEqual([routine.id]);
-    expect(await recordDemonstratedCapabilities(bin)).toEqual([]);
-    expect((await getRoutine(routine.id))!.capabilities).toEqual(['browser', 'repository']);
-  });
-
-  it('writes nothing for a contract that implies no capability, or a session Brain did not fire', async () => {
-    const account = await createAccount({ name: `none-${tag()}` });
-    const session = `cse_${tag()}${tag()}${tag()}`;
-    const routine = await fired(account.id, session);
-    expect(
-      await recordDemonstratedCapabilities({ id: 'b', completionContract: 'FACTORY_UNITS_V1', leaseSessionRef: session } as Bin),
-    ).toEqual([]);
-    expect(
-      await recordDemonstratedCapabilities({ id: 'b', completionContract: 'DESIGN_RENDER_V1', leaseSessionRef: `cse_${tag()}${tag()}${tag()}` } as Bin),
-    ).toEqual([]);
-    expect(
-      await recordDemonstratedCapabilities({ id: 'b', completionContract: 'DESIGN_RENDER_V1', leaseSessionRef: null } as Bin),
-    ).toEqual([]);
-    expect((await getRoutine(routine.id))!.capabilities).toEqual([]);
+  it('exports no writer that infers a capability from a verdict', async () => {
+    const service = await import('../server/services/bins/service.ts');
+    expect('recordDemonstratedCapabilities' in service).toBe(false);
   });
 });
 
@@ -586,7 +605,7 @@ describe('from the recorded state: a render bin, no declared browser, a worker t
       completed = outcome.state;
     }
     await reconcileBins(projectId);
-    return { bin: (await getBin(bin.id))!, refusals, completed };
+    return { bin: (await getBin(bin.id))!, refusals, completed, plain: (await getRoutine(plain.id))! };
   }
 
   it('reproduces the recorded failure: the manifest issued before ends NEEDS_HUMAN with "No render was submitted"', async () => {
@@ -607,5 +626,7 @@ describe('from the recorded state: a render bin, no declared browser, a worker t
     expect(result.refusals).toEqual([[]]);
     expect(result.completed).toBe('COMPLETE');
     expect(result.bin.state).toBe('COMPLETE');
+    // Completing it is not a declaration: the plain Routine still declares nothing.
+    expect(result.plain.capabilities).toEqual([]);
   });
 });

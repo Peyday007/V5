@@ -912,10 +912,10 @@ export function contractCapabilities(completionContract: string): readonly strin
  * open where the unknown could only waste a fire. A fleet in which nobody has
  * yet declared `browser` routes a render bin exactly as it did before, rather
  * than stranding it behind a tag nobody wrote; once one surface declares it,
- * the others stop being handed work they cannot do. The declaration has a
- * producer besides a person: a surface whose session satisfies the contract
- * has demonstrated the capability, and `recordDemonstratedCapabilities`
- * (`service.ts`) writes it to that Routine. With no `declaredInFleet`
+ * the others stop being handed work they cannot do. The declaration's only
+ * producer is a person (`setRoutineCapabilities`): Brain does not infer it
+ * from a satisfied contract, because the render contract's evaluator checks
+ * the submission's shape, not that a browser drew it. With no `declaredInFleet`
  * at all only the bin's own requirements are returned, which is the previous
  * behaviour for every caller that has no fleet to ask.
  */
