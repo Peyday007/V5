@@ -124,7 +124,7 @@ import {
   recordEvent as recordObligationEvent,
   retryWork as retryObligationWork,
 } from '../services/cash/journey/fulfillment.ts';
-import { performCommercialAction, resolveCommercialEffect } from '../services/cash/perform.ts';
+import { continuationAlternatives, performCommercialAction, resolveCommercialEffect } from '../services/cash/perform.ts';
 import { requestInvoice } from '../services/cash/invoicing.ts';
 import { listInvoices } from '../repos/cashInvoices.ts';
 import { commercialProviderStatus } from '../services/cash/providers/status.ts';
@@ -200,6 +200,7 @@ const SERVER_LEDGER_KEY_PREFIXES = [
   'settle:',
 ] as const;
 import type { Outcome } from '../services/cash/opportunities.ts';
+import { PERFORMABLE_ACTIONS, declareContinuationAlternative, isPerformable } from '../services/cash/effects.ts';
 
 export const cashRouter: Router = Router();
 
@@ -627,6 +628,61 @@ cashRouter.post(
  * refused here by type, and a machine that could grant itself a spending
  * ceiling is exactly what §22's split forbids.
  * ------------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------------
+ * Alternatives a commitment may move to (CONT-35, S-0485)
+ *
+ * A registered adapter can declare it stands in for an action (another
+ * acquisition channel, another supplier). Whether Brain may move a
+ * commitment there — and, for a supplier, whether the contract allows it —
+ * is this person's decision, recorded here and read by `continuationGate` at
+ * every send. Nothing recorded is not permitted.
+ * ------------------------------------------------------------------------ */
+
+function triStateBody(value: unknown, field: string): boolean | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'boolean') return value;
+  throw badRequest(`${field} must be true, false or null.`);
+}
+
+cashRouter.get(
+  '/projects/:projectId/cash/continuation-alternatives',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const out: Record<string, unknown>[] = [];
+    for (const action of PERFORMABLE_ACTIONS) {
+      for (const alt of await continuationAlternatives(project.id, action)) out.push({ action, ...alt });
+    }
+    return { alternatives: out };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/continuation-alternatives',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const action = requiredString(body['action'], 'action');
+    if (!isPerformable(action)) throw badRequest(`action must be one of ${PERFORMABLE_ACTIONS.join(', ')}.`);
+    const namespace = requiredString(body['namespace'], 'namespace');
+    try {
+      const decision = await declareContinuationAlternative({
+        projectId: project.id,
+        action,
+        namespace,
+        permitted: triStateBody(body['permitted'], 'permitted'),
+        contractuallyWorkable: triStateBody(body['contractuallyWorkable'], 'contractuallyWorkable'),
+        actorRef: principal.id,
+        note: optionalString(body['note'], 'note') ?? null,
+      });
+      return { decision };
+    } catch (error) {
+      throw unprocessable(error instanceof Error ? error.message : String(error));
+    }
+  }),
+);
 
 cashRouter.post(
   '/projects/:projectId/cash/authority',

@@ -83,6 +83,22 @@ export interface EffectAdapter {
   namespace: string;
 
   /**
+   * The namespace this adapter can stand in for when that one is down or
+   * constrained (S-0485): a second acquisition channel, or another supplier of
+   * the same work. Declaring it says only that the adapter *can* perform that
+   * operation's effect. Whether Brain *may* move a commitment to it is a
+   * person's decision, read from records (`cash/effects.ts
+   * continuationPermissions`); nobody having said is never a yes.
+   */
+  alternateFor?: string;
+
+  /** The channel it reaches people through. Two accounts on one channel share it, so neither stands in for the other when that channel is suspended. */
+  channel?: string | null;
+
+  /** It is a supplier, so moving work to it also needs the contract to allow it. */
+  requiresContract?: boolean;
+
+  /**
    * The provider's key format, when it has one.
    *
    * `maxLength` matters: a provider that silently truncates keys de-duplicates

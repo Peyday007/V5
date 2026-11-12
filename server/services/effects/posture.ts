@@ -87,12 +87,12 @@ export const CONTINUITY_CLAUSE_OWNERS: readonly ClauseOwner[] = [
   },
   {
     clause: 'change to a permitted acquisition channel when an account is suspended',
-    owner: 'server/services/effects/posture.ts (planContinuation: CONSTRAINED → REROUTE to a permitted, different channel), applied before every send by server/services/cash/perform.ts (performCommercialAction → decideCommitmentContinuation)',
-    reader: 'NOT_AUTHORIZED refusals in idempotency_operations; cash_events CASH_CONTINUATION_DECIDED',
+    owner: 'server/services/effects/posture.ts (planContinuation: CONSTRAINED → REROUTE to a permitted, different channel), applied before every send by server/services/cash/perform.ts (performCommercialAction → continuationGate → decideCommitmentContinuation, which reads the alternatives from registered adapters declaring alternateFor and the CASH_CONTINUATION_ALTERNATIVE permission records, and sends through the one chosen)',
+    reader: 'NOT_AUTHORIZED refusals in idempotency_operations; cash_events CASH_CONTINUATION_DECIDED (decision REROUTE, to); idempotency_operations in the alternative namespace under the same correlation',
   },
   {
     clause: 'switch suppliers if the original fails and an alternative is contractually workable',
-    owner: 'server/services/effects/posture.ts (planContinuation: contractuallyWorkable must be declared true), applied before every send by server/services/cash/perform.ts (performCommercialAction → decideCommitmentContinuation)',
+    owner: 'server/services/effects/posture.ts (planContinuation: contractuallyWorkable must be declared true), applied before every send by server/services/cash/perform.ts (performCommercialAction → continuationGate → decideCommitmentContinuation, contractuallyWorkable read from the CASH_CONTINUATION_ALTERNATIVE records, and the send made through the supplier chosen)',
     reader: 'idempotency_operations per supplier namespace; cash_events CASH_CONTINUATION_DECIDED',
   },
   {
@@ -291,6 +291,13 @@ export interface ContinuationInput {
   /** The commitment has a deadline a backoff could outlast. */
   timeCritical: boolean;
   alternatives: readonly ContinuationAlternative[];
+  /**
+   * The attempt being made now is itself unsettled at the original. It may be
+   * reconciled there under its own key, and it never moves: a second provider
+   * asked to do what the first may already have done is the duplicate S-0484
+   * forbids. Absent is zero.
+   */
+  currentUnsettledHere?: number;
 }
 
 export type ContinuationAction =
@@ -342,8 +349,11 @@ export function planContinuation(input: ContinuationInput): ContinuationDecision
   }
   const skipped: { namespace: string; why: string }[] = [];
   let chosen: ContinuationAlternative | null = null;
+  const pinned = (input.currentUnsettledHere ?? 0) > 0;
   for (const alt of input.alternatives) {
-    const why = whyNot(input, alt);
+    const why = pinned
+      ? `the attempt being made now may already have been accepted by ${input.namespace}; it is reconciled there and never sent a second time somewhere else`
+      : whyNot(input, alt);
     if (why === null && chosen === null) chosen = alt;
     else skipped.push({ namespace: alt.namespace, why: why ?? 'an earlier eligible alternative was chosen' });
   }
@@ -399,8 +409,14 @@ export interface CommitmentContinuationInput {
   /** The namespace the commitment would be performed through. */
   namespace: string;
   channel: string | null;
-  /** The operations that belong to this commitment and are not the attempt being made now (that one reconciles itself under its own key). */
+  /** The operations that belong to this commitment and are not the attempt being made now (that one reconciles itself under its own key). Read in every namespace: an attempt moved to an alternative is still this commitment's. */
   otherAttempt: (operation: IdempotencyOperation) => boolean;
+  /**
+   * The attempt being made now, in any namespace. Unsettled at the original it
+   * pins the commitment there (no REROUTE); unsettled at any other namespace it
+   * is held for reconciliation, so moving back or onward never sends it twice.
+   */
+  currentAttempt?: (operation: IdempotencyOperation) => boolean;
   deadline: string | null;
   /** Alternatives the caller's records name; none named is none, never an invented one (R01-A1, invariant 39). */
   alternatives?: readonly ContinuationAlternative[];
@@ -425,13 +441,21 @@ export interface CommitmentContinuation extends ContinuationDecision {
  */
 export async function decideCommitmentContinuation(input: CommitmentContinuationInput): Promise<CommitmentContinuation> {
   const now = input.now ?? operationNow();
-  const operations = (await listOperations(input.projectId, { limit: 500 })).filter((op) => op.namespace === input.namespace);
+  const current = input.currentAttempt ?? (() => false);
   const outcomes: NamespaceOutcome[] = [];
   let unsettled = 0;
-  for (const operation of operations) {
+  let currentUnsettledHere = 0;
+  for (const operation of await listOperations(input.projectId, { limit: 500 })) {
+    const here = operation.namespace === input.namespace;
+    const other = input.otherAttempt(operation);
+    const isCurrent = !other && current(operation);
+    if (!here && !other && !isCurrent) continue;
     const attempts = await listAttempts(operation.id);
-    outcomes.push(...outcomesOf(operation, attempts));
-    if (input.otherAttempt(operation) && UNSETTLED_CLASSES.has(classifyOperation(operation, attempts, now).class)) unsettled += 1;
+    if (here) outcomes.push(...outcomesOf(operation, attempts));
+    if (!other && !isCurrent) continue;
+    if (!UNSETTLED_CLASSES.has(classifyOperation(operation, attempts, now).class)) continue;
+    if (other || !here) unsettled += 1;
+    else currentUnsettledHere += 1;
   }
   const health = judgeDependency(input.namespace, outcomes, now);
   const timeCritical = isTimeCritical(input.deadline, now);
@@ -442,6 +466,7 @@ export async function decideCommitmentContinuation(input: CommitmentContinuation
     unsettled,
     timeCritical,
     alternatives: input.alternatives ?? [],
+    currentUnsettledHere,
   });
   return { ...decision, namespace: input.namespace, health, unsettled, timeCritical };
 }

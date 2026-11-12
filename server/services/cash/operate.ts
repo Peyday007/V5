@@ -1355,6 +1355,7 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
         amountCents: null,
         stateAtSend: opportunity.state,
         subjectRef: prepared.value.subjectRef,
+        via: continuing.value.via,
       });
     } catch (error) {
       out.withheld.push({

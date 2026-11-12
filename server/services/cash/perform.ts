@@ -88,8 +88,14 @@ import { composeBuyerMessage } from './outreach.ts';
 import { dealPosition } from './journey/position.ts';
 import { emptyInvoicingPass, issueOne } from './invoicing.ts';
 import { listInvoices } from '../../repos/cashInvoices.ts';
-import { usableAdapter } from './effects.ts';
-import { decideCommitmentContinuation } from '../effects/posture.ts';
+import {
+  adapterForNamespace,
+  alternateAdaptersFor,
+  alternateNamespace,
+  continuationPermissions,
+  usableAdapter,
+} from './effects.ts';
+import { decideCommitmentContinuation, namespaceHealth, type ContinuationAlternative } from '../effects/posture.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -578,7 +584,11 @@ export async function recoverAbandonedEffects(projectId: string): Promise<Reconc
     const { operation } = one;
     const uncertain = operation.state === 'UNCERTAIN';
     if (!uncertain && (operation.state !== 'RESERVED' || operation.failureCategory)) continue;
-    const adapter = adapterFor(one.action);
+    // The adapter of the namespace the attempt was actually made in: an attempt
+    // moved to an alternative is asked of that provider, never of the original.
+    const adapter = operation.namespace === COMMERCIAL_EFFECTS[one.action].namespace.name
+      ? adapterFor(one.action)
+      : adapterForNamespace(operation.namespace);
     // No adapter on this process: it cannot be asked, so it waits for one.
     if (!adapter) continue;
     // An unknown an adapter cannot be asked about is a person's to settle: the
@@ -1003,35 +1013,65 @@ function stateAllows(action: PerformableAction, state: CashOpportunity['state'])
  * bypassed, a commitment with an unsettled effect is reconciled before
  * anything is resent, and a deadline a wait could miss is escalated now —
  * each decision, with the alternatives it skipped and why, on the cash record.
- * The attempt being made now is not counted as unsettled: it reconciles under
- * its own key rather than resending.
+ * The attempt being made now is not counted as unsettled at the original: it
+ * reconciles under its own key rather than resending — but it pins the
+ * commitment there, and unsettled anywhere else it is held.
+ *
+ * The alternatives are read here, at the send path (S-0485): every registered
+ * adapter that declares it can stand in for this action, with what a person
+ * recorded about it (`continuationPermissions`; nobody having said is not
+ * permitted) and its own health from the same ledger. REROUTE returns the
+ * namespace chosen, and the send is made through it.
  */
+export async function continuationAlternatives(
+  projectId: string,
+  action: PerformableAction,
+): Promise<ContinuationAlternative[]> {
+  const permissions = await continuationPermissions(projectId, action);
+  const out: ContinuationAlternative[] = [];
+  for (const adapter of alternateAdaptersFor(action)) {
+    const decided = permissions.get(adapter.namespace) ?? null;
+    const usable = usableAdapter(alternateNamespace(action, adapter.namespace)) !== null;
+    const health = await namespaceHealth(projectId, adapter.namespace);
+    out.push({
+      namespace: adapter.namespace,
+      channel: adapter.channel ?? null,
+      permitted: decided?.permitted ?? null,
+      contractuallyWorkable: decided?.contractuallyWorkable ?? null,
+      requiresContract: adapter.requiresContract === true,
+      // An adapter whose own configuration is unusable cannot carry the commitment, whatever its ledger says.
+      status: usable ? health.status : 'OUTAGE',
+    });
+  }
+  return out;
+}
+
 export async function continuationGate(
   opportunity: CashOpportunity,
   action: PerformableAction,
   occurrence: string,
   actorRef: string,
-): Promise<Outcome<void>> {
+): Promise<Outcome<{ via: string | null }>> {
   const effect = COMMERCIAL_EFFECTS[action];
   const base = `cash:${opportunity.id}:${action}:`;
   const current = `${base}${occurrence}`;
+  const isCurrent = (op: IdempotencyOperation) =>
+    op.correlationId !== null && (op.correlationId === current || op.correlationId.startsWith(`${current}:`));
   const continuation = await decideCommitmentContinuation({
     projectId: opportunity.projectId,
     namespace: effect.namespace.name,
-    channel: opportunity.reachableChannel,
-    otherAttempt: (op) =>
-      op.correlationId !== null &&
-      op.correlationId.startsWith(base) &&
-      op.correlationId !== current &&
-      !op.correlationId.startsWith(`${current}:`),
+    // The channel the original adapter declares it reaches people through, else the one on the card.
+    channel: adapterFor(action)?.channel ?? opportunity.reachableChannel,
+    otherAttempt: (op) => op.correlationId !== null && op.correlationId.startsWith(base) && !isCurrent(op),
+    currentAttempt: isCurrent,
     deadline: opportunity.deadline,
+    alternatives: await continuationAlternatives(opportunity.projectId, action),
   });
-  if (continuation.action === 'PROCEED') return { ok: true, value: undefined, message: continuation.reason };
-  const refusal = refuse(
-    continuation.action === 'REROUTE'
-      ? `${continuation.reason}. Nothing was sent through ${continuation.namespace}.`
-      : `Nothing was sent: ${continuation.reason}.`,
-  );
+  if (continuation.action === 'PROCEED') return { ok: true, value: { via: null }, message: continuation.reason };
+  const result: Outcome<{ via: string | null }> =
+    continuation.action === 'REROUTE' && continuation.to
+      ? { ok: true, value: { via: continuation.to }, message: `${continuation.reason}. Nothing is sent through ${continuation.namespace}.` }
+      : refuse(`Nothing was sent: ${continuation.reason}.`);
   /*
    * Recorded when the decision changes, not every time it is read. The tick
    * asks this of every held piece on every pass, and a hold waiting on a
@@ -1053,13 +1093,16 @@ export async function continuationGate(
   const previous = (await cashEventsOfKind(opportunity.id, 'CASH_CONTINUATION_DECIDED'))
     .filter((event) => event.detail['action'] === action)
     .at(-1);
-  if (previous && continuationSignature(previous.detail) === signature) return refusal;
+  if (previous && continuationSignature(previous.detail) === signature) return result;
   await recordCashEvent({
     projectId: opportunity.projectId,
     opportunityId: opportunity.id,
     kind: 'CASH_CONTINUATION_DECIDED',
     actorRef,
-    summary: `Brain did not attempt ${effect.doing}: ${continuation.action.toLowerCase().replace(/_/g, ' ')}.`,
+    summary:
+      continuation.action === 'REROUTE'
+        ? `Brain moved ${effect.doing} from ${continuation.namespace} to ${continuation.to}.`
+        : `Brain did not attempt ${effect.doing}: ${continuation.action.toLowerCase().replace(/_/g, ' ')}.`,
     detail: {
       action,
       occurrence,
@@ -1074,7 +1117,7 @@ export async function continuationGate(
       timeCritical: continuation.timeCritical,
     },
   });
-  return refusal;
+  return result;
 }
 
 /** The fields of a continuation decision that make it a different decision. */
@@ -1233,6 +1276,7 @@ export async function performCommercialAction(input: {
       amountCents: prepared.value.amountCents,
       stateAtSend: opportunity.state,
       subjectRef: prepared.value.subjectRef,
+      via: continuing.value.via,
     });
   } catch (error) {
     if (error instanceof OperationInProgress) {
