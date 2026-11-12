@@ -3,7 +3,7 @@
  * an unknown never states a number, an estimate needs a range, and a reach shortfall is met
  * with a move that changes the channel. It fails when there is nothing to look at.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
@@ -103,7 +103,24 @@ describe('probe r01.opp-04 on rows', () => {
     await setTerms(g.id, { dueAt: new Date(now.getTime() + 30 * 86_400_000).toISOString(), ownerUserId: userId }, `person:${userId}`);
     expect((await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 100_000, currency: 'USD', projectId: project.id, now: new Date(now.getTime() - 60_000) })).ok).toBe(true);
     const empty = await getProbe('r01.opp-04')!({});
-    expect(empty.ok).toBe(false);
     expect(empty.detail).toMatch(/none has a pathway|could not be read/);
+    expect(empty.ok).toBe(/could not be read/.test(empty.detail) ? null : false);
+  });
+
+  it('is UNKNOWN, never FAIL, when a live goal\'s plan cannot be read (production 2026-11-12: pool exhausted)', async () => {
+    const { project } = await freshProject();
+    const userId = (await createUser({ email: `o4u-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+    const g = await createWorkstream({ projectId: project.id, title: 'Goal', intent: 'Reach the figure.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: new Date(now.getTime() + 30 * 86_400_000).toISOString(), ownerUserId: userId }, `person:${userId}`);
+    expect((await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 100_000, currency: 'USD', projectId: project.id, now: new Date(now.getTime() - 60_000) })).ok).toBe(true);
+    const plan = await import('../server/services/goals/plan.ts');
+    const spy = vi.spyOn(plan, 'readGoalPlan').mockRejectedValue(new Error('The database pool had no free connection within 10000ms'));
+    try {
+      const r = await getProbe('r01.opp-04')!({});
+      expect(r.ok).toBeNull();
+      expect(r.detail).toMatch(/could not be read .*pool/);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
