@@ -294,7 +294,7 @@ There must be no workflow where the user has to remember "now go update the data
     time to revenue and whether it can be done, and a goal's constraint binds
     that goal, only while it runs.
 
-## 8–106. The architecture record
+## 8–107. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -402,6 +402,7 @@ resolves. Read the section for the area you are changing before you change it
 - §104. An open-source agent answers one narrow question, and Brain keeps the prospect, the decision and the record.
 - §105. An industry is never excluded, and a goal's constraint ends with the goal.
 - §106. Brain has one general operator, and its hands are Brain's own operations.
+- §107. Sellbird's whole sales mind works every business, and Brain still decides, sends through Instantly and keeps the record.
 
 ## Conventions
 

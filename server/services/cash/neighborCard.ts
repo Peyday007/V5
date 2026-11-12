@@ -50,6 +50,13 @@ import {
 } from '../agents/client.ts';
 
 export const CAMPAIGN_NAME = 'Neighbor Card · Camp Hill Jan 2027';
+/**
+ * The personal variant (§107): the same offer, senders, schedule, footer and
+ * follow-ups, with a first email Sellbird wrote for each business from what its
+ * own site says. New leads are split between the two by the measured allocation
+ * (`sales/desk.ts`), so the two first emails are compared on real replies.
+ */
+export const PERSONAL_CAMPAIGN_NAME = `${CAMPAIGN_NAME} · personal`;
 export const PUBLISHER = 'Peyton Rosser';
 export const PUBLISHER_PHONE = '313-671-6425';
 /** Owner-supplied 2026-11-11; the ZIP is the Census geocoder's match for the street. */
@@ -95,6 +102,18 @@ ${SIGN}<p><i>Reply "no thanks" to opt out.</i></p>`,
   },
 ];
 
+/** The personal variant's sequence: Sellbird's first email, then the same two follow-ups. */
+export const PERSONAL_STEPS: { subject: string; body: string; delayDays: number }[] = [
+  {
+    subject: '{{sb_subject}}',
+    delayDays: STEPS[0]!.delayDays,
+    body: `{{sb_body}}
+${SIGN}<p><i>This is an advertising offer. Reply "no thanks" and we won't contact you again.</i></p>`,
+  },
+  STEPS[1]!,
+  STEPS[2]!,
+];
+
 /**
  * Minutes between two sends from one inbox. Left unset, Instantly's default gap
  * held each 90/day inbox to about 42 sends in the 7-hour window (2026-11-12:
@@ -104,14 +123,14 @@ ${SIGN}<p><i>Reply "no thanks" to opt out.</i></p>`,
 export const SEND_GAP_MINUTES = 4;
 export const RANDOM_WAIT_MAX_MINUTES = 1;
 
-export function campaignDefinition(senders: string[], dailyLimit: number): Record<string, unknown> {
+export function campaignDefinition(senders: string[], dailyLimit: number, steps = STEPS): Record<string, unknown> {
   return {
     email_gap: SEND_GAP_MINUTES,
     random_wait_max: RANDOM_WAIT_MAX_MINUTES,
     campaign_schedule: {
       schedules: [{ name: 'Weekdays ET', timing: { from: '09:00', to: '16:00' }, days: { '1': true, '2': true, '3': true, '4': true, '5': true }, timezone: 'America/Detroit' }],
     },
-    sequences: [{ steps: STEPS.map((s) => ({ type: 'email', delay: s.delayDays, variants: [{ subject: s.subject, body: s.body }] })) }],
+    sequences: [{ steps: steps.map((s) => ({ type: 'email', delay: s.delayDays, variants: [{ subject: s.subject, body: s.body }] })) }],
     email_list: senders,
     daily_limit: dailyLimit,
     stop_on_reply: true,
@@ -124,14 +143,14 @@ export function campaignDefinition(senders: string[], dailyLimit: number): Recor
 }
 
 /** What the campaign must look like after a write, or the reason it does not. */
-export function shapeProblems(campaign: Record<string, unknown>, senders: string[], dailyLimit: number): string[] {
+export function shapeProblems(campaign: Record<string, unknown>, senders: string[], dailyLimit: number, expected = STEPS): string[] {
   const problems: string[] = [];
   const steps = ((campaign.sequences as { steps?: { variants?: { subject?: string; body?: string }[] }[] }[] | undefined)?.[0]?.steps) ?? [];
-  if (steps.length !== STEPS.length) problems.push(`${steps.length} steps, expected ${STEPS.length}`);
+  if (steps.length !== expected.length) problems.push(`${steps.length} steps, expected ${expected.length}`);
   steps.forEach((step, i) => {
     const v = step.variants?.[0];
     if (!v?.subject?.trim()) problems.push(`step ${i + 1} has no subject`);
-    if (!v?.body || (v.body.match(/<p>/g) ?? []).length < 2) problems.push(`step ${i + 1} body is blank or fused into one paragraph`);
+    if (!v?.body || (!v.body.includes('{{sb_body}}') && (v.body.match(/<p>/g) ?? []).length < 2)) problems.push(`step ${i + 1} body is blank or fused into one paragraph`);
     if (v?.body && !v.body.includes(PUBLISHER_ADDRESS)) problems.push(`step ${i + 1} lacks the mailing address`);
   });
   const list = [...((campaign.email_list as string[] | undefined) ?? [])].sort();
@@ -165,6 +184,28 @@ export interface Deps {
    * is not connected; refill is then exactly as before.
    */
   agents?: RefillAgents;
+  /**
+   * Sellbird's sales desk for new leads (§107): research and a fit score for
+   * each, highest fit first, and a first email written for the best of them
+   * into the personal variant. Absent when the agents app or a model is not
+   * connected; every lead then goes to the template campaign as before.
+   */
+  personal?: PersonalDesk;
+}
+
+export interface PersonalLead { email: string; greeting: string; name: string; website: string; category: string; town: string; sourceUrl: string }
+
+export interface PersonalDesk {
+  /** New leads this pass that get a written first email (the measured allocation decides). */
+  perPass: number;
+  /** New leads this pass that are researched and scored. */
+  researchPerPass: number;
+  /** Sellbird's research: its fit score, a refusal (the do-not-contact list), a named decision maker's first name. */
+  research: (lead: PersonalLead) => Promise<{ fit: number | null; refuse: string | null; greeting: string | null } | null>;
+  /** One grounded first email as the campaign's variables, or null (then the lead takes the template). */
+  write: (lead: PersonalLead) => Promise<{ subject: string; bodyHtml: string } | null>;
+  /** Record a lead that went to the template campaign, and why. */
+  template: (lead: PersonalLead, note: string) => Promise<void>;
 }
 
 export interface RefillAgents {
@@ -296,6 +337,34 @@ export async function syncCampaign(deps: Deps): Promise<{ id: string; status: nu
   const word = STATUS_WORDS[status] ?? `status ${status}`;
   const note = status === 1 ? '' : status === 0 ? ' (activation did not take)' : ' — not resumed automatically: a person or Instantly stopped it';
   return { id, status, senders: emails.length, dailyCapacity, line: `campaign ${word}${note}; ${emails.length} healthy senders, ${dailyCapacity}/day combined` };
+}
+
+/**
+ * The personal variant, kept in the template's shape: created when missing,
+ * written with the same senders, limit, schedule and follow-ups, and activated
+ * as a draft the way the template is (the owner's activation of the Neighbor
+ * Card covers the same offer from the same senders). Never resumes a campaign a
+ * person or Instantly paused.
+ */
+export async function syncPersonalCampaign(deps: Deps): Promise<{ id: string; status: number; line: string }> {
+  const rows = itemsOf(await instantly(deps, 'GET', `/campaigns?limit=100&search=${encodeURIComponent(PERSONAL_CAMPAIGN_NAME)}`));
+  let campaign = rows.find((c) => c.name === PERSONAL_CAMPAIGN_NAME) ?? null;
+  const { emails, dailyCapacity } = await healthySenders(deps);
+  if (emails.length === 0) throw new InstantlyError('no healthy sending account in the workspace');
+  const definition = campaignDefinition(emails, dailyCapacity, PERSONAL_STEPS);
+  if (!campaign) campaign = await instantly(deps, 'POST', '/campaigns', { name: PERSONAL_CAMPAIGN_NAME, ...definition });
+  const id = String(campaign.id);
+  await instantly(deps, 'PATCH', `/campaigns/${id}`, definition);
+  let back = await instantly(deps, 'GET', `/campaigns/${id}`);
+  const problems = shapeProblems(back, emails, dailyCapacity, PERSONAL_STEPS);
+  if (problems.length) throw new InstantlyError(`the personal campaign did not read back as written: ${problems.join('; ')}`);
+  let status = Number(back.status);
+  if (status === 0) {
+    await instantly(deps, 'POST', `/campaigns/${id}/activate`, {});
+    back = await instantly(deps, 'GET', `/campaigns/${id}`);
+    status = Number(back.status);
+  }
+  return { id, status, line: `personal variant ${STATUS_WORDS[status] ?? `status ${status}`}` };
 }
 
 /** Every lead in the campaign (emails and website domains), for de-duplication. */
@@ -769,7 +838,7 @@ async function pool<T, R>(items: T[], width: number, work: (item: T) => Promise<
   return out;
 }
 
-export interface RefillResult { discovered: number; fresh: number; found: number; noMx: number; added: number; line: string; viaAgents?: { sellbirdAsked: number; sellbirdFound: number; browserAsked: number; browserFound: number } }
+export interface RefillResult { discovered: number; fresh: number; found: number; noMx: number; added: number; line: string; viaAgents?: { sellbirdAsked: number; sellbirdFound: number; browserAsked: number; browserFound: number }; desk?: { researched: number; refused: number; written: number; personal: number; template: number; failed: number } }
 
 /**
  * Discovery rotates by the hour so successive passes cover every chamber
@@ -780,9 +849,15 @@ export interface RefillResult { discovered: number; fresh: number; found: number
 /** Sources one pass reads, all concurrently. A pass runs every quarter hour (loop.ts). */
 export const PER_PASS = { places: 3, chamber: 4, tiles: 6 };
 
-export async function refill(deps: Deps, campaignId: string, options: { slot?: number; maxSites?: number } = {}): Promise<RefillResult> {
+export async function refill(deps: Deps, campaignId: string, options: { slot?: number; maxSites?: number; personalCampaignId?: string | null } = {}): Promise<RefillResult> {
   const slot = options.slot ?? Math.floor(Date.now() / 900_000);
   const known = await campaignLeads(deps, campaignId);
+  if (options.personalCampaignId) {
+    // One business is one lead across both variants.
+    const other = await campaignLeads(deps, options.personalCampaignId);
+    for (const e of other.emails) known.emails.add(e);
+    for (const d of other.domains) known.domains.add(d);
+  }
   const chamber = Array.from({ length: PER_PASS.chamber }, (_, i) => CHAMBER_PAIRS[(slot * PER_PASS.chamber + i) % CHAMBER_PAIRS.length]!);
   const tiles = Array.from({ length: PER_PASS.tiles }, (_, i) => OSM_TILES[(slot * PER_PASS.tiles + i) % OSM_TILES.length]!);
   const [places, ...batches] = await Promise.all([
@@ -801,6 +876,8 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
     seen.add(d);
     return true;
   }).slice(0, options.maxSites ?? 300);
+  type Accepted = { c: Candidate; hit: Found; greeting: string };
+  const accepted: Accepted[] = [];
   let found = 0;
   let noMx = 0;
   let unverified = 0;
@@ -839,30 +916,81 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
     const mx = await deps.resolveMx(hit.email.split('@')[1]!);
     if (mx === null) { unverified += 1; return; }
     if (!mx) { noMx += 1; return; }
-    const cat = CATEGORY[c.category]!;
+    known.emails.add(hit.email);
+    accepted.push({ c, hit, greeting });
+  });
+
+  // Sellbird's desk (§107): research every accepted lead it has room for, drop
+  // what its rules refuse, rank by fit, and write the first email for the best.
+  const personal = deps.personal && options.personalCampaignId ? deps.personal : null;
+  const desk = { researched: 0, refused: 0, written: 0, personal: 0, template: 0, failed: 0 };
+  const placement = new Map<Accepted, { campaign: string; vars: Record<string, string> }>();
+  if (personal) {
+    const asLead = (a: Accepted): PersonalLead => ({
+      email: a.hit.email, greeting: a.greeting, name: a.c.name, website: a.c.website,
+      category: CATEGORY[a.c.category]!.label, town: a.c.town, sourceUrl: a.hit.sourceUrl,
+    });
+    const scored = await pool(accepted.slice(0, personal.researchPerPass), 6, async (a) => ({ a, r: await personal.research(asLead(a)) }));
+    const ranked: { a: Accepted; fit: number }[] = [];
+    for (const { a, r } of scored) {
+      if (!r) continue;
+      desk.researched += 1;
+      if (r.refuse) {
+        desk.refused += 1;
+        placement.set(a, { campaign: '', vars: {} });
+        continue;
+      }
+      if (r.greeting && a.greeting === 'there') a.greeting = r.greeting;
+      ranked.push({ a, fit: r.fit ?? 0 });
+    }
+    ranked.sort((x, y) => y.fit - x.fit);
+    const chosen = ranked.slice(0, personal.perPass).map((x) => x.a);
+    await pool(chosen, 3, async (a) => {
+      const draft = await personal.write(asLead(a));
+      if (!draft) return;
+      desk.written += 1;
+      placement.set(a, { campaign: options.personalCampaignId!, vars: { sb_subject: draft.subject, sb_body: draft.bodyHtml } });
+    });
+    for (const a of accepted) {
+      if (placement.has(a)) continue;
+      await personal.template(asLead(a), chosen.includes(a) ? 'Sellbird wrote no usable first email' : ranked.some((x) => x.a === a) ? 'below this pass\'s personal allocation' : 'not researched this pass');
+    }
+  }
+
+  for (const a of accepted) {
+    const place = placement.get(a);
+    if (place && !place.campaign) continue; // refused by Sellbird's rules (do-not-contact)
+    const cat = CATEGORY[a.c.category]!;
     try {
       await instantly(deps, 'POST', '/leads', {
-        campaign: campaignId,
-        email: hit.email,
-        company_name: c.name,
-        website: c.website,
+        campaign: place?.campaign || campaignId,
+        email: a.hit.email,
+        company_name: a.c.name,
+        website: a.c.website,
         skip_if_in_workspace: true,
         skip_if_in_campaign: true,
-        custom_variables: { greeting, category_lc: cat.label, payback: cat.payback, january_angle: cat.angle, source_url: hit.sourceUrl, found_via: c.sourceUrl.slice(0, 200), town: c.town },
+        custom_variables: {
+          greeting: a.greeting, category_lc: cat.label, payback: cat.payback, january_angle: cat.angle,
+          source_url: a.hit.sourceUrl, found_via: a.c.sourceUrl.slice(0, 200), town: a.c.town, ...(place?.vars ?? {}),
+        },
       });
-      known.emails.add(hit.email);
       added += 1;
+      if (place?.campaign) desk.personal += 1;
+      else desk.template += 1;
     } catch (error) {
-      deps.log(`  lead refused ${hit.email.replace(/^[^@]+/, '…')}: ${error instanceof Error ? error.message : String(error)}`);
+      desk.failed += 1;
+      known.emails.delete(a.hit.email);
+      deps.log(`  lead refused ${a.hit.email.replace(/^[^@]+/, '…')}: ${error instanceof Error ? error.message : String(error)}`);
     }
-  });
+  }
   const discovered = batches.reduce((n, b) => n + b.length, 0);
   const sources = `${places.line}; ${chamber.map((c) => `${new URL(c.base).hostname.split('.')[1]}/${c.slug}`).join(', ')}; map tiles ${tiles.join(', ')} (${batches.slice(1 + chamber.length, 1 + chamber.length + tiles.length).reduce((n, b) => n + b.length, 0)} on the map); West Shore Chamber ${batches[batches.length - 1]!.length}`;
   const line = fresh.length === 0
     ? `refill: nothing new to read this pass (${discovered} discovered from ${sources}, all already in the campaign or not usable)`
     : `refill: ${discovered} discovered from ${sources}; ${fresh.length} new sites read; ${found} published an address; ${noMx} refused for no mail server; ${unverified} left for the next pass (no resolver answered); ${added} added` +
-      (agents ? `; agents: Sellbird ${viaAgents.sellbirdFound}/${viaAgents.sellbirdAsked} found, Browser Use ${viaAgents.browserFound}/${viaAgents.browserAsked} verified` : '');
-  return { discovered, fresh: fresh.length, found, noMx, added, line, ...(agents ? { viaAgents } : {}) };
+      (agents ? `; agents: Sellbird ${viaAgents.sellbirdFound}/${viaAgents.sellbirdAsked} found, Browser Use ${viaAgents.browserFound}/${viaAgents.browserAsked} verified` : '') +
+      (personal ? `; sales desk: ${desk.researched} researched, ${desk.refused} refused by its rules, ${desk.written} first emails written, ${desk.personal} to the personal variant, ${desk.template} to the template` : '');
+  return { discovered, fresh: fresh.length, found, noMx, added, line, ...(agents ? { viaAgents } : {}), ...(personal ? { desk } : {}) };
 }
 
 /**
@@ -921,9 +1049,19 @@ export async function runNeighborCard(deps: Deps = defaultDeps(), options: { ref
     lines.push(`sync failed: ${error instanceof Error ? error.message : String(error)}`);
     try { id = String((await findCampaign(deps))?.id ?? '') || null; } catch { /* reported above */ }
   }
+  let personalId: string | null = null;
+  if (id && deps.personal) {
+    try {
+      const sync = await syncPersonalCampaign(deps);
+      personalId = sync.status === 1 ? sync.id : null;
+      lines.push(sync.line + (personalId ? '' : ' — new leads stay on the template'));
+    } catch (error) {
+      lines.push(`personal variant sync failed (new leads stay on the template): ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
   if (id && options.refill !== false) {
     try {
-      lines.push((await refill(deps, id, { slot: options.slot, maxSites: options.maxSites })).line);
+      lines.push((await refill(deps, id, { slot: options.slot, maxSites: options.maxSites, personalCampaignId: personalId })).line);
     } catch (error) {
       lines.push(`refill failed this pass (the next pass retries): ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -931,6 +1069,7 @@ export async function runNeighborCard(deps: Deps = defaultDeps(), options: { ref
   if (id) {
     try {
       lines.push((await deliveryReport(deps, id)).line);
+      if (personalId) lines.push(`personal variant ${(await deliveryReport(deps, personalId)).line}`);
     } catch (error) {
       lines.push(`report failed: ${error instanceof Error ? error.message : String(error)}`);
     }

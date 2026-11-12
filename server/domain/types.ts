@@ -11279,6 +11279,56 @@ export interface IntegrationEventRow {
   recorded_at: string;
 }
 
+/** One lead Brain researched for a business (§107, migration 147 / pg 138). */
+export interface SalesLeadRow {
+  id: string;
+  business: string;
+  email: string;
+  domain: string;
+  campaign_id: string | null;
+  fit_score: number | null;
+  fit_reasons: string;
+  facts: string;
+  research: string;
+  variant: 'PERSONAL' | 'TEMPLATE';
+  subject: string | null;
+  body: string | null;
+  write_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One analysed reply (§107). */
+export interface SalesReplyRow {
+  id: string;
+  email_id: string;
+  business: string;
+  campaign_id: string;
+  lead_email: string;
+  thread_id: string | null;
+  received_at: string | null;
+  reply_text: string;
+  intent: string;
+  stage: string;
+  status: string;
+  opt_out: string | null;
+  escalation: string | null;
+  answer: string | null;
+  action: string;
+  action_detail: string;
+  answer_email_id: string | null;
+  recorded_at: string;
+}
+
+/** One measurement or decision about a business's selling (§107). */
+export interface SalesLearningRow {
+  id: string;
+  business: string;
+  kind: string;
+  detail: string;
+  recorded_at: string;
+}
+
 /** One operator run (§106, migration 146 / pg 137). */
 export interface OperatorRunRow {
   id: string;

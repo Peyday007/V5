@@ -18,6 +18,11 @@
 #            (scripts/agents-prove.ts): Sellbird on real businesses the plain
 #            reader missed, Browser Use on one site. Sends nothing.
 #   disconnect — remove both settings; the Neighbor Card reads as before.
+#   sales  — one sales desk pass now (scripts/sales-desk.ts, §107): every new
+#            reply on every business's campaigns analysed and acted on under
+#            Brain's rules, learning and deliverability when due.
+#   sales-prove — Sellbird's research, writing and reply analysis on real data
+#            without acting on anyone (scripts/sales-desk.ts --prove).
 #
 # Brain's operator (§106): Hermes Agent as a second private CPU app,
 # `northline-operator`, built from operator/ (the published Hermes image pinned
@@ -37,7 +42,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prove | disconnect | operator-deploy | operator-status | operator-run | operator-show | operator-disconnect'
+        description: 'deploy | status | prove | sales | sales-prove | disconnect | operator-deploy | operator-status | operator-run | operator-show | operator-disconnect'
         required: true
         default: status
 
@@ -122,6 +127,18 @@ jobs:
               on_brain "node --import tsx scripts/agents-prove.ts" 2>&1 | tee prove.txt
               set -e
               grep -q '^AGENTS-PROVE: OK' prove.txt
+              ;;
+            sales)
+              set +e
+              on_brain "node --import tsx scripts/sales-desk.ts" 2>&1 | tee sales.txt
+              set -e
+              grep -q '^SALES-DESK: ' sales.txt
+              ;;
+            sales-prove)
+              set +e
+              on_brain "node --import tsx scripts/sales-desk.ts --prove" 2>&1 | tee sales.txt
+              set -e
+              grep -q '^SALES-PROVE: OK' sales.txt
               ;;
             disconnect)
               flyctl secrets unset --app "$brain" BRAIN_AGENTS_URL BRAIN_AGENTS_KEY >/dev/null

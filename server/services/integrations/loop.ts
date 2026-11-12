@@ -1,6 +1,7 @@
 /**
  * The integration registry's own clock (§103): an hourly health check of every
- * integration, and an hourly Neighbor Card pass, run by the Brain process.
+ * integration, the Neighbor Card pass and the sales desk (§107), run by the
+ * Brain process.
  *
  * GitHub's scheduler was the only clock, and it fired the hourly Neighbor Card
  * workflow twice in eight hours on 2026-11-11, so "the mailer keeps finding and
@@ -16,6 +17,7 @@
 import { withActivity } from '../../db/infra.ts';
 import { countIntegrationUsage, latestIntegrationEvent, recordIntegrationEvent } from '../../repos/integrationEvents.ts';
 import { defaultAgents, defaultDeps, runNeighborCard } from '../cash/neighborCard.ts';
+import { personalDesk, runSalesDesk } from '../sales/desk.ts';
 import { checkAndRecord } from './health.ts';
 import { signingKey } from './keys.ts';
 import { searchPlacesViaV2 } from './v2Bridge.ts';
@@ -29,6 +31,8 @@ export const CHECK_PERIOD_MS = 60 * 60_000;
  * Places stays inside its daily ceiling, which the meter enforces.
  */
 export const NEIGHBOR_CARD_PERIOD_MS = 15 * 60_000;
+/** The sales desk (§107): replies are answered within a quarter hour of arriving. */
+export const SALES_DESK_PERIOD_MS = 15 * 60_000;
 /**
  * Nothing runs in a process's first twenty minutes: Deploy restarts the Brain
  * and then verifies it end to end, and a crawl beside that verification is load
@@ -38,6 +42,7 @@ export const NEIGHBOR_CARD_PERIOD_MS = 15 * 60_000;
 export const WARMUP_MS = 20 * 60_000;
 
 const PASS_STATE = 'NEIGHBOR_CARD_PASS';
+const DESK_STATE = 'SALES_DESK_PASS';
 
 async function due(integrationId: string, kind: 'CHECK' | 'USAGE', state: string | null, periodMs: number, now: number): Promise<boolean> {
   const last = await latestIntegrationEvent(integrationId, kind, state);
@@ -69,6 +74,7 @@ export async function integrationsTick(now = Date.now(), env: NodeJS.ProcessEnv 
     deps.log = () => undefined;
     if (signingKey(env)) deps.places = (query) => searchPlacesViaV2(query, placesMeter('brain tick'));
     deps.agents = defaultAgents(env);
+    deps.personal = await personalDesk(env);
     const result = await runNeighborCard(deps);
     await recordIntegrationEvent({
       integrationId: 'instantly',
@@ -78,6 +84,13 @@ export async function integrationsTick(now = Date.now(), env: NodeJS.ProcessEnv 
       source: 'brain tick',
     });
     done.push('neighbor-card');
+  }
+  if ((env.INSTANTLY_API_KEY ?? '').trim() && (env.BRAIN_AGENTS_URL ?? '').trim() && (await due('open-source-agents', 'USAGE', DESK_STATE, SALES_DESK_PERIOD_MS, now))) {
+    await recordIntegrationEvent({ integrationId: 'open-source-agents', kind: 'USAGE', state: DESK_STATE, detail: 'sales desk pass started', source: 'brain tick' });
+    const deps = defaultDeps();
+    deps.log = () => undefined;
+    await runSalesDesk(deps);
+    done.push('sales-desk');
   }
   return done;
 }
