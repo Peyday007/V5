@@ -175,3 +175,14 @@ describe('who is a neighborhood advertiser', () => {
     expect(isNetworkPage('https://smile.example/contact-us/')).toBe(false);
   });
 });
+
+describe('Places in one pass', () => {
+  it('stops sending searches once Google refuses one', async () => {
+    const { discoverPlaces } = await import('../server/services/cash/neighborCard.ts');
+    let calls = 0;
+    const deps = { places: async () => { calls += 1; throw new Error('V2 Places answered 502 places_error'); } } as unknown as Parameters<typeof discoverPlaces>[0];
+    const { line } = await discoverPlaces(deps, 0, 3);
+    expect(calls).toBe(1);
+    expect(line).toContain('not read');
+  });
+});

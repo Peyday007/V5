@@ -639,11 +639,17 @@ export async function discoverPlaces(deps: Deps, slot: number, count = 1): Promi
   // ceiling is never overshot by searches that read it at the same moment.
   // Every other source of the pass still runs beside them.
   const results: { found: Candidate[]; line: string }[] = [];
-  for (const n of picks) results.push(await discoverOnePlace(deps, n));
+  for (const n of picks) {
+    const result = await discoverOnePlace(deps, n);
+    results.push(result);
+    // A refusal (Google's 403, the ceiling) repeats for every search this pass;
+    // sending the rest would only spend the day's ceiling on the same answer.
+    if (result.failed) break;
+  }
   return { found: results.flatMap((r) => r.found), line: results.map((r) => r.line).join('; ') };
 }
 
-async function discoverOnePlace(deps: Deps, slot: number): Promise<{ found: Candidate[]; line: string }> {
+async function discoverOnePlace(deps: Deps, slot: number): Promise<{ found: Candidate[]; line: string; failed?: true }> {
   // Interleave kinds and towns so consecutive searches differ in both (7 and the query count are coprime).
   const pick = PLACES_QUERIES[(slot * 7) % PLACES_QUERIES.length]!;
   try {
@@ -654,7 +660,7 @@ async function discoverOnePlace(deps: Deps, slot: number): Promise<{ found: Cand
       .map((p) => ({ name: p.name!, website: p.website!.startsWith('http') ? p.website! : `http://${p.website!}`, category: pick.key, town: pick.town, sourceUrl: `Google Places via V2 ("${pick.query}")` }));
     return { found, line: `Places "${pick.query}": ${places.length} businesses, ${found.length} with a website` };
   } catch (error) {
-    return { found: [], line: `Places "${pick.query}" not read: ${error instanceof Error ? error.message : String(error)}` };
+    return { found: [], line: `Places "${pick.query}" not read: ${error instanceof Error ? error.message : String(error)}`, failed: true };
   }
 }
 
