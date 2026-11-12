@@ -117,6 +117,23 @@ export async function backfillDeliveryEvidence(): Promise<{ examined: number; cr
       ORDER BY e.at`,
     [...CONFIRMED_KINDS],
   );
+  /*
+   * Evidence already recorded is skipped in one read, not re-attempted. Each
+   * attempt is three statements (the session's Routine refs, the Routine, the
+   * insert that then does nothing), and on 2026-11-12 every boot re-attempted
+   * ~1,190 of them inside the first dispatch tick — the tick that also writes
+   * this process's liveness — on the database every post-restart verification
+   * was waiting on (Deploy 43193124644: liveness stopped for eight minutes
+   * while this ran). Any row holding the key blocks the insert (`bin_id` is
+   * unique), so any row skips it here too; the insert stays idempotent regardless.
+   */
+  const recorded = new Set(
+    (
+      await getDb().all<{ bin_id: string }>(
+        'SELECT bin_id FROM routine_delivery_proofs',
+      )
+    ).map((one) => one.bin_id),
+  );
   let credited = 0;
   for (const row of rows) {
     let detail: Record<string, unknown> = {};
@@ -126,10 +143,13 @@ export async function backfillDeliveryEvidence(): Promise<{ examined: number; cr
       /* an unreadable detail still names the event */
     }
     const binId = typeof detail.binId === 'string' ? detail.binId : null;
+    const evidenceKey = binId ?? `evt:${row.id}`;
+    if (recorded.has(evidenceKey)) continue;
+    recorded.add(evidenceKey);
     const credited1 = await recordDeliveryEvidence({
       sessionRef: row.session_id,
       repository: row.repository,
-      evidenceKey: binId ?? `evt:${row.id}`,
+      evidenceKey,
       state: 'PROVEN',
       branch: typeof detail.branch === 'string' ? detail.branch : null,
       headSha: typeof detail.headSha === 'string' ? detail.headSha : null,
