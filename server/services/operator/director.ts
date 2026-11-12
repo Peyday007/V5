@@ -310,9 +310,20 @@ async function engineerOrResearch(
 ): Promise<CommissionResult> {
   const scope = d.ownerPaths.length ? [...d.ownerPaths, 'tests/**'] : ['tests/**'];
   const risk = riskForScope(scope, RELEASE_EXCLUDED_PATHS);
-  const key = deficiencyKey(d, sha);
   const { listCandidates: list } = await import('../../repos/improvement.ts');
-  const family = (await list()).filter((c) => c.weaknessKey === key || c.weaknessKey.startsWith(`${key}#`));
+  const everything = await list();
+  // The same deficiency in the same owner files, registered earlier under any key (an older keying,
+  // another goal), is this defect: it keeps that row's key, so it is never a second campaign.
+  const owners = [...d.ownerPaths].sort().join(',');
+  const earlier = owners
+    ? everything.find((c) => {
+        const directive = c.evidence['directive'] as { deficiency?: string } | undefined;
+        const paths = c.evidence['ownerPaths'];
+        return directive?.deficiency === d.deficiency && Array.isArray(paths) && [...(paths as string[])].sort().join(',') === owners;
+      })
+    : undefined;
+  const key = earlier ? earlier.weaknessKey.split('#')[0]! : deficiencyKey(d, sha);
+  const family = everything.filter((c) => c.weaknessKey === key || c.weaknessKey.startsWith(`${key}#`));
   const failedAttempts = family.filter((c) => c.decision === 'KEPT_NO_EFFECT' || c.decision === 'REVERTED').length;
   const priority = engineeringPriority({
     blocksGoal: d.blocksGoal,
@@ -657,7 +668,14 @@ export async function readDeficiencies(): Promise<DeficiencyReading[]> {
     )
     .then((rows) => new Map(rows.map((r) => [r.project_id, Number(r.n)])))
     .catch(() => new Map<string, number>());
+  // One reading per project: the defect is in the code, and every goal of the project shows it.
+  // Attributed to the project's most urgent goal (briefOrder), which is the one it holds back most.
+  const seenProjects = new Set<string>();
   for (const goal of goals) {
+    if (goal.projectId) {
+      if (seenProjects.has(goal.projectId)) continue;
+      seenProjects.add(goal.projectId);
+    }
     const requests = goal.projectId ? (snapshot.requests.get(goal.projectId) ?? []) : [];
     const moot = requests.filter((one) => one.moot);
     const reopened = goal.projectId ? (withdrawn.get(goal.projectId) ?? 0) : 0;
@@ -821,7 +839,15 @@ export async function standingCommission(now = new Date()): Promise<string[]> {
       { deficiency: one.diagnosis.deficiency as DeficiencyClass, ownerPaths: one.diagnosis.ownerPaths, title: one.diagnosis.title, goalId: one.diagnosis.goalId },
       sha,
     );
-    const existing = (await listCandidates()).find((c) => c.weaknessKey === key || c.weaknessKey.startsWith(`${key}#`));
+    const owners = [...one.diagnosis.ownerPaths].sort().join(',');
+    const existing = (await listCandidates()).find(
+      (c) =>
+        c.weaknessKey === key ||
+        c.weaknessKey.startsWith(`${key}#`) ||
+        ((c.evidence['directive'] as { deficiency?: string } | undefined)?.deficiency === one.diagnosis.deficiency &&
+          Array.isArray(c.evidence['ownerPaths']) &&
+          [...(c.evidence['ownerPaths'] as string[])].sort().join(',') === owners),
+    );
     if (existing) continue;
     const result = await commission({ ...one.diagnosis, runId: runs[0]?.id ?? null }, now);
     done.push(`${readingId(one)}: ${result.reason}`);
