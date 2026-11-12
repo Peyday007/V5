@@ -321,12 +321,50 @@ const FOREIGN_DOMAINS = [
   // Other platforms that sign small-business sites.
   'popmenu.com', 'toasttab.com', 'getbento.com', 'mindbodyonline.com', 'vagaro.com', 'squareup.com', 'square.site', 'officite.com', 'prosites.com',
   'godaddysites.com', 'websitepro.hosting', 'scorpion.co', 'patientpop.com', 'weave.com', 'lighthouse360.com', 'sesamecommunications.com',
+  // A dental-practice email platform: its addresses reach a vendor's relay, not the practice (2026-11-12 pull).
+  'mydentalmail.com',
   'boomtownroi.com', 'kvcore.com', 'placester.com', 'realtor.com', 'zillow.com', 'chamberofcommerce.com', 'growthzoneapp.com', 'micronetonline.com',
 ];
 const JUNK_LOCAL = new Set(['noreply', 'noreply', 'donotreply', 'postmaster', 'abuse', 'webmaster', 'hostmaster', 'mailerdaemon', 'bounce', 'bounces', 'unsubscribe', 'privacy', 'legal', 'dpo', 'security', 'spam', 'test', 'example', 'user', 'name', 'youremail', 'email', 'yourname', 'john', 'johndoe', 'jane', 'janedoe']);
 const ROLE_LOCAL = new Set(['info', 'contact', 'hello', 'hi', 'office', 'admin', 'sales', 'service', 'support', 'enquiries', 'inquiries', 'bookings', 'booking', 'schedule', 'scheduling', 'dispatch', 'team', 'help', 'customerservice', 'accounts', 'accounting', 'billing', 'estimates', 'quotes', 'jobs', 'careers', 'hr', 'mail', 'general', 'reception', 'frontdesk', 'main']);
 const EMAIL_RE = /\b[A-Za-z0-9][A-Za-z0-9._%+-]{0,63}@[A-Za-z0-9][A-Za-z0-9.-]{0,252}\.[A-Za-z]{2,24}\b/g;
 const FILE_ENDINGS = /\.(png|jpe?g|gif|svg|webp|css|js|mjs|json|woff2?|ico|pdf|mp4|avif)$/i;
+
+/**
+ * National brands and institutions. Their sites publish a head office's or a
+ * franchisor's address, which is not who buys a spot on a neighborhood card
+ * (2026-11-12: GEICO, Aflac, Snap-on, Orangetheory, Athletico, uBreakiFix,
+ * Dogtopia and others reached the campaign). A local franchisee with its own
+ * domain still qualifies.
+ */
+const CHAIN_DOMAINS = [
+  'geico.com', 'aflac.com', 'statefarm.com', 'allstate.com', 'farmers.com', 'nationwide.com', 'libertymutual.com', 'progressive.com', 'edwardjones.com',
+  'ameriprise.com', 'nm.com', 'primerica.com', 'snapon.com', 'orangetheory.com', 'orangetheoryfitness.com', 'planetfitness.com', 'anytimefitness.com',
+  'athletico.com', 'ubreakifix.com', 'dogtopia.com', 'britishswimschool.com', 'assistinghands.com', 'greatclips.com', 'supercuts.com', 'sportclips.com',
+  'jiffylube.com', 'valvoline.com', 'midas.com', 'meineke.com', 'firestonecompleteautocare.com', 'pepboys.com', 'goodyear.com', 'ottobockcare.us',
+  'fnb-online.com', 'fnb-corp.com', 'pnc.com', 'mtb.com', 'wellsfargo.com', 'chase.com', 'bankofamerica.com', 'truist.com', 'santanderbank.com',
+  'kw.com', 'coldwellbanker.com', 'remax.com', 'century21.com', 'bhhs.com', 'howardhanna.com', 'homesale.com', 'servpro.com', 'servicemaster.com',
+  'mollymaid.com', 'merrymaids.com', 'mrhandyman.com', 'mrrooter.com', 'rotorooter.com', 'terminix.com', 'orkin.com', 'truegreen.com', 'trugreen.com',
+  'theuppspa.com', 'massageenvy.com', 'handandstone.com', 'europeanwax.com', 'waxcenter.com', 'drybar.com', 'banfield.com', 'vca.com', 'petsmart.com',
+  'petco.com', 'aspendental.com', 'heartland.com', 'smiledirectclub.com', 'pearlevision.com', 'visionworks.com', 'lenscrafters.com', 'ivyrehab.com',
+  'athletico.com', 'selectmedical.com', 'upmc.com', 'pennstatehealth.org', 'geisinger.org', 'wellspan.org', 'residentialhealthcaregroup.com',
+];
+
+/** A chain's site or address, a college or a government office: not a neighborhood advertiser. */
+export function isChainOrInstitution(hostOrEmail: string): boolean {
+  const host = hostOrEmail.includes('@') ? hostOrEmail.slice(hostOrEmail.indexOf('@') + 1) : hostOrEmail;
+  const root = rootDomain(host);
+  return CHAIN_DOMAINS.includes(root) || /\.(edu|gov|mil)$/.test(root);
+}
+
+/** A page that is one location of many: whatever address it shows belongs to the network. */
+export function isNetworkPage(url: string): boolean {
+  try {
+    return /\/(locations?|insurance-agents|agents?|offices?|find-a-[a-z-]+)\//i.test(new URL(url).pathname + '/');
+  } catch {
+    return false;
+  }
+}
 
 export function rootDomain(host: string): string {
   const clean = (host || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]!.split(':')[0]!;
@@ -663,6 +701,7 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
   const fresh = batches.flat().filter((c) => {
     const d = rootDomain(c.website);
     if (!d || known.domains.has(d) || seen.has(d) || FOREIGN_DOMAINS.some((f) => d === f || d.endsWith(`.${f}`)) || /facebook|instagram|linkedin|yelp/.test(d)) return false;
+    if (isChainOrInstitution(d) || isNetworkPage(c.website)) return false;
     seen.add(d);
     return true;
   }).slice(0, options.maxSites ?? 300);
@@ -698,6 +737,7 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
       }
     }
     if (!hit) return;
+    if (isChainOrInstitution(hit.email) || isNetworkPage(hit.sourceUrl)) return;
     found += 1;
     if (known.emails.has(hit.email)) return;
     const mx = await deps.resolveMx(hit.email.split('@')[1]!);
