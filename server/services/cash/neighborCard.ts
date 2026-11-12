@@ -44,6 +44,10 @@ import { promises as dns } from 'node:dns';
 import { secretValue } from './providers/config.ts';
 import { INSTANTLY_API } from './providers/instantly.ts';
 import type { V2Place } from '../integrations/v2Bridge.ts';
+import {
+  agentsConfig, browserContact, browserModel, pickBrowser, pickSellbird, sellbirdContacts,
+  type BrowserContact, type SellbirdContacts,
+} from '../agents/client.ts';
 
 export const CAMPAIGN_NAME = 'Neighbor Card · Camp Hill Jan 2027';
 export const PUBLISHER = 'Peyton Rosser';
@@ -142,6 +146,32 @@ export interface Deps {
    * chamber and the map still run.
    */
   places?: (textQuery: string) => Promise<V2Place[]>;
+  /**
+   * The open-source agents (§104), asked only about a site the plain reader
+   * found no address on: Sellbird (who decides, what the site publishes), then
+   * Browser Use for a site that reads as a shell. Absent when the agents app
+   * is not connected; refill is then exactly as before.
+   */
+  agents?: RefillAgents;
+}
+
+export interface RefillAgents {
+  sellbird: (website: string) => Promise<SellbirdContacts | null>;
+  browser: ((website: string) => Promise<BrowserContact | null>) | null;
+  /** Sellbird reads per pass (each is up to ten page requests). */
+  sellbirdPerPass: number;
+  /** Browser tasks per pass (each is a minute or more of the GPU and a Chromium). */
+  browserPerPass: number;
+}
+
+export function defaultAgents(env: NodeJS.ProcessEnv = process.env): RefillAgents | undefined {
+  if (!agentsConfig(env)) return undefined;
+  return {
+    sellbird: (website) => sellbirdContacts(website, { env }),
+    browser: browserModel(env) ? (website) => browserContact(website, { env }) : null,
+    sellbirdPerPass: Number(env['BRAIN_AGENTS_SELLBIRD_PER_PASS'] ?? 40) || 0,
+    browserPerPass: Number(env['BRAIN_AGENTS_BROWSER_PER_PASS'] ?? 2) || 0,
+  };
 }
 
 export function defaultDeps(): Deps {
@@ -565,7 +595,7 @@ async function pool<T, R>(items: T[], width: number, work: (item: T) => Promise<
   return out;
 }
 
-export interface RefillResult { discovered: number; fresh: number; found: number; noMx: number; added: number; line: string }
+export interface RefillResult { discovered: number; fresh: number; found: number; noMx: number; added: number; line: string; viaAgents?: { sellbirdAsked: number; sellbirdFound: number; browserAsked: number; browserFound: number } }
 
 /**
  * Discovery rotates by the hour so successive passes cover every chamber
@@ -596,8 +626,33 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
   let noMx = 0;
   let unverified = 0;
   let added = 0;
+  const agents = deps.agents;
+  let sellbirdLeft = agents?.sellbirdPerPass ?? 0;
+  let browserLeft = agents?.browser ? agents.browserPerPass : 0;
+  const viaAgents = { sellbirdAsked: 0, sellbirdFound: 0, browserAsked: 0, browserFound: 0 };
   await pool(fresh, 10, async (c) => {
-    const hit = await findPublishedEmail(deps, c.website);
+    let hit: Found | null = await findPublishedEmail(deps, c.website);
+    let greeting = 'there';
+    if (!hit && agents && sellbirdLeft > 0) {
+      sellbirdLeft -= 1;
+      viaAgents.sellbirdAsked += 1;
+      const read = await agents.sellbird(c.website);
+      const pick = read ? pickSellbird(read) : null;
+      if (pick && isPlausibleEmail(pick.email)) {
+        viaAgents.sellbirdFound += 1;
+        hit = { email: pick.email, kind: pick.firstName ? 'personal' : 'generic', confidence: 0.9, sourceUrl: pick.sourceUrl };
+        if (pick.firstName) greeting = pick.firstName;
+      } else if (read && agents.browser && browserLeft > 0 && (read.challenged || read.pagesRead <= 1)) {
+        // A shell, a challenge or a one-page site: what a browser can read and plain HTTP cannot.
+        browserLeft -= 1;
+        viaAgents.browserAsked += 1;
+        const seen = pickBrowser(await agents.browser(c.website));
+        if (seen && isPlausibleEmail(seen.email) && rootDomain(`https://${seen.email.split('@')[1]!}`) === rootDomain(c.website)) {
+          viaAgents.browserFound += 1;
+          hit = { email: seen.email, kind: 'generic', confidence: 0.85, sourceUrl: seen.sourceUrl };
+        }
+      }
+    }
     if (!hit) return;
     found += 1;
     if (known.emails.has(hit.email)) return;
@@ -613,7 +668,7 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
         website: c.website,
         skip_if_in_workspace: true,
         skip_if_in_campaign: true,
-        custom_variables: { greeting: 'there', category_lc: cat.label, payback: cat.payback, january_angle: cat.angle, source_url: hit.sourceUrl, found_via: c.sourceUrl.slice(0, 200), town: c.town },
+        custom_variables: { greeting, category_lc: cat.label, payback: cat.payback, january_angle: cat.angle, source_url: hit.sourceUrl, found_via: c.sourceUrl.slice(0, 200), town: c.town },
       });
       known.emails.add(hit.email);
       added += 1;
@@ -625,8 +680,9 @@ export async function refill(deps: Deps, campaignId: string, options: { slot?: n
   const sources = `${places.line}; ${chamber.map(([s]) => s).join(', ')}; map tiles ${tiles.join(', ')} (${batches.slice(1 + chamber.length).reduce((n, b) => n + b.length, 0)} on the map)`;
   const line = fresh.length === 0
     ? `refill: nothing new to read this pass (${discovered} discovered from ${sources}, all already in the campaign or not usable)`
-    : `refill: ${discovered} discovered from ${sources}; ${fresh.length} new sites read; ${found} published an address; ${noMx} refused for no mail server; ${unverified} left for the next pass (no resolver answered); ${added} added`;
-  return { discovered, fresh: fresh.length, found, noMx, added, line };
+    : `refill: ${discovered} discovered from ${sources}; ${fresh.length} new sites read; ${found} published an address; ${noMx} refused for no mail server; ${unverified} left for the next pass (no resolver answered); ${added} added` +
+      (agents ? `; agents: Sellbird ${viaAgents.sellbirdFound}/${viaAgents.sellbirdAsked} found, Browser Use ${viaAgents.browserFound}/${viaAgents.browserAsked} verified` : '');
+  return { discovered, fresh: fresh.length, found, noMx, added, line, ...(agents ? { viaAgents } : {}) };
 }
 
 /**

@@ -15,7 +15,7 @@
  */
 import { withActivity } from '../../db/infra.ts';
 import { countIntegrationUsage, latestIntegrationEvent, recordIntegrationEvent } from '../../repos/integrationEvents.ts';
-import { defaultDeps, runNeighborCard } from '../cash/neighborCard.ts';
+import { defaultAgents, defaultDeps, runNeighborCard } from '../cash/neighborCard.ts';
 import { checkAndRecord } from './health.ts';
 import { signingKey } from './keys.ts';
 import { searchPlacesViaV2 } from './v2Bridge.ts';
@@ -54,6 +54,7 @@ export async function integrationsTick(now = Date.now(), env: NodeJS.ProcessEnv 
     const deps = defaultDeps();
     deps.log = () => undefined;
     if (signingKey(env)) deps.places = (query) => searchPlacesViaV2(query, placesMeter('brain tick'));
+    deps.agents = defaultAgents(env);
     const result = await runNeighborCard(deps);
     await recordIntegrationEvent({
       integrationId: 'instantly',

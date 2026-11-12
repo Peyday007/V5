@@ -8,6 +8,7 @@
  * Every string names settings and states, never a value.
  */
 import { getDb } from '../../db/database.ts';
+import { probeAgents } from '../agents/client.ts';
 import { probeInstantly } from '../cash/providers/instantly.ts';
 import { probeStripe } from '../cash/providers/stripe.ts';
 import { listIntegrationEvents, recordIntegrationEvent, type IntegrationEvent } from '../../repos/integrationEvents.ts';
@@ -119,6 +120,7 @@ function liveProbes(env: NodeJS.ProcessEnv): Record<string, () => Promise<ProbeR
       const detail = r.bridge === 'VERIFIED' ? "V2 accepted Brain's signed request." : r.detail;
       return { ok: r.bridge === 'VERIFIED' ? true : r.bridge === 'UNREACHABLE' ? null : 'repairing', detail };
     },
+    agents: () => probeAgents(env),
     database: async () => {
       await getDb().all('SELECT 1 AS one', []);
       return { ok: true, detail: 'The database answered.' };

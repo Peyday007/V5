@@ -291,7 +291,7 @@ There must be no workflow where the user has to remember "now go update the data
     and never the space, simplification happens in the presentation, and what
     is not in the top five is not thereby worthless.
 
-## 8–103. The architecture record
+## 8–104. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -396,6 +396,7 @@ resolves. Read the section for the area you are changing before you change it
 - §101. A goal is examined from many directions, and the ways of reasoning that work are learned.
 - §102. A plan's variables are swept by ordinary code, and only the strongest strategies cost an engine read.
 - §103. An integration is declared once, and Brain supplies its credentials itself wherever it is authorized.
+- §104. An open-source agent answers one narrow question, and Brain keeps the prospect, the decision and the record.
 
 ## Conventions
 
