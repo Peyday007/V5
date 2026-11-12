@@ -127,6 +127,12 @@ export interface CommercialDecision {
    * outcome and never the permission that preceded it.
    */
   decisionId?: string | null;
+  /**
+   * True when the call recorded a proposal (`mode: 'PROPOSE'`): what Brain
+   * drafted and would do, written to the ledger as PROPOSED. A proposal is
+   * never permission to perform, so `ok` is false on it whatever the grant says.
+   */
+  proposed?: boolean;
 }
 
 /** The principal Brain acts as when its own loop or tick takes an action: not a person, and never a credential. */
@@ -212,6 +218,20 @@ export interface CommercialCheckInput {
   principal?: string | null;
   /** READ_ONLY never reaches past internal work, whatever the grant says. */
   access?: AccessKind;
+  /**
+   * PROPOSE records what Brain drafted and would do — a buyer message composed
+   * but not sent, a quote drafted but not issued — as a PROPOSED ledger row, and
+   * authorizes nothing. The default, PERFORM, is a judgment ahead of an effect.
+   */
+  mode?: 'PERFORM' | 'PROPOSE';
+  /** The piece the action is about, when it has one. */
+  opportunityId?: string | null;
+  /**
+   * What exactly was proposed, as a reference (the digest of a drafted message,
+   * a draft row's id) — never the draft's text. The same proposal recorded twice
+   * is one row.
+   */
+  subjectRef?: string | null;
 }
 
 async function assessCommercialAuthority(input: CommercialCheckInput, record: boolean): Promise<CommercialDecision> {
@@ -240,6 +260,38 @@ async function assessCommercialAuthority(input: CommercialCheckInput, record: bo
     // A project that does not exist has no history to append to and nobody to ask. It is refused in the
     // same words as a project with no grant (invariant 23), and nothing is written against an absent row.
     return { ok: false, authority: null, reason: 'no standing commercial authority exists for this project', policyVersion: null };
+  }
+  if (input.mode === 'PROPOSE') {
+    /*
+     * What Brain proposed is on the ledger beside what it was allowed and did
+     * (AUTH-34). A proposal needs no grant and raises no approval request — it
+     * changes nothing outside Brain — and it never returns ok, so no caller can
+     * read a recorded draft as permission to perform it.
+     */
+    const proposal = await judgeLive(
+      {
+        projectId: input.projectId,
+        action: input.action,
+        at: input.at,
+        mode: 'PROPOSE',
+        path: input.path ?? 'API',
+        amountCents: input.amountCents,
+        principal: input.principal,
+        access: input.access,
+        opportunityId: input.opportunityId,
+        subjectRef: input.subjectRef,
+      },
+      record,
+    );
+    const decisionId = record ? await recordDecision(proposal) : null;
+    return {
+      ok: false,
+      proposed: true,
+      authority,
+      reason: 'proposed only; nothing was performed, and a proposal authorizes no effect',
+      policyVersion: authority?.policyVersion ?? null,
+      decisionId,
+    };
   }
   let judged = await judgeLive(
     {
@@ -377,6 +429,9 @@ const INTERNAL_ACTIONS = [
   'LEARN_FROM_SITE',
 ] as const;
 
+/** Internal actions whose product is a proposal: a draft is what Brain would do, never what it did. */
+const PROPOSAL_ACTIONS: readonly string[] = ['DRAFT_MESSAGE'];
+
 const ENGINEERING_ACTIONS = ['FACTORY_CODE', 'FACTORY_TEST', 'FACTORY_MERGE', 'FACTORY_DEPLOY', 'BUILD_A_TEST'] as const;
 
 const THIRD_PARTY_ACTIONS = ['AUTHENTICATED_READ', 'AUTHENTICATED_OPERATION'] as const;
@@ -471,6 +526,10 @@ export interface AuthorityLedgerRecord {
     | 'SECRET_NOT_IN_STORE';
   policyVersion: number | null;
   amountCents: number | null;
+  /** The piece the action is about, when the caller named one. */
+  opportunityId?: string | null;
+  /** What was proposed or acted on, as a reference (a digest or a row id), never its text. */
+  subjectRef?: string | null;
   at: string;
 }
 
@@ -516,6 +575,10 @@ export interface JudgeInput {
    * established, and the action is refused (deny by default).
    */
   account?: ThirdPartyAccountScope | null;
+  /** The piece the action is about, when it has one. */
+  opportunityId?: string | null;
+  /** A reference to exactly what is proposed or performed (a digest or row id), never its text. */
+  subjectRef?: string | null;
   at?: string;
 }
 
@@ -559,7 +622,8 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
     reason: string,
     needs: ActionDecision['neededApproval'] = null,
   ): ActionDecision => {
-    const proposed = ok && input.mode === 'PROPOSE';
+    // A draft is a proposal by what it is, whatever mode the caller stated: drafting performs nothing.
+    const proposed = ok && (input.mode === 'PROPOSE' || PROPOSAL_ACTIONS.includes(input.action));
     return {
       ok,
       consequenceClass: klass,
@@ -579,6 +643,8 @@ export function judgeAction(input: JudgeInput, state: JudgeState): ActionDecisio
         cause,
         policyVersion: state.authority?.policyVersion ?? null,
         amountCents: amount,
+        opportunityId: input.opportunityId ?? null,
+        subjectRef: input.subjectRef?.trim() ? input.subjectRef.trim().slice(0, 200) : null,
         at,
       },
     };
@@ -878,11 +944,33 @@ export const AUTHORITY_DECISION_KIND = 'AUTHORITY_DECISION';
  * The row carries references and machine causes only — never a credential or a caller's free text.
  * If the row cannot be written the error propagates, so no effect follows an unrecorded decision.
  */
+/**
+ * Whether a decision belongs on the ledger: every consequential one, and every
+ * proposal of any class. Routine internal work leaves no row, but what Brain
+ * proposed — a drafted message, a proposed send — is exactly what the ledger
+ * must show beside what it did (AUTH-34), so a proposal is never skipped as
+ * "internal".
+ */
+export function isLedgered(decision: Pick<ActionDecision, 'consequenceClass' | 'ledger'>): boolean {
+  if (decision.consequenceClass === null) return false;
+  return decision.consequenceClass !== 'INTERNAL' || decision.ledger.disposition === 'PROPOSED';
+}
+
 async function recordDecision(decision: ActionDecision): Promise<string | null> {
   const l = decision.ledger;
-  if (decision.consequenceClass === null || decision.consequenceClass === 'INTERNAL') return null;
+  if (!isLedgered(decision)) return null;
+  if (l.disposition === 'PROPOSED' && l.subjectRef) {
+    // The same proposal of the same thing, drafted again on a later pass, is one row: the ledger says what
+    // Brain proposed, not how often a loop recomposed it.
+    const earlier = await cashEventsOfKindInProject(l.projectId, AUTHORITY_DECISION_KIND);
+    const same = earlier.find(
+      (one) => one.detail.disposition === 'PROPOSED' && one.detail.action === l.action && one.detail.subjectRef === l.subjectRef,
+    );
+    if (same) return same.id;
+  }
   const row = await recordCashEvent({
     projectId: l.projectId,
+    opportunityId: l.opportunityId ?? null,
     kind: AUTHORITY_DECISION_KIND,
     actorRef: 'BRAIN',
     summary: `${l.action}: ${l.disposition} (${l.cause})`,
@@ -896,6 +984,7 @@ async function recordDecision(decision: ActionDecision): Promise<string | null> 
       cause: l.cause,
       policyVersion: l.policyVersion,
       amountCents: l.amountCents,
+      subjectRef: l.subjectRef ?? null,
       decidedAt: l.at,
       ok: decision.ok,
       approvalNeedId: decision.approvalNeedId ?? null,

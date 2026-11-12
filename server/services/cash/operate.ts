@@ -108,6 +108,7 @@ import {
   applyEffectOutcome,
   effectDispositionOf,
   reconcileConfirmedEffects,
+  offerVersion,
   recoverAbandonedEffects,
   sendGate,
   type ReconciledEffect,
@@ -1158,6 +1159,26 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
         because: `Its published closing date, ${opportunity.expiresAt}, has passed, so nobody is contacted.`,
       });
       continue;
+    }
+    /*
+     * What Brain proposes is on the ledger whether or not it is allowed to
+     * send it (AUTH-34: what Brain did versus what it proposed). The drafted
+     * message is recorded as a PROPOSED decision, by the digest of its exact
+     * words and never their text, before the authorization is asked — so a
+     * message a refusal, a missing integration or a later gate kept from being
+     * sent still shows on the record as proposed. The same draft on a later
+     * pass is the same row.
+     */
+    const draft = composeBuyerMessage(opportunity);
+    if (draft.ok) {
+      await checkCommercialAuthority({
+        projectId,
+        action: CONTACT_ACTION,
+        mode: 'PROPOSE',
+        opportunityId: opportunity.id,
+        subjectRef: offerVersion(`${draft.to}\n${draft.subject}\n${draft.text}`),
+        ...actionContext({ principal: BRAIN }),
+      });
     }
     // The person's decision first, because it is the authorization and the
     // other is an operational fact: deny-by-default asks whether this may

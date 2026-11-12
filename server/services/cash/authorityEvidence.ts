@@ -28,6 +28,7 @@
 import { getDb } from '../../db/database.ts';
 import { listAuthorities } from '../../repos/cashAuthority.ts';
 import {
+  isLedgered,
   ALWAYS_PROHIBITED_COMMERCIAL,
   AUTHORITY_DECISION_KIND,
   AUTHORITY_EFFECT_KIND,
@@ -233,6 +234,10 @@ export function policyToActionRule(): Failure {
       if (expired.ok || expired.ledger.cause !== 'EXPIRED_OR_NOT_STARTED') return 'an expired grant authorized a mutation';
       const proposed = judge({ action: 'SEND_OUTREACH', mode: 'PROPOSE' }, live(null));
       if (!proposed.ok || proposed.ledger.disposition !== 'PROPOSED') return 'a proposal was not recorded as proposed';
+      if (!isLedgered(proposed)) return 'a proposal would leave no ledger row';
+      const draft = judge({ action: 'DRAFT_MESSAGE' });
+      if (draft.ledger.disposition !== 'PROPOSED' || !isLedgered(draft)) return 'a drafted message was not recorded as a proposal';
+      if (isLedgered(judge({ action: 'CALCULATE' }))) return 'routine internal work was ledgered as if it were a proposal';
       // An allowed action is authorized, not performed: the decision precedes the effect, which can still fail,
       // come back unknown or be a replay, so "performed" is only ever the effect's own receipt.
       const allowed = judge({ action: 'QUOTE_AND_INVOICE' });
@@ -310,7 +315,11 @@ async function decisions(): Promise<Decision[]> {
 function incomplete(d: Decision): Failure {
   const x = d.detail;
   if (typeof x.action !== 'string' || !x.action) return `decision ${d.id} names no action`;
-  if (typeof x.consequenceClass !== 'string' || !NON_INTERNAL.has(x.consequenceClass)) return `decision ${d.id} has no consequential class`;
+  // A proposal of internal work (a drafted message) is ledgered too: what Brain proposed is half the record.
+  const classOk =
+    typeof x.consequenceClass === 'string' &&
+    (NON_INTERNAL.has(x.consequenceClass) || (x.consequenceClass === 'INTERNAL' && x.disposition === 'PROPOSED'));
+  if (!classOk) return `decision ${d.id} has no consequential class`;
   if (typeof x.path !== 'string' || !PATHS.has(x.path)) return `decision ${d.id} names no path`;
   if (typeof x.disposition !== 'string' || !DISPOSITIONS.has(x.disposition)) return `decision ${d.id} does not say whether it was performed or proposed`;
   if (typeof x.cause !== 'string' || !x.cause) return `decision ${d.id} records no cause`;
@@ -403,8 +412,8 @@ const EFFECT_DISPOSITIONS = new Set(['PERFORMED', 'REPLAYED', 'FAILED', 'UNKNOWN
  * action, that allowed it — a performed effect with no authorization, or after
  * a refusal, is exactly the contradiction the ledger exists to expose.
  */
-async function effectSummary(all: readonly Decision[]): Promise<{ failure: Failure; effects: Array<{ id: string; projectId: string; detail: Record<string, unknown> }> }> {
-  const effects = (await rowsOfKinds([AUTHORITY_EFFECT_KIND])).map((r) => ({ id: r.id, projectId: r.project_id, detail: parse(r.detail) }));
+async function effectSummary(all: readonly Decision[]): Promise<{ failure: Failure; effects: Array<{ id: string; projectId: string; at: string; detail: Record<string, unknown> }> }> {
+  const effects = (await rowsOfKinds([AUTHORITY_EFFECT_KIND])).map((r) => ({ id: r.id, projectId: r.project_id, at: r.created_at, detail: parse(r.detail) }));
   const byId = new Map(all.map((d) => [d.id, d]));
   for (const e of effects) {
     const x = e.detail;
@@ -419,6 +428,9 @@ async function effectSummary(all: readonly Decision[]): Promise<{ failure: Failu
   const leak = leaks(effects);
   return { failure: leak, effects };
 }
+
+/** Actions Brain drafts before it performs them, so a performed one must have its proposal on the ledger. */
+const PROPOSED_BEFORE_PERFORMED = new Set<string>(['CONTACT_BUYER']);
 
 /** Refusal causes that may never sit beside a performed effect. */
 const NEVER_PERFORMED_UNDER = new Set(['READ_ONLY_GRANT', 'PROHIBITED', 'EMERGENCY_STOP', 'REVOKED', 'UNKNOWN_ACTION', 'SECRET_NOT_IN_STORE']);
@@ -482,6 +494,20 @@ export async function policyToActionEvidence(): Promise<AuthorityEvidence> {
   if (effectFailure) return { ok: false, detail: effectFailure };
   const browser = all.filter((d) => d.detail.path === 'BROWSER').length;
   const proposed = all.filter((d) => d.detail.disposition === 'PROPOSED').length;
+  /*
+   * What Brain proposed is the other half of what it did. A message Brain drafted itself is recorded as
+   * PROPOSED before it is authorized or sent (`operate.ts`), so a buyer contact Brain performed with no
+   * proposal of it on the ledger means the ledger shows what was done and not what was proposed.
+   */
+  const unproposed = effects.find(
+    (e) =>
+      e.detail.disposition === 'PERFORMED' &&
+      PROPOSED_BEFORE_PERFORMED.has(String(e.detail.action)) &&
+      !all.some((d) => d.projectId === e.projectId && d.detail.disposition === 'PROPOSED' && d.detail.action === e.detail.action),
+  );
+  if (unproposed) {
+    return { ok: false, detail: `effect ${unproposed.id} performed ${String(unproposed.detail.action)} with no proposal of it on the ledger: what Brain proposed was never recorded` };
+  }
   return {
     ok: true,
     detail: `${all.length} ledger decision(s) (${browser} on a browser path, ${proposed} proposed only), each with principal, scope, class and grant version; no consequential effect under a stop or outside a grant; ${effects.length} effect receipt(s) (${effects.filter((e) => e.detail.disposition === 'PERFORMED').length} performed), each naming the authorization it followed; ${suspensions.length} suspension(s), each keeping its obligations and naming the renewal`,

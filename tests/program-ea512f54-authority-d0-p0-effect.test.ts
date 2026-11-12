@@ -138,7 +138,12 @@ describe('an authorization is never recorded as an effect performed', () => {
     expect(result.ok).toBe(false);
     const rows = await decisions();
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows.every((r) => r.disposition === 'AUTHORIZED')).toBe(true);
+    // The tick drafted the buyer message and recorded it as proposed; every other row is an authorization,
+    // and none says PERFORMED, because nothing was sent.
+    const proposals = rows.filter((r) => r.disposition === 'PROPOSED');
+    expect(proposals.map((r) => r.action)).toEqual(['CONTACT_BUYER']);
+    expect(rows.filter((r) => r.disposition !== 'PROPOSED').every((r) => r.disposition === 'AUTHORIZED')).toBe(true);
+    expect(rows.some((r) => r.disposition === 'PERFORMED')).toBe(false);
     expect(await effects()).toEqual([]);
   });
 });
