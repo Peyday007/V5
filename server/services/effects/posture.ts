@@ -87,13 +87,13 @@ export const CONTINUITY_CLAUSE_OWNERS: readonly ClauseOwner[] = [
   },
   {
     clause: 'change to a permitted acquisition channel when an account is suspended',
-    owner: 'server/services/effects/posture.ts (planContinuation: CONSTRAINED → REROUTE to a permitted, different channel), applied before every send by server/services/cash/perform.ts (performCommercialAction → decideCommitmentContinuation)',
-    reader: 'NOT_AUTHORIZED refusals in idempotency_operations; cash_events CASH_CONTINUATION_DECIDED',
+    owner: 'server/services/effects/posture.ts (planContinuation: CONSTRAINED → REROUTE to a permitted, different channel), applied before every send by server/services/cash/perform.ts (continuationGate reads the alternatives a person declared through server/services/cash/alternatives.ts, decides with decideCommitmentContinuation, and sendCommercialEffect performs through the chosen `<primary>.via.<name>` adapter)',
+    reader: 'NOT_AUTHORIZED refusals in idempotency_operations; cash_events CASH_CONTINUATION_ALTERNATIVE_DECLARED and CASH_CONTINUATION_DECIDED (decision REROUTE, to); the rerouted operation in idempotency_operations under the alternative namespace',
   },
   {
     clause: 'switch suppliers if the original fails and an alternative is contractually workable',
-    owner: 'server/services/effects/posture.ts (planContinuation: contractuallyWorkable must be declared true), applied before every send by server/services/cash/perform.ts (performCommercialAction → decideCommitmentContinuation)',
-    reader: 'idempotency_operations per supplier namespace; cash_events CASH_CONTINUATION_DECIDED',
+    owner: 'server/services/effects/posture.ts (planContinuation: contractuallyWorkable must be declared true), applied before every send by server/services/cash/perform.ts (continuationGate reads declared suppliers through server/services/cash/alternatives.ts, decides with decideCommitmentContinuation, and sendCommercialEffect performs through the chosen one)',
+    reader: 'idempotency_operations per supplier namespace; cash_events CASH_CONTINUATION_ALTERNATIVE_DECLARED and CASH_CONTINUATION_DECIDED (decision REROUTE, to)',
   },
   {
     clause: 'preserve time-critical customer commitments',
@@ -279,6 +279,13 @@ export interface ContinuationAlternative {
   /** Whether the contract question applies at all (a supplier) or not (a research provider). */
   requiresContract: boolean;
   status: DependencyStatus;
+  /**
+   * Whether Brain could actually perform the commitment there now — a usable
+   * integration is registered for it. False is never chosen: a reroute to
+   * something nothing can send through would be a refusal dressed as a move.
+   * Absent or null: the caller does not perform it itself (a planning read).
+   */
+  performable?: boolean | null;
 }
 
 export interface ContinuationInput {
@@ -319,6 +326,10 @@ function whyNot(input: ContinuationInput, alt: ContinuationAlternative): string 
   if (input.health.status === 'CONSTRAINED' && input.channel !== null && alt.channel === input.channel) {
     return 'it is another account on the suspended channel, which would bypass the constraint rather than respect it';
   }
+  if (input.health.status === 'CONSTRAINED' && input.channel !== null && alt.channel === null) {
+    return 'nobody has said which channel it reaches people through, so it could be another account on the suspended one, and an unknown is never a yes';
+  }
+  if (alt.performable === false) return 'no usable integration is registered for it, so nothing could actually be sent there';
   if (alt.status === 'OUTAGE' || alt.status === 'CONSTRAINED') return `it is itself ${alt.status === 'OUTAGE' ? 'down' : 'constrained'}`;
   return null;
 }
@@ -404,6 +415,14 @@ export interface CommitmentContinuationInput {
   deadline: string | null;
   /** Alternatives the caller's records name; none named is none, never an invented one (R01-A1, invariant 39). */
   alternatives?: readonly ContinuationAlternative[];
+  /**
+   * Other namespaces this same commitment may have been attempted through (its
+   * alternatives, or the primary when the commitment is pinned to an
+   * alternative). Their unsettled effects count as this commitment's: an
+   * unknown send through one channel is never followed by a send through
+   * another. They do not change the health read, which is the namespace's own.
+   */
+  commitmentNamespaces?: readonly string[];
   now?: string;
 }
 
@@ -425,12 +444,17 @@ export interface CommitmentContinuation extends ContinuationDecision {
  */
 export async function decideCommitmentContinuation(input: CommitmentContinuationInput): Promise<CommitmentContinuation> {
   const now = input.now ?? operationNow();
-  const operations = (await listOperations(input.projectId, { limit: 500 })).filter((op) => op.namespace === input.namespace);
+  const commitment = new Set<string>([
+    input.namespace,
+    ...(input.commitmentNamespaces ?? []),
+    ...(input.alternatives ?? []).map((alt) => alt.namespace),
+  ]);
+  const operations = (await listOperations(input.projectId, { limit: 500 })).filter((op) => commitment.has(op.namespace));
   const outcomes: NamespaceOutcome[] = [];
   let unsettled = 0;
   for (const operation of operations) {
     const attempts = await listAttempts(operation.id);
-    outcomes.push(...outcomesOf(operation, attempts));
+    if (operation.namespace === input.namespace) outcomes.push(...outcomesOf(operation, attempts));
     if (input.otherAttempt(operation) && UNSETTLED_CLASSES.has(classifyOperation(operation, attempts, now).class)) unsettled += 1;
   }
   const health = judgeDependency(input.namespace, outcomes, now);

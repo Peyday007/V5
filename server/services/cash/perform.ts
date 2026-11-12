@@ -73,7 +73,7 @@ import {
 import {
   COMMERCIAL_EFFECTS,
   commercialOperationsFor,
-  adapterFor,
+  adapterForNamespace,
   commercialOperationsInProject,
   intentFor,
   isPerformable,
@@ -90,6 +90,7 @@ import { emptyInvoicingPass, issueOne } from './invoicing.ts';
 import { listInvoices } from '../../repos/cashInvoices.ts';
 import { usableAdapter } from './effects.ts';
 import { decideCommitmentContinuation } from '../effects/posture.ts';
+import { continuationAlternativesFor, primaryChannel } from './alternatives.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -578,7 +579,9 @@ export async function recoverAbandonedEffects(projectId: string): Promise<Reconc
     const { operation } = one;
     const uncertain = operation.state === 'UNCERTAIN';
     if (!uncertain && (operation.state !== 'RESERVED' || operation.failureCategory)) continue;
-    const adapter = adapterFor(one.action);
+    // The adapter of the namespace it was sent through: a commitment the
+    // continuation gate rerouted is asked of the alternative that sent it.
+    const adapter = adapterForNamespace(operation.namespace);
     // No adapter on this process: it cannot be asked, so it waits for one.
     if (!adapter) continue;
     // An unknown an adapter cannot be asked about is a person's to settle: the
@@ -998,47 +1001,85 @@ function stateAllows(action: PerformableAction, state: CashOpportunity['state'])
  * S-0485, before anything is sent — by a person's press and by the tick alike:
  * is the dependency this commitment needs down or constrained, and does an
  * earlier attempt for it remain unsettled? `decideCommitmentContinuation`
- * reads that from the effect ledger and `planContinuation` decides. Only
- * PROCEED sends. An outage is not hammered, a suspended account is not
- * bypassed, a commitment with an unsettled effect is reconciled before
- * anything is resent, and a deadline a wait could miss is escalated now —
- * each decision, with the alternatives it skipped and why, on the cash record.
+ * reads that from the effect ledger and `planContinuation` decides. PROCEED
+ * sends where the commitment is; REROUTE sends through the alternative a
+ * person declared permitted (and, for a supplier, contractually workable —
+ * `alternatives.ts`) and Brain can perform through now, and the caller hands
+ * the returned `via` to `sendCommercialEffect`. Nothing else sends. An outage
+ * is not hammered, a suspended account is not bypassed by another account on
+ * the same channel, a commitment with an unsettled effect — through any
+ * namespace — is reconciled before anything is resent or moved, and a
+ * deadline a wait could miss is escalated now — each decision, with the
+ * alternatives it skipped and why, on the cash record.
  * The attempt being made now is not counted as unsettled: it reconciles under
  * its own key rather than resending.
  */
+export interface ContinuationRoute {
+  /**
+   * The alternative namespace this send goes through, or null for the
+   * action's own. Hand it to `sendCommercialEffect` unchanged.
+   */
+  via: string | null;
+}
+
 export async function continuationGate(
   opportunity: CashOpportunity,
   action: PerformableAction,
   occurrence: string,
   actorRef: string,
-): Promise<Outcome<void>> {
+): Promise<Outcome<ContinuationRoute>> {
   const effect = COMMERCIAL_EFFECTS[action];
+  const primary = effect.namespace.name;
   const base = `cash:${opportunity.id}:${action}:`;
   const current = `${base}${occurrence}`;
+  /*
+   * An attempt continues where it started. An occurrence that already has an
+   * operation not closed as FAILED — under way, unknown, refused retryably or
+   * confirmed — is pinned to that operation's namespace: pressing again
+   * reaches the same key there, which asks the provider rather than sending,
+   * and moving it anywhere else would be a second send of one commitment.
+   */
+  const attempts = (await commercialOperationsFor(opportunity.projectId, opportunity.id)).filter(
+    (one) => one.action === action,
+  );
+  const pinned =
+    attempts.find((one) => one.occurrence === occurrence && one.operation.state !== 'FAILED')?.operation.namespace ??
+    null;
+  const alternatives = pinned === null ? await continuationAlternativesFor(opportunity.projectId, opportunity.id, action) : [];
+  const namespace = pinned ?? primary;
+  const commitmentNamespaces = [
+    ...new Set([primary, ...attempts.map((one) => one.operation.namespace)].filter((name) => name !== namespace)),
+  ];
   const continuation = await decideCommitmentContinuation({
     projectId: opportunity.projectId,
-    namespace: effect.namespace.name,
-    channel: opportunity.reachableChannel,
+    namespace,
+    // What the commitment reaches people through, in a declaration's words —
+    // never the published address, which no alternative's channel could equal.
+    channel: pinned === null || pinned === primary ? primaryChannel(action) : null,
     otherAttempt: (op) =>
       op.correlationId !== null &&
       op.correlationId.startsWith(base) &&
       op.correlationId !== current &&
       !op.correlationId.startsWith(`${current}:`),
     deadline: opportunity.deadline,
+    alternatives,
+    commitmentNamespaces,
   });
-  if (continuation.action === 'PROCEED') return { ok: true, value: undefined, message: continuation.reason };
-  const refusal = refuse(
-    continuation.action === 'REROUTE'
-      ? `${continuation.reason}. Nothing was sent through ${continuation.namespace}.`
-      : `Nothing was sent: ${continuation.reason}.`,
-  );
+  const via = (name: string): string | null => (name === primary ? null : name);
+  if (continuation.action === 'PROCEED') return { ok: true, value: { via: via(namespace) }, message: continuation.reason };
+  const rerouted = continuation.action === 'REROUTE' && continuation.to !== null;
+  const answer: Outcome<ContinuationRoute> = rerouted
+    ? { ok: true, value: { via: via(continuation.to!) }, message: continuation.reason }
+    : refuse(`Nothing was sent: ${continuation.reason}.`);
   /*
    * Recorded when the decision changes, not every time it is read. The tick
    * asks this of every held piece on every pass, and a hold waiting on a
    * person persists until the person acts — one row per pass would bury the
    * piece's real history under copies of one decision. What identifies the
    * decision is what it decided and why it held, never the prose, which may
-   * name a time.
+   * name a time. A reroute is recorded the same way: the decision row names
+   * where the commitment went, and the operation under that namespace is the
+   * send itself.
    */
   const signature = continuationSignature({
     action,
@@ -1066,7 +1107,7 @@ export async function continuationGate(
     continuationSignature(previous.detail) === signature &&
     (!escalates || typeof previous.detail['needId'] === 'string')
   ) {
-    return refusal;
+    return answer;
   }
   /*
    * "A person is told now" is a need, never a history row. The cash event is
@@ -1082,7 +1123,11 @@ export async function continuationGate(
     opportunityId: opportunity.id,
     kind: 'CASH_CONTINUATION_DECIDED',
     actorRef,
-    summary: `Brain did not attempt ${effect.doing}: ${continuation.action.toLowerCase().replace(/_/g, ' ')}.`,
+    summary: rerouted
+      ? `Brain is attempting ${effect.doing} through ${continuation.to}, because ${continuation.namespace} is ${
+          continuation.health.status === 'OUTAGE' ? 'down' : 'constrained'
+        }.`
+      : `Brain did not attempt ${effect.doing}: ${continuation.action.toLowerCase().replace(/_/g, ' ')}.`,
     detail: {
       action,
       occurrence,
@@ -1098,7 +1143,7 @@ export async function continuationGate(
       needId,
     },
   });
-  return refusal;
+  return answer;
 }
 
 /** The continuation decisions a person must act on: everything else resolves itself or is reconciled by Brain. */
@@ -1305,6 +1350,7 @@ export async function performCommercialAction(input: {
       amountCents: prepared.value.amountCents,
       stateAtSend: opportunity.state,
       subjectRef: prepared.value.subjectRef,
+      via: continuing.value.via,
     });
   } catch (error) {
     if (error instanceof OperationInProgress) {
