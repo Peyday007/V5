@@ -53,6 +53,7 @@ import { reconcileCashJobs, type JobReconciliation } from './jobPipeline.ts';
 import { handOffReadyTests, type FactoryHandoffPass } from './factoryHandoff.ts';
 import { advanceJourney, type JourneyTickReport } from './journey/tick.ts';
 import {
+  getNeed,
   getOpportunity,
   listNeeds,
   listOpportunities,
@@ -75,7 +76,7 @@ import {
   type ReconsiderPass,
 } from './reconsider.ts';
 import { projectStandings, recordStandingChanges, type StandingChange } from './standing.ts';
-import { createCandidate, getCandidate } from '../../repos/russellCandidates.ts';
+import { createCandidate, getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import {
   readAllCapabilities,
@@ -1013,6 +1014,107 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
     out.push({ needId: need.id, candidateId: candidate.id });
   }
   return out;
+}
+
+/** The acquiring routes that need a worker, as `needs.ts` names them. */
+export type AcquiringRoute = 'INTEGRATION' | 'COMMERCIAL' | 'RESEARCH';
+
+/**
+ * What a handed-off need was given to work on (AUTO-20-2 step 5, S-0249).
+ *
+ * `ALLOCATED` is a real idea the research pipeline launches — captured, judged
+ * and run under the standing grant exactly like `startDependentWork`'s — and
+ * `reused` says it was already alive on the need. `DIVE` is the opening's own
+ * deep dive, which already holds a worker on every question about it.
+ * `REFUSED` names why no worker could be given: nothing is reported as handed
+ * that nobody is working on.
+ */
+export type NeedWork =
+  | { kind: 'ALLOCATED'; needId: string; candidateId: string; reused: boolean }
+  | { kind: 'DIVE'; needId: string; opportunityId: string }
+  | { kind: 'REFUSED'; needId: string; reason: string };
+
+/** Whether an idea still holds, or can still be given, a worker. */
+async function ideaAlive(candidateId: string): Promise<boolean> {
+  const candidate = await getCandidate(candidateId);
+  if (!candidate) return false;
+  if (candidate.state === 'REJECTED' || candidate.state === 'PARKED' || candidate.state === 'MERGED' || candidate.state === 'DONE') return false;
+  const mission = await latestMissionForCandidate(candidateId);
+  return !mission || (mission.state !== 'FAILED' && mission.state !== 'CANCELLED' && mission.state !== 'DONE');
+}
+
+/**
+ * What a worker is asked to establish so the need can be acquired, by the route
+ * that acquires it. No vendor, method or category is named here: the need's own
+ * recommended path and completion condition are the brief, and the worker finds
+ * the alternatives (S-0246).
+ */
+export function acquisitionAsk(need: Pick<CashNeed, 'blockedAction' | 'recommendedPath' | 'nextStep' | 'completionCondition'>, route: AcquiringRoute): string {
+  const settles = need.completionCondition?.trim() ? ` It is settled when: ${need.completionCondition.trim()}` : '';
+  const path = need.recommendedPath.trim() ? ` The recommended way forward so far: ${need.recommendedPath.trim()}` : '';
+  switch (route) {
+    case 'INTEGRATION':
+      return (
+        `Brain cannot yet do this: ${need.blockedAction.trim()}. Find every way it could acquire the missing capability that ` +
+        'already exists — an installed or public connector, API, plugin, export of the data, standard library or a provider ' +
+        'granting permitted access — with each one\'s access terms, cost and setup steps from its own published documentation, ' +
+        `and which one is cheapest to put in use.${path}${settles}`
+      );
+    case 'COMMERCIAL':
+      return (
+        `This is blocked on a counterparty: ${need.blockedAction.trim()}. Identify the specific organisations that could be ` +
+        'that counterparty, each with its published channel for being reached, its published terms, and the evidence that it ' +
+        `does this.${path}${settles}`
+      );
+    case 'RESEARCH':
+      return `${need.nextStep.trim()}${path}${settles}`;
+  }
+}
+
+/**
+ * Give one handed-off need a worker through the research pipeline, the owner that
+ * already turns needs into missions (`startDependentWork`). Captured rather than
+ * launched, for the same reason: the archive is asked first, the judgment decides,
+ * and the standing authority decides whether anything may be spent.
+ *
+ * Reuse first: a need whose idea is still alive keeps it; an opening whose dive is
+ * asking its questions already has its worker. Idempotent: the idea is pinned to the
+ * need only while the need names none, and an idea that lost that race is rejected
+ * so no orphan holds a slot.
+ */
+export async function startNeedWork(need: CashNeed, route: AcquiringRoute): Promise<NeedWork> {
+  if (need.state !== 'OPEN') return { kind: 'REFUSED', needId: need.id, reason: `the need is ${need.state}` };
+  if (need.candidateId && (await ideaAlive(need.candidateId))) {
+    return { kind: 'ALLOCATED', needId: need.id, candidateId: need.candidateId, reused: true };
+  }
+  const opportunity = need.opportunityId ? await getOpportunity(need.opportunityId) : null;
+  if (need.opportunityId && !opportunity) return { kind: 'REFUSED', needId: need.id, reason: 'its opening no longer exists' };
+  if (opportunity) {
+    if (diveOwnsItsQuestions(opportunity)) return { kind: 'DIVE', needId: need.id, opportunityId: opportunity.id };
+    const notWorth = await notWorthResearching(opportunity, { now: cashNow() });
+    if (notWorth) return { kind: 'REFUSED', needId: need.id, reason: `its opening is not worth researching: ${describeNotWorthResearching(notWorth)}` };
+    if (cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }).disqualifiedBy) {
+      return { kind: 'REFUSED', needId: need.id, reason: 'its opening is ruled out by its own card' };
+    }
+  }
+  const ask = acquisitionAsk(need, route);
+  const candidate = await createCandidate({
+    projectId: need.projectId,
+    visibility: 'SHARED',
+    title: need.blockedAction.slice(0, 200),
+    statement: opportunity ? dependentQuestion(opportunity, { nextStep: ask }) : ask,
+  });
+  const pointed = need.candidateId
+    ? await replaceNeedCandidate(need.id, need.candidateId, candidate.id)
+    : await setNeedCandidate(need.id, candidate.id);
+  if (pointed) return { kind: 'ALLOCATED', needId: need.id, candidateId: candidate.id, reused: false };
+  // Another pass pinned an idea first: use that one and retire this copy.
+  await transitionCandidate({ candidateId: candidate.id, from: 'CAPTURED', to: 'REJECTED' });
+  const now = await getNeed(need.id);
+  if (now?.candidateId && (await ideaAlive(now.candidateId))) {
+    return { kind: 'ALLOCATED', needId: need.id, candidateId: now.candidateId, reused: true };
+  }
+  return { kind: 'REFUSED', needId: need.id, reason: 'the need changed while its work was being started' };
 }
 
 /** The shape every `dependentQuestion` begins with. */
