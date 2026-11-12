@@ -43,7 +43,7 @@ import type { Bin, BinEvent } from '../../domain/types.ts';
 import type { FactoryRole, FactorySessionState } from '../../domain/factory.ts';
 import { dispatchAttributionForLease, listBinEvents } from '../../repos/bins.ts';
 import { getAccount, getRoutine } from '../../repos/fleet.ts';
-import { recordObservedSession } from '../../repos/factoryFleet.ts';
+import { recordObservedSession, recordedSessionsByBin } from '../../repos/factoryFleet.ts';
 import { listUnits } from '../../repos/factory.ts';
 import { campaignBins } from './remote.ts';
 
@@ -216,6 +216,9 @@ export async function recordObservedSessions(campaignId: string): Promise<Sessio
   const bins = await campaignBins(campaignId);
   if (bins.length === 0) return report;
   const units = await listUnits(campaignId);
+  // Read lazily: only a finished bin this process has not memoized needs it,
+  // which is every finished bin once after a restart and almost none after.
+  let recorded: Map<string, { count: number; lastRecordedAt: string }> | null = null;
   for (const bin of bins) {
     const role = ROLE_OF_BIN_KIND[bin.kind];
     if (!role) {
@@ -228,6 +231,26 @@ export async function recordObservedSessions(campaignId: string): Promise<Sessio
       report.alreadyRecorded += swept.recorded;
       report.unclosed += swept.unclosed;
       continue;
+    }
+    /*
+     * The memo above is this process's, so a restart forgot it and the first
+     * tick after one re-read every finished bin's history in every live
+     * campaign. On 2026-11-11 that was 1,331 session writes and their
+     * attribution reads in the ten minutes after a release restart, which
+     * starved the pool until research calls passed their time limit and the
+     * Deploy's verification after the restart could not complete. The rows
+     * already say it: a finished bin whose newest recorded session was written
+     * after the bin last changed was swept since then, so it has nothing new.
+     */
+    if (FINISHED_BIN_STATES.has(bin.state)) {
+      recorded ??= await recordedSessionsByBin(campaignId);
+      const onRecord = recorded.get(bin.id);
+      if (onRecord && onRecord.lastRecordedAt >= bin.updatedAt) {
+        if (sweptFinished.size >= SWEPT_FINISHED_CEILING) sweptFinished.clear();
+        sweptFinished.set(bin.id, { fingerprint, recorded: onRecord.count, unclosed: 0 });
+        report.alreadyRecorded += onRecord.count;
+        continue;
+      }
     }
     const events = await listBinEvents(bin.id, EVENT_READ_LIMIT);
     const partial = events.length >= EVENT_READ_LIMIT;
