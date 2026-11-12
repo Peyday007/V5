@@ -928,6 +928,25 @@ describe('a READY_TO_TEST software test reaches the Factory and the hosted loop 
     expect(firstRound).toHaveLength(1);
     expect(firstRound[0]).toMatchObject({ verdict: 'CHANGES_REQUIRED', independence: 'SESSION_SEPARATED' });
 
+    // A recorded review bin is not read again on the next tick: its report
+    // cannot change, and production re-parsed every finished bin every 20s.
+    {
+      const db = getDb();
+      const realAll = db.all.bind(db);
+      let reviewReads = 0;
+      db.all = (async (sql: string, params?: unknown[]) => {
+        if (/FROM bin_unit_results WHERE bin_id/.test(sql) && params?.[0] === reviewing!.bin.id) reviewReads += 1;
+        return realAll(sql, params as never);
+      }) as typeof db.all;
+      try {
+        await interval();
+      } finally {
+        db.all = realAll;
+      }
+      expect(reviewReads).toBe(0);
+      expect(await listReviews(campaignId)).toHaveLength(1);
+    }
+
     // The finding became a repair unit by itself, and the repair owns the file
     // the defect must be fixed in — not only the test that showed it.
     const repair = (await listUnits(campaignId)).find((unit) => unit.kind === 'REPAIR');
