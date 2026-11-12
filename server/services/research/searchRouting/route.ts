@@ -63,7 +63,13 @@ export function planExecution(results: MethodResult[]): ExecutionPlan {
   };
 }
 
-/** Which route a request with no stored method takes: the method must be developed first. */
+/**
+ * Which route a request takes. With no stored *executable* method — nothing
+ * code can run — the method must be developed first, and that is the only
+ * Claude route. Discovery's caller is `bucketGates` (`searchMethods/
+ * bucketMethods.ts`): it passes a bucket's compiled executor, or null while the
+ * bucket has none, and `openDiscovery` opens a Claude round only on DEVELOP.
+ */
 export function routeRequest(method: ExecutableMethod | null): Route {
   return method ? 'CODE' : 'DEVELOP';
 }
