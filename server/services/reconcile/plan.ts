@@ -38,10 +38,11 @@ import {
   createBoundaryContract,
   createRequirements,
   listCoverage,
+  listExistingClaims,
   listRequirements,
   type CreateRequirementInput,
 } from '../../repos/reconciliation.ts';
-import { getCurrentExtractionRun } from '../../repos/extraction.ts';
+import { currentExtractionRunsFor } from '../../repos/extraction.ts';
 import { claimsForDocument } from './claims.ts';
 import { buildCoverageMatrix, dedupeClaims, readArchive, type CoverageAssessment } from './coverage.ts';
 
@@ -131,9 +132,29 @@ export async function inventoryProject(projectId: string): Promise<{
   let pending = 0;
   const claims: ExistingClaim[] = [];
 
-  for (const document of await listDocuments(projectId)) {
-    if (!document.filesystemPath || document.fileMissing) continue;
-    const run = await getCurrentExtractionRun(document.id);
+  /*
+   * Read in bulk, not per document. Production, 2026-11-12: two sequential
+   * queries for each of ~990 documents put brain_propose_fragments past the
+   * 180s tool-call limit on three Deploys in a row. One statement per 500
+   * documents reads the current runs, one reads the project's claims, and only
+   * a read document holding no claim yet is inventoried on its own.
+   */
+  const documents = (await listDocuments(projectId)).filter((d) => d.filesystemPath && !d.fileMissing);
+  const runs = await currentExtractionRunsFor(documents.map((d) => d.id));
+  const held = new Map<string, ExistingClaim[]>();
+  for (const claim of await listExistingClaims(projectId)) {
+    const list = held.get(claim.documentId);
+    if (list) list.push(claim);
+    else held.set(claim.documentId, [claim]);
+  }
+  // The order a per-document read returned: page, then block, then insertion.
+  const position = (n: number | null) => (n === null ? -Infinity : n);
+  for (const list of held.values()) {
+    list.sort((a, b) => position(a.page) - position(b.page) || position(a.blockIndex) - position(b.blockIndex));
+  }
+
+  for (const document of documents) {
+    const run = runs.get(document.id) ?? null;
     if (!run || (run.status !== 'READY' && run.status !== 'READY_WITH_WARNINGS')) {
       unreadable += 1;
       // Pending only while a reading could plausibly still finish: an
@@ -147,7 +168,8 @@ export async function inventoryProject(projectId: string): Promise<{
       continue;
     }
     read += 1;
-    claims.push(...await claimsForDocument(document.id));
+    const own = held.get(document.id);
+    claims.push(...(own && own.length > 0 ? own : await claimsForDocument(document.id)));
   }
 
   return { claims, documentsRead: read, documentsUnreadable: unreadable, documentsPending: pending };
