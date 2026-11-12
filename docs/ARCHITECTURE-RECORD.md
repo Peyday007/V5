@@ -15877,9 +15877,24 @@ order); a weak model is demoted by its own run record and the benchmark; an
 underperforming approach is a `STOP_APPROACH` or `CHANGE_STRATEGY` decision
 whose prediction is judged later.
 
+**Remaining limitations** (2026-11-12):
+
+- The RunPod balance ($15.48 at $0.196/h, ~79 h) is the binding constraint on
+  any GPU change; topping it up is the owner's (a payment), and RunPod deletes
+  every pod at zero.
+- 24 GB community cards within the $0.24/h ceiling were out of stock on both
+  clouds at 19:00Z; a 48 GB card (A6000 $0.33/h, A40 $0.35/h) is above the
+  existing per-pod authority and is not used without the owner raising
+  `RUNPOD_MAX_USD_PER_HOUR`.
+- Calibration is reported only over ten or more judged decisions of a kind;
+  until then each miss is investigated by its cause.
+- The operator may not spend, contact anyone or approve a plan (§106): revenue
+  still moves only through Brain's own outreach (Instantly, §94) and a buyer
+  paying. Settled cash is $0 of $10,000.
+
 Tests: `tests/modelBench.test.ts`, `tests/operatorDecisions.test.ts`,
 `tests/runpodRestore.test.ts`. Runs: `cheap-lane.yml runpod-survey |
-runpod-bench | runpod-upgrade`.
+runpod-bench | runpod-upgrade`; `agents.yml operator-prove`.
 
 ## 109. The operator directs engineering, and a merged pull request is not the improvement.
 
