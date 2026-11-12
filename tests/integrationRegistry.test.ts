@@ -33,6 +33,8 @@ const BRAIN_INTERNAL = new Set([
   'BRAIN_BRIDGE_KEY', 'BRAIN_OAUTH_ROTATION_KEY', 'BRAIN_PUBLIC_URL', 'BRAIN_URL', 'BRAIN_ROUTINE_BASE_URL',
   'BRAIN_CHEAP_LLM_WINDOW_TOKENS', 'BRAIN_TEST_DATABASE_URL', 'GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_SERVER_URL',
   'ANTHROPIC_BASE_URL', 'OPENAI_BASE_URL', 'ETSY_AUTH_REDIRECT_URL',
+  // The cheap lane's own Fly app endpoint, built inside cheap-lane.yml for the RunPod bench; not a secret.
+  'CHEAP_URL',
 ]);
 
 const ed = () => generateKeyPairSync('ed25519').privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
