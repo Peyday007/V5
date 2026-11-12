@@ -15776,3 +15776,104 @@ pg 138); every agents call is a USAGE row under `open-source-agents`.
 
 `node --import tsx scripts/sales-desk.ts [--prove]`; `agents.yml sales |
 sales-prove`. Tests: `tests/salesDesk.test.ts`, `agents/tests/test_sales.py`.
+
+## 108. A model is chosen by what it does on Brain's work, and a decision is judged by what it predicted.
+
+**Owner's order, 2026-11-12.** "Make Hermes fully operational … automatically
+build the right RunPod infrastructure … benchmark multiple candidate models
+against representative REAL Brain tasks … select based on measured
+performance … improve Brain's decision-making … dynamic resource and project
+allocation … automatic self-improvement … keep costs economically rational …
+prove the full system on the $10K goal."
+
+**What production showed first** (`agents.yml operator-show`, 2026-11-12):
+the operator had not completed one useful run. Its runs failed on the GPU
+(HTTP 400 `"auto" tool choice requires --enable-auto-tool-choice and
+--tool-call-parser`, opr_540994dd, opr_c2f2294d), on the free switchboard's
+`brain-a` combo (one provider's gpt-oss-120b: HTTP 429 per-minute limits,
+opr_7af304c3; "conversation grown too large", opr_1184fee7), on a saturated
+database pool (opr_8f2520b2), and by inventing a goal id (`wst_dummy`,
+opr_5334b9d8). The RunPod account held $15.48 at $0.196/h — about 79 hours
+of runway, on a pod RunPod deletes at zero (as it did 2026-11-10).
+
+**A model is measured on Brain's own work** (`cheap/modelBench.ts`). Seven
+tasks, built from those production rows and scored by code, not by another
+model's opinion: diagnosing the operator's real failed runs; a multi-step tool
+plan over the operator's real tools and real goal readings (read the goal,
+read its plan, withdraw the moot request, report — an invented id scores
+zero); recovering when Brain answers "temporarily busy" or refuses a missing
+argument; judging a real opening card with no payer and no price beside one
+with both; choosing between the $10K plan's real competing reconstructions
+and naming the test; catching "p50 $131,700, so $10K is likely" against a
+1.5% coverage reach; and answering a validator refusal seen seven times with
+an engineering fix rather than a retry. Each records score, tool calls made
+and correct, latency, tokens and dollars per task at the measured parallel
+throughput. `chooseModel` gates on the tool tasks (an operator that cannot
+call tools directs nothing), then takes the cheapest within 0.05 of the best
+quality. Staged: today's models first (`baseline`), then candidates one
+temporary pod at a time (`runpod-bench`, pods named `brain-bench-*`, deleted
+in `finally`, swept hourly by `runpod-restore` if a run was cancelled).
+
+**Pods are recipes** (`cheap/runpodRestore.ts` `RECIPES`): model, served name,
+GPUs, image, CUDA, window and vLLM flags — every new recipe names its
+tool-call and reasoning parsers and a window of 64K or more, so the 4B's
+defect cannot be reproduced on a dearer card. `runpod-upgrade` moves the GPU
+to a recipe with no gap: the new pod beside the old, waited on, probed
+(`runpod-probe.ts` now makes a structured operator tool call and prints
+`TOOLS on|off` and `CONTEXT n`), connected, and only then the old pod retired,
+so Brain owns one pod before and after. A card cannot change on an existing
+pod, which is why the upgrade is a replacement rather than a repurpose.
+
+**Spending.** No pod above `RUNPOD_MAX_USD_PER_HOUR` (default $0.24 — the
+existing authority) is kept; no benchmark pod starts while the account's spend
+plus the new pod would pass `RUNPOD_MAX_TOTAL_USD_PER_HOUR` (default $0.45) or
+the balance would last under a day; `runpod-restore` reports the runway every
+hour and warns under 72 hours (`runpodAccount.ts`).
+
+**The operator's models are ordered by what they did** (`rankOperatorModels`):
+each model's operator runs that finished DONE (Laplace-smoothed) averaged with
+the benchmark's tool score, never a fixed list. The switchboard route the
+benchmark measured best for tool use (`OPERATOR_FREE_ROUTE`,
+`auto/best-coding`) is tried before the `brain-a` combo; the GPU joins when
+the connect step's probe passed its tool check (`BRAIN_RUNPOD_TOOLS=on`), with
+its served window sent to Hermes as `context_length`.
+
+**Decisions are reviewed, challenged, predicted and judged**
+(`domain/decision.ts`, `operator/decisions.ts`) — on the forecast ledger
+Brain already keeps (§87's `quant/ledger.ts`), not beside it.
+`brain_operator_decide` takes a question, at least two meaningfully different
+options (any variable may change — price, segment, channel, structure,
+financing, geography, timing, allocation, or doing nothing), each with
+probability, value and cost (null when unknown, never zero) and evidence; the
+chosen one, the assumptions, and a prediction with a horizon. It refuses a
+choice of one, unnamed assumptions, and a lower-expected-value choice without
+a reason (an experiment buying information is a reason). A high-impact or
+irreversible decision is attacked by a second model (hidden assumptions,
+missing variables, a stronger alternative); a REVISE is returned uncommitted
+until the operator answers it. The prediction is a ledger PREDICTION with
+comparable key `operator:<kind>`. `brain_operator_verify` records the outcome
+once, with the causes its signals support, and returns the operator's record
+for that kind — calibration only over ten or more comparable outcomes; a
+single miss is investigated by its cause, not read as miscalibration.
+
+**Allocation is by marginal value** (`domain/allocation.ts`,
+`operator/allocation.ts`, `brain_operator_allocation`): every goal is an
+activity read from its rows — remaining stake, its plan's reach (coverage is
+marked as not a probability), evidence ladder, days left, the research it
+consumed in the window and what that bought (sourced claims, openings), reach
+movement — and ranked by the value of the next unit of capacity, cash plus
+information. Shares are proportional, not equal; no cap on activities; a
+barren one is recommended PAUSE, a paused one worth it RESTART.
+`brain_operator_set_goal_focus` pauses or resumes through `goals/decide.ts`
+under a committed decision of that kind, never a goal committed to a customer
+or to somebody (those are a person's to pause).
+
+**Self-improvement uses the doors Brain has:** a recurring defect or missing
+capability goes to Factory (`brain_operator_submit_fix`, §87's standing
+order); a weak model is demoted by its own run record and the benchmark; an
+underperforming approach is a `STOP_APPROACH` or `CHANGE_STRATEGY` decision
+whose prediction is judged later.
+
+Tests: `tests/modelBench.test.ts`, `tests/operatorDecisions.test.ts`,
+`tests/runpodRestore.test.ts`. Runs: `cheap-lane.yml runpod-survey |
+runpod-bench | runpod-upgrade`.

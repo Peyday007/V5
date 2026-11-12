@@ -299,6 +299,191 @@ const learnTool: McpTool = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Deciding, verifying and moving capacity (§108)
+// ---------------------------------------------------------------------------
+
+function numberArg(args: Record<string, unknown>, field: string, fallback: number | null = null): number | null {
+  const v = args[field];
+  if (v === undefined || v === null) return fallback;
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n)) throw invalidInput(`${field} must be a number.`);
+  return n;
+}
+
+const allocationTool: McpTool = {
+  name: 'brain_operator_allocation',
+  title: 'Operator: where capacity is worth most',
+  description:
+    'Every goal as an activity competing for capacity, ranked by the marginal value of the next unit of capacity: ' +
+    'stake, reach of its plan, evidence level, days left, what its recent research consumed and bought, and the value ' +
+    'of the information an answer would give. Each comes with a stance (EXPAND, HOLD, REDUCE, PAUSE, RESTART) and why. ' +
+    'Use it before moving capacity; act through brain_operator_decide and brain_operator_set_goal_focus.',
+  inputSchema: { type: 'object', properties: { window_hours: { type: 'number', description: 'The window recent use is read over (default 24).' } }, additionalProperties: false },
+  annotations: { title: 'Operator: where capacity is worth most', ...READ_ONLY },
+  run: async (args, { principal }) => {
+    const projects = await readableProjects(principal);
+    const { readAllocation } = await import('../services/operator/allocation.ts');
+    const reading = await readAllocation(projects, Math.min(168, Math.max(1, numberArg(args, 'window_hours', 24) ?? 24)));
+    return { projectId: null, value: { readAt: reading.readAt, windowHours: reading.windowHours, allocations: reading.allocations.slice(0, 15) } };
+  },
+};
+
+const decideTool: McpTool = {
+  name: 'brain_operator_decide',
+  title: 'Operator: commit a decision',
+  description:
+    'Before an action that matters, commit the decision: the question, at least two meaningfully different options ' +
+    '(any variable may change — price, segment, channel, structure, financing, timing, allocation — or doing nothing), ' +
+    "each with probability, value and cost in dollars (null when unknown) and its evidence; the chosen option; the " +
+    'assumptions it rests on; and a prediction (observable outcome, probability, horizon in days). Brain checks it, ' +
+    'has a second model challenge a high-impact one, and records the prediction on the ledger so it is judged later. ' +
+    'Returns REVISE with the challenge when a flaw could change the choice; call again with answered_challenge to stand by it.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      kind: { type: 'string', enum: ['PAUSE_GOAL', 'RESUME_GOAL', 'SUBMIT_FIX', 'WITHDRAW_REQUEST', 'CONTINUE_IDLE', 'REALLOCATE', 'CHANGE_STRATEGY', 'RESEARCH', 'SWITCH_MODEL', 'STOP_APPROACH', 'OTHER'] },
+      goal_id: { type: 'string' },
+      question: { type: 'string' },
+      options: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            action: { type: 'string' },
+            probability: { type: 'number' },
+            value_usd: { type: ['number', 'null'] },
+            cost_usd: { type: ['number', 'null'] },
+            evidence: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['action', 'probability'],
+        },
+      },
+      chosen: { type: 'integer', description: 'Index of the chosen option.' },
+      assumptions: { type: 'array', items: { type: 'string' } },
+      why_not_highest_ev: { type: 'string' },
+      prediction_outcome: { type: 'string', description: 'What will be observably true if the choice works.' },
+      prediction_probability: { type: 'number' },
+      horizon_days: { type: 'number' },
+      irreversible: { type: 'boolean' },
+      answered_challenge: { type: 'string' },
+    },
+    required: ['kind', 'question', 'options', 'chosen', 'assumptions', 'prediction_outcome', 'prediction_probability', 'horizon_days'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Operator: commit a decision', ...MUTATING, idempotentHint: false },
+  run: async (args, { principal }) => {
+    const projects = requireOperator(principal);
+    const rawOptions = Array.isArray(args['options']) ? (args['options'] as Record<string, unknown>[]) : [];
+    const strings = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
+    const nullableNumber = (v: unknown) => (v === null || v === undefined || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+    const { decide } = await import('../services/operator/decisions.ts');
+    const { modelsFor } = await import('../services/operator/run.ts');
+    const models = await modelsFor();
+    const result = await decide(
+      {
+        kind: requiredString(args, 'kind') as never,
+        goalId: optionalString(args, 'goal_id'),
+        question: requiredString(args, 'question'),
+        options: rawOptions.map((o) => ({
+          action: String(o['action'] ?? ''),
+          probability: Number(o['probability']),
+          valueUsd: nullableNumber(o['value_usd']),
+          costUsd: nullableNumber(o['cost_usd']),
+          evidence: strings(o['evidence']),
+        })),
+        chosen: Math.trunc(numberArg(args, 'chosen', -1) ?? -1),
+        assumptions: strings(args['assumptions']),
+        whyNotHighestEv: optionalString(args, 'why_not_highest_ev'),
+        prediction: {
+          outcome: requiredString(args, 'prediction_outcome'),
+          probability: numberArg(args, 'prediction_probability', -1) ?? -1,
+          horizonDays: numberArg(args, 'horizon_days', 0) ?? 0,
+        },
+        irreversible: args['irreversible'] === true,
+        answeredChallenge: optionalString(args, 'answered_challenge'),
+      },
+      // The challenger is a different model from the one deciding when Brain has two.
+      { runId: await currentRunId(), projectIds: projects, models: models.length > 1 ? [...models.slice(1), models[0]!] : models },
+    );
+    return { projectId: null, value: { ...result } };
+  },
+};
+
+const verifyTool: McpTool = {
+  name: 'brain_operator_verify',
+  title: 'Operator: judge a past decision',
+  description:
+    'Record what a committed decision actually came to, once, with the evidence it was observed in, and the signals ' +
+    'that explain a miss (an assumption broke, execution deviated, a mechanism was missing, capacity fell short, it ' +
+    'arrived late). Returns your record on decisions of this kind: forecasts against outcomes, and the miss causes. ' +
+    'Without decision_id, lists the decisions still owed a verification.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      decision_id: { type: 'string' },
+      occurred: { type: 'boolean' },
+      evidence: { type: 'string' },
+      assumption_broke: { type: 'boolean' },
+      execution_deviated: { type: 'boolean' },
+      mechanism_missing: { type: 'boolean' },
+      capacity_shortfall: { type: 'boolean' },
+      arrived_late: { type: 'boolean' },
+      broken_assumption: { type: 'string' },
+    },
+    additionalProperties: false,
+  },
+  annotations: { title: 'Operator: judge a past decision', ...MUTATING, idempotentHint: false },
+  run: async (args, { principal }) => {
+    const projects = requireOperator(principal);
+    const { openDecisions, verify } = await import('../services/operator/decisions.ts');
+    const id = optionalString(args, 'decision_id');
+    if (!id) return { projectId: null, value: { open: await openDecisions(20) } };
+    if (typeof args['occurred'] !== 'boolean') throw invalidInput('occurred must be true or false.');
+    const flag = (k: string) => (args[k] === true ? true : undefined);
+    const signals = Object.fromEntries(
+      Object.entries({ assumptionBroke: flag('assumption_broke'), executionDeviated: flag('execution_deviated'), mechanismMissing: flag('mechanism_missing'), capacityShortfall: flag('capacity_shortfall'), arrivedLate: flag('arrived_late') }).filter(([, v]) => v !== undefined),
+    );
+    const result = await verify(
+      { decisionId: id, occurred: args['occurred'] as boolean, evidence: requiredString(args, 'evidence'), signals, brokenAssumption: optionalString(args, 'broken_assumption') },
+      { runId: await currentRunId(), projectIds: projects },
+    );
+    return { projectId: null, value: result };
+  },
+};
+
+const focusTool: McpTool = {
+  name: 'brain_operator_set_goal_focus',
+  title: 'Operator: pause or resume a goal',
+  description:
+    "Move capacity between goals: PAUSE holds every bin a low-value goal pursues (nothing is cancelled; resuming " +
+    'continues it), RESUME releases a paused one whose reading improved. Needs a committed PAUSE_GOAL or RESUME_GOAL ' +
+    'decision for the same goal. A goal owed to a customer or committed to somebody is never paused by the operator.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      goal_id: { type: 'string' },
+      action: { type: 'string', enum: ['PAUSE', 'RESUME'] },
+      decision_id: { type: 'string' },
+      reason: { type: 'string' },
+    },
+    required: ['goal_id', 'action', 'decision_id', 'reason'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Operator: pause or resume a goal', ...MUTATING },
+  run: async (args, { principal }) => {
+    const projects = requireOperator(principal);
+    const action = requiredString(args, 'action').toUpperCase();
+    if (action !== 'PAUSE' && action !== 'RESUME') throw invalidInput('action must be PAUSE or RESUME.');
+    const { setGoalFocus } = await import('../services/operator/decisions.ts');
+    const result = await setGoalFocus(
+      { goalId: requiredString(args, 'goal_id'), action, decisionId: requiredString(args, 'decision_id'), reason: requiredString(args, 'reason') },
+      { runId: await currentRunId(), projectIds: projects },
+    );
+    return { projectId: null, value: result };
+  },
+};
+
 export const OPERATOR_TOOLS: readonly McpTool[] = [
   goalsTool,
   goalTool,
@@ -310,4 +495,8 @@ export const OPERATOR_TOOLS: readonly McpTool[] = [
   continueTool,
   fixTool,
   learnTool,
+  allocationTool,
+  decideTool,
+  verifyTool,
+  focusTool,
 ];

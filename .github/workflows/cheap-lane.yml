@@ -47,9 +47,13 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore'
+        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade'
         required: true
         default: deploy
+      recipes:
+        description: 'For runpod-bench: comma-separated pod recipes (server/services/cheap/runpodRestore.ts RECIPES) to benchmark on temporary pods; add "baseline" to measure production too. For runpod-upgrade: the one recipe to serve.'
+        required: false
+        default: ''
       hours:
         description: 'For runpod-report: the window in hours (1-48). The report also prints the equal window before it, for a before/after reading.'
         required: false
@@ -105,6 +109,7 @@ jobs:
           RUNPOD_MAX_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_USD_PER_HOUR }}
           ACTION: ${{ inputs.action || 'runpod-auto' }}
           HOURS_INPUT: ${{ inputs.hours || '6' }}
+          RECIPES_INPUT: ${{ inputs.recipes || '' }}
         run: |
           set -eu
           exec > >(tee cheap.txt) 2>&1
@@ -125,6 +130,7 @@ jobs:
             [ -n "${RUNPOD_API_KEY:-}" ] || return 0
             rc=0; npx tsx scripts/runpod-restore.ts "$@" > restore.txt 2>&1 || rc=$?
             cat restore.txt
+            if grep -q '^RUNWAY-LOW ' restore.txt; then echo "::warning title=runpod balance::RunPod's balance lasts about $(grep '^RUNWAY-LOW ' restore.txt | cut -d' ' -f2) hours at the current spend; RunPod deletes every pod at zero. Add funds to the RunPod account."; fi
             [ $rc -eq 0 ] || { echo "::error title=runpod::No GPU pod could be found or recreated; the lines above give RunPod's answer."; return $rc; }
             url=$(grep '^URL ' restore.txt | cut -d' ' -f2-)
             pod_id=$(grep '^POD ' restore.txt | cut -d' ' -f2)
@@ -140,6 +146,8 @@ jobs:
               BRAIN_RUNPOD_KEY="$RUNPOD_VLLM_KEY" \
               BRAIN_RUNPOD_MODEL="$model" \
               BRAIN_RUNPOD_FINGERPRINT="$gpu_fp" \
+              BRAIN_RUNPOD_TOOLS="$(grep -q '^TOOLS on' probe.txt && echo on || echo off)" \
+              BRAIN_RUNPOD_CONTEXT="$(grep '^CONTEXT ' probe.txt | cut -d' ' -f2 | tr -cd '0-9')" \
               BRAIN_RUNPOD_MODE=primary >/dev/null
             [ -z "$pod_id" ] || flyctl secrets set --app "$brain" BRAIN_RUNPOD_POD_ID="$pod_id" >/dev/null
             if [ -n "${RUNPOD_API_KEY:-}" ]; then
@@ -195,6 +203,42 @@ jobs:
               ;;
             runpod-report)
               gpu_report
+              ;;
+            runpod-survey)
+              # What the account holds and could rent, from RunPod itself (§108). Changes nothing.
+              [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
+              npx tsx scripts/runpod-survey.ts
+              ;;
+            runpod-upgrade)
+              # Move the GPU to another recipe with no gap (§108): new pod beside the old, probe
+              # (tool calls included), point the Brain at it, then retire the old one.
+              [ -n "${RUNPOD_API_KEY:-}" ] && [ -n "$RUNPOD_VLLM_KEY" ] || { echo "::error::Set the RUNPOD_API_KEY and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
+              recipe=$(printf '%s' "$RECIPES_INPUT" | tr -cd 'a-z0-9.-')
+              npx tsx scripts/runpod-upgrade.ts --recipe "$recipe" | tee upgrade.txt || { echo "::error title=runpod::The new pod did not come up; the old pod keeps serving."; exit 1; }
+              new_id=$(grep '^NEW ' upgrade.txt | cut -d' ' -f2)
+              old_ids=$(grep '^OLD ' upgrade.txt | cut -d' ' -f2 | grep -v "^$new_id$" | paste -sd, - || true)
+              RUNPOD_VLLM_URL=$(grep '^URL ' upgrade.txt | cut -d' ' -f2-)
+              RUNPOD_VLLM_MODEL=""
+              pod_id="$new_id"
+              fingerprint
+              if ! probe || ! grep -q '^TOOLS on' probe.txt; then
+                npx tsx scripts/runpod-upgrade.ts --retire "$new_id"
+                echo "::error title=runpod::The new pod failed the probe or its tool-call check; it was deleted and the old pod keeps serving."
+                exit 1
+              fi
+              gpu_connect
+              [ -z "$old_ids" ] || npx tsx scripts/runpod-upgrade.ts --retire "$old_ids"
+              echo "::notice title=runpod::Brain's GPU now serves recipe $recipe on pod $new_id ($(grep '^POD ' upgrade.txt | cut -d' ' -f4)/h); retired: ${old_ids:-none}."
+              ;;
+            runpod-bench)
+              # Candidate models on Brain's own tasks, each on a temporary pod deleted after (§108).
+              [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
+              recipes=$(printf '%s' "$RECIPES_INPUT" | tr -cd 'a-z0-9.,-' | sed 's/baseline//; s/,,*/,/g; s/^,//; s/,$//')
+              base=""; case "$RECIPES_INPUT" in *baseline*) base="--baseline" ;; esac
+              CHEAP_URL="https://$cheap.fly.dev/v1" timeout --signal=TERM --kill-after=60 6600 \
+                npx tsx scripts/runpod-bench.ts --recipes "$recipes" $base | tee bench.txt
+              grep -q '^RUNPOD-BENCH: OK' bench.txt || { echo "::error title=runpod::The benchmark did not finish."; exit 1; }
+              grep '^WINNER' bench.txt | sed 's/^/::notice title=runpod bench::/'
               ;;
             runpod-restore)
               [ -n "${RUNPOD_API_KEY:-}" ] && [ -n "$RUNPOD_VLLM_KEY" ] || { echo "::error::Set the RUNPOD_API_KEY and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
