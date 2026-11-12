@@ -217,7 +217,9 @@ async function alreadyRouted(goalId: string, key: string): Promise<boolean> {
  *     through the improvement register, the existing intake that engineers
  *     Brain's own repository (§87); a research or commercial-operations cause to
  *     the record of every goal whose plan rests on the corrected claim, which is
- *     where that goal's research and operations read what to change;
+ *     where that goal's research and operations read what to change — and, when
+ *     no goal's plan rests on it, to the register too, so a systematic miss
+ *     always produces work and never stops at a reading;
  *   * every dependent plan in `recompute` is handed back for an immediate re-read
  *     (`requestGoalPlanPass`, the owner of plan recomputation), so the next plan
  *     is built on the corrected claims;
@@ -251,14 +253,39 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
     });
   for (const correction of reading.corrections) {
     const key = correctionKey(correction);
-    if (correction.owner === 'FACTORY') {
+    let reachedGoal = false;
+    for (const goal of goals) {
+      const claim = planClaimId(goal.id);
+      const reaches = (dependsOn.get(claim) ?? []).some((c) => correction.claimIds.includes(c));
+      if (!reaches) continue;
+      reachedGoal = true;
+      if (await routed(goal.id, key)) continue;
+      await note({
+        workstreamId: goal.id,
+        kind: CORRECTION_EVENT,
+        summary: `The cash forecast missed systematically: ${correction.cause} on ${correction.claimIds.length} claim(s), corrected by ${correction.owner}.`.slice(0, 400),
+        detail: { key, cause: correction.cause, owner: correction.owner, claimIds: correction.claimIds, misses: correction.misses, recompute: recompute.has(claim) },
+        actorRef: 'BRAIN',
+      });
+      if (recompute.has(claim)) await replan(goal.id, `forecast correction ${correction.cause}`);
+    }
+    // A software cause always goes to Factory. Any other cause goes to the goals whose plans rest on the
+    // claim; when no goal does, nobody would read it there, so it goes to the register as well, naming the
+    // measurement or correction it needs. A systematic miss always produces work, never nothing.
+    if (correction.owner === 'FACTORY' || !reachedGoal) {
+      const why = reading.diagnoses.find((d) => d.kind === 'SYSTEMATIC' && d.causes.includes(correction.cause))?.reason ?? '';
+      const software = correction.owner === 'FACTORY';
       // Idempotent by weakness key: the register refreshes a live candidate and never reopens a decided one.
       await (deps.toFactory ?? upsertCandidate)({
         weaknessKey: `FORECAST:${correction.cause}`,
         kind: 'FORECAST_MISCALIBRATION',
-        title: 'The cash forecast is systematically miscalibrated by its own implementation',
-        problem:
-          `${correction.misses} systematic miss(es) on ${correction.claimIds.join(', ')}: the same inputs run through the model do not reproduce what the claim stated.`.slice(0, 1000),
+        title: software
+          ? 'The cash forecast is systematically miscalibrated by its own implementation'
+          : `The cash forecast is systematically miscalibrated: ${correction.cause.toLowerCase().replace(/_/g, ' ')} (${correction.owner.toLowerCase().replace(/_/g, ' ')})`,
+        problem: (software
+          ? `${correction.misses} systematic miss(es) on ${correction.claimIds.join(', ')}: the same inputs run through the model do not reproduce what the claim stated.`
+          : `${correction.misses} systematic miss(es) on ${correction.claimIds.join(', ')} and no goal plan rests on them to carry the correction. ${why}`
+        ).slice(0, 1000),
         metric: 'READY_OPPORTUNITIES_PER_DAY',
         downstreamMetric: null,
         ownerComponent: 'server/services/cash/forecast.ts',
@@ -269,24 +296,12 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
         evidence: {
           samples: correction.claimIds,
           mutationScope: ['server/services/cash/forecast.ts', 'server/services/quant/**', 'tests/**'],
-          researchQuestion: 'forecast calibration model implementation',
-          knownCause: `MODEL_IMPLEMENTATION on ${correction.claimIds.join(', ')} (forecast ledger)`,
+          researchQuestion: software ? 'forecast calibration model implementation' : `forecast calibration ${correction.cause.toLowerCase().replace(/_/g, ' ')}`,
+          knownCause: `${correction.cause} on ${correction.claimIds.join(', ')} (forecast ledger)`,
+          correctionOwner: correction.owner,
           observedAt: new Date().toISOString(),
         },
       });
-    }
-    for (const goal of goals) {
-      const claim = planClaimId(goal.id);
-      const reaches = (dependsOn.get(claim) ?? []).some((c) => correction.claimIds.includes(c));
-      if (!reaches || (await routed(goal.id, key))) continue;
-      await note({
-        workstreamId: goal.id,
-        kind: CORRECTION_EVENT,
-        summary: `The cash forecast missed systematically: ${correction.cause} on ${correction.claimIds.length} claim(s), corrected by ${correction.owner}.`.slice(0, 400),
-        detail: { key, cause: correction.cause, owner: correction.owner, claimIds: correction.claimIds, misses: correction.misses, recompute: recompute.has(claim) },
-        actorRef: 'BRAIN',
-      });
-      if (recompute.has(claim)) await replan(goal.id, `forecast correction ${correction.cause}`);
     }
   }
   return reading;

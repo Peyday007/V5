@@ -251,6 +251,12 @@ export interface MissDiagnosis {
   kind: 'NOT_A_MISS' | 'EXPECTED_MISS' | 'SYSTEMATIC' | 'UNJUDGED';
   /** Causes the evidence names; empty means unattributed, never a default cause. */
   causes: readonly MissCause[];
+  /**
+   * Where the causes came from: OBSERVED when an outcome's measured signals name
+   * them, LEDGER when they are read from the claim's own figures and the bucket's
+   * measured outcomes (`ledgerCausesOf`), NONE when nothing names one.
+   */
+  attribution: 'OBSERVED' | 'LEDGER' | 'NONE';
   owner: CorrectionOwner | null;
   /** Every owner the named causes need; `owner` is the one that acts first. */
   owners: readonly CorrectionOwner[];
@@ -263,13 +269,16 @@ export interface MissDiagnosis {
  * Diagnoses one resolved prediction against the calibration of its bucket.
  * A miss inside a calibrated bucket is an ordinary miss; only a miscalibrated
  * bucket makes it systematic, and then the causes come from what was observed
- * plus structural gaps in the claim, never from the miss alone.
+ * and from what the ledger itself measured (`ledgerCausesOf`), never from the
+ * single miss alone. `ledger` is every entry of the reading, so a cause that
+ * shows only across claims (misses on one side, misses that move together) can
+ * be read.
  */
-export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket[]): MissDiagnosis {
+export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket[], ledger: readonly LedgerEntry[] = [entry]): MissDiagnosis {
   const { prediction: p, outcome } = entry;
   const base = { predictionId: p.id, claimId: p.claimId, version: p.version };
   if (!outcome) {
-    return { ...base, contradicted: false, probabilityOfWhatHappened: null, surpriseBits: null, kind: 'UNJUDGED', causes: [], owner: null, owners: [], claimGaps: [], reason: 'no outcome has been recorded for this version' };
+    return { ...base, contradicted: false, probabilityOfWhatHappened: null, surpriseBits: null, kind: 'UNJUDGED', causes: [], attribution: 'NONE', owner: null, owners: [], claimGaps: [], reason: 'no outcome has been recorded for this version' };
   }
   const stated = impliedProbability(p);
   const given = stated === null ? null : outcome.occurred ? stated : 1 - stated;
@@ -281,7 +290,7 @@ export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket
   if (p.assumptions.length === 0) claimGaps.push('the claim states no assumptions');
   if (p.horizonDays === null) claimGaps.push('the claim states no horizon');
   if (!contradicted) {
-    return { ...base, contradicted, probabilityOfWhatHappened: given, surpriseBits, kind: 'NOT_A_MISS', causes: [], owner: null, owners: [], claimGaps, reason: given === null ? 'a point estimate states no probability to contradict' : 'the outcome was the likelier one' };
+    return { ...base, contradicted, probabilityOfWhatHappened: given, surpriseBits, kind: 'NOT_A_MISS', causes: [], attribution: 'NONE', owner: null, owners: [], claimGaps, reason: given === null ? 'a point estimate states no probability to contradict' : 'the outcome was the likelier one' };
   }
   const own = buckets.filter((b) => b.comparableKey === p.comparableKey);
   const miscalibrated = own.some((b) => b.verdict === 'MISCALIBRATED');
@@ -294,6 +303,7 @@ export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket
       surpriseBits,
       kind: judged ? 'EXPECTED_MISS' : 'UNJUDGED',
       causes: [],
+      attribution: 'NONE',
       owner: null,
       owners: [],
       claimGaps,
@@ -302,7 +312,9 @@ export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket
         : `fewer than ${MIN_CALIBRATION_SAMPLE} comparable resolved opportunities: one miss is not evidence either way`,
     };
   }
-  const causes = [...new Set(outcome.observedCauses ?? [])];
+  const observed = [...new Set(outcome.observedCauses ?? [])];
+  const derived = ledgerCausesOf(entry, ledger, own, observed);
+  const causes = [...new Set([...observed, ...derived.causes])];
   return {
     ...base,
     contradicted,
@@ -310,13 +322,198 @@ export function diagnose(entry: LedgerEntry, buckets: readonly CalibrationBucket
     surpriseBits,
     kind: 'SYSTEMATIC',
     causes,
+    attribution: observed.length ? 'OBSERVED' : causes.length ? 'LEDGER' : 'NONE',
     owner: causes.length ? ownerOf(causes) : null,
     owners: ownersOf(causes),
     claimGaps,
-    reason: causes.length
-      ? 'the comparable bucket is miscalibrated and the observation names the cause'
-      : 'the comparable bucket is miscalibrated but no observation names the cause yet: commission the measurement that would',
+    reason: observed.length
+      ? `the comparable bucket is miscalibrated and the observation names the cause${derived.why.length ? `; the ledger adds: ${derived.why.join('; ')}` : ''}`
+      : causes.length
+        ? `the comparable bucket is miscalibrated and no observation names the cause, so it is read from the ledger: ${derived.why.join('; ')}`
+        : 'the comparable bucket is miscalibrated but neither an observation nor the ledger names the cause',
   };
+}
+
+/** The figures a claim states about itself, read from its own text; null where it states none. */
+export interface StatedFigures {
+  /** The claimed figure (`… of V <unit> cents …`). */
+  value: number | null;
+  /** The per-row interval (`(range L..H)`). */
+  low: number | null;
+  high: number | null;
+  /** How many rows the figure was derived from (`derived from N opportunity row(s)`). */
+  rows: number | null;
+  /** How large the population it claims about is (`Q qualified of C opportunities`). */
+  population: number | null;
+}
+
+export function statedFigures(p: Pick<PredictionRow, 'outcome' | 'assumptions' | 'population'>): StatedFigures {
+  const num = (m: RegExpExecArray | null, i = 1): number | null => {
+    const v = m ? Number(m[i]) : Number.NaN;
+    return Number.isFinite(v) ? v : null;
+  };
+  const range = /\(range (-?\d+(?:\.\d+)?)\.\.(-?\d+(?:\.\d+)?)\)/.exec(p.outcome);
+  let rows: number | null = null;
+  for (const a of p.assumptions) {
+    const m = /derived from (\d+) opportunity row/.exec(a);
+    if (m) rows = Number(m[1]);
+  }
+  return {
+    value: num(/\bof (-?\d+(?:\.\d+)?) \S+ cents\b/.exec(p.outcome)),
+    low: num(range, 1),
+    high: num(range, 2),
+    rows,
+    population: num(/^(\d+) qualified of \d+ opportunities/.exec(p.population)),
+  };
+}
+
+/**
+ * Causes a claim carries in its own figures, whatever happened. Pure.
+ *
+ *  - EVIDENCE_QUALITY: it names no data, or its figure was derived from fewer
+ *    rows than the population it claims about — the blanks were left out, so
+ *    the figure rests on part of the evidence its population describes.
+ *  - MODEL_IMPLEMENTATION: its own arithmetic does not hold — a stated interval
+ *    is reversed, or a total of N rows each inside [low, high] lies outside
+ *    [N·low, N·high]. The same inputs through the model cannot have produced
+ *    what the claim states, which is a software defect for Factory.
+ */
+export function claimCausesOf(p: Pick<PredictionRow, 'data' | 'outcome' | 'assumptions' | 'population'>): MissCause[] {
+  const causes: MissCause[] = [];
+  const f = statedFigures(p);
+  if (p.data.length === 0 || (f.rows !== null && f.population !== null && f.rows < f.population)) causes.push('EVIDENCE_QUALITY');
+  if (f.low !== null && f.high !== null && f.high < f.low) causes.push('MODEL_IMPLEMENTATION');
+  else if (f.value !== null && f.low !== null && f.high !== null && f.rows !== null && f.rows > 0 && (f.value < f.rows * f.low || f.value > f.rows * f.high)) {
+    causes.push('MODEL_IMPLEMENTATION');
+  }
+  return causes;
+}
+
+/** Paired deals needed before two claims' misses can be said to move together. */
+export const MIN_DEPENDENCE_PAIRS = 5;
+/** The association (phi) between two claims' misses beyond which they are not independent draws. */
+export const DEPENDENCE_PHI = 0.5;
+/** Of a bucket's out-of-range outcomes, the share on one side that makes them a shifted draw, not a narrow spread. */
+export const ONE_SIDED_SHARE = 0.8;
+/** Out-of-range outcomes with a measured figure needed before their side is read. */
+export const MIN_SIDED_MISSES = 3;
+
+/** The production row an outcome was measured from, without the figure it was read for. */
+function drawOf(outcome: OutcomeRow): string | null {
+  if (!outcome.evidence) return null;
+  return outcome.evidence.split('#')[0]!.split('+')[0]!;
+}
+
+/**
+ * Causes the ledger itself measures for one systematic miss. Pure.
+ *
+ * The claim's own figures first (`claimCausesOf`). Then, across the reading:
+ *
+ *  - DEPENDENCY_ASSUMPTION: this outcome's draw (the production row it was
+ *    measured from) also resolved a claim in another comparable bucket, both
+ *    missed, and across every such pair the two buckets' misses are associated
+ *    (phi ≥ DEPENDENCE_PHI over ≥ MIN_DEPENDENCE_PAIRS pairs). Calibration
+ *    counts each as an independent Bernoulli draw; these are not.
+ *
+ * Only when neither an observation nor any of the above names a cause, the
+ * bucket's own measured outcomes say which estimate was wrong:
+ *
+ *  - SELECTION_BIAS: the bucket's out-of-range outcomes fall on one side of the
+ *    claimed ranges (≥ ONE_SIDED_SHARE of ≥ MIN_SIDED_MISSES). The outcomes that
+ *    arrived are a shifted draw from the rows the range was taken from.
+ *  - PARAMETER_ESTIMATE: otherwise. The bucket's figures land inside or outside
+ *    their ranges at a rate the estimate did not imply. A min..max range from N
+ *    rows implies (N−1)/(N+1), so a miss on both sides means the spread
+ *    estimated from those rows is wrong, and a rate above the implied one means
+ *    the estimate is too wide. Either way the estimator is what is corrected.
+ */
+export function ledgerCausesOf(
+  entry: LedgerEntry,
+  ledger: readonly LedgerEntry[],
+  ownBuckets: readonly CalibrationBucket[],
+  observed: readonly MissCause[] = [],
+): { causes: MissCause[]; why: string[] } {
+  const causes: MissCause[] = [];
+  const why: string[] = [];
+  const add = (cause: MissCause, reason: string): void => {
+    if (causes.includes(cause) || observed.includes(cause)) return;
+    causes.push(cause);
+    why.push(reason);
+  };
+  const p = entry.prediction;
+  for (const cause of claimCausesOf(p)) {
+    add(
+      cause,
+      cause === 'EVIDENCE_QUALITY'
+        ? p.data.length === 0
+          ? 'the claim names no data it rests on'
+          : `the figure was derived from ${statedFigures(p).rows} of the ${statedFigures(p).population} rows its population names`
+        : 'the claim\'s own figures do not reproduce: its total lies outside what its rows and range allow',
+    );
+  }
+
+  const draw = entry.outcome ? drawOf(entry.outcome) : null;
+  if (draw && entry.outcome && !entry.outcome.occurred) {
+    const missOf = (e: LedgerEntry): boolean => e.outcome !== null && !e.outcome.occurred;
+    const byDraw = new Map<string, LedgerEntry[]>();
+    for (const e of ledger) {
+      const d = e.outcome ? drawOf(e.outcome) : null;
+      if (!d || impliedProbability(e.prediction) === null) continue;
+      byDraw.set(d, [...(byDraw.get(d) ?? []), e]);
+    }
+    for (const sibling of byDraw.get(draw) ?? []) {
+      const other = sibling.prediction.comparableKey;
+      if (other === p.comparableKey || !missOf(sibling)) continue;
+      let n = 0;
+      let a = 0;
+      let b = 0;
+      let both = 0;
+      for (const group of byDraw.values()) {
+        const mine = group.find((e) => e.prediction.comparableKey === p.comparableKey);
+        const theirs = group.find((e) => e.prediction.comparableKey === other);
+        if (!mine || !theirs) continue;
+        n += 1;
+        const x = missOf(mine);
+        const y = missOf(theirs);
+        if (x) a += 1;
+        if (y) b += 1;
+        if (x && y) both += 1;
+      }
+      const denom = Math.sqrt(a * (n - a) * b * (n - b));
+      const phi = denom > 0 ? (both * n - a * b) / denom : a === n && b === n && n > 0 ? 1 : 0;
+      if (n >= MIN_DEPENDENCE_PAIRS && phi >= DEPENDENCE_PHI) {
+        add('DEPENDENCY_ASSUMPTION', `the same deals miss ${p.comparableKey} and ${other} together (${both} of ${n} paired draws, phi ${phi.toFixed(2)}), so they are not independent draws`);
+        break;
+      }
+    }
+  }
+
+  if (observed.length === 0 && causes.length === 0) {
+    const own = ledger.filter((e) => e.prediction.comparableKey === p.comparableKey && e.outcome && impliedProbability(e.prediction) !== null);
+    let below = 0;
+    let above = 0;
+    for (const e of own) {
+      if (e.outcome!.occurred || typeof e.outcome!.realized !== 'number') continue;
+      const f = statedFigures(e.prediction);
+      if (f.low !== null && e.outcome!.realized < f.low) below += 1;
+      else if (f.high !== null && e.outcome!.realized > f.high) above += 1;
+    }
+    const sided = below + above;
+    if (sided >= MIN_SIDED_MISSES && Math.max(below, above) / sided >= ONE_SIDED_SHARE) {
+      add('SELECTION_BIAS', `${Math.max(below, above)} of ${sided} out-of-range outcomes landed ${below >= above ? 'below' : 'above'} the claimed ranges: the outcomes that arrived are a shifted draw from the rows the ranges were taken from`);
+    } else {
+      const bucket = ownBuckets.find((b) => b.verdict === 'MISCALIBRATED');
+      const rate = bucket?.observedRate ?? null;
+      const implied = bucket?.meanForecast ?? null;
+      add(
+        'PARAMETER_ESTIMATE',
+        rate !== null && implied !== null
+          ? `the bucket's figures landed as claimed ${(rate * 100).toFixed(0)}% of the time against an implied ${(implied * 100).toFixed(0)}%${sided ? ` (${below} below, ${above} above)` : ''}: the estimate drawn from its rows is ${rate < implied ? 'too narrow' : 'too wide'}`
+          : 'the bucket is miscalibrated and nothing else names a cause: the estimate drawn from its rows is wrong',
+      );
+    }
+  }
+  return { causes, why };
 }
 
 /**

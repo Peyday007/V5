@@ -47,7 +47,7 @@ export interface ModelLearningReading {
 export function assessModelLearning(input: ModelLearningInput): ModelLearningReading {
   const ledger = buildLedger(input.predictions, input.exposures, input.outcomes);
   const calibration = calibrate(ledger, input.windowDays);
-  const diagnoses = ledger.filter((e) => e.outcome).map((e) => diagnose(e, calibration));
+  const diagnoses = ledger.filter((e) => e.outcome).map((e) => diagnose(e, calibration, ledger));
   const corrections = smallestReusableCauses(diagnoses);
   const recompute = dependentsToRecompute(corrections, input.dependsOn ?? new Map());
   const comparisons = [...(input.correctedAt ?? new Map<string, string>())].map(([comparableKey, at]) => ({
