@@ -182,22 +182,22 @@ export function actionContext(input: {
 /** The ledger cause for a spend authorized with no stated sum, whose ceilings are judged at the commitment. */
 export const AMOUNT_JUDGED_AT_COMMIT = 'AMOUNT_JUDGED_AT_COMMIT' as const;
 
-export async function checkCommercialAuthority(input: CommercialCheckInput): Promise<CommercialDecision> {
-  return assessCommercialAuthority(input, true);
-}
-
 /**
- * The same judgment as `checkCommercialAuthority`, for a reader that performs
- * nothing: a screen asking which actions are open, a plan asking what a grant
- * covers. It writes no AUTHORITY_DECISION row, raises no approval request and
- * records no suspension — those belong to an action somebody is about to take.
- * A view that ledgered its answers appended "authorized" rows for every page
- * load, so the ledger no longer said what Brain did versus what it proposed,
- * and a non-owner viewer could raise an owner approval request by reading.
- * An owner's stored answer is still read, so the reading agrees with the act.
+ * `{ record: false }` is for a reader that performs nothing: a screen asking
+ * which actions are open. The same judgment runs, an owner's stored answer is
+ * still read (so the reading agrees with the act), but no AUTHORITY_DECISION
+ * row is written, no approval request is raised and no suspension is recorded —
+ * those belong to an action somebody is about to take. A view that ledgered its
+ * answers appended "authorized" rows on every page load, so the ledger no
+ * longer said what Brain did versus what it proposed, and a non-owner viewer
+ * could raise an owner approval request by reading. The default records, so a
+ * caller that forgets the option leaves too much history, never too little.
  */
-export async function readCommercialAuthority(input: CommercialCheckInput): Promise<CommercialDecision> {
-  return assessCommercialAuthority(input, false);
+export async function checkCommercialAuthority(
+  input: CommercialCheckInput,
+  options: { record?: boolean } = {},
+): Promise<CommercialDecision> {
+  return assessCommercialAuthority(input, options.record !== false);
 }
 
 export interface CommercialCheckInput {
