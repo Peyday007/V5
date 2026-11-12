@@ -84,7 +84,14 @@ import {
   listWorkItemsForBin,
   type ClaimScope,
 } from '../../repos/workQueue.ts';
-import { evaluateContract, hashUnitValue, researchPacketParkReason, type ContractVerdict } from './contracts.ts';
+import {
+  contractCapabilities,
+  effectiveCapabilities,
+  evaluateContract,
+  hashUnitValue,
+  researchPacketParkReason,
+  type ContractVerdict,
+} from './contracts.ts';
 import { getWorkerRouting } from '../../repos/identity.ts';
 import { observeFiredSessionArrival } from '../fleet/arrivalIdentity.ts';
 import {
@@ -355,7 +362,32 @@ export async function binAdmission(input: {
      * something false, fail open where it could only waste a fire — and this is
      * the case where the answer is known.
      */
-    const needed = bin.requiredCapabilities ?? [];
+    /*
+     * The bin's own requirements, plus any its completion contract implies
+     * that an enabled Routine in the fleet declares — the router's rule
+     * (`effectiveCapabilities`), asked of the same rows so the fire and the
+     * assignment cannot disagree. Production, to 2026-11-12: six of six render
+     * bins were handed to sessions with no browser, none could submit a render,
+     * and each spent all three attempts and went to a person.
+     */
+    const needed =
+      input.sessionRef && contractCapabilities(bin.completionContract).length > 0
+        ? await (async () => {
+            const { listRoutines, listAccounts } = await import('../../repos/fleet.ts');
+            const [routines, accounts] = await Promise.all([listRoutines(), listAccounts()]);
+            const enabledAccounts = new Set(
+              accounts.filter((account) => account.state === 'ENABLED').map((account) => account.id),
+            );
+            return effectiveCapabilities(bin, (capability) =>
+              routines.some(
+                (routine) =>
+                  routine.state === 'ENABLED' &&
+                  enabledAccounts.has(routine.accountId) &&
+                  routine.capabilities.includes(capability),
+              ),
+            );
+          })()
+        : (bin.requiredCapabilities ?? []);
     if (needed.length > 0 && input.sessionRef) {
       const { routineRefsForSession } = await import('../../repos/bins.ts');
       const { getRoutineByRef } = await import('../../repos/fleet.ts');
