@@ -137,21 +137,44 @@ export function urgencyOrder(summaries: GoalSummary[]): GoalSummary[] {
   return [...summaries].sort((a, b) => weight(a) - weight(b) || (a.priority ?? 99) - (b.priority ?? 99));
 }
 
-/** The goals as the brief states them: ids the agent can use, and what each is held on. */
+/** How much of the brief the goal list may take: the free models' windows are small (opr_1184fee7). */
+export const BRIEF_GOALS = 8;
+export const BRIEF_CHARS = 3500;
+const BRIEF_MOOT_IDS = 6;
+
+/** The goals that most need directing first: a money target, then open requests, then the rest by urgency. */
+export function briefOrder(snapshot: OperatorSnapshot): GoalSummary[] {
+  const open = (g: GoalSummary) => (g.projectId ? (snapshot.requests.get(g.projectId) ?? []).length : 0);
+  return urgencyOrder(snapshot.summaries)
+    .map((g, i) => ({ g, i }))
+    .sort((a, b) => Number(Boolean(b.g.target)) - Number(Boolean(a.g.target)) || open(b.g) - open(a.g) || a.i - b.i)
+    .map(({ g }) => g);
+}
+
+/** The goals as the brief states them: ids the agent can use, and what each is held on — bounded. */
 export function snapshotForBrief(snapshot: OperatorSnapshot): string {
-  const lines: string[] = [`Brain's goals as read at ${snapshot.takenAt} (${snapshot.depth === 'FULL' ? 'fully derived' : 'register and requests only — Brain is busy'}):`];
-  for (const goal of urgencyOrder(snapshot.summaries)) {
-    lines.push(`- ${goal.id} [${goal.lifecycle}/${goal.state}] ${goal.title}`);
-    if (goal.target) lines.push(`    target: ${goal.target}`);
-    lines.push(`    waiting: ${goal.waiting}`);
-    lines.push(`    next: ${goal.next}`);
+  const ordered = briefOrder(snapshot);
+  const lines: string[] = [
+    `Brain's goals as read at ${snapshot.takenAt} (${snapshot.depth === 'FULL' ? 'fully derived' : 'register and requests only'}; ` +
+      `${ordered.length} live, the first ${Math.min(BRIEF_GOALS, ordered.length)} below — brain_operator_goals lists all):`,
+  ];
+  let size = lines[0]!.length;
+  for (const goal of ordered.slice(0, BRIEF_GOALS)) {
     const requests = goal.projectId ? snapshot.requests.get(goal.projectId) ?? [] : [];
-    const moot = requests.filter((r) => r.moot);
-    if (moot.length) lines.push(`    moot requests (no answer can apply; withdraw them): ${moot.map((r) => r.requestId).join(', ')}`);
-    const live = requests.length - moot.length;
-    if (live) lines.push(`    other open requests: ${live}`);
-    lines.push(`    blockers: ${goal.blockers}, open decisions: ${goal.openDecisions}`);
+    const moot = requests.filter((r) => r.moot).map((r) => r.requestId);
+    const block = [
+      `- ${goal.id} [${goal.lifecycle}/${goal.state}] ${goal.title.slice(0, 90)}`,
+      ...(goal.target ? [`    target: ${goal.target}`] : []),
+      ...(goal.next !== 'not derived' ? [`    next: ${goal.next.slice(0, 140)}`] : []),
+      ...(moot.length
+        ? [`    moot requests (withdraw them): ${moot.slice(0, BRIEF_MOOT_IDS).join(', ')}${moot.length > BRIEF_MOOT_IDS ? ` (+${moot.length - BRIEF_MOOT_IDS} more via brain_operator_goal)` : ''}`]
+        : []),
+      ...(requests.length - moot.length ? [`    other open requests: ${requests.length - moot.length}`] : []),
+    ].join('\n');
+    if (size + block.length > BRIEF_CHARS) break;
+    lines.push(block);
+    size += block.length;
   }
-  if (snapshot.summaries.length === 0) lines.push('- (no live goals in the projects you direct)');
+  if (ordered.length === 0) lines.push('- (no live goals in the projects you direct)');
   return lines.join('\n');
 }

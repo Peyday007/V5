@@ -242,6 +242,20 @@ describe('the run reads the goals once and states them in the brief', () => {
     expect(text).not.toContain('rhr_live');
     expect(operatorBrief({ nowIso: 'x', runId: 'r', goals: text }).startsWith("Brain's goals as read at")).toBe(true);
   });
+
+  it('keeps the goal list inside a small model\'s window however many goals the register holds', async () => {
+    const { snapshotForBrief, BRIEF_CHARS } = await import('../server/services/operator/snapshot.ts');
+    const many = Array.from({ length: 300 }, (_, n) => ({
+      id: `wst_${n}`, title: 'a goal with a long title '.repeat(6), projectId: `prj_${n % 3}`, state: 'NOT_DERIVED', stateEvidence: '',
+      lifecycle: 'ACTIVE', target: n === 250 ? 'SETTLED_CASH 10000 USD' : null, dueAt: null, waiting: '', next: 'not derived',
+      openDecisions: 0, blockers: 0, priority: null,
+    }));
+    const moot = Array.from({ length: 40 }, (_, n) => ({ requestId: `rhr_${n}`, question: '', recommendation: null, since: '', missionId: 'm', missionState: 'RUNNING', packetStatus: null, moot: true, why: '' }));
+    const text = snapshotForBrief({ takenAt: 't', depth: 'LIGHT', goals: [], summaries: many, requests: new Map([['prj_1', moot]]) });
+    expect(text.length).toBeLessThan(BRIEF_CHARS + 400);
+    expect(text.split('\n')[1]).toContain('wst_250'); // the money goal comes first
+    expect(text).toContain('+34 more');
+  });
 });
 
 describe('one snapshot, narrowed to what the caller may read', () => {
