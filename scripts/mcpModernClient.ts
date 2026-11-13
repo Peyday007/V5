@@ -239,7 +239,10 @@ export class ModernMcpClient {
     // (Deploys 1010-1017: "brain_complete_work: UNAVAILABLE … send the same call again").
     for (const waitMs of [2_000, 5_000, 10_000, 20_000]) {
       const category = (reply.result?.structuredContent as { error?: { category?: string } } | undefined)?.error?.category;
-      if (!reply.result?.isError || category !== 'UNAVAILABLE') break;
+      // A 503 with no JSON-RPC body is the same answer one layer down: the endpoint or the
+      // edge proxy said "busy" before a tool ran (Deploy 43359264874: "brain_complete_work: no result").
+      const busy = (reply.result?.isError === true && category === 'UNAVAILABLE') || (reply.status === 503 && !reply.result);
+      if (!busy) break;
       await new Promise((resolve) => setTimeout(resolve, waitMs));
       reply = await this.callTool(name, args);
     }
