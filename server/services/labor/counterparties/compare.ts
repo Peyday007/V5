@@ -14,7 +14,9 @@
  *   2. how many of cost, capacity and timing are verified;
  *   3. verified cost, lower first;
  *   4. verified lead time, shorter first;
- *   5. id, so the result is deterministic.
+ *   5. verified reliability (from reported outcomes), higher first — an
+ *      unproven counterparty is ranked as having none, never as reliable;
+ *   6. id, so the result is deterministic.
  *
  * A candidate is ineligible, not merely lower, when its verified capacity is
  * short of the commitment, its geography is verified outside the commitment's,
@@ -70,6 +72,8 @@ export interface CandidateReading {
   /** Things not yet known that bear on the choice, as tasks. */
   open: string[];
   human: ReturnType<typeof humanRequirementReading>;
+  /** Verified reliability from reported outcomes; null when nothing was reported. */
+  reliability: number | null;
 }
 
 export interface Comparison {
@@ -95,6 +99,12 @@ function figureOf(counterparty: Counterparty, name: FigureName): Figure {
   if (status === 'VERIFIED') return { name, value: null, claimed: null, status: 'UNKNOWN', missing: [{ dimension, state: 'UNKNOWN' }] };
   const state = status === 'UNKNOWN' || status === 'NOT_APPLICABLE' ? 'UNKNOWN' : 'PENDING';
   return { name, value: null, claimed: numeric, status: state, missing: [{ dimension, state }] };
+}
+
+function verifiedNumber(counterparty: Counterparty, dimension: string): number | null {
+  const fact = factFor(counterparty.facts, dimension);
+  if (!fact || effectiveStatus(fact) !== 'VERIFIED') return null;
+  return typeof fact.value === 'number' && Number.isFinite(fact.value) ? fact.value : null;
 }
 
 export function readCandidate(counterparty: Counterparty, commitment: Commitment): CandidateReading {
@@ -127,6 +137,7 @@ export function readCandidate(counterparty: Counterparty, commitment: Commitment
     reasons,
     open,
     human,
+    reliability: verifiedNumber(counterparty, 'reliability'),
   };
 }
 
@@ -138,6 +149,7 @@ function order(a: CandidateReading, b: CandidateReading): number {
     b.verifiedFigures - a.verifiedFigures ||
     (a.figures.cost.value ?? worst) - (b.figures.cost.value ?? worst) ||
     (a.figures.timing.value ?? worst) - (b.figures.timing.value ?? worst) ||
+    (b.reliability ?? -1) - (a.reliability ?? -1) ||
     a.counterpartyId.localeCompare(b.counterpartyId)
   );
 }
