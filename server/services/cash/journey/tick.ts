@@ -30,6 +30,11 @@
  *      the accounting result — and recorded when it changed, with each repeat-
  *      business signal the rows show (`deliverables/realization.ts`).
  *
+ *
+ *   0. a buyer's acceptance or counter-offer, on a deal after its first action,
+ *      becomes the agreement it is, from the terms of the offer it answers —
+ *      or a need naming the term that offer did not state (`acceptance.ts`).
+ *
  * It sends nothing. Every external effect is still a person's press or a
  * granted tick through `perform.ts`, and nothing here calls an adapter.
  */
@@ -51,6 +56,7 @@ import { recordOutcomes } from './learning.ts';
 import { recordDetectedExceptions, rehearseCaseOnTick } from '../deliverables/exceptions.ts';
 import { recordRealization } from '../deliverables/realization.ts';
 import { recordRowDependencies } from '../deliverables/commitments.ts';
+import { agreeFromAcceptances, type AcceptancePass } from './acceptance.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -58,6 +64,8 @@ const BRAIN = 'BRAIN';
 export const RESPONSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface JourneyTickReport {
+  /** Agreements recorded from acceptances and counters, needs raised for unstated terms, refusals. */
+  agreements: AcceptancePass;
   ledgerChecked: number;
   /** Agreements whose ledger entry could not be written, with why. Never silent. */
   ledgerRefused: { agreementId: string; reason: string }[];
@@ -77,6 +85,7 @@ export async function advanceJourney(
   now: Date = new Date(),
 ): Promise<JourneyTickReport> {
   const report: JourneyTickReport = {
+    agreements: { recorded: [], needs: [], refused: [] },
     ledgerChecked: 0,
     ledgerRefused: [],
     fulfillment: { workCreated: [], needsRaised: [], needsSettled: [], refundsSettled: [] },
@@ -89,6 +98,12 @@ export async function advanceJourney(
   };
   const mode = await getCashMode(projectId);
   if (!mode) return report;
+
+  // 0. An acceptance or a counter becomes its agreement (LIFE-29-1), before
+  // the ledger and the obligation passes so both reach it on this same tick.
+  for (const listed of await listOpportunities({ projectId, states: ['EXECUTING', 'DELIVERING'] })) {
+    await agreeFromAcceptances(listed.id, mode.currency, report.agreements);
+  }
 
   // 1. The ledger counts every agreement exactly once, and every release.
   for (const agreement of await agreementsInProject(projectId)) {

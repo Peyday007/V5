@@ -236,6 +236,22 @@ export async function recordAgreement(input: {
     if (seen.kind === 'BUYER_COUNTERED' && seen.amountCents !== input.amountCents) {
       return refuse('The agreed amount differs from the counter-offer it is drawn from.');
     }
+    // One observation stands behind one live agreement. The journey tick
+    // agrees an acceptance by itself (`acceptance.ts`), so a person recording
+    // the same acceptance afterwards reads the agreement it already made rather
+    // than counting the deal twice.
+    const standing = (await agreementsFor(opportunity.id)).find(
+      (one) => one.observationId === seen.id && one.state !== 'RELEASED',
+    );
+    if (standing) {
+      if (standing.amountCents !== input.amountCents) {
+        return refuse(
+          `Agreement ${standing.id} already stands behind this observation at ${standing.amountCents} cents. ` +
+            'Release it before recording a different one.',
+        );
+      }
+      return { ok: true, value: standing, message: 'This agreement was already recorded.' };
+    }
   }
   const requestKey = `agreement:${opportunity.id}:${digest(
     input.amountCents,
