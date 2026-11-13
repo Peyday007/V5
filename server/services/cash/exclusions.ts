@@ -17,6 +17,7 @@
  */
 import { clauseBefore, NEGATORS } from '../russell/negation.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
+import { getDb } from '../../db/database.ts';
 import { listCapitalFor, listConstraintsForProject } from '../../repos/industry.ts';
 import type { CapitalStructure, OpportunityConstraint } from '../../domain/types.ts';
 // Registers the production probe r01.com-13-5 wherever the role reader is loaded; the probe imports this module back, which is safe because it only uses it at call time.
@@ -280,8 +281,9 @@ export function countRoleEconomics(rows: readonly RoleEconomics[]): CountedEcono
 }
 
 /*
- * Reading a role from rows. holds / partner come from what Brain has recorded about an opening
- * (capital_structures, opportunity_constraints), never from a literal a caller types in.
+ * Reading a role from rows. What a role performs is read from the opening's own cash_opportunities
+ * row and its capital / constraint statements; holds / partner come from what Brain has recorded about
+ * an opening (capital_structures, opportunity_constraints), never from a literal a caller types in.
  *
  *  - a LICENSING / COMPLIANCE / INSURANCE requirement, or a CREDENTIAL_REQUIRED / REGULATORY_CAPITAL
  *    constraint, says a licence is needed and not held: licensing = false;
@@ -303,12 +305,62 @@ export interface RoleAttestation {
   partnerContractInPlace?: boolean;
 }
 
+/**
+ * What an opening performs, in the words of its own cash_opportunities row: its title, its mechanism,
+ * its industry and source, and its evidence card. Production records every opening here and populates
+ * capital_structures only for the few a research claim declared a capital requirement for, so a reader
+ * that looked only at capital rows saw no role at all on real openings (r01.com-13-5, 2026-11-10).
+ * This text says what is done; it never says what is held — holds and partner come only from rows and
+ * attestations below.
+ */
+export interface OpeningRoleText {
+  title: string;
+  mechanism?: string | null;
+  industry?: string | null;
+  source?: string | null;
+  payer?: string | null;
+  offerScope?: string | null;
+  buyingSignal?: string | null;
+  acceptanceCondition?: string | null;
+  paymentTerms?: string | null;
+  fulfillmentOwner?: string | null;
+  deliveryMethod?: string | null;
+  requiredInputs?: string | null;
+  economicsNote?: string | null;
+}
+
+/** The text of an opening row that says what it performs, one field per line, blanks left out. */
+export function openingPerforms(opening: OpeningRoleText | null | undefined): string {
+  if (!opening) return '';
+  const mechanism = opening.mechanism ? opening.mechanism.toLowerCase().replace(/_/g, ' ') : null;
+  return [
+    opening.title,
+    mechanism,
+    opening.industry,
+    opening.source,
+    opening.payer,
+    opening.offerScope,
+    opening.buyingSignal,
+    opening.acceptanceCondition,
+    opening.paymentTerms,
+    opening.fulfillmentOwner,
+    opening.deliveryMethod,
+    opening.requiredInputs,
+    opening.economicsNote,
+  ]
+    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+    .join('\n');
+}
+
 export function roleRecordFromRows(
   capital: readonly CapitalStructure[],
   constraints: readonly OpportunityConstraint[],
   attested: RoleAttestation = {},
+  opening: OpeningRoleText | null = null,
 ): RoleRecord {
-  const performs = [...capital.map((c) => c.statement), ...constraints.map((c) => c.statement)].join('\n');
+  const performs = [openingPerforms(opening), ...capital.map((c) => c.statement), ...constraints.map((c) => c.statement)]
+    .filter((part) => part.length > 0)
+    .join('\n');
   const holds: Partial<Record<RoleRequirement, boolean>> = { ...(attested.holds ?? {}) };
   const licenceNeeds = capital.filter((c) => c.entryKind === 'REQUIREMENT' && c.requirement && LICENCE_REQUIREMENTS.has(c.requirement));
   const licenceConstrained = constraints.some((c) => LICENCE_CONSTRAINTS.has(c.kind));
@@ -322,13 +374,71 @@ export function roleRecordFromRows(
   return { performs, holds, partner };
 }
 
-/** One opening's regulated role, assessed from the rows Brain holds for it. */
+/** The columns of cash_opportunities the role reader uses, as stored. */
+export interface OpeningRoleRow {
+  id: string;
+  project_id: string;
+  title: string;
+  mechanism: string | null;
+  industry: string | null;
+  source: string | null;
+  payer: string | null;
+  offer_scope: string | null;
+  buying_signal: string | null;
+  acceptance_condition: string | null;
+  payment_terms: string | null;
+  fulfillment_owner: string | null;
+  delivery_method: string | null;
+  required_inputs: string | null;
+  economics_note: string | null;
+}
+
+export const OPENING_ROLE_COLUMNS =
+  'id, project_id, title, mechanism, industry, source, payer, offer_scope, buying_signal, acceptance_condition, payment_terms, fulfillment_owner, delivery_method, required_inputs, economics_note';
+
+export function openingRoleText(row: OpeningRoleRow): OpeningRoleText {
+  return {
+    title: row.title,
+    mechanism: row.mechanism,
+    industry: row.industry,
+    source: row.source,
+    payer: row.payer,
+    offerScope: row.offer_scope,
+    buyingSignal: row.buying_signal,
+    acceptanceCondition: row.acceptance_condition,
+    paymentTerms: row.payment_terms,
+    fulfillmentOwner: row.fulfillment_owner,
+    deliveryMethod: row.delivery_method,
+    requiredInputs: row.required_inputs,
+    economicsNote: row.economics_note,
+  };
+}
+
+/** One opening's row, bounded to its project in the query. */
+async function openingRow(projectId: string, opportunityId: string): Promise<OpeningRoleRow | null> {
+  const rows = await getDb().all<OpeningRoleRow>(
+    `SELECT ${OPENING_ROLE_COLUMNS} FROM cash_opportunities WHERE id = ? AND project_id = ?`,
+    [opportunityId, projectId],
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * One opening's regulated role, assessed from the rows Brain holds for it: what its own
+ * cash_opportunities row says it does, and what its capital_structures and opportunity_constraints
+ * rows say it needs and holds. An opening with no capital rows is still assessed.
+ */
 export async function assessOpportunityRole(input: {
   projectId: string;
   opportunityId: string;
   attested?: RoleAttestation;
 }): Promise<RoleAssessment> {
-  const [capital, constraints] = await Promise.all([listCapitalFor(input.opportunityId), listConstraintsForProject(input.projectId)]);
+  const [row, capital, constraints] = await Promise.all([
+    openingRow(input.projectId, input.opportunityId),
+    listCapitalFor(input.opportunityId),
+    listConstraintsForProject(input.projectId),
+  ]);
   const own = constraints.filter((c) => c.opportunityId === input.opportunityId);
-  return assessRole(roleRecordFromRows(capital, own, input.attested));
+  const ownCapital = capital.filter((c) => c.projectId === input.projectId);
+  return assessRole(roleRecordFromRows(ownCapital, own, input.attested, row ? openingRoleText(row) : null));
 }
