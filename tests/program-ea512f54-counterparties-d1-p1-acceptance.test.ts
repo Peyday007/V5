@@ -155,13 +155,31 @@ describe('a configured software-service provider is a counterparty', () => {
     })!;
     expect(cp).toMatchObject({ id: 'provider:messaging:instantly', kind: 'software service', humanOperator: false });
     const ladder = readLadder(cp);
-    expect(ladder.stage).toBe('WILLINGNESS'); // listed and willing; qualifications, a quote and a contract are not asserted
-    expect(cp.facts.find((f) => f.dimension === 'willingness')?.evidence).toMatch(/commercialProviderStatus/);
+    // Listed, and configured — but configuration is not willingness: nothing above LISTING is asserted.
+    expect(ladder.stage).toBe('LISTING');
+    expect(cp.facts.find((f) => f.dimension === 'listing')?.evidence).toMatch(/commercialProviderStatus/);
+    expect(cp.facts.find((f) => f.dimension === 'configuration')).toMatchObject({ status: 'VERIFIED', value: 'SEND_A_MESSAGE' });
+    expect(cp.facts.find((f) => f.dimension === 'configuration')?.evidence).toMatch(/CONNECTED/);
+  });
+
+  it('never reads a CONNECTED configuration as willingness, availability, scope or eligibility', () => {
+    const cp = providerCounterparty({
+      area: 'PAYMENTS', capability: 'TAKE_A_PAYMENT', state: 'CONNECTED', provider: 'stripe', mode: 'LIVE', detail: '', nextAction: '',
+    })!;
+    for (const dimension of ['willingness', 'availability', 'scope', 'eligibility']) {
+      expect(cp.facts.find((f) => f.dimension === dimension)?.status, dimension).toBe('PENDING');
+    }
+    const willingness = readLadder(cp).stages.find((s) => s.stage === 'WILLINGNESS')!;
+    expect(willingness.reached).toBe(false);
+    expect(willingness.missing.map((m) => m.dimension).sort()).toEqual(['availability', 'willingness']);
+    // The configuration reading is carried, not dropped, as a fact the ladder does not read.
+    expect(readLadder(cp).other.map((f) => f.dimension)).toContain('configuration');
   });
 
   it('is pending when configured but not registered, and absent when no provider is chosen', () => {
     const pending = providerCounterparty({ area: 'INVOICES', capability: 'ISSUE_AN_INVOICE', state: 'MISSING', provider: 'stripe', mode: 'TEST', detail: '', nextAction: '' })!;
     expect(readLadder(pending).stage).toBe('LISTING');
+    expect(pending.facts.find((f) => f.dimension === 'configuration')?.status).toBe('PENDING');
     expect(pending.facts.find((f) => f.dimension === 'mode')?.value).toBe('TEST');
     expect(providerCounterparty({ area: 'PAYMENTS', capability: 'TAKE_A_PAYMENT', state: 'MISSING', provider: null, mode: null, detail: '', nextAction: '' })).toBeNull();
   });
