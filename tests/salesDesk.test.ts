@@ -4,7 +4,7 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown } from './helpers.ts';
-import { recordSalesLearning, salesLead, salesReplies } from '../server/repos/salesDesk.ts';
+import { recordSalesLearning, recordSalesReply, salesLead, salesReplies, salesRepliesFrom } from '../server/repos/salesDesk.ts';
 import {
   PERSONAL_STEPS, PUBLISHER_ADDRESS, campaignDefinition, refill, shapeProblems, type Deps, type PersonalDesk,
 } from '../server/services/cash/neighborCard.ts';
@@ -51,7 +51,13 @@ function world(options: { decision?: Record<string, unknown>; thread?: Record<st
       if (u.startsWith('https://api.instantly.ai/api/v2/campaigns?')) return json({ items: [{ id: 'nc-1', name: 'Neighbor Card · Camp Hill Jan 2027', status: 1 }, { id: 'ai-1', name: 'AI Dispatch', status: 1 }] });
       if (u.includes('/emails?campaign_id=nc-1')) return json({ items: options.received ?? [reply] });
       if (u.includes('/emails?campaign_id=')) return json({ items: [] });
-      if (u.includes('/emails?thread_id=')) return json({ items: options.thread ?? [reply] });
+      // As Instantly v2 actually answers: `thread_id` is ignored and the workspace's
+      // latest mail comes back (here, an email of ours to another lead, sent after
+      // the reply); `search=thread:<id>` is the filter it honours.
+      if (u.includes('/emails?thread_id=')) {
+        return json({ items: [{ id: 'other-1', thread_id: 'th-other', timestamp_email: '2026-11-12T20:00:00.000Z', from_address_email: 'benjamin@aligninspiration.example', ue_type: '1', lead: 'someone@else.example', body: { text: 'Another lead\'s email' } }] });
+      }
+      if (u.includes('/emails?search=thread%3A')) return json({ items: options.thread ?? [reply] });
       if (u.includes('/accounts/')) return json({ first_name: 'Benjamin', last_name: 'Hall' });
       if (u.endsWith('/emails/reply')) return json({ id: 'sent-1' });
       if (u.includes('/campaigns/analytics')) return json([{ emails_sent_count: 300, reply_count_unique: 6, bounced_count: 2, unsubscribed_count: 1 }]);
@@ -153,7 +159,7 @@ describe('a reply on a business campaign', () => {
     const answered = world({ thread: [owner.reply, later] });
     const out = await handleOneReply(answered.deps, salesBusiness('neighbor-card')!, mail({ ...owner.reply, id: 'em-9' }), [mail(owner.reply), mail(later)]);
     expect(out?.action).toBe('HELD');
-    expect(out?.detail).toContain('already answered');
+    expect(out?.detail).toContain('a later message from us is already in this thread');
     expect(posted(answered.calls, '/emails/reply')).toHaveLength(0);
   });
 
@@ -171,6 +177,35 @@ describe('a reply on a business campaign', () => {
     expect(pass.outcomes).toHaveLength(0);
     expect(pass.line).toContain('left for the next pass');
     expect(await salesReplies(null)).toHaveLength(0);
+  });
+
+  it('reads the reply\'s own thread, not the workspace\'s latest mail, and answers it', async () => {
+    // Production 2026-11-13: with `thread_id=` every reply looked already answered.
+    await freshProject();
+    const w = world();
+    const pass = await workReplies(w.deps);
+    expect(pass.outcomes[0]?.action).toBe('ANSWERED');
+    expect(w.calls.some((c) => c.url.includes('/emails?search=thread%3Ath-1'))).toBe(true);
+    expect(w.calls.some((c) => c.url.includes('thread_id='))).toBe(false);
+  });
+
+  it('reads a reply held on the wrong thread once more, as a second row, leaving the first untouched', async () => {
+    await freshProject();
+    await recordSalesReply({ emailId: 'em-1', business: 'neighbor-card', campaignId: 'nc-1', leadEmail: 'kathy@clubpilates.example', threadId: 'th-1',
+      receivedAt: '2026-11-12T17:49:16.000Z', replyText: 'What is the demographic for these homes?', intent: 'question', stage: 'engaged', status: 'open',
+      optOut: null, escalation: [], answer: 'drafted', action: 'HELD', actionDetail: 'answer drafted and held: someone already answered this thread', answerEmailId: null });
+    const w = world();
+    const pass = await workReplies(w.deps);
+    expect(pass.outcomes.map((o) => o.action)).toEqual(['ANSWERED']);
+    const rows = await salesRepliesFrom('kathy@clubpilates.example');
+    expect(rows.map((r) => [r.emailId, r.action])).toEqual([['em-1#reread', 'ANSWERED']]);
+    expect((await workReplies(world().deps)).outcomes).toHaveLength(0);
+    // A hold for the corrected reason is final.
+    await freshProject();
+    await recordSalesReply({ emailId: 'em-1', business: 'neighbor-card', campaignId: 'nc-1', leadEmail: 'kathy@clubpilates.example', threadId: 'th-1',
+      receivedAt: null, replyText: 'x', intent: 'question', stage: 'engaged', status: 'open', optOut: null, escalation: [], answer: 'drafted',
+      action: 'HELD', actionDetail: 'answer drafted and held: a later message from us is already in this thread', answerEmailId: null });
+    expect((await workReplies(world().deps)).outcomes).toHaveLength(0);
   });
 });
 

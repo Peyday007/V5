@@ -162,19 +162,43 @@ function mapReply(row: SalesReplyRow): SalesReply {
   };
 }
 
+/*
+ * Until 2026-11-13 the desk read a reply's thread with `/emails?thread_id=`,
+ * a filter Instantly v2 ignores: it returned fifty of the campaign's emails,
+ * any of ours later than the reply made it look answered, and the reply was
+ * held having done nothing. Those holds are read once more, as a second row
+ * keyed `<email id>#reread`, so the first row is never rewritten. The phrase
+ * identifies them: the corrected desk words that hold differently.
+ */
+export const STALE_THREAD_HOLD = 'someone already answered this thread';
+export const REREAD = '#reread';
+
+function staleHold(r: { emailId: string; action: string; actionDetail: string }): boolean {
+  return !r.emailId.endsWith(REREAD) && (r.action === 'HELD' || r.action === 'FULFILL') && r.actionDetail.includes(STALE_THREAD_HOLD);
+}
+
+/** Drop a stale hold that has been read again; the reread row stands in its place. */
+function current(rows: SalesReply[]): SalesReply[] {
+  const reread = new Set(rows.filter((r) => r.emailId.endsWith(REREAD)).map((r) => r.emailId.slice(0, -REREAD.length)));
+  return rows.filter((r) => !(staleHold(r) && reread.has(r.emailId)));
+}
+
 export async function salesReplySeen(emailId: string): Promise<boolean> {
-  return Boolean(await getDb().get<{ id: string }>('SELECT id FROM sales_replies WHERE email_id = ?', [emailId]));
+  const rows = (await getDb().all<SalesReplyRow>('SELECT * FROM sales_replies WHERE email_id IN (?, ?)', [emailId, `${emailId}${REREAD}`])).map(mapReply);
+  return rows.some((r) => r.emailId === `${emailId}${REREAD}`) || rows.some((r) => r.emailId === emailId && !staleHold(r));
 }
 
 /** Record one analysed reply. A second record for the same email id is ignored. */
 export async function recordSalesReply(input: Omit<SalesReply, 'id' | 'recordedAt'>): Promise<boolean> {
+  const first = await getDb().get<SalesReplyRow>('SELECT * FROM sales_replies WHERE email_id = ?', [input.emailId]);
+  const emailId = first && staleHold(mapReply(first)) ? `${input.emailId}${REREAD}` : input.emailId;
   const result = await getDb().run(
     `INSERT INTO sales_replies (id, email_id, business, campaign_id, lead_email, thread_id, received_at, reply_text, intent,
        stage, status, opt_out, escalation, answer, action, action_detail, answer_email_id, recorded_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (email_id) DO NOTHING`,
     [
-      orderedId('sr'), input.emailId, input.business, input.campaignId, input.leadEmail.toLowerCase(), input.threadId,
+      orderedId('sr'), emailId, input.business, input.campaignId, input.leadEmail.toLowerCase(), input.threadId,
       input.receivedAt, input.replyText.slice(0, 8000), input.intent, input.stage, input.status,
       input.optOut ? toJson(input.optOut) : null, input.escalation && input.escalation.length ? toJson(input.escalation) : null,
       input.answer, input.action, input.actionDetail.slice(0, 2000), input.answerEmailId, nowIso(),
@@ -185,19 +209,19 @@ export async function recordSalesReply(input: Omit<SalesReply, 'id' | 'recordedA
 
 /** Every earlier reply from this lead, oldest first: the conversation Brain holds. */
 export async function salesRepliesFrom(leadEmail: string): Promise<SalesReply[]> {
-  return (await getDb().all<SalesReplyRow>(
+  return current((await getDb().all<SalesReplyRow>(
     'SELECT * FROM sales_replies WHERE lead_email = ? ORDER BY recorded_at ASC, id ASC',
     [leadEmail.toLowerCase()],
-  )).map(mapReply);
+  )).map(mapReply));
 }
 
 export async function salesReplies(business: string | null, limit = 500): Promise<SalesReply[]> {
-  return (await getDb().all<SalesReplyRow>(
+  return current((await getDb().all<SalesReplyRow>(
     business
       ? 'SELECT * FROM sales_replies WHERE business = ? ORDER BY recorded_at DESC, id DESC LIMIT ?'
       : 'SELECT * FROM sales_replies ORDER BY recorded_at DESC, id DESC LIMIT ?',
     business ? [business, limit] : [limit],
-  )).map(mapReply);
+  )).map(mapReply));
 }
 
 export interface SalesLearning {

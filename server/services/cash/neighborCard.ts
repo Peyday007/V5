@@ -305,6 +305,20 @@ export async function instantly(deps: Deps, method: 'GET' | 'POST' | 'PATCH', pa
   }
 }
 
+/**
+ * One conversation, oldest to newest as Instantly returns it. Instantly v2
+ * ignores `thread_id` as a filter on `/emails` and answers with the latest
+ * fifty emails of the workspace (production 2026-11-13: every Neighbor Card
+ * reply read as already answered, and other leads' mail became its history);
+ * `search=thread:<id>` is the filter it honours, and the result is checked
+ * against the id anyway.
+ */
+export async function threadOf(deps: Deps, threadId: string): Promise<Record<string, unknown>[]> {
+  if (!threadId) return [];
+  return itemsOf(await instantly(deps, 'GET', `/emails?search=${encodeURIComponent(`thread:${threadId}`)}&limit=50`))
+    .filter((m) => String(m.thread_id ?? '') === threadId);
+}
+
 export function itemsOf(answer: Record<string, unknown>): Record<string, unknown>[] {
   return Array.isArray(answer.items) ? (answer.items as Record<string, unknown>[]) : [];
 }
