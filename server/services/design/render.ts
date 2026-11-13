@@ -283,10 +283,13 @@ export async function openDesignRender(input: OpenRenderInput): Promise<string> 
      * worker with no browser reports BLOCKED naming what it lacked, which the
      * stage handles and the attempt budget bounds.
      *
-     * So this is open until a surface declares one. The operator step is two
-     * things in either order: declare `browser` on a Routine whose worker has a
-     * checkout, and add it here. One line, and until it happens the cost is a
-     * fire spent learning what the fleet has not been told.
+     * So it stays open. Declaring `browser` on a Routine is enough to steer
+     * render work: `DESIGN_RENDER_V1` names `browser` as a preference
+     * (`contractCapabilities`), so the router ranks that Routine first and
+     * still fires any other one when it is busy. Adding it here instead would
+     * exclude every undeclared Routine — which an ordinary worker session,
+     * able to render, is — and strand render work behind whichever surfaces a
+     * person happened to tag.
      */
     createdById: renderCreator(input.cycle, input.pass),
     ready: false,

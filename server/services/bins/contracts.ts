@@ -878,21 +878,28 @@ async function evaluateFactoryDelivery(bin: Bin): Promise<ContractVerdict> {
 /* ------------------------------------------------------------------------- */
 
 /**
- * The capabilities a worker must have for this contract to be satisfiable at
- * all, owned here beside the evaluator that would otherwise refuse it.
+ * The capabilities a surface declaring them is **preferred** for, owned here
+ * beside the evaluator that judges the contract.
  *
- * A contract that only a browser can satisfy *is* a declaration that it needs
- * one; it is read from here rather than restated on every bin. This is a
- * routing **preference**, and fails open while no surface declares it.
+ * A routing preference and never a requirement. The router ranks a surface
+ * that declares every capability its contract names ahead of one that does
+ * not (`routeBin`), and nothing — not the router, not admission — refuses a
+ * surface for lacking one. A bin that truly cannot run without a capability
+ * says so in its own `requiredCapabilities`, which fail closed as always.
  *
- * It is not what emptied the six `DESIGN_RENDER_V1` bins that ended
- * NEEDS_HUMAN in the 7 days to 2026-11-12 with "No render was submitted". It
- * was first written as that fix, and a direct run refuted it: an ordinary
- * cloud worker session renders with the manifest's exact command. The cause
- * was the render manifest withholding the authority its own command needs —
- * installing dependencies, building the client — from workers told that the
- * authorized list is the whole of their authority. That is corrected where
- * the manifest is written, `designRenderManifest` in
+ * It was first a requirement, applied fleet-wide once any one Routine declared
+ * it. That stranded every other Routine: once one surface declared `browser`,
+ * the router excluded and admission skipped every undeclared one for render
+ * bins, so none of them could ever be shown to render, and render throughput
+ * collapsed onto whichever surfaces a person happened to tag — while an
+ * ordinary cloud worker session renders fine with the manifest's command.
+ *
+ * Nor was it what emptied the six `DESIGN_RENDER_V1` bins that ended
+ * NEEDS_HUMAN in the 7 days to 2026-11-12 with "No render was submitted". The
+ * cause was the render manifest withholding the authority its own command
+ * needs — installing dependencies, building the client — from workers told
+ * that the authorized list is the whole of their authority. That is corrected
+ * where the manifest is written, `designRenderManifest` in
  * `services/design/render.ts`.
  */
 const CONTRACT_CAPABILITIES: Readonly<Record<string, readonly string[]>> = {
@@ -904,31 +911,15 @@ export function contractCapabilities(completionContract: string): readonly strin
 }
 
 /**
- * The capabilities a surface must declare to be handed this bin.
- *
- * The bin's own `requiredCapabilities` always apply, unchanged — they fail
- * closed exactly as before. A capability **derived** from the contract applies
- * only while `declaredInFleet` says some Routine declares it: §27's rule, fail
- * open where the unknown could only waste a fire. A fleet in which nobody has
- * yet declared `browser` routes a render bin exactly as it did before, rather
- * than stranding it behind a tag nobody wrote; once one surface declares it,
- * the others stop being handed work they cannot do. The declaration's only
- * producer is a person (`setRoutineCapabilities`): Brain does not infer it
- * from a satisfied contract, because the render contract's evaluator checks
- * the submission's shape, not that a browser drew it. With no `declaredInFleet`
- * at all only the bin's own requirements are returned, which is the previous
- * behaviour for every caller that has no fleet to ask.
+ * Whether a surface declaring `capabilities` is one this bin's contract
+ * prefers. True when the contract names nothing, so every surface is equally
+ * preferred for every other contract.
  */
-export function effectiveCapabilities(
-  bin: Pick<Bin, 'requiredCapabilities' | 'completionContract'>,
-  declaredInFleet?: (capability: string) => boolean,
-): string[] {
-  const own = [...(bin.requiredCapabilities ?? [])];
-  if (!declaredInFleet) return own;
-  for (const capability of contractCapabilities(bin.completionContract)) {
-    if (!own.includes(capability) && declaredInFleet(capability)) own.push(capability);
-  }
-  return own;
+export function prefersSurface(
+  bin: Pick<Bin, 'completionContract'>,
+  capabilities: readonly string[],
+): boolean {
+  return contractCapabilities(bin.completionContract).every((cap) => capabilities.includes(cap));
 }
 
 const EVALUATORS: Record<string, Evaluator> = {

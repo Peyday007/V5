@@ -31,7 +31,7 @@
  */
 import type { AllowanceReport, Bin, FleetAccount, FleetPolicy, FleetRoutine } from '../../domain/types.ts';
 import { familyOf, repositoryIdOf } from '../bins/routing.ts';
-import { effectiveCapabilities } from '../bins/contracts.ts';
+import { prefersSurface } from '../bins/contracts.ts';
 
 /** Why no Routine was chosen. A closed set, because each one has its own fix. */
 export type RoutingRefusal =
@@ -608,19 +608,12 @@ export function routeBin(input: RoutingInput): RoutingResult {
   }
 
   /*
-   * The bin's own requirements, plus any its completion contract implies that
-   * some routable surface in this fleet declares (`effectiveCapabilities`). A
-   * render bin is not fired at a browserless surface while a browser surface
-   * exists, and is routed as before while none does.
+   * The bin's own requirements, and only those. A capability its completion
+   * contract names (`contractCapabilities`) is a preference applied in the
+   * ranking below, never an exclusion: excluding undeclared surfaces once any
+   * one declared it stranded every other Routine from render work.
    */
-  const required = effectiveCapabilities(bin, (capability) =>
-    candidates.some(
-      (one) =>
-        routable(one.account.state) &&
-        routable(one.routine.state) &&
-        one.routine.capabilities.includes(capability),
-    ),
-  );
+  const required = [...(bin.requiredCapabilities ?? [])];
   const repository = repositoryIdOf(bin);
   /*
    * The pin, read from the bin's own column and applied before anything else.
@@ -957,6 +950,14 @@ export function routeBin(input: RoutingInput): RoutingResult {
     };
     const standing = rank(b) - rank(a);
     if (standing !== 0) return standing;
+    /*
+     * Then a surface declaring what the bin's contract prefers (a browser for a
+     * render). A preference only: an undeclared surface stays eligible and is
+     * chosen whenever no preferred one is, so it is never stranded.
+     */
+    const preferred =
+      Number(prefersSurface(bin, b.routine.capabilities)) - Number(prefersSurface(bin, a.routine.capabilities));
+    if (preferred !== 0) return preferred;
     if (comparableAllowance) {
       const remaining = freshAllowancePercent(b.allowanceReport, now)! -
         freshAllowancePercent(a.allowanceReport, now)!;
