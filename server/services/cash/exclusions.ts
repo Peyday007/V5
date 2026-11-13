@@ -494,20 +494,19 @@ function positionNeed(title: string, a: RoleAssessment): { whyItMatters: string;
  * performs nothing regulated, raises none.
  */
 export async function seekCompliantPositions(projectId: string): Promise<PositionSought[]> {
-  const db = getDb();
-  const [rows, withStatements] = await Promise.all([
-    db.all<OpeningRoleRow>(`SELECT ${OPENING_ROLE_COLUMNS} FROM cash_opportunities WHERE project_id = ?`, [projectId]),
-    db.all<{ opportunity_id: string }>(
-      `SELECT opportunity_id FROM capital_structures WHERE project_id = ?
-       UNION
-       SELECT opportunity_id FROM opportunity_constraints WHERE project_id = ? AND opportunity_id IS NOT NULL`,
-      [projectId, projectId],
-    ),
-  ]);
+  // One statement for the whole project: a goal read runs this and is held to a bounded statement count.
+  const rows = await getDb().all<OpeningRoleRow & { has_statements: number | boolean }>(
+    `SELECT ${OPENING_ROLE_COLUMNS},
+            CASE WHEN EXISTS (SELECT 1 FROM capital_structures c WHERE c.opportunity_id = o.id)
+                   OR EXISTS (SELECT 1 FROM opportunity_constraints k WHERE k.opportunity_id = o.id)
+                 THEN 1 ELSE 0 END AS has_statements
+       FROM cash_opportunities o WHERE o.project_id = ?`,
+    [projectId],
+  );
   const out: PositionSought[] = [];
   // A candidate is an opening whose own row names a regulated activity, or one with capital or constraint
   // statements that may; the rest perform nothing this reader recognises and have no position to find.
-  const stated = new Set(withStatements.map((one) => one.opportunity_id));
+  const stated = new Set(rows.filter((row) => Number(row.has_statements) === 1 || row.has_statements === true).map((row) => row.id));
   const candidates = rows.filter((row) => stated.has(row.id) || regulatedActivitiesIn(openingPerforms(openingRoleText(row))).length > 0);
   if (candidates.length === 0) return out;
   const [capital, constraints] = stated.size > 0
