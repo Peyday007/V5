@@ -40,7 +40,7 @@
  * Nothing here enumerates a kind of counterparty, an industry or a geography.
  */
 import { compareFulfillers, type CandidateReading, type Commitment, type Comparison, type Figure, type FigureName } from './compare.ts';
-import { effectiveStatus, recordedCounterparty, STAGES, stageIndex, type Counterparty, type MissingFact, type Stage } from './ladder.ts';
+import { effectiveStatus, recordedCounterparty, STAGES, stageIndex, type Counterparty, type Fact, type MissingFact, type Stage } from './ladder.ts';
 import type { CommercialAction } from '../../cash/authority.ts';
 import {
   authorityFor,
@@ -593,4 +593,228 @@ export async function transferRecordedTransaction(input: RecordedTransactionInpu
     const plan = reading.transfer.plan;
     return { result: reading, append: plan && plan.action === 'TRANSFER' ? plan.events : [] };
   });
+}
+
+// ---------------------------------------------------------------------------
+// The same reading on a sourced opportunity (S-0469)
+// ---------------------------------------------------------------------------
+
+/**
+ * Who a sourced opportunity's own rows name as able to fulfil it, and on what
+ * record. Nothing here is supplied by the caller: the candidates are read from
+ * the opportunity card's `fulfillmentOwner` and from each live agreement's
+ * declared fulfilment (`journey/fulfillment.ts` — the supplier or performer a
+ * person named), and the facts those rows establish are read from the same
+ * rows and the money ledger's supplier commitments (`fulfillment-cost:<id>:…`,
+ * the entries `commitments.ts` reads as `owedToSuppliers`, LIFE-29-1).
+ *
+ * What the rows establish, each with the row it came from as its evidence:
+ *
+ *   * a named fulfiller is LISTED — on the record, nothing more;
+ *   * a supplier commitment in the ledger is a verified price (what Brain
+ *     committed to pay, net of reductions) and a verified contract (Brain owes
+ *     the supplier on it);
+ *   * an accepted delivery of the obligation the fulfiller performed is a
+ *     verified completion.
+ *
+ * Everything else — willingness, availability, capability, payment terms,
+ * lead time, capacity — is whatever the counterparty's recorded facts
+ * (`recordCounterpartyFacts`) say, and absent until somebody records it: a
+ * task, never a default. The recorded facts are read after the row-derived
+ * ones, so a later recorded correction is the latest word.
+ *
+ * Brain itself is not a counterparty: a fulfilment Brain performs (software,
+ * research) or a card that names Brain is not offered as a candidate.
+ */
+export interface SourcedFulfiller {
+  counterpartyId: string;
+  /** The name the record uses, as first written. */
+  name: string;
+  /** Where the name was read: `opportunity:<id>:fulfillmentOwner`, `fulfillment:<id>`. */
+  sources: string[];
+  /** The facts the rows themselves establish, before any recorded fact. */
+  facts: Fact[];
+}
+
+/** The counterparty id a fulfiller's name is filed under, the same for every record that names it. */
+export function fulfillerCounterpartyId(name: string): string {
+  return `fulfiller:${name.trim().toLowerCase().replace(/\s+/g, ' ')}`;
+}
+
+const BRAIN_PERFORMS: ReadonlySet<string> = new Set(['SOFTWARE', 'RESEARCH']);
+const namesBrain = (name: string) => name.toLowerCase().includes('brain');
+
+/** The fulfillers the opportunity's rows name, with the facts those rows establish. Writes nothing. */
+export async function sourcedFulfillers(opportunityId: string): Promise<SourcedFulfiller[]> {
+  const [{ getOpportunity }, { readObligations }, { listMoneyEntries }] = await Promise.all([
+    import('../../../repos/cashPortfolio.ts'),
+    import('../../cash/journey/fulfillment.ts'),
+    import('../../../repos/cashLedger.ts'),
+  ]);
+  const opportunity = await getOpportunity(opportunityId);
+  if (!opportunity) return [];
+  const [obligations, entries] = await Promise.all([
+    readObligations(opportunityId),
+    listMoneyEntries({ projectId: opportunity.projectId, opportunityId, limit: 2000 }),
+  ]);
+  const found = new Map<string, SourcedFulfiller>();
+  const named = (name: string, source: string): SourcedFulfiller | null => {
+    const clean = name.trim();
+    if (!clean || namesBrain(clean)) return null;
+    const id = fulfillerCounterpartyId(clean);
+    const one = found.get(id) ?? { counterpartyId: id, name: clean, sources: [], facts: [] };
+    if (!one.sources.includes(source)) one.sources.push(source);
+    found.set(id, one);
+    return one;
+  };
+
+  if (opportunity.fulfillmentOwner) named(opportunity.fulfillmentOwner, `opportunity:${opportunityId}:fulfillmentOwner`);
+  for (const o of obligations) {
+    const f = o.fulfillment;
+    if (!f || BRAIN_PERFORMS.has(f.kind) || o.agreement.releasedAt !== null) continue;
+    const one = named(f.kind === 'SUPPLIER' ? f.supplierName ?? f.performer : f.performer, `fulfillment:${f.id}`);
+    if (!one) continue;
+    const prefix = `fulfillment-cost:${f.id}:`;
+    const own = entries.filter((e) => e.idempotencyKey?.startsWith(prefix) && e.currency === o.agreement.currency);
+    const committed = own.filter((e) => e.kind === 'UNPAID_COMMITMENT');
+    const reduced = own.filter((e) => e.kind === 'COMMITMENT_RELEASED');
+    const price = committed.reduce((n, e) => n + e.amountCents, 0) - reduced.reduce((n, e) => n + e.amountCents, 0);
+    if (committed.length > 0 && price > 0) {
+      const evidence = `ledger supplier commitment ${[...committed, ...reduced].map((e) => e.id).join(', ')} (${o.agreement.currency}, agreement ${o.agreement.id})`;
+      one.facts.push({ dimension: 'price', status: 'VERIFIED', evidence, value: price });
+      one.facts.push({ dimension: 'contract', status: 'VERIFIED', evidence, value: `agreement:${o.agreement.id}` });
+    }
+    if (o.acceptance.state === 'ACCEPTED' && o.delivery.state === 'DELIVERED') {
+      const proof = o.acceptance.evidence ?? o.delivery.evidence;
+      if (proof) one.facts.push({ dimension: 'completion', status: 'VERIFIED', evidence: `agreement ${o.agreement.id} accepted: ${proof}`, value: o.agreement.id });
+    }
+  }
+  for (const one of found.values()) {
+    one.facts.unshift({ dimension: 'listing', status: 'VERIFIED', evidence: `named on ${one.sources.join(', ')}`, value: one.name });
+  }
+  return [...found.values()];
+}
+
+/** The candidate a sourced fulfiller is: the rows' facts, then everything recorded about it. */
+async function sourcedCandidate(fulfiller: SourcedFulfiller, kindHint: string): Promise<Counterparty> {
+  const recorded = await recordedCounterparty(fulfiller.counterpartyId);
+  return {
+    id: fulfiller.counterpartyId,
+    kind: recorded?.kind || kindHint,
+    geography: recorded?.geography ?? null,
+    ...(recorded?.humanOperator === undefined ? {} : { humanOperator: recorded.humanOperator }),
+    facts: [...fulfiller.facts, ...(recorded?.facts ?? [])],
+  };
+}
+
+/**
+ * An opportunity's transaction: the commitment is the opportunity, the business
+ * is the project that owns it, the candidates are the fulfillers its rows name
+ * (plus any counterparty `alsoConsider` names whose facts are on record, so an
+ * alternative sourced elsewhere is compared on the same terms), and the
+ * authority is the project's live grant. The caller supplies only the shape of
+ * the work — units, window, geographies — never a fact or an authority.
+ */
+export interface OpportunityTransactionInput {
+  opportunityId: string;
+  capacityUnits?: number;
+  window: { windowStart: string; windowEnd: string };
+  geographies?: readonly string[];
+  humanRequirement?: Commitment['humanRequirement'];
+  alsoConsider?: readonly string[];
+  at: string;
+  action?: CommercialAction;
+}
+
+export interface OpportunityTransaction {
+  opportunityId: string;
+  businessId: string | null;
+  fulfillers: SourcedFulfiller[];
+  reading: TransactionReading | null;
+  /** Why there is no reading, when there is none. */
+  detail: string;
+}
+
+async function opportunityCandidates(input: OpportunityTransactionInput): Promise<{
+  businessId: string | null; fulfillers: SourcedFulfiller[]; candidates: Counterparty[]; rest: Omit<TransactionInput, 'candidates' | 'events' | 'authority'> | null;
+}> {
+  const { getOpportunity } = await import('../../../repos/cashPortfolio.ts');
+  const opportunity = await getOpportunity(input.opportunityId);
+  if (!opportunity) return { businessId: null, fulfillers: [], candidates: [], rest: null };
+  const fulfillers = await sourcedFulfillers(input.opportunityId);
+  const candidates: Counterparty[] = [];
+  for (const f of fulfillers) candidates.push(await sourcedCandidate(f, f.sources.some((s) => s.startsWith('fulfillment:')) ? 'supplier' : 'fulfiller'));
+  const have = new Set(candidates.map((c) => c.id));
+  for (const id of input.alsoConsider ?? []) {
+    if (have.has(id)) continue;
+    const one = await recordedCounterparty(id);
+    if (one) { candidates.push(one); have.add(id); }
+  }
+  const commitment: Commitment = {
+    id: `opportunity:${opportunity.id}`,
+    capacityUnits: input.capacityUnits ?? 1,
+    ...(input.geographies ? { geographies: input.geographies } : {}),
+    ...(input.humanRequirement ? { humanRequirement: input.humanRequirement } : {}),
+  };
+  return {
+    businessId: opportunity.projectId,
+    fulfillers,
+    candidates,
+    rest: {
+      commitment,
+      businessId: opportunity.projectId,
+      window: input.window,
+      at: input.at,
+      source: `opportunity:${opportunity.id}${opportunity.source ? ` (${opportunity.source})` : ''}`,
+    },
+  };
+}
+
+function noReading(input: OpportunityTransactionInput, found: Awaited<ReturnType<typeof opportunityCandidates>>): OpportunityTransaction | null {
+  if (!found.rest) return { opportunityId: input.opportunityId, businessId: null, fulfillers: [], reading: null, detail: 'no such opportunity' };
+  if (found.candidates.length === 0) {
+    return { opportunityId: input.opportunityId, businessId: found.businessId, fulfillers: found.fulfillers, reading: null, detail: 'the opportunity names no fulfiller other than Brain, and nothing else was considered' };
+  }
+  return null;
+}
+
+/** The opportunity's transaction as the record stands now. Writes nothing. */
+export async function readOpportunityTransaction(input: OpportunityTransactionInput): Promise<OpportunityTransaction> {
+  const found = await opportunityCandidates(input);
+  const none = noReading(input, found);
+  if (none) return none;
+  const ids = found.candidates.map((c) => c.id);
+  const reading = readTransaction({
+    ...found.rest!,
+    candidates: found.candidates,
+    events: await recordedReservationEvents(ids),
+    authority: await authorityFor(found.businessId!, input.action ?? RESERVE_ACTION),
+  });
+  return { opportunityId: input.opportunityId, businessId: found.businessId, fulfillers: found.fulfillers, reading, detail: reading.deliverability.reason };
+}
+
+async function decideOpportunity(
+  input: OpportunityTransactionInput,
+  actorRef: string,
+  toAppend: (reading: TransactionReading) => readonly ReservationEvent[],
+): Promise<OpportunityTransaction> {
+  const found = await opportunityCandidates(input);
+  const none = noReading(input, found);
+  if (none) return none;
+  const ids = found.candidates.map((c) => c.id);
+  const reading = await decideRecorded(ids, actorRef, async (events) => {
+    const one = readTransaction({ ...found.rest!, candidates: found.candidates, events, authority: await authorityFor(found.businessId!, input.action ?? RESERVE_ACTION) });
+    return { result: one, append: toAppend(one) };
+  });
+  return { opportunityId: input.opportunityId, businessId: found.businessId, fulfillers: found.fulfillers, reading, detail: reading.reserve.permitted ? reading.deliverability.reason : reading.reserve.detail };
+}
+
+/** Reserve the opportunity's primary fulfiller under the project's live grant, recorded; only a permitted reserve writes. */
+export function reserveOpportunityTransaction(input: OpportunityTransactionInput, actorRef: string): Promise<OpportunityTransaction> {
+  return decideOpportunity(input, actorRef, (r) => (r.reserve.permitted && r.reserve.event && !r.reserve.duplicate ? [r.reserve.event] : []));
+}
+
+/** Transfer the opportunity's job after its primary reported a failure, recorded: release and new hold together, or nothing. */
+export function transferOpportunityTransaction(input: OpportunityTransactionInput, actorRef: string): Promise<OpportunityTransaction> {
+  return decideOpportunity(input, actorRef, (r) => (r.transfer.plan && r.transfer.plan.action === 'TRANSFER' ? r.transfer.plan.events : []));
 }

@@ -17,6 +17,26 @@ import { readLadder } from '../server/services/labor/counterparties/ladder.ts';
 import { performanceFrom } from '../server/services/labor/counterparties/reservations.ts';
 import { compareFulfillers } from '../server/services/labor/counterparties/compare.ts';
 import { coordinateSteps, negotiate, planWorkforce, withPerformance } from '../server/services/labor/counterparties/transaction.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { createAuthority, revokeAuthority } from '../server/repos/cashAuthority.ts';
+import { recordCardFact } from '../server/repos/cashCardFacts.ts';
+import { cashEventsOfKind } from '../server/repos/cashMode.ts';
+import { activate } from '../server/services/cash/lifecycle.ts';
+import { ALWAYS_PROHIBITED_COMMERCIAL, COMMERCIAL_ACTIONS } from '../server/services/cash/authority.ts';
+import { actionKey, beginExecution, capture, fillCard, markReady } from '../server/services/cash/opportunities.ts';
+import { CAPTURE_KEY, qualificationKeys } from '../server/services/cash/tier.ts';
+import { recordAgreement } from '../server/services/cash/journey/deal.ts';
+import { declare, recordCost } from '../server/services/cash/journey/fulfillment.ts';
+import { readCommitments } from '../server/services/cash/deliverables/commitments.ts';
+import { recordCounterpartyFacts } from '../server/services/labor/counterparties/ladder.ts';
+import { counterpartyLedger, holdsFrom, recordHoldOutcome, recordedReservationEvents, RESERVATION_EVENT_KIND } from '../server/services/labor/counterparties/reservations.ts';
+import {
+  fulfillerCounterpartyId,
+  readOpportunityTransaction,
+  reserveOpportunityTransaction,
+  sourcedFulfillers,
+  transferOpportunityTransaction,
+} from '../server/services/labor/counterparties/transaction.ts';
 
 const W = { windowStart: '2026-12-01T00:00:00Z', windowEnd: '2026-12-08T00:00:00Z' };
 const v = (dimension: string, value: number | string | null = null): Fact => ({ dimension, status: 'VERIFIED', evidence: `source:${dimension}`, value });
@@ -361,5 +381,182 @@ describe('CP-31 in the running Brain: boot wires the model to the live providers
     const [first] = await readProviderTransactions({ env: ENV, at: '2026-11-13T12:00:00Z' });
     const forged = { ...first!, reading: { ...first!.reading, deliverability: { ...first!.reading.deliverability, deliverable: true, stage: 'QUOTE' as const } } };
     expect(counterpartyBreaches([forged])).toEqual(['MESSAGING: reported deliverable at QUOTE, below CONTRACTED']);
+  });
+});
+
+/*
+ * The S-0469 demonstration on a sourced record. Nothing below hands the model a
+ * counterparty, a fact or an authority: the candidates are the fulfillers the
+ * opportunity's own rows name (its card's fulfillmentOwner and the supplier a
+ * person declared for its agreement), the price and contract are read from the
+ * ledger's supplier commitment (the rows commitments.ts reads as owedToSuppliers),
+ * further facts reach the model only through the recorded-facts path with the
+ * record that established them, and the authority is the project's live grant.
+ */
+describe('CP-31 acceptance on a sourced opportunity: the rows feed the model', () => {
+  const W2 = { windowStart: '2031-03-01T00:00:00Z', windowEnd: '2031-03-08T00:00:00Z' };
+  let projectId = '';
+  let userId = '';
+  let authorityId = '';
+
+  const grant = async () => {
+    authorityId = (await createAuthority({
+      projectId, ownerUserId: userId, createdByUserId: userId, name: 'Cash Mode commercial authority',
+      allowedActions: [...COMMERCIAL_ACTIONS], prohibitions: [...ALWAYS_PROHIBITED_COMMERCIAL],
+      maxCommittedCents: 500_000, maxPerActionCents: 200_000, maxConcurrent: 5, currency: 'USD',
+    })).id;
+  };
+
+  /** A captured, qualified opportunity in execution whose card names `owner` as who fulfils it. */
+  async function sourcedOpportunity(owner: string): Promise<string> {
+    const captured = await capture({
+      projectId, actorRef: userId, ownerUserId: userId, title: 'Gutter replacement for a property manager',
+      mechanism: 'EXPLICIT_PAID_REQUEST', currency: 'USD', requiredCapabilities: [],
+    });
+    if (!captured.ok) throw new Error(captured.reason);
+    const id = captured.value.id;
+    const filled = await fillCard({
+      opportunityId: id, actorRef: userId,
+      patch: {
+        payer: 'The property manager, who signs', reachableChannel: 'Replied by email', buyingSignal: 'Asked for a quote',
+        signalObservedAt: '2031-02-01T09:00:00.000Z', offerScope: 'Replace 40m of gutter', acceptanceCondition: 'Gutters installed and inspected',
+        priceCents: 90_000, deliveryMethod: 'Subcontracted crew on site', fulfillmentOwner: owner, peakFundingCents: 0,
+      },
+    });
+    if (!filled.ok) throw new Error(filled.reason);
+    for (const field of [CAPTURE_KEY, ...qualificationKeys(null)]) {
+      await recordCardFact({ projectId, opportunityId: id, field, kind: 'PERSON', value: `The owner's answer to ${field}.`, decidedBy: userId });
+    }
+    expect((await markReady({ opportunityId: id, actorRef: userId })).ok).toBe(true);
+    const began = await beginExecution({
+      opportunityId: id, actorRef: userId,
+      firstAction: { action: 'CONTACT_BUYER', performedBy: 'PERSON', detail: 'Sent the scope and price.', reference: `msg-${id}`, requestKey: actionKey(id, 'CONTACT_BUYER', 'first') },
+    });
+    if (!began.ok) throw new Error(began.reason);
+    return id;
+  }
+
+  /** The agreement, its declared supplier, and the supplier commitment in the ledger. */
+  async function contractedSupplier(opportunityId: string, supplier: string, cents: number): Promise<string> {
+    const agreed = await recordAgreement({
+      opportunityId, amountCents: 90_000, currency: 'USD', deliverable: 'Replace 40m of gutter',
+      acceptanceCondition: 'Gutters installed and inspected', evidenceKind: 'WRITTEN_ACCEPTANCE', evidenceRef: `email-${opportunityId}`, actorRef: userId,
+    });
+    if (!agreed.ok) throw new Error(agreed.reason);
+    const declared = await declare({ projectId, agreementId: agreed.value.id, kind: 'SUPPLIER', performer: supplier, supplierName: supplier, actorRef: userId });
+    if (!declared.ok) throw new Error(declared.reason);
+    const cost = await recordCost({ projectId, agreementId: agreed.value.id, kind: 'SUPPLIER_COMMITMENT', amountCents: cents, detail: 'Signed work order', actorRef: userId });
+    if (!cost.ok) throw new Error(cost.reason);
+    return agreed.value.id;
+  }
+
+  /** What a person learned from each counterparty, recorded with the record it came from. */
+  const record = (id: string, facts: Fact[]) =>
+    recordCounterpartyFacts({ projectId, counterparty: { id, kind: 'contractor', geography: 'region-a', humanOperator: true }, facts, actorRef: userId });
+  const said = (ref: string) => (dimension: string, value: number | string | null = null): Fact => ({ dimension, status: 'VERIFIED', evidence: ref, value });
+
+  beforeEach(async () => {
+    clearAdapters();
+    projectId = (await freshProject()).project.id;
+    userId = (await createUser({ email: `cp31s-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+    expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize additional usable cash over the next few weeks.' })).ok).toBe(true);
+    await grant();
+  });
+
+  it('reads its candidates and their verified facts from the opportunity and the supplier commitment, not from the caller', async () => {
+    const opportunityId = await sourcedOpportunity('Northside Crew');
+    await contractedSupplier(opportunityId, 'Harbor Contractors', 30_000);
+    // The ledger rows this reads are the ones the commitment reading owes the supplier on.
+    const commitments = await readCommitments({ projectId, opportunityId, currency: 'USD' });
+    expect(commitments.owedToSuppliers.reduce((n, o) => n + o.owedCents, 0)).toBe(30_000);
+
+    const fulfillers = await sourcedFulfillers(opportunityId);
+    const harbor = fulfillerCounterpartyId('Harbor Contractors');
+    const northside = fulfillerCounterpartyId('Northside Crew');
+    expect(fulfillers.map((f) => f.counterpartyId).sort()).toEqual([harbor, northside].sort());
+    expect(fulfillers.find((f) => f.counterpartyId === northside)!.sources).toEqual([`opportunity:${opportunityId}:fulfillmentOwner`]);
+    const h = fulfillers.find((f) => f.counterpartyId === harbor)!;
+    expect(h.sources[0]).toMatch(/^fulfillment:/);
+    const owedEntry = commitments.owedToSuppliers[0]!.entries[0]!;
+    expect(h.facts.find((f) => f.dimension === 'price')).toMatchObject({ status: 'VERIFIED', value: 30_000, evidence: expect.stringContaining(owedEntry) });
+    expect(h.facts.find((f) => f.dimension === 'contract')).toMatchObject({ status: 'VERIFIED', evidence: expect.stringContaining(owedEntry) });
+
+    const { reading } = await readOpportunityTransaction({ opportunityId, window: W2, at: '2031-02-10T00:00:00Z' });
+    expect(reading!.source).toBe(`opportunity:${opportunityId}`);
+    expect(reading!.authority).toMatchObject({ businessId: projectId, held: true, authorityId });
+    // Nothing above LISTING is asserted for either: willingness, capability, terms are pending tasks.
+    const hLedger = reading!.facts.find((f) => f.counterpartyId === harbor)!;
+    expect(hLedger.verified).toEqual(expect.arrayContaining(['listing', 'price', 'contract']));
+    expect(hLedger.pending.map((m) => m.dimension)).toEqual(expect.arrayContaining(['willingness', 'availability', 'paymentTerms', 'leadTime', 'reservedCapacity']));
+    expect(reading!.deliverability.deliverable).toBe(false);
+    expect(reading!.reserve).toMatchObject({ permitted: false, reason: 'NOT_QUOTED' });
+  });
+
+  it('walks the demonstration on rows: primary and alternative, authority from the live grant, failure, one transfer, no double-commit', async () => {
+    const opportunityId = await sourcedOpportunity('Northside Crew');
+    await contractedSupplier(opportunityId, 'Harbor Contractors', 30_000);
+    const harbor = fulfillerCounterpartyId('Harbor Contractors');
+    const northside = fulfillerCounterpartyId('Northside Crew');
+    const fromHarbor = said('email reply from Harbor Contractors, 2031-02-02 (msg-harbor-1)');
+    await record(harbor, [
+      fromHarbor('willingness'), fromHarbor('availability'), fromHarbor('eligibility'), fromHarbor('scope'),
+      fromHarbor('qualifications'), fromHarbor('geography', 'region-a'), fromHarbor('paymentTerms', 'net 30'),
+      fromHarbor('leadTime', 5), fromHarbor('availableCapacity', 2), fromHarbor('reservedCapacity'),
+    ]);
+    const fromNorthside = said('phone quote from Northside Crew, 2031-02-03 (call-ns-1)');
+    await record(northside, [
+      fromNorthside('willingness'), fromNorthside('availability'), fromNorthside('eligibility'), fromNorthside('scope'),
+      fromNorthside('qualifications'), fromNorthside('geography', 'region-a'), fromNorthside('price', 36_000),
+      fromNorthside('paymentTerms', 'net 15'), fromNorthside('leadTime', 7), fromNorthside('availableCapacity', 3),
+    ]);
+    const shape = { opportunityId, window: W2, at: '2031-02-10T00:00:00Z' };
+
+    const before = (await readOpportunityTransaction(shape)).reading!;
+    expect(before.primary?.counterpartyId).toBe(harbor);
+    expect(before.alternative?.counterpartyId).toBe(northside);
+    const row = (id: string) => before.compared.find((r) => r.counterpartyId === id)!;
+    expect(row(harbor).figures).toMatchObject({ cost: { value: 30_000 }, capacity: { value: 2 }, timing: { value: 5 } });
+    expect(row(northside).figures).toMatchObject({ cost: { value: 36_000 }, capacity: { value: 3 }, timing: { value: 7 } });
+    // Northside has quoted but has no contract: pending, and not a deliverable alternative yet.
+    expect(before.facts.find((f) => f.counterpartyId === northside)!.pending.map((m) => m.dimension)).toEqual(expect.arrayContaining(['reservedCapacity', 'contract']));
+
+    // Without the live grant nothing is reserved, and nothing is written.
+    expect(await revokeAuthority({ authorityId, actorUserId: userId, reason: 'test: no grant' })).toBe(true);
+    const refused = (await reserveOpportunityTransaction(shape, userId)).reading!;
+    expect(refused.reserve).toMatchObject({ permitted: false, reason: 'MISSING_AUTHORITY', missingAuthority: ['ENGAGE_CONTRACTOR'] });
+    expect(await recordedReservationEvents([harbor, northside])).toEqual([]);
+
+    // With the grant: one hold on the primary, and a retry writes nothing more.
+    await grant();
+    const reserved = (await reserveOpportunityTransaction(shape, userId)).reading!;
+    expect(reserved.reserve).toMatchObject({ permitted: true, counterpartyId: harbor });
+    await reserveOpportunityTransaction(shape, userId);
+    expect(await cashEventsOfKind(counterpartyLedger(harbor), RESERVATION_EVENT_KIND)).toHaveLength(1);
+    const live = (await readOpportunityTransaction(shape)).reading!;
+    expect(live.deliverability).toMatchObject({ deliverable: true, counterpartyId: harbor, stage: 'CONTRACTED' });
+
+    // The primary reports a failure: not deliverable, and the job moves to the alternative exactly once.
+    const [hold] = holdsFrom(await recordedReservationEvents([harbor]));
+    expect((await recordHoldOutcome({ counterpartyId: harbor, key: hold!.key, kind: 'FAILED', at: '2031-02-11T00:00:00Z', actorRef: userId })).recorded).toBe(true);
+    const failed = (await readOpportunityTransaction({ ...shape, at: '2031-02-11T01:00:00Z' })).reading!;
+    expect(failed.deliverability.deliverable).toBe(false);
+    expect(failed.transfer).toMatchObject({ applicable: true, from: harbor, to: northside });
+    await transferOpportunityTransaction({ ...shape, at: '2031-02-11T01:00:00Z' }, userId);
+    await transferOpportunityTransaction({ ...shape, at: '2031-02-11T02:00:00Z' }, userId);
+    const holds = holdsFrom(await recordedReservationEvents([harbor, northside]));
+    expect(holds.map((h) => [h.counterpartyId, h.state]).sort()).toEqual([[harbor, 'RELEASED'], [northside, 'HELD']].sort());
+
+    // Carried by an alternative that has not contracted: held, honestly not deliverable, never double-committed.
+    const after = (await readOpportunityTransaction({ ...shape, at: '2031-02-11T03:00:00Z' })).reading!;
+    expect(after.doubleCommitted).toEqual([]);
+    expect(after.deliverability).toMatchObject({ deliverable: false, counterpartyId: northside, holdState: 'HELD' });
+    expect(after.reserve).toMatchObject({ permitted: false, reason: 'ALREADY_HELD' });
+  });
+
+  it('offers no candidate when only Brain fulfils it', async () => {
+    const opportunityId = await sourcedOpportunity('Brain');
+    expect(await sourcedFulfillers(opportunityId)).toEqual([]);
+    const answer = await readOpportunityTransaction({ opportunityId, window: W2, at: '2031-02-10T00:00:00Z' });
+    expect(answer.reading).toBeNull();
   });
 });
