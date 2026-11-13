@@ -9,11 +9,16 @@
  * own `proposeMap` (so the map, the plan and the validation stay one owner), and
  * records one factory event per transition with the measured evidence.
  *
- * The link between a cash row and a requirement is data, not a list in code: a
- * requirement supplies a cash capability when its `outputs` name that capability
- * id (`RESEARCH_A_QUESTION`, or `capability:RESEARCH_A_QUESTION`). A need for a
- * capability no requirement supplies promotes nothing — it is never matched by
- * guessing from prose.
+ * The link between a cash row and a requirement is read from the requirement's
+ * own rows, never guessed from prose. A requirement supplies a cash capability
+ * when its `outputs` name that capability id (`RESEARCH_A_QUESTION`, or
+ * `capability:RESEARCH_A_QUESTION`), or when a file it changes or cites as
+ * existing (`paths`, `existing.paths`) lies inside the code that answers that
+ * capability (`CAPABILITY_OWNER_PATHS`) — the files whose state decides whether
+ * `readCapability` reads PRESENT. Production maps are decomposed from the source
+ * and name paths, not cash capability ids, so without the second link the
+ * comparison saw no supplier at all (review finding, 2026-11-13). A need for a
+ * capability no requirement supplies still promotes nothing.
  *
  * Only a requirement this module promoted is ever demoted, and only once no open
  * need is still blocked on it. A requirement a person left live is never touched,
@@ -62,15 +67,84 @@ export function capabilityOfNeed(need: Pick<CashNeed, 'requestKey' | 'state'>): 
   return id || null;
 }
 
-/** The cash capability ids a requirement says it supplies, from its own outputs. */
-export function suppliedCapabilities(requirement: Pick<ProgramRequirement, 'outputs'>): Set<string> {
+/**
+ * The code that answers each cash capability (`services/cash/capabilities.ts`):
+ * the files whose state decides whether its reader says PRESENT. A requirement
+ * whose own paths lie inside these supplies the capability. Shared plumbing every
+ * effect passes through (`cash/effects.ts`) is deliberately absent, so touching it
+ * does not make a requirement the supplier of everything. A capability with no
+ * reader and no implementation (`PUBLISH_A_LISTING`) has no owner and is supplied
+ * only by an explicit output. `tests/...-capability-supply.test.ts` keeps this in
+ * step with the vocabulary and with the files on disk.
+ */
+export const CAPABILITY_OWNER_PATHS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  RESEARCH_A_QUESTION: ['server/services/research/auditAdmission.ts', 'server/services/fleet/**', 'server/repos/fleet.ts'],
+  SEND_A_MESSAGE: ['server/services/cash/providers/instantly.ts', 'server/services/cash/providers/instantlySync.ts', 'server/services/cash/providers/resend.ts'],
+  ISSUE_AN_INVOICE: ['server/services/cash/invoicing.ts', 'server/services/cash/providers/stripe.ts'],
+  TAKE_A_PAYMENT: ['server/services/cash/providers/payments.ts', 'server/services/cash/providers/stripe.ts'],
+  BUILD_SOFTWARE: ['server/services/cash/factoryHandoff.ts'],
+  SIGN_AN_AGREEMENT: ['server/services/cash/journey/deal.ts'],
+  PRODUCE_SPREADSHEET: ['server/services/cash/deliverables/**'],
+  PRODUCE_DOCUMENT: ['server/services/cash/deliverables/**'],
+  PRODUCE_PRESENTATION: ['server/services/cash/deliverables/**'],
+  PRODUCE_DATASET: ['server/services/cash/deliverables/**'],
+  PRODUCE_WEBSITE: ['server/services/cash/deliverables/**'],
+  PRODUCE_CODE: ['server/services/cash/deliverables/**'],
+  PRODUCE_GRAPHIC: ['server/services/cash/deliverables/**'],
+  PRODUCE_MODEL_3D: ['server/services/cash/deliverables/**'],
+});
+
+/** A path or glob with its trailing `/**` (or `*`) removed, and whether it named a tree. */
+function pathRoot(path: string): { root: string; tree: boolean } {
+  const trimmed = path.trim().replace(/^\.\//, '');
+  const star = trimmed.indexOf('*');
+  if (star < 0) return { root: trimmed, tree: false };
+  return { root: trimmed.slice(0, star).replace(/\/+$/, ''), tree: true };
+}
+
+/**
+ * Whether a requirement's path lies inside an owner path. The requirement's path
+ * must be at least as specific as the owner's: a requirement over the whole of
+ * `server/services/cash/**` is not thereby the supplier of a payment provider.
+ */
+export function pathWithin(requirementPath: string, ownerPath: string): boolean {
+  const req = pathRoot(requirementPath);
+  const own = pathRoot(ownerPath);
+  if (!req.root || !own.root) return false;
+  if (!own.tree) return !req.tree && req.root === own.root;
+  return req.root === own.root ? true : req.root.startsWith(`${own.root}/`);
+}
+
+/** The cash capability ids a requirement supplies: named in its outputs, or owned by a file it changes or cites. */
+export function suppliedCapabilities(requirement: Pick<ProgramRequirement, 'outputs'> & Partial<Pick<ProgramRequirement, 'paths' | 'existing'>>): Set<string> {
   const out = new Set<string>();
   for (const raw of requirement.outputs) {
     const one = raw.trim();
     const id = one.startsWith(CAPABILITY_KEY) ? one.slice(CAPABILITY_KEY.length).trim() : one;
     if (/^[A-Z][A-Z0-9_]{2,80}$/.test(id)) out.add(id);
   }
+  const paths = [...(requirement.paths ?? []), ...(requirement.existing?.paths ?? [])];
+  if (paths.length === 0) return out;
+  for (const [id, owners] of Object.entries(CAPABILITY_OWNER_PATHS)) {
+    if (paths.some((p) => owners.some((o) => pathWithin(p, o)))) out.add(id);
+  }
   return out;
+}
+
+/**
+ * Which requirements of a map supply which cash capabilities — the reading that
+ * shows on production records whether the comparison has any supplier to work
+ * with. Pure.
+ */
+export function capabilitySupply(map: Pick<RequirementMap, 'requirements'>): { requirementsSupplying: number; byCapability: Record<string, string[]> } {
+  const byCapability: Record<string, string[]> = {};
+  let requirementsSupplying = 0;
+  for (const requirement of map.requirements) {
+    const supplied = suppliedCapabilities(requirement);
+    if (supplied.size > 0) requirementsSupplying += 1;
+    for (const id of supplied) (byCapability[id] ??= []).push(requirement.key);
+  }
+  return { requirementsSupplying, byCapability };
 }
 
 /** Not yet started: no campaign has taken it up, so promotion or demotion only moves readiness. */
