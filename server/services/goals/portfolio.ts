@@ -45,6 +45,7 @@ import {
   addNode,
   addRelation,
   createGraph,
+  currentClaim,
   declareType,
   derive,
   expandToFixpoint,
@@ -61,6 +62,7 @@ import {
   type CausalGraph,
   type Figure,
   type FigureStatus,
+  type MoneyRoute,
   type MoneyRouteReading,
   type OperationalAction,
   type SharedDependency,
@@ -1004,6 +1006,31 @@ function buildCausalGraph(one: ModelledOpportunity): BuiltGraph {
   return { graph: g, discovered: expanded.ok ? expanded.value.map((d) => d.because) : [expanded.reason] };
 }
 
+/**
+ * An opening's money route, read with its outflow's own figure.
+ *
+ * `readMoneyRoute` carries an outflow as a bare amount and reads the stated
+ * total as CONTRACTED from "route outflows", whatever the amount actually was.
+ * The one outflow an opening's route has is its direct cost per deal, priced
+ * from the `directCost` claim — often ASSUMED or MODELED — so reading it as
+ * contracted raised the derived "free to use" figure's status and dropped the
+ * cost's source. Here the free amount is derived from the claim itself, so its
+ * status is no stronger than the cost's and its lineage points at the claim.
+ * The arithmetic, the gaps, the ledger and the break-even are the route's own
+ * reading, unchanged. A route whose outflows are not the one cost outflow the
+ * claim priced is read as the route states it: no claim is attached to an
+ * amount it did not produce.
+ */
+function readOpeningRoute(g: CausalGraph, route: MoneyRoute): MoneyRouteReading {
+  const reading = readMoneyRoute(route);
+  const cost = currentClaim(g, 'directCost');
+  const only = route.outflows.length === 1 ? route.outflows[0] : undefined;
+  if (!cost || !only || only.amountCents !== cost.value) return reading;
+  const outflow: Figure = { ...cost, meaning: 'outflows', source: cost.source ? `claim directCost: ${cost.source}` : 'claim directCost' };
+  const freeCents = derive('free to use', 'cents', [route.collectedCents, route.heldAgainstCents, outflow], ([collected, held, out]) => (collected ?? 0) - (held ?? 0) - (out ?? 0));
+  return { ...reading, freeCents };
+}
+
 /** One opening's graph, from its own row and modelled inputs. Nothing here comes from a caller. */
 export function causalGraphOf(one: ModelledOpportunity): CausalGraph {
   return buildCausalGraph(one).graph;
@@ -1034,7 +1061,7 @@ export function causalOf(openings: ModelledOpportunity[], demand: DemandEstimate
   const linked = graphs.length > 1 ? linkGraphs('portfolio', graphs) : null;
   const shared = linked && linked.ok ? linked.value.shared : [];
   const chains = openings.map((one) => chainOf(one, demand.find((d) => d.opportunityId === one.opportunity.id)?.contacted.p50 ?? 0));
-  const routes = built.map(({ graph }) => readMoneyRoute([...graph.routes.values()][0]!));
+  const routes = built.map(({ graph }) => readOpeningRoute(graph, [...graph.routes.values()][0]!));
   const context: WhatIfContext = { openings, graphs, chains, routes, shared, daysLeft };
   const members: OpeningCausal[] = openings.map((one, i) => {
     const { graph: g, discovered } = built[i] as BuiltGraph;
@@ -1136,7 +1163,7 @@ function whatIfOf(context: WhatIfContext, i: number): WhatIfAnswer[] {
       terms: 'paid in full before delivery',
       heldAgainstCents: derive('held against fulfilment until delivery', 'cents', [base.collectedCents], ([p]) => p ?? 0),
     };
-    const branchReading = readMoneyRoute(branchRoute);
+    const branchReading = readOpeningRoute(g, branchRoute);
     const capitalAfter = capital === null ? null : price === null ? null : Math.max(0, capital - price);
     const marginAfterDelivery = price !== null && cost !== null ? price - cost : null;
     const viable = marginAfterDelivery !== null && marginAfterDelivery >= 0;
