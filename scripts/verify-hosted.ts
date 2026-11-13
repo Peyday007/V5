@@ -274,22 +274,36 @@ async function call(
    * timestamps say what it costs — or fails naming the request and the wait it
    * really performed.
    */
-  let response: BoundedReply;
-  try {
-    response = await boundedRequest(`${base}${path}`, {
-      method: init.method ?? 'GET',
-      headers,
-      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-      timeoutMs: REQUEST_TIMEOUT_MS,
-    });
-  } catch (error) {
-    throw new Error(
-      `${init.method ?? 'GET'} ${path}: ` +
-        `${error instanceof Error ? error.message : String(error)}. ` +
-        'The request was not refused; nothing answered it.',
-      { cause: error },
-    );
+  /*
+   * A 503 is Brain (or the edge in front of it) saying "busy, send it again" —
+   * the route answers `{ retryable: true }` and nothing was decided. Right after
+   * the restart the pool is contended, and the pass that followed one failed on
+   * exactly that (Deploy 43359264874: queue metrics and a keyed mutation, 503
+   * each) while the pass before the restart had passed 261/261. A verifier that
+   * reads the first busy answer as a verdict judges the database's load, not the
+   * release, so a 503 is sent again a few times; every other status is the answer.
+   */
+  let response: BoundedReply | null = null;
+  for (const waitMs of [0, 2_000, 5_000, 10_000, 20_000]) {
+    if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+    try {
+      response = await boundedRequest(`${base}${path}`, {
+        method: init.method ?? 'GET',
+        headers,
+        ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+        timeoutMs: REQUEST_TIMEOUT_MS,
+      });
+    } catch (error) {
+      throw new Error(
+        `${init.method ?? 'GET'} ${path}: ` +
+          `${error instanceof Error ? error.message : String(error)}. ` +
+          'The request was not refused; nothing answered it.',
+        { cause: error },
+      );
+    }
+    if (response.status !== 503) break;
   }
+  if (!response) throw new Error(`${init.method ?? 'GET'} ${path}: no response`);
   const body = response.body;
   let json: unknown = null;
   try {
