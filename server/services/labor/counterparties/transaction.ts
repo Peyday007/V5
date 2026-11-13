@@ -27,7 +27,8 @@
  *     against verified capacity, only with every required authority held, and
  *     never while another live hold already carries the commitment.
  *   * A transfer is planned only after a reported FAILED on the primary hold,
- *     to the best eligible candidate that is not the failed one, releasing the
+ *     to the best eligible candidate that is not the failed one and has at
+ *     least quoted — the same quote gate a first reserve passes — releasing the
  *     primary in the same plan. A hold with no report stays UNKNOWN.
  *
  * Nothing here enumerates a kind of counterparty, an industry or a geography.
@@ -157,6 +158,17 @@ function commitmentHolds(events: readonly ReservationEvent[], commitmentId: stri
   return holdsFrom(events).filter((h) => h.commitmentId === commitmentId);
 }
 
+/**
+ * The one quote gate every hold passes through, the first reserve and a
+ * transfer's alike: a fulfiller that has not reached QUOTE on the ladder is not
+ * given capacity, whatever its verified availableCapacity says. Null when the
+ * gate passes; otherwise the sentence saying why it does not.
+ */
+function notQuoted(candidate: CandidateReading): string | null {
+  if (stageIndex(candidate.stage) >= QUOTE) return null;
+  return `${candidate.counterpartyId} has reached ${candidate.stage ?? 'no stage'}; a reserve needs a verified quote first`;
+}
+
 function readReserve(input: TransactionInput, primary: CandidateReading | null): ReserveReading {
   if (!primary) return { permitted: false, counterpartyId: null, reason: 'NO_FULFILLER', missingAuthority: [], detail: 'no eligible fulfiller to reserve' };
   const live = commitmentHolds(input.events, input.commitment.id).filter((h) => h.state === 'HELD' || h.state === 'FAILED');
@@ -168,12 +180,8 @@ function readReserve(input: TransactionInput, primary: CandidateReading | null):
       detail: `${other.counterpartyId} already holds this commitment; a second hold would double-commit it`,
     };
   }
-  if (stageIndex(primary.stage) < QUOTE) {
-    return {
-      permitted: false, counterpartyId: primary.counterpartyId, reason: 'NOT_QUOTED', missingAuthority: [],
-      detail: `${primary.counterpartyId} has reached ${primary.stage ?? 'no stage'}; a reserve needs a verified quote first`,
-    };
-  }
+  const unquoted = notQuoted(primary);
+  if (unquoted) return { permitted: false, counterpartyId: primary.counterpartyId, reason: 'NOT_QUOTED', missingAuthority: [], detail: unquoted };
   const answer = reserve(input.events, {
     key,
     counterpartyId: primary.counterpartyId,
@@ -215,8 +223,19 @@ function readTransfer(input: TransactionInput, comparison: Comparison): Transfer
         : 'no hold carries the commitment yet',
     };
   }
-  const to = comparison.ranked.find((r) => r.counterpartyId !== failed.counterpartyId) ?? null;
-  if (!to) return { applicable: true, from: failed.counterpartyId, to: null, plan: null, detail: 'the primary failed and no eligible alternative remains' };
+  const others = comparison.ranked.filter((r) => r.counterpartyId !== failed.counterpartyId);
+  if (others.length === 0) return { applicable: true, from: failed.counterpartyId, to: null, plan: null, detail: 'the primary failed and no eligible alternative remains' };
+  // The transfer reserves the alternative, so it passes the same quote gate the first reserve does.
+  const to = others.find((r) => notQuoted(r) === null) ?? null;
+  if (!to) {
+    const best = others[0]!;
+    const detail = notQuoted(best)!;
+    return {
+      applicable: true, from: failed.counterpartyId, to: null,
+      plan: { action: 'REFUSED', reason: 'NOT_QUOTED', detail: `no alternative has quoted: ${detail}` },
+      detail: `the primary failed and no alternative has quoted, so nothing is transferred: ${detail}`,
+    };
+  }
   const plan = planTransfer(input.events, {
     primaryKey: failed.key,
     alternativeKey: reservationKey(input.commitment.id, to.counterpartyId),

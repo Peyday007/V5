@@ -110,6 +110,33 @@ describe('CP-31 acceptance: a sourced contractor-delivered transaction', () => {
     expect(reading.transfer.plan).toMatchObject({ action: 'REFUSED', reason: 'MISSING_AUTHORITY' });
   });
 
+  it('never transfers a failed job to an alternative that has not quoted, even with verified capacity', () => {
+    const a = party('crew-a', contracted(900, 5, 4));
+    const held = readTransaction(input([a]));
+    if (!held.reserve.permitted || !held.reserve.event) throw new Error('expected a reserve');
+    const events = [held.reserve.event, outcome(held.reserve.event, 'FAILED', '2026-11-14T00:00:00Z')];
+    for (const early of [LISTED, WILLING, CAPABLE]) {
+      const b = party('crew-b', [...early, v('availableCapacity', 9)]);
+      const reading = readTransaction(input([a, b], events, { at: '2026-11-14T01:00:00Z' }));
+      expect(reading.compared.find((r) => r.counterpartyId === 'crew-b')?.eligible).toBe(true);
+      expect(reading.transfer).toMatchObject({ applicable: true, from: 'crew-a', to: null });
+      expect(reading.transfer.plan).toMatchObject({ action: 'REFUSED', reason: 'NOT_QUOTED' });
+      expect(reading.deliverability.deliverable).toBe(false);
+    }
+  });
+
+  it('transfers past an unquoted alternative to a quoted one', () => {
+    const a = party('crew-a', contracted(900, 5, 4));
+    const held = readTransaction(input([a]));
+    if (!held.reserve.permitted || !held.reserve.event) throw new Error('expected a reserve');
+    const events = [held.reserve.event, outcome(held.reserve.event, 'FAILED', '2026-11-14T00:00:00Z')];
+    const b = party('crew-b', [...CAPABLE, v('availableCapacity', 9)]);
+    const c = party('crew-c', quoted(950, 6, 3));
+    const reading = readTransaction(input([a, b, c], events, { at: '2026-11-14T01:00:00Z' }));
+    expect(reading.transfer).toMatchObject({ applicable: true, from: 'crew-a', to: 'crew-c' });
+    expect(reading.transfer.plan?.action).toBe('TRANSFER');
+  });
+
   it('never books capacity another business already holds', () => {
     const a = party('crew-a', contracted(900, 5, 2));
     const other: ReservationEvent = {
