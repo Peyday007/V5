@@ -246,6 +246,20 @@ describe('the owner is told once per accepted plan, through the Instantly owner 
     expect(rows.map((r) => (JSON.parse(r.payload) as { status: string }).status).sort()).toEqual(['INTENT', 'SENT']);
   });
 
+  it('leaves the goal running: Brain and Hermes keep executing and improving the plan after the owner is told', async () => {
+    const { notifyPlanReady } = await import('../server/services/goals/planReady.ts');
+    const { getWorkstream } = await import('../server/repos/register.ts');
+    const before = await getWorkstream(goalId);
+    await hermesAdopts(goalId, 0);
+    expect((await notifyPlanReady(goalId, reading())).status).toBe('SENT');
+    const after = await getWorkstream(goalId);
+    // Nothing paused, archived, cancelled or rewritten: the notice only records that the owner was told.
+    expect({ ...after, updatedAt: null }).toEqual({ ...before, updatedAt: null });
+    const events = await getDb().all<{ kind: string }>(`SELECT kind FROM workstream_events WHERE workstream_id = ?`, [goalId]);
+    expect(events.map((e) => e.kind)).toEqual(['OWNER_NOTIFIED_PLAN_READY']);
+    expect(operatorBrief({ nowIso: '2026-11-13T00:00:00Z', runId: 'opr_x' })).toContain('execution and improvement continue afterwards');
+  });
+
   it('tells the owner again only when a different plan is accepted', async () => {
     const { notifyPlanReady } = await import('../server/services/goals/planReady.ts');
     await hermesAdopts(goalId, 0);
