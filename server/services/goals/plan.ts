@@ -43,6 +43,7 @@ import { readTarget, type TargetReading } from './target.ts';
 import { openGoalDiscovery } from '../cash/discovery.ts';
 import { researchGoalPaths } from './pathResearch.ts';
 import { assessReliability, type CompatibleOpening, type ReliabilityReading, type StrategyMemberFacts } from './reliability.ts';
+import { gateRecommendation, goalPolicy, type GateResult, type GoalPolicy, type ProbabilityEvidence } from './policy.ts';
 import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
 import { getScenarioModel } from '../../repos/scenario.ts';
 import { runModel, saveModel } from '../scenario/service.ts';
@@ -118,6 +119,22 @@ export interface StrategyReading {
    * not a candidate.
    */
   reliability: ReliabilityReading | null;
+  /**
+   * The goal policy's recommendation gate, applied to a strategy whose evidence
+   * chain alone would make it recommendable. Null when the chain already
+   * withholds it. A SQUEEZE goal's strategy that fails the gate is NEEDS_EVIDENCE,
+   * with the gate's reasons; a goal held to another policy is not judged on
+   * squeeze rules (`notSqueeze`).
+   */
+  policyGate: GateResult | null;
+}
+
+/** What the goal is held to, as `goalPolicy` read it from the goal's record. */
+export interface PlanPolicy {
+  kind: GoalPolicy['kind'];
+  /** False when nobody recorded a policy and the goal is held to the SQUEEZE default. */
+  recorded: boolean;
+  reliability: GoalPolicy['reliability'];
 }
 
 export interface PlanReading {
@@ -137,6 +154,8 @@ export interface PlanReading {
   /** Only from this Brain's own record of earlier recommended plans. */
   measuredChance: { estimate: number; lowerBound: number; upperBound: number; sampleSize: number; cohort: string } | null;
   target: TargetReading;
+  /** The policy the plan was judged under. */
+  policy: PlanPolicy;
   refusal: string | null;
   /**
    * The most any modelled strategy could put toward the goal if every buyer it
@@ -366,6 +385,30 @@ function strategyFacts(
   };
 }
 
+/**
+ * The evidence a plan's chance rests on, as the policy gate reads it: only this
+ * Brain's own measured outcomes are a probability. No evidence-backed stage
+ * model produces a number yet, so `modelled` is null rather than a figure made
+ * up from the links, and the sweep's coverage is carried only to be named as
+ * not a probability.
+ */
+export function planProbability(measured: PlanReading['measuredChance'], sweepCoverage: number | null): ProbabilityEvidence {
+  return {
+    measured: measured ? { lowerBound: measured.lowerBound, sampleSize: measured.sampleSize } : null,
+    modelled: null,
+    sweepCoverage,
+  };
+}
+
+/**
+ * The chance under realistic adverse conditions is supported only by real
+ * outcomes, which met whatever setbacks actually happened: the measured lower
+ * bound, or nothing.
+ */
+function measuredAdverse(measured: PlanReading['measuredChance']): { lowerBound: number } | null {
+  return measured ? { lowerBound: measured.lowerBound } : null;
+}
+
 /** This Brain's record of earlier recommended goal plans: achieved in time, out of all that ended. */
 export async function measuredPlanChance(): Promise<PlanReading['measuredChance']> {
   const rows = await getDb().all<{ kind: string }>(
@@ -391,7 +434,9 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
   if (!target) return null;
   const model = await composeGoalModel({ goal, target, now });
   const measuredChance = await measuredPlanChance();
-  const base = { goalId: goal.id, target, excluded: model.excluded, measuredChance };
+  const held = await goalPolicy({ goalId: goal.id, target: goal.target, daysLeft: target.daysLeft });
+  const policy: PlanPolicy = { kind: held.kind, recorded: held.recorded, reliability: held.reliability };
+  const base = { goalId: goal.id, target, excluded: model.excluded, measuredChance, policy };
   if (model.refusal) {
     const reading: PlanReading = {
       ...base,
@@ -555,8 +600,30 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     const askCapital =
       verdict === 'RECOMMENDABLE' && target.capitalCeilingCents === null && (cons.exposure ?? 0) > 0;
     if (askCapital) verdict = 'NEEDS_EVIDENCE';
+    const reliability = verdict !== 'NOT_VIABLE' && members.length > 0 ? assessReliability(strategyFacts(spec.key, members, target, capabilities), compatible) : null;
+    /*
+     * The goal's policy decides whether a plan the evidence chain would
+     * recommend may be recommended. Under SQUEEZE it needs a supported chance
+     * for the complete goal and must survive combined setbacks; a sweep's
+     * coverage is passed only so the gate can say it is not a probability.
+     */
+    const policyGate = verdict === 'RECOMMENDABLE' ? gateRecommendation({
+      policy: held,
+      probability: planProbability(measuredChance, sweep.goalMetShare),
+      combinedSetbacks: reliability?.combinedAfter ?? [],
+      adverseShare: measuredAdverse(measuredChance),
+    }) : null;
+    const withheld = policyGate !== null && !policyGate.recommendable;
+    if (withheld) verdict = 'NEEDS_EVIDENCE';
     let nextTest: NextTest | null = null;
-    if (askCapital) {
+    if (withheld) {
+      nextTest = {
+        link: 'CONVERSION',
+        test: `Every link is established, but this goal is held to the ${held.kind} policy and the plan does not meet it: ${policyGate!.reasons.join(' ')}`,
+        by: 'BRAIN',
+        blocker: null,
+      };
+    } else if (askCapital) {
       nextTest = {
         link: 'ECONOMICS',
         test: `This plan ties up about ${Math.round(cons.exposure!)} ${target.currency} before it pays. Say how much this goal may commit, or that it may commit none.`,
@@ -586,7 +653,8 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       sweep,
       conservativeSettled: cons.settled,
       nextTest,
-      reliability: verdict !== 'NOT_VIABLE' && members.length > 0 ? assessReliability(strategyFacts(spec.key, members, target, capabilities), compatible) : null,
+      reliability,
+      policyGate,
     });
   }
 
@@ -605,7 +673,9 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
   const verdict: PlanVerdict = chosen?.verdict ?? 'NEEDS_EVIDENCE';
   const summary =
     verdict === 'RECOMMENDABLE'
-      ? `"${chosen!.label}" is recommendable: every link is established and the cautious numbers reach the target inside the limits.`
+      ? `"${chosen!.label}" is recommendable: every link is established and the cautious numbers reach the target inside the limits${chosen!.policyGate?.notSqueeze ? `; the goal is held to ${held.kind}, not to squeeze rules` : ''}.`
+      : verdict === 'NEEDS_EVIDENCE' && chosen?.policyGate && !chosen.policyGate.recommendable
+        ? `"${chosen.label}" has every link established, but the ${held.kind} policy withholds it: ${chosen.policyGate.reasons[0]}`
       : verdict === 'NOT_VIABLE'
         ? `No modelled strategy can work under the current limits: ${chosen?.constraintsFailed[0] ?? 'every one fails a limit'}.`
         : `Not yet proven. The closest plan is "${chosen?.label}", and what it is missing first is ${CHAIN_LABEL[chosen!.nextTest!.link]}.`;
