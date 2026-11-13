@@ -33,6 +33,7 @@ import { recordedReservationEvents, withoutAuthority, type AuthorityReading, typ
 import { recordedCounterparty } from '../../labor/counterparties/ladder.ts';
 import { readTransaction, type TransactionReading } from '../../labor/counterparties/transaction.ts';
 import { commercialProviderStatus, type ProviderLine } from './status.ts';
+import { billingAlternates, messagingAlternates } from './config.ts';
 
 const EVIDENCE = 'commercialProviderStatus (server/services/cash/providers/status.ts)';
 
@@ -91,6 +92,8 @@ export interface ProviderTransactionReading {
   capability: string;
   /** True when the provider's own recorded operations stand behind facts beyond configuration. */
   evidenced?: boolean;
+  /** Which candidates' own recorded operations stand behind their facts; read per counterparty when present. */
+  evidencedIds?: string[];
   reading: TransactionReading;
 }
 
@@ -122,19 +125,31 @@ export async function readProviderTransactions(options: {
   const lines = await commercialProviderStatus(env);
   const out: ProviderTransactionReading[] = [];
   for (const line of lines) {
-    const configured = providerCounterparty(line);
-    // What the provider's own operations established (`counterpartyRecord.ts`) is read after what
-    // configuration says, so a receipt's VERIFIED replaces configuration's PENDING, never the reverse.
-    const recorded = configured ? await recordedCounterparty(configured.id) : null;
-    const candidate = configured ? { ...configured, facts: [...configured.facts, ...(recorded?.facts ?? [])] } : null;
-    const events = options.events ?? (configured ? await recordedReservationEvents([configured.id]) : []);
+    // The chosen provider and every alternate registered behind it (`register.ts`): each is a
+    // fulfiller of the same commitment, so the reading can name an alternative and plan a transfer.
+    const alternates = !line.provider ? [] : line.area === 'MESSAGING' ? messagingAlternates(env) : billingAlternates(env);
+    const configured = [line.provider, ...alternates]
+      .map((provider) => (provider ? providerCounterparty({ ...line, provider }) : null))
+      .filter((c): c is Counterparty => c !== null);
+    const candidates: Counterparty[] = [];
+    const evidencedIds: string[] = [];
+    for (const one of configured) {
+      // What the provider's own operations established (`counterpartyRecord.ts`) is read after what
+      // configuration says, so a receipt's VERIFIED replaces configuration's PENDING, never the reverse.
+      const recorded = await recordedCounterparty(one.id);
+      if (recorded) evidencedIds.push(one.id);
+      candidates.push({ ...one, facts: [...one.facts, ...(recorded?.facts ?? [])] });
+    }
+    const ids = candidates.map((c) => c.id);
+    const events = options.events ?? (ids.length > 0 ? await recordedReservationEvents(ids) : []);
     out.push({
       area: line.area,
       capability: line.capability,
-      evidenced: recorded !== null,
+      evidenced: candidates[0] ? evidencedIds.includes(candidates[0].id) : false,
+      evidencedIds,
       reading: readTransaction({
         commitment: { id: `commitment:${line.area.toLowerCase()}`, capacityUnits: 1 },
-        candidates: candidate ? [candidate] : [],
+        candidates,
         events,
         businessId: 'brain',
         window: { windowStart: at, windowEnd: at },
@@ -157,7 +172,7 @@ export async function readProviderTransactions(options: {
  */
 export function counterpartyBreaches(readings: readonly ProviderTransactionReading[]): string[] {
   const breaches: string[] = [];
-  for (const { area, capability, reading, evidenced } of readings) {
+  for (const { area, capability, reading, evidenced, evidencedIds } of readings) {
     if (reading.deliverability.deliverable && stageIndex(reading.deliverability.stage) < stageIndex('CONTRACTED')) {
       breaches.push(`${area}: reported deliverable at ${reading.deliverability.stage ?? 'no stage'}, below CONTRACTED`);
     }
@@ -166,7 +181,8 @@ export function counterpartyBreaches(readings: readonly ProviderTransactionReadi
     }
     if (reading.doubleCommitted.length > 0) breaches.push(`${area}: double-committed ${reading.doubleCommitted.join(', ')}`);
     const primary = reading.primary;
-    if (primary?.kind === 'software service' && !evidenced && stageIndex(primary.stage) > stageIndex('LISTING')) {
+    const primaryEvidenced = primary ? (evidencedIds ? evidencedIds.includes(primary.counterpartyId) : evidenced === true) : false;
+    if (primary?.kind === 'software service' && !primaryEvidenced && stageIndex(primary.stage) > stageIndex('LISTING')) {
       breaches.push(`${area}: ${primary.counterpartyId} read past LISTING from configuration alone`);
     }
   }

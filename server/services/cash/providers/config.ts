@@ -38,7 +38,17 @@ export const INSTANTLY_KEY_ENV = 'INSTANTLY_API_KEY';
 /** Optional: an existing Instantly campaign Brain adds its leads to, instead of the one it creates. */
 export const INSTANTLY_CAMPAIGN_ENV = 'BRAIN_INSTANTLY_CAMPAIGN_ID';
 
+/**
+ * Optional: further messaging providers, comma-separated, registered beside the
+ * chosen one as its alternatives (CP-31) — the fulfillers the counterparty
+ * model may transfer a refused commitment to. Each must be implemented, differ
+ * from the chosen provider and be fully configured, or it is not registered.
+ */
+export const MESSAGING_ALTERNATES_ENV = 'BRAIN_MESSAGING_ALTERNATES';
+
 export const BILLING_PROVIDER_ENV = 'BRAIN_BILLING_PROVIDER';
+/** Optional: further billing providers, as `BRAIN_MESSAGING_ALTERNATES` is for messaging. */
+export const BILLING_ALTERNATES_ENV = 'BRAIN_BILLING_ALTERNATES';
 export const STRIPE_KEY_ENV = 'STRIPE_SECRET_KEY';
 
 /** The providers this version implements. Anything else is refused by name. */
@@ -126,6 +136,39 @@ export function billingConfig(env: NodeJS.ProcessEnv = process.env): ProviderCon
     };
   }
   return { provider, configured: true, problems: [], mode };
+}
+
+/**
+ * The alternates a deployment named for one area, in its order: implemented,
+ * distinct from the chosen provider and from each other, and fully configured
+ * as that provider. Names only; no setting's value is returned. None when no
+ * provider is chosen, because an alternative is an alternative to something.
+ */
+function alternates(
+  name: string,
+  env: NodeJS.ProcessEnv,
+  chosen: ProviderConfigReading,
+  implemented: readonly string[],
+  configuredAs: (provider: string) => ProviderConfigReading,
+): string[] {
+  if (!chosen.provider) return [];
+  const out: string[] = [];
+  for (const raw of (read(name, env) ?? '').split(',')) {
+    const provider = raw.trim();
+    if (!provider || provider === chosen.provider || out.includes(provider) || !implemented.includes(provider)) continue;
+    if (configuredAs(provider).configured) out.push(provider);
+  }
+  return out;
+}
+
+export function messagingAlternates(env: NodeJS.ProcessEnv = process.env): string[] {
+  return alternates(MESSAGING_ALTERNATES_ENV, env, messagingConfig(env), MESSAGING_PROVIDERS,
+    (provider) => messagingConfig({ ...env, [MESSAGING_PROVIDER_ENV]: provider }));
+}
+
+export function billingAlternates(env: NodeJS.ProcessEnv = process.env): string[] {
+  return alternates(BILLING_ALTERNATES_ENV, env, billingConfig(env), BILLING_PROVIDERS,
+    (provider) => billingConfig({ ...env, [BILLING_PROVIDER_ENV]: provider }));
 }
 
 /** The value itself, for the one module that sends it in an Authorization header. */

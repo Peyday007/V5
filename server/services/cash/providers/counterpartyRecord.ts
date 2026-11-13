@@ -110,20 +110,62 @@ export interface RecordedAttempt {
   outcome: 'PERFORMED' | 'FAILED' | 'UNKNOWN' | null;
   facts: number;
   transferred: boolean;
+  /** The alternative the model moved the commitment to, when it did. */
+  transferredTo: string | null;
+}
+
+/**
+ * The facts a provider's confirmed receipt establishes, recorded once per
+ * change. Shared by the first attempt and by an alternative that took the
+ * commitment over, so both are evidenced the same way.
+ */
+async function recordReceiptFacts(
+  seat: ProviderSeat,
+  subject: EffectSubject,
+  receiptRef: string,
+  capacity: number | null,
+): Promise<number> {
+  const counterpartyId = providerCounterpartyId(seat);
+  const evidence = `${seat.provider} receipt ${receiptRef} for ${subject.commitmentId}`;
+  const proposed: Fact[] = [
+    { dimension: 'listing', status: 'VERIFIED', evidence, value: seat.provider },
+    { dimension: 'willingness', status: 'VERIFIED', evidence, value: null },
+    { dimension: 'availability', status: 'VERIFIED', evidence, value: null },
+    { dimension: 'scope', status: 'VERIFIED', evidence, value: seat.capability },
+    ...(capacity !== null
+      ? [{ dimension: 'availableCapacity', status: 'VERIFIED' as const, evidence: `${seat.provider} reported ${capacity} a day`, value: capacity }]
+      : []),
+  ];
+  const changed = await changedFacts(counterpartyId, proposed);
+  if (changed.length === 0) return 0;
+  return recordCounterpartyFacts({
+    projectId: subject.projectId,
+    counterparty: { id: counterpartyId, kind: 'software service', geography: null, humanOperator: false },
+    facts: changed,
+    actorRef: BRAIN,
+  });
 }
 
 /**
  * Record one effect's commitment around the provider's own answer. Exported so
  * the wrapper and its tests drive the same code; `send` is the provider call.
+ *
+ * `alternativeIds` are the other counterparties the deployment registered for
+ * the same commitment (`fulfillingCounterparties`). They are the candidates the
+ * model's transfer chooses among after a refusal — the failed provider is
+ * never its own alternative — and, on a retry, any hold an earlier transfer
+ * left on one of them is released with the earlier attempts.
  */
 export async function recordProviderAttempt(
   seat: ProviderSeat,
   request: EffectRequest,
   send: () => Promise<SendOutcome>,
   now: () => string = () => new Date().toISOString(),
+  alternativeIds: readonly string[] = [],
 ): Promise<{ outcome: SendOutcome; recorded: RecordedAttempt }> {
   const counterpartyId = providerCounterpartyId(seat);
-  const recorded: RecordedAttempt = { counterpartyId, subject: null, hold: null, outcome: null, facts: 0, transferred: false };
+  const alternatives = [...new Set(alternativeIds)].filter((id) => id !== counterpartyId);
+  const recorded: RecordedAttempt = { counterpartyId, subject: null, hold: null, outcome: null, facts: 0, transferred: false, transferredTo: null };
   let key: string | null = null;
   let capacity: number | null = null;
   try {
@@ -143,6 +185,13 @@ export async function recordProviderAttempt(
           at,
           actorRef: BRAIN,
         });
+      }
+      if (subject.attempt > 0) {
+        // A transfer holds the alternative under the commitment's own key (`reservationKey`), so a
+        // retry releases that hold too; an absent or settled one is refused by the recorder, harmlessly.
+        for (const alternative of alternatives) {
+          await recordHoldOutcome({ counterpartyId: alternative, key: reservationKey(subject.commitmentId, alternative), kind: 'RELEASED', at, actorRef: BRAIN });
+        }
       }
       recorded.hold = await recordReservation(
         {
@@ -172,25 +221,7 @@ export async function recordProviderAttempt(
       const at = now();
       const held = recorded.hold?.ok === true && key !== null;
       if (outcome.kind === 'CONFIRMED') {
-        const evidence = `${seat.provider} receipt ${outcome.receiptRef} for ${subject.commitmentId}`;
-        const proposed: Fact[] = [
-          { dimension: 'listing', status: 'VERIFIED', evidence, value: seat.provider },
-          { dimension: 'willingness', status: 'VERIFIED', evidence, value: null },
-          { dimension: 'availability', status: 'VERIFIED', evidence, value: null },
-          { dimension: 'scope', status: 'VERIFIED', evidence, value: seat.capability },
-          ...(capacity !== null
-            ? [{ dimension: 'availableCapacity', status: 'VERIFIED' as const, evidence: `${seat.provider} reported ${capacity} a day`, value: capacity }]
-            : []),
-        ];
-        const changed = await changedFacts(counterpartyId, proposed);
-        if (changed.length > 0) {
-          recorded.facts = await recordCounterpartyFacts({
-            projectId: subject.projectId,
-            counterparty: { id: counterpartyId, kind: 'software service', geography: null, humanOperator: false },
-            facts: changed,
-            actorRef: BRAIN,
-          });
-        }
+        recorded.facts = await recordReceiptFacts(seat, subject, outcome.receiptRef, capacity);
       }
       if (held && outcome.kind !== 'UNCERTAIN') {
         const kind = outcome.kind === 'CONFIRMED' ? 'PERFORMED' : 'FAILED';
@@ -198,10 +229,12 @@ export async function recordProviderAttempt(
         if (done.recorded) recorded.outcome = kind;
         if (kind === 'FAILED') {
           // The model's own transfer: to an alternative with evidenced capacity, or nothing at all.
+          // The candidates are every fulfiller registered for this commitment, the failed one among
+          // them so the model ranks it, and never picks it (`readTransfer` excludes the failed hold's party).
           const reading = await transferRecordedTransaction(
             {
               commitment: { id: subject.commitmentId, capacityUnits: 1 },
-              candidateIds: [counterpartyId],
+              candidateIds: [counterpartyId, ...alternatives],
               businessId: subject.projectId,
               window: dayWindow(at),
               action: seat.action,
@@ -211,6 +244,7 @@ export async function recordProviderAttempt(
             BRAIN,
           );
           recorded.transferred = reading.transfer.plan?.action === 'TRANSFER';
+          recorded.transferredTo = recorded.transferred ? reading.transfer.to : null;
         }
       } else if (held) {
         recorded.outcome = 'UNKNOWN';
@@ -239,4 +273,118 @@ export function recordingCounterparty(adapter: EffectAdapter, seat: ProviderSeat
       return (await recordProviderAttempt(seat, request, () => adapter.send(request))).outcome;
     },
   };
+}
+
+/** One registered provider for a commitment: the seat its sends are recorded under, and its adapter. */
+export interface ProviderFulfiller {
+  seat: ProviderSeat;
+  adapter: EffectAdapter;
+}
+
+/** Whether a fulfiller can carry this request at all: its own validation, which sends nothing. */
+function accepts(adapter: EffectAdapter, payload: Record<string, unknown>): boolean {
+  try {
+    adapter.validate(payload);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The commitment carried by the alternative the model transferred it to: the
+ * alternative's own send, and its answer recorded on the hold the transfer
+ * took (`reservationKey(commitment, alternative)`). An uncertain answer leaves
+ * that hold HELD (invariant 26); the facts a receipt establishes are recorded
+ * exactly as for a first attempt.
+ */
+async function carryTransferred(
+  alternative: ProviderFulfiller,
+  subject: EffectSubject,
+  request: EffectRequest,
+  now: () => string,
+): Promise<SendOutcome> {
+  const counterpartyId = providerCounterpartyId(alternative.seat);
+  const capacity = await alternative.seat.capacityPerDay().catch(() => null);
+  const outcome = await alternative.adapter.send(request);
+  try {
+    if (outcome.kind === 'CONFIRMED') await recordReceiptFacts(alternative.seat, subject, outcome.receiptRef, capacity);
+    if (outcome.kind !== 'UNCERTAIN') {
+      await recordHoldOutcome({
+        counterpartyId,
+        key: reservationKey(subject.commitmentId, counterpartyId),
+        kind: outcome.kind === 'CONFIRMED' ? 'PERFORMED' : 'FAILED',
+        at: now(),
+        actorRef: BRAIN,
+      });
+    }
+  } catch (error) {
+    reportRecordingFailure(alternative.seat, 'transferred outcome', error);
+  }
+  return outcome;
+}
+
+/**
+ * Every fulfiller a deployment registered for one commitment, as the one
+ * adapter its operation namespace resolves to (`effects.ts` `adapterFor`).
+ *
+ * The first is the deployment's chosen provider and is sent to first; the rest
+ * are its alternatives. A definite refusal from the first is offered to the
+ * model's transfer with every fulfiller that can carry the request as a
+ * candidate, and when the model moves the commitment — only to an alternative
+ * that has quoted, has evidenced capacity, and only under the live grant,
+ * releasing the failed hold in the same write — the alternative carries it and
+ * its answer is the effect's answer. No transfer, no second send: an uncertain
+ * first answer, a refusal the model would not move, or an alternative that
+ * cannot carry the payload returns the first provider's answer unchanged, so
+ * nothing is ever sent twice on an unknown (invariant 26).
+ *
+ * The fulfillers must share one namespace and one effect class, since the
+ * engine treats the composite as one adapter of that class; a reconcilable
+ * composite answers ABSENT only when every fulfiller does.
+ */
+export function fulfillingCounterparties(
+  fulfillers: readonly ProviderFulfiller[],
+  now: () => string = () => new Date().toISOString(),
+): EffectAdapter & { [RECORDS_COUNTERPARTY]: string } {
+  const [primary, ...alternatives] = fulfillers;
+  if (!primary) throw new Error('fulfillingCounterparties needs at least one fulfiller');
+  if (alternatives.length === 0) return recordingCounterparty(primary.adapter, primary.seat);
+  for (const one of alternatives) {
+    if (one.adapter.namespace !== primary.adapter.namespace || one.adapter.effectClass !== primary.adapter.effectClass) {
+      throw new Error(`${one.adapter.name} cannot be an alternative to ${primary.adapter.name}: it serves another namespace or effect class`);
+    }
+  }
+  const limits = fulfillers.map((f) => f.adapter.providerKeyLimit).filter((n): n is number => typeof n === 'number');
+  const composite: EffectAdapter & { [RECORDS_COUNTERPARTY]: string } = {
+    ...primary.adapter,
+    ...(limits.length > 0 ? { providerKeyLimit: Math.min(...limits) } : {}),
+    [RECORDS_COUNTERPARTY]: providerCounterpartyId(primary.seat),
+    async send(request: EffectRequest): Promise<SendOutcome> {
+      const able = alternatives.filter((one) => accepts(one.adapter, request.payload));
+      const first = await recordProviderAttempt(
+        primary.seat,
+        request,
+        () => primary.adapter.send(request),
+        now,
+        able.map((one) => providerCounterpartyId(one.seat)),
+      );
+      const to = first.recorded.transferredTo;
+      const alternative = to ? able.find((one) => providerCounterpartyId(one.seat) === to) : undefined;
+      if (!alternative || !first.recorded.subject) return first.outcome;
+      return carryTransferred(alternative, first.recorded.subject, request, now);
+    },
+  };
+  if (primary.adapter.reconcile) {
+    composite.reconcile = async (businessId: string) => {
+      let inconclusive: string | null = null;
+      for (const one of fulfillers) {
+        const answer = one.adapter.reconcile ? await one.adapter.reconcile(businessId) : { kind: 'INCONCLUSIVE' as const, reason: `${one.adapter.name} cannot be asked` };
+        if (answer.kind === 'FOUND') return answer;
+        if (answer.kind === 'INCONCLUSIVE') inconclusive ??= answer.reason;
+      }
+      return inconclusive ? { kind: 'INCONCLUSIVE', reason: inconclusive } : { kind: 'ABSENT' };
+    };
+  }
+  return composite;
 }
