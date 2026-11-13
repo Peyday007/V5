@@ -28,7 +28,10 @@ import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import { questionKey } from '../cash/conditions.ts';
 import { diveOwnsItsQuestions } from '../cash/operate.ts';
 import { parseBlockerKey } from '../../domain/types.ts';
-import { goalLimitsOf, screenOpening } from '../economy/possibilities/opening.ts';
+import { goalLimitsOf, openingRequirements, screenOpening } from '../economy/possibilities/opening.ts';
+import { researchOrder } from '../economy/possibilities/screen.ts';
+import { keepPossibility, linkPossibilities, possibilityGraphOf } from '../../repos/economy.ts';
+import { getWorkstream } from '../../repos/register.ts';
 import type { ChainLink, PlanReading } from './plan.ts';
 
 /**
@@ -108,13 +111,14 @@ export async function researchGoalPaths(input: {
   const potential = (one: (typeof considered)[number]) => Math.max(one.supportedReach, one.potentialReach ?? 0);
   // Biggest possible contribution first, so research goes where an answer can
   // change what Brain pursues; an award only after ways that pay in steps.
-  const order = [...considered].sort(
+  const ranked = [...considered].sort(
     (a, b) =>
       Number(a.competitiveAward) - Number(b.competitiveAward) ||
       potential(b) - potential(a) ||
       b.supportedReach - a.supportedReach ||
       a.missing.length - b.missing.length,
   );
+  const order = await byPossibilityReach(ranked, input.reading.goalId, input.projectId, note);
   const limits = goalLimitsOf(input.reading.target);
   let openings = 0;
   for (const one of order) {
@@ -152,17 +156,24 @@ export async function researchGoalPaths(input: {
      * judge yet (a fact is not stated) is held, and its research continues,
      * because the missing fact is exactly what path research asks.
      */
-    const screen = screenOpening(
-      {
-        currency: input.reading.target.currency,
-        peakFundingCents: opportunity.peakFundingCents,
-        requiredCapital: await cardFact(opportunity.id, 'requiredCapital'),
-        timeToFirstCash: await cardFact(opportunity.id, 'timeToFirstCash'),
-      },
-      limits,
-    );
+    const facts = {
+      currency: input.reading.target.currency,
+      peakFundingCents: opportunity.peakFundingCents,
+      requiredCapital: await cardFact(opportunity.id, 'requiredCapital'),
+      timeToFirstCash: await cardFact(opportunity.id, 'timeToFirstCash'),
+    };
+    const screen = screenOpening(facts, limits);
     if (screen.verdict === 'REJECT') {
       screenedOut.push(opportunity.id);
+      // An opening that does not fit this goal is kept for later, with why, in the goal owner's own store.
+      const owner = await goalOwner(input.reading.goalId);
+      if (owner) {
+        await keepPossibility({
+          projectId: input.projectId, ownerUserId: owner, kind: 'OPPORTUNITY', title: opportunity.title,
+          requirements: openingRequirements(facts),
+          sourceRef: opportunity.id, parkedReason: screen.reasons.join(' '),
+        });
+      }
       note(`${one.title.slice(0, 60)}: screened out in code — ${screen.reasons.join(' ')}`);
       continue;
     }
@@ -250,6 +261,36 @@ export async function researchGoalPaths(input: {
 }
 
 /**
+ * The possibility graph decides which openings research reaches first. An
+ * opening whose kept possibility leads on to others (ENABLES, UNLOCKS_AFTER,
+ * SUPPLIES) is researched before any opening that leads nowhere, and a
+ * zero-reach opening waits until nothing stronger is left — it is not dropped.
+ * Equal reach keeps the order above. The graph read is the goal owner's own,
+ * so another person's possibilities never steer this goal's research; a goal
+ * with no owner, or an owner with no graph, keeps the order unchanged.
+ */
+async function byPossibilityReach<T extends { opportunityId: string; title: string }>(
+  ranked: T[], goalId: string | undefined, projectId: string, note: (line: string) => void,
+): Promise<T[]> {
+  if (!goalId || ranked.length < 2) return ranked;
+  const owner = await goalOwner(goalId);
+  if (!owner) return ranked;
+  await recordOpeningDependencies(ranked, projectId, owner);
+  const { idBySource, edges } = await possibilityGraphOf(projectId, owner);
+  if (edges.length === 0) return ranked;
+  // An opening with no kept possibility stands for itself: it has no edges, so zero reach.
+  const keyOf = (one: T) => idBySource.get(one.opportunityId) ?? `opening:${one.opportunityId}`;
+  const byKey = new Map(ranked.map((one) => [keyOf(one), one]));
+  const ordered = researchOrder(ranked.map((one) => ({ id: keyOf(one) })), edges)
+    .map((key) => byKey.get(key))
+    .filter((one): one is T => !!one);
+  if (ordered.map((one) => one.opportunityId).join() !== ranked.map((one) => one.opportunityId).join()) {
+    note(`possibility reach reordered research: ${ordered.map((one) => one.title.slice(0, 30)).join(' > ')}`);
+  }
+  return ordered;
+}
+
+/**
  * The same question, asked a different way. The second asking names what went
  * wrong and turns to other kinds of source; the third answers from comparable
  * published cases. Never the identical search twice.
@@ -292,4 +333,37 @@ async function endedWithoutAnswer(candidateId: string | null, now: Date): Promis
   if (candidate.state !== 'PARKED' && candidate.state !== 'REJECTED') return null;
   if (now.getTime() - Date.parse(candidate.updatedAt) < REASK_AFTER_MS) return null;
   return { reason: candidate.reason ?? `the question was ${candidate.state.toLowerCase()} before any research ran` };
+}
+
+/** Who owns a goal's possibilities: its owner, else whoever created it; null when neither is recorded. */
+async function goalOwner(goalId: string | undefined): Promise<string | null> {
+  if (!goalId) return null;
+  const goal = await getWorkstream(goalId);
+  return goal?.ownerUserId ?? goal?.createdByUserId ?? null;
+}
+
+/**
+ * The edges the reach ordering reads, from what the openings themselves state.
+ * An opening that depends on another (`dependsOnId`) is an arrangement the
+ * other one enables, so both are kept in the goal owner's possibility store —
+ * keyed by the opening they came from, so a second pass finds the same rows —
+ * and linked ENABLES from the dependency to the dependent. Only openings of
+ * this project are linked; a dependency in another project is never read.
+ */
+async function recordOpeningDependencies(
+  ranked: Array<{ opportunityId: string }>, projectId: string, owner: string,
+): Promise<void> {
+  const keep = async (o: NonNullable<Awaited<ReturnType<typeof getOpportunity>>>) =>
+    (await keepPossibility({
+      projectId, ownerUserId: owner, kind: 'OPPORTUNITY', title: o.title,
+      requirements: openingRequirements({ currency: o.currency, peakFundingCents: o.peakFundingCents, requiredCapital: null, timeToFirstCash: null }),
+      sourceRef: o.id,
+    })).possibility.id;
+  for (const one of ranked) {
+    const o = await getOpportunity(one.opportunityId);
+    if (!o?.dependsOnId || o.projectId !== projectId) continue;
+    const dependency = await getOpportunity(o.dependsOnId);
+    if (!dependency || dependency.projectId !== projectId) continue;
+    await linkPossibilities({ projectId, fromId: await keep(dependency), toId: await keep(o), relation: 'ENABLES' });
+  }
 }

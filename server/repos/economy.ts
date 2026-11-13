@@ -197,6 +197,39 @@ export async function linkPossibilities(input: {
   };
 }
 
+/**
+ * One owner's possibility graph in a project, as a research dispatcher needs
+ * it: which possibility stands for each source row it was kept from, and every
+ * edge between that owner's possibilities. Read by the owner index and the
+ * edge identity index; another owner's rows and edges are never returned, and
+ * an edge is returned only when both its ends are this owner's.
+ */
+export async function possibilityGraphOf(
+  projectId: string, ownerUserId: string,
+): Promise<{ idBySource: Map<string, string>; edges: PossibilityEdge[] }> {
+  const sources = await getDb().all<Row>(
+    `SELECT id, source_ref FROM possibilities
+      WHERE project_id = ? AND owner_user_id = ? AND source_ref IS NOT NULL`,
+    [projectId, ownerUserId],
+  );
+  const rows = await getDb().all<Row>(
+    `SELECT e.* FROM possibility_edges e
+       JOIN possibilities f ON f.id = e.from_id
+       JOIN possibilities t ON t.id = e.to_id
+      WHERE e.project_id = ? AND f.project_id = ? AND f.owner_user_id = ?
+        AND t.project_id = ? AND t.owner_user_id = ?
+      ORDER BY e.created_at, e.id`,
+    [projectId, projectId, ownerUserId, projectId, ownerUserId],
+  );
+  return {
+    idBySource: new Map(sources.map((r) => [s(r['source_ref']), s(r['id'])])),
+    edges: rows.map((r) => ({
+      id: s(r['id']), projectId: s(r['project_id']), fromId: s(r['from_id']), toId: s(r['to_id']),
+      relation: s(r['relation']) as PossibilityRelation, createdAt: s(r['created_at']),
+    })),
+  };
+}
+
 function mapCondition(r: Row): PossibilityCondition {
   return {
     id: s(r['id']), projectId: s(r['project_id']), possibilityId: s(r['possibility_id']),
