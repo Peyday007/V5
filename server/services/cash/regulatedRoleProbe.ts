@@ -15,7 +15,8 @@
 import { getDb } from '../../db/database.ts';
 import { listCapitalForProject, listConstraintsForProject } from '../../repos/industry.ts';
 import { registerProbe, type ProbeResult } from '../factory/program/probes.ts';
-import { assessRole, OPENING_ROLE_COLUMNS, openingRoleText, roleRecordFromRows, type OpeningRoleRow, type RoleAssessment } from './exclusions.ts';
+import { assessRole, OPENING_ROLE_COLUMNS, openingRoleText, positionNeedKey, roleRecordFromRows, type OpeningRoleRow, type RoleAssessment } from './exclusions.ts';
+import { needForKey } from '../../repos/cashPortfolio.ts';
 
 export const REGULATED_ROLE_PROBE = 'r01.com-13-5';
 
@@ -62,6 +63,10 @@ export async function regulatedRolesAssessedFromRows(): Promise<ProbeResult> {
       const compliant = assessment.position === 'COMPLIANT' || assessment.position === 'COMPLIANT_VIA_PARTNER';
       if (assessment.countEconomics !== compliant) {
         return { ok: false, detail: `opening ${id}: economics counted=${assessment.countEconomics} with position ${assessment.position}` };
+      }
+      // Held back is not the end: a regulated role without a compliant position must have been sent to find one.
+      if (assessment.regulated && !assessment.countEconomics && !(await needForKey(projectId, positionNeedKey(id)))) {
+        return { ok: false, detail: `opening ${id} is a regulated role held back as ${assessment.position}, and nothing was raised to find it a compliant position` };
       }
       if (assessment.regulated) regulated.push({ id, assessment });
     }

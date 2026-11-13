@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
-import { createOpportunity } from '../server/repos/cashPortfolio.ts';
+import { createOpportunity, needForKey } from '../server/repos/cashPortfolio.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { getDb } from '../server/db/database.ts';
 import {
@@ -10,7 +10,10 @@ import {
   assessRole,
   countRoleEconomics,
   EXCLUSION_CLASSES,
+  goalExclusions,
   openingPerforms,
+  positionNeedKey,
+  seekCompliantPositions,
   roleRecordFromRows,
 } from '../server/services/cash/exclusions.ts';
 import { REGULATED_ROLE_PROBE, regulatedRolesAssessedFromRows } from '../server/services/cash/regulatedRoleProbe.ts';
@@ -113,6 +116,8 @@ describe('COM-13-5 repair: probe r01.com-13-5 enumerates cash_opportunities', ()
   it('passes on a regulated opening with no capital_structures rows', async () => {
     const id = await opening('Insurance referral partnership: earn commissions on policies sold to homeowners we refer');
     expect(await capitalRowsFor(id)).toBe(0);
+    // A held-back role must have been sent to find a compliant position before the probe accepts it.
+    await seekCompliantPositions(projectId);
     const r = await regulatedRolesAssessedFromRows();
     expect(r.ok).toBe(true);
     expect(r.detail).toContain('none excluded');
@@ -123,5 +128,43 @@ describe('COM-13-5 repair: probe r01.com-13-5 enumerates cash_opportunities', ()
     const r = await regulatedRolesAssessedFromRows();
     expect(r.ok).toBe(false);
     expect(r.detail).toContain('none performs a regulated activity');
+  });
+});
+
+describe('COM-13-5 repair: a held-back regulated role is sent to find a compliant position', () => {
+  it('raises one need per held-back regulated opening, naming the licensed-partner route, and none for anything else', async () => {
+    const regulated = await opening('Earn a referral fee for sending borrowers to a mortgage lender', { industry: 'mortgage' });
+    const plain = await opening('Photo prints for a cafe wall');
+    const sought = await seekCompliantPositions(projectId);
+    expect(sought.map((one) => one.opportunityId)).toEqual([regulated]);
+    expect(sought[0]).toMatchObject({ position: 'UNKNOWN', refused: null });
+    const need = (await needForKey(projectId, positionNeedKey(regulated)))!;
+    expect(need.opportunityId).toBe(regulated);
+    expect(need.state).toBe('OPEN');
+    expect(need.recommendedPath).toMatch(/authorized licensed partner/);
+    expect(need.nextStep).toMatch(/licensed partners authorized/);
+    expect(need.completionCondition).toMatch(/compliant position/);
+    expect(await needForKey(projectId, positionNeedKey(plain))).toBeNull();
+    // A loop raises it once.
+    const again = await seekCompliantPositions(projectId);
+    expect(again[0]!.needId).toBe(need.id);
+    const rows = await getDb().all<{ n: number }>('SELECT COUNT(*) AS n FROM cash_needs WHERE project_id = ? AND request_key = ?', [projectId, positionNeedKey(regulated)]);
+    expect(Number(rows[0]!.n)).toBe(1);
+  });
+
+  it('a goal read of the project sends its held-back roles to find a position, and excludes nothing for it', async () => {
+    const id = await opening('Insurance referral partnership: earn commissions on policies sold to homeowners we refer');
+    const classes = await goalExclusions({ title: 'Make $10K', intent: 'cash', outcome: null, target: { projectId } });
+    expect(classes).toEqual([]);
+    expect(await needForKey(projectId, positionNeedKey(id))).not.toBeNull();
+  });
+
+  it('the probe refuses a held-back regulated role nobody sent to find a position', async () => {
+    const id = await opening('Insurance referral partnership: earn commissions on policies sold to homeowners we refer');
+    const before = await regulatedRolesAssessedFromRows();
+    expect(before.ok).toBe(false);
+    expect(before.detail).toContain(`opening ${id} is a regulated role held back as UNKNOWN`);
+    await seekCompliantPositions(projectId);
+    expect((await regulatedRolesAssessedFromRows()).ok).toBe(true);
   });
 });

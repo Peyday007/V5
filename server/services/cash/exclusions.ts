@@ -18,7 +18,7 @@
 import { clauseBefore, NEGATORS } from '../russell/negation.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { getDb } from '../../db/database.ts';
-import { listCapitalFor, listConstraintsForProject } from '../../repos/industry.ts';
+import { listCapitalFor, listCapitalForProject, listConstraintsForProject } from '../../repos/industry.ts';
 import type { CapitalStructure, OpportunityConstraint } from '../../domain/types.ts';
 // Registers the production probe r01.com-13-5 wherever the role reader is loaded; the probe imports this module back, which is safe because it only uses it at call time.
 import './regulatedRoleProbe.ts';
@@ -104,6 +104,10 @@ export function exclusionSentence(classes: readonly ExclusionClass[]): string {
 export async function goalExclusions(goal: { title: string; intent: string; outcome: string | null; target: { projectId: string; resources?: string | null } | null }): Promise<ExclusionClass[]> {
   const parts = [goal.title, goal.intent, goal.outcome ?? '', goal.target?.resources ?? ''];
   if (goal.target?.projectId) {
+    // A goal read of a project is where its openings' economics are about to be weighed: every regulated
+    // role held back for want of a position is sent to find one first (S-0106), and a failure to raise it
+    // never changes what the goal excludes.
+    await seekCompliantPositions(goal.target.projectId).catch(() => undefined);
     const mode = await getCashMode(goal.target.projectId);
     // The whole stored objective: the canonical mandate excludes nothing, and the operator's additions follow it.
     if (mode) parts.push(mode.objective);
@@ -441,4 +445,90 @@ export async function assessOpportunityRole(input: {
   const own = constraints.filter((c) => c.opportunityId === input.opportunityId);
   const ownCapital = capital.filter((c) => c.projectId === input.projectId);
   return assessRole(roleRecordFromRows(ownCapital, own, input.attested, row ? openingRoleText(row) : null));
+}
+
+/*
+ * Finding a compliant position (S-0106: "Brain should find compliant positions (including authorized
+ * licensed partners) before counting their economics").
+ *
+ * A held-back assessment is not an end state. Every regulated opening whose position is NEEDS_POSITION
+ * or UNKNOWN becomes one cash need (services/cash/needs.ts, the existing owner of "a missing capability
+ * with somewhere to go"), keyed per opening so a loop raises it once: what the role performs, what it
+ * lacks or what nobody stated, the way forward through an authorized licensed partner, and the record
+ * that settles it — the same rows `roleRecordFromRows` reads, so the answer is what lets the economics
+ * count. It never excludes anything and never counts anything itself.
+ */
+
+/** The request key of the need that seeks one opening's compliant position. */
+export const positionNeedKey = (opportunityId: string): string => `regulated-position:${opportunityId}`;
+
+export interface PositionSought {
+  opportunityId: string;
+  position: RolePosition;
+  needId: string | null;
+  /** Why no need could be raised, when one could not. */
+  refused: string | null;
+}
+
+function positionNeed(title: string, a: RoleAssessment): { whyItMatters: string; recommendedPath: string; nextStep: string } {
+  const performs = a.activities.map((one) => one.toLowerCase().replace(/_/g, ' ')).join(', ');
+  const lacking = a.missing.length > 0 ? a.missing.join(', ') : null;
+  const unstated = a.unknown.length > 0 ? a.unknown.join(', ') : null;
+  return {
+    whyItMatters:
+      `"${title.slice(0, 120)}" performs a regulated activity (${performs}). Its economics are not counted until a ` +
+      `compliant position exists${lacking ? `; the record says it lacks ${lacking}` : ''}${unstated ? `; nobody has stated ${unstated}` : ''}.`,
+    recommendedPath:
+      'Establish what this role needs for its product and location, then hold it directly or operate through an ' +
+      'authorized licensed partner under a written contract. Changing the role\'s label is not a position: it is ' +
+      'judged by what it performs.',
+    nextStep: unstated
+      ? `Research the ${unstated} requirements for this activity where the buyer is, and name licensed partners authorized to perform it.`
+      : `Name an authorized licensed partner who holds ${lacking ?? 'what the role lacks'} and agree a contract with them.`,
+  };
+}
+
+/**
+ * Send every regulated opening of a project whose economics are held back to find a compliant position.
+ * One need per opening (idempotent by key); an opening that already has a compliant position, or that
+ * performs nothing regulated, raises none.
+ */
+export async function seekCompliantPositions(projectId: string): Promise<PositionSought[]> {
+  const [rows, capital, constraints] = await Promise.all([
+    getDb().all<OpeningRoleRow>(`SELECT ${OPENING_ROLE_COLUMNS} FROM cash_opportunities WHERE project_id = ?`, [projectId]),
+    listCapitalForProject(projectId),
+    listConstraintsForProject(projectId),
+  ]);
+  const out: PositionSought[] = [];
+  if (rows.length === 0) return out;
+  // Loaded only when there is something to raise: needs.ts sits above this module in the cash graph.
+  const { raiseNeed } = await import('./needs.ts');
+  for (const row of rows) {
+    const a = assessRole(
+      roleRecordFromRows(
+        capital.filter((c) => c.opportunityId === row.id),
+        constraints.filter((c) => c.opportunityId === row.id),
+        {},
+        openingRoleText(row),
+      ),
+    );
+    if (!a.regulated || a.countEconomics) continue;
+    const text = positionNeed(row.title, a);
+    const raised = await raiseNeed({
+      projectId,
+      opportunityId: row.id,
+      actorRef: 'brain:regulated-role',
+      blockedAction: `count the economics of "${row.title.slice(0, 120)}"`,
+      whyItMatters: text.whyItMatters,
+      recommendedPath: text.recommendedPath,
+      setupEffort: 'research into the activity\'s requirements, then an agreement with a licensed partner',
+      nextStep: text.nextStep,
+      completionCondition:
+        'The opening\'s record shows a compliant position: every requirement held, or a RESTRUCTURING capital row ' +
+        'whose partner mechanism answers its licence requirement with the partner contract in place.',
+      requestKey: positionNeedKey(row.id),
+    });
+    out.push({ opportunityId: row.id, position: a.position, needId: raised.ok ? raised.value.id : null, refused: raised.ok ? null : raised.reason });
+  }
+  return out;
 }
