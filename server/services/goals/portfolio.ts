@@ -39,6 +39,29 @@ import { makeRng } from '../scenario/random.ts';
 import { cachedCashKnowledge, type CashKnowledge } from '../quant/knowledge.ts';
 import { acquireMarketHistory, historyEvidence, type MarketHistory } from '../quant/history.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
+import {
+  addAction,
+  addMoneyRoute,
+  addNode,
+  addRelation,
+  createGraph,
+  discoverMissing,
+  expandToFixpoint,
+  fullAccount,
+  linkGraphs,
+  makeFigure,
+  passVolume,
+  readMoneyRoute,
+  recordClaim,
+  unknownFigure,
+  type ChainReading,
+  type ChainStage,
+  type CausalGraph,
+  type Figure,
+  type FigureStatus,
+  type MoneyRouteReading,
+  type SharedDependency,
+} from '../quant/graph.ts';
 
 export const PORTFOLIO_WORLDS = 2_000;
 /** The shares of the shared outreach an opening may be given. */
@@ -140,6 +163,12 @@ export interface GoalPortfolio {
    * actual prices and spreads, their sources, and what is still to research.
    */
   marketHistory?: MarketHistory[];
+  /**
+   * The causal graph of the combination, built from this Brain's own rows
+   * (CAUSAL-14-1..4): one graph per opening in it, the route to its money, the
+   * volume passed through every bottleneck, and what is shared between them.
+   */
+  causal?: PortfolioCausal | null;
   /** What keeps the reading from being a probability, or the target from being reached. */
   missing: string[];
   searched: number;
@@ -553,8 +582,148 @@ export function evaluateGoalPortfolio(input: {
     },
     assurance,
     marketHistory: [...histories.values()],
+    causal: causalOf(
+      input.openings.filter((one) => (memberIds.size > 0 ? memberIds.has(one.opportunity.id) : demand.some((d) => d.opportunityId === one.opportunity.id && !d.refused))),
+      demand,
+    ),
     safeguards: result.safeguardEffects ?? [],
     missing,
     searched: result.searched,
+  };
+}
+
+/* ------------------------------------------------------------------------- */
+/* The causal graph, from Brain's own rows (CAUSAL-14-1..4)                  */
+/* ------------------------------------------------------------------------- */
+
+export interface OpeningCausal {
+  opportunityId: string;
+  title: string;
+  nodes: number;
+  relations: number;
+  actions: number;
+  /** Who pays, for what, under which terms, through which channel, and what is free to use (per deal, minor units). */
+  route: MoneyRouteReading;
+  /** Contacts passed through reply, close and the deals the market takes; revenue is read only from its output. */
+  chain: ChainReading;
+  /** Variables the graph implied and Brain added; each names what implied it. */
+  discovered: string[];
+  /** Inputs nobody has stated, shown as unknown rather than filled. */
+  unknowns: string[];
+}
+
+export interface PortfolioCausal {
+  members: OpeningCausal[];
+  /** One party or resource more than one opening depends on: a failure of it is every dependent's failure. */
+  shared: SharedDependency[];
+  /** The whole portfolio graph, unsummarised, for the owner who asks for the complete account. */
+  account: ReturnType<typeof fullAccount> | null;
+}
+
+const PROVENANCE_STATUS: Record<string, FigureStatus> = { EVIDENCE: 'EVIDENCED', HISTORICAL: 'OBSERVED', ASSUMPTION: 'ASSUMED', HYPOTHETICAL: 'ASSUMED' };
+
+/** A model input as a figure: its lineage is the input's own source, and one with none is unknown, never a number. */
+function figureOf(input: ModelInput, meaning: string, unit: string, scale = 1): Figure {
+  const status = PROVENANCE_STATUS[input.provenance];
+  const source = input.source ? `${input.source.kind}:${input.source.ref}` : input.note.trim() || null;
+  if (!status || input.value === null || !source) return unknownFigure(meaning, unit, ['the input is stated with a source']);
+  const bounded = status !== 'ASSUMED' && input.low !== null && input.high !== null && input.low <= input.value && input.value <= input.high;
+  const made = makeFigure({
+    meaning, unit, value: input.value * scale, status, source,
+    bounds: bounded ? { low: (input.low as number) * scale, high: (input.high as number) * scale } : null,
+    invalidatedBy: ['a newer outcome or research claim on this opening'],
+  });
+  return made.ok ? made.figure : unknownFigure(meaning, unit);
+}
+
+/** One opening's graph, from its modelled inputs. Nothing here comes from a caller. */
+export function causalGraphOf(one: ModelledOpportunity): CausalGraph {
+  const o = one.opportunity;
+  const g = createGraph(`opening:${o.id}`);
+  const ok = (r: { ok: boolean }): void => void r;
+  const node = (id: string, type: string, label: string, attributes: Record<string, string | number | boolean | null> = {}): void => ok(addNode(g, { id, type, label, attributes }));
+  node('offer', 'offer', o.title, { mechanism: String(o.mechanism), repeatable: one.repeatable });
+  node('payer', 'payer', `the buyer of ${o.title}`);
+  node('channel', 'channel', one.repeatable ? 'shared outreach' : 'the named buyer');
+  node('payment', 'payment', 'cleared payment', { daysToCash: one.daysToCash.value });
+  node('volume', 'capacity_limit', 'deals the market takes', { deals: one.volume.value });
+  node('no-sale', 'failure_mode', 'the buyer does not choose us');
+  for (const rel of [
+    ['channel-reaches-payer', 'causes', 'channel', 'payer'],
+    ['payer-pays-offer', 'pays', 'payer', 'offer'],
+    ['offer-delivers-payment', 'delivers', 'offer', 'payment'],
+    ['volume-constrains-offer', 'constrains', 'volume', 'offer'],
+    ['no-sale-obliges-payer', 'depends_on', 'payer', 'no-sale'],
+  ] as const) ok(addRelation(g, { id: rel[0], type: rel[1], from: rel[2], to: rel[3] }));
+  ok(addAction(g, {
+    id: 'sell',
+    label: `sell ${o.title}`,
+    prerequisites: [],
+    actor: 'Brain, for the owner',
+    permissions: ['the owner\'s approval of this opening', 'the commercial authority\'s spending limits'],
+    effect: 'a buyer agrees and pays',
+    timing: one.daysToCash.value !== null ? `cash after about ${one.daysToCash.value} days` : 'days to cash not established',
+    externalDependencies: [one.repeatable ? 'the owner\'s sending accounts' : 'the named buyer'],
+    evidence: [`cash_opportunity:${o.id}`],
+    completionCondition: 'the payment is cleared into the owner\'s account',
+  }));
+  const price = figureOf(one.price, 'price per deal', 'cents', 100);
+  const cost = figureOf(one.directCost, 'direct cost per deal', 'cents', 100);
+  ok(addMoneyRoute(g, {
+    id: 'sale',
+    payer: `the buyer of ${o.title}`,
+    for: o.title,
+    terms: one.daysToCash.value !== null ? `cash after about ${one.daysToCash.value} days` : '',
+    channel: one.repeatable ? 'shared outreach' : 'the named buyer',
+    invoicedAt: null,
+    collectedAt: null,
+    collectedCents: price,
+    heldAgainstCents: unknownFigure('held against refund or fulfilment', 'cents', ['a refund or fulfilment term is stated']),
+    outflows: cost.value === null ? [] : [{ to: 'direct cost of delivery', reason: 'cost of one deal', amountCents: cost.value, at: null }],
+  }));
+  recordClaim(g, 'price', price);
+  recordClaim(g, 'directCost', cost);
+  recordClaim(g, 'respond', figureOf(one.respond, 'reply rate', 'ratio'));
+  recordClaim(g, 'close', figureOf(one.close, 'close rate', 'ratio'));
+  expandToFixpoint(g);
+  return g;
+}
+
+function chainOf(one: ModelledOpportunity, contacts: number): ChainReading {
+  const stages: ChainStage[] = [];
+  if (one.repeatable) stages.push({ name: 'reply', yield: figureOf(one.respond, 'reply rate', 'ratio') });
+  stages.push({
+    name: 'close',
+    yield: figureOf(one.close, 'close rate', 'ratio'),
+    ...(one.repeatable ? { capacity: figureOf(one.volume, 'deals the market takes', 'deals') } : {}),
+  });
+  return passVolume(one.repeatable ? contacts : 1, stages);
+}
+
+/** The causal reading of the openings a combination holds, from the rows that built it; null when none. */
+export function causalOf(openings: ModelledOpportunity[], demand: DemandEstimate[]): PortfolioCausal | null {
+  if (openings.length === 0) return null;
+  const graphs = openings.map(causalGraphOf);
+  const members: OpeningCausal[] = openings.map((one, i) => {
+    const g = graphs[i] as CausalGraph;
+    const contacts = demand.find((d) => d.opportunityId === one.opportunity.id)?.contacted.p50 ?? 0;
+    const route = readMoneyRoute([...g.routes.values()][0]!);
+    return {
+      opportunityId: one.opportunity.id,
+      title: one.opportunity.title,
+      nodes: g.nodes.size,
+      relations: g.relations.size,
+      actions: g.actions.size,
+      route,
+      chain: chainOf(one, contacts),
+      discovered: discoverMissing(g).map((d) => d.because),
+      unknowns: [...route.gaps],
+    };
+  });
+  const linked = graphs.length > 1 ? linkGraphs('portfolio', graphs) : null;
+  return {
+    members,
+    shared: linked && linked.ok ? linked.value.shared : [],
+    account: linked && linked.ok ? fullAccount(linked.value.graph) : fullAccount(graphs[0] as CausalGraph),
   };
 }
