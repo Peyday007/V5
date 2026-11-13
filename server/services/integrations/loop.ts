@@ -1,7 +1,8 @@
 /**
  * The integration registry's own clock (§103): an hourly health check of every
- * integration, the Neighbor Card pass and the sales desk (§107), run by the
- * Brain process.
+ * integration, the Neighbor Card pass, the sales desk (§107), and the approved
+ * browser capabilities that are due (ACQ-21-5, `sources/browser/schedule.ts`),
+ * run by the Brain process.
  *
  * GitHub's scheduler was the only clock, and it fired the hourly Neighbor Card
  * workflow twice in eight hours on 2026-11-11, so "the mailer keeps finding and
@@ -18,6 +19,7 @@ import { withActivity } from '../../db/infra.ts';
 import { countIntegrationUsage, latestIntegrationEvent, recordIntegrationEvent } from '../../repos/integrationEvents.ts';
 import { defaultAgents, defaultDeps, runNeighborCard } from '../cash/neighborCard.ts';
 import { personalDesk, runSalesDesk } from '../sales/desk.ts';
+import { runDueBrowserCapabilities } from '../sources/browser/schedule.ts';
 import { checkAndRecord } from './health.ts';
 import { signingKey } from './keys.ts';
 import { searchPlacesViaV2 } from './v2Bridge.ts';
@@ -59,7 +61,7 @@ export function placesMeter(source: string) {
   };
 }
 
-/** One tick: whichever of the two jobs is due. */
+/** One tick: whichever of the jobs is due. */
 export async function integrationsTick(now = Date.now(), env: NodeJS.ProcessEnv = process.env, uptimeMs = process.uptime() * 1000): Promise<string[]> {
   const done: string[] = [];
   if (uptimeMs < WARMUP_MS) return done;
@@ -92,6 +94,11 @@ export async function integrationsTick(now = Date.now(), env: NodeJS.ProcessEnv 
     await runSalesDesk(deps);
     done.push('sales-desk');
   }
+  // Approved, input-free browser reads whose last result went stale. Each run is
+  // its own BROWSER_WORKFLOW_RUN row; freshness, backoff and the request budget
+  // are decided inside operateCapability, so a tick with nothing due runs nothing.
+  const browser = await runDueBrowserCapabilities();
+  if (browser.length > 0) done.push(`browser-capabilities:${browser.length}`);
   return done;
 }
 
