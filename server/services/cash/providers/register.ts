@@ -18,6 +18,7 @@ import { createStripeInvoiceAdapter, readStripeInvoice } from './stripe.ts';
 import { registerProbe } from '../../factory/program/probes.ts';
 import { PROVIDER_COUNTERPARTY_PROBE, providerCounterpartyProbe } from './counterparty.ts';
 import { recordingCounterparty } from './counterpartyRecord.ts';
+import { OPPORTUNITY_COUNTERPARTY_PROBE, opportunityCounterpartyProbe } from '../../labor/counterparties/operations.ts';
 
 /** Instantly's measured daily capacity, shared by every business on the workspace; none reported is null. */
 const instantlyPerDay = async (env: NodeJS.ProcessEnv): Promise<number | null> => (await instantlyCapacity({ env }))?.perDay ?? null;
@@ -65,5 +66,9 @@ export function registerCommercialProviders(env: NodeJS.ProcessEnv = process.env
   // counterparty ladder on the same live status reading, so production verification consults the
   // model rather than a parallel check. Read-only; it sends nothing and reserves nothing.
   registerProbe(PROVIDER_COUNTERPARTY_PROBE, () => providerCounterpartyProbe(env));
+  // The contractor-delivered side (S-0469): every opportunity whose rows name a fulfiller, read
+  // through the same model on production records. Registered whatever providers were chosen,
+  // because a supplier or a crew is a counterparty whether or not a messaging provider is.
+  registerProbe(OPPORTUNITY_COUNTERPARTY_PROBE, (args) => opportunityCounterpartyProbe(args));
   return out;
 }

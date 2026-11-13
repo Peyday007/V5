@@ -529,6 +529,26 @@ export function planWorkforce(demands: readonly WorkforceDemand[], candidates: r
   });
 }
 
+/**
+ * The model's refusals, checked on one reading. Empty when every one holds;
+ * otherwise one sentence per breach: a sale reported deliverable below a
+ * contract, a reserve permitted without the required authority, or a
+ * commitment carried by two live holds. The provider probe and the
+ * opportunity reading judge with this one function, so the guarantees cannot
+ * be stated twice and drift.
+ */
+export function transactionBreaches(label: string, reading: TransactionReading): string[] {
+  const breaches: string[] = [];
+  if (reading.deliverability.deliverable && stageIndex(reading.deliverability.stage) < CONTRACTED) {
+    breaches.push(`${label}: reported deliverable at ${reading.deliverability.stage ?? 'no stage'}, below CONTRACTED`);
+  }
+  if (reading.reserve.permitted && !reading.authority.held) {
+    breaches.push(`${label}: a reserve was permitted without the live grant of ${reading.authority.action}`);
+  }
+  if (reading.doubleCommitted.length > 0) breaches.push(`${label}: double-committed ${reading.doubleCommitted.join(', ')}`);
+  return breaches;
+}
+
 // ---------------------------------------------------------------------------
 // The same reading on recorded rows
 // ---------------------------------------------------------------------------
@@ -696,7 +716,7 @@ export async function sourcedFulfillers(opportunityId: string): Promise<SourcedF
 }
 
 /** The candidate a sourced fulfiller is: the rows' facts, then everything recorded about it. */
-async function sourcedCandidate(fulfiller: SourcedFulfiller, kindHint: string): Promise<Counterparty> {
+export async function sourcedCandidate(fulfiller: SourcedFulfiller, kindHint: string): Promise<Counterparty> {
   const recorded = await recordedCounterparty(fulfiller.counterpartyId);
   return {
     id: fulfiller.counterpartyId,

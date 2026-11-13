@@ -31,7 +31,7 @@
 import { stageIndex, type Counterparty, type Fact } from '../../labor/counterparties/ladder.ts';
 import { recordedReservationEvents, withoutAuthority, type AuthorityReading, type ReservationEvent } from '../../labor/counterparties/reservations.ts';
 import { recordedCounterparty } from '../../labor/counterparties/ladder.ts';
-import { readTransaction, type TransactionReading } from '../../labor/counterparties/transaction.ts';
+import { readTransaction, transactionBreaches, type TransactionReading } from '../../labor/counterparties/transaction.ts';
 import { commercialProviderStatus, type ProviderLine } from './status.ts';
 
 const EVIDENCE = 'commercialProviderStatus (server/services/cash/providers/status.ts)';
@@ -157,14 +157,8 @@ export async function readProviderTransactions(options: {
  */
 export function counterpartyBreaches(readings: readonly ProviderTransactionReading[]): string[] {
   const breaches: string[] = [];
-  for (const { area, capability, reading, evidenced } of readings) {
-    if (reading.deliverability.deliverable && stageIndex(reading.deliverability.stage) < stageIndex('CONTRACTED')) {
-      breaches.push(`${area}: reported deliverable at ${reading.deliverability.stage ?? 'no stage'}, below CONTRACTED`);
-    }
-    if (reading.reserve.permitted && !reading.authority.held) {
-      breaches.push(`${area}: a reserve for ${capability} was permitted without the live grant of ${reading.authority.action}`);
-    }
-    if (reading.doubleCommitted.length > 0) breaches.push(`${area}: double-committed ${reading.doubleCommitted.join(', ')}`);
+  for (const { area, reading, evidenced } of readings) {
+    breaches.push(...transactionBreaches(area, reading));
     const primary = reading.primary;
     if (primary?.kind === 'software service' && !evidenced && stageIndex(primary.stage) > stageIndex('LISTING')) {
       breaches.push(`${area}: ${primary.counterpartyId} read past LISTING from configuration alone`);
