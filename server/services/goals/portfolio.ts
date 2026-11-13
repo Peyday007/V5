@@ -417,9 +417,11 @@ export function evaluateGoalPortfolio(input: {
   measuredCapacity?: { perDay: number; accounts: number } | null;
   /**
    * The project's research and outcomes, from which each opening's market
-   * history is acquired (CAUSAL-14-7). Absent, the knowledge the same goal
-   * tick already loaded is used; with neither, no history is acquired and
-   * every opening says so as a research need.
+   * history is acquired (CAUSAL-14-7). The goal compose passes what it read,
+   * so the history used is what the project holds, never what a cache
+   * happens to still have. Absent (a caller that read nothing), the fresh
+   * cached knowledge is used; with neither, or an explicit null, no history
+   * is acquired and every opening says so as a research need.
    */
   knowledge?: CashKnowledge | null;
   worlds?: number;
