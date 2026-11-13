@@ -56,6 +56,7 @@ function facts(over: Partial<PlanReadyFacts> = {}): PlanReadyFacts {
       prediction: { outcome: '$10,000 collected by the deadline', probability: 0.9, horizonDays: 30 },
     },
     acceptedSince: '2026-11-13T09:00:00.000Z',
+    capitalCeiling: 3000,
     ...over,
   };
 }
@@ -106,19 +107,33 @@ describe('a plan qualifies only on every condition the owner named', () => {
   });
 });
 
-describe('the message', () => {
-  it('carries the summary, economics, evidence, confidence, the challenge and the next steps', () => {
+describe('the starting capital', () => {
+  it('qualifies only when the plan commits no more than $3,000 before revenue, or the goal\'s lower ceiling', () => {
+    expect(planReady(facts()).ready).toBe(true); // 2 × (0 + 300) = 600
+    const heavy = facts();
+    heavy.members[0] = { ...heavy.members[0]!, capitalAtStart: 2800 };
+    expect(failing(heavy)).toEqual(['STARTING_CAPITAL_WITHIN_LIMIT']); // 2800 + 300 + 300 = 3400
+    expect(failing(facts({ capitalCeiling: 500 }))).toEqual(['STARTING_CAPITAL_WITHIN_LIMIT']);
+    expect(planReady(facts({ capitalCeiling: 10_000 })).ready).toBe(true); // the owner's $3,000 still binds
+  });
+});
+
+describe('the completion response', () => {
+  it('begins with the owner\'s header and carries the plan, the capital, the economics, the evidence and the next steps', () => {
     const { subject, text } = planReadyNotice(facts());
-    expect(subject).toMatch(/viable plan to collect \$10,000 within 30 days is ready/);
-    for (const section of ['THE PLAN', 'EXPECTED ECONOMICS', 'WHY THE COMBINATION REACHES THE TARGET', 'SUPPORTING EVIDENCE', 'CONFIDENCE', "HERMES' CHALLENGE", 'NEXT EXECUTION STEPS']) {
+    expect(subject).toBe('$10K / 30-DAY PLAN — COMPLETE');
+    expect(text.startsWith('$10K / 30-DAY PLAN — COMPLETE\n')).toBe(true);
+    for (const section of ['THE ACTUAL PLAN', 'HOW THE $3,000 IS ALLOCATED', 'HOW THE PLAN GENERATES $10,000', 'SUPPORTING EVIDENCE AND CONFIDENCE', 'WHAT BRAIN IS EXECUTING NEXT']) {
       expect(text).toContain(section);
     }
-    expect(text).toContain('Website audits for dental practices: revenue $9,000 ($6,000–$12,000), price $1,500');
-    expect(text).toContain('settles $13,800 median');
-    expect(text).toContain('defensible lower bound 92% (required 90%)');
+    expect(text).toContain('Website audits for dental practices: $0 at start + $300 median spend.');
+    expect(text).toContain('Committed before revenue: $600 of $3,000; held in reserve: $2,400.');
+    expect(text).toContain('Website audits for dental practices: $9,000 median ($6,000–$12,000).');
+    expect(text).toContain('Combined: $13,800 median settled');
+    expect(text).toContain('defensible lower bound 92% (Brain requires 90%)');
     expect(text).toContain('Challenger (qwen): PROCEED');
     expect(text).toContain('Send the audit offer to the 400 verified practices');
-    expect(text).toContain('Nothing has been collected by this message; execution continues automatically.');
+    expect(text).toContain('Brain and Hermes keep executing and improving the plan');
   });
 });
 
@@ -136,10 +151,10 @@ describe('Hermes is given the means and the instruction to challenge an accepted
 /* On real rows: the service, the decision record and the Instantly send      */
 /* ------------------------------------------------------------------------- */
 
-describe('the owner is told once per accepted plan, through the Instantly owner channel', () => {
-  const sent: Record<string, unknown>[] = [];
+describe('the completion response waits for the owner\'s conversation, once per accepted plan, and nothing is sent anywhere', () => {
   let projectId = '';
   let goalId = '';
+  const outbound = vi.fn();
 
   function reading(over: { status?: string; ids?: string[]; achieved?: boolean } = {}): PlanReading {
     const f = facts();
@@ -168,17 +183,17 @@ describe('the owner is told once per accepted plan, through the Instantly owner 
           contacted: spread(400), interested: spread(20), deals: spread(4), revenue: spread(7000), spend: spread(200), days: spread(16), price: spread(1500), respond: spread(0.05), close: spread(0.2),
           capitalAtStart: 0, justified: true, unestablished: [], refused: null,
         })),
-        limits: { target: 10000, deadlineDays: 30, startingCapital: null, perArrangement: null, spendCeiling: null, contactsPerDay: { value: 100, low: 80, high: 120, source: 'workspace' }, correlation: 0.3 },
+        limits: { target: 10000, deadlineDays: 30, startingCapital: 3000, perArrangement: null, spendCeiling: null, contactsPerDay: { value: 100, low: 80, high: 120, source: 'workspace' }, correlation: 0.3 },
         missing: [],
         searched: 4,
       },
       sales: [{ opportunityId: ids[0]!, title: 'Offer 1', potentialReach: 7000, test: { link: 'CONVERSION', test: 'Send the offer to the verified buyers', by: 'BRAIN', blocker: null } }],
       nextTest: null,
-      target: { metric: 'COLLECTED_REVENUE', metricLabel: 'collected revenue', currency: 'USD', projectId, targetCents: 1_000_000, achievedCents: 0, remainingCents: 1_000_000, achieved: over.achieved ?? false, daysLeft: 30 },
+      target: { metric: 'COLLECTED_REVENUE', metricLabel: 'collected revenue', currency: 'USD', projectId, targetCents: 1_000_000, achievedCents: 0, remainingCents: 1_000_000, achieved: over.achieved ?? false, daysLeft: 30, capitalCeilingCents: 300_000 },
     } as unknown as PlanReading;
   }
 
-  async function hermesAdopts(goalId: string, chosen = 0): Promise<void> {
+  async function hermesAdopts(goal: string, chosen = 0): Promise<void> {
     // Decisions are minutes apart in production; here the next one must not share a millisecond with the last.
     await new Promise((resolve) => setTimeout(resolve, 5));
     await recordEvent({
@@ -189,7 +204,7 @@ describe('the owner is told once per accepted plan, through the Instantly owner 
       payload: {
         input: {
           kind: 'ADOPT_PLAN',
-          goalId,
+          goalId: goal,
           question: 'Adopt the accepted $10K plan?',
           options: [{ action: 'Execute the accepted plan as it stands' }, { action: 'Keep constructing' }],
           chosen,
@@ -201,21 +216,27 @@ describe('the owner is told once per accepted plan, through the Instantly owner 
     });
   }
 
+  function worker(scopes: string[], project = projectId) {
+    return {
+      type: 'WORKER', id: 'wkr_conversation', handle: 'worker-05', displayName: 'worker-05', isBrainAdmin: false, mustChangePassword: false,
+      credentialId: 'cred_x', authMethod: 'OAUTH_BEARER', requestId: 'req_x',
+      memberships: [{ projectId: project, principalType: 'WORKER', principalId: 'wkr_conversation', role: null, scopes, active: true }],
+    } as unknown as import('../server/domain/types.ts').Principal;
+  }
+
+  async function tool(name: string, args: Record<string, unknown>, principal: ReturnType<typeof worker>): Promise<Record<string, unknown>> {
+    const { findTool } = await import('../server/mcp/tools.ts');
+    return (await findTool(name)!.run(args, { principal } as never)).value as Record<string, unknown>;
+  }
+
   beforeEach(async () => {
-    sent.length = 0;
+    outbound.mockReset();
     ({ project: { id: projectId } } = await freshProject());
     goalId = (await createWorkstream({ projectId, title: 'Collect $10,000 in 30 days', intent: 'Collect $10,000 in 30 days', purpose: 'REVENUE_DIRECT', createdByUserId: null })).id;
     await createUser({ email: 'owner@example.com', displayName: 'Owner', password: 'correct horse battery staple 1', isBrainAdmin: true });
+    // Instantly stays configured for outreach; the owner's notice must never reach it or any network.
     vi.stubEnv('INSTANTLY_API_KEY', 'instantly-test-key');
-    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
-      const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      if (String(url).includes('/accounts')) return json({ items: [{ email: 'sender@brain.example', status: 1, warmup_status: 1 }] });
-      if (String(url).endsWith('/emails/test') && init?.method === 'POST') {
-        sent.push(JSON.parse(String(init.body)) as Record<string, unknown>);
-        return json({ id: `em_${sent.length}` });
-      }
-      return new Response('{}', { status: 404 });
-    }));
+    vi.stubGlobal('fetch', outbound);
   });
 
   afterEach(() => {
@@ -223,58 +244,69 @@ describe('the owner is told once per accepted plan, through the Instantly owner 
     vi.unstubAllGlobals();
   });
 
-  it('sends nothing for a candidate, nothing before Hermes adopts it, then one message — and never twice', async () => {
+  it('records nothing for a candidate or before Hermes adopts it, then one completion response the conversation reads and marks delivered', async () => {
     const { notifyPlanReady } = await import('../server/services/goals/planReady.ts');
+    const reader = worker(['project:read', 'checkpoints:write']);
     expect((await notifyPlanReady(goalId, reading({ status: 'CANDIDATE_ONLY' }))).status).toBe('NOT_READY');
     const before = await notifyPlanReady(goalId, reading());
     expect(before.status).toBe('NOT_READY');
     expect(before.detail).toMatch(/CHALLENGED_BY_HERMES/);
     await hermesAdopts(goalId, 1);
     expect((await notifyPlanReady(goalId, reading())).detail).toMatch(/not to adopt/);
-    expect(sent).toHaveLength(0);
+    expect(await tool('brain_owner_notices', { project_id: projectId }, reader)).toEqual({ notices: [] });
 
     await hermesAdopts(goalId, 0);
-    const told = await notifyPlanReady(goalId, reading());
-    expect(told.status).toBe('SENT');
-    expect(sent).toHaveLength(1);
-    expect(sent[0]!['to_address_email_list']).toBe('owner@example.com');
-    expect(String(sent[0]!['subject'])).toMatch(/viable plan to collect \$10,000 within 30 days is ready/);
-    const body = (sent[0]!['body'] as { text: string }).text;
-    for (const section of ['EXPECTED ECONOMICS', 'SUPPORTING EVIDENCE', 'CONFIDENCE', "HERMES' CHALLENGE", 'NEXT EXECUTION STEPS']) expect(body).toContain(section);
+    expect((await notifyPlanReady(goalId, reading())).status).toBe('RECORDED');
+    const { notices } = (await tool('brain_owner_notices', { project_id: projectId }, reader)) as { notices: { noticeId: string; kind: string; text: string }[] };
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.kind).toBe('PLAN_READY');
+    expect(notices[0]!.text.startsWith('$10K / 30-DAY PLAN — COMPLETE')).toBe(true);
+    for (const section of ['THE ACTUAL PLAN', 'HOW THE $3,000 IS ALLOCATED', 'HOW THE PLAN GENERATES $10,000', 'SUPPORTING EVIDENCE AND CONFIDENCE', 'WHAT BRAIN IS EXECUTING NEXT']) {
+      expect(notices[0]!.text).toContain(section);
+    }
 
-    expect((await notifyPlanReady(goalId, reading())).status).toBe('ALREADY_SENT');
-    expect(sent).toHaveLength(1);
-    const rows = await getDb().all<{ payload: string }>(`SELECT payload FROM project_events WHERE event_type = 'OWNER_PLAN_READY_NOTIFIED'`, []);
-    expect(rows.map((r) => (JSON.parse(r.payload) as { status: string }).status).sort()).toEqual(['INTENT', 'SENT']);
+    // Announced in the conversation: recorded once, and never offered again.
+    const delivered = await tool('brain_owner_notice_delivered', { project_id: projectId, notice_id: notices[0]!.noticeId, where: 'session_test' }, reader);
+    expect(delivered['deliveredAt']).toBeTruthy();
+    expect(await tool('brain_owner_notice_delivered', { project_id: projectId, notice_id: notices[0]!.noticeId, where: 'session_test' }, reader)).toEqual(delivered);
+    expect(await tool('brain_owner_notices', { project_id: projectId }, reader)).toEqual({ notices: [] });
+    expect((await notifyPlanReady(goalId, reading())).status).toBe('ALREADY_RECORDED');
+    expect(await tool('brain_owner_notices', { project_id: projectId }, reader)).toEqual({ notices: [] });
+    expect(outbound).not.toHaveBeenCalled();
   });
 
-  it('leaves the goal running: Brain and Hermes keep executing and improving the plan after the owner is told', async () => {
+  it('refuses a reader outside the project, and a delivery receipt without checkpoints:write, as not found', async () => {
+    const { notifyPlanReady } = await import('../server/services/goals/planReady.ts');
+    await hermesAdopts(goalId, 0);
+    await notifyPlanReady(goalId, reading());
+    const { notices } = (await tool('brain_owner_notices', { project_id: projectId }, worker(['project:read']))) as { notices: { noticeId: string }[] };
+    await expect(tool('brain_owner_notices', { project_id: projectId }, worker(['project:read'], 'prj_other'))).rejects.toThrow();
+    await expect(tool('brain_owner_notice_delivered', { project_id: projectId, notice_id: notices[0]!.noticeId, where: 'x' }, worker(['project:read']))).rejects.toThrow();
+    expect(await tool('brain_owner_notices', { project_id: projectId }, worker(['project:read']))).toEqual({ notices });
+  });
+
+  it('leaves the goal running: Brain and Hermes keep executing and improving the plan after it is announced', async () => {
     const { notifyPlanReady } = await import('../server/services/goals/planReady.ts');
     const { getWorkstream } = await import('../server/repos/register.ts');
     const before = await getWorkstream(goalId);
     await hermesAdopts(goalId, 0);
-    expect((await notifyPlanReady(goalId, reading())).status).toBe('SENT');
+    expect((await notifyPlanReady(goalId, reading())).status).toBe('RECORDED');
     const after = await getWorkstream(goalId);
-    // Nothing paused, archived, cancelled or rewritten: the notice only records that the owner was told.
     expect({ ...after, updatedAt: null }).toEqual({ ...before, updatedAt: null });
     const events = await getDb().all<{ kind: string }>(`SELECT kind FROM workstream_events WHERE workstream_id = ?`, [goalId]);
     expect(events.map((e) => e.kind)).toEqual(['OWNER_NOTIFIED_PLAN_READY']);
     expect(operatorBrief({ nowIso: '2026-11-13T00:00:00Z', runId: 'opr_x' })).toContain('execution and improvement continue afterwards');
   });
 
-  it('tells the owner again only when a different plan is accepted', async () => {
-    const { notifyPlanReady } = await import('../server/services/goals/planReady.ts');
+  it('announces a different accepted plan on its own, and the self-improvement notice stays a separate kind', async () => {
+    const { notifyPlanReady, planReadyKey } = await import('../server/services/goals/planReady.ts');
     await hermesAdopts(goalId, 0);
     await notifyPlanReady(goalId, reading());
-    expect(sent).toHaveLength(1);
     await hermesAdopts(goalId, 0);
-    expect((await notifyPlanReady(goalId, reading({ ids: ['opp_3', 'opp_4'] }))).status).toBe('SENT');
-    expect(sent).toHaveLength(2);
-  });
-
-  it('is kept apart from the self-improvement notice: its own key and its own event', async () => {
-    const { planReadyKey } = await import('../server/services/goals/planReady.ts');
-    expect(planReadyKey('goal_10k', ['opp_2', 'opp_1'])).toBe(planReadyKey('goal_10k', ['opp_1', 'opp_2']));
-    expect(planReadyKey('goal_10k', ['opp_1'])).toMatch(/^plan-ready\.goal_10k\.[0-9a-f]{16}$/);
+    expect((await notifyPlanReady(goalId, reading({ ids: ['opp_3', 'opp_4'] }))).status).toBe('RECORDED');
+    const { notices } = (await tool('brain_owner_notices', { project_id: projectId }, worker(['project:read']))) as { notices: { kind: string }[] };
+    expect(notices.map((n) => n.kind)).toEqual(['PLAN_READY', 'PLAN_READY']);
+    expect(planReadyKey(goalId, ['opp_2', 'opp_1'])).toBe(planReadyKey(goalId, ['opp_1', 'opp_2']));
+    expect(planReadyKey(goalId, ['opp_1'])).toMatch(/^plan-ready\.wst_[0-9a-f]+\.[0-9a-f]{16}$/);
   });
 });

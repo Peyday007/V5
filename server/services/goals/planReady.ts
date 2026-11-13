@@ -5,25 +5,24 @@
  * keeps — the goal's plan reading and §95's acceptance (`plan.ts`), the quant portfolio, the
  * stored readings in `goal_plan_readings`, and the operator's committed ADOPT_PLAN decision
  * with its challenge (`operator/decisions.ts`, §108) — asks `planReady` whether the plan
- * qualifies, and sends one email through the owner-notice channel the self-improvement notice
- * already uses (`deliverOwnerEmail`). Once per accepted plan: the key is the goal and the set of
- * openings the plan stands on, and the composed text is stored before the first attempt.
+ * qualifies, and records one owner notice (`ownerNotices.ts`) carrying the completion response.
+ * Nothing is sent outward: the owner's own Claude Code conversation reads the notice and
+ * announces it (owner, 2026-11-13: no Instantly, no Resend, no email). Once per accepted plan:
+ * the key is the goal and the set of openings the plan stands on.
  *
  * It stops nothing: an accepted plan's openings stay linked PURSUES, a SQUEEZE goal keeps
  * widening its search until the target is collected, and Hermes keeps directing it.
  */
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
-import { recordEvent } from '../../repos/events.ts';
 import { getWorkstream, recordWorkstreamEvent } from '../../repos/register.ts';
 import { planReady, planReadyNotice, type PlanReadyFacts, type PlanReadyCondition } from '../../domain/planReady.ts';
 import type { PlanReading } from './plan.ts';
 
-export const PLAN_READY_EVENT = 'OWNER_PLAN_READY_NOTIFIED' as const;
 
 export interface PlanReadyResult {
   goalId: string;
-  status: 'SENT' | 'ALREADY_SENT' | 'NOT_READY' | 'NO_READING' | 'NO_CHANNEL' | 'NO_RECIPIENT' | 'UNCERTAIN' | 'FAILED' | 'BUSY';
+  status: 'RECORDED' | 'ALREADY_RECORDED' | 'NOT_READY' | 'NO_READING' | 'BUSY';
   detail: string;
   conditions?: Record<PlanReadyCondition, string | null>;
 }
@@ -36,18 +35,6 @@ function setKey(ids: string[]): string {
 
 export function planReadyKey(goalId: string, opportunityIds: string[]): string {
   return `plan-ready.${goalId}.${createHash('sha256').update(setKey(opportunityIds)).digest('hex').slice(0, 16)}`;
-}
-
-/** The notice rows for one key, newest first: INTENT, then SENT, UNCERTAIN or FAILED. */
-async function noticeRows(key: string): Promise<{ status: string; payload: Record<string, unknown>; projectId: string; at: string }[]> {
-  const rows = await getDb().all<{ payload: string; project_id: string; created_at: string }>(
-    `SELECT payload, project_id, created_at FROM project_events WHERE event_type = ? AND entity_id = ? ORDER BY created_at DESC, id DESC LIMIT 50`,
-    [PLAN_READY_EVENT, key],
-  );
-  return rows.map((r) => {
-    const payload = JSON.parse(r.payload) as Record<string, unknown>;
-    return { status: String(payload['status'] ?? ''), payload, projectId: r.project_id, at: r.created_at };
-  });
 }
 
 /** When this accepted plan (the same openings) was first read as ACCEPTED, from the stored readings. */
@@ -156,6 +143,7 @@ export async function planReadyFacts(goalId: string, reading: PlanReading): Prom
     steps,
     hermes: await adoption(goalId),
     acceptedSince: accepted ? await acceptedSince(goalId, accepted.opportunityIds) : null,
+    capitalCeiling: reading.target.capitalCeilingCents !== null ? reading.target.capitalCeilingCents / 100 : null,
   };
 }
 
@@ -164,7 +152,7 @@ export async function planReadyFacts(goalId: string, reading: PlanReading): Prom
  * tick, and — without one — the moment the operator commits its ADOPT_PLAN decision, when the
  * reading the tick holds (or a fresh, unpersisted one) is judged.
  */
-export async function notifyPlanReady(goalId: string, given?: PlanReading | null, env?: NodeJS.ProcessEnv): Promise<PlanReadyResult> {
+export async function notifyPlanReady(goalId: string, given?: PlanReading | null): Promise<PlanReadyResult> {
   let reading = given ?? null;
   if (!reading) {
     const { heldReading, readGoalPlan } = await import('./plan.ts');
@@ -183,9 +171,9 @@ export async function notifyPlanReady(goalId: string, given?: PlanReading | null
     return { goalId, status: 'NOT_READY', detail: `the plan is ${reading.acceptance.status}: ${reading.acceptance.sentence.slice(0, 200)}` };
   }
   const key = planReadyKey(goalId, reading.acceptance.accepted.opportunityIds);
-  const rows = await noticeRows(key);
-  const done = rows.find((r) => r.status === 'SENT' || r.status === 'UNCERTAIN');
-  if (done) return { goalId, status: 'ALREADY_SENT', detail: `${done.status} at ${done.at}` };
+  const { readOwnerNotice, recordOwnerNotice } = await import('../ownerNotices.ts');
+  const done = await readOwnerNotice(key);
+  if (done) return { goalId, status: 'ALREADY_RECORDED', detail: `READY at ${done.readyAt}${done.deliveredAt ? `, delivered ${done.deliveredAt}` : ''}` };
   const facts = await planReadyFacts(goalId, reading);
   const judged = planReady(facts);
   if (!judged.ready) {
@@ -196,54 +184,28 @@ export async function notifyPlanReady(goalId: string, given?: PlanReading | null
       conditions: judged.conditions,
     };
   }
-  if (inFlight.has(key)) return { goalId, status: 'BUSY', detail: 'a send for this plan is in progress' };
+  if (inFlight.has(key)) return { goalId, status: 'BUSY', detail: 'this plan is being recorded' };
   inFlight.add(key);
   try {
-    // The message is composed once and stored, so every attempt is the identical request (invariant 27).
-    let intent = rows.find((r) => r.status === 'INTENT');
-    if (!intent) {
-      const projectId = reading.target.projectId;
-      const notice = planReadyNotice(facts);
-      await recordEvent({
-        projectId,
-        entityType: 'PROJECT',
-        entityId: key,
-        eventType: PLAN_READY_EVENT,
-        payload: { status: 'INTENT', key, goalId, subject: notice.subject, text: notice.text, decisionId: facts.hermes?.decisionId ?? null, probability: facts.acceptance.probability },
-      });
-      intent = { status: 'INTENT', payload: { subject: notice.subject, text: notice.text }, projectId, at: new Date().toISOString() };
-    }
-    const { deliverOwnerEmail } = await import('../operator/director.ts');
-    const sent = await deliverOwnerEmail({
-      key,
-      projectId: intent.projectId,
-      businessId: key,
-      subject: String(intent.payload['subject']),
-      text: String(intent.payload['text']),
-      principalId: 'brain-goal-planner',
-      env,
+    const notice = planReadyNotice(facts);
+    const recorded = await recordOwnerNotice({
+      kind: 'PLAN_READY',
+      projectId: reading.target.projectId,
+      noticeId: key,
+      subject: notice.subject,
+      text: notice.text,
+      detail: { goalId, decisionId: facts.hermes?.decisionId ?? null, probability: facts.acceptance.probability },
     });
-    if (sent.status === 'NO_CHANNEL' || sent.status === 'NO_RECIPIENT') return { goalId, status: sent.status, detail: sent.detail };
-    const last = rows.find((r) => r.status === 'FAILED');
-    if (sent.status !== 'FAILED' || last?.payload['detail'] !== sent.detail.slice(0, 400)) {
-      await recordEvent({
-        projectId: intent.projectId,
-        entityType: 'PROJECT',
-        entityId: key,
-        eventType: PLAN_READY_EVENT,
-        payload: { status: sent.status, key, goalId, channel: sent.channel, receipt: sent.receipt, detail: sent.detail.slice(0, 400) },
-      });
-    }
-    if (sent.status === 'SENT') {
+    if (recorded.created) {
       await recordWorkstreamEvent({
         workstreamId: goalId,
         kind: 'OWNER_NOTIFIED_PLAN_READY',
-        summary: `The owner was told the plan is ready: ${String(intent.payload['subject']).slice(0, 300)}`,
-        detail: { key, channel: sent.channel, receipt: sent.receipt },
+        summary: `The plan qualified; the completion response waits for the owner's conversation: ${notice.subject}`.slice(0, 400),
+        detail: { key },
         actorRef: 'BRAIN',
       });
     }
-    return { goalId, status: sent.status, detail: sent.detail };
+    return { goalId, status: recorded.created ? 'RECORDED' : 'ALREADY_RECORDED', detail: notice.subject };
   } finally {
     inFlight.delete(key);
   }

@@ -6,6 +6,11 @@
  * merely because a plan document exists or Brain generated an optimistic forecast … Do not
  * require the $10,000 to have already been earned."
  *
+ * Owner, 2026-11-13 (later): "a credible plan to generate $10,000 in collected revenue within
+ * 30 days, using no more than $3,000 in starting capital … The completion response must
+ * prominently begin: "$10K / 30-DAY PLAN — COMPLETE"". The starting capital is a condition and
+ * its allocation is a section of the message.
+ *
  * Every condition is read off what Brain already computes — §95's acceptance (the 90%
  * Wilson lower bound on an all-evidence portfolio), the quant portfolio and its demand
  * estimates, the plan's own execution steps — and the operator's committed, challenged
@@ -71,6 +76,21 @@ export interface PlanReadyFacts {
   } | null;
   /** When the current accepted plan was first read as ACCEPTED; the decision must follow it. */
   acceptedSince: string | null;
+  /** The goal's own capital ceiling, major units, or null when it has none. */
+  capitalCeiling: number | null;
+}
+
+/** The owner's starting-capital limit for the plan, major units (owner, 2026-11-13). */
+export const OWNER_STARTING_CAPITAL = 3000;
+
+/** The capital the plan may commit: the owner's limit, or the goal's own ceiling when lower. */
+export function capitalLimit(f: Pick<PlanReadyFacts, 'capitalCeiling'>): number {
+  return f.capitalCeiling !== null ? Math.min(f.capitalCeiling, OWNER_STARTING_CAPITAL) : OWNER_STARTING_CAPITAL;
+}
+
+/** What the plan commits before its revenue arrives: each member's capital at start plus its median spend. */
+export function capitalCommitted(f: Pick<PlanReadyFacts, 'members'>): number {
+  return f.members.reduce((sum, m) => sum + (m.capitalAtStart ?? 0) + (m.spend?.p50 ?? 0), 0);
 }
 
 export const PLAN_READY_CONDITIONS = [
@@ -79,6 +99,7 @@ export const PLAN_READY_CONDITIONS = [
   'EVIDENCE_FOR_ASSUMPTIONS',
   'RESOURCES_DEPENDENCIES_STEPS',
   'WHY_THE_COMBINATION_REACHES_TARGET',
+  'STARTING_CAPITAL_WITHIN_LIMIT',
   'DEFENSIBLE_UNCERTAINTY',
   'CHALLENGED_BY_HERMES',
   'PASSED_PLANNING_AND_EVIDENCE_REQUIREMENTS',
@@ -129,6 +150,12 @@ export function planReady(f: PlanReadyFacts): { ready: boolean; conditions: Reco
       : f.portfolio.settledP50 < f.remainingAmount
         ? `the combination's median settles ${f.portfolio.settledP50}, under the ${f.remainingAmount} remaining`
         : null,
+    STARTING_CAPITAL_WITHIN_LIMIT:
+      members.some((m) => m.capitalAtStart === null || !m.spend)
+        ? 'a member has no stated capital or spend to allocate'
+        : capitalCommitted(f) > capitalLimit(f)
+          ? `the plan commits ${Math.round(capitalCommitted(f))} before revenue, over the ${capitalLimit(f)} starting-capital limit`
+          : null,
     DEFENSIBLE_UNCERTAINTY: !p
       ? 'no probability'
       : p.lowerBound < f.acceptance.required
@@ -161,54 +188,59 @@ const money = (n: number, currency: string): string =>
   `${currency === 'USD' ? '$' : `${currency} `}${Math.round(n).toLocaleString('en-US')}`;
 const pct = (x: number): string => `${Math.round(x * 1000) / 10}%`;
 
+/** The first line of the completion response, exactly as the owner asked for it. */
+export function completionHeader(f: Pick<PlanReadyFacts, 'targetAmount'>): string {
+  return f.targetAmount === 10000 ? '$10K / 30-DAY PLAN — COMPLETE' : `$${Math.round(f.targetAmount / 1000)}K PLAN — COMPLETE`;
+}
+
 /**
- * The owner's message: the plan's summary, expected economics, supporting evidence, confidence
- * assessment, Hermes' challenge, and the next execution steps. Every figure is the reading's.
+ * The completion response: it begins with the owner's header, then the actual plan, how the
+ * starting capital is allocated, how the plan reaches the target, the evidence and confidence
+ * (with Hermes' challenge), and what Brain executes next. Every figure is the reading's.
  */
 export function planReadyNotice(f: PlanReadyFacts): { subject: string; text: string } {
   const c = f.currency;
   const p = f.acceptance.probability!;
   const pf = f.portfolio!;
   const h = f.hermes!;
-  const subject = `Brain: a viable plan to collect ${money(f.targetAmount, c)}${f.daysLeft !== null ? ` within ${f.daysLeft} days` : ''} is ready — ${f.goalTitle}`.slice(0, 200);
+  const limit = capitalLimit(f);
+  const committed = capitalCommitted(f);
+  const subject = completionHeader(f);
   const text = [
-    `Brain has finished a viable, actionable plan for "${f.goalTitle}": ${money(f.remainingAmount, c)} still to collect${f.daysLeft !== null ? `, ${f.daysLeft} days left` : ''}. Nothing has been collected by this message; execution continues automatically.`,
+    subject,
     '',
-    'THE PLAN',
-    `${f.acceptance.accepted!.label}`,
+    `Goal: ${f.goalTitle} — ${money(f.remainingAmount, c)} to collect${f.daysLeft !== null ? `, ${f.daysLeft} days left` : ''}. Nothing has been collected by this announcement; Brain and Hermes keep executing and improving the plan.`,
+    '',
+    'THE ACTUAL PLAN',
+    f.acceptance.accepted!.label,
     f.summary.slice(0, 700),
+    ...f.members.map((m) => `- ${m.title}: sold at ${money(m.price!.p50, c)}, ~${Math.round(m.deals?.p50 ?? 0)} deal(s), cash in ~${Math.round(m.days!.p50)} days (p90 ${Math.round(m.days!.p90)}).`),
     '',
-    'EXPECTED ECONOMICS (median and range over the worlds evaluated)',
-    ...f.members.map(
-      (m) =>
-        `- ${m.title}: revenue ${money(m.revenue!.p50, c)} (${money(m.revenue!.p10, c)}–${money(m.revenue!.p90, c)}), price ${money(m.price!.p50, c)}, ~${Math.round(m.deals?.p50 ?? 0)} deal(s), spend ${money(m.spend!.p50, c)}, capital at start ${money(m.capitalAtStart ?? 0, c)}, cash in ~${Math.round(m.days!.p50)} days (p90 ${Math.round(m.days!.p90)}).`,
-    ),
-    `Combined: settles ${money(pf.settledP50, c)} median (p10 ${money(pf.settledP10, c)}, p90 ${money(pf.settledP90, c)}) against ${money(f.remainingAmount, c)} remaining. It reaches the target in ${pct(pf.reach)} of ${pf.worlds} worlds evaluated.`,
+    `HOW THE ${money(limit, c)} IS ALLOCATED`,
+    ...f.members.map((m) => `- ${m.title}: ${money(m.capitalAtStart ?? 0, c)} at start + ${money(m.spend!.p50, c)} median spend.`),
+    `Committed before revenue: ${money(committed, c)} of ${money(limit, c)}; held in reserve: ${money(Math.max(0, limit - committed), c)}.`,
     '',
-    'WHY THE COMBINATION REACHES THE TARGET',
-    `${f.acceptance.sentence.slice(0, 600)}`,
+    `HOW THE PLAN GENERATES ${money(f.targetAmount, c)}`,
+    ...f.members.map((m) => `- ${m.title}: ${money(m.revenue!.p50, c)} median (${money(m.revenue!.p10, c)}–${money(m.revenue!.p90, c)}).`),
+    `Combined: ${money(pf.settledP50, c)} median settled (p10 ${money(pf.settledP10, c)}, p90 ${money(pf.settledP90, c)}) against ${money(f.remainingAmount, c)} remaining; the target is reached in ${pct(pf.reach)} of ${pf.worlds} worlds.`,
+    f.acceptance.sentence.slice(0, 600),
     '',
-    'SUPPORTING EVIDENCE',
-    `Basis: ${p.basis} — ${p.note.slice(0, 400)}`,
-    `Every input of every member rests on evidence or Brain's own measurements (portfolio basis ${pf.basis}).`,
+    'SUPPORTING EVIDENCE AND CONFIDENCE',
+    `Probability of collecting the target before the deadline: ${pct(p.value)}, defensible lower bound ${pct(p.lowerBound)} (Brain requires ${pct(f.acceptance.required)}), over ${p.sample} worlds; shared-outreach correlation assumed ${pf.correlation}.`,
+    `Basis: ${p.basis} — ${p.note.slice(0, 400)} Every input of every member rests on evidence or Brain's own measurements.`,
     ...(pf.missing.length ? [`Stated limits: ${pf.missing.slice(0, 4).join('; ').slice(0, 400)}`] : []),
-    '',
-    'CONFIDENCE',
-    `Probability of collecting the target before the deadline: ${pct(p.value)}, defensible lower bound ${pct(p.lowerBound)} (required ${pct(f.acceptance.required)}), from ${p.sample} worlds. Shared-outreach correlation assumed ${pf.correlation}.`,
-    '',
-    "HERMES' CHALLENGE",
-    `Decision ${h.decisionId}: "${h.chosenAction.slice(0, 200)}" — predicted ${pct(h.prediction.probability)} that ${h.prediction.outcome.slice(0, 200)} within ${h.prediction.horizonDays} days.`,
+    `Hermes challenged and adopted it (decision ${h.decisionId}): "${h.chosenAction.slice(0, 160)}", predicting ${pct(h.prediction.probability)} that ${h.prediction.outcome.slice(0, 160)} within ${h.prediction.horizonDays} days.`,
     h.challenge
       ? `Challenger (${h.challenge.model}): ${h.challenge.verdict}. ${h.challenge.reasons.slice(0, 400)}${h.challenge.hiddenAssumptions.length ? ` Hidden assumptions named: ${h.challenge.hiddenAssumptions.slice(0, 4).join('; ')}.` : ''}${h.challenge.strongerAlternative ? ` Alternative raised: ${h.challenge.strongerAlternative.slice(0, 200)}.` : ''}`
       : '',
     h.answeredChallenge ? `Hermes' answer to the challenge: ${h.answeredChallenge.slice(0, 400)}` : '',
     '',
-    'NEXT EXECUTION STEPS',
-    ...f.steps.slice(0, 8).map((s) => `- ${s.title}: ${s.step} (${s.by === 'PERSON' ? `needs a person: ${s.blocker ?? 'see Brain'}` : 'Brain'})`),
+    'WHAT BRAIN IS EXECUTING NEXT',
+    ...f.steps.slice(0, 8).map((s) => `- ${s.title}: ${s.step}${s.by === 'PERSON' ? ` — needs you: ${s.blocker ?? 'see Brain'}` : ''}`),
     '',
-    `Brain and Hermes keep executing and improving this plan. Goal ${f.goalId}. You are told once per accepted plan.`,
+    `Goal ${f.goalId}. Announced once for this plan; a different plan that qualifies later is announced on its own.`,
   ]
     .filter((line, i, all) => !(line === '' && all[i - 1] === ''))
     .join('\n');
-  return { subject, text: text.slice(0, 7_900) };
+  return { subject, text: text.slice(0, 12_000) };
 }

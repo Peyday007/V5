@@ -32,7 +32,7 @@ vi.mock('../server/services/factory/delivery.ts', () => ({
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
-import { decideCandidate, listImprovementEvents, patchCandidate, recordImprovementEvent, upsertCandidate } from '../server/repos/improvement.ts';
+import { decideCandidate, patchCandidate, recordImprovementEvent, upsertCandidate } from '../server/repos/improvement.ts';
 import { finishOperatorRun, startOperatorRun } from '../server/repos/operator.ts';
 import { improvementNotice, verifiedCycle, type CycleFacts } from '../server/domain/engineeringDirector.ts';
 
@@ -127,25 +127,24 @@ describe('the message', () => {
 /* ------------------------------------------------------------------------- */
 
 describe('the owner is notified once per verified improvement, the moment Hermes evaluates it', () => {
-  const sent: Record<string, unknown>[] = [];
   let projectId = '';
+  const outbound = vi.fn();
+
+  /** What waits for the owner's conversation: the READY notices not yet delivered. */
+  async function waiting(): Promise<{ noticeId: string; subject: string; text: string }[]> {
+    const { undeliveredOwnerNotices } = await import('../server/services/ownerNotices.ts');
+    return undeliveredOwnerNotices([projectId]);
+  }
 
   beforeEach(async () => {
-    sent.length = 0;
     factory.status = 'LIVE';
     factory.deployed = true;
+    outbound.mockReset();
     ({ project: { id: projectId } } = await freshProject());
     await createUser({ email: 'owner@example.com', displayName: 'Owner', password: 'correct horse battery staple 1', isBrainAdmin: true });
+    // Instantly is configured for outreach: the owner's notice must still never reach it, or any network.
     vi.stubEnv('INSTANTLY_API_KEY', 'instantly-test-key');
-    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
-      const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      if (String(url).includes('/accounts')) return json({ items: [{ email: 'sender@brain.example', status: 1, warmup_status: 1 }, { email: 'dead@brain.example', status: -1, warmup_status: -1 }] });
-      if (String(url).endsWith('/emails/test') && init?.method === 'POST') {
-        sent.push(JSON.parse(String(init.body)) as Record<string, unknown>);
-        return json({ id: `em_${sent.length}` });
-      }
-      return new Response('{}', { status: 404 });
-    }));
+    vi.stubGlobal('fetch', outbound);
   });
 
   afterEach(() => {
@@ -196,46 +195,44 @@ describe('the owner is notified once per verified improvement, the moment Hermes
     return out.value as Record<string, unknown>;
   }
 
-  it('sends nothing for a release, nothing before Hermes evaluates, then exactly one message', async () => {
+  it('records nothing for a release, nothing before Hermes evaluates, then exactly one notice — and sends nothing anywhere', async () => {
     const { notifyVerifiedImprovements } = await import('../server/services/operator/director.ts');
     const id = await commissionedByHermes('OPERATOR:RECURRING_OPERATIONAL_FAILURE:aaaa');
 
     // Merged, deployed and verified live, not yet measured: a release, not an improvement.
-    expect((await notifyVerifiedImprovements())).toEqual([]);
-    expect(sent).toHaveLength(0);
+    expect(await notifyVerifiedImprovements()).toEqual([]);
+    expect(await waiting()).toHaveLength(0);
 
     await measuredAndKept(id);
     const before = await notifyVerifiedImprovements();
     expect(before[0]?.status).toBe('NOT_VERIFIED');
     expect(before[0]?.detail).toMatch(/GOAL_EVALUATED/);
-    expect(sent).toHaveLength(0);
+    expect(await waiting()).toHaveLength(0);
 
     const value = await hermesEvaluates(id);
-    expect(value['ownerNotice']).toEqual(expect.objectContaining({ status: 'SENT' }));
-    expect(sent).toHaveLength(1);
-    const mail = sent[0]!;
-    expect(mail['eaccount']).toBe('sender@brain.example');
-    expect(mail['to_address_email_list']).toBe('owner@example.com');
-    expect(String(mail['subject'])).toMatch(/first verified autonomous self-improvement/);
-    const body = (mail['body'] as { text: string }).text;
-    expect(body).toContain('the software release');
-    expect(body).toContain('WHAT ACTUALLY IMPROVED');
-    expect(body).toContain('OWNER_INTERVENTIONS_PER_DAY: 4 → 1 (IMPROVED)');
+    expect(value['ownerNotice']).toEqual(expect.objectContaining({ status: 'RECORDED' }));
+    const notices = await waiting();
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.subject).toMatch(/first verified autonomous self-improvement/);
+    expect(notices[0]!.text).toContain('the software release');
+    expect(notices[0]!.text).toContain('WHAT ACTUALLY IMPROVED');
+    expect(notices[0]!.text).toContain('OWNER_INTERVENTIONS_PER_DAY: 4 → 1 (IMPROVED)');
 
     // Once per improvement, however often the pass or the tool runs again.
-    expect((await notifyVerifiedImprovements())[0]?.status).toBe('ALREADY_SENT');
-    expect((await hermesEvaluates(id))['ownerNotice']).toMatchObject({ status: 'ALREADY_SENT' });
-    expect(sent).toHaveLength(1);
+    expect((await notifyVerifiedImprovements())[0]?.status).toBe('ALREADY_RECORDED');
+    expect((await hermesEvaluates(id))['ownerNotice']).toMatchObject({ status: 'ALREADY_RECORDED' });
+    expect(await waiting()).toHaveLength(1);
     const events = await getDb().all<{ payload: string }>(`SELECT payload FROM project_events WHERE event_type = 'OWNER_IMPROVEMENT_NOTIFIED'`, []);
     expect(events).toHaveLength(1);
     const payload = JSON.parse(events[0]!.payload) as { status: string; release: { verifiedLive: boolean }; improvement: { decision: string } };
-    expect(payload.status).toBe('SENT');
+    expect(payload.status).toBe('READY');
     expect(payload.release.verifiedLive).toBe(true);
     expect(payload.improvement.decision).toBe('KEPT');
-    expect(await listImprovementEvents({ candidateId: id, kinds: ['OWNER_NOTIFIED'] })).toHaveLength(1);
+    // No email, no Instantly, no Resend: nothing left the process.
+    expect(outbound).not.toHaveBeenCalled();
   });
 
-  it('keeps tracking: the next verified improvement is its own message, numbered', async () => {
+  it('keeps tracking: the next verified improvement is its own notice, numbered', async () => {
     const { notifyVerifiedImprovements } = await import('../server/services/operator/director.ts');
     const first = await commissionedByHermes('OPERATOR:RECURRING_OPERATIONAL_FAILURE:bbbb');
     await measuredAndKept(first);
@@ -243,10 +240,12 @@ describe('the owner is notified once per verified improvement, the moment Hermes
     const second = await commissionedByHermes('OPERATOR:SLOW_ALGORITHM:cccc');
     await measuredAndKept(second);
     await hermesEvaluates(second);
-    expect(sent).toHaveLength(2);
-    expect(String(sent[1]!['subject'])).toMatch(/verified #2/);
+    const notices = await waiting();
+    expect(notices).toHaveLength(2);
+    expect(notices[1]!.subject).toMatch(/verified #2/);
     await notifyVerifiedImprovements();
-    expect(sent).toHaveLength(2);
+    expect(await waiting()).toHaveLength(2);
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it("never tells the owner about work Brain's standing director commissioned in Hermes' place", async () => {
@@ -254,6 +253,6 @@ describe('the owner is notified once per verified improvement, the moment Hermes
     await measuredAndKept(id);
     const value = await hermesEvaluates(id);
     expect(value['ownerNotice']).toMatchObject({ status: 'NOT_VERIFIED' });
-    expect(sent).toHaveLength(0);
+    expect(await waiting()).toHaveLength(0);
   });
 });
