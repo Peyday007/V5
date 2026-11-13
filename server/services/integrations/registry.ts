@@ -328,8 +328,12 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
       // A browser signed in to an account Brain may operate (sources/browserWorkflow.ts); optional.
       fly('BRAIN_BROWSER_SESSION_MCP_URL', ['OWNER'], { required: false }),
     ],
-    consumers: [{ component: 'Sources: browser reads', path: 'server/services/sources' }],
-    capabilities: ['READ_SCRIPTED_PAGES'],
+    consumers: [
+      { component: 'Sources: browser reads', path: 'server/services/sources' },
+      { component: 'Browser capabilities: approved reads on the integrations tick', path: 'server/services/sources/browser/schedule.ts' },
+      { component: 'Browser capabilities: define, approve, retire and run at the terminal', path: 'server/services/sources/browser/capabilityCli.ts' },
+    ],
+    capabilities: ['READ_SCRIPTED_PAGES', 'RUN_APPROVED_BROWSER_ROUTINES'],
     probe: null,
     dailyCeiling: null,
     ownerAction: 'Nothing: the Browser workflow writes the URL.',
