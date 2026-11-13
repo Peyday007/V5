@@ -27,8 +27,9 @@
  * shared discovery while another live goal may use it, and never once its goal
  * or its sprint has ended.
  */
-import { clauseBefore, NEGATORS } from '../russell/negation.ts';
+import { clauseBefore, foldApostrophes, NEGATORS } from '../russell/negation.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
+import { getDb } from '../../db/database.ts';
 import { listCapitalFor, listConstraintsForProject } from '../../repos/industry.ts';
 import type { CapitalStructure, OpportunityConstraint } from '../../domain/types.ts';
 
@@ -278,8 +279,9 @@ export function countRoleEconomics(rows: readonly RoleEconomics[]): CountedEcono
 }
 
 /*
- * Reading a role from rows. holds / partner come from what Brain has recorded about an opening
- * (capital_structures, opportunity_constraints), never from a literal a caller types in.
+ * Reading a role from rows. What a role performs is read from the opening's own cash_opportunities
+ * row and its capital / constraint statements; holds / partner come from what Brain has recorded about
+ * an opening (capital_structures, opportunity_constraints), never from a literal a caller types in.
  *
  *  - a LICENSING / COMPLIANCE / INSURANCE requirement, or a CREDENTIAL_REQUIRED / REGULATORY_CAPITAL
  *    constraint, says a licence is needed and not held: licensing = false;
@@ -299,14 +301,256 @@ export interface RoleAttestation {
   holds?: Partial<Record<RoleRequirement, boolean>>;
   /** A signed contract with the partner exists. */
   partnerContractInPlace?: boolean;
+  /** An authorized licensed partner a person named, where no capital row names one. */
+  partner?: { holdsLicensing: boolean; contractInPlace: boolean } | null;
+}
+
+/*
+ * Attestations from a person's recorded words (COM-13-5 repair, 2026-11-13).
+ *
+ * Every production caller passed `{}` as the attestation, so licensing and contract could only ever be
+ * read as false or unknown and COMPLIANT / COMPLIANT_VIA_PARTNER were unreachable: no regulated role's
+ * economics could ever be counted. The place a person records what they hold is a goal's own statement
+ * of its resources (workstreams.target_resources: "people, equipment, relationships, licences"), so the
+ * attestation is read from it — never from a caller's literal, and never from a model.
+ *
+ * A sentence attests a licence only when it says one is held, affirmatively: a negated, wanted, planned,
+ * pending or lapsed licence attests nothing. It covers an opening only for the product it names (the
+ * opening must perform that product), and the location only when it names every place the opening names,
+ * or says nationwide. A partner counts only with a signed or executed agreement stated in the same
+ * sentence; a partner without one stays a partner without a contract. Anything a sentence does not say
+ * stays unknown (§34, §39), so an owner's words can make a role compliant only where they actually reach.
+ */
+
+/** A licence somebody holds, as one sentence of a person's statement says it. */
+export interface LicenceStatement {
+  holder: 'OWN' | 'PARTNER';
+  products: string[];
+  places: string[];
+  nationwide: boolean;
+  /** A signed / executed agreement or an appointment is stated. */
+  contract: boolean;
+  text: string;
+}
+
+const LICENCE_HELD = /\b(?:licen[cs](?:e|ed|es)|registered|appointed)\b/i;
+const NOT_HELD = /\b(?:need|needs|needed|want|wants|looking for|seek|seeking|plan|plans|planning|hope|hoping|would|could|might|if|once|until|getting|obtain|obtaining|apply|applying|applied for|pending|expired|lapsed|suspended|revoked|no longer|not yet)\b/i;
+const PARTNER_WORD = /\b(?:partner(?:s|ed|ship)?|(?:with|through|via) (?:a |an |the )?(?:[a-z-]+ ){0,2}licen[cs]ed)\b/i;
+const FIRST_PERSON = /\b(?:i|we|i'm|we're|i am|we are|my|our|me)\b/i; // not "us": it is also the country
+const AGREEMENT = /\b(?:signed|executed|countersigned|under (?:a |an |our )?(?:written )?(?:contract|agreement)|(?:contract|agreement) (?:is )?in (?:place|force)|appointed|appointments?)\b/i;
+const NATIONWIDE = /\b(?:nationwide|all 50 states|every (?:us |u\.s\. )?state|in all (?:us |u\.s\. )?states)\b/i;
+const US_STATES = [
+  'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut', 'delaware', 'florida', 'georgia', 'hawaii', 'idaho',
+  'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana', 'maine', 'maryland', 'massachusetts', 'michigan', 'minnesota',
+  'mississippi', 'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey', 'new mexico', 'new york', 'north carolina',
+  'north dakota', 'ohio', 'oklahoma', 'oregon', 'pennsylvania', 'rhode island', 'south carolina', 'south dakota', 'tennessee', 'texas',
+  'utah', 'vermont', 'virginia', 'washington', 'west virginia', 'wisconsin', 'wyoming', 'district of columbia', 'puerto rico',
+] as const;
+/*
+ * Product families a licence is scoped to. Recognition only: a product no family names is not refused,
+ * its scope simply stays unknown. Nothing here excludes an industry.
+ */
+const PRODUCT_FAMILIES: Record<string, RegExp> = {
+  insurance: /\b(?:insurance|insur(?:e|er|ers|ing)|polic(?:y|ies)|policyholders?|annuit(?:y|ies)|underwrit\w*)\b/i,
+  mortgage: /\b(?:mortgages?|home loans?|refinanc\w*|nmls|loan originat\w*)\b/i,
+  lending: /\b(?:loans?|lend(?:er|ers|ing)?|credit|financing)\b/i,
+  securities: /\b(?:securities|investments?|brokerage account|finra|series \d+)\b/i,
+  'real estate': /\b(?:real[- ]estate|realtor|propert(?:y|ies) sales?)\b/i,
+  warranty: /\b(?:warrant(?:y|ies)|service contracts?)\b/i,
+  health: /\b(?:medical|health ?care|patients?|clinical|pharmac\w*|supplements?)\b/i,
+  food: /\b(?:food|beverages?|cottage food)\b/i,
+  cosmetics: /\bcosmetics?\b/i,
+  contracting: /\b(?:contractor|construction|electrical|plumbing|hvac|roofing)\b/i,
+};
+
+function productsIn(text: string): string[] {
+  return Object.keys(PRODUCT_FAMILIES).filter((key) => PRODUCT_FAMILIES[key]!.test(text));
+}
+
+/*
+ * The product families whose selling, arranging, originating or being paid per unit of is itself a
+ * licensed role (S-0106: commissions, origination, advice, brokering, solicitation and referral payments
+ * in mortgage, insurance and the like). An opening that names one of these is never found "not regulated"
+ * from an absence of rows: "home loan introductions, paid per funded loan" is mortgage referral in other
+ * words, and reading it as compliant is the commercial rewording S-0106 forbids and an unknown read as a
+ * favourable assumption (invariant 39). It stays UNKNOWN until research or a person records the position,
+ * which is what starts the compliant-position search. Recognition only — nothing here excludes an industry.
+ */
+const LICENSED_PRODUCT_FAMILIES: ReadonlySet<string> = new Set(['insurance', 'mortgage', 'lending', 'securities', 'real estate', 'warranty']);
+
+/** The licensed product families a text names. */
+export function licensedProductsIn(text: string | null | undefined): string[] {
+  if (!text) return [];
+  return productsIn(text).filter((family) => LICENSED_PRODUCT_FAMILIES.has(family));
+}
+
+function placesIn(text: string): string[] {
+  const lower = text.toLowerCase();
+  // "West Virginia" must not also read as "Virginia": a longer name claims its span first.
+  const found = new Set<string>();
+  let rest = lower;
+  for (const state of [...US_STATES].sort((a, b) => b.length - a.length)) {
+    const pattern = new RegExp(`\\b${state}\\b`, 'g');
+    if (pattern.test(rest)) {
+      found.add(state);
+      rest = rest.replace(pattern, ' ');
+    }
+  }
+  return [...found].sort();
+}
+
+/** The licences a person's statement says are held, one per affirmative sentence. */
+export function licenceStatementsIn(text: string | null | undefined): LicenceStatement[] {
+  if (!text) return [];
+  const out: LicenceStatement[] = [];
+  for (const raw of foldApostrophes(text).split(/(?<=[.!?;])\s+|\n+/)) {
+    const sentence = raw.trim();
+    const hit = LICENCE_HELD.exec(sentence);
+    if (!hit) continue;
+    if (NOT_HELD.test(sentence)) continue;
+    const before = clauseBefore(sentence, hit.index);
+    if (NEGATORS.test(before) || EXCLUDING.test(before) || /\bun(?:licen[cs]ed|registered)\b/i.test(sentence)) continue;
+    const products = productsIn(sentence);
+    if (products.length === 0) continue;
+    const partner = PARTNER_WORD.test(sentence);
+    if (!partner && !FIRST_PERSON.test(sentence)) continue;
+    out.push({
+      holder: partner ? 'PARTNER' : 'OWN',
+      products,
+      places: placesIn(sentence),
+      nationwide: NATIONWIDE.test(sentence),
+      contract: AGREEMENT.test(sentence),
+      text: sentence.slice(0, 300),
+    });
+  }
+  return out;
+}
+
+/**
+ * What a person's licence statements attest about one role, judged against what the role performs.
+ * Product holds when a statement's licence names a product the role performs; location holds only when
+ * the statement covers every place the role names (or is nationwide). An own licence holds licensing;
+ * a partner's licence under a stated agreement is a partner with a contract in place, and the role's own
+ * licensing is then recorded as not held — it relies on the partner's.
+ */
+export function attestationFrom(statements: readonly LicenceStatement[], performs: string): RoleAttestation {
+  const products = productsIn(performs);
+  const places = placesIn(performs);
+  const holds: Partial<Record<RoleRequirement, boolean>> = {};
+  let partner: RoleAttestation['partner'] = null;
+  if (products.length === 0) return {};
+  for (const s of statements) {
+    if (!s.products.some((p) => products.includes(p))) continue;
+    const covered = s.nationwide || (places.length > 0 && places.every((p) => s.places.includes(p)));
+    if (s.holder === 'OWN') {
+      holds.product = true;
+      holds.licensing = true;
+      if (covered) holds.location = true;
+      if (s.contract) holds.contract = true;
+    } else if (s.contract) {
+      holds.product = true;
+      holds.contract = true;
+      if (covered) holds.location = true;
+      partner = { holdsLicensing: true, contractInPlace: true };
+    } else if (!partner) {
+      partner = { holdsLicensing: true, contractInPlace: false };
+    }
+  }
+  if (partner && holds.licensing !== true) holds.licensing = false;
+  return { holds, ...(partner ? { partner, partnerContractInPlace: partner.contractInPlace } : {}) };
+}
+
+/** A project's live goals' own statements of what their owners hold. */
+export async function ownerStatementsFor(projectId: string): Promise<LicenceStatement[]> {
+  const rows = await getDb().all<{ target_resources: string | null }>(
+    `SELECT target_resources FROM workstreams
+      WHERE target_project_id = ? AND target_resources IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL
+      ORDER BY id`,
+    [projectId],
+  );
+  return rows.flatMap((row) => licenceStatementsIn(row.target_resources));
+}
+
+/**
+ * What an opening performs, in the words of its own cash_opportunities row: its title, its mechanism,
+ * its industry, and the evidence-card fields that describe the work and how it is paid. Production records every opening here and populates
+ * capital_structures only for the few a research claim declared a capital requirement for, so a reader
+ * that looked only at capital rows saw no role at all on real openings (r01.com-13-5, 2026-11-10).
+ * This text says what is done; it never says what is held — holds and partner come only from rows and
+ * attestations below.
+ *
+ * Where an opening was found (`source`) and Brain's research notes on it (`economics_note`) are not
+ * read: they describe the opening, not an activity any role performs, so a note that a market "pays
+ * commissions" or that "deposits are typical" would otherwise mark an opening regulated and hold its
+ * economics back with nobody earning a commission or holding a deposit.
+ */
+export interface OpeningRoleText {
+  title: string;
+  mechanism?: string | null;
+  industry?: string | null;
+  payer?: string | null;
+  offerScope?: string | null;
+  buyingSignal?: string | null;
+  acceptanceCondition?: string | null;
+  paymentTerms?: string | null;
+  fulfillmentOwner?: string | null;
+  deliveryMethod?: string | null;
+  requiredInputs?: string | null;
+}
+
+/** The text of an opening row that says what it performs, one field per line, blanks left out. */
+export function openingPerforms(opening: OpeningRoleText | null | undefined): string {
+  if (!opening) return '';
+  const mechanism = opening.mechanism ? opening.mechanism.toLowerCase().replace(/_/g, ' ') : null;
+  return [
+    opening.title,
+    mechanism,
+    opening.industry,
+    opening.payer,
+    opening.offerScope,
+    opening.buyingSignal,
+    opening.acceptanceCondition,
+    opening.paymentTerms,
+    opening.fulfillmentOwner,
+    opening.deliveryMethod,
+    opening.requiredInputs,
+  ]
+    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+    .join('\n');
+}
+
+/** What a role performs, read from its opening row and its capital and constraint statements. */
+export function performsFromRows(
+  capital: readonly CapitalStructure[],
+  constraints: readonly OpportunityConstraint[],
+  opening: OpeningRoleText | null = null,
+): string {
+  return [openingPerforms(opening), ...capital.map((c) => c.statement), ...constraints.map((c) => c.statement)]
+    .filter((part) => part.length > 0)
+    .join('\n');
+}
+
+/**
+ * The production reader: a role from its rows, with what its project's owners have stated they hold
+ * attested against what it performs. The funnel, the probe and assessOpportunityRole all read through
+ * this, so a figure and its demonstration assess one role identically.
+ */
+export function roleRecordWithStatements(
+  capital: readonly CapitalStructure[],
+  constraints: readonly OpportunityConstraint[],
+  opening: OpeningRoleText | null,
+  statements: readonly LicenceStatement[],
+): RoleRecord {
+  return roleRecordFromRows(capital, constraints, attestationFrom(statements, performsFromRows(capital, constraints, opening)), opening);
 }
 
 export function roleRecordFromRows(
   capital: readonly CapitalStructure[],
   constraints: readonly OpportunityConstraint[],
   attested: RoleAttestation = {},
+  opening: OpeningRoleText | null = null,
 ): RoleRecord {
-  const performs = [...capital.map((c) => c.statement), ...constraints.map((c) => c.statement)].join('\n');
+  const performs = performsFromRows(capital, constraints, opening);
   const holds: Partial<Record<RoleRequirement, boolean>> = { ...(attested.holds ?? {}) };
   const licenceNeeds = capital.filter((c) => c.entryKind === 'REQUIREMENT' && c.requirement && LICENCE_REQUIREMENTS.has(c.requirement));
   const licenceConstrained = constraints.some((c) => LICENCE_CONSTRAINTS.has(c.kind));
@@ -316,17 +560,111 @@ export function roleRecordFromRows(
   const partnered = capital.some(
     (c) => c.entryKind === 'RESTRUCTURING' && c.mechanism !== null && PARTNER_MECHANISMS.has(c.mechanism) && c.answersId !== null && needIds.has(c.answersId),
   );
-  const partner = partnered ? { holdsLicensing: true, contractInPlace: attested.partnerContractInPlace === true } : null;
-  return { performs, holds, partner };
+  const contractInPlace = attested.partnerContractInPlace === true || attested.partner?.contractInPlace === true;
+  const partner = partnered
+    ? { holdsLicensing: true, contractInPlace }
+    : attested.partner
+      ? { holdsLicensing: attested.partner.holdsLicensing, contractInPlace }
+      : null;
+  return { performs, holds, partner, notRegulated: notRegulatedFinding(opening, performs, licenceNeeds.length > 0 || licenceConstrained, holds.contract === false) };
 }
 
-/** One opening's regulated role, assessed from the rows Brain holds for it. */
+/*
+ * The finding that an opening performs nothing regulated, made from the rows that would say otherwise.
+ *
+ * Without it every ordinary opening — whose text names no regulated activity — stayed UNKNOWN with its
+ * economics held back, because nothing on a production path ever wrote `notRegulated`, and the funnel's
+ * countedByCurrency withheld the settled cash of openings nobody had any reason to doubt (2026-11-13).
+ * The finding is not "nothing matched": it is made only when (a) the opening's own cash_opportunities row
+ * was read — an opening the reader could not see stays unknown — (b) none of its text, nor any capital or
+ * constraint statement beside it, names a regulated activity, and (c) research recorded no licence,
+ * compliance, insurance, credential, regulatory-capital, subcontracting or platform-terms row against it.
+ * Those rows are where research records that a role needs rights, so a rewording of the title cannot pass
+ * once research has said otherwise: a single such row withholds the finding and the role stays unknown.
+ * And (d) the text names no product whose sale is itself licensed (`licensedProductsIn`): before research
+ * has looked, "insurance policy sign-ups, paid per bound policy" is not an ordinary opening (COM-13-5 F1).
+ */
+function notRegulatedFinding(
+  opening: OpeningRoleText | null,
+  performs: string,
+  licenceRecorded: boolean,
+  contractRecorded: boolean,
+): { basis: string } | null {
+  if (!opening || opening.title.trim().length === 0) return null;
+  if (licenceRecorded || contractRecorded) return null;
+  if (regulatedActivitiesIn(performs).length > 0) return null;
+  // A product whose sale is itself licensed, named in other words than the activity lists know.
+  if (licensedProductsIn(performs).length > 0) return null;
+  return {
+    basis:
+      'its cash_opportunities row and capital/constraint statements name no regulated activity, and no licensing, compliance, insurance, credential, regulatory-capital, subcontracting or platform-terms row is recorded against it',
+  };
+}
+
+/** The columns of cash_opportunities the role reader uses, as stored. */
+export interface OpeningRoleRow {
+  id: string;
+  project_id: string;
+  title: string;
+  mechanism: string | null;
+  industry: string | null;
+  payer: string | null;
+  offer_scope: string | null;
+  buying_signal: string | null;
+  acceptance_condition: string | null;
+  payment_terms: string | null;
+  fulfillment_owner: string | null;
+  delivery_method: string | null;
+  required_inputs: string | null;
+}
+
+export const OPENING_ROLE_COLUMNS =
+  'id, project_id, title, mechanism, industry, payer, offer_scope, buying_signal, acceptance_condition, payment_terms, fulfillment_owner, delivery_method, required_inputs';
+
+export function openingRoleText(row: OpeningRoleRow): OpeningRoleText {
+  return {
+    title: row.title,
+    mechanism: row.mechanism,
+    industry: row.industry,
+    payer: row.payer,
+    offerScope: row.offer_scope,
+    buyingSignal: row.buying_signal,
+    acceptanceCondition: row.acceptance_condition,
+    paymentTerms: row.payment_terms,
+    fulfillmentOwner: row.fulfillment_owner,
+    deliveryMethod: row.delivery_method,
+    requiredInputs: row.required_inputs,
+  };
+}
+
+/** One opening's row, bounded to its project in the query. */
+async function openingRow(projectId: string, opportunityId: string): Promise<OpeningRoleRow | null> {
+  const rows = await getDb().all<OpeningRoleRow>(
+    `SELECT ${OPENING_ROLE_COLUMNS} FROM cash_opportunities WHERE id = ? AND project_id = ?`,
+    [opportunityId, projectId],
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * One opening's regulated role, assessed from the rows Brain holds for it: what its own
+ * cash_opportunities row says it does, and what its capital_structures and opportunity_constraints
+ * rows say it needs and holds. An opening with no capital rows is still assessed.
+ */
 export async function assessOpportunityRole(input: {
   projectId: string;
   opportunityId: string;
   attested?: RoleAttestation;
 }): Promise<RoleAssessment> {
-  const [capital, constraints] = await Promise.all([listCapitalFor(input.opportunityId), listConstraintsForProject(input.projectId)]);
+  const [row, capital, constraints, statements] = await Promise.all([
+    openingRow(input.projectId, input.opportunityId),
+    listCapitalFor(input.opportunityId),
+    listConstraintsForProject(input.projectId),
+    ownerStatementsFor(input.projectId),
+  ]);
   const own = constraints.filter((c) => c.opportunityId === input.opportunityId);
-  return assessRole(roleRecordFromRows(capital, own, input.attested));
+  const ownCapital = capital.filter((c) => c.projectId === input.projectId);
+  const opening = row ? openingRoleText(row) : null;
+  if (input.attested) return assessRole(roleRecordFromRows(ownCapital, own, input.attested, opening));
+  return assessRole(roleRecordWithStatements(ownCapital, own, opening, statements));
 }
