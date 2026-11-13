@@ -12,8 +12,10 @@ import {
   EXCLUSION_CLASSES,
   goalExclusions,
   openingPerforms,
+  POSITION_SEARCH_INTERVAL_MS,
   positionNeedKey,
   seekCompliantPositions,
+  seekCompliantPositionsAtMostEvery,
   roleRecordFromRows,
 } from '../server/services/cash/exclusions.ts';
 import { REGULATED_ROLE_PROBE, regulatedRolesAssessedFromRows } from '../server/services/cash/regulatedRoleProbe.ts';
@@ -116,8 +118,6 @@ describe('COM-13-5 repair: probe r01.com-13-5 enumerates cash_opportunities', ()
   it('passes on a regulated opening with no capital_structures rows', async () => {
     const id = await opening('Insurance referral partnership: earn commissions on policies sold to homeowners we refer');
     expect(await capitalRowsFor(id)).toBe(0);
-    // A held-back role must have been sent to find a compliant position before the probe accepts it.
-    await seekCompliantPositions(projectId);
     const r = await regulatedRolesAssessedFromRows();
     expect(r.ok).toBe(true);
     expect(r.detail).toContain('none excluded');
@@ -159,12 +159,15 @@ describe('COM-13-5 repair: a held-back regulated role is sent to find a complian
     expect(await needForKey(projectId, positionNeedKey(id))).not.toBeNull();
   });
 
-  it('the probe refuses a held-back regulated role nobody sent to find a position', async () => {
-    const id = await opening('Insurance referral partnership: earn commissions on policies sold to homeowners we refer');
-    const before = await regulatedRolesAssessedFromRows();
-    expect(before.ok).toBe(false);
-    expect(before.detail).toContain(`opening ${id} is a regulated role held back as UNKNOWN`);
-    await seekCompliantPositions(projectId);
-    expect((await regulatedRolesAssessedFromRows()).ok).toBe(true);
+  it('a goal read searches one project at most once per interval; a later read finds a role recorded since', async () => {
+    const first = await opening('Earn insurance commissions by selling insurance policies to retail customers');
+    const t = Date.UTC(2026, 10, 13);
+    expect((await seekCompliantPositionsAtMostEvery(projectId, t))!.map((one) => one.opportunityId)).toEqual([first]);
+    const second = await opening('Earn a referral fee for sending borrowers to a mortgage lender');
+    expect(await seekCompliantPositionsAtMostEvery(projectId, t + 1_000)).toBeNull();
+    expect(await needForKey(projectId, positionNeedKey(second))).toBeNull();
+    const later = await seekCompliantPositionsAtMostEvery(projectId, t + POSITION_SEARCH_INTERVAL_MS);
+    expect(later!.map((one) => one.opportunityId).sort()).toEqual([first, second].sort());
+    expect(await needForKey(projectId, positionNeedKey(second))).not.toBeNull();
   });
 });

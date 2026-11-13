@@ -107,7 +107,7 @@ export async function goalExclusions(goal: { title: string; intent: string; outc
     // A goal read of a project is where its openings' economics are about to be weighed: every regulated
     // role held back for want of a position is sent to find one first (S-0106), and a failure to raise it
     // never changes what the goal excludes.
-    await seekCompliantPositions(goal.target.projectId).catch(() => undefined);
+    await seekCompliantPositionsAtMostEvery(goal.target.projectId).catch(() => undefined);
     const mode = await getCashMode(goal.target.projectId);
     // The whole stored objective: the canonical mandate excludes nothing, and the operator's additions follow it.
     if (mode) parts.push(mode.objective);
@@ -494,16 +494,28 @@ function positionNeed(title: string, a: RoleAssessment): { whyItMatters: string;
  * performs nothing regulated, raises none.
  */
 export async function seekCompliantPositions(projectId: string): Promise<PositionSought[]> {
-  const [rows, capital, constraints] = await Promise.all([
-    getDb().all<OpeningRoleRow>(`SELECT ${OPENING_ROLE_COLUMNS} FROM cash_opportunities WHERE project_id = ?`, [projectId]),
-    listCapitalForProject(projectId),
-    listConstraintsForProject(projectId),
+  const db = getDb();
+  const [rows, withStatements] = await Promise.all([
+    db.all<OpeningRoleRow>(`SELECT ${OPENING_ROLE_COLUMNS} FROM cash_opportunities WHERE project_id = ?`, [projectId]),
+    db.all<{ opportunity_id: string }>(
+      `SELECT opportunity_id FROM capital_structures WHERE project_id = ?
+       UNION
+       SELECT opportunity_id FROM opportunity_constraints WHERE project_id = ? AND opportunity_id IS NOT NULL`,
+      [projectId, projectId],
+    ),
   ]);
   const out: PositionSought[] = [];
-  if (rows.length === 0) return out;
+  // A candidate is an opening whose own row names a regulated activity, or one with capital or constraint
+  // statements that may; the rest perform nothing this reader recognises and have no position to find.
+  const stated = new Set(withStatements.map((one) => one.opportunity_id));
+  const candidates = rows.filter((row) => stated.has(row.id) || regulatedActivitiesIn(openingPerforms(openingRoleText(row))).length > 0);
+  if (candidates.length === 0) return out;
+  const [capital, constraints] = stated.size > 0
+    ? await Promise.all([listCapitalForProject(projectId), listConstraintsForProject(projectId)])
+    : [[], []];
   // Loaded only when there is something to raise: needs.ts sits above this module in the cash graph.
   const { raiseNeed } = await import('./needs.ts');
-  for (const row of rows) {
+  for (const row of candidates) {
     const a = assessRole(
       roleRecordFromRows(
         capital.filter((c) => c.opportunityId === row.id),
@@ -531,4 +543,21 @@ export async function seekCompliantPositions(projectId: string): Promise<Positio
     out.push({ opportunityId: row.id, position: a.position, needId: raised.ok ? raised.value.id : null, refused: raised.ok ? null : raised.reason });
   }
   return out;
+}
+
+/**
+ * How often a goal read may search one project for positions. A goal read happens many times a tick and a
+ * held-back role's need is raised once by key, so searching on every read only repeats statements a
+ * remote database pays for (a goal read is held to a bounded statement count); a role recorded since the
+ * last search is found on the next one.
+ */
+export const POSITION_SEARCH_INTERVAL_MS = 10 * 60_000;
+const lastSearch = new Map<string, number>();
+
+/** `seekCompliantPositions`, skipped when the same project was searched within the interval. */
+export async function seekCompliantPositionsAtMostEvery(projectId: string, now: number = Date.now()): Promise<PositionSought[] | null> {
+  const last = lastSearch.get(projectId);
+  if (last !== undefined && now - last < POSITION_SEARCH_INTERVAL_MS) return null;
+  lastSearch.set(projectId, now);
+  return seekCompliantPositions(projectId);
 }
