@@ -30,7 +30,8 @@
  * verified by a different model than found it.
  */
 import { createHash } from 'node:crypto';
-import { getDb } from '../../db/database.ts';
+import { databasePoolReadings, getDb } from '../../db/database.ts';
+import { classifyInfraFailure, type InfraFailureKind } from '../../db/infra.ts';
 import { CONNECTOR_SCOPES, type ClaimedWork, type Principal, type WorkItemRow } from '../../domain/types.ts';
 import { findingTakesQualifier, isStructuralFinding } from '../../domain/industry.ts';
 import { createWorker, getWorkerByName, grantMembership, listMembershipsForPrincipal } from '../../repos/identity.ts';
@@ -691,6 +692,57 @@ async function askFor(ctx: Ctx, prompt: string): Promise<Record<string, unknown>
 export const BRAIN_NOT_REACHED = /database pool had no free connection|Connection terminated due to connection timeout|too many clients/i;
 /** Waits between attempts when Brain's database was not reached. Exported for tests. */
 export const NOT_REACHED_BACKOFF_MS = [1_000, 3_000, 9_000];
+/** The longest one wait may be stretched to while the pool has callers queued. */
+export const PRESSURED_WAIT_CAP_MS = 30_000;
+
+/**
+ * The database owner's failure kinds in which no statement ran: a checkout that
+ * was never handed a connection, a pooler that would not hand one over. Asking
+ * again cannot repeat an effect, so every tool may be asked again.
+ */
+const NOTHING_RAN: ReadonlySet<InfraFailureKind> = new Set<InfraFailureKind>(['POOL_CHECKOUT_TIMEOUT', 'POOLER_CHECKOUT_TIMEOUT', 'POOLER_REFUSED']);
+
+/**
+ * Whether a failed Brain tool call may be asked again, decided by the database
+ * owner's own classifier (`classifyInfraFailure`) rather than a list of sentences.
+ *
+ * Production, 2026-11-13: `COMPUTE.DATABASE` read 134/149 against a 95% bar —
+ * free-lane items ending on "Connection terminated", "not queryable", "Query
+ * read timeout" and statement timeouts, none of which the three-sentence
+ * `BRAIN_NOT_REACHED` recognised, so a dropped connection under a read threw
+ * away the model's minutes of work. Nothing-ran failures are retried for every
+ * tool. A lost connection, a statement timeout or an unavailable database leaves
+ * a mutation's outcome unknown (invariant 26), so those are retried only for a
+ * tool that declares itself read-only, which has no effect to repeat.
+ */
+export function databaseRetryable(error: unknown, readOnly: boolean): boolean {
+  if (BRAIN_NOT_REACHED.test(String((error as Error)?.message ?? error))) return true;
+  const kind = classifyInfraFailure(error);
+  if (!kind) return false;
+  return NOTHING_RAN.has(kind) || readOnly;
+}
+
+/** What the workload pool held when a wait is chosen; null off Postgres. */
+export interface PoolPressure {
+  waiting: number;
+  max: number;
+}
+
+function workloadPressure(): PoolPressure | null {
+  const reading = databasePoolReadings()?.workload;
+  return reading ? { waiting: reading.waiting, max: reading.max } : null;
+}
+
+/**
+ * Back-pressure: while callers are queued on the pool, wait longer before
+ * asking again, so a saturated pool is waited out rather than joined by every
+ * retry at once. Up to four times the base wait, never past the cap. Pure.
+ */
+export function pressuredWait(baseMs: number, pressure: PoolPressure | null): number {
+  if (!pressure || pressure.waiting <= 0 || pressure.max <= 0) return baseMs;
+  const factor = 1 + Math.min(3, pressure.waiting / pressure.max);
+  return Math.min(Math.max(baseMs, PRESSURED_WAIT_CAP_MS), Math.round(baseMs * factor));
+}
 
 /**
  * A Brain tool, asked again when the database was not reached.
@@ -709,22 +761,36 @@ async function call(ctx: Ctx, tool: string, args: Record<string, unknown>): Prom
   const started = Date.now();
   if (ctx.usage) ctx.usage.dbCalls += 1;
   try {
-    const outcome = await retryNotReached(() => found.run(args, { principal: ctx.principal, requestId: `req_${Math.random().toString(36).slice(2)}` }));
+    const outcome = await retryNotReached(
+      () => found.run(args, { principal: ctx.principal, requestId: `req_${Math.random().toString(36).slice(2)}` }),
+      NOT_REACHED_BACKOFF_MS,
+      { readOnly: found.annotations.readOnlyHint === true },
+    );
     return outcome.value;
   } finally {
     if (ctx.usage) ctx.usage.dbMs += Date.now() - started;
   }
 }
 
-/** Run `fn`, waiting and running it again while Brain's database was not reached. Exported for tests. */
-export async function retryNotReached<T>(fn: () => Promise<T>, backoff: readonly number[] = NOT_REACHED_BACKOFF_MS): Promise<T> {
+/**
+ * Run `fn`, waiting and running it again while Brain's database failed in a way
+ * `databaseRetryable` allows for this call. Exported for tests.
+ */
+export async function retryNotReached<T>(
+  fn: () => Promise<T>,
+  backoff: readonly number[] = NOT_REACHED_BACKOFF_MS,
+  options: { readOnly?: boolean; pressure?: () => PoolPressure | null; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<T> {
+  const readOnly = options.readOnly === true;
+  const pressure = options.pressure ?? workloadPressure;
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await fn();
     } catch (error) {
       const wait = backoff[attempt];
-      if (wait === undefined || !BRAIN_NOT_REACHED.test(String((error as Error)?.message ?? error))) throw error;
-      await new Promise((resolve) => setTimeout(resolve, wait));
+      if (wait === undefined || !databaseRetryable(error, readOnly)) throw error;
+      await sleep(pressuredWait(wait, pressure()));
     }
   }
 }
