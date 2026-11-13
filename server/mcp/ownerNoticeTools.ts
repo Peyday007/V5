@@ -58,7 +58,7 @@ const deliveredTool: McpTool = {
     const projectId = requiredString(args, 'project_id');
     await authorize(principal, projectId, 'WRITE', 'checkpoints:write');
     const noticeId = requiredString(args, 'notice_id');
-    if (!/^(plan-ready|owner-improvement)\.[A-Za-z0-9_.-]{1,120}$/.test(noticeId)) throw invalidInput('notice_id is not an owner notice id.');
+    if (!/^(plan-ready|owner-improvement|ops-report)\.[A-Za-z0-9_.-]{1,120}$/.test(noticeId)) throw invalidInput('notice_id is not an owner notice id.');
     const { readOwnerNotice, markOwnerNoticeDelivered } = await import('../services/ownerNotices.ts');
     const notice = await readOwnerNotice(noticeId);
     // A notice in another project is answered exactly as one that does not exist (invariant 30).

@@ -16101,3 +16101,44 @@ Brain executes next. The owner's conversation reads the notices through
 task bound to that Claude Code session, which resumes it, stays silent while nothing
 qualified, and survives restarts and deployments because both the schedule and the notices
 are stored outside the container. Tests: `tests/planReady.test.ts`, `tests/improvementNotice.test.ts`.
+
+**The owner gets an hourly operations report in the same conversation (owner's order,
+2026-11-13).** "IMPLEMENT A COMPREHENSIVE HOURLY BRAIN INTELLIGENCE AND OPERATIONS REPORT … Use
+actual records, not invented statistics … Do not create duplicate schedulers, trackers, or
+reporting databases." `services/operator/operationsReport.ts` reads, for the hour just ended,
+the hour before, and the last day, only rows Brain already keeps: operator runs and their tool
+calls, models and errors; operator decision and engineering events; lessons; opportunities;
+research fragments and jobs; scenario runs; plan readings; the work queue and bins; Factory
+units, campaigns and workers; cheap-lane calls; money entries; the spend ledger; incidents; and
+integration events. `domain/operationsReport.ts` is pure and does three things:
+- It ranks the bottlenecks. The plan's own shortfall and binding factor always come first.
+- It answers the five scaling questions YES, NO or INSUFFICIENT EVIDENCE, and only as far as
+  the rows support. More agents is a NO while work waits beside free workers.
+- It gives a time to a qualifying plan only from a probability lower bound that rises across
+  readings. Otherwise it says why the time cannot be estimated and what would resolve it.
+
+A value nothing measures is listed under "Not instrumented", never estimated. A bottleneck
+that survives three reports is flagged for a new diagnosis. The report is the operator tick's
+once-an-hour owner notice (kind REPORT, event `OWNER_OPERATIONS_REPORT`, keyed by the hour).
+Only the newest undelivered one is offered, so a missed hour is superseded rather than queued.
+The conversation's existing hourly scheduled task announces it through `brain_list_projects`
+and records it delivered. Its bottleneck section opens the operator's next brief
+(`latestReportBrief` in `engineeringBrief`), so Hermes acts on what Brain may resolve itself.
+Tests: `tests/operationsReport.test.ts`.
+
+The report also carries the owner's remaining sections, each read from the same rows:
+- **Hermes:** goals inspected, problems identified, improvements received from Factory, and
+  tools that failed repeatedly.
+- **Workstreams:** commercial validation, opportunities moved into execution, and customer
+  acquisition (`sales_leads` prepared, `sales_replies` received). A line separates work that
+  advanced the goal from activity that did not.
+- **MODEL ADEQUACY:** run failures are split into rate limits (availability), context and
+  model errors, and only the last two count toward a stronger model.
+- **ENGINEERING CAPACITY:** scarce classes, underutilized workers, and whether work waits
+  beside free slots (scheduling) or behind full ones (capacity).
+- **INTERVENTION TRACKING:** the last report's bottlenecks, listed as resolved, persisting
+  or new.
+
+Every bottleneck states its estimated improvement. Every YES names the resource, its
+utilization, the expected effect, the cost (said to be unrecorded where Brain does not record
+it), a confidence and the smallest test.

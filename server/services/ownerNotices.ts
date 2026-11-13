@@ -17,6 +17,8 @@ import { recordEvent } from '../repos/events.ts';
 export const OWNER_NOTICE_EVENTS = {
   PLAN_READY: 'OWNER_PLAN_READY_NOTIFIED',
   IMPROVEMENT: 'OWNER_IMPROVEMENT_NOTIFIED',
+  /** The hourly operations report (owner, 2026-11-13): only the newest undelivered one is ever offered. */
+  REPORT: 'OWNER_OPERATIONS_REPORT',
 } as const;
 export type OwnerNoticeKind = keyof typeof OWNER_NOTICE_EVENTS;
 const KIND_OF: Record<string, OwnerNoticeKind> = Object.fromEntries(
@@ -44,8 +46,8 @@ interface Row {
 async function rowsFor(noticeId: string): Promise<{ status: string; payload: Record<string, unknown>; at: string; projectId: string; type: string }[]> {
   const rows = await getDb().all<Row>(
     `SELECT entity_id, project_id, event_type, payload, created_at FROM project_events
-      WHERE entity_id = ? AND event_type IN (?, ?) ORDER BY created_at ASC, id ASC`,
-    [noticeId, OWNER_NOTICE_EVENTS.PLAN_READY, OWNER_NOTICE_EVENTS.IMPROVEMENT],
+      WHERE entity_id = ? AND event_type IN (?, ?, ?) ORDER BY created_at ASC, id ASC`,
+    [noticeId, OWNER_NOTICE_EVENTS.PLAN_READY, OWNER_NOTICE_EVENTS.IMPROVEMENT, OWNER_NOTICE_EVENTS.REPORT],
   );
   return rows.map((r) => {
     const payload = JSON.parse(r.payload) as Record<string, unknown>;
@@ -110,6 +112,17 @@ export async function undeliveredOwnerNotices(projectIds: string[]): Promise<Own
   for (const { entity_id } of rows) {
     const notice = await readOwnerNotice(entity_id);
     if (notice && !notice.deliveredAt && projectIds.includes(notice.projectId)) out.push(notice);
+  }
+  // Only the newest hourly report is offered: an older one the conversation missed is superseded,
+  // never queued up behind it.
+  const report = await getDb().get<{ entity_id: string }>(
+    `SELECT entity_id FROM project_events WHERE project_id IN (${marks}) AND event_type = ? AND payload LIKE ?
+      ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [...projectIds, OWNER_NOTICE_EVENTS.REPORT, '%"status":"READY"%'],
+  );
+  if (report) {
+    const notice = await readOwnerNotice(report.entity_id);
+    if (notice && !notice.deliveredAt) out.push(notice);
   }
   return out;
 }
