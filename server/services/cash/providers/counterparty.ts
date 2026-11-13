@@ -29,7 +29,7 @@
  * provider names, never a key.
  */
 import { stageIndex, type Counterparty, type Fact } from '../../labor/counterparties/ladder.ts';
-import { recordedReservationEvents, type ReservationEvent } from '../../labor/counterparties/reservations.ts';
+import { recordedReservationEvents, withoutAuthority, type AuthorityReading, type ReservationEvent } from '../../labor/counterparties/reservations.ts';
 import { recordedCounterparty } from '../../labor/counterparties/ladder.ts';
 import { readTransaction, type TransactionReading } from '../../labor/counterparties/transaction.ts';
 import { commercialProviderStatus, type ProviderLine } from './status.ts';
@@ -107,14 +107,15 @@ export interface ProviderTransactionReading {
  * real send recorded (`counterpartyRecord.ts`): the holds across every
  * business, so a double-commitment of provider capacity is a breach the probe
  * can actually find. No authority is assumed held: the reading proposes, it
- * never performs, and a reserve without authority is refused with the
- * authority named.
+ * never performs, and unless it is handed the owner's reading (`authorityFor`)
+ * a reserve is refused with the authority named.
  */
 export async function readProviderTransactions(options: {
   env?: NodeJS.ProcessEnv;
   at?: string;
   events?: readonly ReservationEvent[];
-  authorityHeld?: readonly string[];
+  /** The authority owner's reading (`authorityFor`); absent, nothing is held. */
+  authority?: AuthorityReading;
 } = {}): Promise<ProviderTransactionReading[]> {
   const env = options.env ?? process.env;
   const at = options.at ?? new Date().toISOString();
@@ -137,9 +138,7 @@ export async function readProviderTransactions(options: {
         events,
         businessId: 'brain',
         window: { windowStart: at, windowEnd: at },
-        // Committing a provider is the same act as performing its effect, so it needs that effect's grant.
-        authorityRequired: [`effect:${line.capability}`],
-        authorityHeld: options.authorityHeld ?? [],
+        authority: options.authority ?? withoutAuthority('brain', undefined, 'the deployment reading holds no commercial grant'),
         at,
         source: `${EVIDENCE}: ${line.area}`,
       }),
@@ -156,14 +155,14 @@ export async function readProviderTransactions(options: {
  * authority, capacity is never double-committed, and a configured provider is
  * never read as willing.
  */
-export function counterpartyBreaches(readings: readonly ProviderTransactionReading[], authorityHeld: readonly string[] = []): string[] {
+export function counterpartyBreaches(readings: readonly ProviderTransactionReading[]): string[] {
   const breaches: string[] = [];
   for (const { area, capability, reading, evidenced } of readings) {
     if (reading.deliverability.deliverable && stageIndex(reading.deliverability.stage) < stageIndex('CONTRACTED')) {
       breaches.push(`${area}: reported deliverable at ${reading.deliverability.stage ?? 'no stage'}, below CONTRACTED`);
     }
-    if (reading.reserve.permitted && !authorityHeld.includes(`effect:${capability}`)) {
-      breaches.push(`${area}: a reserve was permitted without effect:${capability}`);
+    if (reading.reserve.permitted && !reading.authority.held) {
+      breaches.push(`${area}: a reserve for ${capability} was permitted without the live grant of ${reading.authority.action}`);
     }
     if (reading.doubleCommitted.length > 0) breaches.push(`${area}: double-committed ${reading.doubleCommitted.join(', ')}`);
     const primary = reading.primary;

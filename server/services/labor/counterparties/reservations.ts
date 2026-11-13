@@ -25,8 +25,15 @@
  *   Overlap is judged conservatively (the sum of overlapping holds, not their
  *   peak): a scarce resource is never booked on the strength of an optimistic
  *   reading of its schedule.
- * - A reservation needs every authority its caller says it requires. A missing
- *   one is the answer, naming it; it is never downgraded to a softer hold.
+ * - A reservation needs the commercial authority the existing owner grants
+ *   (`services/cash/authority.ts`): by default `ENGAGE_CONTRACTOR`, "Commit
+ *   contractor or supplier capacity against a named obligation". Whether it is
+ *   held is never something a caller says. The pure decisions take an
+ *   `AuthorityReading`, and on recorded rows the only thing that makes one is
+ *   `authorityFor`, which asks `checkCommercialAuthority` about the business's
+ *   live grant at the moment the row is written. There is no second authority
+ *   vocabulary and no second authority store here (§10.3, §20.4). A refusal is
+ *   the answer, naming the action; it is never downgraded to a softer hold.
  * - A logical reservation key counts once. The same key with different terms is
  *   a conflict, not a second reservation (invariant 27).
  * - A failed primary transfers to the named alternative only on a reported
@@ -37,6 +44,60 @@
 
 import { serializeCash } from '../../../repos/cashLock.ts';
 import { cashEventsOfKind, recordCashEvent } from '../../../repos/cashMode.ts';
+import { checkCommercialAuthority, isCommercialAction, type CommercialAction } from '../../cash/authority.ts';
+
+/**
+ * The commercial action that commits a counterparty's capacity, in the
+ * authority owner's own closed vocabulary.
+ */
+export const RESERVE_ACTION: CommercialAction = 'ENGAGE_CONTRACTOR';
+
+/**
+ * The authority owner's answer about one business and one commercial action,
+ * carried into the pure decisions below so they stay functions of their input.
+ *
+ * It is a reading, not a claim. On recorded rows it comes only from
+ * `authorityFor`, which reads the business's live commercial grant; no recorded
+ * entry point accepts one from its caller, so no caller can assert an
+ * authority it was not granted.
+ */
+export interface AuthorityReading {
+  businessId: string;
+  action: CommercialAction;
+  held: boolean;
+  /** The owner's reason, safe to show a person (no credential, no id). */
+  reason: string;
+  /** The grant the answer was read from, when one was live. */
+  authorityId: string | null;
+  policyVersion: number | null;
+}
+
+/** The live grant's answer for this business and action, from `checkCommercialAuthority` and nothing else. */
+export async function authorityFor(businessId: string, action: CommercialAction = RESERVE_ACTION): Promise<AuthorityReading> {
+  if (!isCommercialAction(action)) return withoutAuthority(businessId, action, `"${String(action)}" is not a commercial action`);
+  // Judged now, when the row is written: a grant revoked or expired since the request was made does not count.
+  const decision = await checkCommercialAuthority({ projectId: businessId, action });
+  return {
+    businessId,
+    action,
+    held: decision.ok,
+    reason: decision.reason,
+    authorityId: decision.ok ? decision.authority?.id ?? null : null,
+    policyVersion: decision.policyVersion,
+  };
+}
+
+/** A reading that holds nothing: what a proposal with no grant behind it is judged with. */
+export function withoutAuthority(businessId: string, action: CommercialAction = RESERVE_ACTION, reason = 'no commercial authority was read'): AuthorityReading {
+  return { businessId, action, held: false, reason, authorityId: null, policyVersion: null };
+}
+
+/** Null when the reading authorizes committing this business's capacity; otherwise why not. */
+function authorityRefusal(authority: AuthorityReading, businessId: string): string | null {
+  if (authority.businessId !== businessId) return `the authority read is for ${authority.businessId}, not ${businessId}`;
+  if (!authority.held) return authority.reason;
+  return null;
+}
 
 export type ReservationKind = 'RESERVED' | 'RELEASED' | 'FAILED' | 'PERFORMED';
 
@@ -52,8 +113,10 @@ export interface ReservationEvent {
   /** ISO-8601 UTC; the window is [start, end). */
   windowStart: string;
   windowEnd: string;
-  /** Authorities the actor held when the event was recorded. */
+  /** The commercial action the live grant covered when the hold was taken (empty when none was read). */
   authorityHeld: string[];
+  /** The grant the hold was taken under, when one was read. */
+  authorityId?: string | null;
   /** ISO-8601 UTC when recorded; events are applied in this order, ties in array order. */
   at: string;
 }
@@ -69,24 +132,38 @@ export interface Hold {
   windowStart: string;
   windowEnd: string;
   state: HoldState;
+  /** The authority the hold was taken under, carried onto its outcome events. */
+  authorityHeld: string[];
+  authorityId: string | null;
 }
 
 /** A hold in any state but these still takes the counterparty's capacity. */
 const FREES_CAPACITY: ReadonlySet<HoldState> = new Set(['RELEASED', 'PERFORMED']);
 
-/** The holds, folded from the events. Nothing is stored; the same events give the same holds. */
+/**
+ * The holds, folded from the events. Nothing is stored; the same events give the same holds.
+ *
+ * Every hold is opened before any outcome is applied. An outcome can only be
+ * recorded against a hold that already exists (the arbiter refuses one for an
+ * unknown key), but rows written in the same millisecond can come back in
+ * either order, and an outcome read before its own RESERVED must not be lost —
+ * that once read a FAILED hold as still HELD.
+ */
 export function holdsFrom(events: readonly ReservationEvent[]): Hold[] {
   const ordered = events.map((e, i) => ({ e, i })).sort((a, b) => (a.e.at < b.e.at ? -1 : a.e.at > b.e.at ? 1 : a.i - b.i));
   const holds = new Map<string, Hold>();
   for (const { e } of ordered) {
+    if (e.kind !== 'RESERVED' || holds.has(e.key)) continue; // a repeat of the same logical key counts once
+    holds.set(e.key, {
+      key: e.key, counterpartyId: e.counterpartyId, commitmentId: e.commitmentId, businessId: e.businessId,
+      units: e.units, windowStart: e.windowStart, windowEnd: e.windowEnd, state: 'HELD',
+      authorityHeld: [...e.authorityHeld], authorityId: e.authorityId ?? null,
+    });
+  }
+  for (const { e } of ordered) {
+    if (e.kind === 'RESERVED') continue;
     const existing = holds.get(e.key);
-    if (e.kind === 'RESERVED') {
-      if (existing) continue; // a repeat of the same logical key counts once
-      holds.set(e.key, {
-        key: e.key, counterpartyId: e.counterpartyId, commitmentId: e.commitmentId, businessId: e.businessId,
-        units: e.units, windowStart: e.windowStart, windowEnd: e.windowEnd, state: 'HELD',
-      });
-    } else if (existing && existing.state !== 'RELEASED' && existing.state !== 'PERFORMED') {
+    if (existing && existing.state !== 'RELEASED' && existing.state !== 'PERFORMED') {
       existing.state = e.kind === 'RELEASED' ? 'RELEASED' : e.kind === 'PERFORMED' ? 'PERFORMED' : 'FAILED';
     }
   }
@@ -117,21 +194,23 @@ export interface ReservationRequest {
   windowEnd: string;
   /** Total capacity the counterparty has in the window, as evidenced; unknown capacity is not a number and cannot be reserved against. */
   capacityUnits: number | null;
-  /** What this reservation requires, and what the actor holds. */
-  authorityRequired: string[];
-  authorityHeld: string[];
   at: string;
 }
 
 export type ReservationAnswer =
   | { ok: true; duplicate: boolean; event: ReservationEvent | null }
-  | { ok: false; reason: 'MISSING_AUTHORITY'; missing: string[] }
+  | { ok: false; reason: 'MISSING_AUTHORITY'; missing: string[]; detail: string }
   | { ok: false; reason: 'CAPACITY_UNKNOWN' }
   | { ok: false; reason: 'INVALID'; detail: string }
   | { ok: false; reason: 'KEY_CONFLICT'; detail: string }
   | { ok: false; reason: 'CAPACITY'; remaining: number; holders: Array<{ commitmentId: string; businessId: string; units: number }> };
 
-export function reserve(events: readonly ReservationEvent[], request: ReservationRequest): ReservationAnswer {
+/**
+ * Whether a hold may be taken, from a snapshot of the events and the authority
+ * owner's reading. The reading must be about the business the hold is for and
+ * must say the grant is held; nothing else in the request can stand in for it.
+ */
+export function reserve(events: readonly ReservationEvent[], request: ReservationRequest, authority: AuthorityReading): ReservationAnswer {
   if (!request.key.trim()) return { ok: false, reason: 'INVALID', detail: 'a reservation has a logical key' };
   if (!(request.units > 0) || !Number.isFinite(request.units)) return { ok: false, reason: 'INVALID', detail: 'units are a positive number' };
   if (!(request.windowStart < request.windowEnd)) return { ok: false, reason: 'INVALID', detail: 'the window runs start to end' };
@@ -141,8 +220,8 @@ export function reserve(events: readonly ReservationEvent[], request: Reservatio
       && prior.units === request.units && prior.windowStart === request.windowStart && prior.windowEnd === request.windowEnd;
     return same ? { ok: true, duplicate: true, event: null } : { ok: false, reason: 'KEY_CONFLICT', detail: `key ${request.key} already names a different reservation` };
   }
-  const missing = request.authorityRequired.filter((one) => !request.authorityHeld.includes(one));
-  if (missing.length > 0) return { ok: false, reason: 'MISSING_AUTHORITY', missing };
+  const refusal = authorityRefusal(authority, request.businessId);
+  if (refusal !== null) return { ok: false, reason: 'MISSING_AUTHORITY', missing: [authority.action], detail: refusal };
   if (request.capacityUnits === null) return { ok: false, reason: 'CAPACITY_UNKNOWN' };
   const { remaining, holders } = remainingCapacity(events, request.counterpartyId, request.capacityUnits, request);
   if (request.units > remaining) {
@@ -153,7 +232,8 @@ export function reserve(events: readonly ReservationEvent[], request: Reservatio
     duplicate: false,
     event: {
       kind: 'RESERVED', key: request.key, counterpartyId: request.counterpartyId, commitmentId: request.commitmentId, businessId: request.businessId,
-      units: request.units, windowStart: request.windowStart, windowEnd: request.windowEnd, authorityHeld: request.authorityHeld, at: request.at,
+      units: request.units, windowStart: request.windowStart, windowEnd: request.windowEnd,
+      authorityHeld: [authority.action], authorityId: authority.authorityId, at: request.at,
     },
   };
 }
@@ -165,8 +245,6 @@ export interface TransferRequest {
   alternativeKey: string;
   alternativeCounterpartyId: string;
   alternativeCapacityUnits: number | null;
-  authorityRequired: string[];
-  authorityHeld: string[];
   at: string;
 }
 
@@ -176,7 +254,7 @@ export type TransferPlan =
   | { action: 'REFUSED'; reason: string; detail: string };
 
 /** After a reported failure only. Releases the primary and holds the alternative, or does nothing at all. */
-export function planTransfer(events: readonly ReservationEvent[], request: TransferRequest): TransferPlan {
+export function planTransfer(events: readonly ReservationEvent[], request: TransferRequest, authority: AuthorityReading): TransferPlan {
   const primary = holdsFrom(events).find((h) => h.key === request.primaryKey);
   if (!primary) return { action: 'REFUSED', reason: 'NO_SUCH_HOLD', detail: `no reservation ${request.primaryKey}` };
   if (primary.state === 'HELD') {
@@ -187,13 +265,14 @@ export function planTransfer(events: readonly ReservationEvent[], request: Trans
   // The primary is released in the same plan, so its units are not counted against the alternative's window.
   const release: ReservationEvent = {
     kind: 'RELEASED', key: primary.key, counterpartyId: primary.counterpartyId, commitmentId: primary.commitmentId, businessId: primary.businessId,
-    units: primary.units, windowStart: primary.windowStart, windowEnd: primary.windowEnd, authorityHeld: request.authorityHeld, at: request.at,
+    units: primary.units, windowStart: primary.windowStart, windowEnd: primary.windowEnd,
+    authorityHeld: [authority.action], authorityId: authority.authorityId, at: request.at,
   };
   const next = reserve([...events, release], {
     key: request.alternativeKey, counterpartyId: request.alternativeCounterpartyId, commitmentId: primary.commitmentId, businessId: primary.businessId,
     units: primary.units, windowStart: primary.windowStart, windowEnd: primary.windowEnd, capacityUnits: request.alternativeCapacityUnits,
-    authorityRequired: request.authorityRequired, authorityHeld: request.authorityHeld, at: request.at,
-  });
+    at: request.at,
+  }, authority);
   if (!next.ok) return { action: 'REFUSED', reason: next.reason, detail: `the alternative cannot take the commitment: ${next.reason}` };
   return { action: 'TRANSFER', events: next.event ? [release, next.event] : [release] };
 }
@@ -297,6 +376,7 @@ function eventFromRow(detail: Record<string, unknown>): ReservationEvent | null 
     windowStart: String(e.windowStart ?? ''),
     windowEnd: String(e.windowEnd ?? ''),
     authorityHeld: Array.isArray(e.authorityHeld) ? e.authorityHeld.map(String) : [],
+    authorityId: typeof e.authorityId === 'string' ? e.authorityId : null,
     at: String(e.at ?? ''),
   };
 }
@@ -324,6 +404,8 @@ async function append(event: ReservationEvent, actorRef: string): Promise<void> 
   });
 }
 
+type Decision<T> = { result: T; append: readonly ReservationEvent[] };
+
 /**
  * The arbiter. Takes every named counterparty's capacity lock (`serializeCash`
  * on its own `cash_locks` row, in one fixed order so two callers cannot
@@ -335,7 +417,7 @@ async function append(event: ReservationEvent, actorRef: string): Promise<void> 
 export async function decideRecorded<T>(
   counterpartyIds: readonly string[],
   actorRef: string,
-  decide: (events: ReservationEvent[]) => { result: T; append: readonly ReservationEvent[] },
+  decide: (events: ReservationEvent[]) => Decision<T> | Promise<Decision<T>>,
 ): Promise<T> {
   const ids = [...new Set(counterpartyIds)].sort();
   const locked = new Set(ids);
@@ -343,7 +425,7 @@ export async function decideRecorded<T>(
     i < ids.length
       ? serializeCash(counterpartyLedger(ids[i]!), CAPACITY_LOCK, () => step(i + 1))
       : (async () => {
-          const { result, append: events } = decide(await recordedReservationEvents(ids));
+          const { result, append: events } = await decide(await recordedReservationEvents(ids));
           for (const event of events) {
             if (!locked.has(event.counterpartyId)) throw new Error(`${event.counterpartyId} was not locked for this decision`);
             await append(event, actorRef);
@@ -356,10 +438,16 @@ export async function decideRecorded<T>(
 /**
  * Reserve, recorded. A repeat of the same logical key is answered as a
  * duplicate and writes nothing; a refusal writes nothing.
+ *
+ * The authority is read here, under the capacity lock, from the business's
+ * live grant for `action` — `ENGAGE_CONTRACTOR` unless the caller names the
+ * commercial action of an effect the counterparty performs (a provider sending
+ * a message holds under `CONTACT_BUYER`). The action is from the owner's closed
+ * set; whether it is held is never the caller's to say.
  */
-export async function recordReservation(request: ReservationRequest, actorRef: string): Promise<ReservationAnswer> {
-  return decideRecorded([request.counterpartyId], actorRef, (events) => {
-    const answer = reserve(events, request);
+export async function recordReservation(request: ReservationRequest, actorRef: string, action: CommercialAction = RESERVE_ACTION): Promise<ReservationAnswer> {
+  return decideRecorded([request.counterpartyId], actorRef, async (events) => {
+    const answer = reserve(events, request, await authorityFor(request.businessId, action));
     return { result: answer, append: answer.ok && answer.event ? [answer.event] : [] };
   });
 }
@@ -376,7 +464,6 @@ export async function recordHoldOutcome(input: {
   counterpartyId: string;
   key: string;
   kind: Exclude<ReservationKind, 'RESERVED'>;
-  authorityHeld: string[];
   at: string;
   actorRef: string;
 }): Promise<OutcomeAnswer> {
@@ -386,7 +473,9 @@ export async function recordHoldOutcome(input: {
     if (FREES_CAPACITY.has(hold.state)) return { result: { recorded: false, reason: 'ALREADY_SETTLED', detail: `the hold is already ${hold.state.toLowerCase()}` }, append: [] };
     const event: ReservationEvent = {
       kind: input.kind, key: hold.key, counterpartyId: hold.counterpartyId, commitmentId: hold.commitmentId, businessId: hold.businessId,
-      units: hold.units, windowStart: hold.windowStart, windowEnd: hold.windowEnd, authorityHeld: input.authorityHeld, at: input.at,
+      units: hold.units, windowStart: hold.windowStart, windowEnd: hold.windowEnd,
+      // A report is not a commitment: it carries the authority the hold was taken under, and asserts none.
+      authorityHeld: hold.authorityHeld, authorityId: hold.authorityId, at: input.at,
     };
     return { result: { recorded: true, event }, append: [event] };
   });
@@ -394,15 +483,19 @@ export async function recordHoldOutcome(input: {
 
 /**
  * Transfer, recorded. Holds both counterparties' locks, re-reads both ledgers,
- * plans with `planTransfer`, and appends the release and the new hold in the
- * same transaction — both rows or neither.
+ * reads the live grant of the business the failed hold belongs to, plans with
+ * `planTransfer`, and appends the release and the new hold in the same
+ * transaction — both rows or neither.
  */
 export async function recordTransfer(
   request: TransferRequest & { primaryCounterpartyId: string },
   actorRef: string,
+  action: CommercialAction = RESERVE_ACTION,
 ): Promise<TransferPlan> {
-  return decideRecorded([request.primaryCounterpartyId, request.alternativeCounterpartyId], actorRef, (events) => {
-    const plan = planTransfer(events, request);
+  return decideRecorded([request.primaryCounterpartyId, request.alternativeCounterpartyId], actorRef, async (events) => {
+    const primary = holdsFrom(events).find((h) => h.key === request.primaryKey);
+    const authority = primary ? await authorityFor(primary.businessId, action) : withoutAuthority('', action, 'no such hold');
+    const plan = planTransfer(events, request, authority);
     return { result: plan, append: plan.action === 'TRANSFER' ? plan.events : [] };
   });
 }

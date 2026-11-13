@@ -4,6 +4,9 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { readLadder, recordCounterpartyFacts, recordedCounterparty, type Counterparty, type Fact } from '../server/services/labor/counterparties/ladder.ts';
 import { recordHoldOutcome, type ReservationEvent } from '../server/services/labor/counterparties/reservations.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { createAuthority } from '../server/repos/cashAuthority.ts';
+import { ALWAYS_PROHIBITED_COMMERCIAL, COMMERCIAL_ACTIONS } from '../server/services/cash/authority.ts';
 import {
   readRecordedTransaction, reservationKey, reserveRecordedTransaction, transferRecordedTransaction, type TransactionInput,
 } from '../server/services/labor/counterparties/transaction.ts';
@@ -21,9 +24,20 @@ const contracted = (price: number, lead: number, capacity: number) => [...quoted
 const party = (id: string, facts: Fact[], geography = 'region-a'): Counterparty => ({ id, kind: 'contractor', geography, facts });
 const commitment = { id: 'job-1', capacityUnits: 2, geographies: ['region-a', 'region-b'] };
 
+/** A real commercial grant on a project, written through the owner's own repository. */
+async function grant(projectId: string, allowedActions: readonly string[] = [...COMMERCIAL_ACTIONS]): Promise<string> {
+  const userId = (await createUser({ email: `cp31-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+  return (await createAuthority({
+    projectId, ownerUserId: userId, createdByUserId: userId, name: 'Cash Mode commercial authority',
+    allowedActions: [...allowedActions], prohibitions: [...ALWAYS_PROHIBITED_COMMERCIAL],
+    maxCommittedCents: 500_000, maxPerActionCents: 200_000, maxConcurrent: 5, currency: 'USD',
+  })).id;
+}
+
 const input = (candidates: Counterparty[], events: ReservationEvent[] = [], over: Partial<TransactionInput> = {}): TransactionInput => ({
   commitment, candidates, events, businessId: 'biz-1', window: W,
-  authorityRequired: ['RESERVE_CAPACITY'], authorityHeld: ['RESERVE_CAPACITY'], at: '2026-11-13T12:00:00Z',
+  authority: { businessId: 'biz-1', action: 'ENGAGE_CONTRACTOR', held: true, reason: 'within', authorityId: null, policyVersion: 1 },
+  at: '2026-11-13T12:00:00Z',
   source: 'sourced buyer request', ...over,
 });
 
@@ -35,7 +49,7 @@ describe('CP-31 acceptance on recorded rows', () => {
 
   const record = (c: Counterparty) => recordCounterpartyFacts({ projectId: biz, counterparty: c, facts: c.facts, actorRef: 'BRAIN' });
   const recorded = (over: Partial<TransactionInput> = {}) => {
-    const { candidates: _c, events: _e, ...rest } = input([], [], { businessId: biz, ...over });
+    const { candidates: _c, events: _e, authority: _a, ...rest } = input([], [], { businessId: biz, ...over });
     return { ...rest, candidateIds: ['crew-a', 'crew-b'] };
   };
 
@@ -62,12 +76,21 @@ describe('CP-31 acceptance on recorded rows', () => {
     expect(before.alternative?.counterpartyId).toBe('crew-b');
     expect(before.deliverability.deliverable).toBe(false);
 
-    // Without the authority nothing is written.
-    const refused = await reserveRecordedTransaction(recorded({ authorityHeld: [] }), 'BRAIN');
-    expect(refused.reserve).toMatchObject({ permitted: false, reason: 'MISSING_AUTHORITY' });
+    // Without the business's live grant nothing is written, whatever the caller passes.
+    const asserted = { ...recorded(), authorityRequired: ['ENGAGE_CONTRACTOR'], authorityHeld: ['ENGAGE_CONTRACTOR'] } as ReturnType<typeof recorded>;
+    const refused = await reserveRecordedTransaction(asserted, 'BRAIN');
+    expect(refused.reserve).toMatchObject({ permitted: false, reason: 'MISSING_AUTHORITY', missingAuthority: ['ENGAGE_CONTRACTOR'] });
+    expect(refused.authority).toMatchObject({ businessId: biz, held: false });
+    expect((await readRecordedTransaction(recorded())).deliverability.holdState).toBeNull();
+    // A grant that covers other actions is not one that commits contractor capacity.
+    await grant(biz, ['CONTACT_BUYER']);
+    expect((await reserveRecordedTransaction(recorded(), 'BRAIN')).reserve).toMatchObject({ permitted: false, reason: 'MISSING_AUTHORITY' });
     expect((await readRecordedTransaction(recorded())).deliverability.holdState).toBeNull();
 
+    // The newest live grant covers it: now the reserve is taken, under that grant.
+    const authorityId = await grant(biz);
     const reserved = await reserveRecordedTransaction(recorded(), 'BRAIN');
+    expect(reserved.reserve.permitted && reserved.reserve.event).toMatchObject({ authorityHeld: ['ENGAGE_CONTRACTOR'], authorityId });
     expect(reserved.reserve).toMatchObject({ permitted: true, duplicate: false, counterpartyId: 'crew-a' });
     const live = await readRecordedTransaction(recorded());
     expect(live.deliverability).toMatchObject({ deliverable: true, counterpartyId: 'crew-a', holdState: 'HELD' });
@@ -77,7 +100,7 @@ describe('CP-31 acceptance on recorded rows', () => {
     // No report: transferring is a no-op.
     expect((await transferRecordedTransaction(recorded(), 'BRAIN')).transfer.applicable).toBe(false);
 
-    await recordHoldOutcome({ counterpartyId: 'crew-a', key: reservationKey('job-1', 'crew-a'), kind: 'FAILED', authorityHeld: ['RESERVE_CAPACITY'], at: '2026-11-14T00:00:00Z', actorRef: 'BRAIN' });
+    await recordHoldOutcome({ counterpartyId: 'crew-a', key: reservationKey('job-1', 'crew-a'), kind: 'FAILED', at: '2026-11-14T00:00:00Z', actorRef: 'BRAIN' });
     const failed = await readRecordedTransaction(recorded({ at: '2026-11-14T01:00:00Z' }));
     expect(failed.deliverability.deliverable).toBe(false); // a failed fulfiller is not reported as deliverable
 

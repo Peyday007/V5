@@ -17,9 +17,9 @@
  *     workspace, so two projects cannot both book the last send of a day. A
  *     provider that reports no capacity is not given an invented one: the hold
  *     is refused as CAPACITY_UNKNOWN and nothing is written (§39). The authority
- *     a hold needs is the effect's own commercial action, and the authority
- *     held is read from the project's live grant (`liveAuthority`), never
- *     asserted by a caller;
+ *     a hold needs is the effect's own commercial action, and whether it is
+ *     held is read by the recorder itself from the project's live grant
+ *     (`authorityFor`, under the capacity lock) — this module supplies none;
  *   - **after the send**, the provider's answer as the hold's outcome: a
  *     confirmed receipt is PERFORMED, a definite refusal is FAILED, and an
  *     uncertain outcome leaves the hold HELD — an unknown is never read as
@@ -41,7 +41,6 @@
 import type { EffectAdapter, EffectRequest, SendOutcome } from '../../effects/adapter.ts';
 import { getOpportunity } from '../../../repos/cashPortfolio.ts';
 import { getInvoice } from '../../../repos/cashInvoices.ts';
-import { liveAuthority } from '../../../repos/cashAuthority.ts';
 import { factFor, recordCounterpartyFacts, recordedCounterparty, type Fact } from '../../labor/counterparties/ladder.ts';
 import { recordHoldOutcome, recordReservation, type ReservationAnswer } from '../../labor/counterparties/reservations.ts';
 import { reservationKey, transferRecordedTransaction } from '../../labor/counterparties/transaction.ts';
@@ -126,14 +125,12 @@ export async function recordProviderAttempt(
   const counterpartyId = providerCounterpartyId(seat);
   const recorded: RecordedAttempt = { counterpartyId, subject: null, hold: null, outcome: null, facts: 0, transferred: false };
   let key: string | null = null;
-  let authorityHeld: string[] = [];
   let capacity: number | null = null;
   try {
     const subject = await subjectOf(seat, request.businessId);
     recorded.subject = subject;
     if (subject) {
       const at = now();
-      authorityHeld = ((await liveAuthority(subject.projectId))?.allowedActions ?? []).filter((one) => one === seat.action);
       capacity = await seat.capacityPerDay().catch(() => null);
       key = `${reservationKey(subject.commitmentId, counterpartyId)}#${subject.attempt}`;
       // A retry exists only because a person closed the earlier attempts as not having happened
@@ -143,7 +140,6 @@ export async function recordProviderAttempt(
           counterpartyId,
           key: `${reservationKey(subject.commitmentId, counterpartyId)}#${earlier}`,
           kind: 'RELEASED',
-          authorityHeld,
           at,
           actorRef: BRAIN,
         });
@@ -157,11 +153,10 @@ export async function recordProviderAttempt(
           units: 1,
           ...dayWindow(at),
           capacityUnits: capacity,
-          authorityRequired: [seat.action],
-          authorityHeld,
           at,
         },
         BRAIN,
+        seat.action,
       );
     }
   } catch (error) {
@@ -199,7 +194,7 @@ export async function recordProviderAttempt(
       }
       if (held && outcome.kind !== 'UNCERTAIN') {
         const kind = outcome.kind === 'CONFIRMED' ? 'PERFORMED' : 'FAILED';
-        const done = await recordHoldOutcome({ counterpartyId, key: key!, kind, authorityHeld, at, actorRef: BRAIN });
+        const done = await recordHoldOutcome({ counterpartyId, key: key!, kind, at, actorRef: BRAIN });
         if (done.recorded) recorded.outcome = kind;
         if (kind === 'FAILED') {
           // The model's own transfer: to an alternative with evidenced capacity, or nothing at all.
@@ -209,8 +204,7 @@ export async function recordProviderAttempt(
               candidateIds: [counterpartyId],
               businessId: subject.projectId,
               window: dayWindow(at),
-              authorityRequired: [seat.action],
-              authorityHeld,
+              action: seat.action,
               at,
               source: `${seat.provider} refused ${subject.commitmentId}`,
             },

@@ -142,7 +142,8 @@ describe('a real send writes the counterparty rows', () => {
     await recordProviderAttempt(seat, request(opportunityId, '1', 0), answer({ kind: 'UNCERTAIN', reason: 'timed out' }), () => AT);
     await recordProviderAttempt(seat, request(opportunityId, '1', 1), answer(confirmed('lead-r')), () => AT);
     const holds = holdsFrom(await recordedReservationEvents([ID])).filter((h) => h.commitmentId === `cash:${opportunityId}:CONTACT_BUYER:1`);
-    expect(holds.map((h) => h.state)).toEqual(['RELEASED', 'PERFORMED']);
+    // By attempt (#0, #1): rows written in one millisecond come back in either order.
+    expect([...holds].sort((a, b) => (a.key < b.key ? -1 : 1)).map((h) => [h.key.slice(-2), h.state])).toEqual([['#0', 'RELEASED'], ['#1', 'PERFORMED']]);
   });
 });
 

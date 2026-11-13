@@ -5,7 +5,7 @@ import { clearPaymentReader } from '../server/services/cash/providers/payments.t
 import { registerCommercialProviders } from '../server/services/cash/providers/register.ts';
 import { getProbe } from '../server/services/factory/program/probes.ts';
 import type { Counterparty, Fact } from '../server/services/labor/counterparties/ladder.ts';
-import type { ReservationEvent } from '../server/services/labor/counterparties/reservations.ts';
+import { withoutAuthority, type AuthorityReading, type ReservationEvent } from '../server/services/labor/counterparties/reservations.ts';
 import { readTransaction, reservationKey, type TransactionInput } from '../server/services/labor/counterparties/transaction.ts';
 import {
   counterpartyBreaches,
@@ -31,9 +31,13 @@ const contracted = (price: number, lead: number, capacity: number) => [...quoted
 const party = (id: string, facts: Fact[], geography = 'region-a'): Counterparty => ({ id, kind: 'contractor', geography, facts });
 const commitment = { id: 'job-1', capacityUnits: 2, geographies: ['region-a', 'region-b'] };
 
+/** The authority owner's reading as the pure reading receives it; on rows only `authorityFor` makes one. */
+const HELD: AuthorityReading = { businessId: 'biz-1', action: 'ENGAGE_CONTRACTOR', held: true, reason: 'within the standing commercial authority', authorityId: 'cau_test', policyVersion: 1 };
+const NONE = withoutAuthority('biz-1');
+
 const input = (candidates: Counterparty[], events: ReservationEvent[] = [], over: Partial<TransactionInput> = {}): TransactionInput => ({
   commitment, candidates, events, businessId: 'biz-1', window: W,
-  authorityRequired: ['RESERVE_CAPACITY'], authorityHeld: ['RESERVE_CAPACITY'], at: '2026-11-13T12:00:00Z',
+  authority: HELD, at: '2026-11-13T12:00:00Z',
   source: 'sourced buyer request', ...over,
 });
 const outcome = (e: ReservationEvent, kind: 'FAILED' | 'PERFORMED', at: string): ReservationEvent => ({ ...e, kind, at });
@@ -70,8 +74,8 @@ describe('CP-31 acceptance: a sourced contractor-delivered transaction', () => {
   });
 
   it('does not reserve without the required authority, and names the authority that is missing', () => {
-    const reading = readTransaction(input([party('crew-a', quoted(900, 5, 4))], [], { authorityHeld: [] }));
-    expect(reading.reserve).toMatchObject({ permitted: false, reason: 'MISSING_AUTHORITY', missingAuthority: ['RESERVE_CAPACITY'] });
+    const reading = readTransaction(input([party('crew-a', quoted(900, 5, 4))], [], { authority: NONE }));
+    expect(reading.reserve).toMatchObject({ permitted: false, reason: 'MISSING_AUTHORITY', missingAuthority: ['ENGAGE_CONTRACTOR'] });
   });
 
   it('does not reserve a fulfiller that has not quoted', () => {
@@ -119,7 +123,7 @@ describe('CP-31 acceptance: a sourced contractor-delivered transaction', () => {
     const held = readTransaction(input([a, b]));
     if (!held.reserve.permitted || !held.reserve.event) throw new Error('expected a reserve');
     const events = [held.reserve.event, outcome(held.reserve.event, 'FAILED', '2026-11-14T00:00:00Z')];
-    const reading = readTransaction(input([a, b], events, { authorityHeld: [] }));
+    const reading = readTransaction(input([a, b], events, { authority: NONE }));
     expect(reading.transfer.plan).toMatchObject({ action: 'REFUSED', reason: 'MISSING_AUTHORITY' });
   });
 
@@ -154,7 +158,7 @@ describe('CP-31 acceptance: a sourced contractor-delivered transaction', () => {
     const a = party('crew-a', contracted(900, 5, 2));
     const other: ReservationEvent = {
       kind: 'RESERVED', key: 'job-9:crew-a', counterpartyId: 'crew-a', commitmentId: 'job-9', businessId: 'biz-2',
-      units: 1, ...W, authorityHeld: ['RESERVE_CAPACITY'], at: '2026-11-12T00:00:00Z',
+      units: 1, ...W, authorityHeld: ['ENGAGE_CONTRACTOR'], at: '2026-11-12T00:00:00Z',
     };
     const reading = readTransaction(input([a], [other]));
     expect(reading.reserve).toMatchObject({ permitted: false, reason: 'CAPACITY' });
@@ -243,14 +247,14 @@ describe('CP-31 remaining clauses', () => {
       const reading = readTransaction({
         commitment: { id: 'job-x', capacityUnits: 1 }, candidates: [party('crew-b', quoted(900, 5, 4)), party('crew-a', quoted(900, 5, 4))],
         events: history, businessId: 'biz-1', window: { windowStart: '2027-01-01T00:00:00Z', windowEnd: '2027-01-02T00:00:00Z' },
-        authorityRequired: [], authorityHeld: [], at: LATER,
+        authority: NONE, at: LATER,
       });
       expect(reading.primary?.counterpartyId).toBe('crew-a');
     });
   });
 
   describe('CP-31 clauses: negotiate authorized terms', () => {
-    const terms = { priceCeiling: 1000, maxLeadTime: 7, paymentTerms: ['net 30'], authorityRequired: ['COMMIT_SPEND'], authorityHeld: ['COMMIT_SPEND'] };
+    const terms = { priceCeiling: 1000, maxLeadTime: 7, paymentTerms: ['net 30'], authority: HELD };
 
     it('accepts within the ceiling, counters at the ceiling and never above it', () => {
       expect(negotiate(party('a', quoted(900, 5, 4)), terms)).toMatchObject({ action: 'ACCEPT', price: 900 });
@@ -265,7 +269,7 @@ describe('CP-31 remaining clauses', () => {
     });
 
     it('does not accept without the authority, and names it', () => {
-      expect(negotiate(party('a', quoted(900, 5, 4)), { ...terms, authorityHeld: [] })).toMatchObject({ action: 'MISSING_AUTHORITY', missingAuthority: ['COMMIT_SPEND'] });
+      expect(negotiate(party('a', quoted(900, 5, 4)), { ...terms, authority: NONE })).toMatchObject({ action: 'MISSING_AUTHORITY', missingAuthority: ['ENGAGE_CONTRACTOR'] });
     });
   });
 
