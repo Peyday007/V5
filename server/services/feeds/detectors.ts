@@ -247,8 +247,12 @@ export interface DetectorRunReport {
   filed: number;
 }
 
-/** Run every installed rule once over the stored items it reads. Idempotent. */
-export async function runDetectors(input: { now?: Date; detectors?: readonly Detector[] } = {}): Promise<DetectorRunReport[]> {
+/**
+ * Run every installed rule once over the stored items it reads, then link what
+ * the rules found with trigger findings into combined signals
+ * (`signals/persist.ts`). Idempotent. `combine: false` runs the rules alone.
+ */
+export async function runDetectors(input: { now?: Date; detectors?: readonly Detector[]; combine?: boolean } = {}): Promise<DetectorRunReport[]> {
   const now = input.now ?? new Date();
   const db = getDb();
   const reports: DetectorRunReport[] = [];
@@ -351,7 +355,51 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
     }
     reports.push(report);
   }
+  if (input.combine !== false) {
+    // Loaded on use: the combiner reads this module's `employerKey`, so a
+    // static import here would be a load-order cycle.
+    try {
+      const { runSignalCombination } = await import('../signals/persist.ts');
+      await runSignalCombination({ now });
+    } catch (error) {
+      // A failed combination must not take the detections already recorded
+      // with it; it is reported, and the next tick tries again.
+      console.error('[signals] combining detections and trigger findings failed:', error instanceof Error ? error.message : error);
+    }
+  }
   return reports;
+}
+
+/** What each rule's detection is evidence of, in the signal combiner's vocabulary. */
+export const DETECTOR_SIGNAL_KIND: Readonly<Record<string, string>> = Object.freeze({
+  CONCENTRATED_HIRING: 'HIRING',
+});
+
+/** One detection, as a member the signal combiner reads. */
+export interface DetectionMember {
+  id: string;
+  rule: string;
+  kind: string;
+  /** The employer identity the rule grouped by. */
+  subject: string;
+  at: string;
+}
+
+/**
+ * Open ACTIVE detections about a named organisation, for the signal combiner.
+ * A SHADOW rule's readings are unchecked and change nothing else, so they are
+ * not combined either; a closed detection is history, not a current event.
+ */
+export async function detectionMembers(now: Date = new Date()): Promise<DetectionMember[]> {
+  const rules = Object.keys(DETECTOR_SIGNAL_KIND);
+  const rows = await getDb().all<{ id: string; rule_id: string; entity_key: string; window_to: string }>(
+    `SELECT id, rule_id, entity_key, window_to FROM feed_detections
+      WHERE rule_id IN (${rules.map(() => '?').join(',')}) AND mode = 'ACTIVE'
+        AND entity_key IS NOT NULL AND window_to >= ?
+      ORDER BY id`,
+    [...rules, new Date(now.getTime() - DETECTION_REOPEN_MS).toISOString()],
+  );
+  return rows.map((row) => ({ id: row.id, rule: row.rule_id, kind: DETECTOR_SIGNAL_KIND[row.rule_id]!, subject: row.entity_key, at: row.window_to }));
 }
 
 async function fileDetectionLead(detectionId: string, signal: DetectedSignal): Promise<boolean> {

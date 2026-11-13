@@ -14,6 +14,7 @@
  * trigger that never produces a candidate is visible as such.
  */
 import type { SearchBucket } from './discovery.ts';
+import { getDb } from '../../db/database.ts';
 
 /**
  * On once the free-model lane is connected, because the lane is what sorts
@@ -115,3 +116,63 @@ export const TRIGGER_BUCKETS: readonly SearchBucket[] = Object.freeze([
       `visibly behind on the same page or listing? ${ASK}`,
   },
 ]);
+
+/**
+ * What each trigger bucket's finding is evidence of, in the vocabulary the
+ * signal combiner (`signals/combine.ts`) writes its patterns in. A bucket's
+ * finding is one event about one named business; the combiner links several
+ * such events for the same business, and with detector outputs, into a SIGNAL.
+ */
+export const TRIGGER_SIGNAL_KIND: Readonly<Record<string, string>> = Object.freeze({
+  'trigger-stale-job-post': 'HIRING',
+  'trigger-platform-sunset': 'PLATFORM_SUNSET',
+  'trigger-review-complaint': 'COMPLAINTS',
+  'trigger-new-location': 'EXPANSION',
+  'trigger-new-rule': 'NEW_RULE',
+  'trigger-funded-hiring-sales': 'FUNDING',
+  'trigger-leadership-change': 'LEADERSHIP_CHANGE',
+  'trigger-competitor-move': 'COMPETITOR_MOVE',
+});
+
+/** One trigger-bucket finding, as a member the signal combiner reads. */
+export interface TriggerFinding {
+  /** The opening the finding was filed as. */
+  id: string;
+  projectId: string;
+  bucketId: string;
+  kind: string;
+  /** The business that pays, as the opening's evidence card names it. */
+  subject: string;
+  at: string | null;
+}
+
+/**
+ * The trigger findings that name their business, for these projects (all when
+ * omitted). An opening whose payer is still unknown names nobody, and an
+ * unnamed subject is never grouped, so it is left out rather than guessed at.
+ * Duplicates of another opening are left out: the original already counts.
+ */
+export async function triggerFindings(projectIds?: readonly string[]): Promise<TriggerFinding[]> {
+  const buckets = Object.keys(TRIGGER_SIGNAL_KIND);
+  if (projectIds && projectIds.length === 0) return [];
+  const rows = await getDb().all<{ id: string; project_id: string; bucket_id: string; payer: string; signal_observed_at: string | null; created_at: string }>(
+    `SELECT o.id, o.project_id, r.bucket_id, o.payer, o.signal_observed_at, o.created_at
+       FROM cash_opportunities o
+       JOIN cash_discovery_rounds r ON r.id = o.discovery_round_id
+      WHERE r.bucket_id IN (${buckets.map(() => '?').join(',')})
+        AND o.payer IS NOT NULL AND o.duplicate_of_id IS NULL
+        ${projectIds ? `AND o.project_id IN (${projectIds.map(() => '?').join(',')})` : ''}
+      ORDER BY o.project_id, o.id`,
+    [...buckets, ...(projectIds ?? [])],
+  );
+  return rows
+    .filter((row) => row.payer.trim().length > 0)
+    .map((row) => ({
+      id: row.id,
+      projectId: row.project_id,
+      bucketId: row.bucket_id,
+      kind: TRIGGER_SIGNAL_KIND[row.bucket_id]!,
+      subject: row.payer.trim(),
+      at: row.signal_observed_at ?? row.created_at,
+    }));
+}
