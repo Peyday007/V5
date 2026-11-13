@@ -15,6 +15,8 @@ import { registerPaymentReader } from './payments.ts';
 import { createResendAdapter } from './resend.ts';
 import { createInstantlyAdapter } from './instantly.ts';
 import { createStripeInvoiceAdapter, readStripeInvoice } from './stripe.ts';
+import { registerProbe } from '../../factory/program/probes.ts';
+import { PROVIDER_COUNTERPARTY_PROBE, providerCounterpartyProbe } from './counterparty.ts';
 
 export interface ProviderRegistration {
   messaging: string | null;
@@ -46,5 +48,9 @@ export function registerCommercialProviders(env: NodeJS.ProcessEnv = process.env
     });
     out.billing = 'stripe';
   }
+  // The chosen providers are counterparties too (CP-31): their commitments are read through the
+  // counterparty ladder on the same live status reading, so production verification consults the
+  // model rather than a parallel check. Read-only; it sends nothing and reserves nothing.
+  registerProbe(PROVIDER_COUNTERPARTY_PROBE, () => providerCounterpartyProbe(env));
   return out;
 }
