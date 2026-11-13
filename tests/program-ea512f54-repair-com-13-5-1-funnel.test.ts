@@ -54,10 +54,23 @@ describe('COM-13-5 repair: the funnel counts settled cash through the opening-aw
     const regulated = await settledOpening('Broker mortgages for borrowers for a commission', 20_000);
     const plain = await settledOpening('Photo prints for a cafe wall', 10_000);
     const reading = await cashFunnel({ projectId });
-    for (const id of [regulated, plain]) {
-      const probe = await assessOpportunityRole({ projectId, opportunityId: id });
-      const held = reading.outcomes.heldBack.find((h) => h.opportunityId === id);
-      expect(held).toEqual({ opportunityId: id, position: probe.position, reason: probe.reason });
-    }
+    const probeRegulated = await assessOpportunityRole({ projectId, opportunityId: regulated });
+    expect(reading.outcomes.heldBack.find((h) => h.opportunityId === regulated))
+      .toEqual({ opportunityId: regulated, position: probeRegulated.position, reason: probeRegulated.reason });
+    // The ordinary opening is counted by both: the probe reader finds it unregulated from its rows, and the funnel does not hold it back.
+    const probePlain = await assessOpportunityRole({ projectId, opportunityId: plain });
+    expect(probePlain).toMatchObject({ regulated: false, position: 'COMPLIANT', countEconomics: true });
+    expect(reading.outcomes.heldBack.find((h) => h.opportunityId === plain)).toBeUndefined();
+    expect(reading.outcomes.countedByCurrency).toEqual({ [currency]: 10_000 });
+  });
+
+  it('counts the settled cash of an ordinary opening and holds back only the regulated one (review finding)', async () => {
+    await settledOpening('Bookkeeping cleanup for a bakery', 30_000);
+    await settledOpening('Spreadsheet template for a landscaping crew', 5_000);
+    const insurance = await settledOpening('Insurance partnership for homeowners', 70_000);
+    const reading = await cashFunnel({ projectId });
+    expect(reading.outcomes.settledByCurrency).toEqual({ [currency]: 105_000 });
+    expect(reading.outcomes.countedByCurrency).toEqual({ [currency]: 35_000 });
+    expect(reading.outcomes.heldBack.map((h) => h.opportunityId)).toEqual([insurance]);
   });
 });

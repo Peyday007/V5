@@ -10,11 +10,13 @@ import {
   assessRole,
   countRoleEconomics,
   EXCLUSION_CLASSES,
+  notRegulatedFromRows,
   openingPerforms,
   roleRecordFromRows,
 } from '../server/services/cash/exclusions.ts';
 import { REGULATED_ROLE_PROBE, regulatedRolesAssessedFromRows } from '../server/services/cash/regulatedRoleProbe.ts';
 import { getProbe } from '../server/services/factory/program/probes.ts';
+import type { CapitalStructure, OpportunityConstraint } from '../server/domain/types.ts';
 
 let projectId = '';
 let userId = '';
@@ -102,6 +104,41 @@ describe('COM-13-5 repair: the role reader reads openings from cash_opportunitie
     const asReferral = assessRole({ performs, label: 'referral partner' });
     const asBroker = assessRole({ performs, label: 'mortgage broker' });
     expect(asReferral).toEqual(asBroker);
+  });
+});
+
+describe('COM-13-5 repair: an ordinary opening is found unregulated from its rows, not held back', () => {
+  const capital = (over: Partial<CapitalStructure>): CapitalStructure => ({ id: 'cap-1', projectId: 'p', opportunityId: 'o', entryKind: 'REQUIREMENT', requirement: 'EQUIPMENT', mechanism: null, answersId: null, statement: 'buys a printer', ...over }) as CapitalStructure;
+  const constraint = (kind: string): OpportunityConstraint => ({ id: 'con-1', projectId: 'p', opportunityId: 'o', kind, statement: 'a constraint' }) as unknown as OpportunityConstraint;
+
+  it('an opening whose own row names nothing regulated is COMPLIANT on a stated basis and its economics count', async () => {
+    const id = await opening('Photo prints for a cafe wall');
+    const a = await assessOpportunityRole({ projectId, opportunityId: id });
+    expect(a).toMatchObject({ regulated: false, position: 'COMPLIANT', countEconomics: true, excluded: false });
+    expect(a.reason).toContain('Found not regulated');
+  });
+
+  it('a regulated-sector term keeps the role under assessment, held back and not excluded', () => {
+    for (const title of ['Insurance partnership for homeowners', 'Mortgage lead partner', 'Supplement private-label launch']) {
+      const a = assessRole(roleRecordFromRows([], [], {}, { title }));
+      expect(a.position).toBe('UNKNOWN');
+      expect(a.countEconomics).toBe(false);
+      expect(a.excluded).toBe(false);
+    }
+  });
+
+  it('a recorded licence need or a credential, regulatory or contract constraint withholds the finding', () => {
+    const opening = { title: 'Photo prints for a cafe wall' };
+    expect(notRegulatedFromRows(opening, [capital({})], [])).not.toBeNull();
+    expect(notRegulatedFromRows(opening, [capital({ requirement: 'LICENSING' as CapitalStructure['requirement'] })], [])).toBeNull();
+    for (const kind of ['CREDENTIAL_REQUIRED', 'REGULATORY_CAPITAL', 'SUBCONTRACTING_PROHIBITED', 'PLATFORM_TERMS']) {
+      expect(notRegulatedFromRows(opening, [], [constraint(kind)])).toBeNull();
+    }
+  });
+
+  it('no opening row, no finding: the reader never infers it from capital rows alone', () => {
+    expect(notRegulatedFromRows(null, [capital({})], [])).toBeNull();
+    expect(assessRole(roleRecordFromRows([capital({})], [])).position).toBe('UNKNOWN');
   });
 });
 

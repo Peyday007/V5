@@ -352,6 +352,41 @@ export function openingPerforms(opening: OpeningRoleText | null | undefined): st
     .join('\n');
 }
 
+/*
+ * Words that name a regulated sector, product or credential without naming what is done with it. They do not
+ * make a role regulated (an industry is never an exclusion, and never a verdict) — they only stop the reader from
+ * finding it unregulated, so a role described in a regulated sector's terms stays under assessment (UNKNOWN,
+ * held back, not excluded) until its record says what it holds. This is what keeps a relabel ("partner" for
+ * "broker") from turning a regulated role into an ordinary one.
+ */
+const REGULATED_SECTOR_TERMS =
+  /\b(?:insur(?:ance|er|ers|ed)|polic(?:y|ies)holders?|underwrit\w*|mortgages?|loans?|lend(?:er|ers|ing)|borrow(?:er|ers|ing)|credit|debt|financ(?:e|ing|ial)|securities|invest(?:ment|ments|ing|or|ors)|annuit(?:y|ies)|escrow|deposits?|brok(?:er|ers|ering|erage)|commissions?|referral (?:fees?|payments?)|finder'?s fees?|licen[cs](?:e|ed|es|ing)|permit(?:s|ted)?|regulat\w*|complian\w*|medical|medicines?|pharma\w*|prescription|clinical|health ?care|patients?|supplements?|cosmetics?|food (?:production|manufactur\w*)|firearms?|alcohol|liquor|tobacco|vap(?:e|es|ing)|cannabis|gambling|betting|lotter(?:y|ies)|sweepstakes|real[- ]estate|tenants?|landlord|money transmi\w*|payments? processing|crypto\w*|tax (?:advice|preparation|filing)|legal (?:advice|services)|immigration|childcare|private[- ]label|manufactur\w*|subcontract\w*|advertis\w*|consumers?)\b/i;
+
+/**
+ * A finding, read from an opening's own rows, that its role performs nothing regulated — or null when the rows do
+ * not support one. It holds only when the opening has a row, its text names no regulated activity and no
+ * regulated-sector term, and no capital or constraint row records a licensing, compliance or insurance need or a
+ * credential, regulatory or contract constraint. Without this, every ordinary opening was UNKNOWN and its settled
+ * cash held back, because nothing in production ever produced a notRegulated finding (review, 2026-11-13).
+ */
+export function notRegulatedFromRows(
+  opening: OpeningRoleText | null,
+  capital: readonly CapitalStructure[],
+  constraints: readonly OpportunityConstraint[],
+): { basis: string } | null {
+  if (!opening || !opening.title.trim()) return null;
+  const text = [openingPerforms(opening), ...capital.map((c) => c.statement), ...constraints.map((c) => c.statement)].join('\n');
+  if (regulatedActivitiesIn(text).length > 0 || REGULATED_SECTOR_TERMS.test(text)) return null;
+  if (capital.some((c) => c.entryKind === 'REQUIREMENT' && c.requirement && LICENCE_REQUIREMENTS.has(c.requirement))) return null;
+  if (constraints.some((c) => LICENCE_CONSTRAINTS.has(c.kind) || CONTRACT_CONSTRAINTS.has(c.kind))) return null;
+  return {
+    basis:
+      `the opening's own row ("${opening.title.trim().slice(0, 80)}") names no regulated activity and no regulated-sector term, ` +
+      `and none of its ${capital.length} capital and ${constraints.length} constraint row(s) records a licensing, compliance or insurance need ` +
+      'or a credential, regulatory or contract constraint',
+  };
+}
+
 export function roleRecordFromRows(
   capital: readonly CapitalStructure[],
   constraints: readonly OpportunityConstraint[],
@@ -371,7 +406,7 @@ export function roleRecordFromRows(
     (c) => c.entryKind === 'RESTRUCTURING' && c.mechanism !== null && PARTNER_MECHANISMS.has(c.mechanism) && c.answersId !== null && needIds.has(c.answersId),
   );
   const partner = partnered ? { holdsLicensing: true, contractInPlace: attested.partnerContractInPlace === true } : null;
-  return { performs, holds, partner };
+  return { performs, holds, partner, notRegulated: notRegulatedFromRows(opening, capital, constraints) };
 }
 
 /** The columns of cash_opportunities the role reader uses, as stored. */
