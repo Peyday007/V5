@@ -28,8 +28,14 @@
  *  5. run through the existing owner, `operateWorkflow` → `runBrowserWorkflow`
  *     (its acquisition judgment, OPERATE_PERMISSION check, destination checks
  *     and browser slot are unchanged);
+ *     The steps that run are the approved ones with each declared expected
+ *     page state checked as an `expect` step after the step it names
+ *     (`executedWorkflow`);
  *  6. verify the outcome against the declared outputs and, when given, the
- *     expected page state and datasets;
+ *     expected page state and datasets. A declared expected state that did
+ *     not hold, or a READ's fixture (one whose inputs are this run's) that
+ *     the run did not satisfy, moves the capability to REVIEW: the run row
+ *     carries `interfaceChanged`, from which the lifecycle is derived;
  *  7. settle the effect claim (COMPLETED, FAILED, or UNKNOWN — never assumed
  *     not to have happened once a step ran);
  *  8. write exactly one BROWSER_WORKFLOW_RUN row through `recordBinEvent`,
@@ -53,12 +59,15 @@
  * names a host, category or industry.
  */
 import { recordBinEvent, type RecordBinEventInput } from '../../../repos/bins.ts';
-import { BROWSER_WORKFLOW_RUN_EVENT, operateWorkflow, readBrowserWorkflows, type OperateDeps, type OperateResult, type WorkflowRecord, type WorkflowRun } from '../browserWorkflow.ts';
+import { BROWSER_WORKFLOW_RUN_EVENT, MAX_WORKFLOW_STEPS, operateWorkflow, readBrowserWorkflows, type OperateDeps, type OperateResult, type WorkflowRecord, type WorkflowRun } from '../browserWorkflow.ts';
 import type { ActorType } from '../../../domain/types.ts';
 import { authorizeActions, type ActionClass, type ApprovedAction, type WorkflowJudgment } from './actionClass.ts';
 import {
   BROWSER_CAPABILITY_EVENT,
   effectSubject,
+  executedWorkflow,
+  expectedStateResults,
+  fixtureResults,
   planCapabilityRun,
   outcomeExpectationFor,
   readBrowserCapabilities,
@@ -67,6 +76,8 @@ import {
   type CapabilityDeps,
   type CapabilityRecord,
   type CapabilityStatus,
+  type ExpectedStateResult,
+  type FixtureResult,
 } from './capability.ts';
 import { guardBrowserRun, settleBrowserEffect, type GuardDecision, type RequestBudget, type RunRow } from './effectGuard.ts';
 import { redactLog, redactRun } from './redaction.ts';
@@ -104,6 +115,7 @@ export type OperateFailureReason =
   | 'SESSION_EXPIRED'
   | 'BOUNDARY'
   | 'EXPECTED_STATE_MISSING'
+  | 'FIXTURE_FAILED'
   | 'FRESH'
   | 'RETRY_BACKOFF'
   | string;
@@ -153,6 +165,10 @@ export interface OperateCapabilityResult {
   effectKey: string | null;
   budget: RequestBudget | null;
   verification: OutcomeVerification | null;
+  /** Each declared expected page state, as the run found it (empty when no session opened). */
+  expectedStates: ExpectedStateResult[];
+  /** The fixtures whose inputs are this run's inputs, judged against what it obtained (a READ only). */
+  fixtures: FixtureResult[];
   /** The run as recorded: redacted. */
   run: WorkflowRun | null;
   /** Whether a browser session was opened for this call. */
@@ -175,7 +191,7 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
   const record = deps.record ?? recordBinEvent;
   const empty: OperateCapabilityResult = {
     outcome: 'REFUSED', failureReason: null, detail: '', capability: null, actionClass: null, judgment: null,
-    effectKey: null, budget: null, verification: null, run: null, sessionOpened: false,
+    effectKey: null, budget: null, verification: null, expectedStates: [], fixtures: [], run: null, sessionOpened: false,
   };
 
   const records = await (deps.capabilities ?? ((h: string) => readBrowserCapabilities(h, deps.capabilityDeps ?? {})))(host);
@@ -227,6 +243,11 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
     return decided({ ...classified, failureReason: 'EFFECT_UNDECLARED', detail: `the capability is declared a READ but step ${auth.judgment.effectSteps[0]} is ${auth.judgment.steps[auth.judgment.effectSteps[0]!]?.actionClass}; a new version must declare the mutation` });
   }
   const mutates = actionClass !== 'IDEMPOTENT_READ' || c.effect === 'MUTATION';
+  // The steps that run: the approved ones, each declared expected page state checked after the step it names.
+  const executed = executedWorkflow(c);
+  if (executed.workflow.steps.length > MAX_WORKFLOW_STEPS) {
+    return decided({ ...classified, failureReason: 'EXPECTED_STATE_MISSING', detail: `the approved steps and their expected-state checks are ${executed.workflow.steps.length} steps, more than ${MAX_WORKFLOW_STEPS}; a new version checks fewer states` });
+  }
 
   // 4. The one request budget (the host's limit and this capability's declared rate), then the effect claim.
   const guard: GuardDecision = await (deps.guard ?? guardBrowserRun)({
@@ -258,7 +279,9 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
   // host/name is written separately (and `recordBrowserWorkflow` is callable on its own),
   // so reading it here would let a step list nobody approved run under this approval.
   // Only its lifecycle (retired, interface changed, draft) is taken from the store.
-  const approvedWorkflow = c.workflow;
+  // Every declared expected state is checked as an `expect` step after the step it names
+  // (`executedWorkflow`), so a page that no longer reaches a declared state is seen.
+  const approvedWorkflow = executed.workflow;
   const readStored = deps.operateDeps?.workflows ?? readBrowserWorkflows;
   const pinnedWorkflows = async (h: string): Promise<Map<string, WorkflowRecord>> => {
     const stored = await readStored(h);
@@ -289,6 +312,22 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
     host: cap.host, name: cap.name, outcome: 'FAILED', steps: [], extracted: [], downloads: [], finalUrl: null,
     boundary: null, interfaceChanged: false, detail: `the run ended without a result: ${thrown ?? 'no result'}`,
   };
+  // A declared expected page state that did not hold is the interface no longer behaving as
+  // approved: validation and review, never a guess past it (the lifecycle reads interfaceChanged).
+  const states = expectedStateResults(c, executed, run);
+  const stateMissing = states.filter((x) => x.result === 'MISSING');
+  // A READ's fixtures that apply to these inputs: what this version must obtain when given them.
+  // A mutation's output differs per performance by design, so its fixtures are not judged on a live run.
+  const fixtures = !mutates && run.outcome === 'COMPLETED' ? fixtureResults(c, input.inputs, run) : [];
+  const fixtureFailed = fixtures.filter((f) => f.result === 'FAILED');
+  const interfaceChanged = run.interfaceChanged || stateMissing.length > 0 || fixtureFailed.length > 0;
+  if (stateMissing.length > 0 || fixtureFailed.length > 0) {
+    const why = [
+      ...stateMissing.map((x) => `expected state ${x.state + 1} (after step ${x.afterStep}) did not hold: ${x.detail}`),
+      ...fixtureFailed.map((f) => `fixture "${f.name}" failed: ${f.failures.join('; ')}`),
+    ].join('; ');
+    run.detail = `${run.detail}; ${why}`.slice(0, 400);
+  }
   // Whether anything could have been submitted: a step ran, or the run died with no record of how far it got.
   const stepsRan = run.steps.length > 0 || thrown !== null;
 
@@ -297,16 +336,16 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
   // Always judged: the caller's expectation when it states one, otherwise what the approved version promises.
   const expectation = input.expectation ?? outcomeExpectationFor(c);
   const verification: OutcomeVerification | null = verifyOutcome(run, expectation, { now, ...(deps.finalPage ? { finalPage: deps.finalPage } : {}) });
-  const verified = run.outcome === 'COMPLETED' && obtained.ok && (verification?.verified ?? true);
+  const verified = run.outcome === 'COMPLETED' && obtained.ok && (verification?.verified ?? true) && !interfaceChanged;
 
   let outcome: OperateOutcome;
   let failureReason: OperateFailureReason | null;
   if (verified) {
     outcome = 'COMPLETED';
     failureReason = null;
-  } else if (run.interfaceChanged) {
+  } else if (interfaceChanged) {
     outcome = 'REVIEW';
-    failureReason = 'INTERFACE_CHANGED';
+    failureReason = run.interfaceChanged || stateMissing.length > 0 ? 'INTERFACE_CHANGED' : 'FIXTURE_FAILED';
   } else if (run.boundary === 'AUTHENTICATION' && c.session.account) {
     outcome = 'REAUTHORIZE';
     failureReason = 'SESSION_EXPIRED';
@@ -352,7 +391,7 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
       host: cap.host,
       name: cap.name,
       boundary: run.boundary,
-      interfaceChanged: run.interfaceChanged,
+      interfaceChanged,
       finalUrl: safeRun.finalUrl,
       steps: safeRun.steps,
       stepsOutcome: run.outcome,
@@ -366,6 +405,8 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
         missing: obtained.missing,
         checks: verification?.checks ?? [],
         asOf: verification?.asOf ?? null,
+        expectedStates: states.map((x) => ({ state: x.state, afterStep: x.afterStep, result: x.result })),
+        fixtures: fixtures.map((f) => ({ name: f.name, result: f.result })),
       },
     },
   }));
@@ -376,7 +417,9 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
     failureReason,
     detail: safeRun.detail,
     verification,
-    run: safeRun,
+    expectedStates: states,
+    fixtures,
+    run: { ...safeRun, interfaceChanged },
     sessionOpened: true,
   };
 }

@@ -572,6 +572,116 @@ export function verifyObtained(c: BrowserCapability, run: OperateResult['run']):
 }
 
 /* ------------------------------------------------------------------------- */
+/* Expected page states and fixtures, executed (pure)                         */
+/* ------------------------------------------------------------------------- */
+
+/** Where a step of the executed workflow came from: an approved step, or a declared expected state. */
+export type ExecutedStepOrigin = { step: number; states: number[] };
+
+export interface ExecutedWorkflow {
+  /** The approved steps, with every declared expected state checked as an `expect` step after the step it names. */
+  workflow: BrowserWorkflow;
+  /** `origins[i]` is the executed step i: the 1-based approved step it is (0 for an inserted check) and the 0-based expected states it checks. */
+  origins: ExecutedStepOrigin[];
+}
+
+const stateCheck = (e: Pick<ExpectedState, 'text' | 'absentText' | 'urlIncludes' | 'locator'>): string =>
+  JSON.stringify(canonical({ text: e.text || undefined, absentText: e.absentText || undefined, urlIncludes: e.urlIncludes || undefined, locator: e.locator }));
+
+/**
+ * The step list a run of this version executes: the approved workflow's steps,
+ * unchanged and in order, with each declared expected state checked as an
+ * `expect` step immediately after the step it names. A state the workflow
+ * already checks at that point (its own identical `expect` step) is not
+ * repeated: that step is the state's check. Nothing effectful is added — an
+ * inserted step only reads the page. Pure.
+ */
+export function executedWorkflow(c: BrowserCapability): ExecutedWorkflow {
+  const steps = c.workflow.steps ?? [];
+  const sameCheck = (j: number, want: string): boolean => steps[j]?.kind === 'expect' && stateCheck(steps[j] as Pick<ExpectedState, 'text' | 'absentText' | 'urlIncludes' | 'locator'>) === want;
+  // Each state is either checked by the workflow's own identical `expect` step — the
+  // named step itself or the one right after it — or by a check inserted after the named step.
+  const attached = new Map<number, number[]>();
+  const inserted = new Map<number, number[]>();
+  c.expectedStates.forEach((e, k) => {
+    const want = stateCheck(e);
+    const own = [e.afterStep - 1, e.afterStep].find((j) => sameCheck(j, want));
+    if (own !== undefined) attached.set(own, [...(attached.get(own) ?? []), k]);
+    else inserted.set(e.afterStep, [...(inserted.get(e.afterStep) ?? []), k]);
+  });
+  const out: BrowserWorkflow['steps'] = [];
+  const origins: ExecutedStepOrigin[] = [];
+  steps.forEach((s, i) => {
+    out.push(s);
+    origins.push({ step: i + 1, states: attached.get(i) ?? [] });
+    for (const k of inserted.get(i + 1) ?? []) {
+      const e = c.expectedStates[k]!;
+      out.push({ kind: 'expect', ...(e.text ? { text: e.text } : {}), ...(e.absentText ? { absentText: e.absentText } : {}), ...(e.urlIncludes ? { urlIncludes: e.urlIncludes } : {}), ...(e.locator ? { locator: e.locator } : {}) });
+      origins.push({ step: 0, states: [k] });
+    }
+  });
+  return { workflow: { ...c.workflow, steps: out }, origins };
+}
+
+export interface ExpectedStateResult {
+  /** 0-based index into the version's `expectedStates`. */
+  state: number;
+  afterStep: number;
+  /** HELD: its check passed. MISSING: its check ran and failed. NOT_REACHED: the run stopped before it. */
+  result: 'HELD' | 'MISSING' | 'NOT_REACHED';
+  detail: string;
+}
+
+/**
+ * Whether each declared expected page state held in a run of `executed`.
+ * A MISSING state means the interface no longer behaves as the approved
+ * version says it does: the run's caller moves the capability to REVIEW
+ * rather than guessing past it. Pure.
+ */
+export function expectedStateResults(c: BrowserCapability, executed: ExecutedWorkflow, run: OperateResult['run']): ExpectedStateResult[] {
+  const byIndex = new Map(run.steps.map((s) => [s.index, s]));
+  return c.expectedStates.map((e, state) => {
+    const at = executed.origins.findIndex((o) => o.states.includes(state));
+    const ran = at >= 0 ? byIndex.get(at) : undefined;
+    if (!ran) return { state, afterStep: e.afterStep, result: 'NOT_REACHED' as const, detail: at < 0 ? 'no step checks this state' : 'the run stopped before this check' };
+    return { state, afterStep: e.afterStep, result: ran.ok ? ('HELD' as const) : ('MISSING' as const), detail: redactText(ran.detail).slice(0, 200) };
+  });
+}
+
+export interface FixtureResult {
+  name: string;
+  /** PASSED: every expected output contained its text. FAILED: one did not. */
+  result: 'PASSED' | 'FAILED';
+  failures: string[];
+}
+
+const sameInputs = (a: Record<string, string>, b: Record<string, string>): boolean => {
+  const ka = Object.keys(a).sort();
+  const kb = Object.keys(b).sort();
+  return ka.length === kb.length && ka.every((k, i) => k === kb[i] && a[k] === b[k]);
+};
+
+/**
+ * The capability's fixtures that apply to a run with these inputs (a fixture
+ * applies when its inputs are exactly these), judged against what the run
+ * obtained: each expected output must contain its fixture text. Pure.
+ */
+export function fixtureResults(c: BrowserCapability, inputs: Record<string, string>, run: OperateResult['run']): FixtureResult[] {
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+  const obtained = new Map<string, string>();
+  for (const e of run.extracted) obtained.set(e.name, `${obtained.get(e.name) ?? ''}\n${e.text}`);
+  for (const d of run.downloads) obtained.set(d.name, `${obtained.get(d.name) ?? ''}\n${d.text}`);
+  return c.fixtures
+    .filter((f) => sameInputs(f.inputs ?? {}, inputs))
+    .map((f) => {
+      const failures = Object.entries(f.expect)
+        .filter(([name, text]) => !norm(obtained.get(name) ?? '').includes(norm(text)))
+        .map(([name, text]) => `output "${name}" does not contain "${redactText(text).slice(0, 80)}"`);
+      return { name: f.name, result: failures.length === 0 ? ('PASSED' as const) : ('FAILED' as const), failures };
+    });
+}
+
+/* ------------------------------------------------------------------------- */
 /* Records: append-only rows through recordBinEvent                           */
 /* ------------------------------------------------------------------------- */
 
