@@ -30,12 +30,14 @@ export const DECISION_KINDS = [
   'RESEARCH',
   'SWITCH_MODEL',
   'STOP_APPROACH',
+  // Hermes evaluates and challenges an accepted cash plan before Brain tells the owner (owner, 2026-11-13).
+  'ADOPT_PLAN',
   'OTHER',
 ] as const;
 export type DecisionKind = (typeof DECISION_KINDS)[number];
 
 /** Kinds whose effect is hard to undo or moves capacity between goals: challenged before commitment. */
-export const HIGH_IMPACT_KINDS: readonly DecisionKind[] = ['PAUSE_GOAL', 'SUBMIT_FIX', 'REALLOCATE', 'CHANGE_STRATEGY', 'STOP_APPROACH', 'SWITCH_MODEL'];
+export const HIGH_IMPACT_KINDS: readonly DecisionKind[] = ['PAUSE_GOAL', 'SUBMIT_FIX', 'REALLOCATE', 'CHANGE_STRATEGY', 'STOP_APPROACH', 'SWITCH_MODEL', 'ADOPT_PLAN'];
 /** A stake at or above this is high impact whatever the kind. */
 export const HIGH_IMPACT_USD = 1000;
 

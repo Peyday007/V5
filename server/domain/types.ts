@@ -535,6 +535,8 @@ export const EVENT_TYPES = [
   'OPERATOR_ENGINEERING_OUTCOME',
   // A verified autonomous self-improvement cycle, and the owner's one message about it (§109).
   'OWNER_IMPROVEMENT_NOTIFIED',
+  // A cash goal's plan qualified and the owner was told, once per accepted plan (goals/planReady.ts).
+  'OWNER_PLAN_READY_NOTIFIED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

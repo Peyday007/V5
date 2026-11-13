@@ -1703,6 +1703,11 @@ export const PLAN_REFRESH_MS = 30 * 60_000;
  * waits for the first refresh.
  */
 const lastReadings = new Map<string, PlanReading>();
+
+/** The reading the goal tick last took for a goal, in this process, or null. */
+export function heldReading(goalId: string): PlanReading | null {
+  return lastReadings.get(goalId) ?? null;
+}
 const lastTopUp = new Map<string, number>();
 /** A top-up between refreshes at most this often per goal: rounds settle in minutes, not seconds. */
 export const GOAL_TOP_UP_MS = 5 * 60_000;
@@ -2191,6 +2196,11 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     }
     if (reading) lastReadings.set(id, reading);
     else lastReadings.delete(id);
+    // An accepted plan that Hermes has challenged and adopted is told to the owner now (planReady.ts).
+    if (reading?.acceptance.status === 'ACCEPTED') {
+      const { notifyPlanReady } = await import('./planReady.ts');
+      await notifyPlanReady(id, reading).catch((error: unknown) => console.warn(`plan-ready notice: ${String((error as Error)?.message ?? error)}`));
+    }
     // What Brain holds cannot reach the goal however it is combined: look for
     // more, through the same discovery every bucket uses, instead of reading
     // the same openings again in thirty minutes.
