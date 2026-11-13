@@ -381,6 +381,30 @@ export async function takeOverOperation(
 }
 
 /**
+ * Take back a reservation its last holder released with nothing performed.
+ *
+ * A released reservation is the row `failOperation(..., { terminal: false })`
+ * leaves: still `RESERVED`, its failure category set, `recover_after` at the
+ * release. That category is what tells it apart from a reservation whose
+ * executor died mid-effect (category NULL), which must never be taken as
+ * "nothing happened". Taking it back is one compare-and-swap that also clears
+ * the category and arms the new holder's lease, so a holder that then dies is
+ * read as abandoned, never as released a second time.
+ */
+export async function retakeReleasedOperation(
+  operationId: string,
+  recoverAfter: string,
+  nextRecoverAfter: string,
+): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE idempotency_operations SET recover_after = ?, failure_category = NULL, updated_at = ?
+      WHERE id = ? AND state = 'RESERVED' AND recover_after = ? AND failure_category IS NOT NULL`,
+    [nextRecoverAfter, operationNow(), operationId, recoverAfter],
+  );
+  return result.changes === 1;
+}
+
+/**
  * Make a live external attempt recoverable if its executor dies.
  *
  * `runExternalEffect` holds no transaction across the provider call, so an

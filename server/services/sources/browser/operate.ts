@@ -36,7 +36,7 @@
  *     not hold, or a READ's fixture (one whose inputs are this run's) that
  *     the run did not satisfy, moves the capability to REVIEW: the run row
  *     carries `interfaceChanged`, from which the lifecycle is derived;
- *  7. settle the effect claim (COMPLETED, FAILED, or UNKNOWN — never assumed
+ *  7. settle the effect claim (COMPLETED, released as NOT_SUBMITTED, or UNKNOWN — never assumed
  *     not to have happened once a step ran);
  *  8. write exactly one BROWSER_WORKFLOW_RUN row through `recordBinEvent`,
  *     redacted, carrying the capability version, action class, effect key,
@@ -370,7 +370,16 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
     const settle = deps.settle ?? settleBrowserEffect;
     if (verified) await settle(operationId, { result: 'COMPLETED', summary: `verified: ${cap.name} v${cap.current.version}` });
     else if (effectUnknown) await settle(operationId, { result: 'UNKNOWN', reason: `${failureReason ?? 'unverified'}: ${run.detail}`.slice(0, 400) });
-    else await settle(operationId, { result: 'FAILED', detail: `nothing was submitted: ${failureReason ?? 'not run'}: ${run.detail}`.slice(0, 400) });
+    // Only a mutation is claimed, so reaching here means no step ran and nothing threw:
+    // the site was never reached. The claim is released, not closed, so the same approved
+    // action with the same inputs is admitted again once the person fixes the cause.
+    else {
+      await settle(operationId, {
+        result: 'NOT_SUBMITTED',
+        category: outcome === 'REAUTHORIZE' || outcome === 'REFUSED' ? 'NOT_AUTHORIZED' : 'DEPENDENCY_UNAVAILABLE',
+        detail: `nothing was submitted: ${failureReason ?? 'not run'}: ${run.detail}`.slice(0, 400),
+      });
+    }
   }
 
   // 8. One run row, redacted, carrying the version, class, key, verification and reason.
