@@ -231,7 +231,18 @@ export class ModernMcpClient {
    * `isError` result — throws, so a caller cannot mistake a refusal for data.
    */
   async call(name: string, args: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
-    const reply = await this.callTool(name, args);
+    let reply = await this.callTool(name, args);
+    // UNAVAILABLE is Brain saying its database did not answer in time and "send the same
+    // call again shortly" — nothing was refused and, every mutating tool being idempotent by
+    // work item, a repeat cannot perform the effect twice. A verifier that treats the first
+    // busy answer as a verdict fails a release for the database's load, not for the release
+    // (Deploys 1010-1017: "brain_complete_work: UNAVAILABLE … send the same call again").
+    for (const waitMs of [2_000, 5_000, 10_000, 20_000]) {
+      const category = (reply.result?.structuredContent as { error?: { category?: string } } | undefined)?.error?.category;
+      if (!reply.result?.isError || category !== 'UNAVAILABLE') break;
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      reply = await this.callTool(name, args);
+    }
     if (reply.error) throw new Error(`${name}: protocol error ${reply.error.code} ${reply.error.message}`);
     if (!reply.result) throw new Error(`${name}: no result`);
     if (reply.result.isError) {
