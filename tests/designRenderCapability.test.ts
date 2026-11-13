@@ -13,9 +13,15 @@
  * a worker that kept to its authority could not run it and submitted nothing.
  * `the manifest authorizes the command it gives` reproduces that class.
  *
- * The contract also implies a routing preference (`contractCapabilities`),
- * applied by both gates while some enabled Routine declares it and dropped
- * while none does, so render work prefers a browser and cannot strand.
+ * A review finding then refuted the routing preference that was added beside
+ * the manifest fix: a capability derived from the render contract became
+ * required fleet-wide the moment any one Routine declared `browser` (and Brain
+ * wrote that declaration itself after one satisfied render), so the router and
+ * the assigner excluded every other Routine from renders — Routines that could
+ * render, and could never earn the tag because they were never admitted to
+ * one. Render work collapsed onto whichever Routines completed first. The
+ * derived routing and the automatic write are gone; a bin's own
+ * `requiredCapabilities` still fail closed exactly as before.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
@@ -24,16 +30,8 @@ import { createAccount, createRoutine, getRoutine, setRoutineCapabilities } from
 import { createWorker } from '../server/repos/identity.ts';
 import { getDb } from '../server/db/database.ts';
 import { newId } from '../server/repos/util.ts';
-import {
-  contractCapabilities,
-  effectiveCapabilities,
-  evaluateContract,
-} from '../server/services/bins/contracts.ts';
-import {
-  binAdmission,
-  fleetDeclarationScanCount,
-  forgetFleetDeclarations,
-} from '../server/services/bins/service.ts';
+import { evaluateContract } from '../server/services/bins/contracts.ts';
+import { binAdmission } from '../server/services/bins/service.ts';
 import { routeBin, type RoutingCandidate } from '../server/services/dispatch/router.ts';
 import { designRenderManifest, renderCommand } from '../server/services/design/render.ts';
 import { SEED_SURFACES } from '../server/services/design/surfaces.ts';
@@ -49,8 +47,6 @@ let projectId = '';
 
 beforeEach(async () => {
   projectId = (await freshProject()).project.id;
-  // The fleet's declarations are shared for a short window; each test builds its own fleet.
-  forgetFleetDeclarations();
 });
 
 function renderLike(over: Partial<Bin> = {}): Bin {
@@ -93,29 +89,38 @@ function candidate(id: string, capabilities: string[], state = 'ENABLED'): Routi
   };
 }
 
-describe('the contract names what can satisfy it', () => {
-  it('requires a browser for a render and nothing for any other contract', () => {
-    expect(contractCapabilities('DESIGN_RENDER_V1')).toEqual(['browser']);
-    for (const other of ['DESIGN_REVIEW_V1', 'FACTORY_PLAN_V1', 'FACTORY_UNITS_V1', 'RESEARCH_PACKET_V1']) {
-      expect(contractCapabilities(other)).toEqual([]);
-    }
-  });
-
-  it('adds a derived capability only while the fleet declares it, and never touches explicit ones', () => {
-    const bin = renderLike();
-    expect(effectiveCapabilities(bin)).toEqual([]);
-    expect(effectiveCapabilities(bin, () => false)).toEqual([]);
-    expect(effectiveCapabilities(bin, (cap) => cap === 'browser')).toEqual(['browser']);
-    const factory = renderLike({ completionContract: 'FACTORY_UNITS_V1' as Bin['completionContract'], requiredCapabilities: ['repository'] });
-    expect(effectiveCapabilities(factory, () => true)).toEqual(['repository']);
-    expect(effectiveCapabilities(factory, () => false)).toEqual(['repository']);
-  });
-});
-
-describe('the router fires a render at a surface that can render', () => {
-  it('chooses the browser surface and refuses the browserless one for its capability', () => {
+describe('the router does not strand render work on the surfaces that declared a browser first', () => {
+  it('keeps a browserless surface eligible for a render while another surface declares a browser', () => {
     const result = routeBin({
       bin: renderLike(),
+      candidates: [candidate('plain', []), candidate('browser', ['browser'])],
+      fleetPolicy: null,
+      fleetInFlight: 0,
+      now: NOW,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.considered.find((one) => one.routineId === 'plain')?.verdict).not.toBe(
+      'lacks a required capability',
+    );
+  });
+
+  it('fires a render at a browserless surface when it is the only one with room', () => {
+    const busy = { ...candidate('browser', ['browser']), routineInFlight: 1, routineTarget: 1 };
+    const result = routeBin({
+      bin: renderLike(),
+      candidates: [busy, candidate('plain', [])],
+      fleetPolicy: null,
+      fleetInFlight: 1,
+      now: NOW,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.routine.id).toBe('plain');
+  });
+
+  it('still fails closed on a capability the bin itself requires', () => {
+    const result = routeBin({
+      bin: renderLike({ requiredCapabilities: ['browser'] }),
       candidates: [candidate('plain', []), candidate('browser', ['browser'])],
       fleetPolicy: null,
       fleetInFlight: 0,
@@ -127,29 +132,6 @@ describe('the router fires a render at a surface that can render', () => {
     expect(result.considered.find((one) => one.routineId === 'plain')?.verdict).toBe(
       'lacks a required capability',
     );
-  });
-
-  it('still routes when no enabled surface declares a browser, so the bin is never stranded', () => {
-    const result = routeBin({
-      bin: renderLike(),
-      candidates: [candidate('plain', []), candidate('off', ['browser'], 'DISABLED')],
-      fleetPolicy: null,
-      fleetInFlight: 0,
-      now: NOW,
-    });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.routine.id).toBe('plain');
-  });
-
-  it('routes every other contract exactly as before', () => {
-    const result = routeBin({
-      bin: renderLike({ completionContract: 'DESIGN_REVIEW_V1' as Bin['completionContract'] }),
-      candidates: [candidate('plain', []), candidate('browser', ['browser'])],
-      fleetPolicy: null,
-      fleetInFlight: 0,
-      now: NOW,
-    });
-    expect(result.ok).toBe(true);
   });
 });
 
@@ -170,7 +152,7 @@ const manifest = (): BinManifest =>
     stoppingConditions: ['the submission has been made'],
   }) as unknown as BinManifest;
 
-async function setup(browserSurface: boolean) {
+async function setup(browserSurface: boolean, requiredCapabilities: string[] = []) {
   const account = await createAccount({ name: `render-${tag()}` });
   const plain = await createRoutine({
     accountId: account.id, routineRef: `trig_plain_${tag()}`, name: `plain-${tag()}`, tokenSecretName: 'S_PLAIN',
@@ -193,6 +175,7 @@ async function setup(browserSurface: boolean) {
     ready: true,
     maxAttempts: 3,
     workloadClass: 'GENERAL_DESIGN_RENDER',
+    ...(requiredCapabilities.length > 0 ? { requiredCapabilities } : {}),
   });
   // Brain fired this session from the browserless Routine.
   const session = `cse_${tag()}${tag()}${tag()}`;
@@ -220,9 +203,26 @@ async function setup(browserSurface: boolean) {
   return { bin, admit, plain, session, principal, worker };
 }
 
-describe('the assigner leaves a render for a surface that can render', () => {
-  it('skips a browserless session quietly while a browser surface exists, costing no attempt', async () => {
+describe('the assigner does not strand render work on the surfaces that declared a browser first', () => {
+  it('admits a browserless session to a render while another Routine declares a browser', async () => {
     const { bin, admit } = await setup(true);
+    const verdict = await admit(bin);
+    // Unconditional: a refusal of any kind fails this test.
+    expect(verdict.reason ?? null).toBeNull();
+    expect(verdict.ok).toBe(true);
+    expect(verdict.quiet).toBeUndefined();
+  });
+
+  it('admits the same session when no surface declares a browser', async () => {
+    const { bin, admit } = await setup(false);
+    const verdict = await admit(bin);
+    expect(verdict.reason ?? null).toBeNull();
+    expect(verdict.ok).toBe(true);
+    expect(verdict.quiet).toBeUndefined();
+  });
+
+  it('still skips a session quietly when the bin itself requires a capability its Routine lacks', async () => {
+    const { bin, admit } = await setup(true, ['browser']);
     const verdict = await admit(bin);
     expect(verdict.ok).toBe(false);
     if (verdict.ok) return;
@@ -233,16 +233,6 @@ describe('the assigner leaves a render for a surface that can render', () => {
       [bin.id],
     );
     expect(row).toEqual({ attempt_count: 0, state: 'READY' });
-  });
-
-  it('admits the same session when no surface declares a browser (fail open, as before)', async () => {
-    const { bin, admit } = await setup(false);
-    const verdict = await admit(bin);
-    // Fail open means admitted: an unconditional assertion, so a refusal of any
-    // kind — not only one worded about a browser — fails this test.
-    expect(verdict.reason ?? null).toBeNull();
-    expect(verdict.ok).toBe(true);
-    expect(verdict.quiet).toBeUndefined();
   });
 
   it('keeps the evidence bar: an unanswered render is still refused', async () => {
@@ -256,12 +246,11 @@ describe('the assigner leaves a render for a surface that can render', () => {
 describe('a satisfied render is not evidence of a browser, so Brain never declares one', () => {
   /*
    * Review finding: Brain wrote `browser` onto the Routine whose session
-   * satisfied DESIGN_RENDER_V1, on the premise that only a browser could
-   * satisfy it. `evaluateDesignRender` checks only that `captures` is a
-   * non-empty array — no hash is checked against any bytes — so a browserless
-   * session satisfies it with a fabricated capture, and the write recorded, in a
-   * field a person owns, a capability nothing verified. The declaration's only
-   * producer is now a person.
+   * satisfied DESIGN_RENDER_V1. `evaluateDesignRender` checks only that
+   * `captures` is a non-empty array — no hash is checked against any bytes — so
+   * a browserless session satisfies it with a fabricated capture. The
+   * declaration's only producer is a person, and it is never derived for a
+   * render bin either (see the next block).
    */
 
   /** A render bin Brain fired at `routine` as `session`, taken through check-in, submission and completion. */
@@ -311,14 +300,6 @@ describe('a satisfied render is not evidence of a browser, so Brain never declar
     return (await requestCompletion({ workerId: worker.id, proof })).state;
   }
 
-  it('reproduces the gap: with nobody declaring a browser, a browserless session is admitted to a render', async () => {
-    const bin = renderLike({ id: `bin_${tag()}` });
-    expect(effectiveCapabilities(bin, () => false)).toEqual([]);
-    // Through the real admission, not only the pure function.
-    const { bin: real, admit } = await setup(false);
-    expect((await admit(real)).ok).toBe(true);
-  });
-
   it('the contract is satisfied by a capture no browser drew — so a satisfied verdict cannot be the proof', async () => {
     const account = await createAccount({ name: `fabricated-${tag()}` });
     const routine = await createRoutine({
@@ -335,38 +316,8 @@ describe('a satisfied render is not evidence of a browser, so Brain never declar
     expect(routine.capabilities).toEqual([]);
     expect(await completeRenderFrom(routine.id, routine.routineRef)).toBe('COMPLETE');
     expect((await getRoutine(routine.id))!.capabilities).toEqual([]);
-    // And so the fleet still declares no browser: the next render fails open, as before.
-    forgetFleetDeclarations();
     const { bin, admit } = await setup(false);
     expect((await admit(bin)).ok).toBe(true);
-  });
-
-  it('keeps exactly what a person declared, and the gates use that declaration', async () => {
-    const account = await createAccount({ name: `keep-${tag()}` });
-    const routine = await createRoutine({
-      accountId: account.id, routineRef: `trig_${tag()}`, name: `r-${tag()}`, tokenSecretName: `S_${tag()}`,
-    });
-    await setRoutineCapabilities({ routineId: routine.id, capabilities: ['repository'], actor: 'test', reason: 'checkout' });
-    expect(await completeRenderFrom(routine.id, routine.routineRef)).toBe('COMPLETE');
-    expect((await getRoutine(routine.id))!.capabilities).toEqual(['repository']);
-
-    // A person's declaration of a browser is what moves the gates.
-    await setRoutineCapabilities({ routineId: routine.id, capabilities: ['repository', 'browser'], actor: 'test', reason: 'has Chromium' });
-    forgetFleetDeclarations();
-    const { bin, admit } = await setup(false);
-    const verdict = await admit(bin);
-    expect(verdict.ok).toBe(false);
-    if (verdict.ok) return;
-    expect(verdict.quiet).toBe(true);
-    expect(verdict.reason).toContain('browser');
-    const routed = routeBin({
-      bin: renderLike(),
-      candidates: [candidate('plain', []), candidate(routine.id, (await getRoutine(routine.id))!.capabilities)],
-      fleetPolicy: null,
-      fleetInFlight: 0,
-      now: NOW,
-    });
-    expect(routed.ok && routed.routine.id).toBe(routine.id);
   });
 
   it('exports no writer that infers a capability from a verdict', async () => {
@@ -376,44 +327,51 @@ describe('a satisfied render is not evidence of a browser, so Brain never declar
 });
 
 /*
- * Review finding: admission read every Routine and every Account on each
- * admission of a render bin with a session, so each claim attempt cost two
- * full-table reads on the pressure-sensitive claim path (§61/§63). The fleet is
- * now read only when its answer can change the verdict, and then once per short
- * window — without changing a single verdict above.
+ * Review finding (this change): once any one Routine declared `browser`, the
+ * contract-derived requirement made it required fleet-wide, and the router and
+ * the assigner excluded every other Routine from renders — Routines that could
+ * never earn the tag because they were never admitted to one.
  */
-describe('admission does not scan the fleet on every claim', () => {
-  it('scans at most once across many admissions of the browserless session, and still skips it', async () => {
-    const { bin, principal, worker, session } = await setup(true);
-    const before = fleetDeclarationScanCount();
-    for (let i = 0; i < 5; i += 1) {
-      const admit = await binAdmission({ workerId: worker.id, principal, sessionRef: session });
-      const verdict = await admit(bin);
-      expect(verdict.ok).toBe(false);
-      expect(verdict.quiet).toBe(true);
-    }
-    expect(fleetDeclarationScanCount() - before).toBeLessThanOrEqual(1);
-  });
+describe('a person declaring a browser on one Routine does not withdraw renders from the rest', () => {
+  it('keeps exactly what a person declared, and that declaration excludes no other Routine', async () => {
+    const account = await createAccount({ name: `keep-${tag()}` });
+    const routine = await createRoutine({
+      accountId: account.id, routineRef: `trig_${tag()}`, name: `r-${tag()}`, tokenSecretName: `S_${tag()}`,
+    });
+    await setRoutineCapabilities({ routineId: routine.id, capabilities: ['repository'], actor: 'test', reason: 'checkout' });
+    expect(await completeRenderFrom(routine.id, routine.routineRef)).toBe('COMPLETE');
+    expect((await getRoutine(routine.id))!.capabilities).toEqual(['repository']);
 
-  it('never scans for a session Brain did not fire', async () => {
-    const { bin, principal, worker } = await setup(true);
-    const before = fleetDeclarationScanCount();
-    const admit = await binAdmission({ workerId: worker.id, principal, sessionRef: `cse_unfired_${tag()}` });
-    const verdict = await admit(bin);
-    expect(verdict.ok).toBe(true);
-    expect(fleetDeclarationScanCount()).toBe(before);
-  });
-
-  it('never scans for a session whose own enabled Routine already declares the browser', async () => {
-    // The session Brain fired from `plain`, which is now declared to have a browser.
-    const { bin, principal, worker, plain, session } = await setup(false);
-    await setRoutineCapabilities({ routineId: plain.id, capabilities: ['browser'], actor: 'test', reason: 'has Chromium' });
-    const before = fleetDeclarationScanCount();
-    const admit = await binAdmission({ workerId: worker.id, principal, sessionRef: session });
+    await setRoutineCapabilities({ routineId: routine.id, capabilities: ['repository', 'browser'], actor: 'test', reason: 'has Chromium' });
+    // The real assigner, for a session Brain fired from a different, browserless Routine.
+    const { bin, admit } = await setup(false);
     const verdict = await admit(bin);
     expect(verdict.reason ?? null).toBeNull();
     expect(verdict.ok).toBe(true);
-    expect(fleetDeclarationScanCount()).toBe(before);
+    // The real router: the browserless surface is still a candidate.
+    const routed = routeBin({
+      bin: renderLike(),
+      candidates: [candidate('plain', []), candidate(routine.id, (await getRoutine(routine.id))!.capabilities)],
+      fleetPolicy: null,
+      fleetInFlight: 0,
+      now: NOW,
+    });
+    expect(routed.ok).toBe(true);
+    if (!routed.ok) return;
+    expect(routed.considered.find((one) => one.routineId === 'plain')?.verdict).not.toBe('lacks a required capability');
+  });
+
+  it('admission of a render reads no fleet-wide declaration at all, however many times it is asked', async () => {
+    const { bin, principal, worker, session } = await setup(true);
+    for (let i = 0; i < 5; i += 1) {
+      const admit = await binAdmission({ workerId: worker.id, principal, sessionRef: session });
+      const verdict = await admit(bin);
+      expect(verdict.ok).toBe(true);
+    }
+    const service = await import('../server/services/bins/service.ts');
+    expect('fleetDeclarationScanCount' in service).toBe(false);
+    const contracts = await import('../server/services/bins/contracts.ts');
+    expect('effectiveCapabilities' in contracts).toBe(false);
   });
 });
 
@@ -628,5 +586,17 @@ describe('from the recorded state: a render bin, no declared browser, a worker t
     expect(result.bin.state).toBe('COMPLETE');
     // Completing it is not a declaration: the plain Routine still declares nothing.
     expect(result.plain.capabilities).toEqual([]);
+  });
+
+  it('a satisfied render declares nothing on its Routine, so the next render is not withheld from the rest of the fleet', async () => {
+    const result = (await drive('now'))!;
+    expect(result.completed).toBe('COMPLETE');
+    // No automatic capability write: the Routine that rendered is unchanged.
+    expect((await getRoutine(result.plain.id))!.capabilities).toEqual([]);
+    // And a different browserless Routine's session is still admitted to the next render.
+    const { bin, admit } = await setup(false);
+    const verdict = await admit(bin);
+    expect(verdict.reason ?? null).toBeNull();
+    expect(verdict.ok).toBe(true);
   });
 });
