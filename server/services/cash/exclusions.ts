@@ -307,17 +307,21 @@ export interface RoleAttestation {
 
 /**
  * What an opening performs, in the words of its own cash_opportunities row: its title, its mechanism,
- * its industry and source, and its evidence card. Production records every opening here and populates
+ * its industry, and the evidence-card fields that describe the work and how it is paid. Production records every opening here and populates
  * capital_structures only for the few a research claim declared a capital requirement for, so a reader
  * that looked only at capital rows saw no role at all on real openings (r01.com-13-5, 2026-11-10).
  * This text says what is done; it never says what is held — holds and partner come only from rows and
  * attestations below.
+ *
+ * Where an opening was found (`source`) and Brain's research notes on it (`economics_note`) are not
+ * read: they describe the opening, not an activity any role performs, so a note that a market "pays
+ * commissions" or that "deposits are typical" would otherwise mark an opening regulated and hold its
+ * economics back with nobody earning a commission or holding a deposit.
  */
 export interface OpeningRoleText {
   title: string;
   mechanism?: string | null;
   industry?: string | null;
-  source?: string | null;
   payer?: string | null;
   offerScope?: string | null;
   buyingSignal?: string | null;
@@ -326,7 +330,6 @@ export interface OpeningRoleText {
   fulfillmentOwner?: string | null;
   deliveryMethod?: string | null;
   requiredInputs?: string | null;
-  economicsNote?: string | null;
 }
 
 /** The text of an opening row that says what it performs, one field per line, blanks left out. */
@@ -337,7 +340,6 @@ export function openingPerforms(opening: OpeningRoleText | null | undefined): st
     opening.title,
     mechanism,
     opening.industry,
-    opening.source,
     opening.payer,
     opening.offerScope,
     opening.buyingSignal,
@@ -346,7 +348,6 @@ export function openingPerforms(opening: OpeningRoleText | null | undefined): st
     opening.fulfillmentOwner,
     opening.deliveryMethod,
     opening.requiredInputs,
-    opening.economicsNote,
   ]
     .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
     .join('\n');
@@ -381,7 +382,6 @@ export interface OpeningRoleRow {
   title: string;
   mechanism: string | null;
   industry: string | null;
-  source: string | null;
   payer: string | null;
   offer_scope: string | null;
   buying_signal: string | null;
@@ -390,18 +390,16 @@ export interface OpeningRoleRow {
   fulfillment_owner: string | null;
   delivery_method: string | null;
   required_inputs: string | null;
-  economics_note: string | null;
 }
 
 export const OPENING_ROLE_COLUMNS =
-  'id, project_id, title, mechanism, industry, source, payer, offer_scope, buying_signal, acceptance_condition, payment_terms, fulfillment_owner, delivery_method, required_inputs, economics_note';
+  'id, project_id, title, mechanism, industry, payer, offer_scope, buying_signal, acceptance_condition, payment_terms, fulfillment_owner, delivery_method, required_inputs';
 
 export function openingRoleText(row: OpeningRoleRow): OpeningRoleText {
   return {
     title: row.title,
     mechanism: row.mechanism,
     industry: row.industry,
-    source: row.source,
     payer: row.payer,
     offerScope: row.offer_scope,
     buyingSignal: row.buying_signal,
@@ -410,7 +408,6 @@ export function openingRoleText(row: OpeningRoleRow): OpeningRoleText {
     fulfillmentOwner: row.fulfillment_owner,
     deliveryMethod: row.delivery_method,
     requiredInputs: row.required_inputs,
-    economicsNote: row.economics_note,
   };
 }
 

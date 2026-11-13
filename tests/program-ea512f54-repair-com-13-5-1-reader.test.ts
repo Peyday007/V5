@@ -125,3 +125,45 @@ describe('COM-13-5 repair: probe r01.com-13-5 enumerates cash_opportunities', ()
     expect(r.detail).toContain('none performs a regulated activity');
   });
 });
+
+describe('COM-13-5 repair: where an opening was found and Brain\'s notes on it are not what any role performs', () => {
+  it('a research note mentioning commissions or deposits does not mark an opening regulated', async () => {
+    const o = await createOpportunity({
+      projectId, cashModeId, ownerUserId: userId, title: 'Repair a small business intake form',
+      mechanism: 'EXPLICIT_PAID_REQUEST', currency,
+      source: 'A forum thread where agents discuss commissions and referral fees',
+    });
+    await getDb().run('UPDATE cash_opportunities SET economics_note = ? WHERE id = ?', [
+      'Comparable shops take customer deposits; agencies in this market earn commissions.',
+      o.id,
+    ]);
+    const a = await assessOpportunityRole({ projectId, opportunityId: o.id });
+    expect(a.activities).toEqual([]);
+    expect(a.activities).not.toContain('EARN_COMMISSION');
+    expect(a.activities).not.toContain('HOLD_DEPOSITS');
+  });
+
+  it('openingPerforms ignores source and economics note even when handed them', () => {
+    const text = openingPerforms({
+      title: 'Repair an intake form',
+      source: 'a thread about commissions',
+      economicsNote: 'buyers usually leave customer deposits',
+    } as Parameters<typeof openingPerforms>[0]);
+    expect(text).toBe('Repair an intake form');
+  });
+
+  it('an activity the opening itself performs is still recognised, so the fix is not a blind spot', async () => {
+    const o = await createOpportunity({
+      projectId, cashModeId, ownerUserId: userId, title: 'Event venue booking',
+      mechanism: 'EXPLICIT_PAID_REQUEST', currency, source: 'A plain listing',
+    });
+    await getDb().run('UPDATE cash_opportunities SET offer_scope = ? WHERE id = ?', [
+      'Take a refundable booking deposit and earn a commission from the venue',
+      o.id,
+    ]);
+    const a = await assessOpportunityRole({ projectId, opportunityId: o.id });
+    expect(a.activities).toEqual(expect.arrayContaining(['EARN_COMMISSION', 'HOLD_DEPOSITS']));
+    expect(a.countEconomics).toBe(false);
+    expect(a.excluded).toBe(false);
+  });
+});
