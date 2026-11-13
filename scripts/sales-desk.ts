@@ -5,7 +5,7 @@
  *       One pass: every new reply on every business's campaigns analysed and
  *       acted on, learning, deliverability and knowledge when due.
  *       Prints `SALES-DESK: OK` or `SALES-DESK: ATTENTION`.
- *   node --import tsx scripts/sales-desk.ts --prove [--sites N]
+ *   node --import tsx scripts/sales-desk.ts --prove [--sites N] [--replies N]
  *       Sellbird's capabilities on real data without acting on anyone:
  *       research, fit and a written first email for N businesses the Neighbor
  *       Card would contact (nothing added), and its reading of the replies on
@@ -41,10 +41,15 @@ if (!argv.includes('--prove')) {
 const card = SALES_BUSINESSES.find((b) => b.id === 'neighbor-card')!;
 let researched = 0;
 let written = 0;
-const want = flag('--sites', 4);
-for (let t = 0; t < OSM_TILES.length && written < want; t += 1) {
+const want = flag('--sites', 2);
+// A proof runs over one SSH session inside a 75-minute job: each stage gets a
+// share of the clock and stops at it, so one slow site or model call can never
+// cost the whole proof its output.
+const started = Date.now();
+const until = (minutes: number) => Date.now() - started < minutes * 60_000;
+for (let t = 0; t < OSM_TILES.length && written < want && until(30); t += 1) {
   for (const c of await discoverOsm(deps, OSM_TILES[(t * 7) % OSM_TILES.length]!)) {
-    if (written >= want) break;
+    if (written >= want || !until(30)) break;
     const hit = await findPublishedEmail(deps, c.website);
     if (!hit) continue;
     const r = await sellbirdResearch(c.website, card.offer, { industry: c.category, source: 'sales prove' });
@@ -67,8 +72,9 @@ for (let t = 0; t < OSM_TILES.length && written < want; t += 1) {
 let analysed = 0;
 const finished = itemsOf(await instantly(deps, 'GET', '/campaigns?limit=100')).filter((c) => Number(c.status) === 3);
 for (const c of finished) {
-  const replies = itemsOf(await instantly(deps, 'GET', `/emails?campaign_id=${String(c.id)}&email_type=received&limit=100`)).slice(0, flag('--replies', 6));
+  const replies = itemsOf(await instantly(deps, 'GET', `/emails?campaign_id=${String(c.id)}&email_type=received&limit=100`)).slice(0, flag('--replies', 3));
   for (const m of replies) {
+    if (!until(55)) break;
     const body = (m.body ?? {}) as { text?: string; html?: string };
     const text = body.text?.trim() || String(m.content_preview ?? '');
     const lead = String(m.lead ?? m.from_address_email ?? '').toLowerCase();
