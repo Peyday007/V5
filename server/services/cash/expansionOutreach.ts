@@ -15,7 +15,7 @@
  * The HTTP client is The Neighbor Card's (`neighborCard.ts`): same key, same
  * retry and backoff.
  */
-import { defaultDeps, instantly, itemsOf, type Deps } from './neighborCard.ts';
+import { defaultDeps, instantly, itemsOf, threadOf, type Deps } from './neighborCard.ts';
 
 export interface ExpansionCampaign { business: string; name: string }
 
@@ -51,7 +51,7 @@ async function unanswered(deps: Deps, campaignId: string): Promise<CampaignReadi
     if (AUTO.test(String(m.subject ?? '')) || AUTO.test(preview)) continue;
     const from = String(m.from_address_email ?? '').toLowerCase();
     const at = String(m.timestamp_email ?? '');
-    const thread = itemsOf(await instantly(deps, 'GET', `/emails?thread_id=${encodeURIComponent(String(m.thread_id ?? ''))}&limit=50`));
+    const thread = await threadOf(deps, String(m.thread_id ?? ''));
     const ours = thread.some((t) => String(t.timestamp_email ?? '') > at && String(t.from_address_email ?? '').toLowerCase() !== from);
     if (!ours) waiting.push({ from, at, preview: preview.slice(0, 160).replace(/\s+/g, ' '), id: String(m.id ?? '') });
   }

@@ -37,8 +37,8 @@ describe('expansion outreach pass', () => {
           ],
         };
       }
-      if (path.includes('thread_id=t1')) return { items: [{ from_address_email: 'ann@org.org', timestamp_email: '2026-11-12T10:00:00Z' }] };
-      if (path.includes('thread_id=t2')) return { items: [{ from_address_email: 'bob@co.com', timestamp_email: '2026-11-12T11:00:00Z' }, { from_address_email: 'info@us.com', timestamp_email: '2026-11-12T13:00:00Z' }] };
+      if (path.includes('search=thread%3At1')) return { items: [{ thread_id: 't1', from_address_email: 'ann@org.org', timestamp_email: '2026-11-12T10:00:00Z' }] };
+      if (path.includes('search=thread%3At2')) return { items: [{ thread_id: 't2', from_address_email: 'bob@co.com', timestamp_email: '2026-11-12T11:00:00Z' }, { thread_id: 't2', from_address_email: 'info@us.com', timestamp_email: '2026-11-12T13:00:00Z' }] };
       return { items: [] };
     });
     const r = await runExpansionOutreach(d, [CAMPAIGN]);

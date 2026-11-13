@@ -44,7 +44,7 @@ import {
   type SalesOffer,
 } from '../agents/sellbird.ts';
 import { AGENTS_INTEGRATION, agentsConfig, browserModel } from '../agents/client.ts';
-import { instantly, itemsOf, rootDomain, type Deps, type PersonalDesk, type PersonalLead } from '../cash/neighborCard.ts';
+import { instantly, itemsOf, rootDomain, threadOf, type Deps, type PersonalDesk, type PersonalLead } from '../cash/neighborCard.ts';
 import { SALES_BUSINESSES, salesBusiness, type SalesBusiness } from './businesses.ts';
 
 export const LEARN_PERIOD_MS = 6 * 60 * 60_000;
@@ -261,7 +261,7 @@ export async function handleOneReply(deps: Deps, business: SalesBusiness, reply:
   } else {
     const ungrounded = ungroundedFigures(decision.answer, [...factsOf(business), ...history.map((h) => h.text), reply.text]);
     const why = !business.answer ? 'Brain does not answer on this campaign (the owner\'s own)'
-      : answeredAlready ? 'someone already answered this thread'
+      : answeredAlready ? 'a later message from us is already in this thread'
       : ungrounded.length ? `it quotes ${ungrounded.join(', ')}, which the business's facts do not state`
       : promisesDeliverable(decision.answer) ? `it promises ${business.deliverable ?? 'something'} a text reply cannot carry`
       : null;
@@ -312,9 +312,7 @@ export async function workReplies(deps: Deps, limit = REPLIES_PER_PASS): Promise
         if (await salesReplySeen(reply.id)) continue;
         waiting += 1;
         if (outcomes.length >= limit) continue;
-        const thread = reply.threadId
-          ? itemsOf(await instantly(deps, 'GET', `/emails?thread_id=${encodeURIComponent(reply.threadId)}&limit=50`)).map(mailOf)
-          : [reply];
+        const thread = reply.threadId ? (await threadOf(deps, reply.threadId)).map(mailOf) : [reply];
         const out = await handleOneReply(deps, business, reply, thread.length ? thread : [reply]);
         if (out) {
           outcomes.push(out);

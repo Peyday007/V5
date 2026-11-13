@@ -15799,6 +15799,16 @@ hears anything about the prospect's website. A failed draft's reason now names
 what the model calls returned, because "no usable draft" hid a 404 from a model
 name the pod had stopped serving.
 
+The fourth was the worst, because it looked like caution. Instantly v2 ignores
+`thread_id` as a filter on `/emails` and answers with the workspace's latest
+fifty emails, so every reply's "thread" held a later email of ours to some
+other lead: the desk read each one as already answered and held it, and fed
+other leads' mail to the model as this lead's history. `threadOf` asks with
+`search=thread:<id>` and keeps only messages carrying that id. The replies held
+for that reason did nothing, so each is read once more as a second row keyed
+`<email id>#reread`; the first row is never rewritten, and the corrected desk
+words its own hold differently so a true one is final.
+
 ## 108. A model is chosen by what it does on Brain's work, and a decision is judged by what it predicted.
 
 **Owner's order, 2026-11-12.** "Make Hermes fully operational … automatically
