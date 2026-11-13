@@ -26,7 +26,8 @@
  *  - reading replies (`syncInstantlyReplies`): the unibox's received mail on
  *    Brain's campaign becomes `BUYER_REPLIED` observations on the deal the
  *    lead was added for, which `journey/learning.ts` turns into the measured
- *    reply rates the plan models.
+ *    reply rates the plan models — and, where Instantly's own interest status
+ *    states the buyer's answer (won, not interested, lost), the answer too.
  *
  * Brain never touches a campaign it did not create (its name starts with
  * `BRAIN_CAMPAIGN_PREFIX`) unless the deployment names one in
@@ -419,6 +420,29 @@ export interface InstantlyReply {
   campaignId: string | null;
   at: string | null;
   autoReply: boolean;
+  /**
+   * Instantly's own interest status on the email (`i_status`), as the provider
+   * reports it — set by the owner in the unibox or by Instantly — never read
+   * from the words of the reply. Null when the provider states none.
+   */
+  interestStatus: number | null;
+}
+
+/**
+ * Instantly v2 interest statuses that state the buyer's answer. Only these
+ * two kinds are an answer: "interested", a meeting booked or held, out of
+ * office and wrong person are not, and stay a plain reply. Interest is an
+ * observation, never an agreement (`journey/deal.ts`).
+ */
+export const INSTANTLY_WON_STATUS = 4;
+export const INSTANTLY_DECLINED_STATUSES: ReadonlySet<number> = new Set([-1, -3]);
+
+/** The buyer's answer the provider states for a reply, or null when it states none. Instantly has no counter-offer status, so a counter is never read from it. */
+export function answerFromInterestStatus(status: number | null): 'BUYER_ACCEPTED' | 'BUYER_DECLINED' | null {
+  if (status === null || !Number.isInteger(status)) return null;
+  if (status === INSTANTLY_WON_STATUS) return 'BUYER_ACCEPTED';
+  if (INSTANTLY_DECLINED_STATUSES.has(status)) return 'BUYER_DECLINED';
+  return null;
 }
 
 /** Received mail on one campaign, newest first, read only. The unibox allows 20 requests a minute, so at most a few pages. */
@@ -440,6 +464,7 @@ export async function readInstantlyReplies(input: { campaignId: string; fetch?: 
         campaignId: typeof one.campaign_id === 'string' ? one.campaign_id : null,
         at: typeof one.timestamp_email === 'string' ? one.timestamp_email : typeof one.timestamp_created === 'string' ? one.timestamp_created : null,
         autoReply: Number(one.is_auto_reply ?? 0) === 1,
+        interestStatus: one.i_status === undefined || one.i_status === null || one.i_status === '' || !Number.isFinite(Number(one.i_status)) ? null : Number(one.i_status),
       });
     }
     const next = answer.body.next_starting_after;
