@@ -30,7 +30,7 @@ import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import { questionKey } from '../cash/conditions.ts';
 import { diveOwnsItsQuestions } from '../cash/operate.ts';
 import { parseBlockerKey } from '../../domain/types.ts';
-import type { ChainLink, PlanReading } from './plan.ts';
+import { RECOMMENDATION_POLICY, type ChainLink, type PlanReading } from './plan.ts';
 
 /**
  * The smallest share of what is still needed an opening must be able to bring
@@ -51,6 +51,39 @@ export const REASK_AFTER_MS = 24 * 60 * 60 * 1000;
 export const MAX_ASKINGS = 3;
 
 const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> = {
+  /*
+   * An opening with no payer, an undated signal or a guessed price raised no
+   * question at all: these links had no field, so a plan read "no payer",
+   * "undated signal" and "price a guess" and nothing went to find them. One
+   * narrow question per missing fact; the dated, sourced form is the answer.
+   */
+  REACHABLE_BUYER: [
+    {
+      field: 'payer',
+      ask: 'Name who pays for this — a named buyer or a buyer class — with the source that shows they buy it.',
+    },
+    /*
+     * The link needs a payer and a channel (plan.ts reads both). They were one
+     * question keyed on the payer, so an opening whose payer was already known
+     * and whose channel was not raised nothing: the link stayed missing and
+     * nothing went to find the half that was. Each half is its own field, so a
+     * known payer skips only its own question.
+     */
+    {
+      field: 'access',
+      ask:
+        'Find the published channel through which this buyer can be reached (a directory, register, association list, ' +
+        'marketplace category or contact page), with its source.',
+    },
+  ],
+  CURRENT_DEMAND: [
+    {
+      field: 'buyingEvidence',
+      ask:
+        'Find a sign that buyers of this kind need this now: the post, tender, listing or request itself, with the date it was ' +
+        'observed and its source. An undated signal is not an answer.',
+    },
+  ],
   SETTLES_IN_TIME: [
     {
       field: 'timeToFirstCash',
@@ -87,7 +120,12 @@ const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> =
     },
   ],
   OFFER_AND_PRICE: [
-    { field: 'revenueRange', ask: 'Find what buyers are published as actually paying for this — a figure or a range, each with its source and date.' },
+    {
+      field: 'revenueRange',
+      ask:
+        'Find what buyers are published as actually paying for this — a figure or a range, each with its source, its date and the ' +
+        'population it was measured on. A guessed or unsourced price is not an answer.',
+    },
   ],
 };
 
@@ -261,11 +299,17 @@ export async function researchGoalPaths(input: {
       // Already established from a source or by a person: asking again would
       // be settled the instant it was raised and re-raised on the next read.
       const known = await cardFact(opportunity.id, field);
-      if (known && known.value !== null && known.kind !== 'RECOMMENDATION') {
+      const aged = known && known.value !== null && known.kind !== 'RECOMMENDATION' ? staleDemand(field, opportunity.signalObservedAt, now) : null;
+      if (known && known.value !== null && known.kind !== 'RECOMMENDATION' && aged === null) {
         note(`${one.title.slice(0, 60)} ${field}: already established (${String(known.value).slice(0, 40)})`);
         continue;
       }
       let nextStep = ask;
+      if (aged !== null) {
+        // The fact is on the card but the plan still reads demand as missing: it is no longer current, so a current one is asked for.
+        note(`${one.title.slice(0, 60)} ${field}: on record but ${aged}; asking for a current one`);
+        nextStep = `${ask} The signal on record (${String(known!.value).slice(0, 120)}) is ${aged}; find one observed within the last ${RECOMMENDATION_POLICY.demandFreshDays} days.`;
+      }
       if (keys.has(key)) {
         // Already asked. Ask again only when that research ended without an
         // answer a while ago — and never the same way: production held 161
@@ -332,6 +376,23 @@ export async function researchGoalPaths(input: {
   }
   note(`live path questions ${openHere} of ${questionCap}; openings researched ${openings} of ${openingCap}`);
   return raised;
+}
+
+/**
+ * Why a recorded demand signal no longer counts as current demand, or null
+ * when it still does (or the field is not demand at all). The plan's
+ * CURRENT_DEMAND link holds only while the opening's signal was observed
+ * within `RECOMMENDATION_POLICY.demandFreshDays` (plan.ts `linkChecks`), so a
+ * `buyingEvidence` fact whose signal is undated or has aged out of that window
+ * is not an answer to the link, and treating it as established closed the
+ * question for good while the link stayed broken.
+ */
+export function staleDemand(field: string, signalObservedAt: string | null, now: Date): string | null {
+  if (field !== 'buyingEvidence') return null;
+  const at = signalObservedAt ? Date.parse(signalObservedAt) : Number.NaN;
+  if (Number.isNaN(at)) return 'undated';
+  const days = (now.getTime() - at) / 86_400_000;
+  return days <= RECOMMENDATION_POLICY.demandFreshDays ? null : `observed ${Math.floor(days)} days ago, older than the ${RECOMMENDATION_POLICY.demandFreshDays} the plan allows`;
 }
 
 /**
