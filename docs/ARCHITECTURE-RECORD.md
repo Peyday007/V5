@@ -16081,3 +16081,23 @@ attempt) and records `OWNER_PLAN_READY_NOTIFIED` rows (INTENT, then SENT, UNCERT
 FAILED) and a goal event. Once per accepted plan: a different accepted plan is a new
 message. Nothing stops: the plan's openings stay PURSUES, a SQUEEZE goal keeps widening
 until the target is collected, and Hermes keeps directing it. Tests: `tests/planReady.test.ts`.
+
+**Owner notices are delivered in the owner's Claude Code conversation, never by email
+(owner's order, 2026-11-13, superseding the two Instantly paragraphs above).** "STOP USING
+INSTANTLY OR RESEND FOR OWNER NOTIFICATIONS … notify me DIRECTLY IN THIS ORIGINAL CLAUDE
+CODE CONVERSATION … The completion response must prominently begin: "$10K / 30-DAY PLAN —
+COMPLETE"." Both notices are now rows only (`services/ownerNotices.ts`): a READY row on the
+existing event log (`OWNER_PLAN_READY_NOTIFIED`, `OWNER_IMPROVEMENT_NOTIFIED`), written
+once per key with the composed text, and a DELIVERED row when the conversation announces it.
+Nothing leaves Brain: the Instantly owner adapter and `deliverOwnerEmail` are gone, and
+Instantly is outreach only. The plan gate gains a ninth condition, `STARTING_CAPITAL_WITHIN_LIMIT`:
+the plan commits, before revenue, each member's capital at start plus its median spend, and that
+sum must be within $3,000, or within the goal's own ceiling when that is lower. The completion
+response begins with that header and then gives the actual plan, how the $3,000 is allocated,
+how the plan reaches $10,000, the evidence and confidence with Hermes' challenge, and what
+Brain executes next. The owner's conversation reads the notices through
+`brain_owner_notices` (`project:read`) and records each announced through
+`brain_owner_notice_delivered` (`checkpoints:write`, idempotent), from a recurring scheduled
+task bound to that Claude Code session, which resumes it, stays silent while nothing
+qualified, and survives restarts and deployments because both the schedule and the notices
+are stored outside the container. Tests: `tests/planReady.test.ts`, `tests/improvementNotice.test.ts`.
