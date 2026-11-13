@@ -261,6 +261,8 @@ describe('the completion response waits for the owner\'s conversation, once per 
     expect(notices).toHaveLength(1);
     expect(notices[0]!.kind).toBe('PLAN_READY');
     expect(notices[0]!.text.startsWith('$10K / 30-DAY PLAN — COMPLETE')).toBe(true);
+    // A conversation whose client listed its tools before the notice tools existed reads the same notice here.
+    expect((await tool('brain_get_plan', { project_id: projectId }, reader))['ownerNotices']).toEqual(notices);
     for (const section of ['THE ACTUAL PLAN', 'HOW THE $3,000 IS ALLOCATED', 'HOW THE PLAN GENERATES $10,000', 'SUPPORTING EVIDENCE AND CONFIDENCE', 'WHAT BRAIN IS EXECUTING NEXT']) {
       expect(notices[0]!.text).toContain(section);
     }
@@ -270,6 +272,7 @@ describe('the completion response waits for the owner\'s conversation, once per 
     expect(delivered['deliveredAt']).toBeTruthy();
     expect(await tool('brain_owner_notice_delivered', { project_id: projectId, notice_id: notices[0]!.noticeId, where: 'session_test' }, reader)).toEqual(delivered);
     expect(await tool('brain_owner_notices', { project_id: projectId }, reader)).toEqual({ notices: [] });
+    expect((await tool('brain_get_plan', { project_id: projectId }, reader))['ownerNotices']).toEqual([]);
     expect((await notifyPlanReady(goalId, reading())).status).toBe('ALREADY_RECORDED');
     expect(await tool('brain_owner_notices', { project_id: projectId }, reader)).toEqual({ notices: [] });
     expect(outbound).not.toHaveBeenCalled();
