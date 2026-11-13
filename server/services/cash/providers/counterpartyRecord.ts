@@ -34,9 +34,15 @@
  *     (`recordCounterpartyFacts`). A refusal establishes nothing about
  *     willingness and records none.
  *
- * Recording never changes the effect: the send's answer is returned exactly as
- * the provider gave it, and a recording failure is reported on the log (no
- * payload, no credential) rather than turned into a failed or repeated send.
+ * A hold the model definitely refuses stops the send (`gatingRefusal`): when
+ * the window's capacity is already held by other commitments — across every
+ * business on the provider — or the business holds no live grant for the
+ * action, the provider is never called and the effect is answered with a
+ * definite rejection, so scarce capacity is not double-booked by a send that
+ * carries no hold. Otherwise recording never changes the effect: the send's
+ * answer is returned exactly as the provider gave it, and a recording failure
+ * is reported on the log (no payload, no credential) rather than turned into a
+ * failed or repeated send.
  */
 import type { EffectAdapter, EffectRequest, SendOutcome } from '../../effects/adapter.ts';
 import { getOpportunity } from '../../../repos/cashPortfolio.ts';
@@ -110,6 +116,42 @@ export interface RecordedAttempt {
   outcome: 'PERFORMED' | 'FAILED' | 'UNKNOWN' | null;
   facts: number;
   transferred: boolean;
+  /** Set when a refused hold stopped the send: the provider was never called. */
+  gated: 'CAPACITY' | 'MISSING_AUTHORITY' | null;
+}
+
+/**
+ * The refusals that stop a send, and the definite rejection the effect records instead. Only
+ * these two: they are the model saying the capacity is not this commitment's to use. A provider
+ * that reports no capacity (CAPACITY_UNKNOWN) has nothing to over-book and is not stopped; a
+ * hold that could not be recorded at all is reported, never turned into a refused send.
+ */
+export function gatingRefusal(hold: ReservationAnswer | null): { reason: 'CAPACITY' | 'MISSING_AUTHORITY'; outcome: SendOutcome } | null {
+  if (!hold || hold.ok) return null;
+  if (hold.reason === 'CAPACITY') {
+    return {
+      reason: 'CAPACITY',
+      outcome: {
+        kind: 'REJECTED',
+        category: 'DEPENDENCY_UNAVAILABLE',
+        // Nothing was sent, and the window's capacity frees as holds settle or the day turns.
+        retryable: true,
+        detail: `the provider's capacity for this window is held by other commitments (${hold.remaining} left); nothing was sent`,
+      },
+    };
+  }
+  if (hold.reason === 'MISSING_AUTHORITY') {
+    return {
+      reason: 'MISSING_AUTHORITY',
+      outcome: {
+        kind: 'REJECTED',
+        category: 'NOT_AUTHORIZED',
+        retryable: false,
+        detail: `no live commercial grant for ${hold.missing.join(', ')}; nothing was sent`,
+      },
+    };
+  }
+  return null;
 }
 
 /**
@@ -123,7 +165,7 @@ export async function recordProviderAttempt(
   now: () => string = () => new Date().toISOString(),
 ): Promise<{ outcome: SendOutcome; recorded: RecordedAttempt }> {
   const counterpartyId = providerCounterpartyId(seat);
-  const recorded: RecordedAttempt = { counterpartyId, subject: null, hold: null, outcome: null, facts: 0, transferred: false };
+  const recorded: RecordedAttempt = { counterpartyId, subject: null, hold: null, outcome: null, facts: 0, transferred: false, gated: null };
   let key: string | null = null;
   let capacity: number | null = null;
   try {
@@ -161,6 +203,15 @@ export async function recordProviderAttempt(
     }
   } catch (error) {
     reportRecordingFailure(seat, 'hold', error);
+  }
+
+  // A hold the model definitely refused gates the send: capacity another commitment already
+  // holds, or a business without the grant to commit it, is not booked anyway and left for a
+  // reading to discover — the over-booking would carry no hold for any reading to see.
+  const refusal = gatingRefusal(recorded.hold);
+  if (refusal) {
+    recorded.gated = refusal.reason;
+    return { outcome: refusal.outcome, recorded };
   }
 
   // The provider call itself, untouched by anything above.

@@ -110,11 +110,36 @@ describe('a real send writes the counterparty rows', () => {
     const first = await recordProviderAttempt(seat, request(a.opportunityId), answer({ kind: 'UNCERTAIN', reason: 'no answer' }), () => AT);
     expect(first.recorded.hold, JSON.stringify(first.recorded)).toMatchObject({ ok: true });
     expect(first.recorded.outcome).toBe('UNKNOWN'); // an unknown outcome keeps its hold
-    const second = await recordProviderAttempt(seat, request(b.opportunityId), answer(confirmed('lead-b')), () => AT);
+    let calls = 0;
+    const second = await recordProviderAttempt(seat, request(b.opportunityId), async () => { calls += 1; return confirmed('lead-b'); }, () => AT);
     expect(second.recorded.hold).toMatchObject({ ok: false, reason: 'CAPACITY', remaining: 0 });
-    expect(second.outcome).toEqual(confirmed('lead-b')); // recording never changes the effect
+    // The refused hold gates the send: the provider is never called, so the last unit is not booked twice.
+    expect(calls).toBe(0);
+    expect(second.recorded.gated).toBe('CAPACITY');
+    expect(second.outcome).toMatchObject({ kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true });
+    expect(second.recorded.outcome).toBeNull();
     const live = holdsFrom(await recordedReservationEvents([ID])).filter((h) => h.state === 'HELD');
     expect(live).toHaveLength(1);
+    expect(live[0]!.businessId).toBe(a.projectId);
+  });
+
+  it('one unit of shared capacity is one provider send, whichever business asks second', async () => {
+    capacity = 1;
+    const a = await business();
+    const b = await business(true, true);
+    let sends = 0;
+    // The path every wrapped adapter's send takes, with a counting provider in place of the network.
+    // The first send's outcome is unknown, so its hold keeps the unit (invariant 26).
+    const provider = async (): Promise<SendOutcome> => { sends += 1; return { kind: 'UNCERTAIN', reason: 'no answer' }; };
+    const first = await recordProviderAttempt(seat, request(a.opportunityId), provider, () => AT);
+    const second = await recordProviderAttempt(seat, request(b.opportunityId), provider, () => AT);
+    const third = await recordProviderAttempt(seat, request(b.opportunityId, '2'), provider, () => AT);
+    expect(first.outcome.kind).toBe('UNCERTAIN');
+    expect(second.outcome.kind).toBe('REJECTED');
+    expect(third.outcome.kind).toBe('REJECTED');
+    expect(sends).toBe(1); // one unit of capacity, one send — across both businesses
+    const mine = holdsFrom(await recordedReservationEvents([ID])).filter((h) => h.businessId === a.projectId || h.businessId === b.projectId);
+    expect(mine.map((h) => [h.businessId, h.state])).toEqual([[a.projectId, 'HELD']]);
   });
 
   it('records a refusal as FAILED, establishes no willingness, and offers it to the model\'s transfer', async () => {
@@ -128,12 +153,20 @@ describe('a real send writes the counterparty rows', () => {
 
   it('holds nothing without the live grant, and nothing against capacity the provider did not report', async () => {
     const ungranted = await business(false);
-    const refused = await recordProviderAttempt(seat, request(ungranted.opportunityId), answer(confirmed('x')), () => AT);
+    let calls = 0;
+    const refused = await recordProviderAttempt(seat, request(ungranted.opportunityId), async () => { calls += 1; return confirmed('x'); }, () => AT);
     expect(refused.recorded.hold).toMatchObject({ ok: false, reason: 'MISSING_AUTHORITY', missing: ['CONTACT_BUYER'] });
+    // Without the grant the send does not happen either: nothing commits capacity it was not authorized to.
+    expect(calls).toBe(0);
+    expect(refused.recorded.gated).toBe('MISSING_AUTHORITY');
+    expect(refused.outcome).toMatchObject({ kind: 'REJECTED', category: 'NOT_AUTHORIZED', retryable: false });
     capacity = null;
     const granted = await business();
     const unknown = await recordProviderAttempt(seat, request(granted.opportunityId), answer(confirmed('y')), () => AT);
     expect(unknown.recorded.hold).toMatchObject({ ok: false, reason: 'CAPACITY_UNKNOWN' });
+    // No reported capacity is nothing to over-book: the send is not stopped (§39 invents none to refuse against).
+    expect(unknown.recorded.gated).toBeNull();
+    expect(unknown.outcome).toEqual(confirmed('y'));
     expect(await recordedReservationEvents([ID])).toHaveLength(0);
   });
 
