@@ -134,16 +134,31 @@ export function chainsFrom(fromId: string, edges: PossibilityEdge[]): string[][]
 }
 
 /**
+ * Every candidate in the order research should take them: positive reach
+ * first, strongest first, then the zero-reach ones. Ties keep the caller's own
+ * order, so reach refines a ranking rather than replacing it. A consumer that
+ * walks this list and stops when its budget is spent therefore reaches a
+ * zero-reach candidate only after every stronger one was taken or passed over.
+ */
+export function researchOrder<T extends Pick<Possibility, 'id'>>(
+  candidates: T[], edges: PossibilityEdge[],
+): { candidate: T; reach: number }[] {
+  const scored = candidates.map((candidate, index) => ({ candidate, index, reach: reachOf(candidate.id, edges) }));
+  scored.sort((a, b) => b.reach - a.reach || a.index - b.index);
+  return scored.map(({ candidate, reach }) => ({ candidate, reach }));
+}
+
+/**
  * What may be researched next. A zero-reach candidate is passed over while any
  * stronger (higher-reach) unexplored candidate remains; it becomes eligible
- * only when nothing stronger is left.
+ * only when nothing stronger is left. `goals/pathResearch.ts` is the production
+ * consumer: it walks `researchOrder`, which applies this same rule one opening
+ * at a time.
  */
 export function researchNext(
   candidates: Pick<Possibility, 'id'>[], edges: PossibilityEdge[], explored: ReadonlySet<string>,
 ): string[] {
-  const open = candidates.filter((c) => !explored.has(c.id))
-    .map((c) => ({ id: c.id, reach: reachOf(c.id, edges) }));
+  const open = researchOrder(candidates.filter((c) => !explored.has(c.id)), edges);
   const strong = open.filter((c) => c.reach > 0);
-  const pool = strong.length > 0 ? strong : open;
-  return pool.sort((a, b) => b.reach - a.reach || a.id.localeCompare(b.id)).map((c) => c.id);
+  return (strong.length > 0 ? strong : open).map((c) => c.candidate.id);
 }

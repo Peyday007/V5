@@ -36,6 +36,13 @@ export interface OpeningFacts {
 const established = (fact: OpeningFact | null): string | null =>
   fact && fact.value !== null && fact.value.trim() !== '' && fact.kind !== 'RECOMMENDATION' ? fact.value : null;
 
+/**
+ * The `source_ref` a kept possibility carries when it stands for a goal's
+ * opening. Path research reads the owner's possibility graph by it, so an
+ * opening's reach (what it leads to) orders which openings are researched.
+ */
+export const openingSourceRef = (opportunityId: string): string => `opportunity:${opportunityId}`;
+
 /** The opening's facts as screen requirements: only what is stated, never a default. */
 export function openingRequirements(facts: OpeningFacts): PossibilityRequirements {
   const capital: string[] = [];

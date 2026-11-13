@@ -180,6 +180,45 @@ export async function updatePossibilityRequirements(input: {
   );
 }
 
+function mapPossibilityEdge(r: Row): PossibilityEdge {
+  return {
+    id: s(r['id']), projectId: s(r['project_id']), fromId: s(r['from_id']), toId: s(r['to_id']),
+    relation: s(r['relation']) as PossibilityRelation, createdAt: s(r['created_at']),
+  };
+}
+
+/**
+ * One owner's possibility graph, read for the openings a goal's research is
+ * ordering: which kept possibility stands for each source, and every edge whose
+ * two ends both belong to that owner in this project. Another owner's rows are
+ * never read, so their graph cannot move this owner's research.
+ */
+export async function possibilityGraphFor(
+  projectId: string, ownerUserId: string, sourceRefs: string[],
+): Promise<{ bySource: Map<string, string>; edges: PossibilityEdge[] }> {
+  const bySource = new Map<string, string>();
+  if (sourceRefs.length === 0) return { bySource, edges: [] };
+  const refs = [...new Set(sourceRefs)];
+  const kept = await getDb().all<{ id: string; source_ref: string }>(
+    `SELECT id, source_ref FROM possibilities
+      WHERE project_id = ? AND owner_user_id = ? AND source_ref IN (${refs.map(() => '?').join(', ')})
+      ORDER BY id`,
+    [projectId, ownerUserId, ...refs],
+  );
+  for (const row of kept) bySource.set(row.source_ref, row.id);
+  if (bySource.size === 0) return { bySource, edges: [] };
+  const rows = await getDb().all<Row>(
+    `SELECT e.* FROM possibility_edges e
+       JOIN possibilities f ON f.id = e.from_id
+       JOIN possibilities t ON t.id = e.to_id
+      WHERE e.project_id = ? AND f.project_id = ? AND t.project_id = ?
+        AND f.owner_user_id = ? AND t.owner_user_id = ?
+      ORDER BY e.created_at, e.id`,
+    [projectId, projectId, projectId, ownerUserId, ownerUserId],
+  );
+  return { bySource, edges: rows.map(mapPossibilityEdge) };
+}
+
 export async function linkPossibilities(input: {
   projectId: string; fromId: string; toId: string; relation: PossibilityRelation;
 }): Promise<PossibilityEdge> {
@@ -191,10 +230,7 @@ export async function linkPossibilities(input: {
   const r = (await getDb().get<Row>(
     'SELECT * FROM possibility_edges WHERE from_id = ? AND relation = ? AND to_id = ?',
     [input.fromId, input.relation, input.toId]))!;
-  return {
-    id: s(r['id']), projectId: s(r['project_id']), fromId: s(r['from_id']), toId: s(r['to_id']),
-    relation: s(r['relation']) as PossibilityRelation, createdAt: s(r['created_at']),
-  };
+  return mapPossibilityEdge(r);
 }
 
 function mapCondition(r: Row): PossibilityCondition {

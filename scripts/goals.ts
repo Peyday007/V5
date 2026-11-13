@@ -446,7 +446,11 @@ async function printSearching(reading: PlanReading): Promise<void> {
   );
   console.log(`  digging     ${needs.length} research question(s) on openings it holds`);
   const trace: string[] = [];
-  await researchGoalPaths({ reading, projectId: reading.target.projectId, dryRun: true, trace });
+  const goal = await getWorkstream(reading.goalId);
+  await researchGoalPaths({
+    reading, projectId: reading.target.projectId, dryRun: true, trace,
+    ownerUserId: goal?.ownerUserId ?? goal?.createdByUserId ?? null,
+  });
   for (const line of trace) console.log(`    next: ${line}`);
   // Grouped by what became of each: whether its research is running, done, or
   // ended without an answer — and the reason it gave — so a stall is readable.

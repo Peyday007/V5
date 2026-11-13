@@ -28,7 +28,9 @@ import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import { questionKey } from '../cash/conditions.ts';
 import { diveOwnsItsQuestions } from '../cash/operate.ts';
 import { parseBlockerKey } from '../../domain/types.ts';
-import { goalLimitsOf, screenOpening } from '../economy/possibilities/opening.ts';
+import { goalLimitsOf, openingSourceRef, screenOpening } from '../economy/possibilities/opening.ts';
+import { researchOrder } from '../economy/possibilities/screen.ts';
+import { possibilityGraphFor } from '../../repos/economy.ts';
 import type { ChainLink, PlanReading } from './plan.ts';
 
 /**
@@ -76,6 +78,12 @@ export async function researchGoalPaths(input: {
   dryRun?: boolean;
   /** Filled with the openings the code screen rejected, so a caller can count them. */
   screenedOut?: string[];
+  /**
+   * The goal's owner. Their possibility graph orders the openings by reach:
+   * one that leads on to others is researched before a dead end. Without an
+   * owner no graph is read and the order is the evidence order alone.
+   */
+  ownerUserId?: string | null;
 }): Promise<string[]> {
   const note = (line: string) => input.trace?.push(line);
   const now = input.now ?? new Date();
@@ -115,9 +123,28 @@ export async function researchGoalPaths(input: {
       b.supportedReach - a.supportedReach ||
       a.missing.length - b.missing.length,
   );
+  /*
+   * Reach refines that order: an opening the owner's possibility graph shows
+   * leading on to others (a cash op that enables a recurring service) is taken
+   * before one that leads nowhere, and a zero-reach opening is reached only
+   * once every stronger one has been taken or passed over — the budget below
+   * usually ends the walk first. Ties keep the evidence order above.
+   */
+  const graph = input.ownerUserId
+    ? await possibilityGraphFor(input.projectId, input.ownerUserId, order.map((one) => openingSourceRef(one.opportunityId)))
+    : null;
+  const ordered = graph && graph.edges.length > 0
+    ? researchOrder(
+        order.map((one) => ({ id: graph.bySource.get(openingSourceRef(one.opportunityId)) ?? `unkept:${one.opportunityId}`, one })),
+        graph.edges,
+      ).map(({ candidate, reach }) => {
+        if (reach > 0) note(`${candidate.one.title.slice(0, 60)}: leads on to ${reach} other possibilit${reach === 1 ? 'y' : 'ies'}`);
+        return candidate.one;
+      })
+    : order;
   const limits = goalLimitsOf(input.reading.target);
   let openings = 0;
-  for (const one of order) {
+  for (const one of ordered) {
     if (openings >= PATH_RESEARCH_OPENINGS || openHere >= MAX_OPEN_PATH_QUESTIONS) break;
     let asks = one.missing.flatMap((link) => FIELDS_FOR[link] ?? []);
     if (asks.length === 0) continue;
