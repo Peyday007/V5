@@ -45,6 +45,7 @@ import {
   markUncertain,
   reserveOperation,
   resolveUncertain,
+  retakeReleasedOperation,
   succeedOperation,
   failOperation,
 } from '../../../repos/idempotency.ts';
@@ -518,6 +519,14 @@ export async function claimBrowserEffect(input: ClaimInput): Promise<ClaimResult
     case 'UNCERTAIN':
       return { claimed: false, effectKey, operationId: op.id, reason: 'UNKNOWN', detail: `outcome unknown (${op.uncertaintyReason ?? 'unrecorded'}); a person or a verification of the site's state resolves it` };
     case 'RECOVERABLE': {
+      // Released by a run that never reached the site: nothing was performed, so the
+      // same approved action may run again once the cause (permission, sign-in,
+      // handoff) is fixed. Retaken in one compare-and-swap; a loser is HELD.
+      if (op.failureCategory !== null && op.recoverAfter !== null) {
+        const retaken = await retakeReleasedOperation(op.id, op.recoverAfter, new Date(now.getTime() + EFFECT_CLAIM_TTL_MS).toISOString());
+        if (retaken) return { claimed: true, effectKey, operationId: op.id };
+        return { claimed: false, effectKey, operationId: op.id, reason: 'HELD', detail: 'another executor took this released effect first' };
+      }
       const reason = `the executor holding this claim stopped without settling it after ${EFFECT_CLAIM_TTL_MS / 60_000} minutes; the submission may have happened`;
       await markUncertain(op.id, reason);
       return { claimed: false, effectKey, operationId: op.id, reason: 'UNKNOWN', detail: reason };
@@ -532,13 +541,23 @@ export async function claimBrowserEffect(input: ClaimInput): Promise<ClaimResult
 /**
  * Record how a claimed mutation ended. COMPLETED and FAILED are facts the run
  * observed; anything else — a timeout after submitting, a lost session, an
- * error with no page state to read — is UNKNOWN.
+ * error with no page state to read — is UNKNOWN. NOT_SUBMITTED is a run that
+ * never reached the site (no step ran, nothing threw mid-run): the claim is
+ * released, not closed, so the same approved action with the same inputs runs
+ * again once its cause is fixed. FAILED stays terminal and is only for a
+ * definite refusal the site itself gave.
  */
 export async function settleBrowserEffect(
   operationId: string,
-  outcome: { result: 'COMPLETED'; summary?: string | null; resultRef?: string | null } | { result: 'FAILED'; detail: string } | { result: 'UNKNOWN'; reason: string },
+  outcome:
+    | { result: 'COMPLETED'; summary?: string | null; resultRef?: string | null }
+    | { result: 'FAILED'; detail: string }
+    | { result: 'UNKNOWN'; reason: string }
+    | { result: 'NOT_SUBMITTED'; category: 'NOT_AUTHORIZED' | 'DEPENDENCY_UNAVAILABLE'; detail: string },
 ): Promise<boolean> {
   switch (outcome.result) {
+    case 'NOT_SUBMITTED':
+      return await failOperation(operationId, { category: outcome.category, terminal: false, detail: outcome.detail });
     case 'COMPLETED':
       return await succeedOperation(operationId, { resultSummary: outcome.summary ?? null, resultRef: outcome.resultRef ?? null });
     case 'FAILED':
