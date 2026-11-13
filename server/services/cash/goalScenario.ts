@@ -690,6 +690,17 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       perWeek: target.capitalPerWeekCents === null ? null : target.capitalPerWeekCents / 100,
       resources: target.resources,
       measuredCapacity: await instantlyCapacity().catch(() => null),
+      /*
+       * The knowledge this compose already read for the project, passed
+       * explicitly (CAUSAL-14-7, review F4-2). Left out, the portfolio fell
+       * back to the module cache, so whether an opening's market history was
+       * acquired depended on whether that cache was still warm — a cold or
+       * expired entry (a compose slower than the cache's lifetime, or another
+       * process) read as "no history" even where the project holds the research.
+       * Null here means the project's evidence could not be read, which the
+       * portfolio reports as a research need rather than guessing.
+       */
+      knowledge,
     });
     trace('quant portfolio');
   }
