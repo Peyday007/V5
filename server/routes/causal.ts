@@ -25,7 +25,7 @@
  */
 import { Router } from 'express';
 import { badRequest, bodyOf, handler, notFound, pathId, requirePerson, requireProject, unprocessable } from './helpers.ts';
-import { listEvents, recordEvent } from '../repos/events.ts';
+import { listEventsByEntity, recordEvent } from '../repos/events.ts';
 import { getOpportunity } from '../repos/cashPortfolio.ts';
 import { loadCashKnowledge } from '../services/quant/knowledge.ts';
 import { acquireMarketHistory, requestMarketHistory } from '../services/quant/history.ts';
@@ -298,9 +298,13 @@ function graphKeyOf(value: unknown): string {
 
 /** Every stored version of one named graph, oldest first, numbered by position in the history. */
 async function storedVersions(projectId: string, key: string): Promise<StoredGraphVersion[]> {
-  const events = await listEvents(projectId, 5000);
+  // Read by entity, not from a window of the project's newest events: a version
+  // number is a position in this graph's own history, so it must not move when
+  // unrelated events accumulate. The entity key is not project-scoped, so the
+  // project is filtered here.
+  const events = await listEventsByEntity(GRAPH_ENTITY, key);
   return events
-    .filter((e) => e.entityType === GRAPH_ENTITY && e.entityId === key && e.payload.kind === GRAPH_VERSION_KIND && isObject(e.payload.graph))
+    .filter((e) => e.projectId === projectId && e.payload.kind === GRAPH_VERSION_KIND && isObject(e.payload.graph))
     .reverse()
     .map((e, index) => ({ version: index + 1, at: e.createdAt, reason: text(e.payload.reason), graph: e.payload.graph as Json }));
 }
