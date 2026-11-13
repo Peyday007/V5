@@ -1,5 +1,11 @@
 /** CP-31: the evidence ladder and the choice of a primary and an alternative fulfiller. */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { clearAdapters } from '../server/services/effects/adapter.ts';
+import { clearPaymentReader } from '../server/services/cash/providers/payments.ts';
+import { registerCommercialProviders } from '../server/services/cash/providers/register.ts';
+import { getProbe } from '../server/services/factory/program/probes.ts';
+import { counterpartyBreaches, PROVIDER_COUNTERPARTY_PROBE, readProviderTransactions } from '../server/services/cash/providers/counterparty.ts';
 import { readLadder, type Counterparty, type Fact } from '../server/services/labor/counterparties/ladder.ts';
 import { compareFulfillers, type Commitment } from '../server/services/labor/counterparties/compare.ts';
 
@@ -115,5 +121,48 @@ describe('choosing a primary and an alternative', () => {
 
   it('returns no primary rather than a guess when nobody is eligible', () => {
     expect(compareFulfillers(need, []).primary).toBeNull();
+  });
+});
+
+describe('CP-31 in the running Brain: boot wires the model to the live providers', () => {
+  const ENV = { BRAIN_MESSAGING_PROVIDER: 'resend', RESEND_API_KEY: 're_test_value_not_printed_0001', BRAIN_MESSAGING_FROM: 'Brain <s@brain.example>' } as NodeJS.ProcessEnv;
+
+  beforeEach(async () => {
+    clearAdapters();
+    clearPaymentReader();
+    await freshProject();
+  });
+
+  it('boot registers the counterparty reading where production verification runs it, under a non-release name', async () => {
+    expect(PROVIDER_COUNTERPARTY_PROBE).not.toMatch(/^r\d{2}\./);
+    registerCommercialProviders(ENV);
+    const probe = getProbe(PROVIDER_COUNTERPARTY_PROBE);
+    expect(probe).not.toBeNull();
+    const answer = await probe!({});
+    expect(answer.ok).toBe(true);
+    expect(answer.detail).toContain('provider:messaging:resend at LISTING');
+    expect(answer.detail).toContain('deliverable=false');
+    expect(answer.detail).not.toContain('re_test_value_not_printed_0001');
+  });
+
+  it('reads each live provider commitment end to end: listed, not willing, not deliverable, not reservable without the grant', async () => {
+    registerCommercialProviders(ENV);
+    const readings = await readProviderTransactions({ env: ENV, at: '2026-11-13T12:00:00Z' });
+    expect(readings.map((r) => r.area)).toEqual(['MESSAGING', 'INVOICES', 'PAYMENTS']);
+    const messaging = readings.find((r) => r.area === 'MESSAGING')!.reading;
+    expect(messaging.primary?.counterpartyId).toBe('provider:messaging:resend');
+    expect(messaging.primary?.stage).toBe('LISTING');
+    expect(messaging.facts[0]!.pending.map((m) => m.dimension)).toContain('willingness');
+    expect(messaging.deliverability.deliverable).toBe(false);
+    expect(messaging.reserve.permitted).toBe(false);
+    expect(readings.find((r) => r.area === 'INVOICES')!.reading.primary).toBeNull();
+    expect(counterpartyBreaches(readings)).toEqual([]);
+  });
+
+  it('names a breach when a reading claims more than the model allows', async () => {
+    registerCommercialProviders(ENV);
+    const [first] = await readProviderTransactions({ env: ENV, at: '2026-11-13T12:00:00Z' });
+    const forged = { ...first!, reading: { ...first!.reading, deliverability: { ...first!.reading.deliverability, deliverable: true, stage: 'QUOTE' as const } } };
+    expect(counterpartyBreaches([forged])).toEqual(['MESSAGING: reported deliverable at QUOTE, below CONTRACTED']);
   });
 });
