@@ -41,7 +41,7 @@
  */
 import { compareFulfillers, type CandidateReading, type Commitment, type Comparison, type Figure, type FigureName } from './compare.ts';
 import { effectiveStatus, recordedCounterparty, STAGES, stageIndex, type Counterparty, type Fact, type MissingFact, type Stage } from './ladder.ts';
-import type { CommercialAction } from '../../cash/authority.ts';
+import { checkCommercialAuthority, type CommercialAction } from '../../cash/authority.ts';
 import {
   authorityFor,
   decideRecorded,
@@ -654,6 +654,12 @@ export interface SourcedFulfiller {
   sources: string[];
   /** The facts the rows themselves establish, before any recorded fact. */
   facts: Fact[];
+  /**
+   * The currency the row-derived `price` fact is stated in (the agreement's), or null when the rows
+   * establish no price. A price recorded elsewhere carries no currency here, and is never assumed
+   * to be in the grant's.
+   */
+  priceCurrency: string | null;
 }
 
 /** The counterparty id a fulfiller's name is filed under, the same for every record that names it. */
@@ -682,7 +688,7 @@ export async function sourcedFulfillers(opportunityId: string): Promise<SourcedF
     const clean = name.trim();
     if (!clean || namesBrain(clean)) return null;
     const id = fulfillerCounterpartyId(clean);
-    const one = found.get(id) ?? { counterpartyId: id, name: clean, sources: [], facts: [] };
+    const one = found.get(id) ?? { counterpartyId: id, name: clean, sources: [], facts: [], priceCurrency: null };
     if (!one.sources.includes(source)) one.sources.push(source);
     found.set(id, one);
     return one;
@@ -702,6 +708,7 @@ export async function sourcedFulfillers(opportunityId: string): Promise<SourcedF
     if (committed.length > 0 && price > 0) {
       const evidence = `ledger supplier commitment ${[...committed, ...reduced].map((e) => e.id).join(', ')} (${o.agreement.currency}, agreement ${o.agreement.id})`;
       one.facts.push({ dimension: 'price', status: 'VERIFIED', evidence, value: price });
+      one.priceCurrency = o.agreement.currency;
       one.facts.push({ dimension: 'contract', status: 'VERIFIED', evidence, value: `agreement:${o.agreement.id}` });
     }
     if (o.acceptance.state === 'ACCEPTED' && o.delivery.state === 'DELIVERED') {
@@ -751,6 +758,12 @@ export interface OpportunityTransaction {
   businessId: string | null;
   fulfillers: SourcedFulfiller[];
   reading: TransactionReading | null;
+  /**
+   * The next negotiating move on each candidate's terms, judged against the terms the owner
+   * authorized (`negotiate`, S-0468 "negotiate authorized terms"): the live grant's per-action
+   * ceiling for engaging a contractor, in the grant's currency. Empty when there is no reading.
+   */
+  negotiations: OpportunityNegotiation[];
   /** Why there is no reading, when there is none. */
   detail: string;
 }
@@ -791,9 +804,9 @@ async function opportunityCandidates(input: OpportunityTransactionInput): Promis
 }
 
 function noReading(input: OpportunityTransactionInput, found: Awaited<ReturnType<typeof opportunityCandidates>>): OpportunityTransaction | null {
-  if (!found.rest) return { opportunityId: input.opportunityId, businessId: null, fulfillers: [], reading: null, detail: 'no such opportunity' };
+  if (!found.rest) return { opportunityId: input.opportunityId, businessId: null, fulfillers: [], reading: null, negotiations: [], detail: 'no such opportunity' };
   if (found.candidates.length === 0) {
-    return { opportunityId: input.opportunityId, businessId: found.businessId, fulfillers: found.fulfillers, reading: null, detail: 'the opportunity names no fulfiller other than Brain, and nothing else was considered' };
+    return { opportunityId: input.opportunityId, businessId: found.businessId, fulfillers: found.fulfillers, reading: null, negotiations: [], detail: 'the opportunity names no fulfiller other than Brain, and nothing else was considered' };
   }
   return null;
 }
@@ -810,7 +823,8 @@ export async function readOpportunityTransaction(input: OpportunityTransactionIn
     events: await recordedReservationEvents(ids),
     authority: await authorityFor(found.businessId!, input.action ?? RESERVE_ACTION),
   });
-  return { opportunityId: input.opportunityId, businessId: found.businessId, fulfillers: found.fulfillers, reading, detail: reading.deliverability.reason };
+  const negotiations = await negotiateCandidates(found.businessId!, found.candidates, found.fulfillers);
+  return { opportunityId: input.opportunityId, businessId: found.businessId, fulfillers: found.fulfillers, reading, negotiations, detail: reading.deliverability.reason };
 }
 
 async function decideOpportunity(
@@ -826,7 +840,8 @@ async function decideOpportunity(
     const one = readTransaction({ ...found.rest!, candidates: found.candidates, events, authority: await authorityFor(found.businessId!, input.action ?? RESERVE_ACTION) });
     return { result: one, append: toAppend(one) };
   });
-  return { opportunityId: input.opportunityId, businessId: found.businessId, fulfillers: found.fulfillers, reading, detail: reading.reserve.permitted ? reading.deliverability.reason : reading.reserve.detail };
+  const negotiations = await negotiateCandidates(found.businessId!, found.candidates, found.fulfillers);
+  return { opportunityId: input.opportunityId, businessId: found.businessId, fulfillers: found.fulfillers, reading, negotiations, detail: reading.reserve.permitted ? reading.deliverability.reason : reading.reserve.detail };
 }
 
 /** Reserve the opportunity's primary fulfiller under the project's live grant, recorded; only a permitted reserve writes. */
@@ -837,4 +852,85 @@ export function reserveOpportunityTransaction(input: OpportunityTransactionInput
 /** Transfer the opportunity's job after its primary reported a failure, recorded: release and new hold together, or nothing. */
 export function transferOpportunityTransaction(input: OpportunityTransactionInput, actorRef: string): Promise<OpportunityTransaction> {
   return decideOpportunity(input, actorRef, (r) => (r.transfer.plan && r.transfer.plan.action === 'TRANSFER' ? r.transfer.plan.events : []));
+}
+
+// ---------------------------------------------------------------------------
+// Negotiation on recorded rows (S-0468 "negotiate authorized terms")
+// ---------------------------------------------------------------------------
+
+/** The commercial action whose grant authorizes accepting a contractor's terms. */
+export const NEGOTIATE_ACTION: CommercialAction = 'ENGAGE_CONTRACTOR';
+
+export type OpportunityNegotiationStep = NegotiationStep | { action: 'NOT_COMPARABLE'; detail: string };
+
+export interface OpportunityNegotiation {
+  counterpartyId: string;
+  /** What the authorized terms were read from: the live grant, never the caller. */
+  terms: { priceCeiling: number | null; currency: string | null; authorityId: string | null };
+  step: OpportunityNegotiationStep;
+}
+
+/**
+ * The terms the owner authorized for engaging a contractor on this business, read from the live
+ * commercial grant by its owner (`checkCommercialAuthority`): the per-action ceiling a person
+ * wrote, in the grant's currency. No grant, no terms — the reading says which authority is missing.
+ */
+export async function authorizedTermsFor(
+  businessId: string,
+  action: CommercialAction = NEGOTIATE_ACTION,
+): Promise<{ terms: AuthorizedTerms | null; currency: string | null; authority: AuthorityReading }> {
+  const decision = await checkCommercialAuthority({ projectId: businessId, action });
+  const authority: AuthorityReading = {
+    businessId,
+    action,
+    held: decision.ok,
+    reason: decision.reason,
+    authorityId: decision.ok ? decision.authority?.id ?? null : null,
+    policyVersion: decision.policyVersion,
+  };
+  if (!decision.ok || !decision.authority) return { terms: null, currency: null, authority };
+  return { terms: { priceCeiling: decision.authority.maxPerActionCents, authority }, currency: decision.authority.currency, authority };
+}
+
+/**
+ * One candidate's next move against the authorized terms. A price is compared with the ceiling
+ * only when both are in the same, stated currency: a price whose currency the rows do not state is
+ * not comparable, never assumed to match (an unknown is never favourable).
+ */
+export function negotiateOnTerms(
+  candidate: Counterparty,
+  fulfiller: SourcedFulfiller | null,
+  read: { terms: AuthorizedTerms | null; currency: string | null; authority: AuthorityReading },
+): OpportunityNegotiation {
+  const terms = { priceCeiling: read.terms?.priceCeiling ?? null, currency: read.currency, authorityId: read.authority.authorityId };
+  if (!read.terms) {
+    return {
+      counterpartyId: candidate.id,
+      terms,
+      step: { action: 'MISSING_AUTHORITY', missingAuthority: [read.authority.action], detail: `no terms are authorized without ${read.authority.action}: ${read.authority.reason}` },
+    };
+  }
+  const price = candidate.facts.filter((f) => f.dimension === 'price').at(-1);
+  if (price && effectiveStatus(price) === 'VERIFIED' && typeof price.value === 'number') {
+    const currency = fulfiller && fulfiller.facts.includes(price) ? fulfiller.priceCurrency : null;
+    if (currency === null || read.currency === null || currency.toUpperCase() !== read.currency.toUpperCase()) {
+      return {
+        counterpartyId: candidate.id,
+        terms,
+        step: { action: 'NOT_COMPARABLE', detail: `the price is stated in ${currency ?? 'no recorded currency'} and the authorized ceiling in ${read.currency ?? 'no currency'}; nothing is negotiated across them` },
+      };
+    }
+  }
+  return { counterpartyId: candidate.id, terms, step: negotiate(candidate, read.terms) };
+}
+
+/** Every candidate's next move, against the business's live authorized terms. Writes nothing. */
+async function negotiateCandidates(
+  businessId: string,
+  candidates: readonly Counterparty[],
+  fulfillers: readonly SourcedFulfiller[],
+): Promise<OpportunityNegotiation[]> {
+  if (candidates.length === 0) return [];
+  const read = await authorizedTermsFor(businessId);
+  return candidates.map((c) => negotiateOnTerms(c, fulfillers.find((f) => f.counterpartyId === c.id) ?? null, read));
 }
