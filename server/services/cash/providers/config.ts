@@ -39,6 +39,16 @@ export const INSTANTLY_KEY_ENV = 'INSTANTLY_API_KEY';
 export const INSTANTLY_CAMPAIGN_ENV = 'BRAIN_INSTANTLY_CAMPAIGN_ID';
 
 export const BILLING_PROVIDER_ENV = 'BRAIN_BILLING_PROVIDER';
+/**
+ * Optional, comma-separated: further providers the deployment chooses as
+ * alternative fulfillers for the same area (CP-31). Each is registered only when
+ * its own settings read configured, and only behind the primary — the primary
+ * named by `BRAIN_*_PROVIDER` still serves every send; an alternate is the
+ * counterparty a failed commitment can be transferred to. Naming one is a
+ * choice like naming the primary: a provider nobody named is never registered.
+ */
+export const MESSAGING_ALTERNATES_ENV = 'BRAIN_MESSAGING_ALTERNATES';
+export const BILLING_ALTERNATES_ENV = 'BRAIN_BILLING_ALTERNATES';
 export const STRIPE_KEY_ENV = 'STRIPE_SECRET_KEY';
 
 /** The providers this version implements. Anything else is refused by name. */
@@ -75,11 +85,16 @@ export function messagingConfig(env: NodeJS.ProcessEnv = process.env): ProviderC
   if (!provider) {
     return { provider: null, configured: false, problems: [MESSAGING_PROVIDER_ENV] };
   }
+  return messagingProviderConfig(provider, env, MESSAGING_PROVIDER_ENV);
+}
+
+/** One named messaging provider's settings, whether it is the primary or an alternate. */
+export function messagingProviderConfig(provider: string, env: NodeJS.ProcessEnv = process.env, chosenBy: string = MESSAGING_PROVIDER_ENV): ProviderConfigReading {
   if (!(MESSAGING_PROVIDERS as readonly string[]).includes(provider)) {
     return {
       provider,
       configured: false,
-      problems: [`${MESSAGING_PROVIDER_ENV} (only ${MESSAGING_PROVIDERS.join(', ')} is implemented)`],
+      problems: [`${chosenBy} (only ${MESSAGING_PROVIDERS.join(', ')} is implemented)`],
     };
   }
   const problems: string[] = [];
@@ -101,16 +116,38 @@ export function messagingConfig(env: NodeJS.ProcessEnv = process.env): ProviderC
   return { provider, configured: problems.length === 0, problems };
 }
 
+/**
+ * The alternates a deployment named for an area (`BRAIN_*_ALTERNATES`), each
+ * read with its own settings, in the order named. The primary and repeats are
+ * dropped: an alternate is a second counterparty, never the first one twice.
+ */
+export function alternateProviders(area: 'MESSAGING' | 'BILLING', env: NodeJS.ProcessEnv = process.env): ProviderConfigReading[] {
+  const listName = area === 'MESSAGING' ? MESSAGING_ALTERNATES_ENV : BILLING_ALTERNATES_ENV;
+  const primary = read(area === 'MESSAGING' ? MESSAGING_PROVIDER_ENV : BILLING_PROVIDER_ENV, env);
+  const names = (read(listName, env) ?? '').split(',').map((one) => one.trim()).filter((one) => one !== '');
+  const out: ProviderConfigReading[] = [];
+  for (const name of [...new Set(names)]) {
+    if (name === primary) continue;
+    out.push(area === 'MESSAGING' ? messagingProviderConfig(name, env, listName) : billingProviderConfig(name, env, listName));
+  }
+  return out;
+}
+
 export function billingConfig(env: NodeJS.ProcessEnv = process.env): ProviderConfigReading {
   const provider = read(BILLING_PROVIDER_ENV, env);
   if (!provider) {
     return { provider: null, configured: false, problems: [BILLING_PROVIDER_ENV], mode: null };
   }
+  return billingProviderConfig(provider, env, BILLING_PROVIDER_ENV);
+}
+
+/** One named billing provider's settings, whether it is the primary or an alternate. */
+export function billingProviderConfig(provider: string, env: NodeJS.ProcessEnv = process.env, chosenBy: string = BILLING_PROVIDER_ENV): ProviderConfigReading {
   if (!(BILLING_PROVIDERS as readonly string[]).includes(provider)) {
     return {
       provider,
       configured: false,
-      problems: [`${BILLING_PROVIDER_ENV} (only ${BILLING_PROVIDERS.join(', ')} is implemented)`],
+      problems: [`${chosenBy} (only ${BILLING_PROVIDERS.join(', ')} is implemented)`],
       mode: null,
     };
   }

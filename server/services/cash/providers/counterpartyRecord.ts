@@ -38,7 +38,7 @@
  * the provider gave it, and a recording failure is reported on the log (no
  * payload, no credential) rather than turned into a failed or repeated send.
  */
-import type { EffectAdapter, EffectRequest, SendOutcome } from '../../effects/adapter.ts';
+import { listAdapters, type EffectAdapter, type EffectRequest, type SendOutcome } from '../../effects/adapter.ts';
 import { getOpportunity } from '../../../repos/cashPortfolio.ts';
 import { getInvoice } from '../../../repos/cashInvoices.ts';
 import { factFor, recordCounterpartyFacts, recordedCounterparty, type Fact } from '../../labor/counterparties/ladder.ts';
@@ -61,6 +61,22 @@ export interface ProviderSeat {
 /** The counterparty id `counterparty.ts`' `providerCounterparty` gives the same provider. */
 export function providerCounterpartyId(seat: Pick<ProviderSeat, 'area' | 'provider'>): string {
   return `provider:${seat.area.toLowerCase()}:${seat.provider}`;
+}
+
+/**
+ * Every provider seated in the same area as `seat` — the area's primary and its
+ * alternates — with `seat` itself first: the candidates a refused commitment can
+ * be transferred among. Read from the adapter registry itself (each wrapped
+ * adapter names its counterparty), so the boot registration is the one record
+ * of who is seated and there is no second list to drift from it.
+ */
+export function seatedCounterparties(seat: Pick<ProviderSeat, 'area' | 'provider'>): string[] {
+  const self = providerCounterpartyId(seat);
+  const prefix = `provider:${seat.area.toLowerCase()}:`;
+  const peers = listAdapters()
+    .map((adapter) => (adapter as Partial<Record<typeof RECORDS_COUNTERPARTY, string>>)[RECORDS_COUNTERPARTY])
+    .filter((id): id is string => typeof id === 'string' && id.startsWith(prefix) && id !== self);
+  return [self, ...new Set(peers)];
 }
 
 /** The commitment one effect is for, and the business (project) it belongs to. */
@@ -110,6 +126,8 @@ export interface RecordedAttempt {
   outcome: 'PERFORMED' | 'FAILED' | 'UNKNOWN' | null;
   facts: number;
   transferred: boolean;
+  /** The counterparty the commitment was transferred to, when it was. */
+  transferredTo?: string | null;
 }
 
 /**
@@ -198,10 +216,12 @@ export async function recordProviderAttempt(
         if (done.recorded) recorded.outcome = kind;
         if (kind === 'FAILED') {
           // The model's own transfer: to an alternative with evidenced capacity, or nothing at all.
+          // The candidates are every provider seated in this area, so the plan can move the commitment
+          // off the counterparty that refused it; the failed one is excluded by the plan itself.
           const reading = await transferRecordedTransaction(
             {
               commitment: { id: subject.commitmentId, capacityUnits: 1 },
-              candidateIds: [counterpartyId],
+              candidateIds: seatedCounterparties(seat),
               businessId: subject.projectId,
               window: dayWindow(at),
               action: seat.action,
@@ -211,6 +231,7 @@ export async function recordProviderAttempt(
             BRAIN,
           );
           recorded.transferred = reading.transfer.plan?.action === 'TRANSFER';
+          recorded.transferredTo = recorded.transferred ? reading.transfer.to : null;
         }
       } else if (held) {
         recorded.outcome = 'UNKNOWN';
