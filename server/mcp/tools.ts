@@ -525,15 +525,38 @@ const heartbeatTool: McpTool = {
  * reaches the same conclusion. That is the whole reason it reads only
  * persisted state.
  */
-async function advanceAfter(item: { orchestrationId: string | null }): Promise<void> {
+export async function advanceAfter(
+  item: { orchestrationId: string | null },
+  waitsMs: readonly number[] = ADVANCE_RETRY_WAITS_MS,
+): Promise<void> {
   if (!item.orchestrationId) return;
-  try {
-    const { advancePacket } = await import('../services/research/packetRunner.ts');
-    await advancePacket(item.orchestrationId);
-  } catch (error) {
-    console.error('[brain] could not advance the packet after a completion:', error);
+  const { advancePacket } = await import('../services/research/packetRunner.ts');
+  const { classifyInfraFailure } = await import('../db/infra.ts');
+  /*
+   * A database that did not answer is retried here, briefly, rather than left
+   * to the next sweep. Right after a restart the pool is contended, and the
+   * released-image verification watched exactly this: a verification
+   * completed, its advance was swallowed, and the packet sat with its question
+   * unsettled and no synthesis queued until something else woke it.
+   * `advancePacket` reads only rows, so a second pass is safe; any other error
+   * is a real one and is logged at once, as before.
+   */
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await advancePacket(item.orchestrationId);
+      return;
+    } catch (error) {
+      const wait = waitsMs[attempt];
+      if (wait === undefined || !classifyInfraFailure(error)) {
+        console.error('[brain] could not advance the packet after a completion:', error);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
   }
 }
+
+const ADVANCE_RETRY_WAITS_MS = [1000, 3000, 8000] as const;
 
 const completeTool: McpTool = {
   name: 'brain_complete_work',
