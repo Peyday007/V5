@@ -179,6 +179,8 @@ describe('the owner is told once per accepted plan, through the Instantly owner 
   }
 
   async function hermesAdopts(goalId: string, chosen = 0): Promise<void> {
+    // Decisions are minutes apart in production; here the next one must not share a millisecond with the last.
+    await new Promise((resolve) => setTimeout(resolve, 5));
     await recordEvent({
       projectId,
       entityType: 'PROJECT',
