@@ -243,6 +243,53 @@ describe('the assigner does not strand render work on the surfaces that declared
   });
 });
 
+/** A render bin Brain fired at `routine` as `session`, taken through check-in, submission and completion. */
+async function completeRenderFrom(routineId: string, routineRef: string) {
+  const { checkIn, submitUnit, requestCompletion } = await import('../server/services/bins/service.ts');
+  const bin = await createBin({
+    projectId,
+    kind: 'DESIGN_RENDER',
+    title: 'Design render: proof',
+    objective: 'Render the home surface.',
+    manifest: manifest(),
+    completionContract: 'DESIGN_RENDER_V1',
+    createdByType: 'SYSTEM',
+    createdById: `design:render:proof:${tag()}`,
+    ready: true,
+    maxAttempts: 3,
+    workloadClass: 'GENERAL_DESIGN_RENDER',
+  });
+  const session = `cse_${tag()}${tag()}${tag()}`;
+  const at = new Date().toISOString();
+  await getDb().run(
+    `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count, max_attempts,
+       next_attempt_at, routine_id, routine_ref, session_ref, created_at, updated_at, sent_at)
+     VALUES (?, ?, 0, 'SENT', 1, 5, ?, ?, ?, ?, ?, ?, ?)`,
+    [newId('bdi'), bin.id, at, routineId, routineRef, session, at, at, at],
+  );
+  const worker = await createWorker({ name: `render-worker-${tag()}`, createdByType: 'SYSTEM', createdById: 't' });
+  const principal = {
+    type: 'WORKER', id: worker.id, handle: `worker-${worker.id}`, displayName: 'Render worker',
+    isBrainAdmin: false, mustChangePassword: false, credentialId: `cred-${worker.id}`, authMethod: 'WORKER_BEARER',
+    memberships: [{ projectId, role: null, scopes: SCOPES, active: true }], requestId: 'test-request',
+  } as unknown as Principal;
+  const arrival = await checkIn({ principal, workerId: worker.id, sessionRef: session });
+  expect(arrival.assigned).toBe(true);
+  if (!arrival.assigned) throw new Error('not assigned');
+  expect(arrival.assignment.binId).toBe(bin.id);
+  const proof = {
+    binId: arrival.assignment.binId, leaseId: arrival.assignment.leaseId,
+    leaseGeneration: arrival.assignment.leaseGeneration, workerId: worker.id,
+  };
+  // A capture no browser drew: the hash is not of any bytes.
+  const fabricated = JSON.stringify({
+    revision: 'abc1234', treeDirty: false,
+    captures: [{ surfaceKey: 'home', width: 1280, sha256: 'f'.repeat(64), engine: 'chromium', engineVersion: '131' }],
+  });
+  expect((await submitUnit({ workerId: worker.id, proof, unitKey: 'design_render', value: fabricated })).held).toBe(true);
+  return (await requestCompletion({ workerId: worker.id, proof })).state;
+}
+
 describe('a satisfied render is not evidence of a browser, so Brain never declares one', () => {
   /*
    * Review finding: Brain wrote `browser` onto the Routine whose session
@@ -252,53 +299,6 @@ describe('a satisfied render is not evidence of a browser, so Brain never declar
    * declaration's only producer is a person, and it is never derived for a
    * render bin either (see the next block).
    */
-
-  /** A render bin Brain fired at `routine` as `session`, taken through check-in, submission and completion. */
-  async function completeRenderFrom(routineId: string, routineRef: string) {
-    const { checkIn, submitUnit, requestCompletion } = await import('../server/services/bins/service.ts');
-    const bin = await createBin({
-      projectId,
-      kind: 'DESIGN_RENDER',
-      title: 'Design render: proof',
-      objective: 'Render the home surface.',
-      manifest: manifest(),
-      completionContract: 'DESIGN_RENDER_V1',
-      createdByType: 'SYSTEM',
-      createdById: `design:render:proof:${tag()}`,
-      ready: true,
-      maxAttempts: 3,
-      workloadClass: 'GENERAL_DESIGN_RENDER',
-    });
-    const session = `cse_${tag()}${tag()}${tag()}`;
-    const at = new Date().toISOString();
-    await getDb().run(
-      `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count, max_attempts,
-         next_attempt_at, routine_id, routine_ref, session_ref, created_at, updated_at, sent_at)
-       VALUES (?, ?, 0, 'SENT', 1, 5, ?, ?, ?, ?, ?, ?, ?)`,
-      [newId('bdi'), bin.id, at, routineId, routineRef, session, at, at, at],
-    );
-    const worker = await createWorker({ name: `render-worker-${tag()}`, createdByType: 'SYSTEM', createdById: 't' });
-    const principal = {
-      type: 'WORKER', id: worker.id, handle: `worker-${worker.id}`, displayName: 'Render worker',
-      isBrainAdmin: false, mustChangePassword: false, credentialId: `cred-${worker.id}`, authMethod: 'WORKER_BEARER',
-      memberships: [{ projectId, role: null, scopes: SCOPES, active: true }], requestId: 'test-request',
-    } as unknown as Principal;
-    const arrival = await checkIn({ principal, workerId: worker.id, sessionRef: session });
-    expect(arrival.assigned).toBe(true);
-    if (!arrival.assigned) throw new Error('not assigned');
-    expect(arrival.assignment.binId).toBe(bin.id);
-    const proof = {
-      binId: arrival.assignment.binId, leaseId: arrival.assignment.leaseId,
-      leaseGeneration: arrival.assignment.leaseGeneration, workerId: worker.id,
-    };
-    // A capture no browser drew: the hash is not of any bytes.
-    const fabricated = JSON.stringify({
-      revision: 'abc1234', treeDirty: false,
-      captures: [{ surfaceKey: 'home', width: 1280, sha256: 'f'.repeat(64), engine: 'chromium', engineVersion: '131' }],
-    });
-    expect((await submitUnit({ workerId: worker.id, proof, unitKey: 'design_render', value: fabricated })).held).toBe(true);
-    return (await requestCompletion({ workerId: worker.id, proof })).state;
-  }
 
   it('the contract is satisfied by a capture no browser drew — so a satisfied verdict cannot be the proof', async () => {
     const account = await createAccount({ name: `fabricated-${tag()}` });
