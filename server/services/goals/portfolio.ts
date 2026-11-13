@@ -46,14 +46,15 @@ import {
   addRelation,
   createGraph,
   declareType,
-  expandToFixpoint,
   derive,
+  expandToFixpoint,
   fullAccount,
   linkGraphs,
   makeFigure,
   passVolume,
   readMoneyRoute,
   recordClaim,
+  trace as traceGraph,
   unknownFigure,
   type ChainReading,
   type ChainStage,
@@ -64,6 +65,7 @@ import {
   type OperationalAction,
   type SharedDependency,
 } from '../quant/graph.ts';
+import { decompose, type Subproblem } from '../quant/decompose.ts';
 
 export const PORTFOLIO_WORLDS = 2_000;
 /** The shares of the shared outreach an opening may be given. */
@@ -567,6 +569,13 @@ export function evaluateGoalPortfolio(input: {
   if (!best) missing.push('no combination of the openings held can run inside the limits');
   // Historical data the best combination still lacks is targeted research, named, never assumed.
   for (const need of assurance?.researchNeeds ?? []) missing.push(`research: ${need}`);
+  const causal = causalOf(
+    input.openings.filter((one) => (memberIds.size > 0 ? memberIds.has(one.opportunity.id) : demand.some((d) => d.opportunityId === one.opportunity.id && !d.refused))),
+    demand,
+    input.daysLeft,
+  );
+  // What the graph's decision answers depend on and nobody established goes to research or to an authorized action, by name.
+  for (const one of causal?.decisionUnknowns ?? []) missing.push(`${one.sendTo}: ${one.unknown}`);
   return {
     basis,
     worlds,
@@ -584,10 +593,7 @@ export function evaluateGoalPortfolio(input: {
     },
     assurance,
     marketHistory: [...histories.values()],
-    causal: causalOf(
-      input.openings.filter((one) => (memberIds.size > 0 ? memberIds.has(one.opportunity.id) : demand.some((d) => d.opportunityId === one.opportunity.id && !d.refused))),
-      demand,
-    ),
+    causal,
     safeguards: result.safeguardEffects ?? [],
     missing,
     searched: result.searched,
@@ -612,6 +618,51 @@ export interface OpeningCausal {
   discovered: string[];
   /** Inputs nobody has stated, shown as unknown rather than filled. */
   unknowns: string[];
+  /**
+   * The decision questions asked of this opening's own graph on every
+   * evaluation (CAUSAL-14-4): each change propagated through the money route,
+   * cash timing, capital and the chain of this opening and of every opening a
+   * shared party or resource ties to it.
+   */
+  whatIf: WhatIfAnswer[];
+  /**
+   * An opening Brain itself would fulfil — an AI business — decomposed into the
+   * observable causal subproblems that settle it (CAUSAL-14-7). Null when a
+   * supplier or person fulfils it.
+   */
+  decomposition: Subproblem[] | null;
+}
+
+/** What one change does to one opening, before and after, through the figures it moves. */
+export interface PropagatedEffect {
+  opportunityId: string;
+  title: string;
+  /** Why the change reaches this opening: it is the opening changed, or the shared party or resource that ties it there. */
+  via: string;
+  before: Record<string, number | null>;
+  after: Record<string, number | null>;
+  note: string;
+}
+
+export interface WhatIfAnswer {
+  id: string;
+  opportunityId: string;
+  question: string;
+  change: string;
+  effects: PropagatedEffect[];
+  /** What in the graph the change stops or delays, read by tracing forward from what changed. */
+  breaks: string[];
+  /** A different route the change opens, added to the opening's graph beside the original when it is viable. */
+  branch: { routeId: string; viable: boolean; why: string } | null;
+  /** What the answer depends on that nobody has established, and where it is sent. */
+  unknowns: DecisionUnknown[];
+}
+
+export interface DecisionUnknown {
+  opportunityId: string;
+  unknown: string;
+  /** Research when evidence could settle it; an authorized action when only asking the counterparty can. */
+  sendTo: 'research' | 'authorized action';
 }
 
 export interface PortfolioCausal {
@@ -620,6 +671,8 @@ export interface PortfolioCausal {
   shared: SharedDependency[];
   /** The whole portfolio graph, unsummarised, for the owner who asks for the complete account. */
   account: ReturnType<typeof fullAccount> | null;
+  /** Every decision-critical unknown the what-if answers depend on, each sent to research or to an authorized action. */
+  decisionUnknowns: DecisionUnknown[];
 }
 
 const PROVENANCE_STATUS: Record<string, FigureStatus> = { EVIDENCE: 'EVIDENCED', HISTORICAL: 'OBSERVED', ASSUMPTION: 'ASSUMED', HYPOTHETICAL: 'ASSUMED' };
@@ -644,6 +697,9 @@ const stated = (value: string | null | undefined): string | null => (typeof valu
 const listed = (value: string | null | undefined): string[] =>
   (stated(value) ?? '').split(/\s*(?:;|\n|,)\s*/).map((one) => one.trim()).filter((one) => one.length >= 3);
 const BRAIN_FULFILLER = /^(brain|ai|the ai|brain itself|brain's own)\b/i;
+/** Money the opening ties up before it settles, in minor units; null when nobody stated it. */
+const capitalCentsOf = (one: ModelledOpportunity): number | null =>
+  one.opportunity.peakFundingCents ?? (one.capital.value !== null && one.capital.value > 0 ? Math.round(one.capital.value * 100) : null);
 
 /**
  * How an opening reaches its money, read from its own row: whether a buyer has
@@ -785,7 +841,7 @@ function buildCausalGraph(one: ModelledOpportunity): BuiltGraph {
   const external = fulfiller !== null && !BRAIN_FULFILLER.test(fulfiller);
   const delivery = stated(o.deliveryMethod);
   const deadline = stated(o.deadline);
-  const capitalCents = o.peakFundingCents ?? (one.capital.value !== null && one.capital.value > 0 ? Math.round(one.capital.value * 100) : null);
+  const capitalCents = capitalCentsOf(one);
   const days = one.daysToCash.value;
   const timing = terms ?? (days !== null ? `cash after about ${days} days` : '');
 
@@ -971,14 +1027,19 @@ function chainOf(one: ModelledOpportunity, contacts: number): ChainReading {
 }
 
 /** The causal reading of the openings a combination holds, from the rows that built it; null when none. */
-export function causalOf(openings: ModelledOpportunity[], demand: DemandEstimate[]): PortfolioCausal | null {
+export function causalOf(openings: ModelledOpportunity[], demand: DemandEstimate[], daysLeft: number | null = null): PortfolioCausal | null {
   if (openings.length === 0) return null;
   const built = openings.map(buildCausalGraph);
   const graphs = built.map((one) => one.graph);
+  const linked = graphs.length > 1 ? linkGraphs('portfolio', graphs) : null;
+  const shared = linked && linked.ok ? linked.value.shared : [];
+  const chains = openings.map((one) => chainOf(one, demand.find((d) => d.opportunityId === one.opportunity.id)?.contacted.p50 ?? 0));
+  const routes = built.map(({ graph }) => readMoneyRoute([...graph.routes.values()][0]!));
+  const context: WhatIfContext = { openings, graphs, chains, routes, shared, daysLeft };
   const members: OpeningCausal[] = openings.map((one, i) => {
     const { graph: g, discovered } = built[i] as BuiltGraph;
-    const contacts = demand.find((d) => d.opportunityId === one.opportunity.id)?.contacted.p50 ?? 0;
-    const route = readMoneyRoute([...g.routes.values()][0]!);
+    const route = routes[i] as MoneyRouteReading;
+    const whatIf = whatIfOf(context, i);
     return {
       opportunityId: one.opportunity.id,
       title: one.opportunity.title,
@@ -986,15 +1047,220 @@ export function causalOf(openings: ModelledOpportunity[], demand: DemandEstimate
       relations: g.relations.size,
       actions: g.actions.size,
       route,
-      chain: chainOf(one, contacts),
+      chain: chains[i] as ChainReading,
       discovered,
-      unknowns: [...route.gaps],
+      unknowns: [...route.gaps, ...whatIf.flatMap((answer) => answer.unknowns.map((one) => one.unknown))],
+      whatIf,
+      decomposition: decompositionOf(one, g),
     };
   });
-  const linked = graphs.length > 1 ? linkGraphs('portfolio', graphs) : null;
+  const seen = new Set<string>();
+  const decisionUnknowns = members.flatMap((one) => one.whatIf.flatMap((answer) => answer.unknowns)).filter((one) => {
+    const key = `${one.opportunityId}|${one.unknown}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   return {
     members,
-    shared: linked && linked.ok ? linked.value.shared : [],
-    account: linked && linked.ok ? fullAccount(linked.value.graph) : fullAccount(graphs[0] as CausalGraph),
+    shared,
+    // Built after the what-ifs, so a viable branch they opened is in the complete account.
+    account: linked && linked.ok ? fullAccount((linkGraphs('portfolio', graphs) as { ok: true; value: { graph: CausalGraph } }).value.graph) : fullAccount(graphs[0] as CausalGraph),
+    decisionUnknowns,
   };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Asking the graph: what-if, propagated across connected openings          */
+/* ------------------------------------------------------------------------- */
+
+interface WhatIfContext {
+  openings: ModelledOpportunity[];
+  graphs: CausalGraph[];
+  chains: ChainReading[];
+  routes: MoneyRouteReading[];
+  shared: SharedDependency[];
+  daysLeft: number | null;
+}
+
+/** The other openings a member node of opening i is shared with, through one party or resource. */
+function sharedWith(context: WhatIfContext, i: number, node: string): { index: number; via: string }[] {
+  const id = `${(context.graphs[i] as CausalGraph).subject}::${node}`;
+  const out: { index: number; via: string }[] = [];
+  for (const dep of context.shared) {
+    if (!dep.members.includes(id)) continue;
+    for (const member of dep.members) {
+      const subject = member.slice(0, member.indexOf('::'));
+      const index = context.graphs.findIndex((g) => g.subject === subject);
+      if (index >= 0 && index !== i && !out.some((one) => one.index === index)) out.push({ index, via: `shares the ${dep.type} ${dep.label}` });
+    }
+  }
+  return out;
+}
+
+const centsOf = (figure: Figure): number | null => (figure.status === 'UNKNOWN' ? null : figure.value);
+
+/**
+ * The decision questions the owner asks of a business, asked of this
+ * opening's own graph on every evaluation rather than only when somebody posts
+ * one: what changes if the buyer prepays, what breaks if the supplier is late,
+ * where an added $1,000 of advertising goes. Each answer carries the change
+ * through the money route, cash timing, capital and the chain, to this opening
+ * and to every opening a shared party or resource ties to it; a change that
+ * opens a different viable route adds it to the graph as a branch; and what the
+ * answer depends on that nobody established is sent to research or to an
+ * authorized action. Nothing is filled in: an unknown input makes its answer
+ * unknown and says so.
+ */
+function whatIfOf(context: WhatIfContext, i: number): WhatIfAnswer[] {
+  const one = context.openings[i] as ModelledOpportunity;
+  const o = one.opportunity;
+  const g = context.graphs[i] as CausalGraph;
+  const chain = context.chains[i] as ChainReading;
+  const reading = context.routes[i] as MoneyRouteReading;
+  const base = [...g.routes.values()][0]!;
+  const payer = stated(o.payer) ?? 'the buyer';
+  const answers: WhatIfAnswer[] = [];
+  const days = one.daysToCash.value;
+  const capital = capitalCentsOf(one);
+  const price = centsOf(base.collectedCents);
+  const costKnown = base.outflows.every((out) => out.amountCents !== null && Number.isFinite(out.amountCents));
+  const cost = costKnown ? base.outflows.reduce((sum, out) => sum + (out.amountCents ?? 0), 0) : null;
+
+  // 1. Prepayment: the payer pays in full before delivery.
+  if (!/\b(pre-?paid|prepay|up-?front|in advance)\b/i.test(base.terms)) {
+    const unknowns: DecisionUnknown[] = [{ opportunityId: o.id, unknown: `whether ${payer} will pay in full before delivery`, sendTo: 'authorized action' }];
+    const branchRoute = {
+      ...base,
+      id: 'sale:prepaid',
+      terms: 'paid in full before delivery',
+      heldAgainstCents: derive('held against fulfilment until delivery', 'cents', [base.collectedCents], ([p]) => p ?? 0),
+    };
+    const branchReading = readMoneyRoute(branchRoute);
+    const capitalAfter = capital === null ? null : price === null ? null : Math.max(0, capital - price);
+    const marginAfterDelivery = price !== null && cost !== null ? price - cost : null;
+    const viable = marginAfterDelivery !== null && marginAfterDelivery >= 0;
+    if (price === null) unknowns.push({ opportunityId: o.id, unknown: 'the price per deal', sendTo: 'research' });
+    if (cost === null) unknowns.push({ opportunityId: o.id, unknown: 'the direct cost per deal', sendTo: 'research' });
+    if (viable) addMoneyRoute(g, branchRoute);
+    const freed = capital !== null && capitalAfter !== null ? capital - capitalAfter : null;
+    const effects: PropagatedEffect[] = [{
+      opportunityId: o.id, title: o.title, via: 'the opening changed',
+      before: { freeCents: reading.freeCents.value, daysToCash: days, capitalCents: capital },
+      after: { freeCents: branchReading.freeCents.value, freeCentsOnDelivery: marginAfterDelivery, daysToCash: days === null ? null : 0, capitalCents: capitalAfter },
+      note: price === null
+        ? 'the price is unknown, so neither the hold nor the capital it would free can be computed'
+        : `the whole ${price} cents collected is held against fulfilment until delivery, then released; cash arrives at order instead of after ${days ?? 'an unknown number of'} days`,
+    }];
+    // Capital the prepayment frees is the goal's shared ceiling: every other opening that ties money up gets the room.
+    if (freed !== null && freed > 0) {
+      context.openings.forEach((other, j) => {
+        const need = capitalCentsOf(other);
+        if (j === i || need === null || need <= 0) return;
+        effects.push({
+          opportunityId: other.opportunity.id, title: other.opportunity.title, via: 'draws on the same capital ceiling',
+          before: { capitalCents: need, ceilingRoomFreedCents: 0 }, after: { capitalCents: need, ceilingRoomFreedCents: freed },
+          note: `${freed} cents of the ceiling this opening no longer ties up can fund ${need <= freed ? 'all' : 'part'} of this opening's ${need} cents`,
+        });
+      });
+    }
+    answers.push({
+      id: `${o.id}:prepaid`, opportunityId: o.id,
+      question: `What happens if ${payer} prepays?`,
+      change: `terms "${base.terms || 'unstated'}" → paid in full before delivery`,
+      effects, breaks: [],
+      branch: {
+        routeId: 'sale:prepaid', viable,
+        why: viable
+          ? `prepaid, the deal still leaves ${marginAfterDelivery} cents once delivery releases the hold, and cash arrives at order`
+          : marginAfterDelivery === null ? 'not established: the price or the direct cost is unknown' : `prepaid, the deal still loses ${-marginAfterDelivery} cents after delivery`,
+      },
+      unknowns,
+    });
+  }
+
+  // 2. The supplier is late: what stops, here and in every opening that depends on the same supplier.
+  if (g.nodes.get('fulfiller')?.type === 'supplier') {
+    const supplier = g.nodes.get('fulfiller')!.label;
+    const traced = traceGraph(g, 'fulfiller', 'forward');
+    const breaks = [...new Set((traced?.reached ?? []).filter((r) => r.node.type !== 'failure_mode').map((r) => `${r.node.type}: ${r.node.label}`))];
+    for (const step of ['fulfil', 'accept', 'collect']) if (g.actions.has(step)) breaks.push(`action: ${g.actions.get(step)!.label}`);
+    const affected = [{ index: i, via: `fulfilled by ${supplier}` }, ...sharedWith(context, i, 'fulfiller')];
+    const effects: PropagatedEffect[] = affected.map(({ index, via }) => {
+      const member = context.openings[index] as ModelledOpportunity;
+      const d = member.daysToCash.value;
+      const slack = context.daysLeft !== null && d !== null ? Math.max(0, Math.floor(context.daysLeft - d)) : null;
+      return {
+        opportunityId: member.opportunity.id, title: member.opportunity.title, via,
+        before: { daysToCash: d, freeCentsPerDeal: (context.routes[index] as MoneyRouteReading).freeCents.value },
+        after: { daysToCashPerDayLate: d === null ? null : 1, toleratesDelayDays: slack },
+        note: slack === null
+          ? 'each day the supplier is late moves collection a day later; when that passes the goal\'s deadline is unknown'
+          : `each day late moves collection a day later; after ${slack} days late the cash lands past the goal's deadline and does not count`,
+      };
+    });
+    answers.push({
+      id: `${o.id}:supplier-late`, opportunityId: o.id,
+      question: `What breaks if ${supplier} delivers late?`,
+      change: `${supplier} delivers later than planned`,
+      effects, breaks, branch: null,
+      unknowns: [{ opportunityId: o.id, unknown: `how reliably ${supplier} delivers on time`, sendTo: 'research' }],
+    });
+  }
+
+  // 3. An added $1,000 of advertising: where it goes, and whether a constraint stops it becoming sales.
+  if (acquisitionOf(one) === 'OUTREACH') {
+    const channel = stated(o.reachableChannel) ?? 'the outreach channel';
+    const cap = chain.stages.find((stage) => stage.capped);
+    const unknowns: DecisionUnknown[] = [];
+    if (!cap) unknowns.push({ opportunityId: o.id, unknown: `how many buyers $1,000 of advertising reaches through ${channel}, and at what reply rate as spend grows`, sendTo: 'research' });
+    const effects: PropagatedEffect[] = [{
+      opportunityId: o.id, title: o.title, via: 'the opening changed',
+      before: { outputUnits: chain.outputUnits },
+      after: { outputUnits: cap ? chain.outputUnits : null },
+      note: cap
+        ? `${cap.name} already caps sales, so the $1,000 buys no more deals here`
+        : 'the spend enters at reach; what it buys is unknown, so sales after it are unknown rather than the old rate scaled up',
+    }];
+    for (const { index, via } of sharedWith(context, i, 'channel')) {
+      const other = context.chains[index] as ChainReading;
+      effects.push({
+        opportunityId: (context.openings[index] as ModelledOpportunity).opportunity.id, title: (context.openings[index] as ModelledOpportunity).opportunity.title, via,
+        before: { outputUnits: other.outputUnits }, after: { outputUnits: null },
+        note: 'the same channel carries this opening too: added spend competes for its buyers, so its sales after the change are unknown',
+      });
+    }
+    answers.push({
+      id: `${o.id}:advertising`, opportunityId: o.id,
+      question: 'Where does an added $1,000 of advertising go?',
+      change: `100000 cents more spent reaching buyers through ${channel}`,
+      effects, breaks: [], branch: null, unknowns,
+    });
+  }
+  return answers;
+}
+
+/**
+ * An opening Brain itself fulfils is an AI business; it is decomposed into the
+ * same observable causal subproblems as any other, with what its row already
+ * says toward each attached and every one left UNKNOWN until observed.
+ */
+function decompositionOf(one: ModelledOpportunity, g: CausalGraph): Subproblem[] | null {
+  const fulfiller = fulfillerOf(one);
+  if (fulfiller === null || !BRAIN_FULFILLER.test(fulfiller)) return null;
+  const o = one.opportunity;
+  const route = [...g.routes.values()][0];
+  const decomposed = decompose(new Map(), [], {
+    demand: stated(o.payer),
+    access: stated(o.reachableChannel),
+    capability: `fulfilled by ${fulfiller}${o.requiredCapabilities.length > 0 ? `; needs ${o.requiredCapabilities.join(', ')}` : ''}`,
+    'unit-cost': one.directCost.value === null ? null : `${one.directCost.value} ${o.currency} per deal (${one.directCost.provenance.toLowerCase()})`,
+    capacity: one.volume.value === null ? null : `${one.volume.value} deals the market takes (${one.volume.provenance.toLowerCase()})`,
+    purchase: one.agreed ? `${one.agreedDeals} agreement(s) recorded` : null,
+    acceptance: stated(o.acceptanceCondition),
+    payment: stated(o.paymentTerms),
+    obligations: route && route.outflows.length > 0 ? route.outflows.map((out) => `${out.to}: ${out.reason}`).join('; ') : null,
+    failure: null,
+  });
+  return decomposed.ok ? decomposed.subproblems : null;
 }
