@@ -887,6 +887,13 @@ async function resumeCapabilityAuthority(request: RussellHumanRequest): Promise<
 }
 
 /**
+ * What a resume says when the mission left `NEEDS_HUMAN` underneath the
+ * answer. One string, two readers: the two resumes that write it, and
+ * `reopenAnswered`, which withdraws rather than re-asks on it.
+ */
+const MOVED_OUT_OF_NEEDS_YOU = 'the mission moved out of Needs You before the answer could be applied';
+
+/**
  * Carry out what a person decided.
  *
  * This is the answering transition condition 17 is about, and the whole reason
@@ -899,13 +906,6 @@ async function resumeCapabilityAuthority(request: RussellHumanRequest): Promise<
  * an orchestration; a replacement would fail condition 17 outright and would
  * also throw away the packet's accepted work.
  */
-/**
- * What a resume says when the mission left `NEEDS_HUMAN` underneath the
- * answer. One string, two readers: the two resumes that write it, and
- * `reopenAnswered`, which withdraws rather than re-asks on it.
- */
-const MOVED_OUT_OF_NEEDS_YOU = 'the mission moved out of Needs You before the answer could be applied';
-
 export async function resumeAnsweredRequest(
   request: RussellHumanRequest,
 ): Promise<ResumeResult> {

@@ -238,3 +238,22 @@ describe('the moot cards an earlier version already re-opened', () => {
     expect(await decisions(other.requestId)).toHaveLength(0);
   });
 });
+
+describe('the source keeps each doc comment on what it documents', () => {
+  it('resumeAnsweredRequest is directly preceded by its own doc comment, not the moot-reason constant\'s', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const source = await readFile(new URL('../server/services/russell/needsHuman.ts', import.meta.url), 'utf8');
+    const fn = source.indexOf('export async function resumeAnsweredRequest(');
+    expect(fn).toBeGreaterThan(0);
+    const before = source.slice(0, fn).trimEnd();
+    expect(before.endsWith('*/')).toBe(true);
+    const doc = before.slice(before.lastIndexOf('/**'));
+    expect(doc).toContain('Carry out what a person decided.');
+    expect(doc).not.toContain('MOVED_OUT_OF_NEEDS_YOU');
+    // The constant keeps its own comment, directly above it.
+    const constAt = source.indexOf('const MOVED_OUT_OF_NEEDS_YOU =');
+    const constDoc = source.slice(0, constAt).trimEnd();
+    expect(constDoc.endsWith('*/')).toBe(true);
+    expect(constDoc.slice(constDoc.lastIndexOf('/**'))).toContain('What a resume says when the mission left');
+  });
+});
