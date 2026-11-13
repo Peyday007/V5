@@ -237,11 +237,16 @@ export class ModernMcpClient {
     // work item, a repeat cannot perform the effect twice. A verifier that treats the first
     // busy answer as a verdict fails a release for the database's load, not for the release
     // (Deploys 1010-1017: "brain_complete_work: UNAVAILABLE … send the same call again").
-    for (const waitMs of [2_000, 5_000, 10_000, 20_000]) {
+    // IN_PROGRESS is the replay of a call whose first attempt is still running on the server
+    // ("wait, do not duplicate it"): sending the same key again later returns its stored result.
+    // A busy first answer followed by a retry lands here (Deploy 43365957142, brain_submit_synthesis).
+    for (const waitMs of [2_000, 5_000, 10_000, 20_000, 30_000, 60_000]) {
       const category = (reply.result?.structuredContent as { error?: { category?: string } } | undefined)?.error?.category;
       // A 503 with no JSON-RPC body is the same answer one layer down: the endpoint or the
       // edge proxy said "busy" before a tool ran (Deploy 43359264874: "brain_complete_work: no result").
-      const busy = (reply.result?.isError === true && category === 'UNAVAILABLE') || (reply.status === 503 && !reply.result);
+      const busy =
+        (reply.result?.isError === true && (category === 'UNAVAILABLE' || category === 'IN_PROGRESS')) ||
+        (reply.status === 503 && !reply.result);
       if (!busy) break;
       await new Promise((resolve) => setTimeout(resolve, waitMs));
       reply = await this.callTool(name, args);
