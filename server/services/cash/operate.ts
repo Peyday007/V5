@@ -90,6 +90,7 @@ import { cashEngineCard, NEED_RESEARCHABLE_ENGINE_FIELDS } from './engineCard.ts
 import { CAPTURE_INPUTS, cashTier } from './tier.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
+import { seekCompliantPositions, type PositionPass } from './regulatedPositions.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
 import { runValidations, whyNotDiving, type ValidationProgress } from './validation.ts';
 import { enumeratePossibilities } from './monetization/enumerate.ts';
@@ -1434,6 +1435,8 @@ export async function operate(
   proposed: Proposed[];
   continuations: Continuation[];
   dependentWork: DependentWork[];
+  /** Held-back openings sent to find a compliant position, and searches the record settled (`regulatedPositions.ts`). */
+  positions?: PositionPass;
   validations: ValidationProgress;
   /**
    * Steps that threw this pass, each in its own failure domain. Empty on a
@@ -1566,6 +1569,12 @@ export async function operate(
   ];
   const continuations = await step('runNeedContinuations', () => runNeedContinuations(projectId, now), []);
   const dependentWork = await step('startDependentWork', () => startDependentWork(projectId), []);
+  /*
+   * Every opening whose economics the role reader holds back is sent to find a compliant position
+   * (S-0106: "find compliant positions (including authorized licensed partners) before counting their
+   * economics"): one need and one research idea per opening, closed when its record shows the position.
+   */
+  const positions = await step('seekCompliantPositions', () => seekCompliantPositions(projectId), { sought: [], settled: [] } as PositionPass);
   /*
    * And the bounded deep dive on each opening, which is where the commercial
    * questions actually get answered.
@@ -1701,6 +1710,7 @@ export async function operate(
     proposed,
     continuations,
     dependentWork,
+    positions,
     validations,
     failures,
     effects,
