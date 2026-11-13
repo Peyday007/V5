@@ -7,6 +7,10 @@
  * between a receipt and its record, a restart mid-journey, and the deals
  * already stranded. Each step is idempotent by a row, never by a flag:
  *
+ *   0. a buyer's acceptance (or counter-offer) of an offer Brain sent becomes an
+ *      agreement on that offer's own terms — the card's, only while the card
+ *      still composes the exact words every send of that contact carried — and
+ *      a term the sent offer did not state is a need, never a guess (LIFE-29-1);
  *   1. an agreement's ledger entries exist (and its release, if released);
  *   2. (invoices are issued and read back by `invoicing.ts`, just before this);
  *   3. each agreement's obligation advances (`fulfillment.ts`): its work is
@@ -43,7 +47,13 @@ import {
   observationsFor,
   opportunitiesInJourney,
 } from '../../../repos/cashJourney.ts';
-import { ensureAgreementLedger } from './deal.ts';
+import { ensureAgreementLedger, recordAgreement } from './deal.ts';
+import { raiseNeed } from '../needs.ts';
+import { contactOfferVersions } from '../effects.ts';
+import { composeBuyerMessage } from '../outreach.ts';
+import { offerVersion } from '../perform.ts';
+import type { CashAction, CashOpportunity } from '../../../domain/types.ts';
+import type { CashObservation } from '../../../domain/cashJourney.ts';
 import { agreementAnswering } from '../../../domain/cashJourney.ts';
 import { advanceFulfillment, moveToDelivering, type FulfillmentPass } from './fulfillment.ts';
 import { collectable, dealPosition } from './position.ts';
@@ -58,6 +68,11 @@ const BRAIN = 'BRAIN';
 export const RESPONSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface JourneyTickReport {
+  /**
+   * Acceptances answered this pass: agreements recorded from them, needs raised
+   * for terms the sent offer did not state, and agreements refused, with why.
+   */
+  acceptances: { agreed: number; needs: number; refused: { observationId: string; reason: string }[] };
   ledgerChecked: number;
   /** Agreements whose ledger entry could not be written, with why. Never silent. */
   ledgerRefused: { agreementId: string; reason: string }[];
@@ -77,6 +92,7 @@ export async function advanceJourney(
   now: Date = new Date(),
 ): Promise<JourneyTickReport> {
   const report: JourneyTickReport = {
+    acceptances: { agreed: 0, needs: 0, refused: [] },
     ledgerChecked: 0,
     ledgerRefused: [],
     fulfillment: { workCreated: [], needsRaised: [], needsSettled: [], refundsSettled: [] },
@@ -89,6 +105,9 @@ export async function advanceJourney(
   };
   const mode = await getCashMode(projectId);
   if (!mode) return report;
+
+  // 0. An acceptance of a sent offer is an agreement on that offer's terms.
+  report.acceptances = await agreeFromAcceptances(projectId);
 
   // 1. The ledger counts every agreement exactly once, and every release.
   for (const agreement of await agreementsInProject(projectId)) {
@@ -182,4 +201,123 @@ export async function advanceJourney(
     }
   }
   return report;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Acceptance → agreement                                                     */
+/* ------------------------------------------------------------------------- */
+
+type SentTerms =
+  | { ok: true; deliverable: string; acceptanceCondition: string; priceCents: number; version: string }
+  | { ok: false; missing: string[]; why: string };
+
+/**
+ * The terms of the offer one contact carried, read from rows.
+ *
+ * The card states them only while it still composes exactly the message every
+ * send of that contact was made with (the digest on each intent, as
+ * `learning.ts` reads the offered price): a contact recorded by hand, sent
+ * before intents carried the message, or whose card has changed since, offered
+ * terms no row states, and they are named rather than assumed.
+ */
+async function sentOfferTerms(opportunity: CashOpportunity, contact: CashAction): Promise<SentTerms> {
+  const occurrence = contact.requestKey?.split(':').at(-1) ?? '';
+  const sent = occurrence ? await contactOfferVersions(opportunity.id, occurrence) : [];
+  if (sent.length === 0) {
+    return {
+      ok: false,
+      missing: ['the amount', 'the deliverable', 'the acceptance condition'],
+      why: 'Brain did not send this offer, so the words that reached the buyer are on no row',
+    };
+  }
+  const message = composeBuyerMessage(opportunity);
+  const now = message.ok ? offerVersion(`${message.to}\n${message.subject}\n${message.text}`) : null;
+  if (!now || !sent.every((one) => one === now)) {
+    return {
+      ok: false,
+      missing: ['the amount', 'the deliverable', 'the acceptance condition'],
+      why: 'the card has changed since the offer was sent, so its terms today are not provably the terms the buyer accepted',
+    };
+  }
+  const deliverable = (opportunity.offerScope ?? '').trim();
+  const acceptanceCondition = (opportunity.acceptanceCondition ?? '').trim();
+  const priceCents = opportunity.priceCents ?? 0;
+  const missing = [
+    ...(priceCents > 0 ? [] : ['the amount']),
+    ...(deliverable ? [] : ['the deliverable']),
+    ...(acceptanceCondition ? [] : ['the acceptance condition']),
+  ];
+  if (missing.length > 0) return { ok: false, missing, why: 'the offer as sent did not state it' };
+  return { ok: true, deliverable, acceptanceCondition, priceCents, version: now };
+}
+
+/** The contact an observation answers: the latest one made at or before it. */
+function contactAnswered(observation: CashObservation, contacts: CashAction[]): CashAction | null {
+  let found: CashAction | null = null;
+  for (const contact of contacts) if (contact.createdAt <= observation.observedAt) found = contact;
+  return found;
+}
+
+/**
+ * Every acceptance or counter-offer on a piece being pursued that no agreement
+ * answers yet becomes one, through `recordAgreement` and nothing beside it —
+ * its request key makes a second tick the same agreement, and its
+ * `PIPELINE_AGREED` entry is written in the same transaction. A counter agrees
+ * the countered amount, never the offered one. Nothing is sent.
+ */
+async function agreeFromAcceptances(projectId: string): Promise<JourneyTickReport['acceptances']> {
+  const out: JourneyTickReport['acceptances'] = { agreed: 0, needs: 0, refused: [] };
+  for (const opportunity of await listOpportunities({ projectId, states: ['EXECUTING', 'DELIVERING'] })) {
+    const answers = (await observationsFor(opportunity.id)).filter(
+      (one) => one.kind === 'BUYER_ACCEPTED' || (one.kind === 'BUYER_COUNTERED' && (one.amountCents ?? 0) > 0),
+    );
+    if (answers.length === 0) continue;
+    const contacts = (await actionsFor(opportunity.id)).filter((one) => one.action === 'CONTACT_BUYER');
+    let agreements = await agreementsFor(opportunity.id);
+    for (const observation of answers) {
+      if (agreements.some((one) => one.observationId === observation.id)) continue;
+      const contact = contactAnswered(observation, contacts);
+      if (!contact) continue; // an acceptance before any offer answers nothing Brain sent
+      // Somebody already recorded the agreement this offer led to.
+      if (agreementAnswering(contact, contacts, agreements, null) !== null) continue;
+      const terms = await sentOfferTerms(opportunity, contact);
+      if (!terms.ok) {
+        const raised = await raiseNeed({
+          projectId,
+          opportunityId: opportunity.id,
+          actorRef: BRAIN,
+          blockedAction: `Record the agreement the buyer's ${observation.kind === 'BUYER_COUNTERED' ? 'counter-offer' : 'acceptance'} (${observation.evidenceRef}) answers`,
+          whyItMatters:
+            `The buyer said yes, and Brain cannot state ${terms.missing.join(', ')}: ${terms.why}. ` +
+            'Until an agreement is recorded no commitment, invoice or delivery follows from it.',
+          recommendedPath: 'Record the agreement with the terms the buyer accepted, citing the message that carried them.',
+          setupEffort: 'A few minutes.',
+          nextStep: `State ${terms.missing.join(', ')} as the buyer accepted them and record the agreement against observation ${observation.id}.`,
+          completionCondition: `An agreement on this piece names observation ${observation.id}.`,
+          requestKey: `agreement-terms:${observation.id}`,
+        });
+        if (raised.ok) out.needs += 1;
+        else out.refused.push({ observationId: observation.id, reason: raised.reason });
+        continue;
+      }
+      const agreed = await recordAgreement({
+        opportunityId: opportunity.id,
+        amountCents: observation.kind === 'BUYER_COUNTERED' ? observation.amountCents! : terms.priceCents,
+        currency: opportunity.currency,
+        deliverable: terms.deliverable,
+        acceptanceCondition: terms.acceptanceCondition,
+        evidenceKind: 'WRITTEN_ACCEPTANCE',
+        evidenceRef: `${observation.evidenceRef} (observation ${observation.id}; offer ${terms.version})`,
+        observationId: observation.id,
+        actorRef: BRAIN,
+      });
+      if (!agreed.ok) {
+        out.refused.push({ observationId: observation.id, reason: agreed.reason });
+        continue;
+      }
+      if (!agreements.some((one) => one.id === agreed.value.id)) out.agreed += 1;
+      agreements = await agreementsFor(opportunity.id);
+    }
+  }
+  return out;
 }
