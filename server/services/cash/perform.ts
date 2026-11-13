@@ -85,6 +85,7 @@ import { dealPosition } from './journey/position.ts';
 import { emptyInvoicingPass, issueOne } from './invoicing.ts';
 import { listInvoices } from '../../repos/cashInvoices.ts';
 import { usableAdapter } from './effects.ts';
+import { agreementsFor, recordAgreement } from './journey/deal.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -273,6 +274,78 @@ export function paymentKey(opportunityId: string, receiptRef: string): string {
 
 const IN_FLIGHT = new Set<CashOpportunity['state']>(['EXECUTING', 'DELIVERING']);
 
+/** The key the need for a payment's unstated terms is kept under. */
+export function paymentTermsKey(opportunityId: string, receiptRef: string): string {
+  return `payment-terms:${opportunityId}:${receiptRef}`;
+}
+
+/**
+ * The agreement a provider-confirmed payment stands for (LIFE-29-1).
+ *
+ * A transaction that skips straight to payment (the buyer paid on the
+ * provider's page and no person pressed "agree") still has an agreement:
+ * the provider's receipt is the evidence of it. Without one, the commitment
+ * model (`deliverables/commitments.ts`, keyed by agreement) cannot see the
+ * transaction at all. So the agreement is written here, through its one
+ * writer `recordAgreement` with `PROVIDER_RECORD` evidence, before the
+ * payment, in the same pass.
+ *
+ * - The amount is what the send asked for (the intent), or a person's verified
+ *   amount. It is never recomputed.
+ * - What is delivered and what counts as acceptance are the terms the piece
+ *   states. A term nobody stated is never invented (§39). It becomes a need
+ *   naming that term, and no agreement is written.
+ * - Idempotent on the receipt: an agreement already evidenced by this receipt,
+ *   or any agreement still standing on the piece (the payment pays that one),
+ *   means nothing is written.
+ */
+async function agreementFromPayment(input: {
+  opportunity: CashOpportunity;
+  amountCents: number;
+  currency: string;
+  receiptRef: string;
+  actorRef: string;
+}): Promise<void> {
+  const { opportunity, receiptRef } = input;
+  if (!IN_FLIGHT.has(opportunity.state)) return;
+  const standing = await agreementsFor(opportunity.id);
+  if (standing.some((one) => one.evidenceRef === receiptRef || one.state === 'AGREED')) return;
+  const unstated: string[] = [];
+  if (!opportunity.offerScope?.trim()) unstated.push('what is being delivered');
+  if (!opportunity.acceptanceCondition?.trim()) unstated.push('what counts as acceptance');
+  const termsNeed = (why: string) =>
+    raiseNeed({
+      projectId: opportunity.projectId,
+      opportunityId: opportunity.id,
+      actorRef: BRAIN,
+      blockedAction: `Record the agreement behind the payment taken for "${opportunity.title}"`,
+      whyItMatters:
+        `The provider confirmed a payment (reference ${receiptRef}) and no agreement stands behind it. ${why}`,
+      recommendedPath: 'State the missing term on this piece, or record the agreement with the provider reference as its evidence.',
+      setupEffort: 'A minute.',
+      nextStep: `Record the agreement evidenced by ${receiptRef}.`,
+      completionCondition: `An agreement evidenced by reference ${receiptRef} is on the record for this piece.`,
+      requestKey: paymentTermsKey(opportunity.id, receiptRef),
+    });
+  if (unstated.length) {
+    await termsNeed(
+      `The piece does not state ${unstated.join(' or ')}, so Brain will not invent the term an agreement needs.`,
+    );
+    return;
+  }
+  const agreed = await recordAgreement({
+    opportunityId: opportunity.id,
+    amountCents: input.amountCents,
+    currency: input.currency,
+    deliverable: opportunity.offerScope!,
+    acceptanceCondition: opportunity.acceptanceCondition!,
+    evidenceKind: 'PROVIDER_RECORD',
+    evidenceRef: receiptRef,
+    actorRef: input.actorRef,
+  });
+  if (!agreed.ok) await termsNeed(`Recording it was refused: ${agreed.reason}`);
+}
+
 /**
  * Record what a provider confirmed, exactly once, from whatever is true now.
  *
@@ -373,6 +446,17 @@ export async function recordConfirmedEffect(input: {
   if (action === 'ACCEPT_PAYMENT') {
     const mode = await getCashMode(opportunity.projectId);
     const amount = input.amountCents ?? intent?.amountCents ?? null;
+    // The agreement before the money: a payment pays an agreement, and the
+    // commitment model reads a transaction by its agreement.
+    if (mode && amount !== null && amount > 0) {
+      await agreementFromPayment({
+        opportunity,
+        amountCents: amount,
+        currency: mode.currency,
+        receiptRef,
+        actorRef: input.actorRef,
+      });
+    }
     const onLedger = await customerPaymentByReference(opportunity.projectId, receiptRef);
     if (onLedger) {
       // Already recorded — by hand, or by an earlier pass — and one provider
