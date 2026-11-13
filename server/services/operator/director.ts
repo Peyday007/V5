@@ -1086,37 +1086,73 @@ export async function notifyVerifiedImprovements(options: { candidateId?: string
   return out;
 }
 
+/**
+ * One email to the owner through the connected channel, exactly once per key: the shared
+ * sender of every owner notice (a verified self-improvement here, a ready cash plan in
+ * `goals/planReady.ts`). The caller stores the composed text before the first attempt, so a
+ * retry under the same key is the identical request; an unknown outcome is never resent.
+ */
+export async function deliverOwnerEmail(input: {
+  key: string;
+  projectId: string;
+  businessId: string;
+  subject: string;
+  text: string;
+  principalId: string;
+  env?: NodeJS.ProcessEnv;
+}): Promise<{ status: 'SENT' | 'UNCERTAIN' | 'FAILED' | 'NO_CHANNEL' | 'NO_RECIPIENT'; detail: string; channel: string | null; receipt: string | null }> {
+  const channel = await ownerChannel(input.env ?? process.env);
+  if (!channel) return { status: 'NO_CHANNEL', detail: 'neither INSTANTLY_API_KEY nor a configured Resend is present', channel: null, receipt: null };
+  const to = await ownerAddress();
+  if (!to) return { status: 'NO_RECIPIENT', detail: 'no Brain administrator has an email address', channel: channel.name, receipt: null };
+  const { runExternalEffect } = await import('../effects/external.ts');
+  const result = await runExternalEffect({
+    adapter: channel.adapter,
+    namespace: OWNER_NOTICE_NAMESPACE,
+    projectId: input.projectId,
+    key: input.key,
+    businessId: input.businessId,
+    payload: { requestKey: input.key, to, subject: input.subject, text: input.text },
+    principalType: 'SYSTEM',
+    principalId: input.principalId,
+    correlationId: `owner-notice:${input.businessId}`,
+  });
+  if (result.status === 'CONFIRMED' || result.status === 'RECONCILED' || result.status === 'REPLAYED') {
+    const receipt = 'receiptRef' in result ? result.receiptRef : (result.operation.resultRef ?? null);
+    return { status: 'SENT', detail: `sent through ${channel.name} (${receipt ?? 'no receipt id'})`, channel: channel.name, receipt };
+  }
+  if (result.status === 'UNCERTAIN') return { status: 'UNCERTAIN', detail: result.reason, channel: channel.name, receipt: null };
+  const why = result.withheld ?? result.operation.resultSummary ?? result.operation.failureCategory ?? 'the provider refused';
+  return { status: 'FAILED', detail: String(why), channel: channel.name, receipt: null };
+}
+
 async function sendNotice(facts: CycleFacts, steps: Record<string, string | null>, env: NodeJS.ProcessEnv): Promise<OwnerNoticeResult> {
   const id = facts.candidateId;
-  const channel = await ownerChannel(env);
-  if (!channel) return { candidateId: id, status: 'NO_CHANNEL', detail: 'neither INSTANTLY_API_KEY nor a configured Resend is present' };
-  const to = await ownerAddress();
-  if (!to) return { candidateId: id, status: 'NO_RECIPIENT', detail: 'no Brain administrator has an email address' };
   // The message is composed once and stored, so a retry is the identical request (invariant 27).
   let intent = (await listImprovementEvents({ candidateId: id, kinds: [OWNER_NOTICE_KINDS.intent], limit: 1 }))[0]?.detail as
     | { projectId: string; subject: string; text: string; ordinal: number }
     | undefined;
   if (!intent) {
+    if (!(await ownerChannel(env))) return { candidateId: id, status: 'NO_CHANNEL', detail: 'neither INSTANTLY_API_KEY nor a configured Resend is present' };
+    if (!(await ownerAddress())) return { candidateId: id, status: 'NO_RECIPIENT', detail: 'no Brain administrator has an email address' };
     const projectId = await anchorProject(await goalProject(facts.goalId));
     if (!projectId) return { candidateId: id, status: 'FAILED', detail: 'no project to record the notice under' };
     const ordinal = (await listImprovementEvents({ kinds: [OWNER_NOTICE_KINDS.intent], limit: 1000 })).length + 1;
     const notice = improvementNotice(facts, ordinal);
     intent = { projectId, subject: notice.subject, text: notice.text, ordinal };
-    await recordImprovementEvent({ candidateId: id, kind: OWNER_NOTICE_KINDS.intent, detail: { ...intent, channel: channel.name } });
+    await recordImprovementEvent({ candidateId: id, kind: OWNER_NOTICE_KINDS.intent, detail: { ...intent } });
   }
-  const key = `owner-improvement.${id}`;
-  const { runExternalEffect } = await import('../effects/external.ts');
-  const result = await runExternalEffect({
-    adapter: channel.adapter,
-    namespace: OWNER_NOTICE_NAMESPACE,
+  const sent = await deliverOwnerEmail({
+    key: `owner-improvement.${id}`,
     projectId: intent.projectId,
-    key,
     businessId: id,
-    payload: { requestKey: key, to, subject: intent.subject, text: intent.text },
-    principalType: 'SYSTEM',
+    subject: intent.subject,
+    text: intent.text,
     principalId: 'brain-engineering-director',
-    correlationId: `owner-notice:${id}`,
+    env,
   });
+  if (sent.status === 'NO_CHANNEL' || sent.status === 'NO_RECIPIENT') return { candidateId: id, status: sent.status, detail: sent.detail };
+  const channelName = sent.channel;
   const event = async (status: string, extra: Record<string, unknown>): Promise<void> => {
     await recordEvent({
       projectId: intent.projectId,
@@ -1127,7 +1163,7 @@ async function sendNotice(facts: CycleFacts, steps: Record<string, string | null
         candidateId: id,
         status,
         ordinal: intent.ordinal,
-        channel: channel.name,
+        channel: channelName,
         subject: intent.subject,
         // The release and the improvement, kept apart as the message keeps them.
         release: { campaignId: facts.campaignId, prUrl: facts.factory?.prUrl ?? null, mergeSha: facts.factory?.mergeSha ?? null, deployed: facts.factory?.deployed ?? false, verifiedLive: facts.factory?.verified ?? false },
@@ -1138,23 +1174,21 @@ async function sendNotice(facts: CycleFacts, steps: Record<string, string | null
       },
     });
   };
-  if (result.status === 'CONFIRMED' || result.status === 'RECONCILED' || result.status === 'REPLAYED') {
-    const receipt = 'receiptRef' in result ? result.receiptRef : (result.operation.resultRef ?? null);
-    await recordImprovementEvent({ candidateId: id, kind: OWNER_NOTICE_KINDS.sent, detail: { channel: channel.name, receipt, ordinal: intent.ordinal } });
-    await event('SENT', { receipt });
-    return { candidateId: id, status: 'SENT', detail: `sent through ${channel.name} (${receipt ?? 'no receipt id'})` };
+  if (sent.status === 'SENT') {
+    await recordImprovementEvent({ candidateId: id, kind: OWNER_NOTICE_KINDS.sent, detail: { channel: channelName, receipt: sent.receipt, ordinal: intent.ordinal } });
+    await event('SENT', { receipt: sent.receipt });
+    return { candidateId: id, status: 'SENT', detail: sent.detail };
   }
-  if (result.status === 'UNCERTAIN') {
+  if (sent.status === 'UNCERTAIN') {
     // Unknown is recorded as unknown and never sent again by itself (invariant 26).
-    await recordImprovementEvent({ candidateId: id, kind: OWNER_NOTICE_KINDS.uncertain, detail: { channel: channel.name, reason: result.reason } });
-    await event('UNCERTAIN', { reason: result.reason });
-    return { candidateId: id, status: 'UNCERTAIN', detail: result.reason };
+    await recordImprovementEvent({ candidateId: id, kind: OWNER_NOTICE_KINDS.uncertain, detail: { channel: channelName, reason: sent.detail } });
+    await event('UNCERTAIN', { reason: sent.detail });
+    return { candidateId: id, status: 'UNCERTAIN', detail: sent.detail };
   }
-  const why = result.withheld ?? result.operation.resultSummary ?? result.operation.failureCategory ?? 'the provider refused';
   // A refusal is retried on the next pass under the same key; the same refusal is recorded once, not every pass.
   const lastFailure = (await listImprovementEvents({ candidateId: id, kinds: [OWNER_NOTICE_KINDS.failed], limit: 1 }))[0];
-  if (lastFailure?.detail['reason'] !== String(why).slice(0, 400)) {
-    await recordImprovementEvent({ candidateId: id, kind: OWNER_NOTICE_KINDS.failed, detail: { channel: channel.name, reason: String(why).slice(0, 400) } });
+  if (lastFailure?.detail['reason'] !== sent.detail.slice(0, 400)) {
+    await recordImprovementEvent({ candidateId: id, kind: OWNER_NOTICE_KINDS.failed, detail: { channel: channelName, reason: sent.detail.slice(0, 400) } });
   }
-  return { candidateId: id, status: 'FAILED', detail: String(why) };
+  return { candidateId: id, status: 'FAILED', detail: sent.detail };
 }

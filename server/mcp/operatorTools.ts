@@ -545,7 +545,7 @@ const decideTool: McpTool = {
   inputSchema: {
     type: 'object',
     properties: {
-      kind: { type: 'string', enum: ['PAUSE_GOAL', 'RESUME_GOAL', 'SUBMIT_FIX', 'WITHDRAW_REQUEST', 'CONTINUE_IDLE', 'REALLOCATE', 'CHANGE_STRATEGY', 'RESEARCH', 'SWITCH_MODEL', 'STOP_APPROACH', 'OTHER'] },
+      kind: { type: 'string', enum: ['PAUSE_GOAL', 'RESUME_GOAL', 'SUBMIT_FIX', 'WITHDRAW_REQUEST', 'CONTINUE_IDLE', 'REALLOCATE', 'CHANGE_STRATEGY', 'RESEARCH', 'SWITCH_MODEL', 'STOP_APPROACH', 'ADOPT_PLAN', 'OTHER'] },
       goal_id: { type: 'string' },
       question: { type: 'string' },
       options: {
@@ -609,6 +609,13 @@ const decideTool: McpTool = {
       // The challenger is a different model from the one deciding when Brain has two.
       { runId: await currentRunId(), projectIds: projects, models: models.length > 1 ? [...models.slice(1), models[0]!] : models },
     );
+    const goalId = optionalString(args, 'goal_id');
+    if (result.committed && args['kind'] === 'ADOPT_PLAN' && goalId) {
+      // Hermes' challenge is the plan's last condition: a plan that now qualifies is told to the owner at once.
+      const { notifyPlanReady } = await import('../services/goals/planReady.ts');
+      const ownerNotice = await notifyPlanReady(goalId).catch((error: unknown) => ({ goalId, status: 'FAILED', detail: String((error as Error)?.message ?? error) }));
+      return { projectId: null, value: { ...result, ownerNotice } };
+    }
     return { projectId: null, value: { ...result } };
   },
 };

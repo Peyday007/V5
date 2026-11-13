@@ -16055,3 +16055,29 @@ every attempt is the same request, an unknown outcome is recorded and never rese
 (invariant 26), and `OWNER_NOTIFIED` plus an `OWNER_IMPROVEMENT_NOTIFIED` project event
 close it. Each later verified improvement is its own message, numbered. Tests:
 `tests/improvementNotice.test.ts`.
+
+**The owner is told when the $10K plan is ready, before the money (owner's order, 2026-11-13).**
+"NOTIFY ME IMMEDIATELY WHEN BRAIN HAS FINISHED DEVELOPING A VIABLE, ACTIONABLE PLAN TO
+GENERATE $10,000 IN COLLECTED REVENUE WITHIN 30 DAYS … Do not notify me merely because a
+plan document exists or Brain generated an optimistic forecast … Do not require the $10,000
+to have already been earned." `planReady` (pure, `domain/planReady.ts`) reads the owner's
+eight conditions off what Brain already computes. Named strategies and sources: §95's
+accepted plan and the quant portfolio's members. Quantified economics and timelines: each
+member's demand estimate (revenue, price, deals, spend, days to cash, with the median
+inside the deadline). Evidence: a PROBABILITY-basis portfolio with every member's inputs
+on evidence; a forecast on coverage never counts, and TARGET_MET is not a plan. Resources
+and steps: capital, spend, and the plan's own sales steps and next test. Why the
+combination reaches the target: its median settles at least what remains. Uncertainty:
+§95's Wilson lower bound at or over the required 90%, with its sample. Hermes: a
+committed `ADOPT_PLAN` decision (§108; high impact, so the challenger model always
+reviews it) for that goal, after the plan was first read ACCEPTED, choosing option 0,
+"execute the accepted plan as it stands", with the challenger's PROCEED or an answered
+REVISE. Brain's own requirements: ACCEPTED and RECOMMENDABLE. `goals/planReady.ts`
+judges it in the goal tick on every ACCEPTED reading, and inside `brain_operator_decide`
+the moment Hermes adopts. It sends through the self-improvement notice's channel
+(`deliverOwnerEmail`: the Instantly workspace, one EXTERNAL_OPAQUE email keyed
+`plan-ready.<goal>.<hash of the plan's openings>`, composed and stored before the first
+attempt) and records `OWNER_PLAN_READY_NOTIFIED` rows (INTENT, then SENT, UNCERTAIN or
+FAILED) and a goal event. Once per accepted plan: a different accepted plan is a new
+message. Nothing stops: the plan's openings stay PURSUES, a SQUEEZE goal keeps widening
+until the target is collected, and Hermes keeps directing it. Tests: `tests/planReady.test.ts`.
