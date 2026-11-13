@@ -21,6 +21,7 @@
  */
 import type { ProgramRequirement, RequirementMap, RequirementReading, RequirementStatus } from '../../domain/factoryProgram.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
+import { registerProbe, type ProbeResult } from '../factory/program/probes.ts';
 import { reconcileCapabilities, type BlockedTransactionRow, type CapabilityReconciliation, type CapabilityRecordRow } from './priority.ts';
 
 export const CAPABILITY_EVENT_KINDS = {
@@ -150,8 +151,7 @@ export interface CapabilityPassReport {
   refused: boolean;
 }
 
-/** One pass over every approved program: read rows, decide, apply through the coordinator, record. */
-export async function reconcilePreparedCapabilities(ports: CapabilityPorts): Promise<CapabilityPassReport[]> {
+async function openNeedsWithOpportunities(ports: Pick<CapabilityPorts, 'openNeeds' | 'opportunity'>) {
   const needs = await ports.openNeeds();
   const opportunities = new Map<string, CashOpportunity>();
   for (const need of needs) {
@@ -159,6 +159,12 @@ export async function reconcilePreparedCapabilities(ports: CapabilityPorts): Pro
     const one = await ports.opportunity(need.opportunityId);
     if (one) opportunities.set(one.id, one);
   }
+  return { needs, opportunities };
+}
+
+/** One pass over every approved program: read rows, decide, apply through the coordinator, record. */
+export async function reconcilePreparedCapabilities(ports: CapabilityPorts): Promise<CapabilityPassReport[]> {
+  const { needs, opportunities } = await openNeedsWithOpportunities(ports);
   const workers = await ports.parallelWorkers();
   const reports: CapabilityPassReport[] = [];
   for (const program of await ports.programs()) {
@@ -257,3 +263,45 @@ export async function reconcilePreparedCapabilitiesIfDue(now = Date.now()): Prom
     return { error: error instanceof Error ? error.message.slice(0, 300) : String(error) };
   }
 }
+
+/* ------------------------------------------------------------------------- */
+/* The fixed check of GOV-22-1: probe r01.gov-22-1                             */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Reads the same production rows the pass reads and decides without applying,
+ * then checks the recorded transitions against the installed maps: every
+ * requirement whose newest capability event is a promotion is still in the map
+ * (neither promotion nor demotion removes a requirement from the specification).
+ * Fails when there is no approved program to read, or a promoted requirement has
+ * vanished from its map. Pending decisions are reported, not failed: the pass
+ * applies them on its next minute.
+ */
+export async function capabilityPromotionHolds(ports: CapabilityPorts): Promise<ProbeResult> {
+  const programs = await ports.programs();
+  if (programs.length === 0) return { ok: false, detail: 'no approved program with an installed map to read' };
+  const { needs, opportunities } = await openNeedsWithOpportunities(ports);
+  const workers = await ports.parallelWorkers();
+  const parts: string[] = [];
+  for (const program of programs) {
+    const promotedHere = await ports.promotedHere(program.id);
+    const byKey = new Map(program.map.requirements.map((r) => [r.key, r]));
+    let reprepared = 0;
+    for (const key of promotedHere) {
+      const requirement = byKey.get(key);
+      if (!requirement) return { ok: false, detail: `program ${program.id}: ${key} was promoted but is no longer in the map` };
+      // Another map revision (a person's) may prepare it again; that is reported, not overridden.
+      if (requirement.prepared === true) reprepared += 1;
+    }
+    const rows = capabilityRowsFromProgram({ map: program.map, readings: program.readings, edgesOf: program.edgesOf, needs, opportunities, promotedHere });
+    const decision = reconcileCapabilities(rows.capabilities, rows.blocked, { parallelWorkers: workers });
+    const prepared = program.map.requirements.filter((r) => r.prepared === true).length;
+    parts.push(
+      `program ${program.id}: ${prepared} prepared, ${rows.capabilities.length} not started, ${rows.blocked.length} blocked transaction link(s), ` +
+        `${promotedHere.size} promoted by a measured blocker (${reprepared} since prepared again by another revision), pending ${decision.promotions.length} promotion(s) / ${decision.demotions.length} demotion(s)`,
+    );
+  }
+  return { ok: true, detail: `${needs.length} open cash need(s) read; ${parts.join('; ')}`.slice(0, 900) };
+}
+
+registerProbe('r01.gov-22-1', async () => capabilityPromotionHolds(await productionCapabilityPorts()));
