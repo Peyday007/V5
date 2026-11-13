@@ -28,7 +28,9 @@
  * No setting's value is read or carried: the facts name capabilities and
  * provider names, never a key.
  */
-import type { Counterparty, Fact } from '../../labor/counterparties/ladder.ts';
+import { stageIndex, type Counterparty, type Fact } from '../../labor/counterparties/ladder.ts';
+import type { ReservationEvent } from '../../labor/counterparties/reservations.ts';
+import { readTransaction, type TransactionReading } from '../../labor/counterparties/transaction.ts';
 import { commercialProviderStatus, type ProviderLine } from './status.ts';
 
 const EVIDENCE = 'commercialProviderStatus (server/services/cash/providers/status.ts)';
@@ -69,4 +71,111 @@ export function providerCounterparty(line: ProviderLine): Counterparty | null {
 export async function providerCounterparties(env: NodeJS.ProcessEnv = process.env): Promise<Counterparty[]> {
   const lines = await commercialProviderStatus(env);
   return lines.map(providerCounterparty).filter((c): c is Counterparty => c !== null);
+}
+
+// ---------------------------------------------------------------------------
+// The running Brain's reading of its own provider commitments (CP-31)
+// ---------------------------------------------------------------------------
+
+/**
+ * The name the provider-counterparty reading is registered under in the
+ * program probe registry. Deliberately not a release name (`r01.…`): a
+ * campaign never defines its own judge (§96), so this is the reading the
+ * owner's `r01.cp-31` may consult, not a verdict on this work.
+ */
+export const PROVIDER_COUNTERPARTY_PROBE = 'cash.counterparties.providers';
+
+export interface ProviderTransactionReading {
+  area: string;
+  capability: string;
+  reading: TransactionReading;
+}
+
+/**
+ * Every commercial commitment Brain's deployment makes through a software
+ * service — sending a message, issuing an invoice, taking a payment — read end
+ * to end through the counterparty model: who fulfils it (the chosen provider),
+ * what about them is verified and what is still pending, how they compare,
+ * whether a reserve may be made, what happens after a failure, and whether the
+ * commitment is deliverable.
+ *
+ * The candidates are the providers the existing status reading names, so this
+ * runs on the deployment's real configuration. No reservation is recorded for
+ * a provider — nothing in Brain holds provider capacity — so `events` is the
+ * caller's (empty by default) and no authority is assumed held: the reading
+ * proposes, it never performs, and a reserve without authority is refused with
+ * the authority named.
+ */
+export async function readProviderTransactions(options: {
+  env?: NodeJS.ProcessEnv;
+  at?: string;
+  events?: readonly ReservationEvent[];
+  authorityHeld?: readonly string[];
+} = {}): Promise<ProviderTransactionReading[]> {
+  const env = options.env ?? process.env;
+  const at = options.at ?? new Date().toISOString();
+  const lines = await commercialProviderStatus(env);
+  return lines.map((line) => ({
+    area: line.area,
+    capability: line.capability,
+    reading: readTransaction({
+      commitment: { id: `commitment:${line.area.toLowerCase()}`, capacityUnits: 1 },
+      candidates: [providerCounterparty(line)].filter((c): c is Counterparty => c !== null),
+      events: options.events ?? [],
+      businessId: 'brain',
+      window: { windowStart: at, windowEnd: at },
+      // Committing a provider is the same act as performing its effect, so it needs that effect's grant.
+      authorityRequired: [`effect:${line.capability}`],
+      authorityHeld: options.authorityHeld ?? [],
+      at,
+      source: `${EVIDENCE}: ${line.area}`,
+    }),
+  }));
+}
+
+/**
+ * The model's guarantees, checked against a set of readings. Empty when every
+ * one holds; otherwise one sentence per breach. These are the clauses the
+ * specification states as refusals: a sale is never reported deliverable
+ * below a contract, a reserve is never permitted without the required
+ * authority, capacity is never double-committed, and a configured provider is
+ * never read as willing.
+ */
+export function counterpartyBreaches(readings: readonly ProviderTransactionReading[], authorityHeld: readonly string[] = []): string[] {
+  const breaches: string[] = [];
+  for (const { area, capability, reading } of readings) {
+    if (reading.deliverability.deliverable && stageIndex(reading.deliverability.stage) < stageIndex('CONTRACTED')) {
+      breaches.push(`${area}: reported deliverable at ${reading.deliverability.stage ?? 'no stage'}, below CONTRACTED`);
+    }
+    if (reading.reserve.permitted && !authorityHeld.includes(`effect:${capability}`)) {
+      breaches.push(`${area}: a reserve was permitted without effect:${capability}`);
+    }
+    if (reading.doubleCommitted.length > 0) breaches.push(`${area}: double-committed ${reading.doubleCommitted.join(', ')}`);
+    const primary = reading.primary;
+    if (primary?.kind === 'software service' && stageIndex(primary.stage) > stageIndex('LISTING')) {
+      breaches.push(`${area}: ${primary.counterpartyId} read past LISTING from configuration alone`);
+    }
+  }
+  return breaches;
+}
+
+function summarize(readings: readonly ProviderTransactionReading[]): string {
+  if (readings.length === 0) return 'no provider area is read';
+  return readings
+    .map(({ area, reading }) => {
+      const who = reading.primary ? `${reading.primary.counterpartyId} at ${reading.primary.stage ?? 'no stage'}` : 'no fulfiller';
+      const pending = reading.facts[0]?.pending.length ?? 0;
+      return `${area}: ${who}; ${pending} pending fact(s); deliverable=${reading.deliverability.deliverable}; reserve=${reading.reserve.permitted ? 'permitted' : reading.reserve.reason}`;
+    })
+    .join(' | ')
+    .slice(0, 900);
+}
+
+/** The probe body: the live providers read through the model, passing only when no guarantee is breached. */
+export async function providerCounterpartyProbe(env: NodeJS.ProcessEnv = process.env): Promise<{ ok: boolean; detail: string }> {
+  const readings = await readProviderTransactions({ env });
+  const breaches = counterpartyBreaches(readings);
+  return breaches.length === 0
+    ? { ok: true, detail: summarize(readings) }
+    : { ok: false, detail: breaches.join('; ').slice(0, 900) };
 }
