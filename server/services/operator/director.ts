@@ -869,6 +869,9 @@ export function readingId(one: DeficiencyReading): string {
  */
 export async function engineeringBrief(): Promise<string> {
   const lines: string[] = [];
+  const { latestReportBrief } = await import('./operationsReport.ts');
+  const report = await latestReportBrief().catch(() => '');
+  if (report) lines.push(report);
   const outcomes = await engineeringOutcomes({ limit: 5 }).catch(() => []);
   if (outcomes.length) {
     lines.push('ENGINEERING YOU COMMISSIONED (brain_operator_engineering for detail):');
@@ -887,7 +890,7 @@ export async function engineeringBrief(): Promise<string> {
     lines.push('DEFICIENCIES THE ROWS SHOW (brain_operator_commission {deficiency_id} acts on one):');
     for (const one of found) lines.push(`- ${readingId(one)} ${one.diagnosis.deficiency} → ${one.intervention}: ${one.diagnosis.title.slice(0, 120)}`);
   }
-  return lines.join('\n').slice(0, 2500);
+  return lines.join('\n').slice(0, 4000);
 }
 
 /** Runs that must pass without the operator acting before Brain's standing director acts itself. */

@@ -537,6 +537,8 @@ export const EVENT_TYPES = [
   'OWNER_IMPROVEMENT_NOTIFIED',
   // A cash goal's plan qualified and the owner was told, once per accepted plan (goals/planReady.ts).
   'OWNER_PLAN_READY_NOTIFIED',
+  // The hourly operations report waiting for the owner's conversation (operator/operationsReport.ts).
+  'OWNER_OPERATIONS_REPORT',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
