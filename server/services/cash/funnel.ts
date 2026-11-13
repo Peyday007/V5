@@ -27,7 +27,7 @@ import { CASH_TIERS, cashTier, tierRank, type CashTier } from './tier.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { listCapitalForProject, listConstraintsForProject } from '../../repos/industry.ts';
-import { countRoleEconomics, OPENING_ROLE_COLUMNS, openingRoleText, roleRecordFromRows, type OpeningRoleRow, type RoleEconomics } from './exclusions.ts';
+import { countRoleEconomics, OPENING_ROLE_COLUMNS, openingRoleText, ownerStatementsFor, roleRecordWithStatements, type OpeningRoleRow, type RoleEconomics } from './exclusions.ts';
 
 export const FUNNEL_WEEKS = 8;
 
@@ -284,10 +284,13 @@ export async function cashFunnel(input: {
       GROUP BY opportunity_id, currency`,
     [input.projectId],
   );
-  const [capitalRows, constraintRows, openingRows] = await Promise.all([
+  // What the project's goal owners have stated they hold (licences, partners under agreement) is the
+  // attestation: without it no regulated role could ever reach a compliant position.
+  const [capitalRows, constraintRows, openingRows, ownerStatements] = await Promise.all([
     listCapitalForProject(input.projectId),
     listConstraintsForProject(input.projectId),
     db.all<OpeningRoleRow>(`SELECT ${OPENING_ROLE_COLUMNS} FROM cash_opportunities WHERE project_id = ?`, [input.projectId]),
+    ownerStatementsFor(input.projectId),
   ]);
   const openingById = new Map(openingRows.map((o) => [o.id, o]));
   const roleRows: Array<RoleEconomics & { currency: string; opportunityId: string }> = settledByOpening.map((row) => ({
@@ -295,14 +298,14 @@ export async function cashFunnel(input: {
     opportunityId: row.opportunity_id,
     currency: row.currency,
     valueCents: Number(row.total),
-    role: roleRecordFromRows(
+    role: roleRecordWithStatements(
       capitalRows.filter((c) => c.opportunityId === row.opportunity_id),
       constraintRows.filter((c) => c.opportunityId === row.opportunity_id),
-      {},
       (() => {
         const opening = openingById.get(row.opportunity_id);
         return opening ? openingRoleText(opening) : null;
       })(),
+      ownerStatements,
     ),
   }));
   const counted = countRoleEconomics(roleRows);
