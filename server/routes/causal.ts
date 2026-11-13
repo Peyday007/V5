@@ -59,6 +59,7 @@ import {
   type MoneyRouteReading,
   type OperationalAction,
 } from '../services/quant/graph.ts';
+import { decompose } from '../services/quant/decompose.ts';
 import { UnknownOrchestrationError, sendNeeds, type Need, type NeedDelivery } from '../services/quant/needs.ts';
 
 export const causalRouter = Router();
@@ -562,34 +563,7 @@ causalRouter.post(
 /* Decomposing a business nobody has run before                               */
 /* ------------------------------------------------------------------------- */
 
-interface Subproblem {
-  id: string;
-  question: string;
-  /** The thing that could be seen or measured that would answer it. */
-  observable: string;
-  dependsOn: string[];
-  origin: 'starting' | 'supplied';
-  status: 'UNKNOWN';
-}
-
-/**
- * A starting vocabulary of causal links, to be extended and not a checklist: a
- * business that skips one says so, one that needs another adds it, and the model
- * of an AI business uses the same links as any other because its novelty is in the
- * inputs and not in the shape. Each link names what could be observed to settle it.
- */
-const STARTING_LINKS: { id: string; question: string; observable: string; dependsOn: string[] }[] = [
-  { id: 'demand', question: 'Who would pay for the output, and how many of them are there?', observable: 'a count of payers from a named source, or priced requests already made', dependsOn: [] },
-  { id: 'access', question: 'By what path can those payers be reached or can they reach us?', observable: 'a path that has delivered a conversation, with its provider terms read', dependsOn: ['demand'] },
-  { id: 'capability', question: 'Can the AI or supplier produce the output at the required quality?', observable: 'a sample judged against the buyer’s acceptance condition', dependsOn: [] },
-  { id: 'unit-cost', question: 'What does one unit of output cost to make, all in?', observable: 'metered cost of producing a unit, from real runs', dependsOn: ['capability'] },
-  { id: 'capacity', question: 'How many units can be made and delivered in the period?', observable: 'throughput measured over a period, and the limit that bound it', dependsOn: ['capability'] },
-  { id: 'purchase', question: 'What makes a payer agree, and at what price and terms?', observable: 'an agreement, or a refusal with its stated reason', dependsOn: ['access', 'capability'] },
-  { id: 'acceptance', question: 'What does the buyer do to accept delivery, and how often is it refused?', observable: 'acceptance and rejection records', dependsOn: ['purchase', 'capacity'] },
-  { id: 'payment', question: 'When is payment invoiced, collected and cleared, and what can reverse it?', observable: 'cleared funds against an invoice, and any refund or chargeback', dependsOn: ['acceptance'] },
-  { id: 'obligations', question: 'What must be paid out or held back, and when?', observable: 'dated outflows and amounts held against refunds', dependsOn: ['payment'] },
-  { id: 'failure', question: 'What shared resource or dependency, if it failed, would stop more than one stream?', observable: 'a named dependency used by more than one stream, with its failure history', dependsOn: ['capability', 'access'] },
-];
+// The vocabulary and the decomposition live in quant/decompose.ts, shared with the goal portfolio.
 
 /**
  * Decompose a business into observable causal subproblems. The caller may name
@@ -607,33 +581,13 @@ causalRouter.post(
     const name = business ? text(business.name).trim() : '';
     if (!name) throw badRequest('"business.name" is required.');
     const skipped = new Map<string, string>();
-    for (const one of list(body.notApplicable, 'notApplicable', 50)) {
-      const id = text(one.id);
-      const reason = text(one.reason).trim();
-      if (!STARTING_LINKS.some((link) => link.id === id)) throw badRequest(`"notApplicable" names ${id}, which is not a starting link.`);
-      if (!reason) throw badRequest(`"notApplicable" for ${id} must say why it does not apply.`);
-      skipped.set(id, reason);
-    }
-    const subproblems: Subproblem[] = STARTING_LINKS.filter((link) => !skipped.has(link.id)).map((link) => ({
-      ...link,
-      dependsOn: link.dependsOn.filter((dep) => !skipped.has(dep)),
-      origin: 'starting' as const,
-      status: 'UNKNOWN' as const,
+    for (const one of list(body.notApplicable, 'notApplicable', 50)) skipped.set(text(one.id), text(one.reason).trim());
+    const supplied = list(body.subproblems, 'subproblems', LIMITS.subproblems).map((one) => ({
+      id: text(one.id).trim(), question: text(one.question).trim(), observable: text(one.observable).trim(), dependsOn: strings(one.dependsOn),
     }));
-    const known = new Set(subproblems.map((one) => one.id));
-    for (const one of list(body.subproblems, 'subproblems', LIMITS.subproblems)) {
-      const id = text(one.id).trim();
-      if (!/^[a-z][a-z0-9-]{1,60}$/.test(id)) throw badRequest('A subproblem id is lowercase words joined by hyphens.');
-      if (known.has(id)) throw badRequest(`Subproblem ${id} already exists.`);
-      const question = text(one.question).trim();
-      const observable = text(one.observable).trim();
-      if (!question || !observable) throw badRequest(`Subproblem ${id} states its question and what could be observed to answer it.`);
-      known.add(id);
-      subproblems.push({ id, question, observable, dependsOn: strings(one.dependsOn), origin: 'supplied', status: 'UNKNOWN' });
-    }
-    for (const one of subproblems) {
-      for (const dep of one.dependsOn) if (!known.has(dep)) throw unprocessable(`Subproblem ${one.id} depends on ${dep}, which is not in this decomposition.`);
-    }
+    const decomposed = decompose(skipped, supplied);
+    if (!decomposed.ok) throw decomposed.kind === 'bad' ? badRequest(decomposed.reason) : unprocessable(decomposed.reason);
+    const subproblems = decomposed.subproblems;
     return {
       business: { name, description: text(business?.description) },
       subproblems,
