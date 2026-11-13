@@ -237,7 +237,12 @@ const ACTION_TEXT = ['label', 'actor', 'effect', 'timing', 'completionCondition'
 export interface Outflow {
   to: string;
   reason: string;
-  amountCents: number;
+  /**
+   * Null while nobody has stated the amount. An outflow the arrangement
+   * implies is kept with an unknown amount, never dropped: dropping it would
+   * make the route's free cash look larger than it is.
+   */
+  amountCents: number | null;
   /** ISO date the money leaves. */
   at: string | null;
 }
@@ -255,12 +260,17 @@ export interface MoneyRoute {
   outflows: Outflow[];
   /** Collected money still exposed to refund or fulfilment obligations. */
   heldAgainstCents: Figure;
+  /** Where the invoice and collection dates came from, when they were derived rather than observed. */
+  dateBasis?: { invoiced: string | null; collected: string | null };
 }
 
 export interface MoneyRouteReading {
   route: string;
   collectedCents: number | null;
+  /** The stated outflows' total; outflows with an unknown amount are listed in `gaps` and make the free amount unknown. */
   outflowCents: number;
+  /** How many outflows have no stated amount. */
+  unknownOutflows: number;
   heldAgainstCents: number | null;
   /**
    * What is genuinely free to use; null when the collection or the hold is
@@ -281,16 +291,17 @@ export interface MoneyRouteReading {
    */
   ledger: { entries: Entry[]; reconciliation: Reconciliation };
   /**
-   * When exactly one of the collection or the hold is unknown: the value it must
-   * take for the route not to be under water. The unknown stays unknown; this is
-   * the threshold the plan needs, never a filled-in number.
+   * When the free amount is unknown because of what nobody stated: the value
+   * (or, for two unknowns together, the combined ceiling) the unknown must
+   * respect for the route not to be under water. The unknown stays unknown;
+   * this is the threshold the plan needs, never a filled-in number.
    */
   breakEven: BreakEven | null;
 }
 
 export interface BreakEven {
   /** Which unknown the threshold is for. */
-  unknown: 'collectedCents' | 'heldAgainstCents';
+  unknown: 'collectedCents' | 'heldAgainstCents' | 'outflowCents' | 'heldAgainstCents+outflowCents';
   /** 'at least' for a collection, 'at most' for a hold. */
   bound: 'AT_LEAST' | 'AT_MOST';
   /** Null when no value of the unknown can keep the route above water. */
@@ -312,15 +323,16 @@ function routeEntries(route: MoneyRoute): Entry[] {
   const held = route.heldAgainstCents.value;
   if (held !== null) entries.push({ id: `${route.id}:held`, debit: ACCOUNT.revenue, credit: ACCOUNT.obligation, amountCents: Math.round(held), evidence: route.heldAgainstCents.source ?? 'derived hold' });
   route.outflows.forEach((one, i) => {
+    if (one.amountCents === null) return;
     entries.push({ id: `${route.id}:out:${i}`, debit: `paid to: ${one.to}`, credit: ACCOUNT.cash, amountCents: Number.isFinite(one.amountCents) ? Math.round(one.amountCents) : one.amountCents, evidence: one.reason });
   });
   return entries;
 }
 
-function breakEvenOf(route: MoneyRoute, outflowCents: number): BreakEven | null {
+function breakEvenOf(route: MoneyRoute, outflowCents: number, outflowKnown: boolean): BreakEven | null {
   const collected = route.collectedCents.value;
   const held = route.heldAgainstCents.value;
-  if (collected === null && held !== null) {
+  if (collected === null && held !== null && outflowKnown) {
     const owed = held + outflowCents;
     const found = owed <= 0 ? 0 : thresholdFor(0, owed * 2, (x) => x - owed);
     const cents = found === null ? null : Math.ceil(found - 1e-6);
@@ -329,18 +341,25 @@ function breakEvenOf(route: MoneyRoute, outflowCents: number): BreakEven | null 
       statement: cents === null ? 'no collection keeps this route above water' : `the route needs at least ${cents} cents collected to cover the hold and outflows`,
     };
   }
-  if (held === null && collected !== null) {
-    // x is how much of the collection is NOT held; free cash rises with it.
-    const found = collected <= 0 ? null : thresholdFor(0, collected, (x) => collected - (collected - x) - outflowCents);
-    const cents = found === null ? null : Math.max(0, Math.floor(collected - found + 1e-6));
-    return {
-      unknown: 'heldAgainstCents', bound: 'AT_MOST', cents,
-      statement: cents === null
-        ? `outflows of ${outflowCents} cents exceed the ${collected} cents collected even with nothing held`
-        : `the route stays above water if at most ${cents} cents of the collection is held against refund or fulfilment`,
-    };
-  }
-  return null;
+  if (collected === null) return null;
+  // What the unknown part may take: the collection less every stated amount.
+  const room = collected - (held ?? 0) - outflowCents;
+  const unknown: BreakEven['unknown'] | null = held === null && !outflowKnown ? 'heldAgainstCents+outflowCents' : held === null ? 'heldAgainstCents' : !outflowKnown ? 'outflowCents' : null;
+  if (unknown === null) return null;
+  // x is how much of the room is NOT consumed by the unknown; free cash rises with it.
+  const found = room <= 0 ? (room === 0 ? 0 : null) : thresholdFor(0, room, (x) => x);
+  const cents = found === null ? null : Math.max(0, Math.floor(room - found + 1e-6));
+  const what = unknown === 'heldAgainstCents'
+    ? 'of the collection is held against refund or fulfilment'
+    : unknown === 'outflowCents'
+      ? 'is paid out on the outflows nobody has priced'
+      : 'is held against refund or fulfilment and paid out on the unpriced outflows together';
+  return {
+    unknown, bound: 'AT_MOST', cents,
+    statement: cents === null
+      ? `the stated hold and outflows already exceed the ${collected} cents collected, so no value of the unknown keeps the route above water`
+      : `the route stays above water if at most ${cents} cents ${what} (the range that works is 0 to ${cents} cents)`,
+  };
 }
 
 export function readMoneyRoute(route: MoneyRoute): MoneyRouteReading {
@@ -349,8 +368,12 @@ export function readMoneyRoute(route: MoneyRoute): MoneyRouteReading {
   if (!route.invoicedAt) gaps.push('invoice date');
   if (!route.collectedAt) gaps.push('collection date');
   for (const one of route.outflows) if (!one.at) gaps.push(`when ${one.to} is paid`);
-  const outflowCents = route.outflows.reduce((sum, one) => sum + one.amountCents, 0);
-  const outflow = { ...unknownFigure('', 'cents'), meaning: 'outflows', unit: 'cents', status: 'CONTRACTED' as FigureStatus, value: outflowCents, source: 'route outflows' };
+  const unknownOutflows = route.outflows.filter((one) => one.amountCents === null);
+  for (const one of unknownOutflows) gaps.push(`amount paid to ${one.to}`);
+  const outflowCents = route.outflows.reduce((sum, one) => sum + (one.amountCents ?? 0), 0);
+  const outflow: Figure = unknownOutflows.length > 0
+    ? unknownFigure('outflows', 'cents', unknownOutflows.map((one) => `the amount paid to ${one.to} is stated`))
+    : { ...unknownFigure('', 'cents'), meaning: 'outflows', unit: 'cents', status: 'CONTRACTED' as FigureStatus, value: outflowCents, source: 'route outflows' };
   const free = derive('free to use', 'cents', [route.collectedCents, route.heldAgainstCents, outflow], ([collected, held, out]) => (collected ?? 0) - (held ?? 0) - (out ?? 0));
   if (route.collectedCents.value === null) gaps.push('collected amount');
   if (route.heldAgainstCents.value === null) gaps.push('amount held against refund or fulfilment');
@@ -369,10 +392,10 @@ export function readMoneyRoute(route: MoneyRoute): MoneyRouteReading {
     if (Number.isFinite(fromEntries) && Math.abs(fromEntries - free.value) >= 1) discrepancies.push(`free to use is ${free.value} cents but the entries give ${fromEntries} cents`);
   }
   return {
-    route: route.id, collectedCents: route.collectedCents.value, outflowCents, heldAgainstCents: route.heldAgainstCents.value,
+    route: route.id, collectedCents: route.collectedCents.value, outflowCents, unknownOutflows: unknownOutflows.length, heldAgainstCents: route.heldAgainstCents.value,
     freeCents: free, shortfallCents, gaps, discrepancies,
     ledger: { entries, reconciliation },
-    breakEven: breakEvenOf(route, outflowCents),
+    breakEven: breakEvenOf(route, outflowCents, unknownOutflows.length === 0),
   };
 }
 

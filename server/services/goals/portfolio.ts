@@ -47,6 +47,7 @@ import {
   createGraph,
   declareType,
   expandToFixpoint,
+  derive,
   fullAccount,
   linkGraphs,
   makeFigure,
@@ -664,6 +665,89 @@ function fulfillerOf(one: ModelledOpportunity): string | null {
   return stated(one.fulfilledBy?.value) ?? stated(one.opportunity.fulfillmentOwner);
 }
 
+const DAY_MS = 86_400_000;
+/** A stated date as YYYY-MM-DD; null when nothing parseable was stated. */
+function isoDay(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? new Date(at).toISOString().slice(0, 10) : null;
+}
+const plusDays = (day: string, days: number): string => new Date(Date.parse(day) + Math.round(days) * DAY_MS).toISOString().slice(0, 10);
+/** The whole price is paid before the work is delivered. A deposit is not: its share is unstated. */
+const PREPAID = /\b(pre-?paid|prepay(?:ment)?|up-?front|in advance|paid (?:at|on) (?:order|booking|checkout)|before (?:work|delivery|fulfil+ment) (?:starts|begins)?)/i;
+/** Payment falls due only once the work is delivered or accepted. */
+const AFTER_DELIVERY = /\b(net\s*\d{1,3}|(?:on|upon|after) (?:delivery|completion|acceptance|receipt of (?:the )?(?:goods|work|deliverable))|in arrears|due on receipt)\b/i;
+const NET_DAYS = /\bnet\s*(\d{1,3})\b/i;
+
+export interface Settlement {
+  invoicedAt: string | null;
+  collectedAt: string | null;
+  dateBasis: { invoiced: string | null; collected: string | null };
+  /** Collected money that stays owed against fulfilment or refund; unknown only when nothing in the row decides it. */
+  heldAgainstCents: Figure;
+  /** When the work's direct cost leaves, from the delivery date the row states. */
+  costAt: string | null;
+}
+
+/**
+ * When the money is invoiced and collected, and how much of it stays owed
+ * against fulfilment or refund — read from the opening's own row: its payment
+ * terms, its delivery deadline, its acceptance condition and the modelled days
+ * to cash measured from when the opening was recorded. A date or hold nothing
+ * in the row decides stays unknown and is named; nothing is filled with a guess.
+ */
+export function settlementOf(one: ModelledOpportunity, price: Figure): Settlement {
+  const o = one.opportunity;
+  const row = `cash_opportunity:${o.id}`;
+  const terms = stated(o.paymentTerms);
+  const start = isoDay(o.createdAt);
+  const deadline = isoDay(o.deadline);
+  const days = one.daysToCash.value;
+  const prepaid = terms !== null && PREPAID.test(terms);
+  const net = terms ? NET_DAYS.exec(terms) : null;
+  const netDays = net ? Number(net[1]) : null;
+  const afterDelivery = !prepaid && ((terms !== null && AFTER_DELIVERY.test(terms)) || stated(o.acceptanceCondition) !== null || one.competitiveAward);
+
+  let invoicedAt: string | null = null;
+  let invoiced: string | null = null;
+  let collectedAt: string | null = null;
+  let collected: string | null = null;
+  if (start && days !== null && Number.isFinite(days) && days >= 0) {
+    collectedAt = plusDays(start, days);
+    collected = `${row} recorded ${start}, plus ${days} days to cash (${one.daysToCash.provenance.toLowerCase()})`;
+  }
+  if (prepaid && start) {
+    invoicedAt = start;
+    invoiced = `${row} terms "${terms}": invoiced when ordered`;
+  } else if (netDays !== null && collectedAt) {
+    invoicedAt = plusDays(collectedAt, -netDays);
+    invoiced = `${row} terms "${terms}": collection date less ${netDays} days`;
+  } else if (deadline && afterDelivery) {
+    invoicedAt = deadline;
+    invoiced = `${row} invoiced on delivery, by the stated deadline ${deadline}`;
+  }
+  if (!collectedAt && invoicedAt && netDays !== null) {
+    collectedAt = plusDays(invoicedAt, netDays);
+    collected = `${invoiced}, plus ${netDays} days`;
+  }
+
+  let heldAgainstCents: Figure;
+  if (prepaid) {
+    // Collected before delivery: all of it is owed back if the work is not delivered.
+    heldAgainstCents = derive('held against fulfilment until delivery', 'cents', [price], ([p]) => p ?? 0);
+  } else if (afterDelivery) {
+    const made = makeFigure({
+      meaning: 'held against refund or fulfilment', unit: 'cents', value: 0, status: 'MODELED',
+      source: `${row} ${terms ? `terms "${terms}"` : one.competitiveAward ? 'paid on the award\'s completion' : 'acceptance condition'}: collected only after delivery, so nothing stays owed against fulfilment`,
+      invalidatedBy: ['a refund, chargeback or warranty right in the agreement'],
+    });
+    heldAgainstCents = made.ok ? made.figure : unknownFigure('held against refund or fulfilment', 'cents', ['a refund or fulfilment term is stated']);
+  } else {
+    heldAgainstCents = unknownFigure('held against refund or fulfilment', 'cents', ['a refund or fulfilment term is stated']);
+  }
+  return { invoicedAt, collectedAt, dateBasis: { invoiced, collected }, heldAgainstCents, costAt: deadline };
+}
+
 interface BuiltGraph {
   graph: CausalGraph;
   /** What discovery added, each naming what in the arrangement implied it. */
@@ -841,17 +925,20 @@ function buildCausalGraph(one: ModelledOpportunity): BuiltGraph {
 
   const price = figureOf(one.price, 'price per deal', 'cents', 100);
   const cost = figureOf(one.directCost, 'direct cost per deal', 'cents', 100);
+  const settlement = settlementOf(one, price);
   ok(addMoneyRoute(g, {
     id: 'sale',
     payer: payer ?? '',
     for: scope ?? o.title,
     terms: timing,
     channel: acquisition === 'AGREED' ? (channel ?? 'the agreement already recorded') : (channel ?? ''),
-    invoicedAt: null,
-    collectedAt: null,
+    invoicedAt: settlement.invoicedAt,
+    collectedAt: settlement.collectedAt,
+    dateBasis: settlement.dateBasis,
     collectedCents: price,
-    heldAgainstCents: unknownFigure('held against refund or fulfilment', 'cents', ['a refund or fulfilment term is stated']),
-    outflows: cost.value === null ? [] : [{ to: external ? (fulfiller as string) : 'direct cost of delivery', reason: 'cost of one deal', amountCents: cost.value, at: null }],
+    heldAgainstCents: settlement.heldAgainstCents,
+    // The deal's direct cost is an outflow whether or not anybody has priced it: an unknown cost stays on the route as unknown.
+    outflows: [{ to: external ? (fulfiller as string) : 'direct cost of delivery', reason: 'cost of one deal', amountCents: cost.value, at: settlement.costAt }],
   }));
   recordClaim(g, 'price', price);
   recordClaim(g, 'directCost', cost);

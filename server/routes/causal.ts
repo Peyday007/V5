@@ -126,8 +126,9 @@ function routeFrom(raw: Json, index: number): MoneyRoute {
     collectedCents: figureFrom(raw.collectedCents, `${where}.collectedCents`, 'collected cash'),
     heldAgainstCents: figureFrom(raw.heldAgainstCents, `${where}.heldAgainstCents`, 'held against refund or fulfilment'),
     outflows: list(raw.outflows, `${where}.outflows`, 200).map((one) => {
-      const amountCents = Number(one.amountCents);
-      if (!Number.isFinite(amountCents) || amountCents < 0) throw badRequest(`"${where}.outflows" amounts are non-negative numbers of cents.`);
+      // An outflow whose amount nobody has stated is sent as null and stays unknown, never zero.
+      const amountCents = one.amountCents === null ? null : Number(one.amountCents);
+      if (amountCents !== null && (!Number.isFinite(amountCents) || amountCents < 0)) throw badRequest(`"${where}.outflows" amounts are non-negative numbers of cents, or null when unknown.`);
       return { to: text(one.to), reason: text(one.reason), amountCents, at: textOrNull(one.at) };
     }),
   };
