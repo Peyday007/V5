@@ -16142,3 +16142,26 @@ The report also carries the owner's remaining sections, each read from the same 
 Every bottleneck states its estimated improvement. Every YES names the resource, its
 utilization, the expected effect, the cost (said to be unrecorded where Brain does not record
 it), a confidence and the smallest test.
+
+**The report never blocks Hermes, and its reads are budgeted (owner, 2026-11-13: "reporting
+must never block Hermes or Brain's productive work").**
+
+The first production hour after release recorded no report and logged no failure. The database
+was timing out connections, and the report was waiting on its 75-odd reads. `operatorTickIfDue`
+awaited it, so Hermes' tick waited too.
+
+The report now runs as the Russell loop's own `operations-report` pass. That pass starts the
+generation in the background and returns at once. It runs one generation at a time. It retries
+a failure after five minutes, and it stops treating a generation as blocking once ten minutes
+have passed without it settling.
+
+The operational tables are read once, for the hour reported. The previous hour, the per-hour
+baseline, the plan history and bottleneck persistence all come from one bounded read of
+earlier reports, whose payloads now carry their measured window and plan reading. Every read
+counts against a 60-second budget. A read that fails or is skipped is named at the top as a
+**PARTIAL REPORT** and shown as n/a; it is never shown as zero.
+
+The pass recovers missed hours within the last six, newest first: the hour just ended plus at
+most one earlier hour per pass. A recovered hour says so, and the conversation is still offered
+the newest hour. The check-then-write of an owner notice is serialized per notice, so a
+presumed-hung attempt and its replacement cannot both record one hour.
