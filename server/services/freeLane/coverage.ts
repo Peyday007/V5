@@ -21,6 +21,7 @@ import { getDb } from '../../db/database.ts';
 import { recordIntervention } from '../../repos/engineering.ts';
 import { laneConfig } from '../cheap/lane.ts';
 import { FREE_LANE_WORK_TYPES } from './worker.ts';
+import { readStageCapacity, recordedCause, stageCapacityLines, type RecordedStageCapacity } from './stageCapacity.ts';
 
 export interface LaneCoverage {
   configured: boolean;
@@ -107,6 +108,11 @@ export async function laneCoverage(now = new Date()): Promise<LaneCoverage> {
     coverage.ready = true;
     coverage.reason = `${waiting} displaced item(s); the free lane submitted ${coverage.submittedLastHour} in the last hour.`;
   }
+  if (!coverage.ready) {
+    // CAP-16-3: the hourly stage-capacity reading names the failing route; a refusal carries it.
+    const cause = recordedCause(await readStageCapacity(now.getTime()).catch(() => null));
+    if (cause) coverage.reason = `${coverage.reason} ${cause}`;
+  }
   return coverage;
 }
 
@@ -157,6 +163,9 @@ export async function freeLaneReading(): Promise<{
   claimsSubmitted: number;
   documentsFiled: number;
   recentFailures: string[];
+  /** The latest recorded per-stage capacity reading (CAP-16-3) and the lines `admin free-lane show` prints for it. */
+  stageCapacity: RecordedStageCapacity | null;
+  stageCapacityLines: string[];
 }> {
   const db = getDb();
   const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
@@ -188,7 +197,10 @@ export async function freeLaneReading(): Promise<{
       WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'FAILED_RETRYABLE' ORDER BY at DESC LIMIT 8`,
     [],
   );
+  const stageCapacity = await readStageCapacity();
   return {
+    stageCapacity,
+    stageCapacityLines: stageCapacityLines(stageCapacity),
     recentFailures: failures.map((f) => `${f.at} ${f.workload_class ?? '?'} ${f.reason ?? ''}`),
     coverage: await laneCoverage(),
     outcomesLastDay: Object.fromEntries(outcomes.map((o) => [o.k, Number(o.n)])),

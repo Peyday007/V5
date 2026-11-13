@@ -12723,7 +12723,9 @@ only. `docs/CONNECTOR-LIFECYCLE.md` describes the mechanism.
 - **One wrong-worker arrival stops the Routine.** It is quarantined with the
   cause and both remedies: the account owner picks the right connector in
   Claude, or an operator repoints the Routine. Brain never adopts the arriving
-  identity. Once a person registers the Routine for the worker it was proven to
+  identity (amended by §100: a clean switch to a connector in the same Claude
+  account is now adopted; this rule still holds for every case §100 refuses).
+  Once a person registers the Routine for the worker it was proven to
   run as, the Routine comes back by itself, and its next arrival binds the
   connector. Old evidence binds nothing and re-enables nothing; a later
   quarantine for another reason waits for its own recovery.
@@ -15083,3 +15085,1060 @@ the rest. Every other requirement names an `r01.<key>` probe that is not yet
 registered, so it reads UNKNOWN — never PASS — until a reviewed probe reads
 the behavior from production rows; a probe lives under the protected path, so
 the campaign that builds a behavior cannot write its own judge.
+
+## 98. Every pool of capacity is fed: idle capacity beside waiting work is a fault Brain finds and corrects itself.
+
+**Owner's order, 2026-11-09.** A permanent Brain-wide rule, not a Factory one:
+- Allocate every AI worker, Claude account, GPU slot, research lane and Factory worker to eligible work.
+- Run independent objectives at the same time; revenue is the highest priority now.
+- Limit parallelism only for capacity, quota, dependency, reliability, cost or safety.
+- Detect waiting, stalls, idle capacity and poor allocation, and correct them.
+- Reuse the existing schedulers.
+
+**What production showed.** The free research lane, which does all commercial research (§85):
+- had **76 items waiting and submitted nothing for ten hours** (09:10–19:30Z), with 191 provider errors an hour;
+- the cause was that the free-model gateway's 1 GB volume was full of its own debugging output (a JSON file per call, 276 MB in a day, and 260 MB of rotated logs);
+- so every call failed with "database or disk is full".
+
+Its controller recorded `FREE_LANE_IDLE` and kept retrying, but nothing read every pool together, and nothing cleared the gateway.
+
+**The pools, and the scheduler that already owns each.** No second scheduler was built:
+
+| pool | waiting | running | capacity | continuation |
+|---|---|---|---|---|
+| Claude routines (bins) | `DISPATCHABLE_SQL` ∧ `FIREABLE_SQL` | leased bins | fleet target (`capacityReading`) | `dispatchTickIfIdle` (guarded) |
+| Free lane and GPU (§86) | `waitingNow` | busy slots / leased free-lane items | the controller's per-model targets | `controlStep`, which tops up idle slots |
+| Research slots | QUEUED ideas with a mission spec and no live mission | live MISSION holds | sum of active grants' `max_concurrent` | Russell's launch pass, goal ideas first (§78) |
+| Factory line | executable campaigns and bins | leased and arriving bins | plus free repository surfaces | the Factory remote loop (`readLine`) |
+
+**What changed.**
+- **One reading of every pool, acted on.**
+  - `brainUtilization` reads the four pools from their own counts.
+  - `watchUtilization` records each idle pool once per ten-minute window, as `IDLE_WITH_EXECUTABLE_WORK` naming the pool and the reason.
+  - It then continues the pool through its own path.
+  - The durable tick runs it every five minutes. Before, the tick's idle watch only recorded, and only for routines.
+  - `admin utilization show | run` prints every pool, and the day's interventions.
+- **The most important work first, in every queue.**
+  - The free lane asked by stage before priority, so an approved revenue goal's boosted research (`GOAL_PRIORITY_BOOST`) waited behind any unrelated synthesis. It now asks for the type holding the highest-priority waiting item first (`asksByPriority`), and stage order breaks ties.
+  - The dispatch intent queue was ordered by time alone. `claimDispatchIntent` now orders by the bin's priority, then time.
+- **The gateway cannot fill again.** The hourly cheap-lane run prunes its call logs older than two hours and all but its two newest rotated logs. Its database is not touched.
+
+**Limits kept, each for a reason this rule allows.**
+- The grant's at-once ceiling and account and routine targets: quota and capacity.
+- The free lane's controller and its database share: reliability.
+- Its start-up hold after a restart: reliability on a cold machine.
+- Synthesis waiting for its fragments, and audits in sequence: dependencies (§90, §71).
+- The await-release gate on operator workflows: it holds only while a machine is being replaced, then fails open.
+
+**Factory does not block unrelated work.**
+- Factory and research bins need different surfaces.
+- The fleet target already excludes Factory.
+- The fire order now follows priority instead of arrival.
+- Brain's runtime has no Factory lock on research, cash, goals or dispatch: `RELEASE_IN_FLIGHT` gates only Factory's own release planner.
+
+**After release (2026-11-09 20:52Z, `admin utilization run`).** The first production reading found two more gaps, and both are now fixed.
+
+- **Research slots: 138 launchable ideas beside 88 free grant slots, 19 running.**
+  - The launch pass started one mission a tick (`max_launches_per_cycle`).
+  - That bound exists so Russell's own follow-ons cannot feed themselves, and it still binds follow-ons.
+  - Fresh ideas now fill free slots, up to `SLOT_FILL_PER_TICK` (5) a pass.
+  - `reserve` still refuses any launch over a grant's at-once ceiling.
+- **Claude routines read "idle" for hours with 3 executable bins.**
+  - The watchdog counted bins without the dispatcher's third predicate (`workReadySql`): a research packet bin with no claimable work is not executable.
+  - The count is now the dispatcher's own.
+
+**Second reading (21:53Z).** Routines still read "3 executable, 13 eligible, idle" for hours. `dispatch-diagnose` showed why:
+- The 3 bins were Factory work.
+- The router refused them on every tick with named limits:
+  - `NO_SURFACE_SERVES_THIS_FAMILY`: only a repository surface takes Factory work.
+  - `ALL_SURFACES_INELIGIBLE`.
+  - `NO_SURFACE_SERVES_THIS_PROJECT`.
+  - `ACCOUNT_TARGETS_REACHED`.
+- The 13 eligible surfaces were research surfaces.
+
+A bin the router refused in the last `UNROUTED_WINDOW_MS` (15 minutes) now waits on that refusal's named limit and is not counted as executable beside idle capacity. The limit stays visible in `DISPATCH_UNROUTED` and in `dispatch-diagnose`.
+
+
+## 99. A plan short of its requirement is reconstructed, not re-read, and a result keeps the context it was measured in.
+
+**Owner's order, 2026-11-09.** Brain rebuilt the $10K plan, explored too
+narrowly, relied on results from a flawed outreach system, and produced low
+probabilities without reconsidering its strategy. Fix the planning
+intelligence itself, for every goal.
+
+**What production showed.** Goals plan 42692716368 read 2.6% coverage. Its only
+response to a plan short of 90% was "find more openings" (`needsMoreOpenings`).
+#649 had made the owner's workspace record bind every cold-outreach opening:
+4,096 sends of other offers, from lists that bounced 9.7%. On the regression
+fixture that cut the best combination from 52% coverage to 15%. Sending capacity
+was a fixed input, and nothing weighed spending the $3,000 the owner had set
+aside on what was binding.
+
+**Evidence keeps its context** (`goals/evidenceAuthority.ts`). An outreach
+record is judged by its own counts against sourced thresholds:
+- a bounce rate over 5% (Instantly pauses a campaign there by itself) means the
+  list and the sender's reputation were measured, not the market;
+- campaigns that are not Brain's own measured other offers, lists and copy;
+- too few replies cannot say what share were interested.
+
+Each record gets one authority:
+
+| Authority | Meaning | How the portfolio uses it |
+|---|---|---|
+| `TRANSFERABLE` | Brain's own campaign for this opening, on a sound list | Binds |
+| `COMPARABLE` | Brain's campaigns, sound list | Moves an unknown's floor |
+| `CONTEXT_ONLY` | A defect, or another implementation | Never narrows a redesigned plan |
+| `NOISE` | Too small to say anything | Ignored |
+
+A `CONTEXT_ONLY` record is kept as the **as-is floor**: the same plan if the new
+campaign does no better (`GoalPortfolio.measuredRates.asIs`). It is the
+`quant/pool.ts` transfer rule applied to Brain's own history.
+
+**The reconstruction loop** (`goals/reconstruction.ts`, pure, on the one engine
+`evaluateGoalPortfolio`). It runs on every plan read that is not ACCEPTED,
+including the refusal path:
+
+1. **Diagnose.** Volume, reply, close, price, cash timing, market size and money
+   limits are each moved to the favourable end of what is known. The lift each
+   gives ranks what binds. Moving all of them at once gives the openings'
+   **headroom**. Headroom under the requirement is **structural**: the pool or
+   channel must change, not the estimates.
+2. **Challenge.** Six implicit assumptions are named with their evidence status
+   and the dimension that tests them: the history describes the new campaign;
+   capacity is fixed; cold email is the only way in; one unit at list price;
+   cash at listed timing; the openings held are the market.
+3. **Construct.** Generic operators, one dimension each:
+   - **Capacity:** buy sending capacity (`acquisitionLevers.ts`).
+   - **Acquisition:** buy inbound or marketplace demand. It becomes a channel of
+     its own (`ModelledOpportunity.channel`, its own capacity and risk group).
+   - **Transaction:** reshape a small ticket into a bundle or retainer, with the
+     close rate assumed lower.
+   - **Partner:** sell through a partner who already holds the buyers. The
+     commission is sourced (10–30%); referral volume is assumed until a partner
+     is signed.
+   - **Financing:** prepaid fulfilment (`fundedByBuyer`). The buyer's payment,
+     not the owner's limit, funds the supplier.
+   - **Cash timing:** a deposit at signing.
+
+   No operator names a business. A lever is a row of sourced unit costs.
+4. **Evaluate and combine.** Each variant is screened at 1,000 worlds and
+   evaluated once (keyed). Improving ones are combined greedily across
+   dimensions while the combination improves materially (2 points of reach or
+   10% of median cash) and fits the money limits. The loop stops when nothing
+   improves, not after a round count. It yields between evaluations (§63).
+5. **Conclude.** For the strongest plan it states:
+   - its changes as a dated execution sequence (`StrategyChange.startDay`);
+   - the as-is floor on the old record;
+   - the reply rate every outreach opening must reach for the requirement;
+   - what is measured and what is assumed, and whether the reach is coverage or
+     a probability. An assumed change is never a probability, and acceptance
+     (§95) is unchanged.
+
+   Its search brief ("any industry, including ones not searched before", buyers
+   already asking, delivery and ticket from the goal) enters the goal round as a
+   `STRATEGY_RECONSTRUCTION` diagnosis (§89), so discovery reaches beyond the
+   taxonomy.
+
+**Capital-aware.** `purchaseCapacity`, `buyInbound` and `dailyVolumePlan` cost
+each lever from sourced figures:
+- domains, mailboxes (owner-warmed or pre-warmed), warm-up, sends per mailbox,
+  platform plan, lead data and verification;
+- cost per lead and qualified share for paid search, paid social and
+  marketplaces;
+- deliverability limits.
+
+A purchase over the before-proof limit only starts after first cash and is an
+assumption. On 2026-11-09, 10,000 sends a day needed:
+
+| Requirement | Amount |
+|---|---|
+| Mailboxes | 334–500 |
+| Domains | 112–250 |
+| Warm-up | 14–21 days, leaving 9–16 sending days |
+| Cost inside the window | $2,329–$24,308 |
+
+Its first purchase alone breaks the $375 before-proof limit, so it was costed
+and refused, not assumed. Pre-warmed accounts at $10 a month remove the
+warm-up, and $375 of them is a variant the loop evaluates.
+
+**Regression** (`tests/goalReconstruction.test.ts`, fixture
+`tests/fixtures/goal10k.ts`): the record reads `CONTEXT_ONLY` with its three
+defects; at least five dimensions are explored; capacity is costed within the
+limits; acquisition and financing change; the brief reaches the goal round;
+coverage is never called a probability; and the result beats the pre-§99 reading
+by over 20 points. A second, unrelated goal reconstructs with no $10K
+knowledge.
+
+**Third reading (22:40Z, both fixes live).**
+- **Routines:** read correctly. Nothing executable was idle.
+- **Research slots:** still read "132 waiting beside 89 free". The count summed every grant's slots, and a grant serves only its own project, so free slots in one project do nothing for ideas waiting in another.
+- **The fix:** the pool now matches project by project. An idea is startable only when its own project's grants have a free slot.
+- **The launch fill:** it uses the same matched number.
+
+**Fourth reading (2026-11-10 00:32Z, on 7422b13).**
+- **Concurrency:** all four pools were working at the same time. Factory had 1 stage running, the free lane 4 calls, and research 13 missions. Routines were idle because nothing was executable.
+- **Research slots:** still read "26 startable" for two readings in a row. The project-by-project count still added up every active grant in a project. `launch()` takes slots only from the one grant that governs research, which `checkAuthority` resolves for work class `RESEARCH`, so outreach and cash grants were counted as research slots.
+- **The fix:** the pool now reads `researchMissionSlots(projectId)` in `russell/launch.ts`. That is the same grant and the same live-hold arithmetic that `reserve` enforces, so the watchdog can only call slots idle when a launch would actually be accepted.
+- **A gate that moved under it:** #661's Deploy and Postgres suite both failed `ocr.test.ts` ("a scan too poor to trust") because `ubuntu-latest` moved from 24.04 to 26.04 between two runs, taking tesseract from 5.3 to 5.5, and 5.5 reads the deliberately poor fixture as text. Production's image is Debian bookworm with tesseract 5.3, so the test jobs are now pinned to `ubuntu-24.04`. CI now checks the OCR engine production actually runs, and the refusal test still means what it says.
+
+## 100. A change is recognized where it happens, and the work it enables resumes without a person restating it.
+
+**Owner's order, 2026-11-10.** Brain recognizes meaningful changes across the whole system — accounts, connectors, Routines, workers, credentials, configuration, providers, GPU pods, capacity, Factory campaigns and dependencies, research, opportunities, budgets and constraints — reconciles its records, and resumes, reroutes or reprioritizes the work the change enables. Event-driven wherever an event exists; a bounded periodic check only where none does. A person is asked only for authorization, a missing credential, or what Brain cannot do safely. No second control system.
+
+**What production showed.** Caleb's *Factory surface 3* (`trig_01EhddNq…`, registered for `factory-brain`) was quarantined on 2026-10-15 because its sessions arrived as his research worker. Its fast probes, then its daily probes, ran out by the end of October. When Caleb moved the Routine onto the Factory Brain connector, nothing would ever fire it again, so the change was invisible: the alert still told him to fix the connector he had already fixed. The reverse case was no better. §59 refused to adopt an arriving identity, so a Routine its owner deliberately switched to another connector was quarantined until an operator restated the switch with `repoint-worker`.
+
+**What changed.**
+- **A connector switch is adopted** (`fleet/arrivalIdentity.ts:adoptSwitchedIdentities`, on the dispatch tick, before the wrong-worker quarantine). The event is the fired session's authenticated check-in: its provider session matches the fire, within 30 minutes, and it authenticated as another worker.
+  - **What adoption does:** the Routine is repointed (compare-and-swap, audited `REPOINT_ROUTINE_WORKER` by `brain:arrival-adoption`, with the reverse command in the reason). Its stale connector is replaced by the one the session came through, or cleared. Its capabilities gain what the new worker's routing declares. A wrong-worker quarantine lifts on the same tick (`recoverRebindedSurfaces`), and the re-armed deferred intents fire it for the new worker's work.
+  - **The verification is the next arrival.** A MATCH binds the connector. An arrival as the old worker is a reversal, refused, and quarantined as mixed.
+  - **Refused, so §59's quarantine still applies:** the same session also arrived as the registered worker; interleaved arrivals; a connector attributed to another Claude account; a stale or replayed session; a worker that is disabled or serves no project; a surface commissioned for `repository` work arriving as a worker not routed for it. Adoption widens what a surface serves and never retires its role.
+  - **§59 is amended accordingly:** "Brain never adopts the arriving identity" now holds only for these refusals.
+- **A quarantine is never abandoned** (`fleet/autoRecovery.ts`).
+  - `identityChangeSignal` reads the token rows the authorization server already writes: a new consent for the registered worker, from an unattributed client or one in this Routine's account, or use of a client no connector is attributed to.
+  - A signal newer than the last probe buys one probe, at most hourly, whatever the budget says.
+  - Past the fast and daily budgets, a weekly probe remains, at about four activations a month for a surface nobody has fixed.
+- **A stale binding is repaired** (`fleet/connectorBinding.ts:clearStaleConnectorBindings`). A Routine bound to a connector verified to authorize as a different worker is unbound, guarded on that binding, and the next proven arrival binds the right one. Repoints used to leave these behind, and every later arrival through the right connector read as a CONFLICT.
+- **The register** (`server/domain/changeRecognition.ts`) names, for every change class, the existing recognizer, the running file that calls it, EVENT or PERIODIC (and for PERIODIC, why no event exists), and what it corrects and resumes. `tests/changeRecognition.test.ts` fails when a class has no recognizer, a recognizer disappears, or it is no longer called from its loop. **A new capability that holds state other work depends on adds its row in the same change.**
+
+**Left manual, deliberately.** `fleet reconcile-secrets` pairs deployment secrets with triggers by elimination, and every attempt is a real activation on someone's account. It runs only when a person asks.
+
+**Regression.** `tests/calebDurability.test.ts`:
+- Factory surface 3 with every budget spent is lifted by the consent signal alone.
+- The weekly fallback fires.
+- A research Routine switched to the Factory Brain connector is adopted and given work.
+- Both-connector and reversal cases are refused.
+- Stale bindings are cleared.
+
+Also `tests/connectionRecovery.test.ts` and `tests/changeRecognition.test.ts`.
+
+## 101. A goal is examined from many directions, and the ways of reasoning that work are learned.
+
+**Owner's order, 2026-11-10.** Brain must examine one problem from dozens or
+hundreds of genuinely different directions, discover approaches nobody
+programmed, run them concurrently, let them challenge, combine and replace one
+another, learn which ways of reasoning work, and do it inside the real planning
+pipeline for every goal. The $10K goal is the test.
+
+**What production showed (Goals plan 42901469599, 2026-11-10 21:15Z, before).**
+Baseline 4.2% coverage, structural. §99 walked one greedy path and kept
+prepaid fulfilment + deposit + a ×9 bundle at 75.4% — every move an untested
+assumption. Nothing asked what the plan holds if those assumptions fail, and
+nothing could reason about the goal in a way not already written as an operator.
+
+`services/goals/reasoning/` extends §99; it is not a second planner. The one
+engine (`evaluateGoalPortfolio`) judges everything, and the result goes out
+through the same `Reconstruction` the plan read already persists and the goal
+round already reads (§89).
+
+- **A direction is a way of reasoning, written as a program.** Stances are
+  strings, not an enum. The vocabulary is small and honest: §99's costed
+  operators (now pointable at any opening: `buildOperators({ target })`), a
+  price change that pays for itself in close rate (elasticity 1.2, assumed),
+  FOCUS and DROP. Nothing can raise a reply or close rate by declaring it.
+- **Generated three ways.** Cheap algorithms derive directions from the
+  problem's data — backward from the remaining amount, forward from each held
+  opening, middle-out from §99's plan (each move removed or swapped), through
+  each binding constraint, each resource, each relationship, inversions,
+  portfolio. The library (`reasoning_methods`) supplies what worked before,
+  ranked by an upper confidence bound. Brain's free-lane models invent methods
+  (`invent.ts`): several calls at once, each told the stances already held,
+  answers validated and refused when off-shape — at most every 15 minutes a goal.
+- **Distinct, not counted.** A signature over the program (factors bucketed
+  by half-powers of two) makes a meaningless variation the same direction; a
+  near-copy of a kept direction of the same stance is dropped. The budget is
+  the problem's: openings + operators + 3 × binding factors, scaled by how far
+  the challenged plan is from its requirement, 12 to 120. An accepted plan is
+  not explored.
+- **Concurrent.** Directions are screened on a pool of niced worker threads
+  (`evaluatorPool.ts`, `availableParallelism() − 1`, at most 4; inline if a
+  pool cannot start). The model invents while the seeds are screened.
+- **Challenge, combine, modify, replace.** Every direction that improves the
+  plan is challenged twice — conversion halved, and every assumption-based
+  move removed — and scored on reach and the weaker challenged reach equally.
+  Leaders of different stances are recombined, mutated (re-pointed, another
+  budget, a step back, rebuilt from scratch), and the next generation is
+  challenged again until nothing improves materially. A winner replaces §99's
+  plan, and the floor, required reply and confidence are then computed on it.
+  A direction that starts from the plan as held is a full reconstruction.
+- **Learned.** Each persisted plan read records every direction (tries,
+  improvements, wins, lift) and one append-only `reasoning_explorations` row
+  (migrations 143 / pg 134). `npm run goals -- plan` prints the exploration,
+  the stance yield, the methods on record and the goal's recent explorations.
+- **Questions reach the world.** A direction's `ask` (a fact the openings
+  cannot answer) is appended to the search brief the next goal round reads.
+
+**Regression** (`tests/multidirectionalReasoning.test.ts`, fixture
+`tests/fixtures/goal10k.ts`): before, §99 alone keeps a plan resting on a
+$2,999 purchase before proof; after, over 100 distinct directions across more
+than ten stances (two invented by the model), the winner holds over 60% with
+its assumptions removed against §99's 47%, adds an estimate-backed move, and
+stays coverage, never a probability.
+
+## 102. A plan's variables are swept by ordinary code, and only the strongest strategies cost an engine read.
+
+**Owner's order, 2026-11-11.** Brain must explore how changing the variables, structure and approach to a problem produces a better result — money, price and margin, deal size and volume, time, market and geography, buyers, channels and capacity, suppliers, structure and financing, and combinations — discover further variables from the problem itself, explore tens or hundreds of thousands of combinations without spending model calls on arithmetic, attack the problem from several directions, change the plan's size, economics and structure, separate what is mathematically possible from what is commercially supported, and keep improving. For every goal, inside the real planner.
+
+**What was missing.** §101 explores up to 120 directions, each judged by the Monte Carlo engine at about a second a read on production. That is the right judge and the wrong search tool: the space of operator budgets × targets × prices × compositions on the $10K goal is two million combinations before the world's conditions are moved at all.
+
+**`services/goals/reasoning/variables.ts`** is §101's front end, not a second planner. It runs in `reconstructPlan` before `exploreDirections` whenever the plan is not defensibly accepted (§95: a probability on no assumed move — 99% coverage on assumptions still sweeps).
+
+- **Discovered variables.** Every §99 operator family becomes a decision variable whose levels are its budgets, and for channels and partners its targets (the four openings that settle most per contact). Price is a factor over each scope the plan's openings occupy (close moves the other way, elasticity 1.2, assumed). Composition is focus-N and drop-scope. Conditions are the eight every goal has (reply, close, market, ticket, supplier cost, cash speed, outreach capacity, time available) plus one per input an opening holds as a range of ×2 or wider. Nothing names a business.
+- **Fast reading.** `fastReading` is a closed form of the engine's own model: shared outreach allocated to the openings that settle most per contact until each market is exhausted, channels on their own capacity, one-offs and agreed money added, the money limits applied, and a lognormal spread from each input's range with the shared-outreach correlation. Microseconds a read. It ranks; it never decides.
+- **Search.** A 4,000-combination screen measures each level's main effect; the factorial is then narrowed by dropping the globally weakest level until it fits 60% of `MAX_VARIATIONS` (250,000); a combination that leaves the same plan as one already read is counted as equivalent, not as a variation. Ten approaches pick their own leaders — FORWARD (money in hand, no assumption), BACKWARD (reach), MIDDLE_OUT (§99's plan), BOTTLENECK (levels that relieve what binds), CHALLENGE (halved conversion), and the CASH, FLOOR, SPEED and CAPITAL perspectives — and COMBINE crosses them. Local search moves each leader one level at a time, effort going first to approaches that have been improving (UCB), until no approach improves. Bounded by count and by 60 s, the time shared between stages (screen 10%, factorial to 55%, local search to 75%, conditions the rest), yielding whenever 8 ms have passed (§63). The factorial turns price and composition fastest, so one built operator state serves every combination of them.
+- **Supported vs mathematical.** A strategy is supported only when no level is assumed. The world's conditions are then moved ×1.5 and ×2 (÷ for cost and delay) under the supported leaders — 6,560 reads each — and the strongest that reaches the requirement on the fewest moves is reported as *mathematically possible only*, with each move named. Backward from the requirement, bisection gives the multiple each condition would need on the strongest supported strategy, marked inside or outside the evidenced range; those outside become questions in the search brief (§89). Demand and conversion are never raised to win.
+- **The engine decides.** Up to 14 distinct strategies (stance `VARIABLE:<approach>`) enter §101's pool first, are screened, challenged, combined and mutated with every other direction, and may replace §99's plan. They are learned in `reasoning_methods` like any direction.
+- **Recorded.** `reasoning_explorations` gains `variations`, `variables` and a compact `sweep` summary (migrations 144 / pg 135). `npm run goals -- plan` prints the variables, approaches, strategies, requirements, the most sensitive conditions and each strategy's engine reading.
+
+**Regression** (`tests/variableExploration.test.ts`, fixture `tests/fixtures/goal10k.ts`): over 50,000 distinct variations with no model call, eight decision families and eight global conditions plus discovered ones, ten approaches, at least five strategies judged by the engine with one reading over twice the plan-as-held's median, a supported strategy with no assumption beside a mathematical-only one naming its world moves, and a second unrelated goal sweeping its own variables inside a smaller bound.
+
+**First production reading (Goals plan 43003547180, 2026-11-11, serving 2396516).** 21 openings, 8 modelled. The sweep read 27,086 distinct variations of 8 decision variables (space 1,251,264) and 41 conditions (33 discovered on openings), with 10,932 equivalent combinations not re-read, in 49 s. A sweep strategy (VARIABLE:BACKWARD: pre-warmed capacity, marketplace leads and a referral partner on one constructed arrangement, a retainer, prepaid fulfilment) replaced §99's plan at 99.5% coverage against 75.0%, with 4.5% when its conversion is halved, against 4.5%. The engine read 14 sweep strategies, with medians from $30,663 to $658,741 against $649 for the plan as held. No commercially supported variation beat the plan as held (fast reading $217). Every gain rests on an assumed move, and no single condition up to ×20 carries the requirement inside evidence, so acceptance stays CANDIDATE_ONLY. Two defects: one bound for the whole sweep let the factorial take all 49 s (local search 0 reads, conditions 82), and the sweep yielded by read count. Both are fixed above.
+
+**Off the server's loop.** The next two releases (Deploys 42998216834 and 43007394331) passed hosted verification 261/261 before the restart. After it, `brain_propose_fragments` timed out, which no earlier release did. At boot the goal tick reads plans, and the sweep then ran on the main loop in 8 ms slices. A request that awaits hundreds of queries in sequence waits up to one slice per query. The sweep now runs on the evaluator pool's niced threads (`Evaluator.sweep`, `reconstruction.ts:sweepFor` rebuilds the operators from plain data), and inline only when no pool can start. Test: the threaded and inline sweeps read identically.
+
+## 103. An integration is declared once, and Brain supplies its credentials itself wherever it is authorized.
+
+**Owner's order, 2026-11-11.** "Every part of Brain must use the same reliable
+system for managing and accessing connected services. Stop fixing missing
+connections individually."
+
+**What was wrong.** Each integration was wired where it was first needed. The
+Neighbor Card workflow (and expansion outreach, and the launch replies stage)
+said the Instantly key was "already" on the production machine; it never had
+been — `flyctl secrets list` held no Instantly setting — so every hourly mailer
+pass failed with `INSTANTLY_API_KEY is not configured` while the owner's
+workspace was connected to every Claude session and to V2. Boot logged
+`messaging none selected` because the provider also needed a second word,
+`BRAIN_MESSAGING_PROVIDER`. V2's Google Places key lived only in V2's Vercel
+project, so Brain's discovery fell back to a chamber directory and the map.
+
+**The rule.** `server/services/integrations/registry.ts` declares every
+integration of Brain and its connected projects: where each credential lives
+(the deployment, a GitHub Actions secret, or a connected project), how it can
+arrive without a person (`GITHUB_SECRET`, `CONNECTOR_SEALED`, `GENERATED`,
+`WORKFLOW`, else `OWNER`), which components use it, its capabilities, its live
+probe, a daily ceiling for a service that bills per call, and the one sentence
+the owner sees when no automatic path is left. `tests/integrationRegistry.test.ts`
+refuses a credential read anywhere in `server/`, `scripts/` or the workflows
+that no entry declares, so a future integration cannot be wired around it.
+
+- **Health is one reading for all** (`health.ts`): each credential present and
+  well-formed where it lives, then the probe (none sends anything): CONNECTED,
+  CONFIGURED, REPAIRING (Brain supplies what is missing), NEEDS_OWNER, REFUSED
+  (malformed, expired, revoked or restricted — the owner's action), UNREACHABLE,
+  NOT_IN_USE. Readings and repairs are append-only rows in `integration_events`
+  (SQLite 145 / pg 136), never values.
+- **Repairs are `integrations.yml`, hourly.** It generates the deployment's own
+  keys, copies each `GITHUB_SECRET` credential from the same-named repository
+  secret when the machine lacks it or its fingerprint changed, opens a
+  credential a session sealed from an authorized connector, applies all of it
+  in one restart, records each repair, and records a full check. Values cross
+  only pipes into `flyctl secrets import`.
+- **A connector's credential is sealed, never pasted.** The deployment holds an
+  RSA seal key it generated; a session holding the owner's connector encrypts
+  the credential to its public half, and only the machine can open it, so the
+  ciphertext may pass through a workflow input. Nothing a person handles.
+- **A held key selects its provider.** An Instantly key with no selection is an
+  Instantly deployment, and a Stripe key a Stripe one (`derived: true`); an
+  explicit selection still wins. Grants still gate every effect.
+- **A connected project's service is reached through it, not copied.** V2 serves
+  `/api/brain/places`, which accepts only a request signed with the
+  deployment's generated Ed25519 key, whose public half V2 pins in
+  `src/lib/brainBridge.ts`; the Google key never leaves V2. Each search is
+  recorded before it is sent and refused past 24 a day, inside Places' free
+  monthly allowance at one search a Neighbor Card pass.
+- **One page.** `/integrations` (Brain administrators): every service, the
+  components that use it, its health, missing credentials, Brain's repairs and
+  the owner's actions, with "Check now".
+- **Brain keeps its own clock** (`integrations/loop.ts`). GitHub's scheduler
+  fired the hourly Neighbor Card workflow twice in eight hours, so the Brain
+  process runs the health check and the Neighbor Card pass itself, each hourly
+  from its last recorded row (deploys restart the process several times an
+  hour). The workflows stay as a second door; credential repairs that write
+  deployment secrets remain the workflow's, since the machine holds no Fly token.
+
+**Owner's order, 2026-11-12: scale the Neighbor Card end to end.** The pass
+read one Places search, two chamber categories and three map tiles an hour,
+and found about six addresses a pass, while twelve healthy senders offered
+930 a day. The pass now runs every quarter hour (`NEIGHBOR_CARD_PERIOD_MS`),
+and reads three Places searches, four chamber × category pairs (the
+Mechanicsburg and Carlisle chambers share GrowthZone's slugs) and six map
+tiles at once (`PER_PASS`), rotating by the quarter hour over 600 Places
+queries; the Places daily ceiling stays the spend guard. Google's 403 on V2's
+key carried `PERMISSION_DENIED` and no reason code, which names no setting, so
+V2's bridge now passes on Google's one-line message (key and links removed)
+and `googleRefusal` prints it.
+
+## 104. An open-source agent answers one narrow question, and Brain keeps the prospect, the decision and the record.
+
+**Owner's order, 2026-11-12.** "Install and operationalize proven open-source
+agents to accelerate Brain's revenue generation. Evaluate Hermes Agent,
+Sellbird (formerly Harvey), Skyvern, Browser Use, and OpenOutreach. Select
+complementary capabilities, not duplicate agents … Connect each agent through a
+narrow, callable interface to Brain. Give Brain ownership of opportunity state,
+task routing, results, and revenue records."
+
+**The evaluation** (each read at its repository's head, 2026-11-12):
+
+| agent | what it is | decision |
+|---|---|---|
+| Sellbird 0.4.0 (AGPL-3.0) | a prospecting pipeline: discover, read a business's own pages, find who decides, learn its address pattern, write and send | **Selected for its reading half only.** Its people and inbox finders (named owners from cards, prose and schema.org; hidden-address decoding; own-domain checks) are what the Neighbor Card's plain reader lacks. Its writer and sender are not used: Brain writes the copy and sends through Instantly under its own grants (§94). |
+| Browser Use 0.13.14 (MIT) | an LLM driving a real Chromium | **Selected, read-only,** for sites plain HTTP cannot read (a JavaScript shell, a challenge). 0.13 rather than 1.0: 1.0's engine has the model write Python in a REPL, which a 4B model on the existing GPU does badly and which cannot be restricted to reading. |
+| Skyvern | another LLM browser agent (vision, its own Postgres and server) | **Not selected:** it duplicates Browser Use and needs a vision model and a database Brain would not own. |
+| Hermes Agent | a general agent framework: memory, skills, schedules, messaging gateways | **Not selected:** Brain already owns orchestration, scheduling, memory and dispatch (§23, §56, §87); a second orchestrator is the duplicate the order forbids. |
+| OpenOutreach | LinkedIn automation through a logged-in browser | **Not selected:** LinkedIn's terms forbid automated use (`LEGAL_RISK`), it needs the owner's own login, and it would be a second outreach channel beside Instantly with none of its grants. |
+
+**The shape.**
+
+- **One private CPU app** (`agents/`, `northline-agents` on Fly, Flycast only,
+  stopped when idle): neither agent needs a GPU. Browser Use thinks with the
+  RunPod vLLM Brain already pays for (`browserModel`: the GPU, else the cheap
+  lane's named model), sent per request; the app holds no model key. Deployed by
+  `agents.yml` (`deploy`: build, run the service's tests inside the image, push,
+  replace the machine, a fresh key for both sides, one Brain restart).
+  Not `flyctl deploy`: one workflow ships the Brain.
+- **Two calls** (`server/services/agents/client.ts`), each a USAGE row under
+  `open-source-agents` in `integration_events` with addresses masked:
+  `POST /v1/sellbird/contacts {website}` and `POST /v1/browser/contact {website, llm}`.
+  Bearer key, compared in constant time, one refusal for every failure.
+  Unset, every call is a no-op and the callers are exactly as before.
+- **Brain takes only what a business published.** `pickSellbird` takes a named
+  owner's or manager's address only when it appears on the site's own pages
+  (then the greeting uses the first name), else the published inbox; a pattern
+  guess is never taken. The browser's claimed address is looked for again in
+  the HTML of the page it cites (`verify_on_page`) and taken only when found and
+  on the business's own domain — a small model invents plausible addresses.
+- **The browser agent cannot act.** Typing, keys, uploads, dropdowns, arbitrary
+  JavaScript, web search and files are removed from its tools; `allowed_domains`
+  is the business's own domain. Contacting, buying and committing stay behind
+  Brain's grants and the effects engine (§20, §94), unchanged.
+- **Where it runs in the revenue path.** The Neighbor Card refill (§103's hourly
+  pass, in-process and the workflow door) asks Sellbird only about a site the
+  plain reader found no address on (`BRAIN_AGENTS_SELLBIRD_PER_PASS`, default
+  40), and Browser Use only when Sellbird read one page or a challenge
+  (`BRAIN_AGENTS_BROWSER_PER_PASS`, default 2). The pass's line reports
+  `agents: Sellbird found/asked, Browser Use verified/asked`. What either finds
+  goes through the same mail-server check and `skip_if_in_workspace` as every
+  other address.
+- **Proof** is `agents.yml prove` (`scripts/agents-prove.ts`): Sellbird on real
+  businesses the plain reader missed, Browser Use on one site, from the deployed
+  Brain over the private network; it sends nothing.
+
+## 105. An industry is never excluded, and a goal's constraint ends with the goal.
+
+**Owner's order, 2026-11-12.** "Government contracts, federal opportunities,
+and other industries are NOT permanently excluded. The current $10K sprint
+prioritizes opportunities that can generate money within the 30-day window.
+Evaluate every opportunity by its actual economics, time to revenue, and
+feasibility — not by its industry. A government-related business that can
+generate revenue tomorrow is eligible. A business requiring 90 days may be
+unsuitable for this particular sprint but remains eligible for longer-term
+goals. Do not turn temporary goal constraints into permanent Brain-wide
+exclusions."
+
+What was wrong. The $10K goal's words ("no government contracts") switched on
+a `GOVERNMENT_CONTRACTING` class in `services/cash/exclusions.ts`, and from
+there the exclusion reached further than the goal:
+
+- **Every opening of a kind, not one goal's.** The class matched any
+  government buyer: SAM.gov, `.gov`, an RFP, a county department. That made it
+  an industry ban, when the sprint's real limit was time to cash, which
+  `isCompetitiveAward` and the goal's window already measure for any buyer.
+- **The project's shared discovery.** `unionOf` gave every discovery question
+  in the project the exclusions of *any* live goal, so one goal's constraint
+  narrowed what the whole project searched.
+- **After the sprint.** `goalExclusions` read the sprint's operator additions
+  whatever the sprint's state, so a wound-down sprint kept binding later goals.
+- **Called permanent.** `retireListings` filed a goal's exclusion among the
+  "reasons no later fact reverses".
+
+What it is now:
+
+- **No industry class.** `GOVERNMENT_CONTRACTING` is gone from the
+  vocabulary, so the $10K goal's stored government words exclude nothing. The
+  owner's text is kept as written (§5). A government opening is judged like any
+  other: its economics, when the money arrives, and whether Brain can deliver
+  it. A long award cycle ranks lower for this sprint by its timing and stays
+  eligible for longer goals. A regulated industry was already never a class
+  (COM-13-5); the rule is now general.
+- **A play a goal's owner names binds that goal only.** Website repair and
+  domain speculation remain classes because the $10K owner named them for that
+  goal. Discovery shares only what *every* live goal excludes (`commonTo`), the
+  same rule a dive already followed (`notWorthResearching`).
+- **A sprint's words bind only while it is ACTIVE.**
+- **Nothing was rewritten to correct the records.** Opening rows were never
+  moved out of play. An exclusion is re-read on every pass, so the openings it
+  had screened are judged afresh from this release. Research released earlier
+  stays released, with its history (§5). The opening is dived again when a
+  goal's plan or discovery reaches it.
+- **Preserved.** The Weekly Bid Digest (`businesses/bid-digest/`) is a federal
+  contracting business and stays in the portfolio.
+
+Recorded in the plans that state the old exclusion
+(`docs/CASH-10K-PLAN.md`, `docs/CASH-10K-PLAN-2026-11-09.md`,
+`docs/CASH-10K-BRAIN-PLAN.md`) and in the research notes under
+`fast-cash/10k/`. Tests: `tests/fastCashScope.test.ts`,
+`tests/goalDiscoveryBreadth.test.ts`, `tests/economicMechanisms.test.ts`,
+`tests/goalEstimatedArrangements.test.ts`.
+
+## 106. Brain has one general operator, and its hands are Brain's own operations.
+
+**Owner's order, 2026-11-12.** "Give Brain an autonomous AI operator that directs
+ALL its goals and businesses. Do not build a new agent framework from scratch …
+Start with OpenClaw and compare other suitable alternatives … No paid model APIs
+… The agent must use Brain's EXISTING systems … Do not give the agent
+unrestricted production or financial authority."
+
+**This is a recorded correction to §104,** which declined Hermes Agent the same
+morning because "Brain already owns orchestration … a second orchestrator is
+the duplicate the order forbids". The owner now asks for exactly one agent that
+*directs*. It is admitted on §104's own terms: it owns no schedule, queue,
+state or authority. Brain's tick starts it, its memory is Brain's rows, and its
+only hands are Brain's operations behind Brain's policy.
+
+**The evaluation** (each read at its repository's head, 2026-11-12; source cloned and run, not read about):
+
+| agent | what it is | decision |
+|---|---|---|
+| **Hermes Agent** v0.23.1 (Nous Research, MIT) | an agent runtime: tool-calling loop over any OpenAI-compatible endpoint, MCP client (HTTP + headers, per-server tool filter), persistent memory (`MEMORY.md`/`USER.md`) and self-written skills (procedural memory), fallback providers, a scripted one-shot (`chat --oneshot --format stream-json`), a published image pinned by digest with exact-pinned dependencies | **Selected.** Planning and execution, tool use through MCP, memory and continuation, and a one-shot mode Brain can schedule are all demonstrated in its own tree and were run here end to end against a real Brain. Python, like `agents/`. |
+| OpenClaw 2026.11.3 (MIT) | a multi-channel personal-assistant *gateway* (WhatsApp/Telegram/…), its own Postgres state families, cron, a skills marketplace | **Not selected.** Its centre is messaging channels and its own state store — a second database and scheduler Brain would not own, and a published CVE let external sites hijack a local gateway over WebSocket. Nothing it adds over Hermes is something Brain needs. |
+| Goose (Block) | MCP-native CLI agent, recipes, headless runs | Close second; no first-class persistent memory or self-written skills — the "preserve what it learns" requirement would have been built by hand. |
+| OpenHands | a software-engineering agent in a sandbox | Duplicates Factory (§27, §58), which already builds, reviews and releases Brain. |
+| Letta | a memory-first agent server with its own Postgres | Its memory is its database, not Brain's; a second state store (invariant 12). |
+
+**No paid model API.** The operator thinks with capacity Brain already has
+(`operatorModels`): the free-provider switchboard (OmniRoute, §85) first, the
+RunPod GPU last, each the next one's fallback, sent per run — the app holds no
+model key. Hermes refuses a window under 64K tokens; the GPU serves Qwen3-4B at
+32K with no tool-call parser, so until its recipe changes it is a fallback only.
+No Claude, OpenAI or Perplexity API is called.
+
+**The shape.**
+
+- **One private CPU app** (`operator/`, `northline-operator`, Flycast only,
+  stopped when idle): the published Hermes image by digest plus
+  `operator/server.py` (standard library). `POST /v1/operator/run` writes a
+  throwaway `HERMES_HOME` (config, memory, a `.env` for the run's keys), runs
+  `hermes chat --oneshot --format stream-json` and streams NDJSON back so the
+  request stays live; the home is deleted after. Deployed by `agents.yml
+  operator-deploy` (tests inside the image, fresh key for both sides).
+- **Brain starts every run** (`services/operator/run.ts`, the Russell tick's
+  `operator` pass, hourly, `BRAIN_OPERATOR_INTERVAL_MINUTES`): never overlapping,
+  a run left RUNNING by a restart is finished FAILED after 30 minutes. Hermes'
+  cron, gateway and dashboard are not run.
+- **A credential per run.** The `brain-operator` worker holds `OPERATOR_SCOPES`
+  (`project:read`, `research:read`, `queue:read`, `operator:act`) on every
+  project; Brain mints a `brnw_` credential that expires with the run and
+  revokes it when the run ends. The agent reaches Brain only through `/mcp`
+  over the private network, authenticated and authorized like any worker (§17,
+  §21). It holds nothing between runs.
+- **Its hands are ten tools** (`mcp/operatorTools.ts`, in the one registry),
+  filtered by name in Hermes' config and kept eager (no tool-search bridge):
+  read — `brain_operator_goals`, `_goal` (blockers, open requests with their
+  mission and packet state and a `moot` reading), `_goal_plan` (the planner's
+  stored reading: strategies, simulated reach, conservative settled cash, the
+  next test — §95, §99, §102), `_capacity` (§98's pools), `_integrations`
+  (§103's registry with health), `_history` (its runs, actions and lessons); act — `_withdraw_moot_request`,
+  `_continue_idle` (§98's continuation), `_submit_fix` (Factory on the owner's
+  standing improvement order, §87, with §58's LOW-risk release when a person
+  set that order; `RELEASE_EXCLUDED_PATHS`, review and the gate unchanged),
+  `_record_learning`. Each action re-checks its own rule; a wrong choice is
+  refused with why. Hermes' own toolsets are memory, skills and a task list —
+  no shell, files, browser, web or code execution.
+- **Memory is rows.** `operator_memory` (migration 146 / pg 137) holds the
+  memory files and skills Hermes wrote; sent with every run, replaced by what
+  it returns, bounded and path-checked. `operator_learnings` is append-only.
+  `operator_runs` records each run's model, tools called and report, and an
+  `OPERATOR_RUN_FINISHED` event sits beside it.
+- **What it may never do:** spend, contact anyone, approve a plan, publish,
+  merge outside §58's grant, or change a permission. Those stay behind the
+  grants, the effects engine and a person, unchanged.
+
+**The first blocker it was built against.** The $10K goal read BLOCKED on four
+"accept a report with unresolved questions" cards since 2026-11-08. Each was
+answered by §80's routine decision, the answer failed because the mission had
+already left NEEDS_HUMAN, `answered-requests` reopened it, and the next tick
+answered it again — a loop holding a goal on a decision nobody can make.
+`moot()` names that state from the rows (a research card whose mission is not
+NEEDS_HUMAN can never be applied, since every answer begins by moving the
+mission out of NEEDS_HUMAN); withdrawing it keeps the row, and a packet still
+parked is then reached by `answerUnaskedParks` / `concludeUnworkablePackets`,
+which act only on a park no open card covers.
+
+**What the first production day taught it** (each a row, each fixed in the owner
+named): a run that began during a deploy's restart reached nothing (a 12-minute
+boot grace); the GPU fallback answered HTTP 400 (no tool-call parser — the GPU
+stays out until `BRAIN_OPERATOR_GPU=on`); deriving every goal inside an MCP call
+ran past the 180 s limit and, with the pool at 8/8, could not check out a
+connection at all. So Brain reads the goals once per run in its own process —
+a light reading (register and requests, retried under pool pressure) always,
+the full derivation within a bound when it can — states every goal id and moot
+request id in the brief, and serves the read tools from that one reading.
+`operator show` prints the MCP audit rows (§17) and each failed tool's refusal
+line, which is how each of these was found.
+
+A run that outlived a Brain restart was still lost: Fly's proxy autostop counts
+connections, the restart dropped the only one, and at 20:56 the proxy stopped
+the operator machine under opr_59db70fd — the run and its kept result with it
+(the collector's `GET /v1/operator/runs/:id` answered 404 on the fresh boot). So
+the operator app is deployed with proxy autostop off and stops itself
+(`stop_when_idle`) only when no run holds its lock and nothing has asked it for
+anything for 20 minutes — long enough for a restarted Brain to collect.
+
+`npm run operator -- show | run | probe` (and `agents.yml operator-show |
+operator-run | operator-status`). Tests: `tests/operator.test.ts`,
+`operator/tests/test_server.py`.
+
+## 107. Sellbird's whole sales mind works every business, and Brain still decides, sends through Instantly and keeps the record.
+
+**Owner's order, 2026-11-12.** "You installed Sellbird but only connected its
+contact-finding features. I want the COMPLETE Sellbird system integrated into
+Brain … Connect everything to Brain's existing systems. Instantly remains
+responsible for sending emails. Use our existing self-hosted/free AI
+resources … Make the capabilities available across ALL applicable Brain
+businesses … If a capability cannot be integrated, explain the specific
+reason."
+
+**The seam.** Sellbird thinks through `sellbird.brain.Brain`, which runs the
+Claude or Codex CLI — or any `transport(prompt, *, agent, task, timeout,
+expect_json)` it is given. `agents/brain_agents/sales.py` gives it one that
+calls Brain's own model (the RunPod vLLM; else the cheap lane's named free
+model, `browserModel`), with `/no_think` and any `<think>` block removed before
+Sellbird reads the answer. No paid model API exists anywhere in the path. Each
+request runs Sellbird's own classes against a throwaway state seeded with what
+Brain holds, and returns the answer; the agents app keeps and sends nothing.
+
+**Where each capability lives** (Sellbird at `25ec839`, every module read):
+
+| Sellbird capability | where it runs for Brain |
+|---|---|
+| Business research: `collectors/profile.ProfileCollector` (tools, ads, agency, schema, stale sitemap, robots, hiring boards via `collectors/ats`, YC/accelerator/funding), `site_facts`, `startups.startup_facts`, `integrations/tech_detect` | `/v1/sellbird/research`; every Neighbor Card lead the desk researches, recorded in `sales_leads` |
+| Decision makers and their published addresses: `Scout._scrape_team_page` / `collectors/people.find_people`, `_resolve_email`, `_find_inbox_address` | `/v1/sellbird/contacts` (§104) and inside research; the greeting uses a published decision maker's first name |
+| Qualification and prioritization: `fit.company_fit` (sector, decision maker, reachability, hiring) and the do-not-contact rule | research returns the 0-100 fit and its reasons; refill drops a refused lead and writes for the best fit first |
+| Personalized writing: `Writer._write_personal_email` (facts fenced as untrusted, the signal playbook's relevant part, the offer block, learned feedback), `humanize`, `Writer._keep_to_rules` / `email_style.style_problems`, `gate.autopilot_review` | `/v1/sellbird/write`; the Neighbor Card's personal variant (`… · personal`) carries it as `{{sb_subject}}` / `{{sb_body}}`; Brain also holds any draft quoting a figure the business never stated (`ungroundedFigures`) |
+| Sequences and follow-ups: `Writer._write_sequence` (3 steps, days 0/3/7, Instantly merge variables) | `/v1/sellbird/sequence`, for a campaign variant test; Instantly runs the sequence and stops on reply and for the company |
+| Reply analysis and handling: `Handler._process_reply` — `_opt_out_reason` (English, Spanish, French, Hebrew; before any model call), `_escalates`, `_classify_intent`, `_determine_stage`, `_generate_response` with objection handling, `booking_instruction`, its pre-send and autopilot gates | `/v1/sellbird/reply` with Sellbird's Instantly client replaced by a recorder; the sales desk acts on the decision (below) |
+| Engagement and sales progression: the stage machine (initial_outreach → engaged → qualifying → presenting → negotiating → closing / closed_lost), stop-the-company on reply, accepted-offer handoff | `sales_replies.stage`; Instantly's lead interest status set from the intent; an accepted offer is held for fulfilment (Brain's handoff) |
+| Suppression: `Handler._suppress`, `gate.do_not_contact_match` | the workspace block list in Instantly (every campaign), plus each business's `doNotContact` list in Sellbird's config |
+| Campaign optimization and performance learning: `agents/analyst._generate_insights`; Sellbird's writer feedback block | the desk's six-hourly `learn`: the analyst over Instantly's counts and Brain's intents (`sales_learnings` ANALYST), what prospects asked fed to the writer (WRITER_FEEDBACK), and the personal-vs-template split moved by positive replies per send (ALLOCATION) |
+| Product knowledge: `trainer.Trainer` (product facts, ICP, competition, objections and answers) | `/v1/sellbird/knowledge` over each business's own facts weekly (KNOWLEDGE); its objections reach the reply handler |
+| Offer design: `offer.suggest_offers` | `/v1/sellbird/offers` |
+| Deliverability: `deliverability.check_mx/spf/dmarc/dkim/check_domain_blocklists` | `/v1/sellbird/deliverability`, every sending domain daily (DELIVERABILITY) |
+| Prompt-injection defence: `untrusted.fence`, `UNTRUSTED_RULE` | inside every Sellbird prompt as Sellbird builds it |
+
+**Not integrated, and why.**
+
+- *Sending and the mailbox side* (`agents/sender.py`'s outbox and approval ladder, `integrations/gmail.py`, `microsoft.py`, `smtp_mail.py`, `mailboxes.py`, `send_window.py`, the warmup ramp, `trulyinbox.py`, bounce handling and the bounce kill switch, `signature.py`): Instantly sends, schedules, warms, tracks bounces and pauses on bounce protection; a second sender is what the owner ruled out.
+- *Discovery that costs money* (Serper, DataForSEO, Scavio, Hunter beyond its free tier, ZeroBounce, Reoon, Cloudflare Browser Rendering): no money is spent without the owner turning it on (invariant 18). Brain's own discovery (OpenStreetMap, chambers, Places within its ceiling) feeds the desk instead; Sellbird's free OSM provider would duplicate it.
+- *SMTP address verification and pattern guessing* (`email_finder.find_email`): port 25 is closed on cloud hosts and a guessed address is not one a business published (§104); Brain checks MX itself.
+- *LinkedIn* (`integrations/linkedin.py`, the LinkedIn scout strategies): automated use breaks LinkedIn's terms (`LEGAL_RISK`) and needs the owner's personal login.
+- *Precleared* (`integrations/precleared.py`, a cold-email legality API): paid beyond a small free allowance and written for native sends; every campaign here is US B2B under CAN-SPAM with the address and opt-out in every message.
+- *Calendar booking* (`integrations/calendar.py`): a placeholder in Sellbird that does nothing; replies use `booking_instruction`'s "ask preference".
+- *Handoff over MCP* (`handoff.py`): Brain's handoff is its own fulfilment record (`FULFILL`); a business whose deliverable is an image, a PDF or a generated sample cannot be sent in a text reply from Brain, and the expansion samples are built by `businesses/*/build` outside the Brain image (`operate.py fulfill`).
+- *Dashboard, tray, MCP server, CLI, setup wizard, export, extensions* (`dashboard*.py`, `web/`, `desktop/`, `mcp_server.py`, `cli.py`, `setup.py`, `export.py`, `extensions.py`): no administration page (invariant 35); Brain's own surfaces read `sales_*` rows.
+- *Claude/Codex runtimes and quota* (`claude_runtime.py`, `codex.py`, `integrations/quota.py`, `usage.py`): replaced by the transport to Brain's own model.
+
+**The rest of Sellbird, module by module.** Used in-process as the machinery
+the capabilities above stand on: `config` (`SellbirdConfig` built per business
+by `build_config`), `models/prospect`, `models/company`, `models/conversation`,
+`models/campaign`, `state` and `storage` (a throwaway SQLite per request),
+`signals` (the catalog seeded so observations validate), `paths`, `home`,
+`workspace_home`, `textio`, `logsafety`, `public_http` (the profile collector's
+public-address-only HTTP client). Replaced by Brain's own counterpart, because
+running both would give one job two owners: `main` and `pipeline` (Sellbird's
+heartbeat and stage loop — Brain's integrations tick runs the desk),
+`collectors/discover` (Brain's discovery), `integrations/instantly` (Brain's
+Instantly provider calls the API; Sellbird's client is the recorder in
+`handle_reply`), `integrations/mail_provider` (its `strip_quoted_reply` still
+runs inside the handler), `sending_mode`, `send_hooks` and `legacy` (Sellbird's
+approval and hold switches — Brain's rules decide what is sent),
+`agent_policy` and `mcp_install` (Sellbird's own agent door — Brain has its own,
+§21), `register` (Brain's `sales_leads` is the register), `secrets` and
+`pidfile` (a desktop keychain and process lock). The interactive surfaces —
+`dashboard`, `dashboard_auth`, `dashboard_instance`, `inbox_cli`,
+`inbox_routes`, `desktop/tray`, `desktop/login_item`, `desktop_cli`, `cli`,
+`setup` — are covered by invariant 35 above.
+
+**What Brain does with a reply** (`server/services/sales/desk.ts`, every
+quarter hour from the integrations tick, and `agents.yml sales`): read every
+received email on every business's campaigns once; Sellbird decides; then —
+opt-out: the workspace block list and interest −1, nothing sent; escalation or
+a person needed: left for the owner, nothing sent; accepted offer, or an answer
+promising what a text reply cannot carry: `FULFILL`, nothing promised; an
+answer for an interested lead, a question, an objection or a wrong person: sent
+in the thread from the mailbox that received the reply, signed with that
+account's own name — only when the business lets Brain answer (never the
+owner's own campaigns), nobody answered the thread already, and every figure in
+it is one the business states. One row per reply in `sales_replies`, keyed by
+Instantly's email id, so a second pass repeats nothing; a reply the model could
+not answer is left for the next pass, unrecorded.
+
+**Who is on the desk** (`server/services/sales/businesses.ts`): the Neighbor
+Card (template and personal variant), Brain's buyer outreach, Grant Prospects,
+Bid Digest and Accessibility Audit (answered by Brain), and the owner's AI
+Dispatch (read, suppressed, never answered). The expansion businesses' first
+emails already carry a finding computed for each prospect (`{{teaser}}`), so
+their personalization is that; Sellbird reads and answers their replies.
+
+**Records.** `sales_leads`, `sales_replies`, `sales_learnings` (migration 147 /
+pg 138); every agents call is a USAGE row under `open-source-agents`.
+
+`node --import tsx scripts/sales-desk.ts [--prove]`; `agents.yml sales |
+sales-prove`. Tests: `tests/salesDesk.test.ts`, `agents/tests/test_sales.py`.
+
+**What the first production runs corrected (2026-11-12).** Three defects
+showed only on real data. Instantly allows 20 requests a minute with no
+`retry-after`, and the shared client's 2–16s backoff spent all five tries
+inside one minute, so the reply pass lost every thread read: a 429 now waits
+20s, doubling. Sellbird's classifier read auto-responders ("no longer
+monitored", "automatic reply") as unsubscribes; an opt-out the model alone
+inferred from automated wording is now recorded and kept off the block list,
+while Sellbird's phrase rules still suppress whatever surrounds them. And the
+Neighbor Card's writer led with website gaps (no JSON-LD, Squarespace) that are
+no reason to buy a postcard: a business's `siteFacts` says whether its writer
+hears anything about the prospect's website. A failed draft's reason now names
+what the model calls returned, because "no usable draft" hid a 404 from a model
+name the pod had stopped serving.
+
+The fourth was the worst, because it looked like caution. Instantly v2 ignores
+`thread_id` as a filter on `/emails` and answers with the workspace's latest
+fifty emails, so every reply's "thread" held a later email of ours to some
+other lead: the desk read each one as already answered and held it, and fed
+other leads' mail to the model as this lead's history. `threadOf` asks with
+`search=thread:<id>` and keeps only messages carrying that id. The replies held
+for that reason did nothing, so each is read once more as a second row keyed
+`<email id>#reread`; the first row is never rewritten, and the corrected desk
+words its own hold differently so a true one is final.
+
+## 108. A model is chosen by what it does on Brain's work, and a decision is judged by what it predicted.
+
+**Owner's order, 2026-11-12.** "Make Hermes fully operational … automatically
+build the right RunPod infrastructure … benchmark multiple candidate models
+against representative REAL Brain tasks … select based on measured
+performance … improve Brain's decision-making … dynamic resource and project
+allocation … automatic self-improvement … keep costs economically rational …
+prove the full system on the $10K goal."
+
+**What production showed first** (`agents.yml operator-show`, 2026-11-12):
+the operator had not completed one useful run. Its runs failed on the GPU
+(HTTP 400 `"auto" tool choice requires --enable-auto-tool-choice and
+--tool-call-parser`, opr_540994dd, opr_c2f2294d), on the free switchboard's
+`brain-a` combo (one provider's gpt-oss-120b: HTTP 429 per-minute limits,
+opr_7af304c3; "conversation grown too large", opr_1184fee7), on a saturated
+database pool (opr_8f2520b2), and by inventing a goal id (`wst_dummy`,
+opr_5334b9d8). The RunPod account held $15.48 at $0.196/h — about 79 hours
+of runway, on a pod RunPod deletes at zero (as it did 2026-11-10).
+
+**A model is measured on Brain's own work** (`cheap/modelBench.ts`). Nine
+tasks, built from those production rows and scored by code, not by another
+model's opinion: diagnosing the operator's real failed runs; a multi-step tool
+plan over the operator's real tools and real goal readings (read the goal,
+read its plan, withdraw the moot request, report — an invented id scores
+zero); recovering when Brain answers "temporarily busy" or refuses a missing
+argument; judging a real opening card with no payer and no price beside one
+with both; choosing between the $10K plan's real competing reconstructions
+and naming the test; catching "p50 $131,700, so $10K is likely" against a
+1.5% coverage reach; and answering a validator refusal seen seven times with
+an engineering fix rather than a retry; finding the one pool-exhaustion run in
+~35K tokens of operator history (long context); and the SQLite-passes,
+Postgres-throws `SELECT DISTINCT … ORDER BY MAX(x)` defect the conventions
+record (code). Each records score, tool calls made
+and correct, latency, tokens and dollars per task at the measured parallel
+throughput. `chooseModel` gates on the tool tasks (an operator that cannot
+call tools directs nothing), then takes the cheapest within 0.05 of the best
+quality. Staged: today's models first (`baseline`), then candidates one
+temporary pod at a time (`runpod-bench`, pods named `brain-bench-*`, deleted
+in `finally`, swept hourly by `runpod-restore` if a run was cancelled).
+
+**Pods are recipes** (`cheap/runpodRestore.ts` `RECIPES`): model, served name,
+GPUs, image, CUDA, window and vLLM flags — every new recipe names its
+tool-call and reasoning parsers and a window of 64K or more, so the 4B's
+defect cannot be reproduced on a dearer card. `runpod-upgrade` moves the GPU
+to a recipe with no gap: the new pod beside the old, waited on, probed
+(`runpod-probe.ts` now makes a structured operator tool call and prints
+`TOOLS on|off` and `CONTEXT n`), connected, and only then the old pod retired,
+so Brain owns one pod before and after. A card cannot change on an existing
+pod, which is why the upgrade is a replacement rather than a repurpose.
+
+**Spending.** No pod above `RUNPOD_MAX_USD_PER_HOUR` (default $0.24 — the
+existing authority) is kept; no benchmark pod starts while the account's spend
+plus the new pod would pass `RUNPOD_MAX_TOTAL_USD_PER_HOUR` (default $0.45) or
+the balance would last under a day; `runpod-restore` reports the runway every
+hour and warns under 72 hours (`runpodAccount.ts`).
+
+**The operator's models are ordered by what they did** (`rankOperatorModels`):
+each model's operator runs that finished DONE (Laplace-smoothed) averaged with
+the benchmark's tool score, never a fixed list. The switchboard route the
+benchmark measured best for tool use (`OPERATOR_FREE_ROUTE`,
+`auto/best-coding`) is tried before the `brain-a` combo; the GPU joins when
+the connect step's probe passed its tool check (`BRAIN_RUNPOD_TOOLS=on`), with
+its served window sent to Hermes as `context_length`.
+
+**Decisions are reviewed, challenged, predicted and judged**
+(`domain/decision.ts`, `operator/decisions.ts`) — on the forecast ledger
+Brain already keeps (§87's `quant/ledger.ts`), not beside it.
+`brain_operator_decide` takes a question, at least two meaningfully different
+options (any variable may change — price, segment, channel, structure,
+financing, geography, timing, allocation, or doing nothing), each with
+probability, value and cost (null when unknown, never zero) and evidence; the
+chosen one, the assumptions, and a prediction with a horizon. It refuses a
+choice of one, unnamed assumptions, and a lower-expected-value choice without
+a reason (an experiment buying information is a reason). A high-impact or
+irreversible decision is attacked by a second model (hidden assumptions,
+missing variables, a stronger alternative); a REVISE is returned uncommitted
+until the operator answers it. The prediction is a ledger PREDICTION with
+comparable key `operator:<kind>`. `brain_operator_verify` records the outcome
+once, with the causes its signals support, and returns the operator's record
+for that kind — calibration only over ten or more comparable outcomes; a
+single miss is investigated by its cause, not read as miscalibration.
+
+**Allocation is by marginal value** (`domain/allocation.ts`,
+`operator/allocation.ts`, `brain_operator_allocation`): every goal is an
+activity read from its rows — remaining stake, its plan's reach (coverage is
+marked as not a probability), evidence ladder, days left, the research it
+consumed in the window and what that bought (sourced claims, openings), reach
+movement — and ranked by the value of the next unit of capacity, cash plus
+information. Shares are proportional, not equal; no cap on activities; a
+barren one is recommended PAUSE, a paused one worth it RESTART.
+`brain_operator_set_goal_focus` pauses or resumes through `goals/decide.ts`
+under a committed decision of that kind, never a goal committed to a customer
+or to somebody (those are a person's to pause).
+
+**Self-improvement uses the doors Brain has:** a recurring defect or missing
+capability goes to Factory (`brain_operator_submit_fix`, §87's standing
+order); a weak model is demoted by its own run record and the benchmark; an
+underperforming approach is a `STOP_APPROACH` or `CHANGE_STRATEGY` decision
+whose prediction is judged later.
+
+**What was measured and chosen** (2026-11-12, runs 43285247214, 43289119187,
+43309470657; scores 0–1 by code):
+
+| model | where | quality | operator tool calls | median | cost |
+|---|---|---|---|---|---|
+| `auto/best-coding` | free switchboard | 0.98 | 15/15 correct, recovered from "busy", withdrew the moot request | 22 s | $0 |
+| Qwen3-4B, 32K, no parser | the pod as it was | 0.65 | 0 — HTTP 400 on every call | 16 s | $0.0006/task at $0.19/h |
+| `brain-a` (one provider's gpt-oss-120b) | free switchboard | 0 | HTTP 429 on every call | — | $0 |
+| gpt-oss-20b | new A5000 pod, $0.22/h | — | never served in 40 min; pod deleted | — | ~$0.15 spent |
+| Qwen3-8B-AWQ, FP8 KV, 64K | the pod, repurposed | — | listed its model, every chat HTTP 500; stepped down | — | — |
+| **Qwen3-4B-AWQ, 64K, hermes parser** | **the pod, repurposed** | probe: chat 5.1 s, tool call 2.5 s, 4/4 parallel, ~10K prompt 2.1 s | **structured tool call correct** | — | unchanged $0.19/h |
+
+The operator thinks first with the measured route (`auto/best-coding`, free),
+then the GPU (now tool-capable, 64K) as its fallback — ranked by their own run
+records from there on. No 24 GB card was in stock within the $0.24/h ceiling;
+a stronger GPU model is a re-run of `runpod-bench` when one is, and a 48 GB card
+is the owner's decision (see below).
+
+**Remaining limitations** (2026-11-12):
+
+- The RunPod balance ($15.48 at $0.196/h, ~79 h) is the binding constraint on
+  any GPU change; topping it up is the owner's (a payment), and RunPod deletes
+  every pod at zero.
+- 24 GB community cards within the $0.24/h ceiling were out of stock on both
+  clouds at 19:00Z; a 48 GB card (A6000 $0.33/h, A40 $0.35/h) is above the
+  existing per-pod authority and is not used without the owner raising
+  `RUNPOD_MAX_USD_PER_HOUR`.
+- Calibration is reported only over ten or more judged decisions of a kind;
+  until then each miss is investigated by its cause.
+- The operator may not spend, contact anyone or approve a plan (§106): revenue
+  still moves only through Brain's own outreach (Instantly, §94) and a buyer
+  paying. Settled cash is $0 of $10,000.
+
+Tests: `tests/modelBench.test.ts`, `tests/operatorDecisions.test.ts`,
+`tests/runpodRestore.test.ts`. Runs: `cheap-lane.yml runpod-survey |
+runpod-bench | runpod-upgrade`; `agents.yml operator-prove`.
+
+## 109. The operator directs engineering, and a merged pull request is not the improvement.
+
+**Owner's order, 2026-11-12.** "Hermes must act as Brain's executive operator,
+diagnosing weaknesses in Brain's reasoning, software, strategies and operations,
+then directing engineering resources to fix them without owner intervention …
+REUSE THESE SYSTEMS. DO NOT BUILD A PARALLEL FACTORY … Do not turn every problem
+into a coding assignment … Do not treat a merged pull request as proof that
+Brain's reasoning or commercial performance improved."
+
+**What was missing.** §106 gave the operator `brain_operator_submit_fix`, which
+called `submitObjective` and `approveAndStartCampaign` directly: no register row,
+so naming the defect twice was deduplicated only by title; no priority beyond
+Factory's defaults; no worker class; no measurement after delivery; and nothing
+came back — the operator never learned whether its fix shipped, let alone
+whether the goal moved. §87's loop had all of the missing half (one row per
+defect, research-before-engineering, the baseline, the measurement, KEPT /
+REVERTED, at most three attempts) and the operator did not use it.
+
+**The shape** (`domain/engineeringDirector.ts` pure, `services/operator/director.ts`):
+
+- **Diagnose.** `brain_operator_deficiencies` reads what the rows already show
+  — a goal held on a person by moot cards that keep returning, operator runs
+  failing on the model, an improvement kind that keeps ending without effect —
+  each as a ready-made diagnosis with an id. A free model chooses; it does not
+  have to discover. It may also describe its own diagnosis.
+- **Decide the intervention** (`decideIntervention`). PERSON when only a person
+  holds what is missing; MODEL when the failure is a model's output; CAPACITY
+  when work waits beside idle capacity and continuing it has not been tried;
+  EVIDENCE when the cause is not established; WATCH when it was seen once;
+  STRATEGY when no code owns it; ENGINEERING only for an established, owned,
+  recurring cause. A less invasive proposal is honoured; engineering the rows
+  do not support is overruled with the reason (`OPERATOR_INTERVENTION_DECIDED`).
+- **Commission, and acknowledge in the same call.** `brain_operator_commission`
+  registers the defect in §87's register (`registerDirected`, keyed
+  `OPERATOR:<class>:<hash(goal, owner paths)>`, so the same defect twice is one
+  campaign) with a directive — the goal, the evidence, the expected benefit,
+  the acceptance, the priority and why, the worker class and why, and how the
+  effect is judged — and advances it **now** (`advanceNow`), not at the next
+  ten-minute tick: `submitObjective`, `approveAndStartCampaign` on the owner's
+  standing order, the LOW-risk release grant, exactly as the loop does. The
+  directive is written into the objective and its acceptance conditions.
+  `brain_operator_submit_fix` is the same path.
+- **Priority from what the defect holds back** (`engineeringPriority`): the goal's
+  remaining value × the share the defect blocks ÷ days left, log-scaled to
+  Factory's 1..9, raised for a defect that blocks the goal outright or keeps
+  recurring. No equal shares, no favourite goal. Applied to the campaign's
+  waiting bins only (`reprioritizeWaitingCampaignBins`: READY or DRAFT, in the
+  statement); a leased bin keeps what it has. `brain_operator_prioritize_engineering`
+  changes it with a reason.
+- **Routing to a worker that can do it** (`routeEngineering`). Brain's economic or
+  planning reasoning, strategy, allocation and algorithms, a wide or risky
+  scope, a second attempt, or an immediate urgency is ARCHITECTURAL: the
+  objective carries `ROUTING_MARKER`, the planner holds every unit STRONGEST,
+  and `scheduler.chooseWorker` **refuses** a FAST worker for a unit marked
+  STRONGEST rather than settling for it because it is free. A bounded fix is
+  FAST work, and the scheduler prefers the cheaper class and the worker with
+  the better 30-day record (`workerTrackRecord`: sessions finished vs failed).
+  No new coding agent: Factory's registry and executors are the surfaces.
+- **The result comes back** (`brain_operator_engineering`, `directorPass`):
+  Factory's status, the pull request, the paths its units own, the
+  verification and review units, merge, deploy, live verification, §87's
+  measurement and decision, and the goal read again (`goalMark`: state, what it
+  waits on, settled cash, best reach, ladder, blockers, moot requests) against
+  the reading stored when it was commissioned. `judgeEngineering` calls a merge
+  without measurement DELIVERED_UNMEASURED; RESOLVED needs KEPT on an improved
+  metric, and a resolved defect whose goal did not move says CHANGE_STRATEGY.
+  Every change is an `OPERATOR_ENGINEERING_OUTCOME` event, and an outcome the
+  operator has not seen starts its next run ten minutes after the last
+  (`operatorDue … outcomeWaiting`) instead of at the hour; the brief carries
+  the outcomes and the deficiencies.
+- **It survives what breaks.** Every step is a row: the candidate, its
+  directive and goal baseline, the Factory campaign, the outcome events. A
+  restart, a failed worker, a model that stopped mid-run, a deploy: the next
+  pass reads where it got to. When the operator's last two runs acted on
+  nothing (the free model rate-limited, overflowed or failed — production
+  2026-11-12, most runs that day), Brain's **standing director**
+  (`standingCommission`) commissions a goal-blocking ENGINEERING deficiency
+  itself and records the lesson; it never does more than that, and never a
+  second campaign.
+
+`npm run operator -- engineering` (and `agents.yml operator-engineering`) prints
+every commissioned intervention with its Factory facts, measurement and goal
+effect, and the deficiencies the rows show. Tests: `tests/engineeringDirector.test.ts`.
+
+**The owner is told when a cycle closes, once (owner's order, 2026-11-12).** "Add an
+automatic owner notification when Brain completes its first verified autonomous
+self-improvement cycle … Use existing Brain events and notification infrastructure.
+Do not build a second tracking system … only once per verified improvement … must
+distinguish a successful software release from a demonstrated improvement."
+`verifiedCycle` (pure, `domain/engineeringDirector.ts`) reads the five steps off rows
+this section already keeps, and refuses each with its reason: (1) the directive's
+origin is `OPERATOR` and the run it names made the commission call itself — Brain's
+standing director now writes `origin: STANDING_DIRECTOR`, which never qualifies;
+(2) an ENGINEERING intervention with a Factory campaign; (3) merged, deployed and LIVE;
+(4–5) §87 decided KEPT on an IMPROVED measurement (`RESOLVED`) and an operator run then
+recorded a lesson carrying `[evaluates <candidate>]` — the `candidate_id` argument of
+`brain_operator_record_learning`, which the brief asks for on every RESOLVED outcome.
+`notifyVerifiedImprovements` runs in `directorPass` and, so it is immediate, inside that
+tool call. The message (`improvementNotice`) has separate sections for the software
+release and for what was measured to improve, and the goal's effect stated as it is.
+It is sent through the connected channel — the owner's Instantly workspace (§94), one
+email from a healthy sending account through its single-send endpoint, never a lead or
+a campaign; Resend when that is what is configured — to the first Brain administrator's
+address, as an `EXTERNAL_OPAQUE` effect in namespace `brain.notify_owner` keyed by the
+candidate: the composed text is stored (`OWNER_NOTICE_INTENT`) before the first send so
+every attempt is the same request, an unknown outcome is recorded and never resent
+(invariant 26), and `OWNER_NOTIFIED` plus an `OWNER_IMPROVEMENT_NOTIFIED` project event
+close it. Each later verified improvement is its own message, numbered. Tests:
+`tests/improvementNotice.test.ts`.
+
+**The owner is told when the $10K plan is ready, before the money (owner's order, 2026-11-13).**
+"NOTIFY ME IMMEDIATELY WHEN BRAIN HAS FINISHED DEVELOPING A VIABLE, ACTIONABLE PLAN TO
+GENERATE $10,000 IN COLLECTED REVENUE WITHIN 30 DAYS … Do not notify me merely because a
+plan document exists or Brain generated an optimistic forecast … Do not require the $10,000
+to have already been earned." `planReady` (pure, `domain/planReady.ts`) reads the owner's
+eight conditions off what Brain already computes. Named strategies and sources: §95's
+accepted plan and the quant portfolio's members. Quantified economics and timelines: each
+member's demand estimate (revenue, price, deals, spend, days to cash, with the median
+inside the deadline). Evidence: a PROBABILITY-basis portfolio with every member's inputs
+on evidence; a forecast on coverage never counts, and TARGET_MET is not a plan. Resources
+and steps: capital, spend, and the plan's own sales steps and next test. Why the
+combination reaches the target: its median settles at least what remains. Uncertainty:
+§95's Wilson lower bound at or over the required 90%, with its sample. Hermes: a
+committed `ADOPT_PLAN` decision (§108; high impact, so the challenger model always
+reviews it) for that goal, after the plan was first read ACCEPTED, choosing option 0,
+"execute the accepted plan as it stands", with the challenger's PROCEED or an answered
+REVISE. Brain's own requirements: ACCEPTED and RECOMMENDABLE. `goals/planReady.ts`
+judges it in the goal tick on every ACCEPTED reading, and inside `brain_operator_decide`
+the moment Hermes adopts. It sends through the self-improvement notice's channel
+(`deliverOwnerEmail`: the Instantly workspace, one EXTERNAL_OPAQUE email keyed
+`plan-ready.<goal>.<hash of the plan's openings>`, composed and stored before the first
+attempt) and records `OWNER_PLAN_READY_NOTIFIED` rows (INTENT, then SENT, UNCERTAIN or
+FAILED) and a goal event. Once per accepted plan: a different accepted plan is a new
+message. Nothing stops: the plan's openings stay PURSUES, a SQUEEZE goal keeps widening
+until the target is collected, and Hermes keeps directing it. Tests: `tests/planReady.test.ts`.
+
+**Owner notices are delivered in the owner's Claude Code conversation, never by email
+(owner's order, 2026-11-13, superseding the two Instantly paragraphs above).** "STOP USING
+INSTANTLY OR RESEND FOR OWNER NOTIFICATIONS … notify me DIRECTLY IN THIS ORIGINAL CLAUDE
+CODE CONVERSATION … The completion response must prominently begin: "$10K / 30-DAY PLAN —
+COMPLETE"." Both notices are now rows only (`services/ownerNotices.ts`): a READY row on the
+existing event log (`OWNER_PLAN_READY_NOTIFIED`, `OWNER_IMPROVEMENT_NOTIFIED`), written
+once per key with the composed text, and a DELIVERED row when the conversation announces it.
+Nothing leaves Brain: the Instantly owner adapter and `deliverOwnerEmail` are gone, and
+Instantly is outreach only. The plan gate gains a ninth condition, `STARTING_CAPITAL_WITHIN_LIMIT`:
+the plan commits, before revenue, each member's capital at start plus its median spend, and that
+sum must be within $3,000, or within the goal's own ceiling when that is lower. The completion
+response begins with that header and then gives the actual plan, how the $3,000 is allocated,
+how the plan reaches $10,000, the evidence and confidence with Hermes' challenge, and what
+Brain executes next. The owner's conversation reads the notices through
+`brain_owner_notices` (`project:read`) and records each announced through
+`brain_owner_notice_delivered` (`checkpoints:write`, idempotent), from a recurring scheduled
+task bound to that Claude Code session, which resumes it, stays silent while nothing
+qualified, and survives restarts and deployments because both the schedule and the notices
+are stored outside the container. Tests: `tests/planReady.test.ts`, `tests/improvementNotice.test.ts`.
+
+**The owner gets an hourly operations report in the same conversation (owner's order,
+2026-11-13).** "IMPLEMENT A COMPREHENSIVE HOURLY BRAIN INTELLIGENCE AND OPERATIONS REPORT … Use
+actual records, not invented statistics … Do not create duplicate schedulers, trackers, or
+reporting databases." `services/operator/operationsReport.ts` reads, for the hour just ended,
+the hour before, and the last day, only rows Brain already keeps: operator runs and their tool
+calls, models and errors; operator decision and engineering events; lessons; opportunities;
+research fragments and jobs; scenario runs; plan readings; the work queue and bins; Factory
+units, campaigns and workers; cheap-lane calls; money entries; the spend ledger; incidents; and
+integration events. `domain/operationsReport.ts` is pure and does three things:
+- It ranks the bottlenecks. The plan's own shortfall and binding factor always come first.
+- It answers the five scaling questions YES, NO or INSUFFICIENT EVIDENCE, and only as far as
+  the rows support. More agents is a NO while work waits beside free workers.
+- It gives a time to a qualifying plan only from a probability lower bound that rises across
+  readings. Otherwise it says why the time cannot be estimated and what would resolve it.
+
+A value nothing measures is listed under "Not instrumented", never estimated. A bottleneck
+that survives three reports is flagged for a new diagnosis. The report is the operator tick's
+once-an-hour owner notice (kind REPORT, event `OWNER_OPERATIONS_REPORT`, keyed by the hour).
+Only the newest undelivered one is offered, so a missed hour is superseded rather than queued.
+The conversation's existing hourly scheduled task announces it through `brain_list_projects`
+and records it delivered. Its bottleneck section opens the operator's next brief
+(`latestReportBrief` in `engineeringBrief`), so Hermes acts on what Brain may resolve itself.
+Tests: `tests/operationsReport.test.ts`.
+
+The report also carries the owner's remaining sections, each read from the same rows:
+- **Hermes:** goals inspected, problems identified, improvements received from Factory, and
+  tools that failed repeatedly.
+- **Workstreams:** commercial validation, opportunities moved into execution, and customer
+  acquisition (`sales_leads` prepared, `sales_replies` received). A line separates work that
+  advanced the goal from activity that did not.
+- **MODEL ADEQUACY:** run failures are split into rate limits (availability), context and
+  model errors, and only the last two count toward a stronger model.
+- **ENGINEERING CAPACITY:** scarce classes, underutilized workers, and whether work waits
+  beside free slots (scheduling) or behind full ones (capacity).
+- **INTERVENTION TRACKING:** the last report's bottlenecks, listed as resolved, persisting
+  or new.
+
+Every bottleneck states its estimated improvement. Every YES names the resource, its
+utilization, the expected effect, the cost (said to be unrecorded where Brain does not record
+it), a confidence and the smallest test.

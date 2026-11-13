@@ -20,15 +20,18 @@
  * would have made that impossible to enforce, which is why nothing stores one.
  */
 import type { Request } from 'express';
-import { conflict, badRequest } from '../../routes/helpers.ts';
+import { conflict, badRequest, HttpError } from '../../routes/helpers.ts';
 import { InvalidIdempotencyKey, assertValidKey } from './fingerprint.ts';
 import {
   OperationConflict,
   OperationInProgress,
+  findCompletedEffect,
   runIdempotent,
   type ExecutionResult,
   type RunInput,
 } from './engine.ts';
+import { CONTINUITY_CLI, operationContinuity } from './continuity.ts';
+import { openCircuit, withheldReason } from './posture.ts';
 import type { IdempotencyOperation } from '../../domain/types.ts';
 
 export const IDEMPOTENCY_HEADER = 'idempotency-key';
@@ -86,6 +89,28 @@ export async function runIdempotentRequest<T>(
   input: IdempotentRouteInput<T>,
   execute: (context: { operation: IdempotencyOperation }) => Promise<ExecutionResult<T>>,
 ): Promise<IdempotentReply<T>> {
+  // The circuit breaker (CONT-35, S-0484): a namespace that is down is not run
+  // again until its circuit closes. Only a request that would execute is held
+  // back — one whose key already has a settled outcome still replays, reports
+  // its failure or its uncertainty below, because none of those runs anything.
+  const circuit = await openCircuit(input.projectId, input.namespace.name);
+  if (circuit) {
+    const existing = await findCompletedEffect({
+      namespace: input.namespace,
+      projectId: input.projectId,
+      key: input.key,
+      principalType: input.principalType,
+      principalId: input.principalId,
+    });
+    if (!existing || existing.state === 'RESERVED') {
+      throw new HttpError(503, withheldReason(circuit), {
+        reason: 'CIRCUIT_OPEN',
+        namespace: circuit.namespace,
+        lastOutcomeAt: circuit.lastOutcomeAt,
+      });
+    }
+  }
+
   try {
     const outcome = await runIdempotent<T>(input, async (context) => await execute(context));
 
@@ -105,14 +130,20 @@ export async function runIdempotentRequest<T>(
       case 'UNCERTAIN':
         throw conflict(
           'An earlier attempt at this operation had an unknown outcome. ' +
-            'It must be resolved by an administrator before it can be retried.',
-          { reason: 'RECONCILIATION_REQUIRED', operationId: outcome.operation.id },
+            'It must be resolved by an administrator before it can be retried. ' +
+            `The project's continuity account lists it with what is known and what remains uncertain (${CONTINUITY_CLI}).`,
+          {
+            reason: 'RECONCILIATION_REQUIRED',
+            operationId: outcome.operation.id,
+            continuity: await operationContinuity(outcome.operation.id),
+          },
         );
       case 'TERMINAL_FAILURE':
         throw conflict('That operation has already failed and will not be retried.', {
           reason: 'ALREADY_TERMINAL',
           category: outcome.operation.failureCategory,
           operationId: outcome.operation.id,
+          continuity: await operationContinuity(outcome.operation.id),
         });
     }
   } catch (error) {
@@ -126,6 +157,7 @@ export async function runIdempotentRequest<T>(
       throw conflict('An equivalent request is already being processed.', {
         reason: 'IN_PROGRESS',
         operationId: error.operation.id,
+        continuity: await operationContinuity(error.operation.id),
       });
     }
     throw error;

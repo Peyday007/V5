@@ -1,0 +1,928 @@
+[
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "MERMAID CAR WASH",
+"addr": "90 CUMBERLAND PKWY",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 795-9980",
+"member": "https://business.mechanicsburgchamber.org/list/member/mermaid-car-wash-1231",
+"web": []
+},
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "SELECT COLLISION CENTERS",
+"addr": "1020 W CHOCOLATE AVE",
+"city": "HERSHEY",
+"zip": "17033",
+"phone": "(717) 566-4651",
+"member": "https://business.mechanicsburgchamber.org/list/member/select-collision-centers-723",
+"web": []
+},
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "MODWASH",
+"addr": "6465 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 980-3556",
+"member": "https://business.mechanicsburgchamber.org/list/member/modwash-1138",
+"web": []
+},
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "FRED BEANS FORD/KIA OF MECHANICSBURG",
+"addr": "6320 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 766-4733",
+"member": "https://business.mechanicsburgchamber.org/list/member/fred-beans-ford-kia-of-mechanicsburg-247",
+"web": []
+},
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "SOLAR COMFORT, LLC",
+"addr": "2205 GLEIM CT",
+"city": "ENOLA",
+"zip": "17025",
+"phone": "(443) 600-7562",
+"member": "https://business.mechanicsburgchamber.org/list/member/solar-comfort-llc-884",
+"web": []
+},
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "FRED BEANS BUICK GMC OF MECHANICSBURG",
+"addr": "6251 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 766-8422",
+"member": "https://business.mechanicsburgchamber.org/list/member/fred-beans-buick-gmc-of-mechanicsburg-148",
+"web": []
+},
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "LAWRENCE CHEVROLET",
+"addr": "6445 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 610-4134",
+"member": "https://business.mechanicsburgchamber.org/list/member/lawrence-chevrolet-225",
+"web": []
+},
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "MAJOR'S SELECT COLLISION CENTER",
+"addr": "269 Mulberry Dr",
+"city": "Mechanicsburg",
+"zip": "17050",
+"phone": "(717) 766-4461",
+"member": "https://business.mechanicsburgchamber.org/list/member/major-s-select-collision-center-724",
+"web": []
+},
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "FAULKNER CHRYSLER DODGE JEEP RAM FIAT OF MECHANICSBURG",
+"addr": "6643 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "888-802-5233 sales",
+"member": "https://business.mechanicsburgchamber.org/list/member/faulkner-chrysler-dodge-jeep-ram-fiat-of-mechanicsburg-857",
+"web": []
+},
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "ZIMMERMAN'S AUTOMOTIVE TIRE PROS",
+"addr": "2234 SOUTH MARKET STREET",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-7656",
+"member": "https://business.mechanicsburgchamber.org/list/member/zimmerman-s-automotive-tire-pros-439",
+"web": []
+},
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "A & B AUTOMOTIVE",
+"addr": "415 S MARKET ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 691-7141",
+"member": "https://business.mechanicsburgchamber.org/list/member/a-b-automotive-mechanicsburg-915",
+"web": []
+},
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "CLAY'S SERVICE CENTER, INC.",
+"addr": "138 WEST MAIN STREET",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-9334",
+"member": "https://business.mechanicsburgchamber.org/list/member/clay-s-service-center-inc-82",
+"web": []
+},
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "AUTOBODIES BY LUCAS - SELECT COLLISION GROUP",
+"addr": "526 E MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-0641",
+"member": "https://business.mechanicsburgchamber.org/list/member/autobodies-by-lucas-select-collision-group-722",
+"web": []
+},
+{
+"cat": "automobile-maintenance-repairs-service-11",
+"name": "ROHRER BUS",
+"addr": "1515 STATE RD",
+"city": "DUNCANNON",
+"zip": "17020",
+"phone": "(717) 957-3811",
+"member": "https://business.mechanicsburgchamber.org/list/member/rohrer-bus-979",
+"web": [
+"http://www.growthzone.com/"
+]
+},
+{
+"cat": "beauticians-barbers-15",
+"name": "MANOR SALON (THE)",
+"addr": "4500 OAKHURST BLVD.",
+"city": "HARRISBURG",
+"zip": "17110",
+"phone": "(717) 540-1304",
+"member": "https://business.mechanicsburgchamber.org/list/member/manor-salon-the-385",
+"web": []
+},
+{
+"cat": "beauticians-barbers-15",
+"name": "THE CRAFT BARBER & CO.",
+"addr": "35 W MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(734) 444-8206",
+"member": "https://business.mechanicsburgchamber.org/list/member/the-craft-barber-co-1156",
+"web": []
+},
+{
+"cat": "beauticians-barbers-15",
+"name": "THE ADDED TOUCH - PAULUS AND BLACK, INC.",
+"addr": "4200 DERRY ST",
+"city": "HARRISBURG",
+"zip": "17111",
+"phone": "(717) 564-6572",
+"member": "https://business.mechanicsburgchamber.org/list/member/the-added-touch-paulus-and-black-inc-297",
+"web": []
+},
+{
+"cat": "beauticians-barbers-15",
+"name": "HAIR COUNSELORS LLC",
+"addr": "5002 LENKER ST",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 695-3264",
+"member": "https://business.mechanicsburgchamber.org/list/member/hair-counselors-llc-1133",
+"web": []
+},
+{
+"cat": "beauticians-barbers-15",
+"name": "WAXED & WORTH IT",
+"addr": "5600 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 610-0692",
+"member": "https://business.mechanicsburgchamber.org/list/member/waxed-worth-it-1294",
+"web": [
+"http://www.growthzone.com/"
+]
+},
+{
+"cat": "catering-21",
+"name": "SNAPPERS BAR & GRILL",
+"addr": "120 EAST ALLEN STREET",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 697-9475",
+"member": "https://business.mechanicsburgchamber.org/list/member/snappers-bar-grill-353",
+"web": []
+},
+{
+"cat": "catering-21",
+"name": "AROOGA'S GRILLE HOUSE & SPORTS BAR",
+"addr": "4713 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 737-9464",
+"member": "https://business.mechanicsburgchamber.org/list/member/arooga-s-grille-house-sports-bar-597",
+"web": []
+},
+{
+"cat": "catering-21",
+"name": "ISAAC'S CRAFT KITCHEN & BREWERY",
+"addr": "4940 RITTER RD",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-1111",
+"member": "https://business.mechanicsburgchamber.org/list/member/isaac-s-craft-kitchen-brewery-507",
+"web": []
+},
+{
+"cat": "catering-21",
+"name": "STROCK ENTERPRISES, INC.",
+"addr": "729 WILLIAMS GROVE ROAD",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 697-2824",
+"member": "https://business.mechanicsburgchamber.org/list/member/strock-enterprises-inc-362",
+"web": []
+},
+{
+"cat": "catering-21",
+"name": "VISAGGIO'S RISTORANTE",
+"addr": "6990 WERTZVILLE RD",
+"city": "ENOLA",
+"zip": "17025",
+"phone": "(717) 697-8082",
+"member": "https://business.mechanicsburgchamber.org/list/member/visaggio-s-ristorante-1285",
+"web": []
+},
+{
+"cat": "catering-21",
+"name": "FLINCHY'S",
+"addr": "1833 HUMMEL AVE",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 761-9000",
+"member": "https://business.mechanicsburgchamber.org/list/member/flinchy-s-998",
+"web": []
+},
+{
+"cat": "catering-21",
+"name": "THE ARC OF CUMBERLAND AND PERRY COUNTIES",
+"addr": "71 ASHLAND AVE",
+"city": "CARLISLE",
+"zip": "17013",
+"phone": "(717) 249-2611",
+"member": "https://business.mechanicsburgchamber.org/list/member/the-arc-of-cumberland-and-perry-counties-1048",
+"web": []
+},
+{
+"cat": "catering-21",
+"name": "SOPHIA'S AT WALDEN",
+"addr": "129 WALDEN WAY",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 791-0100",
+"member": "https://business.mechanicsburgchamber.org/list/member/sophia-s-at-walden-740",
+"web": []
+},
+{
+"cat": "catering-21",
+"name": "Chick-fil-A at Shepherdstown Crossing",
+"addr": "219 Gettysburg Pike",
+"city": "Mechanicsburg",
+"zip": "17055",
+"phone": "(717) 781-2151",
+"member": "https://business.mechanicsburgchamber.org/list/member/chick-fil-a-at-shepherdstown-crossing-1226",
+"web": []
+},
+{
+"cat": "catering-21",
+"name": "ISAAC'S RESTAURANTS",
+"addr": "1104 FERNWOOD AVE",
+"city": "CAMP HILL",
+"zip": "17011-6903",
+"phone": "(717) 394-0623",
+"member": "https://business.mechanicsburgchamber.org/list/member/isaac-s-restaurants-camp-hill-506",
+"web": []
+},
+{
+"cat": "catering-21",
+"name": "PENN HARRIS HOTEL",
+"addr": "1150 CAMP HILL BYPASS",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 433-9737",
+"member": "https://business.mechanicsburgchamber.org/list/member/penn-harris-hotel-1006",
+"web": [
+"http://www.growthzone.com/"
+]
+},
+{
+"cat": "dentistry-orthodontics-43",
+"name": "SMILES ON TRINDLE DENTAL CARE",
+"addr": "4805 E TRINDLE RD",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 697-4606",
+"member": "https://business.mechanicsburgchamber.org/list/member/smiles-on-trindle-dental-care-486",
+"web": []
+},
+{
+"cat": "dentistry-orthodontics-43",
+"name": "SADLER HEALTH CENTER",
+"addr": "5210 East Trindle Road",
+"city": "Mechanicsburg",
+"zip": "17050",
+"phone": "(717) 218-6670",
+"member": "https://business.mechanicsburgchamber.org/list/member/sadler-health-center-1137",
+"web": []
+},
+{
+"cat": "dentistry-orthodontics-43",
+"name": "CARLISLE PIKE FAMILY DENTISTRY",
+"addr": "5007 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 288-5999",
+"member": "https://business.mechanicsburgchamber.org/list/member/carlisle-pike-family-dentistry-1073",
+"web": []
+},
+{
+"cat": "dentistry-orthodontics-43",
+"name": "FIELDS FAMILY DENTISTRY",
+"addr": "2101 ASPEN DR",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 697-3400",
+"member": "https://business.mechanicsburgchamber.org/list/member/fields-family-dentistry-1072",
+"web": []
+},
+{
+"cat": "dentistry-orthodontics-43",
+"name": "EAST MAIN DENTAL",
+"addr": "324 E MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-4163",
+"member": "https://business.mechanicsburgchamber.org/list/member/east-main-dental-1049",
+"web": []
+},
+{
+"cat": "dentistry-orthodontics-43",
+"name": "DENTAL HEALTH OF SILVER SPRING",
+"addr": "11 FLOWERS DRIVE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 766-0600",
+"member": "https://business.mechanicsburgchamber.org/list/member/dental-health-of-silver-spring-113",
+"web": []
+},
+{
+"cat": "dentistry-orthodontics-43",
+"name": "CRAIG M. ANZUR, DMD -  ANZUR PERIODONTICS, P.C.",
+"addr": "4225 TRINDLE RD",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 763-7971",
+"member": "https://business.mechanicsburgchamber.org/list/member/craig-m-anzur-dmd-anzur-periodontics-p-c-939",
+"web": []
+},
+{
+"cat": "dentistry-orthodontics-43",
+"name": "ROTHER DENTAL",
+"addr": "555 GETTYSBURG PIKE",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 737-4337",
+"member": "https://business.mechanicsburgchamber.org/list/member/rother-dental-1025",
+"web": [
+"http://www.growthzone.com/"
+]
+},
+{
+"cat": "fitness-180",
+"name": "ARK FITNESS",
+"addr": "220 N YORK ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 230-1544",
+"member": "https://business.mechanicsburgchamber.org/list/member/ark-fitness-1169",
+"web": []
+},
+{
+"cat": "fitness-180",
+"name": "BLITZ 45",
+"addr": "3445 SIMPSON FERRY RD",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 722-5489",
+"member": "https://business.mechanicsburgchamber.org/list/member/blitz-45-1117",
+"web": []
+},
+{
+"cat": "fitness-180",
+"name": "SKY ZONE HARRISBURG",
+"addr": "95 GATEWAY DR",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 208-8909",
+"member": "https://business.mechanicsburgchamber.org/list/member/sky-zone-harrisburg-856",
+"web": []
+},
+{
+"cat": "fitness-180",
+"name": "H2L STUDIO LLC",
+"addr": "2151 FISHER RD",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 697-4425",
+"member": "https://business.mechanicsburgchamber.org/list/member/h2l-studio-llc-860",
+"web": []
+},
+{
+"cat": "fitness-180",
+"name": "ITTEN DOJO INC",
+"addr": "701 W SIMPSON ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-8871",
+"member": "https://business.mechanicsburgchamber.org/list/member/itten-dojo-inc-1291",
+"web": []
+},
+{
+"cat": "fitness-180",
+"name": "ORANGETHEORY FITNESS",
+"addr": "6416 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 288-1243",
+"member": "https://business.mechanicsburgchamber.org/list/member/orangetheory-fitness-1268",
+"web": []
+},
+{
+"cat": "fitness-180",
+"name": "CHASE FITNESS PT, LLC",
+"addr": "4928 LOUISE DR",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(814) 462-9599",
+"member": "https://business.mechanicsburgchamber.org/list/member/chase-fitness-pt-llc-1254",
+"web": [
+"http://www.growthzone.com/"
+]
+},
+{
+"cat": "heating-venting-air-conditioning-62",
+"name": "Zimmerman Plumbing, Heating & Air Conditioning",
+"addr": "110 EAST ALLEN STREET",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 697-3528",
+"member": "https://business.mechanicsburgchamber.org/list/member/zimmerman-plumbing-heating-air-conditioning-438",
+"web": []
+},
+{
+"cat": "heating-venting-air-conditioning-62",
+"name": "H & H SALES ASSOCIATES, INC",
+"addr": "4510 WESTPORT DR",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 796-2401",
+"member": "https://business.mechanicsburgchamber.org/list/member/h-h-sales-associates-inc-452",
+"web": []
+},
+{
+"cat": "heating-venting-air-conditioning-62",
+"name": "METRO HVAC",
+"addr": "913 KRANZEL DR",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 874-2030",
+"member": "https://business.mechanicsburgchamber.org/list/member/metro-hvac-1249",
+"web": []
+},
+{
+"cat": "heating-venting-air-conditioning-62",
+"name": "HANDYSIDE INC",
+"addr": "450 FISHING CREEK RD",
+"city": "ETTERS",
+"zip": "17319",
+"phone": "(717) 938-2521",
+"member": "https://business.mechanicsburgchamber.org/list/member/handyside-inc-1146",
+"web": []
+},
+{
+"cat": "heating-venting-air-conditioning-62",
+"name": "WILLIS FUEL SERVICES",
+"addr": "891 S RIDGE RD",
+"city": "YORK SPRINGS",
+"zip": "17372",
+"phone": "(717) 688-2573",
+"member": "https://business.mechanicsburgchamber.org/list/member/willis-fuel-services-1261",
+"web": []
+},
+{
+"cat": "heating-venting-air-conditioning-62",
+"name": "HB HOME SERVICE TEAM",
+"addr": "600 S. 17 St.",
+"city": "Harrisburg",
+"zip": "17104",
+"phone": "(717) 802-5848",
+"member": "https://business.mechanicsburgchamber.org/list/member/hb-home-service-team-1213",
+"web": []
+},
+{
+"cat": "heating-venting-air-conditioning-62",
+"name": "DAFLURE HEATING & COOLING",
+"addr": "22 8TH ST",
+"city": "NEW CUMBERLAND",
+"zip": "17070",
+"phone": "(717) 774-9480",
+"member": "https://business.mechanicsburgchamber.org/list/member/daflure-heating-cooling-661",
+"web": []
+},
+{
+"cat": "heating-venting-air-conditioning-62",
+"name": "BUCHANAN & ERB, INC",
+"addr": "903 SOUTH MARKET STREET",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-0160",
+"member": "https://business.mechanicsburgchamber.org/list/member/buchanan-erb-inc-226",
+"web": []
+},
+{
+"cat": "heating-venting-air-conditioning-62",
+"name": "HALLER ENTERPRISES",
+"addr": "P O BOX 375",
+"city": "LITITZ",
+"zip": "17543",
+"phone": "(717) 795-1700",
+"member": "https://business.mechanicsburgchamber.org/list/member/haller-enterprises-716",
+"web": []
+},
+{
+"cat": "heating-venting-air-conditioning-62",
+"name": "PRONTO PLUMBING",
+"addr": "1111 PRIMROSE AVE",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 737-3700",
+"member": "https://business.mechanicsburgchamber.org/list/member/pronto-plumbing-342",
+"web": [
+"http://www.growthzone.com/"
+]
+},
+{
+"cat": "realtors-real-estate-services-107",
+"name": "LAWYERS REALTY, LLC",
+"addr": "7 E MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 364-3000",
+"member": "https://business.mechanicsburgchamber.org/list/member/lawyers-realty-llc-682",
+"web": []
+},
+{
+"cat": "realtors-real-estate-services-107",
+"name": "CARRIE SEYMORE - COLDWELL BANKER REALTY",
+"addr": "3915 MARKET ST",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(570) 590-8582",
+"member": "https://business.mechanicsburgchamber.org/list/member/carrie-seymore-coldwell-banker-realty-1192",
+"web": []
+},
+{
+"cat": "realtors-real-estate-services-107",
+"name": "VALERIE NASH - COLDWELL BANKER",
+"addr": "3915 MARKET ST",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 813-3320",
+"member": "https://business.mechanicsburgchamber.org/list/member/valerie-nash-coldwell-banker-1265",
+"web": []
+},
+{
+"cat": "realtors-real-estate-services-107",
+"name": "KAREN TRYNOSKI - NEXT HOME CAPITAL REALTY",
+"addr": "4349 CARLISLE PIKE",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "773-1340",
+"member": "https://business.mechanicsburgchamber.org/list/member/karen-trynoski-next-home-capital-realty-478",
+"web": []
+},
+{
+"cat": "realtors-real-estate-services-107",
+"name": "M.C. WALKER REALTY",
+"addr": "14 NORTH WALNUT STREET",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 697-9487",
+"member": "https://business.mechanicsburgchamber.org/list/member/m-c-walker-realty-234",
+"web": []
+},
+{
+"cat": "realtors-real-estate-services-107",
+"name": "RICHARD D. RICHARDSON - MARCUS & MILLICHAP",
+"addr": "10 N FRONT ST",
+"city": "WORMLEYSBURG",
+"zip": "17043",
+"phone": "(717) 580-7496",
+"member": "https://business.mechanicsburgchamber.org/list/member/richard-d-richardson-marcus-millichap-325",
+"web": []
+},
+{
+"cat": "realtors-real-estate-services-107",
+"name": "HAMPDEN GREENE",
+"addr": "4150 VALLEY RD",
+"city": "ENOLA",
+"zip": "17025",
+"phone": "(717) 210-3654",
+"member": "https://business.mechanicsburgchamber.org/list/member/hampden-greene-1075",
+"web": []
+},
+{
+"cat": "realtors-real-estate-services-107",
+"name": "BETH WILLIAMSON - COLDWELL BANKER",
+"addr": "3915 MARKET ST",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 571-1796",
+"member": "https://business.mechanicsburgchamber.org/list/member/beth-williamson-coldwell-banker-48",
+"web": []
+},
+{
+"cat": "realtors-real-estate-services-107",
+"name": "MEADOWS AT BUMBLE BEE HOLLOW (THE)",
+"addr": "2277 MILL ROAD",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 458-8919",
+"member": "https://business.mechanicsburgchamber.org/list/member/meadows-at-bumble-bee-hollow-the-683",
+"web": []
+},
+{
+"cat": "realtors-real-estate-services-107",
+"name": "SONNIE MINICK - COLDWELL BANKER",
+"addr": "3915 MARKET ST",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 440-6001",
+"member": "https://business.mechanicsburgchamber.org/list/member/sonnie-minick-coldwell-banker-1266",
+"web": []
+},
+{
+"cat": "realtors-real-estate-services-107",
+"name": "COLDWELL BANKER",
+"addr": "3915 MARKET ST",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 761-4800",
+"member": "https://business.mechanicsburgchamber.org/list/member/coldwell-banker-199",
+"web": []
+},
+{
+"cat": "realtors-real-estate-services-107",
+"name": "BROKERS REALTY.COM",
+"addr": "610 LOWTHER RD",
+"city": "LEWISBERRY",
+"zip": "17339",
+"phone": "(717) 554-7430",
+"member": "https://business.mechanicsburgchamber.org/list/member/brokers-realty-com-911",
+"web": [
+"http://www.growthzone.com/"
+]
+},
+{
+"cat": "restaurants-116",
+"name": "DENIM COFFEE COMPANY",
+"addr": "36 W MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(908) 902-9830",
+"member": "https://business.mechanicsburgchamber.org/list/member/denim-coffee-company-1235",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "ISAAC'S CRAFT KITCHEN & BREWERY",
+"addr": "4940 RITTER RD",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-1111",
+"member": "https://business.mechanicsburgchamber.org/list/member/isaac-s-craft-kitchen-brewery-507",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "RICH VALLEY GOLF",
+"addr": "227 RICH VALLEY RD",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 691-8805",
+"member": "https://business.mechanicsburgchamber.org/list/member/rich-valley-golf-512",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "ECKELS ICE CREAM FOUNTAIN",
+"addr": "36 E MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 458-8551",
+"member": "https://business.mechanicsburgchamber.org/list/member/eckels-ice-cream-fountain-795",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "LUNA ITALIAN CUISINE",
+"addr": "100 LEGACY PARK DR",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 620-8683",
+"member": "https://business.mechanicsburgchamber.org/list/member/luna-italian-cuisine-1286",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "REVOLUTIONARY HOT SAUCE EATERY & BREWPUB",
+"addr": "30 S MARKET ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 579-7519",
+"member": "https://business.mechanicsburgchamber.org/list/member/revolutionary-hot-sauce-eatery-brewpub-1211",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "WOLF BREWING CO.",
+"addr": "100 LEGACY PARK DR",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 590-7917",
+"member": "https://business.mechanicsburgchamber.org/list/member/wolf-brewing-co-1173",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "TEXAS ROADHOUSE",
+"addr": "1101 LOWER ALLEN DR",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 730-7427",
+"member": "https://business.mechanicsburgchamber.org/list/member/texas-roadhouse-504",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "AMICI PIZZA",
+"addr": "125 GATEWAY DR",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 591-1313",
+"member": "https://business.mechanicsburgchamber.org/list/member/amici-pizza-1275",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "DALICIA RISTORANTE & BAKERY",
+"addr": "105 S MARKET ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 525-7496",
+"member": "https://business.mechanicsburgchamber.org/list/member/dalicia-ristorante-bakery-1150",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "KANAGAWA",
+"addr": "41 W MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 979-2368",
+"member": "https://business.mechanicsburgchamber.org/list/member/kanagawa-1088",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "MARZONI'S BRICK OVEN & BREWING CO.",
+"addr": "4925 RITTER RD",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-6289",
+"member": "https://business.mechanicsburgchamber.org/list/member/marzoni-s-brick-oven-brewing-co-1066",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "SPICE RESTAURANT & BAR",
+"addr": "125 W MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 691-3131",
+"member": "https://business.mechanicsburgchamber.org/list/member/spice-restaurant-bar-1205",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "FLINCHY'S",
+"addr": "1833 HUMMEL AVE",
+"city": "CAMP HILL",
+"zip": "17011",
+"phone": "(717) 761-9000",
+"member": "https://business.mechanicsburgchamber.org/list/member/flinchy-s-998",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "AROOGA'S GRILLE HOUSE & SPORTS BAR",
+"addr": "4713 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 737-9464",
+"member": "https://business.mechanicsburgchamber.org/list/member/arooga-s-grille-house-sports-bar-597",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "JOJO'S PIZZA & PASTA",
+"addr": "107 W MAIN ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 766-8292",
+"member": "https://business.mechanicsburgchamber.org/list/member/jojo-s-pizza-pasta-208",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "Chick-fil-A at Shepherdstown Crossing",
+"addr": "219 Gettysburg Pike",
+"city": "Mechanicsburg",
+"zip": "17055",
+"phone": "(717) 781-2151",
+"member": "https://business.mechanicsburgchamber.org/list/member/chick-fil-a-at-shepherdstown-crossing-1226",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "ISAAC'S RESTAURANTS",
+"addr": "1104 FERNWOOD AVE",
+"city": "CAMP HILL",
+"zip": "17011-6903",
+"phone": "(717) 394-0623",
+"member": "https://business.mechanicsburgchamber.org/list/member/isaac-s-restaurants-camp-hill-506",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "SNAPPERS BAR & GRILL",
+"addr": "120 EAST ALLEN STREET",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 697-9475",
+"member": "https://business.mechanicsburgchamber.org/list/member/snappers-bar-grill-353",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "7 BREW DRIVE THRU COFFEE",
+"addr": "6469 CARLISLE PIKE",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(484) 388-1841",
+"member": "https://business.mechanicsburgchamber.org/list/member/7-brew-drive-thru-coffee-1264",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "SOPHIA'S AT WALDEN",
+"addr": "129 WALDEN WAY",
+"city": "MECHANICSBURG",
+"zip": "17050",
+"phone": "(717) 791-0100",
+"member": "https://business.mechanicsburgchamber.org/list/member/sophia-s-at-walden-740",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "COMFORT SUITES CARLISLE",
+"addr": "10 S HANOVER ST",
+"city": "CARLISLE",
+"zip": "17013",
+"phone": "(717) 960-1000",
+"member": "https://business.mechanicsburgchamber.org/list/member/comfort-suites-carlisle-659",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "DOUGH N JOE",
+"addr": "33 E SIMPSON ST",
+"city": "MECHANICSBURG",
+"zip": "17055",
+"phone": "(717) 431-4297",
+"member": "https://business.mechanicsburgchamber.org/list/member/dough-n-joe-1243",
+"web": []
+},
+{
+"cat": "restaurants-116",
+"name": "VISAGGIO'S RISTORANTE",
+"addr": "6990 WERTZVILLE RD",
+"city": "ENOLA",
+"zip": "17025",
+"phone": "(717) 697-8082",
+"member": "https://business.mechanicsburgchamber.org/list/member/visaggio-s-ristorante-1285",
+"web": [
+"http://www.growthzone.com/"
+]
+}
+]

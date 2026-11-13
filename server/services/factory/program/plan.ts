@@ -358,3 +358,30 @@ export function promotedRequirements(map: RequirementMap, extra: Map<string, str
 export function eligibleCampaigns(plan: ProgramPlan, finished: Set<string>, started: Set<string>): PlannedCampaign[] {
   return plan.campaigns.filter((c) => !started.has(c.key) && c.dependsOn.every((dep) => finished.has(dep)));
 }
+
+/** Whether a glob would reach the program's own verification code. */
+function reachesProtected(glob: string): boolean {
+  return PROTECTED_VERIFICATION_PATHS.some((p) => glob === p || matchesGlob(p.replace('/**', '/x.ts'), glob));
+}
+
+/**
+ * A file widens to its directory; a glob stays as it is. A directory that would
+ * reach the program's verification code keeps its original file instead, and so
+ * does a file directly under a top-level directory: `docs/**` or `tests/**` is
+ * the whole shared tree, and the line serializes every campaign that overlaps
+ * it (program fpg_2adb7f5e, 2026-11-09: links-d2, two files in docs/, queued
+ * behind a parked campaign owning docs/programs/brain-architecture/**).
+ */
+export function widenScope(scope: string[]): string[] {
+  const out = new Set<string>();
+  for (const entry of scope) {
+    const parent = entry.includes('/') ? entry.slice(0, entry.lastIndexOf('/')) : '';
+    const wider = entry.includes('*') || !/\.[a-z]+$/i.test(entry) || !parent.includes('/') ? entry : `${parent}/**`;
+    out.add(reachesProtected(wider) ? entry : wider);
+    // The exact file stays named too: a repair is anchored only to a file the scope names
+    // exactly, and a person's grant must survive the next widening (production 2026-11-10).
+    if (wider !== entry && !entry.includes('*')) out.add(entry);
+  }
+  return [...out].sort();
+}
+

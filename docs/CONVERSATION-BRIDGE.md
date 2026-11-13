@@ -188,6 +188,10 @@ automatic bridge. Do not read "I imported an export" as "the bridge is working".
 
 ## Importing what already exists
 
+**A whole history** — every conversation of an export, every branch, the files —
+goes through Historical memory, not this route: see `HISTORICAL-MEMORY.md`. The
+route below reads one conversation and is kept for pasting a single transcript.
+
 `POST /api/bridge/conversations/import` takes `{"body": "…"}` and reads it two
 ways, saying which happened:
 

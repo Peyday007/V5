@@ -1,9 +1,11 @@
+> **Superseded 2026-11-09** by [`CASH-10K-PLAN-2026-11-09.md`](CASH-10K-PLAN-2026-11-09.md). Kept as the record of how the plan got here.
+
 # The $10K plan, rebuilt for remote operation — goal `wst_7b4fcbb5f2384f31b6c3`
 
 > **Superseded** by `docs/CASH-10K-BRAIN-PLAN.md`, the plan Brain's own research, construction and quant engine now produce. The owner's constraints carry over unchanged:
 > - Freelance marketplaces are not the main business model.
 > - No paid API has been added: `package.json` is unchanged since the 2026-11-03 assignment.
-> - No government contracts, domain speculation or broken-website plays.
+> - No government contracts, domain speculation or broken-website plays. *(Government: lifted 2026-11-12, §105; an industry is never excluded.)*
 > - $375 per arrangement before proof, $750 a week tied up, $3,000 in all.
 
 **Standing rule** (`server/domain/operatingModel.ts`):

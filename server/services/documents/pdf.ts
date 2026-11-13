@@ -202,6 +202,41 @@ function isHeading(line: Line, bodyHeight: number): boolean {
 
 const LIST_RE = /^\s*(?:[-*•‣◦·]|\(?\d{1,3}[.)]|[a-z][.)])\s+/i;
 
+/** A line that ends in a letter and a hard hyphen: a word may be wrapped onto the next line. */
+const LINE_WRAP_HYPHEN = /[A-Za-z]-[ \t]*$/;
+
+/**
+ * Join the lines of one block. A line ending in a letter followed by '-' is
+ * joined to the next with a newline, so `normalizeBlockText` can rejoin a word
+ * hyphenated across the break ("recog-" / "nition"); every other pair of lines
+ * is joined with a space. Whether the hyphen is a wrap or a real compound is
+ * normalisation's call, not the extractor's: flattening the break into a space
+ * would make it look like a suspended hyphen ("pre- and post-closing") and leave
+ * the word split in normalized_text (section 9). Shared by every extractor.
+ */
+export function joinBlockLines(lines: readonly string[]): string {
+  let out = '';
+  for (const [index, line] of lines.entries()) {
+    if (index > 0) {
+      if (LINE_WRAP_HYPHEN.test(out)) out = `${out.replace(/[ \t]+$/, '')}\n`;
+      else out += ' ';
+    }
+    out += line;
+  }
+  return out;
+}
+
+/**
+ * Collapse every whitespace run in one block's text to a single space, except a
+ * run containing a line break straight after a letter and '-', which becomes a
+ * single '\n' — the line wrap `joinBlockLines` kept for normalisation to judge.
+ */
+export function collapseBlockWhitespace(text: string): string {
+  return text.replace(/([A-Za-z]-)?(\s+)/g, (_run, hyphen: string | undefined, space: string) =>
+    hyphen ? `${hyphen}${/[\r\n]/.test(space) ? '\n' : ' '}` : ' ',
+  );
+}
+
 function classify(line: Line, bodyHeight: number): BlockType {
   if (LIST_RE.test(line.text)) return 'LIST_ITEM';
   if (isHeading(line, bodyHeight)) return 'HEADING';
@@ -225,7 +260,7 @@ function buildBlocks(lines: Line[], pageNumber: number, bodyHeight: number): Ext
 
   const flush = (): void => {
     if (!current || current.lines.length === 0) return;
-    const text = current.lines.map((line) => line.text).join(' ').replace(/\s+/g, ' ').trim();
+    const text = collapseBlockWhitespace(joinBlockLines(current.lines.map((line) => line.text))).trim();
     if (text.length > 0) {
       const x0 = Math.min(...current.lines.map((line) => line.x0));
       const x1 = Math.max(...current.lines.map((line) => line.x1));

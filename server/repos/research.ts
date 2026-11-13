@@ -1498,6 +1498,35 @@ export async function claimedMethods(input: {
 
 /** The lane a goal round's repeating-buyer pattern is filed under (`compilerProfiles.ts`). */
 export const PATTERN_LANE = 'demand_pattern';
+/** The lane a goal round's specific open request is filed in (MARKET_DISCOVERY's `demand_signal`). */
+export const GOAL_REQUEST_LANE = 'demand_signal';
+
+/**
+ * What a fragment's own `demand_signal` lane must say before an untagged claim
+ * in it is read as an open request (`signalledClaims`).
+ *
+ * The goal-round rule matches every `goal-%` bucket — a lens round and a
+ * constructed `-mx-` round alike — and it used to assume the lane id carried
+ * the profile's meaning in each of them. Nothing checked it: a lane id is
+ * whatever the fragment that holds the claim declared, and a repaired or
+ * re-planned fragment names its own lanes. So the rule now reads the lane the
+ * claim was actually filed under, from that fragment's stored
+ * `required_evidence`, and files the claim only when the fragment declared
+ * `demand_signal` as a published request — which MARKET_DISCOVERY's lane, and
+ * GOAL_MECHANISM's inherited copy of it, both say ("the specific published
+ * request, posting, listing ..."). A fragment whose `demand_signal` means
+ * something else, or that never declared it, files nothing untagged; a claim
+ * its worker tagged is judged by its tag, as before.
+ */
+export const GOAL_REQUEST_LANE_MEANS = 'published request';
+/** `serializeLanes` writes `id` then `description`, so the declared lane opens with exactly this. */
+const GOAL_REQUEST_LANE_DECLARED = `%${JSON.stringify({ id: GOAL_REQUEST_LANE, description: '' }).slice(0, -2)}%`;
+
+/** Whether a fragment's stored lanes declare `demand_signal` as a published request. */
+export function declaresOpenRequestLane(requiredEvidence: string | null | undefined): boolean {
+  const lane = parseLanes(parseJson<unknown[]>(requiredEvidence ?? '[]', [])).find((one) => one.id === GOAL_REQUEST_LANE);
+  return lane !== undefined && lane.description.toLowerCase().includes(GOAL_REQUEST_LANE_MEANS);
+}
 
 /**
  * Words a repeating-buyer pattern has to use: somebody paying, buying, hiring
@@ -1512,6 +1541,36 @@ export const PATTERN_LANE = 'demand_pattern';
 export const PATTERN_BUYING_WORDS = ['pay', 'purchas', 'buy', 'bought', 'hire', 'hiring', 'outsourc', 'contract', 'spend', 'subscri', 'retain', 'fee', 'pric', 'cost', 'usd', 'dollar', 'per hour', 'per month', 'per project'] as const;
 const PATTERN_STATES_BUYING_SQL = `(${PATTERN_BUYING_WORDS.map((word) => `LOWER(c.claim) LIKE '%${word}%'`).join(' OR ')})`;
 
+/**
+ * A claim that states a price — a currency beside a number, in either order
+ * ("$400", "USD 400", "400 USD", "900 dollars", "€50"). What a goal lens
+ * round's untagged pattern must state beside its buying words before the lane
+ * makes it an opening (`signalledClaims`): the lens asks for "the price buyers
+ * are shown paying". Any digit is not that — the profile holds a pattern to
+ * two dated examples, so a date, a year or a count is in nearly every pattern
+ * claim, priced or not, and "Dentists repeatedly pay outside firms for
+ * appointment reminders (examples posted March 2026 and May 2026)" would file.
+ * `LIKE`s rather than a character class, because SQLite's `GLOB` and
+ * Postgres's `~` are not one statement; lower-cased, because Postgres's `LIKE`
+ * is case-sensitive.
+ */
+export const PATTERN_PRICE_BEFORE = ['$', '€', '£', 'usd', 'eur', 'gbp'] as const;
+export const PATTERN_PRICE_AFTER = ['$', '€', '£', 'usd', 'eur ', 'euros', 'gbp', 'dollar'] as const;
+const DIGITS = Array.from({ length: 10 }, (_, digit) => String(digit));
+const PATTERN_PRICE_SHAPES = DIGITS.flatMap((digit) =>
+  ['', ' '].flatMap((gap) => [
+    ...PATTERN_PRICE_BEFORE.map((marker) => `${marker}${gap}${digit}`),
+    ...PATTERN_PRICE_AFTER.map((marker) => `${digit}${gap}${marker}`),
+  ]),
+);
+const PATTERN_STATES_PRICE_SQL = `(${PATTERN_PRICE_SHAPES.map((shape) => `(LOWER(c.claim) || ' ') LIKE '%${shape}%'`).join(' OR ')})`;
+
+/** The same price rule, for a reader holding a claim's text. */
+export function patternStatesPrice(text: string): boolean {
+  const lower = `${text.toLowerCase()} `;
+  return PATTERN_PRICE_SHAPES.some((shape) => lower.includes(shape));
+}
+
 /** The same rule, for a reader holding a claim's text. */
 export function patternStatesBuying(text: string): boolean {
   const lower = text.toLowerCase();
@@ -1522,8 +1581,8 @@ export async function signalledClaims(input: {
   projectId: string;
   limit?: number;
 }): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
-  const rows = await getDb().all<ResearchClaimRow>(
-    `SELECT c.* FROM research_claims c
+  const rows = await getDb().all<ResearchClaimRow & { fragment_required_evidence: string | null }>(
+    `SELECT c.*, f.required_evidence AS fragment_required_evidence FROM research_claims c
        JOIN research_fragments f ON f.id = c.fragment_id
        JOIN research_orchestrations o ON o.id = c.orchestration_id
       WHERE o.project_id = ? AND c.accepted = 1
@@ -1538,10 +1597,57 @@ export async function signalledClaims(input: {
            * tagged by the worker — so the harvest filed nothing from any of
            * them. The lane says what the claim is; the worker need not repeat it.
            */
+          /*
+           * And the same pattern from a goal's own lens round, which asks the
+           * same profile (GOAL_MECHANISM, the same demand_pattern lane and its
+           * two-example floor) a broader question. Production read 0 of 18
+           * lens rounds filing an opening: the research ran, the pattern claims
+           * were gated, and the worker tagged none of them — the class above,
+           * which naming the field in the question (GOAL_OPENING_SENTENCE) did
+           * not fix for constructed rounds either. A lens question is not about
+           * one designed arrangement, so the lane alone does not say which
+           * thing the buyers pay for; the claim must also state the price the
+           * lens asked for ("the price buyers are shown paying") — a currency
+           * beside a number, not any digit, because the two dated examples put
+           * a year in every pattern. "Dentists repeatedly pay for appointment
+           * reminders (examples March 2026 and May 2026)" stays context.
+           */
           OR (c.evidence_lane = ? AND ${PATTERN_STATES_BUYING_SQL} AND EXISTS (
                 SELECT 1 FROM russell_missions pm
                   JOIN cash_discovery_rounds pr ON pr.candidate_id = pm.candidate_id
-                 WHERE pm.orchestration_id = o.id AND pr.bucket_id LIKE ?))
+                 WHERE pm.orchestration_id = o.id
+                   AND (pr.bucket_id LIKE ? OR (pr.bucket_id LIKE ? AND ${PATTERN_STATES_PRICE_SQL}))))
+          /*
+           * And one specific open request from a goal's own round
+           * (GOAL_PLAN.OPENINGS.ROUNDS_FILE, 2026-11-12). Production read 2 of
+           * 39 settled goal rounds filing an opening: the rounds settled
+           * correctly and the harvest attributed and counted every signalled
+           * claim on them, but the gated demand_signal claims those rounds
+           * found carried no opportunity_signal, so none was read here —
+           * the same untagged class as the two rules above, in the lane
+           * GOAL_MECHANISM inherits from MARKET_DISCOVERY. That lane is
+           * defined as an opening: "the specific published request ... it is
+           * open ... everything filed here becomes a piece of work", held to
+           * SPECIFIC_INSTANCE by the gate, and a closed request or a
+           * documented absence has a lane of its own. So the lane says what
+           * the claim is, and it is read as ACTIVE_BUYER_DEMAND (below). Only
+           * for a goal's own rounds, where the question is "which ways reach
+           * this goal" and a worker reports the request without restating its
+           * kind; a broad bucket's worker is asked for the request itself and
+           * still files only what it tagged. The gate, the fragment's own
+           * verdict (ACCEPTED or BLOCKED, below) and every exclusion are
+           * unchanged.
+           */
+          /*
+           * And only where the claim's own fragment declared that lane as a
+           * published request (GOAL_REQUEST_LANE_MEANS): coarsely here, so a
+           * bounded read is not filled with claims it would drop, and exactly
+           * per row below, where the lane's own description is parsed.
+           */
+          OR (c.evidence_lane = ? AND f.required_evidence LIKE ? AND LOWER(f.required_evidence) LIKE ? AND EXISTS (
+                SELECT 1 FROM russell_missions gm
+                  JOIN cash_discovery_rounds gr ON gr.candidate_id = gm.candidate_id
+                 WHERE gm.orchestration_id = o.id AND gr.bucket_id LIKE ?))
         )
         AND f.status IN ('ACCEPTED', 'BLOCKED')
         /*
@@ -1605,11 +1711,23 @@ export async function signalledClaims(input: {
         )
       ORDER BY c.created_at, c.rowid
       LIMIT ?`,
-    [input.projectId, PATTERN_LANE, 'goal-%-mx-%', Math.max(1, input.limit ?? 50)],
+    [input.projectId, PATTERN_LANE, 'goal-%-mx-%', 'goal-%', GOAL_REQUEST_LANE, GOAL_REQUEST_LANE_DECLARED,
+      `%${GOAL_REQUEST_LANE_MEANS}%`, 'goal-%', Math.max(1, input.limit ?? 50)],
   );
-  return rows.map((row) => {
+  return rows.filter((row) => {
+    // The exact half of the fragment check: the coarse LIKEs above cannot bind the phrase to the lane.
+    if (row.opportunity_signal !== null || row.evidence_lane !== GOAL_REQUEST_LANE) return true;
+    return declaresOpenRequestLane(row.fragment_required_evidence);
+  }).map((row) => {
     const mapped = mapClaim(row);
-    const claim = mapped.opportunitySignal || mapped.evidenceLane !== PATTERN_LANE ? mapped : { ...mapped, opportunitySignal: 'RECURRING_OUTSOURCED_WORK' as const };
+    // An untagged claim is only returned by the two lane rules above, so its lane names its kind.
+    const claim = mapped.opportunitySignal
+      ? mapped
+      : mapped.evidenceLane === PATTERN_LANE
+        ? { ...mapped, opportunitySignal: 'RECURRING_OUTSOURCED_WORK' as const }
+        : mapped.evidenceLane === GOAL_REQUEST_LANE
+          ? { ...mapped, opportunitySignal: 'ACTIVE_BUYER_DEMAND' as const }
+          : mapped;
     return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
   });
 }

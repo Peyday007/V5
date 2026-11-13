@@ -1,5 +1,7 @@
 # High-ticket remote B2B offers ($1k–$5k, prepaid or deposit): research (2026-11-03)
 
+> **Corrected 2026-11-12 (§105):** government and federal work is not excluded. Every opening is judged on its economics, its time to revenue and feasibility, never its industry. A long award cycle may not suit a 30-day sprint, and it stays eligible for longer goals.
+
 Scope: earlier studies found low-ticket remote lines settle only ~$1–3.5k by Nov 27. This study asks whether a **few sales at $1,000–$5,000**, prepaid or with a large deposit, delivered remotely by AI and subcontractors, can do better. Owner rules apply: no physical work, online only, ≤$300 at risk before income, ≤$3,000 committed in total, no government buyers, no website-repair plays, no freelance-platform bidding, no new paid APIs.
 
 Tags: **PUBLISHED** means a source states it (URL given). **ESTIMATE** means my inference. Almost every price below comes from a vendor page or a vendor blog with a commercial interest. Those are weaker than primary data, and I say so where it matters.

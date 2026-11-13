@@ -408,6 +408,29 @@ describe('the adaptive account control: only unproductive starts count', () => {
     expect(result.unrouted['ACCOUNT_SESSIONS_UNPRODUCTIVE']).toBe(1);
   });
 
+  it('judges a Factory surface apart from the research surfaces on its account', async () => {
+    // Production 2026-11-10: research starts on an account that found nothing
+    // held Factory bins on ACCOUNT_SESSIONS_UNPRODUCTIVE for the surface beside them.
+    for (let index = 0; index < UNPRODUCTIVE_STARTS_THRESHOLD; index += 1) {
+      await pastFire({ sentAt: minutesAgo(40 - index), session: `cse_never_f_${index}` });
+      await binEvent({ type: 'DISPATCH_SESSION_ARRIVED', at: minutesAgo(38 - index), session: `cse_other_f_${index}` });
+    }
+    const factory = await createRoutine({
+      accountId,
+      routineRef: `trig_factory_${Math.random().toString(36).slice(2, 8)}`,
+      name: 'factory-routine',
+      tokenSecretName: 'LOOP_TEST_SECRET',
+      capabilities: ['repository', 'repository-write'],
+    });
+    const { fleetSnapshot } = await import('../server/services/dispatch/candidates.ts');
+    resetProductivityCache();
+    const snapshot = await fleetSnapshot();
+    const research = snapshot.candidates.find((c) => c.routine.id === routineId);
+    const surface = snapshot.candidates.find((c) => c.routine.id === factory.id);
+    expect(research?.accountUnproductiveStarts).toBe(UNPRODUCTIVE_STARTS_THRESHOLD);
+    expect(surface?.accountUnproductiveStarts).toBe(0);
+  });
+
   it('does not count a session Brain handed nothing it could do against its account', async () => {
     for (let index = 0; index < UNPRODUCTIVE_STARTS_THRESHOLD + 2; index += 1) {
       const session = `cse_withheld_${index}`;

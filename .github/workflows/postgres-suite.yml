@@ -119,7 +119,10 @@ jobs:
 
   suite:
     name: The whole suite, against Postgres (shard ${{ matrix.shard }}/8)
-    runs-on: ubuntu-latest
+    # Pinned to the OS whose OCR stack matches production's image (tesseract 5.3,
+    # Debian bookworm). ubuntu-latest moved to 26.04 on 2026-11-10 (tesseract
+    # 5.5), which reads the deliberately poor test scan as text (§98 record).
+    runs-on: ubuntu-24.04
     strategy:
       # Every shard runs to its end, so one red run names every failure in the
       # suite rather than the first shard's. The verdict is the same either way.
@@ -151,6 +154,10 @@ jobs:
             if timeout 300 sudo apt-get update && timeout 300 sudo apt-get install -y --no-install-recommends \
                 poppler-utils tesseract-ocr tesseract-ocr-eng; then ok=1; break; fi
             echo "::warning::OCR tooling install attempt $attempt did not finish; retrying."
+            # A runner whose Azure apt mirror stops resolving (2026-11-11: every
+            # suite shard from 13:32 to 16:26 failed here, so nothing released)
+            # takes the next attempt from Ubuntu's own archive.
+            sudo sed -i 's#mirror+file:/etc/apt/apt-mirrors.txt#http://archive.ubuntu.com/ubuntu/#g; s#http://azure.archive.ubuntu.com/ubuntu/#http://archive.ubuntu.com/ubuntu/#g' /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
           done
           [ "$ok" = 1 ] || { echo '::error::Could not install the OCR tooling in three bounded attempts.'; exit 1; }
           tesseract --version | head -1

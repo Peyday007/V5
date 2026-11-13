@@ -114,6 +114,12 @@ async function readObjectiveText(file: string, flags: Map<string, string | true>
   return reply.body;
 }
 
+/** `--contains true|false`: the release workflow's authenticated containment reading, or absent. */
+function containsFlag(flags: Args['flags']): boolean | null {
+  const value = flagString(flags, 'contains');
+  return value === 'true' ? true : value === 'false' ? false : null;
+}
+
 function fail(message: string): never {
   process.stderr.write(`${message}\n`);
   process.exit(1);
@@ -391,8 +397,24 @@ async function main(): Promise<void> {
       const changeRequestId =
         flagString(flags, 'change-request') ?? fail('--change-request is required');
       const field = flagString(flags, 'field') ?? fail('--field is required');
-      const reason = flagString(flags, 'reason') ?? fail('--reason is required');
-      const raw = flagString(flags, 'value') ?? fail('--value is required');
+      /*
+       * `--value-file <path> [--ref <branch>]`: the amendment as a committed JSON
+       * file, `{ "value": …, "reason": "…" }`, read the way `submit` reads an
+       * objective. Prose cannot pass through factory.yml's `extra`, which refuses
+       * quotes and splits on spaces, so a contradictory acceptance condition had
+       * no way to be corrected from a session: fcp_b11abd00 (2026-11-11) spent
+       * two attempts on a condition a worker read as forbidding the fix.
+       */
+      const valueFile = flagString(flags, 'value-file');
+      const fromFile = valueFile
+        ? (JSON.parse(await readObjectiveText(valueFile, flags)) as { value?: unknown; reason?: unknown })
+        : null;
+      if (fromFile && fromFile.value === undefined) fail(`${valueFile} has no "value"`);
+      const reason =
+        flagString(flags, 'reason') ??
+        (typeof fromFile?.reason === 'string' ? fromFile.reason : null) ??
+        fail('--reason is required');
+      const raw = fromFile ? JSON.stringify(fromFile.value) : (flagString(flags, 'value') ?? fail('--value is required'));
       // A list for the list-shaped fields, a plain string for the rest. Parsed
       // here rather than guessed inside the service.
       const listFields = new Set([
@@ -401,7 +423,9 @@ async function main(): Promise<void> {
         'mutation_scope',
         'verification_commands',
       ]);
-      const newValue: unknown = listFields.has(field)
+      const newValue: unknown = fromFile
+        ? listFields.has(field) ? fromFile.value : String(fromFile.value)
+        : listFields.has(field)
         ? raw.trim().startsWith('[')
           ? (JSON.parse(raw) as unknown)
           : raw.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0)
@@ -430,6 +454,17 @@ async function main(): Promise<void> {
           `reason ${result.amendment.reason}\n` +
           `re-verification ${result.amendment.requiresReverification ? 'required' : 'not required'}\n`,
       );
+      /*
+       * A campaign parked on its contract is not re-ticked by the dispatcher, so
+       * "the next tick queues the repair by itself" waited for a tick that never
+       * came (production 2026-11-11, fcp_ef7bb04a: the scope was amended and
+       * the campaign stayed BLOCKED until a session ticked it by hand). The
+       * amendment is the event that changes the campaign's reality; tick it here.
+       */
+      if (campaign && campaign.state === 'BLOCKED') {
+        const report = await tickRemoteCampaign(campaign.id);
+        process.stdout.write(`ticked ${report.campaignId}: ${report.state} — ${report.stage}\n`);
+      }
       break;
     }
 
@@ -845,9 +880,7 @@ async function main(): Promise<void> {
       const { listBins, listDispatchesForBin } = await import('../server/repos/bins.ts');
       const now = new Date().toISOString();
       const snapshot = await fleetSnapshot(new Date(now));
-      const ready = (await listBins({ states: ['READY'], limit: 500 })).filter((bin) =>
-        bin.kind.startsWith('FACTORY_'),
-      );
+      const ready = await listBins({ states: ['READY'], kindPrefix: 'FACTORY_', limit: 500 });
       const bins = [];
       for (const bin of ready) {
         const dispatches = await listDispatchesForBin(bin.id);
@@ -1392,7 +1425,7 @@ async function main(): Promise<void> {
         process.stdout.write(`  campaign ${row.campaign.id} ${row.campaign.state}${row.working ? '' : ' (holds no slot)'}\n`);
         if (row.blocked) {
           process.stdout.write(
-            `      blocked (${row.blocked.wait === 'PERSON' ? 'NEEDS YOU' : 'automatic wait'}) ${row.blocked.kind}: ` +
+            `      blocked (${row.blocked.wait === 'PERSON' ? 'NEEDS YOU' : row.blocked.wait === 'MAINTAINER' ? 'maintainer session' : 'automatic wait'}) ${row.blocked.kind}: ` +
               `${row.blocked.detail.slice(0, 200)}\n      remedy ${row.blocked.remedy}\n`,
           );
         }
@@ -1546,11 +1579,33 @@ async function main(): Promise<void> {
     case 'release-verify': {
       const runId = flagString(flags, 'run') ?? fail('--run is required');
       const { verifyReleaseRun } = await import('../server/services/factory/release/verify.ts');
-      const outcome = await verifyReleaseRun(runId);
+      const outcome = await verifyReleaseRun(runId, { attestedContains: containsFlag(flags) });
       for (const check of outcome.checks) {
         process.stdout.write(`  ${check.ok ? 'PASS' : 'FAIL'} ${check.check} — ${check.detail}\n`);
       }
-      process.stdout.write(`RELEASE-VERIFY: ${outcome.live ? 'LIVE' : 'FAILED'}\n`);
+      process.stdout.write(`RELEASE-VERIFY: ${outcome.live ? 'LIVE' : outcome.unknown ? 'UNKNOWN' : 'FAILED'}\n`);
+      break;
+    }
+
+    /*
+     * The serving revision, for the release workflow to ask the forge — with its
+     * own token — whether it contains a merge, and hand the answer back in
+     * `--contains` (production reads the forge without one).
+     */
+    case 'release-revision': {
+      const { BRAIN_REVISION } = await import('../server/env.ts');
+      process.stdout.write(`RELEASE-REVISION: ${BRAIN_REVISION ?? 'none'}\n`);
+      break;
+    }
+
+    case 'release-reverify': {
+      const runId = flagString(flags, 'run') ?? fail('--run is required');
+      const { reverifyUnansweredRelease } = await import('../server/services/factory/release/verify.ts');
+      const outcome = await reverifyUnansweredRelease(runId, { attestedContains: containsFlag(flags) });
+      for (const check of outcome.checks) {
+        process.stdout.write(`  ${check.ok ? 'PASS' : check.unknown ? 'UNKNOWN' : 'FAIL'} ${check.check} — ${check.detail}\n`);
+      }
+      process.stdout.write(`RELEASE-VERIFY: ${outcome.live ? 'LIVE' : outcome.unknown ? 'UNKNOWN' : 'FAILED'}\n`);
       break;
     }
 
@@ -1739,6 +1794,36 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'program-unblock': {
+      // Widen a program's started campaigns to their directories and own test file, regrant
+      // units that ran out on scope, reopen parked bins — as the program's approver (§97).
+      const { unblockProgram } = await import('../server/services/factory/program/unblock.ts');
+      const { getProgram: readProgramRow } = await import('../server/repos/factoryProgram.ts');
+      const programId = flagString(flags, 'program') ?? fail('--program is required');
+      const row = await readProgramRow(programId);
+      if (!row?.approvedByUserId) fail('the program is not approved');
+      const grantCampaign = flagString(flags, 'campaign');
+      const grantPaths = (flagString(flags, 'add') ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+      if ((grantCampaign === undefined) !== (grantPaths.length === 0)) fail('--campaign and --add go together: the campaign key and the exact paths granted to it');
+      const steps = await unblockProgram({
+        programId,
+        operatorId: row!.approvedByUserId!,
+        ...(grantCampaign ? { grant: { campaign: grantCampaign, paths: grantPaths } } : {}),
+      });
+      for (const step of steps) process.stdout.write(`${step.action} ${step.campaign}: ${step.detail}\n`);
+      process.stdout.write(`unblock: ${steps.filter((s) => s.action !== 'SKIP' && s.action !== 'REFUSED').length} step(s), ${steps.filter((s) => s.action === 'REFUSED').length} refused\n`);
+      break;
+    }
+
+    case 'reconcile-scopes': {
+      // The hourly scope reconciliation, now (owner's authorization 2026-11-11).
+      const { reconcileBlockedScopes } = await import('../server/services/factory/program/unblock.ts');
+      const steps = await reconcileBlockedScopes(Date.now(), true);
+      for (const step of steps) process.stdout.write(`${step.action} ${step.campaign}: ${step.detail}\n`);
+      process.stdout.write(`reconcile: ${steps.filter((s) => s.action !== 'SKIP' && s.action !== 'REFUSED').length} step(s), ${steps.filter((s) => s.action === 'REFUSED').length} refused\n`);
+      break;
+    }
+
     case 'program-approve': {
       const { approveProgram } = await import('../server/services/factory/program/coordinator.ts');
       const programId = flagString(flags, 'program') ?? fail('--program is required');
@@ -1758,6 +1843,10 @@ async function main(): Promise<void> {
       const { readProgram, tickProgram } = await import('../server/services/factory/program/coordinator.ts');
       const { productionPorts } = await import('../server/services/factory/program/ports.ts');
       const { listPrograms } = await import('../server/repos/factoryProgram.ts');
+      // A probe module registers itself when imported. The server loads it through the
+      // cash routes (cash/view.ts); this process loads no routes, so it is loaded here,
+      // or the CLI would read a requirement as "no such probe" that the server can check.
+      await import('../server/services/cash/telemetryProbe.ts');
       const programId = flagString(flags, 'program') ?? (await listPrograms(['APPROVED', 'DRAFT'])).at(-1)?.id ?? fail('--program is required');
       const ports = productionPorts();
       if (command === 'program-tick') {
@@ -1771,12 +1860,22 @@ async function main(): Promise<void> {
           `source sha256 ${reading.program.sourceSha256}\n` +
           `counts ${Object.entries(reading.counts).map(([k, v]) => `${k}=${v}`).join(' ')}\n`,
       );
-      for (const p of reading.progress) process.stdout.write(`  campaign ${p.key}: ${p.outcome ?? 'not started'}${p.campaignId ? ` (${p.campaignId})` : ''}${p.blocker ? ` — ${p.blocker}` : ''}\n`);
+      for (const p of reading.progress) process.stdout.write(`  campaign ${p.key}: ${p.outcome ?? 'not started'}${p.campaignId ? ` (${p.campaignId})` : p.changeRequestId ? ` (change request ${p.changeRequestId}, not admitted)` : ''}${p.blocker ? ` — ${p.blocker}` : ''}\n`);
       for (const r of reading.requirements) {
         if (r.status === 'PRODUCTION_VERIFIED' && !flags['all']) continue;
         process.stdout.write(`  ${r.key} ${r.status}${r.reopened ? ' (reopened)' : ''}: ${r.reason}\n`);
       }
       process.stdout.write(`PROGRAM-VERDICT: ${reading.verdict}\n`);
+      // The second, independent status (Release 01, R01-C): whether each cash goal
+      // is met, read from the ledger and the goal's own acceptance policy. A
+      // release, a merged campaign or a verified requirement never moves it.
+      const { cashGoalStatuses } = await import('../server/services/goals/status.ts');
+      for (const goal of await cashGoalStatuses()) {
+        process.stdout.write(
+          `CASH-GOAL ${goal.goalId} ${goal.achieved ? 'ACHIEVED' : 'NOT_ACHIEVED'}: ${goal.achievedLabel} of ${goal.targetLabel} ${goal.metric}` +
+            `${goal.daysLeft === null ? '' : `, ${goal.daysLeft} day(s) left`}; plan ${goal.planVerdict ?? 'not yet read'} — ${goal.title}\n`,
+        );
+      }
       break;
     }
 
@@ -1797,7 +1896,9 @@ async function main(): Promise<void> {
 
     case 'capacity': {
       const { readCapacity } = await import('../server/services/factory/program/capacity.ts');
-      const reading = await readCapacity({ sinceHours: Number(flagString(flags, 'hours') ?? '168') });
+      // `--ago N` reads the same window ending N hours ago: the previous day, for a comparison.
+      const ago = Number(flagString(flags, 'ago') ?? '0');
+      const reading = await readCapacity({ sinceHours: Number(flagString(flags, 'hours') ?? '168'), now: new Date(Date.now() - ago * 3_600_000) });
       process.stdout.write(`${JSON.stringify(reading, null, 2)}\n`);
       process.stdout.write(`CAPACITY-BOTTLENECK: ${reading.bottleneck}\n`);
       break;
@@ -1810,8 +1911,8 @@ async function main(): Promise<void> {
           '  set-state, queue, withdraw, admission, line, burnin,\n' +
           '  answer-bin,\n' +
           '  reauthorize, regrant-unit, retire, release,\n' +
-          '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-status,\n' +
-          '  program-skeleton, program-submit, program-amend, program-release, program-approve, program-tick, program-status, program-depend, capacity\n',
+          '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-reverify, release-revision, release-status,\n' +
+          '  program-skeleton, program-submit, program-amend, program-release, program-unblock, program-approve, program-tick, program-status, program-depend, capacity\n',
       );
       // An unknown command is the caller getting it wrong, and it used to be
       // reported as success — see the verdict line below.

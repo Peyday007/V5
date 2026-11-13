@@ -37,6 +37,7 @@
 import { optimizePortfolio, type Activity, type PortfolioReading } from '../quant/portfolio.ts';
 import { makeRng } from '../scenario/random.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
+import { assessOutreachRecord, type EvidenceAssessment, type OutreachCampaignRecord } from './evidenceAuthority.ts';
 
 export const PORTFOLIO_WORLDS = 2_000;
 /** The shares of the shared outreach an opening may be given. */
@@ -103,6 +104,22 @@ export interface PortfolioCombination {
   overSpend: number;
 }
 
+/** What the owner's own sends measured, and the interval it puts on a cold-outreach reply rate (§92). */
+export interface MeasuredRatesReading {
+  sent: number;
+  replies: number;
+  opportunities: number;
+  bounced: number;
+  low: number;
+  high: number;
+  /** What the record may say about this plan (§99), and why. */
+  assessment: EvidenceAssessment;
+  /** How it was used: binding the estimate, moving its floor, or only as the as-is floor reading. */
+  applied: 'BINDS' | 'FLOOR_OF_RANGE' | 'AS_IS_FLOOR_ONLY';
+  /** The plan if the new implementation performs no better than the record: never the plan's own reading. */
+  asIs?: { reach: number; settledP10: number; settledP50: number; settledP90: number } | null;
+}
+
 export interface GoalPortfolio {
   /** PROBABILITY only when every input of every member rests on evidence. */
   basis: 'PROBABILITY' | 'COVERAGE';
@@ -123,6 +140,8 @@ export interface GoalPortfolio {
   /** What keeps the reading from being a probability, or the target from being reached. */
   missing: string[];
   searched: number;
+  /** The measured reply interval cold-outreach openings were sampled in, when one was passed. */
+  measuredRates?: MeasuredRatesReading | null;
 }
 
 /** Whether an input may be read as a distribution of the world rather than a range swept. */
@@ -225,6 +244,64 @@ interface Worlds {
   close: number[];
 }
 
+/** Two-sided 90% Wilson score interval. */
+const Z90 = 1.6449;
+function wilson90(successes: number, trials: number): { low: number; high: number } {
+  if (trials <= 0) return { low: 0, high: 1 };
+  const p = successes / trials;
+  const denom = 1 + (Z90 * Z90) / trials;
+  const centre = p + (Z90 * Z90) / (2 * trials);
+  const margin = Z90 * Math.sqrt((p * (1 - p)) / trials + (Z90 * Z90) / (4 * trials * trials));
+  return { low: Math.max(0, (centre - margin) / denom), high: Math.min(1, (centre + margin) / denom) };
+}
+
+/**
+ * The interval the owner's own sends put on a cold-outreach reply rate: from
+ * the lower bound of opportunities per send to the upper bound of unique
+ * replies per send, each at 90%. Null when nothing was sent.
+ */
+export function measuredReplyInterval(rates: { sent: number; replies: number; opportunities: number }): { low: number; high: number } | null {
+  if (!(rates.sent > 0)) return null;
+  const low = wilson90(Math.min(rates.opportunities, rates.sent), rates.sent).low;
+  const high = wilson90(Math.min(rates.replies, rates.sent), rates.sent).high;
+  return low <= high ? { low, high } : { low: high, high: low };
+}
+
+/**
+ * An opening that sells through the shared cold outreach has its reply rate
+ * sampled inside the measured interval. A card's own rate (published or
+ * measured) survives only where it lies inside that interval; otherwise the
+ * observed figure wins over the estimate (§92). A rate of exactly one is a
+ * per-contact agreement measurement that already contains replying, so it is
+ * not a reply rate and is left alone.
+ */
+function withMeasuredReply(one: ModelledOpportunity, rates: Pick<MeasuredRatesReading, 'low' | 'high' | 'sent' | 'replies' | 'opportunities' | 'bounced'>, mode: 'BINDS' | 'FLOOR_OF_RANGE' = 'BINDS'): ModelledOpportunity {
+  if (!one.repeatable || one.agreedValue > 0 || one.channel) return one;
+  const own = one.respond;
+  if (own.value === 1 && own.provenance === 'HISTORICAL') return one;
+  const ownLow = own.value ?? own.low ?? own.inferred?.p10 ?? null;
+  const ownHigh = own.value ?? own.high ?? own.inferred?.p90 ?? null;
+  if (ownLow !== null && ownHigh !== null && ownLow >= rates.low - 1e-12 && ownHigh <= rates.high + 1e-12) return one;
+  const pct = (x: number) => `${(x * 100).toFixed(2)}%`;
+  if (mode === 'FLOOR_OF_RANGE') {
+    // A comparable record on a sound list moves an unknown's floor; a card's own rate stands.
+    if (own.value !== null || own.provenance === 'EVIDENCE' || own.provenance === 'HISTORICAL') return one;
+    const high = Math.max(ownHigh ?? rates.high, rates.high);
+    return { ...one, respond: { ...own, low: Math.min(rates.low, high), high, note: `${own.note}${own.note ? '; ' : ''}floor from a comparable measured record (${rates.replies} replies on ${rates.sent} sends)` } };
+  }
+  return {
+    ...one,
+    respond: {
+      value: null,
+      low: rates.low,
+      high: rates.high,
+      provenance: 'UNKNOWN',
+      source: { kind: 'OTHER', ref: 'instantly:analytics' },
+      note: `measured on the owner's own sends: ${rates.replies} unique replies and ${rates.opportunities} opportunities from ${rates.sent} emails (${rates.bounced} bounced); sampled from ${pct(rates.low)} to ${pct(rates.high)} at 90%`,
+    },
+  };
+}
+
 /** One opening's demand and cash, world by world, at one share of the shared outreach. */
 export function demandWorlds(one: ModelledOpportunity, share: number, daysLeft: number, contactsPerDay: ModelInput, worlds: number, seed: number): Worlds {
   const rng = makeRng(seed, one.index * 97 + Math.round(share * 100));
@@ -308,18 +385,37 @@ export function evaluateGoalPortfolio(input: {
    * figure; an owner's stated figure wins.
    */
   measuredCapacity?: { perDay: number; accounts: number } | null;
+  /**
+   * What the owner's own sends measured (§92). When passed, the reply rate of
+   * every opening that sells through the shared cold outreach is sampled in
+   * the interval those sends allow rather than over the published bounds.
+   */
+  measuredRates?: { sent: number; replies: number; opportunities: number; bounced?: number; campaigns?: OutreachCampaignRecord[] } | null;
+  /**
+   * Overrides the outreach a day (a strategy that buys sending capacity, §99)
+   * and money already committed before any opening starts (its cost).
+   */
+  contactsPerDay?: ModelInput;
+  committed?: { capital: number; spend: number } | null;
+  /** Internal: apply the measured record as binding regardless of its authority (the as-is floor). */
+  forceMeasured?: boolean;
   worlds?: number;
   seed?: number;
 }): GoalPortfolio {
   const worlds = input.worlds ?? PORTFOLIO_WORLDS;
   const seed = input.seed ?? 20261103;
   const stated = statedContactsPerDay(input.resources);
-  const contactsPerDay: ModelInput =
-    stated !== null
+  const interval = input.measuredRates ? measuredReplyInterval(input.measuredRates) : null;
+  const record = input.measuredRates ? { sent: input.measuredRates.sent, replies: input.measuredRates.replies, opportunities: input.measuredRates.opportunities, bounced: input.measuredRates.bounced ?? 0 } : null;
+  const assessment = record ? assessOutreachRecord({ ...record, campaigns: input.measuredRates?.campaigns ?? [] }) : null;
+  const applied: MeasuredRatesReading['applied'] = input.forceMeasured || assessment?.authority === 'TRANSFERABLE' ? 'BINDS' : assessment?.authority === 'COMPARABLE' ? 'FLOOR_OF_RANGE' : 'AS_IS_FLOOR_ONLY';
+  const measuredRates: MeasuredRatesReading | null = record && interval && assessment ? { ...record, ...interval, assessment, applied } : null;
+  const contactsPerDay: ModelInput = input.contactsPerDay ??
+    (stated !== null
       ? { value: stated, low: stated, high: stated, provenance: 'EVIDENCE', source: { kind: 'PERSON', ref: 'goal resources' }, note: 'the outreach a day the owner stated' }
       : input.measuredCapacity && input.measuredCapacity.perDay > CONTACTS_PER_DAY_BOUNDS.low
         ? { value: null, low: CONTACTS_PER_DAY_BOUNDS.low, high: input.measuredCapacity.perDay, provenance: 'UNKNOWN', source: { kind: 'OTHER', ref: 'instantly:accounts' }, note: `up to ${input.measuredCapacity.perDay} a day across the owner's ${input.measuredCapacity.accounts} healthy Instantly sending accounts, shared with the owner's other campaigns; swept` }
-        : { value: null, low: CONTACTS_PER_DAY_BOUNDS.low, high: CONTACTS_PER_DAY_BOUNDS.high, provenance: 'UNKNOWN', source: null, note: 'nobody has stated the outreach a day; swept' };
+        : { value: null, low: CONTACTS_PER_DAY_BOUNDS.low, high: CONTACTS_PER_DAY_BOUNDS.high, provenance: 'UNKNOWN', source: null, note: 'nobody has stated the outreach a day; swept' });
   /*
    * Money tied up before anything has been proved: the owner's per-week limit
    * is what may go out in the first week, before any cash can have returned,
@@ -327,16 +423,22 @@ export function evaluateGoalPortfolio(input: {
    * tied up before proof"). Each arrangement on its own may start with at most
    * the before-proof limit ("about $375 initial individual outlay").
    */
-  const startingCapital = input.perWeek ?? input.beforeProof ?? input.capitalCeiling;
+  const committed = input.committed ?? null;
+  const baseCapital = input.perWeek ?? input.beforeProof ?? input.capitalCeiling;
+  const startingCapital = baseCapital === null ? null : Math.max(0, baseCapital - (committed?.capital ?? 0));
+  const spendCeiling = input.capitalCeiling === null ? null : Math.max(0, input.capitalCeiling - (committed?.spend ?? 0));
   const activities: Activity[] = [];
   const memberOf = new Map<string, PortfolioMember>();
   const demand: DemandEstimate[] = [];
-  for (const one of input.openings) {
+  for (const card of input.openings) {
+    const one = measuredRates && applied !== 'AS_IS_FLOOR_ONLY' ? withMeasuredReply(card, measuredRates, applied) : card;
     const id = one.opportunity.id;
     const capital = capitalAtStart(one);
     const unestablished = INPUT_NAMES.filter(([key]) => !established(one[key] as ModelInput)).map(([, name]) => name);
     if (!capital.established) unestablished.push('money tied up');
-    if (one.repeatable && stated === null) unestablished.push('outreach a day');
+    if (one.channel) {
+      if (!established(one.channel.perDay)) unestablished.push(`${one.channel.label} a day`);
+    } else if (one.repeatable && stated === null && !(input.contactsPerDay && established(input.contactsPerDay))) unestablished.push('outreach a day');
     let refused: string | null = null;
     /*
      * An established outlay over the per-arrangement limit is refused. An
@@ -359,7 +461,8 @@ export function evaluateGoalPortfolio(input: {
         capital.amount = (floor + input.beforeProof) / 2;
       }
     }
-    const full = demandWorlds(one, 1, input.daysLeft, contactsPerDay, worlds, seed);
+    const reach = one.channel?.perDay ?? contactsPerDay;
+    const full = demandWorlds(one, 1, input.daysLeft, reach, worlds, seed);
     demand.push({
       opportunityId: id,
       title: one.opportunity.title,
@@ -379,10 +482,10 @@ export function evaluateGoalPortfolio(input: {
       refused,
     });
     if (refused) continue;
-    const shares: number[] = one.repeatable && one.agreedValue === 0 ? [...OUTREACH_SHARES] : [0];
+    const shares: number[] = one.channel ? [1] : one.repeatable && one.agreedValue === 0 ? [...OUTREACH_SHARES] : [0];
     const keys = shares.map((share) => `${id}@${share}`);
     for (const share of shares) {
-      const w = share === 1 ? full : demandWorlds(one, share, input.daysLeft, contactsPerDay, worlds, seed);
+      const w = share === 1 ? full : demandWorlds(one, share, input.daysLeft, reach, worlds, seed);
       const key = `${id}@${share}`;
       memberOf.set(key, { opportunityId: id, title: one.opportunity.title, share: share > 0 ? share : null });
       activities.push({
@@ -390,11 +493,12 @@ export function evaluateGoalPortfolio(input: {
         label: one.opportunity.title.slice(0, 80),
         cash: w.cash,
         days: w.days,
-        spend: w.spend,
+        // A cost the buyer's prepayment funds is not the owner's money at risk (§99).
+        spend: one.fundedByBuyer ? w.spend.map(() => 0) : w.spend,
         justified: unestablished.length === 0,
         capital: capital.amount,
         startDay: 0,
-        ...(share > 0 ? { uses: { outreach: share }, riskGroup: 'shared-outreach' } : {}),
+        ...(one.channel ? { uses: { [one.channel.resource]: 1 }, riskGroup: one.channel.riskGroup } : share > 0 ? { uses: { outreach: share }, riskGroup: 'shared-outreach' } : {}),
         excludes: keys.filter((other) => other !== key),
       });
     }
@@ -403,9 +507,9 @@ export function evaluateGoalPortfolio(input: {
     activities,
     target: input.remaining,
     deadlineDays: input.daysLeft,
-    capacity: { outreach: 1 },
+    capacity: { outreach: 1, ...Object.fromEntries(input.openings.filter((o) => o.channel).map((o) => [o.channel!.resource, 1])) },
     ...(startingCapital !== null ? { startingCapital } : {}),
-    ...(input.capitalCeiling !== null ? { spendCeiling: input.capitalCeiling } : {}),
+    ...(spendCeiling !== null ? { spendCeiling } : {}),
     riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
     worlds,
     seed,
@@ -440,6 +544,13 @@ export function evaluateGoalPortfolio(input: {
     missing.push(`the best combination reaches the target in ${(best.reach * 100).toFixed(0)}% of worlds; more openings, or better-evidenced ones, are needed for 90%`);
   }
   if (!best) missing.push('no combination of the openings held can run inside the limits');
+  if (measuredRates && measuredRates.applied === 'AS_IS_FLOOR_ONLY' && !input.forceMeasured) {
+    // The record answers one question: what if the new campaign does no better than the old ones?
+    const floor = evaluateGoalPortfolio({ ...input, forceMeasured: true, worlds: Math.min(worlds, 600) });
+    measuredRates.asIs = floor.best
+      ? { reach: floor.best.reach, settledP10: floor.best.settledP10, settledP50: floor.best.settledP50, settledP90: floor.best.settledP90 }
+      : null;
+  }
   return {
     basis,
     worlds,
@@ -451,11 +562,12 @@ export function evaluateGoalPortfolio(input: {
       deadlineDays: input.daysLeft,
       startingCapital,
       perArrangement: input.beforeProof,
-      spendCeiling: input.capitalCeiling,
+      spendCeiling,
       contactsPerDay: { value: stated, low: contactsPerDay.low ?? 0, high: contactsPerDay.high ?? 0, source: stated !== null ? 'stated by the owner on the goal' : input.measuredCapacity && input.measuredCapacity.perDay > CONTACTS_PER_DAY_BOUNDS.low ? `measured: up to ${input.measuredCapacity.perDay}/day on ${input.measuredCapacity.accounts} healthy Instantly accounts (shared); swept` : 'not stated; swept' },
       correlation: SHARED_OUTREACH_CORRELATION,
     },
     missing,
     searched: result.searched,
+    measuredRates,
   };
 }

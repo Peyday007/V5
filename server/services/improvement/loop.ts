@@ -62,6 +62,9 @@ import { BRAIN_PROJECT_SLUG, BRAIN_REPOSITORY_ID } from '../../domain/binPurpose
 import { RELEASE_EXCLUDED_PATHS } from '../../domain/factoryRelease.ts';
 import { claimRejections, freeLaneFailures, ownerInterventions, packetOutcomes, readMetric } from './scoreboard.ts';
 import { improvementPerson, improvementSwitch } from './authority.ts';
+import { ROUTING_MARKER } from '../../domain/engineeringDirector.ts';
+import type { ExistingMatch } from '../selfmodel/gapLoop.ts';
+import type { ValueJudgment } from '../selfmodel/gapValue.ts';
 
 export const IMPROVEMENT_TICK_MS = 10 * 60_000;
 const HOUR = 3_600_000;
@@ -91,6 +94,10 @@ export interface ImprovementTickReport {
   activation?: string;
   /** Goals whose capability assessment changed this pass (§88). */
   objectives?: string[];
+  /** Capability-gap loop steps recorded this pass, `KEY:STEP` (AUTO-20-2, `selfmodel/gapLoopSync.ts`). */
+  gapSteps?: string[];
+  /** Weaknesses Brain originated from goals, failures, idle capacity, openings and needs this pass (AUTO-20-1, `selfmodel/originate.ts`). */
+  originated?: string[];
 }
 
 const OBJECTIVE_CHECK_MS = 60 * 60_000;
@@ -101,6 +108,7 @@ export const CAPABILITY_BOOT_GRACE_MS = 15 * 60_000;
 const CAPABILITY_EVERY_MS = 60 * 60_000;
 let lastCapabilityAt = 0;
 let lastCapabilityGaps: Weakness[] = [];
+let lastOriginated: Weakness[] = [];
 let processStartedAt = Date.now();
 
 function capabilityDue(now: Date): boolean {
@@ -120,6 +128,7 @@ export function resetImprovementTick(): void {
   lastObjectiveCheck = 0;
   lastCapabilityAt = 0;
   lastCapabilityGaps = [];
+  lastOriginated = [];
   processStartedAt = Date.now() - CAPABILITY_BOOT_GRACE_MS;
 }
 
@@ -129,6 +138,10 @@ export function resetImprovementTick(): void {
 
 /** Every weakness the rows show now. Pure reads. */
 export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
+  return (await detectAll(now)).weaknesses;
+}
+
+async function detectAll(now: Date): Promise<{ weaknesses: Weakness[]; originated: string[]; errors: string[] }> {
   const to = now.toISOString();
   const day = new Date(now.getTime() - 24 * HOUR).toISOString();
   const week = new Date(now.getTime() - 7 * 24 * HOUR).toISOString();
@@ -148,7 +161,12 @@ export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
   // At most hourly, and never in the first minutes after boot: the assessment is ~25
   // reads, and a restart is when the database is busiest (Deploy 41940346030 and
   // 41945448533 timed out verifying right after the restart).
-  if (!capabilityDue(now)) return [...detected, ...lastCapabilityGaps];
+  const cached = (): { weaknesses: Weakness[]; originated: string[]; errors: string[] } => ({
+    weaknesses: [...detected, ...lastCapabilityGaps, ...lastOriginated.filter((w) => !detected.some((d) => d.key === w.key))],
+    originated: lastOriginated.map((w) => w.key),
+    errors: [],
+  });
+  if (!capabilityDue(now)) return cached();
   lastCapabilityAt = now.getTime();
   const open = (await listCandidates({ open: true })).map((c) => c.weaknessKey);
   const { capabilityWeaknesses } = await import('../selfmodel/capabilities.ts');
@@ -157,7 +175,16 @@ export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
     console.warn(`capability assessment failed: ${String((error as Error)?.message ?? error)}`);
     return [];
   });
-  return [...detected, ...lastCapabilityGaps];
+  // AUTO-20-1: the work nobody told Brain to look for — live goals held by the same gaps for days,
+  // bins failing the same way, capacity idle beside waiting work, openings closing unpursued, and a
+  // resource several opportunities wait on. Same unit, same loop, same hourly cadence as the maps.
+  const { originatedWeaknesses } = await import('../selfmodel/originate.ts');
+  const origination = await originatedWeaknesses(now, [...detected, ...lastCapabilityGaps].map((w) => w.key)).catch((error: unknown) => ({
+    weaknesses: [],
+    errors: [`origination: ${String((error as Error)?.message ?? error).slice(0, 200)}`],
+  }));
+  lastOriginated = origination.weaknesses;
+  return { ...cached(), errors: origination.errors };
 }
 
 /** The candidates of one weakness family (`KEY`, `KEY#2`, …), newest attempt last. */
@@ -189,19 +216,60 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
     parentId = latest.id;
   }
   const key = attempt === 1 ? weakness.key : `${weakness.key}#${attempt}`;
-  const { candidate, created } = await upsertCandidate(toInput(weakness, attempt, parentId, key));
+  const input = toInput(weakness, attempt, parentId, key);
+  const evidence: Record<string, unknown> = { ...input.evidence };
+  // §87 (AUTO-20-1): a weakness that persists after an attempt that was kept without effect, or reverted,
+  // is evidence that the method was inadequate, not that it needs running again. The judgment is
+  // made from the earlier attempts' own recorded decisions and stored on the candidate, so the
+  // next objective asks for a different method and names what was tried.
+  const inadequate = members.filter((m) => m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED');
+  let methodInadequacy: { judgment: string; failedAttempts: number[] } | null = null;
+  // AUTO-20-1: work Brain originated carries the judgment that made an observation into work, and an
+  // observation that says an earlier repair did not move the objective is a method judged inadequate.
+  const { isOriginated } = await import('../selfmodel/originate.ts');
+  if (isOriginated(weakness)) {
+    evidence['origination'] = weakness.origination;
+    if (weakness.origination.methodInadequate) methodInadequacy = { judgment: weakness.origination.methodInadequate, failedAttempts: [] };
+  }
+  if (attempt > 1 && inadequate.length > 0) {
+    methodInadequacy = {
+      judgment:
+        `Attempt(s) ${inadequate.map((m) => m.attempt).join(', ')} ended ${inadequate.map((m) => m.decision).join(', ')} ` +
+        'and the weakness still shows in the rows: the method used was inadequate for this cause. ' +
+        'Change the method (the approach, the owner of the behaviour, or the measure), do not re-run it.',
+      failedAttempts: inadequate.map((m) => m.attempt),
+    };
+    Object.assign(evidence, {
+      methodInadequacy,
+      researchQuestion: `${String(evidence['researchQuestion'] ?? weakness.title)} Earlier methods did not work (attempt ${methodInadequacy.failedAttempts.join(', ')}); find a different class of method.`,
+    });
+  }
+  if (methodInadequacy && !evidence['methodInadequacy']) evidence['methodInadequacy'] = methodInadequacy;
+  const { candidate, created } = await upsertCandidate({ ...input, evidence });
   if (!created) return;
   report.opened.push(candidate.weaknessKey);
   await recordImprovementEvent({
     candidateId: candidate.id,
     kind: 'WEAKNESS_DETECTED',
-    detail: { key: candidate.weaknessKey, frequency: weakness.frequency, denominator: weakness.denominator, samples: weakness.samples, attempt },
+    detail: {
+      key: candidate.weaknessKey,
+      frequency: weakness.frequency,
+      denominator: weakness.denominator,
+      samples: weakness.samples,
+      attempt,
+      ...(methodInadequacy ? { methodInadequacy } : {}),
+      ...(evidence['origination'] ? { origination: evidence['origination'] } : {}),
+    },
   });
   // Combine: one owner, one objective. A weakness on a component whose candidate
   // has not yet been sent to Factory joins it rather than racing it.
-  const open = (await listCandidates({ open: true })).filter(
-    (c) => c.id !== candidate.id && c.ownerComponent === candidate.ownerComponent && !c.changeRequestId && c.createdAt <= candidate.createdAt,
-  );
+  // A gap handed to a non-software owner carries its own rows (needs, openings) to that owner: folding it
+  // into another candidate would leave those rows with nobody (S-0249).
+  const open = executionRouteOf(candidate)
+    ? []
+    : (await listCandidates({ open: true })).filter(
+        (c) => c.id !== candidate.id && c.ownerComponent === candidate.ownerComponent && !c.changeRequestId && !executionRouteOf(c) && c.createdAt <= candidate.createdAt,
+      );
   const host = open[0];
   if (host) {
     const joined = [...((host.evidence['combined'] as string[] | undefined) ?? []), candidate.weaknessKey];
@@ -213,6 +281,45 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
     report.decided.push(`${candidate.weaknessKey} COMBINED`);
   }
 }
+
+/** The origination an originated weakness carries, read without importing the originator. */
+function originationOf(weakness: Weakness): Record<string, unknown> | null {
+  const origination = (weakness as { origination?: unknown }).origination;
+  return origination && typeof origination === 'object' ? (origination as Record<string, unknown>) : null;
+}
+
+/**
+ * The non-software owner a candidate's gap belongs to (S-0249), from the route its originator
+ * recorded: a connector, a commercial interaction, information, a watched fact or a person.
+ * Null for every gap the Factory or method research may own.
+ */
+export function executionRouteOf(candidate: Pick<ImprovementCandidate, 'evidence'>): {
+  kind: 'INTEGRATION' | 'COMMERCIAL' | 'RESEARCH' | 'WATCH' | 'PERSON';
+  owner: string;
+  why: string;
+  family: string;
+  observed: string[];
+} | null {
+  const origination = candidate.evidence['origination'] as
+    | { family?: unknown; observed?: unknown; handTo?: unknown; route?: { kind?: unknown; owner?: unknown; why?: unknown } }
+    | undefined;
+  const route = origination?.route;
+  if (!route || typeof route.kind !== 'string' || typeof route.owner !== 'string') return null;
+  if (!['INTEGRATION', 'COMMERCIAL', 'RESEARCH', 'WATCH', 'PERSON'].includes(route.kind)) return null;
+  return {
+    kind: route.kind as 'INTEGRATION' | 'COMMERCIAL' | 'RESEARCH' | 'WATCH' | 'PERSON',
+    owner: route.owner,
+    why: typeof route.why === 'string' ? route.why : '',
+    family: typeof origination?.family === 'string' ? origination.family : '',
+    // The rows the owner is handed: those the originator named for it, else those it observed.
+    observed: (Array.isArray(origination?.handTo) ? origination.handTo : Array.isArray(origination?.observed) ? origination.observed : []).filter(
+      (o): o is string => typeof o === 'string',
+    ),
+  };
+}
+
+/** The ref a hand-off to a non-software owner is recorded under (`deliveredRef`). */
+export const OWNER_HANDOFF_PREFIX = 'OWNER:';
 
 function toInput(weakness: Weakness, attempt: number, parentId: string | null, key: string) {
   return {
@@ -233,6 +340,8 @@ function toInput(weakness: Weakness, attempt: number, parentId: string | null, k
       researchQuestion: weakness.researchQuestion,
       knownCause: weakness.knownCause,
       observedAt: new Date().toISOString(),
+      // The origination (and its execution route, S-0249) survives a re-registration of the same weakness.
+      ...(originationOf(weakness) ? { origination: originationOf(weakness) } : {}),
     },
     attempt,
     parentId,
@@ -245,7 +354,13 @@ function toInput(weakness: Weakness, attempt: number, parentId: string | null, k
 
 export interface Linked {
   research: { settled: boolean; acceptedClaims: number; status: string | null; claims: { claim: string; source: string | null }[] } | null;
-  factory: { state: string; detail: string; mergeSha: string | null; since: string } | null;
+  /**
+   * `needsPerson` is the outcome's own word that the campaign stopped for a
+   * person (its blocker names a person's action). It is carried onto the
+   * FACTORY_BLOCKED event so the scoreboard can tell a gap a person had to
+   * unblock from one Brain closed alone (AUTO-20-4).
+   */
+  factory: { state: string; detail: string; mergeSha: string | null; since: string; needsPerson: boolean; personAction: string | null } | null;
   archive: { claim: string; source: string | null; topic: string | null }[];
 }
 
@@ -288,9 +403,11 @@ async function linked(candidate: ImprovementCandidate): Promise<Linked> {
         detail: outcome.blocker ?? outcome.detail,
         mergeSha: outcome.release?.mergeSha ?? delivery?.mergeSha ?? null,
         since: campaign.updatedAt,
+        needsPerson: outcome.needsPerson,
+        personAction: outcome.personAction,
       };
     } else {
-      factory = { state: 'BUILDING', detail: 'no campaign yet', mergeSha: null, since: candidate.updatedAt };
+      factory = { state: 'BUILDING', detail: 'no campaign yet', mergeSha: null, since: candidate.updatedAt, needsPerson: false, personAction: null };
     }
   }
   const { methodClaimsAnswering } = await import('../research/methodRules.ts');
@@ -330,7 +447,26 @@ async function brainProject(): Promise<{ id: string; layerId: string | null } | 
  * Open method research for a weakness: a research goal in brain-architecture, worked by Claude
  * routines and, once the activation gate is ACTIVE, by the free lane beside them (`activation.ts`).
  */
-async function openResearch(candidate: ImprovementCandidate, now: Date): Promise<string> {
+/**
+ * Search existing capabilities before acquiring anything, and record it (AUTO-20-2 step 3).
+ * The archive count is the one the stage decision read (`link.archive`). A search that cannot be
+ * run or recorded throws, so the caller hands nothing to an owner this pass.
+ */
+async function searchFirst(candidate: ImprovementCandidate, link: Linked): Promise<{ archiveClaims: number; existing: ExistingMatch[] }> {
+  const { searchBeforeAcquire } = await import('../selfmodel/gapLoopSync.ts');
+  return searchBeforeAcquire(candidate, { archiveClaims: link.archive.length });
+}
+
+/** What the search found, as a sentence an assignment or objective carries. Pure. */
+export function existingSentence(existing: readonly ExistingMatch[]): string {
+  if (existing.length === 0) return 'A search of the system scan and the owner path found nothing that already does this. ';
+  return `Already in Brain, found by searching before building (read these first and extend them rather than adding a second mechanism): ${existing
+    .slice(0, 8)
+    .map((e) => `${e.name} (${e.detail})`)
+    .join('; ')}. `;
+}
+
+async function openResearch(candidate: ImprovementCandidate, now: Date, existing: readonly ExistingMatch[] = []): Promise<string> {
   const project = await brainProject();
   if (!project || !project.layerId) throw new Error('The brain-architecture project or its layer is missing.');
   const person = await improvementPerson();
@@ -341,6 +477,8 @@ async function openResearch(candidate: ImprovementCandidate, now: Date): Promise
     `Brain improvement research (not a commercial question). ${String(candidate.evidence['researchQuestion'] ?? candidate.title)}\n\n` +
     `The weakness, from Brain's own production rows: ${candidate.problem} It occurred ${candidate.frequency} time(s) ` +
     `out of ${candidate.denominator}. Recorded reasons:\n${samples}\n\n` +
+    existingSentence(existing) +
+    '\n\n' +
     'Find established, sourced methods (papers, standards, documented engineering practice) that would remove this ' +
     'class of failure for every future job, the evidence of how well each works, and the conditions under which it ' +
     'does not. Name what to measure to know it worked.';
@@ -359,7 +497,13 @@ async function openResearch(candidate: ImprovementCandidate, now: Date): Promise
 }
 
 /** The engineering objective Factory receives: complete, evidenced, with acceptance conditions. */
-export function composeObjective(candidate: ImprovementCandidate, link: Linked, history: ImprovementCandidate[], baseline: MetricReading) {
+export function composeObjective(
+  candidate: ImprovementCandidate,
+  link: Linked,
+  history: ImprovementCandidate[],
+  baseline: MetricReading,
+  existing: readonly ExistingMatch[] | null = null,
+) {
   const samples = ((candidate.evidence['samples'] as string[] | undefined) ?? []).slice(0, 5);
   const combined = (candidate.evidence['combined'] as string[] | undefined) ?? [];
   const methods = [...(link.research?.claims ?? []), ...link.archive].slice(0, 8);
@@ -375,12 +519,20 @@ export function composeObjective(candidate: ImprovementCandidate, link: Linked, 
     `${baseline.value === null ? 'not measured' : baseline.value} over ${baseline.numerator}/${baseline.denominator}). ` +
     (combined.length ? `It also covers ${combined.join(', ')} (same owner). ` : '') +
     `The owner of this behaviour is ${candidate.ownerComponent}; extend it, do not add a second mechanism. ` +
+    (existing ? existingSentence(existing) : '') +
+    (candidate.evidence['origination']
+      ? `Brain originated this from its own observation of the rows (${String((candidate.evidence['origination'] as { family?: string }).family ?? '')}): ${String((candidate.evidence['origination'] as { judgment?: string }).judgment ?? '')} `
+      : '') +
     (candidate.evidence['knownCause'] ? `Diagnosis from the rows: ${String(candidate.evidence['knownCause'])} ` : '') +
+    directiveSentence(candidate) +
     `Recorded failure reasons, verbatim: ${samples.map((s) => JSON.stringify(s)).join('; ')}. ` +
     (methods.length
       ? `Accepted method research Brain holds that bears on it: ${methods.map((m) => `${m.claim} (${m.source ?? 'no source'})`).join(' | ')}. `
       : '') +
     (earlier.length ? `Earlier attempts on this weakness — do not repeat their strategy: ${earlier.join(' | ')}. ` : '') +
+    (candidate.evidence['methodInadequacy']
+      ? `Method judged inadequate by Brain: ${String((candidate.evidence['methodInadequacy'] as { judgment?: string }).judgment ?? '')} `
+      : '') +
     'Make the smallest general change that removes the cause for every future job of this kind, with a test that ' +
     'reproduces the recorded failure class and passes after the change. Lower no evidence bar, gate or permission.';
   return {
@@ -401,6 +553,7 @@ export function composeObjective(candidate: ImprovementCandidate, link: Linked, 
         verification: 'npm test',
       },
       { statement: 'The repository typechecks and the impacted tests pass.', verification: 'npm run typecheck && npm run test:impacted' },
+      ...directiveAcceptance(candidate),
       /*
        * No production-measurement condition here. Production, 2026-11-04: campaign
        * fcp_f648380f… blocked two units on "A03 is a post-deploy measurement and
@@ -414,7 +567,83 @@ export function composeObjective(candidate: ImprovementCandidate, link: Linked, 
   };
 }
 
-async function brainFactoryProject(): Promise<string | null> {
+/**
+ * The operator's directive on a candidate it commissioned (§109), as the objective states it:
+ * the goal it serves, the benefit expected, the priority and why, and how the real effect is
+ * judged. Empty for every candidate a detector raised.
+ */
+export interface Directive {
+  origin: 'OPERATOR';
+  runId: string | null;
+  goalId: string | null;
+  goalTitle: string | null;
+  deficiency: string;
+  intervention: string;
+  expectedBenefit: string;
+  acceptance: string;
+  priority: number;
+  urgency: string;
+  priorityWhy: string;
+  complexity: string;
+  minimumModelClass: 'STRONGEST' | 'FAST';
+  routeWhy: string;
+  evaluation: string;
+}
+
+export function directiveOf(candidate: Pick<ImprovementCandidate, 'evidence'>): Directive | null {
+  const value = candidate.evidence['directive'];
+  return value && typeof value === 'object' && (value as { origin?: unknown }).origin === 'OPERATOR' ? (value as Directive) : null;
+}
+
+function directiveSentence(candidate: ImprovementCandidate): string {
+  const d = directiveOf(candidate);
+  if (!d) return '';
+  return (
+    `Commissioned by Brain's operator${d.runId ? ` (run ${d.runId})` : ''} as a ${d.deficiency} deficiency` +
+    (d.goalId ? ` holding back goal ${d.goalId}${d.goalTitle ? ` ("${d.goalTitle.slice(0, 120)}")` : ''}` : '') +
+    `. Expected benefit: ${d.expectedBenefit} Priority ${d.priority} (${d.urgency}): ${d.priorityWhy}. ` +
+    `How its real effect is judged: ${d.evaluation} ` +
+    (d.minimumModelClass === 'STRONGEST' ? `${ROUTING_MARKER} (${d.routeWhy}) ` : '')
+  );
+}
+
+function directiveAcceptance(candidate: ImprovementCandidate): { statement: string; verification: string }[] {
+  const d = directiveOf(candidate);
+  return d ? [{ statement: d.acceptance.slice(0, 600), verification: 'npm run test:impacted' }] : [];
+}
+
+/**
+ * Register a weakness the operator diagnosed (§109) — the same register, the same family rules,
+ * the same combination by owner as a detector's — and return its live candidate.
+ */
+export async function registerDirected(weakness: Weakness, now = new Date()): Promise<{ candidate: ImprovementCandidate; created: boolean; report: ImprovementTickReport }> {
+  const report: ImprovementTickReport = { ran: true, reason: 'directed', detected: 1, opened: [], advanced: [], decided: [], alerts: [], errors: [] };
+  await register(weakness, now, report);
+  const members = await family(weakness.key);
+  const latest = members.at(-1);
+  if (!latest) throw new Error('The directed candidate was not registered.');
+  return { candidate: latest, created: report.opened.length > 0, report };
+}
+
+/**
+ * Advance one candidate now, outside the ten-minute tick: an authorized assignment is admitted
+ * the moment it exists (§109). The same `advance` the tick runs, with the same one-objective-per-
+ * owner rule, so a candidate whose owner is busy waits for the tick exactly as it would anyway.
+ */
+export async function advanceNow(candidateId: string, now = new Date()): Promise<{ did: string | null; report: ImprovementTickReport }> {
+  const report: ImprovementTickReport = { ran: true, reason: 'directed', detected: 0, opened: [], advanced: [], decided: [], alerts: [], errors: [] };
+  const state = await improvementSwitch();
+  if (!state.enabled) return { did: 'not advanced: the improvement order is switched off', report };
+  const candidate = await getCandidate(candidateId);
+  if (!candidate || candidate.decision) return { did: null, report };
+  const open = await listCandidates({ open: true });
+  const busyOwners = new Set(open.filter((c) => c.id !== candidate.id && c.changeRequestId && !c.deliveredAt).map((c) => c.ownerComponent));
+  const did = await advance(candidate, busyOwners, now, report);
+  if (did) report.advanced.push(`${candidate.weaknessKey}: ${did}`);
+  return { did, report };
+}
+
+export async function brainFactoryProject(): Promise<string | null> {
   const row = await getDb().get<{ project_id: string }>(
     "SELECT project_id FROM factory_project_repositories WHERE grant_id = 'brain' ORDER BY created_at LIMIT 1",
     [],
@@ -423,7 +652,7 @@ async function brainFactoryProject(): Promise<string | null> {
 }
 
 /** Send the engineering to Factory: submit, approve on the standing order, start, and grant a LOW-risk release. */
-async function engineer(candidate: ImprovementCandidate, link: Linked, now: Date): Promise<string> {
+async function engineer(candidate: ImprovementCandidate, link: Linked, now: Date, existing: readonly ExistingMatch[]): Promise<string> {
   const projectId = await brainFactoryProject();
   if (!projectId) throw new Error('No project holds the Brain repository grant for Factory.');
   const baseline = await readMetric(candidate.metric, new Date(now.getTime() - BASELINE_HOURS * HOUR).toISOString(), now.toISOString());
@@ -439,7 +668,7 @@ async function engineer(candidate: ImprovementCandidate, link: Linked, now: Date
   const verdict = checkDependencies(dependency);
   if (!verdict.complete) throw new Error(`The dependency check is incomplete: ${verdict.missing.join(' ')}`);
   const history = await family(candidate.weaknessKey.split('#')[0]!);
-  const spec = composeObjective(candidate, link, history, baseline);
+  const spec = composeObjective(candidate, link, history, baseline, existing);
   const { submitObjective } = await import('../factory/contract.ts');
   const submitted = await submitObjective({
     projectId,
@@ -506,7 +735,8 @@ async function measureAndDecide(candidate: ImprovementCandidate, now: Date, repo
   const result = { before, beforeDownstream: beforeDown, after, afterDownstream: afterDown, primary, downstream, at: now.toISOString() };
   await patchCandidate(candidate.id, { result });
   if (!decision.decision) return;
-  if (decision.revert) {
+  // A hand-off to a non-software owner merged nothing, so there is nothing to revert: the decision retires it.
+  if (decision.revert && !candidate.deliveredRef?.startsWith(OWNER_HANDOFF_PREFIX)) {
     await submitRevert(candidate, decision.reason, now).catch(async (error: unknown) => {
       await recordImprovementEvent({ candidateId: candidate.id, kind: 'REVERT_NOT_SUBMITTED', detail: { error: String((error as Error).message ?? error).slice(0, 300) } });
     });
@@ -540,6 +770,233 @@ async function submitRevert(candidate: ImprovementCandidate, why: string, now: D
   await recordImprovementEvent({ candidateId: candidate.id, kind: 'REVERT_SUBMITTED', detail: { changeRequestId: submitted.changeRequest.id, at: now.toISOString() } });
 }
 
+/**
+ * Value the next step for one candidate (AUTO-20-2 step 4, `selfmodel/gapValue.ts`): the options the
+ * existing owners can carry out, each costed from the loop's own rows and this candidate's evidence.
+ */
+async function valueNextStep(
+  candidate: ImprovementCandidate,
+  link: Linked,
+  stage: 'DIAGNOSE' | 'ENGINEER',
+  found: { archiveClaims: number; existing: readonly ExistingMatch[] },
+): Promise<ValueJudgment> {
+  const { evaluateNextStep, readRouteHistory } = await import('../selfmodel/gapValue.ts');
+  const { judgeCause } = await import('../selfmodel/gapLoopSync.ts');
+  const earlier = (await family(candidate.weaknessKey.split('#')[0]!)).filter((m) => m.attempt < candidate.attempt);
+  const knownCause = typeof candidate.evidence['knownCause'] === 'string' ? (candidate.evidence['knownCause'] as string) : null;
+  return evaluateNextStep({
+    stage,
+    severity: candidate.severity,
+    scope: candidate.scope,
+    frequency: candidate.frequency,
+    denominator: candidate.denominator,
+    cause: judgeCause(candidate).cause,
+    knownCause,
+    archiveClaims: link.archive.length,
+    existingOther: found.existing.filter((e) => !(e.kind === 'PATH' && e.name === candidate.ownerComponent)).length,
+    research: candidate.researchGoalId ? { opened: true, settled: Boolean(link.research?.settled), acceptedClaims: link.research?.acceptedClaims ?? 0 } : null,
+    // An attempt that was a hand-off to a non-software owner says nothing about how a Factory change or
+    // research would fare; its failure is recorded as the route set aside (recordRouteSetAside).
+    failedAttempts: earlier
+      .filter((m) => (m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED') && !m.deliveredRef?.startsWith(OWNER_HANDOFF_PREFIX))
+      .map((m) => ({ attempt: m.attempt, researched: Boolean(m.researchGoalId) })),
+    history: await readRouteHistory(),
+  });
+}
+
+/** Write the judgment as the gap's VALUE step, once per decision: a pass that reaches the same choice adds nothing. */
+async function recordValue(candidate: ImprovementCandidate, judgment: ValueJudgment): Promise<void> {
+  const { readGapLoop, recordGapStep } = await import('../selfmodel/gapLoop.ts');
+  const { valueDetail } = await import('../selfmodel/gapValue.ts');
+  const prior = (await readGapLoop(candidate.weaknessKey)).latest.VALUE?.detail;
+  if (prior && prior['evaluated'] === true && prior['decision'] === judgment.chosen && prior['stage'] === judgment.stage) return;
+  await recordGapStep({ gapKey: candidate.weaknessKey, step: 'VALUE', summary: `${judgment.chosen}: ${judgment.basis}`.slice(0, 400), detail: valueDetail(judgment) });
+}
+
+/**
+ * Hand a gap to the non-software owner that acquires it (AUTO-20-2 step 5, S-0249).
+ *
+ * UNMET_NEED: the open needs go to the owner their typed cause names (`cash/needs.ts`
+ * handNeedsToOwners): reconsideration reads the fact now and each blocked piece is re-decided.
+ * MISSED_OPPORTUNITY: the openings still inside their window go back to the cash lifecycle,
+ * which re-decides them. The hand-off is recorded as the delivery, so the loop measures the
+ * candidate's metric before and after it like any other repair (step 6). A gap whose every
+ * piece waits on a person is held for that person; a gap whose rows all settled closes.
+ */
+async function handToOwner(
+  candidate: ImprovementCandidate,
+  route: NonNullable<ReturnType<typeof executionRouteOf>>,
+  now: Date,
+  report: ImprovementTickReport,
+): Promise<string | null> {
+  const { recordGapStep } = await import('../selfmodel/gapLoop.ts');
+  const at = now.toISOString();
+  // A hand-off counts only where the owner was given work: an idea the research pipeline runs, a live
+  // dive, or the standing watch (S-0249: allocate actual workers and time, not a routed event).
+  let handed = 0;
+  let personOnly = false;
+  const refused: string[] = [];
+  const work: Record<string, unknown>[] = [];
+  if (route.family === 'UNMET_NEED') {
+    const { handNeedsToOwners, handoffAllocated } = await import('../cash/needs.ts');
+    const result = await handNeedsToOwners({ needIds: route.observed, gapKey: candidate.weaknessKey, actorRef: 'improvement loop', now: at });
+    handed = result.handed.filter(handoffAllocated).length;
+    personOnly = result.handed.length > 0 && result.handed.every((h) => h.route === 'PERSON');
+    for (const one of result.handed) {
+      work.push({ needId: one.needId, route: one.route, owner: one.owner, ...one.work });
+      if (one.work.kind === 'REFUSED') refused.push(`${one.needId}: ${one.work.reason}`);
+    }
+  } else {
+    const { getOpportunity } = await import('../../repos/cashPortfolio.ts');
+    const { requestDecisionRecompute } = await import('../../repos/cashDecisions.ts');
+    const { raiseNeed } = await import('../cash/needs.ts');
+    const { startNeedWork } = await import('../cash/operate.ts');
+    const family = candidate.weaknessKey.split('#')[0]!;
+    for (const id of new Set(route.observed)) {
+      const opening = await getOpportunity(id);
+      if (!opening || (opening.expiresAt && opening.expiresAt <= at)) continue;
+      // The opening's missing facts become one need with a worker on it, so the lifecycle has something
+      // to re-decide it on before its window closes, rather than only a recompute request.
+      const by = opening.expiresAt ? ` before ${opening.expiresAt}` : '';
+      const raised = await raiseNeed({
+        projectId: opening.projectId,
+        opportunityId: opening.id,
+        actorRef: 'improvement loop',
+        blockedAction: `Decide "${opening.title}"${by}`.slice(0, 300),
+        whyItMatters: candidate.problem.slice(0, 600),
+        recommendedPath: 'Research the facts its card still lacks from published sources, then let the cash lifecycle re-decide it.',
+        setupEffort: 'one research mission',
+        nextStep:
+          `Establish from published sources, for this opening, who pays, what it pays, what it costs to deliver and what would rule it out${by}: ` +
+          'the facts its card still lacks to be decided.',
+        completionCondition: 'The opening is READY or later, or its window has ended.',
+        requestKey: `gap:${family}:${opening.id}`,
+      });
+      if (!raised.ok) {
+        refused.push(`${id}: ${raised.reason}`);
+        continue;
+      }
+      const started = await startNeedWork(raised.value, 'RESEARCH');
+      work.push({ opportunityId: id, ...started });
+      if (started.kind === 'REFUSED') {
+        refused.push(`${id}: ${started.reason}`);
+        continue;
+      }
+      await requestDecisionRecompute(id, `GAP_ROUTED:${candidate.weaknessKey}`, at);
+      handed += 1;
+    }
+  }
+  const basis = `${route.why}. Acquired by the existing owner ${route.owner} (${route.kind}), not by a Factory change or method research.`;
+  await recordGapStep({
+    gapKey: candidate.weaknessKey,
+    step: 'VALUE',
+    summary: `HAND_TO_OWNER: ${basis}`.slice(0, 400),
+    detail: {
+      evaluated: true,
+      decision: 'HAND_TO_OWNER',
+      chosen: `hand to ${route.owner} (${route.kind})`,
+      alternatives:
+        'a Factory change to the need or opening module and method research in brain-architecture: neither acquires a connector, a supplier, a payer, information or a watched fact, which is what the typed cause names',
+      stage: 'ROUTE',
+      route: route.kind,
+      owner: route.owner,
+      basis,
+      handed,
+    },
+  });
+  if (handed === 0 && refused.length > 0 && !personOnly) {
+    // The owner could not be given work for any row: the route did not acquire anything, so it is set
+    // aside (once) and the gap is valued like any other on the next pass, instead of being marked delivered.
+    await recordRouteRefused(candidate, route, refused);
+    return NOT_ALLOCATED;
+  }
+  if (handed === 0 && !personOnly) {
+    const reason = `Every row this gap was noticed from (${route.observed.length}) has settled or its window has closed; there is nothing left for ${route.owner} to acquire.`;
+    await decideCandidate(candidate.id, 'REJECTED', reason);
+    await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'REJECTED', route: route.kind, owner: route.owner, reason } });
+    report.decided.push(`${candidate.weaknessKey} REJECTED`);
+    return 'rejected: the rows settled on their own';
+  }
+  if (personOnly) {
+    const ask = `a person settles what ${route.owner} cannot grant itself: ${candidate.title}`;
+    await decideCandidate(candidate.id, 'HELD', `${basis} Every piece waits on a person (${route.kind}).`.slice(0, 1000), { heldOn: ask.slice(0, 300) });
+    await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'HELD', needsPerson: true, personAction: ask, route: route.kind, owner: route.owner } });
+    report.decided.push(`${candidate.weaknessKey} HELD`);
+    return 'held: only a person can settle it';
+  }
+  const ref = ownerHandoffRef(route);
+  await patchCandidate(candidate.id, { deliveredAt: at, deliveredRef: ref });
+  await recordImprovementEvent({
+    candidateId: candidate.id,
+    kind: 'DELIVERED',
+    detail: { handedTo: route.owner, route: route.kind, handed, family: route.family, work: work.slice(0, 50), refused: refused.slice(0, 20) },
+  });
+  return `handed ${handed} row(s) to ${route.owner} (${route.kind})`;
+}
+
+/** handToOwner's answer when the owner could be given no work at all: the route is set aside and valuation runs. */
+export const NOT_ALLOCATED = 'NOT_ALLOCATED' as const;
+
+/** Record, once per candidate, that its execution route could allocate no work and was set aside. */
+async function recordRouteRefused(
+  candidate: ImprovementCandidate,
+  route: NonNullable<ReturnType<typeof executionRouteOf>>,
+  refused: readonly string[],
+): Promise<void> {
+  if (candidate.evidence['routeRefused']) return;
+  const judgment =
+    `Handing this gap to ${route.owner} (${route.kind}) could give no worker any of its rows (${refused.slice(0, 5).join('; ')}). ` +
+    'A route that allocates nothing acquires nothing, so it is not recorded as delivered; the next step is valued among research, ' +
+    'a Factory change to the owner of the behaviour, a credential or abandoning.';
+  const routeRefused = { kind: route.kind, owner: route.owner, refused: refused.slice(0, 20), judgment };
+  const evidence = { ...candidate.evidence, routeRefused };
+  await patchCandidate(candidate.id, { evidence });
+  candidate.evidence = evidence;
+  await recordImprovementEvent({ candidateId: candidate.id, kind: 'ROUTE_SET_ASIDE', detail: routeRefused });
+}
+
+/** The ref a hand-off by one route is recorded under, so a later attempt can recognise the same route. */
+export function ownerHandoffRef(route: Pick<NonNullable<ReturnType<typeof executionRouteOf>>, 'kind' | 'owner'>): string {
+  return `${OWNER_HANDOFF_PREFIX}${route.kind}:${route.owner}`;
+}
+
+/**
+ * The earlier attempts of this weakness that were handed to the same owner by the same route and were
+ * then decided KEPT_NO_EFFECT or REVERTED: the record that this route was tried and did not work.
+ */
+export async function failedHandOffs(
+  candidate: Pick<ImprovementCandidate, 'weaknessKey' | 'attempt'>,
+  route: Pick<NonNullable<ReturnType<typeof executionRouteOf>>, 'kind' | 'owner'>,
+): Promise<ImprovementCandidate[]> {
+  const ref = ownerHandoffRef(route);
+  return (await family(candidate.weaknessKey.split('#')[0]!)).filter(
+    (m) => m.attempt < candidate.attempt && m.deliveredRef === ref && (m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED'),
+  );
+}
+
+/** Record, once per candidate, that its execution route was judged inadequate and set aside. */
+async function recordRouteSetAside(
+  candidate: ImprovementCandidate,
+  route: NonNullable<ReturnType<typeof executionRouteOf>>,
+  failed: readonly ImprovementCandidate[],
+): Promise<void> {
+  if (candidate.evidence['routeSetAside']) return;
+  const judgment =
+    `Handing this gap to ${route.owner} (${route.kind}) was already tried in attempt(s) ${failed.map((m) => m.attempt).join(', ')}, ` +
+    `which ended ${failed.map((m) => m.decision).join(', ')}, and the weakness still shows: that route is inadequate for this cause. ` +
+    'It is not re-run; the next step is valued among research, a Factory change to the owner of the behaviour (the routing included), a credential or abandoning.';
+  const setAside = { kind: route.kind, owner: route.owner, ref: ownerHandoffRef(route), failedAttempts: failed.map((m) => m.attempt), judgment };
+  const prior = candidate.evidence['methodInadequacy'] as { judgment?: string; failedAttempts?: number[] } | undefined;
+  const methodInadequacy = {
+    judgment: prior?.judgment ? `${prior.judgment} ${judgment}` : judgment,
+    failedAttempts: [...new Set([...(prior?.failedAttempts ?? []), ...setAside.failedAttempts])].sort((a, b) => a - b),
+  };
+  const evidence = { ...candidate.evidence, routeSetAside: setAside, methodInadequacy };
+  await patchCandidate(candidate.id, { evidence });
+  candidate.evidence = evidence;
+  await recordImprovementEvent({ candidateId: candidate.id, kind: 'ROUTE_SET_ASIDE', detail: setAside });
+}
+
 /** Advance one candidate by one step. Returns what it did, or null when it waited. */
 async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>, now: Date, report: ImprovementTickReport): Promise<string | null> {
   const link = await linked(candidate);
@@ -549,26 +1006,80 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
     await recordImprovementEvent({ candidateId: candidate.id, kind: 'STAGE', detail: { stage, from: last?.detail['stage'] ?? null } });
   }
   switch (stage as Stage) {
-    case 'DIAGNOSE': {
-      const goalId = await openResearch(candidate, now);
-      await patchCandidate(candidate.id, { researchGoalId: goalId });
-      await recordImprovementEvent({ candidateId: candidate.id, kind: 'RESEARCH_OPENED', detail: { goalId, archiveClaims: link.archive.length } });
-      return `research goal ${goalId} (Claude routines)`;
+    case 'DIAGNOSE':
+    case 'ENGINEER': {
+      // Reuse comes first (AUTO-20-2 step 3): what exists is searched and recorded before anything is valued or acquired.
+      const found = await searchFirst(candidate, link);
+      // A missing connector, supplier, payer, piece of information or watched fact is acquired by the owner
+      // that already does that (S-0249), never turned into an engineering objective or method research.
+      // Unless that very route already failed this weakness (S-0242): a hand-off that ended KEPT_NO_EFFECT or
+      // REVERTED and is still showing is a method judged inadequate, and re-running it is what S-0242 forbids.
+      // The route is set aside and the gap is valued like any other, so research or a Factory change to the
+      // owner of the behaviour (the routing itself included) competes for it (step 4).
+      const route = executionRouteOf(candidate);
+      if (route && !candidate.evidence['routeRefused']) {
+        const failed = await failedHandOffs(candidate, route);
+        if (failed.length === 0) {
+          const handedOff = await handToOwner(candidate, route, now, report);
+          if (handedOff !== NOT_ALLOCATED) return handedOff;
+        } else await recordRouteSetAside(candidate, route, failed);
+      }
+      // Then the next step is valued (step 4): every option the existing owners can carry out, compared on
+      // expected value, cost, latency, opportunity cost and dependencies, and the best one is taken.
+      const valued = await valueNextStep(candidate, link, stage as 'DIAGNOSE' | 'ENGINEER', found);
+      // The operator's director already decided the intervention from the diagnosis (§109,
+      // `decideIntervention`): engineering goes to Factory, evidence to method research. The
+      // valuation is still recorded beside it, so a disagreement is visible in the gap loop.
+      const directive = directiveOf(candidate);
+      const directed =
+        directive?.intervention === 'ENGINEERING' && stage === 'ENGINEER'
+          ? 'FACTORY_CHANGE'
+          : directive?.intervention === 'EVIDENCE' && !candidate.researchGoalId
+            ? 'COMMISSION_RESEARCH'
+            : null;
+      const judgment: ValueJudgment = directed
+        ? { ...valued, chosen: directed, basis: `Operator directive (${directive!.deficiency}, priority ${directive!.priority}): ${directed}. Brain's valuation chose ${valued.chosen}: ${valued.basis}`.slice(0, 1000) }
+        : valued;
+      const needsSlot = judgment.chosen === 'FACTORY_CHANGE' || judgment.chosen === 'REUSE_EXISTING';
+      // One live engineering objective per owner component: a chosen change waits while another holds it.
+      if (needsSlot && busyOwners.has(candidate.ownerComponent)) return null;
+      await recordValue(candidate, judgment);
+      switch (judgment.chosen) {
+        case 'COMMISSION_RESEARCH': {
+          const goalId = await openResearch(candidate, now, found.existing);
+          await patchCandidate(candidate.id, { researchGoalId: goalId });
+          await recordImprovementEvent({ candidateId: candidate.id, kind: 'RESEARCH_OPENED', detail: { goalId, archiveClaims: link.archive.length, value: judgment.basis } });
+          return `research goal ${goalId} (Claude routines)`;
+        }
+        case 'FACTORY_CHANGE':
+        case 'REUSE_EXISTING': {
+          // Nothing is built before what exists has been searched; what it found goes into the objective.
+          busyOwners.add(candidate.ownerComponent);
+          return engineer(candidate, link, now, found.existing);
+        }
+        case 'ASK_CREDENTIAL': {
+          const ask = `a person supplies the credential the rows say was refused: ${String(candidate.evidence['knownCause'] ?? '').slice(0, 200)}`;
+          await decideCandidate(candidate.id, 'HELD', `Valued: ${judgment.basis} Held for one credential only a person holds (MISSING_AUTHORITY).`, { heldOn: ask.slice(0, 300) });
+          await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'HELD', needsPerson: true, personAction: ask, value: judgment.basis } });
+          report.decided.push(`${candidate.weaknessKey} HELD`);
+          return 'held: one credential from a person';
+        }
+        case 'ABANDON': {
+          // Research that settled with nothing supported and no diagnosis concludes honestly: no change.
+          const reason =
+            link.research && link.research.settled && link.research.acceptedClaims === 0 && link.archive.length === 0 && !candidate.evidence['knownCause']
+              ? `Method research ended ${link.research.status ?? 'without a result'} with no accepted claim and the rows state no cause; no change is justified.`
+              : `No option is expected to return more than it costs; no change is justified. ${judgment.basis}`;
+          await decideCandidate(candidate.id, 'REJECTED', reason.slice(0, 1000));
+          await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'REJECTED', research: link.research?.status ?? null, value: judgment.basis } });
+          report.decided.push(`${candidate.weaknessKey} REJECTED`);
+          return link.research?.settled ? 'rejected: research found nothing to build' : 'rejected: no option is worth its cost';
+        }
+      }
+      return null;
     }
     case 'RESEARCHING':
       return null;
-    case 'ENGINEER': {
-      // Research that settled with nothing supported and no diagnosis concludes honestly: no change.
-      if (link.research && link.research.settled && link.research.acceptedClaims === 0 && link.archive.length === 0 && !candidate.evidence['knownCause']) {
-        await decideCandidate(candidate.id, 'REJECTED', `Method research ended ${link.research.status ?? 'without a result'} with no accepted claim and the rows state no cause; no change is justified.`);
-        await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'REJECTED', research: link.research.status } });
-        report.decided.push(`${candidate.weaknessKey} REJECTED`);
-        return 'rejected: research found nothing to build';
-      }
-      if (busyOwners.has(candidate.ownerComponent)) return null;
-      busyOwners.add(candidate.ownerComponent);
-      return engineer(candidate, link, now);
-    }
     case 'ENGINEERING': {
       const factory = link.factory!;
       if (factory.state === 'LIVE') {
@@ -588,7 +1099,7 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
       if (factory.state === 'BLOCKED') {
         const prior = (await listImprovementEvents({ candidateId: candidate.id, kinds: ['FACTORY_BLOCKED'], limit: 1 }))[0];
         if (!prior || prior.detail['detail'] !== factory.detail) {
-          await recordImprovementEvent({ candidateId: candidate.id, kind: 'FACTORY_BLOCKED', detail: { detail: factory.detail } });
+          await recordImprovementEvent({ candidateId: candidate.id, kind: 'FACTORY_BLOCKED', detail: { detail: factory.detail, needsPerson: factory.needsPerson, personAction: factory.personAction } });
         } else if (now.getTime() - Date.parse(prior.at) >= BLOCKED_HOLD_HOURS * HOUR) {
           await decideCandidate(candidate.id, 'HELD', `Factory blocked for ${BLOCKED_HOLD_HOURS} h on: ${factory.detail}`, { heldOn: factory.detail.slice(0, 300) });
           await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'HELD', factory } });
@@ -656,6 +1167,51 @@ async function raiseAlerts(now: Date, open: ImprovementCandidate[], actionable: 
 }
 
 /* ------------------------------------------------------------------------- */
+/* The capability-gap record (AUTO-20-2)                                      */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Write down, as capability-gap loop steps, what this pass and earlier ones did:
+ * every candidate this pass ranked or opened, and every gap whose recorded loop
+ * has not concluded — not integrated, not abandoned (`openGapLoops`) — so a pass after a restart or a lost
+ * worker resumes the record from the rows rather than from anybody's memory.
+ */
+async function recordGapLoops(rankedIds: readonly string[], report: ImprovementTickReport): Promise<void> {
+  try {
+    const { syncCandidateGap } = await import('../selfmodel/gapLoopSync.ts');
+    const { openGapLoops } = await import('../selfmodel/gapLoop.ts');
+    const { getCandidateByKey } = await import('../../repos/improvement.ts');
+    const { methodClaimsAnswering } = await import('../research/methodRules.ts');
+    const seen = new Set<string>();
+    const targets: ImprovementCandidate[] = [];
+    const add = (c: ImprovementCandidate | null | undefined) => {
+      if (c && !seen.has(c.id)) {
+        seen.add(c.id);
+        targets.push(c);
+      }
+    };
+    for (const id of rankedIds) add(await getCandidate(id));
+    for (const key of report.opened) add(await getCandidateByKey(key));
+    for (const state of await openGapLoops(50)) add(await getCandidateByKey(state.gapKey));
+    const written: string[] = [];
+    for (const candidate of targets) {
+      try {
+        const question = String(candidate.evidence['researchQuestion'] ?? candidate.title);
+        const steps = await syncCandidateGap(candidate, {
+          archive: async () => (await methodClaimsAnswering(question, ARCHIVE_OVERLAP_SHARE).catch(() => [])).length,
+        });
+        written.push(...steps.map((step) => `${candidate.weaknessKey}:${step}`));
+      } catch (error) {
+        report.errors.push(`gap ${candidate.weaknessKey}: ${String((error as Error).message ?? error).slice(0, 200)}`);
+      }
+    }
+    report.gapSteps = written;
+  } catch (error) {
+    report.errors.push(`gap loops: ${String((error as Error).message ?? error).slice(0, 200)}`);
+  }
+}
+
+/* ------------------------------------------------------------------------- */
 /* The tick                                                                   */
 /* ------------------------------------------------------------------------- */
 
@@ -675,8 +1231,11 @@ export async function improvementTick(now = new Date()): Promise<ImprovementTick
     return report;
   }
   report.ran = true;
-  const weaknesses = await detectWeaknesses(now);
+  const detection = await detectAll(now);
+  const weaknesses = detection.weaknesses;
   report.detected = weaknesses.length;
+  report.originated = detection.originated;
+  for (const error of detection.errors) report.errors.push(error);
   // §88: substantial live goals are checked against the capability maps, at most hourly.
   if (now.getTime() - processStartedAt >= CAPABILITY_BOOT_GRACE_MS && now.getTime() - lastObjectiveCheck >= OBJECTIVE_CHECK_MS) {
     lastObjectiveCheck = now.getTime();
@@ -728,6 +1287,7 @@ export async function improvementTick(now = new Date()): Promise<ImprovementTick
       }
     }
   }
+  await recordGapLoops(ranked.map((c) => c.id), report);
   try {
     await raiseAlerts(now, await listCandidates({ open: true }), actionable, report);
   } catch (error) {
@@ -761,6 +1321,8 @@ export interface ImprovementReading {
     links: string;
   }>;
   recent: string[];
+  /** Open capability-gap loops (AUTO-20-2), as `formatGapLoop` prints them. */
+  gapLoops: string[];
 }
 
 /** What `admin improvement show` prints: the scoreboard, the register and what happened. */
@@ -807,6 +1369,10 @@ export async function improvementReading(now = new Date()): Promise<ImprovementR
     });
   }
   const recent = (await listImprovementEvents({ limit: 25 })).map((e) => `${e.at} ${e.kind} ${e.candidateId ?? ''} ${JSON.stringify(e.detail).slice(0, 240)}`);
+  const { openGapLoops, formatGapLoop } = await import('../selfmodel/gapLoop.ts');
+  const gapLoops = (await openGapLoops(10).catch(() => [])).flatMap(formatGapLoop);
+  // The existing printer shows `recent`; the open gap loops ride there too, labelled.
+  recent.push(...gapLoops.map((line) => `gap-loop ${line}`));
   return {
     switch: await improvementSwitch(),
     scoreboard,
@@ -814,6 +1380,7 @@ export async function improvementReading(now = new Date()): Promise<ImprovementR
     detectors,
     candidates,
     recent,
+    gapLoops,
   };
 }
 

@@ -1,0 +1,68 @@
+{
+ "customer": "Gerke Electric",
+ "uei": "EFEDPQFHXC16",
+ "trades": [
+  "electrical"
+ ],
+ "naics": [],
+ "setasides": [
+  "SDVOSB",
+  "small business"
+ ],
+ "states": [
+  "OH"
+ ],
+ "include_neighbors": true,
+ "basis": {
+  "business_types_reported": [
+   "category_business",
+   "corporate_entity_not_tax_exempt",
+   "service_disabled_veteran_owned_business",
+   "small_business",
+   "special_designations",
+   "us_owned_business",
+   "veteran_owned_business"
+  ],
+  "naics_paid_last_3y": [
+   {
+    "id": null,
+    "code": "238210",
+    "name": "Electrical Contractors and Other Wiring Installation Contractors",
+    "amount": 1006088.74,
+    "total_outlays": null,
+    "year_retired": null
+   },
+   {
+    "id": null,
+    "code": "541380",
+    "name": "Testing Laboratories and Services",
+    "amount": 470000.0,
+    "total_outlays": null,
+    "year_retired": null
+   },
+   {
+    "id": null,
+    "code": "334290",
+    "name": "Other Communications Equipment Manufacturing",
+    "amount": 134560.0,
+    "total_outlays": null,
+    "year_retired": null
+   }
+  ],
+  "recipient_location": {
+   "address_line1": "13 PHILLIPS AVE",
+   "address_line2": null,
+   "address_line3": null,
+   "foreign_province": null,
+   "city_name": "CINCINNATI",
+   "county_name": null,
+   "state_code": "OH",
+   "zip": "45217",
+   "zip4": "1231",
+   "foreign_postal_code": null,
+   "country_name": "UNITED STATES",
+   "country_code": "USA",
+   "congressional_code": "01"
+  }
+ }
+}

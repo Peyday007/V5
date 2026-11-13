@@ -468,6 +468,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
 
   people    list | foundation | rename <user|email> "<name>"
   brain-only show [<bin_…> …] | on | off   (Claude routines take only Brain-improvement work, §84)
+  utilization show | run   (every capacity pool: waiting, running, capacity, idle beside work, §98)
   free-lane show | run [ticks]             (free models do the displaced research, §85)
   sources   show [hours] | compare [n]     (how research reads public pages, and what each route recovered)
   capacity  show | adopt <user|email> <trig_…>
@@ -479,7 +480,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
             clear <worker> | retire <worker> --reason "why"
   connectors show | derive | attach <brnc_…> <trig_…>
              reconnect <cnr_…|trig_…> <user|email>
-             probe <trig_…> [--no-wait] | probe-status <trig_…|crp_…>
+             probe <trig_…> [--no-wait] | probe-status <trig_…|crp_…> | auto-probe
              repoint-worker <cnr_…> <to-worker>
   projects  list | create <name>
   access    show <worker> | grant <worker> <project> | revoke <worker> <project>
@@ -1309,6 +1310,25 @@ async function main(): Promise<void> {
       console.log(`  ${connectorId} now authorizes as ${to} (was ${before.workerId ?? 'none'}); recorded against ${actor.id}.`);
       break;
     }
+    /*
+     * Brain's own probe pass (§100): every quarantined Routine, when Brain will
+     * next probe it by itself, or the one reason it never will.
+     */
+    case 'connectors auto-probe': {
+      const { autoProbePlan } = await import('../server/services/fleet/autoRecovery.ts');
+      const { liveRecoveryProbe } = await import('../server/repos/recoveryProbes.ts');
+      const live = await liveRecoveryProbe();
+      console.log(`  live probe: ${live ? `${live.id} for ${live.routineId} until ${live.expiresAt}` : 'none'}`);
+      for (const row of await autoProbePlan()) {
+        console.log(
+          `  ${row.routineName.padEnd(22)} ${row.routineRef}  ` +
+            (row.dueAt
+              ? `due=${row.dueAt} failed=${row.failed} last=${row.lastProbeAt ?? '—'} signal=${row.signal ?? '—'}`
+              : `never: ${row.never}`),
+        );
+      }
+      break;
+    }
     case 'connectors probe-status': {
       const target = rest[0] ?? fail('Name the Routine (trig_…) or the probe (crp_…).');
       const { getRecoveryProbe, latestRecoveryProbeFor } = await import('../server/repos/recoveryProbes.ts');
@@ -1345,6 +1365,28 @@ async function main(): Promise<void> {
      * real administrator; turning it on also runs the clean-up pass at once.
      * The owner said the mode stays on until they say otherwise.
      */
+    /*
+     * Every pool Brain schedules onto (§98): waiting, running, capacity, and
+     * whether it is idle beside waiting work, with the interventions recorded
+     * in the last day. `run` also continues what is idle.
+     */
+    case 'utilization show':
+    case 'utilization run': {
+      const { brainUtilization, watchUtilization } = await import('../server/services/engineering/watchdog.ts');
+      const pools = command === 'run' ? (await watchUtilization({})).pools : await brainUtilization();
+      for (const one of pools) {
+        console.log(
+          `  ${one.pool.padEnd(15)} waiting ${String(one.waiting).padStart(5)}  running ${String(one.running).padStart(4)}  capacity ${String(one.capacity).padStart(4)}  ${one.idle ? 'IDLE BESIDE WORK' : 'ok'}  ${one.because.slice(0, 160)}`,
+        );
+      }
+      const recent = await getDb().all<{ created_at: string; attempted_action: string; replacement_action: string }>(
+        "SELECT created_at, attempted_action, replacement_action FROM engineering_interventions WHERE kind = 'IDLE_WITH_EXECUTABLE_WORK' AND created_at > ? ORDER BY created_at DESC LIMIT 15",
+        [new Date(Date.now() - 24 * 3_600_000).toISOString()],
+      );
+      console.log(`  interventions (24h): ${recent.length}`);
+      for (const one of recent) console.log(`    ${one.created_at}  ${one.attempted_action.slice(0, 140)}  -> ${one.replacement_action}`);
+      break;
+    }
     case 'brain-only show': {
       const reading = await brainOnlyReading();
       console.log(`  brain_only_mode  ${reading.mode ? 'ON' : 'OFF'}  (set ${reading.updatedAt ?? '—'} by ${reading.updatedBy ?? '—'})`);
@@ -1515,6 +1557,50 @@ async function main(): Promise<void> {
      * weaknesses from detection to measured decision, and what happened.
      * `tick` runs one pass of the loop now, the same pass the tick runs.
      */
+    /*
+     * Historical memory (docs/HISTORICAL-MEMORY.md). Counts only — never a
+     * conversation, a title or an idea: this output lands in a workflow log.
+     */
+    case 'memory show': {
+      const { coverageReport } = await import('../server/services/memory/coverage.ts');
+      const owners = await getDb().all<{ owner_user_id: string }>(
+        `SELECT DISTINCT owner_user_id FROM memory_conversations
+         UNION SELECT DISTINCT owner_user_id FROM bridge_conversations WHERE message_count > 0
+         UNION SELECT DISTINCT owner_user_id FROM memory_archives`,
+      );
+      console.log(`  owners with history  ${owners.length}`);
+      for (const { owner_user_id: owner } of owners) {
+        const c = await coverageReport(owner);
+        console.log(`  OWNER ${owner}`);
+        console.log(`    archives            ${c.archives.total} (complete ${c.archives.complete}, receiving ${c.archives.receiving})`);
+        console.log(`    conversations       declared ${c.conversations.declared}, recovered ${c.conversations.recovered}, bridge ${c.conversations.fromBridge}, failed ${c.conversations.failed}, not sent ${c.conversations.notYetSent}`);
+        console.log(`    messages            declared ${c.messages.declared}, stored ${c.messages.stored}, alternate ${c.messages.alternateBranches}, superseded ${c.messages.supersededVersions}`);
+        console.log(`    attachments         referenced ${c.attachments.referenced}, recovered ${c.attachments.recovered}, referenced-only ${c.attachments.referencedOnly}, failed ${c.attachments.failed}`);
+        console.log(`    search index        messages ${c.search.messagesIndexed}/${c.search.messagesWithText}, passages ${c.search.passages}, conversations pending ${c.search.conversationsPending}`);
+        console.log(`    organization        topics ${c.organization.topics}, subtopics ${c.organization.subtopics}, merged ${c.organization.merged}, retired ${c.organization.retired}`);
+        console.log(`    registry            ideas ${c.registry.ideas} ${JSON.stringify(c.registry.byState)}, reconstructed ${c.registry.reconstructed}`);
+        console.log(`    rediscovery         open ${c.rediscovery.open}, decided ${c.rediscovery.decided}, decisions ${c.rediscovery.decisions}`);
+        console.log(`    hubs                ${c.hubs.total} ${JSON.stringify(c.hubs.byState)}`);
+        console.log(`    range               ${c.dateRange.first ?? '—'} → ${c.dateRange.last ?? '—'} (since summer 2025: ${c.dateRange.since2025Summer}, before: ${c.dateRange.before2025Summer})`);
+      }
+      break;
+    }
+    case 'memory sweep': {
+      await administrator();
+      const { sweepToCompletion } = await import('../server/services/memory/pipeline.ts');
+      const reports = await sweepToCompletion({ maxPasses: 40 });
+      const total = reports.reduce(
+        (a, r) => ({
+          absorbed: a.absorbed + r.absorbed, indexed: a.indexed + r.indexed, passages: a.passages + r.passages,
+          excavated: a.excavated + r.excavated, ideas: a.ideas + r.ideasCreated, reconstructed: a.reconstructed + r.reconstructed,
+          surfaced: a.surfaced + r.surfaced, hubs: a.hubs + r.hubsPrepared,
+        }),
+        { absorbed: 0, indexed: 0, passages: 0, excavated: 0, ideas: 0, reconstructed: 0, surfaced: 0, hubs: 0 },
+      );
+      const last = reports[reports.length - 1];
+      console.log(`  passes ${reports.length}  ${JSON.stringify(total)}  remaining ${JSON.stringify(last?.remaining ?? {})}`);
+      break;
+    }
     case 'improvement show': {
       const { improvementReading } = await import('../server/services/improvement/loop.ts');
       const reading = await improvementReading();

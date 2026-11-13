@@ -191,6 +191,23 @@ describe('independent units are separately claimable', () => {
     expect(text(without)).not.toContain('a migration number');
   });
 
+  it('retires an integration bin whose units are all integrated, so the waiting units get one', async () => {
+    // Production 2026-11-10: fcp_ca724ae4's integrate bin named one unit an earlier
+    // round had integrated; three units implemented since waited behind it while it
+    // ran to 24 attempts merging nothing.
+    const campaign = (await getCampaign(campaignId))!;
+    const changeRequest = (await getChangeRequest(campaign.changeRequestId))!;
+    const alpha = { ...(await getUnitByKey(campaignId, 'alpha'))!, branch: 'b/alpha', headSha: 'd'.repeat(40) };
+    const stale = await createIntegrateBin(campaign, changeRequest, [alpha]);
+    await getDbForTest().run("UPDATE factory_work_units SET state = 'INTEGRATED', branch = 'b/alpha', head_sha = ? WHERE campaign_id = ? AND unit_key = 'alpha'", ['d'.repeat(40), campaignId]);
+    await getDbForTest().run("UPDATE factory_work_units SET state = 'IMPLEMENTED', branch = 'b/beta', head_sha = ? WHERE campaign_id = ? AND unit_key = 'beta'", ['e'.repeat(40), campaignId]);
+    stubForge({});
+    const report = await tickRemoteCampaign(campaignId);
+    expect(report.notes.join(' ')).toContain(`retired stale integration ${stale!.id}`);
+    const row = await getDbForTest().get<{ state: string }>('SELECT state FROM bins WHERE id = ?', [stale!.id]);
+    expect(row?.state).toBe('CANCELLED');
+  });
+
   it('lets two workers hold the two units at once', async () => {
     stubForge({});
     await tickRemoteCampaign(campaignId);
@@ -250,5 +267,59 @@ describe('independent units are separately claimable', () => {
     expect(tick.created.some((entry) => entry.startsWith('integrate:'))).toBe(true);
     // And beta was not handed out a second time beside its live bin.
     expect(tick.created.some((entry) => entry.startsWith('units:'))).toBe(false);
+
+    /*
+     * And once no unit is waiting for a report, a completed units bin costs
+     * nothing on later ticks: production read `bin_unit_results` 5,227 times
+     * in 50 minutes re-asking bins whose every unit had moved on.
+     */
+    /*
+     * And a READY unit elsewhere in the campaign does not make a finished bin
+     * worth re-reading: alpha's bin reported only alpha, beta is READY, and the
+     * bin's results are not read again (1,152 reads in 15 minutes, 2026-11-12).
+     */
+    {
+      expect((await getUnitByKey(campaignId, 'beta'))?.state).toBe('READY');
+      const db = getDbForTest();
+      const realAll = db.all.bind(db);
+      let alphaReads = 0;
+      db.all = (async (sql: string, params?: unknown[]) => {
+        if (/FROM bin_unit_results WHERE bin_id/.test(sql) && params?.[0] === alphaBin.id) alphaReads += 1;
+        return realAll(sql, params as never);
+      }) as typeof db.all;
+      try {
+        await tickRemoteCampaign(campaignId);
+      } finally {
+        db.all = realAll;
+      }
+      expect(alphaReads).toBe(0);
+    }
+
+    await getDbForTest().run("UPDATE factory_work_units SET state = 'INTEGRATED' WHERE campaign_id = ?", [campaignId]);
+    // Every bin finished: the unit list must be read once for all of them,
+    // not once per bin (3,890 reads in 23 minutes on production, 2026-11-12).
+    await getDbForTest().run("UPDATE bins SET state = 'COMPLETE' WHERE factory_campaign_id = ?", [campaignId]);
+    const completed = (
+      await getDbForTest().all<{ id: string }>('SELECT id FROM bins WHERE factory_campaign_id = ?', [campaignId])
+    ).length;
+    const db = getDbForTest();
+    const realAll = db.all.bind(db);
+    let resultReads = 0;
+    let unitReads = 0;
+    db.all = (async (sql: string, params?: unknown[]) => {
+      if (/FROM bin_unit_results WHERE bin_id/.test(sql)) resultReads += 1;
+      if (/FROM factory_work_units WHERE campaign_id/.test(sql)) unitReads += 1;
+      return realAll(sql, params as never);
+    }) as typeof db.all;
+    try {
+      await tickRemoteCampaign(campaignId);
+    } finally {
+      db.all = realAll;
+    }
+    expect(resultReads).toBe(0);
+    // One read for the whole ingest loop, two for the stage decision after it —
+    // and not one more for each of the finished bins.
+    expect(completed).toBe(3);
+    expect(unitReads).toBeLessThanOrEqual(3);
   });
 });

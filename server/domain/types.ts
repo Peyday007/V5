@@ -508,6 +508,37 @@ export const EVENT_TYPES = [
   'RUSSELL_ROUTINE_DECISION',
   /** A substantial goal checked against the capability maps; recorded when what blocks it changes (§88). */
   'CAPABILITY_ASSESSED',
+  /** A rediscovered historical idea the owner chose to explore or plan became a Russell idea here. */
+  'MEMORY_IDEA_PROMOTED',
+  /** A rediscovered historical idea the owner gave its own section became this project. */
+  'MEMORY_SECTION_CREATED',
+  /** A hub prepared from a sustained commitment in the owner's history was accepted as this project. */
+  'MEMORY_HUB_ACCEPTED',
+  /** The operator withdrew a person-request its mission no longer waits on (§106). */
+  'OPERATOR_WITHDREW_MOOT_REQUEST',
+  /** The operator sent a defect to Factory on the standing improvement order (§106). */
+  'OPERATOR_FIX_SUBMITTED',
+  /** The operator's fix was submitted and Factory refused to start it, with why (§106). */
+  'OPERATOR_FIX_NOT_STARTED',
+  /** An operator run finished; its report and the tools it called (§106). */
+  'OPERATOR_RUN_FINISHED',
+  /** The operator committed a reviewed, challenged decision with a prediction on the ledger (§108). */
+  'OPERATOR_DECISION',
+  /** The operator recorded what a decision's prediction actually came to (§108). */
+  'OPERATOR_DECISION_VERIFIED',
+  /** The operator paused or resumed a goal to move capacity, under a recorded decision (§108). */
+  'OPERATOR_GOAL_FOCUS',
+  // §109: Hermes as engineering director.
+  'OPERATOR_INTERVENTION_DECIDED',
+  'OPERATOR_ENGINEERING_COMMISSIONED',
+  'OPERATOR_ENGINEERING_PRIORITIZED',
+  'OPERATOR_ENGINEERING_OUTCOME',
+  // A verified autonomous self-improvement cycle, and the owner's one message about it (§109).
+  'OWNER_IMPROVEMENT_NOTIFIED',
+  // A cash goal's plan qualified and the owner was told, once per accepted plan (goals/planReady.ts).
+  'OWNER_PLAN_READY_NOTIFIED',
+  // The hourly operations report waiting for the owner's conversation (operator/operationsReport.ts).
+  'OWNER_OPERATIONS_REPORT',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -4000,8 +4031,27 @@ export const WORKER_SCOPES = [
   // membership, no approval, no research write — so a stolen site credential
   // reaches exactly the surface a site already had.
   'external:sync',
+
+  // §106 — the operator. One scope for the bounded actions the operator's
+  // tools perform (settle a request its mission no longer waits on, continue
+  // idle capacity, send a defect to Factory on the owner's standing improvement
+  // order, record a lesson). Each action re-checks its own rule; the scope only
+  // says this credential is the operator's.
+  'operator:act',
 ] as const;
 export type WorkerScope = (typeof WORKER_SCOPES)[number];
+
+/**
+ * What the operator's per-run credential gets (§106): read every project it
+ * directs, and act through the operator tools. No queue claiming, no research
+ * writes — it directs the workers that do those, it is not one of them.
+ */
+export const OPERATOR_SCOPES: readonly WorkerScope[] = [
+  'project:read',
+  'research:read',
+  'queue:read',
+  'operator:act',
+];
 
 /**
  * What a remote worker gets, decided here rather than by a person ticking boxes.
@@ -11191,4 +11241,138 @@ export interface ImprovementEventRow {
   kind: string;
   detail: string;
   at: string;
+}
+
+/** A way of reasoning about a goal and its record (§101, migration 143). */
+export interface ReasoningMethodRow {
+  id: string;
+  signature: string;
+  name: string;
+  stance: string;
+  origin: string;
+  thinking: string;
+  /** JSON: `{ from, program }` — the direction's executable program. */
+  program: string;
+  tries: number;
+  improvements: number;
+  wins: number;
+  total_lift: number;
+  best_lift: number;
+  first_goal_id: string | null;
+  created_at: string;
+  last_used_at: string;
+}
+
+/** One exploration a plan read ran (§101, migration 143); append-only. */
+export interface ReasoningExplorationRow {
+  id: string;
+  goal_id: string;
+  directions: number;
+  model_directions: number;
+  stances: number;
+  baseline_reach: number;
+  greedy_reach: number;
+  best_reach: number;
+  best_method: string | null;
+  replaced: number;
+  summary: string;
+  /** Distinct variations the variable sweep read (§102); 0 when none ran. */
+  variations: number;
+  /** Decision variables plus conditions the sweep discovered. */
+  variables: number;
+  /** The sweep's compact summary as JSON, or null. */
+  sweep: string | null;
+  created_at: string;
+}
+
+/** One reading, repair or metered call of a connected service (migration 145 / pg 136, §103). */
+export interface IntegrationEventRow {
+  id: string;
+  integration_id: string;
+  kind: 'CHECK' | 'REPAIR' | 'USAGE';
+  state: string;
+  detail: string;
+  source: string;
+  recorded_at: string;
+}
+
+/** One lead Brain researched for a business (§107, migration 147 / pg 138). */
+export interface SalesLeadRow {
+  id: string;
+  business: string;
+  email: string;
+  domain: string;
+  campaign_id: string | null;
+  fit_score: number | null;
+  fit_reasons: string;
+  facts: string;
+  research: string;
+  variant: 'PERSONAL' | 'TEMPLATE';
+  subject: string | null;
+  body: string | null;
+  write_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One analysed reply (§107). */
+export interface SalesReplyRow {
+  id: string;
+  email_id: string;
+  business: string;
+  campaign_id: string;
+  lead_email: string;
+  thread_id: string | null;
+  received_at: string | null;
+  reply_text: string;
+  intent: string;
+  stage: string;
+  status: string;
+  opt_out: string | null;
+  escalation: string | null;
+  answer: string | null;
+  action: string;
+  action_detail: string;
+  answer_email_id: string | null;
+  recorded_at: string;
+}
+
+/** One measurement or decision about a business's selling (§107). */
+export interface SalesLearningRow {
+  id: string;
+  business: string;
+  kind: string;
+  detail: string;
+  recorded_at: string;
+}
+
+/** One operator run (§106, migration 146 / pg 137). */
+export interface OperatorRunRow {
+  id: string;
+  state: 'RUNNING' | 'DONE' | 'FAILED';
+  model: string;
+  started_at: string;
+  finished_at: string | null;
+  summary: string | null;
+  /** JSON array of `{ tool, ok }`, in call order. */
+  tool_calls: string;
+  error: string | null;
+}
+
+/** The operator's current memory file or skill, by name (§106). */
+export interface OperatorMemoryRow {
+  name: string;
+  body: string;
+  updated_at: string;
+  run_id: string | null;
+}
+
+/** A lesson the operator recorded, append-only (§106). */
+export interface OperatorLearningRow {
+  id: string;
+  goal_id: string | null;
+  run_id: string | null;
+  lesson: string;
+  evidence: string;
+  recorded_at: string;
 }

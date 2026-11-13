@@ -166,6 +166,9 @@ import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import type { RussellCandidate, RussellMission, RussellVisibility } from '../../domain/types.ts';
 
 /** How often the loop wakes when nothing else has woken it. */
+/** Fresh ideas one launch pass may start into free research slots (§98). */
+export const SLOT_FILL_PER_TICK = 5;
+
 export const RUSSELL_TICK_MS = 30_000;
 
 /** How often the tick re-walks missing execution lineage. A backlog, not a tick concern. */
@@ -186,6 +189,7 @@ import { scanIfStale } from '../selfmodel/refresh.ts';
 import { watchIdleOnTick } from '../engineering/watchdog.ts';
 import { databasePressure } from '../../db/pressure.ts';
 import { withArchiveMemo } from '../reconcile/coverage.ts';
+import { runMemoryPass, type MemoryPassReport } from '../memory/pipeline.ts';
 
 export interface TickReport {
   /**
@@ -194,6 +198,8 @@ export interface TickReport {
    * could not read the goals leaves it out rather than reporting zeros.
    */
   goals?: GoalTickReport;
+  /** What the historical-memory pass did (docs/HISTORICAL-MEMORY.md); absent when it did not run. */
+  memory?: MemoryPassReport;
   /** What the research-goal continuation pass did; absent when it could not run. */
   researchGoals?: GoalContinuationReport;
   ran: boolean;
@@ -789,6 +795,7 @@ export const DEFERRABLE_UNDER_PRESSURE: ReadonlySet<string> = new Set([
   'lens-inquiries',
   'feeds',
   'improvement-loop',
+  'historical-memory',
 ]);
 
 /** True, and recorded on the report, when optional work should wait. */
@@ -1365,6 +1372,17 @@ async function tickOnce(owner: string): Promise<TickReport> {
     });
 
     /*
+     * Historical memory: index, organize, excavate and re-evaluate a person's
+     * conversation history in bounded steps (docs/HISTORICAL-MEMORY.md). Every
+     * stage reads what is due from its own checkpoints, so a pass cut short
+     * resumes where it stopped. Optional work, deferred under database
+     * pressure; an idle pass costs a handful of indexed reads.
+     */
+    await runPass(report, 'historical-memory', async () => {
+      report.memory = await runMemoryPass({ budgetMs: 15_000 });
+    });
+
+    /*
      * A targeted goal's plan: compose the scenario model from rows, run the
      * existing engine, apply the evidence gate, and record what actually
      * happened once the target is met or the due date passes. At most every
@@ -1391,6 +1409,17 @@ async function tickOnce(owner: string): Promise<TickReport> {
     await runPass(report, 'improvement-loop', async () => {
       const { improvementTickIfDue } = await import('../improvement/loop.ts');
       await improvementTickIfDue();
+    });
+
+    /*
+     * Brain's operator (§106): Hermes Agent directs every goal through the
+     * operator tools. Started here when due (hourly by default) and never
+     * awaited — the run streams back on its own and is recorded when it ends.
+     * Does nothing until the operator app is deployed and connected.
+     */
+    await runPass(report, 'operator', async () => {
+      const { operatorTickIfDue } = await import('../operator/run.ts');
+      await operatorTickIfDue();
     });
 
     /*
@@ -2423,9 +2452,22 @@ async function tickOnce(owner: string): Promise<TickReport> {
       });
     } else await runPass(report, 'launch', async () => {
       const launchable = await nextLaunchable(cycle.maxEventsPerCycle);
+      /*
+       * Free research slots are filled, not trickled (§98). The cycle's bound
+       * stops Russell's own output — a follow-on — from becoming its own input
+       * without limit, and it still binds follow-ons. Production, 2026-11-09:
+       * 138 launchable ideas beside 88 free grant slots at one launch a tick.
+       * Fresh ideas may now take up to SLOT_FILL_PER_TICK of the free slots;
+       * `reserve` still refuses any launch over a grant's at-once ceiling.
+       */
+      const { researchSlotsFree } = await import('../engineering/watchdog.ts');
+      const fill = Math.min(SLOT_FILL_PER_TICK, await researchSlotsFree().catch(() => 0));
+      const limit = Math.max(cycle.maxLaunchesPerCycle, fill);
       let started = 0;
+      let followOns = 0;
       for (const entry of launchable) {
-        if (started >= cycle.maxLaunchesPerCycle) {
+        if (entry.followOnOfMissionId && followOns >= cycle.maxLaunchesPerCycle) continue;
+        if (started >= limit) {
           // The bound stopped the tick, and the rest stay queued for the next
           // one. Preserved rather than dropped: a candidate that lost a race for
           // a slot has not been decided against.
@@ -2436,6 +2478,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
         if (outcome.ok && !outcome.replayed) {
           report.launched.push(outcome.mission!.id);
           started += 1;
+          if (entry.followOnOfMissionId) followOns += 1;
           /*
            * And now the parent can be told, because only now does the follow-on
            * have a mission id.

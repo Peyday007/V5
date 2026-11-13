@@ -1,0 +1,12 @@
+{
+  "brand": "Weekly Bid Digest",
+  "trial": "First two weekly digests free to anyone who replies; no card, no obligation.",
+  "products": [
+    {"key": "digest", "name": "Weekly Bid Digest", "price_usd": 49, "recurring": "month",
+     "description": "Every Monday, a PDF/HTML digest of open federal solicitations, pre-solicitations and sources-sought notices on SAM.gov matching one trade's NAICS codes, your set-aside certifications and your home state plus neighboring states: title, agency, due date, place of performance, set-aside and the SAM.gov notice link, with recent comparable awards from USAspending for each."},
+    {"key": "digest_plus", "name": "Weekly Bid Digest Plus", "price_usd": 99, "recurring": "month",
+     "description": "The weekly digest for up to 3 trades (any NAICS list) and any set of states or nationwide, plus a mid-week alert for notices that close within 7 days."},
+    {"key": "award_history", "name": "Incumbent and price history report", "price_usd": 79, "recurring": null,
+     "description": "One-time report for a single solicitation you are pricing: every USAspending award in the same NAICS at the same location over 5 years, with awardee, amount, agency and dates."}
+  ]
+}

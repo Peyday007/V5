@@ -638,6 +638,48 @@ const recentStalls: { ms: number; at: string; active: string[] }[] = [];
 let stallTimer: ReturnType<typeof setInterval> | null = null;
 let stallLast = Date.now();
 
+/*
+ * Every recorded stall with its time, for the pressure reading (§63): a
+ * process whose own event loop is held is overloaded however fast the
+ * database answers. Kept for the pressure window and no longer.
+ */
+const STALL_LOG_MS = 10 * 60_000;
+const stallLog: { at: number; ms: number }[] = [];
+
+/** Record one stall. Exported for tests; the probe is the only caller in production. */
+export function noteStall(ms: number, at = Date.now()): void {
+  stallLog.push({ at, ms });
+  while (stallLog.length > 0 && stallLog[0]!.at < at - STALL_LOG_MS) stallLog.shift();
+}
+
+/** Milliseconds this process's event loop spent in stalls of 2 s or more since `sinceMs`. */
+export function stalledMsSince(sinceMs: number): number {
+  let total = 0;
+  for (const one of stallLog) if (one.at >= sinceMs) total += one.ms;
+  return total;
+}
+
+/** Tests only. */
+export function resetStallLog(): void {
+  stallLog.length = 0;
+}
+
+/*
+ * Whether the probe's stalls feed the pressure reading. On in production. Off
+ * under vitest by default: a test's own synchronous work (building a fresh
+ * database, hashing a password, a whole pass run inline) is seconds of stall
+ * on a loaded runner, which put suites that never asked about pressure into
+ * SHEDDING and deferred the very passes they assert on
+ * (opportunityReconsiderationWalk, cashAutonomousFunnel, autonomyChain on
+ * 2026-11-12). The pressure suite drives `noteStall` directly.
+ */
+function stallsFeedPressure(): boolean {
+  const setting = (process.env['BRAIN_STALL_PRESSURE'] ?? '').toLowerCase();
+  if (setting === 'off' || setting === '0') return false;
+  if (setting === 'on' || setting === '1') return true;
+  return !process.env['VITEST'];
+}
+
 function ensureStallProbe(): void {
   if (stallTimer) return;
   stallLast = Date.now();
@@ -650,6 +692,7 @@ function ensureStallProbe(): void {
     const active = [...activeActivities.keys()].sort();
     recentStalls.push({ ms: late, at: new Date(now).toISOString(), active });
     if (recentStalls.length > 20) recentStalls.shift();
+    if (stallsFeedPressure()) noteStall(late, now);
     for (const label of active.length > 0 ? active : ['(nothing labelled)']) {
       const t = stallTotals.get(label) ?? { stalls: 0, totalMs: 0, maxMs: 0 };
       t.stalls += 1;

@@ -33,6 +33,7 @@
  *     event when the plan is installed, so a reader can see what the factory
  *     changed and why.
  */
+import { minimumModelClassOf } from '../../domain/engineeringDirector.ts';
 import type {
   FactoryChangeRequest,
   FactoryModelClass,
@@ -237,7 +238,8 @@ export function validatePlan(
       expectedArtifact: String(record['expectedArtifact'] ?? '').slice(0, 500),
       risk: (['LOW', 'MEDIUM', 'HIGH'] as string[]).includes(risk) ? risk : 'MEDIUM',
       criticalPath: record['criticalPath'] === true,
-      modelClass: modelClass === 'STRONGEST' ? 'STRONGEST' : 'FAST',
+      // An objective routed to the strongest class (§109) holds every unit there, whatever the plan said.
+      modelClass: modelClass === 'STRONGEST' || minimumModelClassOf(changeRequest.objective) === 'STRONGEST' ? 'STRONGEST' : 'FAST',
       dependsOn,
       serves: asStringArray(record['serves']),
     });

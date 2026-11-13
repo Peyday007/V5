@@ -190,8 +190,8 @@ async function countWorking(campaigns: FactoryCampaign[]): Promise<number> {
  * objective's declared scope is compared against the `ownedPaths` of other live
  * campaigns' units that are still in play (not INTEGRATED, CANCELLED, FAILED or
  * SUPERSEDED); a campaign with no units yet owns nothing and blocks nothing.
- * Compared against every live campaign — a BLOCKED one still owns its branch —
- * and never against a finished one. It is a wait, not a refusal: the entry
+ * Compared against every live campaign except one BLOCKED on a person — which,
+ * as at the unit level, holds nothing — and never against a finished one. It is a wait, not a refusal: the entry
  * starts on the pass after the owning unit is INTEGRATED. Once the campaign
  * runs, `runRemoteTick` defers individual units that collide with a live unit
  * of another campaign, so this admission check is only the coarse first gate.
@@ -211,6 +211,15 @@ const UNIT_OWNERSHIP_ENDED = new Set(['INTEGRATED', 'CANCELLED', 'FAILED', 'SUPE
 async function liveScopes(live: FactoryCampaign[]): Promise<Array<{ campaignId: string; scope: string[] }>> {
   const scopes: Array<{ campaignId: string; scope: string[] }> = [];
   for (const campaign of live) {
+    /*
+     * The same rule `conflictingUnitOfOtherCampaign` applies to units: a campaign
+     * stopped on something only a person can answer holds nothing. Production
+     * 2026-11-11: five Release 01 change requests (three priority-1 repairs) sat
+     * "not admitted" behind fcp_e51947d1 and fcp_709188ac, both BLOCKED for a
+     * person for days; the unit check would have let them run, the admission
+     * gate never asked it.
+     */
+    if (campaign.state === 'BLOCKED' && parkedOffFleet(campaign.blockerKind)) continue;
     const units = await listUnits(campaign.id);
     const owned = units
       .filter((unit) => !UNIT_OWNERSHIP_ENDED.has(unit.state))
@@ -331,7 +340,16 @@ export interface LineBin {
  * somebody to act, and names what. A `Record` over the whole union, so a blocker
  * kind added later is a compile error until somebody says which it is.
  */
-export const BLOCKER_WAIT: Record<FactoryBlockerKind, { wait: 'AUTOMATIC' | 'PERSON'; remedy: string }> = {
+/**
+ * `MAINTAINER`: neither Brain's next tick nor the owner — the authorized
+ * engineering session. Like PERSON it holds no files and is not re-ticked.
+ */
+export type BlockerWait = 'AUTOMATIC' | 'PERSON' | 'MAINTAINER';
+/** A blocked campaign nothing in the fleet will move: it holds no files and admits nothing. */
+export const parkedOffFleet = (kind: FactoryBlockerKind | null | undefined): boolean =>
+  !!kind && BLOCKER_WAIT[kind]?.wait !== 'AUTOMATIC';
+
+export const BLOCKER_WAIT: Record<FactoryBlockerKind, { wait: BlockerWait; remedy: string }> = {
   NO_HEALTHY_EXECUTION_SURFACE: {
     wait: 'AUTOMATIC',
     remedy: 'Resumes on the next tick once a surface that can take the stage is eligible.',
@@ -358,6 +376,12 @@ export const BLOCKER_WAIT: Record<FactoryBlockerKind, { wait: 'AUTOMATIC' | 'PER
       'A repair needs a file the approved scope does not cover. Amend mutation_scope to add ' +
       'exactly the files named; the next tick queues the repair.',
   },
+  PROTECTED_SCOPE: {
+    wait: 'MAINTAINER',
+    remedy:
+      'No Factory worker may change this scope. A direct Brain engineering session makes the change ' +
+      '(factory-objective skill), or amends the scope to writable paths; the next tick plans it then.',
+  },
   REPAIR_OWNERSHIP_UNRESOLVED: {
     wait: 'PERSON',
     remedy:
@@ -374,7 +398,7 @@ export interface LineCampaign {
   bins: LineBin[];
   /** Null while it is moving. */
   blocked: null | {
-    wait: 'AUTOMATIC' | 'PERSON';
+    wait: BlockerWait;
     kind: string;
     detail: string;
     remedy: string;

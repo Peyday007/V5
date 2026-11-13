@@ -344,6 +344,36 @@ describe('an operator command cannot cancel a deployment', () => {
   });
 
   /**
+   * A workflow that restarts the Brain waits out the whole release job.
+   *
+   * The ordinary wait ends once the machine is replaced, which is right for a
+   * command that only reads. A restart is different: on 2026-11-11 an
+   * Integrations run found no machine step in flight, ran `secrets deploy`,
+   * and restarted the Brain in the middle of the hosted verification before
+   * the restart. The release served, and could not be verified.
+   */
+  it('makes every workflow that restarts the Brain wait out the whole Deploy to Fly job', () => {
+    const restarts = (text: string) =>
+      text.split('\n').some((line) =>
+        !/^\s*#/.test(line) &&
+        (/flyctl\s+secrets\s+(set|unset|import)\b/.test(line) && !/--stage\b/.test(line) ||
+          /flyctl\s+secrets\s+deploy\b/.test(line) ||
+          /flyctl\s+(apps|machine)\s+restart\b/.test(line)),
+      );
+    const restarting = workflows()
+      .filter((f) => !f.endsWith('/deploy.yml'))
+      .filter((f) => restarts(read(f)));
+    expect(restarting.length).toBeGreaterThan(0);
+    const unguarded = restarting.filter(
+      (f) => !/uses: \.\/\.github\/actions\/await-release\n\s+with:\n(?:\s+#.*\n)*\s+whole-job: 'true'/.test(read(f)),
+    );
+    expect(unguarded).toEqual([]);
+    expect(read('.github/actions/await-release/action.yml')).toContain(
+      '(.name == "Deploy to Fly" and $ENV.WHOLE_JOB == "true")',
+    );
+  });
+
+  /**
    * The wait covers the minutes that replace the machine, not the whole run.
    *
    * It used to hold every console command for as long as any Deploy run was in

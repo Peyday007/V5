@@ -445,6 +445,12 @@ export async function listBinHeads(filter: {
   projectId?: string;
   states?: BinState[];
   limit?: number;
+  /**
+   * Only bins whose attempts are spent. A page of 500 in priority order once
+   * hid two exhausted Factory bins behind 500 READY research bins, so the
+   * reconcile pass never saw them and their campaigns waited for ten hours.
+   */
+  exhausted?: boolean;
 }): Promise<BinHead[]> {
   const clauses: string[] = [];
   const params: SqlParam[] = [];
@@ -456,6 +462,7 @@ export async function listBinHeads(filter: {
     clauses.push(`state IN (${filter.states.map(() => '?').join(', ')})`);
     params.push(...filter.states);
   }
+  if (filter.exhausted) clauses.push('attempt_count >= max_attempts');
   const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
   params.push(Math.min(500, Math.max(1, filter.limit ?? 100)));
   const rows = await getDb().all<BinRow>(
@@ -475,6 +482,8 @@ export async function listBins(filter: {
   projectId?: string;
   states?: BinState[];
   limit?: number;
+  /** Only bins whose kind starts with this, e.g. `FACTORY_`; filtered before the limit. */
+  kindPrefix?: string;
 }): Promise<Bin[]> {
   const clauses: string[] = [];
   const params: SqlParam[] = [];
@@ -485,6 +494,10 @@ export async function listBins(filter: {
   if (filter.states && filter.states.length > 0) {
     clauses.push(`state IN (${filter.states.map(() => '?').join(', ')})`);
     params.push(...filter.states);
+  }
+  if (filter.kindPrefix) {
+    clauses.push('substr(kind, 1, ?) = ?');
+    params.push(filter.kindPrefix.length, filter.kindPrefix);
   }
   const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
   params.push(Math.min(500, Math.max(1, filter.limit ?? 100)));
@@ -1204,6 +1217,22 @@ export async function retireBin(input: {
  * reach that state would give every existing caller a power none of them mean
  * to have.
  */
+/**
+ * Re-prioritize a Factory campaign's *waiting* bins (§109): READY or DRAFT,
+ * never LEASED — work in progress keeps what it has, since interrupting it
+ * would waste more than the reorder saves. One statement; the state guard is
+ * in it, so a bin leased between the read and the write is not touched.
+ */
+export async function reprioritizeWaitingCampaignBins(campaignId: string, priority: number): Promise<number> {
+  const bounded = Math.min(9, Math.max(0, Math.trunc(priority)));
+  const result = await getDb().run(
+    `UPDATE bins SET priority = ?, updated_at = ?
+      WHERE factory_campaign_id = ? AND state IN ('READY', 'DRAFT') AND priority <> ?`,
+    [bounded, binNow(), campaignId, bounded],
+  );
+  return Number(result.changes ?? 0);
+}
+
 export async function markBinReady(id: string): Promise<Bin | null> {
   const at = binNow();
   const result = await getDb().run(
@@ -4017,9 +4046,15 @@ export async function claimDispatchIntent(): Promise<BinDispatch | null> {
   const now = binNow();
   const deadline = plusMs(now, DISPATCH_CLAIM_MS);
   const candidates = await db.all<BinDispatchRow>(
-    `SELECT * FROM bin_dispatch
-      WHERE (state = 'PENDING' OR state = 'SENDING') AND next_attempt_at <= ?
-      ORDER BY next_attempt_at, rowid LIMIT 10`,
+    /*
+     * The most important work fires first (Brain-wide resource rule, §98).
+     * The intent queue was ordered by time alone, so a burst of five could be
+     * spent on whatever was queued first while a goal's higher-priority bin
+     * waited a tick; the bin's own priority now leads, time breaks ties.
+     */
+    `SELECT d.* FROM bin_dispatch d LEFT JOIN bins b ON b.id = d.bin_id
+      WHERE (d.state = 'PENDING' OR d.state = 'SENDING') AND d.next_attempt_at <= ?
+      ORDER BY COALESCE(b.priority, 0) DESC, d.next_attempt_at, d.rowid LIMIT 10`,
     [now],
   );
   for (const row of candidates) {

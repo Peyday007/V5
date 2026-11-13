@@ -38,6 +38,25 @@ export const RETRYABLE_FAILURE_STAGES: readonly ReleaseFailureStage[] = ['INFRA'
 export const MAX_RELEASE_ATTEMPTS = 3;
 
 /**
+ * Whether a later pass may try this failed attempt again on the same head.
+ *
+ * A runner or dispatch failure is retried up to MAX_RELEASE_ATTEMPTS. The whole
+ * suite failing on the merged tree is retried once: that tree is the change
+ * plus everything on the canonical branch, on a runner image, and a failure
+ * there is as often the branch or the image as the change (program
+ * fpg_2adb7f5e, 2026-11-10: links-d2, two documentation links, refused on
+ * ocr.test after ubuntu-latest moved to tesseract 5.5). A second refusal is a
+ * verdict, and so is every other gate refusal, a withdrawn grant among them.
+ */
+export const SUITE_FAILED_ON_MERGED_TREE = 'the whole suite against Postgres failed on the merged tree';
+
+export function releaseRetryable(run: Pick<ReleaseRun, 'state' | 'failureStage' | 'failureDetail' | 'attempt'>): boolean {
+  if (run.state !== 'FAILED' || run.failureStage === null) return false;
+  if (RETRYABLE_FAILURE_STAGES.includes(run.failureStage)) return run.attempt < MAX_RELEASE_ATTEMPTS;
+  return run.failureStage === 'GATE' && run.attempt === 1 && (run.failureDetail ?? '').includes(SUITE_FAILED_ON_MERGED_TREE);
+}
+
+/**
  * One thing that must be true of the released Brain before it is called LIVE.
  *
  * `HTTP` asks the running Brain a path and expects a status and, optionally,

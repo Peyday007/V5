@@ -4,7 +4,7 @@
  * populations rather than one population filling the top of the list.
  */
 import { describe, expect, it } from 'vitest';
-import { excludedBy, unionOf } from '../server/services/cash/exclusions.ts';
+import { commonTo, excludedBy, exclusionsIn } from '../server/services/cash/exclusions.ts';
 import { questionFor, type SearchBucket } from '../server/services/cash/discovery.ts';
 import { interleaveByPopulation, type ConstructedArrangement } from '../server/services/cash/construct.ts';
 
@@ -12,24 +12,34 @@ const bucket: SearchBucket = { id: 'temporary-exploit', mechanism: 'TEMPORARY_EX
 
 describe('a goal exclusion reaches the question and the screen, not only the plan', () => {
   it('puts the exclusion in a broad discovery question once', () => {
-    const q = questionFor(bucket, 'Collect cash', 1, [], { lines: [], omitted: 0 }, null, ['GOVERNMENT_CONTRACTING']);
-    expect(q).toMatch(/Leave out government and public-sector contracts/);
+    const q = questionFor(bucket, 'Collect cash', 1, [], { lines: [], omitted: 0 }, null, ['WEBSITE_REPAIR']);
+    expect(q).toMatch(/Leave out broken-website and website-repair plays/);
     // A question that already carries it (a constructed round) is not told twice.
-    const carried = questionFor({ ...bucket, question: `${bucket.question} Leave out government and public-sector contracts: the goal's owner excluded them.` }, 'Collect cash', 1, [], { lines: [], omitted: 0 }, null, ['GOVERNMENT_CONTRACTING']);
-    expect(carried.match(/Leave out government/g)).toHaveLength(1);
-    expect(questionFor(bucket, 'Collect cash', 1, [])).not.toMatch(/Leave out government/);
+    const carried = questionFor({ ...bucket, question: `${bucket.question} Leave out broken-website and website-repair plays: the goal's owner excluded them.` }, 'Collect cash', 1, [], { lines: [], omitted: 0 }, null, ['WEBSITE_REPAIR']);
+    expect(carried.match(/Leave out broken-website/g)).toHaveLength(1);
+    expect(questionFor(bucket, 'Collect cash', 1, [])).not.toMatch(/Leave out/);
   });
 
-  it('recognises a government source by its address, as production researched them', () => {
-    for (const source of ['https://stlouis-mo.gov/bids/1', 'https://www.neh.gov/program', 'https://www.rfpmart.com/x', 'https://www.publicsurplus.com/sms/auction']) {
-      expect(excludedBy(`Some opening ${source}`, ['GOVERNMENT_CONTRACTING'])).toBe('GOVERNMENT_CONTRACTING');
+  it('shares only what every live goal excludes: one goal never narrows the project\'s discovery', () => {
+    expect(commonTo([{ exclusions: ['WEBSITE_REPAIR'] }, { exclusions: ['DOMAIN_SPECULATION', 'WEBSITE_REPAIR'] }])).toEqual(['WEBSITE_REPAIR']);
+    expect(commonTo([{ exclusions: ['WEBSITE_REPAIR'] }, { exclusions: [] }])).toEqual([]);
+    expect(commonTo([])).toEqual([]);
+  });
+});
+
+describe('an industry is never excluded (owner, 2026-11-12)', () => {
+  it('reads the $10K goal\'s old government words as excluding nothing, and keeps every government opening in play', () => {
+    expect(exclusionsIn('No government contracts. No high-priced domain speculation.')).toEqual(['DOMAIN_SPECULATION']);
+    expect(exclusionsIn('Avoid government/federal contracts and public-sector work.')).toEqual([]);
+    const everyClass = ['WEBSITE_REPAIR', 'DOMAIN_SPECULATION'] as const;
+    for (const opening of [
+      'Listing at https://www.sam.gov/opp/123',
+      'City of Austin purchasing RFP for janitorial services',
+      "PA Department of Agriculture's Farm Vitality Planning Grant",
+      'Weekly federal bid digest for small contractors (SAM.gov, USAspending)',
+    ]) {
+      expect(excludedBy(opening, everyClass)).toBeNull();
     }
-    expect(excludedBy('Holiday light installation for homeowners https://example.com', ['GOVERNMENT_CONTRACTING'])).toBeNull();
-  });
-
-  it('takes the union of what live goals exclude', () => {
-    expect(unionOf([{ exclusions: ['WEBSITE_REPAIR'] }, { exclusions: ['GOVERNMENT_CONTRACTING'] }])).toEqual(['GOVERNMENT_CONTRACTING', 'WEBSITE_REPAIR']);
-    expect(unionOf([])).toEqual([]);
   });
 });
 
@@ -48,8 +58,7 @@ describe('constructed arrangements are dealt one buyer population at a time', ()
 
 describe('domain speculation, as the owner excluded it on 2026-11-02', () => {
   it('reads the owner\'s words as an exclusion and recognises the openings production named', async () => {
-    const { exclusionsIn } = await import('../server/services/cash/exclusions.ts');
-    expect(exclusionsIn('No government contracts. No high-priced domain speculation.')).toEqual(['GOVERNMENT_CONTRACTING', 'DOMAIN_SPECULATION']);
+    expect(exclusionsIn('No high-priced domain speculation.')).toEqual(['DOMAIN_SPECULATION']);
     expect(exclusionsIn('Sell domain names to buyers who want them')).toEqual([]);
     for (const title of [
       'dujo.com is listed for sale on Afternic (a GoDaddy marketplace) with a live Buy Now',

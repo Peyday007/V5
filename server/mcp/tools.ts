@@ -52,6 +52,8 @@ import type { McpTool } from './toolkit.ts';
 import { RESEARCH_TOOLS } from './researchTools.ts';
 import { BIN_TOOLS } from './binTools.ts';
 import { ENGINEERING_TOOLS } from './engineeringTools.ts';
+import { OPERATOR_TOOLS } from './operatorTools.ts';
+import { OWNER_NOTICE_TOOLS } from './ownerNoticeTools.ts';
 import { fetchSourceTool } from './sourceTools.ts';
 import { activeBinForWorker, confinementFor } from '../repos/bins.ts';
 import { RESEARCH_METHOD, RESEARCH_METHOD_VERSION } from '../services/research/method.ts';
@@ -138,6 +140,14 @@ const listProjectsTool: McpTool = {
     const visible = new Set(visibleProjectIds(principal, all.map((project) => project.id)));
     // Filtered, not refused. A worker with one project of five is shown one.
     const mine = all.filter((project) => visible.has(project.id));
+    // The owner's conversation reads its waiting notices here as well (owner, 2026-11-13): this
+    // read is cheap and listed by every client, where brain_get_plan builds a whole plan and a
+    // client connected before brain_owner_notices existed cannot see that tool. Only projects the
+    // principal may read with project:read, the same decision brain_owner_notices makes.
+    const { decideProjectAccess } = await import('../services/identity/policy.ts');
+    const readable = mine.filter((project) => decideProjectAccess(principal, project.id, 'READ', 'project:read').allowed).map((p) => p.id);
+    const { undeliveredOwnerNotices } = await import('../services/ownerNotices.ts');
+    const notices = await undeliveredOwnerNotices(readable);
     return {
       projectId: null,
       value: {
@@ -146,6 +156,7 @@ const listProjectsTool: McpTool = {
           name: project.name,
           slug: project.slug,
         })),
+        ownerNotices: notices.map((n) => ({ projectId: n.projectId, noticeId: n.noticeId, kind: n.kind, readyAt: n.readyAt, subject: n.subject, text: n.text })),
       },
     };
   },
@@ -222,6 +233,16 @@ const getPlanTool: McpTool = {
         blocked: brief(plan.blocked),
         nextBestAction: plan.nextBestActionText,
         generatedAt: plan.generatedAt,
+        // What waits to be announced in the owner's conversation (owner, 2026-11-13). Carried here
+        // too because a client lists its tools once when it connects: a conversation connected
+        // before `brain_owner_notices` existed reads the same rows through this tool.
+        ownerNotices: (await (await import('../services/ownerNotices.ts')).undeliveredOwnerNotices([projectId])).map((n) => ({
+          noticeId: n.noticeId,
+          kind: n.kind,
+          readyAt: n.readyAt,
+          subject: n.subject,
+          text: n.text,
+        })),
       },
     };
   },
@@ -524,15 +545,38 @@ const heartbeatTool: McpTool = {
  * reaches the same conclusion. That is the whole reason it reads only
  * persisted state.
  */
-async function advanceAfter(item: { orchestrationId: string | null }): Promise<void> {
+export async function advanceAfter(
+  item: { orchestrationId: string | null },
+  waitsMs: readonly number[] = ADVANCE_RETRY_WAITS_MS,
+): Promise<void> {
   if (!item.orchestrationId) return;
-  try {
-    const { advancePacket } = await import('../services/research/packetRunner.ts');
-    await advancePacket(item.orchestrationId);
-  } catch (error) {
-    console.error('[brain] could not advance the packet after a completion:', error);
+  const { advancePacket } = await import('../services/research/packetRunner.ts');
+  const { classifyInfraFailure } = await import('../db/infra.ts');
+  /*
+   * A database that did not answer is retried here, briefly, rather than left
+   * to the next sweep. Right after a restart the pool is contended, and the
+   * released-image verification watched exactly this: a verification
+   * completed, its advance was swallowed, and the packet sat with its question
+   * unsettled and no synthesis queued until something else woke it.
+   * `advancePacket` reads only rows, so a second pass is safe; any other error
+   * is a real one and is logged at once, as before.
+   */
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await advancePacket(item.orchestrationId);
+      return;
+    } catch (error) {
+      const wait = waitsMs[attempt];
+      if (wait === undefined || !classifyInfraFailure(error)) {
+        console.error('[brain] could not advance the packet after a completion:', error);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
   }
 }
+
+const ADVANCE_RETRY_WAITS_MS = [1000, 3000, 8000] as const;
 
 const completeTool: McpTool = {
   name: 'brain_complete_work',
@@ -981,6 +1025,12 @@ export const TOOLS: readonly McpTool[] = [
   // evidence, test policy, existing owners, next action, blockers. Same array,
   // same reason as the two above.
   ...ENGINEERING_TOOLS,
+  // §106 — the operator directs every goal through these. Same array, same
+  // reason: who may *succeed* with them is `operator:act`, decided at execution.
+  ...OPERATOR_TOOLS,
+  // The owner's own Claude Code conversation reads the notices Brain records for it (owner,
+  // 2026-11-13). Same array, same reason: project:read to read, checkpoints:write to mark delivered.
+  ...OWNER_NOTICE_TOOLS,
 ];
 
 const BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));

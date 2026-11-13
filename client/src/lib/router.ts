@@ -28,6 +28,8 @@ export type Route =
   | { name: 'BUILD' }
   | { name: 'PROJECTS' }
   | { name: 'KNOWLEDGE' }
+  /** Historical memory: the person's recovered conversation history and its rediscoveries. */
+  | { name: 'MEMORY' }
   | { name: 'FLEET' }
   | { name: 'NEEDS_YOU' }
   | { name: 'SITES' }
@@ -52,6 +54,8 @@ export type Route =
    * from, so no one of them is a standalone destination in the navigation.
    */
   | { name: 'SYSTEMS' }
+  /** Integrations (§103): every connected service, who uses it, its health, repairs and owner actions. */
+  | { name: 'INTEGRATIONS' }
   /** Magic Deck Lab: a secondary destination (§57), each subsection its own address. */
   | { name: 'MAGIC'; section: MagicSection | null }
   | { name: 'SEARCH' }
@@ -108,6 +112,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'PROJECTS' };
     case 'knowledge':
       return { name: 'KNOWLEDGE' };
+    case 'memory':
+      return { name: 'MEMORY' };
     case 'fleet':
       return { name: 'FLEET' };
     case 'needs-you':
@@ -126,6 +132,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'SCENARIOS' };
     case 'systems':
       return { name: 'SYSTEMS' };
+    case 'integrations':
+      return { name: 'INTEGRATIONS' };
     case 'magic': {
       if (parts.length === 1) return { name: 'MAGIC', section: null };
       const section = parts[1] as MagicSection;
@@ -168,6 +176,8 @@ export function pathFor(route: Route): string {
       return '/projects';
     case 'KNOWLEDGE':
       return '/knowledge';
+    case 'MEMORY':
+      return '/memory';
     case 'FLEET':
       return '/fleet';
     case 'NEEDS_YOU':
@@ -186,6 +196,8 @@ export function pathFor(route: Route): string {
       return '/scenarios';
     case 'SYSTEMS':
       return '/systems';
+    case 'INTEGRATIONS':
+      return '/integrations';
     case 'MAGIC':
       return route.section ? `/magic/${route.section}` : '/magic';
     case 'SEARCH':

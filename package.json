@@ -30,6 +30,7 @@
     "admin": "tsx scripts/admin.ts",
     "goal-budget-proof": "tsx scripts/goal-budget-proof.ts",
     "engineering": "tsx scripts/engineering.ts",
+    "operator": "tsx scripts/operator.ts",
     "finish": "node .claude/hooks/finish-job.mjs",
     "goals": "tsx scripts/goals.ts",
     "report:packet": "tsx scripts/packet-report.ts",
@@ -56,7 +57,8 @@
     "scenario:bench": "tsx scripts/scenario-bench.ts",
     "puzzle-book": "tsx scripts/puzzle-book.ts",
     "plan:check": "tsx scripts/plan-check.ts",
-    "quant": "tsx scripts/quant.ts"
+    "quant": "tsx scripts/quant.ts",
+    "memory": "tsx scripts/memory.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
@@ -64,6 +66,7 @@
     "@resvg/resvg-js": "2.6.2",
     "cross-env": "^7.0.3",
     "express": "^4.21.2",
+    "jszip": "^3.10.1",
     "mammoth": "^1.12.1",
     "multer": "^2.0.2",
     "pdf-lib": "^1.17.1",

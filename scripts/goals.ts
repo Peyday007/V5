@@ -60,9 +60,11 @@ import { discoveryYield, type YieldRow } from '../server/services/cash/discovery
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
+import { methodYield, recentExplorations } from '../server/services/goals/reasoning/learning.ts';
 import { askConstructedArrangements, askPathwayConstructions, CHAIN_LABEL, goalArrangements, goalLimits, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 import { constructArrangements } from '../server/services/cash/construct.ts';
 import { renderPathways } from '../server/services/goals/pathways.ts';
+import { renderReconstruction } from '../server/services/goals/reconstruction.ts';
 import { goalExclusions } from '../server/services/cash/exclusions.ts';
 import { targetProperties } from '../server/services/cash/properties.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS } from '../server/services/cash/discovery.ts';
@@ -503,6 +505,15 @@ async function printPlan(reading: PlanReading): Promise<void> {
     console.log(`    ${one.modelled ? 'model' : '     '} ${one.stage.slice(0, 1)} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);
   }
   printPortfolio(reading.portfolio);
+  // Why the plan falls short, what was changed, and the strongest reconstruction (§99).
+  if (reading.reconstruction) for (const line of renderReconstruction(reading.reconstruction)) console.log(line);
+  // Which ways of reasoning have worked, across every goal, and this goal's recent explorations (§101).
+  const yieldRows = await methodYield().catch(() => []);
+  if (yieldRows.length) {
+    console.log(`  methods     ${yieldRows.reduce((n, x) => n + x.methods, 0)} way(s) of reasoning on record`);
+    for (const y of yieldRows.slice(0, 12)) console.log(`    learned   ${y.stance.padEnd(24)} ${y.origin.toLowerCase().padEnd(10)} ${y.methods} method(s), ${y.tries} tri(es), ${y.improvements} improved, ${y.wins} won, mean lift ${(y.meanLift * 100).toFixed(1)}%`);
+  }
+  for (const x of await recentExplorations(reading.goalId).catch(() => [])) console.log(`    explored  ${x.created_at} ${Number(x.variations).toLocaleString('en-US')} variation(s) of ${x.variables} variable(s), ${x.directions} direction(s), ${x.model_directions} from the model; best ${(x.best_reach * 100).toFixed(1)}% vs greedy ${(x.greedy_reach * 100).toFixed(1)}%${x.replaced ? ' (strategy replaced)' : ''}: ${x.best_method ?? 'greedy kept'}`);
   console.log(`  ladder      ${Object.entries(reading.ladder).map(([stage, n]) => `${stage} ${n}`).join(' · ')}`);
   console.log(`  policy      ${reading.executionPolicy}${reading.executionPolicy === 'SQUEEZE' ? ': a cash target with a deadline; no market-testing phase, sellable openings are sold now, several at once' : ''}`);
   for (const one of reading.sales) {
@@ -764,6 +775,13 @@ function printPortfolio(portfolio: import('../server/services/goals/portfolio.ts
   const l = portfolio.limits;
   console.log(`  quant       ${portfolio.basis === 'PROBABILITY' ? 'probability' : 'coverage of tested conditions, not a probability'}; ${portfolio.searched} combination(s) searched; target ${Math.round(l.target)} in ${l.deadlineDays} day(s)`);
   console.log(`    limits    start capital ${l.startingCapital ?? 'none'} · per arrangement ${l.perArrangement ?? 'none'} · spend ceiling ${l.spendCeiling ?? 'none'} · outreach ${l.contactsPerDay.value ?? `${l.contactsPerDay.low}–${l.contactsPerDay.high}`}/day (${l.contactsPerDay.source}) · shared-outreach correlation ${l.correlation}`);
+  const m0 = portfolio.measuredRates;
+  if (m0) {
+    const pc = (x: number) => `${(x * 100).toFixed(2)}%`;
+    console.log(`    measured   reply ${pc(m0.low)}–${pc(m0.high)} on ${m0.sent} sends (${m0.replies} replies, ${m0.opportunities} opportunities, ${((m0.bounced / m0.sent) * 100).toFixed(1)}% bounced) from the Instantly workspace`);
+    console.log(`    authority  ${m0.assessment.authority} → ${m0.applied}: ${m0.assessment.sentence}`);
+    if (m0.asIs) console.log(`    as-is      if the new campaign does no better: reach ${(m0.asIs.reach * 100).toFixed(1)}% · settled p10 ${Math.round(m0.asIs.settledP10)} p50 ${Math.round(m0.asIs.settledP50)} p90 ${Math.round(m0.asIs.settledP90)}`);
+  }
   const b = portfolio.best;
   if (b) {
     console.log(`    best      reaches the target in ${(b.reach * 100).toFixed(1)}% of worlds · settled p10 ${Math.round(b.settledP10)} p50 ${Math.round(b.settledP50)} p90 ${Math.round(b.settledP90)} · capital short ${(b.capitalShort * 100).toFixed(0)}% · over spend ${(b.overSpend * 100).toFixed(0)}%`);

@@ -857,19 +857,29 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     for (let i = 0; i < 40; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 20_000 + i });
     const id = await goal(1_000_000);
     const db = getDb() as unknown as Record<'all' | 'get' | 'run', (...args: unknown[]) => unknown>;
-    const originals = { all: db.all, get: db.get, run: db.run };
-    let statements = 0;
-    for (const m of ['all', 'get', 'run'] as const) {
-      const orig = originals[m].bind(db);
-      db[m] = (...args: unknown[]) => { statements += 1; return orig(...args); };
-    }
-    try {
-      expect(await readGoalPlan({ goalId: id, evaluations: 2_000 })).not.toBeNull();
-    } finally {
-      Object.assign(db, originals);
-    }
-    expect(statements).toBeLessThan(120);
-  });
+    const count = async (): Promise<number> => {
+      const originals = { all: db.all, get: db.get, run: db.run };
+      let statements = 0;
+      for (const m of ['all', 'get', 'run'] as const) {
+        const orig = originals[m].bind(db);
+        db[m] = (...args: unknown[]) => { statements += 1; return orig(...args); };
+      }
+      try {
+        expect(await readGoalPlan({ goalId: id, evaluations: 2_000 })).not.toBeNull();
+      } finally {
+        Object.assign(db, originals);
+      }
+      return statements;
+    };
+    const atForty = await count();
+    // A bounded total. The money route read (one statement per currency, #758) and the
+    // forecast ledger kept on each refresh (LEARN-15-1, a fixed cost per project) are in it.
+    expect(atForty).toBeLessThan(140);
+    // And what the bound is for: twenty more openings cost a few statements, not several each.
+    for (let i = 40; i < 60; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 20_000 + i });
+    const atSixty = await count();
+    expect(atSixty - atForty).toBeLessThan(10);
+  }, 120_000);
 
   it('never builds a plan on the owner doing physical work, and still plans the same service brokered', async () => {
     // The standing rule (domain/operatingModel.ts), owner 2026-11-02: "I DO NOT WANT TO PERFORM PHYSICAL WORK."

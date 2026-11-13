@@ -74,7 +74,7 @@ import {
   plainLayerName,
   readDealDispatch,
 } from '../server/services/russell/dealDispatch.ts';
-import { tick } from '../server/services/russell/loop.ts';
+import { SLOT_FILL_PER_TICK, tick } from '../server/services/russell/loop.ts';
 import { claimCycle, completeCycle, pauseCycle, resumeCycle } from '../server/repos/russellCycle.ts';
 import {
   askHuman,
@@ -2784,7 +2784,40 @@ describe('the loop starts work, bounded', () => {
     expect((await getCandidate(captured.candidate!.id))!.state).toBe('QUEUED');
   });
 
-  it('starts one, and leaves the rest queued rather than dropping them', async () => {
+  it('fills free research slots a few at a time, and leaves the rest queued rather than dropping them (§98)', async () => {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'acceptance',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 10,
+      maxFragments: 10,
+      maxConcurrent: 10,
+      maxProbes: 1,
+    });
+    const states = ['Florida', 'California', 'Texas', 'Ohio', 'Iowa', 'Utah'];
+    const ids: string[] = [];
+    for (const state of states) ids.push(await queuedWithSpec(`establish the ${state} broker licence position`));
+
+    // Free slots are filled, up to the per-tick fill, not one a tick.
+    const report = await tick('instance-a');
+    expect(report.launched).toHaveLength(SLOT_FILL_PER_TICK);
+    expect(report.bounded).toBe(true);
+
+    // The one that did not go is preserved rather than decided against, so the
+    // next tick starts it — which is the property that makes a bound a pacing
+    // mechanism instead of a way to lose work.
+    const next = await tick('instance-a');
+    expect(next.launched).toHaveLength(states.length - SLOT_FILL_PER_TICK);
+    expect(report.launched).not.toContain(next.launched[0]);
+
+    const missions = await listMissions({ projectId });
+    expect(missions).toHaveLength(states.length);
+    expect(new Set(missions.map((m) => m.candidateId))).toEqual(new Set(ids));
+  });
+
+  it('starts no more than the grant\u2019s free slots allow', async () => {
     await createGoal({
       projectId,
       ownerUserId: userId,
@@ -2793,26 +2826,13 @@ describe('the loop starts work, bounded', () => {
       allowedWork: ['RESEARCH'],
       maxMissions: 5,
       maxFragments: 5,
-      maxConcurrent: 5,
+      maxConcurrent: 1,
       maxProbes: 1,
     });
-    const first = await queuedWithSpec('establish the Florida broker licence position');
-    const second = await queuedWithSpec('establish the California broker licence position');
-
+    await queuedWithSpec('establish the Florida broker licence position');
+    await queuedWithSpec('establish the California broker licence position');
     const report = await tick('instance-a');
     expect(report.launched).toHaveLength(1);
-    expect(report.bounded).toBe(true);
-
-    // The one that did not go is preserved rather than decided against, so the
-    // next tick starts it — which is the property that makes a bound a pacing
-    // mechanism instead of a way to lose work.
-    const next = await tick('instance-a');
-    expect(next.launched).toHaveLength(1);
-    expect(next.launched[0]).not.toBe(report.launched[0]);
-
-    const missions = await listMissions({ projectId });
-    expect(missions).toHaveLength(2);
-    expect(new Set(missions.map((m) => m.candidateId))).toEqual(new Set([first, second]));
   });
 });
 

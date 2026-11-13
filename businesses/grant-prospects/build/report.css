@@ -1,0 +1,30 @@
+:root{--ink:#1d2430;--muted:#5d6675;--line:#dfe3ea;--accent:#1f6f5c;--soft:#eef6f3}
+*{box-sizing:border-box}
+body{font:10.5pt/1.45 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif;color:var(--ink);background:#fff;margin:0 auto;max-width:820px;padding:16px}
+header{border-bottom:3px solid var(--accent);padding-bottom:10px;margin-bottom:14px}
+.brand{color:var(--accent);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:9pt}
+h1{margin:4px 0 0;font-size:20pt}
+header h2{margin:2px 0 4px;font-size:14pt;font-weight:600}
+.meta{color:var(--muted);font-size:9pt;margin:2px 0}
+.muted{color:var(--muted);font-size:9pt}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 18px}
+.summary div{background:var(--soft);border-radius:8px;padding:10px}
+.summary b{display:block;font-size:20pt;color:var(--accent)}
+.summary span{font-size:8.5pt;color:var(--muted)}
+h2.sec{font-size:13pt;border-bottom:1px solid var(--line);padding-bottom:4px;margin-top:22px;break-after:avoid}
+.card{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:10px 0;break-inside:avoid}
+.card h3{margin:0 0 2px;font-size:11.5pt}
+.card p{margin:4px 0}
+.rank{display:inline-block;min-width:22px;color:var(--accent)}
+.why{font-size:9.5pt}
+.flag{background:#fff6d6;padding:3px 6px;border-radius:4px;font-size:9pt}
+table.grants{width:100%;border-collapse:collapse;font-size:8.5pt;margin:6px 0}
+table.grants th{text-align:left;color:var(--muted);font-weight:600;border-bottom:1px solid var(--line);padding:3px 4px}
+table.grants td{border-bottom:1px solid #f0f2f5;padding:3px 4px;vertical-align:top}
+td.n{text-align:right;white-space:nowrap}
+.apply{font-size:8.8pt;background:#f7f8fa;border-radius:6px;padding:6px 8px;margin-top:6px}
+ul.muted li{margin:4px 0}
+footer{margin-top:24px;border-top:1px solid var(--line);padding-top:6px;color:var(--muted);font-size:8.5pt}
+@media (max-width:600px){.summary{grid-template-columns:1fr}}
+.tag{font-size:8pt;font-weight:500;color:#5d6675;border:1px solid #dfe3ea;border-radius:4px;padding:0 4px}
+.src{font-size:7.5pt;color:#8a92a0;margin:4px 0 0}

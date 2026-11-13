@@ -51,7 +51,7 @@ import {
 } from '../../../repos/factoryProgram.ts';
 import { recordFactoryEvent } from '../../../repos/factoryFleet.ts';
 import { edgesOf, findCycle, parseRequirementMap, validateRequirementMap } from './map.ts';
-import { campaignIsPrepared, campaignLinePriority, deriveProgramPlan, eligibleCampaigns, promotedRequirements, validateProgramPlan } from './plan.ts';
+import { widenScope, campaignIsPrepared, campaignLinePriority, deriveProgramPlan, eligibleCampaigns, promotedRequirements, validateProgramPlan } from './plan.ts';
 import { extractSourceItems, itemsMovedBy, programSource, sha256 } from './spec.ts';
 import { deriveProgramReading, repairTargets, type StatusInput } from './status.ts';
 
@@ -95,6 +95,12 @@ export interface ProgramPorts {
   queue(input: { changeRequestId: string; projectId: string; userId: string; priority: number }): Promise<void>;
   /** Grant automatic release with these live checks. Idempotent. */
   authorizeRelease(input: { changeRequestId: string; userId: string; liveChecks: LiveCheck[]; reason: string }): Promise<void>;
+  /**
+   * Add paths to a submitted campaign's contract scope, as the program's approver,
+   * through the contract's own amendment (recorded with both values). Optional:
+   * a port without it leaves submitted scopes as they are.
+   */
+  extendScope?(input: { changeRequestId: string; add: string[]; userId: string; reason: string }): Promise<void>;
   /** The risk class the contract derived for a change request. */
   riskOf(changeRequestId: string): Promise<string | null>;
   /** What one change request has become, read from the existing campaign rows. */
@@ -462,6 +468,9 @@ export async function readProgram(programId: string, ports: Pick<ProgramPorts, '
 /** Verification is repeated at most this often for a requirement whose answer has not changed revision. */
 export const REVERIFY_AFTER_MS = 15 * 60_000;
 
+/** Requirements already asked ahead of their campaign at a revision (in memory: once per revision per process). */
+const opportunisticAsked = new Map<string, string>();
+
 export interface ProgramTickReport {
   programId: string;
   verified: Array<{ requirement: string; outcome: string }>;
@@ -484,6 +493,11 @@ export function campaignObjective(program: FactoryProgram, campaign: PlannedCamp
         : `Structural review of requirement ${campaign.repairOf?.requirement} of program ${program.id}: ${MAX_REPAIR_EPISODES} repairs did not hold. Find the shared root cause across the failures below and change the structure that keeps producing it.`,
     'Each requirement below quotes the approved specification verbatim; the quote governs over any summary here, and its checks are fixed.',
   ];
+  // Production 2026-11-10: units spent up to twelve attempts each trying to register their own
+  // acceptance probes. The judge is not the campaign's to write (§96, §97).
+  lines.push(
+    'Probes: a check named "probe …" is defined by the program owner, never by this campaign. A probe that is not registered yet is not a defect of this work and not a reason to fail a unit: implement the behavior and its tests, and the owner adds the probe that reads it from real rows.',
+  );
   for (const r of requirements) {
     lines.push(
       '',
@@ -502,6 +516,8 @@ export function campaignObjective(program: FactoryProgram, campaign: PlannedCamp
     lines.push(`Checks: ${r.verification.map(describeCheck).join(' | ')}`);
   }
   if (campaign.repairOf) lines.push('', `Failures: ${campaign.repairOf.failures.join(' | ')}`);
+  lines.push('', `Tests: write this campaign's own regression tests in ${campaignTestPath(program, campaign)} (owned by this campaign alone).`);
+
   return {
     projectId: program.projectId,
     submissionKey: `program:${program.id}:${campaign.key}`,
@@ -512,10 +528,22 @@ export function campaignObjective(program: FactoryProgram, campaign: PlannedCamp
       statement: `${r.key}: ${r.behavior}`.slice(0, 1_000),
       verification: r.verification.map(describeCheck).join(' AND ').slice(0, 1_000),
     })),
-    mutationScope: campaign.mutationScope,
+    mutationScope: [...widenScope(campaign.mutationScope), campaignTestPath(program, campaign)],
     repository: program.repository,
     baseBranch: program.baseBranch,
   };
+}
+
+/**
+ * The test file a campaign owns beside its source scope. A campaign whose
+ * scope named only source files could not add the regression test its own
+ * review demanded (production 2026-11-09: quant-d0-p0's repair unit spent three
+ * attempts refusing to write outside server/services/cash/funnel.ts). The path
+ * is unique to the program and campaign, so it never makes two campaigns wait
+ * on each other.
+ */
+export function campaignTestPath(program: Pick<FactoryProgram, 'id'>, campaign: Pick<PlannedCampaign, 'key'>): string {
+  return `tests/program-${program.id.replace(/^fpg_/, '').slice(0, 8)}-${campaign.key}*.test.ts`;
 }
 
 export function describeCheck(check: RequirementCheck): string {
@@ -563,11 +591,10 @@ export async function tickProgram(programId: string, ports: ProgramPorts): Promi
   for (const requirement of reading.requirements) {
     const due = requirement.status === 'INTEGRATED' || requirement.status === 'PRODUCTION_VERIFIED' || requirement.status === 'NOT_DONE';
     if (!due) continue;
-    // A requirement under repair is re-verified only once its repair is live.
-    if (requirement.status === 'NOT_DONE') {
-      const answering = input.plan.campaigns.find((c) => c.key === requirement.campaign);
-      if (answering?.kind !== 'BUILD' && input.progress.get(answering?.key ?? '')?.outcome !== 'LIVE') continue;
-    }
+    // A reopened requirement is asked again at every new revision, not only once
+    // its repair is live: a failure read wrongly (program fpg_2adb7f5e, 2026-11-09:
+    // a spent forge budget read as a missing file) then clears itself, and the
+    // repair it opened stops mattering. One answer per revision bounds the cost.
     // One answer per revision: a definite answer stands until production changes;
     // an UNKNOWN is asked again after a while.
     const last = latest.get(requirement.key);
@@ -587,6 +614,25 @@ export async function tickProgram(programId: string, ports: ProgramPorts): Promi
     } else if (outcome === 'PASS' && last?.outcome !== 'PASS') {
       await recordFactoryEvent({ kind: PROGRAM_EVENT_KINDS.verified, evidenceClass: 'MEASURED', detail: { programId, requirement: requirement.key, revision: result.revision, verificationId: recorded.id } });
     }
+  }
+  // 1b. Production evidence decides whatever route the code took. A requirement whose campaign
+  //     stalled or never started may already hold on production (production 2026-11-10: the
+  //     quant campaign's funnel was landed by review after its last unit stalled on a finding
+  //     that no longer reproduced). Its checks are asked once per revision, and only a PASS is
+  //     recorded: a failure of unbuilt work is not a regression and must not open a repair.
+  for (const requirement of reading.requirements) {
+    if (requirement.status !== 'BLOCKED' && requirement.status !== 'IMPLEMENTED' && requirement.status !== 'MAPPED') continue;
+    if (revision === null) continue;
+    const askedKey = `${programId}:${requirement.key}`;
+    if (opportunisticAsked.get(askedKey) === revision) continue;
+    opportunisticAsked.set(askedKey, revision);
+    const def = input.map.requirements.find((r) => r.key === requirement.key)!;
+    if (def.ambiguities.some((a) => a.interpretation === null && !a.resolvedBy)) continue;
+    const result = await ports.verify(def.verification);
+    if (result.revision === null || !result.checks.length || !result.checks.every((c) => c.ok === true)) continue;
+    const recorded = await recordVerification({ programId, requirementKey: requirement.key, outcome: 'PASS', revision: result.revision, checks: result.checks, at: now.toISOString() });
+    report.verified.push({ requirement: requirement.key, outcome: 'PASS' });
+    await recordFactoryEvent({ kind: PROGRAM_EVENT_KINDS.verified, evidenceClass: 'MEASURED', detail: { programId, requirement: requirement.key, revision: result.revision, verificationId: recorded.id, route: 'evidence-ahead-of-campaign' } });
   }
   input = await statusInput(program, ports);
 
@@ -649,6 +695,23 @@ export async function tickProgram(programId: string, ports: ProgramPorts): Promi
     const changeRequestId = input.links.get(campaign.key);
     if (changeRequestId && input.progress.get(campaign.key)?.campaignId === null) await queueAndGrant(campaign, changeRequestId, null);
   }
+  // Campaigns submitted before they owned a test file get theirs (idempotent: the port adds only what is missing).
+  if (ports.extendScope) {
+    for (const campaign of input.plan.campaigns) {
+      const changeRequestId = input.links.get(campaign.key);
+      if (!changeRequestId || input.progress.get(campaign.key)?.outcome === 'LIVE') continue;
+      try {
+        await ports.extendScope({
+          changeRequestId,
+          add: [campaignTestPath(program, campaign)],
+          userId: program.approvedByUserId!,
+          reason: `Program ${program.id}: every campaign owns its own test file, so a review that asks for a regression test can be satisfied.`,
+        });
+      } catch {
+        // Refused or unreachable: the next tick asks again; the campaign is unchanged.
+      }
+    }
+  }
   // Most urgent first; a prepared capability waits until a live requirement needs it.
   const promoted = promotedRequirements(input.map, input.extraEdges);
   const waiting = (campaign: PlannedCampaign): boolean =>
@@ -681,6 +744,17 @@ export async function tickProgram(programId: string, ports: ProgramPorts): Promi
 
   input = await statusInput(program, ports);
   reading = deriveProgramReading(input);
+  // GOV-17-3: what this release changed, once per revision, read from cash and goal rows.
+  try {
+    const { evaluateRelease } = await import('./releaseEvaluation.ts');
+    await evaluateRelease({
+      programId,
+      revision,
+      verifiedRequirements: reading.requirements.filter((r) => r.status === 'PRODUCTION_VERIFIED').map((r) => r.key),
+    });
+  } catch (error) {
+    console.warn(`[program] release evaluation failed: ${String((error as Error)?.message ?? error)}`);
+  }
   if (reading.verdict === 'DONE') {
     const { listFactoryEvents } = await import('../../../repos/factoryFleet.ts');
     const done = (await listFactoryEvents(null, { kinds: [PROGRAM_EVENT_KINDS.done], limit: 500 })).some((e) => (e.detail as { programId?: string }).programId === programId);

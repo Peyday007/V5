@@ -53,6 +53,7 @@ import {
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { resumeParkedForProject } from '../russell/resumeParked.ts';
 import { researchSurfacesOnRecord } from './researchRoom.ts';
+import { capacityChangeGate } from './screenMetrics.ts';
 import type { RussellGoal } from '../../domain/types.ts';
 
 /**
@@ -200,7 +201,22 @@ export async function ensureDiscoveryAuthority(
    * keeps it idempotent: once they agree, no tick writes anything.
    */
   const target = (await discoveryConcurrencyFor(projectId)) ?? goal.maxConcurrent;
-  if (goal.maxConcurrent !== target) {
+  /*
+   * Raising concurrency is a capacity upgrade, and an upgrade is decided on a
+   * fresh production telemetry reading or not at all (TEL-07-1, S-0083). A
+   * refused raise leaves the grant as it is; the next tick asks again.
+   */
+  const gate =
+    goal.maxConcurrent !== target
+      ? await capacityChangeGate({
+          resource: 'CONCURRENCY',
+          direction: target > goal.maxConcurrent ? 'INCREASE' : 'DECREASE',
+          from: goal.maxConcurrent,
+          to: target,
+          reason: 'discovery grant follows the research surfaces on record',
+        })
+      : null;
+  if (gate?.allowed) {
     const from = goal.maxConcurrent;
     if (await setGoalConcurrency(goal.id, target)) {
       await recordCashEvent({
@@ -211,7 +227,7 @@ export async function ensureDiscoveryAuthority(
           `How much of this sprint may run at once moved from ${from} to ` +
           `${target}, the research surfaces it has on record. It is provider capacity rather than an allowance, and ` +
           'nothing about what may be researched, spent or acted on changed.',
-        detail: { goalId: goal.id, from, to: target },
+        detail: { goalId: goal.id, from, to: target, telemetryReadingAt: gate.readingAt, capacityGate: gate.code },
       });
     }
   }

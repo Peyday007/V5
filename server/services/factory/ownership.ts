@@ -27,6 +27,8 @@
  * Pure: no rows, no clock. The reads live with the callers, so a decision is
  * answerable from its inputs.
  */
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { narrowsOrEqual } from './contract.ts';
 import { ownershipReachesForbidden, forbiddenIn } from './forbidden.ts';
 import { matchesGlob } from './glob.ts';
@@ -639,6 +641,26 @@ export type RepairScope =
  * same way. A test whose subject cannot be established is a repair that could
  * only weaken the test, so it is refused: `REPAIR_SCOPE_INSUFFICIENT`, and no bin.
  */
+/**
+ * The repository's top-level directories. A path that starts with one is already
+ * written from the root, whether or not the running image carries it — the image
+ * leaves out tests/ and docs/ (production 2026-11-11, money-d0-p0:
+ * tests/quantEngine.test.ts was rewritten under server/services/quant/ and the
+ * repair could never anchor).
+ */
+const ROOT_DIRECTORIES = ['server/', 'client/', 'scripts/', 'tests/', 'docs/', 'objectives/', 'specs/', 'plans/', 'blueprints/', '.github/', '.claude/'];
+
+/** A path that records or documents the work rather than doing it. */
+export function isReferenceRecord(path: string): boolean {
+  return (
+    path.startsWith('objectives/') ||
+    path.startsWith('docs/') ||
+    // The generator of a program's map is the record's source, changed only with an amendment.
+    path.startsWith('scripts/program-map-') ||
+    (path.endsWith('.md') && !path.includes('/'))
+  );
+}
+
 export function resolveRepairScope(input: RepairScopeInput): RepairScope {
   /*
    * The reviewer's suggestions, else the files its statement names, else the
@@ -692,17 +714,40 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
         }),
     ),
   ];
+  /** Whether a repository-relative path is a file, read from the repository root rather than the process's directory. */
+  const onDisk = (path: string): boolean => existsSync(fileURLToPath(new URL(`../../../${path}`, import.meta.url)));
   const canonical = (path: string): string => {
     if (knownPaths.includes(path)) return path;
     if (input.mutationScope.some((glob) => matchesGlob(path, glob))) return path;
-    const candidates = new Set(knownPaths.filter((known) => known.endsWith(`/${path}`)));
+    // A path that is already a file from the repository root is not a short path
+    // (production 2026-11-11, authority-d0-p0: objectives/programs/…/release-01.map.json
+    // was rewritten under server/services/cash/ and no repair could anchor it).
+    if (onDisk(path) || ROOT_DIRECTORIES.some((dir) => path.startsWith(dir))) return path;
+    const exact = knownPaths.filter((known) => known.endsWith(`/${path}`));
+    // A file a unit owns or a person named exactly beats any reading a glob could compose.
+    if (new Set(exact).size === 1) return exact[0]!;
+    const candidates = new Set(exact);
     for (const dir of globDirs) {
       const candidate = `${dir}${path}`;
       if (input.mutationScope.some((glob) => matchesGlob(candidate, glob))) candidates.add(candidate);
     }
-    return candidates.size === 1 ? [...candidates][0]! : path;
+    if (candidates.size === 1) return [...candidates][0]!;
+    // Several readings of a reviewer's short path: a file that exists beats one only a glob
+    // could compose (production 2026-11-10: "goals/portfolio.ts" read as both
+    // server/services/goals/portfolio.ts and server/services/quant/goals/portfolio.ts, so the
+    // repair was never created and the campaign stayed blocked after its scope was amended).
+    const existing = [...candidates].filter(onDisk);
+    return existing.length === 1 ? existing[0]! : path;
   };
-  const evidenceFiles = [...new Set(named.filter(isConcrete).map(canonical))];
+  /*
+   * The program's record and the docs are where a reviewer looks a name up,
+   * not where a campaign fixes anything: they change through a program
+   * amendment, never a repair (production 2026-11-11, authority-d0-p0: "the
+   * only references to these probes are in objectives/…/release-01.map.json"
+   * made the map the repair's file, and the campaign stayed blocked asking a
+   * person to let a repair edit the authoritative record).
+   */
+  const evidenceFiles = [...new Set(named.filter(isConcrete).map(canonical))].filter((path) => !isReferenceRecord(path));
 
   if (evidenceFiles.length === 0) {
     const union = [...new Set(input.units.flatMap((unit) => unit.ownedPaths))];
@@ -763,6 +808,7 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
         knownSources,
         input.units,
         (path) => allowed(path) && (unitOwned(path) || namedInScope(path)),
+        input.mutationScope.filter((path) => isConcrete(path) && !isTestPath(path)),
       );
       if (found.length === 0) unresolved.push(test);
       for (const path of found) if (!subjects.includes(path)) subjects.push(path);
@@ -801,6 +847,7 @@ function subjectsOf(
   knownSources: string[],
   units: RepairScopeInput['units'],
   accept: (path: string) => boolean,
+  granted: string[] = [],
 ): string[] {
   const byName: string[] = [];
   const sibling = siblingSubjectOf(test);
@@ -822,5 +869,13 @@ function subjectsOf(
       for (const path of unit.ownedPaths) if (isConcrete(path) && !isTestPath(path)) context.add(path);
     }
   }
-  return context.size === 1 ? [...context].filter(accept) : [];
+  if (context.size === 1) return [...context].filter(accept);
+  /*
+   * Otherwise the answer the refusal asks a person for: the one source file
+   * named exactly in the scope (production 2026-11-11, acquisition-d0: the
+   * test's unit owned three source files and nothing read the grant, so naming
+   * the file — the remedy the refusal itself gives — could not unblock it).
+   */
+  const chosen = granted.filter((path) => context.size === 0 || context.has(path));
+  return chosen.length === 1 ? chosen.filter(accept) : [];
 }

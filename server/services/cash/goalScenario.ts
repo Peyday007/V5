@@ -24,7 +24,7 @@
  * pays after the deadline contributes nothing, which is what lets a smaller,
  * faster plan beat a bigger, slower one.
  */
-import { instantlyCapacity } from './providers/instantly.ts';
+import { instantlyCapacity, instantlyMeasuredRates } from './providers/instantly.ts';
 import { breaksOperatingModel, operatingFactsOf, operatingFit } from '../../domain/operatingModel.ts';
 import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
@@ -102,6 +102,19 @@ export interface ModelInput {
 }
 
 export interface ModelledOpportunity {
+  /**
+   * A buyer-acquisition channel of its own, instead of the shared cold
+   * outreach: prospects a day it brings (paid inbound, a marketplace, a
+   * partner), the capacity it draws on and the risk it shares. Set only by a
+   * reconstructed strategy (§99), never by a card.
+   */
+  channel?: { label: string; perDay: ModelInput; resource: string; riskGroup: string };
+  /**
+   * The buyer pays before the supplier is paid, so its direct cost is funded
+   * from the buyer's money rather than the owner's. Set only by a
+   * reconstructed strategy (§99) and always as an assumption.
+   */
+  fundedByBuyer?: boolean;
   opportunity: CashOpportunity;
   index: number;
   tier: string;
@@ -307,6 +320,8 @@ export interface GoalModel {
    * simulation's slots. Null when nothing could be modelled.
    */
   portfolio: GoalPortfolio | null;
+  /** Exactly what the portfolio was evaluated on, so a reconstruction (§99) re-reads the same plan. */
+  portfolioInput?: Parameters<typeof evaluateGoalPortfolio>[0] | null;
 }
 
 function kindToProvenance(fact: CashCardFact | null): { provenance: VariableProvenance; source: SourceRef | null } {
@@ -680,8 +695,9 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
    * that combination first, then each by the cash its own demand settles.
    */
   let portfolio: GoalPortfolio | null = null;
+  let portfolioInput: Parameters<typeof evaluateGoalPortfolio>[0] | null = null;
   if (candidates.length + estimates.length > 0) {
-    portfolio = evaluateGoalPortfolio({
+    portfolioInput = {
       openings: [...candidates, ...estimates],
       remaining: remainingMajor,
       daysLeft: target.daysLeft,
@@ -690,7 +706,9 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       perWeek: target.capitalPerWeekCents === null ? null : target.capitalPerWeekCents / 100,
       resources: target.resources,
       measuredCapacity: await instantlyCapacity().catch(() => null),
-    });
+      measuredRates: await instantlyMeasuredRates().catch(() => null),
+    };
+    portfolio = evaluateGoalPortfolio(portfolioInput);
     trace('quant portfolio');
   }
   const inBest = new Set(portfolio?.best?.members.map((one) => one.opportunityId) ?? []);
@@ -724,6 +742,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
           : 'No live opportunity is far enough along to model: each one is evidence only or has no price anywhere.',
       ),
       portfolio,
+      portfolioInput,
       estimates,
     };
   }
@@ -905,6 +924,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     estimates,
     refusal: null,
     portfolio,
+    portfolioInput,
   };
 }
 

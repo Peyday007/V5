@@ -254,12 +254,32 @@ export function chooseWorker(
   const wanted = modelClassFor(unit);
   const avoid = new Set(options.preferNotWorkers ?? []);
 
+  /*
+   * A unit its plan (or its objective's routing, §109) declared STRONGEST is
+   * never handed to a FAST worker because that worker is free: a hard problem
+   * on a weak model costs a failed attempt, a review and a repair, which is more
+   * than the wait for a strong slot. It waits, with that reason. Escalations
+   * `modelClassFor` derives (a reviewer, a critical path) stay preferences.
+   */
+  if (unit.modelClass === 'STRONGEST') {
+    const strong = eligible.filter((slot) => slot.modelClass === 'STRONGEST' || slot.modelClass === 'EITHER');
+    if (strong.length === 0) {
+      return { slot: null, reason: `no free STRONGEST slot holds ${capability}; a FAST worker is not given a unit routed STRONGEST` };
+    }
+    eligible.splice(0, eligible.length, ...strong);
+  }
+
   const rank = (slot: WorkerSlot): number => {
     let score = 0;
     // Independence first among preferences: a reviewer that did not implement
     // the work is the assignment most likely to be admitted at claim time.
     if (avoid.has(slot.workerId)) score += 100;
+    // A strong worker on FAST work is paying for capability the unit does not need.
     if (slot.modelClass !== wanted && slot.modelClass !== 'EITHER') score += 10;
+    // Demonstrated capability (§109): a worker that fails most of what it is given, on a
+    // record large enough to mean something, goes after one that does not.
+    const done = (slot.track?.finished ?? 0) + (slot.track?.failed ?? 0);
+    if (done >= 5) score += Math.round(8 * ((slot.track?.failed ?? 0) / done));
     // Spread the load: the worker with the most room goes first, so one worker
     // does not become a queue while another sits idle.
     score -= slot.freeSlots;

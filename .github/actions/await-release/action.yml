@@ -13,6 +13,16 @@ inputs:
       lock.
     required: false
     default: '900'
+  whole-job:
+    description: >
+      'true' for a workflow that restarts the Brain (a secrets change that is
+      not staged, `secrets deploy`, a machine restart). It then waits out the
+      whole "Deploy to Fly" job, hosted verification included, not only the
+      steps that replace the machine: on 2026-11-11 an Integrations run found
+      no machine step in flight, restarted the Brain during the verification
+      before the restart, and the release could not be verified.
+    required: false
+    default: 'false'
   poll-seconds:
     description: How often to re-ask.
     required: false
@@ -27,6 +37,7 @@ runs:
         GH_TOKEN: ${{ github.token }}
         TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
         POLL_SECONDS: ${{ inputs.poll-seconds }}
+        WHOLE_JOB: ${{ inputs.whole-job }}
       run: |
         set -uo pipefail
 
@@ -109,6 +120,7 @@ runs:
                     | select(
                         ([.steps[]? | select(.status == "in_progress") | .name | test($ENV.MACHINE_STEPS)] | any)
                         or (.name == "Deploy to Fly" and ([.steps[]? | select(.status == "in_progress")] | length) == 0)
+                        or (.name == "Deploy to Fly" and $ENV.WHOLE_JOB == "true")
                       )] | length' 2>/dev/null) || return 2
             count=$(( count + n ))
           done

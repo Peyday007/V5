@@ -29,7 +29,7 @@
  *     state after compaction or resume; the ledger is also printed into the
  *     transcript on every check, so a fresh container can rebuild it.
  *
- * Usage: `npm run finish -- <status|check|evidence|wait|block|clear|add|init|dismiss> …`
+ * Usage: `npm run finish -- <status|check|evidence|withdraw|wait|block|clear|add|init|dismiss> …`
  * Hook:  `node finish-job.mjs hook` (UserPromptSubmit, PreToolUse, SessionStart).
  */
 import { spawnSync } from 'node:child_process';
@@ -44,6 +44,8 @@ export const RALPH_FILE = '.claude/ralph-loop.local.md';
 export const LEDGER_DIR = '.claude/finish-job';
 export const MAX_ITERATIONS = 20;
 export const STALL_LIMIT = 3;
+/** Different approaches demanded on a repeated identical failure before STALLED releases the stop. */
+export const MAX_STRATEGY_SHIFTS = 1;
 export const RULE11 = [
   'SPEND_OVER_CEILING', 'IRREVERSIBLE_PRODUCTION_LOSS', 'LEGAL_RISK', 'SECRET_EXPOSED', 'MAJOR_NEWS', 'MISSING_AUTHORITY',
 ];
@@ -54,6 +56,9 @@ const TRIVIAL = /^\s*(true|:|exit\s+0|echo\b|printf\b|sleep\b)|\|\|\s*(true|:)\s
 const WAKE = /^(task|monitor|pr|trigger|send_later|workflow|run|wakeup)[:\s]+\S+/i;
 /** Tools that arm a wake: calling one must not re-arm the stop the wait just released. */
 const WAKE_TOOLS = /send_later|create_trigger|subscribe_pr_activity|^Monitor$|^ScheduleWakeup$|^TaskOutput$/;
+/** A prompt the harness delivered on someone else's behalf: a task, a subagent, a peer, a webhook. */
+export const HARNESS_NOTICE =
+  /^\s*(<(task-notification|system-reminder|agent-message|teammate-message|cross-session-message|webhook-payload|wake|event|command-|local-command)|\[SYSTEM NOTIFICATION)/;
 const FINISH_CLI = /finish-job\.mjs|npm run (-s )?finish\b/;
 
 const root = () => process.env.FINISH_JOB_ROOT || process.env.CLAUDE_PROJECT_DIR || process.cwd();
@@ -64,13 +69,43 @@ const short = (s, n = 120) => (s.length > n ? `${s.slice(0, n - 1)}…` : s).rep
 
 const ITEM = /^\s{0,6}(?:\d+[.)]|[-*•])\s+\S/;
 
-/** Each list item of the owner's message, with the paragraph lines under it. */
+/** A short label line ("PRIORITY 1 — AUTHORITY", "SUCCESS:") that names the paragraphs under it. */
+const HEADING = (s) => s.length <= 80 && (/:$/.test(s) || (/^[^a-z]+$/.test(s) && /[A-Z]{3}/.test(s)));
+
+/**
+ * Each list item of the owner's message, with the lines directly under it, and
+ * each prose paragraph after the first item as a requirement of its own,
+ * prefixed by the heading it sits under.
+ *
+ * 2026-11-11: a message listed its existing infrastructure, then gave PRIORITY
+ * 1–3 as paragraphs, then a numbered demonstration. Lines were glued to the
+ * last item whatever the blank lines said, so all three priorities became the
+ * tail of "- GitHub PR, merge, CI, and deployment machinery" — one requirement,
+ * shown truncated, satisfiable by evidence about a bullet. A blank line ends an
+ * item; an indented line still continues it.
+ */
 export function requirementsFrom(text) {
   const items = [];
   let cur = null;
+  let gap = false;
+  let heading = null;
   for (const line of text.split('\n')) {
-    if (ITEM.test(line)) items.push((cur = { text: line.trim() }));
-    else if (cur && line.trim()) cur.text += `\n${line.trim()}`;
+    const t = line.trim();
+    if (!t) {
+      gap = true;
+      continue;
+    }
+    if (ITEM.test(line)) {
+      items.push((cur = { text: t }));
+    } else if (cur && (!gap || /^\s{2,}/.test(line))) {
+      cur.text += `\n${t}`;
+    } else if (HEADING(t)) {
+      heading = t.replace(/:$/, '');
+      cur = null;
+    } else if (items.length > 0) {
+      items.push((cur = { text: heading ? `${heading}: ${t}` : t }));
+    }
+    gap = false;
   }
   return items.map((i) => i.text);
 }
@@ -128,9 +163,9 @@ export function ralphState() {
 }
 
 /** Write Ralph's state file: its Stop hook now refuses this session's stops. */
-export function arm(l, body) {
+export function arm(l, body, { renew = false } = {}) {
   const prev = ralphState();
-  const iteration = Number(prev?.match(/^iteration: (\d+)$/m)?.[1] ?? 1);
+  const iteration = renew ? 1 : Number(prev?.match(/^iteration: (\d+)$/m)?.[1] ?? 1);
   fs.mkdirSync(path.dirname(ralphPath()), { recursive: true });
   fs.writeFileSync(
     ralphPath(),
@@ -146,10 +181,11 @@ export function disarm(l) {
   if (prev && prev.includes(`session_id: ${l.sessionId}`)) fs.unlinkSync(ralphPath());
 }
 
-function continuePrompt(l, verdict) {
+function continuePrompt(l, verdict, shift = false) {
   const open = verdict?.open ?? l.requirements.map((r) => ({ id: r.id, text: r.text }));
   const lines = [
     `FINISH THE JOB — this assignment is not verified complete${verdict ? ` (check #${l.checks}: CONTINUE)` : ''}.`,
+    ...(shift ? [`CHANGE STRATEGY: the same failing state ${STALL_LIMIT} checks running. Do not repeat the attempt behind these items; choose a different approach or owner first.`] : []),
     'Your written status is not read. The stop is released only by `npm run finish -- check` returning',
     'DONE, WAITING (every open item waits on an armed wake), BLOCKED (a rule-11 reason) or STALLED.',
     '', 'Actionable now:', ...open.map((o) => `- ${o.id}: ${short(o.text, 160)}${o.detail ? ` — ${short(o.detail, 160)}` : ''}`),
@@ -222,7 +258,14 @@ function workflowPassed(g, workflow, target) {
   const runs = g.slug && gh(`repos/${g.slug}/actions/workflows/${workflow}/runs?branch=${g.canonical}&per_page=30`);
   if (!runs?.workflow_runs) return { ok: false, detail: `could not read ${workflow} runs from GitHub` };
   const covering = runs.workflow_runs.filter((r) => r.head_sha === target || contains(target, r.head_sha));
-  const pass = covering.find((r) => r.conclusion === 'success');
+  // A Deploy superseded by a newer canonical tip ends `success` having released
+  // nothing: its "Deploy to Fly" job is skipped. 2026-11-11 08:31–09:10, nine
+  // such runs in a row while parallel sessions merged, and this check read each
+  // as a release. A release is the job that releases.
+  const released = (r) =>
+    workflow !== 'deploy.yml' ||
+    (gh(`repos/${g.slug}/actions/runs/${r.id}/jobs`)?.jobs ?? []).some((j) => /^Deploy to Fly/.test(j.name) && j.conclusion === 'success');
+  const pass = covering.find((r) => r.conclusion === 'success' && released(r));
   if (pass) return { ok: true, detail: `${workflow} run ${pass.id} succeeded on ${pass.head_sha.slice(0, 7)}` };
   const live = covering.find((r) => r.status !== 'completed');
   if (live) return { ok: false, pending: `run:${live.id}`, detail: `${workflow} run ${live.id} is ${live.status}` };
@@ -352,9 +395,24 @@ export function check(l, { fetch = true } = {}) {
   const verdict = { open: by('open'), waiting: by('waiting'), blocked: by('blocked'), done: by('done') };
   let word = verdict.open.length ? 'CONTINUE' : verdict.waiting.length ? 'WAITING' : verdict.blocked.length ? 'BLOCKED' : 'DONE';
   const fp = sha(JSON.stringify([g.head, sha(g.dirty ?? ''), rows.map((r) => [r.id, r.status, r.detail.replace(/ \(cached for this tree\)/g, '')])]));
+  // Progress (a requirement newly verified) renews the loop's budget: the
+  // iteration limit bounds unproductive stops, never a long objective that keeps
+  // moving, and an objective that moved earns its strategy changes back.
+  const progressed = l.doneCount !== undefined && done.size > l.doneCount;
+  l.doneCount = done.size;
+  if (progressed) l.strategyShifts = 0;
+  let shift = false;
   if (word === 'CONTINUE') {
     l.same = fp === l.lastFp ? l.same + 1 : 0;
-    if (l.same >= STALL_LIMIT - 1) word = 'STALLED';
+    if (l.same >= STALL_LIMIT - 1) {
+      // A repeated identical failure is first a demand for a different approach,
+      // and only after that has also failed a reason to release the stop.
+      if ((l.strategyShifts ?? 0) < MAX_STRATEGY_SHIFTS) {
+        l.strategyShifts = (l.strategyShifts ?? 0) + 1;
+        l.same = 0;
+        shift = true;
+      } else word = 'STALLED';
+    }
   } else l.same = 0;
   l.lastFp = fp;
   if (word === 'WAITING') {
@@ -362,16 +420,18 @@ export function check(l, { fetch = true } = {}) {
     l.lastParkFp = fp;
   }
   l.status = word === 'CONTINUE' ? 'ACTIVE' : word;
-  if (word === 'CONTINUE') arm(l, continuePrompt(l, verdict));
+  if (word === 'CONTINUE') arm(l, continuePrompt(l, verdict, shift), { renew: progressed });
   else disarm(l);
   l.lastCheck = { at: new Date().toISOString(), word, rows: rows.map(({ id, status, detail }) => ({ id, status, detail })) };
   saveLedger(l);
-  return { word, verdict, rows };
+  return { word, verdict, rows, shift };
 }
 
 export function report(l, res) {
   const say = {
-    CONTINUE: 'Actionable work remains. The stop stays refused: do it.',
+    CONTINUE: res.shift
+      ? `CHANGE STRATEGY (${l.strategyShifts}/${MAX_STRATEGY_SHIFTS}) — the same failing state ${STALL_LIMIT} checks running. The approach behind the open items below does not work: take a different root-cause hypothesis, a different path, or another owner (the Factory, or the maintainer route for a protected file) before checking again. Independent items do not wait on these.`
+      : 'Actionable work remains. The stop stays refused: do it.',
     WAITING: `Every open item waits on an armed wake. The stop is released; the objective is NOT done and the next tool call re-arms it.${l.unchangedParks ? ` Unchanged since the last wait (${l.unchangedParks}x): a re-armed check-in must be ≥ ${minDelay(l)} min out.` : ''}`,
     BLOCKED: 'Everything left is blocked by a rule-11 reason. Report NOT DONE with each blocker.',
     STALLED: `The same failing state ${STALL_LIMIT} checks in a row. The stop is released; report NOT DONE with each open item. Do not repeat the same attempt.`,
@@ -435,8 +495,9 @@ function hookUserPrompt(e) {
   const prompt = String(e.prompt ?? '');
   if (!sid || !prompt.trim()) return '';
   // A harness notice (a finished background task or subagent, a reminder) arrives as a
-  // prompt but is not the owner's words: 2026-11-04 a subagent's report became R8-R72.
-  if (/^\s*<(task-notification|system-reminder|command-|local-command)/.test(prompt)) return isOpen(loadLedger(sid)) ? brief(loadLedger(sid)) : '';
+  // prompt but is not the owner's words: 2026-11-04 a subagent's report became R8-R72,
+  // and 2026-11-11 a subagent hand-back (`<agent-message …>`) became R18-R33.
+  if (HARNESS_NOTICE.test(prompt)) return isOpen(loadLedger(sid)) ? brief(loadLedger(sid)) : '';
   let l = loadLedger(sid);
   if (isOpen(l) && /^\s*(stop|cancel|abort|abandon)\b/i.test(prompt) && prompt.length < 120) {
     l.status = 'CANCELLED';
@@ -622,6 +683,17 @@ export function cli(argv) {
   } else if (cmd === 'block') {
     if (!RULE11.includes(flags.code) || typeof flags.detail !== 'string') return fail(`block needs --code one of ${RULE11.join(', ')} and --detail.`);
     mark.block = { code: flags.code, detail: flags.detail };
+  } else if (cmd === 'withdraw') {
+    // A proof attached by mistake (the wrong range, the wrong file) would hold the
+    // requirement open for ever. Only one that fails now may go: a passing proof
+    // is never withdrawn, so this cannot turn a requirement from done to anything.
+    if (!req) return fail(`${id} takes no evidence.`);
+    if (typeof flags.reason !== 'string') return fail('withdraw needs --reason.');
+    const g = gitInfo(false);
+    const failing = req.evidence.filter((ev) => !verify(ev, l, g, new Set()).ok);
+    if (!failing.length) return fail(`every proof on ${id} passes; nothing to withdraw.`);
+    req.evidence = req.evidence.filter((ev) => !failing.includes(ev));
+    (req.withdrawn ??= []).push(...failing.map((ev) => ({ ...ev, reason: flags.reason, at: new Date().toISOString() })));
   } else if (cmd === 'clear') {
     mark.wait = null;
     mark.block = null;

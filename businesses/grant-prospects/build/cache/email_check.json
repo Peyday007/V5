@@ -1,0 +1,476 @@
+{
+ "gp-001": {
+  "email": "info@gotrlehighpocono.org",
+  "url": "https://www.gotrlehighpocono.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:22:04.497Z"
+ },
+ "gp-002": {
+  "email": "info@mosaicnorristown.org",
+  "url": "https://mosaicnorristown.org/contact-us/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:22:07.866Z"
+ },
+ "gp-003": {
+  "email": "info@childhoodfoodsolutions.org",
+  "url": "https://childhoodfoodsolutions.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:22:13.158Z"
+ },
+ "gp-004": {
+  "email": "info@nsifoodpantry.org",
+  "url": "https://www.nsifoodpantry.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:22:20.480Z"
+ },
+ "gp-005": {
+  "email": "contact.us@bnoc.org",
+  "url": "https://www.bnoc.org/",
+  "seen": "source-only",
+  "checked": "2026-11-11T09:22:24.213Z"
+ },
+ "gp-006": {
+  "email": "contact@dreamcentercincinnati.org",
+  "url": "https://www.dreamcentercincinnati.org/",
+  "seen": "mailto",
+  "checked": "2026-11-11T09:22:27.465Z"
+ },
+ "gp-007": {
+  "email": "info@adoptagoldenatlanta.com",
+  "url": "https://adoptagoldenatlanta.com/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:22:32.281Z"
+ },
+ "gp-008": {
+  "email": "info@pawsatlanta.org",
+  "url": "https://www.pawsatlanta.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:22:37.732Z"
+ },
+ "gp-009": {
+  "email": "info@braveheartbulliezrescue.org",
+  "url": "https://www.braveheartbulliezrescue.org/",
+  "seen": "mailto",
+  "checked": "2026-11-11T09:22:41.066Z"
+ },
+ "gp-010": {
+  "email": "education@oldtownplayhouse.com",
+  "url": "https://www.oldtownplayhouse.com/about/contact-us.html",
+  "seen": "absent",
+  "checked": "2026-11-11T09:22:43.536Z"
+ },
+ "gp-011": {
+  "email": "info@voces8.foundation",
+  "url": "https://voces8.foundation/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:22:47.205Z"
+ },
+ "gp-012": {
+  "email": "info@farmersalleytheatre.com",
+  "url": "https://www.farmersalleytheatre.com/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:22:50.649Z"
+ },
+ "gp-013": {
+  "email": "info@harbordistrict.org",
+  "url": "https://harbordistrict.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:22:54.731Z"
+ },
+ "gp-014": {
+  "email": "info@goldensandsrcd.org",
+  "url": "https://www.goldensandsrcd.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:22:58.158Z"
+ },
+ "gp-015": {
+  "email": "info@steppingstoneeh.org",
+  "url": "https://steppingstoneeh.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:23:04.035Z"
+ },
+ "gp-016": {
+  "email": "info@estherhomesmn.org",
+  "url": "https://www.estherhomesmn.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:23:08.549Z"
+ },
+ "gp-017": {
+  "email": "info@bthrespite.org",
+  "url": "https://bthrespite.org/contact-us",
+  "seen": "visible",
+  "checked": "2026-11-11T09:23:11.462Z"
+ },
+ "gp-018": {
+  "email": "info@oakhillcc.care",
+  "url": "https://www.oakhillcc.care/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:23:14.940Z"
+ },
+ "gp-019": {
+  "email": "office@maryparrish.org",
+  "url": "https://www.maryparrish.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:23:18.926Z"
+ },
+ "gp-020": {
+  "email": "info@kindred-place.org",
+  "url": "https://kindred-place.org/about",
+  "seen": "visible",
+  "checked": "2026-11-11T09:23:21.771Z"
+ },
+ "gp-021": {
+  "email": "hello@untoldjourneyfoundation.org",
+  "url": "https://untoldjourneyfoundation.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:23:27.612Z"
+ },
+ "gp-022": {
+  "email": "staff@plannedpethoodinternational.org",
+  "url": "https://plannedpethoodinternational.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:23:30.504Z"
+ },
+ "gp-023": {
+  "email": "info@deschutesriver.org",
+  "url": "https://www.deschutesriver.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:23:33.702Z"
+ },
+ "gp-024": {
+  "email": "info@oregondesertlandtrust.org",
+  "url": "https://www.oregondesertlandtrust.org/contact/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:23:45.248Z"
+ },
+ "gp-025": {
+  "email": "info@worldforestry.org",
+  "url": "https://worldforestry.org/",
+  "seen": "source-only",
+  "checked": "2026-11-11T09:23:50.492Z"
+ },
+ "gp-026": {
+  "email": "info@kitsapharvest.org",
+  "url": "https://kitsapharvest.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:23:56.614Z"
+ },
+ "gp-027": {
+  "email": "contact@email.greenhousedp.com",
+  "url": "https://greenhousedp.com/",
+  "seen": "mailto",
+  "checked": "2026-11-11T09:23:59.460Z"
+ },
+ "gp-028": {
+  "email": "info@kpbfoodbank.org",
+  "url": "https://www.kpbfoodbank.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:24:02.769Z"
+ },
+ "gp-029": {
+  "email": "info@beyondbatten.org",
+  "url": "https://beyondbatten.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:24:07.909Z"
+ },
+ "gp-030": {
+  "email": "info@mentornewyork.org",
+  "url": "https://www.mentornewyork.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:24:11.487Z"
+ },
+ "gp-031": {
+  "email": "info@lccil.org",
+  "url": "https://www.lccil.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:24:14.150Z"
+ },
+ "gp-032": {
+  "email": "info@therefugeinc.com",
+  "url": "https://therefugeinc.com/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:24:17.342Z"
+ },
+ "gp-033": {
+  "email": "info@bgcglasgowbarren.org",
+  "url": "https://www.bgcglasgowbarren.org/contact-4",
+  "seen": "visible",
+  "checked": "2026-11-11T09:24:20.424Z"
+ },
+ "gp-034": {
+  "email": "contact@adelanteky.org",
+  "url": "https://adelanteky.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:24:24.526Z"
+ },
+ "gp-035": {
+  "email": "info@iowaceramicscenter.org",
+  "url": "https://iowaceramicscenter.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:24:28.783Z"
+ },
+ "gp-036": {
+  "email": "info@captheatre.org",
+  "url": "https://www.captheatre.org/",
+  "seen": "mailto",
+  "checked": "2026-11-11T09:24:33.555Z"
+ },
+ "gp-037": {
+  "email": "info@girlsrockdsm.org",
+  "url": "https://www.girlsrockdsm.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:24:37.978Z"
+ },
+ "gp-038": {
+  "email": "info@civicmusic.org",
+  "url": "https://civicmusic.org/contact/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:24:43.646Z"
+ },
+ "gp-039": {
+  "email": "info@apcaaz.org",
+  "url": "https://www.apcaaz.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:24:48.978Z"
+ },
+ "gp-040": {
+  "email": "outreach@gcoflorida.org",
+  "url": "https://gcoflorida.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:24:54.014Z"
+ },
+ "gp-041": {
+  "email": "info@mcfamilypromise.org",
+  "url": "https://www.mcfamilypromise.org/",
+  "seen": "mailto",
+  "checked": "2026-11-11T09:25:03.233Z"
+ },
+ "gp-042": {
+  "email": "director@fisherhouseemeraldcoast.org",
+  "url": "https://fisherhouseemeraldcoast.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:25:11.107Z"
+ },
+ "gp-043": {
+  "email": "info@gaccinc.org",
+  "url": "https://gaccinc.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:25:17.457Z"
+ },
+ "gp-044": {
+  "email": "info@hopefloatswellness.org",
+  "url": "https://www.hopefloatswellness.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:25:22.871Z"
+ },
+ "gp-045": {
+  "email": "info@jfynet.org",
+  "url": "https://jfynet.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:25:32.170Z"
+ },
+ "gp-046": {
+  "email": "info@dorothydaysoupkitchen.org",
+  "url": "https://dorothydaysoupkitchen.org/",
+  "seen": "source-only",
+  "checked": "2026-11-11T09:25:35.461Z"
+ },
+ "gp-047": {
+  "email": "admin@fullcirclerescueandsanctuary.com",
+  "url": "https://www.fullcirclerescueandsanctuary.com/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:25:39.332Z"
+ },
+ "gp-048": {
+  "email": "info@asdsolutionsinc.org",
+  "url": "https://www.asdsolutionsinc.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:25:42.486Z"
+ },
+ "gp-049": {
+  "email": "info@legacytheatrect.org",
+  "url": "https://www.legacytheatrect.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:25:46.369Z"
+ },
+ "gp-050": {
+  "email": "admin@keysmusic.org",
+  "url": "https://www.keysmusic.org/",
+  "seen": "mailto",
+  "checked": "2026-11-11T09:25:53.886Z"
+ },
+ "gp-051": {
+  "email": "info@coastalmountains.org",
+  "url": "https://www.coastalmountains.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:25:58.262Z"
+ },
+ "gp-052": {
+  "email": "info@littlesebagolake.com",
+  "url": "https://littlesebagolake.com/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:26:02.069Z"
+ },
+ "gp-053": {
+  "email": "info@kennebecestuary.org",
+  "url": "https://www.kennebecestuary.org/contact",
+  "seen": "visible",
+  "checked": "2026-11-11T09:26:05.308Z"
+ },
+ "gp-054": {
+  "email": "info@kezarwatershed.org",
+  "url": "https://kezarwatershed.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:26:08.579Z"
+ },
+ "gp-055": {
+  "email": "info@randolphareafoodshelf.org",
+  "url": "https://www.randolphareafoodshelf.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:26:11.482Z"
+ },
+ "gp-056": {
+  "email": "info@northendfoodpantry.org",
+  "url": "https://www.northendfoodpantry.org/",
+  "seen": "source-only",
+  "checked": "2026-11-11T09:26:15.069Z"
+ },
+ "gp-057": {
+  "email": "info@foodconnects.org",
+  "url": "https://www.foodconnects.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:26:18.337Z"
+ },
+ "gp-058": {
+  "email": "info@auntdotsplace.com",
+  "url": "https://www.auntdotsplace.com/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:26:21.836Z"
+ },
+ "gp-059": {
+  "email": "info@elevatenavajo.org",
+  "url": "https://elevatenavajo.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:26:26.244Z"
+ },
+ "gp-060": {
+  "email": "info@northernyouthproject.org",
+  "url": "https://www.northernyouthproject.org/contact-1",
+  "seen": "visible",
+  "checked": "2026-11-11T09:26:29.397Z"
+ },
+ "gp-061": {
+  "email": "info@nmyoungactors.org",
+  "url": "http://www.nmyoungactors.org/",
+  "seen": "mailto",
+  "checked": "2026-11-11T09:26:35.353Z"
+ },
+ "gp-062": {
+  "email": "contact@casaq.org",
+  "url": "http://casaq.org/contact/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:26:38.424Z"
+ },
+ "gp-063": {
+  "email": "info@familyadvocates.org",
+  "url": "https://www.familyadvocates.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:26:41.320Z"
+ },
+ "gp-064": {
+  "email": "help@vavmv.org",
+  "url": "https://www.vavmv.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:26:44.179Z"
+ },
+ "gp-065": {
+  "email": "hello@buildinghopetoday.org",
+  "url": "https://buildinghopetoday.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:26:56.057Z"
+ },
+ "gp-066": {
+  "email": "info@wcnaaa.org",
+  "url": "https://wcnaaa.org/",
+  "seen": "source-only",
+  "checked": "2026-11-11T09:26:59.218Z"
+ },
+ "gp-067": {
+  "email": "info@lovechloe.org",
+  "url": "https://lovechloe.org/contact-us",
+  "seen": "absent",
+  "checked": "2026-11-11T09:27:09.469Z"
+ },
+ "gp-068": {
+  "email": "info@camotocollege.org",
+  "url": "https://camotocollege.org/",
+  "seen": "mailto",
+  "checked": "2026-11-11T09:27:13.613Z"
+ },
+ "gp-069": {
+  "email": "info@eagleops.org",
+  "url": "https://eagleops.org/",
+  "seen": "mailto",
+  "checked": "2026-11-11T09:27:16.455Z"
+ },
+ "gp-070": {
+  "email": "info@executivealliance.org",
+  "url": "https://www.executivealliance.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:27:20.046Z"
+ },
+ "gp-071": {
+  "email": "info@racssf.org",
+  "url": "https://www.racssf.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:27:24.765Z"
+ },
+ "gp-072": {
+  "email": "info@thelatinacenter.org",
+  "url": "https://thelatinacenter.org/contact-2/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:27:31.847Z"
+ },
+ "gp-073": {
+  "email": "info@girlsontherunutah.org",
+  "url": "https://www.girlsontherunutah.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:27:35.583Z"
+ },
+ "gp-074": {
+  "email": "programs@livelikesam.org",
+  "url": "https://livelikesam.org/contact/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:27:39.185Z"
+ },
+ "gp-075": {
+  "email": "info@commonthreadcommunity.org",
+  "url": "https://www.commonthreadcommunity.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:27:42.090Z"
+ },
+ "gp-076": {
+  "email": "info@boxesofloveforthehomeless.org",
+  "url": "https://boxesofloveforthehomeless.org/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:27:45.073Z"
+ },
+ "gp-077": {
+  "email": "info@familypromisesnh.org",
+  "url": "https://familypromisesnh.org/contact-us/",
+  "seen": "visible",
+  "checked": "2026-11-11T09:27:49.002Z"
+ },
+ "gp-078": {
+  "email": "info@matsnh.org",
+  "url": "https://www.matsnh.org/mats-contact-us",
+  "seen": "visible",
+  "checked": "2026-11-11T09:27:52.274Z"
+ },
+ "gp-079": {
+  "email": "generalcommunication@isaiah58nh.com",
+  "url": "https://www.isaiah58nh.com/contact",
+  "seen": "visible",
+  "checked": "2026-11-11T09:27:55.481Z"
+ }
+}

@@ -5,6 +5,12 @@
  * and a due date still ahead. Read from the goal rows, so it holds for every
  * such goal, now and later, with nothing to switch on. Cached for a minute:
  * every opening of a pass asks the same question.
+ *
+ * Resolved per goal row, never as a default: the $10K ceilings and deadline
+ * bind only the project that live goal targets. A project with no such goal
+ * resolves to EVIDENCE_FIRST, so execution of authorized offers continues
+ * while planning is unproven. Whether a plan is accepted at a defensible 90%
+ * is judged in `plan.ts` and read from there, not duplicated here.
  */
 import { getDb } from '../../db/database.ts';
 import type { GoalExecutionPolicy } from '../../domain/goalPolicy.ts';

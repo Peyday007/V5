@@ -41,6 +41,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - uses: ./.github/actions/await-release
+        with:
+          # This workflow restarts the Brain, so it waits out the hosted
+          # verification too, not only the machine replacement.
+          whole-job: 'true'
+          timeout-seconds: '2700'
       - name: Run
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

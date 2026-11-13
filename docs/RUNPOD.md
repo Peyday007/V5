@@ -2,13 +2,46 @@
 
 Brain's own model on a rented GPU, used before the free providers and backed by them.
 
+## Recipes, benchmark and upgrade (§108)
+
+What a pod serves is a recipe in `server/services/cheap/runpodRestore.ts`
+(`RECIPES`, `ACTIVE_RECIPE`): model, served name, GPUs, image, CUDA, window and
+vLLM flags. Every recipe after the legacy 4B names its `--tool-call-parser` and
+`--reasoning-parser` and serves 64K or more — the 4B's missing parser is why
+every operator call to it failed with HTTP 400.
+
+| action (`cheap-lane.yml`) | what it does |
+|---|---|
+| `runpod-survey` | balance, spend per hour, every pod with its start command, every GPU type's price and stock — read from RunPod, changes nothing |
+| `runpod-bench` (`recipes: baseline,<key>,…`) | the seven Brain tasks of `modelBench.ts` on production's pod and the free switchboard (`baseline`), and on a temporary `brain-bench-<key>` pod per recipe, deleted when done |
+| `runpod-upgrade` (`recipes: <key>`) | a new pod from the recipe beside the old one, probe (tool call included), connect, retire the old one — one pod before and after |
+
+Ceilings: a pod above `RUNPOD_MAX_USD_PER_HOUR` (default $0.24) is deleted at
+creation; benchmark and upgrade pods are refused when the account's spend plus
+the new pod passes `RUNPOD_MAX_TOTAL_USD_PER_HOUR` (default $0.45) or the
+balance would last under 24 hours. The hourly `runpod-auto` prints the balance
+and runway and warns under 72 hours: RunPod deletes every pod at zero.
+
 | | |
 |---|---|
-| GPU | RTX 2000 Ada, 16 GB |
-| Server | vLLM (`vllm-latest` template, OpenAI-compatible, port 8000) |
-| Model | `Qwen/Qwen3-8B-AWQ` (4-bit, ~6 GB). Full-precision Qwen3-8B (~16 GB) does not fit with room for a KV cache. `Qwen/Qwen3-8B-FP8` (~9 GB) also fits; AWQ leaves more KV cache, so more jobs at once. |
+| GPU | RTX 2000 Ada, 16 GB (pod `odsft6ptpi2reh`, repurposed in place 2026-11-12) |
+| Server | vLLM 0.8.5.post1 (OpenAI-compatible, port 8000), `--enable-auto-tool-choice --tool-call-parser hermes` |
+| Model | `Qwen/Qwen3-4B-AWQ` at 64K (YaRN ×2, bf16 KV) — recipe `qwen3-4b-awq-tools`, `ACTIVE_RECIPE`. Until 2026-11-12 it was `Qwen/Qwen3-4B` at 32K with no tool-call parser, which failed every operator call (HTTP 400). `Qwen/Qwen3-8B-AWQ` with an FP8 KV cache listed its model at 64K and answered every chat HTTP 500 on this build. |
+| Price | measured $0.24/h; a recreated pod above `RUNPOD_MAX_USD_PER_HOUR` (default 0.24) is deleted at once |
 | Code | `server/services/cheap/runpod.ts`, wired in `cheap/lane.ts` |
 | Workflow | `Cheap lane` (`.github/workflows/cheap-lane.yml`), `runpod-*` actions + an hourly `runpod-auto` |
+
+## Recovering a lost pod
+
+RunPod deletes a pod when the account balance runs out (2026-11-10). The pod's
+recipe is code: `server/services/cheap/runpodRestore.ts` (GPU, image
+`vllm/vllm-openai`, start command, model, `volumeInGb: 0` so no paid volume).
+With `RUNPOD_API_KEY` set, every hourly `runpod-auto` finds the pod through
+RunPod's API — by the old address, else by the name `brain-vllm` — and creates
+it from the recipe when it is gone, reusing `RUNPOD_VLLM_KEY` as vLLM's key, waits
+for vLLM, probes and reconnects the Brain to the new address. No secret has to be
+edited. `runpod-restore` does the same on demand. It never starts or stops an
+existing pod (that is `runpodPod.ts`).
 
 ## Pod settings
 

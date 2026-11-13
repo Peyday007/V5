@@ -9,7 +9,7 @@
  * green review or a merge is never LIVE.
  */
 import type { FactoryBlockerKind, FactoryCampaign } from '../../../domain/factory.ts';
-import { MAX_RELEASE_ATTEMPTS, type ObjectiveOutcome, type ReleaseGrant, type ReleaseRun } from '../../../domain/factoryRelease.ts';
+import { releaseRetryable, type ObjectiveOutcome, type ReleaseGrant, type ReleaseRun } from '../../../domain/factoryRelease.ts';
 import type { DeliveryObservation } from '../delivery.ts';
 
 /**
@@ -18,6 +18,15 @@ import type { DeliveryObservation } from '../delivery.ts';
  * arrive, a base that will be re-read — is not a person's, and saying it is
  * would send somebody to answer a question the next tick answers.
  */
+/**
+ * Not a person's: the maintainer route. The waiting Brain engineering session
+ * (`.claude/skills/factory-objective`) acts on any BLOCKED outcome that is not a
+ * rule-11 reason, and this one names what it does.
+ */
+export const MAINTAINER_ACTION =
+  'MAINTAINER: the scope is protected from Factory workers. A direct Brain engineering session makes ' +
+  'this change itself (merge, Deploy, verify), or amends the scope to writable paths; no owner action.';
+
 const PERSON_BLOCKERS: Record<FactoryBlockerKind, string | null> = {
   NO_HEALTHY_EXECUTION_SURFACE: null,
   NO_ELIGIBLE_REVIEWER: null,
@@ -29,7 +38,23 @@ const PERSON_BLOCKERS: Record<FactoryBlockerKind, string | null> = {
   EXTERNAL_CREDENTIAL_REQUIRED: 'Grant the named access where the worker runs; Brain resumes by itself.',
   SCOPE_AMENDMENT_REQUIRED: 'Widen the mutation scope to the named file, or withdraw the objective.',
   REPAIR_OWNERSHIP_UNRESOLVED: 'Name the file the repair may change in the objective’s scope.',
+  PROTECTED_SCOPE: MAINTAINER_ACTION,
 };
+
+/**
+ * Blockers the contract's own author resolves through the operator door
+ * (`amend`, `regrant-unit`): the session that submitted the objective, never
+ * the owner. Production 2026-11-11, fcp_ef7bb04a: a correct review finding
+ * needed four more files in scope, and the outcome read "Stopped until a
+ * person acts" for a routine amendment.
+ */
+const CONTRACT_BLOCKERS: ReadonlySet<FactoryBlockerKind> = new Set([
+  'DEPENDENCY_CYCLE',
+  'UNIT_EXHAUSTED_ATTEMPTS',
+  'CONTRADICTORY_CONTRACT',
+  'SCOPE_AMENDMENT_REQUIRED',
+  'REPAIR_OWNERSHIP_UNRESOLVED',
+]);
 
 export interface OutcomeInput {
   campaign: FactoryCampaign;
@@ -90,7 +115,13 @@ export function deriveOutcome(input: OutcomeInput): ObjectiveOutcome {
       const action = kind ? PERSON_BLOCKERS[kind] : null;
       return make(
         'BLOCKED',
-        action ? 'Stopped until a person acts.' : 'Stopped; Brain re-examines this by itself every tick.',
+        kind === 'PROTECTED_SCOPE'
+          ? 'Routed to the maintainer: no Factory worker may change this scope.'
+          : kind && CONTRACT_BLOCKERS.has(kind)
+            ? 'Stopped until the submitting session amends the contract (factory amend or regrant-unit); not the owner\'s.'
+            : action
+            ? 'Stopped until a person acts.'
+            : 'Stopped; Brain re-examines this by itself every tick.',
         campaign.blockerDetail ?? kind ?? 'blocked',
         action,
       );
@@ -124,7 +155,12 @@ export function deriveOutcome(input: OutcomeInput): ObjectiveOutcome {
    * while 53 such requests sat open (docs/FACTORY-PERFORMANCE-2026-11-02.md).
    */
   const delivery = input.delivery ?? null;
-  if (delivery && (!run || !base.autoRelease)) {
+  // A release that ended without merging (refused, or failed at the gate for
+  // good) leaves the merge to a person — its own blocker says "release by hand" —
+  // and that merge is then read like any other (program fpg_2adb7f5e, 2026-11-10:
+  // links-d2 refused twice by flakes in the shared suite, never by its change).
+  const releaseEndedUnmerged = run !== null && !run.mergeSha && (run.state === 'REFUSED' || (run.state === 'FAILED' && !releaseRetryable(run)));
+  if (delivery && (!run || !base.autoRelease || releaseEndedUnmerged)) {
     if (delivery.state === 'CLOSED') {
       return make('CANCELLED', 'The pull request was closed without merging; nothing was delivered.');
     }
@@ -176,8 +212,8 @@ export function deriveOutcome(input: OutcomeInput): ObjectiveOutcome {
     case 'LIVE':
       return { ...make('LIVE', `Live and verified at ${run.mergeSha?.slice(0, 12) ?? '—'}.`), pageUrl: pageUrl(input) };
     case 'FAILED':
-      if ((run.failureStage === 'INFRA' || run.failureStage === 'DISPATCH') && run.attempt < MAX_RELEASE_ATTEMPTS) {
-        return make('RELEASING', `The last attempt stopped on the runner (${run.failureDetail ?? 'no detail'}); it will be tried again.`);
+      if (releaseRetryable(run)) {
+        return make('RELEASING', `The last attempt stopped (${run.failureStage}: ${run.failureDetail ?? 'no detail'}); it will be tried again.`);
       }
       return make(
         'BLOCKED',

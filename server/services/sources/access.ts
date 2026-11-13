@@ -41,6 +41,22 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { browserMcpUrl, renderInBrowser } from './browserMcp.ts';
 import { connectorFor } from './connectors.ts';
 import { searchSuccessor } from './discover.ts';
+import {
+  ACCESS_HANDOFF_EVENT,
+  discoverExistingSources,
+  discoveryFromRows,
+  handoffKey,
+  recordAcquisitionJudgment,
+  repeatedUseFromRows,
+  REPEATED_USE_WINDOW_MS,
+  SOURCE_DISCOVERY_EVENT,
+  type AcquisitionEvidence,
+  type AcquisitionNeed,
+  type RecordAcquisitionDeps,
+  type SourceDiscovery,
+} from './acquisition.ts';
+import { activeRoutine, routinesFrom, type Routine, type RoutineUse } from './routines.ts';
+import { boundaryOfRead, classOfRoute, selectAccessMethod, type AccessEvidence } from './accessMethods.ts';
 import { checkDestination, fetchForWorker, systemResolver, type Resolver, type SourceFetch } from './fetchForWorker.ts';
 
 export const ACCESS_METHODS = ['DIRECT', 'CONNECTOR', 'BROWSER', 'SITEMAP', 'ARCHIVE', 'SEARCH'] as const;
@@ -54,7 +70,21 @@ export interface AccessAttempt {
   ms: number;
 }
 
-export type SourceRead = SourceFetch & { method: AccessMethod; attempts: AccessAttempt[] };
+/** What the reader learned about the source's own terms while reading it. */
+export interface ReadTerms {
+  /** robots.txt refused the browser route this read needed. */
+  robotsDisallows?: boolean;
+  /** Some attempt was answered 429. */
+  rateLimited?: boolean;
+}
+
+export type SourceRead = SourceFetch & {
+  method: AccessMethod;
+  attempts: AccessAttempt[];
+  terms?: ReadTerms;
+  /** The reusable routine (from a CONNECTOR_PROPOSED row, `routines.ts`) that led this read, when one did. */
+  routine?: RoutineUse;
+};
 
 export interface AccessDeps {
   direct?: (url: string) => Promise<SourceFetch>;
@@ -72,6 +102,13 @@ export interface AccessDeps {
    */
   search?: ((url: string) => Promise<SourceFetch | null>) | null;
   learned?: (host: string) => Promise<AccessMethod | null>;
+  /**
+   * The search for existing corpora a SEARCH_FIRST judgment starts (`discoverExistingSources`).
+   * Defaults on exactly where `search` does; null turns it off.
+   */
+  discover?: ((need: AcquisitionNeed) => Promise<SourceDiscovery>) | null;
+  /** The routine a CONNECTOR_PROPOSED row built for this host (`routines.ts`); defaults to the recorded rows. */
+  routine?: (host: string) => Promise<Routine | null>;
   record?: (read: SourceRead, caller: string, ms: number) => Promise<void>;
   /** Which part of Brain asked, for the event. */
   caller?: string;
@@ -336,9 +373,7 @@ export async function sitemapSuccessor(
 
 const LEARN_WINDOW_MS = 7 * 24 * 60 * 60_000;
 const LEARN_REFRESH_MS = 5 * 60_000;
-let learnedAt = 0;
 let learnedMap = new Map<string, AccessMethod>();
-let learning: Promise<void> | null = null;
 
 interface HostTally {
   directOk: number;
@@ -386,36 +421,407 @@ export function learnFrom(rows: { provider: string | null; outcome: string | nul
   return out;
 }
 
-async function defaultLearned(host: string): Promise<AccessMethod | null> {
-  if (Date.now() - learnedAt > LEARN_REFRESH_MS) {
-    learning ??= (async () => {
+/** Browser reads of a host from SOURCE_ACCESS rows, newest first. */
+export interface BrowserRecord {
+  runs: number;
+  stable: number;
+  /** The most recent browser attempt on the host read the page. */
+  lastOk: boolean;
+}
+
+/** How often the browser route ran on each host and how often it read the page. Pure. */
+export function browserRecordFrom(rows: { measures: string | null }[]): Map<string, BrowserRecord> {
+  const out = new Map<string, BrowserRecord>();
+  for (const row of rows) {
+    let measures: { host?: string; attempts?: AccessAttempt[] };
+    try {
+      measures = JSON.parse(row.measures ?? '{}') as typeof measures;
+    } catch {
+      continue;
+    }
+    if (!measures.host) continue;
+    for (const attempt of measures.attempts ?? []) {
+      if (attempt.method !== 'BROWSER') continue;
+      const entry = out.get(measures.host) ?? { runs: 0, stable: 0, lastOk: attempt.readable };
+      entry.runs += 1;
+      if (attempt.readable) entry.stable += 1;
+      out.set(measures.host, entry);
+    }
+  }
+  return out;
+}
+
+let browserRecords = new Map<string, BrowserRecord>();
+
+/*
+ * The access history, loaded once per refresh and shared.
+ *
+ * Every public read records itself and two judgments, so anything read per read
+ * runs on the research hot path against the shared database (§61/§63). The
+ * learner, the routines, the acquisition judgment's repetition count and its
+ * "already proposed" check all want the same two sets of rows — recent
+ * SOURCE_ACCESS and CONNECTOR_PROPOSED — so they are read together, at most once
+ * per `LEARN_REFRESH_MS`, single-flight, and every consumer derives from them.
+ * What this process writes is added as it is written (`noteHistory`), so a read
+ * counts itself and this process's earlier reads at once, and other processes'
+ * rows within one refresh. Nothing is held that a reload cannot rebuild (§45).
+ */
+interface HistoryAccessRow {
+  provider: string | null;
+  outcome: string | null;
+  measures: string | null;
+  at: string | null;
+}
+interface HistoryProposalRow {
+  event_type?: string | null;
+  outcome?: string | null;
+  measures: string | null;
+  at: string | null;
+}
+const HISTORY_ACCESS_MAX = 5000;
+let historyAt = 0;
+let historyLoading: Promise<void> | null = null;
+/** Newest first. */
+let historyAccess: HistoryAccessRow[] = [];
+/** `host|route` of each CONNECTOR_PROPOSED row inside the window, held or written here. */
+let historyProposals = new Set<string>();
+let routineMap = new Map<string, Routine>();
+/** SOURCE_DISCOVERY per host inside the window, held or written here: the search is made once per window, not per read. */
+let historyDiscoveries = new Map<string, SourceDiscovery>();
+/** Hosts whose discovery this process has started and not yet recorded, so concurrent reads start one search. */
+const discoveriesInFlight = new Set<string>();
+/** `handoffKey` of each ACCESS_HANDOFF inside the window, held or written here. */
+let historyHandoffs = new Set<string>();
+
+/** What the history reads and writes cost the database since the last reset: the load this module adds, measured. */
+const dbLoad = { historyLoads: 0, queries: 0, writes: 0, judgmentsSkipped: 0 };
+export function sourceAccessDbLoad(): Readonly<typeof dbLoad> {
+  return { ...dbLoad };
+}
+
+const proposalKey = (host: string, route: string) => `${host.toLowerCase()}|${route}`;
+
+async function loadHistory(): Promise<void> {
+  dbLoad.historyLoads += 1;
+  // One window covers every consumer: repetition and routines look back
+  // REPEATED_USE_WINDOW_MS; the learner keeps only its own LEARN_WINDOW_MS of it.
+  const since = new Date(Date.now() - Math.max(REPEATED_USE_WINDOW_MS, LEARN_WINDOW_MS)).toISOString();
+  let access: HistoryAccessRow[] = [];
+  let proposals: HistoryProposalRow[] = [];
+  try {
+    dbLoad.queries += 1;
+    access = await getDb().all<HistoryAccessRow>(
+      `SELECT provider, outcome, measures, at FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? ORDER BY at DESC LIMIT ${HISTORY_ACCESS_MAX}`,
+      [since],
+    );
+  } catch {
+    // A record that cannot be read teaches nothing; DIRECT leads and nothing is repeated.
+  }
+  try {
+    dbLoad.queries += 1;
+    // The rows a judgment's consumers read back — proposals, discoveries, open handoffs — in the same one query.
+    proposals = await getDb().all<HistoryProposalRow>(
+      `SELECT event_type, outcome, measures, at FROM bin_events WHERE event_type IN ('CONNECTOR_PROPOSED', '${SOURCE_DISCOVERY_EVENT}', '${ACCESS_HANDOFF_EVENT}') AND at >= ? ORDER BY at DESC LIMIT 1500`,
+      [new Date(Date.now() - REPEATED_USE_WINDOW_MS).toISOString()],
+    );
+  } catch {
+    // A record that cannot be read builds no routine; the ordinary routes run.
+  }
+  const learnSince = Date.now() - LEARN_WINDOW_MS;
+  const learnRows = access.filter((r) => (r.at ? Date.parse(r.at) >= learnSince : false));
+  learnedMap = learnFrom(learnRows);
+  browserRecords = browserRecordFrom(learnRows);
+  const discoveryRows = proposals.filter((p) => p.event_type === SOURCE_DISCOVERY_EVENT);
+  const handoffRows = proposals.filter((p) => p.event_type === ACCESS_HANDOFF_EVENT);
+  proposals = proposals.filter((p) => !p.event_type || p.event_type === 'CONNECTOR_PROPOSED');
+  routineMap = routinesFrom(proposals, access);
+  historyAccess = access;
+  historyDiscoveries = new Map();
+  for (const d of discoveryRows) {
+    const m = (() => {
       try {
-        const since = new Date(Date.now() - LEARN_WINDOW_MS).toISOString();
-        const rows = await getDb().all<{ provider: string | null; outcome: string | null; measures: string | null }>(
-          `SELECT provider, outcome, measures FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? ORDER BY at DESC LIMIT 5000`,
-          [since],
-        );
-        learnedMap = learnFrom(rows);
+        return JSON.parse(d.measures ?? '{}') as { host?: unknown };
       } catch {
-        // A record that cannot be read teaches nothing; DIRECT leads.
-      } finally {
-        learnedAt = Date.now();
-        learning = null;
+        return {};
       }
     })();
-    await learning;
+    if (typeof m.host !== 'string' || historyDiscoveries.has(m.host)) continue;
+    const found = discoveryFromRows([d], m.host);
+    if (found) historyDiscoveries.set(m.host, found);
   }
+  historyHandoffs = new Set();
+  for (const h of handoffRows) {
+    try {
+      const m = JSON.parse(h.measures ?? '{}') as { host?: unknown; capability?: unknown; boundary?: unknown };
+      if (typeof m.host === 'string') historyHandoffs.add(handoffKey(m.host, String(m.capability), String(m.boundary)));
+    } catch {
+      /* an unparseable row opens nothing */
+    }
+  }
+  historyProposals = new Set();
+  for (const p of proposals) {
+    try {
+      const m = JSON.parse(p.measures ?? '{}') as { host?: unknown; route?: unknown };
+      if (typeof m.host === 'string' && typeof m.route === 'string') historyProposals.add(proposalKey(m.host, m.route));
+    } catch {
+      /* an unparseable row proposes nothing */
+    }
+  }
+}
+
+async function freshHistory(): Promise<void> {
+  if (Date.now() - historyAt > LEARN_REFRESH_MS) {
+    historyLoading ??= loadHistory().finally(() => {
+      historyAt = Date.now();
+      historyLoading = null;
+    });
+    await historyLoading;
+  }
+}
+
+/** Add a row this process just wrote to the held history, so the next judgment counts it without reading it back. */
+function noteHistory(eventType: string, provider: string | null, measures: Record<string, unknown>): void {
+  if (eventType === 'SOURCE_ACCESS') {
+    historyAccess.unshift({ provider, outcome: null, measures: JSON.stringify(measures), at: new Date().toISOString() });
+    if (historyAccess.length > HISTORY_ACCESS_MAX) historyAccess.length = HISTORY_ACCESS_MAX;
+  } else if (eventType === 'CONNECTOR_PROPOSED' && typeof measures.host === 'string' && typeof measures.route === 'string') {
+    historyProposals.add(proposalKey(measures.host, measures.route));
+  } else if (eventType === SOURCE_DISCOVERY_EVENT && typeof measures.host === 'string') {
+    const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+    historyDiscoveries.set(measures.host, { query: String(measures.query ?? ''), candidates: list(measures.candidates), bulkCandidates: list(measures.bulkCandidates) });
+    discoveriesInFlight.delete(measures.host);
+  } else if (eventType === ACCESS_HANDOFF_EVENT && typeof measures.host === 'string') {
+    historyHandoffs.add(handoffKey(measures.host, String(measures.capability), String(measures.boundary)));
+  }
+}
+
+async function defaultLearned(host: string): Promise<AccessMethod | null> {
+  await freshHistory();
   return learnedMap.get(host) ?? null;
 }
 
-export function resetSourceAccessMemory(): void {
-  learnedAt = 0;
-  learnedMap = new Map();
-  robotsCache.clear();
+async function defaultRoutine(host: string): Promise<Routine | null> {
+  await freshHistory();
+  return routineMap.get(host) ?? null;
 }
 
-async function defaultRecord(read: SourceRead, caller: string, ms: number): Promise<void> {
+/** A host's repetition, counted from the held SOURCE_ACCESS rows (this read's own row included). */
+async function heldRepeatedUse(host: string): Promise<{ repeatedUses: number; repeatedUsesNeedingFallback: number }> {
+  await freshHistory();
+  return repeatedUseFromRows(historyAccess, host);
+}
+
+async function heldProposalOnRecord(host: string, route: string): Promise<boolean> {
+  await freshHistory();
+  return historyProposals.has(proposalKey(host, route));
+}
+
+async function heldDiscoveryOnRecord(host: string): Promise<SourceDiscovery | null> {
+  await freshHistory();
+  return historyDiscoveries.get(host.toLowerCase()) ?? null;
+}
+
+async function heldHandoffOnRecord(host: string, capability: string, boundary: string): Promise<boolean> {
+  await freshHistory();
+  return historyHandoffs.has(handoffKey(host, capability, boundary));
+}
+
+/*
+ * A judgment that has not changed is not written again. The SOURCE_ACCESS row is
+ * the record of every read; the ACQUISITION_JUDGMENT row records a decision, and a
+ * decision repeated unchanged for the same caller, host and capability within one
+ * refresh adds a write and no information. A changed route, outcome, boundary or
+ * connector/script flag is written at once, so every change of decision is a row.
+ */
+const lastJudgment = new Map<string, { signature: string; at: number }>();
+
+
+export function resetSourceAccessMemory(): void {
+  historyAt = 0;
+  historyLoading = null;
+  historyAccess = [];
+  historyProposals = new Set();
+  routineMap = new Map();
+  historyDiscoveries = new Map();
+  discoveriesInFlight.clear();
+  historyHandoffs = new Set();
+  learnedMap = new Map();
+  browserRecords = new Map();
+  robotsCache.clear();
+  lastJudgment.clear();
+  dbLoad.historyLoads = 0;
+  dbLoad.queries = 0;
+  dbLoad.writes = 0;
+  dbLoad.judgmentsSkipped = 0;
+}
+
+/**
+ * What the attempts made on one read say about each way in. Pure.
+ *
+ * Each class is evidenced only by an attempt at a route of that class, and a
+ * route no attempt tried is left unknown rather than assumed either way. The
+ * route that finally produced the text is not special: it counts the same as any
+ * other attempt at its class, so the evidence can name a different method than
+ * the one used. No account is ever asserted — a browser render here is a public
+ * page read, and says nothing about a session.
+ */
+export function accessEvidenceOfAttempts(
+  attempts: readonly AccessAttempt[],
+  context: { terms?: ReadTerms; browserRecord?: BrowserRecord | null } = {},
+): AccessEvidence {
+  const evidence: AccessEvidence = {};
+  const terms = context.terms;
+  const rateLimited = terms?.rateLimited === true || attempts.some((a) => a.status === 429);
+  if (terms?.robotsDisallows || rateLimited) evidence.terms = { ...(terms?.robotsDisallows ? { robotsDisallows: true } : {}), ...(rateLimited ? { rateLimited: true } : {}) };
+  const verdict = (methods: readonly AccessMethod[]): boolean | undefined => {
+    const tried = attempts.filter((a) => methods.includes(a.method));
+    return tried.length === 0 ? undefined : tried.some((a) => a.readable);
+  };
+  evidence.nativeAvailable = verdict(['CONNECTOR']);
+  evidence.bulkAvailable = verdict(['SITEMAP', 'ARCHIVE']);
+  evidence.httpReadable = verdict(['DIRECT', 'SEARCH']);
+  const browser = verdict(['BROWSER']);
+  // The interface is the only way in when a render read what plain HTTP could not.
+  evidence.interfaceOnly = browser === undefined ? undefined : browser && evidence.httpReadable !== true;
+  // The interface is unfamiliar when the host has no browser history or its last browser read failed
+  // after others worked (it changed); stated only where this read used the browser or the host has a record.
+  const record = context.browserRecord;
+  if (record || browser !== undefined) {
+    evidence.interfaceUnfamiliar = !record || !record.lastOk;
+    if (record) evidence.recurrence = { runs: record.runs, stable: record.stable };
+  }
+  return evidence;
+}
+
+/** What the attempts on one read say, in the acquisition judgment's terms. Pure. */
+export function acquisitionEvidenceOfRead(
+  read: Pick<SourceRead, 'attempts' | 'readable' | 'method'>,
+  boundary: AccessEvidence['boundary'] | null,
+  evidence: AccessEvidence,
+): AcquisitionEvidence {
+  const bulkTried = read.attempts.some((a) => a.method === 'SITEMAP' || a.method === 'ARCHIVE');
+  const bulkFound = read.attempts.filter((a) => (a.method === 'SITEMAP' || a.method === 'ARCHIVE') && a.readable).map((a) => a.method);
+  return {
+    nativeIntegrationAvailable: evidence.nativeAvailable === true,
+    existingBulkSources: bulkFound,
+    bulkSearchDone: bulkTried,
+    stableHttpDocuments: evidence.httpReadable === true,
+    interactiveInterfaceOnly: evidence.interfaceOnly === true,
+    blockedAtBoundary: boundary !== null && boundary !== 'PAYMENT' && boundary !== 'LEGAL',
+    requiresLicence: boundary === 'PAYMENT' || boundary === 'LEGAL',
+  };
+}
+
+/**
+ * What a read-path judgment reads and writes through: repetition and prior
+ * proposals from the held history (no query of their own), and a writer that counts every write, adds
+ * it to the held history, and leaves out a judgment that has not changed.
+ */
+function judgmentDeps(caller: string): RecordAcquisitionDeps {
+  return {
+    caller,
+    repeatedUse: heldRepeatedUse,
+    proposalOnRecord: heldProposalOnRecord,
+    discoveryOnRecord: heldDiscoveryOnRecord,
+    handoffOnRecord: heldHandoffOnRecord,
+    // A read path that is itself driven by injected readers runs no search of its own.
+    discover: null,
+    record: async (event) => {
+      const measures = (event.measures ?? {}) as Record<string, unknown>;
+      if (event.eventType === 'ACQUISITION_JUDGMENT') {
+        const key = `${caller}|${String(measures.host)}|${String(measures.capability)}`;
+        const signature = JSON.stringify([event.outcome, event.provider, measures.reusableConnectorJustified, measures.convertToScript, measures.bespokeCrawlerMayBeProposed, measures.boundaries]);
+        const prior = lastJudgment.get(key);
+        if (prior && prior.signature === signature && Date.now() - prior.at <= LEARN_REFRESH_MS) {
+          dbLoad.judgmentsSkipped += 1;
+          return;
+        }
+        lastJudgment.set(key, { signature, at: Date.now() });
+      }
+      dbLoad.writes += 1;
+      await recordBinEvent(event);
+      noteHistory(event.eventType, event.provider ?? null, measures);
+    },
+  };
+}
+
+async function judgeReadAsAcquisition(
+  read: SourceRead,
+  host: string | null,
+  boundary: AccessEvidence['boundary'] | null,
+  evidence: AccessEvidence,
+  caller: string,
+  discover: ((need: AcquisitionNeed) => Promise<SourceDiscovery>) | null,
+): Promise<void> {
+  // A SEARCH_FIRST read starts one discovery for its host — in the background, because a read never
+  // waits on a search — and every later read of the host is judged on the discovery once it is recorded.
+  const starts = Boolean(discover && host && !discoveriesInFlight.has(host) && !historyDiscoveries.has(host));
+  const deps: RecordAcquisitionDeps = {
+    ...judgmentDeps(caller),
+    discover: starts
+      ? async (need) => {
+          discoveriesInFlight.add(host!);
+          try {
+            return await discover!(need);
+          } finally {
+            // Recorded or not, the host may be searched again after the next refresh.
+            setTimeout(() => discoveriesInFlight.delete(host!), LEARN_REFRESH_MS).unref?.();
+          }
+        }
+      : null,
+    discoverInBackground: true,
+  };
+  await recordAcquisitionJudgment({ kind: 'ACQUIRE', purpose: `read ${read.requestedUrl}`, host }, acquisitionEvidenceOfRead(read, boundary, evidence), deps);
+}
+
+async function defaultRecord(
+  read: SourceRead,
+  caller: string,
+  ms: number,
+  opts: { discover?: ((need: AcquisitionNeed) => Promise<SourceDiscovery>) | null } = {},
+): Promise<void> {
   const host = hostOf(read.requestedUrl);
+  const used = classOfRoute(read.method);
+  const boundary = boundaryOfRead({
+    readable: read.readable,
+    reason: read.readable ? undefined : read.reason,
+    status: read.status,
+    robotsBlocked: read.terms?.robotsDisallows === true,
+  });
+  // The held history is brought up to date before this read's row is added to it, so
+  // a refresh already in flight cannot drop the row, and the browser record is current.
+  await freshHistory().catch(() => undefined);
+  const attemptEvidence = accessEvidenceOfAttempts(read.attempts, { terms: read.terms, browserRecord: host ? browserRecords.get(host) : null });
+  const evidence: AccessEvidence = boundary ? { boundary, ...(attemptEvidence.terms ? { terms: attemptEvidence.terms } : {}) } : attemptEvidence;
+  const judged = selectAccessMethod(evidence);
+  // A boundary is a stop; otherwise the method used is the route that ran, and the
+  // judgment is what the evidence of every attempt supports, so a disagreement shows.
+  const agrees = judged.method === used;
+  const methodReason = (
+    boundary
+      ? judged.why
+      : read.readable
+        ? agrees
+          ? `${used} was used and the attempts support it: ${judged.why}`
+          : `${used} was used; the attempts on this read support ${judged.method} (${judged.why}); no session was evidenced`
+        : `${used} did not yield a readable source (${read.reason}); no boundary was met, so no human step is implied`
+  ).slice(0, 300);
+  const accessMeasures = {
+    host,
+    url: read.requestedUrl.slice(0, 400),
+    finalUrl: read.finalUrl?.slice(0, 400) ?? null,
+    chars: read.readable ? read.totalChars : 0,
+    attempts: read.attempts,
+    ...(read.routine ? { routine: read.routine } : {}),
+    methodClass: boundary ? judged.method : used,
+    methodJudged: judged.method,
+    methodAgrees: boundary ? true : agrees,
+    methodReason,
+    convertToScript: judged.convertToScript,
+    methodConsidered: judged.considered,
+    methodConstraints: judged.constraints,
+  };
+  dbLoad.writes += 1;
   await recordBinEvent({
     eventType: 'SOURCE_ACCESS',
     provider: read.method,
@@ -424,14 +830,18 @@ async function defaultRecord(read: SourceRead, caller: string, ms: number): Prom
     reason: `${read.readable ? read.method : read.reason} ${read.requestedUrl}`.slice(0, 480),
     durationMs: ms,
     evidenceClass: 'MEASURED',
-    measures: {
-      host,
-      url: read.requestedUrl.slice(0, 400),
-      finalUrl: read.finalUrl?.slice(0, 400) ?? null,
-      chars: read.readable ? read.totalChars : 0,
-      attempts: read.attempts,
-    },
+    measures: accessMeasures,
   });
+  noteHistory('SOURCE_ACCESS', read.method, accessMeasures);
+  // Reading a public source is the ACQUIRE capability: ask the acquisition judgment what
+  // this read's own evidence supports (existing bulk sources first, a connector when the
+  // host's SOURCE_ACCESS history justifies one) and record it beside the access row.
+  await judgeReadAsAcquisition(read, host, boundary ?? null, evidence, caller, opts.discover ?? null).catch(() => undefined);
+  // A read never records the OPERATE capability, whatever rendered it and whatever permission
+  // stands for its host: the research browser opens one isolated, signed-out session per page
+  // (`browserMcp.ts`), so no account was used and no interface was operated. An OPERATE judgment
+  // is written only by the code that actually runs a workflow under the granted account
+  // (`browserWorkflow.ts operateWorkflow`), so the row and the operation are the same event (§18, inv. 45).
 }
 
 /* ------------------------------------------------------------------------- */
@@ -450,8 +860,20 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   const search =
     deps.search !== undefined ? deps.search : deps.direct ? null : (u: string) => searchSuccessor(u, direct);
   const learned = deps.learned ?? defaultLearned;
-  const record = deps.record ?? defaultRecord;
+  // Source discovery runs from the read path exactly where the site search does: a caller that
+  // brings its own readers brings its own search, so an injected read never reaches a real one.
+  const record =
+    deps.record ?? ((r: SourceRead, c: string, ms: number) => defaultRecord(r, c, ms, { discover: deps.discover !== undefined ? deps.discover : search ? (need) => discoverExistingSources(need) : null }));
+  const routineOf = deps.routine ?? defaultRoutine;
   const attempts: AccessAttempt[] = [];
+  let routineUsed: RoutineUse | undefined;
+  const terms: ReadTerms = {};
+  /** Whether the site's robots.txt allows the browser route; a refusal is recorded as a term of this read. */
+  const browserAllowed = async (): Promise<boolean> => {
+    const allowed = await robotsAllow(url).catch(() => false);
+    if (!allowed) terms.robotsDisallows = true;
+    return allowed;
+  };
 
   const attempt = async (method: AccessMethod, run: () => Promise<SourceFetch | null>): Promise<SourceFetch | null> => {
     const t = Date.now();
@@ -486,7 +908,7 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
           detail: 'the site answered with a bot challenge, not the page',
         }
       : read;
-    const out: SourceRead = { ...honest, method, attempts };
+    const out: SourceRead = { ...honest, method, attempts, ...(routineUsed ? { routine: routineUsed } : {}), ...(terms.robotsDisallows || attempts.some((a) => a.status === 429) ? { terms: { ...terms, ...(attempts.some((a) => a.status === 429) ? { rateLimited: true } : {}) } } : {}) };
     await record(out, deps.caller ?? 'unknown', Date.now() - started).catch(() => undefined);
     return out;
   };
@@ -507,9 +929,23 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
     if (viaApi?.readable) return done(viaApi, 'CONNECTOR');
   }
 
-  // A host whose own record says DIRECT never works there and the browser does.
-  const lead = await learned(host).catch(() => null);
-  if (lead === 'BROWSER' && browser && (await robotsAllow(url).catch(() => false))) {
+  // A reusable routine a CONNECTOR_PROPOSED row built for this host leads, so the
+  // route repetition justified is run rather than rediscovered on every read.
+  const routine = activeRoutine(await routineOf(host).catch(() => null));
+  if (routine && (routine.lead === 'SITEMAP' || routine.lead === 'ARCHIVE')) {
+    routineUsed = routine;
+    const run = routine.lead === 'SITEMAP' ? sitemap : archive;
+    const viaRoutine = await attempt(routine.lead, () => run(url));
+    if (viaRoutine?.readable && !wantsBrowser(viaRoutine)) return done(viaRoutine, routine.lead);
+  }
+
+  // A host whose own record says DIRECT never works there and the browser does,
+  // or whose browser routine was proposed from recorded repetition.
+  const learnedLead = await learned(host).catch(() => null);
+  const routineBrowser = routine?.lead === 'BROWSER';
+  const lead: AccessMethod | null = learnedLead ?? (routineBrowser ? 'BROWSER' : null);
+  if (lead === 'BROWSER' && browser && (await browserAllowed())) {
+    if (routineBrowser) routineUsed = routine!;
     const rendered = await attempt('BROWSER', () => browser(url));
     if (rendered?.readable && !wantsBrowser(rendered)) return done(rendered, 'BROWSER');
   }
@@ -521,7 +957,7 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   let bestRead: SourceFetch = first;
   let bestMethod: AccessMethod = 'DIRECT';
 
-  if (wantsBrowser(first) && browser && lead !== 'BROWSER' && (await robotsAllow(url).catch(() => false))) {
+  if (wantsBrowser(first) && browser && lead !== 'BROWSER' && (await browserAllowed())) {
     const rendered = await attempt('BROWSER', () => browser(url));
     if (rendered && better(rendered, bestRead)) {
       bestRead = rendered;

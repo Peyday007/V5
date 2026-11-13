@@ -89,6 +89,7 @@ import {
 import { fleetSnapshot, NO_SHOW_WINDOW_MS } from './candidates.ts';
 import { shouldQuarantine } from './scaler.ts';
 import { routeBin } from './router.ts';
+import { rearmStrandedIntents } from './rearm.ts';
 import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator, type RoutingRefusal } from './router.ts';
 import { binNeedsWeb, markDispatchRoutine } from '../../repos/bins.ts';
 import {
@@ -186,11 +187,18 @@ export interface TickResult {
   abandonedNoShows: number;
   /** Abandoned intents asked once more after their cool-off (bounded per bin). */
   revivedAbandoned: number;
+  /**
+   * Intents abandoned for any other charged failure, re-armed after their
+   * cool-off because their bin is still executable (bounded per bin; `rearm.ts`).
+   */
+  revivedStranded: number;
   /** Surfaces taken out of routing this tick for not answering their fires. */
   quarantinedForNoShow: string[];
   /** Surfaces put back after their connector was re-authorized. */
   recoveredAfterReauth: string[];
   /** Surfaces stopped at their first session that arrived as another worker. */
+  /** Routines re-registered for the worker their owner switched them to (`adoptSwitchedIdentities`). */
+  adoptedIdentities: string[];
   quarantinedForWrongWorker: string[];
   /** Surfaces put back because their registration now matches the worker that arrived. */
   recoveredAfterRebind: string[];
@@ -254,8 +262,10 @@ export async function dispatchTick(
     reopenedNoShows: 0,
     abandonedNoShows: 0,
     revivedAbandoned: 0,
+    revivedStranded: 0,
     quarantinedForNoShow: [],
     recoveredAfterReauth: [],
+    adoptedIdentities: [],
     quarantinedForWrongWorker: [],
     recoveredAfterRebind: [],
     autoProbe: null,
@@ -297,6 +307,30 @@ export async function dispatchTick(
       await activationFallback();
     } catch (error) {
       console.warn('[dispatch] improvement activation fallback failed:', (error as Error).message);
+    }
+    /*
+     * Throughput self-correction, each bounded by its own interval: account
+     * targets follow the provider's answers (`autoScaleAccounts`, ten minutes),
+     * and an approved program's campaigns stopped on scope or exhausted
+     * attempts are answered on the approver's standing approval
+     * (`unblockApprovedPrograms`, hourly). Neither creates work.
+     */
+    try {
+      const { autoScaleAccounts } = await import('./scaler.ts');
+      const scaled = await autoScaleAccounts();
+      for (const step of scaled) {
+        console.log(`[dispatch] auto-scale ${step.accountId} ${step.from} -> ${step.to}: ${step.reason}`);
+      }
+    } catch (error) {
+      console.warn('[dispatch] auto-scale failed:', (error as Error).message);
+    }
+    try {
+      const { unblockApprovedPrograms, reconcileBlockedScopes } = await import('../factory/program/unblock.ts');
+      const steps = [...(await unblockApprovedPrograms()), ...(await reconcileBlockedScopes())];
+      const acted = steps.filter((step) => step.action !== 'SKIP');
+      if (acted.length > 0) console.log(`[dispatch] program auto-unblock: ${acted.map((s) => `${s.action} ${s.campaign}`).join('; ')}`);
+    } catch (error) {
+      console.warn('[dispatch] program auto-unblock failed:', (error as Error).message);
     }
   }
 
@@ -414,6 +448,16 @@ export async function dispatchTick(
   result.revivedAbandoned = (await reviveAbandonedNoShowDispatches(20)).length;
 
   /*
+   * And every other abandonment the same way. An intent that ran out of charged
+   * fires left its bin READY at the same generation with attempts of its own,
+   * and since the intent is unique per (bin, generation) nothing ever fired for
+   * it again: the watchdog read executable work beside free surfaces for hours
+   * while the pass it asked for had nothing to send. Level-driven, not edge-
+   * driven: the tick asks of the state it sees, not of the transition it missed.
+   */
+  result.revivedStranded = (await rearmStrandedIntents(20)).length;
+
+  /*
    * And a surface that has stopped answering stops being chosen.
    *
    * `shouldQuarantine` has stated this fleet's rule since Step 11 — repeated
@@ -479,6 +523,8 @@ export async function dispatchTick(
     lastConnectorReconcile = Date.now();
     try {
       await reconcileConnectorBindings();
+      const { clearStaleConnectorBindings } = await import('../fleet/connectorBinding.ts');
+      await clearStaleConnectorBindings();
     } catch {
       // Evidence, not a precondition. The next pass retries it.
     }
@@ -496,7 +542,10 @@ export async function dispatchTick(
    * dispatch.
    */
   try {
-    const { quarantineWrongWorkerSurfaces, recoverRebindedSurfaces } = await import('../fleet/arrivalIdentity.ts');
+    const { adoptSwitchedIdentities, quarantineWrongWorkerSurfaces, recoverRebindedSurfaces } = await import(
+      '../fleet/arrivalIdentity.ts'
+    );
+    result.adoptedIdentities = (await adoptSwitchedIdentities()).filter((d) => d.adopted).map((d) => d.routineId);
     result.quarantinedForWrongWorker = await quarantineWrongWorkerSurfaces();
     result.recoveredAfterRebind = await recoverRebindedSurfaces();
   } catch {

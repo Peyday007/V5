@@ -76,12 +76,6 @@ import {
 import { auditRoundFor, auditRoundStartedAt, earlierAuditRole } from './auditBrief.ts';
 import { assessPacket, MANDATORY_COVERAGE_CHECK } from './packet.ts';
 import { directResearch } from './intelligence/apply.ts';
-import {
-  alreadyReasked,
-  firstRefusalOf,
-  onlySourceTypeRefusals,
-  reaskRefusedSourceTypes,
-} from './replan.ts';
 import { assessSufficiency, mayProceedToSynthesis } from './intelligence/sufficiency.ts';
 import { readGraph } from './intelligence/uncertainty.ts';
 import {
@@ -163,8 +157,9 @@ export interface AdvanceResult {
  * — not something to try again with a fresh key.
  *
  * One exception, and `mayReplace` below is the whole of it: an item whose
- * attempts the queue spent, on a target where a second item cannot duplicate
- * anything, gets a bounded replacement instead of a park.
+ * attempts the queue spent (or, for a synthesis, that its worker failed on a
+ * transient cause), on a target where a second item cannot duplicate anything,
+ * gets a bounded replacement instead of a park.
  */
 function alreadyCreated(items: WorkItem[], predicate: (item: WorkItem) => boolean): boolean {
   return items.some(predicate);
@@ -297,11 +292,15 @@ async function mayReplace(
    * recorded nothing is a different fact — a worker said it was done, which
    * `brain_complete_work` now refuses — and stays a fault for a person, as do
    * items cancelled for any other reason (a round reopened, a packet ended).
+   * A synthesis is the exception, below: its no-op successes are replaced
+   * under the filing-effect check.
    */
   /*
-   * FAILED counts only when the queue spent the attempts — a retryable failure
-   * or a lapsed lease on the last one. A worker that failed the item as not
-   * retryable said not to try again, and the repair ladder answers that.
+   * For every type, FAILED counts as spent when the queue spent the attempts —
+   * a retryable failure or a lapsed lease on the last one. Otherwise a worker
+   * that failed the item as not retryable said not to try again, and the repair
+   * ladder answers that — with one exception, `transient` below: a synthesis
+   * failed on a transient cause is replaceable too, for the reason given there.
    */
   const exhausted = (item: WorkItem): boolean =>
     (item.state === 'FAILED' &&
@@ -309,7 +308,41 @@ async function mayReplace(
         item.failureCategory === 'LEASE_EXPIRED' ||
         item.failureCategory === 'TIMEOUT')) ||
     (item.state === 'CANCELLED' && item.attemptCount >= item.maxAttempts);
-  if (!earlier.every(exhausted)) return false;
+  /*
+   * A synthesis also counts as spent when its worker failed it on a transient
+   * cause — a provider or store that could not answer, a worker that crashed,
+   * a cause it could not name. Production, 2026-11: two of five recorded
+   * NEEDS_HUMAN reasons were exactly this, parked "nothing was recorded about
+   * why" while the item had recorded why. For a synthesis that is safe for the
+   * same reason a spent one is: the replacement is issued only when no earlier
+   * item reached the filing effect (the `idempotency_operations` check below),
+   * and the count is bounded by MAX_ITEMS_PER_TARGET. INVALID_INPUT stays a
+   * fault — the input will not change — as does every other type, whose
+   * not-retryable failures the repair ladder answers.
+   */
+  const transient = (item: WorkItem): boolean =>
+    type === 'RESEARCH_SYNTHESIZE' &&
+    item.state === 'FAILED' &&
+    (item.failureCategory === 'DEPENDENCY_UNAVAILABLE' ||
+      item.failureCategory === 'WORKER_ERROR' ||
+      item.failureCategory === 'UNKNOWN');
+  /*
+   * The same park text ("finished without recording anything") is also reached
+   * by a synthesis that SUCCEEDED and left no document: a worker said it was
+   * done and filed nothing. The caller only gets here while the packet has no
+   * document, and `researchItemRecorded` confirms it per item. For a synthesis
+   * that is not a judgement on its input, so it is replaced under the same two
+   * bounds as above: no earlier item reached the filing effect, and at most
+   * MAX_ITEMS_PER_TARGET items per target. A CANCELLED synthesis with attempts
+   * left stays a fault: inside the current round only an ended packet or a
+   * person cancels one, and tests/packetFaultDiagnosis.test.ts holds that.
+   */
+  const ended = async (item: WorkItem): Promise<boolean> =>
+    type === 'RESEARCH_SYNTHESIZE' && item.state === 'SUCCEEDED' && !(await researchItemRecorded(item));
+  for (const item of earlier) {
+    if (exhausted(item) || transient(item)) continue;
+    if (!(await ended(item))) return false;
+  }
   if (type === 'RESEARCH_SYNTHESIZE') {
     const reached = await getDb().get<{ n: number }>(
       `SELECT COUNT(*) AS n FROM idempotency_operations
@@ -470,11 +503,59 @@ async function faultedFragment(input: {
  * Exported so the one reader that has to tell a preserved diagnosis from this
  * fallback can compare against it rather than against a copy.
  */
+/** What a goal round with nobody to ask says when it ends rather than parks. */
+export const GOAL_ROUND_ENDS =
+  'This round belongs to a research goal with no mission, so it ends here and the goal may start its next round.';
+
+/**
+ * A research goal's round with no mission behind it: a park would reach no
+ * person and would hold the goal's next round (`goalContinuation` treats a
+ * NEEDS_HUMAN packet as live), so the runner ends such a round FAILED instead.
+ */
+async function nobodyToAsk(orchestration: ResearchOrchestration): Promise<boolean> {
+  return (
+    orchestration.goalId !== null &&
+    orchestration.goalId !== undefined &&
+    !(await getMissionByOrchestration(orchestration.id))
+  );
+}
+
 export function faultedOutReason(what: string): string {
   return (
     `A ${what} work item finished without recording anything, and nothing was ` +
     'recorded about why. The packet cannot continue on its own: re-plan it, or ' +
     'investigate the work item.'
+  );
+}
+
+/**
+ * What the newest item for this target recorded, or null. A FAILED item with a
+ * summary gives its worker's own reason; otherwise a SUCCEEDED item that filed
+ * nothing is named by id, so the park cites the row a person would investigate
+ * rather than saying nothing was recorded.
+ */
+function lastItemFailure(
+  items: WorkItem[] | undefined,
+  predicate: ((item: WorkItem) => boolean) | undefined,
+): string | null {
+  if (!items || !predicate) return null;
+  const newest = (list: WorkItem[]): WorkItem | undefined =>
+    [...list].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))[0];
+  const own = items.filter(predicate);
+  const failed = newest(own.filter((item) => item.state === 'FAILED' && (item.resultSummary?.trim().length ?? 0) > 0));
+  if (failed) {
+    return `The last ${failed.workType} work item failed (${failed.failureCategory ?? 'UNKNOWN'}): ${failed.resultSummary!.trim()}`;
+  }
+  // A no-op success is the one other ended state a park reaches with nothing on
+  // the orchestration; name its row so the park cites what to investigate.
+  const last = newest(own.filter((item) => item.state === 'SUCCEEDED'));
+  if (!last) return null;
+  const summary = last.resultSummary?.trim();
+  return (
+    `The last ${last.workType} work item (${last.id}) ended ${last.state}` +
+    ' without recording what it exists to record' +
+    (summary ? `: ${summary}` : ', and its row carries no reason') +
+    `. ${own.length} item(s) for this target; the packet cannot continue on its own: re-plan it, or investigate that item.`
   );
 }
 
@@ -509,9 +590,19 @@ async function faultedOut(input: {
   orchestration: ResearchOrchestration;
   fragment?: ResearchFragment | null;
   what: string;
+  /**
+   * The target's items, when the caller has them. A failed item records its
+   * worker's own reason in `resultSummary`; that is a recorded reason, and
+   * saying "nothing was recorded about why" over it is §33's defect again.
+   */
+  items?: WorkItem[];
+  predicate?: (item: WorkItem) => boolean;
 }): Promise<AdvanceResult> {
   const recorded = input.orchestration.failureReason?.trim();
-  const reason = recorded && recorded.length > 0 ? recorded : faultedOutReason(input.what);
+  const reason =
+    recorded && recorded.length > 0
+      ? recorded
+      : (lastItemFailure(input.items, input.predicate) ?? faultedOutReason(input.what));
   if (input.fragment) {
     await updateFragment(input.fragment.id, {
       status: 'BLOCKED',
@@ -1365,17 +1456,40 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
 
   if (result.status === 'AWAITING_REPAIR') {
     const fragments = await currentFragments(orchestrationId);
-    const waiting = fragments.some((fragment) => fragment.nextRetryAt !== null);
+    /*
+     * A retry time is a wait only while it is still ahead. One that has passed
+     * is a repair that is due: reading it as a wait left the packet live, idle
+     * and holding its slot until the progress deadline wrote its research off
+     * as FAILED — a due, still-allowed repair lost instead of run.
+     */
+    const now = queueNow();
+    const waiting = fragments.some((fragment) => fragment.nextRetryAt !== null && fragment.nextRetryAt > now);
     if (waiting) return result;
     /*
-     * Reachable now only through a race — the verdict branch asks
-     * `assessRepairs` before it writes AWAITING_REPAIR — so when it does happen
-     * it names the refusals rather than only that nothing is pending.
+     * Nothing is scheduled to return, so the one repair answer decides: a
+     * repair it would still mint is minted here and the packet moves on; one
+     * it refuses parks the packet with those refusals in its words.
      */
     const orchestration = await getOrchestration(orchestrationId);
     const repairs = orchestration
       ? await assessRepairs({ orchestration, fragments })
       : { mintable: [], refused: [] };
+    if (orchestration && repairs.mintable.length > 0) {
+      let minted = 0;
+      try {
+        minted = await mintRepairs({ orchestration, fragments, items: live });
+      } catch (error) {
+        if (!(error instanceof RepairRefusedByGrant)) throw error;
+        const reason =
+          `A repair attempt for ${error.fragmentKey} was refused by the permission this packet ` +
+          `runs under: ${error.detail}. Nothing was researched or spent on it, and every earlier ` +
+          'attempt and accepted claim is kept. Renewing or extending that permission lets the ' +
+          'repair run on the next tick; stopping the work is the other answer.';
+        await parkOrchestration(orchestrationId, reason, { stampCompleted: true });
+        return { ...result, status: 'NEEDS_HUMAN', waitingOn: `a person: ${reason}` };
+      }
+      if (minted > 0) return await advancePacket(orchestrationId);
+    }
     const detail = repairs.refused.map((entry) => entry.reason).join('; ');
     await parkOrchestration(orchestrationId,
         'The packet was left awaiting a repair that has no claimable work and no scheduled ' +
@@ -1877,13 +1991,6 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
         fragments: awaitingApproval,
         assignmentAlreadyApproved: await assignmentApprovedUnder(orchestration, envelope.id),
       });
-      /*
-       * A refusal that is only a source-type label is asked again once, with the
-       * envelope's own sourceRule, before a person is. Anything else, or a
-       * second refusal, parks as before.
-       */
-      const reask =
-        !verdict.fits && onlySourceTypeRefusals(verdict.reasons) && !alreadyReasked(awaitingApproval);
       await recordEvent({
         projectId: orchestration.projectId,
         layerId: orchestration.layerId,
@@ -1907,28 +2014,13 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
           fits: verdict.fits,
           reasons: verdict.reasons,
           checked: verdict.checked,
-          ...(reask ? { reask: true } : {}),
         },
       });
 
-      if (reask) {
-        const reasked = await reaskRefusedSourceTypes({
-          orchestrationId,
-          fragments: awaitingApproval,
-          envelope,
-          reasons: verdict.reasons,
-        });
-        if (reasked.length > 0) return await advancePacket(orchestrationId);
-      }
-
       if (!verdict.fits) {
-        const first = alreadyReasked(awaitingApproval) ? firstRefusalOf(awaitingApproval) : '';
         await parkOrchestration(orchestrationId,
             'The proposed plan falls outside the preauthorized envelope: ' +
-            (first
-              ? `${verdict.reasons.join(' ')} It was asked once more under the envelope's source ` +
-                `rule and refused again. First refusal: ${first}`
-              : verdict.reasons.join(' ')));
+            verdict.reasons.join(' '));
         return {
           orchestrationId,
           status: 'NEEDS_HUMAN',
@@ -2163,19 +2255,14 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
      * row. A packet behind a mission still parks, because a mission's park has
      * a person and a card.
      */
-    const goalRoundWithNobodyToAsk =
-      orchestration.goalId !== null &&
-      orchestration.goalId !== undefined &&
-      repairs.mintable.length === 0 &&
-      !(await getMissionByOrchestration(orchestration.id));
+    const goalRoundWithNobodyToAsk = repairs.mintable.length === 0 && (await nobodyToAsk(orchestration));
     if (goalRoundWithNobodyToAsk) {
       await updateOrchestration(orchestration.id, {
         status: 'FAILED',
         failureReason:
           'No fragment cleared its evidence gate, so there is nothing to synthesize. ' +
           noFragmentClearedDetail(fragments, repairs) +
-          ' This round belongs to a research goal with no mission, so it ends here and the goal ' +
-          'may start its next round.',
+          ` ${GOAL_ROUND_ENDS}`,
         completedAt: new Date().toISOString(),
       });
       return {
@@ -2212,7 +2299,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
       };
     }
     if (alreadyCreated(items, synthItem) && !(await mayReplace(items, synthItem, 'RESEARCH_SYNTHESIZE'))) {
-      return await faultedOut({ orchestration, what: 'synthesis' });
+      return await faultedOut({ orchestration, what: 'synthesis', items, predicate: synthItem });
     }
     const claims = await acceptedClaims(orchestration.id);
     if (claims.length === 0) {
@@ -2254,7 +2341,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     const failed = coverage.checks.filter((check) => !check.passed);
     const mandatoryGap = failed.find((check) => check.check === MANDATORY_COVERAGE_CHECK);
     if (mandatoryGap) {
-      await parkOrchestration(orchestration.id,
+      const gapReason =
           'The packet does not cover the goal\'s mandatory part, so it was not synthesized. ' +
           `${mandatoryGap.detail}` +
           (failed.length > 1
@@ -2262,7 +2349,26 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
                 .filter((check) => check !== mandatoryGap)
                 .map((check) => check.check)
                 .join(', ')}.`
-            : ''), { stampCompleted: true });
+            : '');
+      /*
+       * The same rule as a round where no fragment cleared its gate: a research
+       * goal's round with no mission has nobody to ask, and parked at
+       * NEEDS_HUMAN it is live to `goalContinuation`, so the goal never starts
+       * the round that could cover the gap. Nothing is synthesized either way
+       * (invariant 20 holds), the gap is still recorded below, and the goal's
+       * own packet ceiling asks a person when it is reached. A round behind a
+       * mission still parks: its person has a card.
+       */
+      const endRound = await nobodyToAsk(orchestration);
+      if (endRound) {
+        await updateOrchestration(orchestration.id, {
+          status: 'FAILED',
+          failureReason: `${gapReason} ${GOAL_ROUND_ENDS}`,
+          completedAt: new Date().toISOString(),
+        });
+      } else {
+        await parkOrchestration(orchestration.id, gapReason, { stampCompleted: true });
+      }
       await recordEvent({
         projectId: orchestration.projectId,
         layerId: orchestration.layerId,
@@ -2276,6 +2382,14 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
           failedChecks: failed.map((check) => check.check),
         },
       });
+      if (endRound) {
+        return {
+          orchestrationId,
+          status: 'FAILED',
+          enqueued: [],
+          waitingOn: 'nothing: the goal decides whether another round starts',
+        };
+      }
       return {
         orchestrationId,
         status: 'NEEDS_HUMAN',
@@ -2675,6 +2789,23 @@ export const PACKET_STALL_WINDOW_MS = 4 * 60 * 60 * 1000;
 export const PACKET_NOOP_RETRY_MS = 60 * 60 * 1000;
 const idleNoopAt = new Map<string, number>();
 
+/**
+ * How long a live packet may go without movement, with nothing outstanding,
+ * before an advance that still changes nothing concludes it.
+ *
+ * The stall window above only *detects*: it advances the packet, and when the
+ * advance changes nothing the packet was left as it was and tried again an hour
+ * later, for ever — live, idle and holding its slot. That is a progress deadline
+ * with no bound action, which reports and never resolves (Kubernetes'
+ * ProgressDeadlineExceeded alone); the bound action is the exit a Step Functions
+ * task's TimeoutSeconds gives it. Longer than `PACKET_STALL_WINDOW_MS`, so a
+ * packet always gets at least one ordinary advance first, and under the six
+ * hours `PACKETS_MOVING` measures. Read from the packet's own `updated_at`, so a
+ * restart that forgets `idleNoopAt` forgets only the retry pacing, never the
+ * judgment.
+ */
+export const PACKET_PROGRESS_DEADLINE_MS = 5 * 60 * 60 * 1000;
+
 /** Test hook: forget which packets were tried without effect. */
 export function resetIdlePacketAttempts(): void {
   idleNoopAt.clear();
@@ -2732,19 +2863,137 @@ export async function advanceIdlePackets(
   for (const row of rows) {
     const before = await getOrchestration(row.id);
     if (!before) continue;
-    const result = await advancePacket(row.id);
+    /*
+     * One packet whose advance throws must not end the sweep. Ordered oldest
+     * first and never stamped, it would be selected first again on every tick
+     * and stop every packet behind it from being reached.
+     */
+    let result: AdvanceResult | null = null;
+    let failure: string | null = null;
+    try {
+      result = await advancePacket(row.id);
+    } catch (error) {
+      failure = error instanceof Error ? error.message : String(error);
+    }
     const after = await getOrchestration(row.id);
     const minted = (await listWorkItemsForOrchestration(row.id)).some((item) =>
       LIVE_ITEM.has(item.state),
     );
-    if (!after || (after.status === before.status && !minted && after.updatedAt === before.updatedAt)) {
+    if (!after || !result || (after.status === before.status && !minted && after.updatedAt === before.updatedAt)) {
       idleNoopAt.set(row.id, nowMs);
+      if (after && after.status === before.status && after.updatedAt === before.updatedAt && !minted) {
+        const concluded = await concludeStalledPacket(before, nowMs, failure);
+        if (concluded) out.push({ orchestrationId: row.id, from: before.status, to: concluded });
+      }
       continue;
     }
     if (after.updatedAt === before.updatedAt) await beat(row.id);
     out.push({ orchestrationId: row.id, from: before.status, to: result.status });
   }
   return out;
+}
+
+/**
+ * The bound action of the progress deadline: conclude a packet whose advance has
+ * stopped producing movement.
+ *
+ * Judged only from the packet's rows. It must have gone `PACKET_PROGRESS_DEADLINE_MS`
+ * without an update (the advance that just ran left `updated_at` alone, so this
+ * is the age of its last real movement), and it must have no QUEUED or LEASED
+ * item. It is left alone when its rows say it is waiting by design and not
+ * stalled:
+ *
+ *   - **A plan awaiting a person's approval** (a PLANNED fragment). That is the
+ *     §16 gate, and `advancePacket` already refuses to treat it as a stall.
+ *     Concluding it would decide about spend for a person; parking it would
+ *     erase the difference between that wait and a stuck packet.
+ *   - **A repair scheduled to return** (a fragment whose `nextRetryAt` is still
+ *     ahead). It already has a bounded exit, and that time is it.
+ *
+ * A packet one of whose fragments is itself NEEDS_HUMAN already needs a person
+ * by its own rows, so that packet parks at NEEDS_HUMAN with the same sentence
+ * and a `RESEARCH_BLOCKED` event. So does a packet behind a mission, by the same
+ * rule `advancePacket` applies when no fragment clears its gate: only a goal
+ * round with no mission ends FAILED, and a packet behind a mission parks,
+ * because a mission's park has a person and a card. A repair whose `nextRetryAt`
+ * has already passed is not such a packet: `advancePacket` treats it as due and
+ * mints it or parks with the repair answer's refusals, so this deadline is the
+ * backstop only for a packet whose advance genuinely cannot move it (an advance
+ * that fails every time, or a state nothing else resolves).
+ *
+ * Everything else is concluded through the transition a packet that cannot go
+ * on already takes, FAILED with its reason, plus a `RESEARCH_FAILED` event.
+ * Nothing is synthesized, so no mandatory requirement is filed uncovered
+ * (invariant 20). No gate, audit or verification is consulted or skipped. Every
+ * fragment, claim and attempt keeps its row. Unless a fragment already asks for
+ * a person, it is not NEEDS_HUMAN: nothing in its rows asks anyone anything, and
+ * a park would hand the owner a decision with nothing to decide. FAILED is also what lets a research
+ * goal start its next round. The write is guarded in its own statement on the
+ * status and `updated_at` it judged, and on there still being no outstanding
+ * work, so a packet that moved in the meantime is not touched. A transition it
+ * makes ends with `recomputeProject`, as every outcome transition does (§6).
+ * Returns the status it wrote, or null when it left the packet alone.
+ */
+async function concludeStalledPacket(
+  packet: ResearchOrchestration,
+  nowMs: number,
+  failure: string | null,
+): Promise<'FAILED' | 'NEEDS_HUMAN' | null> {
+  const idleMs = nowMs - Date.parse(packet.updatedAt);
+  if (!(idleMs >= PACKET_PROGRESS_DEADLINE_MS)) return null;
+  const fragments = await currentFragments(packet.id);
+  if (fragments.some((fragment) => fragment.status === 'PLANNED')) return null;
+  const now = new Date(nowMs).toISOString();
+  if (fragments.some((fragment) => fragment.nextRetryAt !== null && fragment.nextRetryAt > now)) return null;
+
+  const fragmentAsks = fragments.some((fragment) => fragment.status === 'NEEDS_HUMAN');
+  const mission = fragmentAsks ? null : await getMissionByOrchestration(packet.id);
+  const needsPerson = fragmentAsks || mission !== null;
+  const hours = Math.floor(idleMs / 3_600_000);
+  const reason =
+    `This packet sat ${packet.status} for ${hours} hour${hours === 1 ? '' : 's'} with no work queued ` +
+    `or leased, and advancing it ${failure ? `failed (${failure.slice(0, 300)})` : 'changed nothing'}. ` +
+    `That is past the ${PACKET_PROGRESS_DEADLINE_MS / 3_600_000}-hour progress deadline, so it is ` +
+    (fragmentAsks
+      ? 'parked for the person one of its fragments already asks for, and it no longer holds a ' +
+        'slot as live work. '
+      : mission
+      ? `parked for the person behind mission ${mission.id}, whose card carries it, and it no ` +
+        'longer holds a slot as live work. '
+      : 'concluded here and no longer holds a slot for movement that will not come. ') +
+    'Nothing was synthesized, and every fragment, claim and attempt keeps its row.';
+  const to: 'FAILED' | 'NEEDS_HUMAN' = needsPerson ? 'NEEDS_HUMAN' : 'FAILED';
+  const done = await getDb().run(
+    `UPDATE research_orchestrations
+        SET status = ?, ${to === 'FAILED' ? 'failed_at = ?,' : ''} completed_at = ?, failure_reason = ?, updated_at = ?
+      WHERE id = ? AND status = ? AND updated_at = ?
+        AND NOT EXISTS (SELECT 1 FROM work_items w
+                         WHERE w.orchestration_id = research_orchestrations.id AND w.state IN ('QUEUED','LEASED'))`,
+    [to, ...(to === 'FAILED' ? [now] : []), now, reason, now, packet.id, packet.status, packet.updatedAt],
+  );
+  if (done.changes !== 1) return null;
+  idleNoopAt.delete(packet.id);
+  await recordEvent({
+    projectId: packet.projectId,
+    layerId: packet.layerId,
+    entityType: 'RUN',
+    entityId: packet.runId,
+    eventType: needsPerson ? 'RESEARCH_BLOCKED' : 'RESEARCH_FAILED',
+    payload: {
+      orchestrationId: packet.id,
+      reason,
+      status: to,
+      stuckStatus: packet.status,
+      idleMs,
+      progressDeadlineMs: PACKET_PROGRESS_DEADLINE_MS,
+      ...(failure ? { advanceError: failure.slice(0, 300) } : {}),
+    },
+  });
+  // The transition changed reality, so it re-derives state like every other
+  // outcome transition does (§6): the run, layer and runtime snapshot must not
+  // keep reading the packet as live until something unrelated recomputes.
+  await recomputeProject(packet.projectId);
+  return to;
 }
 
 /**

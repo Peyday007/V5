@@ -82,8 +82,17 @@ class Line implements ProgramPorts {
     const live = this.live.has(changeRequestId);
     return { changeRequestId, campaignId: admitted ? `fc:${changeRequestId}` : null, outcome: admitted ? (live ? 'LIVE' : 'BUILDING') : null, delivered: live, needsPerson: false, blocker: null };
   }
+  /** Requirement keys whose behavior production shows; null means every check passes. */
+  holding: Set<string> | null = null;
   async verify(checks: RequirementCheck[]) {
-    return { revision: 'rev1', checks: checks.map((c) => ({ check: c.kind, ok: true, detail: 'ok' })) };
+    return {
+      revision: 'rev1',
+      checks: checks.map((c) => {
+        const key = c.kind === 'BUNDLE_TEXT' ? c.text.replace('marker:', '') : '';
+        const ok = this.holding === null || this.holding.has(key);
+        return { check: c.kind, ok, detail: ok ? 'ok' : 'missing' };
+      }),
+    };
   }
   revision() {
     return 'rev1';
@@ -169,6 +178,7 @@ describe('a program scheduled by priority, with prepared capabilities', () => {
   it('queues the most urgent first with its priority and keeps a prepared capability out of the line', async () => {
     const programId = await submitAndApprove();
     const line = new Line();
+    line.holding = new Set();
     const report = await tickProgram(programId, line);
     expect(report.queued).toEqual(['cash-d0-p0', 'feeds-d0-p1']);
     expect(line.priorityOf('cash-d0-p0')).toBe(2);
@@ -257,5 +267,156 @@ describe('the Brain architecture program, Release 01', () => {
       const r = map.requirements.find((x) => x.key === key)!;
       for (const check of r.verification) if (check.kind === 'PROBE') expect(registered.has(check.probe), check.probe).toBe(true);
     }
+  });
+});
+
+describe('the research-throughput probe (CAP-16-3)', () => {
+  it('fails while providers fail and passes once work is accepted again', async () => {
+    const { recordBinEvent } = await import('../server/repos/bins.ts');
+    const probe = getProbe('r01.cap-16-3')!;
+    expect((await probe({ hours: 1 })).ok).toBe(false);
+    for (let i = 0; i < 4; i += 1) await recordBinEvent({ eventType: 'FREE_LANE_ITEM', outcome: 'RELEASED_TRANSIENT', reason: 'model brain-a: model call failed: cheap lane HTTP 503', evidenceClass: 'MEASURED' });
+    expect((await probe({ hours: 1 })).ok).toBe(false);
+    for (let i = 0; i < 5; i += 1) await recordBinEvent({ eventType: 'FREE_LANE_ITEM', outcome: 'SUBMITTED', reason: 'model brain-a', evidenceClass: 'MEASURED' });
+    // Throughput restored; the stage half (release01/capacityProbe.ts) then decides,
+    // and with no stage reading yet that is UNKNOWN rather than a failure.
+    const passing = await probe({ hours: 1 });
+    expect(passing.ok).toBeNull();
+    expect(passing.detail).toMatch(/5 accepted of 9/);
+  });
+});
+
+describe('a campaign owns a test file of its own', () => {
+  it('adds a unique tests/ path to every submitted campaign scope and says so in the objective', async () => {
+    const programId = await submitAndApprove();
+    const line = new Line();
+    const seen: CampaignSubmission[] = [];
+    const submit = line.submit.bind(line);
+    line.submit = async (input: CampaignSubmission) => {
+      seen.push(input);
+      return submit(input);
+    };
+    await tickProgram(programId, line);
+    expect(seen.length).toBeGreaterThan(0);
+    for (const s of seen) {
+      const testPath = s.mutationScope.find((p) => p.startsWith('tests/program-'));
+      expect(testPath).toMatch(/^tests\/program-[a-z0-9]{1,8}-[a-z0-9-]+\*\.test\.ts$/);
+      expect(s.objective).toContain(testPath!);
+    }
+    expect(new Set(seen.map((s) => s.mutationScope.at(-1))).size).toBe(seen.length);
+  });
+});
+
+describe('campaigns submitted before they owned a test file', () => {
+  it('get their test path added through the scope port, and a live campaign is left alone', async () => {
+    const programId = await submitAndApprove();
+    const line = new Line();
+    const extended: Array<{ changeRequestId: string; add: string[] }> = [];
+    (line as ProgramPorts).extendScope = async (input) => {
+      extended.push({ changeRequestId: input.changeRequestId, add: input.add });
+    };
+    await tickProgram(programId, line);
+    await tickProgram(programId, line);
+    const links = await listCampaignLinks(programId);
+    expect(new Set(extended.map((e) => e.changeRequestId))).toEqual(new Set(links.map((l) => l.changeRequestId)));
+    for (const e of extended) expect(e.add[0]).toMatch(/^tests\/program-/);
+    for (const [id] of line.keyOf) line.live.add(id);
+    extended.length = 0;
+    await tickProgram(programId, line);
+    expect(extended).toEqual([]);
+  });
+});
+
+describe('a campaign is told its probes are not its own to write', () => {
+  it('says so in every submitted objective', async () => {
+    const programId = await submitAndApprove();
+    const line = new Line();
+    const seen: CampaignSubmission[] = [];
+    const submit = line.submit.bind(line);
+    line.submit = async (input: CampaignSubmission) => {
+      seen.push(input);
+      return submit(input);
+    };
+    await tickProgram(programId, line);
+    expect(seen.length).toBeGreaterThan(0);
+    for (const s of seen) expect(s.objective).toMatch(/defined by the program owner, never by this campaign/);
+  });
+});
+
+describe('production evidence decides whatever route the code took', () => {
+  it('verifies a requirement whose campaign never finished once production shows it, and records nothing for one that does not hold', async () => {
+    const programId = await submitAndApprove();
+    const line = new Line();
+    line.holding = new Set(['FEEDS']);
+    const report = await tickProgram(programId, line);
+    expect(report.verified).toEqual([{ requirement: 'FEEDS', outcome: 'PASS' }]);
+    const reading = await readProgram(programId, line);
+    expect(reading.requirements.find((r) => r.key === 'FEEDS')!.status).toBe('PRODUCTION_VERIFIED');
+    expect(reading.requirements.find((r) => r.key === 'CASH')!.status).toBe('MAPPED');
+    // No failure was recorded for unbuilt work, so no repair is opened for it.
+    expect(report.repairs).toEqual([]);
+    // Asked once per revision.
+    const again = await tickProgram(programId, line);
+    expect(again.verified.filter((v) => v.requirement === 'CASH')).toEqual([]);
+  });
+});
+
+describe('an approved program answers its own blocked campaigns', () => {
+  it('unblocks a BLOCKED campaign on the approver’s standing approval, hourly, and leaves the rest alone', async () => {
+    const { unblockApprovedPrograms, resetAutoUnblock } = await import('../server/services/factory/program/unblock.ts');
+    const { ensureCampaign, getChangeRequest, patchCampaign } = await import('../server/repos/factory.ts');
+    resetAutoUnblock();
+    const programId = await submitAndApprove();
+    await tickProgram(programId, new Line());
+    // Nothing blocked: nothing done.
+    expect(await unblockApprovedPrograms(Date.now(), true)).toEqual([]);
+
+    const [link] = await listCampaignLinks(programId);
+    const { campaign } = await ensureCampaign({
+      changeRequestId: link!.changeRequestId,
+      projectId: fixture.project.id,
+      baseSha: 'a'.repeat(40),
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    } as never);
+    await patchCampaign(campaign.id, { state: 'BLOCKED', blockerKind: 'UNIT_EXHAUSTED_ATTEMPTS' as never, blockerDetail: 'out of attempts on scope' });
+    // A map that named one file, the shape that ran units out of attempts in production.
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run('UPDATE factory_change_requests SET mutation_scope = ? WHERE id = ?', [JSON.stringify(['server/services/cash/funnel.ts']), link!.changeRequestId]);
+    const before = (await getChangeRequest(link!.changeRequestId))!.mutationScope;
+
+    const steps = await unblockApprovedPrograms(Date.now(), true);
+    // The blocked campaign was answered through the program door (its scope step is
+    // refused here only because this test project never onboarded the repository).
+    const mine = steps.filter((step) => step.campaign === link!.campaignKey);
+    expect(mine.length).toBeGreaterThan(0);
+    expect(mine[0]!.action === 'SCOPE' || mine[0]!.detail.startsWith('scope:')).toBe(true);
+    expect(before).toEqual(['server/services/cash/funnel.ts']);
+    // Hourly: an unforced call inside the interval does nothing.
+    expect(await unblockApprovedPrograms(Date.now() + 60_000)).toEqual([]);
+  });
+});
+
+describe('scope reconciliation answers any campaign blocked on scope', () => {
+  it('acts on a campaign BLOCKED on exhausted attempts and leaves a running one alone', async () => {
+    const { reconcileBlockedScopes } = await import('../server/services/factory/program/unblock.ts');
+    const { ensureCampaign, patchCampaign } = await import('../server/repos/factory.ts');
+    const programId = await submitAndApprove();
+    await tickProgram(programId, new Line());
+    const [link] = await listCampaignLinks(programId);
+    const { campaign } = await ensureCampaign({
+      changeRequestId: link!.changeRequestId, projectId: fixture.project.id, baseSha: 'a'.repeat(40),
+      laneTarget: 1, laneTargetReason: 'test', executionMode: 'REMOTE',
+    } as never);
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run('UPDATE factory_change_requests SET mutation_scope = ?, approved_by_user_id = ? WHERE id = ?', [JSON.stringify(['server/services/cash/funnel.ts']), approverId, link!.changeRequestId]);
+    // Running: nothing to reconcile.
+    expect((await reconcileBlockedScopes(Date.now(), true)).filter((s) => s.campaign === campaign.id)).toEqual([]);
+    await patchCampaign(campaign.id, { state: 'BLOCKED', blockerKind: 'UNIT_EXHAUSTED_ATTEMPTS' as never, blockerDetail: 'The failing test is tests/cashFunnel.test.ts, outside the unit.' });
+    const steps = (await reconcileBlockedScopes(Date.now(), true)).filter((s) => s.campaign === campaign.id);
+    // The scope step is refused here only because this test project never onboarded the repository.
+    expect(steps.length).toBeGreaterThan(0);
+    expect(steps[0]!.action === 'SCOPE' || steps[0]!.detail.startsWith('scope:')).toBe(true);
   });
 });

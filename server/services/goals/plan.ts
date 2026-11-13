@@ -65,6 +65,10 @@ import type { GoalPortfolio } from './portfolio.ts';
 import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
 import { readPathways, type BrainCapabilities, type PathwayReading } from './pathways.ts';
+import { reconstructPlan, type Reconstruction } from './reconstruction.ts';
+import { sharedEvaluator } from './reasoning/evaluatorPool.ts';
+import { inventDirections } from './reasoning/invent.ts';
+import { loadLibrary, recordExploration } from './reasoning/learning.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
@@ -261,6 +265,11 @@ export interface PlanReading {
    * (`researchYield.ts`). The next goal round is asked differently for each.
    */
   researchDiagnosis: ResearchDiagnosis[];
+  /**
+   * When the plan is not accepted: why, what was changed, what each change
+   * did, and the strongest reconstructed plan with its confidence (§99).
+   */
+  reconstruction?: Reconstruction | null;
   /**
    * The goal-to-transaction reasoning loop (§93, `pathways.ts`): the
    * transaction structures the goal's own figures require, a transaction model
@@ -774,6 +783,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const measuredChance = await measuredPlanChance();
   const base = { goalId: goal.id, target, excluded: model.excluded, measuredChance };
   if (model.refusal) {
+    const refusedReconstruction = target.achieved ? null : await reconstructionFor(model, RECOMMENDATION_POLICY.requiredProbability, { goalId: goal.id, persist: !!input.persist });
     const reading: PlanReading = {
       ...base,
       verdict: target.achieved ? 'RECOMMENDABLE' : 'NEEDS_EVIDENCE',
@@ -800,13 +810,17 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       executionPolicy: goalExecutionPolicy(target),
       sales: [],
       portfolio: model.portfolio,
-      researchDiagnosis: diagnoseGoalResearch({
-        considered: [],
-        excludedReasons: model.excluded.map((one) => one.reason),
-        rounds: await recentGoalRounds(target.projectId, goal.id),
-        remaining: target.remainingCents / 100,
-      }),
+      researchDiagnosis: [
+        ...reconstructionDiagnosis(refusedReconstruction),
+        ...diagnoseGoalResearch({
+          considered: [],
+          excludedReasons: model.excluded.map((one) => one.reason),
+          rounds: await recentGoalRounds(target.projectId, goal.id),
+          remaining: target.remainingCents / 100,
+        }),
+      ],
       pathways: null,
+      reconstruction: refusedReconstruction,
     };
     if (input.persist) await persistReading(goal, reading, null);
     return reading;
@@ -1068,6 +1082,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       };
     }
   }
+  // A plan short of its requirement is reconstructed, not just re-read (§99).
+  const reconstruction = acceptance.status !== 'ACCEPTED' ? await reconstructionFor(model, acceptance.required, { goalId: goal.id, persist: !!input.persist }) : null;
+  trace('reconstruction');
   const verdict: PlanVerdict = acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
   const summary =
     verdict === 'RECOMMENDABLE'
@@ -1119,7 +1136,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     portfolio: model.portfolio,
     // The method's own failures first: they change how Brain searches, not one opening (§93).
     researchDiagnosis: mergeDiagnosis(
-      pathways.failures,
+      [...reconstructionDiagnosis(reconstruction), ...pathways.failures],
       diagnoseGoalResearch({
         considered: found,
         excludedReasons: model.excluded.map((one) => one.reason),
@@ -1128,12 +1145,84 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       }),
     ),
     pathways,
+    reconstruction,
   };
   if (input.persist) {
     await persistReading(goal, reading, chosen);
     await pursueSales(goal, reading);
   }
   return reading;
+}
+
+/** How long a goal's exploration is reused while its inputs are unchanged (§101); after it, the library and the model get another turn. */
+export const EXPLORATION_HELD_MS = 6 * 60 * 60_000;
+const explored = new Map<string, { key: string; at: number; reconstruction: Reconstruction }>();
+
+/** How often a goal's plan read asks the model to invent new ways of reasoning (§101). */
+export const INVENT_EVERY_MS = 15 * 60_000;
+const lastInvent = new Map<string, number>();
+export function inventDue(goalId: string | undefined, now = Date.now()): boolean {
+  const key = goalId ?? '';
+  if (now - (lastInvent.get(key) ?? 0) < INVENT_EVERY_MS) return false;
+  lastInvent.set(key, now);
+  return true;
+}
+
+/**
+ * The reconstruction loop over exactly what the portfolio was evaluated on;
+ * null when there is nothing to reconstruct. It explores the plan from many
+ * directions (§101): the methods that worked before, Brain's model inventing
+ * new ones, all evaluated concurrently on the pool's threads. A persisted read
+ * records what it learned, so the next read — of this goal or another —
+ * starts from what worked.
+ */
+export async function reconstructionFor(
+  model: { portfolio: GoalPortfolio | null; portfolioInput?: Parameters<typeof reconstructPlan>[0]['portfolio'] & { openings: Parameters<typeof reconstructPlan>[0]['openings'] } | null },
+  required: number,
+  context: { goalId?: string; persist?: boolean } = {},
+): Promise<Reconstruction | null> {
+  if (!model.portfolio || !model.portfolioInput || model.portfolioInput.openings.length === 0) return null;
+  const { openings, ...portfolio } = model.portfolioInput;
+  // Unchanged inputs are not re-explored: the same plan reads the same, and the CPU goes to goals whose inputs moved.
+  const inputsKey = sha256(JSON.stringify({ openings, portfolio, required }));
+  const held = context.goalId ? explored.get(context.goalId) : undefined;
+  if (held && held.key === inputsKey && Date.now() - held.at < EXPLORATION_HELD_MS) return held.reconstruction;
+  const evaluator = sharedEvaluator();
+  try {
+    const library = await loadLibrary().catch(() => []);
+    const r = await reconstructPlan({
+      openings,
+      portfolio,
+      baseline: model.portfolio,
+      required,
+      evaluator,
+      // The model is asked at most every INVENT_EVERY_MS per goal; between, the library carries what it invented.
+      explore: { library, ...(inventDue(context.goalId) ? { invent: (brief) => inventDirections(brief) } : {}) },
+    });
+    if (context.goalId) explored.set(context.goalId, { key: inputsKey, at: Date.now(), reconstruction: r });
+    if (context.persist && context.goalId && r.exploration) {
+      await recordExploration(context.goalId, r.exploration).catch((error: unknown) => console.warn(`reasoning record failed: ${String((error as Error)?.message ?? error)}`));
+    }
+    return r;
+  } catch (error) {
+    console.warn(`reconstruction failed: ${String((error as Error)?.message ?? error)}`);
+    return null;
+  } finally {
+    await evaluator.close();
+  }
+}
+
+/** What the reconstruction asks the next discovery round, as a diagnosis the goal round already reads (§89). */
+export function reconstructionDiagnosis(r: Reconstruction | null): ResearchDiagnosis[] {
+  if (!r || !r.searchBrief) return [];
+  const top = r.diagnosis[0];
+  return [
+    {
+      cause: 'STRATEGY_RECONSTRUCTION',
+      evidence: `the plan reaches ${(r.baseline.reach * 100).toFixed(1)}% as built and ${(r.best.reach * 100).toFixed(1)}% reconstructed (${r.best.basis.toLowerCase()})${top ? `; ${top.factor} binds` : ''}${r.structural ? '; the openings held cannot reach the requirement at their best' : ''}${r.exploration ? `; explored: ${r.exploration.sentence}` : ''}`,
+      instruction: r.searchBrief,
+    },
+  ];
 }
 
 /**
@@ -1492,6 +1581,26 @@ export function planProgress(reading: PlanReading): {
 }
 
 /** Append a reading when its conclusion differs from the last; link a recommended plan's work to the goal. */
+/** The reconstruction's conclusion, small enough to be part of a stored reading. */
+export function reconstructionSummary(r: Reconstruction | null): Record<string, unknown> | null {
+  if (!r) return null;
+  const round3 = (x: number) => Math.round(x * 1000) / 1000;
+  return {
+    baseline: round3(r.baseline.reach),
+    best: { key: r.best.key, reach: round3(r.best.reach), basis: r.best.basis, settledP50: Math.round(r.best.settledP50), committed: r.best.committed },
+    floor: r.floor ? round3(r.floor.reach) : null,
+    requiredReply: r.requiredReply === null ? null : round3(r.requiredReply * 100) / 100,
+    binding: r.diagnosis[0]?.factor ?? null,
+    structural: r.structural,
+    variants: r.rounds.reduce((n, x) => n + x.tried.length, 0),
+    // What the multidirectional exploration concluded (§101): a different winning way of reasoning is a new row.
+    // How many directions ran is not a conclusion — the library changes it between identical reads.
+    explored: r.exploration
+      ? { winner: r.exploration.winner?.direction.name ?? null, replaced: r.exploration.replaced }
+      : null,
+  };
+}
+
 async function persistReading(goal: Workstream, reading: PlanReading, chosen: StrategyReading | null): Promise<void> {
   const summary = {
     verdict: reading.verdict,
@@ -1505,6 +1614,8 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     progress: planProgress(reading),
     sales: reading.sales.map((one) => one.opportunityId),
     acceptance: { status: reading.acceptance.status, basis: reading.acceptance.probability?.basis ?? null, candidate: reading.acceptance.candidate?.opportunityIds ?? [] },
+    // What the reconstruction found and kept (§99): a strategy that changed is a new row.
+    reconstruction: reconstructionSummary(reading.reconstruction ?? null),
   };
   const digest = sha256(canonicalJson(summary));
   const last = await latestReading(goal.id);
@@ -1515,6 +1626,7 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     remainingCents: reading.target.remainingCents,
     daysLeft: reading.target.daysLeft,
     ...planProgress(reading),
+    reconstruction: reconstructionSummary(reading.reconstruction ?? null),
   };
   await getDb().run(
     `INSERT INTO goal_plan_readings (id, workstream_id, digest, scenario_model_id, scenario_run_id, verdict, chosen_strategy, strategies, next_test, forecast, created_at)
@@ -1591,6 +1703,11 @@ export const PLAN_REFRESH_MS = 30 * 60_000;
  * waits for the first refresh.
  */
 const lastReadings = new Map<string, PlanReading>();
+
+/** The reading the goal tick last took for a goal, in this process, or null. */
+export function heldReading(goalId: string): PlanReading | null {
+  return lastReadings.get(goalId) ?? null;
+}
 const lastTopUp = new Map<string, number>();
 /** A top-up between refreshes at most this often per goal: rounds settle in minutes, not seconds. */
 export const GOAL_TOP_UP_MS = 5 * 60_000;
@@ -1655,6 +1772,7 @@ export function requestGoalPlanPass(goalId: string, why: string): void {
 /** Tests. */
 export function forgetGoalReadings(): void {
   lastArrangements.clear();
+  explored.clear();
   lastReadings.clear();
   lastTopUp.clear();
   lastInputs.clear();
@@ -2078,6 +2196,11 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     }
     if (reading) lastReadings.set(id, reading);
     else lastReadings.delete(id);
+    // An accepted plan that Hermes has challenged and adopted is told to the owner now (planReady.ts).
+    if (reading?.acceptance.status === 'ACCEPTED') {
+      const { notifyPlanReady } = await import('./planReady.ts');
+      await notifyPlanReady(id, reading).catch((error: unknown) => console.warn(`plan-ready notice: ${String((error as Error)?.message ?? error)}`));
+    }
     // What Brain holds cannot reach the goal however it is combined: look for
     // more, through the same discovery every bucket uses, instead of reading
     // the same openings again in thirty minutes.

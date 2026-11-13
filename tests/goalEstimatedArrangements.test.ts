@@ -82,25 +82,27 @@ describe('a constructed arrangement as an estimate', () => {
     const picked = pickEstimatedArrangements(
       [
         arrangement({ key: 'gov', p50: 5_000, label: 'Broker federal procurement bids for agencies', demand: { name: 'federal agencies', claimId: null, from: 'INDUSTRY_MAP', ref: 'g' } }),
+        arrangement({ key: 'repair', p50: 5_000, label: 'Website repair for small businesses with a broken site', demand: { name: 'small businesses', claimId: null, from: 'INDUSTRY_MAP', ref: 'r' } }),
         arrangement({ key: 'mow', p50: 5_000, label: 'Lawn mowing for homeowners', question: 'Who wants mowing?' }),
         arrangement({ key: 'moves', p50: 600, label: 'Book moves online and dispatch the jobs to independent movers for a commission', question: 'Who books moves?' }),
       ],
-      { ...base, remaining: 10_000, exclusions: ['GOVERNMENT_CONTRACTING'] },
+      { ...base, remaining: 10_000, exclusions: ['WEBSITE_REPAIR'] },
     );
     // Mowing is a service a crew performs while this operation sells it: kept, who mows is a question (owner, 2026-11-07).
-    expect(picked.map((one) => one.estimated!.arrangementKey).sort()).toEqual(['moves', 'mow']);
+    // A federal buyer is a buyer like any other (owner, 2026-11-12); the excluded play is what stays out.
+    expect(picked.map((one) => one.estimated!.arrangementKey).sort()).toEqual(['gov', 'moves', 'mow']);
   });
 });
 
 describe('judged on what it is, not on the instructions in its question', () => {
   it('is not excluded by the exclusion sentence and operating rule its own research question carries', () => {
     const question =
-      'Who buys brokered tenant screening for landlords? Leave out government and public-sector contracts: the goal’s owner excluded them. ' +
+      'Who buys brokered tenant screening for landlords? Leave out broken-website and website-repair plays: the goal’s owner excluded them. ' +
       'The owner does no physical work — no travel, no deliveries, no meeting customers in person.';
     const picked = pickEstimatedArrangements([arrangement({ key: 'screening', p50: 120, repeat: 'SUBSCRIPTION', question })], {
       ...base,
       remaining: 10_000,
-      exclusions: ['GOVERNMENT_CONTRACTING'],
+      exclusions: ['WEBSITE_REPAIR'],
     });
     expect(picked.map((one) => one.estimated!.arrangementKey)).toEqual(['screening']);
   });

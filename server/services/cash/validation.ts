@@ -38,7 +38,14 @@
  */
 import { latestScreens, laneConfig, screenOpening, type ScreenOutput } from '../cheap/lane.ts';
 import { closedBy } from './closing.ts';
-import { describeNotWorthResearching, notWorthResearching, type NotWorthResearching } from './worthResearching.ts';
+import {
+  DIVE_RUNWAY_MS,
+  closesWithin,
+  closingInstant,
+  describeNotWorthResearching,
+  notWorthResearching,
+  type NotWorthResearching,
+} from './worthResearching.ts';
 import { getDb } from '../../db/database.ts';
 import {
   cashEventsOfKind,
@@ -866,6 +873,168 @@ export function compareDiveValue(a: DiveValueFacts, b: DiveValueFacts): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
+/**
+ * The band order of the dive queue, applied after the decision-value sort
+ * (stable, so the decision-value order stands wherever this returns 0).
+ *
+ *   0. an approved goal's own openings (owner, 2026-11-03);
+ *   1. quick plays (owner, 2026-10-22: fast cash, a window of weeks is fine) —
+ *      a TEMPORARY_EXPLOIT, one a cheap screen read as a short window, or one
+ *      whose closing date is recorded and still outside the dive runway;
+ *   2. everything else;
+ *   3. junk a cheap screen dropped, always last.
+ *
+ * Within a band, dated openings go Earliest Deadline First: the opening whose
+ * latest useful start (closing − DIVE_RUNWAY_MS) comes first is dived first,
+ * and an undated one sorts after every dated one. Production, 2026-11: 14 of 14
+ * dated openings (federal solicitations N0010426QAC01, 140LL027Q0005) expired
+ * DISCOVERED — the order never read `expiresAt`, so each waited behind older
+ * undated openings until it entered the runway, where `notWorthResearching`
+ * correctly refuses it as CLOSES_TOO_SOON. No gate, runway or ceiling moves:
+ * only which eligible opening takes a free slot first.
+ */
+export function diveOrder(input: {
+  now: string;
+  dropped: (opportunity: CashOpportunity) => boolean;
+  forGoal: (opportunity: CashOpportunity) => boolean;
+  shortWindow: (opportunity: CashOpportunity) => boolean;
+}): (a: CashOpportunity, b: CashOpportunity) => number {
+  const deadline = (opportunity: CashOpportunity): number | null => diveDeadline(opportunity, input.now);
+  const band = (opportunity: CashOpportunity): number => {
+    if (input.dropped(opportunity)) return 3;
+    if (input.forGoal(opportunity)) return 0;
+    if (opportunity.mechanism === 'TEMPORARY_EXPLOIT' || input.shortWindow(opportunity)) return 1;
+    return deadline(opportunity) !== null ? 1 : 2;
+  };
+  return (a, b) => {
+    const byBand = band(a) - band(b);
+    if (byBand !== 0) return byBand;
+    const da = deadline(a);
+    const db = deadline(b);
+    if (da === db) return 0;
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return da - db;
+  };
+}
+
+/**
+ * When a dated opening must start a dive, in epoch ms, or null when its date is
+ * unrecorded, unreadable or already inside the runway — the only openings an
+ * order can save. The same reading `diveOrder` keys on.
+ */
+export function diveDeadline(opportunity: Pick<CashOpportunity, 'expiresAt'>, now: string): number | null {
+  if (closesWithin(opportunity.expiresAt, now, DIVE_RUNWAY_MS)) return null;
+  return closingInstant(opportunity.expiresAt);
+}
+
+/**
+ * Whether any order could have saved a dated opening, read from its own row.
+ *
+ *   UNDATED                      no recorded close: a deadline did not decide it.
+ *   INSIDE_RUNWAY_AT_DISCOVERY   it closed less than `runwayMs` after it was
+ *                                filed, so it was refused as CLOSES_TOO_SOON from
+ *                                its first tick and no order or capacity could
+ *                                have dived it in time.
+ *   ORDERABLE                    it had `slackMs` between filing and the last
+ *                                moment a dive could start: only these can be
+ *                                missed because they waited for a slot.
+ *
+ * A review of the EDF change (2026-11-12) found the diagnosis "waited behind
+ * undated openings" asserted without rows: a solicitation amended or closed
+ * inside the runway at discovery (N0010426QAC01 changed three days after it was
+ * posted) could not have been saved by any ordering. This is the split that
+ * tells the two apart, and `CAPACITY_DEFERRAL_EVENT` is the row that shows a
+ * slot was actually contended while an ORDERABLE opening waited.
+ */
+export type DeadlineAtDiscovery =
+  | { kind: 'UNDATED' }
+  | { kind: 'INSIDE_RUNWAY_AT_DISCOVERY'; closesAt: number }
+  | { kind: 'ORDERABLE'; closesAt: number; slackMs: number };
+
+export function deadlineAtDiscovery(
+  opportunity: Pick<CashOpportunity, 'expiresAt' | 'createdAt'>,
+  runwayMs = DIVE_RUNWAY_MS,
+): DeadlineAtDiscovery {
+  const closesAt = closingInstant(opportunity.expiresAt);
+  if (closesAt === null) return { kind: 'UNDATED' };
+  const slackMs = closesAt - runwayMs - Date.parse(opportunity.createdAt);
+  if (!Number.isFinite(slackMs) || slackMs <= 0) return { kind: 'INSIDE_RUNWAY_AT_DISCOVERY', closesAt };
+  return { kind: 'ORDERABLE', closesAt, slackMs };
+}
+
+/**
+ * The row that a dated, eligible opening was passed over because every slot
+ * was taken: the evidence that capacity, not the opening, decided its fate.
+ * Recorded once per opening, lane and recorded close, so a tick that repeats
+ * the same contention writes nothing new; a changed close is a new row.
+ */
+export const CAPACITY_DEFERRAL_EVENT = 'CASH_DEFERRED_FOR_CAPACITY';
+
+/** Most deferrals one pass records, so a long queue never makes a tick slow. */
+export const CAPACITY_DEFERRALS_PER_PASS = 25;
+
+export type DeferralLane = 'DIVE' | 'ENGINE_QUESTION';
+
+/**
+ * Which openings a full pass passed over that an order could still save: dated,
+ * outside the runway, not already started, Earliest Deadline First, bounded.
+ * Pure — the caller decides eligibility and writes the rows.
+ */
+export function capacityDeferralCandidates<T extends Pick<CashOpportunity, 'id' | 'expiresAt'>>(
+  waiting: readonly T[],
+  started: ReadonlySet<string>,
+  now: string,
+  limit = CAPACITY_DEFERRALS_PER_PASS,
+): T[] {
+  return waiting
+    .filter((one) => !started.has(one.id) && diveDeadline(one, now) !== null)
+    .sort((a, b) => diveDeadline(a, now)! - diveDeadline(b, now)!)
+    .slice(0, Math.max(0, limit));
+}
+
+/**
+ * Record that each of `waiting` waited for capacity on `lane`, once per
+ * opening, lane and recorded close. Returns how many rows it wrote.
+ */
+export async function recordCapacityDeferrals(input: {
+  projectId: string;
+  lane: DeferralLane;
+  waiting: readonly CashOpportunity[];
+  now: string;
+  capacity: Record<string, unknown>;
+}): Promise<number> {
+  let written = 0;
+  for (const opportunity of input.waiting) {
+    const held = (await cashEventsOfKind(opportunity.id, CAPACITY_DEFERRAL_EVENT)).some((event) => {
+      const detail = (event.detail ?? {}) as { lane?: unknown; expiresAt?: unknown };
+      return event.projectId === input.projectId && detail.lane === input.lane && detail.expiresAt === opportunity.expiresAt;
+    });
+    if (held) continue;
+    const deadline = diveDeadline(opportunity, input.now);
+    const atDiscovery = deadlineAtDiscovery(opportunity);
+    await recordCashEvent({
+      projectId: input.projectId,
+      opportunityId: opportunity.id,
+      kind: CAPACITY_DEFERRAL_EVENT,
+      actorRef: 'BRAIN',
+      summary:
+        `Waiting for a free ${input.lane === 'DIVE' ? 'dive slot' : 'question slot'}: this opening closes ` +
+        `${opportunity.expiresAt} and every slot is taken.`,
+      detail: {
+        lane: input.lane,
+        expiresAt: opportunity.expiresAt,
+        latestStart: deadline === null ? null : new Date(deadline - DIVE_RUNWAY_MS).toISOString(),
+        atDiscovery: atDiscovery.kind,
+        slackMsAtDiscovery: atDiscovery.kind === 'ORDERABLE' ? atDiscovery.slackMs : null,
+        ...input.capacity,
+      },
+    });
+    written += 1;
+  }
+  return written;
+}
+
 /** The facts the order compares, for one opening. Pure. */
 export function diveValueFacts(input: {
   opportunity: CashOpportunity;
@@ -984,7 +1153,34 @@ export async function startValidations(input: {
     const goalInFlight = all.filter((one) => forGoal(one) && one.validationState === 'RUNNING').length;
     goalExtra = Math.max(0, Math.min(queueable, GOAL_DIVES_BESIDE_CEILING - goalInFlight));
   }
-  if (room + goalExtra <= 0) return [];
+  /*
+   * Evidence that capacity decided, not an assertion of it (review of the EDF
+   * change, 2026-11-12): every dated opening an order could still save that
+   * this pass leaves waiting for a slot gets a CAPACITY_DEFERRAL_EVENT row, so
+   * a later miss reads as "waited for capacity" only when a row says it did.
+   * Only when the slots — not a caller's explicit limit — ran out.
+   */
+  const now = cashNow();
+  const deferWaiting = async (started: ReadonlySet<string>): Promise<void> => {
+    if (input.limit !== undefined) return;
+    const waiting: CashOpportunity[] = [];
+    for (const one of capacityDeferralCandidates(all, started, now, Number.POSITIVE_INFINITY)) {
+      if (waiting.length >= CAPACITY_DEFERRALS_PER_PASS) break;
+      if ((await whyNotDiving(one)).kind === 'ELIGIBLE') waiting.push(one);
+    }
+    if (waiting.length === 0) return;
+    await recordCapacityDeferrals({
+      projectId: input.projectId,
+      lane: 'DIVE',
+      waiting,
+      now,
+      capacity: { room: derived.room, limitedBy: derived.limitedBy, started: started.size },
+    }).catch(() => 0);
+  };
+  if (room + goalExtra <= 0) {
+    await deferWaiting(new Set());
+    return [];
+  }
 
   /*
    * The order is the decision-value order, and it is a preference rather than
@@ -1048,24 +1244,24 @@ export async function startValidations(input: {
   );
   const dropped = (id: string) => screens.get(id)?.verdict === 'DROP';
   /*
-   * Quick plays first among the rest (the owner, 2026-10-22: fast cash, a
-   * window of weeks is fine): a time-bounded opening, or one a cheap screen
-   * read as a short window, is dived before ongoing ones. Junk still last.
-   */
-  const quick = (opportunity: CashOpportunity) =>
-    opportunity.mechanism === 'TEMPORARY_EXPLOIT' || screens.get(opportunity.id)?.window === 'SHORT';
-  /*
    * An opening an approved goal's own search found comes first (owner,
    * 2026-11-03: construction must reach the goal's plan). Production: seven
    * openings filed from constructed rounds sat NOT_STARTED behind 68 older
    * ones while the plan they were built for read NOT_VIABLE. Junk still last.
    */
-  const band = (opportunity: CashOpportunity) => (dropped(opportunity.id) ? 3 : forGoal(opportunity) ? 0 : quick(opportunity) ? 1 : 2);
-  valued.sort((a, b) => band(a.opportunity) - band(b.opportunity));
+  const order = diveOrder({
+    now,
+    dropped: (opportunity) => dropped(opportunity.id),
+    forGoal,
+    shortWindow: (opportunity) => screens.get(opportunity.id)?.window === 'SHORT',
+  });
+  valued.sort((a, b) => order(a.opportunity, b.opportunity));
 
   const out: StartedValidation[] = [];
+  let slotsRanOut = false;
   for (const { opportunity, value } of valued) {
     if (out.length >= room) {
+      slotsRanOut = true;
       // Beyond the ceiling, only an approved goal's own openings, and only a few.
       if (goalExtra <= 0) break;
       if (!forGoal(opportunity)) continue;
@@ -1164,6 +1360,7 @@ export async function startValidations(input: {
     if (!moved) continue;
     out.push({ opportunityId: opportunity.id, candidateId: candidate.id, stage });
   }
+  if (slotsRanOut || out.length >= room) await deferWaiting(new Set(out.map((one) => one.opportunityId)));
   return out;
 }
 

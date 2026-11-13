@@ -36,6 +36,7 @@ import type {
   FactoryCampaign,
   FactoryCampaignState,
   FactoryChangeRequest,
+  FactoryWorkUnit,
 } from '../../domain/factory.ts';
 import {
   chargeAndReopenUnit,
@@ -59,7 +60,8 @@ import {
   recordFactoryEvent,
   recordReview,
 } from '../../repos/factoryFleet.ts';
-import { listDispatchesForBin } from '../../repos/bins.ts';
+import { listDispatchesForBin, terminateUnleasedBin } from '../../repos/bins.ts';
+import { forbiddenPathsFor, scopeOnlyForbidden } from './forbidden.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { installPlan, validatePlan } from './planner.ts';
 import { FactoryError } from './errors.ts';
@@ -78,6 +80,7 @@ import {
   integrationBranchDrift,
   acceptUnitReport,
   binBaseOf,
+  integrationUnitsFor,
   binIdentity,
   campaignBins,
   createDeliverBin,
@@ -261,12 +264,25 @@ async function ingestUnitsBin(
     report.notes.push(`"${changeRequest.repository}" is not a repository this Brain can read.`);
     return false;
   }
+  /*
+   * Asked of the units first, because it is the cheap question and almost
+   * always the final one. A completed units bin is offered to this function on
+   * every tick for as long as its campaign is live, and every unit it reported
+   * is past READY after the first pass — so reading its results and three
+   * identity rows before learning that was five statements per bin per tick
+   * for nothing. Production, 2026-11-12: 5,227 `bin_unit_results` reads in 50
+   * minutes, the event loop stalled past 20s, and a goal read after a restart
+   * went unanswered for 240s.
+   */
+  const units = await listUnits(campaign.id);
+  if (!units.some((unit) => unit.state === 'READY')) return false;
   const { reports, problems } = await readUnitReports(bin.id);
+  // Only a clean read is remembered: a report with problems is read again.
+  if (problems.length === 0) rememberReportedKeys(bin, reports.keys());
   for (const problem of problems) report.notes.push(problem);
   if (reports.size === 0) return false;
   const who = await binIdentity(bin);
 
-  const units = await listUnits(campaign.id);
   let moved = 0;
   for (const [key, unitReport] of reports) {
     const unit = units.find((candidate) => candidate.unitKey === key);
@@ -427,17 +443,21 @@ async function ingestReviewBin(
   bin: Bin,
   report: RemoteTickReport,
 ): Promise<boolean> {
-  const round = (await listReviews(campaign.id)).length + 1;
+  const reviews = await listReviews(campaign.id);
+  const round = reviews.length + 1;
   const review = await readReviewReport(bin.id);
   if (!review.ok) {
     report.notes.push(`The review bin ${bin.id} completed without a usable review.`);
     await noteReviewRefused(campaign, bin, 'the bin completed without a usable review');
     return false;
   }
-  const already = (await listReviews(campaign.id)).some(
+  const already = reviews.some(
     (row) => row.reviewedSha === review.value.reviewedSha && row.verdict === review.value.verdict,
   );
-  if (already) return false;
+  if (already) {
+    rememberRecorded(bin);
+    return false;
+  }
 
   /*
    * Is the reviewer independent of the work, and how independent?
@@ -501,6 +521,7 @@ async function ingestReviewBin(
   }
   if (repairs.queued.length > 0) await promoteReadyUnits(campaign.id);
   report.ingested.push(`review:${bin.id}`);
+  rememberRecorded(bin);
   report.notes.push(
     `round ${round}: ${recorded.review.verdict}, ${recorded.findings.length} finding(s), ` +
       `${repairs.queued.length} repair(s) queued`,
@@ -919,6 +940,11 @@ async function ingestIntegrateBin(
     });
     return false;
   }
+  // The units before the report: nothing implemented means nothing to ingest,
+  // and the report is the large read (see `ingestUnitsBin`).
+  const units = await listUnits(campaign.id);
+  const implemented = units.filter((unit) => unit.state === 'IMPLEMENTED' && unit.headSha !== null);
+  if (implemented.length === 0) return false;
   const parsed = await readIntegrationReport(bin.id);
   if (!parsed.ok) {
     report.notes.push(`The integration bin ${bin.id} completed without a usable report.`);
@@ -927,9 +953,6 @@ async function ingestIntegrateBin(
     });
     return false;
   }
-  const who = await binIdentity(bin);
-  const units = await listUnits(campaign.id);
-  const implemented = units.filter((unit) => unit.state === 'IMPLEMENTED' && unit.headSha !== null);
   /*
    * Already ingested, asked two ways, and the second one is not redundant.
    *
@@ -942,8 +965,12 @@ async function ingestIntegrateBin(
    * is also asked of the bin, which cannot change. Same correction as the unit
    * ingest, at the stage above it.
    */
-  if (implemented.length === 0) return false;
-  if (await integrationAlreadyIngested(campaign.id, bin.id)) return false;
+  if (await integrationAlreadyIngested(campaign.id, bin.id)) {
+    rememberRecorded(bin);
+    return false;
+  }
+  // Read only once the bin has something to ingest; see `ingestUnitsBin`.
+  const who = await binIdentity(bin);
 
   if (parsed.value.outcome === 'BLOCKED') {
     const failed = parsed.value.commands.filter((command) => command.exitCode !== 0);
@@ -1093,11 +1120,14 @@ async function ingestIntegrateBin(
     {
       integrationBranch: campaign.integrationBranch,
       baseSha: base,
-      units: implemented.map((unit) => ({
-        unitKey: unit.unitKey,
-        headSha: unit.headSha as string,
-        ownedPaths: unit.ownedPaths,
-      })),
+      units: integrationUnitsFor(
+        bin,
+        implemented.map((unit) => ({
+          unitKey: unit.unitKey,
+          headSha: unit.headSha as string,
+          ownedPaths: unit.ownedPaths,
+        })),
+      ),
     },
     parsed.value,
   );
@@ -1431,6 +1461,53 @@ async function lastReauthorization(campaignId: string): Promise<string | null> {
 }
 
 /** Has this integration bin's report already become rows, either way? */
+/**
+ * Completed review and integration bins this process has seen recorded.
+ *
+ * A completed bin's report cannot change, and what says it was recorded — a
+ * review row with its sha and verdict, an integration event naming the bin — is
+ * append-only, so once a pass has seen that, every later pass would read the
+ * same large report to reach the same `false`. Production, 2026-11-12: every
+ * live campaign's finished bins re-read and re-parsed every 20 seconds, the
+ * event loop saturated, and the Deploy's verification after its restart could
+ * not get a goal read answered in 240s. Keyed on `updatedAt` as well, so a bin
+ * that moves again is read again. A restart empties it, and the first pass
+ * relearns it from the rows.
+ */
+const recordedBins = new Map<string, string>();
+const RECORDED_BINS_CEILING = 20_000;
+
+function rememberRecorded(bin: Bin): void {
+  if (recordedBins.size >= RECORDED_BINS_CEILING) recordedBins.clear();
+  recordedBins.set(bin.id, bin.updatedAt);
+}
+
+/** Tests: forget what this process has seen recorded, as a restart would. */
+export function forgetRecordedBins(): void {
+  recordedBins.clear();
+  reportedUnitKeys.clear();
+}
+
+/*
+ * The unit keys a completed units bin reported, by bin and `updatedAt`. A
+ * complete bin's results cannot change, so once read they decide, with no
+ * statement, whether any unit this bin speaks for is still READY. Without it,
+ * one READY unit anywhere in a campaign had every finished units bin of that
+ * campaign re-read on every tick (production 2026-11-12: 1,152
+ * `bin_unit_results` reads in 15 minutes after the per-tick unit read was
+ * already fixed).
+ */
+const reportedUnitKeys = new Map<string, { updatedAt: string; keys: Set<string> }>();
+function rememberReportedKeys(bin: Bin, keys: Iterable<string>): void {
+  if (reportedUnitKeys.size >= RECORDED_BINS_CEILING) reportedUnitKeys.clear();
+  reportedUnitKeys.set(bin.id, { updatedAt: bin.updatedAt, keys: new Set(keys) });
+}
+function reportsNoReadyUnit(bin: Bin, units: FactoryWorkUnit[]): boolean {
+  const held = reportedUnitKeys.get(bin.id);
+  if (!held || held.updatedAt !== bin.updatedAt) return false;
+  return !units.some((unit) => unit.state === 'READY' && held.keys.has(unit.unitKey));
+}
+
 async function integrationAlreadyIngested(campaignId: string, binId: string): Promise<boolean> {
   const events = await listFactoryEvents(campaignId, {
     kinds: [FACTORY_EVENT_KINDS.integrationRejected, FACTORY_EVENT_KINDS.integrationMerged],
@@ -1606,6 +1683,52 @@ async function noteSurfaceBlocker(
 }
 
 /**
+ * The other live campaigns in one repository, read once for a pass rather than
+ * once per unit it asks about. A pass over this campaign's waiting units writes
+ * only this campaign's rows, so what the others hold cannot change between two
+ * of its units. Production 2026-11-12 (Deploy 43202746551): a held unit was
+ * re-judged every 20 s against every live campaign — its change request, its
+ * units and its bins, per unit, per campaign — 987 change-request reads in 14
+ * minutes on the process the post-restart verification was waiting on.
+ */
+interface OtherCampaigns {
+  list(): Promise<Array<{ other: FactoryCampaign; units: FactoryWorkUnit[]; carried: () => Promise<Set<string>> }>>;
+}
+
+function otherCampaignsOf(campaign: { id: string }, repository: string): OtherCampaigns {
+  let read: ReturnType<OtherCampaigns['list']> | null = null;
+  return {
+    list: () =>
+      (read ??= (async () => {
+        const { BLOCKER_WAIT } = await import('./line.ts');
+        const out: Awaited<ReturnType<OtherCampaigns['list']>> = [];
+        for (const other of await listLiveCampaigns()) {
+          if (other.id === campaign.id) continue;
+          /*
+           * A campaign stopped on something only a person can answer holds nothing.
+           * Its units will not move until somebody acts, and if they ever do its own
+           * integration re-judges them against the moved base like any other change.
+           * Production, 2026-11-02: fcp_cc5ef744 was planned in 16 s and then held for
+           * four hours by fcp_3a8b4e75, BLOCKED (UNIT_EXHAUSTED_ATTEMPTS) since
+           * 2026-10-30, through a unit owning the same goal files; the escalation was
+           * recorded and nothing could release it.
+           */
+          if (other.state === 'BLOCKED' && other.blockerKind && BLOCKER_WAIT[other.blockerKind]?.wait !== 'AUTOMATIC') continue;
+          const otherRequest = await getChangeRequest(other.changeRequestId);
+          if (!otherRequest || otherRequest.repository !== repository) continue;
+          let carried: Promise<Set<string>> | null = null;
+          out.push({
+            other,
+            units: await listUnits(other.id),
+            carried: () => (carried ??= campaignBins(other.id).then(liveUnitKeys)),
+          });
+        }
+        return out;
+      })()),
+  };
+}
+
+/**
  * The unit of another live campaign, in the same repository, that already holds
  * files this unit would edit: one that is with a worker (`LEASED`), finished but
  * not yet integrated (`IMPLEMENTED`), or `READY` and already carried by a live
@@ -1614,35 +1737,15 @@ async function noteSurfaceBlocker(
  * campaign, are never held by this.
  */
 async function conflictingUnitOfOtherCampaign(
-  campaign: { id: string },
-  repository: string,
+  others: OtherCampaigns,
   unit: { ownedPaths: string[] },
 ): Promise<{ campaignId: string; campaignState: string; unitId: string; unitKey: string } | null> {
-  const { BLOCKER_WAIT } = await import('./line.ts');
-  for (const other of await listLiveCampaigns()) {
-    if (other.id === campaign.id) continue;
-    /*
-     * A campaign stopped on something only a person can answer holds nothing.
-     * Its units will not move until somebody acts, and if they ever do its own
-     * integration re-judges them against the moved base like any other change.
-     * Production, 2026-11-02: fcp_cc5ef744 was planned in 16 s and then held for
-     * four hours by fcp_3a8b4e75, BLOCKED (UNIT_EXHAUSTED_ATTEMPTS) since
-     * 2026-10-30, through a unit owning the same goal files; the escalation was
-     * recorded and nothing could release it.
-     */
-    if (other.state === 'BLOCKED' && other.blockerKind && BLOCKER_WAIT[other.blockerKind]?.wait === 'PERSON') continue;
-    const otherRequest = await getChangeRequest(other.changeRequestId);
-    if (!otherRequest || otherRequest.repository !== repository) continue;
-    const otherUnits = await listUnits(other.id);
-    let carried: Set<string> | null = null;
+  for (const { other, units: otherUnits, carried } of await others.list()) {
     for (const held of otherUnits) {
       if (!pathsOverlap(unit.ownedPaths, held.ownedPaths)) continue;
       const hit = { campaignId: other.id, campaignState: other.state, unitId: held.id, unitKey: held.unitKey };
       if (held.state === 'LEASED' || held.state === 'IMPLEMENTED') return hit;
-      if (held.state === 'READY') {
-        carried ??= liveUnitKeys(await campaignBins(other.id));
-        if (carried.has(held.unitKey)) return hit;
-      }
+      if (held.state === 'READY' && (await carried()).has(held.unitKey)) return hit;
     }
   }
   return null;
@@ -1811,15 +1914,38 @@ async function runRemoteTick(
   const newestPlan = bins
     .filter((one) => one.kind === 'FACTORY_PLAN' && one.state === 'COMPLETE')
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))[0];
+  /*
+   * The campaign's units, read once for the whole loop rather than once per
+   * completed bin, and read again only after an ingest that ran past its cheap
+   * test (it may have moved a unit). A live campaign keeps every units and
+   * integration bin it ever completed, and each asked `listUnits` on every tick
+   * only to learn nothing was READY or IMPLEMENTED. Production, 2026-11-12 after
+   * the recorded-bin skip: 3,890 `factory_work_units` reads in 23 minutes, the
+   * most expensive statement on the process, and a goal read taking 214s.
+   *
+   * The test here only skips. A bin skipped on a stale read is offered again on
+   * the next tick, so the cost of a stale answer is one tick, never a lost ingest.
+   */
+  let tickUnits: FactoryWorkUnit[] | null = null;
+  const unitsThisPass = async (): Promise<FactoryWorkUnit[]> => (tickUnits ??= await listUnits(campaign.id));
   for (const bin of bins) {
     if (bin.state !== 'COMPLETE') continue;
+    if (recordedBins.get(bin.id) === bin.updatedAt) continue;
     if (bin.kind === 'FACTORY_PLAN') {
       if (bin.id !== newestPlan?.id) continue;
       if (await ingestPlanBin(campaign, changeRequest, bin, report)) report.progress = true;
+      tickUnits = null;
     } else if (bin.kind === 'FACTORY_UNITS') {
+      const units = await unitsThisPass();
+      if (!units.some((unit) => unit.state === 'READY')) continue;
+      if (reportsNoReadyUnit(bin, units)) continue;
       if (await ingestUnitsBin(campaign, changeRequest, bin, report)) report.progress = true;
+      tickUnits = null;
     } else if (bin.kind === 'FACTORY_INTEGRATE') {
+      const units = await unitsThisPass();
+      if (!units.some((unit) => unit.state === 'IMPLEMENTED' && unit.headSha !== null)) continue;
       if (await ingestIntegrateBin(campaign, changeRequest, bin, report)) report.progress = true;
+      tickUnits = null;
     } else if (bin.kind === 'FACTORY_REVIEW') {
       if (await ingestReviewBin(campaign, changeRequest, bin, report)) report.progress = true;
     } else if (bin.kind === 'FACTORY_DELIVER') {
@@ -1876,6 +2002,37 @@ async function runRemoteTick(
   const reauthorizedAt = await lastReauthorization(fresh.id);
 
   /*
+   * 1a. An integration bin whose list is already history is retired, not retried.
+   *
+   * Production 2026-11-10: fcp_ca724ae4's integrate bin was made to merge one unit;
+   * an earlier round integrated it, three other units were implemented since, and
+   * the bin's workers could only merge what it named. Every report moved nothing
+   * (NO_UNIT_MOVED), the bin ran to 24 attempts, and because one live integration
+   * bin holds the stage, no bin for the three waiting units was ever made. A bin
+   * none of whose units is still IMPLEMENTED can integrate nothing; it is cancelled
+   * so the next pass makes one from the units that are.
+   */
+  const integrating = liveBinOfKind(liveBins, 'FACTORY_INTEGRATE');
+  if (integrating) {
+    const named = integrationUnitsFor(integrating, []).map((unit) => unit.unitKey);
+    const waiting = new Set(units.filter((unit) => unit.state === 'IMPLEMENTED').map((unit) => unit.unitKey));
+    if (named.length > 0 && !named.some((key) => waiting.has(key))) {
+      const retired = await terminateUnleasedBin(
+        integrating.id,
+        integrating.leaseGeneration,
+        'CANCELLED',
+        `Every unit this integration was given (${named.join(', ')}) is already integrated or no longer ` +
+          'implemented, so it can merge nothing. Retired so the next pass integrates the units that are waiting.',
+      );
+      if (retired) {
+        report.notes.push(`retired stale integration ${integrating.id}`);
+        report.progress = true;
+        return report;
+      }
+    }
+  }
+
+  /*
    * 1b. Say so when a stage is ready and nobody may be handed it.
    *
    * Derived from the dispatch rows every tick, in both directions, before any
@@ -1887,6 +2044,40 @@ async function runRemoteTick(
 
   // 2. Make the next thing available, at most one bin per stage.
   if (units.length === 0) {
+    /*
+     * Work no worker may ever do is not handed to one (see `scopeOnlyForbidden`).
+     * A live plan bin nobody holds is retired with it; one a worker holds ends on
+     * its own report. Re-read every tick, so an amended scope plans at once.
+     */
+    const protectedScope = scopeOnlyForbidden(changeRequest.mutationScope, forbiddenPathsFor(changeRequest.repository));
+    if (protectedScope) {
+      const waiting = liveBinOfKind(liveBins, 'FACTORY_PLAN');
+      if (waiting && waiting.state !== 'LEASED') {
+        await terminateUnleasedBin(
+          waiting.id,
+          waiting.leaseGeneration,
+          'CANCELLED',
+          'The approved scope is protected from every Factory worker; routed to the maintainer instead.',
+        );
+      }
+      if (fresh.state === 'BLOCKED' && fresh.blockerKind === 'PROTECTED_SCOPE') {
+        report.notes.push('routed to the maintainer: the approved scope is protected');
+        return report;
+      }
+      return await blockStage(
+        fresh,
+        'planning',
+        {
+          detail:
+            `Every path in the approved scope (${protectedScope.join(', ')}) is one this repository's grant ` +
+            'puts out of every Factory worker\'s reach, so no worker is dispatched to plan it. ' +
+            'Routed to the maintainer: a direct Brain engineering session makes this change, or the ' +
+            'scope is amended to writable paths.',
+        },
+        report,
+        'PROTECTED_SCOPE',
+      );
+    }
     if (liveBinOfKind(liveBins, 'FACTORY_PLAN')) {
       report.notes.push('waiting for a worker to take the plan');
       await stageIsLive(fresh, 'PLANNING', 'waiting for a worker to take the plan', report);
@@ -1943,8 +2134,9 @@ async function runRemoteTick(
     }
     let created = 0;
     const deferred: string[] = [];
+    const others = otherCampaignsOf(fresh, changeRequest.repository);
     for (const unit of uncovered) {
-      const clash = await conflictingUnitOfOtherCampaign(fresh, changeRequest.repository, unit);
+      const clash = await conflictingUnitOfOtherCampaign(others, unit);
       if (clash) {
         const hold = await recordHold(fresh, unit, clash, Date.now());
         const base = `${unit.unitKey} waits for ${clash.unitKey} of campaign ${clash.campaignId}`;
@@ -2636,7 +2828,7 @@ async function blockedWatermark(campaign: FactoryCampaign): Promise<string> {
 async function quietlyBlocked(campaign: FactoryCampaign, now: number): Promise<boolean> {
   if (campaign.state !== 'BLOCKED' || !campaign.blockerKind) return false;
   const { BLOCKER_WAIT } = await import('./line.ts');
-  if (BLOCKER_WAIT[campaign.blockerKind]?.wait !== 'PERSON') return false;
+  if (BLOCKER_WAIT[campaign.blockerKind]?.wait === 'AUTOMATIC') return false;
   const seen = quietBlocked.get(campaign.id);
   if (!seen || now - seen.at >= PERSON_WAIT_RECHECK_MS) return false;
   return seen.mark === (await blockedWatermark(campaign));

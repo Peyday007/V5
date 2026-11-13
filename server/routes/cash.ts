@@ -125,6 +125,7 @@ import {
   retryWork as retryObligationWork,
 } from '../services/cash/journey/fulfillment.ts';
 import { performCommercialAction, resolveCommercialEffect } from '../services/cash/perform.ts';
+import { declareContinuationAlternative } from '../services/cash/alternatives.ts';
 import { requestInvoice } from '../services/cash/invoicing.ts';
 import { listInvoices } from '../repos/cashInvoices.ts';
 import { commercialProviderStatus } from '../services/cash/providers/status.ts';
@@ -987,6 +988,41 @@ cashRouter.post(
           }),
         );
         return { result: value, message };
+      }
+      case 'continuation-alternative': {
+        /*
+         * A person states whether an alternative channel or supplier may carry
+         * this piece's commitment when its own is down or suspended (S-0485).
+         * Kept as an append-only record the continuation gate reads before
+         * every send; nothing is sent from here, and an unstated permission or
+         * contract stays unknown, which is never a yes.
+         */
+        const permitted = body['permitted'];
+        if (permitted !== true && permitted !== false && permitted !== null) {
+          throw badRequest('"permitted" must be true, false or null.');
+        }
+        const workable = body['contractuallyWorkable'];
+        if (workable !== undefined && workable !== true && workable !== false && workable !== null) {
+          throw badRequest('"contractuallyWorkable" must be true, false or null.');
+        }
+        const requiresContract = body['requiresContract'];
+        if (requiresContract !== undefined && typeof requiresContract !== 'boolean') {
+          throw badRequest('"requiresContract" must be true or false.');
+        }
+        const { value, message } = taken(
+          await declareContinuationAlternative({
+            opportunityId: opportunity.id,
+            action: requiredString(body['action'], 'action'),
+            namespace: requiredString(body['namespace'], 'namespace'),
+            channel: optionalString(body['channel'], 'channel') ?? null,
+            permitted,
+            contractuallyWorkable: (workable as boolean | null | undefined) ?? null,
+            requiresContract: requiresContract === true,
+            actorRef: principal.id,
+            note: requiredString(body['note'], 'note'),
+          }),
+        );
+        return { alternative: value, message };
       }
       case 'resolve-effect': {
         /*

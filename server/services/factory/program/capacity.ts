@@ -40,6 +40,14 @@ export interface CapacityReading {
   window: { since: string; until: string; hours: number };
   workers: { registered: number | null; usable: number | null; inFlightNow: number | null; admissionLimit: number | null; basis: string };
   concurrency: { peak: number; average: number | null; basis: string };
+  /**
+   * Worker sessions, not bins. A bin is counted from its first assignment to its
+   * terminal row, including every wait between reopens, so bin overlap read as
+   * "concurrent sessions" overstated it (peak 18 bins against 2 usable surfaces).
+   * A session is the provider session id on the bins' own events, from its first
+   * to its last event in the window.
+   */
+  sessions: { distinct: number; peak: number; average: number | null; basis: string };
   queueDelay: Stat;
   stageDurations: Record<string, Stat>;
   planningMs: Stat;
@@ -47,7 +55,7 @@ export interface CapacityReading {
   integrationAndReviewMs: Stat;
   repairMs: Stat;
   releaseMs: Stat;
-  completed: { bins: number; campaigns: number; unitsIntegrated: number; perHour: number | null; campaignsPerHour: number | null };
+  completed: { bins: number; campaigns: number; unitsIntegrated: number; perHour: number | null; campaignsPerHour: number | null; unitBinsCompleted: number; unitBinsPerHour: number | null };
   requirements: { verified: number; perHour: number | null };
   idle: { readyBinsNow: number | null; idleEvents: number; idleMs: number | null; basis: string };
   failures: { binsFailed: number; leaseExpiries: number; noShows: number; dedupedSubmissions: number; supersededUnits: number; releaseFailures: number };
@@ -101,6 +109,8 @@ export interface CapacityInput {
   dedupedSubmissions: number;
   supersededUnits: number;
   idleEvents: Array<{ kind: string; at: string }>;
+  /** Each provider session's first and last event on a factory bin in the window. */
+  sessionSpans?: Array<[string, string]>;
   fleet: { registered: number; usable: number; inFlight: number; admissionLimit: number } | null;
   readyBinsNow: number | null;
 }
@@ -119,6 +129,9 @@ export function computeCapacity(input: CapacityInput): CapacityReading {
     .filter((b) => b.assignedAt.length > 0)
     .map((b) => [Date.parse(b.assignedAt[0]!), Date.parse(b.terminalAt ?? input.until)]);
   const concurrency = overlap(intervals, windowMs);
+  const spans = input.sessionSpans ?? [];
+  const sessions = overlap(spans.map(([a, b]) => [Date.parse(a), Date.parse(b)]), windowMs);
+  const unitBinsCompleted = input.bins.filter((b) => b.kind === 'FACTORY_UNITS' && b.terminalOutcome === 'COMPLETE').length;
   const queue = stat(input.bins.map((b) => ms(b.readyAt, b.assignedAt[0])).filter((v): v is number => v !== null));
   const completedBins = input.bins.filter((b) => b.terminalOutcome === 'COMPLETE').length;
   const failedBins = input.bins.filter((b) => b.terminalOutcome && b.terminalOutcome !== 'COMPLETE').length;
@@ -143,6 +156,7 @@ export function computeCapacity(input: CapacityInput): CapacityReading {
       ? { registered: input.fleet.registered, usable: input.fleet.usable, inFlightNow: input.fleet.inFlight, admissionLimit: input.fleet.admissionLimit, basis: 'fleet snapshot (routines that may take factory work) and the line’s admission policy, now' }
       : { registered: null, usable: null, inFlightNow: null, admissionLimit: null, basis: 'no fleet snapshot was available' },
     concurrency: { ...concurrency, basis: 'factory bins overlapping between first assignment and terminal, in the window' },
+    sessions: { distinct: spans.length, ...sessions, basis: 'provider sessions on factory bin events, first to last event, overlapping in the window' },
     queueDelay: queue,
     stageDurations,
     planningMs: stat(byKind.get('FACTORY_PLAN') ?? []),
@@ -156,6 +170,8 @@ export function computeCapacity(input: CapacityInput): CapacityReading {
       unitsIntegrated: input.unitsIntegrated,
       perHour: Math.round((input.unitsIntegrated / hours) * 100) / 100,
       campaignsPerHour: Math.round((input.campaignsCompleted / hours) * 100) / 100,
+      unitBinsCompleted,
+      unitBinsPerHour: Math.round((unitBinsCompleted / hours) * 100) / 100,
     },
     requirements: { verified: input.requirementsVerified, perHour: Math.round((input.requirementsVerified / hours) * 100) / 100 },
     idle: { readyBinsNow: input.readyBinsNow, idleEvents: input.idleEvents.length, idleMs, basis: 'FACTORY_IDLE_STARTED/ENDED on the ledger: executable work, free capacity and nothing running' },
@@ -214,21 +230,37 @@ export async function readCapacity(input: { sinceHours: number; now?: Date }): P
   const since = new Date(Date.parse(until) - input.sinceHours * 3_600_000).toISOString();
   const db = getDb();
   const bins = await db.all<{ id: string; kind: string; factory_campaign_id: string | null }>(
-    `SELECT id, kind, factory_campaign_id FROM bins WHERE kind LIKE 'FACTORY_%' AND created_at >= ? ORDER BY created_at`,
-    [since],
+    `SELECT id, kind, factory_campaign_id FROM bins WHERE kind LIKE 'FACTORY_%' AND created_at >= ? AND created_at <= ? ORDER BY created_at`,
+    [since, until],
   );
   const events = bins.length
     ? await db.all<{ bin_id: string; event_type: string; at: string; outcome: string | null }>(
         `SELECT e.bin_id, e.event_type, e.at, e.outcome FROM bin_events e
            JOIN bins b ON b.id = e.bin_id
-          WHERE b.kind LIKE 'FACTORY_%' AND b.created_at >= ?
+          WHERE b.kind LIKE 'FACTORY_%' AND b.created_at >= ? AND e.at <= ?
           ORDER BY e.at`,
-        [since],
+        [since, until],
       )
     : [];
   const timelines = new Map<string, BinTimeline>(
     bins.map((b) => [b.id, { binId: b.id, kind: b.kind, campaignId: b.factory_campaign_id, readyAt: null, assignedAt: [], terminalAt: null, terminalOutcome: null, leaseExpiries: 0, noShows: 0 }]),
   );
+  const sessionRows = bins.length
+    ? await db.all<{ session_ref: string; first_at: string; last_at: string }>(
+        `SELECT e.session_ref AS session_ref, MIN(e.at) AS first_at, MAX(e.at) AS last_at FROM bin_events e
+           JOIN bins b ON b.id = e.bin_id
+          WHERE b.kind LIKE 'FACTORY_%' AND e.at >= ? AND e.at <= ? AND e.session_ref IS NOT NULL
+          GROUP BY e.session_ref`,
+        [since, until],
+      )
+    : [];
+  // One provider session reports itself as cse_… and as session_…; merge the spellings.
+  const spanBySession = new Map<string, [string, string]>();
+  for (const row of sessionRows) {
+    const key = row.session_ref.replace(/^(cse_|session_|claude-code-session_)/, '');
+    const held = spanBySession.get(key);
+    spanBySession.set(key, held ? [held[0] < row.first_at ? held[0] : row.first_at, held[1] > row.last_at ? held[1] : row.last_at] : [row.first_at, row.last_at]);
+  }
   for (const e of events) {
     const t = timelines.get(e.bin_id);
     if (!t) continue;
@@ -244,16 +276,16 @@ export async function readCapacity(input: { sinceHours: number; now?: Date }): P
   const count = async (sql: string, params: unknown[]): Promise<number> =>
     Number((await db.get<{ n: number }>(sql, params as never))?.n ?? 0);
   const repairUnits = await db.all<{ created_at: string; updated_at: string; state: string }>(
-    `SELECT created_at, updated_at, state FROM factory_work_units WHERE kind = 'REPAIR' AND created_at >= ?`,
-    [since],
+    `SELECT created_at, updated_at, state FROM factory_work_units WHERE kind = 'REPAIR' AND created_at >= ? AND created_at <= ?`,
+    [since, until],
   );
   const releaseRuns = await db.all<{ created_at: string; finished_at: string | null; state: string }>(
-    `SELECT created_at, finished_at, state FROM factory_release_runs WHERE created_at >= ?`,
-    [since],
+    `SELECT created_at, finished_at, state FROM factory_release_runs WHERE created_at >= ? AND created_at <= ?`,
+    [since, until],
   );
   const idleEvents = await db.all<{ kind: string; at: string }>(
-    `SELECT kind, at FROM factory_events WHERE kind IN ('FACTORY_IDLE_STARTED', 'FACTORY_IDLE_ENDED') AND at >= ? ORDER BY at`,
-    [since],
+    `SELECT kind, at FROM factory_events WHERE kind IN ('FACTORY_IDLE_STARTED', 'FACTORY_IDLE_ENDED') AND at >= ? AND at <= ? ORDER BY at`,
+    [since, until],
   );
   let fleet: CapacityInput['fleet'] = null;
   let readyBinsNow: number | null = null;
@@ -279,12 +311,13 @@ export async function readCapacity(input: { sinceHours: number; now?: Date }): P
     bins: [...timelines.values()],
     repairUnits: repairUnits.map((u) => ({ createdAt: u.created_at, integratedAt: u.state === 'INTEGRATED' ? u.updated_at : null })),
     releaseRuns: releaseRuns.map((r) => ({ createdAt: r.created_at, finishedAt: r.finished_at, state: r.state })),
-    campaignsCompleted: await count(`SELECT COUNT(*) AS n FROM factory_campaigns WHERE state = 'COMPLETE' AND finished_at >= ?`, [since]),
-    unitsIntegrated: await count(`SELECT COUNT(*) AS n FROM factory_work_units WHERE state = 'INTEGRATED' AND updated_at >= ?`, [since]),
-    requirementsVerified: await count(`SELECT COUNT(DISTINCT program_id || ':' || requirement_key) AS n FROM factory_program_verifications WHERE outcome = 'PASS' AND at >= ?`, [since]),
-    dedupedSubmissions: await count(`SELECT COUNT(*) AS n FROM factory_events WHERE kind = 'CHANGE_REQUEST_DEDUPED' AND at >= ?`, [since]),
-    supersededUnits: await count(`SELECT COUNT(*) AS n FROM factory_work_units WHERE state = 'SUPERSEDED' AND updated_at >= ?`, [since]),
+    campaignsCompleted: await count(`SELECT COUNT(*) AS n FROM factory_campaigns WHERE state = 'COMPLETE' AND finished_at >= ? AND finished_at <= ?`, [since, until]),
+    unitsIntegrated: await count(`SELECT COUNT(*) AS n FROM factory_work_units WHERE state = 'INTEGRATED' AND updated_at >= ? AND updated_at <= ?`, [since, until]),
+    requirementsVerified: await count(`SELECT COUNT(DISTINCT program_id || ':' || requirement_key) AS n FROM factory_program_verifications WHERE outcome = 'PASS' AND at >= ? AND at <= ?`, [since, until]),
+    dedupedSubmissions: await count(`SELECT COUNT(*) AS n FROM factory_events WHERE kind = 'CHANGE_REQUEST_DEDUPED' AND at >= ? AND at <= ?`, [since, until]),
+    supersededUnits: await count(`SELECT COUNT(*) AS n FROM factory_work_units WHERE state = 'SUPERSEDED' AND updated_at >= ? AND updated_at <= ?`, [since, until]),
     idleEvents,
+    sessionSpans: [...spanBySession.values()],
     fleet,
     readyBinsNow,
   });

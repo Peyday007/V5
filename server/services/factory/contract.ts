@@ -800,7 +800,24 @@ export function narrowsOrEqual(next: string[], current: string[]): boolean {
     const star = glob.indexOf('*');
     return star === -1 ? glob : glob.slice(0, star);
   };
-  const allowed = current.map(stem);
-  if (allowed.some((a) => a === '')) return true; // '**' allows everything in the tree
-  return next.map(stem).every((n) => allowed.some((a) => n.startsWith(a)));
+  // A wildcard-free entry written as a directory (`docs/`) means the same as `docs`:
+  // the trailing slashes are dropped so the boundary test below adds exactly one.
+  // An entry that is nothing but slashes is kept as written: it must never become
+  // the empty stem, which is the `**` allow-everything shortcut.
+  const allowed = current.map((glob) => {
+    const wild = glob.includes('*');
+    const trimmed = glob.replace(/\/+$/, '');
+    return { stem: wild ? stem(glob) : trimmed === '' ? glob : trimmed, wild };
+  });
+  if (allowed.some((a) => a.stem === '')) return true; // '**' allows everything in the tree
+  return next.every((glob) => {
+    const n = stem(glob);
+    const nextWild = glob.includes('*');
+    return allowed.some((a) =>
+      // A stem cut at a wildcard is a real prefix. A wildcard-free entry names
+      // a file or a directory, so only itself or a path beneath it is inside it:
+      // `sites/v4` must not admit `sites/v4-private`.
+      a.wild ? n.startsWith(a.stem) : (!nextWild && n === a.stem) || n.startsWith(a.stem + '/'),
+    );
+  });
 }

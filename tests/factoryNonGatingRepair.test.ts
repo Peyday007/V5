@@ -49,7 +49,7 @@ afterEach(async () => {
   await teardown();
 });
 
-async function reviewedCampaignWithFailedRepair(severity: 'MINOR' | 'MAJOR') {
+async function reviewedCampaignWithFailedRepair(severity: 'MINOR' | 'MAJOR', failureDetail = 'the finding contradicts the contract') {
   const approver = await createUser({
     email: `approver-${Math.random().toString(36).slice(2)}@example.test`,
     displayName: 'An approver',
@@ -125,9 +125,9 @@ async function reviewedCampaignWithFailedRepair(severity: 'MINOR' | 'MAJOR') {
   const repair = (await getUnitByKey(campaign.id, queued.queued[0]!.unitKey))!;
   await getDb().run(
     `UPDATE factory_work_units SET state = 'FAILED', attempt = max_attempts,
-       failure_category = 'WORKER_ERROR', failure_detail = 'the finding contradicts the contract'
+       failure_category = 'WORKER_ERROR', failure_detail = ?
      WHERE id = ?`,
-    [repair.id],
+    [failureDetail, repair.id],
   );
   return campaign.id;
 }
@@ -150,5 +150,18 @@ describe('a failed repair of a non-gating finding', () => {
     const after = await getCampaign(campaignId);
     expect(after?.state).toBe('BLOCKED');
     expect(after?.blockerKind).toBe('UNIT_EXHAUSTED_ATTEMPTS');
+  });
+
+  it('does not block when every attempt failed because the fix is the program\'s protected probe', async () => {
+    const campaignId = await reviewedCampaignWithFailedRepair(
+      'MAJOR',
+      'The fix lives on the protected verification path, which no implementing unit may write: r01.x-1 belongs in server/services/factory/program/probes.ts.',
+    );
+    await tickRemoteCampaign(campaignId);
+    const after = await getCampaign(campaignId);
+    expect(after?.blockerKind).not.toBe('UNIT_EXHAUSTED_ATTEMPTS');
+    const [finding] = await listFindings(campaignId);
+    expect(finding?.state).toBe('ACCEPTED_LIMITATION');
+    expect(finding?.resolution).toMatch(/owed by the program/);
   });
 });

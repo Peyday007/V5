@@ -290,8 +290,11 @@ There must be no workflow where the user has to remember "now go update the data
 47. No possibility discarded for ranking poorly — a rank is a view of the space
     and never the space, simplification happens in the presentation, and what
     is not in the top five is not thereby worthless.
+48. No industry excluded by Brain — an opening is judged on its economics, its
+    time to revenue and whether it can be done, and a goal's constraint binds
+    that goal, only while it runs.
 
-## 8–97. The architecture record
+## 8–109. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -390,6 +393,18 @@ resolves. Read the section for the area you are changing before you change it
 - §95. A candidate is not an accepted plan: a cash goal is met at a defensible 90%, never at a point reading.
 - §96. A specification is the authority, and a program is DONE only when every requirement it states is verified on production.
 - §97. A specification grows by releases, and a program's order is when, never whether.
+- §98. Every pool of capacity is fed: idle capacity beside waiting work is a fault Brain finds and corrects itself.
+- §99. A plan short of its requirement is reconstructed, not re-read, and a result keeps the context it was measured in.
+- §100. A change is recognized where it happens, and the work it enables resumes without a person restating it.
+- §101. A goal is examined from many directions, and the ways of reasoning that work are learned.
+- §102. A plan's variables are swept by ordinary code, and only the strongest strategies cost an engine read.
+- §103. An integration is declared once, and Brain supplies its credentials itself wherever it is authorized.
+- §104. An open-source agent answers one narrow question, and Brain keeps the prospect, the decision and the record.
+- §105. An industry is never excluded, and a goal's constraint ends with the goal.
+- §106. Brain has one general operator, and its hands are Brain's own operations.
+- §107. Sellbird's whole sales mind works every business, and Brain still decides, sends through Instantly and keeps the record.
+- §108. A model is chosen by what it does on Brain's work, and a decision is judged by what it predicted.
+- §109. The operator directs engineering, and a merged pull request is not the improvement.
 
 ## Conventions
 

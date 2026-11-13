@@ -204,7 +204,7 @@ export interface FactoryLine {
       lastRoutine: string | null;
     }[];
     blocked: null | {
-      wait: 'AUTOMATIC' | 'PERSON';
+      wait: 'AUTOMATIC' | 'PERSON' | 'MAINTAINER';
       kind: string;
       detail: string;
       remedy: string;

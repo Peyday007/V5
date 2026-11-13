@@ -1,0 +1,53 @@
+# The expansion businesses' outreach, read every hour (businesses/README.md).
+#
+# One read-only pass of scripts/expansion-outreach.ts on the deployed machine,
+# where the Integrations workflow puts the Instantly key (INSTANTLY_API_KEY, §94, §103): each campaign's
+# sent, replied, bounced and opted-out counts, and every reply nobody has
+# answered yet. ATTENTION (a stopped campaign, a bounce rate over 5%, or a reply
+# waiting) is published as annotations so the operating session reads it from
+# the checks API. It changes nothing and handles no secret.
+name: Expansion outreach
+
+on:
+  schedule:
+    - cron: '47 * * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: brain-console-expansion-outreach
+  cancel-in-progress: false
+
+jobs:
+  pass:
+    name: Read campaigns and replies
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Never against a machine mid-release; see .github/actions/await-release.
+      - uses: ./.github/actions/await-release
+
+      - name: Pass
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          set +e
+          flyctl ssh console --app "$app" -C "sh -c 'cd /app && node --import tsx scripts/expansion-outreach.ts'" 2>&1 | tee pass.txt
+          set -e
+          grep -q '^EXPANSION: ' pass.txt
+
+      - name: Publish the pass as annotations
+        if: always()
+        run: |
+          [ -f pass.txt ] || exit 0
+          python3 - <<'PY'
+          text = open('pass.txt', encoding='utf-8', errors='replace').read()
+          enc = lambda s: s.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)][-10:]
+          for n, chunk in enumerate(chunks, 1):
+              print(f'::notice title=pass {n}/{len(chunks)}::{enc(chunk)}')
+          PY

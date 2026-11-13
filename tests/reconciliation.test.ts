@@ -12,6 +12,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
 import type { BoundaryContract, Requirement, ResearchFragment } from '../server/domain/types.ts';
 import { isLaneId, laneIds } from '../server/domain/evidenceLanes.ts';
 import { importFile } from '../server/services/importer.ts';
@@ -217,6 +218,51 @@ describe('claims are recovered from documents the project already has', () => {
     const second = await inventoryDocument(documentId);
     expect(second).toHaveLength(first.length);
     expect(await listExistingClaims(fixture.project.id)).toHaveLength(first.length);
+  });
+
+  it('reads the archive in a fixed number of statements, however many documents it holds', async () => {
+    // Production, 2026-11-12: two sequential reads per document made a 989-document
+    // archive ~2,000 statements, and `brain_propose_fragments` passed its time limit.
+    const layerId = (await fixture.layerByName('World Model')).id;
+    for (const version of ['v1', 'v2', 'v3', 'v4']) {
+      await importFile({
+        projectId: fixture.project.id,
+        originalFilename: `World Model ${version}.txt`,
+        contents: Buffer.from(`${SOURCED}\n\nThis is revision ${version} of the model, filed separately.`),
+        layerId,
+        version,
+        documentType: 'FOUNDATION',
+      });
+    }
+    await whenExtractionIdle();
+    const first = await inventoryProject(fixture.project.id);
+    expect(first.documentsRead).toBe(4);
+    expect(first.claims.length).toBeGreaterThan(0);
+
+    const db = getDb();
+    const realAll = db.all.bind(db);
+    const realGet = db.get.bind(db);
+    let perDocument = 0;
+    const count = (sql: string): void => {
+      if (/FROM (extraction_runs|existing_claims)\b/.test(sql)) perDocument += 1;
+    };
+    db.all = (async (sql: string, params?: unknown[]) => {
+      count(sql);
+      return realAll(sql, params as never);
+    }) as typeof db.all;
+    db.get = (async (sql: string, params?: unknown[]) => {
+      count(sql);
+      return realGet(sql, params as never);
+    }) as typeof db.get;
+    let second;
+    try {
+      second = await inventoryProject(fixture.project.id);
+    } finally {
+      db.all = realAll;
+      db.get = realGet;
+    }
+    expect(perDocument).toBe(2);
+    expect(second.claims.map((claim) => claim.id)).toEqual(first.claims.map((claim) => claim.id));
   });
 
   it('does not inventory a document nobody could read', async () => {
