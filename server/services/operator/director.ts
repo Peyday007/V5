@@ -560,10 +560,11 @@ async function factoryFacts(candidate: ImprovementCandidate): Promise<Engineerin
 }
 
 /** Every engineering the operator commissioned, with what happened to it. Newest first. */
-export async function engineeringOutcomes(options: { limit?: number; includeClosed?: boolean } = {}): Promise<EngineeringOutcome[]> {
+export async function engineeringOutcomes(options: { limit?: number; includeClosed?: boolean; candidateIds?: string[] } = {}): Promise<EngineeringOutcome[]> {
   const all = (await listCandidates()).filter((c) => c.evidence['directive']);
   const chosen = all
     .filter((c) => options.includeClosed !== false || !c.decision)
+    .filter((c) => !options.candidateIds || options.candidateIds.includes(c.id))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, options.limit ?? 10);
   const out: EngineeringOutcome[] = [];
@@ -1034,16 +1035,22 @@ export interface OwnerNoticeResult {
  */
 export async function notifyVerifiedImprovements(options: { candidateId?: string; env?: NodeJS.ProcessEnv } = {}): Promise<OwnerNoticeResult[]> {
   const out: OwnerNoticeResult[] = [];
-  const outcomes = (await engineeringOutcomes({ limit: 50 })).filter(
-    (o) => o.status === 'RESOLVED' && (!options.candidateId || o.candidateId === options.candidateId),
+  // Only a change §87 kept can be RESOLVED, and one already told is done: both are read off the
+  // register before any Factory or goal read, so the pass every five minutes costs one query.
+  const kept = (await listCandidates()).filter(
+    (c) => c.decision === 'KEPT' && c.evidence['directive'] && (!options.candidateId || c.id === options.candidateId),
   );
+  const pending: string[] = [];
+  for (const c of kept) {
+    const told = await listImprovementEvents({ candidateId: c.id, kinds: [OWNER_NOTICE_KINDS.sent, OWNER_NOTICE_KINDS.uncertain], limit: 1 });
+    if (told.length) out.push({ candidateId: c.id, status: 'ALREADY_SENT', detail: `${told[0]!.kind} at ${told[0]!.at}` });
+    else pending.push(c.id);
+  }
+  const outcomes = pending.length
+    ? (await engineeringOutcomes({ candidateIds: pending, limit: pending.length })).filter((o) => o.status === 'RESOLVED')
+    : [];
   for (const outcome of outcomes) {
     const id = outcome.candidateId;
-    const done = await listImprovementEvents({ candidateId: id, kinds: [OWNER_NOTICE_KINDS.sent, OWNER_NOTICE_KINDS.uncertain], limit: 1 });
-    if (done.length) {
-      out.push({ candidateId: id, status: 'ALREADY_SENT', detail: `${done[0]!.kind} at ${done[0]!.at}` });
-      continue;
-    }
     const facts = await cycleFacts(outcome);
     if (!facts) continue;
     const cycle = verifiedCycle(facts);
