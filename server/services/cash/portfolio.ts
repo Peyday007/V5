@@ -103,7 +103,7 @@ export function isWorkable(input: { tier: CashTier; state: string }): boolean {
  * not have its pieces treated as qualified by default — deny by default, at a
  * projection.
  */
-const UNREAD_TIER: TierReading = Object.freeze({
+export const UNREAD_TIER: TierReading = Object.freeze({
   tier: 'SIGNAL' as const,
   establishes: 'something was recorded here',
   doesNotEstablish: 'anything about it, because no reading was composed',
@@ -112,6 +112,21 @@ const UNREAD_TIER: TierReading = Object.freeze({
   required: 0,
   summary: 'Nothing has been read about this piece yet.',
 });
+
+/**
+ * The tier a piece reads as, from a caller's composed tiers: its own reading,
+ * or `UNREAD_TIER` when none was composed. Every projection that asks whether a
+ * piece is work reads it through here, so the portfolio and the forecast can
+ * never disagree about a piece nobody composed a tier for.
+ */
+export function tierOf(tiers: Readonly<Record<string, TierReading>>, id: string): TierReading {
+  return tiers[id] ?? UNREAD_TIER;
+}
+
+/** `isWorkable` for one piece, with a missing tier read exactly as the portfolio reads it. */
+export function isWorkableIn(tiers: Readonly<Record<string, TierReading>>, opportunity: { id: string; state: string }): boolean {
+  return isWorkable({ tier: tierOf(tiers, opportunity.id).tier, state: opportunity.state });
+}
 
 export interface Placement {
   opportunity: CashOpportunity;
@@ -222,7 +237,7 @@ export function placements(input: PortfolioInput): Placement[] {
   function place(opportunity: CashOpportunity): Omit<Placement, 'standing'> {
     const card = evidenceCard(opportunity);
     const missing = card.readiness.missing.map(String);
-    const tier = input.tiers[opportunity.id] ?? UNREAD_TIER;
+    const tier = tierOf(input.tiers, opportunity.id);
 
     if (opportunity.state === 'ARCHIVED') {
       return {
