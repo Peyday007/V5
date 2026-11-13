@@ -369,6 +369,23 @@ function productsIn(text: string): string[] {
   return Object.keys(PRODUCT_FAMILIES).filter((key) => PRODUCT_FAMILIES[key]!.test(text));
 }
 
+/*
+ * The product families whose selling, arranging, originating or being paid per unit of is itself a
+ * licensed role (S-0106: commissions, origination, advice, brokering, solicitation and referral payments
+ * in mortgage, insurance and the like). An opening that names one of these is never found "not regulated"
+ * from an absence of rows: "home loan introductions, paid per funded loan" is mortgage referral in other
+ * words, and reading it as compliant is the commercial rewording S-0106 forbids and an unknown read as a
+ * favourable assumption (invariant 39). It stays UNKNOWN until research or a person records the position,
+ * which is what starts the compliant-position search. Recognition only — nothing here excludes an industry.
+ */
+const LICENSED_PRODUCT_FAMILIES: ReadonlySet<string> = new Set(['insurance', 'mortgage', 'lending', 'securities', 'real estate', 'warranty']);
+
+/** The licensed product families a text names. */
+export function licensedProductsIn(text: string | null | undefined): string[] {
+  if (!text) return [];
+  return productsIn(text).filter((family) => LICENSED_PRODUCT_FAMILIES.has(family));
+}
+
 function placesIn(text: string): string[] {
   const lower = text.toLowerCase();
   // "West Virginia" must not also read as "Virginia": a longer name claims its span first.
@@ -566,6 +583,8 @@ export function roleRecordFromRows(
  * compliance, insurance, credential, regulatory-capital, subcontracting or platform-terms row against it.
  * Those rows are where research records that a role needs rights, so a rewording of the title cannot pass
  * once research has said otherwise: a single such row withholds the finding and the role stays unknown.
+ * And (d) the text names no product whose sale is itself licensed (`licensedProductsIn`): before research
+ * has looked, "insurance policy sign-ups, paid per bound policy" is not an ordinary opening (COM-13-5 F1).
  */
 function notRegulatedFinding(
   opening: OpeningRoleText | null,
@@ -576,6 +595,8 @@ function notRegulatedFinding(
   if (!opening || opening.title.trim().length === 0) return null;
   if (licenceRecorded || contractRecorded) return null;
   if (regulatedActivitiesIn(performs).length > 0) return null;
+  // A product whose sale is itself licensed, named in other words than the activity lists know.
+  if (licensedProductsIn(performs).length > 0) return null;
   return {
     basis:
       'its cash_opportunities row and capital/constraint statements name no regulated activity, and no licensing, compliance, insurance, credential, regulatory-capital, subcontracting or platform-terms row is recorded against it',
