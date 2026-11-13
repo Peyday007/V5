@@ -708,7 +708,20 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       measuredCapacity: await instantlyCapacity().catch(() => null),
       measuredRates: await instantlyMeasuredRates().catch(() => null),
     };
-    portfolio = evaluateGoalPortfolio(portfolioInput);
+    /*
+     * The baseline evaluation is the same synchronous engine §101 moved onto worker threads:
+     * run inline here it held the server's loop for seconds at a time (production, 2026-11-13:
+     * 8–24 s event-loop stalls, ~20 s of CPU a minute in the quant engine, every database
+     * socket and MCP call behind it timing out). On the shared pool it runs beside the loop;
+     * the pool falls back to inline, yielding first, when it has no thread.
+     */
+    const { sharedEvaluator } = await import('../goals/reasoning/evaluatorPool.ts');
+    const evaluator = sharedEvaluator();
+    try {
+      portfolio = await evaluator.evaluate(portfolioInput);
+    } finally {
+      await evaluator.close();
+    }
     trace('quant portfolio');
   }
   const inBest = new Set(portfolio?.best?.members.map((one) => one.opportunityId) ?? []);

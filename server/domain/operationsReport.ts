@@ -419,12 +419,24 @@ export function renderReport(r: ReportInput): { subject: string; text: string; b
   if (r.partial.length) L.push(`PARTIAL REPORT — not readable this hour: ${r.partial.join('; ')}. Those figures show as n/a, never as zero.`);
   if (r.recoveredAt) L.push(`Recovered at ${r.recoveredAt} after the hour was missed; queue and worker snapshots are as of then.`);
   L.push('');
-  L.push('EXECUTIVE SUMMARY');
+  // The first section is the elimination of bottlenecks (owner, 2026-11-13): what limits the plan,
+  // what was removed, what is being worked on now, and what Hermes started by itself.
+  const eliminated = r.lastKeys.filter((k) => !top.some((b) => b.key === k));
+  const running = r.openEngineering.filter((e) => !['RESOLVED', 'NOT_RESOLVED', 'CANCELLED'].includes(e.status));
+  const q = now.queues;
+  const yes = (Object.entries({ agents: scale.agents, 'stronger model': scale.model, compute: scale.gpu, research: scale.research, capital: scale.capital }) as [string, { call: string }][])
+    .filter(([, v]) => v.call === 'YES').map(([k]) => k);
+  L.push('$10K PLAN — ACTIVE BOTTLENECK ELIMINATION');
   L.push(`Plan readiness: ${accepted ? 'QUALIFYING PLAN EXISTS' : `not qualified — ${plan?.acceptance ?? 'no plan reading'}${plan?.reach !== null && plan?.reach !== undefined ? `, best reach ${pct(plan.reach)} (${plan.reachBasis === 'PROBABILITY' ? 'probability' : 'coverage'}; needs ${pct(plan.required)} lower bound)` : ''}`}`);
-  L.push(`Progress this hour: Hermes ${h.runsDone}/${h.runsStarted} runs, ${h.actionsExecuted} actions executed, ${h.outcomesResolved} verified improvement(s); research ${now.queues.research.completed} done; ${now.pipeline.planReadings} plan reading(s).${why}`);
-  L.push(`Most important improvement: ${improvement}`);
-  L.push(`Biggest remaining obstacle: ${top[0]?.problem ?? 'none identified from the rows'}`);
-  L.push(`Expected time to qualifying plan: ${eta.eta ?? 'unknown'} — ${eta.why}`);
+  L.push(`Main remaining constraint: ${top[0] ? `${top[0].problem} — ${top[0].intervention}` : 'none identified from the rows'}`);
+  L.push(`Constraints eliminated this hour: ${eliminated.length ? eliminated.join(', ') : 'none'}.`);
+  L.push(`Work being performed right now: research ${num(q.research.running)} running / ${num(q.research.queued)} queued; Factory ${num(q.factoryUnits.running)} unit(s) running / ${num(q.factoryUnits.queued)} queued; coding agents ${num(q.coding.running)} running.`);
+  L.push(`Independent fixes running simultaneously: ${running.length ? running.map((e) => `${e.title} (${e.status})`).join('; ') : 'none open'}.`);
+  L.push(`Resource or intelligence bottlenecks: ${top.slice(1).map((b) => b.problem).join(' | ') || 'none beyond the main constraint'}.`);
+  L.push(`Initiated by Hermes without being asked: ${num(h.commissioned)} engineering commission(s), ${num(h.actionsExecuted)} action(s) executed, ${num(h.reprioritized)} reprioritization(s), ${num(h.strategyChanges)} strategy change(s).`);
+  L.push(`What actually improved: ${improvement}${why}`);
+  L.push(`Would agents, compute or capital accelerate it: ${yes.length ? `YES — ${yes.join(', ')} (see SCALING DECISIONS)` : 'no measured case this hour (see SCALING DECISIONS)'}.`);
+  L.push(`Remaining time to a qualifying plan: ${eta.eta ?? 'not defensibly estimable'} — ${eta.why}`);
   L.push(`Collected ${usd(plan?.collectedCents ?? now.money.collectedCents)} of ${usd(plan?.targetCents ?? null)} (expected revenue is not collected revenue); ${plan?.daysLeft ?? '—'} days left.`);
   L.push('');
   L.push('$10K PLAN DEVELOPMENT');

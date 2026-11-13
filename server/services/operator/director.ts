@@ -699,7 +699,35 @@ export async function refreshPriority(candidateId: string): Promise<number | nul
 export async function unseenOutcomeSince(lastStartedAt: string | null): Promise<boolean> {
   if (!lastStartedAt) return false;
   const rows = await eventsOfType(ENGINEERING_EVENTS.outcome, lastStartedAt, 20);
-  return rows.some((row) => !row.payload.includes('"status":"BUILDING"'));
+  if (rows.some((row) => !row.payload.includes('"status":"BUILDING"'))) return true;
+  return changedConstraintSince(lastStartedAt);
+}
+
+/**
+ * What limits the goal changed since the operator last looked (owner, 2026-11-13: "a new plan
+ * reading … or measurable lack of progress should be able to initiate an appropriate response
+ * immediately"): a cash goal's plan was re-read with a different conclusion (a reading is only
+ * written when the conclusion changed), or the hourly report's main bottleneck is not the one
+ * before it. Either wakes the operator within minutes, like a Factory outcome does.
+ */
+export async function changedConstraintSince(lastStartedAt: string): Promise<boolean> {
+  const db = getDb();
+  const reading = await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM goal_plan_readings WHERE created_at > ?', [lastStartedAt]);
+  if (Number(reading?.n ?? 0) > 0) return true;
+  const reports = await db.all<{ payload: string; created_at: string }>(
+    `SELECT payload, created_at FROM project_events WHERE event_type = 'OWNER_OPERATIONS_REPORT' AND payload LIKE '%"status":"READY"%' ORDER BY entity_id DESC LIMIT 2`,
+    [],
+  );
+  const [latest, before] = reports;
+  if (!latest || latest.created_at <= lastStartedAt) return false;
+  const top = (row: { payload: string } | undefined): string | null => {
+    try {
+      return row ? ((JSON.parse(row.payload) as { bottleneckKeys?: string[] }).bottleneckKeys?.[0] ?? null) : null;
+    } catch {
+      return null;
+    }
+  };
+  return top(latest) !== top(before);
 }
 
 /* ------------------------------------------------------------------------- */
