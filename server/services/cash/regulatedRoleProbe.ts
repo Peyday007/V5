@@ -15,7 +15,7 @@
 import { getDb } from '../../db/database.ts';
 import { listCapitalForProject, listConstraintsForProject } from '../../repos/industry.ts';
 import { registerProbe, type ProbeResult } from '../factory/program/probes.ts';
-import { assessRole, OPENING_ROLE_COLUMNS, openingRoleText, roleRecordFromRows, type OpeningRoleRow, type RoleAssessment } from './exclusions.ts';
+import { assessRole, OPENING_ROLE_COLUMNS, openingRoleText, ownerStatementsFor, roleRecordWithStatements, type OpeningRoleRow, type RoleAssessment } from './exclusions.ts';
 
 export const REGULATED_ROLE_PROBE = 'r01.com-13-5';
 
@@ -42,20 +42,21 @@ export async function regulatedRolesAssessedFromRows(): Promise<ProbeResult> {
   for (const o of openings) byProject.set(o.project_id, [...(byProject.get(o.project_id) ?? []), o.opportunity_id]);
   const regulated: Array<{ id: string; assessment: RoleAssessment }> = [];
   for (const [projectId, ids] of byProject) {
-    const [rows, capital, constraints] = await Promise.all([
+    const [rows, capital, constraints, statements] = await Promise.all([
       db.all<OpeningRoleRow>(`SELECT ${OPENING_ROLE_COLUMNS} FROM cash_opportunities WHERE project_id = ?`, [projectId]),
       listCapitalForProject(projectId),
       listConstraintsForProject(projectId),
+      ownerStatementsFor(projectId),
     ]);
     const rowById = new Map(rows.map((r) => [r.id, r]));
     for (const id of ids) {
       const row = rowById.get(id);
       const assessment = assessRole(
-        roleRecordFromRows(
+        roleRecordWithStatements(
           capital.filter((c) => c.opportunityId === id),
           constraints.filter((c) => c.opportunityId === id),
-          {},
           row ? openingRoleText(row) : null,
+          statements,
         ),
       );
       if (assessment.excluded !== false) return { ok: false, detail: `opening ${id} was excluded by category` };

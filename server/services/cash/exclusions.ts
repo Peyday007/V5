@@ -15,7 +15,7 @@
  * says what text it recognises in an opening, so an exclusion applies to rows
  * by matching, never by a model deciding what a person meant.
  */
-import { clauseBefore, NEGATORS } from '../russell/negation.ts';
+import { clauseBefore, foldApostrophes, NEGATORS } from '../russell/negation.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { getDb } from '../../db/database.ts';
 import { listCapitalFor, listConstraintsForProject } from '../../repos/industry.ts';
@@ -303,6 +303,157 @@ export interface RoleAttestation {
   holds?: Partial<Record<RoleRequirement, boolean>>;
   /** A signed contract with the partner exists. */
   partnerContractInPlace?: boolean;
+  /** An authorized licensed partner a person named, where no capital row names one. */
+  partner?: { holdsLicensing: boolean; contractInPlace: boolean } | null;
+}
+
+/*
+ * Attestations from a person's recorded words (COM-13-5 repair, 2026-11-13).
+ *
+ * Every production caller passed `{}` as the attestation, so licensing and contract could only ever be
+ * read as false or unknown and COMPLIANT / COMPLIANT_VIA_PARTNER were unreachable: no regulated role's
+ * economics could ever be counted. The place a person records what they hold is a goal's own statement
+ * of its resources (workstreams.target_resources: "people, equipment, relationships, licences"), so the
+ * attestation is read from it — never from a caller's literal, and never from a model.
+ *
+ * A sentence attests a licence only when it says one is held, affirmatively: a negated, wanted, planned,
+ * pending or lapsed licence attests nothing. It covers an opening only for the product it names (the
+ * opening must perform that product), and the location only when it names every place the opening names,
+ * or says nationwide. A partner counts only with a signed or executed agreement stated in the same
+ * sentence; a partner without one stays a partner without a contract. Anything a sentence does not say
+ * stays unknown (§34, §39), so an owner's words can make a role compliant only where they actually reach.
+ */
+
+/** A licence somebody holds, as one sentence of a person's statement says it. */
+export interface LicenceStatement {
+  holder: 'OWN' | 'PARTNER';
+  products: string[];
+  places: string[];
+  nationwide: boolean;
+  /** A signed / executed agreement or an appointment is stated. */
+  contract: boolean;
+  text: string;
+}
+
+const LICENCE_HELD = /\b(?:licen[cs](?:e|ed|es)|registered|appointed)\b/i;
+const NOT_HELD = /\b(?:need|needs|needed|want|wants|looking for|seek|seeking|plan|plans|planning|hope|hoping|would|could|might|if|once|until|getting|obtain|obtaining|apply|applying|applied for|pending|expired|lapsed|suspended|revoked|no longer|not yet)\b/i;
+const PARTNER_WORD = /\b(?:partner(?:s|ed|ship)?|(?:with|through|via) (?:a |an |the )?(?:[a-z-]+ ){0,2}licen[cs]ed)\b/i;
+const FIRST_PERSON = /\b(?:i|we|i'm|we're|i am|we are|my|our|me)\b/i; // not "us": it is also the country
+const AGREEMENT = /\b(?:signed|executed|countersigned|under (?:a |an |our )?(?:written )?(?:contract|agreement)|(?:contract|agreement) (?:is )?in (?:place|force)|appointed|appointments?)\b/i;
+const NATIONWIDE = /\b(?:nationwide|all 50 states|every (?:us |u\.s\. )?state|in all (?:us |u\.s\. )?states)\b/i;
+const US_STATES = [
+  'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut', 'delaware', 'florida', 'georgia', 'hawaii', 'idaho',
+  'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana', 'maine', 'maryland', 'massachusetts', 'michigan', 'minnesota',
+  'mississippi', 'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey', 'new mexico', 'new york', 'north carolina',
+  'north dakota', 'ohio', 'oklahoma', 'oregon', 'pennsylvania', 'rhode island', 'south carolina', 'south dakota', 'tennessee', 'texas',
+  'utah', 'vermont', 'virginia', 'washington', 'west virginia', 'wisconsin', 'wyoming', 'district of columbia', 'puerto rico',
+] as const;
+/*
+ * Product families a licence is scoped to. Recognition only: a product no family names is not refused,
+ * its scope simply stays unknown. Nothing here excludes an industry.
+ */
+const PRODUCT_FAMILIES: Record<string, RegExp> = {
+  insurance: /\b(?:insurance|insur(?:e|er|ers|ing)|polic(?:y|ies)|policyholders?|annuit(?:y|ies)|underwrit\w*)\b/i,
+  mortgage: /\b(?:mortgages?|home loans?|refinanc\w*|nmls|loan originat\w*)\b/i,
+  lending: /\b(?:loans?|lend(?:er|ers|ing)?|credit|financing)\b/i,
+  securities: /\b(?:securities|investments?|brokerage account|finra|series \d+)\b/i,
+  'real estate': /\b(?:real[- ]estate|realtor|propert(?:y|ies) sales?)\b/i,
+  warranty: /\b(?:warrant(?:y|ies)|service contracts?)\b/i,
+  health: /\b(?:medical|health ?care|patients?|clinical|pharmac\w*|supplements?)\b/i,
+  food: /\b(?:food|beverages?|cottage food)\b/i,
+  cosmetics: /\bcosmetics?\b/i,
+  contracting: /\b(?:contractor|construction|electrical|plumbing|hvac|roofing)\b/i,
+};
+
+function productsIn(text: string): string[] {
+  return Object.keys(PRODUCT_FAMILIES).filter((key) => PRODUCT_FAMILIES[key]!.test(text));
+}
+
+function placesIn(text: string): string[] {
+  const lower = text.toLowerCase();
+  // "West Virginia" must not also read as "Virginia": a longer name claims its span first.
+  const found = new Set<string>();
+  let rest = lower;
+  for (const state of [...US_STATES].sort((a, b) => b.length - a.length)) {
+    const pattern = new RegExp(`\\b${state}\\b`, 'g');
+    if (pattern.test(rest)) {
+      found.add(state);
+      rest = rest.replace(pattern, ' ');
+    }
+  }
+  return [...found].sort();
+}
+
+/** The licences a person's statement says are held, one per affirmative sentence. */
+export function licenceStatementsIn(text: string | null | undefined): LicenceStatement[] {
+  if (!text) return [];
+  const out: LicenceStatement[] = [];
+  for (const raw of foldApostrophes(text).split(/(?<=[.!?;])\s+|\n+/)) {
+    const sentence = raw.trim();
+    const hit = LICENCE_HELD.exec(sentence);
+    if (!hit) continue;
+    if (NOT_HELD.test(sentence)) continue;
+    const before = clauseBefore(sentence, hit.index);
+    if (NEGATORS.test(before) || EXCLUDING.test(before) || /\bun(?:licen[cs]ed|registered)\b/i.test(sentence)) continue;
+    const products = productsIn(sentence);
+    if (products.length === 0) continue;
+    const partner = PARTNER_WORD.test(sentence);
+    if (!partner && !FIRST_PERSON.test(sentence)) continue;
+    out.push({
+      holder: partner ? 'PARTNER' : 'OWN',
+      products,
+      places: placesIn(sentence),
+      nationwide: NATIONWIDE.test(sentence),
+      contract: AGREEMENT.test(sentence),
+      text: sentence.slice(0, 300),
+    });
+  }
+  return out;
+}
+
+/**
+ * What a person's licence statements attest about one role, judged against what the role performs.
+ * Product holds when a statement's licence names a product the role performs; location holds only when
+ * the statement covers every place the role names (or is nationwide). An own licence holds licensing;
+ * a partner's licence under a stated agreement is a partner with a contract in place, and the role's own
+ * licensing is then recorded as not held — it relies on the partner's.
+ */
+export function attestationFrom(statements: readonly LicenceStatement[], performs: string): RoleAttestation {
+  const products = productsIn(performs);
+  const places = placesIn(performs);
+  const holds: Partial<Record<RoleRequirement, boolean>> = {};
+  let partner: RoleAttestation['partner'] = null;
+  if (products.length === 0) return {};
+  for (const s of statements) {
+    if (!s.products.some((p) => products.includes(p))) continue;
+    const covered = s.nationwide || (places.length > 0 && places.every((p) => s.places.includes(p)));
+    if (s.holder === 'OWN') {
+      holds.product = true;
+      holds.licensing = true;
+      if (covered) holds.location = true;
+      if (s.contract) holds.contract = true;
+    } else if (s.contract) {
+      holds.product = true;
+      holds.contract = true;
+      if (covered) holds.location = true;
+      partner = { holdsLicensing: true, contractInPlace: true };
+    } else if (!partner) {
+      partner = { holdsLicensing: true, contractInPlace: false };
+    }
+  }
+  if (partner && holds.licensing !== true) holds.licensing = false;
+  return { holds, ...(partner ? { partner, partnerContractInPlace: partner.contractInPlace } : {}) };
+}
+
+/** A project's live goals' own statements of what their owners hold. */
+export async function ownerStatementsFor(projectId: string): Promise<LicenceStatement[]> {
+  const rows = await getDb().all<{ target_resources: string | null }>(
+    `SELECT target_resources FROM workstreams
+      WHERE target_project_id = ? AND target_resources IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL
+      ORDER BY id`,
+    [projectId],
+  );
+  return rows.flatMap((row) => licenceStatementsIn(row.target_resources));
 }
 
 /**
@@ -353,15 +504,38 @@ export function openingPerforms(opening: OpeningRoleText | null | undefined): st
     .join('\n');
 }
 
+/** What a role performs, read from its opening row and its capital and constraint statements. */
+export function performsFromRows(
+  capital: readonly CapitalStructure[],
+  constraints: readonly OpportunityConstraint[],
+  opening: OpeningRoleText | null = null,
+): string {
+  return [openingPerforms(opening), ...capital.map((c) => c.statement), ...constraints.map((c) => c.statement)]
+    .filter((part) => part.length > 0)
+    .join('\n');
+}
+
+/**
+ * The production reader: a role from its rows, with what its project's owners have stated they hold
+ * attested against what it performs. The funnel, the probe and assessOpportunityRole all read through
+ * this, so a figure and its demonstration assess one role identically.
+ */
+export function roleRecordWithStatements(
+  capital: readonly CapitalStructure[],
+  constraints: readonly OpportunityConstraint[],
+  opening: OpeningRoleText | null,
+  statements: readonly LicenceStatement[],
+): RoleRecord {
+  return roleRecordFromRows(capital, constraints, attestationFrom(statements, performsFromRows(capital, constraints, opening)), opening);
+}
+
 export function roleRecordFromRows(
   capital: readonly CapitalStructure[],
   constraints: readonly OpportunityConstraint[],
   attested: RoleAttestation = {},
   opening: OpeningRoleText | null = null,
 ): RoleRecord {
-  const performs = [openingPerforms(opening), ...capital.map((c) => c.statement), ...constraints.map((c) => c.statement)]
-    .filter((part) => part.length > 0)
-    .join('\n');
+  const performs = performsFromRows(capital, constraints, opening);
   const holds: Partial<Record<RoleRequirement, boolean>> = { ...(attested.holds ?? {}) };
   const licenceNeeds = capital.filter((c) => c.entryKind === 'REQUIREMENT' && c.requirement && LICENCE_REQUIREMENTS.has(c.requirement));
   const licenceConstrained = constraints.some((c) => LICENCE_CONSTRAINTS.has(c.kind));
@@ -371,7 +545,12 @@ export function roleRecordFromRows(
   const partnered = capital.some(
     (c) => c.entryKind === 'RESTRUCTURING' && c.mechanism !== null && PARTNER_MECHANISMS.has(c.mechanism) && c.answersId !== null && needIds.has(c.answersId),
   );
-  const partner = partnered ? { holdsLicensing: true, contractInPlace: attested.partnerContractInPlace === true } : null;
+  const contractInPlace = attested.partnerContractInPlace === true || attested.partner?.contractInPlace === true;
+  const partner = partnered
+    ? { holdsLicensing: true, contractInPlace }
+    : attested.partner
+      ? { holdsLicensing: attested.partner.holdsLicensing, contractInPlace }
+      : null;
   return { performs, holds, partner, notRegulated: notRegulatedFinding(opening, performs, licenceNeeds.length > 0 || licenceConstrained, holds.contract === false) };
 }
 
@@ -458,12 +637,15 @@ export async function assessOpportunityRole(input: {
   opportunityId: string;
   attested?: RoleAttestation;
 }): Promise<RoleAssessment> {
-  const [row, capital, constraints] = await Promise.all([
+  const [row, capital, constraints, statements] = await Promise.all([
     openingRow(input.projectId, input.opportunityId),
     listCapitalFor(input.opportunityId),
     listConstraintsForProject(input.projectId),
+    ownerStatementsFor(input.projectId),
   ]);
   const own = constraints.filter((c) => c.opportunityId === input.opportunityId);
   const ownCapital = capital.filter((c) => c.projectId === input.projectId);
-  return assessRole(roleRecordFromRows(ownCapital, own, input.attested, row ? openingRoleText(row) : null));
+  const opening = row ? openingRoleText(row) : null;
+  if (input.attested) return assessRole(roleRecordFromRows(ownCapital, own, input.attested, opening));
+  return assessRole(roleRecordWithStatements(ownCapital, own, opening, statements));
 }
