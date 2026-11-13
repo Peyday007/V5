@@ -15,6 +15,7 @@ import {
 } from '../server/services/cash/exclusions.ts';
 import { REGULATED_ROLE_PROBE, regulatedRolesAssessedFromRows } from '../server/services/cash/regulatedRoleProbe.ts';
 import { getProbe } from '../server/services/factory/program/probes.ts';
+import type { OpportunityConstraint } from '../server/domain/types.ts';
 
 let projectId = '';
 let userId = '';
@@ -102,6 +103,44 @@ describe('COM-13-5 repair: the role reader reads openings from cash_opportunitie
     const asReferral = assessRole({ performs, label: 'referral partner' });
     const asBroker = assessRole({ performs, label: 'mortgage broker' });
     expect(asReferral).toEqual(asBroker);
+  });
+});
+
+describe('COM-13-5 repair: an ordinary opening is found unregulated from its rows, not held back', () => {
+  const constraint = (kind: string): OpportunityConstraint => ({
+    id: 'c1', projectId: 'p', opportunityId: 'o', nodeId: null, kind: kind as OpportunityConstraint['kind'],
+    statement: 'a credential is needed to do this work', effect: null, sourceClaimId: 'cl', createdAt: '', updatedAt: '',
+  });
+
+  it('assesses an opening read from its row that names no regulated activity as compliant, with a basis', async () => {
+    const id = await opening('Photo prints for a cafe wall');
+    const a = await assessOpportunityRole({ projectId, opportunityId: id });
+    expect(a.regulated).toBe(false);
+    expect(a.position).toBe('COMPLIANT');
+    expect(a.countEconomics).toBe(true);
+    expect(a.excluded).toBe(false);
+    expect(a.reason).toContain('Found not regulated');
+  });
+
+  it('withholds the finding when research recorded a licence or contract constraint, so a rewording cannot pass', () => {
+    for (const kind of ['CREDENTIAL_REQUIRED', 'REGULATORY_CAPITAL', 'SUBCONTRACTING_PROHIBITED', 'PLATFORM_TERMS']) {
+      const r = roleRecordFromRows([], [constraint(kind)], {}, { title: 'Help homeowners with paperwork' });
+      expect(r.notRegulated ?? null).toBeNull();
+      const a = assessRole(r);
+      expect(a.countEconomics).toBe(false);
+      expect(a.position).not.toBe('COMPLIANT');
+    }
+  });
+
+  it('withholds the finding when the opening row was not read', () => {
+    expect(roleRecordFromRows([], [], {}, null).notRegulated ?? null).toBeNull();
+    expect(assessRole(roleRecordFromRows([], [], {}, null)).position).toBe('UNKNOWN');
+  });
+
+  it('never makes the finding for an opening that performs a regulated activity', () => {
+    const r = roleRecordFromRows([], [], {}, { title: 'Earn insurance commissions on policies sold to homeowners we refer' });
+    expect(r.notRegulated ?? null).toBeNull();
+    expect(assessRole(r).countEconomics).toBe(false);
   });
 });
 

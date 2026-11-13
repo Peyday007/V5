@@ -54,10 +54,23 @@ describe('COM-13-5 repair: the funnel counts settled cash through the opening-aw
     const regulated = await settledOpening('Broker mortgages for borrowers for a commission', 20_000);
     const plain = await settledOpening('Photo prints for a cafe wall', 10_000);
     const reading = await cashFunnel({ projectId });
-    for (const id of [regulated, plain]) {
-      const probe = await assessOpportunityRole({ projectId, opportunityId: id });
-      const held = reading.outcomes.heldBack.find((h) => h.opportunityId === id);
-      expect(held).toEqual({ opportunityId: id, position: probe.position, reason: probe.reason });
-    }
+    const regulatedProbe = await assessOpportunityRole({ projectId, opportunityId: regulated });
+    const held = reading.outcomes.heldBack.find((h) => h.opportunityId === regulated);
+    expect(held).toEqual({ opportunityId: regulated, position: regulatedProbe.position, reason: regulatedProbe.reason });
+    // The ordinary opening: the same reader finds it unregulated from its rows, and the funnel counts it.
+    const plainProbe = await assessOpportunityRole({ projectId, opportunityId: plain });
+    expect(plainProbe.position).toBe('COMPLIANT');
+    expect(plainProbe.countEconomics).toBe(true);
+    expect(reading.outcomes.heldBack.find((h) => h.opportunityId === plain)).toBeUndefined();
+    expect(reading.outcomes.countedByCurrency).toEqual({ [currency]: 10_000 });
+  });
+
+  it('counts the settled cash of an ordinary opening, and holds back only the regulated one', async () => {
+    await settledOpening('Photo prints for a cafe wall', 10_000);
+    await settledOpening('Spreadsheet cleanup for a bakery', 7_500);
+    const reading = await cashFunnel({ projectId });
+    expect(reading.outcomes.settledByCurrency).toEqual({ [currency]: 17_500 });
+    expect(reading.outcomes.countedByCurrency).toEqual({ [currency]: 17_500 });
+    expect(reading.outcomes.heldBack).toEqual([]);
   });
 });
