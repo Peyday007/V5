@@ -25,6 +25,7 @@
  * its source (§96/§97) and the register owns nothing but its own rows.
  */
 import type { SourceItem } from '../../domain/factoryProgram.ts';
+import { registerProbe } from '../factory/program/probes.ts';
 
 export const REGISTER_PATH = 'docs/programs/brain-architecture/OPEN-QUESTIONS-REGISTER.md';
 
@@ -397,3 +398,17 @@ export async function reconcileRegisterIfDue(now = Date.now(), ports?: RegisterP
     return { error: error instanceof Error ? error.message.slice(0, 300) : String(error) };
   }
 }
+
+/**
+ * The fixed check of GOV-11: `probe r01.gov-11({}) passes`. It is the production
+ * check itself — the program's stored source and appended releases against the
+ * register at the running revision — so it passes only when every owner decision
+ * is recorded verbatim, every open question is still open without a default (or
+ * answered and re-mapped), and the register has been mapped against every
+ * appended release. Registered here, by the module the goals tick loads at boot,
+ * so the running Brain answers it rather than reporting it unregistered.
+ */
+registerProbe('r01.gov-11', async () => {
+  const outcome = await checkRegisterOnProduction();
+  return { ok: outcome.ok, detail: outcome.detail };
+});
