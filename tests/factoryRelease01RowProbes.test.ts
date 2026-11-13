@@ -14,6 +14,7 @@ import {
 } from '../server/services/factory/program/release01/acquisitionProbe.ts';
 import { continuityHolds, ledgerHolds, type AttemptRow } from '../server/services/factory/program/release01/continuityProbe.ts';
 import { getProbe } from '../server/services/factory/program/probes.ts';
+import { promotionHolds } from '../server/services/factory/program/release01/governanceProbe.ts';
 
 const at = '2026-11-13T00:00:00.000Z';
 const judgment = (capability: string, outcome: string, route: string | null, reason = 'why'): JudgmentRow => ({
@@ -25,7 +26,7 @@ const judgment = (capability: string, outcome: string, route: string | null, rea
 });
 
 describe('the probes are registered in the protected module', () => {
-  it.each(['r01.acq-21-1', 'r01.acq-21-2', 'r01.acq-21-5', 'r01.cont-35', 'r01.learn-15-1'])('%s, and its query runs: UNKNOWN on an empty Brain', async (name) => {
+  it.each(['r01.acq-21-1', 'r01.acq-21-2', 'r01.acq-21-5', 'r01.cont-35', 'r01.learn-15-1', 'r01.gov-11', 'r01.gov-22-1'])('%s, and its query runs: UNKNOWN on an empty Brain', async (name) => {
     await freshProject();
     const probe = getProbe(name);
     expect(probe).not.toBeNull();
@@ -113,5 +114,21 @@ describe('LEARN-15-1: versioned predictions, exposures and observed outcomes', (
     const r = ledgerHolds([p('c@v1'), p('c@v2'), row('OUTCOME', { predictionId: 'c@v2', occurred: false })]);
     expect(r.ok).toBe(true);
     expect(r.detail).toMatch(/2 version\(s\) of 1 claim\(s\) \(1 revised\)/);
+  });
+});
+
+describe('GOV-22-1: promoted from a measured blocker, demoted with the requirement kept', () => {
+  const ev = (kind: string, detail: Record<string, unknown>) => ({ kind, detail, at });
+  it('is UNKNOWN with no promotion', () => {
+    expect(promotionHolds([]).ok).toBeNull();
+    expect(promotionHolds([ev('PROGRAM_CAPABILITY_DEMOTED', { requirement: 'X', requirementRetained: true })]).ok).toBeNull();
+  });
+  it('fails a promotion without its evidence or map version, and a demotion that dropped the requirement', () => {
+    expect(promotionHolds([ev('PROGRAM_CAPABILITY_PROMOTED', { requirement: 'X', reasons: ['BLOCKED_TRANSACTIONS'], evidence: [], mapVersion: 3 })]).ok).toBe(false);
+    expect(promotionHolds([ev('PROGRAM_CAPABILITY_PROMOTED', { requirement: 'X', reasons: ['r'], evidence: ['e'] })]).ok).toBe(false);
+    expect(promotionHolds([ev('PROGRAM_CAPABILITY_DEMOTED', { requirement: 'X', requirementRetained: false })]).ok).toBe(false);
+  });
+  it('passes on a measured promotion applied to the map', () => {
+    expect(promotionHolds([ev('PROGRAM_CAPABILITY_PROMOTED', { requirement: 'X', reasons: ['r'], evidence: ['3 blocked transactions'], mapVersion: 4 })]).ok).toBe(true);
   });
 });
