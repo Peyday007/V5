@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  doubleCommitted, holdsFrom, planTransfer, remainingCapacity, reserve,
+  counterpartyLedger, doubleCommitted, holdsFrom, planTransfer, recordedReservationEvents, recordHoldOutcome, recordReservation,
+  recordTransfer, remainingCapacity, reserve, RESERVATION_EVENT_KIND,
   type ReservationEvent, type ReservationRequest,
 } from '../server/services/labor/counterparties/reservations.ts';
+import { getDb } from '../server/db/database.ts';
+import { freshProject } from './helpers.ts';
 
 const W = { windowStart: '2026-12-01T00:00:00Z', windowEnd: '2026-12-08T00:00:00Z' };
 const req = (over: Partial<ReservationRequest> = {}): ReservationRequest => ({
@@ -79,5 +82,66 @@ describe('reservations', () => {
     events = outcome(events, 'k1', 'FAILED', '2026-11-20T00:00:00Z');
     const plan = planTransfer(events, { primaryKey: 'k1', alternativeKey: 'k1-alt', alternativeCounterpartyId: 'crew-b', alternativeCapacityUnits: 2, authorityRequired: [], authorityHeld: [], at: '2026-11-20T01:00:00Z' });
     expect(plan).toMatchObject({ action: 'REFUSED', reason: 'CAPACITY' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The recorded half: real rows, one arbiter
+// ---------------------------------------------------------------------------
+
+describe('reservations, recorded', () => {
+  let bizA = '';
+  const bizB = 'biz-recorded-b';
+  beforeEach(async () => {
+    bizA = (await freshProject()).project.id;
+  });
+
+  it('writes each event as an append-only cash_events row on the counterparty ledger, readable across businesses', async () => {
+    const first = await recordReservation(req({ businessId: bizA }), 'BRAIN');
+    expect(first).toMatchObject({ ok: true, duplicate: false });
+    const rows = await getDb().all<{ project_id: string; opportunity_id: string; kind: string; actor_ref: string }>(
+      'SELECT project_id, opportunity_id, kind, actor_ref FROM cash_events WHERE kind = ?', [RESERVATION_EVENT_KIND],
+    );
+    expect(rows).toEqual([{ project_id: bizA, opportunity_id: counterpartyLedger('crew-a'), kind: RESERVATION_EVENT_KIND, actor_ref: 'BRAIN' }]);
+    // A second business is refused on the capacity the first one holds, read from the row.
+    const second = await recordReservation(req({ key: 'k2', businessId: bizB, commitmentId: 'job-2', units: 2 }), 'BRAIN');
+    expect(second).toMatchObject({ ok: false, reason: 'CAPACITY', remaining: 1, holders: [{ commitmentId: 'job-1', businessId: bizA, units: 3 }] });
+    // The repeat of the same logical key writes nothing.
+    expect(await recordReservation(req({ businessId: bizA }), 'BRAIN')).toEqual({ ok: true, duplicate: true, event: null });
+    expect(await recordedReservationEvents(['crew-a'])).toHaveLength(1);
+  });
+
+  it('lets exactly one of two concurrent businesses take the last capacity', async () => {
+    const answers = await Promise.all([
+      recordReservation(req({ key: 'race-1', businessId: bizA, commitmentId: 'job-1', units: 3 }), 'BRAIN'),
+      recordReservation(req({ key: 'race-2', businessId: bizB, commitmentId: 'job-2', units: 3 }), 'BRAIN'),
+    ]);
+    expect(answers.filter((a) => a.ok)).toHaveLength(1);
+    expect(answers.filter((a) => !a.ok && a.reason === 'CAPACITY')).toHaveLength(1);
+    const events = await recordedReservationEvents(['crew-a']);
+    expect(events).toHaveLength(1);
+    expect(remainingCapacity(events, 'crew-a', 4, W).remaining).toBe(1);
+  });
+
+  it('records a reported failure, then transfers in one transaction, and never on silence', async () => {
+    await recordReservation(req({ businessId: bizA }), 'BRAIN');
+    const transfer = { primaryKey: 'k1', primaryCounterpartyId: 'crew-a', alternativeKey: 'k1-alt', alternativeCounterpartyId: 'crew-b', alternativeCapacityUnits: 5, authorityRequired: ['commit-spend'], authorityHeld: ['commit-spend'], at: '2026-11-20T01:00:00Z' };
+    expect(await recordTransfer(transfer, 'BRAIN')).toMatchObject({ action: 'UNKNOWN' });
+    expect(await recordedReservationEvents(['crew-a', 'crew-b'])).toHaveLength(1);
+
+    expect(await recordHoldOutcome({ counterpartyId: 'crew-a', key: 'k1', kind: 'FAILED', authorityHeld: [], at: '2026-11-20T00:00:00Z', actorRef: 'BRAIN' })).toMatchObject({ recorded: true });
+    expect(await recordTransfer(transfer, 'BRAIN')).toMatchObject({ action: 'TRANSFER' });
+    const after = await recordedReservationEvents(['crew-a', 'crew-b']);
+    expect(holdsFrom(after).map((h) => [h.key, h.state]).sort()).toEqual([['k1', 'RELEASED'], ['k1-alt', 'HELD']]);
+    expect(doubleCommitted(after)).toEqual([]);
+    // Doing it again transfers nothing a second time.
+    expect(await recordTransfer(transfer, 'BRAIN')).toMatchObject({ action: 'REFUSED', reason: 'NOT_FAILED' });
+    expect(await recordedReservationEvents(['crew-a', 'crew-b'])).toHaveLength(after.length);
+  });
+
+  it('refuses an outcome for a hold that does not exist, and writes nothing', async () => {
+    expect(await recordHoldOutcome({ counterpartyId: 'crew-a', key: 'nope', kind: 'FAILED', authorityHeld: [], at: '2026-11-20T00:00:00Z', actorRef: 'BRAIN' }))
+      .toMatchObject({ recorded: false, reason: 'NO_SUCH_HOLD' });
+    expect(await recordedReservationEvents(['crew-a'])).toEqual([]);
   });
 });
