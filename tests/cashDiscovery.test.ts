@@ -1354,7 +1354,7 @@ describe('the wider economy (2026-10-28)', () => {
     expect(nextGoalRoundFor(parkedHistory, new Date(Date.now() + 1.5 * day).toISOString())).toBe(2);
   });
 
-  it('asks a goal lens to tag its openings, and files an untagged open request by its lane (0 of 18 goal rounds, 2026-11-11; 2 of 39, 2026-11-12)', async () => {
+  it('asks a goal lens to tag its openings, because an untagged answer files nothing (0 of 18 goal rounds, 2026-11-11)', async () => {
     const { openGoalDiscovery, GOAL_OPENING_SENTENCE } = await import('../server/services/cash/discovery.ts');
     const { OPPORTUNITY_SIGNALS } = await import('../server/domain/types.ts');
     const { createWorkstream, getWorkstream } = await import('../server/repos/register.ts');
@@ -1377,11 +1377,7 @@ describe('the wider economy (2026-10-28)', () => {
     const bucketRounds = async (bucketId: string) => (await listRounds(projectId)).filter((one) => one.bucketId === bucketId);
 
     // The recorded failure class: a lens round whose worker answered the arrangement
-    // question with accepted, sourced claims and no signal ended DONE having filed nothing.
-    // Asking for the tag did not fix it in production (2 of 39 goal rounds filed, 2026-11-12),
-    // so a goal round's gated demand_signal claim — a specific open request by the lane's own
-    // definition — is now read by its lane as ACTIVE_BUYER_DEMAND. A claim in a lane that is
-    // not an opening still files nothing untagged.
+    // question with accepted, sourced claims and no signal ends DONE having filed nothing.
     const untagged = await openGoalDiscovery({ goal: w, target, bestReach: null });
     expect(untagged).not.toBeNull();
     const asked = (await getCandidate(untagged!.candidateId))!.statement;
@@ -1391,16 +1387,10 @@ describe('the wider economy (2026-10-28)', () => {
     for (const signal of OPPORTUNITY_SIGNALS) expect(asked).toContain(signal);
     await finishedMission({
       candidateId: untagged!.candidateId,
-      claims: [
-        { claim: 'Riverside Property Group posted a request on 2026-11-10 for a bookkeeping firm to reconcile its monthly rent rolls, responses due 2026-11-24.', lane: SIGNAL_LANE, sourceUrl: 'https://example.test/goal-lens/untagged' },
-        { claim: 'Rent-roll reconciliation is a common pain point for property managers.', lane: 'market_context', sourceUrl: 'https://example.test/goal-lens/context' },
-      ],
+      claims: [{ claim: 'Property managers pay bookkeeping firms 400 dollars a month for rent-roll reconciliation.', lane: SIGNAL_LANE, sourceUrl: 'https://example.test/goal-lens/untagged' }],
     });
     await harvest({ projectId });
-    expect((await bucketRounds(untagged!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 1]]);
-    const { listOpportunities } = await import('../server/repos/cashPortfolio.ts');
-    const fromUntagged = (await listOpportunities({ projectId })).filter((one) => one.discoveredByCandidateId === untagged!.candidateId);
-    expect(fromUntagged.map((one) => one.opportunitySignal)).toEqual(['ACTIVE_BUYER_DEMAND']);
+    expect((await bucketRounds(untagged!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 0]]);
 
     // The same answer, tagged as the question now asks, is filed and counted on its round.
     const tagged = await openGoalDiscovery({ goal: w, target, bestReach: null });
@@ -1412,9 +1402,6 @@ describe('the wider economy (2026-10-28)', () => {
     });
     await harvest({ projectId });
     expect((await bucketRounds(tagged!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 1]]);
-    // The worker's own tag wins over the lane's reading.
-    const fromTagged = (await listOpportunities({ projectId })).filter((one) => one.discoveredByCandidateId === tagged!.candidateId);
-    expect(fromTagged.map((one) => one.opportunitySignal)).toEqual(['RECURRING_OUTSOURCED_WORK']);
   });
 
   it('files a goal lens round\'s untagged, priced demand_pattern claim as RECURRING_OUTSOURCED_WORK, and keeps an unpriced one as context (d104f93)', async () => {
