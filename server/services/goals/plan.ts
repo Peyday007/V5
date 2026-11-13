@@ -67,6 +67,14 @@ import type { EvidenceTier } from '../../domain/quant.ts';
 import { readPathways, type BrainCapabilities, type PathwayReading } from './pathways.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
 
+/**
+ * Every authority check in a plan is a reading: it asks "is this granted?" for an
+ * action nobody is performing. It must not append an AUTHORITY_DECISION row or raise
+ * an approval request, or the ledger stops showing what Brain did versus what it
+ * proposed (AUTH-34) and a plan pass raises owner requests by reading.
+ */
+const READING = { record: false } as const;
+
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
 
@@ -516,7 +524,7 @@ async function nextTestFor(link: ChainLink, one: ModelledOpportunity, projectId:
   const title = one.opportunity.title.slice(0, 80);
   switch (link) {
     case 'CONVERSION': {
-      const contact = await checkCommercialAuthority({ projectId, action: 'CONTACT_BUYER' });
+      const contact = await checkCommercialAuthority({ projectId, action: 'CONTACT_BUYER' }, READING);
       const message = (await readCapabilities(['SEND_A_MESSAGE']))[0];
       const test = `A bounded offer test for "${title}": send the offer to a few reachable buyers and count who agrees. Fewer agreements than the plan needs downgrades it.`;
       if (!contact.ok) return { link, test, by: 'PERSON', blocker: `Brain has no standing permission to contact buyers here (${contact.reason}). Grant CONTACT_BUYER under the commercial authority to let it run this test.` };
@@ -721,7 +729,7 @@ export function judgeAcceptance(input: {
 async function missingPermissions(projectId: string): Promise<string[]> {
   const out: string[] = [];
   for (const action of ['CONTACT_BUYER', 'QUOTE_AND_INVOICE', 'ACCEPT_PAYMENT']) {
-    if (!(await checkCommercialAuthority({ projectId, action })).ok) out.push(action);
+    if (!(await checkCommercialAuthority({ projectId, action }, READING)).ok) out.push(action);
   }
   const caps = new Map((await readCapabilities(['SEND_A_MESSAGE', 'TAKE_A_PAYMENT'])).map((cap) => [cap.id, cap.state]));
   if (caps.get('SEND_A_MESSAGE') !== 'PRESENT') out.push('Instantly connected (messaging)');
@@ -1295,7 +1303,7 @@ export async function missingForSale(one: ModelledOpportunity, target: TargetRea
   const send: string[] = [];
   const collect: string[] = [];
   let sendByPerson = false;
-  const granted = async (action: string) => (await checkCommercialAuthority({ projectId: target.projectId, action })).ok;
+  const granted = async (action: string) => (await checkCommercialAuthority({ projectId: target.projectId, action }, READING)).ok;
   const caps = new Map((await readCapabilities(['SEND_A_MESSAGE', 'ISSUE_AN_INVOICE', 'TAKE_A_PAYMENT'])).map((cap) => [cap.id, cap.state]));
   if (!(await granted('CONTACT_BUYER'))) {
     send.push('a standing commercial authority granting CONTACT_BUYER (none exists for this project)');
