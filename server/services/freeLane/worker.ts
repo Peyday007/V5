@@ -710,16 +710,24 @@ const NOTHING_RAN: ReadonlySet<InfraFailureKind> = new Set<InfraFailureKind>(['P
  * free-lane items ending on "Connection terminated", "not queryable", "Query
  * read timeout" and statement timeouts, none of which the three-sentence
  * `BRAIN_NOT_REACHED` recognised, so a dropped connection under a read threw
- * away the model's minutes of work. Nothing-ran failures are retried for every
- * tool. A lost connection, a statement timeout or an unavailable database leaves
- * a mutation's outcome unknown (invariant 26), so those are retried only for a
- * tool that declares itself read-only, which has no effect to repeat.
+ * away the model's minutes of work. A lost connection, a statement timeout or an
+ * unavailable database leaves a mutation's outcome unknown (invariant 26), so
+ * those are retried only for a tool that declares itself read-only, which has
+ * no effect to repeat.
+ *
+ * Nothing-ran is true only of the checkout that failed. A tool that makes
+ * several checkouts can commit through an earlier one and then fail a later
+ * one, and asking again re-runs the whole tool, committed part included. So a
+ * nothing-ran failure is retried for a read-only tool, or for a mutation that
+ * declares itself idempotent (`idempotentHint`) — whose committed part a second
+ * run cannot repeat as a second effect — and never for any other mutation.
  */
-export function databaseRetryable(error: unknown, readOnly: boolean): boolean {
+export function databaseRetryable(error: unknown, readOnly: boolean, idempotent = false): boolean {
+  if (readOnly) return BRAIN_NOT_REACHED.test(String((error as Error)?.message ?? error)) || classifyInfraFailure(error) !== null;
+  if (!idempotent) return false;
   if (BRAIN_NOT_REACHED.test(String((error as Error)?.message ?? error))) return true;
   const kind = classifyInfraFailure(error);
-  if (!kind) return false;
-  return NOTHING_RAN.has(kind) || readOnly;
+  return kind !== null && NOTHING_RAN.has(kind);
 }
 
 /** What the workload pool held when a wait is chosen; null off Postgres. */
@@ -764,7 +772,7 @@ async function call(ctx: Ctx, tool: string, args: Record<string, unknown>): Prom
     const outcome = await retryNotReached(
       () => found.run(args, { principal: ctx.principal, requestId: `req_${Math.random().toString(36).slice(2)}` }),
       NOT_REACHED_BACKOFF_MS,
-      { readOnly: found.annotations.readOnlyHint === true },
+      { readOnly: found.annotations.readOnlyHint === true, idempotent: found.annotations.idempotentHint === true },
     );
     return outcome.value;
   } finally {
@@ -774,14 +782,17 @@ async function call(ctx: Ctx, tool: string, args: Record<string, unknown>): Prom
 
 /**
  * Run `fn`, waiting and running it again while Brain's database failed in a way
- * `databaseRetryable` allows for this call. Exported for tests.
+ * `databaseRetryable` allows for this call. `call` always states the tool's own
+ * `readOnlyHint` and `idempotentHint`; a bare `fn` with no declaration is taken
+ * as a single idempotent effect. Exported for tests.
  */
 export async function retryNotReached<T>(
   fn: () => Promise<T>,
   backoff: readonly number[] = NOT_REACHED_BACKOFF_MS,
-  options: { readOnly?: boolean; pressure?: () => PoolPressure | null; sleep?: (ms: number) => Promise<void> } = {},
+  options: { readOnly?: boolean; idempotent?: boolean; pressure?: () => PoolPressure | null; sleep?: (ms: number) => Promise<void> } = {},
 ): Promise<T> {
   const readOnly = options.readOnly === true;
+  const idempotent = options.idempotent !== false;
   const pressure = options.pressure ?? workloadPressure;
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   for (let attempt = 0; ; attempt += 1) {
@@ -789,7 +800,7 @@ export async function retryNotReached<T>(
       return await fn();
     } catch (error) {
       const wait = backoff[attempt];
-      if (wait === undefined || !databaseRetryable(error, readOnly)) throw error;
+      if (wait === undefined || !databaseRetryable(error, readOnly, idempotent)) throw error;
       await sleep(pressuredWait(wait, pressure()));
     }
   }

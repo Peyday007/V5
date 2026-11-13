@@ -5,6 +5,7 @@
  * whose outcome a lost connection left unknown (invariant 26).
  */
 import { describe, expect, it } from 'vitest';
+import { findTool } from '../server/mcp/tools.ts';
 import { databaseRetryable, pressuredWait, PRESSURED_WAIT_CAP_MS, retryNotReached } from '../server/services/freeLane/worker.ts';
 
 const noSleep = async (): Promise<void> => undefined;
@@ -62,8 +63,49 @@ describe('free-lane database retry', () => {
       if (calls < 3) throw calls === 1 ? poolTimeout() : new Error('timeout exceeded when trying to connect');
       return 'submitted';
     };
-    await expect(retryNotReached(write, [1, 1, 1], { readOnly: false, sleep: noSleep, pressure: () => null })).resolves.toBe('submitted');
+    await expect(retryNotReached(write, [1, 1, 1], { readOnly: false, idempotent: true, sleep: noSleep, pressure: () => null })).resolves.toBe('submitted');
     expect(calls).toBe(3);
+  });
+
+  it('never re-runs a non-idempotent mutation that committed through one checkout and then failed the next', async () => {
+    for (const nothingRan of [poolTimeout, () => new Error('timeout exceeded when trying to connect')]) {
+      const committed: string[] = [];
+      let runs = 0;
+      // One tool, two checkouts: the first commits, the second never gets a connection.
+      const write = async () => {
+        runs += 1;
+        committed.push(`row-${runs}`);
+        throw nothingRan();
+      };
+      await expect(retryNotReached(write, [1, 1, 1], { readOnly: false, idempotent: false, sleep: noSleep, pressure: () => null })).rejects.toThrow();
+      expect(runs).toBe(1);
+      expect(committed).toEqual(['row-1']);
+      expect(databaseRetryable(nothingRan(), false, false)).toBe(false);
+    }
+  });
+
+  it('re-runs an idempotent mutation after a later checkout failed, and its committed part lands once', async () => {
+    const rows = new Map<string, number>();
+    let runs = 0;
+    const write = async () => {
+      runs += 1;
+      // Keyed by work item: a second run upserts the same row rather than adding one.
+      rows.set('item-1', 1);
+      if (runs < 2) throw poolTimeout();
+      return 'submitted';
+    };
+    await expect(retryNotReached(write, [1, 1], { readOnly: false, idempotent: true, sleep: noSleep, pressure: () => null })).resolves.toBe('submitted');
+    expect(runs).toBe(2);
+    expect(rows.get('item-1')).toBe(1);
+  });
+
+  it('every mutating tool the free lane asks again declares itself idempotent, so the retry rests on a declaration', () => {
+    for (const name of ['brain_complete_work', 'brain_fail_work', 'brain_release_work', 'brain_submit_claims', 'brain_submit_audit', 'brain_submit_synthesis', 'brain_propose_fragments']) {
+      const tool = findTool(name);
+      expect(tool, name).not.toBeNull();
+      if (tool!.annotations.readOnlyHint) continue;
+      expect(tool!.annotations.idempotentHint, name).toBe(true);
+    }
   });
 
   it('never retries an error that is not the database', async () => {
