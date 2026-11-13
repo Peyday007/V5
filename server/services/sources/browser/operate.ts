@@ -28,8 +28,12 @@
  *  5. run through the existing owner, `operateWorkflow` → `runBrowserWorkflow`
  *     (its acquisition judgment, OPERATE_PERMISSION check, destination checks
  *     and browser slot are unchanged);
- *  6. verify the outcome against the declared outputs and, when given, the
- *     expected page state and datasets;
+ *  6. verify the outcome against the declared outputs, the capability's own
+ *     fixtures for these inputs and, when given, the expected page state and
+ *     datasets. The capability's declared expected page states are checked in
+ *     the live page during step 5 (`withExpectedStates`); a missing one, or a
+ *     fixture the run no longer satisfies, is drift that affects correctness,
+ *     so the capability moves to REVIEW rather than being guessed through;
  *  7. settle the effect claim (COMPLETED, FAILED, or UNKNOWN — never assumed
  *     not to have happened once a step ran);
  *  8. write exactly one BROWSER_WORKFLOW_RUN row through `recordBinEvent`,
@@ -58,10 +62,14 @@ import type { ActorType } from '../../../domain/types.ts';
 import { authorizeActions, type ActionClass, type ApprovedAction, type WorkflowJudgment } from './actionClass.ts';
 import {
   BROWSER_CAPABILITY_EVENT,
+  checkFixture,
   effectSubject,
+  expectedStateDrift,
+  fixturesFor,
   planCapabilityRun,
   readBrowserCapabilities,
   verifyObtained,
+  withExpectedStates,
   type PriorRun,
   type CapabilityDeps,
   type CapabilityRecord,
@@ -105,6 +113,7 @@ export type OperateFailureReason =
   | 'EXPECTED_STATE_MISSING'
   | 'FRESH'
   | 'RETRY_BACKOFF'
+  | 'FIXTURE_MISMATCH'
   | string;
 
 export interface OperateCapabilityInput {
@@ -254,7 +263,8 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
   // host/name is written separately (and `recordBrowserWorkflow` is callable on its own),
   // so reading it here would let a step list nobody approved run under this approval.
   // Only its lifecycle (retired, interface changed, draft) is taken from the store.
-  const approvedWorkflow = c.workflow;
+  // The declared expected page states run as checks in the page, after the step each names.
+  const approvedWorkflow = withExpectedStates(c.workflow, c.expectedStates).workflow;
   const readStored = deps.operateDeps?.workflows ?? readBrowserWorkflows;
   const pinnedWorkflows = async (h: string): Promise<Map<string, WorkflowRecord>> => {
     const stored = await readStored(h);
@@ -291,16 +301,23 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
   // 6. Verify.
   const obtained = verifyObtained(c, run);
   const verification = input.expectation ? verifyOutcome(run, input.expectation, { now, ...(deps.finalPage ? { finalPage: deps.finalPage } : {}) }) : null;
-  const verified = run.outcome === 'COMPLETED' && obtained.ok && (verification?.verified ?? true);
+  // An expected page state that did not hold, in the live page, is drift — never a plain failure to retry.
+  const drift = expectedStateDrift(run);
+  // The capability's own fixtures for exactly these inputs: what a run with them must obtain.
+  const fixtures = run.outcome === 'COMPLETED' && obtained.ok ? fixturesFor(c, input.inputs).map((f) => ({ name: f.name, ...checkFixture(f, run) })) : [];
+  const fixtureMismatch = fixtures.filter((f) => !f.ok);
+  const verified = run.outcome === 'COMPLETED' && obtained.ok && fixtureMismatch.length === 0 && (verification?.verified ?? true);
+  /** Whether the interface no longer matches the approved definition: the lifecycle reads this from the run row. */
+  const interfaceChanged = run.interfaceChanged || drift.length > 0 || fixtureMismatch.length > 0;
 
   let outcome: OperateOutcome;
   let failureReason: OperateFailureReason | null;
   if (verified) {
     outcome = 'COMPLETED';
     failureReason = null;
-  } else if (run.interfaceChanged) {
+  } else if (interfaceChanged) {
     outcome = 'REVIEW';
-    failureReason = 'INTERFACE_CHANGED';
+    failureReason = run.interfaceChanged ? 'INTERFACE_CHANGED' : drift.length > 0 ? 'EXPECTED_STATE_MISSING' : 'FIXTURE_MISMATCH';
   } else if (run.boundary === 'AUTHENTICATION' && c.session.account) {
     outcome = 'REAUTHORIZE';
     failureReason = 'SESSION_EXPIRED';
@@ -346,7 +363,7 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
       host: cap.host,
       name: cap.name,
       boundary: run.boundary,
-      interfaceChanged: run.interfaceChanged,
+      interfaceChanged,
       finalUrl: safeRun.finalUrl,
       steps: safeRun.steps,
       stepsOutcome: run.outcome,
@@ -360,6 +377,8 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
         missing: obtained.missing,
         checks: verification?.checks ?? [],
         asOf: verification?.asOf ?? null,
+        expectedStates: { declared: c.expectedStates.length, missing: drift },
+        fixtures,
       },
     },
   }));
@@ -370,7 +389,42 @@ export async function operateCapability(input: OperateCapabilityInput, deps: Ope
     failureReason,
     detail: safeRun.detail,
     verification,
-    run: safeRun,
+    run: { ...safeRun, interfaceChanged },
     sessionOpened: true,
   };
+}
+
+export interface FixtureTestResult {
+  fixture: string;
+  result: OperateCapabilityResult | null;
+  detail: string;
+}
+
+/**
+ * Run a capability's test fixtures: each one through `operateCapability` with
+ * the fixture's own inputs, so every rule above applies unchanged (lifecycle,
+ * approvals, the request budget, redacted rows) and a fixture the site no
+ * longer satisfies moves the capability to REVIEW exactly as an ordinary run
+ * would. Only a READ is exercised this way: a mutation's fixtures are checked
+ * on its approved runs, never by performing the mutation to test it.
+ */
+export async function testCapabilityFixtures(
+  input: Pick<OperateCapabilityInput, 'projectId' | 'host' | 'name' | 'actor' | 'approvals' | 'declaredPerMinute'>,
+  deps: OperateCapabilityDeps = {},
+): Promise<FixtureTestResult[]> {
+  const host = input.host.trim().toLowerCase();
+  const records = await (deps.capabilities ?? ((h: string) => readBrowserCapabilities(h, deps.capabilityDeps ?? {})))(host);
+  const cap = findRecord(records, host, input.name);
+  if (!cap) return [{ fixture: '', result: null, detail: `no capability "${input.name}" is recorded for ${host}` }];
+  const c = cap.current.capability;
+  if (c.effect !== 'READ') {
+    return c.fixtures.map((f) => ({ fixture: f.name, result: null, detail: 'a mutation is not performed to test it; its fixtures are checked on approved runs with those inputs' }));
+  }
+  const out: FixtureTestResult[] = [];
+  for (const f of c.fixtures) {
+    const result = await operateCapability({ ...input, inputs: { ...f.inputs } }, { ...deps, capabilities: async () => records });
+    out.push({ fixture: f.name, result, detail: `${result.outcome}${result.failureReason ? ` (${result.failureReason})` : ''}` });
+    if (result.outcome === 'REVIEW') break;
+  }
+  return out;
 }

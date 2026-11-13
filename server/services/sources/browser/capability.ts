@@ -239,6 +239,11 @@ export function validateCapability(c: BrowserCapability): string[] {
       if (!e?.text && !e?.absentText && !e?.urlIncludes && !hasLocator(e?.locator)) problems.push(`expected state ${i + 1}: names what must hold`);
     });
 
+  if (Array.isArray(c.expectedStates) && steps.length > 0) {
+    const checked = withExpectedStates(c.workflow, c.expectedStates).workflow.steps.length;
+    if (checked > MAX_WORKFLOW_STEPS) problems.push(`the workflow's steps plus its expected-state checks are at most ${MAX_WORKFLOW_STEPS} (${checked})`);
+  }
+
   if (!(Number.isInteger(c.timeoutMs) && c.timeoutMs > 0 && c.timeoutMs <= MAX_CAPABILITY_TIMEOUT_MS)) problems.push(`a timeout of 1-${MAX_CAPABILITY_TIMEOUT_MS} ms`);
 
   const r = c.retry;
@@ -541,6 +546,105 @@ export function verifyObtained(c: BrowserCapability, run: OperateResult['run']):
   const got = new Set([...run.extracted.filter((e) => e.text.trim().length > 0).map((e) => e.name), ...run.downloads.filter((d) => d.chars > 0).map((d) => d.name)]);
   const missing = c.outputs.map((o) => o.name).filter((n) => !got.has(n));
   return { ok: missing.length === 0, missing };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Executing the declared expected states and fixtures (pure)                  */
+/* ------------------------------------------------------------------------- */
+
+type ExpectStep = Extract<BrowserWorkflow['steps'][number], { kind: 'expect' }>;
+
+const expectStepOf = (e: ExpectedState): ExpectStep => {
+  const step: ExpectStep = { kind: 'expect' };
+  if (e.text) step.text = e.text;
+  if (e.absentText) step.absentText = e.absentText;
+  if (e.urlIncludes) step.urlIncludes = e.urlIncludes;
+  if (e.locator) step.locator = e.locator;
+  return step;
+};
+
+const sameCheck = (a: ExpectStep, b: ExpectStep): boolean => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+
+export interface ExpectedStateCheck {
+  /** Index into the capability's `expectedStates`. */
+  state: number;
+  /** 0-based index, in the workflow that runs, of the `expect` step that checks it. */
+  stepIndex: number;
+}
+
+/**
+ * The workflow a capability actually runs: its approved steps with every
+ * declared expected page state checked in the live page right after the step
+ * it names, before the next step is taken. Pure.
+ *
+ * The check is an ordinary `expect` step, so the workflow owner evaluates it in
+ * the page exactly as it evaluates the workflow's own success checks — there is
+ * no second way of looking at a page. A state whose named step is already an
+ * identical `expect` (the shape a
+ * discovered capability has, `draftCapabilityFromRun`: the state named after
+ * an `expect` step is that step's own check) is not checked twice.
+ * Expected states are part of the approved content hash, so nothing here runs
+ * a step nobody approved, and an `expect` step reads the page and changes nothing.
+ */
+export function withExpectedStates(workflow: BrowserWorkflow, states: readonly ExpectedState[]): { workflow: BrowserWorkflow; checks: ExpectedStateCheck[] } {
+  const original = workflow.steps ?? [];
+  const steps: BrowserWorkflow['steps'] = [];
+  const checks: ExpectedStateCheck[] = [];
+  /** Expected states that are the named step itself (an identical `expect`), keyed by that step's original index. */
+  const ownCheck = new Map<number, number[]>();
+  states.forEach((e, k) => {
+    const named = original[e.afterStep - 1];
+    if (named?.kind === 'expect' && sameCheck(named, expectStepOf(e))) ownCheck.set(e.afterStep - 1, [...(ownCheck.get(e.afterStep - 1) ?? []), k]);
+  });
+  const deduped = new Set([...ownCheck.values()].flat());
+  original.forEach((step, i) => {
+    for (const k of ownCheck.get(i) ?? []) checks.push({ state: k, stepIndex: steps.length });
+    steps.push(step);
+    states.forEach((e, k) => {
+      if (e.afterStep !== i + 1 || deduped.has(k)) return;
+      checks.push({ state: k, stepIndex: steps.length });
+      steps.push(expectStepOf(e));
+    });
+  });
+  return { workflow: { ...workflow, steps }, checks };
+}
+
+/**
+ * The expected page states a run found missing: every `expect` step that ran
+ * and failed. A workflow's own success checks are expected states too (a
+ * discovered capability's are copied from them), so any of them failing means
+ * the page is not in the state the approved definition was built against. Pure.
+ */
+export function expectedStateDrift(run: Pick<OperateResult['run'], 'steps'>): { stepIndex: number; detail: string }[] {
+  return run.steps.filter((s) => s.kind === 'expect' && !s.ok).map((s) => ({ stepIndex: s.index, detail: s.detail }));
+}
+
+const squash = (t: string): string => t.replace(/\s+/g, ' ').trim();
+
+/** The capability's fixtures whose inputs are exactly these inputs. Pure. */
+export function fixturesFor(c: Pick<BrowserCapability, 'fixtures'>, inputs: Record<string, string>): CapabilityFixture[] {
+  const want = JSON.stringify(canonical(inputs));
+  return (c.fixtures ?? []).filter((f) => JSON.stringify(canonical(f.inputs ?? {})) === want);
+}
+
+/**
+ * Whether a run obtained what a fixture says it must: each named output's text
+ * contains the fixture's expectation (whitespace-normalized; compared both raw
+ * and redacted, because a discovered fixture's excerpt was recorded redacted). Pure.
+ */
+export function checkFixture(fixture: CapabilityFixture, run: Pick<OperateResult['run'], 'extracted' | 'downloads'>): { ok: boolean; mismatched: string[] } {
+  const obtained = new Map<string, string>();
+  for (const e of run.extracted) obtained.set(e.name, `${obtained.get(e.name) ?? ''}\n${e.text}`);
+  for (const d of run.downloads) obtained.set(d.name, `${obtained.get(d.name) ?? ''}\n${d.text}`);
+  const mismatched = Object.entries(fixture.expect ?? {})
+    .filter(([name, want]) => {
+      const got = obtained.get(name);
+      if (got === undefined) return true;
+      const w = squash(want);
+      return !(squash(got).includes(w) || squash(redactText(got)).includes(w));
+    })
+    .map(([name]) => name);
+  return { ok: mismatched.length === 0, mismatched };
 }
 
 /* ------------------------------------------------------------------------- */

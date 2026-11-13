@@ -64,6 +64,9 @@ const publishCap = (): BrowserCapability => {
   };
   c.effect = 'MUTATION';
   c.retry = { maxAttempts: 1, backoffMs: 0, retryAfterUnknown: false };
+  // Its own fixture: what publishing obtains. Fixtures are executed (repair F3), so a
+  // fixture copied from the read capability would correctly fail every publish run.
+  c.fixtures = [{ name: 'october', inputs: { month: '2026-10' }, expect: { report: 'Published' } }];
   return c;
 };
 
