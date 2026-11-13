@@ -114,8 +114,8 @@ describe('the report', () => {
       plan: plan(), planPrev: plan(), planHistory: [], hermesSummary: 'Inspected the goal; recorded a lesson.', openEngineering: [], persistence: {}, lastKeys: ['hermes:inactive'],
       ownerOpportunities: [], unmeasured: ['per-call token counts'],
     });
-    expect(r.text.startsWith('BRAIN — $10K PLAN OPERATIONS REPORT\nHour ending: 2026-11-13T11:00:00.000Z\n\nEXECUTIVE SUMMARY')).toBe(true);
-    for (const s of ['Plan readiness:', 'Progress this hour:', 'Most important improvement:', 'Biggest remaining obstacle:', 'Expected time to qualifying plan:', '$10K PLAN DEVELOPMENT', 'Pipeline (this hour', 'HERMES PERFORMANCE', 'Runs / actions / real outcomes:', 'A thought:', 'B decided:', 'C executed:', 'D improved:', 'PIPELINE PERFORMANCE', 'RESOURCE UTILIZATION', 'TOP 3 BOTTLENECKS', 'SCALING DECISIONS', 'MORE AGENTS:', 'STRONGER MODEL:', 'MORE GPU CAPACITY:', 'MORE RESEARCH CAPACITY:', 'MORE FINANCIAL CAPITAL:', "HERMES' NEXT ACTIONS", 'OWNER OPPORTUNITIES', 'NONE.', 'MODEL ADEQUACY', 'ENGINEERING CAPACITY', 'INTERVENTION TRACKING', 'resolved hermes:inactive', 'Goals inspected 3', 'brain_operator_goal_plan ×2', 'Customer acquisition:', 'Goal-advancing this hour:', 'Estimated improvement:', 'Stronger model?', 'Scarce capabilities:', 'Not instrumented (stated, not estimated): per-call token counts']) {
+    expect(r.text.startsWith('BRAIN — $10K PLAN OPERATIONS REPORT\nHour ending: 2026-11-13T11:00:00.000Z\n\n$10K PLAN — ACTIVE BOTTLENECK ELIMINATION')).toBe(true);
+    for (const s of ['Plan readiness:', 'Main remaining constraint:', 'Constraints eliminated this hour: hermes:inactive', 'Work being performed right now:', 'Independent fixes running simultaneously:', 'Resource or intelligence bottlenecks:', 'Initiated by Hermes without being asked:', 'What actually improved:', 'Would agents, compute or capital accelerate it:', 'Remaining time to a qualifying plan:', '$10K PLAN DEVELOPMENT', 'Pipeline (this hour', 'HERMES PERFORMANCE', 'Runs / actions / real outcomes:', 'A thought:', 'B decided:', 'C executed:', 'D improved:', 'PIPELINE PERFORMANCE', 'RESOURCE UTILIZATION', 'TOP 3 BOTTLENECKS', 'SCALING DECISIONS', 'MORE AGENTS:', 'STRONGER MODEL:', 'MORE GPU CAPACITY:', 'MORE RESEARCH CAPACITY:', 'MORE FINANCIAL CAPITAL:', "HERMES' NEXT ACTIONS", 'OWNER OPPORTUNITIES', 'NONE.', 'MODEL ADEQUACY', 'ENGINEERING CAPACITY', 'INTERVENTION TRACKING', 'resolved hermes:inactive', 'Goals inspected 3', 'brain_operator_goal_plan ×2', 'Customer acquisition:', 'Goal-advancing this hour:', 'Estimated improvement:', 'Stronger model?', 'Scarce capabilities:', 'Not instrumented (stated, not estimated): per-call token counts']) {
       expect(r.text).toContain(s);
     }
     expect(r.text).toContain('Plan reach did not move because its binding factor (reply rate) received no new evidence');
@@ -315,5 +315,33 @@ describe('built from production rows, recorded once an hour, and read by the own
     const { engineeringBrief } = await import('../server/services/operator/director.ts');
     const brief = await engineeringBrief();
     expect(brief.startsWith('OPERATIONS REPORT — act first on what Brain may resolve itself')).toBe(true);
+  });
+});
+
+describe('Hermes wakes on a changed constraint, not only on the hour', () => {
+  it('a new plan reading, or a report whose main bottleneck changed, wakes the operator; an unchanged one does not', async () => {
+    const { project: { id: projectId } } = await freshProject();
+    const goalId = (await createWorkstream({ projectId, title: 'Collect $10,000', intent: 'Collect cash.', purpose: 'REVENUE_DIRECT', createdByUserId: null })).id;
+    const { changedConstraintSince } = await import('../server/services/operator/director.ts');
+    const report = (hour: string, keys: string[]) => recordEvent({
+      projectId, entityType: 'PROJECT', entityId: `ops-report.${hour}`, eventType: 'OWNER_OPERATIONS_REPORT',
+      payload: { status: 'READY', noticeId: `ops-report.${hour}`, subject: 's', text: 't', bottleneckKeys: keys },
+    });
+    await report('20261113T10', ['plan:reply rate']);
+    const since = new Date().toISOString();
+    await new Promise((r) => setTimeout(r, 5));
+    expect(await changedConstraintSince(since)).toBe(false);
+    await report('20261113T11', ['plan:reply rate', 'hermes:inactive']);
+    expect(await changedConstraintSince(since)).toBe(false); // same main constraint: the hourly run is enough
+    await report('20261113T12', ['factory:scheduling', 'plan:reply rate']);
+    expect(await changedConstraintSince(since)).toBe(true); // the main constraint moved
+    const later = new Date().toISOString();
+    await new Promise((r) => setTimeout(r, 5));
+    expect(await changedConstraintSince(later)).toBe(false);
+    await getDb().run(
+      `INSERT INTO goal_plan_readings (id, workstream_id, digest, scenario_model_id, scenario_run_id, verdict, chosen_strategy, strategies, next_test, forecast, created_at) VALUES (?, ?, 'd', NULL, NULL, 'NEEDS_EVIDENCE', NULL, '[]', NULL, '{}', ?)`,
+      ['gpr_wake', goalId, new Date().toISOString()],
+    );
+    expect(await changedConstraintSince(later)).toBe(true); // the plan's conclusion changed
   });
 });

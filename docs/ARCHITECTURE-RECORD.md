@@ -16165,3 +16165,22 @@ The pass recovers missed hours within the last six, newest first: the hour just 
 most one earlier hour per pass. A recovered hour says so, and the conversation is still offered
 the newest hour. The check-then-write of an owner notice is serialized per notice, so a
 presumed-hung attempt and its replacement cannot both record one hour.
+
+**The recurring post-deploy "database" failures were the event loop, not the database
+(2026-11-13).** The connection report on `54de08e` measured the process itself. Its event loop
+stalled for 8–24 s at a time, and in one window it was stalled 49 of 120 s. About 20 s of every
+minute's CPU went to the quant engine (`reconstruct.ts`, `inverseNormal`), plus 15–22 s of
+garbage collection. Pool waits stayed under 2 s throughout. So "Connection terminated due to
+connection timeout", the 502/503s the post-restart verification kept failing on, and the 30–55 s
+`brain_check_in` were all sockets the stalled loop never serviced.
+
+The goal scenario's baseline portfolio evaluation (`cash/goalScenario.ts`) ran that synchronous
+engine inline, once per goal reading. It now runs on the shared evaluator pool (§101), the
+threads the reconstruction already used for the same engine. With no thread available, it
+falls back to running inline and yields first.
+
+Two related changes:
+- **Hermes wakes on a changed constraint.** `changedConstraintSince` wakes the operator within
+  minutes of a new plan reading, or of a report whose main bottleneck moved, as an engineering
+  outcome already did.
+- **The report's first section** is now `$10K PLAN — ACTIVE BOTTLENECK ELIMINATION`.
