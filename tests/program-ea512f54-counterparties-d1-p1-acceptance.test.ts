@@ -1,4 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
+import { recordCounterpartyFacts, recordedCounterparty } from '../server/services/labor/counterparties/ladder.ts';
+import { recordHoldOutcome } from '../server/services/labor/counterparties/reservations.ts';
+import {
+  readRecordedTransaction, reserveRecordedTransaction, transferRecordedTransaction,
+} from '../server/services/labor/counterparties/transaction.ts';
 import type { Counterparty, Fact } from '../server/services/labor/counterparties/ladder.ts';
 import type { ReservationEvent } from '../server/services/labor/counterparties/reservations.ts';
 import { readTransaction, reservationKey, type TransactionInput } from '../server/services/labor/counterparties/transaction.ts';
@@ -137,5 +144,72 @@ describe('a configured software-service provider is a counterparty', () => {
     expect(readLadder(pending).stage).toBe('LISTING');
     expect(pending.facts.find((f) => f.dimension === 'mode')?.value).toBe('TEST');
     expect(providerCounterparty({ area: 'PAYMENTS', capability: 'TAKE_A_PAYMENT', state: 'MISSING', provider: null, mode: null, detail: '', nextAction: '' })).toBeNull();
+  });
+});
+
+describe('CP-31 acceptance on recorded rows', () => {
+  let biz = '';
+  beforeEach(async () => {
+    biz = (await freshProject()).project.id;
+  });
+
+  const record = (c: Counterparty) => recordCounterpartyFacts({ projectId: biz, counterparty: c, facts: c.facts, actorRef: 'BRAIN' });
+  const recorded = (over: Partial<TransactionInput> = {}) => {
+    const { candidates: _c, events: _e, ...rest } = input([], [], { businessId: biz, ...over });
+    return { ...rest, candidateIds: ['crew-a', 'crew-b'] };
+  };
+
+  it('stores facts as rows and reads the same counterparty back, a correction beside the original', async () => {
+    const a = party('crew-a', quoted(900, 5, 4));
+    expect(await record(a)).toBe(a.facts.length);
+    const back = await recordedCounterparty('crew-a');
+    expect(back).toMatchObject({ id: 'crew-a', kind: 'contractor', geography: 'region-a' });
+    expect(readLadder(back!).stage).toBe('QUOTE');
+    // A withdrawn price lowers the stage without editing the earlier row.
+    await recordCounterpartyFacts({ projectId: biz, counterparty: a, facts: [p('price', 900)], actorRef: 'BRAIN' });
+    expect(readLadder((await recordedCounterparty('crew-a'))!).stage).toBe('CAPABILITY');
+    const rows = await getDb().all<{ n: number }>("SELECT COUNT(*) AS n FROM cash_events WHERE kind = 'COUNTERPARTY_FACT'", []);
+    expect(Number(rows[0]!.n)).toBe(a.facts.length + 1);
+    expect(await recordedCounterparty('nobody')).toBeNull();
+  });
+
+  it('walks the demonstration on rows: reserve, failure, one transfer, no double-commit, honest deliverability', async () => {
+    await record(party('crew-a', contracted(900, 5, 4)));
+    await record(party('crew-b', contracted(950, 6, 3), 'region-b'));
+
+    const before = await readRecordedTransaction(recorded());
+    expect(before.primary?.counterpartyId).toBe('crew-a');
+    expect(before.alternative?.counterpartyId).toBe('crew-b');
+    expect(before.deliverability.deliverable).toBe(false);
+
+    // Without the authority nothing is written.
+    const refused = await reserveRecordedTransaction(recorded({ authorityHeld: [] }), 'BRAIN');
+    expect(refused.reserve).toMatchObject({ permitted: false, reason: 'MISSING_AUTHORITY' });
+    expect((await readRecordedTransaction(recorded())).deliverability.holdState).toBeNull();
+
+    const reserved = await reserveRecordedTransaction(recorded(), 'BRAIN');
+    expect(reserved.reserve).toMatchObject({ permitted: true, duplicate: false, counterpartyId: 'crew-a' });
+    const live = await readRecordedTransaction(recorded());
+    expect(live.deliverability).toMatchObject({ deliverable: true, counterpartyId: 'crew-a', holdState: 'HELD' });
+    // Repeating the reserve writes no second row.
+    expect((await reserveRecordedTransaction(recorded(), 'BRAIN')).reserve).toMatchObject({ permitted: true, duplicate: true });
+
+    // No report: transferring is a no-op.
+    expect((await transferRecordedTransaction(recorded(), 'BRAIN')).transfer.applicable).toBe(false);
+
+    await recordHoldOutcome({ counterpartyId: 'crew-a', key: reservationKey('job-1', 'crew-a'), kind: 'FAILED', authorityHeld: ['RESERVE_CAPACITY'], at: '2026-11-14T00:00:00Z', actorRef: 'BRAIN' });
+    const failed = await readRecordedTransaction(recorded({ at: '2026-11-14T01:00:00Z' }));
+    expect(failed.deliverability.deliverable).toBe(false); // a failed fulfiller is not reported as deliverable
+
+    const moved = await transferRecordedTransaction(recorded({ at: '2026-11-14T01:00:00Z' }), 'BRAIN');
+    expect(moved.transfer).toMatchObject({ applicable: true, from: 'crew-a', to: 'crew-b' });
+    const after = await readRecordedTransaction(recorded({ at: '2026-11-14T02:00:00Z' }));
+    expect(after.doubleCommitted).toEqual([]);
+    expect(after.deliverability).toMatchObject({ deliverable: true, counterpartyId: 'crew-b' });
+    // A second transfer and a second reserve both write nothing.
+    await transferRecordedTransaction(recorded({ at: '2026-11-14T03:00:00Z' }), 'BRAIN');
+    expect((await reserveRecordedTransaction(recorded(), 'BRAIN')).reserve).toMatchObject({ permitted: false, reason: 'ALREADY_HELD' });
+    const rows = await getDb().all<{ n: number }>("SELECT COUNT(*) AS n FROM cash_events WHERE kind = 'COUNTERPARTY_RESERVATION'", []);
+    expect(Number(rows[0]!.n)).toBe(4); // RESERVED a, FAILED a, RELEASED a, RESERVED b
   });
 });
