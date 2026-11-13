@@ -307,6 +307,9 @@ define('r01.acq-21-2', async () => (await import('./release01/acquisitionProbe.t
 define('r01.acq-21-5', async () => (await import('./release01/acquisitionProbe.ts')).browserCapabilitiesOnRows());
 define('r01.cont-35', async () => (await import('./release01/continuityProbe.ts')).continuityOnRows());
 define('r01.learn-15-1', async () => (await import('./release01/continuityProbe.ts')).ledgerOnRows());
+/* GOV-11 and GOV-22-1, for factory-program-d0-p1 (release01/governanceProbe.ts). */
+define('r01.gov-11', async () => (await import('./release01/governanceProbe.ts')).registerHoldsOnProduction());
+define('r01.gov-22-1', async () => (await import('./release01/governanceProbe.ts')).promotionOnRows());
 /**
  * CAP-16-3 is both halves: throughput restored first, and every stage measured
  * (release01/capacityProbe.ts). A throughput failure answers first; otherwise
