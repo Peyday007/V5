@@ -9,11 +9,16 @@
  * authority held, what happens when the primary fails, and whether the sale is
  * deliverable at all.
  *
- * Pure, like everything in `services/labor`: a function over a snapshot that
- * writes nothing, schedules nothing and holds no authority of its own. A
- * reserve or a transfer comes back as the events the caller would append —
- * under its own transaction, as `reservations.ts` explains — never as an effect
- * performed here. Authority is the caller's: `authorityRequired` and
+ * `readTransaction` is pure: a function over a snapshot that writes nothing,
+ * schedules nothing and holds no authority of its own. The recorded entry
+ * points at the foot of this file are its caller on real rows: they read the
+ * counterparties' recorded facts and every business's recorded reservations,
+ * and `reserveRecordedTransaction` / `transferRecordedTransaction` re-run the
+ * whole reading under every candidate's capacity lock (`decideRecorded`) and
+ * append exactly the events it proposed — so the commitment-level guard (no
+ * second live hold on one commitment) and the capacity guard (no double-booking
+ * across businesses) are both decided on a snapshot nobody else can change
+ * before the rows land. Authority is the caller's: `authorityRequired` and
  * `authorityHeld` are read from the existing authority owner by whoever calls,
  * and this module only refuses when they do not cover the action.
  *
@@ -34,14 +39,16 @@
  * Nothing here enumerates a kind of counterparty, an industry or a geography.
  */
 import { compareFulfillers, type CandidateReading, type Commitment, type Comparison, type Figure, type FigureName } from './compare.ts';
-import { effectiveStatus, STAGES, stageIndex, type Counterparty, type MissingFact, type Stage } from './ladder.ts';
+import { effectiveStatus, recordedCounterparty, STAGES, stageIndex, type Counterparty, type MissingFact, type Stage } from './ladder.ts';
 import {
+  decideRecorded,
   doubleCommitted,
   holdsFrom,
   performanceFacts,
   performanceFrom,
   planTransfer,
   remainingCapacity,
+  recordedReservationEvents,
   reserve,
   type Hold,
   type ReservationEvent,
@@ -509,5 +516,57 @@ export function planWorkforce(demands: readonly WorkforceDemand[], candidates: r
         : null,
       underperformers,
     };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The same reading on recorded rows
+// ---------------------------------------------------------------------------
+
+/** A transaction named by its candidates' ids; their facts and every business's holds are read from the record. */
+export type RecordedTransactionInput = Omit<TransactionInput, 'candidates' | 'events'> & { candidateIds: readonly string[] };
+
+async function recordedCandidates(ids: readonly string[]): Promise<Counterparty[]> {
+  const out: Counterparty[] = [];
+  for (const id of [...new Set(ids)]) {
+    const one = await recordedCounterparty(id);
+    if (one) out.push(one);
+  }
+  return out;
+}
+
+/** The transaction as the record stands now. Writes nothing. */
+export async function readRecordedTransaction(input: RecordedTransactionInput): Promise<TransactionReading> {
+  const { candidateIds, ...rest } = input;
+  return readTransaction({ ...rest, candidates: await recordedCandidates(candidateIds), events: await recordedReservationEvents(candidateIds) });
+}
+
+/**
+ * Reserve the primary fulfiller, recorded. The reading is re-made under every
+ * candidate's capacity lock, and the reserve event it proposes — only when it
+ * is permitted — is the one row written. The returned reading is the one the
+ * decision was made on.
+ */
+export async function reserveRecordedTransaction(input: RecordedTransactionInput, actorRef: string): Promise<TransactionReading> {
+  const { candidateIds, ...rest } = input;
+  const candidates = await recordedCandidates(candidateIds);
+  return decideRecorded(candidateIds, actorRef, (events) => {
+    const reading = readTransaction({ ...rest, candidates, events });
+    return { result: reading, append: reading.reserve.permitted && reading.reserve.event ? [reading.reserve.event] : [] };
+  });
+}
+
+/**
+ * Carry out the transfer the reading plans after a reported primary failure,
+ * recorded: the primary's release and the alternative's hold land together or
+ * not at all. When no transfer applies, nothing is written.
+ */
+export async function transferRecordedTransaction(input: RecordedTransactionInput, actorRef: string): Promise<TransactionReading> {
+  const { candidateIds, ...rest } = input;
+  const candidates = await recordedCandidates(candidateIds);
+  return decideRecorded(candidateIds, actorRef, (events) => {
+    const reading = readTransaction({ ...rest, candidates, events });
+    const plan = reading.transfer.plan;
+    return { result: reading, append: plan && plan.action === 'TRANSFER' ? plan.events : [] };
   });
 }

@@ -1,12 +1,24 @@
 /**
  * Reserved capacity of a counterparty, derived from recorded events (CP-31).
  *
- * Pure, for the reason `services/dispatch/router.ts` is pure: a function over a
+ * Two halves. The decisions (`holdsFrom`, `reserve`, `planTransfer` …) are
+ * pure, for the reason `services/dispatch/router.ts` is pure: a function over a
  * snapshot, so "why was this refused" is answerable afterwards from an input.
- * Being pure it is not an exclusion mechanism. Two callers that both read a
- * snapshot with room can both be told yes; the arbiter is the database in the
- * caller, which must append the returned event under a constraint or a
- * transaction that re-reads. This module only decides from what it is given.
+ * A pure decision is not an exclusion mechanism — two callers that both read a
+ * snapshot with room could both be told yes — so the recorded half at the foot
+ * of this file is the arbiter, and it is the only way an event reaches a row:
+ *
+ * - Every event is one append-only `cash_events` row (kind
+ *   `COUNTERPARTY_RESERVATION`), written under the business's project and
+ *   filed on the counterparty's own ledger (`counterparty:<id>`), so one read
+ *   returns that counterparty's holds across EVERY business. No new table and
+ *   no second store: `cash_events` is already the append-only record of what
+ *   Brain committed and on whose authority.
+ * - A write re-reads that ledger and decides inside `serializeCash` on the
+ *   counterparty's own lock row, the primitive every cash decision already
+ *   uses, so on Postgres the second of two concurrent reservations blocks until
+ *   the first one's row is visible and is then refused on capacity. A transfer
+ *   takes both counterparties' locks, in a fixed order.
  *
  * - Capacity is never a stored counter. It is the sum of the units of the holds
  *   the events say are still held, over ALL businesses, in an overlapping window.
@@ -22,6 +34,9 @@
  *   same plan. A hold with no report is UNKNOWN: it is not released, not
  *   transferred, and keeps its capacity (invariant 26).
  */
+
+import { serializeCash } from '../../../repos/cashLock.ts';
+import { cashEventsOfKind, recordCashEvent } from '../../../repos/cashMode.ts';
 
 export type ReservationKind = 'RESERVED' | 'RELEASED' | 'FAILED' | 'PERFORMED';
 
@@ -245,4 +260,149 @@ export function performanceFacts(reading: PerformanceReading): Array<{ dimension
     { dimension: 'performanceHistory', status: 'VERIFIED', evidence, value: `${reading.performed} performed, ${reading.failed} failed` },
     { dimension: 'reliability', status: 'VERIFIED', evidence, value: reading.reliability },
   ];
+}
+
+// ---------------------------------------------------------------------------
+// The recorded half: the rows, and the one arbiter that writes them
+// ---------------------------------------------------------------------------
+
+/** The `cash_events.kind` every reservation event is recorded under. */
+export const RESERVATION_EVENT_KIND = 'COUNTERPARTY_RESERVATION';
+
+/**
+ * The ledger a counterparty's rows are filed on (`cash_events.opportunity_id`,
+ * served by its `(opportunity_id, kind, created_at)` index). A logical
+ * reservation key is unique within one counterparty's ledger; the keys
+ * `transaction.ts` builds name the counterparty, so they are unique overall.
+ */
+export function counterpartyLedger(counterpartyId: string): string {
+  return `counterparty:${counterpartyId}`;
+}
+
+/** The lock row (`cash_locks`) a counterparty's capacity decisions serialize on. */
+const CAPACITY_LOCK = 'CAPACITY';
+
+const KINDS: ReadonlySet<string> = new Set<ReservationKind>(['RESERVED', 'RELEASED', 'FAILED', 'PERFORMED']);
+
+function eventFromRow(detail: Record<string, unknown>): ReservationEvent | null {
+  const e = detail['event'] as Partial<ReservationEvent> | undefined;
+  if (!e || typeof e !== 'object' || !KINDS.has(String(e.kind)) || typeof e.key !== 'string' || typeof e.counterpartyId !== 'string') return null;
+  return {
+    kind: e.kind as ReservationKind,
+    key: e.key,
+    counterpartyId: e.counterpartyId,
+    commitmentId: String(e.commitmentId ?? ''),
+    businessId: String(e.businessId ?? ''),
+    units: Number(e.units ?? 0),
+    windowStart: String(e.windowStart ?? ''),
+    windowEnd: String(e.windowEnd ?? ''),
+    authorityHeld: Array.isArray(e.authorityHeld) ? e.authorityHeld.map(String) : [],
+    at: String(e.at ?? ''),
+  };
+}
+
+/** Every recorded reservation event about these counterparties, from every business, in recorded order. */
+export async function recordedReservationEvents(counterpartyIds: readonly string[]): Promise<ReservationEvent[]> {
+  const out: ReservationEvent[] = [];
+  for (const id of [...new Set(counterpartyIds)].sort()) {
+    for (const row of await cashEventsOfKind(counterpartyLedger(id), RESERVATION_EVENT_KIND)) {
+      const event = eventFromRow(row.detail);
+      if (event && event.counterpartyId === id) out.push(event);
+    }
+  }
+  return out;
+}
+
+async function append(event: ReservationEvent, actorRef: string): Promise<void> {
+  await recordCashEvent({
+    projectId: event.businessId,
+    opportunityId: counterpartyLedger(event.counterpartyId),
+    kind: RESERVATION_EVENT_KIND,
+    actorRef,
+    summary: `${event.kind} ${event.units} unit(s) of ${event.counterpartyId} for ${event.commitmentId}`,
+    detail: { event },
+  });
+}
+
+/**
+ * The arbiter. Takes every named counterparty's capacity lock (`serializeCash`
+ * on its own `cash_locks` row, in one fixed order so two callers cannot
+ * deadlock), re-reads their ledgers across every business, lets `decide`
+ * choose from that fresh snapshot, and appends exactly the events it returns —
+ * in the same transaction, so a decision and its rows land together or not at
+ * all. This is the only path by which a reservation event is written.
+ */
+export async function decideRecorded<T>(
+  counterpartyIds: readonly string[],
+  actorRef: string,
+  decide: (events: ReservationEvent[]) => { result: T; append: readonly ReservationEvent[] },
+): Promise<T> {
+  const ids = [...new Set(counterpartyIds)].sort();
+  const locked = new Set(ids);
+  const step = (i: number): Promise<T> =>
+    i < ids.length
+      ? serializeCash(counterpartyLedger(ids[i]!), CAPACITY_LOCK, () => step(i + 1))
+      : (async () => {
+          const { result, append: events } = decide(await recordedReservationEvents(ids));
+          for (const event of events) {
+            if (!locked.has(event.counterpartyId)) throw new Error(`${event.counterpartyId} was not locked for this decision`);
+            await append(event, actorRef);
+          }
+          return result;
+        })();
+  return step(0);
+}
+
+/**
+ * Reserve, recorded. A repeat of the same logical key is answered as a
+ * duplicate and writes nothing; a refusal writes nothing.
+ */
+export async function recordReservation(request: ReservationRequest, actorRef: string): Promise<ReservationAnswer> {
+  return decideRecorded([request.counterpartyId], actorRef, (events) => {
+    const answer = reserve(events, request);
+    return { result: answer, append: answer.ok && answer.event ? [answer.event] : [] };
+  });
+}
+
+export type OutcomeAnswer =
+  | { recorded: true; event: ReservationEvent }
+  | { recorded: false; reason: 'NO_SUCH_HOLD' | 'ALREADY_SETTLED'; detail: string };
+
+/**
+ * A reported outcome of a hold: the counterparty FAILED, PERFORMED, or the hold
+ * was RELEASED. Only a report is recorded; silence is never turned into one.
+ */
+export async function recordHoldOutcome(input: {
+  counterpartyId: string;
+  key: string;
+  kind: Exclude<ReservationKind, 'RESERVED'>;
+  authorityHeld: string[];
+  at: string;
+  actorRef: string;
+}): Promise<OutcomeAnswer> {
+  return decideRecorded<OutcomeAnswer>([input.counterpartyId], input.actorRef, (events) => {
+    const hold = holdsFrom(events).find((h) => h.key === input.key);
+    if (!hold) return { result: { recorded: false, reason: 'NO_SUCH_HOLD', detail: `no reservation ${input.key} on ${input.counterpartyId}` }, append: [] };
+    if (FREES_CAPACITY.has(hold.state)) return { result: { recorded: false, reason: 'ALREADY_SETTLED', detail: `the hold is already ${hold.state.toLowerCase()}` }, append: [] };
+    const event: ReservationEvent = {
+      kind: input.kind, key: hold.key, counterpartyId: hold.counterpartyId, commitmentId: hold.commitmentId, businessId: hold.businessId,
+      units: hold.units, windowStart: hold.windowStart, windowEnd: hold.windowEnd, authorityHeld: input.authorityHeld, at: input.at,
+    };
+    return { result: { recorded: true, event }, append: [event] };
+  });
+}
+
+/**
+ * Transfer, recorded. Holds both counterparties' locks, re-reads both ledgers,
+ * plans with `planTransfer`, and appends the release and the new hold in the
+ * same transaction — both rows or neither.
+ */
+export async function recordTransfer(
+  request: TransferRequest & { primaryCounterpartyId: string },
+  actorRef: string,
+): Promise<TransferPlan> {
+  return decideRecorded([request.primaryCounterpartyId, request.alternativeCounterpartyId], actorRef, (events) => {
+    const plan = planTransfer(events, request);
+    return { result: plan, append: plan.action === 'TRANSFER' ? plan.events : [] };
+  });
 }
