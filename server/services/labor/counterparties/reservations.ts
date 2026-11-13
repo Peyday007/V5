@@ -27,6 +27,14 @@
  *   reading of its schedule.
  * - A reservation needs every authority its caller says it requires. A missing
  *   one is the answer, naming it; it is never downgraded to a softer hold.
+ * - What a caller says it holds is not authority. Committing a counterparty's
+ *   capacity is the owner's ENGAGE_CONTRACTOR grant ("Commit contractor or
+ *   supplier capacity against a named obligation"), so the arbiter refuses to
+ *   write any RESERVED event unless `checkCommercialAuthority` finds that action
+ *   in the business's live commercial authority row, re-read inside the same
+ *   transaction that writes it, and files the grant beside the row. There is
+ *   one authority path (§10.3, §20.4): the caller-supplied arrays only ever
+ *   narrow what the pure decision allows, never widen what is written.
  * - A logical reservation key counts once. The same key with different terms is
  *   a conflict, not a second reservation (invariant 27).
  * - A failed primary transfers to the named alternative only on a reported
@@ -37,6 +45,7 @@
 
 import { serializeCash } from '../../../repos/cashLock.ts';
 import { cashEventsOfKind, recordCashEvent } from '../../../repos/cashMode.ts';
+import { checkCommercialAuthority, type CommercialAction, type CommercialDecision } from '../../cash/authority.ts';
 
 export type ReservationKind = 'RESERVED' | 'RELEASED' | 'FAILED' | 'PERFORMED';
 
@@ -125,7 +134,7 @@ export interface ReservationRequest {
 
 export type ReservationAnswer =
   | { ok: true; duplicate: boolean; event: ReservationEvent | null }
-  | { ok: false; reason: 'MISSING_AUTHORITY'; missing: string[] }
+  | { ok: false; reason: 'MISSING_AUTHORITY'; missing: string[]; detail?: string }
   | { ok: false; reason: 'CAPACITY_UNKNOWN' }
   | { ok: false; reason: 'INVALID'; detail: string }
   | { ok: false; reason: 'KEY_CONFLICT'; detail: string }
@@ -313,14 +322,34 @@ export async function recordedReservationEvents(counterpartyIds: readonly string
   return out;
 }
 
-async function append(event: ReservationEvent, actorRef: string): Promise<void> {
+/**
+ * The commercial action that commits a counterparty's capacity. Read from the owner's live grant, never
+ * from what a caller says it holds.
+ */
+export const RESERVE_AUTHORITY: CommercialAction = 'ENGAGE_CONTRACTOR';
+
+/** A RESERVED event the business's live commercial authority does not cover. Nothing was written. */
+export class ReservationAuthorityRefused extends Error {
+  readonly businessId: string;
+  readonly reason: string;
+  constructor(businessId: string, reason: string) {
+    super(`not reserved: ${reason} (${RESERVE_AUTHORITY} is required to commit counterparty capacity)`);
+    this.name = 'ReservationAuthorityRefused';
+    this.businessId = businessId;
+    this.reason = reason;
+  }
+}
+
+async function append(event: ReservationEvent, actorRef: string, grant: CommercialDecision | null): Promise<void> {
   await recordCashEvent({
     projectId: event.businessId,
     opportunityId: counterpartyLedger(event.counterpartyId),
     kind: RESERVATION_EVENT_KIND,
     actorRef,
     summary: `${event.kind} ${event.units} unit(s) of ${event.counterpartyId} for ${event.commitmentId}`,
-    detail: { event },
+    detail: grant?.authority
+      ? { event, authority: { action: RESERVE_AUTHORITY, authorityId: grant.authority.id, policyVersion: grant.policyVersion } }
+      : { event },
   });
 }
 
@@ -330,7 +359,10 @@ async function append(event: ReservationEvent, actorRef: string): Promise<void> 
  * deadlock), re-reads their ledgers across every business, lets `decide`
  * choose from that fresh snapshot, and appends exactly the events it returns —
  * in the same transaction, so a decision and its rows land together or not at
- * all. This is the only path by which a reservation event is written.
+ * all. This is the only path by which a reservation event is written, so it is
+ * where authority is enforced: every RESERVED event must be covered by its
+ * business's live ENGAGE_CONTRACTOR grant, checked before anything is appended;
+ * one that is not throws `ReservationAuthorityRefused` and nothing is written.
  */
 export async function decideRecorded<T>(
   counterpartyIds: readonly string[],
@@ -344,10 +376,18 @@ export async function decideRecorded<T>(
       ? serializeCash(counterpartyLedger(ids[i]!), CAPACITY_LOCK, () => step(i + 1))
       : (async () => {
           const { result, append: events } = decide(await recordedReservationEvents(ids));
+          const grants = new Map<string, CommercialDecision>();
           for (const event of events) {
             if (!locked.has(event.counterpartyId)) throw new Error(`${event.counterpartyId} was not locked for this decision`);
-            await append(event, actorRef);
+            if (event.kind !== 'RESERVED') continue;
+            let grant = grants.get(event.businessId);
+            if (!grant) {
+              grant = await checkCommercialAuthority({ projectId: event.businessId, action: RESERVE_AUTHORITY });
+              grants.set(event.businessId, grant);
+            }
+            if (!grant.ok) throw new ReservationAuthorityRefused(event.businessId, grant.reason);
           }
+          for (const event of events) await append(event, actorRef, event.kind === 'RESERVED' ? grants.get(event.businessId) ?? null : null);
           return result;
         })();
   return step(0);
@@ -358,10 +398,15 @@ export async function decideRecorded<T>(
  * duplicate and writes nothing; a refusal writes nothing.
  */
 export async function recordReservation(request: ReservationRequest, actorRef: string): Promise<ReservationAnswer> {
-  return decideRecorded([request.counterpartyId], actorRef, (events) => {
-    const answer = reserve(events, request);
-    return { result: answer, append: answer.ok && answer.event ? [answer.event] : [] };
-  });
+  try {
+    return await decideRecorded([request.counterpartyId], actorRef, (events) => {
+      const answer = reserve(events, request);
+      return { result: answer, append: answer.ok && answer.event ? [answer.event] : [] };
+    });
+  } catch (error) {
+    if (error instanceof ReservationAuthorityRefused) return { ok: false, reason: 'MISSING_AUTHORITY', missing: [RESERVE_AUTHORITY], detail: error.reason };
+    throw error;
+  }
 }
 
 export type OutcomeAnswer =
@@ -401,8 +446,15 @@ export async function recordTransfer(
   request: TransferRequest & { primaryCounterpartyId: string },
   actorRef: string,
 ): Promise<TransferPlan> {
-  return decideRecorded([request.primaryCounterpartyId, request.alternativeCounterpartyId], actorRef, (events) => {
-    const plan = planTransfer(events, request);
-    return { result: plan, append: plan.action === 'TRANSFER' ? plan.events : [] };
-  });
+  try {
+    return await decideRecorded([request.primaryCounterpartyId, request.alternativeCounterpartyId], actorRef, (events) => {
+      const plan = planTransfer(events, request);
+      return { result: plan, append: plan.action === 'TRANSFER' ? plan.events : [] };
+    });
+  } catch (error) {
+    if (error instanceof ReservationAuthorityRefused) {
+      return { action: 'REFUSED', reason: 'MISSING_AUTHORITY', detail: `the alternative cannot be held: ${error.reason}` };
+    }
+    throw error;
+  }
 }
