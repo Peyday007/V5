@@ -374,6 +374,12 @@ export interface ReliabilityReading {
   unprotected: { kind: FailureKind; subject: string | null; question: string }[];
   before: { tested: number; meetingTarget: number; worst: SetbackResult | null; note: string };
   after: { tested: number; meetingTarget: number; worst: SetbackResult | null; note: string };
+  /**
+   * Every combination of two or more plausible setbacks tested on the rebuilt
+   * plan, and whether the target was still met under it — what a goal policy's
+   * combined-setback test reads. Counts of cases, never a probability.
+   */
+  combinedAfter: { setbacks: string[]; goalMet: boolean }[];
   /** Openings the rebuild combined into the plan. */
   addedOpportunityIds: string[];
   /** The evidence the rebuilt plan rests on, including what each protection added. */
@@ -457,6 +463,7 @@ export function assessReliability(facts: StrategyFacts, openings: readonly Compa
     unprotected: result.unprotected.map((u) => ({ kind: u.path.kind, subject: u.path.subject, question: u.question })),
     before: { ...summaryOf(result.before), note: `${result.before.note}${basisNote}` },
     after: { ...summaryOf(result.after), note: `${result.after.note}${basisNote}` },
+    combinedAfter: result.after.combined.map((r) => ({ setbacks: r.setbacks, goalMet: r.meetsTarget })),
     addedOpportunityIds: result.rebuilt.customers.map((c) => c.id).filter((id) => !original.has(id)),
     evidence: result.rebuilt.evidence,
     rebuilt: {

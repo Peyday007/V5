@@ -19,6 +19,7 @@ import { insertAgreement } from '../server/repos/cashJourney.ts';
 import { recordMoney } from '../server/repos/cashLedger.ts';
 import { createWorkstream, getWorkstream, listLinks } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
+import { setGoalPolicy } from '../server/services/goals/policy.ts';
 import { readTarget, setTarget } from '../server/services/goals/target.ts';
 import { advanceGoalPlans, listReadings, readGoalPlan, recordGoalOutcome } from '../server/services/goals/plan.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
@@ -174,7 +175,9 @@ describe('the gate', () => {
     expect((await proveCapabilities()).SPREADSHEET.available).toBe(true);
     const o = await play({ title: 'Agreed monthly reports', priceCents: 400_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
     await insertAgreement({ projectId, opportunityId: o.id, amountCents: 1_200_000, currency: 'USD', deliverable: 'reports', acceptanceCondition: 'delivered', evidenceKind: 'WRITTEN_ACCEPTANCE', evidenceRef: 'email-1', recordedBy: 'PERSON', requestKey: 'agree-1' });
+    // Held to a policy that is not a squeeze: the evidence chain decides.
     const id = await goal(1_000_000);
+    expect(await setGoalPolicy({ goalId: id, kind: 'RECURRING_INCOME', setBy: `person:${userId}` })).toMatchObject({ ok: true });
     const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
     expect(reading.verdict).toBe('RECOMMENDABLE');
     expect(reading.strategies[0]!.links.every((one) => one.ok)).toBe(true);
@@ -183,6 +186,39 @@ describe('the gate', () => {
     // The recommended plan's opportunity is now work the goal pursues.
     expect((await listLinks(id)).some((one) => one.kind === 'OPPORTUNITY' && one.ref === o.id && one.relation === 'PURSUES')).toBe(true);
     expect(reading.scenarioRunId).toBeTruthy();
+    expect(reading.policy).toMatchObject({ kind: 'RECURRING_INCOME', recorded: true, reliability: null });
+    expect(reading.strategies[0]!.policyGate).toMatchObject({ recommendable: true, notSqueeze: true, reasons: [] });
+  });
+
+  it('withholds the same plan from a SQUEEZE goal until a supported chance for the complete goal exists', async () => {
+    await proveCapabilities();
+    const o = await play({ title: 'Agreed monthly reports', priceCents: 400_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    await insertAgreement({ projectId, opportunityId: o.id, amountCents: 1_200_000, currency: 'USD', deliverable: 'reports', acceptanceCondition: 'delivered', evidenceKind: 'WRITTEN_ACCEPTANCE', evidenceRef: 'email-1', recordedBy: 'PERSON', requestKey: 'agree-1' });
+    // Nothing recorded: the goal is held to SQUEEZE with the default standard.
+    const id = await goal(1_000_000);
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000, persist: true }))!;
+    expect(reading.policy).toEqual({ kind: 'SQUEEZE', recorded: false, reliability: { normal: 0.9, adverse: 0.8 } });
+    const strategy = reading.strategies[0]!;
+    // Every link of the evidence chain is established, yet no probability supports the complete goal.
+    expect(strategy.links.every((one) => one.ok)).toBe(true);
+    expect(strategy.policyGate).toMatchObject({ recommendable: false, notSqueeze: false, policy: 'SQUEEZE', probability: { supported: false } });
+    expect(strategy.policyGate!.reasons.join(' ')).toMatch(/No comparable outcomes or evidence-backed model supports a chance for the complete goal/);
+    expect(strategy.verdict).toBe('NEEDS_EVIDENCE');
+    expect(reading.verdict).toBe('NEEDS_EVIDENCE');
+    expect(reading.summary).toMatch(/SQUEEZE policy withholds it/);
+    expect(reading.nextTest).toMatchObject({ by: 'BRAIN', blocker: null });
+    expect(reading.nextTest!.test).toMatch(/held to the SQUEEZE policy/);
+    expect(reading.needsMoreOpenings).toBe(true);
+    // A withheld plan is not pursued as though it were recommended.
+    expect((await listLinks(id)).some((one) => one.kind === 'OPPORTUNITY' && one.ref === o.id && one.relation === 'PURSUES')).toBe(false);
+
+    // A recorded SQUEEZE goal with its own standard is gated the same way, against that standard.
+    const own = await goal(1_000_000);
+    expect(await setGoalPolicy({ goalId: own, kind: 'SQUEEZE', reliability: { normal: 0.95, adverse: 0.85 }, setBy: `person:${userId}` })).toMatchObject({ ok: true });
+    const gated = (await readGoalPlan({ goalId: own, evaluations: 2_000 }))!;
+    expect(gated.policy).toEqual({ kind: 'SQUEEZE', recorded: true, reliability: { normal: 0.95, adverse: 0.85 } });
+    expect(gated.verdict).toBe('NEEDS_EVIDENCE');
+    expect(gated.strategies[0]!.policyGate?.recommendable).toBe(false);
   });
 
   it('does not let one buyer saying yes stand for a rate: a smaller agreement still needs evidence', async () => {
@@ -310,8 +346,15 @@ describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
     expect(unstated.nextTest).toMatchObject({ link: 'ECONOMICS', by: 'PERSON' });
     expect(unstated.nextTest!.test).toMatch(/ties up about 4000 USD/);
 
-    // The owner says more may be used: the same plan is recommendable.
-    expect((await readGoalPlan({ goalId: await goal(1_000_000, 1_000_000), evaluations: 2_000 }))!.verdict).toBe('RECOMMENDABLE');
+    // The owner says more may be used: the capital question is gone, and for a goal
+    // not held to squeeze rules the same plan is recommendable.
+    const roomy = await goal(1_000_000, 1_000_000);
+    const squeezed = (await readGoalPlan({ goalId: roomy, evaluations: 2_000 }))!;
+    expect(squeezed.strategies[0]!.constraintsFailed).toEqual([]);
+    expect(squeezed.nextTest?.link).not.toBe('ECONOMICS');
+    expect(squeezed.strategies[0]!.policyGate?.recommendable).toBe(false); // the default SQUEEZE policy still needs a supported chance
+    expect(await setGoalPolicy({ goalId: roomy, kind: 'RECURRING_INCOME', setBy: `person:${userId}` })).toMatchObject({ ok: true });
+    expect((await readGoalPlan({ goalId: roomy, evaluations: 2_000 }))!.verdict).toBe('RECOMMENDABLE');
     // The owner says less: not viable, and it says why.
     const tight = (await readGoalPlan({ goalId: await goal(1_000_000, 100_000), evaluations: 2_000 }))!;
     expect(tight.verdict).toBe('NOT_VIABLE');
