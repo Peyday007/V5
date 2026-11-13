@@ -189,3 +189,60 @@ export function doubleCommitted(events: readonly ReservationEvent[]): string[] {
   for (const h of holdsFrom(events)) if (!FREES_CAPACITY.has(h.state) && h.state === 'HELD') live.set(h.commitmentId, (live.get(h.commitmentId) ?? 0) + 1);
   return [...live].filter(([, n]) => n > 1).map(([id]) => id);
 }
+
+/**
+ * What the recorded outcomes say about how a counterparty actually performs
+ * (CP-31: "learn which counterparties actually perform").
+ *
+ * Read from the same events, never stored: a PERFORMED or FAILED report counts,
+ * a hold with no report counts as neither (invariant 26 — an unknown outcome is
+ * not a failure and not a success). `reliability` is null until at least one
+ * outcome was reported, so a counterparty nobody has used never looks reliable
+ * or unreliable by default.
+ */
+export interface PerformanceReading {
+  counterpartyId: string;
+  performed: number;
+  failed: number;
+  /** Holds still HELD whose window has ended with no report. Carried as a task, never scored. */
+  unreported: number;
+  /** performed / (performed + failed), or null with no reported outcome. */
+  reliability: number | null;
+  /** The reservation keys the figures come from, so the reading resolves to records. */
+  evidence: string[];
+}
+
+export function performanceFrom(events: readonly ReservationEvent[], counterpartyId: string, asOf: string): PerformanceReading {
+  const mine = holdsFrom(events).filter((h) => h.counterpartyId === counterpartyId);
+  const performed = mine.filter((h) => h.state === 'PERFORMED');
+  const failed = mine.filter((h) => h.state === 'FAILED');
+  const unreported = mine.filter((h) => h.state === 'HELD' && h.windowEnd <= asOf);
+  const reported = performed.length + failed.length;
+  return {
+    counterpartyId,
+    performed: performed.length,
+    failed: failed.length,
+    unreported: unreported.length,
+    reliability: reported === 0 ? null : performed.length / reported,
+    evidence: [...performed, ...failed].map((h) => h.key).sort(),
+  };
+}
+
+/**
+ * The performance reading as ladder facts. With no reported outcome the facts are
+ * UNKNOWN (a task), never a favourable default. With outcomes they are VERIFIED,
+ * naming the reservation keys they were read from.
+ */
+export function performanceFacts(reading: PerformanceReading): Array<{ dimension: string; status: 'VERIFIED' | 'UNKNOWN'; evidence: string | null; value: number | string | null }> {
+  if (reading.reliability === null) {
+    return [
+      { dimension: 'performanceHistory', status: 'UNKNOWN', evidence: null, value: null },
+      { dimension: 'reliability', status: 'UNKNOWN', evidence: null, value: null },
+    ];
+  }
+  const evidence = `reservation events: ${reading.evidence.join(', ')}`;
+  return [
+    { dimension: 'performanceHistory', status: 'VERIFIED', evidence, value: `${reading.performed} performed, ${reading.failed} failed` },
+    { dimension: 'reliability', status: 'VERIFIED', evidence, value: reading.reliability },
+  ];
+}

@@ -38,7 +38,10 @@ import { effectiveStatus, STAGES, stageIndex, type Counterparty, type MissingFac
 import {
   doubleCommitted,
   holdsFrom,
+  performanceFacts,
+  performanceFrom,
   planTransfer,
+  remainingCapacity,
   reserve,
   type Hold,
   type ReservationEvent,
@@ -284,10 +287,13 @@ function readDeliverability(input: TransactionInput, readings: Map<string, Candi
 }
 
 export function readTransaction(input: TransactionInput): TransactionReading {
-  const comparison = compareFulfillers(input.commitment, input.candidates);
+  // What the recorded outcomes say about each candidate is part of the reading:
+  // a counterparty that failed before ranks below an equal one that performed.
+  const candidates = input.candidates.map((c) => withPerformance(c, input.events, input.at));
+  const comparison = compareFulfillers(input.commitment, candidates);
   const all = [...comparison.ranked, ...comparison.ineligible];
   const readings = new Map(all.map((r) => [r.counterpartyId, r]));
-  const byId = new Map(input.candidates.map((c) => [c.id, c]));
+  const byId = new Map(candidates.map((c) => [c.id, c]));
   const facts: FactLedger[] = [];
   for (const one of [comparison.primary, comparison.alternative]) {
     const party = one ? byId.get(one.counterpartyId) : undefined;
@@ -307,4 +313,201 @@ export function readTransaction(input: TransactionInput): TransactionReading {
     doubleCommitted: doubleCommitted(input.events),
     needsHumanOperator: comparison.needsHumanOperator,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Learning, negotiation, coordination and workforce planning (CP-31)
+// ---------------------------------------------------------------------------
+
+/**
+ * The counterparty with its performance read from the recorded outcomes
+ * ("learn which counterparties actually perform"). Verified outcomes replace
+ * whatever the caller carried for `performanceHistory` and `reliability`,
+ * because the events are the record. With no reported outcome the caller's own
+ * facts stand, and if there are none the dimensions are added as UNKNOWN: a
+ * task, never a favourable default.
+ */
+export function withPerformance(counterparty: Counterparty, events: readonly ReservationEvent[], asOf: string): Counterparty {
+  const reading = performanceFrom(events, counterparty.id, asOf);
+  const facts = performanceFacts(reading);
+  if (reading.reliability !== null) return { ...counterparty, facts: [...counterparty.facts, ...facts] };
+  const has = new Set(counterparty.facts.map((f) => f.dimension));
+  const missing = facts.filter((f) => !has.has(f.dimension));
+  return missing.length === 0 ? counterparty : { ...counterparty, facts: [...counterparty.facts, ...missing] };
+}
+
+/** Terms a person authorized for a negotiation. Brain never moves outside them. */
+export interface AuthorizedTerms {
+  /** The most Brain may agree to pay per commitment. */
+  priceCeiling: number;
+  /** The longest lead time acceptable, when one was set. */
+  maxLeadTime?: number | null;
+  /** Payment terms acceptable, when restricted; absent means any. */
+  paymentTerms?: readonly string[] | null;
+  /** Authority a binding acceptance needs, and what the actor holds. */
+  authorityRequired: readonly string[];
+  authorityHeld: readonly string[];
+}
+
+export type NegotiationStep =
+  | { action: 'ACCEPT'; price: number; detail: string }
+  | { action: 'COUNTER'; price: number; detail: string }
+  | { action: 'DECLINE'; detail: string }
+  | { action: 'NEEDS_QUOTE'; missing: MissingFact[]; detail: string }
+  | { action: 'MISSING_AUTHORITY'; missingAuthority: string[]; detail: string };
+
+/**
+ * The next move on a counterparty's quote within the authorized terms
+ * ("negotiate authorized terms"). A pending price is not negotiated against; a
+ * figure above the ceiling is countered at the ceiling, once, and never beyond
+ * it; a lead time or payment term outside the authorized set is declined; an
+ * acceptance without the authority it needs is refused, naming the authority.
+ */
+export function negotiate(counterparty: Counterparty, terms: AuthorizedTerms): NegotiationStep {
+  const facts = counterparty.facts;
+  const read = (dimension: string) => {
+    const fact = facts.filter((f) => f.dimension === dimension).at(-1);
+    return fact && effectiveStatus(fact) === 'VERIFIED' ? fact : null;
+  };
+  const price = read('price');
+  const lead = read('leadTime');
+  const payment = read('paymentTerms');
+  const missing: MissingFact[] = [];
+  if (!price || typeof price.value !== 'number') missing.push({ dimension: 'price', state: price ? 'UNKNOWN' : 'PENDING' });
+  if (terms.maxLeadTime != null && (!lead || typeof lead.value !== 'number')) missing.push({ dimension: 'leadTime', state: 'PENDING' });
+  if (terms.paymentTerms && terms.paymentTerms.length > 0 && !payment) missing.push({ dimension: 'paymentTerms', state: 'PENDING' });
+  if (missing.length > 0) return { action: 'NEEDS_QUOTE', missing, detail: 'nothing is negotiated against a figure that is not verified' };
+  if (terms.maxLeadTime != null && (lead!.value as number) > terms.maxLeadTime) {
+    return { action: 'DECLINE', detail: `lead time ${String(lead!.value)} exceeds the authorized ${terms.maxLeadTime}` };
+  }
+  if (terms.paymentTerms && terms.paymentTerms.length > 0 && !terms.paymentTerms.includes(String(payment!.value))) {
+    return { action: 'DECLINE', detail: `payment terms ${String(payment!.value)} are not among the authorized terms` };
+  }
+  const quoted = price!.value as number;
+  const missingAuthority = terms.authorityRequired.filter((a) => !terms.authorityHeld.includes(a));
+  if (quoted <= terms.priceCeiling) {
+    if (missingAuthority.length > 0) return { action: 'MISSING_AUTHORITY', missingAuthority, detail: `accepting ${quoted} needs ${missingAuthority.join(', ')}` };
+    return { action: 'ACCEPT', price: quoted, detail: `${quoted} is within the authorized ceiling ${terms.priceCeiling}` };
+  }
+  return { action: 'COUNTER', price: terms.priceCeiling, detail: `${quoted} exceeds the authorized ceiling; counter at ${terms.priceCeiling}, never above it` };
+}
+
+/** One step of a project a commitment is delivered through. */
+export interface ProjectStep {
+  id: string;
+  /** Steps that must be complete first. */
+  dependsOn: readonly string[];
+  /** The reservation key that carries this step, once one is held. */
+  holdKey?: string | null;
+}
+
+export type StepState = 'WAITING' | 'READY' | 'IN_PROGRESS' | 'DONE' | 'FAILED' | 'UNKNOWN';
+
+export interface StepReading {
+  id: string;
+  state: StepState;
+  counterpartyId: string | null;
+  detail: string;
+}
+
+/**
+ * Where each project step stands, read from the reservation events
+ * ("coordinate project steps … check completion"). A step is DONE only on a
+ * recorded PERFORMED report for its hold — never because its window passed. A
+ * hold past its window with no report is UNKNOWN (invariant 26), and its
+ * dependants wait rather than assume it finished.
+ */
+export function coordinateSteps(steps: readonly ProjectStep[], events: readonly ReservationEvent[], asOf: string): StepReading[] {
+  const holds = new Map(holdsFrom(events).map((h) => [h.key, h]));
+  const own = new Map<string, StepReading>();
+  for (const step of steps) {
+    const hold = step.holdKey ? holds.get(step.holdKey) : undefined;
+    if (!hold) { own.set(step.id, { id: step.id, state: 'READY', counterpartyId: null, detail: 'no fulfiller holds this step' }); continue; }
+    const who = hold.counterpartyId;
+    if (hold.state === 'PERFORMED') own.set(step.id, { id: step.id, state: 'DONE', counterpartyId: who, detail: `${who} reported it performed` });
+    else if (hold.state === 'FAILED') own.set(step.id, { id: step.id, state: 'FAILED', counterpartyId: who, detail: `${who} reported a failure; transfer it` });
+    else if (hold.state === 'RELEASED') own.set(step.id, { id: step.id, state: 'READY', counterpartyId: null, detail: `${who} released it; nobody holds it now` });
+    else if (hold.windowEnd <= asOf) own.set(step.id, { id: step.id, state: 'UNKNOWN', counterpartyId: who, detail: `${who}'s window ended with no report; ask, do not assume` });
+    else own.set(step.id, { id: step.id, state: 'IN_PROGRESS', counterpartyId: who, detail: `${who} holds it` });
+  }
+  return steps.map((step) => {
+    const reading = own.get(step.id)!;
+    const blocking = step.dependsOn.filter((d) => own.get(d)?.state !== 'DONE');
+    if (blocking.length > 0 && (reading.state === 'READY' || reading.state === 'IN_PROGRESS')) {
+      return { ...reading, state: 'WAITING' as const, detail: `waits on ${blocking.join(', ')} being performed` };
+    }
+    return reading;
+  });
+}
+
+/** A commitment's need, for workforce planning across businesses. */
+export interface WorkforceDemand {
+  commitment: Commitment;
+  businessId: string;
+  window: { windowStart: string; windowEnd: string };
+}
+
+export interface WorkforceLine {
+  commitmentId: string;
+  businessId: string;
+  /** Eligible counterparties, of any kind, with verified free capacity in the window. */
+  coveredBy: Array<{ counterpartyId: string; kind: string; freeUnits: number }>;
+  shortfall: number;
+  /**
+   * Ways to close a shortfall. Full-time employment is one option among
+   * several and never a prerequisite: a hire is listed only beside sourcing.
+   */
+  options: Array<'SOURCE_COUNTERPARTY' | 'EXTEND_PARTNER_NETWORK' | 'PREPARE_HIRE'>;
+  /** What a hiring process or a sourcing search would need to state, from the commitment. */
+  roleBrief: { capacityUnits: number; geographies: readonly string[]; humanRequirement: Commitment['humanRequirement'] | null } | null;
+  /** Counterparties of any kind with a verified reliability below one half, for performance management. */
+  underperformers: string[];
+}
+
+/**
+ * Workforce planning over every business at once ("support workforce
+ * planning, hiring-process preparation, performance management and partner
+ * networks"). Capacity is read from the shared reservation events, so a unit
+ * free for one business is not counted again for another. Kinds are the
+ * caller's words; employees are one kind among the rest.
+ */
+export function planWorkforce(demands: readonly WorkforceDemand[], candidates: readonly Counterparty[], events: readonly ReservationEvent[], asOf: string): WorkforceLine[] {
+  const parties = candidates.map((c) => withPerformance(c, events, asOf));
+  // Units this plan has already promised, so two demands in overlapping windows never count one unit twice.
+  const promised: Array<{ counterpartyId: string; windowStart: string; windowEnd: string; units: number }> = [];
+  const promisedIn = (counterpartyId: string, w: { windowStart: string; windowEnd: string }) =>
+    promised.filter((p) => p.counterpartyId === counterpartyId && p.windowStart < w.windowEnd && w.windowStart < p.windowEnd).reduce((n, p) => n + p.units, 0);
+  return demands.map((demand) => {
+    let need = demand.commitment.capacityUnits;
+    const coveredBy: WorkforceLine['coveredBy'] = [];
+    // Demand may be split across counterparties, so one too small for the whole of it is still eligible for a part.
+    for (const reading of compareFulfillers({ ...demand.commitment, capacityUnits: 1 }, parties).ranked) {
+      if (need <= 0) break;
+      const total = reading.figures.capacity.value;
+      if (total === null) continue;
+      const free = remainingCapacity(events, reading.counterpartyId, total, demand.window).remaining - promisedIn(reading.counterpartyId, demand.window);
+      if (free <= 0) continue;
+      const take = Math.min(free, need);
+      promised.push({ counterpartyId: reading.counterpartyId, ...demand.window, units: take });
+      coveredBy.push({ counterpartyId: reading.counterpartyId, kind: reading.kind, freeUnits: take });
+      need -= take;
+    }
+    const shortfall = Math.max(0, need);
+    const underperformers = parties
+      .map((p) => ({ id: p.id, r: p.facts.filter((f) => f.dimension === 'reliability').at(-1) }))
+      .filter(({ r }) => r && effectiveStatus(r) === 'VERIFIED' && typeof r.value === 'number' && r.value < 0.5)
+      .map(({ id }) => id)
+      .sort();
+    return {
+      commitmentId: demand.commitment.id,
+      businessId: demand.businessId,
+      coveredBy,
+      shortfall,
+      options: shortfall > 0 ? ['SOURCE_COUNTERPARTY', 'EXTEND_PARTNER_NETWORK', 'PREPARE_HIRE'] : [],
+      roleBrief: shortfall > 0
+        ? { capacityUnits: shortfall, geographies: demand.commitment.geographies ?? [], humanRequirement: demand.commitment.humanRequirement ?? null }
+        : null,
+      underperformers,
+    };
+  });
 }

@@ -4,6 +4,9 @@ import type { ReservationEvent } from '../server/services/labor/counterparties/r
 import { readTransaction, reservationKey, type TransactionInput } from '../server/services/labor/counterparties/transaction.ts';
 import { providerCounterparty } from '../server/services/cash/providers/counterparty.ts';
 import { readLadder } from '../server/services/labor/counterparties/ladder.ts';
+import { performanceFrom } from '../server/services/labor/counterparties/reservations.ts';
+import { compareFulfillers } from '../server/services/labor/counterparties/compare.ts';
+import { coordinateSteps, negotiate, planWorkforce, withPerformance } from '../server/services/labor/counterparties/transaction.ts';
 
 const W = { windowStart: '2026-12-01T00:00:00Z', windowEnd: '2026-12-08T00:00:00Z' };
 const v = (dimension: string, value: number | string | null = null): Fact => ({ dimension, status: 'VERIFIED', evidence: `source:${dimension}`, value });
@@ -182,5 +185,124 @@ describe('a configured software-service provider is a counterparty', () => {
     expect(pending.facts.find((f) => f.dimension === 'configuration')?.status).toBe('PENDING');
     expect(pending.facts.find((f) => f.dimension === 'mode')?.value).toBe('TEST');
     expect(providerCounterparty({ area: 'PAYMENTS', capability: 'TAKE_A_PAYMENT', state: 'MISSING', provider: null, mode: null, detail: '', nextAction: '' })).toBeNull();
+  });
+});
+
+// The remaining clauses of S-0468/S-0469: learning who performs, negotiating within
+// authorized terms, coordinating steps and checking completion, and workforce planning.
+describe('CP-31 remaining clauses', () => {
+  const W = { windowStart: '2026-12-01T00:00:00Z', windowEnd: '2026-12-08T00:00:00Z' };
+  const LATER = '2026-12-20T00:00:00Z';
+  const v = (dimension: string, value: number | string | null = null): Fact => ({ dimension, status: 'VERIFIED', evidence: `source:${dimension}`, value });
+  const quoted = (price: number, lead: number, capacity: number) => [
+    v('listing'), v('willingness'), v('availability'), v('eligibility'), v('scope'), v('qualifications'), v('geography'),
+    v('price', price), v('paymentTerms', 'net 30'), v('leadTime', lead), v('availableCapacity', capacity),
+  ];
+  const party = (id: string, facts: Fact[], kind = 'contractor'): Counterparty => ({ id, kind, geography: 'region-a', facts });
+  const ev = (kind: ReservationEvent['kind'], key: string, counterpartyId: string, at: string, over: Partial<ReservationEvent> = {}): ReservationEvent => ({
+    kind, key, counterpartyId, commitmentId: `job-${key}`, businessId: 'biz-1', units: 1, ...W, authorityHeld: [], at, ...over,
+  });
+
+  describe('CP-31 clauses: learn which counterparties actually perform', () => {
+    const history = [
+      ev('RESERVED', 'a1', 'crew-a', '2026-11-01T00:00:00Z'), ev('PERFORMED', 'a1', 'crew-a', '2026-11-02T00:00:00Z'),
+      ev('RESERVED', 'b1', 'crew-b', '2026-11-01T00:00:00Z'), ev('FAILED', 'b1', 'crew-b', '2026-11-02T00:00:00Z'),
+      ev('RESERVED', 'c1', 'crew-c', '2026-11-01T00:00:00Z'),
+    ];
+
+    it('reads reliability from reported outcomes only; an unreported hold is neither', () => {
+      expect(performanceFrom(history, 'crew-a', LATER)).toMatchObject({ performed: 1, failed: 0, reliability: 1, evidence: ['a1'] });
+      expect(performanceFrom(history, 'crew-b', LATER)).toMatchObject({ performed: 0, failed: 1, reliability: 0 });
+      expect(performanceFrom(history, 'crew-c', LATER)).toMatchObject({ performed: 0, failed: 0, unreported: 1, reliability: null });
+    });
+
+    it('an untried counterparty gets UNKNOWN performance facts, never a favourable default', () => {
+      const c = withPerformance(party('crew-c', quoted(900, 5, 4)), history, LATER);
+      expect(c.facts.filter((f) => f.dimension === 'reliability')).toEqual([{ dimension: 'reliability', status: 'UNKNOWN', evidence: null, value: null }]);
+    });
+
+    it('a counterparty that failed ranks below an otherwise equal one that performed', () => {
+      const parties = [party('crew-b', quoted(900, 5, 4)), party('crew-a', quoted(900, 5, 4))].map((p) => withPerformance(p, history, LATER));
+      const cmp = compareFulfillers({ id: 'job-x', capacityUnits: 1 }, parties);
+      expect(cmp.primary?.counterpartyId).toBe('crew-a');
+      expect(cmp.primary?.reliability).toBe(1);
+      expect(cmp.alternative?.reliability).toBe(0);
+    });
+
+    it('readTransaction applies the learned performance without being told', () => {
+      const reading = readTransaction({
+        commitment: { id: 'job-x', capacityUnits: 1 }, candidates: [party('crew-b', quoted(900, 5, 4)), party('crew-a', quoted(900, 5, 4))],
+        events: history, businessId: 'biz-1', window: { windowStart: '2027-01-01T00:00:00Z', windowEnd: '2027-01-02T00:00:00Z' },
+        authorityRequired: [], authorityHeld: [], at: LATER,
+      });
+      expect(reading.primary?.counterpartyId).toBe('crew-a');
+    });
+  });
+
+  describe('CP-31 clauses: negotiate authorized terms', () => {
+    const terms = { priceCeiling: 1000, maxLeadTime: 7, paymentTerms: ['net 30'], authorityRequired: ['COMMIT_SPEND'], authorityHeld: ['COMMIT_SPEND'] };
+
+    it('accepts within the ceiling, counters at the ceiling and never above it', () => {
+      expect(negotiate(party('a', quoted(900, 5, 4)), terms)).toMatchObject({ action: 'ACCEPT', price: 900 });
+      expect(negotiate(party('a', quoted(1400, 5, 4)), terms)).toMatchObject({ action: 'COUNTER', price: 1000 });
+    });
+
+    it('declines terms outside the authorization and refuses a pending price', () => {
+      expect(negotiate(party('a', quoted(900, 12, 4)), terms).action).toBe('DECLINE');
+      expect(negotiate(party('a', [...quoted(900, 5, 4), v('paymentTerms', 'upfront')]), terms).action).toBe('DECLINE');
+      const pending = party('a', [...quoted(900, 5, 4), { dimension: 'price', status: 'PENDING', evidence: null, value: 500 }]);
+      expect(negotiate(pending, terms)).toMatchObject({ action: 'NEEDS_QUOTE', missing: [{ dimension: 'price', state: 'PENDING' }] });
+    });
+
+    it('does not accept without the authority, and names it', () => {
+      expect(negotiate(party('a', quoted(900, 5, 4)), { ...terms, authorityHeld: [] })).toMatchObject({ action: 'MISSING_AUTHORITY', missingAuthority: ['COMMIT_SPEND'] });
+    });
+  });
+
+  describe('CP-31 clauses: coordinate project steps and check completion', () => {
+    it('a step is DONE only on a PERFORMED report; a silent hold past its window is UNKNOWN and its dependants wait', () => {
+      const events = [
+        ev('RESERVED', 's1', 'crew-a', '2026-11-01T00:00:00Z'), ev('PERFORMED', 's1', 'crew-a', '2026-12-02T00:00:00Z'),
+        ev('RESERVED', 's2', 'crew-b', '2026-11-01T00:00:00Z'),
+      ];
+      const steps = [
+        { id: 'prep', dependsOn: [], holdKey: 's1' },
+        { id: 'build', dependsOn: ['prep'], holdKey: 's2' },
+        { id: 'finish', dependsOn: ['build'], holdKey: null },
+      ];
+      const during = coordinateSteps(steps, events, '2026-12-03T00:00:00Z');
+      expect(during.map((s) => s.state)).toEqual(['DONE', 'IN_PROGRESS', 'WAITING']);
+      const after = coordinateSteps(steps, events, LATER);
+      expect(after.map((s) => s.state)).toEqual(['DONE', 'UNKNOWN', 'WAITING']);
+      const failed = coordinateSteps(steps, [...events, ev('FAILED', 's2', 'crew-b', '2026-12-04T00:00:00Z')], LATER);
+      expect(failed[1]).toMatchObject({ state: 'FAILED', counterpartyId: 'crew-b' });
+    });
+  });
+
+  describe('CP-31 clauses: workforce planning, hiring preparation, performance management, partner networks', () => {
+    it('covers demand from any kind of counterparty across businesses without counting a unit twice', () => {
+      const parties = [party('partner-x', quoted(900, 5, 3), 'distribution partner'), party('employee-y', quoted(950, 5, 1), 'employee')];
+      const demands = [
+        { commitment: { id: 'job-1', capacityUnits: 2 }, businessId: 'biz-1', window: W },
+        { commitment: { id: 'job-2', capacityUnits: 3 }, businessId: 'biz-2', window: W },
+      ];
+      const [one, two] = planWorkforce(demands, parties, [], LATER);
+      expect(one).toMatchObject({ shortfall: 0, coveredBy: [{ counterpartyId: 'partner-x', freeUnits: 2 }] });
+      // partner-x has 1 unit left and employee-y has 1: two units, not five.
+      expect(two!.coveredBy.reduce((n, c) => n + c.freeUnits, 0)).toBe(2);
+      expect(two).toMatchObject({ shortfall: 1, roleBrief: { capacityUnits: 1 } });
+      // A hire is one option beside sourcing, never the only one.
+      expect(two!.options).toEqual(['SOURCE_COUNTERPARTY', 'EXTEND_PARTNER_NETWORK', 'PREPARE_HIRE']);
+    });
+
+    it('runs a business with no employee at all, and flags counterparties that do not perform', () => {
+      const history = [ev('RESERVED', 'z1', 'crew-z', '2026-11-01T00:00:00Z'), ev('FAILED', 'z1', 'crew-z', '2026-11-02T00:00:00Z')];
+      const [line] = planWorkforce(
+        [{ commitment: { id: 'job-9', capacityUnits: 1 }, businessId: 'biz-1', window: { windowStart: '2027-01-01T00:00:00Z', windowEnd: '2027-01-02T00:00:00Z' } }],
+        [party('carrier-q', quoted(500, 2, 2), 'carrier'), party('crew-z', quoted(400, 2, 2))], history, LATER,
+      );
+      expect(line).toMatchObject({ shortfall: 0, options: [] });
+      expect(line!.underperformers).toEqual(['crew-z']);
+    });
   });
 });
