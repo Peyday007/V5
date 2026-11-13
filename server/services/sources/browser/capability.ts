@@ -60,6 +60,7 @@ import { getDb } from '../../../db/database.ts';
 import { recordBinEvent } from '../../../repos/bins.ts';
 import { hostMeasuresPattern } from '../acquisition.ts';
 import { redactText } from './redaction.ts';
+import type { OutcomeExpectation } from './verifyOutcome.ts';
 import { browserEffectKey, type EffectSubject } from './effectGuard.ts';
 import {
   BROWSER_WORKFLOW_RUN_EVENT,
@@ -533,6 +534,33 @@ export function planCapabilityRun(record: CapabilityRecord, inputs: Record<strin
   }
 
   return { decision: 'RUN', key, attempt: mine.length + 1, claim: mutation ? 'REQUIRED' : 'NONE' };
+}
+
+/**
+ * What a run of this capability must have obtained, read from the approved
+ * version itself, so every run — the integrations tick's, the terminal's —
+ * is verified against what the capability promises and not only against "the
+ * clicks worked". A caller that knows more (a minimum row count, required
+ * fields, a pinned hash, a freshness field) passes its own expectation instead.
+ *
+ * - every declared output an `extract` step captures is a dataset of at least
+ *   one row, and every one a `download` step captures is a non-empty download;
+ * - an expected state declared after the workflow's last step is the final
+ *   address the run must end on. States after earlier steps, and page text,
+ *   are not judged here: the run carries only its final address. Pure.
+ */
+export function outcomeExpectationFor(c: BrowserCapability): OutcomeExpectation {
+  const steps = c.workflow.steps ?? [];
+  const extracts = new Set(steps.flatMap((s) => (s.kind === 'extract' ? [s.name] : [])));
+  const downloads = new Set(steps.flatMap((s) => (s.kind === 'download' ? [s.name] : [])));
+  const datasets = c.outputs.filter((o) => extracts.has(o.name)).map((o) => ({ name: o.name, minRows: 1 }));
+  const files = c.outputs.filter((o) => downloads.has(o.name) && !extracts.has(o.name)).map((o) => ({ name: o.name, minChars: 1 }));
+  const finalUrl = c.expectedStates.filter((e) => e.afterStep >= steps.length && typeof e.urlIncludes === 'string' && e.urlIncludes.length > 0).at(-1)?.urlIncludes;
+  return {
+    ...(finalUrl !== undefined ? { finalState: { urlIncludes: finalUrl } } : {}),
+    ...(datasets.length > 0 ? { datasets } : {}),
+    ...(files.length > 0 ? { downloads: files } : {}),
+  };
 }
 
 /** Whether every output the capability declares was actually obtained by a run. Pure. */

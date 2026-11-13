@@ -286,3 +286,54 @@ describe('operating an approved capability', () => {
     expect(h.calls()).toBe(0);
   });
 });
+
+/**
+ * Repair F2: the tick and the terminal call operateCapability with no
+ * `expectation`, and outcome verification used to be skipped for them — only a
+ * test ever passed one. A run is now always judged against what the approved
+ * version promises (`outcomeExpectationFor`), the way production calls it.
+ */
+describe('a production call, which passes no expectation, is still verified', () => {
+  const urlCap = (): BrowserCapability => {
+    const c = readCap();
+    c.expectedStates = [{ afterStep: 2, text: 'Report for' }, { afterStep: 3, urlIncludes: '/reports' }];
+    return c;
+  };
+
+  it('verifies a run against the approved version and records the checks it ran', async () => {
+    const h = harness();
+    await h.define(urlCap());
+    const out = await operateCapability({ projectId, host: HOST, name: 'monthly report', inputs: { month: '2026-10' }, actor: worker }, h.deps());
+    expect(out.outcome).toBe('COMPLETED');
+    expect(out.verification).not.toBeNull();
+    expect(out.verification!.verified).toBe(true);
+    expect(out.verification!.checks.map((c) => c.check)).toEqual([
+      'run completed its steps',
+      'final address includes "/reports"',
+      'dataset report has at least 1 row(s)',
+    ]);
+    const m = JSON.parse(h.runRows()[0]!.measures);
+    expect(m.verification.checks.length).toBe(3);
+  });
+
+  it('refuses a run that completed its steps but ended somewhere the version does not promise', async () => {
+    const h = harness();
+    await h.define(urlCap());
+    h.setRun({ finalUrl: `https://${HOST}/login` });
+    const out = await operateCapability({ projectId, host: HOST, name: 'monthly report', inputs: { month: '2026-10' }, actor: worker }, h.deps());
+    expect(out.outcome).toBe('FAILED');
+    expect(out.failureReason).toBe('STATE_MISMATCH');
+    expect(out.verification!.verified).toBe(false);
+  });
+
+  it('a caller\'s own expectation still governs when it states one', async () => {
+    const h = harness();
+    await h.define(urlCap());
+    const out = await operateCapability(
+      { projectId, host: HOST, name: 'monthly report', inputs: { month: '2026-10' }, actor: worker, expectation: { datasets: [{ name: 'report', minRows: 5 }] } },
+      h.deps(),
+    );
+    expect(out.outcome).toBe('FAILED');
+    expect(out.failureReason).toBe('EMPTY_DATASET');
+  });
+});
