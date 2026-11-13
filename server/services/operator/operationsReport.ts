@@ -35,7 +35,9 @@ async function safe<T>(fallback: T, read: () => Promise<T>, missing: string[], w
 function classifyFailure(error: string | null, toolsOk: number): string {
   const e = (error ?? '').toLowerCase();
   if (toolsOk > 0 && !e) return 'other';
-  if (/rate.?limit|429|quota|overloaded|model|context|token|max_turns|max turns|length/.test(e)) return 'model';
+  if (/rate.?limit|429|quota|overloaded/.test(e)) return 'rate_limit';
+  if (/context|token|max_turns|max turns|length/.test(e)) return 'context';
+  if (/model|tool call|malformed|parse/.test(e)) return 'model';
   if (/timed out|timeout|brain|mcp|503|502|econn|socket|database/.test(e)) return 'brain';
   if (/restart|did not report back/.test(e)) return 'restart';
   return e ? 'other' : 'no reason recorded';
@@ -146,7 +148,7 @@ export async function readWindow(start: string, end: string, nowMs: number, miss
   }
   const okCount = (names: string[]): number => names.reduce((s, n) => s + (toolsByName[n]?.ok ?? 0), 0);
   const events = await safe([], () => db.all<{ event_type: string; payload: string }>(
-    `SELECT event_type, payload FROM project_events WHERE created_at >= ? AND created_at < ? AND event_type IN ('OPERATOR_DECISION','OPERATOR_ENGINEERING_COMMISSIONED','OPERATOR_ENGINEERING_OUTCOME','OPERATOR_ENGINEERING_PRIORITIZED','OPERATOR_DECISION_VERIFIED')`,
+    `SELECT event_type, payload FROM project_events WHERE created_at >= ? AND created_at < ? AND event_type IN ('OPERATOR_DECISION','OPERATOR_ENGINEERING_COMMISSIONED','OPERATOR_ENGINEERING_OUTCOME','OPERATOR_ENGINEERING_PRIORITIZED','OPERATOR_DECISION_VERIFIED','OPERATOR_INTERVENTION_DECIDED')`,
     [start, end],
   ), missing, 'operator events');
   const decisionsByKind: Record<string, number> = {};
@@ -157,6 +159,8 @@ export async function readWindow(start: string, end: string, nowMs: number, miss
   let outcomesResolved = 0;
   let outcomesNotResolved = 0;
   let verifications = 0;
+  let interventionsDecided = 0;
+  let outcomesReceived = 0;
   for (const e of events) {
     let p: Record<string, unknown> = {};
     try {
@@ -172,7 +176,9 @@ export async function readWindow(start: string, end: string, nowMs: number, miss
     } else if (e.event_type === 'OPERATOR_ENGINEERING_COMMISSIONED') commissioned += 1;
     else if (e.event_type === 'OPERATOR_ENGINEERING_PRIORITIZED') reprioritized += 1;
     else if (e.event_type === 'OPERATOR_DECISION_VERIFIED') verifications += 1;
+    else if (e.event_type === 'OPERATOR_INTERVENTION_DECIDED') interventionsDecided += 1;
     else if (e.event_type === 'OPERATOR_ENGINEERING_OUTCOME') {
+      if (p['status'] !== 'BUILDING') outcomesReceived += 1;
       if (p['status'] === 'RESOLVED') outcomesResolved += 1;
       if (p['status'] === 'NOT_RESOLVED') outcomesNotResolved += 1;
     }
@@ -192,6 +198,9 @@ export async function readWindow(start: string, end: string, nowMs: number, miss
   const strategiesConstructed = await count(`SELECT COUNT(*) AS n FROM project_events WHERE created_at >= ? AND created_at < ? AND event_type LIKE '%CONSTRUCT%'`, 'constructions');
   const readings = await safe([], () => db.all<{ forecast: string | null }>('SELECT forecast FROM goal_plan_readings WHERE created_at >= ? AND created_at < ?', [start, end]), missing, 'plan readings');
   const plansAccepted = readings.filter((r) => (r.forecast ?? '').includes('"status":"ACCEPTED"')).length;
+  const executionStarted = await count(`SELECT COUNT(*) AS n FROM cash_opportunities WHERE updated_at >= ? AND updated_at < ? AND state IN ('EXECUTING','DELIVERING')`, 'opportunities in execution');
+  const leadsPrepared = await count('SELECT COUNT(*) AS n FROM sales_leads WHERE created_at >= ? AND created_at < ?', 'sales leads');
+  const repliesReceived = await count('SELECT COUNT(*) AS n FROM sales_replies WHERE received_at >= ? AND received_at < ?', 'sales replies');
   // Queues ------------------------------------------------------------------
   const research = mergeQueues(
     await safe(emptyQueue(), () => queueFromWorkItems(start, end, nowMs, "work_type LIKE '%RESEARCH%'"), missing, 'research work items'),
@@ -280,8 +289,12 @@ export async function readWindow(start: string, end: string, nowMs: number, miss
       outcomesNotResolved,
       verifications: verifications + okCount(['brain_operator_verify']),
       lessons,
+      goalsInspected: okCount(['brain_operator_goal', 'brain_operator_goal_plan']),
+      problemsIdentified: okCount(['brain_operator_deficiencies']) + interventionsDecided,
+      outcomesReceived,
+      repeatedToolFailures: Object.fromEntries(Object.entries(toolsByName).filter(([, v]) => v.failed >= 2).map(([k, v]) => [k, v.failed])),
     },
-    pipeline: { opportunitiesDiscovered, opportunitiesQualified, researchCompleted, researchFailed, strategiesConstructed, evaluationsCompleted, evaluationsFailed, evidenceValidated, planReadings: readings.length, plansAccepted },
+    pipeline: { opportunitiesDiscovered, opportunitiesQualified, researchCompleted, researchFailed, strategiesConstructed, evaluationsCompleted, evaluationsFailed, evidenceValidated, planReadings: readings.length, plansAccepted, executionStarted, leadsPrepared, repliesReceived },
     queues: { research, coding, factoryUnits, otherWork },
     factory: {
       campaignsActive: campaigns.filter((c) => !['COMPLETE', 'CANCELLED', 'BLOCKED'].includes(c.state)).length,
@@ -412,6 +425,7 @@ export async function buildOperationsReport(nowMs = Date.now(), goalId = REPORT_
     return (await engineeringOutcomes({ limit: 5, includeClosed: false })).map((o) => ({ title: o.title.slice(0, 80), status: o.status }));
   }, missing, 'open engineering');
   // How many earlier reports each bottleneck appeared in, consecutively: the survival count.
+  let lastKeys: string[] = [];
   const persistence = await safe({} as Record<string, number>, async () => {
     const rows = await getDb().all<{ payload: string }>(
       `SELECT payload FROM project_events WHERE event_type = 'OWNER_OPERATIONS_REPORT' AND payload LIKE '%"status":"READY"%' ORDER BY created_at DESC LIMIT 12`,
@@ -421,6 +435,7 @@ export async function buildOperationsReport(nowMs = Date.now(), goalId = REPORT_
     const alive = new Set<string>();
     rows.forEach((row, i) => {
       const keys = ((JSON.parse(row.payload) as { bottleneckKeys?: string[] }).bottleneckKeys ?? []);
+      if (i === 0) lastKeys = keys;
       for (const k of keys) if (i === 0 || alive.has(k)) counts[k] = (counts[k] ?? 0) + 1;
       alive.clear();
       for (const k of keys) alive.add(k);
@@ -444,6 +459,7 @@ export async function buildOperationsReport(nowMs = Date.now(), goalId = REPORT_
     hermesSummary: lastRun?.summary ?? null,
     openEngineering,
     persistence,
+    lastKeys,
     ownerOpportunities,
     unmeasured,
   });

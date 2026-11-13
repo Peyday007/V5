@@ -16125,3 +16125,20 @@ The conversation's existing hourly scheduled task announces it through `brain_li
 and records it delivered. Its bottleneck section opens the operator's next brief
 (`latestReportBrief` in `engineeringBrief`), so Hermes acts on what Brain may resolve itself.
 Tests: `tests/operationsReport.test.ts`.
+
+The report also carries the owner's remaining sections, each read from the same rows:
+- **Hermes:** goals inspected, problems identified, improvements received from Factory, and
+  tools that failed repeatedly.
+- **Workstreams:** commercial validation, opportunities moved into execution, and customer
+  acquisition (`sales_leads` prepared, `sales_replies` received). A line separates work that
+  advanced the goal from activity that did not.
+- **MODEL ADEQUACY:** run failures are split into rate limits (availability), context and
+  model errors, and only the last two count toward a stronger model.
+- **ENGINEERING CAPACITY:** scarce classes, underutilized workers, and whether work waits
+  beside free slots (scheduling) or behind full ones (capacity).
+- **INTERVENTION TRACKING:** the last report's bottlenecks, listed as resolved, persisting
+  or new.
+
+Every bottleneck states its estimated improvement. Every YES names the resource, its
+utilization, the expected effect, the cost (said to be unrecorded where Brain does not record
+it), a confidence and the smallest test.

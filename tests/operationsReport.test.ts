@@ -22,8 +22,9 @@ function win(over: Partial<OpsWindow> = {}): OpsWindow {
       toolsByName: { brain_operator_goal: { ok: 3, failed: 0 } }, runMinutes: 30, lostMinutes: 10, failureReasons: { model: 1 },
       decisions: 1, decisionsByKind: { RESEARCH: 1 }, challenged: 1, actionsExecuted: 1, commissioned: 0, reprioritized: 0,
       strategyChanges: 0, outcomesResolved: 0, outcomesNotResolved: 0, verifications: 0, lessons: 1,
+      goalsInspected: 3, problemsIdentified: 1, outcomesReceived: 0, repeatedToolFailures: { brain_operator_goal_plan: 2 },
     },
-    pipeline: { opportunitiesDiscovered: 4, opportunitiesQualified: 1, researchCompleted: 3, researchFailed: 1, strategiesConstructed: 2, evaluationsCompleted: 1, evaluationsFailed: 0, evidenceValidated: 3, planReadings: 1, plansAccepted: 0 },
+    pipeline: { opportunitiesDiscovered: 4, opportunitiesQualified: 1, researchCompleted: 3, researchFailed: 1, strategiesConstructed: 2, evaluationsCompleted: 1, evaluationsFailed: 0, evidenceValidated: 3, planReadings: 1, plansAccepted: 0, executionStarted: 0, leadsPrepared: 5, repliesReceived: 1 },
     queues: { research: q({ queued: 5, running: 2, completed: 3, failed: 1, oldestWaitMin: 90, avgWaitMin: 40 }), coding: q(), factoryUnits: q(), otherWork: q() },
     factory: { campaignsActive: 1, campaignsBlocked: 0, campaignsCompleted: 0, workers: [{ name: 'claude-1', modelClass: 'STRONGEST', availability: 'AVAILABLE', maxConcurrency: 2, leased: 2, rateLimited: false }], waitingByClass: {} },
     models: { researchJobsByModel: { opus: { done: 3, failed: 1, avgSeconds: 120 } }, cheapCallsByModel: { qwen: { ok: 40, failed: 2 } } },
@@ -110,11 +111,11 @@ describe('the report', () => {
   it('opens with the executive summary and carries every section the owner listed, explaining why nothing moved', () => {
     const r = renderReport({
       hourEnding: '2026-11-13T11:00:00.000Z', now: win(), prev: win({ pipeline: { ...win().pipeline, researchCompleted: 1 } }), day: win(),
-      plan: plan(), planPrev: plan(), planHistory: [], hermesSummary: 'Inspected the goal; recorded a lesson.', openEngineering: [], persistence: {},
+      plan: plan(), planPrev: plan(), planHistory: [], hermesSummary: 'Inspected the goal; recorded a lesson.', openEngineering: [], persistence: {}, lastKeys: ['hermes:inactive'],
       ownerOpportunities: [], unmeasured: ['per-call token counts'],
     });
     expect(r.text.startsWith('BRAIN — $10K PLAN OPERATIONS REPORT\nHour ending: 2026-11-13T11:00:00.000Z\n\nEXECUTIVE SUMMARY')).toBe(true);
-    for (const s of ['Plan readiness:', 'Progress this hour:', 'Most important improvement:', 'Biggest remaining obstacle:', 'Expected time to qualifying plan:', '$10K PLAN DEVELOPMENT', 'Pipeline (this hour', 'HERMES PERFORMANCE', 'Runs / actions / real outcomes:', 'A thought:', 'B decided:', 'C executed:', 'D improved:', 'PIPELINE PERFORMANCE', 'RESOURCE UTILIZATION', 'TOP 3 BOTTLENECKS', 'SCALING DECISIONS', 'MORE AGENTS:', 'STRONGER MODEL:', 'MORE GPU CAPACITY:', 'MORE RESEARCH CAPACITY:', 'MORE FINANCIAL CAPITAL:', "HERMES' NEXT ACTIONS", 'OWNER OPPORTUNITIES', 'NONE.', 'Not instrumented (stated, not estimated): per-call token counts']) {
+    for (const s of ['Plan readiness:', 'Progress this hour:', 'Most important improvement:', 'Biggest remaining obstacle:', 'Expected time to qualifying plan:', '$10K PLAN DEVELOPMENT', 'Pipeline (this hour', 'HERMES PERFORMANCE', 'Runs / actions / real outcomes:', 'A thought:', 'B decided:', 'C executed:', 'D improved:', 'PIPELINE PERFORMANCE', 'RESOURCE UTILIZATION', 'TOP 3 BOTTLENECKS', 'SCALING DECISIONS', 'MORE AGENTS:', 'STRONGER MODEL:', 'MORE GPU CAPACITY:', 'MORE RESEARCH CAPACITY:', 'MORE FINANCIAL CAPITAL:', "HERMES' NEXT ACTIONS", 'OWNER OPPORTUNITIES', 'NONE.', 'MODEL ADEQUACY', 'ENGINEERING CAPACITY', 'INTERVENTION TRACKING', 'resolved hermes:inactive', 'Goals inspected 3', 'brain_operator_goal_plan ×2', 'Customer acquisition:', 'Goal-advancing this hour:', 'Estimated improvement:', 'Stronger model?', 'Scarce capabilities:', 'Not instrumented (stated, not estimated): per-call token counts']) {
       expect(r.text).toContain(s);
     }
     expect(r.text).toContain('Plan reach did not move because its binding factor (reply rate) received no new evidence');
@@ -163,7 +164,7 @@ describe('built from production rows, recorded once an hour, and read by the own
     const { buildOperationsReport } = await import('../server/services/operator/operationsReport.ts');
     const report = await buildOperationsReport(Date.now() + 3_600_000, goalId);
     expect(report.text).toContain('Runs / actions / real outcomes: 2 started, 1 done, 1 failed / 1 executed / 0 improved');
-    expect(report.text).toContain('model ×1');
+    expect(report.text).toContain('rate_limit ×1');
     expect(report.text).toContain('Decisions by kind: RESEARCH 1');
     expect(report.text).toContain('Best evidence-backed candidate: Dental audits');
     expect(report.text).toContain('Failed acceptance conditions: the reach is coverage, not a probability');
