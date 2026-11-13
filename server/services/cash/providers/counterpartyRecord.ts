@@ -34,9 +34,22 @@
  *     (`recordCounterpartyFacts`). A refusal establishes nothing about
  *     willingness and records none.
  *
- * Recording never changes the effect: the send's answer is returned exactly as
- * the provider gave it, and a recording failure is reported on the log (no
- * payload, no credential) rather than turned into a failed or repeated send.
+ * **A refused hold stops the send.** Holding capacity is the one place the
+ * model can keep two businesses from booking the same scarce send, so a hold
+ * the recorder definitely refuses — the window's capacity is exhausted across
+ * every business (CAPACITY), the project's live grant does not cover the
+ * action (MISSING_AUTHORITY), or the hold's key or shape is refused — is
+ * answered as a definite REJECTED without calling the provider: an effect
+ * performed without its hold would be exactly the over-booking nothing could
+ * see afterwards. Capacity the provider does not report (CAPACITY_UNKNOWN) is
+ * not a refusal of anything scarce, and Brain invents no figure for it (§39),
+ * so that send proceeds unheld; an effect whose commitment cannot be resolved
+ * holds nothing and proceeds as before.
+ *
+ * Otherwise recording never changes the effect: the send's answer is returned
+ * exactly as the provider gave it, and a recording failure (an error, not a
+ * refusal) is reported on the log (no payload, no credential) rather than
+ * turned into a failed or repeated send.
  */
 import type { EffectAdapter, EffectRequest, SendOutcome } from '../../effects/adapter.ts';
 import { getOpportunity } from '../../../repos/cashPortfolio.ts';
@@ -110,6 +123,29 @@ export interface RecordedAttempt {
   outcome: 'PERFORMED' | 'FAILED' | 'UNKNOWN' | null;
   facts: number;
   transferred: boolean;
+  /** Why the send was not made: the hold the recorder refused. Null when the provider was called. */
+  refusedSend?: Extract<ReservationAnswer, { ok: false }>['reason'] | null;
+}
+
+/**
+ * The definite answer for a send whose hold was refused, or null when the send
+ * may proceed. A refusal is never ambiguous: the provider was not called, so the
+ * outcome is REJECTED, retryable only when waiting can change it (capacity frees
+ * when its window ends; a missing grant or a refused key does not by itself).
+ */
+export function refusalOutcome(hold: ReservationAnswer | null): SendOutcome | null {
+  if (!hold || hold.ok || hold.reason === 'CAPACITY_UNKNOWN') return null;
+  switch (hold.reason) {
+    case 'CAPACITY':
+      return {
+        kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true,
+        detail: `not sent: the provider's capacity for this window is fully held across every business (${hold.remaining} remaining)`,
+      };
+    case 'MISSING_AUTHORITY':
+      return { kind: 'REJECTED', category: 'NOT_AUTHORIZED', retryable: false, detail: `not sent: the live commercial grant does not cover ${hold.missing.join(', ')}` };
+    default:
+      return { kind: 'REJECTED', category: 'INVALID_INPUT', retryable: false, detail: `not sent: the capacity hold was refused (${hold.reason})` };
+  }
 }
 
 /**
@@ -161,6 +197,13 @@ export async function recordProviderAttempt(
     }
   } catch (error) {
     reportRecordingFailure(seat, 'hold', error);
+  }
+
+  // A refused hold is a refused send: the provider is not called (see the header).
+  const refusal = refusalOutcome(recorded.hold);
+  if (refusal) {
+    recorded.refusedSend = (recorded.hold as Extract<ReservationAnswer, { ok: false }>).reason;
+    return { outcome: refusal, recorded };
   }
 
   // The provider call itself, untouched by anything above.

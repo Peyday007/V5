@@ -110,9 +110,13 @@ describe('a real send writes the counterparty rows', () => {
     const first = await recordProviderAttempt(seat, request(a.opportunityId), answer({ kind: 'UNCERTAIN', reason: 'no answer' }), () => AT);
     expect(first.recorded.hold, JSON.stringify(first.recorded)).toMatchObject({ ok: true });
     expect(first.recorded.outcome).toBe('UNKNOWN'); // an unknown outcome keeps its hold
-    const second = await recordProviderAttempt(seat, request(b.opportunityId), answer(confirmed('lead-b')), () => AT);
+    let sent = false;
+    const second = await recordProviderAttempt(seat, request(b.opportunityId), async () => { sent = true; return confirmed('lead-b'); }, () => AT);
     expect(second.recorded.hold).toMatchObject({ ok: false, reason: 'CAPACITY', remaining: 0 });
-    expect(second.outcome).toEqual(confirmed('lead-b')); // recording never changes the effect
+    // The last send of the window is the first business's: the second is refused before the provider is called.
+    expect(sent).toBe(false);
+    expect(second.outcome).toMatchObject({ kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true });
+    expect(second.recorded.refusedSend).toBe('CAPACITY');
     const live = holdsFrom(await recordedReservationEvents([ID])).filter((h) => h.state === 'HELD');
     expect(live).toHaveLength(1);
   });
