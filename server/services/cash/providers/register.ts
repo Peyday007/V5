@@ -13,10 +13,16 @@ import { CONTACT_BUYER_NAMESPACE, ISSUE_INVOICE_NAMESPACE } from '../effects.ts'
 import { billingConfig, messagingConfig } from './config.ts';
 import { registerPaymentReader } from './payments.ts';
 import { createResendAdapter } from './resend.ts';
-import { createInstantlyAdapter } from './instantly.ts';
+import { createInstantlyAdapter, instantlyCapacity } from './instantly.ts';
 import { createStripeInvoiceAdapter, readStripeInvoice } from './stripe.ts';
 import { registerProbe } from '../../factory/program/probes.ts';
 import { PROVIDER_COUNTERPARTY_PROBE, providerCounterpartyProbe } from './counterparty.ts';
+import { recordingCounterparty } from './counterpartyRecord.ts';
+
+/** Instantly's measured daily capacity, shared by every business on the workspace; none reported is null. */
+const instantlyPerDay = async (env: NodeJS.ProcessEnv): Promise<number | null> => (await instantlyCapacity({ env }))?.perDay ?? null;
+/** Resend and Stripe report no capacity, and Brain invents none (§39): a hold on them is refused as unknown capacity. */
+const unreported = async (): Promise<number | null> => null;
 
 export interface ProviderRegistration {
   messaging: string | null;
@@ -26,15 +32,22 @@ export interface ProviderRegistration {
 export function registerCommercialProviders(env: NodeJS.ProcessEnv = process.env): ProviderRegistration {
   const out: ProviderRegistration = { messaging: null, billing: null };
   if (messagingConfig(env).provider === 'resend') {
-    registerAdapter(createResendAdapter({ namespace: CONTACT_BUYER_NAMESPACE.name }));
+    registerAdapter(recordingCounterparty(createResendAdapter({ namespace: CONTACT_BUYER_NAMESPACE.name }), {
+      area: 'MESSAGING', provider: 'resend', capability: 'SEND_A_MESSAGE', action: 'CONTACT_BUYER', capacityPerDay: unreported,
+    }));
     out.messaging = 'resend';
   } else if (messagingConfig(env).provider === 'instantly') {
     // The owner's Instantly workspace (§94): a lead in Brain's campaign, activated only inside the granted effect.
-    registerAdapter(createInstantlyAdapter({ namespace: CONTACT_BUYER_NAMESPACE.name }));
+    // Every send is also recorded as a counterparty commitment (CP-31, `counterpartyRecord.ts`).
+    registerAdapter(recordingCounterparty(createInstantlyAdapter({ namespace: CONTACT_BUYER_NAMESPACE.name }), {
+      area: 'MESSAGING', provider: 'instantly', capability: 'SEND_A_MESSAGE', action: 'CONTACT_BUYER', capacityPerDay: () => instantlyPerDay(env),
+    }));
     out.messaging = 'instantly';
   }
   if (billingConfig(env).provider === 'stripe') {
-    registerAdapter(createStripeInvoiceAdapter({ namespace: ISSUE_INVOICE_NAMESPACE.name }));
+    registerAdapter(recordingCounterparty(createStripeInvoiceAdapter({ namespace: ISSUE_INVOICE_NAMESPACE.name }), {
+      area: 'INVOICES', provider: 'stripe', capability: 'ISSUE_AN_INVOICE', action: 'QUOTE_AND_INVOICE', capacityPerDay: unreported,
+    }));
     registerPaymentReader({
       name: 'stripe.invoice_payments',
       provider: 'stripe',

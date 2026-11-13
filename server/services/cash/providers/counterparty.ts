@@ -29,7 +29,8 @@
  * provider names, never a key.
  */
 import { stageIndex, type Counterparty, type Fact } from '../../labor/counterparties/ladder.ts';
-import type { ReservationEvent } from '../../labor/counterparties/reservations.ts';
+import { recordedReservationEvents, type ReservationEvent } from '../../labor/counterparties/reservations.ts';
+import { recordedCounterparty } from '../../labor/counterparties/ladder.ts';
 import { readTransaction, type TransactionReading } from '../../labor/counterparties/transaction.ts';
 import { commercialProviderStatus, type ProviderLine } from './status.ts';
 
@@ -88,6 +89,8 @@ export const PROVIDER_COUNTERPARTY_PROBE = 'cash.counterparties.providers';
 export interface ProviderTransactionReading {
   area: string;
   capability: string;
+  /** True when the provider's own recorded operations stand behind facts beyond configuration. */
+  evidenced?: boolean;
   reading: TransactionReading;
 }
 
@@ -100,11 +103,12 @@ export interface ProviderTransactionReading {
  * commitment is deliverable.
  *
  * The candidates are the providers the existing status reading names, so this
- * runs on the deployment's real configuration. No reservation is recorded for
- * a provider — nothing in Brain holds provider capacity — so `events` is the
- * caller's (empty by default) and no authority is assumed held: the reading
- * proposes, it never performs, and a reserve without authority is refused with
- * the authority named.
+ * runs on the deployment's real configuration, with the facts and holds every
+ * real send recorded (`counterpartyRecord.ts`): the holds across every
+ * business, so a double-commitment of provider capacity is a breach the probe
+ * can actually find. No authority is assumed held: the reading proposes, it
+ * never performs, and a reserve without authority is refused with the
+ * authority named.
  */
 export async function readProviderTransactions(options: {
   env?: NodeJS.ProcessEnv;
@@ -115,22 +119,33 @@ export async function readProviderTransactions(options: {
   const env = options.env ?? process.env;
   const at = options.at ?? new Date().toISOString();
   const lines = await commercialProviderStatus(env);
-  return lines.map((line) => ({
-    area: line.area,
-    capability: line.capability,
-    reading: readTransaction({
-      commitment: { id: `commitment:${line.area.toLowerCase()}`, capacityUnits: 1 },
-      candidates: [providerCounterparty(line)].filter((c): c is Counterparty => c !== null),
-      events: options.events ?? [],
-      businessId: 'brain',
-      window: { windowStart: at, windowEnd: at },
-      // Committing a provider is the same act as performing its effect, so it needs that effect's grant.
-      authorityRequired: [`effect:${line.capability}`],
-      authorityHeld: options.authorityHeld ?? [],
-      at,
-      source: `${EVIDENCE}: ${line.area}`,
-    }),
-  }));
+  const out: ProviderTransactionReading[] = [];
+  for (const line of lines) {
+    const configured = providerCounterparty(line);
+    // What the provider's own operations established (`counterpartyRecord.ts`) is read after what
+    // configuration says, so a receipt's VERIFIED replaces configuration's PENDING, never the reverse.
+    const recorded = configured ? await recordedCounterparty(configured.id) : null;
+    const candidate = configured ? { ...configured, facts: [...configured.facts, ...(recorded?.facts ?? [])] } : null;
+    const events = options.events ?? (configured ? await recordedReservationEvents([configured.id]) : []);
+    out.push({
+      area: line.area,
+      capability: line.capability,
+      evidenced: recorded !== null,
+      reading: readTransaction({
+        commitment: { id: `commitment:${line.area.toLowerCase()}`, capacityUnits: 1 },
+        candidates: candidate ? [candidate] : [],
+        events,
+        businessId: 'brain',
+        window: { windowStart: at, windowEnd: at },
+        // Committing a provider is the same act as performing its effect, so it needs that effect's grant.
+        authorityRequired: [`effect:${line.capability}`],
+        authorityHeld: options.authorityHeld ?? [],
+        at,
+        source: `${EVIDENCE}: ${line.area}`,
+      }),
+    });
+  }
+  return out;
 }
 
 /**
@@ -143,7 +158,7 @@ export async function readProviderTransactions(options: {
  */
 export function counterpartyBreaches(readings: readonly ProviderTransactionReading[], authorityHeld: readonly string[] = []): string[] {
   const breaches: string[] = [];
-  for (const { area, capability, reading } of readings) {
+  for (const { area, capability, reading, evidenced } of readings) {
     if (reading.deliverability.deliverable && stageIndex(reading.deliverability.stage) < stageIndex('CONTRACTED')) {
       breaches.push(`${area}: reported deliverable at ${reading.deliverability.stage ?? 'no stage'}, below CONTRACTED`);
     }
@@ -152,7 +167,7 @@ export function counterpartyBreaches(readings: readonly ProviderTransactionReadi
     }
     if (reading.doubleCommitted.length > 0) breaches.push(`${area}: double-committed ${reading.doubleCommitted.join(', ')}`);
     const primary = reading.primary;
-    if (primary?.kind === 'software service' && stageIndex(primary.stage) > stageIndex('LISTING')) {
+    if (primary?.kind === 'software service' && !evidenced && stageIndex(primary.stage) > stageIndex('LISTING')) {
       breaches.push(`${area}: ${primary.counterpartyId} read past LISTING from configuration alone`);
     }
   }
