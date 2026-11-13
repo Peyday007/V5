@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
+import { createAuthority } from '../server/repos/cashAuthority.ts';
 import { readLadder, recordCounterpartyFacts, recordedCounterparty, type Counterparty, type Fact } from '../server/services/labor/counterparties/ladder.ts';
 import { recordHoldOutcome, type ReservationEvent } from '../server/services/labor/counterparties/reservations.ts';
 import {
@@ -22,9 +23,13 @@ const party = (id: string, facts: Fact[], geography = 'region-a'): Counterparty 
 const commitment = { id: 'job-1', capacityUnits: 2, geographies: ['region-a', 'region-b'] };
 
 const input = (candidates: Counterparty[], events: ReservationEvent[] = [], over: Partial<TransactionInput> = {}): TransactionInput => ({
-  commitment, candidates, events, businessId: 'biz-1', window: W,
-  authorityRequired: ['RESERVE_CAPACITY'], authorityHeld: ['RESERVE_CAPACITY'], at: '2026-11-13T12:00:00Z',
+  commitment, candidates, events, businessId: 'biz-1', window: W, authority: null, at: '2026-11-13T12:00:00Z',
   source: 'sourced buyer request', ...over,
+});
+/** The owner's standing commercial authority, as a person would grant it: a real row, read by the arbiter. */
+const engage = (projectId: string) => createAuthority({
+  projectId, ownerUserId: 'usr_owner', createdByUserId: 'usr_owner', name: 'test grant', allowedActions: ['ENGAGE_CONTRACTOR'],
+  prohibitions: [], maxCommittedCents: 100_000, maxPerActionCents: 100_000, maxConcurrent: 3, currency: 'USD',
 });
 
 describe('CP-31 acceptance on recorded rows', () => {
@@ -35,7 +40,7 @@ describe('CP-31 acceptance on recorded rows', () => {
 
   const record = (c: Counterparty) => recordCounterpartyFacts({ projectId: biz, counterparty: c, facts: c.facts, actorRef: 'BRAIN' });
   const recorded = (over: Partial<TransactionInput> = {}) => {
-    const { candidates: _c, events: _e, ...rest } = input([], [], { businessId: biz, ...over });
+    const { candidates: _c, events: _e, authority: _a, ...rest } = input([], [], { businessId: biz, ...over });
     return { ...rest, candidateIds: ['crew-a', 'crew-b'] };
   };
 
@@ -62,10 +67,11 @@ describe('CP-31 acceptance on recorded rows', () => {
     expect(before.alternative?.counterpartyId).toBe('crew-b');
     expect(before.deliverability.deliverable).toBe(false);
 
-    // Without the authority nothing is written.
-    const refused = await reserveRecordedTransaction(recorded({ authorityHeld: [] }), 'BRAIN');
-    expect(refused.reserve).toMatchObject({ permitted: false, reason: 'MISSING_AUTHORITY' });
+    // Without the owner's live grant nothing is written.
+    const refused = await reserveRecordedTransaction(recorded(), 'BRAIN');
+    expect(refused.reserve).toMatchObject({ permitted: false, reason: 'MISSING_AUTHORITY', missingAuthority: ['ENGAGE_CONTRACTOR'] });
     expect((await readRecordedTransaction(recorded())).deliverability.holdState).toBeNull();
+    await engage(biz);
 
     const reserved = await reserveRecordedTransaction(recorded(), 'BRAIN');
     expect(reserved.reserve).toMatchObject({ permitted: true, duplicate: false, counterpartyId: 'crew-a' });
@@ -77,7 +83,7 @@ describe('CP-31 acceptance on recorded rows', () => {
     // No report: transferring is a no-op.
     expect((await transferRecordedTransaction(recorded(), 'BRAIN')).transfer.applicable).toBe(false);
 
-    await recordHoldOutcome({ counterpartyId: 'crew-a', key: reservationKey('job-1', 'crew-a'), kind: 'FAILED', authorityHeld: ['RESERVE_CAPACITY'], at: '2026-11-14T00:00:00Z', actorRef: 'BRAIN' });
+    await recordHoldOutcome({ counterpartyId: 'crew-a', key: reservationKey('job-1', 'crew-a'), kind: 'FAILED', at: '2026-11-14T00:00:00Z', actorRef: 'BRAIN' });
     const failed = await readRecordedTransaction(recorded({ at: '2026-11-14T01:00:00Z' }));
     expect(failed.deliverability.deliverable).toBe(false); // a failed fulfiller is not reported as deliverable
 

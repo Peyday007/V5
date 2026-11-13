@@ -25,8 +25,15 @@
  *   Overlap is judged conservatively (the sum of overlapping holds, not their
  *   peak): a scarce resource is never booked on the strength of an optimistic
  *   reading of its schedule.
- * - A reservation needs every authority its caller says it requires. A missing
- *   one is the answer, naming it; it is never downgraded to a softer hold.
+ * - A reservation is the commercial action `ENGAGE_CONTRACTOR` ("commit
+ *   contractor or supplier capacity against a named obligation"), and the only
+ *   thing that authorizes it is the business's live commercial authority row,
+ *   read through the existing owner (`checkCommercialAuthority`,
+ *   `services/cash/authority.ts`). No caller names what it holds: the pure
+ *   decision takes that owner's `CommercialDecision` and checks it covers this
+ *   action for this business, and the arbiter ignores whatever a caller read
+ *   and re-reads the grant itself, inside the lock, at the moment of the write.
+ *   A refusal names the action; it is never downgraded to a softer hold.
  * - A logical reservation key counts once. The same key with different terms is
  *   a conflict, not a second reservation (invariant 27).
  * - A failed primary transfers to the named alternative only on a reported
@@ -35,8 +42,43 @@
  *   transferred, and keeps its capacity (invariant 26).
  */
 
+import { cashAuthorityNow } from '../../../repos/cashAuthority.ts';
 import { serializeCash } from '../../../repos/cashLock.ts';
 import { cashEventsOfKind, recordCashEvent } from '../../../repos/cashMode.ts';
+import { checkCommercialAuthority, type CommercialAction, type CommercialDecision } from '../../cash/authority.ts';
+
+// ---------------------------------------------------------------------------
+// Authority: the owner's live grant, never a caller's assertion
+// ---------------------------------------------------------------------------
+
+/** The one commercial action a reservation (and a transfer's new hold) is. */
+export const RESERVATION_ACTION: CommercialAction = 'ENGAGE_CONTRACTOR';
+
+/**
+ * The business's live commercial authority for a reservation, read from the
+ * owner of commercial authority (`checkCommercialAuthority`). This is the only
+ * way an authority reaches this module; a business is a project.
+ */
+export function reservationAuthority(businessId: string, at?: string): Promise<CommercialDecision> {
+  return checkCommercialAuthority({ projectId: businessId, action: RESERVATION_ACTION, at });
+}
+
+/**
+ * Null when this decision authorizes reserving capacity for this business;
+ * otherwise the sentence saying why it does not. A decision about another
+ * project, another action, a revoked grant or no grant at all authorizes
+ * nothing — the check reads the grant the decision carries, not its `ok` alone.
+ */
+export function authorityRefusal(decision: CommercialDecision | null | undefined, businessId: string): string | null {
+  if (!decision) return `no commercial authority was read for ${RESERVATION_ACTION}`;
+  if (!decision.ok || !decision.authority) return decision.reason;
+  const grant = decision.authority;
+  if (grant.projectId !== businessId) return 'no standing commercial authority exists for this business';
+  if (grant.state !== 'ACTIVE') return 'the commercial authority is not active';
+  if (grant.prohibitions.includes(RESERVATION_ACTION)) return `the commercial authority prohibits ${RESERVATION_ACTION}`;
+  if (!grant.allowedActions.includes(RESERVATION_ACTION)) return `the commercial authority does not cover ${RESERVATION_ACTION}`;
+  return null;
+}
 
 export type ReservationKind = 'RESERVED' | 'RELEASED' | 'FAILED' | 'PERFORMED';
 
@@ -52,8 +94,10 @@ export interface ReservationEvent {
   /** ISO-8601 UTC; the window is [start, end). */
   windowStart: string;
   windowEnd: string;
-  /** Authorities the actor held when the event was recorded. */
+  /** The commercial action the grant covered when the event was recorded ([] on an outcome report). */
   authorityHeld: string[];
+  /** The `cash_authorities` row that authorized a RESERVED (or a transfer's RELEASED); null otherwise. */
+  authorityId?: string | null;
   /** ISO-8601 UTC when recorded; events are applied in this order, ties in array order. */
   at: string;
 }
@@ -117,15 +161,14 @@ export interface ReservationRequest {
   windowEnd: string;
   /** Total capacity the counterparty has in the window, as evidenced; unknown capacity is not a number and cannot be reserved against. */
   capacityUnits: number | null;
-  /** What this reservation requires, and what the actor holds. */
-  authorityRequired: string[];
-  authorityHeld: string[];
+  /** The business's live grant, from `reservationAuthority` — never a list the caller wrote. */
+  authority: CommercialDecision | null;
   at: string;
 }
 
 export type ReservationAnswer =
   | { ok: true; duplicate: boolean; event: ReservationEvent | null }
-  | { ok: false; reason: 'MISSING_AUTHORITY'; missing: string[] }
+  | { ok: false; reason: 'MISSING_AUTHORITY'; missing: string[]; detail: string }
   | { ok: false; reason: 'CAPACITY_UNKNOWN' }
   | { ok: false; reason: 'INVALID'; detail: string }
   | { ok: false; reason: 'KEY_CONFLICT'; detail: string }
@@ -141,8 +184,8 @@ export function reserve(events: readonly ReservationEvent[], request: Reservatio
       && prior.units === request.units && prior.windowStart === request.windowStart && prior.windowEnd === request.windowEnd;
     return same ? { ok: true, duplicate: true, event: null } : { ok: false, reason: 'KEY_CONFLICT', detail: `key ${request.key} already names a different reservation` };
   }
-  const missing = request.authorityRequired.filter((one) => !request.authorityHeld.includes(one));
-  if (missing.length > 0) return { ok: false, reason: 'MISSING_AUTHORITY', missing };
+  const refusal = authorityRefusal(request.authority, request.businessId);
+  if (refusal !== null) return { ok: false, reason: 'MISSING_AUTHORITY', missing: [RESERVATION_ACTION], detail: refusal };
   if (request.capacityUnits === null) return { ok: false, reason: 'CAPACITY_UNKNOWN' };
   const { remaining, holders } = remainingCapacity(events, request.counterpartyId, request.capacityUnits, request);
   if (request.units > remaining) {
@@ -153,7 +196,8 @@ export function reserve(events: readonly ReservationEvent[], request: Reservatio
     duplicate: false,
     event: {
       kind: 'RESERVED', key: request.key, counterpartyId: request.counterpartyId, commitmentId: request.commitmentId, businessId: request.businessId,
-      units: request.units, windowStart: request.windowStart, windowEnd: request.windowEnd, authorityHeld: request.authorityHeld, at: request.at,
+      units: request.units, windowStart: request.windowStart, windowEnd: request.windowEnd,
+      authorityHeld: [RESERVATION_ACTION], authorityId: request.authority!.authority!.id, at: request.at,
     },
   };
 }
@@ -165,8 +209,8 @@ export interface TransferRequest {
   alternativeKey: string;
   alternativeCounterpartyId: string;
   alternativeCapacityUnits: number | null;
-  authorityRequired: string[];
-  authorityHeld: string[];
+  /** The primary's business's live grant, from `reservationAuthority`. */
+  authority: CommercialDecision | null;
   at: string;
 }
 
@@ -184,15 +228,18 @@ export function planTransfer(events: readonly ReservationEvent[], request: Trans
   }
   if (primary.state !== 'FAILED') return { action: 'REFUSED', reason: 'NOT_FAILED', detail: `the primary hold is ${primary.state.toLowerCase()}, not failed` };
   if (request.alternativeCounterpartyId === primary.counterpartyId) return { action: 'REFUSED', reason: 'SAME_COUNTERPARTY', detail: 'the alternative is the primary' };
+  const refusal = authorityRefusal(request.authority, primary.businessId);
+  if (refusal !== null) return { action: 'REFUSED', reason: 'MISSING_AUTHORITY', detail: `the alternative cannot take the commitment: ${refusal}` };
   // The primary is released in the same plan, so its units are not counted against the alternative's window.
   const release: ReservationEvent = {
     kind: 'RELEASED', key: primary.key, counterpartyId: primary.counterpartyId, commitmentId: primary.commitmentId, businessId: primary.businessId,
-    units: primary.units, windowStart: primary.windowStart, windowEnd: primary.windowEnd, authorityHeld: request.authorityHeld, at: request.at,
+    units: primary.units, windowStart: primary.windowStart, windowEnd: primary.windowEnd,
+    authorityHeld: [RESERVATION_ACTION], authorityId: request.authority!.authority!.id, at: request.at,
   };
   const next = reserve([...events, release], {
     key: request.alternativeKey, counterpartyId: request.alternativeCounterpartyId, commitmentId: primary.commitmentId, businessId: primary.businessId,
     units: primary.units, windowStart: primary.windowStart, windowEnd: primary.windowEnd, capacityUnits: request.alternativeCapacityUnits,
-    authorityRequired: request.authorityRequired, authorityHeld: request.authorityHeld, at: request.at,
+    authority: request.authority, at: request.at,
   });
   if (!next.ok) return { action: 'REFUSED', reason: next.reason, detail: `the alternative cannot take the commitment: ${next.reason}` };
   return { action: 'TRANSFER', events: next.event ? [release, next.event] : [release] };
@@ -297,6 +344,7 @@ function eventFromRow(detail: Record<string, unknown>): ReservationEvent | null 
     windowStart: String(e.windowStart ?? ''),
     windowEnd: String(e.windowEnd ?? ''),
     authorityHeld: Array.isArray(e.authorityHeld) ? e.authorityHeld.map(String) : [],
+    authorityId: typeof e.authorityId === 'string' ? e.authorityId : null,
     at: String(e.at ?? ''),
   };
 }
@@ -324,18 +372,27 @@ async function append(event: ReservationEvent, actorRef: string): Promise<void> 
   });
 }
 
+/** The live grant of a business, as the arbiter read it inside the lock. */
+export type AuthorityOf = (businessId: string) => CommercialDecision | null;
+
 /**
  * The arbiter. Takes every named counterparty's capacity lock (`serializeCash`
  * on its own `cash_locks` row, in one fixed order so two callers cannot
- * deadlock), re-reads their ledgers across every business, lets `decide`
- * choose from that fresh snapshot, and appends exactly the events it returns —
- * in the same transaction, so a decision and its rows land together or not at
- * all. This is the only path by which a reservation event is written.
+ * deadlock), re-reads their ledgers across every business, reads the live
+ * commercial authority of every business involved (the named ones and every
+ * business that already holds on these ledgers) at the moment of the write,
+ * lets `decide` choose from that fresh snapshot, and appends exactly the events
+ * it returns — in the same transaction, so a decision and its rows land
+ * together or not at all. This is the only path by which a reservation event is
+ * written, and it refuses to write a RESERVED event (or a transfer's release)
+ * that the business's live grant does not cover, whatever `decide` proposed:
+ * the authority is the arbiter's reading, never the caller's.
  */
 export async function decideRecorded<T>(
   counterpartyIds: readonly string[],
   actorRef: string,
-  decide: (events: ReservationEvent[]) => { result: T; append: readonly ReservationEvent[] },
+  decide: (events: ReservationEvent[], authorityOf: AuthorityOf) => { result: T; append: readonly ReservationEvent[] },
+  businessIds: readonly string[] = [],
 ): Promise<T> {
   const ids = [...new Set(counterpartyIds)].sort();
   const locked = new Set(ids);
@@ -343,9 +400,23 @@ export async function decideRecorded<T>(
     i < ids.length
       ? serializeCash(counterpartyLedger(ids[i]!), CAPACITY_LOCK, () => step(i + 1))
       : (async () => {
-          const { result, append: events } = decide(await recordedReservationEvents(ids));
+          const snapshot = await recordedReservationEvents(ids);
+          // The clock is the arbiter's, not the caller's: a grant is read as it stands when the row is written.
+          const now = cashAuthorityNow();
+          const grants = new Map<string, CommercialDecision>();
+          for (const business of [...new Set([...businessIds, ...snapshot.map((e) => e.businessId)])].sort()) {
+            grants.set(business, await reservationAuthority(business, now));
+          }
+          const authorityOf: AuthorityOf = (business) => grants.get(business) ?? null;
+          const { result, append: events } = decide(snapshot, authorityOf);
           for (const event of events) {
             if (!locked.has(event.counterpartyId)) throw new Error(`${event.counterpartyId} was not locked for this decision`);
+            if (event.kind === 'RESERVED' || event.authorityHeld.length > 0) {
+              const grant = authorityOf(event.businessId);
+              const refusal = authorityRefusal(grant, event.businessId);
+              if (refusal !== null) throw new Error(`refused to record ${event.kind} ${event.key}: ${refusal}`);
+              if (event.authorityId !== grant!.authority!.id) throw new Error(`refused to record ${event.kind} ${event.key}: it does not name the live commercial authority`);
+            }
             await append(event, actorRef);
           }
           return result;
@@ -357,11 +428,11 @@ export async function decideRecorded<T>(
  * Reserve, recorded. A repeat of the same logical key is answered as a
  * duplicate and writes nothing; a refusal writes nothing.
  */
-export async function recordReservation(request: ReservationRequest, actorRef: string): Promise<ReservationAnswer> {
-  return decideRecorded([request.counterpartyId], actorRef, (events) => {
-    const answer = reserve(events, request);
+export async function recordReservation(request: Omit<ReservationRequest, 'authority'>, actorRef: string): Promise<ReservationAnswer> {
+  return decideRecorded([request.counterpartyId], actorRef, (events, authorityOf) => {
+    const answer = reserve(events, { ...request, authority: authorityOf(request.businessId) });
     return { result: answer, append: answer.ok && answer.event ? [answer.event] : [] };
-  });
+  }, [request.businessId]);
 }
 
 export type OutcomeAnswer =
@@ -376,7 +447,6 @@ export async function recordHoldOutcome(input: {
   counterpartyId: string;
   key: string;
   kind: Exclude<ReservationKind, 'RESERVED'>;
-  authorityHeld: string[];
   at: string;
   actorRef: string;
 }): Promise<OutcomeAnswer> {
@@ -386,7 +456,7 @@ export async function recordHoldOutcome(input: {
     if (FREES_CAPACITY.has(hold.state)) return { result: { recorded: false, reason: 'ALREADY_SETTLED', detail: `the hold is already ${hold.state.toLowerCase()}` }, append: [] };
     const event: ReservationEvent = {
       kind: input.kind, key: hold.key, counterpartyId: hold.counterpartyId, commitmentId: hold.commitmentId, businessId: hold.businessId,
-      units: hold.units, windowStart: hold.windowStart, windowEnd: hold.windowEnd, authorityHeld: input.authorityHeld, at: input.at,
+      units: hold.units, windowStart: hold.windowStart, windowEnd: hold.windowEnd, authorityHeld: [], authorityId: null, at: input.at,
     };
     return { result: { recorded: true, event }, append: [event] };
   });
@@ -398,11 +468,12 @@ export async function recordHoldOutcome(input: {
  * same transaction — both rows or neither.
  */
 export async function recordTransfer(
-  request: TransferRequest & { primaryCounterpartyId: string },
+  request: Omit<TransferRequest, 'authority'> & { primaryCounterpartyId: string },
   actorRef: string,
 ): Promise<TransferPlan> {
-  return decideRecorded([request.primaryCounterpartyId, request.alternativeCounterpartyId], actorRef, (events) => {
-    const plan = planTransfer(events, request);
+  return decideRecorded([request.primaryCounterpartyId, request.alternativeCounterpartyId], actorRef, (events, authorityOf) => {
+    const primary = holdsFrom(events).find((h) => h.key === request.primaryKey);
+    const plan = planTransfer(events, { ...request, authority: primary ? authorityOf(primary.businessId) : null });
     return { result: plan, append: plan.action === 'TRANSFER' ? plan.events : [] };
   });
 }

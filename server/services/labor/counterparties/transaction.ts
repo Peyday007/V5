@@ -18,9 +18,12 @@
  * append exactly the events it proposed — so the commitment-level guard (no
  * second live hold on one commitment) and the capacity guard (no double-booking
  * across businesses) are both decided on a snapshot nobody else can change
- * before the rows land. Authority is the caller's: `authorityRequired` and
- * `authorityHeld` are read from the existing authority owner by whoever calls,
- * and this module only refuses when they do not cover the action.
+ * before the rows land. Authority is never the caller's to assert: a reserve,
+ * a transfer and a binding acceptance are `ENGAGE_CONTRACTOR`, authorized only
+ * by the business's live commercial authority row (`reservationAuthority`, the
+ * existing owner's `checkCommercialAuthority`). The recorded entry points read
+ * it themselves — the arbiter re-reads it inside the lock — and take no
+ * authority from their caller at all.
  *
  * Rules this reading keeps:
  *
@@ -40,7 +43,9 @@
  */
 import { compareFulfillers, type CandidateReading, type Commitment, type Comparison, type Figure, type FigureName } from './compare.ts';
 import { effectiveStatus, recordedCounterparty, STAGES, stageIndex, type Counterparty, type MissingFact, type Stage } from './ladder.ts';
+import type { CommercialDecision } from '../../cash/authority.ts';
 import {
+  authorityRefusal,
   decideRecorded,
   doubleCommitted,
   holdsFrom,
@@ -48,7 +53,9 @@ import {
   performanceFrom,
   planTransfer,
   remainingCapacity,
+  RESERVATION_ACTION,
   recordedReservationEvents,
+  reservationAuthority,
   reserve,
   type Hold,
   type ReservationEvent,
@@ -63,9 +70,8 @@ export interface TransactionInput {
   events: readonly ReservationEvent[];
   businessId: string;
   window: { windowStart: string; windowEnd: string };
-  /** What a reserve on this commitment requires, and what the actor holds — read from the authority owner by the caller. */
-  authorityRequired: readonly string[];
-  authorityHeld: readonly string[];
+  /** The business's live commercial authority, as `reservationAuthority` read it. Never a list the caller wrote. */
+  authority: CommercialDecision | null;
   /** ISO-8601 UTC for any event this reading proposes. */
   at: string;
   /** Where the transaction came from (an opening, a buyer's request). Carried, never interpreted. */
@@ -201,8 +207,7 @@ function readReserve(input: TransactionInput, primary: CandidateReading | null):
     windowStart: input.window.windowStart,
     windowEnd: input.window.windowEnd,
     capacityUnits: primary.figures.capacity.value,
-    authorityRequired: [...input.authorityRequired],
-    authorityHeld: [...input.authorityHeld],
+    authority: input.authority,
     at: input.at,
   });
   if (answer.ok) return { permitted: true, duplicate: answer.duplicate, counterpartyId: primary.counterpartyId, event: answer.event };
@@ -210,7 +215,7 @@ function readReserve(input: TransactionInput, primary: CandidateReading | null):
     case 'MISSING_AUTHORITY':
       return {
         permitted: false, counterpartyId: primary.counterpartyId, reason: 'MISSING_AUTHORITY', missingAuthority: answer.missing,
-        detail: `not reserved: the actor does not hold ${answer.missing.join(', ')}`,
+        detail: `not reserved without ${answer.missing.join(', ')}: ${answer.detail}`,
       };
     case 'CAPACITY_UNKNOWN':
       return { permitted: false, counterpartyId: primary.counterpartyId, reason: 'CAPACITY_UNKNOWN', missingAuthority: [], detail: 'capacity is not verified, so nothing can be reserved against it' };
@@ -251,8 +256,7 @@ function readTransfer(input: TransactionInput, comparison: Comparison): Transfer
     alternativeKey: reservationKey(input.commitment.id, to.counterpartyId),
     alternativeCounterpartyId: to.counterpartyId,
     alternativeCapacityUnits: to.figures.capacity.value,
-    authorityRequired: [...input.authorityRequired],
-    authorityHeld: [...input.authorityHeld],
+    authority: input.authority,
     at: input.at,
   });
   const detail = plan.action === 'TRANSFER'
@@ -351,9 +355,9 @@ export interface AuthorizedTerms {
   maxLeadTime?: number | null;
   /** Payment terms acceptable, when restricted; absent means any. */
   paymentTerms?: readonly string[] | null;
-  /** Authority a binding acceptance needs, and what the actor holds. */
-  authorityRequired: readonly string[];
-  authorityHeld: readonly string[];
+  /** The business the acceptance binds, and its live commercial authority (`reservationAuthority`). */
+  businessId: string;
+  authority: CommercialDecision | null;
 }
 
 export type NegotiationStep =
@@ -391,9 +395,9 @@ export function negotiate(counterparty: Counterparty, terms: AuthorizedTerms): N
     return { action: 'DECLINE', detail: `payment terms ${String(payment!.value)} are not among the authorized terms` };
   }
   const quoted = price!.value as number;
-  const missingAuthority = terms.authorityRequired.filter((a) => !terms.authorityHeld.includes(a));
+  const refusal = authorityRefusal(terms.authority, terms.businessId);
   if (quoted <= terms.priceCeiling) {
-    if (missingAuthority.length > 0) return { action: 'MISSING_AUTHORITY', missingAuthority, detail: `accepting ${quoted} needs ${missingAuthority.join(', ')}` };
+    if (refusal !== null) return { action: 'MISSING_AUTHORITY', missingAuthority: [RESERVATION_ACTION], detail: `accepting ${quoted} needs ${RESERVATION_ACTION}: ${refusal}` };
     return { action: 'ACCEPT', price: quoted, detail: `${quoted} is within the authorized ceiling ${terms.priceCeiling}` };
   }
   return { action: 'COUNTER', price: terms.priceCeiling, detail: `${quoted} exceeds the authorized ceiling; counter at ${terms.priceCeiling}, never above it` };
@@ -523,8 +527,12 @@ export function planWorkforce(demands: readonly WorkforceDemand[], candidates: r
 // The same reading on recorded rows
 // ---------------------------------------------------------------------------
 
-/** A transaction named by its candidates' ids; their facts and every business's holds are read from the record. */
-export type RecordedTransactionInput = Omit<TransactionInput, 'candidates' | 'events'> & { candidateIds: readonly string[] };
+/**
+ * A transaction named by its candidates' ids; their facts, every business's
+ * holds and the business's live commercial authority are read from the record.
+ * It carries no authority: there is nothing a caller can assert.
+ */
+export type RecordedTransactionInput = Omit<TransactionInput, 'candidates' | 'events' | 'authority'> & { candidateIds: readonly string[] };
 
 async function recordedCandidates(ids: readonly string[]): Promise<Counterparty[]> {
   const out: Counterparty[] = [];
@@ -538,7 +546,12 @@ async function recordedCandidates(ids: readonly string[]): Promise<Counterparty[
 /** The transaction as the record stands now. Writes nothing. */
 export async function readRecordedTransaction(input: RecordedTransactionInput): Promise<TransactionReading> {
   const { candidateIds, ...rest } = input;
-  return readTransaction({ ...rest, candidates: await recordedCandidates(candidateIds), events: await recordedReservationEvents(candidateIds) });
+  return readTransaction({
+    ...rest,
+    candidates: await recordedCandidates(candidateIds),
+    events: await recordedReservationEvents(candidateIds),
+    authority: await reservationAuthority(rest.businessId),
+  });
 }
 
 /**
@@ -550,10 +563,10 @@ export async function readRecordedTransaction(input: RecordedTransactionInput): 
 export async function reserveRecordedTransaction(input: RecordedTransactionInput, actorRef: string): Promise<TransactionReading> {
   const { candidateIds, ...rest } = input;
   const candidates = await recordedCandidates(candidateIds);
-  return decideRecorded(candidateIds, actorRef, (events) => {
-    const reading = readTransaction({ ...rest, candidates, events });
+  return decideRecorded(candidateIds, actorRef, (events, authorityOf) => {
+    const reading = readTransaction({ ...rest, candidates, events, authority: authorityOf(rest.businessId) });
     return { result: reading, append: reading.reserve.permitted && reading.reserve.event ? [reading.reserve.event] : [] };
-  });
+  }, [rest.businessId]);
 }
 
 /**
@@ -564,9 +577,9 @@ export async function reserveRecordedTransaction(input: RecordedTransactionInput
 export async function transferRecordedTransaction(input: RecordedTransactionInput, actorRef: string): Promise<TransactionReading> {
   const { candidateIds, ...rest } = input;
   const candidates = await recordedCandidates(candidateIds);
-  return decideRecorded(candidateIds, actorRef, (events) => {
-    const reading = readTransaction({ ...rest, candidates, events });
+  return decideRecorded(candidateIds, actorRef, (events, authorityOf) => {
+    const reading = readTransaction({ ...rest, candidates, events, authority: authorityOf(rest.businessId) });
     const plan = reading.transfer.plan;
     return { result: reading, append: plan && plan.action === 'TRANSFER' ? plan.events : [] };
-  });
+  }, [rest.businessId]);
 }

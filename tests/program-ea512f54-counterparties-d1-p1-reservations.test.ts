@@ -5,13 +5,35 @@ import {
   type ReservationEvent, type ReservationRequest,
 } from '../server/services/labor/counterparties/reservations.ts';
 import { getDb } from '../server/db/database.ts';
+import { createAuthority } from '../server/repos/cashAuthority.ts';
+import { createProject } from '../server/repos/projects.ts';
+import type { CommercialDecision } from '../server/services/cash/authority.ts';
 import { freshProject } from './helpers.ts';
 
-const W = { windowStart: '2026-12-01T00:00:00Z', windowEnd: '2026-12-08T00:00:00Z' };
-const req = (over: Partial<ReservationRequest> = {}): ReservationRequest => ({
-  key: 'k1', counterpartyId: 'crew-a', commitmentId: 'job-1', businessId: 'biz-1', units: 3, ...W,
-  capacityUnits: 4, authorityRequired: ['commit-spend'], authorityHeld: ['commit-spend'], at: '2026-11-13T10:00:00Z', ...over,
+/** A decision as the authority owner (`checkCommercialAuthority`) returns it, for the pure layer. */
+const grant = (businessId: string, allowedActions: string[] = ['ENGAGE_CONTRACTOR']): CommercialDecision => ({
+  ok: true, reason: 'within the standing commercial authority', policyVersion: 1,
+  authority: {
+    id: `cau_${businessId}`, projectId: businessId, ownerUserId: 'usr_owner', name: 'test grant', policyVersion: 1, allowedActions, prohibitions: [],
+    maxCommittedCents: 0, maxPerActionCents: 0, maxConcurrent: 1, currency: 'USD', startsAt: '2026-01-01T00:00:00Z', expiresAt: null, state: 'ACTIVE',
+    revokedAt: null, revokedByUserId: null, revokedReason: null, createdByUserId: 'usr_owner', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+  },
 });
+const NO_GRANT: CommercialDecision = { ok: false, authority: null, reason: 'no standing commercial authority exists for this project', policyVersion: null };
+
+const W = { windowStart: '2026-12-01T00:00:00Z', windowEnd: '2026-12-08T00:00:00Z' };
+const req = (over: Partial<ReservationRequest> = {}): ReservationRequest => {
+  const businessId = over.businessId ?? 'biz-1';
+  return {
+    key: 'k1', counterpartyId: 'crew-a', commitmentId: 'job-1', businessId, units: 3, ...W,
+    capacityUnits: 4, authority: grant(businessId), at: '2026-11-13T10:00:00Z', ...over,
+  };
+};
+/** The recorded request: no authority field at all — the arbiter reads the live grant itself. */
+const rec = (over: Partial<ReservationRequest> = {}): Omit<ReservationRequest, 'authority'> => {
+  const { authority: _a, ...rest } = req(over);
+  return rest;
+};
 const take = (events: ReservationEvent[], r: ReservationRequest): ReservationEvent[] => {
   const a = reserve(events, r);
   if (!a.ok || !a.event) throw new Error('expected a new reservation');
@@ -36,8 +58,12 @@ describe('reservations', () => {
     expect(reserve(events, req({ key: 'k3', commitmentId: 'job-3', windowStart: W.windowEnd, windowEnd: '2026-12-15T00:00:00Z' })).ok).toBe(true);
   });
 
-  it('refuses without the required authority and names it', () => {
-    expect(reserve([], req({ authorityHeld: [] }))).toEqual({ ok: false, reason: 'MISSING_AUTHORITY', missing: ['commit-spend'] });
+  it('refuses without the live commercial grant and names ENGAGE_CONTRACTOR', () => {
+    expect(reserve([], req({ authority: NO_GRANT }))).toMatchObject({ ok: false, reason: 'MISSING_AUTHORITY', missing: ['ENGAGE_CONTRACTOR'] });
+    expect(reserve([], req({ authority: null }))).toMatchObject({ ok: false, reason: 'MISSING_AUTHORITY', missing: ['ENGAGE_CONTRACTOR'] });
+    // A grant that does not cover the action, or that belongs to another business, authorizes nothing.
+    expect(reserve([], req({ authority: grant('biz-1', ['CONTACT_BUYER']) }))).toMatchObject({ ok: false, reason: 'MISSING_AUTHORITY' });
+    expect(reserve([], req({ authority: grant('biz-other') }))).toMatchObject({ ok: false, reason: 'MISSING_AUTHORITY' });
   });
 
   it('does not reserve against capacity nobody has evidenced', () => {
@@ -61,7 +87,7 @@ describe('reservations', () => {
   it('transfers to the alternative after a reported failure, releasing the primary, with no double commitment', () => {
     let events = take([], req());
     events = outcome(events, 'k1', 'FAILED', '2026-11-20T00:00:00Z');
-    const plan = planTransfer(events, { primaryKey: 'k1', alternativeKey: 'k1-alt', alternativeCounterpartyId: 'crew-b', alternativeCapacityUnits: 5, authorityRequired: ['commit-spend'], authorityHeld: ['commit-spend'], at: '2026-11-20T01:00:00Z' });
+    const plan = planTransfer(events, { primaryKey: 'k1', alternativeKey: 'k1-alt', alternativeCounterpartyId: 'crew-b', alternativeCapacityUnits: 5, authority: grant('biz-1'), at: '2026-11-20T01:00:00Z' });
     expect(plan.action).toBe('TRANSFER');
     const after = [...events, ...(plan as { events: ReservationEvent[] }).events];
     expect(holdsFrom(after).find((h) => h.key === 'k1')?.state).toBe('RELEASED');
@@ -72,7 +98,7 @@ describe('reservations', () => {
 
   it('reports an unknown outcome as unknown and neither transfers nor releases', () => {
     const events = take([], req());
-    const plan = planTransfer(events, { primaryKey: 'k1', alternativeKey: 'k1-alt', alternativeCounterpartyId: 'crew-b', alternativeCapacityUnits: 5, authorityRequired: [], authorityHeld: [], at: '2026-11-20T01:00:00Z' });
+    const plan = planTransfer(events, { primaryKey: 'k1', alternativeKey: 'k1-alt', alternativeCounterpartyId: 'crew-b', alternativeCapacityUnits: 5, authority: grant('biz-1'), at: '2026-11-20T01:00:00Z' });
     expect(plan.action).toBe('UNKNOWN');
     expect(remainingCapacity(events, 'crew-a', 4, W).remaining).toBe(1);
   });
@@ -80,7 +106,7 @@ describe('reservations', () => {
   it('refuses a transfer the alternative has no room for, leaving the primary held', () => {
     let events = take([], req());
     events = outcome(events, 'k1', 'FAILED', '2026-11-20T00:00:00Z');
-    const plan = planTransfer(events, { primaryKey: 'k1', alternativeKey: 'k1-alt', alternativeCounterpartyId: 'crew-b', alternativeCapacityUnits: 2, authorityRequired: [], authorityHeld: [], at: '2026-11-20T01:00:00Z' });
+    const plan = planTransfer(events, { primaryKey: 'k1', alternativeKey: 'k1-alt', alternativeCounterpartyId: 'crew-b', alternativeCapacityUnits: 2, authority: grant('biz-1'), at: '2026-11-20T01:00:00Z' });
     expect(plan).toMatchObject({ action: 'REFUSED', reason: 'CAPACITY' });
   });
 });
@@ -91,30 +117,37 @@ describe('reservations', () => {
 
 describe('reservations, recorded', () => {
   let bizA = '';
-  const bizB = 'biz-recorded-b';
+  let bizB = '';
+  const engage = (projectId: string) => createAuthority({
+    projectId, ownerUserId: 'usr_owner', createdByUserId: 'usr_owner', name: 'test grant', allowedActions: ['ENGAGE_CONTRACTOR'],
+    prohibitions: [], maxCommittedCents: 100_000, maxPerActionCents: 100_000, maxConcurrent: 3, currency: 'USD',
+  });
   beforeEach(async () => {
     bizA = (await freshProject()).project.id;
+    bizB = (await createProject({ name: 'Recorded business B' })).id;
+    await engage(bizA);
+    await engage(bizB);
   });
 
   it('writes each event as an append-only cash_events row on the counterparty ledger, readable across businesses', async () => {
-    const first = await recordReservation(req({ businessId: bizA }), 'BRAIN');
+    const first = await recordReservation(rec({ businessId: bizA }), 'BRAIN');
     expect(first).toMatchObject({ ok: true, duplicate: false });
     const rows = await getDb().all<{ project_id: string; opportunity_id: string; kind: string; actor_ref: string }>(
       'SELECT project_id, opportunity_id, kind, actor_ref FROM cash_events WHERE kind = ?', [RESERVATION_EVENT_KIND],
     );
     expect(rows).toEqual([{ project_id: bizA, opportunity_id: counterpartyLedger('crew-a'), kind: RESERVATION_EVENT_KIND, actor_ref: 'BRAIN' }]);
     // A second business is refused on the capacity the first one holds, read from the row.
-    const second = await recordReservation(req({ key: 'k2', businessId: bizB, commitmentId: 'job-2', units: 2 }), 'BRAIN');
+    const second = await recordReservation(rec({ key: 'k2', businessId: bizB, commitmentId: 'job-2', units: 2 }), 'BRAIN');
     expect(second).toMatchObject({ ok: false, reason: 'CAPACITY', remaining: 1, holders: [{ commitmentId: 'job-1', businessId: bizA, units: 3 }] });
     // The repeat of the same logical key writes nothing.
-    expect(await recordReservation(req({ businessId: bizA }), 'BRAIN')).toEqual({ ok: true, duplicate: true, event: null });
+    expect(await recordReservation(rec({ businessId: bizA }), 'BRAIN')).toEqual({ ok: true, duplicate: true, event: null });
     expect(await recordedReservationEvents(['crew-a'])).toHaveLength(1);
   });
 
   it('lets exactly one of two concurrent businesses take the last capacity', async () => {
     const answers = await Promise.all([
-      recordReservation(req({ key: 'race-1', businessId: bizA, commitmentId: 'job-1', units: 3 }), 'BRAIN'),
-      recordReservation(req({ key: 'race-2', businessId: bizB, commitmentId: 'job-2', units: 3 }), 'BRAIN'),
+      recordReservation(rec({ key: 'race-1', businessId: bizA, commitmentId: 'job-1', units: 3 }), 'BRAIN'),
+      recordReservation(rec({ key: 'race-2', businessId: bizB, commitmentId: 'job-2', units: 3 }), 'BRAIN'),
     ]);
     expect(answers.filter((a) => a.ok)).toHaveLength(1);
     expect(answers.filter((a) => !a.ok && a.reason === 'CAPACITY')).toHaveLength(1);
@@ -124,12 +157,12 @@ describe('reservations, recorded', () => {
   });
 
   it('records a reported failure, then transfers in one transaction, and never on silence', async () => {
-    await recordReservation(req({ businessId: bizA }), 'BRAIN');
-    const transfer = { primaryKey: 'k1', primaryCounterpartyId: 'crew-a', alternativeKey: 'k1-alt', alternativeCounterpartyId: 'crew-b', alternativeCapacityUnits: 5, authorityRequired: ['commit-spend'], authorityHeld: ['commit-spend'], at: '2026-11-20T01:00:00Z' };
+    await recordReservation(rec({ businessId: bizA }), 'BRAIN');
+    const transfer = { primaryKey: 'k1', primaryCounterpartyId: 'crew-a', alternativeKey: 'k1-alt', alternativeCounterpartyId: 'crew-b', alternativeCapacityUnits: 5, at: '2026-11-20T01:00:00Z' };
     expect(await recordTransfer(transfer, 'BRAIN')).toMatchObject({ action: 'UNKNOWN' });
     expect(await recordedReservationEvents(['crew-a', 'crew-b'])).toHaveLength(1);
 
-    expect(await recordHoldOutcome({ counterpartyId: 'crew-a', key: 'k1', kind: 'FAILED', authorityHeld: [], at: '2026-11-20T00:00:00Z', actorRef: 'BRAIN' })).toMatchObject({ recorded: true });
+    expect(await recordHoldOutcome({ counterpartyId: 'crew-a', key: 'k1', kind: 'FAILED', at: '2026-11-20T00:00:00Z', actorRef: 'BRAIN' })).toMatchObject({ recorded: true });
     expect(await recordTransfer(transfer, 'BRAIN')).toMatchObject({ action: 'TRANSFER' });
     const after = await recordedReservationEvents(['crew-a', 'crew-b']);
     expect(holdsFrom(after).map((h) => [h.key, h.state]).sort()).toEqual([['k1', 'RELEASED'], ['k1-alt', 'HELD']]);
@@ -140,7 +173,7 @@ describe('reservations, recorded', () => {
   });
 
   it('refuses an outcome for a hold that does not exist, and writes nothing', async () => {
-    expect(await recordHoldOutcome({ counterpartyId: 'crew-a', key: 'nope', kind: 'FAILED', authorityHeld: [], at: '2026-11-20T00:00:00Z', actorRef: 'BRAIN' }))
+    expect(await recordHoldOutcome({ counterpartyId: 'crew-a', key: 'nope', kind: 'FAILED', at: '2026-11-20T00:00:00Z', actorRef: 'BRAIN' }))
       .toMatchObject({ recorded: false, reason: 'NO_SUCH_HOLD' });
     expect(await recordedReservationEvents(['crew-a'])).toEqual([]);
   });
