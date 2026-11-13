@@ -136,14 +136,38 @@ export function chainsFrom(fromId: string, edges: PossibilityEdge[]): string[][]
 /**
  * What may be researched next. A zero-reach candidate is passed over while any
  * stronger (higher-reach) unexplored candidate remains; it becomes eligible
- * only when nothing stronger is left.
+ * only when nothing stronger is left. Equal reach keeps the caller's order, so
+ * a dispatcher's own priorities still decide between equals.
  */
 export function researchNext(
   candidates: Pick<Possibility, 'id'>[], edges: PossibilityEdge[], explored: ReadonlySet<string>,
 ): string[] {
   const open = candidates.filter((c) => !explored.has(c.id))
-    .map((c) => ({ id: c.id, reach: reachOf(c.id, edges) }));
+    .map((c, index) => ({ id: c.id, reach: reachOf(c.id, edges), index }));
   const strong = open.filter((c) => c.reach > 0);
   const pool = strong.length > 0 ? strong : open;
-  return pool.sort((a, b) => b.reach - a.reach || a.id.localeCompare(b.id)).map((c) => c.id);
+  return pool.sort((a, b) => b.reach - a.reach || a.index - b.index).map((c) => c.id);
+}
+
+/**
+ * The whole order a dispatcher walks: `researchNext` taken repeatedly, each
+ * pool explored before the next is offered. Every stronger candidate comes
+ * before any zero-reach one, and the zero-reach ones still come — last, in the
+ * caller's order — so nothing is discarded for ranking poorly.
+ */
+export function researchOrder(
+  candidates: Pick<Possibility, 'id'>[], edges: PossibilityEdge[],
+): string[] {
+  const explored = new Set<string>();
+  const order: string[] = [];
+  while (explored.size < new Set(candidates.map((c) => c.id)).size) {
+    const next = researchNext(candidates, edges, explored);
+    if (next.length === 0) break;
+    for (const id of next) {
+      if (explored.has(id)) continue;
+      explored.add(id);
+      order.push(id);
+    }
+  }
+  return order;
 }

@@ -29,6 +29,9 @@ import { questionKey } from '../cash/conditions.ts';
 import { diveOwnsItsQuestions } from '../cash/operate.ts';
 import { parseBlockerKey } from '../../domain/types.ts';
 import { goalLimitsOf, screenOpening } from '../economy/possibilities/opening.ts';
+import { researchOrder } from '../economy/possibilities/screen.ts';
+import { possibilityGraphOf } from '../../repos/economy.ts';
+import { getWorkstream } from '../../repos/register.ts';
 import type { ChainLink, PlanReading } from './plan.ts';
 
 /**
@@ -108,13 +111,14 @@ export async function researchGoalPaths(input: {
   const potential = (one: (typeof considered)[number]) => Math.max(one.supportedReach, one.potentialReach ?? 0);
   // Biggest possible contribution first, so research goes where an answer can
   // change what Brain pursues; an award only after ways that pay in steps.
-  const order = [...considered].sort(
+  const ranked = [...considered].sort(
     (a, b) =>
       Number(a.competitiveAward) - Number(b.competitiveAward) ||
       potential(b) - potential(a) ||
       b.supportedReach - a.supportedReach ||
       a.missing.length - b.missing.length,
   );
+  const order = await byPossibilityReach(ranked, input.reading.goalId, input.projectId, note);
   const limits = goalLimitsOf(input.reading.target);
   let openings = 0;
   for (const one of order) {
@@ -247,6 +251,36 @@ export async function researchGoalPaths(input: {
   }
   note(`live path questions ${openHere} of ${MAX_OPEN_PATH_QUESTIONS}; openings researched ${openings} of ${PATH_RESEARCH_OPENINGS}`);
   return raised;
+}
+
+/**
+ * The possibility graph decides which openings research reaches first. An
+ * opening whose kept possibility leads on to others (ENABLES, UNLOCKS_AFTER,
+ * SUPPLIES) is researched before any opening that leads nowhere, and a
+ * zero-reach opening waits until nothing stronger is left — it is not dropped.
+ * Equal reach keeps the order above. The graph read is the goal owner's own,
+ * so another person's possibilities never steer this goal's research; a goal
+ * with no owner, or an owner with no graph, keeps the order unchanged.
+ */
+async function byPossibilityReach<T extends { opportunityId: string; title: string }>(
+  ranked: T[], goalId: string | undefined, projectId: string, note: (line: string) => void,
+): Promise<T[]> {
+  if (!goalId || ranked.length < 2) return ranked;
+  const goal = await getWorkstream(goalId);
+  const owner = goal?.ownerUserId ?? goal?.createdByUserId ?? null;
+  if (!owner) return ranked;
+  const { idBySource, edges } = await possibilityGraphOf(projectId, owner);
+  if (edges.length === 0) return ranked;
+  // An opening with no kept possibility stands for itself: it has no edges, so zero reach.
+  const keyOf = (one: T) => idBySource.get(one.opportunityId) ?? `opening:${one.opportunityId}`;
+  const byKey = new Map(ranked.map((one) => [keyOf(one), one]));
+  const ordered = researchOrder(ranked.map((one) => ({ id: keyOf(one) })), edges)
+    .map((key) => byKey.get(key))
+    .filter((one): one is T => !!one);
+  if (ordered.map((one) => one.opportunityId).join() !== ranked.map((one) => one.opportunityId).join()) {
+    note(`possibility reach reordered research: ${ordered.map((one) => one.title.slice(0, 30)).join(' > ')}`);
+  }
+  return ordered;
 }
 
 /**
