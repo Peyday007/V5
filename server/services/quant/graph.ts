@@ -274,6 +274,73 @@ export interface MoneyRouteReading {
   gaps: string[];
   /** Figures that do not reconcile, stated rather than silently plugged. */
   discrepancies: string[];
+  /**
+   * The route as double-entry accounting events (billing, collection, the hold
+   * against refund or fulfilment, each outflow) and their reconciliation, so the
+   * free amount is reproducible from entries rather than asserted.
+   */
+  ledger: { entries: Entry[]; reconciliation: Reconciliation };
+  /**
+   * When exactly one of the collection or the hold is unknown: the value it must
+   * take for the route not to be under water. The unknown stays unknown; this is
+   * the threshold the plan needs, never a filled-in number.
+   */
+  breakEven: BreakEven | null;
+}
+
+export interface BreakEven {
+  /** Which unknown the threshold is for. */
+  unknown: 'collectedCents' | 'heldAgainstCents';
+  /** 'at least' for a collection, 'at most' for a hold. */
+  bound: 'AT_LEAST' | 'AT_MOST';
+  /** Null when no value of the unknown can keep the route above water. */
+  cents: number | null;
+  statement: string;
+}
+
+/** Accounts of a route's ledger. Free to use is cash less what is still owed against it. */
+const ACCOUNT = { cash: 'cash', revenue: 'gross billings', obligation: 'held against refund or fulfilment' } as const;
+
+function routeEntries(route: MoneyRoute): Entry[] {
+  const entries: Entry[] = [];
+  const receivable = `receivable: ${route.payer || 'payer'}`;
+  const collected = route.collectedCents.value;
+  if (collected !== null) {
+    entries.push({ id: `${route.id}:billed`, debit: receivable, credit: ACCOUNT.revenue, amountCents: Math.round(collected), evidence: route.collectedCents.source ?? 'derived collection' });
+    entries.push({ id: `${route.id}:collected`, debit: ACCOUNT.cash, credit: receivable, amountCents: Math.round(collected), evidence: route.collectedCents.source ?? 'derived collection' });
+  }
+  const held = route.heldAgainstCents.value;
+  if (held !== null) entries.push({ id: `${route.id}:held`, debit: ACCOUNT.revenue, credit: ACCOUNT.obligation, amountCents: Math.round(held), evidence: route.heldAgainstCents.source ?? 'derived hold' });
+  route.outflows.forEach((one, i) => {
+    entries.push({ id: `${route.id}:out:${i}`, debit: `paid to: ${one.to}`, credit: ACCOUNT.cash, amountCents: Number.isFinite(one.amountCents) ? Math.round(one.amountCents) : one.amountCents, evidence: one.reason });
+  });
+  return entries;
+}
+
+function breakEvenOf(route: MoneyRoute, outflowCents: number): BreakEven | null {
+  const collected = route.collectedCents.value;
+  const held = route.heldAgainstCents.value;
+  if (collected === null && held !== null) {
+    const owed = held + outflowCents;
+    const found = owed <= 0 ? 0 : thresholdFor(0, owed * 2, (x) => x - owed);
+    const cents = found === null ? null : Math.ceil(found - 1e-6);
+    return {
+      unknown: 'collectedCents', bound: 'AT_LEAST', cents,
+      statement: cents === null ? 'no collection keeps this route above water' : `the route needs at least ${cents} cents collected to cover the hold and outflows`,
+    };
+  }
+  if (held === null && collected !== null) {
+    // x is how much of the collection is NOT held; free cash rises with it.
+    const found = collected <= 0 ? null : thresholdFor(0, collected, (x) => collected - (collected - x) - outflowCents);
+    const cents = found === null ? null : Math.max(0, Math.floor(collected - found + 1e-6));
+    return {
+      unknown: 'heldAgainstCents', bound: 'AT_MOST', cents,
+      statement: cents === null
+        ? `outflows of ${outflowCents} cents exceed the ${collected} cents collected even with nothing held`
+        : `the route stays above water if at most ${cents} cents of the collection is held against refund or fulfilment`,
+    };
+  }
+  return null;
 }
 
 export function readMoneyRoute(route: MoneyRoute): MoneyRouteReading {
@@ -294,9 +361,18 @@ export function readMoneyRoute(route: MoneyRoute): MoneyRouteReading {
       `hold and outflows (${(route.heldAgainstCents.value ?? 0) + outflowCents} cents) exceed the ${route.collectedCents.value} cents collected by ${shortfallCents} cents`,
     );
   }
+  const entries = routeEntries(route);
+  const reconciliation = reconcile(entries);
+  if (!reconciliation.balanced) discrepancies.push('the route\'s accounting entries do not balance: an amount is negative or not a number');
+  if (free.value !== null) {
+    const fromEntries = (reconciliation.balances[ACCOUNT.cash] ?? 0) + (reconciliation.balances[ACCOUNT.obligation] ?? 0);
+    if (Number.isFinite(fromEntries) && Math.abs(fromEntries - free.value) >= 1) discrepancies.push(`free to use is ${free.value} cents but the entries give ${fromEntries} cents`);
+  }
   return {
     route: route.id, collectedCents: route.collectedCents.value, outflowCents, heldAgainstCents: route.heldAgainstCents.value,
     freeCents: free, shortfallCents, gaps, discrepancies,
+    ledger: { entries, reconciliation },
+    breakEven: breakEvenOf(route, outflowCents),
   };
 }
 
