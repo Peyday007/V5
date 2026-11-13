@@ -273,7 +273,8 @@ define('r01.com-13-5', async () => {
   }
   return regulated > 0
     ? { ok: true, detail: `${regulated} of ${openings.length} opening(s) are regulated roles, all assessed by rights and none excluded by category` }
-    : { ok: false, detail: `${openings.length} opening(s) read; none performs a regulated activity, so the behaviour is not yet demonstrated` };
+    : // Not yet demonstrated is UNKNOWN, never a FAIL that reopens the requirement into a repair nobody can make.
+      { ok: null, detail: `${openings.length} opening(s) read; none performs a regulated activity, so the behaviour is not yet demonstrated` };
 });
 
 /*
@@ -294,6 +295,18 @@ define('r01.auth-34', async (args) => (await releaseOne<typeof import('./release
 define('r01.auto-20-1', async (args) => (await releaseOne<typeof import('./release01/autonomyProbe.ts')>('./release01/autonomyProbe.ts', (m) => m.originationHoldsOnRows))(args));
 define('r01.auto-20-2', async (args) => (await releaseOne<typeof import('./release01/autonomyProbe.ts')>('./release01/autonomyProbe.ts', (m) => m.gapLoopHoldsOnRows))(args));
 define('r01.auto-20-4', async (args) => (await releaseOne<typeof import('./release01/autonomyProbe.ts')>('./release01/autonomyProbe.ts', (m) => m.gapMeasuresHoldOnRows))(args));
+/*
+ * ACQ-21-1, ACQ-21-2, ACQ-21-5, CONT-35 and LEARN-15-1: the acquisition,
+ * browser-operator, continuity and model-learning campaigns shipped the
+ * behaviour, and a campaign does not register its own judge, so these read
+ * the rows that behaviour writes (release01/acquisitionProbe.ts,
+ * release01/continuityProbe.ts).
+ */
+define('r01.acq-21-1', async () => (await import('./release01/acquisitionProbe.ts')).separateCapabilitiesOnRows());
+define('r01.acq-21-2', async () => (await import('./release01/acquisitionProbe.ts')).methodSelectionOnRows());
+define('r01.acq-21-5', async () => (await import('./release01/acquisitionProbe.ts')).browserCapabilitiesOnRows());
+define('r01.cont-35', async () => (await import('./release01/continuityProbe.ts')).continuityOnRows());
+define('r01.learn-15-1', async () => (await import('./release01/continuityProbe.ts')).ledgerOnRows());
 /**
  * CAP-16-3 is both halves: throughput restored first, and every stage measured
  * (release01/capacityProbe.ts). A throughput failure answers first; otherwise
