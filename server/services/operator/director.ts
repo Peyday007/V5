@@ -300,13 +300,30 @@ async function goalProject(goalId: string | null): Promise<string | null> {
   return snapshot?.summaries.find((one) => one.id === goalId)?.projectId ?? null;
 }
 
+/**
+ * Rows of one event type since a time, read project by project through
+ * `idx_events_project_type (project_id, event_type, created_at)`. `project_events`
+ * has no index that leads with `event_type`, so `WHERE event_type = ?` alone is a
+ * scan of the whole table — and the operator tick asks on every Russell pass.
+ */
+async function eventsOfType(eventType: string, sinceIso: string, limitPerProject = 200): Promise<{ projectId: string; payload: string; createdAt: string }[]> {
+  const out: { projectId: string; payload: string; createdAt: string }[] = [];
+  for (const project of await listProjects()) {
+    const rows = await getDb().all<{ payload: string; created_at: string }>(
+      `SELECT payload, created_at FROM project_events
+        WHERE project_id = ? AND event_type = ? AND created_at > ?
+        ORDER BY created_at DESC LIMIT ?`,
+      [project.id, eventType, sinceIso, limitPerProject],
+    );
+    for (const row of rows) out.push({ projectId: project.id, payload: row.payload, createdAt: row.created_at });
+  }
+  return out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+}
+
 /** Whether the operator already continued idle capacity for this goal's work in the last six hours. */
 async function capacityAlreadyTried(goalId: string | null): Promise<boolean> {
   const since = new Date(Date.now() - 6 * 3_600_000).toISOString();
-  const rows = await getDb().all<{ payload: string }>(
-    `SELECT payload FROM project_events WHERE event_type = ? AND created_at >= ? ORDER BY created_at DESC LIMIT 20`,
-    [ENGINEERING_EVENTS.decided, since],
-  );
+  const rows = (await eventsOfType(ENGINEERING_EVENTS.decided, since, 20)).slice(0, 20);
   return rows.some((row) => {
     try {
       const p = JSON.parse(row.payload) as { intervention?: string; goalId?: string | null };
@@ -683,11 +700,8 @@ export async function refreshPriority(candidateId: string): Promise<number | nul
 /** Whether an engineering outcome the operator has not yet seen arrived after its last run started. */
 export async function unseenOutcomeSince(lastStartedAt: string | null): Promise<boolean> {
   if (!lastStartedAt) return false;
-  const row = await getDb().get<{ n: number }>(
-    `SELECT COUNT(*) AS n FROM project_events WHERE event_type = ? AND created_at > ? AND payload NOT LIKE '%"status":"BUILDING"%'`,
-    [ENGINEERING_EVENTS.outcome, lastStartedAt],
-  );
-  return Number(row?.n ?? 0) > 0;
+  const rows = await eventsOfType(ENGINEERING_EVENTS.outcome, lastStartedAt, 20);
+  return rows.some((row) => !row.payload.includes('"status":"BUILDING"'));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -718,12 +732,12 @@ export async function readDeficiencies(): Promise<DeficiencyReading[]> {
   //    per project from the withdrawals already made, so withdrawing today's card does not hide the
   //    recurrence that makes it an engineering defect rather than a chore.
   const weekAgo = new Date(Date.now() - 7 * 24 * 3_600_000).toISOString();
-  const withdrawn = await getDb()
-    .all<{ project_id: string; n: number }>(
-      `SELECT project_id, COUNT(*) AS n FROM project_events WHERE event_type = 'OPERATOR_WITHDREW_MOOT_REQUEST' AND created_at >= ? GROUP BY project_id`,
-      [weekAgo],
-    )
-    .then((rows) => new Map(rows.map((r) => [r.project_id, Number(r.n)])))
+  const withdrawn = await eventsOfType('OPERATOR_WITHDREW_MOOT_REQUEST', weekAgo, 1000)
+    .then((rows) => {
+      const counts = new Map<string, number>();
+      for (const row of rows) counts.set(row.projectId, (counts.get(row.projectId) ?? 0) + 1);
+      return counts;
+    })
     .catch(() => new Map<string, number>());
   // One reading per project: the defect is in the code, and every goal of the project shows it.
   // Attributed to the project's most urgent goal (briefOrder), which is the one it holds back most.
