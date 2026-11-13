@@ -172,3 +172,24 @@ describe('acting is gated on a committed decision', () => {
     }
   });
 });
+
+describe('a run is judged from its rows, and the next run is told what it skipped', () => {
+  it('names plan and observe when a run acted without reading the plan or looking again', async () => {
+    await freshProject();
+    const { startOperatorRun, finishOperatorRun, recentOperatorRuns } = await import('../server/repos/operator.ts');
+    const { judgeOperatorRun, previousRunGaps } = await import('../server/services/operator/judge.ts');
+    const run = await startOperatorRun('free:auto/best-coding');
+    const call = (tool: string) => ({ tool: `mcp__brain__${tool}`, ok: true });
+    await finishOperatorRun({ id: run.id, state: 'DONE', summary: 's', error: null, toolCalls: [call('brain_operator_goal'), call('brain_operator_continue_idle'), call('brain_operator_record_learning')] as never });
+    const done = (await recentOperatorRuns(5)).find((r) => r.id === run.id)!;
+    const { checks } = await judgeOperatorRun(done);
+    const failed = checks.filter((c) => !c.pass).map((c) => c.step);
+    expect(failed).toEqual(expect.arrayContaining(['plan', 'decide', 'observe']));
+    expect(failed).not.toContain('inspect');
+    expect(failed).not.toContain('act');
+    const gaps = await previousRunGaps(done);
+    expect(gaps).toContain(run.id);
+    expect(gaps).toMatch(/plan — .*observe — /);
+    expect(await previousRunGaps(null)).toBe('');
+  });
+});

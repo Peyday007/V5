@@ -65,10 +65,6 @@ async function probe(): Promise<void> {
   console.log(`OPERATOR-PROBE: app ${health} · brain ${config.brainUrl} · models ${models.map((m) => m.label).join(' → ') || 'none'}`);
 }
 
-// Judging a past decision (verify) is not an action on the world; Factory work is.
-const ACTS = ['brain_operator_withdraw_moot_request', 'brain_operator_continue_idle', 'brain_operator_submit_fix', 'brain_operator_set_goal_focus', 'brain_operator_commission', 'brain_operator_prioritize_engineering'];
-const READS = ['brain_operator_goal', 'brain_operator_goal_plan', 'brain_operator_capacity', 'brain_operator_goals', 'brain_operator_allocation', 'brain_operator_engineering'];
-
 async function prove(): Promise<void> {
   // `prove latest` judges the newest finished run Brain's own tick started — the autonomous one —
   // instead of starting another (a shared workflow queue can cancel a dispatched run, and a run
@@ -84,12 +80,8 @@ async function prove(): Promise<void> {
   console.log(`RUN ${run.id} ${run.state} on ${run.model}${run.error ? ` error ${run.error}` : ''}`);
   console.log(`  tools ${names.map((n) => `${n.tool}${n.ok ? '' : '(failed)'}`).join(', ') || 'none'}`);
   if (run.summary) console.log(`  report ${run.summary.slice(0, 2500).replace(/\n/g, '\n         ')}`);
-  const ok = (tool: string) => names.some((n) => n.tool === tool && n.ok);
-  const firstAct = names.findIndex((n) => ACTS.includes(n.tool) && n.ok);
-  const decisions = await getDb().all<{ entity_id: string; payload: string }>(
-    "SELECT entity_id, payload FROM project_events WHERE event_type = 'OPERATOR_DECISION' AND payload LIKE ? ORDER BY created_at",
-    [`%"runId":"${run.id}"%`],
-  );
+  const { judgeOperatorRun } = await import('../server/services/operator/judge.ts');
+  const { checks: judged, decisions } = await judgeOperatorRun(run);
   for (const d of decisions) {
     const p = JSON.parse(d.payload) as { input: { kind: string; question: string; options: { action: string }[]; chosen: number; prediction: { outcome: string; probability: number; horizonDays: number } }; challenge: unknown };
     console.log(`DECISION ${d.entity_id} ${p.input.kind}: ${p.input.question} → ${p.input.options[p.input.chosen]?.action} · predicts "${p.input.prediction.outcome}" p=${p.input.prediction.probability} in ${p.input.prediction.horizonDays}d · challenge ${typeof p.challenge === 'object' ? JSON.stringify(p.challenge).slice(0, 300) : p.challenge}`);
@@ -99,17 +91,7 @@ async function prove(): Promise<void> {
     [`%"runId":"${run.id}"%`],
   );
   for (const v of verified) console.log(`VERIFIED ${v.entity_id} ${v.payload.slice(0, 300)}`);
-  const learned = (await listOperatorLearnings({ limit: 50 })).filter((l) => l.runId === run.id);
-  const memory = await readOperatorMemory();
-  const checks: [string, boolean, string][] = [
-    ['run', run.state === 'DONE', `${run.state} on ${run.model}`],
-    ['inspect', ok('brain_operator_goal') || ok('brain_operator_goals'), 'read a real goal'],
-    ['plan', ok('brain_operator_goal_plan'), 'read the goal\'s quantitative plan'],
-    ['decide', decisions.length > 0, `${decisions.length} decision(s) committed with a prediction on the ledger`],
-    ['act', firstAct >= 0, firstAct >= 0 ? `acted through ${names[firstAct]!.tool}` : 'no action succeeded'],
-    ['observe', firstAct >= 0 && names.slice(firstAct + 1).some((n) => READS.includes(n.tool) && n.ok), 'read Brain again after acting'],
-    ['learn', learned.length > 0 || Object.keys(memory).length > 0, `${learned.length} lesson(s) this run, ${Object.keys(memory).length} memory file(s)`],
-  ];
+  const checks: [string, boolean, string][] = judged.map((c) => [c.step, c.pass, c.detail]);
   for (const [name, pass, detail] of checks) console.log(`${pass ? 'PASS' : 'FAIL'} ${name}: ${detail}`);
   const { readAllocation } = await import('../server/services/operator/allocation.ts');
   const { listProjects } = await import('../server/repos/projects.ts');

@@ -357,9 +357,13 @@ async function performRun(runId: string, config: OperatorConfig, models: Operato
     // §109: what Factory did with what the operator commissioned, and the deficiencies the rows show.
     const { engineeringBrief } = await import('./director.ts');
     const engineering = await engineeringBrief().catch(() => '');
+    // What the previous finished run skipped, asked for again by Brain (§108).
+    const { previousRunGaps } = await import('./judge.ts');
+    const previous = (await recentOperatorRuns(5)).find((r) => r.id !== runId && r.state !== 'RUNNING') ?? null;
+    const gaps = await previousRunGaps(previous).catch(() => '');
     const body = {
       runId,
-      prompt: operatorBrief({ nowIso: new Date().toISOString(), runId, goals: snapshotForBrief(snapshot), engineering: engineering || undefined }),
+      prompt: operatorBrief({ nowIso: new Date().toISOString(), runId, goals: snapshotForBrief(snapshot), engineering: [gaps, engineering].filter(Boolean).join('\n\n') || undefined }),
       models: models.map((m) => ({ baseUrl: m.baseUrl, model: m.model, apiKey: m.apiKey, ...(m.contextLength ? { contextLength: m.contextLength } : {}) })),
       mcp: { url: `${config.brainUrl}/mcp`, token: issued.plaintext, tools: [...OPERATOR_TOOL_NAMES] },
       toolsets: [...OPERATOR_HERMES_TOOLSETS],
