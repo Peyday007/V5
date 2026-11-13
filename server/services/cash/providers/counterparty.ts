@@ -33,6 +33,7 @@ import { recordedReservationEvents, withoutAuthority, type AuthorityReading, typ
 import { recordedCounterparty } from '../../labor/counterparties/ladder.ts';
 import { readTransaction, transactionBreaches, type TransactionReading } from '../../labor/counterparties/transaction.ts';
 import { commercialProviderStatus, type ProviderLine } from './status.ts';
+import { billingAlternates, messagingAlternates } from './config.ts';
 
 const EVIDENCE = 'commercialProviderStatus (server/services/cash/providers/status.ts)';
 
@@ -68,6 +69,37 @@ export function providerCounterparty(line: ProviderLine): Counterparty | null {
   };
 }
 
+/**
+ * The alternative fulfillers the deployment named for one area's line
+ * (`BRAIN_MESSAGING_ALTERNATES` / `BRAIN_BILLING_ALTERNATES`), each a
+ * counterparty listed by that naming and nothing more — its willingness,
+ * availability and scope stay PENDING until an operation it performed shows
+ * them, exactly as the chosen provider's do. Only fully configured names are
+ * alternatives (`config.ts`).
+ */
+export function alternateCounterparties(line: Pick<ProviderLine, 'area' | 'capability' | 'provider'>, env: NodeJS.ProcessEnv = process.env): Counterparty[] {
+  const named = line.area === 'MESSAGING' ? messagingAlternates(env).providers : line.area === 'INVOICES' ? billingAlternates(env).providers : [];
+  return named
+    .filter((provider) => provider !== line.provider)
+    .map((provider) => {
+      const pending = (dimension: string, value: string | null = null): Fact => ({ dimension, status: 'PENDING', evidence: null, value });
+      return {
+        id: `provider:${line.area.toLowerCase()}:${provider}`,
+        kind: 'software service',
+        geography: null,
+        humanOperator: false,
+        facts: [
+          { dimension: 'listing', status: 'VERIFIED', evidence: `${EVIDENCE}: ${line.area} names ${provider} as an alternative`, value: provider },
+          pending('willingness'),
+          pending('availability'),
+          pending('scope', line.capability),
+          pending('eligibility', line.capability),
+          { dimension: 'geography', status: 'NOT_APPLICABLE', evidence: 'a hosted software service has no service area', value: null },
+        ],
+      };
+    });
+}
+
 /** Every chosen commercial provider as a counterparty, read from the existing status reading. */
 export async function providerCounterparties(env: NodeJS.ProcessEnv = process.env): Promise<Counterparty[]> {
   const lines = await commercialProviderStatus(env);
@@ -91,6 +123,10 @@ export interface ProviderTransactionReading {
   capability: string;
   /** True when the provider's own recorded operations stand behind facts beyond configuration. */
   evidenced?: boolean;
+  /** The alternative fulfillers the deployment seated behind the chosen provider. */
+  alternates?: string[];
+  /** Every candidate (chosen or alternative) whose own recorded operations stand behind its facts. */
+  evidencedIds?: string[];
   reading: TransactionReading;
 }
 
@@ -127,14 +163,26 @@ export async function readProviderTransactions(options: {
     // configuration says, so a receipt's VERIFIED replaces configuration's PENDING, never the reverse.
     const recorded = configured ? await recordedCounterparty(configured.id) : null;
     const candidate = configured ? { ...configured, facts: [...configured.facts, ...(recorded?.facts ?? [])] } : null;
-    const events = options.events ?? (configured ? await recordedReservationEvents([configured.id]) : []);
+    // The alternatives the deployment seated behind it (`register.ts`), read the same way, so the
+    // reading names a primary and an alternative and a failure has somewhere to go.
+    const alternates: Counterparty[] = [];
+    const evidencedIds = configured && recorded ? [configured.id] : [];
+    for (const one of configured ? alternateCounterparties(line, env) : []) {
+      const known = await recordedCounterparty(one.id);
+      if (known) evidencedIds.push(one.id);
+      alternates.push({ ...one, facts: [...one.facts, ...(known?.facts ?? [])] });
+    }
+    const candidates = candidate ? [candidate, ...alternates] : [];
+    const events = options.events ?? (candidates.length > 0 ? await recordedReservationEvents(candidates.map((c) => c.id)) : []);
     out.push({
       area: line.area,
       capability: line.capability,
       evidenced: recorded !== null,
+      alternates: alternates.map((one) => one.id),
+      evidencedIds,
       reading: readTransaction({
         commitment: { id: `commitment:${line.area.toLowerCase()}`, capacityUnits: 1 },
-        candidates: candidate ? [candidate] : [],
+        candidates,
         events,
         businessId: 'brain',
         window: { windowStart: at, windowEnd: at },
@@ -157,11 +205,13 @@ export async function readProviderTransactions(options: {
  */
 export function counterpartyBreaches(readings: readonly ProviderTransactionReading[]): string[] {
   const breaches: string[] = [];
-  for (const { area, reading, evidenced } of readings) {
+  for (const { area, reading, evidenced, evidencedIds } of readings) {
     breaches.push(...transactionBreaches(area, reading));
-    const primary = reading.primary;
-    if (primary?.kind === 'software service' && !evidenced && stageIndex(primary.stage) > stageIndex('LISTING')) {
-      breaches.push(`${area}: ${primary.counterpartyId} read past LISTING from configuration alone`);
+    // The chosen provider and its alternative alike: neither is read as willing on configuration alone.
+    for (const one of [reading.primary, reading.alternative]) {
+      if (!one || one.kind !== 'software service' || stageIndex(one.stage) <= stageIndex('LISTING')) continue;
+      const backed = evidencedIds ? evidencedIds.includes(one.counterpartyId) : one === reading.primary && evidenced === true;
+      if (!backed) breaches.push(`${area}: ${one.counterpartyId} read past LISTING from configuration alone`);
     }
   }
   return breaches;

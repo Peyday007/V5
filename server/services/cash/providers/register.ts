@@ -8,16 +8,16 @@
  * MISSING without a restart, and a provider nobody chose is never registered at
  * all. Nothing here sends anything or reaches the network.
  */
-import { registerAdapter } from '../../effects/adapter.ts';
+import { registerAdapter, type EffectAdapter } from '../../effects/adapter.ts';
 import { CONTACT_BUYER_NAMESPACE, ISSUE_INVOICE_NAMESPACE } from '../effects.ts';
-import { billingConfig, messagingConfig } from './config.ts';
+import { billingAlternates, billingConfig, messagingAlternates, messagingConfig } from './config.ts';
 import { registerPaymentReader } from './payments.ts';
 import { createResendAdapter } from './resend.ts';
 import { createInstantlyAdapter, instantlyCapacity } from './instantly.ts';
 import { createStripeInvoiceAdapter, readStripeInvoice } from './stripe.ts';
 import { registerProbe } from '../../factory/program/probes.ts';
 import { PROVIDER_COUNTERPARTY_PROBE, providerCounterpartyProbe } from './counterparty.ts';
-import { recordingCounterparty } from './counterpartyRecord.ts';
+import { ALTERNATIVE_COUNTERPARTIES as ALTERNATIVES, failoverCounterparty, providerCounterpartyId, type SeatedAdapter } from './counterpartyRecord.ts';
 import { OPPORTUNITY_COUNTERPARTY_PROBE, opportunityCounterpartyProbe } from '../../labor/counterparties/operations.ts';
 
 /** Instantly's measured daily capacity, shared by every business on the workspace; none reported is null. */
@@ -28,27 +28,74 @@ const unreported = async (): Promise<number | null> => null;
 export interface ProviderRegistration {
   messaging: string | null;
   billing: string | null;
+  /**
+   * The alternative fulfillers seated behind the chosen provider, in the order they are tried
+   * (CP-31). Present only when the deployment seated at least one.
+   */
+  messagingAlternates?: string[];
+  billingAlternates?: string[];
+}
+
+/** One messaging provider seated as a counterparty, whichever role the deployment gave it. */
+function messagingSeat(provider: string, env: NodeJS.ProcessEnv): SeatedAdapter | null {
+  if (provider === 'resend') {
+    return {
+      adapter: createResendAdapter({ namespace: CONTACT_BUYER_NAMESPACE.name }),
+      seat: { area: 'MESSAGING', provider: 'resend', capability: 'SEND_A_MESSAGE', action: 'CONTACT_BUYER', capacityPerDay: unreported },
+    };
+  }
+  if (provider === 'instantly') {
+    // The owner's Instantly workspace (§94): a lead in Brain's campaign, activated only inside the granted effect.
+    return {
+      adapter: createInstantlyAdapter({ namespace: CONTACT_BUYER_NAMESPACE.name }),
+      seat: { area: 'MESSAGING', provider: 'instantly', capability: 'SEND_A_MESSAGE', action: 'CONTACT_BUYER', capacityPerDay: () => instantlyPerDay(env) },
+    };
+  }
+  return null;
+}
+
+/** One billing provider seated as a counterparty, whichever role the deployment gave it. */
+function billingSeat(provider: string): SeatedAdapter | null {
+  if (provider === 'stripe') {
+    return {
+      adapter: createStripeInvoiceAdapter({ namespace: ISSUE_INVOICE_NAMESPACE.name }),
+      seat: { area: 'INVOICES', provider: 'stripe', capability: 'ISSUE_AN_INVOICE', action: 'QUOTE_AND_INVOICE', capacityPerDay: unreported },
+    };
+  }
+  return null;
+}
+
+/**
+ * The chosen provider, wrapped once with every alternative the deployment named
+ * for the same area: one adapter per operation namespace (the engine's rule),
+ * and every send — the primary's, and an alternative's after the primary's
+ * definite refusal — recorded as a counterparty commitment (`counterpartyRecord.ts`).
+ */
+function seatArea(primary: SeatedAdapter, alternates: readonly string[], seatOf: (provider: string) => SeatedAdapter | null): { adapter: EffectAdapter; alternates: string[] } {
+  const seated = alternates.map(seatOf).filter((one): one is SeatedAdapter => one !== null);
+  const adapter = failoverCounterparty(primary, seated);
+  const kept = new Set(adapter[ALTERNATIVES]);
+  return { adapter, alternates: seated.filter((one) => kept.has(providerCounterpartyId(one.seat))).map((one) => one.seat.provider) };
 }
 
 export function registerCommercialProviders(env: NodeJS.ProcessEnv = process.env): ProviderRegistration {
   const out: ProviderRegistration = { messaging: null, billing: null };
-  if (messagingConfig(env).provider === 'resend') {
-    registerAdapter(recordingCounterparty(createResendAdapter({ namespace: CONTACT_BUYER_NAMESPACE.name }), {
-      area: 'MESSAGING', provider: 'resend', capability: 'SEND_A_MESSAGE', action: 'CONTACT_BUYER', capacityPerDay: unreported,
-    }));
-    out.messaging = 'resend';
-  } else if (messagingConfig(env).provider === 'instantly') {
-    // The owner's Instantly workspace (§94): a lead in Brain's campaign, activated only inside the granted effect.
-    // Every send is also recorded as a counterparty commitment (CP-31, `counterpartyRecord.ts`).
-    registerAdapter(recordingCounterparty(createInstantlyAdapter({ namespace: CONTACT_BUYER_NAMESPACE.name }), {
-      area: 'MESSAGING', provider: 'instantly', capability: 'SEND_A_MESSAGE', action: 'CONTACT_BUYER', capacityPerDay: () => instantlyPerDay(env),
-    }));
-    out.messaging = 'instantly';
+  const messagingChosen = messagingConfig(env).provider;
+  const messaging = messagingChosen ? messagingSeat(messagingChosen, env) : null;
+  if (messaging) {
+    const area = seatArea(messaging, messagingAlternates(env).providers, (provider) => messagingSeat(provider, env));
+    registerAdapter(area.adapter);
+    out.messaging = messaging.seat.provider;
+    if (area.alternates.length > 0) out.messagingAlternates = area.alternates;
   }
-  if (billingConfig(env).provider === 'stripe') {
-    registerAdapter(recordingCounterparty(createStripeInvoiceAdapter({ namespace: ISSUE_INVOICE_NAMESPACE.name }), {
-      area: 'INVOICES', provider: 'stripe', capability: 'ISSUE_AN_INVOICE', action: 'QUOTE_AND_INVOICE', capacityPerDay: unreported,
-    }));
+  const billingChosen = billingConfig(env).provider;
+  const billing = billingChosen ? billingSeat(billingChosen) : null;
+  if (billing) {
+    const area = seatArea(billing, billingAlternates(env).providers, billingSeat);
+    registerAdapter(area.adapter);
+    if (area.alternates.length > 0) out.billingAlternates = area.alternates;
+  }
+  if (billingChosen === 'stripe') {
     registerPaymentReader({
       name: 'stripe.invoice_payments',
       provider: 'stripe',

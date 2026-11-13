@@ -38,7 +38,17 @@ export const INSTANTLY_KEY_ENV = 'INSTANTLY_API_KEY';
 /** Optional: an existing Instantly campaign Brain adds its leads to, instead of the one it creates. */
 export const INSTANTLY_CAMPAIGN_ENV = 'BRAIN_INSTANTLY_CAMPAIGN_ID';
 
+/**
+ * Optional, comma-separated: further implemented messaging providers the deployment names as
+ * alternative fulfillers of the same commitment (CP-31). One is registered only when it is named
+ * here, is not the chosen provider, and its own settings are complete — the same rule the chosen
+ * provider is held to. It is offered a commitment only after the chosen one definitely refused it.
+ */
+export const MESSAGING_ALTERNATES_ENV = 'BRAIN_MESSAGING_ALTERNATES';
+
 export const BILLING_PROVIDER_ENV = 'BRAIN_BILLING_PROVIDER';
+/** The billing counterpart of `BRAIN_MESSAGING_ALTERNATES`. */
+export const BILLING_ALTERNATES_ENV = 'BRAIN_BILLING_ALTERNATES';
 export const STRIPE_KEY_ENV = 'STRIPE_SECRET_KEY';
 
 /** The providers this version implements. Anything else is refused by name. */
@@ -75,6 +85,11 @@ export function messagingConfig(env: NodeJS.ProcessEnv = process.env): ProviderC
   if (!provider) {
     return { provider: null, configured: false, problems: [MESSAGING_PROVIDER_ENV] };
   }
+  return messagingProviderConfig(provider, env);
+}
+
+/** One named messaging provider's own settings, whichever role the deployment gave it. */
+export function messagingProviderConfig(provider: string, env: NodeJS.ProcessEnv = process.env): ProviderConfigReading {
   if (!(MESSAGING_PROVIDERS as readonly string[]).includes(provider)) {
     return {
       provider,
@@ -106,6 +121,11 @@ export function billingConfig(env: NodeJS.ProcessEnv = process.env): ProviderCon
   if (!provider) {
     return { provider: null, configured: false, problems: [BILLING_PROVIDER_ENV], mode: null };
   }
+  return billingProviderConfig(provider, env);
+}
+
+/** One named billing provider's own settings, whichever role the deployment gave it. */
+export function billingProviderConfig(provider: string, env: NodeJS.ProcessEnv = process.env): ProviderConfigReading {
   if (!(BILLING_PROVIDERS as readonly string[]).includes(provider)) {
     return {
       provider,
@@ -126,6 +146,47 @@ export function billingConfig(env: NodeJS.ProcessEnv = process.env): ProviderCon
     };
   }
   return { provider, configured: true, problems: [], mode };
+}
+
+/**
+ * The alternative providers a deployment named for one area, in the order it named them: each
+ * implemented, not the chosen provider, named once, and fully configured. A name that fails any of
+ * those is not an alternative — it is dropped here and reported by `alternateProblems`.
+ */
+function alternates(
+  listEnv: string,
+  chosen: string | null,
+  implemented: readonly string[],
+  configOf: (provider: string, env: NodeJS.ProcessEnv) => ProviderConfigReading,
+  env: NodeJS.ProcessEnv,
+): { providers: string[]; problems: string[] } {
+  const named = (read(listEnv, env) ?? '').split(',').map((one) => one.trim()).filter((one) => one !== '');
+  const providers: string[] = [];
+  const problems: string[] = [];
+  for (const provider of named) {
+    if (provider === chosen || providers.includes(provider)) continue;
+    if (!implemented.includes(provider)) {
+      problems.push(`${listEnv} (${provider} is not implemented)`);
+      continue;
+    }
+    const reading = configOf(provider, env);
+    if (!reading.configured) {
+      problems.push(...reading.problems.map((problem) => `${listEnv} ${provider}: ${problem}`));
+      continue;
+    }
+    providers.push(provider);
+  }
+  return { providers, problems };
+}
+
+/** The messaging providers named as alternative fulfillers, each fully configured (CP-31). */
+export function messagingAlternates(env: NodeJS.ProcessEnv = process.env): { providers: string[]; problems: string[] } {
+  return alternates(MESSAGING_ALTERNATES_ENV, messagingConfig(env).provider, MESSAGING_PROVIDERS, messagingProviderConfig, env);
+}
+
+/** The billing providers named as alternative fulfillers, each fully configured (CP-31). */
+export function billingAlternates(env: NodeJS.ProcessEnv = process.env): { providers: string[]; problems: string[] } {
+  return alternates(BILLING_ALTERNATES_ENV, billingConfig(env).provider, BILLING_PROVIDERS, billingProviderConfig, env);
 }
 
 /** The value itself, for the one module that sends it in an Authorization header. */
