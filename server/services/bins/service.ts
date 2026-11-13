@@ -84,7 +84,12 @@ import {
   listWorkItemsForBin,
   type ClaimScope,
 } from '../../repos/workQueue.ts';
-import { evaluateContract, hashUnitValue, researchPacketParkReason, type ContractVerdict } from './contracts.ts';
+import {
+  evaluateContract,
+  hashUnitValue,
+  researchPacketParkReason,
+  type ContractVerdict,
+} from './contracts.ts';
 import { getWorkerRouting } from '../../repos/identity.ts';
 import { observeFiredSessionArrival } from '../fleet/arrivalIdentity.ts';
 import {
@@ -307,6 +312,19 @@ export async function binAdmission(input: {
   });
   const admit = auditAdmission(lineage);
   const routing = input.routing ?? (await workerRoutingFor(input.workerId, input.principal));
+  /* The session is fixed for this admission, so the Routines Brain fired it from are read once. */
+  let refsOnce: Promise<string[]> | null = null;
+  const sessionRoutineRefs = (): Promise<string[]> => {
+    if (!input.sessionRef) return Promise.resolve([]);
+    if (!refsOnce) {
+      const sessionRef = input.sessionRef;
+      refsOnce = import('../../repos/bins.ts').then(({ routineRefsForSession }) => routineRefsForSession(sessionRef));
+      refsOnce.catch(() => {
+        refsOnce = null;
+      });
+    }
+    return refsOnce;
+  };
   return async (bin: Bin): Promise<BinAdmissionVerdict> => {
     /*
      * Scope first, and every dimension of it, before anything else is asked.
@@ -355,14 +373,23 @@ export async function binAdmission(input: {
      * something false, fail open where it could only waste a fire — and this is
      * the case where the answer is known.
      */
-    const needed = bin.requiredCapabilities ?? [];
-    if (needed.length > 0 && input.sessionRef) {
-      const { routineRefsForSession } = await import('../../repos/bins.ts');
-      const { getRoutineByRef } = await import('../../repos/fleet.ts');
-      const refs = await routineRefsForSession(input.sessionRef);
+    /*
+     * The bin's own requirements, and only those — the router's rule, asked of
+     * the same rows so the fire and the assignment cannot disagree. A
+     * capability the bin's completion contract names (`contractCapabilities`,
+     * a browser for a render) is a ranking preference in the router and never
+     * a reason to skip a session here: skipping undeclared sessions once any
+     * one Routine declared it stranded every other Routine from render work,
+     * though an ordinary worker session renders with the manifest's command.
+     */
+    const own = bin.requiredCapabilities ?? [];
+    if (own.length > 0 && input.sessionRef) {
+      const refs = await sessionRoutineRefs();
       if (refs.length > 0) {
+        const { getRoutineByRef } = await import('../../repos/fleet.ts');
         const routines = await Promise.all(refs.map((ref) => getRoutineByRef(ref)));
         const known = routines.filter((routine): routine is NonNullable<typeof routine> => routine !== null);
+        const needed = [...own];
         const { DELIVERY_PROBE_CLASS, WRITE_CAPABILITY } = await import('../dispatch/router.ts');
         const { repositoryIdOf } = await import('./routing.ts');
         /*
@@ -405,8 +432,8 @@ export async function binAdmission(input: {
      * offered the audits and syntheses it can do. Open wherever it cannot tell.
      */
     if (input.sessionRef && familyOf(bin) === 'RESEARCH') {
-      const { routineRefsForSession, binNeedsWeb } = await import('../../repos/bins.ts');
-      const refs = await routineRefsForSession(input.sessionRef).catch(() => [] as string[]);
+      const { binNeedsWeb } = await import('../../repos/bins.ts');
+      const refs = await sessionRoutineRefs().catch(() => [] as string[]);
       if (refs.length > 0) {
         const { getRoutineByRef } = await import('../../repos/fleet.ts');
         const { networkBlockedRoutines } = await import('../dispatch/candidates.ts');
@@ -1564,6 +1591,15 @@ export async function requestCompletion(input: {
    * so nothing here can make the bin's own outcome depend on it.
    */
   await advanceFactoryAfter(bin);
+  /*
+   * Deliberately nothing about the fleet. A satisfied contract is not evidence
+   * of the capability `contractCapabilities` names for it: `DESIGN_RENDER_V1`
+   * is satisfied by a non-empty `captures` array whose hashes Brain never
+   * checks against any bytes, so a browserless session can satisfy it. Writing
+   * `browser` onto the Routine it was fired from — a field a person sets with
+   * `setRoutineCapabilities` — would record a capability nothing verified and
+   * then route every render bin by it.
+   */
   return { held: true, terminal: true, state: 'COMPLETE', verdict, signals };
 }
 
