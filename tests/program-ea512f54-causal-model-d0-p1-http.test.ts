@@ -11,6 +11,7 @@ import { pickPort } from './helpers/ports.ts';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -520,6 +521,27 @@ describe('stored graphs keep every version', () => {
     bad.routes[0]!.collectedCents = { value: 1, status: 'OBSERVED' } as never;
     expect((await call('POST', `${CAUSAL()}/graphs/g3`, { cookie: adminCookie, body: { graph: bad } })).status).toBe(422);
     expect((await call('GET', `${CAUSAL()}/graphs/g3`, { cookie: adminCookie })).status).toBe(404);
+  });
+
+  it('a version keeps its number however much unrelated history follows it', async () => {
+    const stored = await call('POST', `${CAUSAL()}/graphs/g-window`, { cookie: adminCookie, body: { graph: { ...GRAPH(), claims: [claim(5)] } } });
+    expect(stored.body.version).toBe(1);
+    await call('POST', `${CAUSAL()}/graphs/g-window`, { cookie: adminCookie, body: { graph: { ...GRAPH(), claims: [claim(6)] }, reason: 'second' } });
+    // More project events than any fixed window of the newest ones can hold.
+    const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
+    const db = new DatabaseSync(path.join(dataDir, 'brain.db'));
+    db.exec('PRAGMA busy_timeout = 5000');
+    const insert = db.prepare("INSERT INTO project_events (id, project_id, layer_id, entity_type, entity_id, event_type, payload, created_at) VALUES (?, ?, NULL, 'noise', 'n', 'USER_CORRECTION', '{}', ?)");
+    db.exec('BEGIN');
+    for (let i = 0; i < 5200; i += 1) insert.run(`evt_noise_${i}`, project, new Date(Date.now() + 1000 + i).toISOString());
+    db.exec('COMMIT');
+    db.close();
+    const after = await call('GET', `${CAUSAL()}/graphs/g-window`, { cookie: adminCookie });
+    expect(after.body.version).toBe(2);
+    expect(after.body.versions.map((v: { reason: string }) => v.reason)).toEqual(['', 'second']);
+    const v1 = await call('GET', `${CAUSAL()}/graphs/g-window?version=1`, { cookie: adminCookie });
+    expect(v1.status).toBe(200);
+    expect(v1.body.account.claims.price.map((v: { figure: { value: number } }) => v.figure.value)).toEqual([5]);
   });
 
   it('a graph stored in one project is not readable from another’s key space by a non-member', async () => {
