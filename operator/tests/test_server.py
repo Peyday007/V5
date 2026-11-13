@@ -2,6 +2,7 @@
 import json
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -87,6 +88,48 @@ class Results(unittest.TestCase):
         self.assertGreater(server.idle_for(start + server.IDLE_STOP_SECONDS + 1), server.IDLE_STOP_SECONDS)
         with server.LOCK:
             self.assertIsNone(server.idle_for(start + 10 * server.IDLE_STOP_SECONDS))
+
+
+class Deadline(unittest.TestCase):
+    """opr_681f7877 and opr_fc22b38c: a silent Hermes outran its budget by 13 and 29 minutes."""
+
+    def _run(self, script: str, budget: int):
+        original_command, original_grace, original_preflight = server.command, server.BUDGET_GRACE_SECONDS, server.preflight
+        server.command = lambda body, prompt: [sys.executable, "-c", script]
+        server.BUDGET_GRACE_SECONDS = 0
+        server.preflight = lambda mcp: "HTTP 200 in 1 ms"
+        try:
+            started = time.time()
+            result = server.run_operator(dict(BODY, budgetSeconds=budget), lambda obj: None)
+            return result, time.time() - started
+        finally:
+            server.command, server.BUDGET_GRACE_SECONDS, server.preflight = original_command, original_grace, original_preflight
+
+    def test_a_silent_run_is_stopped_at_its_deadline(self):
+        result, took = self._run("import time; time.sleep(60)", 1)
+        self.assertLess(took, 15)
+        self.assertEqual(result["error"], "the run exceeded its budget")
+
+    def test_stderr_never_fills_and_freezes_the_run(self):
+        script = (
+            "import sys, json\n"
+            "sys.stderr.write('x' * 2_000_000)\n"
+            "print(json.dumps({'type': 'result', 'text': 'done'}), flush=True)\n"
+        )
+        result, took = self._run(script, 30)
+        self.assertLess(took, 20)
+        self.assertIsNone(result["error"])
+        self.assertEqual(result["final"], "done")
+
+    def test_a_finished_run_keeps_its_tool_events(self):
+        script = (
+            "import json\n"
+            "print(json.dumps({'type': 'tool_result', 'name': 'brain_operator_goal'}), flush=True)\n"
+            "print(json.dumps({'type': 'result', 'text': 'ok'}), flush=True)\n"
+        )
+        result, _ = self._run(script, 30)
+        self.assertEqual(result["tools"], 1)
+        self.assertIsNone(result["error"])
 
 
 if __name__ == "__main__":

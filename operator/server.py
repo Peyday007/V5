@@ -38,6 +38,8 @@ LOCK = threading.Lock()
 # Finished results by run id, so a Brain that restarted mid-run can collect one.
 RESULTS: dict[str, dict] = {}
 RESULTS_KEPT = 8
+# Past its budget a run gets this long to finish its last call before it is stopped.
+BUDGET_GRACE_SECONDS = 180
 # The machine stops itself, never mid-run (§106). Fly's proxy autostop counts
 # connections, and a Brain that restarted mid-run drops the only one: at 20:56
 # on 2026-11-12 it stopped this machine under opr_59db70fd and the run and its
@@ -225,7 +227,32 @@ def run_operator(body: dict, emit) -> dict:
         error = None
         model = body["models"][0]["model"]
         tools: list[dict] = []
-        deadline = time.time() + int(body.get("budgetSeconds", 1200)) + 180
+        # Production, 2026-11-13 (opr_681f7877 ran 36 min, opr_fc22b38c 52 min,
+        # against a 23 min limit): the deadline was checked only when Hermes
+        # printed a line, so a silent Hermes was never stopped, and a run past
+        # Brain's 45 min stale bound could not be collected after a restart.
+        # stderr was read only at the end, so a chatty Hermes filled the pipe
+        # and blocked — silent. stderr is drained as it comes, and the deadline
+        # is a timer that kills the process whether or not it is talking.
+        stderr_tail: list[str] = []
+
+        def drain() -> None:
+            assert proc.stderr is not None
+            for err_line in proc.stderr:
+                stderr_tail.append(err_line)
+                del stderr_tail[:-40]
+
+        drainer = threading.Thread(target=drain, daemon=True)
+        drainer.start()
+        overran = threading.Event()
+
+        def overrun() -> None:
+            overran.set()
+            proc.kill()
+
+        killer = threading.Timer(int(body.get("budgetSeconds", 1200)) + BUDGET_GRACE_SECONDS, overrun)
+        killer.daemon = True
+        killer.start()
         assert proc.stdout is not None
         for line in proc.stdout:
             line = line.strip()
@@ -247,12 +274,19 @@ def run_operator(body: dict, emit) -> dict:
                 if out["type"] == "tool":
                     tools.append(out)
                 emit(out)
-            if time.time() > deadline:
-                proc.kill()
-                error = "the run exceeded its budget"
-                break
-        proc.wait(timeout=60)
-        stderr = proc.stderr.read() if proc.stderr else ""
+        killer.cancel()
+        try:
+            proc.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=10)
+        drainer.join(timeout=5)
+        for stream in (proc.stdout, proc.stderr):
+            if stream is not None:
+                stream.close()
+        if overran.is_set():
+            error = "the run exceeded its budget"
+        stderr = "".join(stderr_tail)
         if final is None and error is None:
             error = f"hermes exited {proc.returncode} without a result: {stderr[-400:]}"
         return {"type": "result", "final": final, "error": error, "model": model, "memory": read_memory(home), "tools": len(tools), "toolEvents": tools, "preflight": reached}
