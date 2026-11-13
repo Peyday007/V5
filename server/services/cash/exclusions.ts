@@ -371,7 +371,35 @@ export function roleRecordFromRows(
     (c) => c.entryKind === 'RESTRUCTURING' && c.mechanism !== null && PARTNER_MECHANISMS.has(c.mechanism) && c.answersId !== null && needIds.has(c.answersId),
   );
   const partner = partnered ? { holdsLicensing: true, contractInPlace: attested.partnerContractInPlace === true } : null;
-  return { performs, holds, partner };
+  return { performs, holds, partner, notRegulated: notRegulatedFinding(opening, performs, licenceNeeds.length > 0 || licenceConstrained, holds.contract === false) };
+}
+
+/*
+ * The finding that an opening performs nothing regulated, made from the rows that would say otherwise.
+ *
+ * Without it every ordinary opening — whose text names no regulated activity — stayed UNKNOWN with its
+ * economics held back, because nothing on a production path ever wrote `notRegulated`, and the funnel's
+ * countedByCurrency withheld the settled cash of openings nobody had any reason to doubt (2026-11-13).
+ * The finding is not "nothing matched": it is made only when (a) the opening's own cash_opportunities row
+ * was read — an opening the reader could not see stays unknown — (b) none of its text, nor any capital or
+ * constraint statement beside it, names a regulated activity, and (c) research recorded no licence,
+ * compliance, insurance, credential, regulatory-capital, subcontracting or platform-terms row against it.
+ * Those rows are where research records that a role needs rights, so a rewording of the title cannot pass
+ * once research has said otherwise: a single such row withholds the finding and the role stays unknown.
+ */
+function notRegulatedFinding(
+  opening: OpeningRoleText | null,
+  performs: string,
+  licenceRecorded: boolean,
+  contractRecorded: boolean,
+): { basis: string } | null {
+  if (!opening || opening.title.trim().length === 0) return null;
+  if (licenceRecorded || contractRecorded) return null;
+  if (regulatedActivitiesIn(performs).length > 0) return null;
+  return {
+    basis:
+      'its cash_opportunities row and capital/constraint statements name no regulated activity, and no licensing, compliance, insurance, credential, regulatory-capital, subcontracting or platform-terms row is recorded against it',
+  };
 }
 
 /** The columns of cash_opportunities the role reader uses, as stored. */
