@@ -60,7 +60,24 @@ async function rowsFor(noticeId: string): Promise<{ status: string; payload: Rec
  * every later call for the same key returns that row and writes nothing, so the text the owner
  * reads is the text recorded when it first qualified.
  */
-export async function recordOwnerNotice(input: {
+/**
+ * Check-then-write is serialized per notice in this process, so two attempts at one notice (a
+ * generation presumed hung and the one started after it) can never both write READY.
+ */
+const writing = new Map<string, Promise<unknown>>();
+
+export async function recordOwnerNotice(input: Parameters<typeof recordOwnerNoticeNow>[0]): Promise<{ created: boolean; notice: OwnerNotice }> {
+  const before = writing.get(input.noticeId) ?? Promise.resolve();
+  const mine = before.catch(() => undefined).then(() => recordOwnerNoticeNow(input));
+  writing.set(input.noticeId, mine);
+  try {
+    return await mine;
+  } finally {
+    if (writing.get(input.noticeId) === mine) writing.delete(input.noticeId);
+  }
+}
+
+async function recordOwnerNoticeNow(input: {
   kind: OwnerNoticeKind;
   projectId: string;
   noticeId: string;
@@ -113,11 +130,11 @@ export async function undeliveredOwnerNotices(projectIds: string[]): Promise<Own
     const notice = await readOwnerNotice(entity_id);
     if (notice && !notice.deliveredAt && projectIds.includes(notice.projectId)) out.push(notice);
   }
-  // Only the newest hourly report is offered: an older one the conversation missed is superseded,
-  // never queued up behind it.
+  // Only the newest hour's report is offered (by its hour, not by when it was written, so a
+  // recovered earlier hour never displaces it): an older one is superseded, never queued.
   const report = await getDb().get<{ entity_id: string }>(
     `SELECT entity_id FROM project_events WHERE project_id IN (${marks}) AND event_type = ? AND payload LIKE ?
-      ORDER BY created_at DESC, id DESC LIMIT 1`,
+      ORDER BY entity_id DESC LIMIT 1`,
     [...projectIds, OWNER_NOTICE_EVENTS.REPORT, '%"status":"READY"%'],
   );
   if (report) {

@@ -3,7 +3,7 @@
  * what is unmeasured, ranking real bottlenecks, and delivered in the owner's conversation through
  * the existing owner-notice path — once per hour, newest only.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createWorkstream } from '../server/repos/register.ts';
@@ -110,7 +110,7 @@ describe('the time to a qualifying plan is never invented', () => {
 describe('the report', () => {
   it('opens with the executive summary and carries every section the owner listed, explaining why nothing moved', () => {
     const r = renderReport({
-      hourEnding: '2026-11-13T11:00:00.000Z', now: win(), prev: win({ pipeline: { ...win().pipeline, researchCompleted: 1 } }), day: win(),
+      hourEnding: '2026-11-13T11:00:00.000Z', now: win(), prev: win({ pipeline: { ...win().pipeline, researchCompleted: 1 } }), baseline: { hours: 5, pipeline: win().pipeline }, partial: [],
       plan: plan(), planPrev: plan(), planHistory: [], hermesSummary: 'Inspected the goal; recorded a lesson.', openEngineering: [], persistence: {}, lastKeys: ['hermes:inactive'],
       ownerOpportunities: [], unmeasured: ['per-call token counts'],
     });
@@ -123,6 +123,23 @@ describe('the report', () => {
     expect(r.text).toContain('coverage of assumed inputs, not a probability');
     expect(r.text).not.toContain('Nothing to announce');
     expect(r.text).toContain('research done 3 (+2)');
+    expect(r.text).not.toContain('PARTIAL REPORT');
+  });
+
+  it('publishes a partial report that names what it could not read and shows those figures as n/a, never as zero', () => {
+    const now = win();
+    now.hermes.runsStarted = Number.NaN;
+    now.pipeline.researchCompleted = Number.NaN;
+    const r = renderReport({
+      hourEnding: '2026-11-13T11:00:00.000Z', now, prev: null, baseline: null, partial: ['operator runs (could not be read)', 'research fragments (skipped: the report\'s read budget ran out)'],
+      plan: plan(), planPrev: null, planHistory: [], hermesSummary: null, openEngineering: [], persistence: {}, lastKeys: [], ownerOpportunities: [], unmeasured: [],
+    });
+    expect(r.text.split('\n')[2]).toBe("PARTIAL REPORT — not readable this hour: operator runs (could not be read); research fragments (skipped: the report's read budget ran out). Those figures show as n/a, never as zero.");
+    expect(r.text).toContain('research done n/a');
+    expect(r.text).toContain('Runs / actions / real outcomes: n/a started');
+    expect(r.text).toContain('no previous hour measured');
+    expect(r.text).toContain('no earlier reports yet');
+    expect(r.text).not.toContain('NaN');
   });
 });
 
@@ -187,6 +204,109 @@ describe('built from production rows, recorded once an hour, and read by the own
     expect(second!.noticeId).toBe(reportNoticeId(new Date(Math.floor((t0 + 3_600_000) / 3_600_000) * 3_600_000).toISOString()));
     await tool('brain_owner_notice_delivered', { project_id: projectId, notice_id: second!.noticeId, where: 'session_test' });
     expect(((await tool('brain_list_projects', {}))['ownerNotices'] as unknown[]).filter((n) => (n as { kind: string }).kind === 'REPORT')).toEqual([]);
+  });
+
+  it('reads the operational tables once per hour: the hour before, the baseline and the history come from recorded reports', async () => {
+    const mod = await import('../server/services/operator/operationsReport.ts');
+    const db = getDb() as unknown as { all: (...a: unknown[]) => Promise<unknown>; get: (...a: unknown[]) => Promise<unknown> };
+    const counted = async (fn: () => Promise<unknown>): Promise<number> => {
+      const all = db.all.bind(db);
+      const get = db.get.bind(db);
+      let n = 0;
+      db.all = (...a: unknown[]) => { n += 1; return all(...a); };
+      db.get = (...a: unknown[]) => { n += 1; return get(...a); };
+      try { await fn(); } finally { db.all = all; db.get = get; }
+      return n;
+    };
+    const t0 = Date.parse('2026-11-13T09:30:00.000Z');
+    const cold = await counted(() => mod.recordHourlyReport(t0)); // no earlier report: the hour before is read from the tables
+    const warm = await counted(() => mod.recordHourlyReport(t0 + 3_600_000)); // the hour before is the report just recorded
+    expect(warm).toBeLessThan(cold);
+    expect(warm).toBeLessThan(60);
+    const later = await mod.buildOperationsReport(t0 + 2 * 3_600_000);
+    expect(later.text).toContain('per-hour baseline over 2 earlier report(s)');
+  });
+
+  it('stops reading at its budget and publishes the report partial, naming every skipped read', async () => {
+    const { recordHourlyReport } = await import('../server/services/operator/operationsReport.ts');
+    const t0 = Date.parse('2026-11-13T05:30:00.000Z');
+    const r = await recordHourlyReport(t0, { budgetMs: -1 });
+    expect(r?.created).toBe(true);
+    expect(r!.partial.length).toBeGreaterThan(10);
+    expect(r!.partial.every((m) => m.endsWith("(skipped: the report's read budget ran out)"))).toBe(true);
+    const row = await getDb().get<{ payload: string }>(`SELECT payload FROM project_events WHERE entity_id = ? AND payload LIKE '%"status":"READY"%'`, [r!.noticeId]);
+    const text = String((JSON.parse(row!.payload) as { text: string }).text);
+    expect(text).toContain("PARTIAL REPORT — not readable this hour: earlier reports (skipped: the report's read budget ran out); operator runs (skipped");
+    expect(text).not.toContain('$n/a');
+    expect(text).not.toContain('NaN');
+    expect(text).toContain('Runs / actions / real outcomes: n/a started');
+  });
+
+  it('runs in the background: the tick returns at once, one generation at a time, recovering missed hours without duplicates', async () => {
+    const mod = await import('../server/services/operator/operationsReport.ts');
+    mod.resetReportScheduleForTests(0);
+    const t = Date.parse('2026-11-13T12:20:00.000Z');
+    expect(mod.operationsReportTick(t)).toBe('STARTED');
+    expect(mod.operationsReportTick(t + 1000)).toBe('IN_FLIGHT');
+    await vi.waitFor(async () => expect(mod.operationsReportTick(t + 2000)).not.toBe('IN_FLIGHT'), { timeout: 20_000 });
+    const ids = async () => (await getDb().all<{ entity_id: string; n: number }>(
+      `SELECT entity_id, COUNT(*) AS n FROM project_events WHERE event_type = 'OWNER_OPERATIONS_REPORT' AND payload LIKE '%"status":"READY"%' GROUP BY entity_id ORDER BY entity_id DESC`, [],
+    ));
+    // The hour just ended, and the newest missed hour before it, recovered and marked so.
+    expect((await ids()).map((x) => x.entity_id)).toEqual(['ops-report.20261113T12', 'ops-report.20261113T11']);
+    const recovered = await getDb().get<{ payload: string }>(`SELECT payload FROM project_events WHERE entity_id = 'ops-report.20261113T11'`, []);
+    expect(JSON.parse(recovered!.payload).text).toContain('Recovered at 2026-11-13T12:20:00.000Z after the hour was missed');
+    // Later ticks keep recovering the window, one hour at a time, and never record an hour twice.
+    for (let i = 0; i < 4; i += 1) {
+      mod.operationsReportTick(t + 60_000 * (i + 2));
+      await vi.waitFor(async () => expect(mod.operationsReportTick(t + 60_000 * (i + 2) + 1)).not.toBe('IN_FLIGHT'), { timeout: 20_000 });
+    }
+    const all = await ids();
+    expect(all).toHaveLength(mod.REPORT_RECOVERY_HOURS);
+    expect(all.every((x) => Number(x.n) === 1)).toBe(true);
+    expect(mod.operationsReportTick(t + 10 * 60_000)).toBe('NOT_DUE'); // this hour is done
+    // The conversation is offered the hour just ended, not the last hour recovered.
+    const notices = (await tool('brain_list_projects', {}))['ownerNotices'] as { noticeId: string; kind: string }[];
+    expect(notices.filter((n) => n.kind === 'REPORT').map((n) => n.noticeId)).toEqual(['ops-report.20261113T12']);
+  });
+
+  it('retries a failed generation after a pause, and never blocks Hermes while a report is slow or hung', async () => {
+    const mod = await import('../server/services/operator/operationsReport.ts');
+    mod.resetReportScheduleForTests(0);
+    const db = getDb() as unknown as { all: (sql: string, p?: unknown[]) => Promise<unknown> };
+    const all = db.all.bind(db);
+    // 1. The database refuses the report's reads: the generation fails, is logged, and waits REPORT_RETRY_MS.
+    db.all = (sql: string, p?: unknown[]) => (sql.includes('OWNER_OPERATIONS_REPORT') ? Promise.reject(new Error('Connection terminated due to connection timeout')) : all(sql, p));
+    const t = Date.parse('2026-11-13T15:10:00.000Z');
+    try {
+      expect(mod.operationsReportTick(t)).toBe('STARTED');
+      await vi.waitFor(() => expect(mod.operationsReportTick(t + 1000)).toBe('NOT_DUE'), { timeout: 20_000 });
+      expect(mod.operationsReportTick(t + mod.REPORT_RETRY_MS - 1000)).toBe('NOT_DUE');
+    } finally {
+      db.all = all;
+    }
+    // 2. A report that hangs: Hermes' tick still completes, and no second generation piles up.
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    db.all = (sql: string, p?: unknown[]) => (sql.includes('OWNER_OPERATIONS_REPORT') ? gate.then(() => all(sql, p)) : all(sql, p));
+    try {
+      const retryAt = t + mod.REPORT_RETRY_MS + 1000;
+      expect(mod.operationsReportTick(retryAt)).toBe('STARTED');
+      const { operatorTickIfDue } = await import('../server/services/operator/run.ts');
+      const started = Date.now();
+      await operatorTickIfDue(retryAt, {});
+      expect(Date.now() - started).toBeLessThan(5_000);
+      expect(mod.operationsReportTick(retryAt + 60_000)).toBe('IN_FLIGHT');
+      // Hung past REPORT_HUNG_MS, it no longer blocks the next attempt.
+      expect(mod.operationsReportTick(retryAt + mod.REPORT_HUNG_MS + 1000)).toBe('STARTED');
+    } finally {
+      release();
+      db.all = all;
+    }
+    await vi.waitFor(async () => {
+      const rows = await getDb().all<{ n: number }>(`SELECT COUNT(*) AS n FROM project_events WHERE entity_id = 'ops-report.20261113T15' AND payload LIKE '%"status":"READY"%'`, []);
+      expect(Number(rows[0]!.n)).toBe(1);
+    }, { timeout: 20_000 });
   });
 
   it("puts the latest report's bottlenecks first in Hermes' next brief, so it acts on them", async () => {

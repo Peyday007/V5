@@ -23,7 +23,20 @@ export const REPORT_GOAL_ID = 'wst_7b4fcbb5f2384f31b6c3';
 
 const minutesSince = (iso: string, nowMs: number): number => Math.max(0, (nowMs - Date.parse(iso)) / 60_000);
 
+/**
+ * The report's read budget (owner, 2026-11-13: "enforce a report execution budget"). Every read
+ * goes through `safe`, which refuses to start one after the deadline: the report is then
+ * published PARTIAL, naming what it did not read, rather than holding a database connection
+ * Brain's productive work needs. One generation runs at a time, so one deadline is enough.
+ */
+export const REPORT_READ_BUDGET_MS = 60_000;
+let readDeadline = Number.POSITIVE_INFINITY;
+
 async function safe<T>(fallback: T, read: () => Promise<T>, missing: string[], what: string): Promise<T> {
+  if (Date.now() > readDeadline) {
+    missing.push(`${what} (skipped: the report's read budget ran out)`);
+    return fallback;
+  }
   try {
     return await read();
   } catch {
@@ -31,6 +44,9 @@ async function safe<T>(fallback: T, read: () => Promise<T>, missing: string[], w
     return fallback;
   }
 }
+
+/** Whether a named read failed or was skipped, so its figures are reported as n/a, not zero. */
+const unread = (missing: string[], what: string): boolean => missing.some((m) => m.startsWith(`${what} (`));
 
 function classifyFailure(error: string | null, toolsOk: number): string {
   const e = (error ?? '').toLowerCase();
@@ -107,8 +123,35 @@ function mergeQueues(a: QueueReading, b: QueueReading): QueueReading {
 }
 
 /** One window's readings. Snapshot fields (queued, running, oldest wait) are as of `nowMs`. */
-export async function readWindow(start: string, end: string, nowMs: number, missing: string[]): Promise<OpsWindow> {
+export async function readWindow(start: string, end: string, nowMs: number, outerMissing: string[]): Promise<OpsWindow> {
   const db = getDb();
+  const missing: string[] = [];
+  const window = await readWindowInto(db, start, end, nowMs, missing);
+  outerMissing.push(...missing);
+  // A read that failed contributes n/a (NaN), never a zero that looks measured.
+  const h = window.hermes;
+  if (unread(missing, 'operator runs')) {
+    for (const k of ['runsStarted', 'runsDone', 'runsFailed', 'toolCalls', 'toolCallsFailed', 'runMinutes', 'lostMinutes', 'actionsExecuted', 'goalsInspected', 'strategyChanges'] as const) h[k] = Number.NaN;
+  }
+  if (unread(missing, 'operator events')) {
+    for (const k of ['decisions', 'challenged', 'commissioned', 'reprioritized', 'outcomesResolved', 'outcomesNotResolved', 'outcomesReceived', 'problemsIdentified'] as const) h[k] = Number.NaN;
+  }
+  if (unread(missing, 'plan readings')) {
+    window.pipeline.planReadings = Number.NaN;
+    window.pipeline.plansAccepted = Number.NaN;
+  }
+  if (unread(missing, 'research work items') || unread(missing, 'research bins')) window.queues.research = nanQueue();
+  if (unread(missing, 'coding bins')) window.queues.coding = nanQueue();
+  if (unread(missing, 'other work items')) window.queues.otherWork = nanQueue();
+  if (unread(missing, 'factory units')) window.queues.factoryUnits = nanQueue();
+  return window;
+}
+
+function nanQueue(): QueueReading {
+  return { queued: Number.NaN, running: Number.NaN, blocked: Number.NaN, completed: Number.NaN, failed: Number.NaN, oldestWaitMin: null, avgWaitMin: null };
+}
+
+async function readWindowInto(db: ReturnType<typeof getDb>, start: string, end: string, nowMs: number, missing: string[]): Promise<OpsWindow> {
   // Hermes ------------------------------------------------------------------
   const runs = await safe([], () => db.all<{ id: string; state: string; model: string; started_at: string; finished_at: string | null; tool_calls: string; error: string | null }>(
     'SELECT id, state, model, started_at, finished_at, tool_calls, error FROM operator_runs WHERE started_at >= ? AND started_at < ?',
@@ -183,11 +226,11 @@ export async function readWindow(start: string, end: string, nowMs: number, miss
       if (p['status'] === 'NOT_RESOLVED') outcomesNotResolved += 1;
     }
   }
-  const lessons = Number((await safe({ n: 0 }, async () => (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM operator_learnings WHERE recorded_at >= ? AND recorded_at < ?', [start, end])) ?? { n: 0 }, missing, 'operator lessons')).n ?? 0);
+  const lessons = Number((await safe({ n: Number.NaN }, async () => (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM operator_learnings WHERE recorded_at >= ? AND recorded_at < ?', [start, end])) ?? { n: 0 }, missing, 'operator lessons')).n ?? 0);
   const actingTools = ['brain_operator_withdraw_moot_request', 'brain_operator_continue_idle', 'brain_operator_submit_fix', 'brain_operator_commission', 'brain_operator_set_goal_focus', 'brain_operator_prioritize_engineering'];
   // Pipeline ----------------------------------------------------------------
   const count = async (sql: string, what: string, params: unknown[] = [start, end]): Promise<number> =>
-    Number((await safe({ n: 0 }, async () => (await db.get<{ n: number }>(sql, params as never[])) ?? { n: 0 }, missing, what)).n ?? 0);
+    Number((await safe({ n: Number.NaN }, async () => (await db.get<{ n: number }>(sql, params as never[])) ?? { n: 0 }, missing, what)).n ?? 0);
   const opportunitiesDiscovered = await count('SELECT COUNT(*) AS n FROM cash_opportunities WHERE created_at >= ? AND created_at < ?', 'opportunities');
   const opportunitiesQualified = await count(`SELECT COUNT(*) AS n FROM cash_opportunities WHERE updated_at >= ? AND updated_at < ? AND state IN ('READY','EXECUTING','DELIVERING','COLLECTED')`, 'qualified opportunities');
   const researchCompleted = await count(`SELECT COUNT(*) AS n FROM research_fragments WHERE completed_at >= ? AND completed_at < ? AND status = 'ACCEPTED'`, 'research fragments');
@@ -399,85 +442,162 @@ export function reportNoticeId(hourEnding: string): string {
   return `ops-report.${hourEnding.slice(0, 13).replace(/[^0-9T]/g, '')}`;
 }
 
-/** Build the report for the hour that just ended. */
-export async function buildOperationsReport(nowMs = Date.now(), goalId = REPORT_GOAL_ID): Promise<{ hourEnding: string; subject: string; text: string; bottleneckKeys: string[] }> {
-  const missing: string[] = [];
-  const { start, end } = reportHour(nowMs);
-  const prevStart = new Date(Date.parse(start) - 3_600_000).toISOString();
-  const dayStart = new Date(Date.parse(end) - 86_400_000).toISOString();
-  const now = await readWindow(start, end, nowMs, missing);
-  const prev = await readWindow(prevStart, start, nowMs, missing);
-  const day = await readWindow(dayStart, end, nowMs, missing);
-  const plan = await safe(null, () => readPlan(goalId, end), missing, 'plan reading');
-  const planPrev = await safe(null, () => readPlan(goalId, start), missing, 'previous plan reading');
-  const history = await safe([], async () => {
-    const rows = await getDb().all<{ created_at: string }>('SELECT created_at FROM goal_plan_readings WHERE workstream_id = ? AND created_at >= ? AND created_at <= ? ORDER BY created_at ASC LIMIT 48', [goalId, dayStart, end]);
-    const out: { at: string; reach: number | null; basis: string | null; lowerBound: number | null }[] = [];
-    for (const r of rows) {
-      const p = await readPlan(goalId, r.created_at);
-      if (p) out.push({ at: r.created_at, reach: p.reach, basis: p.basis, lowerBound: p.lowerBound });
-    }
-    return out;
-  }, missing, 'plan history');
-  const lastRun = await safe(null, () => getDb().get<{ summary: string | null }>('SELECT summary FROM operator_runs WHERE summary IS NOT NULL ORDER BY started_at DESC LIMIT 1', []), missing, 'last operator run');
-  const openEngineering = await safe([], async () => {
-    const { engineeringOutcomes } = await import('./director.ts');
-    return (await engineeringOutcomes({ limit: 5, includeClosed: false })).map((o) => ({ title: o.title.slice(0, 80), status: o.status }));
-  }, missing, 'open engineering');
-  // How many earlier reports each bottleneck appeared in, consecutively: the survival count.
-  let lastKeys: string[] = [];
-  const persistence = await safe({} as Record<string, number>, async () => {
-    const rows = await getDb().all<{ payload: string }>(
-      `SELECT payload FROM project_events WHERE event_type = 'OWNER_OPERATIONS_REPORT' AND payload LIKE '%"status":"READY"%' ORDER BY created_at DESC LIMIT 12`,
-      [],
-    );
-    const counts: Record<string, number> = {};
-    const alive = new Set<string>();
-    rows.forEach((row, i) => {
-      const keys = ((JSON.parse(row.payload) as { bottleneckKeys?: string[] }).bottleneckKeys ?? []);
-      if (i === 0) lastKeys = keys;
-      for (const k of keys) if (i === 0 || alive.has(k)) counts[k] = (counts[k] ?? 0) + 1;
-      alive.clear();
-      for (const k of keys) alive.add(k);
-    });
-    return counts;
-  }, missing, 'earlier reports');
-  const ownerOpportunities = (plan?.facts.personBlockers ?? []).map((b) => `${b} — the plan's next test waits on you; cost: your time only.`);
-  const unmeasured = [
-    ...new Set(missing),
-    'per-call token counts and inference cost (research jobs record bytes and duration only)',
-    "Hermes' reasoning versus executing time within a run (only whole-run duration is recorded)",
-  ];
-  const r = renderReport({
-    hourEnding: end,
-    now,
-    prev,
-    day,
-    plan: plan?.facts ?? null,
-    planPrev: planPrev?.facts ?? null,
-    planHistory: history,
-    hermesSummary: lastRun?.summary ?? null,
-    openEngineering,
-    persistence,
-    lastKeys,
-    ownerOpportunities,
-    unmeasured,
-  });
-  return { hourEnding: end, ...r };
+/** A report recorded earlier, as its payload stored it: the readings later reports reuse. */
+interface StoredReport {
+  hourEnding: string;
+  window: OpsWindow | null;
+  plan: { at: string | null; reach: number | null; basis: string | null; lowerBound: number | null; facts: PlanReadingFacts } | null;
+  bottleneckKeys: string[];
+}
+
+/** JSON has no NaN: a figure stored as n/a comes back null, and is n/a again here. */
+function revive(window: unknown): OpsWindow | null {
+  if (!window || typeof window !== 'object') return null;
+  return JSON.parse(JSON.stringify(window), (_k, v) => (v === null ? Number.NaN : v)) as OpsWindow;
 }
 
 /**
- * Record the report for the hour that just ended, once: an owner notice the conversation's
- * hourly task announces. Returns null when this hour's report already exists.
+ * The reports recorded before `hourEnding`, newest hour first — one bounded read that supplies
+ * the previous hour, the baseline, the plan history and the bottleneck persistence, instead of
+ * re-reading those windows from the operational tables every hour.
  */
-export async function recordHourlyReport(nowMs = Date.now()): Promise<{ noticeId: string; created: boolean } | null> {
-  const { end } = reportHour(nowMs);
+async function storedReports(hourEnding: string, missing: string[]): Promise<StoredReport[]> {
+  const rows = await safe([], () => getDb().all<{ payload: string }>(
+    `SELECT payload FROM project_events WHERE event_type = 'OWNER_OPERATIONS_REPORT' AND entity_id < ? AND payload LIKE '%"status":"READY"%'
+      ORDER BY entity_id DESC LIMIT 30`,
+    [reportNoticeId(hourEnding)],
+  ), missing, 'earlier reports');
+  const out: StoredReport[] = [];
+  for (const row of rows) {
+    try {
+      const p = JSON.parse(row.payload) as { hourEnding?: string; window?: unknown; plan?: StoredReport['plan']; bottleneckKeys?: string[] };
+      if (!p.hourEnding) continue;
+      out.push({ hourEnding: p.hourEnding, window: revive(p.window), plan: p.plan ?? null, bottleneckKeys: p.bottleneckKeys ?? [] });
+    } catch {
+      /* an unreadable payload is skipped, not guessed */
+    }
+  }
+  return out;
+}
+
+const PIPELINE_KEYS = [
+  'opportunitiesDiscovered', 'opportunitiesQualified', 'researchCompleted', 'researchFailed', 'strategiesConstructed', 'evaluationsCompleted',
+  'evaluationsFailed', 'evidenceValidated', 'planReadings', 'plansAccepted', 'executionStarted', 'leadsPrepared', 'repliesReceived',
+] as const;
+
+/** Per-hour averages over the earlier reports in the last day; a figure no report measured stays n/a. */
+function baselineFrom(stored: StoredReport[], end: string): { hours: number; pipeline: OpsWindow['pipeline'] } | null {
+  const since = Date.parse(end) - 86_400_000;
+  const windows = stored.filter((x) => x.window && Date.parse(x.hourEnding) > since).map((x) => x.window!);
+  if (windows.length === 0) return null;
+  const pipeline = {} as OpsWindow['pipeline'];
+  for (const k of PIPELINE_KEYS) {
+    const values = windows.map((w) => w.pipeline?.[k]).filter((v): v is number => typeof v === 'number' && !Number.isNaN(v));
+    pipeline[k] = values.length ? values.reduce((a, b) => a + b, 0) / values.length : Number.NaN;
+  }
+  return { hours: windows.length, pipeline };
+}
+
+export interface BuiltReport {
+  hourEnding: string;
+  subject: string;
+  text: string;
+  bottleneckKeys: string[];
+  window: OpsWindow;
+  plan: StoredReport['plan'];
+  partial: string[];
+}
+
+/**
+ * Build the report for one hour. The operational tables are read once, for that hour; the hour
+ * before, the baseline, the plan history and the persistence of each bottleneck come from the
+ * reports already recorded. Every read is bounded by the report's read budget.
+ */
+export async function buildOperationsReport(
+  nowMs = Date.now(),
+  goalId = REPORT_GOAL_ID,
+  opts: { hourEnding?: string; budgetMs?: number; recovered?: boolean } = {},
+): Promise<BuiltReport> {
+  const missing: string[] = [];
+  readDeadline = Date.now() + (opts.budgetMs ?? REPORT_READ_BUDGET_MS);
+  try {
+    const end = opts.hourEnding ?? reportHour(nowMs).end;
+    const start = new Date(Date.parse(end) - 3_600_000).toISOString();
+    const stored = await storedReports(end, missing);
+    const now = await readWindow(start, end, nowMs, missing);
+    const before = stored.find((x) => x.hourEnding === start) ?? null;
+    // The hour before comes from its own report; read only when no report recorded it.
+    const prev = before?.window ?? (Date.now() < readDeadline ? await readWindow(new Date(Date.parse(start) - 3_600_000).toISOString(), start, nowMs, []) : null);
+    const planNow = await safe(null, () => readPlan(goalId, end), missing, 'plan reading');
+    const planPrev = before?.plan?.facts ?? (await safe(null, () => readPlan(goalId, start), [], 'previous plan reading'))?.facts ?? null;
+    const since = Date.parse(end) - 86_400_000;
+    const history = stored
+      .filter((x) => x.plan && Date.parse(x.hourEnding) > since)
+      .map((x) => ({ at: x.plan!.at ?? x.hourEnding, reach: x.plan!.reach, basis: x.plan!.basis, lowerBound: x.plan!.lowerBound }))
+      .reverse();
+    if (planNow) history.push({ at: planNow.facts.readAt ?? end, reach: planNow.reach, basis: planNow.basis, lowerBound: planNow.lowerBound });
+    const lastRun = await safe(null, () => getDb().get<{ summary: string | null }>('SELECT summary FROM operator_runs WHERE summary IS NOT NULL ORDER BY started_at DESC LIMIT 1', []), missing, 'last operator run');
+    const openEngineering = await safe([], async () => {
+      const { engineeringOutcomes } = await import('./director.ts');
+      return (await engineeringOutcomes({ limit: 5, includeClosed: false })).map((o) => ({ title: o.title.slice(0, 80), status: o.status }));
+    }, missing, 'open engineering');
+    // How many consecutive earlier reports each bottleneck appeared in: the survival count.
+    const persistence: Record<string, number> = {};
+    const alive = new Set<string>();
+    stored.slice(0, 12).forEach((x, i) => {
+      for (const k of x.bottleneckKeys) if (i === 0 || alive.has(k)) persistence[k] = (persistence[k] ?? 0) + 1;
+      alive.clear();
+      for (const k of x.bottleneckKeys) alive.add(k);
+    });
+    const ownerOpportunities = (planNow?.facts.personBlockers ?? []).map((b) => `${b} — the plan's next test waits on you; cost: your time only.`);
+    const partial = [...new Set(missing)];
+    const r = renderReport({
+      hourEnding: end,
+      now,
+      prev,
+      baseline: baselineFrom(stored, end),
+      partial,
+      recoveredAt: opts.recovered ? new Date(nowMs).toISOString() : null,
+      plan: planNow?.facts ?? null,
+      planPrev,
+      planHistory: history,
+      hermesSummary: lastRun?.summary ?? null,
+      openEngineering,
+      persistence,
+      lastKeys: stored[0]?.bottleneckKeys ?? [],
+      ownerOpportunities,
+      unmeasured: [
+        'per-call token counts and inference cost (research jobs record bytes and duration only)',
+        "Hermes' reasoning versus executing time within a run (only whole-run duration is recorded)",
+      ],
+    });
+    return {
+      hourEnding: end,
+      ...r,
+      window: now,
+      plan: planNow ? { at: planNow.facts.readAt, reach: planNow.reach, basis: planNow.basis, lowerBound: planNow.lowerBound, facts: planNow.facts } : null,
+      partial,
+    };
+  } finally {
+    readDeadline = Number.POSITIVE_INFINITY;
+  }
+}
+
+/**
+ * Record the report for one hour, once. Idempotent by the hour's notice id: a report already
+ * recorded is returned, never rebuilt or duplicated.
+ */
+export async function recordHourlyReport(
+  nowMs = Date.now(),
+  opts: { hourEnding?: string; budgetMs?: number; recovered?: boolean } = {},
+): Promise<{ noticeId: string; created: boolean; partial: string[] } | null> {
+  const end = opts.hourEnding ?? reportHour(nowMs).end;
   const noticeId = reportNoticeId(end);
   const { readOwnerNotice, recordOwnerNotice } = await import('../ownerNotices.ts');
-  if (await readOwnerNotice(noticeId)) return { noticeId, created: false };
-  const report = await buildOperationsReport(nowMs);
-  const projectId = (await getDb().get<{ project_id: string | null; target_project_id: string | null }>('SELECT project_id, target_project_id FROM workstreams WHERE id = ?', [REPORT_GOAL_ID]));
-  const anchor = projectId?.target_project_id ?? projectId?.project_id ?? (await getDb().get<{ id: string }>('SELECT id FROM projects ORDER BY created_at LIMIT 1', []))?.id;
+  if (await readOwnerNotice(noticeId)) return { noticeId, created: false, partial: [] };
+  const report = await buildOperationsReport(nowMs, REPORT_GOAL_ID, { ...opts, hourEnding: end });
+  const goal = await getDb().get<{ project_id: string | null; target_project_id: string | null }>('SELECT project_id, target_project_id FROM workstreams WHERE id = ?', [REPORT_GOAL_ID]);
+  const anchor = goal?.target_project_id ?? goal?.project_id ?? (await getDb().get<{ id: string }>('SELECT id FROM projects ORDER BY created_at LIMIT 1', []))?.id;
   if (!anchor) return null;
   const recorded = await recordOwnerNotice({
     kind: 'REPORT',
@@ -485,15 +605,92 @@ export async function recordHourlyReport(nowMs = Date.now()): Promise<{ noticeId
     noticeId,
     subject: report.subject,
     text: report.text,
-    detail: { hourEnding: report.hourEnding, bottleneckKeys: report.bottleneckKeys },
+    detail: { hourEnding: report.hourEnding, bottleneckKeys: report.bottleneckKeys, window: report.window, plan: report.plan, partial: report.partial, recovered: !!opts.recovered },
   });
-  return { noticeId, created: recorded.created };
+  return { noticeId, created: recorded.created, partial: report.partial };
+}
+
+/** How far back a missed hour is recovered. Older gaps stay gaps: their snapshots are gone. */
+export const REPORT_RECOVERY_HOURS = 6;
+/** How long after a failed generation the next attempt may start. */
+export const REPORT_RETRY_MS = 5 * 60_000;
+/** After this long an unsettled generation is treated as hung, and a new one may start. */
+export const REPORT_HUNG_MS = 10 * 60_000;
+/** No report in the first minutes after a boot: the boot's own catch-up work comes first. */
+export const REPORT_BOOT_GRACE_MS = 3 * 60_000;
+
+const reportState = {
+  inFlight: null as Promise<void> | null,
+  inFlightSince: 0,
+  doneHour: '',
+  lastFailureMs: 0,
+  bootMs: Date.now(),
+};
+
+/** For tests: forget this process's scheduling memory. */
+export function resetReportScheduleForTests(bootMs = 0): void {
+  reportState.inFlight = null;
+  reportState.inFlightSince = 0;
+  reportState.doneHour = '';
+  reportState.lastFailureMs = 0;
+  reportState.bootMs = bootMs;
+}
+
+/** The hours in the recovery window with no recorded report, newest first. */
+async function missingHours(nowMs: number): Promise<string[]> {
+  const ends: string[] = [];
+  const latest = Date.parse(reportHour(nowMs).end);
+  for (let i = 0; i < REPORT_RECOVERY_HOURS; i += 1) ends.push(new Date(latest - i * 3_600_000).toISOString());
+  const ids = ends.map(reportNoticeId);
+  const rows = await getDb().all<{ entity_id: string }>(
+    `SELECT DISTINCT entity_id FROM project_events WHERE event_type = 'OWNER_OPERATIONS_REPORT' AND entity_id IN (${ids.map(() => '?').join(', ')})`,
+    ids,
+  );
+  const have = new Set(rows.map((x) => x.entity_id));
+  return ends.filter((e) => !have.has(reportNoticeId(e)));
+}
+
+async function generateDue(nowMs: number, hour: string): Promise<void> {
+  const started = Date.now();
+  const missing = await missingHours(nowMs);
+  // The hour just ended first, then at most one earlier missed hour per pass (newest first), so
+  // a long outage is recovered over a few ticks without one tick reading six windows.
+  for (const end of missing.slice(0, 2)) {
+    const result = await recordHourlyReport(nowMs, { hourEnding: end, recovered: end !== hour });
+    console.info(`operations report: ${result?.created ? 'recorded' : 'already present'} ${reportNoticeId(end)} in ${Date.now() - started} ms${result?.partial.length ? `, PARTIAL (${result.partial.length} read(s) unavailable)` : ''}`);
+  }
+  if (missing.length <= 2) reportState.doneHour = hour;
+}
+
+/**
+ * The scheduler's hook (the Russell loop's `operations-report` pass): start the hour's report
+ * in the background and return at once. It never awaits generation, so neither the tick nor
+ * Hermes waits on it. One generation at a time; a failure is retried after REPORT_RETRY_MS; a
+ * generation unsettled after REPORT_HUNG_MS no longer blocks the next. Idempotent by the hour's
+ * notice id, so a retry or a restart never records an hour twice.
+ */
+export function operationsReportTick(nowMs = Date.now()): 'STARTED' | 'IN_FLIGHT' | 'NOT_DUE' {
+  const hour = reportHour(nowMs).end;
+  if (nowMs - reportState.bootMs < REPORT_BOOT_GRACE_MS) return 'NOT_DUE';
+  if (reportState.inFlight && nowMs - reportState.inFlightSince < REPORT_HUNG_MS) return 'IN_FLIGHT';
+  if (reportState.doneHour === hour) return 'NOT_DUE';
+  if (nowMs - reportState.lastFailureMs < REPORT_RETRY_MS) return 'NOT_DUE';
+  reportState.inFlightSince = nowMs;
+  const run = generateDue(nowMs, hour).catch((error: unknown) => {
+    reportState.lastFailureMs = nowMs; // the attempt's own clock, so the pause is measured on one clock
+    console.warn(`operations report: generation failed, retrying in ${REPORT_RETRY_MS / 60_000} min: ${String((error as Error)?.message ?? error).slice(0, 300)}`);
+  });
+  const mine = run.finally(() => {
+    if (reportState.inFlight === mine) reportState.inFlight = null;
+  });
+  reportState.inFlight = mine;
+  return 'STARTED';
 }
 
 /** The latest report's bottlenecks, for the operator's brief: what to act on first. */
 export async function latestReportBrief(): Promise<string> {
   const row = await getDb().get<{ payload: string }>(
-    `SELECT payload FROM project_events WHERE event_type = 'OWNER_OPERATIONS_REPORT' AND payload LIKE '%"status":"READY"%' ORDER BY created_at DESC LIMIT 1`,
+    `SELECT payload FROM project_events WHERE event_type = 'OWNER_OPERATIONS_REPORT' AND payload LIKE '%"status":"READY"%' ORDER BY entity_id DESC LIMIT 1`,
     [],
   );
   if (!row) return '';

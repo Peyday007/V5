@@ -170,25 +170,7 @@ async function directorTick(nowMs: number): Promise<void> {
   await standingCommission(new Date(nowMs)).catch((error: unknown) => console.warn(`operator standing director: ${String((error as Error)?.message ?? error)}`));
 }
 
-let lastReportHour = '';
-
-/**
- * The owner's hourly operations report (owner, 2026-11-13): once per hour, after the hour ends,
- * whether or not an operator run is in flight. Rows only; the conversation's hourly task reads it.
- */
-async function reportTick(nowMs: number): Promise<void> {
-  const { reportHour, recordHourlyReport } = await import('./operationsReport.ts');
-  const hour = reportHour(nowMs).end;
-  if (hour === lastReportHour || nowMs - processStartedMs < OPERATOR_BOOT_GRACE_MINUTES * 60_000) return;
-  lastReportHour = hour;
-  await recordHourlyReport(nowMs).catch((error: unknown) => {
-    lastReportHour = '';
-    console.warn(`operations report: ${String((error as Error)?.message ?? error)}`);
-  });
-}
-
 export async function operatorTickIfDue(nowMs = Date.now(), env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
-  await reportTick(nowMs);
   if (!inFlight) await directorTick(nowMs);
   const config = operatorConfig(env);
   if (!config || inFlight) return null;

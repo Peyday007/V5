@@ -1423,6 +1423,16 @@ async function tickOnce(owner: string): Promise<TickReport> {
     });
 
     /*
+     * The owner's hourly operations report. Started in the background and never awaited: it
+     * reads under its own budget, records itself once per hour, recovers missed hours and
+     * retries failures, and neither this tick nor Hermes ever waits on it.
+     */
+    await runPass(report, 'operations-report', async () => {
+      const { operationsReportTick } = await import('../operator/operationsReport.ts');
+      operationsReportTick();
+    });
+
+    /*
      * And the self-model, when the last reading has stopped being about this
      * system.
      *

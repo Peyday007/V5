@@ -149,7 +149,7 @@ export interface Bottleneck {
 }
 
 const pct = (x: number | null): string => (x === null ? '—' : `${Math.round(x * 1000) / 10}%`);
-const usd = (cents: number | null): string => (cents === null ? '—' : `$${Math.round(cents / 100).toLocaleString('en-US')}`);
+const usd = (cents: number | null): string => (cents === null ? '—' : Number.isNaN(cents) ? 'n/a' : `$${Math.round(cents / 100).toLocaleString('en-US')}`);
 
 /**
  * The constraints holding a qualifying plan back, strongest first. The plan's own shortfalls are
@@ -363,9 +363,14 @@ export function timeToPlan(history: { at: string; reach: number | null; basis: s
 export interface ReportInput {
   hourEnding: string;
   now: OpsWindow;
-  prev: OpsWindow;
-  /** The last 24 h, for the baseline; per-hour figures are this divided by 24. */
-  day: OpsWindow;
+  /** The hour before, from its own recorded report when there is one; null when nothing measured it. */
+  prev: OpsWindow | null;
+  /** Per-hour averages of the pipeline over the earlier reports recorded in the last day. */
+  baseline: { hours: number; pipeline: OpsWindow['pipeline'] } | null;
+  /** Measurements that could not be read for this report (shown as n/a, never as zero). */
+  partial: string[];
+  /** Set when the report was produced after its hour, recovering a missed one. */
+  recoveredAt?: string | null;
   plan: PlanReadingFacts | null;
   planPrev: PlanReadingFacts | null;
   planHistory: { at: string; reach: number | null; basis: string | null; lowerBound: number | null }[];
@@ -378,15 +383,21 @@ export interface ReportInput {
   unmeasured: string[];
 }
 
-const delta = (a: number, b: number): string => (a === b ? `${a} (=)` : `${a} (${a > b ? '+' : ''}${a - b})`);
-const perHour = (n: number): string => (Math.round((n / 24) * 10) / 10).toString();
+/** A measured number, or n/a when it could not be read — never a zero standing in for one. */
+const num = (n: number | null | undefined): string => (n === null || n === undefined || Number.isNaN(n) ? 'n/a' : String(n));
+const delta = (a: number, b: number | null | undefined): string => {
+  if (Number.isNaN(a)) return 'n/a';
+  if (b === null || b === undefined || Number.isNaN(b)) return `${a} (no previous hour measured)`;
+  return a === b ? `${a} (=)` : `${a} (${a > b ? '+' : ''}${a - b})`;
+};
+const perHour = (n: number | undefined): string => (n === undefined || Number.isNaN(n) ? 'n/a' : (Math.round(n * 10) / 10).toString());
 
-function queueLine(name: string, q: QueueReading, p: QueueReading): string {
-  return `${name}: done ${delta(q.completed, p.completed)}, failed ${q.failed}, running ${q.running}, queued ${q.queued}, blocked ${q.blocked}, oldest wait ${q.oldestWaitMin === null ? '—' : `${Math.round(q.oldestWaitMin)} min`}, average ${q.avgWaitMin === null ? '—' : `${Math.round(q.avgWaitMin)} min`}`;
+function queueLine(name: string, q: QueueReading, p: QueueReading | undefined): string {
+  return `${name}: done ${delta(q.completed, p?.completed)}, failed ${num(q.failed)}, running ${q.running}, queued ${q.queued}, blocked ${q.blocked}, oldest wait ${q.oldestWaitMin === null ? '—' : `${Math.round(q.oldestWaitMin)} min`}, average ${q.avgWaitMin === null ? '—' : `${Math.round(q.avgWaitMin)} min`}`;
 }
 
 export function renderReport(r: ReportInput): { subject: string; text: string; bottleneckKeys: string[] } {
-  const { now, prev, day, plan } = r;
+  const { now, prev, baseline, plan } = r;
   const h = now.hermes;
   const top = bottlenecks(now, plan, r.persistence);
   const scale = scalingDecisions(now, plan);
@@ -397,14 +408,17 @@ export function renderReport(r: ReportInput): { subject: string; text: string; b
     ? `Best plan reach ${pct(r.planPrev!.reach)} → ${pct(plan!.reach)}.`
     : h.outcomesResolved > 0
       ? `${h.outcomesResolved} engineering change(s) measured as improvements.`
-      : now.pipeline.researchCompleted > prev.pipeline.researchCompleted
+      : prev && now.pipeline.researchCompleted > prev.pipeline.researchCompleted
         ? `Research completed ${now.pipeline.researchCompleted} (previous hour ${prev.pipeline.researchCompleted}).`
         : 'None measured this hour.';
   const why = !reachMoved && !accepted
     ? ` Plan reach did not move because ${plan?.binding ? `its binding factor (${plan.binding}) received no new evidence` : (plan?.shortfalls[0] ?? 'no new plan reading was taken')}.`
     : '';
   const L: string[] = [];
-  L.push('BRAIN — $10K PLAN OPERATIONS REPORT', `Hour ending: ${r.hourEnding}`, '');
+  L.push('BRAIN — $10K PLAN OPERATIONS REPORT', `Hour ending: ${r.hourEnding}`);
+  if (r.partial.length) L.push(`PARTIAL REPORT — not readable this hour: ${r.partial.join('; ')}. Those figures show as n/a, never as zero.`);
+  if (r.recoveredAt) L.push(`Recovered at ${r.recoveredAt} after the hour was missed; queue and worker snapshots are as of then.`);
+  L.push('');
   L.push('EXECUTIVE SUMMARY');
   L.push(`Plan readiness: ${accepted ? 'QUALIFYING PLAN EXISTS' : `not qualified — ${plan?.acceptance ?? 'no plan reading'}${plan?.reach !== null && plan?.reach !== undefined ? `, best reach ${pct(plan.reach)} (${plan.reachBasis === 'PROBABILITY' ? 'probability' : 'coverage'}; needs ${pct(plan.required)} lower bound)` : ''}`}`);
   L.push(`Progress this hour: Hermes ${h.runsDone}/${h.runsStarted} runs, ${h.actionsExecuted} actions executed, ${h.outcomesResolved} verified improvement(s); research ${now.queues.research.completed} done; ${now.pipeline.planReadings} plan reading(s).${why}`);
@@ -423,8 +437,9 @@ export function renderReport(r: ReportInput): { subject: string; text: string; b
     L.push(`Next action for acceptance: ${plan.nextTest ? `${plan.nextTest.test} (${plan.nextTest.by}${plan.nextTest.blocker ? `: ${plan.nextTest.blocker}` : ''})` : 'none recorded'}.`);
   } else L.push('No plan reading exists for the goal.');
   const p = now.pipeline;
-  const pp = prev.pipeline;
-  L.push(`Pipeline (this hour, vs previous; 24 h per-hour baseline): discovered ${delta(p.opportunitiesDiscovered, pp.opportunitiesDiscovered)} [${perHour(day.pipeline.opportunitiesDiscovered)}] → qualified ${delta(p.opportunitiesQualified, pp.opportunitiesQualified)} [${perHour(day.pipeline.opportunitiesQualified)}] → research done ${delta(p.researchCompleted, pp.researchCompleted)} [${perHour(day.pipeline.researchCompleted)}] (failed ${p.researchFailed}) → strategies constructed ${delta(p.strategiesConstructed, pp.strategiesConstructed)} → economic evaluations ${delta(p.evaluationsCompleted, pp.evaluationsCompleted)} (failed ${p.evaluationsFailed}) → evidence validated ${delta(p.evidenceValidated, pp.evidenceValidated)} → plans accepted ${p.plansAccepted}.`);
+  const pp = prev?.pipeline;
+  const b = baseline?.pipeline;
+  L.push(`Pipeline (this hour, vs previous; [per-hour baseline over ${baseline ? `${baseline.hours} earlier report(s)` : 'no earlier reports yet'}]): discovered ${delta(p.opportunitiesDiscovered, pp?.opportunitiesDiscovered)} [${perHour(b?.opportunitiesDiscovered)}] → qualified ${delta(p.opportunitiesQualified, pp?.opportunitiesQualified)} [${perHour(b?.opportunitiesQualified)}] → research done ${delta(p.researchCompleted, pp?.researchCompleted)} [${perHour(b?.researchCompleted)}] (failed ${p.researchFailed}) → strategies constructed ${delta(p.strategiesConstructed, pp?.strategiesConstructed)} → economic evaluations ${delta(p.evaluationsCompleted, pp?.evaluationsCompleted)} (failed ${p.evaluationsFailed}) → evidence validated ${delta(p.evidenceValidated, pp?.evidenceValidated)} → plans accepted ${p.plansAccepted}.`);
   L.push('');
   L.push('HERMES PERFORMANCE');
   L.push(`Runs / actions / real outcomes: ${h.runsStarted} started, ${h.runsDone} done, ${h.runsFailed} failed / ${h.actionsExecuted} executed / ${h.outcomesResolved} improved (A thought: ${h.runsDone} runs → B decided: ${h.decisions} (${h.challenged} challenged) → C executed: ${h.actionsExecuted} → D improved: ${h.outcomesResolved}).`);
@@ -438,15 +453,15 @@ export function renderReport(r: ReportInput): { subject: string; text: string; b
   L.push('');
   L.push('PIPELINE PERFORMANCE');
   L.push(`Discovery: ${p.opportunitiesDiscovered} discovered, ${p.opportunitiesQualified} qualified.`);
-  L.push(queueLine('Research', now.queues.research, prev.queues.research));
+  L.push(queueLine('Research', now.queues.research, prev?.queues.research));
   L.push(`Planning: ${p.evaluationsCompleted} evaluation(s), ${p.planReadings} plan reading(s).`);
   L.push(`Validation: ${p.evidenceValidated} evidence item(s) validated; commercial validation: ${p.opportunitiesQualified} opportunit(ies) reached READY or beyond.`);
   L.push(`Execution: ${p.executionStarted} opportunit(ies) moved into execution; collected ${usd(now.money.collectedCents)}; spent ${usd(now.money.spentCents)}.`);
-  L.push(`Customer acquisition: ${delta(p.leadsPrepared, pp.leadsPrepared)} lead(s) prepared, ${delta(p.repliesReceived, pp.repliesReceived)} repl(ies) received.`);
+  L.push(`Customer acquisition: ${delta(p.leadsPrepared, pp?.leadsPrepared)} lead(s) prepared, ${delta(p.repliesReceived, pp?.repliesReceived)} repl(ies) received.`);
   L.push(`Goal-advancing this hour: ${p.evidenceValidated} evidence validated, ${p.plansAccepted} plan(s) accepted, ${usd(now.money.collectedCents)} collected${reachMoved ? ', plan reach moved' : ', plan reach unchanged'}. Activity without goal effect: ${h.runsFailed} failed run(s), ${h.toolCallsFailed} failed tool call(s), ${p.researchFailed} failed research, ${p.evaluationsFailed} failed evaluation(s).`);
-  L.push(queueLine('Factory', now.queues.factoryUnits, prev.queues.factoryUnits) + `; campaigns active ${now.factory.campaignsActive}, blocked ${now.factory.campaignsBlocked}, completed ${now.factory.campaignsCompleted}`);
-  L.push(queueLine('Coding agents', now.queues.coding, prev.queues.coding));
-  L.push(queueLine('Other Brain work', now.queues.otherWork, prev.queues.otherWork));
+  L.push(queueLine('Factory', now.queues.factoryUnits, prev?.queues.factoryUnits) + `; campaigns active ${now.factory.campaignsActive}, blocked ${now.factory.campaignsBlocked}, completed ${now.factory.campaignsCompleted}`);
+  L.push(queueLine('Coding agents', now.queues.coding, prev?.queues.coding));
+  L.push(queueLine('Other Brain work', now.queues.otherWork, prev?.queues.otherWork));
   L.push('');
   L.push('RESOURCE UTILIZATION');
   L.push(`Models: ${Object.entries(now.models.researchJobsByModel).map(([m, v]) => `${m} ${v.done} done/${v.failed} failed${v.avgSeconds !== null ? ` ~${Math.round(v.avgSeconds)}s` : ''}`).join('; ') || 'no research model jobs'}.`);
@@ -507,5 +522,6 @@ export function renderReport(r: ReportInput): { subject: string; text: string; b
     L.push(`Not instrumented (stated, not estimated): ${r.unmeasured.join('; ')}.`);
   }
   const subject = `BRAIN — $10K PLAN OPERATIONS REPORT — ${r.hourEnding}`;
-  return { subject, text: L.join('\n').slice(0, 14_000), bottleneckKeys: top.map((b) => b.key) };
+  // A number that could not be read is NaN through the arithmetic above; it reads as n/a.
+  return { subject, text: L.join('\n').replace(/\bNaN\b/g, 'n/a').slice(0, 14_000), bottleneckKeys: top.map((x) => x.key) };
 }
