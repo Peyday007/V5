@@ -224,6 +224,16 @@ const getPlanTool: McpTool = {
         blocked: brief(plan.blocked),
         nextBestAction: plan.nextBestActionText,
         generatedAt: plan.generatedAt,
+        // What waits to be announced in the owner's conversation (owner, 2026-11-13). Carried here
+        // too because a client lists its tools once when it connects: a conversation connected
+        // before `brain_owner_notices` existed reads the same rows through this tool.
+        ownerNotices: (await (await import('../services/ownerNotices.ts')).undeliveredOwnerNotices([projectId])).map((n) => ({
+          noticeId: n.noticeId,
+          kind: n.kind,
+          readyAt: n.readyAt,
+          subject: n.subject,
+          text: n.text,
+        })),
       },
     };
   },
