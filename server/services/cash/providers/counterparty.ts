@@ -11,10 +11,19 @@
  * disagree.
  *
  * Only what that reading establishes is VERIFIED, with the reading named as the
- * evidence. A provider that is configured but not registered is PENDING; a
- * missing provider is not a counterparty at all until one is chosen. Nothing
- * here asserts a contract, a reservation or a performance the reading did not
- * observe — those stay ABSENT on the ladder and are reported as missing.
+ * evidence — and the reading establishes configuration, nothing more (§18:
+ * configuration is a request; only a real operation is a fact). That the
+ * deployment names a provider is the LISTING. That its key is present and its
+ * capability registered (`state: CONNECTED`) is configuration health, carried
+ * as its own `configuration` fact. It is not the counterparty's willingness,
+ * availability, scope or eligibility: a connected account can be suspended,
+ * rate-limited or refuse the work, and only an operation the provider actually
+ * performed shows otherwise. Those four stay PENDING here, so a connected
+ * provider reads at LISTING — the same distinction between a directory entry
+ * and a willing party that every other counterparty is held to. A missing
+ * provider is not a counterparty at all until one is chosen. Nothing here
+ * asserts a quote, a contract, a reservation or a performance — those stay
+ * ABSENT on the ladder and are reported as missing.
  *
  * No setting's value is read or carried: the facts name capabilities and
  * provider names, never a key.
@@ -28,16 +37,20 @@ const EVIDENCE = 'commercialProviderStatus (server/services/cash/providers/statu
 export function providerCounterparty(line: ProviderLine): Counterparty | null {
   if (!line.provider) return null;
   const connected = line.state === 'CONNECTED';
-  const established = (dimension: string, value: string | null = null): Fact =>
-    connected ? { dimension, status: 'VERIFIED', evidence: `${EVIDENCE}: ${line.capability} CONNECTED`, value } : { dimension, status: 'PENDING', evidence: null, value };
+  // Not established by a configuration reading, whatever its state: a task, never a default.
+  const pending = (dimension: string, value: string | null = null): Fact => ({ dimension, status: 'PENDING', evidence: null, value });
   const facts: Fact[] = [
     // The deployment's own configuration names the provider: that is the listing.
     { dimension: 'listing', status: 'VERIFIED', evidence: `${EVIDENCE}: ${line.area} names ${line.provider}`, value: line.provider },
-    // A registered, configured provider accepts work on the deployment's account.
-    established('willingness'),
-    established('availability'),
-    established('scope', line.capability),
-    established('eligibility', line.capability),
+    // Configuration health, as the reading observed it. Not a ladder dimension.
+    connected
+      ? { dimension: 'configuration', status: 'VERIFIED', evidence: `${EVIDENCE}: ${line.capability} CONNECTED`, value: line.capability }
+      : { dimension: 'configuration', status: 'PENDING', evidence: null, value: line.capability },
+    // Willingness and capacity are the provider's to show by performing, not the deployment's to assert by configuring.
+    pending('willingness'),
+    pending('availability'),
+    pending('scope', line.capability),
+    pending('eligibility', line.capability),
     // A hosted API serves wherever the deployment runs; there is no service area to verify.
     { dimension: 'geography', status: 'NOT_APPLICABLE', evidence: 'a hosted software service has no service area', value: null },
     { dimension: 'providerState', status: 'VERIFIED', evidence: EVIDENCE, value: line.state },
