@@ -263,6 +263,9 @@ describe('the completion response waits for the owner\'s conversation, once per 
     expect(notices[0]!.text.startsWith('$10K / 30-DAY PLAN — COMPLETE')).toBe(true);
     // A conversation whose client listed its tools before the notice tools existed reads the same notice here.
     expect((await tool('brain_get_plan', { project_id: projectId }, reader))['ownerNotices']).toEqual(notices);
+    // And through the cheapest read every client lists, scoped to projects it may read.
+    expect((await tool('brain_list_projects', {}, reader))['ownerNotices']).toEqual(notices.map((n) => ({ projectId, ...n })));
+    expect((await tool('brain_list_projects', {}, worker(['queue:read'])))['ownerNotices']).toEqual([]);
     for (const section of ['THE ACTUAL PLAN', 'HOW THE $3,000 IS ALLOCATED', 'HOW THE PLAN GENERATES $10,000', 'SUPPORTING EVIDENCE AND CONFIDENCE', 'WHAT BRAIN IS EXECUTING NEXT']) {
       expect(notices[0]!.text).toContain(section);
     }

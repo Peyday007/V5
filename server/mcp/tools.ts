@@ -140,6 +140,14 @@ const listProjectsTool: McpTool = {
     const visible = new Set(visibleProjectIds(principal, all.map((project) => project.id)));
     // Filtered, not refused. A worker with one project of five is shown one.
     const mine = all.filter((project) => visible.has(project.id));
+    // The owner's conversation reads its waiting notices here as well (owner, 2026-11-13): this
+    // read is cheap and listed by every client, where brain_get_plan builds a whole plan and a
+    // client connected before brain_owner_notices existed cannot see that tool. Only projects the
+    // principal may read with project:read, the same decision brain_owner_notices makes.
+    const { decideProjectAccess } = await import('../services/identity/policy.ts');
+    const readable = mine.filter((project) => decideProjectAccess(principal, project.id, 'READ', 'project:read').allowed).map((p) => p.id);
+    const { undeliveredOwnerNotices } = await import('../services/ownerNotices.ts');
+    const notices = await undeliveredOwnerNotices(readable);
     return {
       projectId: null,
       value: {
@@ -148,6 +156,7 @@ const listProjectsTool: McpTool = {
           name: project.name,
           slug: project.slug,
         })),
+        ownerNotices: notices.map((n) => ({ projectId: n.projectId, noticeId: n.noticeId, kind: n.kind, readyAt: n.readyAt, subject: n.subject, text: n.text })),
       },
     };
   },
