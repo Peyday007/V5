@@ -9,7 +9,9 @@ import {
   DEFAULT_SCRUTINY,
   challenge,
   detectSharedExposure,
+  reviewOf,
   scrutinyFor,
+  scrutinyInputFor,
   type ActivityFacts,
   type ChallengeInput,
   type ScrutinyInput,
@@ -292,5 +294,91 @@ describe('readWithSafeguard: the one re-evaluation, exported', () => {
     const { problem } = multiWedge();
     expect(() => readWithSafeguard(problem, ['nope'], { key: 'x', kind: 'CONTINGENCY' })).toThrow('No activity');
     expect(() => readWithSafeguard({ ...problem, resourceFailure: {} }, ['w1'], { key: 'x', kind: 'CONTINGENCY' })).toThrow('No failure probability');
+  });
+});
+
+describe('the consequence is derived from a real action, not typed in (repair F2)', () => {
+  const probeProblem = (): PortfolioProblem => ({
+    target: 50, deadlineDays: 10, startingCapital: 1000, worlds: 1000,
+    activities: [act('probe', { capital: 0, cash: [60] })],
+  });
+
+  it('every optimization carries a review derived from its own rows', () => {
+    const r = optimizePortfolio(probeProblem());
+    expect(r.review).toBeDefined();
+    expect(r.review!.action).toEqual(scrutinyInputFor(probeProblem(), r.best!.keys, r.assurance));
+  });
+
+  it('a small reversible probe is tiered basic and is not held for the heavy review', () => {
+    const problem = probeProblem();
+    const r = optimizePortfolio(problem);
+    expect(r.review!.action.potentialLoss).toBe(0);
+    expect(r.review!.action.irreversible).toBe(false);
+    expect(r.review!.scrutiny.tier).toBe('BASIC_INVARIANTS');
+    expect(r.review!.heavyReviewRequired).toBe(false);
+    // The challenge, given no action, reads the derived one and runs invariants only.
+    const report = challenge({ problem, result: r, producedBy: { model: 'brain-portfolio', dataSource: 'research:run-1' } });
+    expect(report.scrutiny.tier).toBe('BASIC_INVARIANTS');
+    expect(report.ran).toEqual(['INVARIANT_CHECK']);
+    expect(report.verdict).toBe('PASS');
+  });
+
+  it('the multi-wedge plan on one supplier derives a deep review: money at risk, shared exposure, portfolio-wide', () => {
+    const { planned } = multiWedge();
+    const r = optimizePortfolio(planned);
+    const a = r.review!.action;
+    expect(a.potentialLoss).toBe(10 * r.best!.keys.length); // capital tied to a supplier that may fail does not come back
+    expect(a.reference).toBe(100);
+    expect(a.irreversible).toBe(true);
+    expect(a.correlatedExposure).toBe(1);
+    expect(a.portfolioWide).toBe(true);
+    expect(r.review!.scrutiny.tier).toBe('DEEP');
+    expect(r.review!.heavyReviewRequired).toBe(true);
+    const { problem } = multiWedge();
+    const report = challenge({ problem, result: r, producedBy: { model: 'brain-portfolio', dataSource: 'research:run-1' }, now: '2026-11-14T00:00:00Z' });
+    expect(report.ran).toContain('CORRELATED_STRESS');
+    expect(report.exposure!.exposures.some((e) => e.id === 'supplier-x')).toBe(true);
+  });
+
+  it('inside one plan, the reversible step proceeds while the irreversible purchase waits for review', () => {
+    const problem: PortfolioProblem = {
+      target: 100, deadlineDays: 10, startingCapital: 1000, worlds: 1000,
+      activities: [act('probe', { capital: 0, cash: [40] }), act('buy', { capital: 0, cash: [90], spend: [80] })],
+    };
+    const r = optimizePortfolio(problem);
+    expect(r.best!.keys.sort()).toEqual(['buy', 'probe']);
+    const steps = new Map(r.review!.steps.map((s) => [s.key, s]));
+    expect(steps.get('probe')!.heavyReviewRequired).toBe(false);
+    expect(steps.get('probe')!.scrutiny.tier).toBe('BASIC_INVARIANTS');
+    expect(steps.get('buy')!.action.irreversible).toBe(true);
+    expect(steps.get('buy')!.heavyReviewRequired).toBe(true);
+    expect(r.review!.heavyReviewRequired).toBe(true);
+  });
+
+  it('a purchase made after proof counts as money put beyond recall', () => {
+    const gated = act('scale', { capital: 0, cash: [10], gated: { gate: 'g1', cash: [200], days: [5] } });
+    const problem: PortfolioProblem = { target: 100, deadlineDays: 10, startingCapital: 1000, worlds: 500, gates: [{ id: 'g1', day: 3, tranche: 10, cost: 300 }], activities: [gated] };
+    const a = scrutinyInputFor(problem, ['scale']);
+    expect(a.potentialLoss).toBe(300);
+    expect(a.irreversible).toBe(true);
+    expect(scrutinyFor(a).tier).toBe('DEEP');
+  });
+
+  it('unknown evidence and unknown money are the worse case, never a free pass', () => {
+    const problem: PortfolioProblem = { target: 50, deadlineDays: 10, startingCapital: 1000, worlds: 500, activities: [act('guess', { capital: 0, cash: [60], justified: false, evidence: undefined })] };
+    const r = optimizePortfolio(problem);
+    expect(r.review!.action.modelUncertainty).toBe(1);
+    expect(r.review!.scrutiny.tier).not.toBe('BASIC_INVARIANTS');
+    const nan = scrutinyInputFor({ ...problem, activities: [act('x', { spend: [Number.NaN] })] }, ['x']);
+    expect(nan.potentialLoss).toBe(Infinity);
+    expect(scrutinyFor(nan).tier).toBe('DEEP');
+  });
+
+  it('a stated action still governs when a caller challenges something other than the recommended commitment', () => {
+    const problem = probeProblem();
+    const r = optimizePortfolio(problem);
+    const report = challenge({ problem, result: r, action: heavy, producedBy: { model: 'm', dataSource: 'd' } });
+    expect(report.scrutiny.tier).toBe('DEEP');
+    expect(reviewOf(problem, r.best!, r.assurance).scrutiny.tier).toBe('BASIC_INVARIANTS');
   });
 });

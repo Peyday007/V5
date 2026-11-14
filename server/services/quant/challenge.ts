@@ -38,107 +38,29 @@ import {
   effectiveSample,
   evaluateCombination,
   readWithSafeguard,
+  reviewOf,
+  scrutinyFor,
   type Activity,
   type Assurance,
   type PortfolioProblem,
   type PortfolioReading,
   type PortfolioResult,
   type Safeguard,
+  type Scrutiny,
+  type ScrutinyInput,
+  type ScrutinyThresholds,
 } from './portfolio.ts';
-
-// ─── Scrutiny ────────────────────────────────────────────────────────────────
-
-export type ScrutinyTier = 'BASIC_INVARIANTS' | 'STANDARD' | 'DEEP';
-
-/** What being wrong about an action would cost. Every field is a number or a flag, never a category. */
-export interface ScrutinyInput {
-  /** Money lost if the conclusion is wrong (major units). */
-  potentialLoss: number;
-  /** What the loss is measured against: capital available, the target, the account balance. */
-  reference: number;
-  /** True when the action cannot be undone once taken (an obligation signed, money sent). */
-  irreversible: boolean;
-  /** 0–1: how unsure the model behind the conclusion is (1 = no calibration at all). */
-  modelUncertainty: number;
-  /** 0–1: share of the plan's value exposed to one shared supplier, channel, marketplace or payment rail. */
-  correlatedExposure: number;
-  /** 0–1: how much the decision would change if the conclusion were wrong (e.g. EVPPI over the decision's value). */
-  decisionImpact: number;
-  /** True when the conclusion is an assumption every plan in the portfolio rests on. */
-  portfolioWide?: boolean;
-}
-
-/** The thresholds a tier is chosen by. Defaults are deliberate, and a caller may tighten them. */
-export interface ScrutinyThresholds {
-  /** At or under this share of the reference, a reversible action is small. */
-  basicLossShare: number;
-  /** At or over this share, the review is deep whether or not the action is reversible. */
-  deepLossShare: number;
-  /** An irreversible action at or over this share is deep. */
-  deepIrreversibleLossShare: number;
-  /** Above this, model uncertainty alone rules out basic invariants. */
-  basicUncertainty: number;
-  /** At or above this, model uncertainty alone makes the review deep when the loss is not small. */
-  deepUncertainty: number;
-  basicExposure: number;
-  deepExposure: number;
-  basicImpact: number;
-  deepImpact: number;
-}
-
-export const DEFAULT_SCRUTINY: ScrutinyThresholds = {
-  basicLossShare: 0.02,
-  deepLossShare: 0.25,
-  deepIrreversibleLossShare: 0.05,
-  basicUncertainty: 0.5,
-  deepUncertainty: 0.8,
-  basicExposure: 0.25,
-  deepExposure: 0.5,
-  basicImpact: 0.1,
-  deepImpact: 0.5,
-};
-
-export interface Scrutiny {
-  tier: ScrutinyTier;
-  /** Why this tier, one line per factor that decided it. */
-  because: string[];
-  lossShare: number;
-}
 
 const clamp01 = (x: number) => (Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : 1);
 
-/**
- * Choose how hard to look. A small reversible action with a confident model,
- * little shared exposure and little bearing on the decision needs only basic
- * invariants; a large or irreversible obligation, a portfolio-wide assumption,
- * a heavily shared exposure or a decision that turns on the conclusion gets
- * the deep review. Anything unknown is read as the worse case: a non-finite
- * number is treated as maximal, never as zero.
- */
-export function scrutinyFor(action: ScrutinyInput, thresholds: ScrutinyThresholds = DEFAULT_SCRUTINY): Scrutiny {
-  const t = thresholds;
-  const loss = Number.isFinite(action.potentialLoss) ? Math.max(0, action.potentialLoss) : Infinity;
-  const lossShare = action.reference > 0 && Number.isFinite(action.reference) ? loss / action.reference : loss > 0 ? Infinity : 0;
-  const uncertainty = clamp01(action.modelUncertainty);
-  const exposure = clamp01(action.correlatedExposure);
-  const impact = clamp01(action.decisionImpact);
-  const deep: string[] = [];
-  if (action.portfolioWide) deep.push('a portfolio-wide assumption: every plan rests on it');
-  if (lossShare >= t.deepLossShare) deep.push(`potential loss is ${pct(lossShare)} of the reference (deep at ${pct(t.deepLossShare)})`);
-  if (action.irreversible && lossShare >= t.deepIrreversibleLossShare) deep.push(`irreversible, and the loss is ${pct(lossShare)} of the reference`);
-  if (exposure >= t.deepExposure) deep.push(`${pct(exposure)} of the value shares one dependency`);
-  if (impact >= t.deepImpact) deep.push(`the decision turns on it (impact ${pct(impact)})`);
-  if (uncertainty >= t.deepUncertainty && lossShare > t.basicLossShare) deep.push(`model uncertainty ${pct(uncertainty)} on a loss that is not small`);
-  if (deep.length > 0) return { tier: 'DEEP', because: deep, lossShare };
-  const notBasic: string[] = [];
-  if (action.irreversible) notBasic.push('irreversible');
-  if (lossShare > t.basicLossShare) notBasic.push(`potential loss is ${pct(lossShare)} of the reference (basic at or under ${pct(t.basicLossShare)})`);
-  if (uncertainty > t.basicUncertainty) notBasic.push(`model uncertainty ${pct(uncertainty)}`);
-  if (exposure > t.basicExposure) notBasic.push(`${pct(exposure)} shared exposure`);
-  if (impact > t.basicImpact) notBasic.push(`decision impact ${pct(impact)}`);
-  if (notBasic.length > 0) return { tier: 'STANDARD', because: notBasic, lossShare };
-  return { tier: 'BASIC_INVARIANTS', because: ['small, reversible, confident, unshared and with little bearing on the decision: basic invariants only'], lossShare };
-}
+// ─── Scrutiny ────────────────────────────────────────────────────────────────
+//
+// The scrutiny rule lives with the quant owner (`portfolio.ts`), so every real
+// optimization derives the action's consequence from its own rows and carries
+// the tier (`PortfolioResult.review`). It is re-exported here unchanged.
+
+export { DEFAULT_SCRUTINY, scrutinyFor, scrutinyInputFor, reviewOf } from './portfolio.ts';
+export type { Scrutiny, ScrutinyInput, ScrutinyThresholds, ScrutinyTier, ConsequenceReview } from './portfolio.ts';
 
 // ─── Findings ────────────────────────────────────────────────────────────────
 
@@ -245,7 +167,13 @@ export interface ChallengeInput {
   problem: PortfolioProblem;
   /** The optimizer's own answer for that problem. */
   result: PortfolioResult;
-  action: ScrutinyInput;
+  /**
+   * The consequence of acting on the conclusion. Omitted, it is the one the
+   * optimizer derived from the problem's own rows (`result.review`), so a real
+   * action is tiered by what it actually puts at risk; a caller states it only
+   * to challenge something other than committing the recommended combination.
+   */
+  action?: ScrutinyInput;
   thresholds?: ScrutinyThresholds;
   /** Who produced the conclusion, so a check by the same model or over the same data is not counted. */
   producedBy: { model: string; dataSource: string };
@@ -588,7 +516,9 @@ function sensitivity(problem: PortfolioProblem, best: PortfolioReading, facts: R
 export function challenge(input: ChallengeInput): ChallengeReport {
   const { problem, result } = input;
   const facts = input.facts ?? {};
-  const scrutiny = scrutinyFor(input.action, input.thresholds);
+  const action = input.action ?? result.review?.action ?? (result.best ? reviewOf(problem, result.best, result.assurance, input.thresholds).action : null);
+  // No best and no stated action: nothing is committed, but an unknown consequence is the worse case, never a free pass.
+  const scrutiny = scrutinyFor(action ?? { potentialLoss: Infinity, reference: 0, irreversible: true, modelUncertainty: 1, correlatedExposure: 1, decisionImpact: 1 }, input.thresholds);
   const ran: ChallengeMethod[] = ['INVARIANT_CHECK'];
   const findings = invariants(problem, result);
   const best = result.best;
