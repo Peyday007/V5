@@ -94,13 +94,13 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | S-6 | reasoning | no move can add a constructed arrangement outside the 12 | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-7 | method learning | learns from unchallenged and critic-flagged reach | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-8 | transfer of methods | learned methods keyed by opening ids; don't transfer across goals | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
-| S-9 | learning stats | repeat reads of one goal counted as independent | MINOR | — | DISCOVERED |
-| S-10 | learning | stance yield computed, never fed back | MAJOR | search-selection | DISCOVERED (not repaired; stance yield still unused) |
-| S-11 | invention | model-invented methods only retune 4 operations on held openings | MAJOR | search-selection | PARTIAL (INCLUDE move added; new-design invention not yet) |
+| S-9 | learning stats | repeat reads of one goal counted as independent | MINOR | adaptive-search | REPAIRING |
+| S-10 | learning | stance yield computed, never fed back | MAJOR | adaptive-search | REPAIRING |
+| S-11 | invention | model-invented methods only retune 4 operations on held openings | MAJOR | search-selection | PARTIAL — REPAIRING (invented designs as candidates) |
 | S-12 | transfer | transfers model no material differences; precedent bonus outranks gated evidence | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-13 | correlation | = Q2-10 | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 | S-15 | wiring | `bestReachCents` never reaches construction (10-min cache) | MINOR | arrangement-library | REPAIRING |
-| S-16 | screening | factorial screen drops levels that matter only in combination | MINOR | — | DISCOVERED |
+| S-16 | screening | factorial screen drops levels that matter only in combination | MINOR | adaptive-search | REPAIRING |
 | S-17 | traceability | nothing records what was cut | MINOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | Q2-1 | acceptance | chain link and assurance accept mutually exclusive input forms → EVIDENCED_PORTFOLIO unreachable (repro: 3 sized comparables → basis PROBABILITY, still CANDIDATE_ONLY) | BLOCKING | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 | Q2-2 | statistics | "sample" = number of studies ≥ 20; Wilson bound double-counts (`quant/portfolio.ts:1027,1061`) | BLOCKING | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
