@@ -45,6 +45,7 @@ export function drawerRows(fact: WorldFact, ctx: TruthContext, detail: RecordDet
     ['Queue', known(detail.queue)],
     ['Inputs', known(detail.inputs)],
     ['Output', known(detail.output)],
+    ['Progress', known(fact.progress)],
     ['Blocker', known(fact.blocker)],
     ['Economic consequence', known(detail.economicConsequence)],
     ['Next action', known(fact.nextAction)],

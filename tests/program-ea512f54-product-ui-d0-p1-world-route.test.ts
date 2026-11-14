@@ -19,7 +19,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { leaseIsLive, campaignState, researchState, opportunityState, invoiceState, WORLD_STATES } from '../server/routes/world.ts';
+import { leaseIsLive, campaignState, researchState, opportunityState, invoiceState, WORLD_STATES, goalWorldState, goalProgress } from '../server/routes/world.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = pickPort(8900, 100);
@@ -143,6 +143,10 @@ function seed(): void {
     db.prepare(
       `INSERT INTO workstreams (id, project_id, title, intent, purpose, paused_at, paused_reason, created_at, updated_at) VALUES ('wst_x', ?, 'A paused goal', 'i', 'CAPABILITY', ?, 'owner paused it', ?, ?)`,
     ).run(project, now, now, now);
+    // An open goal nobody has pointed at any work: the goal model says so, and the world must too.
+    db.prepare(
+      `INSERT INTO workstreams (id, project_id, title, intent, purpose, created_at, updated_at) VALUES ('wst_open', ?, 'An open goal', 'i', 'CAPABILITY', ?, ?)`,
+    ).run(project, now, now);
     const bin = db.prepare(
       `INSERT INTO bins (id, project_id, kind, title, objective, completion_contract, state, held_by_workstream_id, held_reason, created_by_type, created_at, updated_at)
        VALUES (?, ?, 'FACTORY_UNITS', ?, 'o', 'FACTORY_UNITS_V1', ?, ?, ?, 'HUMAN', ?, ?)`,
@@ -346,5 +350,57 @@ describe('state mappings, one record word at a time', () => {
     expect(invoiceState('ISSUED')).toBe('WAITING');
     expect(invoiceState('UNCERTAIN')).toBe('UNKNOWN');
     expect(invoiceState('PAID')).toBe('SUCCEEDED');
+  });
+});
+
+describe('a goal reads its state and progress from the goal model', () => {
+  it('an open goal is not UNKNOWN with progress missing; it carries the goal model\'s derivation', async () => {
+    const { body } = await call('GET', WORLD(), { cookie: memberCookie });
+    const goals = body.facts.filter((f: any) => f.kind === 'GOAL');
+    expect(goals.map((g: any) => g.recordId)).toEqual(expect.arrayContaining(['wst_x', 'wst_open']));
+    for (const g of goals) {
+      expect(g.missing).not.toContain('progress (read at the goal record)');
+      expect(typeof g.progress).toBe('string');
+      expect(g.progress.length).toBeGreaterThan(0);
+    }
+    const open = goals.find((g: any) => g.recordId === 'wst_open');
+    const fromModel = await call('GET', '/api/goals/wst_open', { cookie: memberCookie });
+    expect(fromModel.status).toBe(200);
+    expect(open.recordState.startsWith(fromModel.body.goal.lifecycle)).toBe(true);
+    expect(open.progress).toContain(fromModel.body.goal.lifecycleReason);
+    expect(open.nextAction).toBe(fromModel.body.goal.next.action);
+    expect(open.state).not.toBe('UNKNOWN');
+    const paused = goals.find((g: any) => g.recordId === 'wst_x');
+    expect(paused.state).toBe('BLOCKED');
+    expect(paused.blocker).toContain('owner paused it');
+  });
+
+  it('maps every derived goal reading to a state that is true of it', () => {
+    const base = {
+      lifecycle: 'ACTIVE' as const,
+      lifecycleReason: 'r',
+      state: 'UNKNOWN' as const,
+      stateEvidence: 'e',
+      waiting: { kind: 'NOTHING' as const, detail: '', since: null },
+      work: [] as any[],
+      blockers: [] as any[],
+      decisions: [] as any[],
+      target: null,
+      pausedReason: null,
+      cancelledReason: null,
+    };
+    expect(goalWorldState({ ...base, lifecycle: 'COMPLETE' }).state).toBe('SUCCEEDED');
+    expect(goalWorldState({ ...base, lifecycle: 'CANCELLED' }).state).toBe('IDLE');
+    expect(goalWorldState({ ...base, lifecycle: 'PAUSED', pausedReason: 'x' })).toEqual({ state: 'BLOCKED', blocker: 'paused: x' });
+    expect(goalWorldState({ ...base, waiting: { kind: 'PERSON', detail: 'answer it', since: null } }).state).toBe('NEEDS_APPROVAL');
+    expect(goalWorldState({ ...base, blockers: [{ text: 'b' }] as any[] }).state).toBe('BLOCKED');
+    // Queued work is waiting; only a worker holding a live lease makes a goal WORKING.
+    expect(goalWorldState({ ...base, state: 'IN_PROGRESS', work: [{ workerOnIt: false }] as any[] }).state).toBe('WAITING');
+    expect(goalWorldState({ ...base, state: 'IN_PROGRESS', work: [{ workerOnIt: true }] as any[] }).state).toBe('WORKING');
+    expect(goalWorldState({ ...base, state: 'VERIFIED_LIVE' }).state).toBe('SUCCEEDED');
+    expect(goalWorldState({ ...base, waiting: { kind: 'NOTHING_LINKED', detail: '', since: null } }).state).toBe('IDLE');
+    expect(goalWorldState({ ...base, waiting: { kind: 'CAPACITY', detail: '', since: null } }).state).toBe('WAITING');
+    expect(goalWorldState(base).state).toBe('UNKNOWN');
+    expect(goalProgress({ ...base, state: 'IN_PROGRESS' })).toContain('register IN_PROGRESS (e)');
   });
 });
