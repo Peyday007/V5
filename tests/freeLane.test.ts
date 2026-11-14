@@ -716,6 +716,13 @@ describe('the free research lane', () => {
     expect(laneFor('Lane 1', [{ id: 'lane_1', description: 'a' }, { id: 'lane-1', description: 'b' }])).toBeNull();
     expect(laneFor('Lane 3', lanes)).toBeNull();
     expect(laneFor('', lanes)).toBeNull();
+    // A two-part label names a lane through its first part; the second only confirms it.
+    expect(laneFor('Lane 3 (primary sources)', lanes)).toBeNull();
+    expect(laneFor('Lane 3: an official wage statistic', lanes)).toBeNull();
+    expect(laneFor('primary sources (L2)', lanes)).toBe('L2');
+    expect(laneFor('L2 - primary sources', lanes)).toBe('L2');
+    expect(laneFor('Lane 1: primary sources', lanes)).toBeNull();
+    expect(laneFor('Lane 1: wage figures', lanes)).toBe('lane_1');
   });
 
   it('submits cited claims from a top-level array behind a <think> block, where it once offered none', async () => {
