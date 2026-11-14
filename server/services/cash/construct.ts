@@ -297,6 +297,18 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
       measures: `money tied up on "${one.title.slice(0, 60)}"`,
     }));
   const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables' } : null;
+  /*
+   * The same inputs construct the same arrangements, so a plan re-read whose map, openings,
+   * facts and limits did not move reuses the last construction instead of composing up to
+   * MAX_CONSTRUCTIONS designs again (production, 2026-11-14: ~11 s of quant CPU a minute on
+   * the main thread, most of it identical re-construction, and the garbage it left behind).
+   * Keyed by the day, as the reconstructions' recency is.
+   */
+  const memoKey = createHash('sha256')
+    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]) }))
+    .digest('hex');
+  const held = constructionMemo.get(memoKey);
+  if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) return structuredClone(held.result);
   const designs = allDesigns(STRUCTURE_KEYS);
   const ctx = { priced, tiedUp, input, limits, targets, exclusions, now };
 
@@ -345,7 +357,19 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
     }
   }
   out.push(...reverseArrangements({ ...ctx, designs, capability }));
-  return rank(out, limits, targets);
+  const ranked = rank(out, limits, targets);
+  constructionMemo.set(memoKey, { at: Date.now(), result: structuredClone(ranked) });
+  while (constructionMemo.size > CONSTRUCTION_MEMO_MAX) constructionMemo.delete(constructionMemo.keys().next().value!);
+  return ranked;
+}
+
+/** How long an unchanged construction is reused, and how many distinct ones are held. */
+export const CONSTRUCTION_MEMO_MS = 30 * 60_000;
+const CONSTRUCTION_MEMO_MAX = 8;
+const constructionMemo = new Map<string, { at: number; result: ConstructedArrangement[] }>();
+/** For tests: forget held constructions. */
+export function clearConstructionMemo(): void {
+  constructionMemo.clear();
 }
 
 /**
