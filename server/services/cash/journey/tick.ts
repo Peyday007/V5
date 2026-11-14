@@ -7,6 +7,9 @@
  * between a receipt and its record, a restart mid-journey, and the deals
  * already stranded. Each step is idempotent by a row, never by a flag:
  *
+ *   0. a buyer's acceptance of a sent offer becomes its agreement, on the
+ *      offer's own terms, or a need naming the term it did not state
+ *      (`acceptance.ts`);
  *   1. an agreement's ledger entries exist (and its release, if released);
  *   2. (invoices are issued and read back by `invoicing.ts`, just before this);
  *   3. each agreement's obligation advances (`fulfillment.ts`): its work is
@@ -44,6 +47,7 @@ import {
   opportunitiesInJourney,
 } from '../../../repos/cashJourney.ts';
 import { ensureAgreementLedger } from './deal.ts';
+import { agreeAcceptances } from './acceptance.ts';
 import { agreementAnswering } from '../../../domain/cashJourney.ts';
 import { advanceFulfillment, moveToDelivering, type FulfillmentPass } from './fulfillment.ts';
 import { collectable, dealPosition } from './position.ts';
@@ -58,6 +62,8 @@ const BRAIN = 'BRAIN';
 export const RESPONSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface JourneyTickReport {
+  /** Acceptances recorded as agreements this pass, and those that raised a need instead. */
+  acceptances: { agreed: number; needs: number };
   ledgerChecked: number;
   /** Agreements whose ledger entry could not be written, with why. Never silent. */
   ledgerRefused: { agreementId: string; reason: string }[];
@@ -77,6 +83,7 @@ export async function advanceJourney(
   now: Date = new Date(),
 ): Promise<JourneyTickReport> {
   const report: JourneyTickReport = {
+    acceptances: { agreed: 0, needs: 0 },
     ledgerChecked: 0,
     ledgerRefused: [],
     fulfillment: { workCreated: [], needsRaised: [], needsSettled: [], refundsSettled: [] },
@@ -89,6 +96,14 @@ export async function advanceJourney(
   };
   const mode = await getCashMode(projectId);
   if (!mode) return report;
+
+  // 0. An acceptance answering a sent offer is the agreement on that offer's
+  // terms; recordAgreement writes its PIPELINE_AGREED in the same transaction.
+  for (const listed of await listOpportunities({ projectId, states: ['EXECUTING', 'DELIVERING'] })) {
+    const pass = await agreeAcceptances(listed, mode.currency);
+    report.acceptances.agreed += pass.agreed.length;
+    report.acceptances.needs += pass.needs.length;
+  }
 
   // 1. The ledger counts every agreement exactly once, and every release.
   for (const agreement of await agreementsInProject(projectId)) {
