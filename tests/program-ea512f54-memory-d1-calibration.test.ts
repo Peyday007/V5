@@ -14,12 +14,16 @@ import {
   classifyMiss,
   goalPredictionRows,
   lessonOf,
+  factoryFixOf,
   methodCorrections,
+  owningGoal,
   productionCalibrationPorts,
   reconcileCalibration,
   type CalibrationPorts,
+  type FactoryHandoff,
+  type MethodCorrection,
 } from '../server/services/goals/calibration.ts';
-import { listOperatorLearnings } from '../server/repos/operator.ts';
+import { listOperatorLearnings, recordOperatorLearning } from '../server/repos/operator.ts';
 import { freshProject } from './helpers.ts';
 
 const PROJECT = 'prj_a';
@@ -151,19 +155,32 @@ describe('goal plan predictions on the ledger shape', () => {
   });
 });
 
-function memoryPorts(input: { ledger: ReturnType<typeof systematic>; goals: { goalId: string; projectId: string }[] }) {
-  const written: { goalId: string; lesson: string; evidence: string }[] = [];
+function memoryPorts(input: {
+  ledger: ReturnType<typeof systematic>;
+  goals: { goalId: string; projectId: string }[];
+  factory?: (c: MethodCorrection) => Promise<FactoryHandoff>;
+}) {
+  const written: { goalId: string | null; lesson: string; evidence: string }[] = [];
+  const handed: MethodCorrection[] = [];
+  const ledgerCalls: string[] = [];
   const ports: CalibrationPorts = {
     goals: async () => input.goals,
-    ledger: async () => ({ predictions: input.ledger.predictions, exposures: [], outcomes: input.ledger.outcomes }),
+    ledger: async (projectId) => {
+      ledgerCalls.push(projectId);
+      return { predictions: input.ledger.predictions, exposures: [], outcomes: input.ledger.outcomes };
+    },
     goalRows: async () => ({ readings: [], outcomes: [] }),
-    recordedKeys: async (goalId) =>
-      new Set(written.filter((w) => w.goalId === goalId).map((w) => w.evidence.slice('calibration-key='.length, 'calibration-key='.length + 32))),
+    recordedKeys: async (projectId) =>
+      new Set(written.filter((w) => w.evidence.includes(`; project=${projectId};`)).map((w) => w.evidence.slice('calibration-key='.length, 'calibration-key='.length + 32))),
     record: async (goalId, lesson, evidence) => {
       written.push({ goalId, lesson, evidence });
     },
+    toFactory: async (c) => {
+      handed.push(c);
+      return input.factory ? input.factory(c) : { ok: true, reason: 'started', changeRequestId: `fcr_${handed.length}`, campaignId: `fcp_${handed.length}` };
+    },
   };
-  return { ports, written };
+  return { ports, written, handed, ledgerCalls };
 }
 
 describe('recording corrections', () => {
@@ -210,5 +227,102 @@ describe('recording corrections', () => {
     const second = await reconcileCalibration(ports);
     expect(second[0]!.recorded).toEqual([]);
     expect(await listOperatorLearnings({ goalId: 'wst_db', limit: 50 })).toHaveLength(stored.length);
+  });
+});
+
+describe('a project ledger is judged once, however many goals share it (repair F5)', () => {
+  it('two goals on one project: one judgment, one lesson per correction, attached to the project alone', async () => {
+    const { ports, written, ledgerCalls } = memoryPorts({
+      ledger: systematic('CAPACITY'),
+      goals: [
+        { goalId: 'wst_b', projectId: PROJECT },
+        { goalId: 'wst_a', projectId: PROJECT },
+      ],
+    });
+    const report = await reconcileCalibration(ports);
+    expect(report).toHaveLength(1);
+    expect(report[0]!.goalIds).toEqual(['wst_a', 'wst_b']);
+    expect(ledgerCalls).toEqual([PROJECT]);
+    const keys = written.map((w) => w.evidence.slice('calibration-key='.length, 'calibration-key='.length + 32));
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(written.length).toBe(report[0]!.recorded.length);
+    expect(written.length).toBeGreaterThan(0);
+    // The lesson is the project's: it is not copied onto either goal.
+    expect(written.every((w) => w.goalId === null)).toBe(true);
+    const again = await reconcileCalibration(ports);
+    expect(again[0]!.recorded).toEqual([]);
+    expect(written).toHaveLength(keys.length);
+  });
+
+  it('the correction key is the project\'s, not the goal\'s', () => {
+    const reading = assessModelLearning({ ...systematic('TIMING'), exposures: [] });
+    const one = methodCorrections(reading, { projectId: PROJECT, goalIds: ['wst_1'] });
+    const other = methodCorrections(reading, { projectId: PROJECT, goalIds: ['wst_2', 'wst_3'] });
+    expect(one.map((c) => c.key)).toEqual(other.map((c) => c.key));
+    expect(one.every((c) => c.goalId === 'wst_1')).toBe(true);
+    expect(other.every((c) => c.goalId === null)).toBe(true);
+  });
+
+  it('a lesson resting only on one goal\'s own plan predictions belongs to that goal', () => {
+    expect(owningGoal([`goal:${PROJECT}:wst_2`, `goal:${PROJECT}:wst_2`], PROJECT, ['wst_1', 'wst_2'])).toBe('wst_2');
+    expect(owningGoal([`goal:${PROJECT}:wst_2`, `cash:${PROJECT}:c1`], PROJECT, ['wst_1', 'wst_2'])).toBeNull();
+    expect(owningGoal([`goal:${PROJECT}:wst_9`], PROJECT, ['wst_1', 'wst_2'])).toBeNull();
+    expect(owningGoal([`cash:${PROJECT}:c1`], PROJECT, ['wst_1'])).toBe('wst_1');
+  });
+});
+
+describe('a software correction is handed to Factory (repair F5)', () => {
+  it('hands it once, through the Factory port, and the lesson names the change request', async () => {
+    const { ports, written, handed } = memoryPorts({
+      ledger: systematic('MODEL_IMPLEMENTATION'),
+      goals: [
+        { goalId: 'wst_a', projectId: PROJECT },
+        { goalId: 'wst_b', projectId: PROJECT },
+      ],
+    });
+    const report = await reconcileCalibration(ports);
+    const software = handed.filter((c) => c.cause === 'MODEL_IMPLEMENTATION');
+    expect(software).toHaveLength(1);
+    expect(handed.every((c) => c.needsFactory)).toBe(true);
+    expect(report[0]!.factory).toEqual(handed.map((c, i) => ({ key: c.key, ok: true, reason: 'started', changeRequestId: `fcr_${i + 1}` })));
+    const lesson = written.find((w) => w.lesson.includes('(MODEL_IMPLEMENTATION)'))!.lesson;
+    expect(lesson).toMatch(/^\[FACTORY\]/);
+    expect(lesson).toContain('handed to Factory (change request fcr_1, campaign fcp_1)');
+    await reconcileCalibration(ports);
+    expect(handed).toHaveLength(software.length);
+  });
+
+  it('a Factory refusal is recorded with its reason, never thrown', async () => {
+    const { ports, written } = memoryPorts({
+      ledger: systematic('MODEL_IMPLEMENTATION'),
+      goals: [{ goalId: 'wst_a', projectId: PROJECT }],
+      factory: async () => {
+        throw new Error('improvement loop is off');
+      },
+    });
+    const report = await reconcileCalibration(ports);
+    expect(report[0]!.factory[0]).toMatchObject({ ok: false, reason: 'improvement loop is off' });
+    expect(written.find((w) => w.lesson.includes('(MODEL_IMPLEMENTATION)'))!.lesson).toContain('Factory did not take it: improvement loop is off');
+  });
+
+  it('the defect handed over is deterministic and names the model that owns the bucket', () => {
+    const reading = assessModelLearning({ ...systematic('MODEL_IMPLEMENTATION'), exposures: [] });
+    const [model] = methodCorrections(reading, { projectId: PROJECT, goalIds: ['wst_1'] }).filter((c) => c.cause === 'MODEL_IMPLEMENTATION');
+    const fix = factoryFixOf(model!);
+    expect(fix).toEqual(factoryFixOf(model!));
+    expect(fix.ownerPaths).toEqual(['server/services/quant/forecast.ts', 'server/services/quant/ledger.ts']);
+    expect(fix.problem).toContain(`calibration-key=${model!.key}`);
+    expect(fix.problem.length).toBeGreaterThanOrEqual(40);
+    expect(fix.acceptance.length).toBeGreaterThanOrEqual(20);
+    expect(factoryFixOf({ ...model!, comparableKeys: ['goal-plan:EVIDENCED_PORTFOLIO'] }).ownerPaths).toEqual(['server/services/goals/plan.ts']);
+  });
+
+  it('production keys are read per project, whichever goal they were attached to', async () => {
+    await freshProject();
+    const production = await productionCalibrationPorts();
+    await recordOperatorLearning({ goalId: null, runId: null, lesson: 'x', evidence: `calibration-key=${'a'.repeat(32)}; project=${PROJECT}; supporting 0: ; disconfirming 0: ` });
+    await recordOperatorLearning({ goalId: 'wst_other', runId: null, lesson: 'x', evidence: `calibration-key=${'b'.repeat(32)}; project=${PROJECT}; supporting 0: ; disconfirming 0: ` });
+    await recordOperatorLearning({ goalId: null, runId: null, lesson: 'x', evidence: `calibration-key=${'c'.repeat(32)}; project=${PROJECT}x; supporting 0: ; disconfirming 0: ` });
+    expect(await production.recordedKeys(PROJECT)).toEqual(new Set(['a'.repeat(32), 'b'.repeat(32)]));
   });
 });
