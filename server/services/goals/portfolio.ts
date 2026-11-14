@@ -38,7 +38,7 @@ import { optimizePortfolio, type Activity, type PortfolioReading } from '../quan
 import { makeRng } from '../scenario/random.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { assessOutreachRecord, type EvidenceAssessment, type OutreachCampaignRecord } from './evidenceAuthority.ts';
-import { buildStreams, type StreamWorlds, type StreamsReading } from './streams.ts';
+import { buildStreams, measuredGroupCorrelations, type ObservedOutcome, type StreamWorlds, type StreamsReading } from './streams.ts';
 
 export const PORTFOLIO_WORLDS = 2_000;
 /** The shares of the shared outreach an opening may be given. */
@@ -49,6 +49,13 @@ export const OUTREACH_SHARES = [0.25, 0.5, 1] as const;
  * hits every line that shares the mailbox. It is stated on the reading.
  */
 export const SHARED_OUTREACH_CORRELATION = 0.5;
+/**
+ * The coefficient a risk group nobody named takes: the optimizer's own default
+ * (`quant/portfolio.ts`). Like the shared-outreach figure it is a declared
+ * assumption, used only where the ledger has measured no pair in the group.
+ */
+export const UNNAMED_RISK_GROUP_CORRELATION = 0.5;
+const SHARED_OUTREACH_GROUP = 'shared-outreach';
 /**
  * Prospects one online operation can contact a day when nobody has said: one
  * to two warmed mailboxes. Bounds only — the reading cannot be a probability
@@ -136,7 +143,12 @@ export interface GoalPortfolio {
     perArrangement: number | null;
     spendCeiling: number | null;
     contactsPerDay: { value: number | null; low: number; high: number; source: string };
+    /** The shared-outreach coefficient the optimizer used. */
     correlation: number;
+    /** MEASURED when the ledger's co-movement of shared-outreach pairs set it; DECLARED otherwise. */
+    correlationBasis?: 'MEASURED' | 'DECLARED';
+    /** Every risk group's coefficient as the optimizer used it, and where it came from. */
+    riskGroups?: Array<{ riskGroup: string; coefficient: number; source: 'MEASURED' | 'DECLARED'; measuredPairs: number }>;
   };
   /** What keeps the reading from being a probability, or the target from being reached. */
   missing: string[];
@@ -405,6 +417,13 @@ export function evaluateGoalPortfolio(input: {
    */
   contactsPerDay?: ModelInput;
   committed?: { capital: number; spend: number } | null;
+  /**
+   * Buyer money each opening has actually taken, dated, from the ledger. Where
+   * two openings in one risk group cover enough of the same weeks, their
+   * measured co-movement sets the group's coefficient for the optimizer and
+   * each pair's correlation on the streams, in place of the declared figure.
+   */
+  observedOutcomes?: readonly ObservedOutcome[];
   /** Internal: apply the measured record as binding regardless of its authority (the as-is floor). */
   forceMeasured?: boolean;
   worlds?: number;
@@ -515,6 +534,25 @@ export function evaluateGoalPortfolio(input: {
       });
     }
   }
+  /*
+   * Each risk group's coefficient: measured from the ledger where two of its
+   * openings have co-moved over enough shared weeks, declared otherwise. The
+   * optimizer is a factor model and takes [0, 0.95]; a measured negative mean
+   * enters as 0 (no shared factor), never as a hedge it cannot represent.
+   */
+  const groupOf = new Map<string, string | null>();
+  for (const one of modelled) groupOf.set(one.opportunity.id, one.channel ? one.channel.riskGroup : one.repeatable && one.agreedValue === 0 ? SHARED_OUTREACH_GROUP : null);
+  const measuredGroups = input.observedOutcomes && input.observedOutcomes.length > 0 ? measuredGroupCorrelations(groupOf, input.observedOutcomes) : new Map<string, { coefficient: number; pairs: number }>();
+  const declared: Record<string, number> = { [SHARED_OUTREACH_GROUP]: SHARED_OUTREACH_CORRELATION };
+  const riskCorrelation: Record<string, number> = { ...declared };
+  for (const [g, m] of measuredGroups) riskCorrelation[g] = Math.min(0.95, Math.max(0, m.coefficient));
+  const riskGroups = [...new Set([...groupOf.values()].filter((g): g is string => g !== null))].sort().map((g) => ({
+    riskGroup: g,
+    coefficient: riskCorrelation[g] ?? UNNAMED_RISK_GROUP_CORRELATION,
+    source: measuredGroups.has(g) ? ('MEASURED' as const) : ('DECLARED' as const),
+    measuredPairs: measuredGroups.get(g)?.pairs ?? 0,
+  }));
+  const sharedOutreachCorrelation = riskCorrelation[SHARED_OUTREACH_GROUP]!;
   const result = optimizePortfolio({
     activities,
     target: input.remaining,
@@ -522,7 +560,7 @@ export function evaluateGoalPortfolio(input: {
     capacity: { outreach: 1, ...Object.fromEntries(input.openings.filter((o) => o.channel).map((o) => [o.channel!.resource, 1])) },
     ...(startingCapital !== null ? { startingCapital } : {}),
     ...(spendCeiling !== null ? { spendCeiling } : {}),
-    riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
+    riskCorrelation,
     worlds,
     seed,
   });
@@ -573,8 +611,9 @@ export function evaluateGoalPortfolio(input: {
     startingCapital,
     spendCeiling,
     contactsPerDay,
-    riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
-    defaultCorrelation: 0.5,
+    riskCorrelation: declared,
+    defaultCorrelation: UNNAMED_RISK_GROUP_CORRELATION,
+    ...(input.observedOutcomes && input.observedOutcomes.length > 0 ? { observed: input.observedOutcomes } : {}),
   });
   return {
     basis,
@@ -589,7 +628,9 @@ export function evaluateGoalPortfolio(input: {
       perArrangement: input.beforeProof,
       spendCeiling,
       contactsPerDay: { value: stated, low: contactsPerDay.low ?? 0, high: contactsPerDay.high ?? 0, source: stated !== null ? 'stated by the owner on the goal' : input.measuredCapacity && input.measuredCapacity.perDay > CONTACTS_PER_DAY_BOUNDS.low ? `measured: up to ${input.measuredCapacity.perDay}/day on ${input.measuredCapacity.accounts} healthy Instantly accounts (shared); swept` : 'not stated; swept' },
-      correlation: SHARED_OUTREACH_CORRELATION,
+      correlation: sharedOutreachCorrelation,
+      correlationBasis: measuredGroups.has(SHARED_OUTREACH_GROUP) ? 'MEASURED' : 'DECLARED',
+      riskGroups,
     },
     missing,
     searched: result.searched,

@@ -13,7 +13,8 @@ import { activate } from '../server/services/cash/lifecycle.ts';
 import { capture } from '../server/services/cash/opportunities.ts';
 import { createWorkstream, linkWorkstream } from '../server/repos/register.ts';
 import { assembleGoals } from '../server/services/goals/model.ts';
-import { composePort05, noteGoalPortfolio, noteGoalStreamsCleared, readPort05 } from '../server/services/goals/port05.ts';
+import { composePort05, noteGoalPortfolio, noteGoalStreamsCleared, observedOutcomesFromLedger, readPort05 } from '../server/services/goals/port05.ts';
+import { recordMoney } from '../server/repos/cashLedger.ts';
 import type { StreamsReading, PortfolioStream } from '../server/services/goals/streams.ts';
 import type { CapabilityCredit } from '../server/services/goals/capabilityCredit.ts';
 import type { OfferReadiness } from '../server/services/goals/offerReadiness.ts';
@@ -91,7 +92,8 @@ describe('the composition', () => {
 
   it('takes the streams the goal plan handed over, and forgets them when the plan has none', async () => {
     noteGoalStreamsCleared();
-    const deps = { credits: async () => [], offers: async () => [] };
+    // Every row read is injected here; the ledger read is covered against real rows below.
+    const deps = { credits: async () => [], offers: async () => [], observed: async () => [] };
     expect((await readPort05('wst_g', new Date(), deps)).streams.known).toBe(false);
     noteGoalPortfolio('wst_g', { streams: STREAMS });
     expect((await readPort05('wst_g', new Date(), deps)).streams).toMatchObject({ known: true, independentStreams: 2 });
@@ -137,6 +139,26 @@ describe('GoalView carries it, from rows', () => {
 
     const tick = await assembleGoals({ projectIds: null, includeArchived: false });
     expect(tick.goals.find((one) => one.id === goal.id)!.port05 ?? null).toBeNull();
+  });
+
+  it('reads each stream\'s buyer money from the ledger: payments less refunds, dated, one currency per stream', async () => {
+    const opened = await capture({ projectId, actorRef: userId, ownerUserId: userId, title: 'Quarterly reports for clinics', mechanism: 'EXPLICIT_PAID_REQUEST', currency: 'USD', industry: 'clinics', source: 'https://example.com/c' });
+    if (!opened.ok) throw new Error(opened.reason);
+    const id = opened.value.id;
+    const write = (kind: 'CUSTOMER_PAYMENT' | 'REFUND' | 'COST', amountCents: number, occurredAt: string, currency = 'USD') =>
+      recordMoney({ projectId, opportunityId: id, kind, amountCents, currency, occurredAt, recordedBy: 'PERSON', idempotencyKey: `f6-${kind}-${occurredAt}-${currency}`, verifiedReference: kind === 'CUSTOMER_PAYMENT' ? `ref-${occurredAt}-${currency}` : null });
+    await write('CUSTOMER_PAYMENT', 50_000, '2026-09-01T10:00:00.000Z');
+    await write('CUSTOMER_PAYMENT', 30_000, '2026-09-08T10:00:00.000Z');
+    await write('REFUND', 10_000, '2026-09-09T10:00:00.000Z');
+    await write('COST', 7_000, '2026-09-10T10:00:00.000Z');
+    await write('CUSTOMER_PAYMENT', 99_000, '2026-09-11T10:00:00.000Z', 'EUR');
+    const observed = await observedOutcomesFromLedger([id, 'cop_missing']);
+    expect(observed.map((o) => [o.occurredAt, o.amount]).sort()).toEqual([
+      ['2026-09-01T10:00:00.000Z', 500],
+      ['2026-09-08T10:00:00.000Z', 300],
+      ['2026-09-09T10:00:00.000Z', -100],
+    ]);
+    expect(observed.every((o) => o.opportunityId === id)).toBe(true);
   });
 
   it('creates no second derivation of goal state: model.ts calls the composition and port05.ts writes nothing', () => {
