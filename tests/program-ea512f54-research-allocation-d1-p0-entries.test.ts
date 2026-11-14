@@ -108,13 +108,35 @@ describe('no owner defaults', () => {
 describe('ordering follows the family declaration', () => {
   const rankOf = (order: { id: string }[], id: string) => order.findIndex((one) => one.id === id);
 
-  it('inside its window, each family bucket comes before every other bucket of its mechanism', () => {
+  it('inside its window, a family bucket is offered first inside its mechanism\'s turn, once a cycle, in that turn\'s place', () => {
     const order = fairOrder(SEARCH_BUCKETS, [], INSIDE);
-    for (const bucket of INTERMEDIATION_BUCKETS) {
-      expect(familyRank(bucket, INSIDE)).toBe(0);
-      const peers = SEARCH_BUCKETS.filter((one) => one.mechanism === bucket.mechanism && !INTERMEDIATION_BUCKETS.includes(one as IntermediationBucket));
-      for (const peer of peers) expect(rankOf(order, bucket.id), `${bucket.id} before ${peer.id}`).toBeLessThan(rankOf(order, peer.id));
-    }
+    const family = new Set(INTERMEDIATION_BUCKETS.map((one) => one.id));
+    for (const bucket of INTERMEDIATION_BUCKETS) expect(familyRank(bucket, INSIDE)).toBe(0);
+    const cycle = new Set(SEARCH_BUCKETS.map((one) => one.mechanism)).size;
+    // The first cycle asks the family once, in a mechanism's place, and still reaches every mechanism once.
+    const firstCycle = order.slice(0, cycle);
+    expect(firstCycle.filter((one) => family.has(one.id))).toHaveLength(1);
+    expect(new Set(firstCycle.map((one) => one.mechanism)).size).toBe(cycle);
+    // The first family bucket stands in its mechanism's first turn, ahead of that mechanism's own buckets.
+    const first = order.find((one) => family.has(one.id))!;
+    const peer = SEARCH_BUCKETS.find((one) => one.mechanism === first.mechanism && !family.has(one.id))!;
+    expect(order.indexOf(first)).toBeLessThan(order.findIndex((one) => one.id === peer.id));
+    expect(order.indexOf(first)).toBeLessThan(cycle);
+    // Lapsed, the family buckets are ordinary: none is asked before every mechanism has had a turn.
+    expect(fairOrder(SEARCH_BUCKETS, [], AFTER).slice(0, cycle).some((one) => family.has(one.id))).toBe(false);
+  });
+
+  it('a family asking counts as the family\'s turn and its mechanism\'s, while the window holds', () => {
+    const asked = INTERMEDIATION_BUCKETS[0]!;
+    const family = new Set(INTERMEDIATION_BUCKETS.map((one) => one.id));
+    const rounds = [{ bucketId: asked.id, mechanism: asked.mechanism }] as unknown as Parameters<typeof fairOrder>[1];
+    const order = fairOrder(SEARCH_BUCKETS, rounds, INSIDE);
+    const cycle = new Set(SEARCH_BUCKETS.map((one) => one.mechanism)).size;
+    // The family had this cycle's turn, and so did its mechanism: neither comes back before every other mechanism has had one.
+    const firstCycle = order.slice(0, cycle - 1);
+    expect(firstCycle.some((one) => family.has(one.id))).toBe(false);
+    expect(firstCycle.some((one) => one.mechanism === asked.mechanism)).toBe(false);
+    expect(new Set(firstCycle.map((one) => one.mechanism)).size).toBe(cycle - 1);
   });
 
   it('after the window lapses, the ordinary order returns, and renewing restores the priority', () => {

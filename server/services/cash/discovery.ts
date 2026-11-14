@@ -1354,52 +1354,66 @@ export async function liveConstructedResearch(rounds: readonly CashDiscoveryRoun
  * list order only breaks a tie. It changes which question is asked next and
  * nothing about whether any may be.
  *
- * A current priority family (`INTERMEDIATION_FAMILY`, RES-15-4) is ordered
- * first inside each mechanism's turn while its dated declaration holds at
- * `now`; it never takes another mechanism's turn, and when the declaration
- * lapses its buckets fall back to their ordinary place.
+ * A current priority family (`INTERMEDIATION_FAMILY`, RES-15-4) is offered
+ * first inside its own mechanism's turn, once a cycle, while its dated
+ * declaration holds at `now`; it never takes another mechanism's turn, and
+ * when the declaration lapses its buckets fall back to their ordinary place.
  */
 export function fairOrder(buckets: readonly SearchBucket[], rounds: readonly CashDiscoveryRound[], now: Date | string = new Date()): SearchBucket[] {
-  const byMechanism = new Map<string, number>();
+  /*
+   * A turn is a mechanism's. While a priority family's dated declaration holds
+   * at `now` (RES-15-4), its buckets also share one family turn a cycle, and a
+   * family bucket is offered first inside its own mechanism's turn — in that
+   * turn's place, so it never takes another mechanism's and no mechanism is
+   * reached later. Asking one counts as both its mechanism's turn and the
+   * family's, so the family is asked once a cycle, at the earliest of its
+   * mechanisms' places, never several times over. When the declaration lapses
+   * each family bucket is an ordinary bucket of its mechanism at its own place
+   * in the list.
+   */
+  const inFamily = (bucket: { id: string }) => familyRank(bucket, now) === 0;
+  const byTurn = new Map<string, number>();
   const byBucket = new Map<string, number>();
+  const count = (bucket: { id: string; mechanism: string }) => {
+    byTurn.set(bucket.mechanism, (byTurn.get(bucket.mechanism) ?? 0) + 1);
+    if (inFamily(bucket)) byTurn.set(PRIORITY_FAMILY_TURN, (byTurn.get(PRIORITY_FAMILY_TURN) ?? 0) + 1);
+  };
   for (const round of rounds) {
-    byMechanism.set(round.mechanism, (byMechanism.get(round.mechanism) ?? 0) + 1);
+    count({ id: round.bucketId, mechanism: round.mechanism });
     byBucket.set(round.bucketId, (byBucket.get(round.bucketId) ?? 0) + 1);
   }
-  // Greedy, so one pass that opens several rounds interleaves mechanisms too:
-  // each pick counts as an asking of its mechanism before the next is chosen.
-  /*
-   * List position, except that a current priority family's bucket (RES-15-4) takes
-   * the place just before the first bucket of its own mechanism, so it is offered
-   * first inside that mechanism's turn and never in another's. One key, so the
-   * order stays total; when the family lapses every bucket is at its own index.
-   */
+  // How many turns a bucket's asking would follow: its mechanism's, and for a family bucket the family's too.
+  const turns = (one: { bucket: SearchBucket; family: boolean }) =>
+    Math.max(byTurn.get(one.bucket.mechanism) ?? 0, one.family ? (byTurn.get(PRIORITY_FAMILY_TURN) ?? 0) : 0);
+  // A family bucket takes the place just before the first bucket of its own mechanism.
   const firstOfMechanism = new Map<string, number>();
   buckets.forEach((bucket, index) => {
     if (!firstOfMechanism.has(bucket.mechanism)) firstOfMechanism.set(bucket.mechanism, index);
   });
-  const left = buckets.map((bucket, index) => ({
-    bucket,
-    at: familyRank(bucket, now) === 0 ? firstOfMechanism.get(bucket.mechanism)! - 1 + (index + 1) / (buckets.length + 1) : index,
-  }));
+  // Greedy, so one pass that opens several rounds interleaves turns too:
+  // each pick counts as an asking of its turns before the next is chosen.
+  const left = buckets.map((bucket, index) => {
+    const family = inFamily(bucket);
+    return { bucket, family, at: family ? firstOfMechanism.get(bucket.mechanism)! - 1 + (index + 1) / (buckets.length + 1) : index };
+  });
   const out: SearchBucket[] = [];
   while (left.length > 0) {
     let best = 0;
     for (let i = 1; i < left.length; i += 1) {
       const a = left[i]!;
       const b = left[best]!;
-      const order =
-        (byMechanism.get(a.bucket.mechanism) ?? 0) - (byMechanism.get(b.bucket.mechanism) ?? 0) ||
-        (byBucket.get(a.bucket.id) ?? 0) - (byBucket.get(b.bucket.id) ?? 0) ||
-        a.at - b.at;
+      const order = turns(a) - turns(b) || (byBucket.get(a.bucket.id) ?? 0) - (byBucket.get(b.bucket.id) ?? 0) || a.at - b.at;
       if (order < 0) best = i;
     }
     const [picked] = left.splice(best, 1);
     out.push(picked!.bucket);
-    byMechanism.set(picked!.bucket.mechanism, (byMechanism.get(picked!.bucket.mechanism) ?? 0) + 1);
+    count(picked!.bucket);
   }
   return out;
 }
+
+/** The one turn a cycle a current priority family's buckets share in `fairOrder`; never a mechanism's name. */
+const PRIORITY_FAMILY_TURN = 'priority-family:intermediation';
 
 /**
  * A round insert lost its `ON CONFLICT DO NOTHING` race.
