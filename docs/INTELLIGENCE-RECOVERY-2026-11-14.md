@@ -189,6 +189,18 @@ the margin is large (5th-percentile reach 98.75% at 2,100 contacts for 7 deals);
 unsized, single-source, assumed and contested evidence never certifies, and more
 simulated worlds never raise confidence.
 
+### Hermes as director — production record
+
+| when (Z) | run | model | what Hermes did | source |
+|---|---|---|---|---|
+| 21:12–21:28 | `opr_322701cdf14f411e9b6b` (Agents run 43641617727, mission `SURGE:B` set, 3,048 chars) | `auto/best-coding` (free switchboard) | RUN_DONE, 41 tool calls, 0 failed: 19 × `brain_operator_inventory` (populated the Surge B inventory from the mission), `brain_operator_decide` (opd_0943d48c45d6ea1d), `continue_idle`, `record_learning`; commissioned **no** duplicate engineering (every root cause was already REPAIRING by a stream) | `agents.yml operator-show` run 43643347745 |
+
+Limits observed honestly: the run's own decision and lessons still centre on
+the $10K goal and infrastructure congestion (Surge A's area); it tracked the
+Surge B inventory but did not yet reprioritise or re-attempt Surge B work —
+nothing in flight had stalled. The post-run `show` crashed on `LIMIT NaN`
+(argument parsing in `scripts/operator.ts`, fixed e45cb30).
+
 ### Handed to Surge A
 
 - `tests/goalPlan.test.ts` "reads a large project in a bounded number of
