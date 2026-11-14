@@ -166,7 +166,7 @@ differences), I (no capital restructuring), L (contradiction pooled), O4/O5
 dropped by key string), PERSIST 0/3. Full table:
 `docs/intelligence-recovery/evaluation-baseline.md`.
 
-### Repairs integrated (branch `claude/brain-intelligence-recovery-s0dl4l`)
+### Repairs integrated (branch `claude/brain-intelligence-recovery-s0dl4l`; released in PR #901, merge 7a8b565, Deploy 1070)
 
 | stream | commit | what changed | evidence |
 |---|---|---|---|
@@ -203,6 +203,14 @@ the $10K goal and infrastructure congestion (Surge A's area); it tracked the
 Surge B inventory but did not yet reprioritise or re-attempt Surge B work —
 nothing in flight had stalled. The post-run `show` crashed on `LIMIT NaN`
 (argument parsing in `scripts/operator.ts`, fixed e45cb30).
+
+### Received from Surge A (22:09Z scope adjustment)
+
+| id | finding | status |
+|---|---|---|
+| A-O6 | research rounds end without a report (`research/gate.ts`, `packetRunner.ts`) — verifier on all-conditional lanes vs unreachable sources | REPAIRING (engineer in worktree) |
+| A-10K | the $10K plan has no buyer-validated or market-test-ready opening, and conversion is unmeasured | ROOT CAUSE CONFIRMED — evidence gap, not a code defect: it closes only by measurement (outreach replies through Instantly, §94) or sourced comparables; acceptance now certifies on sized comparables with margin (case O), never on assumption. Directed to Hermes. |
+| A-CAP | starting-capital fallback chain `perWeek ?? beforeProof ?? capitalCeiling` (`goals/portfolio.ts` ~905) | REVIEWED — NOT A DEFECT: every link is a limit the goal itself states; with no weekly or before-proof limit the ceiling is the most that may be tied up, and the reconstruction's CAPITAL factor sweeps it. No owner figure is hard-coded. |
 
 ### Handed to Surge A
 
