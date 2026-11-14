@@ -292,7 +292,9 @@ describe('arrangements Brain constructs from what it knows', () => {
 
   it('takes turns: after an arrangement round, the next construction is a transaction built from a held opening (§93)', async () => {
     await sector('Veterinary care', { buyer: 'Independent veterinary clinics', bottleneck: 'After-hours phone coverage', supply: 'Remote answering services' });
-    await opening({ title: 'One small report', priceCents: 20_000, play: false, signal: 'PAID_TASK_OR_CONTRACT' });
+    // The held opening's payer is the map's buyer: its price is that population's own evidence, so the
+    // constructed estimates carry a value (an arrangement never borrows another buyer's price: PRICE-POOL).
+    await opening({ title: 'One small report', priceCents: 20_000, play: false, signal: 'PAID_TASK_OR_CONTRACT', payer: 'Independent veterinary clinics' });
     const id = await goal(600_000);
     await advanceGoalPlans(now);
     const first = (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-mx-`));

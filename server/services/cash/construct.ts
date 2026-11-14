@@ -85,6 +85,14 @@ export interface Primitive {
   claimId: string | null;
   from: 'INDUSTRY_MAP' | 'OPENING' | 'CAPABILITY' | 'REVERSE';
   ref: string;
+  /**
+   * What this part *is*, independent of any row id (K-7): a map node's kind and
+   * the normalised names from its map root down to it, or an opening payer's
+   * normalised industry and name. Two rows describing the same part — a node
+   * retired and re-created, the same population read by a second goal — have
+   * one path, so the arrangement built from them has one signature.
+   */
+  path?: string;
 }
 
 /**
@@ -132,6 +140,21 @@ export interface ConstructedArrangement {
    * and their sum. Absent or zero is unknown, never "will not return" (LIFE-29-2).
    */
   repeatBusiness?: { observations: number; statedValueCents: number };
+  /**
+   * The arrangement's identity in the library (migration 152): its design and
+   * its parts' paths, hashed — never a row id, never its wording. The same
+   * structure composed by another goal, another process or after a restart is
+   * one row (`monetization_paths.design_signature`).
+   */
+  signature?: string;
+  /**
+   * What research about it depends on: its parts' rows and claims, the
+   * precedent it transfers, and the observations about this buyer's prices. A
+   * refutation holds while this is unchanged; new evidence reopens it.
+   */
+  inputsDigest?: string;
+  /** Everything its composition read, hashed: a stored arrangement composed under the same is reused rather than recomposed. */
+  composedUnder?: string;
 }
 
 /** At most this many arrangements are composed per goal pass (they are ranked and few are asked). */
@@ -165,6 +188,38 @@ function rootOf(node: IndustryNode, byId: Map<string, IndustryNode>): IndustryNo
 
 function keyOf(parts: string[]): string {
   return createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 12);
+}
+
+function digestOf(value: unknown): string {
+  return createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex').slice(0, 32);
+}
+
+/** A map node's kind and the normalised names from its root down to it. */
+function nodePath(node: IndustryNode, byId: Map<string, IndustryNode>): string {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  let at: IndustryNode | undefined = node;
+  while (at && !seen.has(at.id)) {
+    seen.add(at.id);
+    names.unshift(norm(at.name));
+    at = at.parentId ? byId.get(at.parentId) : undefined;
+  }
+  return `${node.kind}:${names.join('>')}`;
+}
+
+function partPath(part: Primitive | null): string {
+  if (!part) return '-';
+  return part.path ?? `${part.from}:${norm(part.name)}`;
+}
+
+/**
+ * An arrangement's identity by structure (K-7): the design and, for buyer,
+ * need and supply, what each part is — never a row id and never the label.
+ * How it was found (forward, transferred, reversed) is not part of it: the
+ * same mechanism reached two ways is one mechanism.
+ */
+export function arrangementSignature(design: Design, demand: Primitive, need: Primitive | null, supply: Primitive | null): string {
+  return digestOf(['arrangement/v1', designKey(design), partPath(demand), partPath(need), partPath(supply)].join('|'));
 }
 
 /** The parts of a structure, in the words a researcher reads. */
@@ -236,7 +291,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
     if (!safeName(node.name) || !allowed(node.name)) continue;
     const root = rootOf(node, byId);
     if (!allowed(root.name)) continue;
-    const p: Primitive = { name: clean(node.name), claimId: node.sourceClaimId, from: 'INDUSTRY_MAP', ref: node.id };
+    const p: Primitive = { name: clean(node.name), claimId: node.sourceClaimId, from: 'INDUSTRY_MAP', ref: node.id, path: nodePath(node, byId) };
     if (node.kind === 'BUYER_TYPE') sector(root.name).demand.push(p);
     else if (node.kind === 'BOTTLENECK') sector(root.name).needs.push(p);
     else if (node.kind === 'FULFILMENT_SOURCE') sector(root.name).supply.push(p);
@@ -252,9 +307,9 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   for (const group of byPayer.values()) {
     const first = group[0]!;
     const s = sector(first.industry);
-    if (!s.demand.some((one) => norm(one.name) === norm(first.payer))) s.demand.push({ name: clean(first.payer!), claimId: first.sourceClaimId, from: 'OPENING', ref: first.id });
+    if (!s.demand.some((one) => norm(one.name) === norm(first.payer))) s.demand.push({ name: clean(first.payer!), claimId: first.sourceClaimId, from: 'OPENING', ref: first.id, path: `OPENING_PAYER:${norm(first.industry)}>${norm(first.payer)}` });
     const need = first.offerScope ?? first.title;
-    if (safeName(need)) s.needs.push({ name: clean(need), claimId: first.sourceClaimId, from: 'OPENING', ref: first.id });
+    if (safeName(need)) s.needs.push({ name: clean(need), claimId: first.sourceClaimId, from: 'OPENING', ref: first.id, path: `OPENING_NEED:${norm(first.industry)}>${norm(need)}` });
   }
 
   /*
@@ -296,7 +351,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
       source: one.sourceClaimId ? { kind: 'CLAIM', ref: one.sourceClaimId } : { kind: 'CASH_OPPORTUNITY', ref: one.id },
       measures: `money tied up on "${one.title.slice(0, 60)}"`,
     }));
-  const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables' } : null;
+  const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables', path: `CAPABILITY:${input.delivers.map(norm).sort().join('>')}` } : null;
   /*
    * The same inputs construct the same arrangements, so a plan re-read whose map, openings,
    * facts and limits did not move reuses the last construction instead of composing up to
@@ -304,12 +359,21 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    * the main thread, most of it identical re-construction, and the garbage it left behind).
    * Keyed by the day, as the reconstructions' recency is.
    */
+  /*
+   * What the library already holds about these structures (migration 152): a
+   * research verdict and a value rank candidates before the cap cuts, and an
+   * arrangement stored under exactly this composition's inputs is reused
+   * rather than recomposed — after a restart, a deploy or by another goal.
+   */
+  const { known, reuse } = await libraryFor(input.projectId);
   const memoKey = createHash('sha256')
-    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]) }))
+    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]), known }))
     .digest('hex');
   const held = constructionMemo.get(memoKey);
   if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) return structuredClone(held.result);
-  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, input, limits, targets, exclusions, now };
+  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, input, limits, targets, exclusions, now, known, reuse };
+  // How many candidates the parts support, against how many are composed: the cut is reported, never silent (K-2).
+  const considered = forEachCandidate(job, () => undefined);
   /*
    * Composing is synchronous quantitative work — several reconstructions per
    * design, up to `MAX_CONSTRUCTIONS` designs. Run in one stretch it held
@@ -331,7 +395,47 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   }
   constructionMemo.set(memoKey, { at: Date.now(), result: structuredClone(ranked) });
   while (constructionMemo.size > CONSTRUCTION_MEMO_MAX) constructionMemo.delete(constructionMemo.keys().next().value!);
+  const reusable = new Set(reuse.map(([under]) => under));
+  constructionReports.set(input.projectId, {
+    considered,
+    composed: Math.min(considered, MAX_CONSTRUCTIONS),
+    cut: Math.max(0, considered - MAX_CONSTRUCTIONS),
+    reused: ranked.filter((one) => one.composedUnder !== undefined && reusable.has(one.composedUnder)).length,
+    at: now.toISOString(),
+  });
   return ranked;
+}
+
+/** What the last construction for a project considered, composed, cut and reused. */
+export interface ConstructionReport {
+  /** Forward and transfer candidates the parts support. */
+  considered: number;
+  /** Of those, composed this pass (at most `MAX_CONSTRUCTIONS`). */
+  composed: number;
+  /** Ranked below the cap and not composed: still in the space, never discarded (§47). */
+  cut: number;
+  /** Taken from the library because their composition inputs had not changed. */
+  reused: number;
+  at: string;
+}
+const constructionReports = new Map<string, ConstructionReport>();
+export function lastConstructionReport(projectId: string): ConstructionReport | null {
+  return constructionReports.get(projectId) ?? null;
+}
+
+/** What the library holds for construction to rank by and reuse. */
+async function libraryFor(projectId: string): Promise<{ known: NonNullable<ConstructionJob['known']>; reuse: NonNullable<ConstructionJob['reuse']> }> {
+  const { listConstructedArrangements } = await import('../../repos/monetization.ts');
+  const known: NonNullable<ConstructionJob['known']> = [];
+  const reuse: NonNullable<ConstructionJob['reuse']> = [];
+  for (const one of await listConstructedArrangements(projectId)) {
+    const stored = one.design['arrangement'] as ConstructedArrangement | undefined;
+    const p50 = stored?.value && typeof stored.value.p50 === 'number' ? stored.value.p50 : 0;
+    known.push([one.signature, { verdict: one.verdict?.verdict ?? null, p50 }]);
+    if (stored && typeof stored.composedUnder === 'string' && stored.signature === one.signature) reuse.push([stored.composedUnder, stored]);
+  }
+  known.sort((a, b) => a[0].localeCompare(b[0]));
+  return { known, reuse };
 }
 
 /** Everything composition reads, as plain data, so it can run on a pool thread (§109). */
@@ -349,33 +453,54 @@ export interface ConstructionJob {
   targets: EconomicProperty[];
   exclusions: readonly ExclusionClass[];
   now: Date;
+  /** The library's verdict and value per signature, for ranking before the cap (migration 152). */
+  known?: Array<[string, { verdict: 'CONFIRMED' | 'REFUTED' | null; p50: number }]>;
+  /** Stored arrangements by the composition digest they were composed under: reused, not recomposed. */
+  reuse?: Array<[string, ConstructedArrangement]>;
 }
 
+/** One forward or transfer arrangement the parts support, before it is composed. */
+export interface Candidate {
+  design: Design;
+  transfer: CashOpportunity | null;
+  sector: string | null;
+  demand: Primitive;
+  need: Primitive | null;
+  supply: Primitive | null;
+  related: CashOpportunity[];
+  /** Enumeration order: the last tiebreak, so ranking is total and stable. */
+  order: number;
+}
+
+/** At most this many candidates are held for ranking; the rest are counted as considered and cut. */
+export const MAX_CANDIDATES = 50_000;
+
 /**
- * Compose, stress and rank every arrangement a job's parts support. Pure: the
- * same job gives the same arrangements on any thread. `yieldEveryMs` hands the
- * loop back between designs when it runs on the server's own thread.
+ * Visit every forward and transfer candidate a job's parts support, in
+ * enumeration order, and return how many there are. Cheap: nothing is
+ * composed, so the main thread can count what a pass will cut.
  */
-export async function composeConstruction(job: ConstructionJob, yieldEveryMs: number | null = null): Promise<ConstructedArrangement[]> {
-  const { opportunities, capability, priced, tiedUp, input, limits, targets, exclusions, now } = job;
+export function forEachCandidate(job: ConstructionJob, visit: (one: Candidate) => void): number {
+  const { opportunities, capability } = job;
   const precedentByBase = new Map(job.precedent);
-  const designs = allDesigns(STRUCTURE_KEYS);
-  const ctx = { priced, tiedUp, input, limits, targets, exclusions, now };
-  const out: ConstructedArrangement[] = [];
-  let lastYield = Date.now();
-  const breathe = async (): Promise<void> => {
-    if (yieldEveryMs === null || Date.now() - lastYield < yieldEveryMs) return;
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    lastYield = Date.now();
+  const relatedByPayer = new Map<string, CashOpportunity[]>();
+  const relatedTo = (name: string): CashOpportunity[] => {
+    const k = norm(name);
+    if (!relatedByPayer.has(k)) relatedByPayer.set(k, opportunities.filter((one) => norm(one.payer) === k));
+    return relatedByPayer.get(k)!;
   };
-  // Designs outermost and defaults first, so a capped pass keeps the original
-  // arrangements of every buyer before it adds any buyer's variants.
-  outer: for (const design of designs) {
+  const physical = new Map<string, boolean>();
+  const breaks = (need: Primitive): boolean => {
+    if (!physical.has(need.name)) physical.set(need.name, breaksOperatingModel(operatingFit({ title: need.name })));
+    return physical.get(need.name)!;
+  };
+  let order = 0;
+  for (const design of allDesigns(STRUCTURE_KEYS)) {
     const def = STRUCTURES[design.base];
     if (def.needsDeliverable && !capability) continue;
     for (const s of job.sectors) {
       for (const demand of s.demand) {
-        const related = opportunities.filter((one) => norm(one.payer) === norm(demand.name));
+        const related = relatedTo(demand.name);
         const heldStructures = new Set(related.map((one) => one.mechanism as string));
         // An existing opening sold the way it already is, is not a new mechanism;
         // the same structure with a different funding, pooling or repeat design is.
@@ -386,15 +511,128 @@ export async function composeConstruction(job: ConstructionJob, yieldEveryMs: nu
         for (const need of needs) {
           const supplies = def.needsSupply ? s.supply : [capability];
           // Brain produces only what it can make online; a physical need is brokered or subcontracted, never produced by the owner.
-          if (!def.needsSupply && need && breaksOperatingModel(operatingFit({ title: need.name }))) continue;
+          if (!def.needsSupply && need && breaks(need)) continue;
           for (const supply of supplies) {
-            if (out.length >= MAX_CONSTRUCTIONS) break outer;
-            await breathe();
-            out.push(compose({ ...ctx, design, origin: transfer ? 'TRANSFER' : 'FORWARD', precedent: transfer, sector: s.name, demand, need, supply, related }));
+            visit({ design, transfer, sector: s.name, demand, need, supply, related, order });
+            order += 1;
           }
         }
       }
     }
+  }
+  return order;
+}
+
+/**
+ * The candidates a pass composes: every one the parts support, ranked by a
+ * cheap closed form on what each already carries, dealt one buyer population
+ * at a time, then cut at `MAX_CONSTRUCTIONS` (K-2).
+ *
+ * The cap was a CPU guard applied in enumeration order — designs outermost,
+ * sectors in map order — so later designs and later sectors were never
+ * composed and nothing said so. Now what is cut is what ranks lowest:
+ * lexicographically, a structure research CONFIRMED before one nobody asked
+ * about before one research REFUTED; then more of the goal's target
+ * properties; a design a held opening shows working; more parts on gated
+ * claims; more published prices from this very buyer; the library's own value
+ * for it; the original design before a variant; fewer parts to establish.
+ * Never a weighted score.
+ */
+export function selectCandidates(job: ConstructionJob): { selected: Candidate[]; considered: number } {
+  const all: Candidate[] = [];
+  const considered = forEachCandidate(job, (one) => {
+    if (all.length < MAX_CANDIDATES) all.push(one);
+  });
+  if (all.length <= MAX_CONSTRUCTIONS) return { selected: all, considered };
+  const known = new Map(job.known ?? []);
+  const pricedByPayer = new Map<string, number>();
+  for (const one of job.priced) {
+    const payer = String(one.context['payer'] ?? '');
+    pricedByPayer.set(payer, (pricedByPayer.get(payer) ?? 0) + 1);
+  }
+  const metByDesign = new Map<string, number>();
+  const partsByDesign = new Map<string, number>();
+  const keyed = all.map((one) => {
+    const dk = designKey(one.design);
+    if (!metByDesign.has(dk)) {
+      metByDesign.set(dk, propertiesOf(one.design).filter((p) => job.targets.includes(p)).length);
+      partsByDesign.set(dk, designParts(one.design).length);
+    }
+    const held = known.get(arrangementSignature(one.design, one.demand, one.need, one.supply));
+    return {
+      one,
+      verdict: held?.verdict === 'CONFIRMED' ? 0 : held?.verdict === 'REFUTED' ? 2 : 1,
+      met: metByDesign.get(dk)!,
+      precedent: one.transfer ? 1 : 0,
+      evidenced: [one.demand, one.need, one.supply].filter((p) => p?.claimId).length,
+      priced: pricedByPayer.get(norm(one.demand.name)) ?? 0,
+      p50: held?.p50 ?? 0,
+      variant: isDefaultDesign(one.design) ? 0 : 1,
+      parts: partsByDesign.get(dk)!,
+    };
+  });
+  keyed.sort(
+    (a, b) =>
+      a.verdict - b.verdict ||
+      b.met - a.met ||
+      b.precedent - a.precedent ||
+      b.evidenced - a.evidenced ||
+      b.priced - a.priced ||
+      b.p50 - a.p50 ||
+      a.variant - b.variant ||
+      a.parts - b.parts ||
+      a.one.order - b.one.order,
+  );
+  // One buyer population at a time, so the cap keeps breadth (production, 2026-11-02: one sector filled the list).
+  const lanes = new Map<string, Candidate[]>();
+  for (const { one } of keyed) {
+    const k = `${norm(one.sector)}|${partPath(one.demand)}`;
+    const lane = lanes.get(k);
+    if (lane) lane.push(one);
+    else lanes.set(k, [one]);
+  }
+  const dealt: Candidate[] = [];
+  const queues = [...lanes.values()];
+  for (let depth = 0; dealt.length < MAX_CONSTRUCTIONS && queues.some((lane) => lane.length > depth); depth += 1) {
+    for (const lane of queues) {
+      if (dealt.length >= MAX_CONSTRUCTIONS) break;
+      if (lane[depth]) dealt.push(lane[depth]!);
+    }
+  }
+  return { selected: dealt, considered };
+}
+
+/**
+ * Compose, stress and rank every arrangement a job's parts support, up to the
+ * cap, best-ranked first. Pure: the same job gives the same arrangements on
+ * any thread. `yieldEveryMs` hands the loop back between designs when it runs
+ * on the server's own thread.
+ */
+export async function composeConstruction(job: ConstructionJob, yieldEveryMs: number | null = null): Promise<ConstructedArrangement[]> {
+  const { capability, priced, tiedUp, input, limits, targets, exclusions, now } = job;
+  const designs = allDesigns(STRUCTURE_KEYS);
+  const ctx = { priced, tiedUp, input, limits, targets, exclusions, now };
+  const out: ConstructedArrangement[] = [];
+  let lastYield = Date.now();
+  const breathe = async (): Promise<void> => {
+    if (yieldEveryMs === null || Date.now() - lastYield < yieldEveryMs) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    lastYield = Date.now();
+  };
+  const reuse = new Map(job.reuse ?? []);
+  // Everything a composition reads besides its own parts, once per pass.
+  const context = digestOf({ day: now.toISOString().slice(0, 10), currency: input.currency, daysLeft: input.daysLeft, limits, targets, exclusions, priced, tiedUp });
+  for (const one of selectCandidates(job).selected) {
+    const under = digestOf([context, designKey(one.design), one.transfer?.id ?? '-', one.sector ?? '-', one.demand, one.need, one.supply, one.related.map((o) => o.id)]);
+    const stored = reuse.get(under);
+    if (stored) {
+      out.push(stored);
+      continue;
+    }
+    await breathe();
+    const made = compose({ ...ctx, design: one.design, origin: one.transfer ? 'TRANSFER' : 'FORWARD', precedent: one.transfer, sector: one.sector, demand: one.demand, need: one.need, supply: one.supply, related: one.related });
+    made.composedUnder = under;
+    out.push(made);
   }
   out.push(...reverseArrangements({ ...ctx, designs, capability }));
   return rank(out, limits, targets);
@@ -540,10 +778,17 @@ function compose(args: {
   const unknownCount = (min: number, max: number): Part => ({ min, max });
   const unknownShare: Part = { min: 0, max: 1 };
   const pooled = design.aggregation === 'POOLED_BUYERS';
-  // What Brain holds about what these buyers pay: the same payer is comparable
-  // evidence about another thing they buy, any other payer only bounds.
-  const valueObs = args.priced.map((one) => ({ ...one, broad: one.context['payer'] !== norm(demand.name) }));
-  const riskObs = args.tiedUp.map((one) => ({ ...one, broad: one.context['payer'] !== norm(demand.name) }));
+  // What Brain holds about what *these* buyers pay: the same payer is comparable
+  // evidence about another thing they buy. Any other payer's price is dropped,
+  // never pooled (PRICE-POOL, production 2026-11-14: every constructed
+  // arrangement read the identical project-wide "E 281", fulfil 0–43,661,
+  // capital 0–72,769, because every held opening's price was handed to every
+  // arrangement as a "broad" bound and the reconstruction pooled them). An
+  // arrangement with no evidence from its own buyers has an UNKNOWN value, and
+  // the library keeps it that way until research establishes one.
+  const ownBuyer = (one: Observation) => one.context['payer'] === norm(demand.name);
+  const valueObs = args.priced.filter(ownBuyer).map((one) => ({ ...one, broad: false }));
+  const riskObs = args.tiedUp.filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   const context = { payer: norm(demand.name), industry: norm(args.sector), arrangement: key };
   const captureFor = (): Parameters<typeof composeArrangement>[0]['capture'] =>
     def.capture === 'COMMISSION'
@@ -656,6 +901,14 @@ function compose(args: {
     relatedOpenings: args.related.map((one) => one.id),
     question,
     repeatBusiness,
+    signature: arrangementSignature(design, demand, need, supply),
+    inputsDigest: digestOf([
+      'inputs/v1',
+      arrangementSignature(design, demand, need, supply),
+      [demand, need, supply].map((one) => (one ? [one.ref, one.claimId] : null)),
+      args.precedent?.id ?? null,
+      [...valueObs, ...riskObs].filter((one) => !one.broad).map((one) => one.id).sort(),
+    ]),
   };
 }
 

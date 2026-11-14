@@ -20,6 +20,7 @@ import { mayAnswer } from '../domain/monetization.ts';
 import { mayReplace } from './cashCardFacts.ts';
 import { newId, nowIso } from './util.ts';
 import type {
+  ConstructedArrangementRecord,
   FactKind,
   MonetizationAttribute,
   MonetizationCommission,
@@ -33,6 +34,7 @@ import type {
   MonetizationPathFact,
   MonetizationPathFactRow,
   MonetizationPathJudgment,
+  MonetizationPathEvaluationRow,
   MonetizationPathJudgmentRow,
   MonetizationPathRow,
   MonetizationRankSnapshot,
@@ -138,7 +140,8 @@ export async function pathForMethod(input: {
       WHERE project_id = ?
         AND COALESCE(opportunity_id, '-') = ?
         AND COALESCE(industry_node_id, '-') = ?
-        AND method = ?`,
+        AND method = ?
+        AND design_signature IS NULL`,
     [
       input.projectId,
       input.opportunityId ?? '-',
@@ -174,7 +177,10 @@ export async function listPaths(input: {
   projectId: string;
   opportunityId?: string;
 }): Promise<MonetizationPath[]> {
-  const where = ['project_id = ?'];
+  // A constructed arrangement (migration 152) is a hypothesis in the library,
+  // not a possibility the ledger ranks: it is read through
+  // `listConstructedArrangements`, never through here.
+  const where = ['project_id = ?', "origin <> 'CONSTRUCTED'"];
   const args: string[] = [input.projectId];
   if (input.opportunityId !== undefined) {
     where.push('opportunity_id = ?');
@@ -926,4 +932,340 @@ export async function contradictedPathAnswers(projectId: string): Promise<Set<st
     [projectId],
   );
   return new Set(rows.map((row) => `${row.path_id}::${row.attribute}`));
+}
+
+/* --------------------------------------------------------------------------
+ * Constructed arrangements (§81/§82, migration 152)
+ *
+ * The library of arrangements Brain composed itself. One row per structure per
+ * project (`design_signature`), written by the plan after construction and
+ * read back by the next construction, the next goal and the next process — a
+ * restart or a deploy no longer starts the space from zero. Nothing here is
+ * deleted; an arrangement nobody composes any more keeps its row, its
+ * evaluations and its verdict.
+ * ------------------------------------------------------------------------ */
+
+function parseDesign(text: string | null): Record<string, unknown> {
+  if (!text) return {};
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function mapArrangement(row: MonetizationPathRow): ConstructedArrangementRecord {
+  return {
+    pathId: row.id,
+    projectId: row.project_id,
+    signature: row.design_signature ?? '',
+    legacyKey: row.legacy_key,
+    constructionOrigin: (row.construction_origin ?? 'FORWARD') as ConstructedArrangementRecord['constructionOrigin'],
+    design: parseDesign(row.design_json),
+    inputsDigest: row.inputs_digest ?? '',
+    precedentOpportunityId: row.precedent_opportunity_id,
+    opportunityId: row.opportunity_id,
+    industryNodeId: row.industry_node_id,
+    firstGoalId: row.first_goal_id,
+    lastComposedAt: row.last_composed_at,
+    askedCount: Number(row.asked_count ?? 0),
+    lastAskedAt: row.last_asked_at,
+    evaluatedCount: Number(row.evaluated_count ?? 0),
+    lastEvaluation: row.last_evaluation_goal_id
+      ? {
+          goalId: row.last_evaluation_goal_id,
+          readingId: row.last_evaluation_reading_id,
+          contributionCents: row.last_evaluation_contribution_cents === null ? null : Number(row.last_evaluation_contribution_cents),
+          picked: Number(row.last_evaluation_picked ?? 0) === 1,
+        }
+      : null,
+    verdict:
+      row.research_verdict === 'CONFIRMED' || row.research_verdict === 'REFUTED'
+        ? { verdict: row.research_verdict, inputsDigest: row.verdict_inputs_digest ?? '', roundId: row.verdict_round_id, at: row.verdict_at }
+        : null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/** What a construction pass hands the library for one arrangement. */
+export interface ArrangementToRecord {
+  signature: string;
+  legacyKey: string;
+  method: MonetizationMethod;
+  title: string;
+  thesis: string | null;
+  constructionOrigin: 'FORWARD' | 'TRANSFER' | 'REVERSE';
+  /** The buyer, when it is a row: an opening's payer or a map node. Neither for a reverse design. */
+  opportunityId: string | null;
+  industryNodeId: string | null;
+  precedentOpportunityId: string | null;
+  inputsDigest: string;
+  designJson: string;
+}
+
+/**
+ * Record a pass's arrangements in the library, idempotently by signature.
+ *
+ * One read of what the project already holds, then a write only for a
+ * structure that is new or whose stored design changed — a pass over an
+ * unchanged space writes nothing, which is what keeps a ten-minute plan cycle
+ * from rewriting four hundred rows. The unique index on
+ * `(project_id, design_signature)` decides between two processes composing
+ * the same structure at once: the loser's insert becomes an update of the
+ * winner's row, never a second row. Near-identical recompositions therefore
+ * cannot inflate the count — a structure is one row however often, by however
+ * many goals, it is composed.
+ */
+export async function recordConstructedArrangements(
+  projectId: string,
+  goalId: string | null,
+  arrangements: readonly ArrangementToRecord[],
+  at: string = nowIso(),
+): Promise<{ created: number; updated: number; unchanged: number }> {
+  const report = { created: 0, updated: 0, unchanged: 0 };
+  if (arrangements.length === 0) return report;
+  const held = new Map<string, { design_json: string | null; inputs_digest: string | null; legacy_key: string | null }>();
+  for (const row of await getDb().all<{ design_signature: string; design_json: string | null; inputs_digest: string | null; legacy_key: string | null }>(
+    `SELECT design_signature, design_json, inputs_digest, legacy_key FROM monetization_paths
+      WHERE project_id = ? AND design_signature IS NOT NULL`,
+    [projectId],
+  )) {
+    held.set(row.design_signature, row);
+  }
+  const seen = new Set<string>();
+  const writes: ArrangementToRecord[] = [];
+  for (const one of arrangements) {
+    if (seen.has(one.signature)) continue;
+    seen.add(one.signature);
+    const prior = held.get(one.signature);
+    if (prior && prior.design_json === one.designJson && prior.inputs_digest === one.inputsDigest && prior.legacy_key === one.legacyKey) {
+      report.unchanged += 1;
+      continue;
+    }
+    writes.push(one);
+    if (prior) report.updated += 1;
+    else report.created += 1;
+  }
+  // A few multi-row statements rather than one per arrangement: a plan read is
+  // counted in statements (goalPlan's bounded-read test), and a remote
+  // database pays a round trip for each.
+  for (let i = 0; i < writes.length; i += ARRANGEMENT_WRITE_BATCH) {
+    const chunk = writes.slice(i, i + ARRANGEMENT_WRITE_BATCH);
+    await getDb().run(
+      `INSERT INTO monetization_paths
+         (id, project_id, opportunity_id, industry_node_id, method, title, thesis, origin,
+          source_claim_id, merged_into_id, split_from_id, last_evaluated_at, created_at, updated_at,
+          design_signature, legacy_key, design_json, construction_origin, precedent_opportunity_id,
+          first_goal_id, inputs_digest, last_composed_at)
+       VALUES ${chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, 'CONSTRUCTED', NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(', ')}
+       ON CONFLICT (project_id, design_signature) DO UPDATE SET
+         opportunity_id = excluded.opportunity_id,
+         industry_node_id = excluded.industry_node_id,
+         method = excluded.method,
+         title = excluded.title,
+         thesis = excluded.thesis,
+         legacy_key = excluded.legacy_key,
+         design_json = excluded.design_json,
+         construction_origin = excluded.construction_origin,
+         precedent_opportunity_id = excluded.precedent_opportunity_id,
+         inputs_digest = excluded.inputs_digest,
+         last_composed_at = excluded.last_composed_at,
+         updated_at = excluded.updated_at`,
+      chunk.flatMap((one) => [
+        newId('mpx'),
+        projectId,
+        one.opportunityId,
+        one.industryNodeId,
+        one.method,
+        one.title.slice(0, 300),
+        one.thesis,
+        at,
+        at,
+        one.signature,
+        one.legacyKey,
+        one.designJson,
+        one.constructionOrigin,
+        one.precedentOpportunityId,
+        goalId,
+        one.inputsDigest,
+        at,
+      ]),
+    );
+  }
+  return report;
+}
+
+/** Arrangements written per statement: 17 parameters each, far inside both drivers' limits. */
+const ARRANGEMENT_WRITE_BATCH = 100;
+
+/** Every constructed arrangement one project holds, oldest first. */
+export async function listConstructedArrangements(projectId: string): Promise<ConstructedArrangementRecord[]> {
+  const rows = await getDb().all<MonetizationPathRow>(
+    `SELECT * FROM monetization_paths
+      WHERE project_id = ? AND design_signature IS NOT NULL
+      ORDER BY created_at, id`,
+    [projectId],
+  );
+  return rows.map(mapArrangement);
+}
+
+/**
+ * One structure across every project that holds it (K-5): the same buyer
+ * kind, need, supply and design composed in another project is the same
+ * arrangement, and its research and evaluations are reusable there when its
+ * parts resolve. Ordered by project then creation, in both dialects.
+ */
+export async function arrangementsBySignature(signature: string): Promise<ConstructedArrangementRecord[]> {
+  const rows = await getDb().all<MonetizationPathRow>(
+    'SELECT * FROM monetization_paths WHERE design_signature = ? ORDER BY project_id, created_at, id',
+    [signature],
+  );
+  return rows.map(mapArrangement);
+}
+
+/**
+ * Each stored arrangement's research verdict, by signature, without its
+ * design: the question a goal pass asks before it opens a round, answered
+ * from the narrow columns rather than four hundred designs.
+ */
+export async function arrangementVerdicts(projectId: string): Promise<Map<string, Pick<ConstructedArrangementRecord, 'verdict'>>> {
+  const rows = await getDb().all<{ design_signature: string; research_verdict: string | null; verdict_inputs_digest: string | null; verdict_round_id: string | null; verdict_at: string | null }>(
+    `SELECT design_signature, research_verdict, verdict_inputs_digest, verdict_round_id, verdict_at FROM monetization_paths
+      WHERE project_id = ? AND design_signature IS NOT NULL AND research_verdict IS NOT NULL`,
+    [projectId],
+  );
+  return new Map(
+    rows.map((row) => [
+      row.design_signature,
+      { verdict: { verdict: row.research_verdict as 'CONFIRMED' | 'REFUTED', inputsDigest: row.verdict_inputs_digest ?? '', roundId: row.verdict_round_id, at: row.verdict_at } },
+    ]),
+  );
+}
+
+/** The arrangement a `goal-…-mx-<key>` round asked about, by its 12-hex key. */
+export async function arrangementForLegacyKey(projectId: string, legacyKey: string): Promise<ConstructedArrangementRecord | null> {
+  const rows = await getDb().all<MonetizationPathRow>(
+    `SELECT * FROM monetization_paths
+      WHERE project_id = ? AND legacy_key = ? AND design_signature IS NOT NULL
+      ORDER BY updated_at DESC, id`,
+    [projectId, legacyKey],
+  );
+  return rows[0] ? mapArrangement(rows[0]) : null;
+}
+
+/** A research round was opened for this arrangement. */
+export async function noteArrangementAsked(projectId: string, legacyKey: string, at: string = nowIso()): Promise<boolean> {
+  const path = await arrangementForLegacyKey(projectId, legacyKey);
+  if (!path) return false;
+  const result = await getDb().run(
+    'UPDATE monetization_paths SET asked_count = asked_count + 1, last_asked_at = ?, updated_at = ? WHERE id = ?',
+    [at, at, path.pathId],
+  );
+  return (result.changes ?? 0) > 0;
+}
+
+/**
+ * What research concluded about an arrangement, under the inputs it had then.
+ *
+ * A REFUTED verdict holds only while `inputs_digest` still equals the
+ * `verdict_inputs_digest` written here: new evidence about any of its parts
+ * changes the digest and reopens the question. Guarded on the round, so a
+ * second tick reading the same closed round writes nothing.
+ */
+export async function recordArrangementVerdict(input: {
+  pathId: string;
+  verdict: 'CONFIRMED' | 'REFUTED';
+  inputsDigest: string;
+  roundId: string;
+  at?: string;
+}): Promise<boolean> {
+  const at = input.at ?? nowIso();
+  const result = await getDb().run(
+    `UPDATE monetization_paths
+        SET research_verdict = ?, verdict_inputs_digest = ?, verdict_round_id = ?, verdict_at = ?, updated_at = ?
+      WHERE id = ? AND design_signature IS NOT NULL
+        AND (verdict_round_id IS NULL OR verdict_round_id <> ? OR research_verdict IS NULL OR research_verdict <> ?)`,
+    [input.verdict, input.inputsDigest, input.roundId, at, at, input.pathId, input.roundId, input.verdict],
+  );
+  return (result.changes ?? 0) > 0;
+}
+
+/**
+ * One goal model's weighing of constructed arrangements, for one stored plan
+ * reading: an append-only row each, plus the count and the last one on the
+ * path. Idempotent by `(path, reading)`, so a retried write counts once.
+ */
+export async function recordArrangementEvaluations(input: {
+  projectId: string;
+  goalId: string;
+  readingId: string;
+  at?: string;
+  entries: ReadonlyArray<{ legacyKey: string; picked: boolean; refused: boolean; contributionCents: number | null }>;
+}): Promise<number> {
+  if (input.entries.length === 0) return 0;
+  const at = input.at ?? nowIso();
+  let written = 0;
+  const keys = [...new Set(input.entries.map((one) => one.legacyKey))];
+  const byKey = new Map<string, { pathId: string }>();
+  for (const row of await getDb().all<{ id: string; legacy_key: string }>(
+    `SELECT id, legacy_key FROM monetization_paths
+      WHERE project_id = ? AND design_signature IS NOT NULL AND legacy_key IN (${keys.map(() => '?').join(', ')})
+      ORDER BY updated_at, id`,
+    [input.projectId, ...keys],
+  )) {
+    byKey.set(row.legacy_key, { pathId: row.id });
+  }
+  for (const one of input.entries) {
+    const path = byKey.get(one.legacyKey);
+    if (!path) continue;
+    const cents = one.contributionCents === null ? null : Math.max(-2_000_000_000, Math.min(2_000_000_000, Math.round(one.contributionCents)));
+    const inserted = await getDb().run(
+      `INSERT INTO monetization_path_evaluations
+         (id, project_id, path_id, goal_id, reading_id, picked, refused, contribution_cents, evaluated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT DO NOTHING`,
+      [newId('mpe'), input.projectId, path.pathId, input.goalId, input.readingId, one.picked ? 1 : 0, one.refused ? 1 : 0, cents, at],
+    );
+    if ((inserted.changes ?? 0) === 0) continue;
+    await getDb().run(
+      `UPDATE monetization_paths
+          SET evaluated_count = evaluated_count + 1, last_evaluated_at = ?, last_evaluation_goal_id = ?,
+              last_evaluation_reading_id = ?, last_evaluation_contribution_cents = ?, last_evaluation_picked = ?,
+              updated_at = ?
+        WHERE id = ?`,
+      [at, input.goalId, input.readingId, cents, one.picked ? 1 : 0, at, path.pathId],
+    );
+    written += 1;
+  }
+  return written;
+}
+
+export interface ArrangementEvaluation {
+  id: string;
+  pathId: string;
+  goalId: string;
+  readingId: string;
+  picked: boolean;
+  refused: boolean;
+  contributionCents: number | null;
+  evaluatedAt: string;
+}
+
+export async function arrangementEvaluations(pathId: string): Promise<ArrangementEvaluation[]> {
+  const rows = await getDb().all<MonetizationPathEvaluationRow>(
+    'SELECT * FROM monetization_path_evaluations WHERE path_id = ? ORDER BY evaluated_at, id',
+    [pathId],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    pathId: row.path_id,
+    goalId: row.goal_id,
+    readingId: row.reading_id,
+    picked: Number(row.picked) === 1,
+    refused: Number(row.refused) === 1,
+    contributionCents: row.contribution_cents === null ? null : Number(row.contribution_cents),
+    evaluatedAt: row.evaluated_at,
+  }));
 }
