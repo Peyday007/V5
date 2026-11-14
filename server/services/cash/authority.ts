@@ -781,6 +781,34 @@ export function approvalScopeKey(projectId: string, action: string, cause: Autho
   return `authority-approval:${projectId}:${action}:${cause}`;
 }
 
+/**
+ * A standing grant answers the approvals it covers. A refusal for want of a
+ * grant raises one approval need per scope; when a person then grants the
+ * action, that need is answered and stays open beside the grant forever
+ * otherwise (it listed an answered ask among what Brain needs). It is closed
+ * WITHDRAWN rather than RESOLVED: RESOLVED is a stored approval that a later
+ * check honours without a grant, and a withdrawn grant must not leave one
+ * behind. Fails closed: the worst case is a scope Brain does not re-ask.
+ */
+const ANSWERED_BY_GRANT: ReadonlyArray<AuthorityLedgerRecord['cause']> = ['NO_AUTHORITY', 'ACTION_TYPE_NOT_APPROVED', 'NOT_COVERED'];
+export async function closeApprovalsAnsweredByGrant(input: { projectId: string; actions: readonly string[]; actorUserId: string }): Promise<number> {
+  let closed = 0;
+  for (const action of input.actions) {
+    for (const cause of ANSWERED_BY_GRANT) {
+      const need = await openNeedForKey(input.projectId, approvalScopeKey(input.projectId, action, cause));
+      if (!need) continue;
+      const done = await closeNeed({
+        needId: need.id,
+        to: 'WITHDRAWN',
+        resolution: `Answered by the standing commercial authority granted for ${action}.`,
+        actorUserId: input.actorUserId,
+      });
+      if (done.ok) closed += 1;
+    }
+  }
+  return closed;
+}
+
 function approvalCovers(need: CashNeed, amountCents: number | null): boolean {
   return need.expectedCostCents === null || (amountCents !== null && amountCents <= need.expectedCostCents);
 }
