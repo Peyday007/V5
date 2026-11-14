@@ -38,7 +38,7 @@ import { optimizePortfolio, type Activity, type PortfolioReading } from '../quan
 import { makeRng } from '../scenario/random.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { assessOutreachRecord, type EvidenceAssessment, type OutreachCampaignRecord } from './evidenceAuthority.ts';
-import { buildStreams, type StreamWorlds, type StreamsReading } from './streams.ts';
+import { buildStreams, type MeasuredSeries, type StreamWorlds, type StreamsReading } from './streams.ts';
 
 export const PORTFOLIO_WORLDS = 2_000;
 /** The shares of the shared outreach an opening may be given. */
@@ -49,6 +49,14 @@ export const OUTREACH_SHARES = [0.25, 0.5, 1] as const;
  * hits every line that shares the mailbox. It is stated on the reading.
  */
 export const SHARED_OUTREACH_CORRELATION = 0.5;
+/**
+ * The coefficient `quant/portfolio.ts` gives a risk group nobody named — the
+ * optimizer's own default, stated here so the streams reading declares the
+ * same figure the search used rather than a literal of its own. It is an
+ * assumption; a pair whose payments the ledger can measure is read from them
+ * instead (`streams.ts` `measureCoMovement`).
+ */
+export const UNNAMED_RISK_GROUP_CORRELATION = 0.5;
 /**
  * Prospects one online operation can contact a day when nobody has said: one
  * to two warmed mailboxes. Bounds only — the reading cannot be a probability
@@ -405,6 +413,12 @@ export function evaluateGoalPortfolio(input: {
    */
   contactsPerDay?: ModelInput;
   committed?: { capital: number; spend: number } | null;
+  /**
+   * Weekly customer payments per opening, from the ledger (`weeklyPayments`).
+   * A pair of streams with enough shared weeks has its correlation measured
+   * from them rather than declared.
+   */
+  measuredSeries?: MeasuredSeries | null;
   /** Internal: apply the measured record as binding regardless of its authority (the as-is floor). */
   forceMeasured?: boolean;
   worlds?: number;
@@ -574,7 +588,8 @@ export function evaluateGoalPortfolio(input: {
     spendCeiling,
     contactsPerDay,
     riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
-    defaultCorrelation: 0.5,
+    defaultCorrelation: UNNAMED_RISK_GROUP_CORRELATION,
+    measured: input.measuredSeries ?? null,
   });
   return {
     basis,

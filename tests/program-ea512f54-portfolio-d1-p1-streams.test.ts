@@ -5,7 +5,10 @@
  * crowding and shared constraints modelled per stream and across them.
  */
 import { describe, expect, it } from 'vitest';
-import { evaluateGoalPortfolio, SHARED_OUTREACH_CORRELATION } from '../server/services/goals/portfolio.ts';
+import { readFileSync } from 'node:fs';
+import { evaluateGoalPortfolio, SHARED_OUTREACH_CORRELATION, UNNAMED_RISK_GROUP_CORRELATION } from '../server/services/goals/portfolio.ts';
+import { CORRELATED_AT, MIN_COMOVEMENT_PERIODS, isCorrelated, measureCoMovement, weekOf, weeklyPayments, withMeasuredCoMovement } from '../server/services/goals/streams.ts';
+import { readPort05 } from '../server/services/goals/port05.ts';
 import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 
 const fixed = (value: number, provenance: ModelInput['provenance'] = 'EVIDENCE'): ModelInput => ({ value, low: value, high: value, provenance, source: null, note: '' });
@@ -95,7 +98,7 @@ describe('PORT-05 streams', () => {
 
   it('reports independence false whenever a binding constraint or a correlated risk group is shared', () => {
     for (const s of streams.streams) {
-      const correlated = s.correlations.some((c) => c.kind === 'SHARED_RISK_GROUP' && c.coefficient > 0);
+      const correlated = s.correlations.some(isCorrelated);
       const binding = s.sharedConstraints.some((c) => c.binding);
       expect(s.independent).toBe(!correlated && !binding);
     }
@@ -146,5 +149,135 @@ describe('PORT-05 streams', () => {
   it('excludes nothing by category or industry', () => {
     const r = evaluateGoalPortfolio({ ...limits, openings: [opening('x', {}, 1, { industry: 'scrap metal' }), opening('y', {}, 2, { industry: 'software' })] });
     expect(r.streams!.streams.map((s) => s.opportunityId).sort()).toEqual(['x', 'y']);
+  });
+});
+
+/** A weekly series starting at week `from`: values[i] is the amount received in week from + i. */
+const series = (values: number[], from = 2900) => new Map(values.map((v, i) => [from + i, v] as const));
+
+describe('PORT-05 correlation is measured from the streams\' own payments where the rows allow it (F6)', () => {
+  const up = [100, 300, 200, 500, 400, 700, 600, 900, 800, 1100];
+  const along = up.map((v) => v * 2 + 50);
+  const against = up.map((v) => 1200 - v);
+  const unrelated = [400, 100, 500, 300, 200, 200, 300, 500, 100, 400];
+
+  it('measures the Pearson co-movement of two weekly series over the weeks both were live', () => {
+    expect(measureCoMovement(series(up), series(along))).toEqual({ coefficient: 1, periods: up.length });
+    expect(measureCoMovement(series(up), series(against))).toEqual({ coefficient: -1, periods: up.length });
+    const r = measureCoMovement(series(up), series(unrelated))!;
+    expect(Math.abs(r.coefficient)).toBeLessThan(CORRELATED_AT);
+    // Only the shared window counts: b starts two weeks later.
+    expect(measureCoMovement(series(up), series(along.slice(2), 2902))!.periods).toBe(up.length - 2);
+    // A week with no payment inside the window is a zero, not a gap.
+    const holed = new Map(series(along));
+    holed.delete(2904);
+    expect(measureCoMovement(series(up), holed)!.coefficient).toBeLessThan(1);
+  });
+
+  it('refuses to locate a co-movement on too few shared weeks or on a series that never varied', () => {
+    expect(measureCoMovement(series(up.slice(0, MIN_COMOVEMENT_PERIODS - 1)), series(along.slice(0, MIN_COMOVEMENT_PERIODS - 1)))).toBeNull();
+    expect(measureCoMovement(series(up), series(up.map(() => 250)))).toBeNull();
+    expect(measureCoMovement(series(up), undefined)).toBeNull();
+    expect(measureCoMovement(series(up, 2900), series(along, 3100))).toBeNull();
+  });
+
+  const openings = [
+    opening('lead', {}, 1, { payer: 'Dental practices' }),
+    opening('peer', { price: fixed(1200) }, 2),
+    opening('market', { channel: channel('marketplace') }, 3),
+    opening('partner', { channel: channel('partner') }, 4),
+  ];
+
+  it('replaces the declared coefficient with the measured one, ESTABLISHED, and keeps what was assumed', () => {
+    const measuredSeries = new Map([['lead', series(up)], ['peer', series(unrelated)], ['market', series(along)], ['partner', series(against)]]);
+    const declared = evaluateGoalPortfolio({ ...limits, openings }).streams!;
+    const r = evaluateGoalPortfolio({ ...limits, openings, measuredSeries }).streams!;
+    const leadingIds = new Set(r.streams.filter((s) => s.roles.includes('LEADING')).map((s) => s.opportunityId));
+    expect(leadingIds.size).toBeGreaterThan(0);
+    for (const s of r.streams) {
+      for (const c of s.correlations) {
+        const expected = measureCoMovement(measuredSeries.get(s.opportunityId), measuredSeries.get(c.with))!;
+        expect(c).toMatchObject({ kind: 'MEASURED', basis: 'ESTABLISHED', coefficient: expected.coefficient, periods: up.length });
+        const before = declared.streams.find((d) => d.opportunityId === s.opportunityId)!.correlations.find((d) => d.with === c.with)!;
+        expect(c.assumed).toBe(before.coefficient);
+      }
+    }
+    expect(r.across.correlations.length).toBeGreaterThan(0);
+    for (const p of r.across.correlations) expect(p).toMatchObject({ kind: 'MEASURED', basis: 'ESTABLISHED', periods: up.length });
+    // No pair is left at a declared coefficient once both of its streams have history.
+    expect(r.streams.flatMap((s) => s.correlations).some((c) => c.basis === 'ASSUMED')).toBe(false);
+  });
+
+  it('reads independence from the measurement: a separate channel whose payments move with a leader is dependent', () => {
+    const lead = [...evaluateGoalPortfolio({ ...limits, openings }).best!.members][0]!.opportunityId;
+    const measuredSeries = new Map(openings.map((o) => [o.opportunity.id, series(o.opportunity.id === lead || o.opportunity.id === 'market' ? up : unrelated)] as const));
+    const r = evaluateGoalPortfolio({ ...limits, openings, measuredSeries }).streams!;
+    const market = r.streams.find((s) => s.opportunityId === 'market')!;
+    if (market.opportunityId !== lead) {
+      const vsLead = market.correlations.find((c) => c.with === lead)!;
+      expect(vsLead).toMatchObject({ kind: 'MEASURED', coefficient: 1, basis: 'ESTABLISHED' });
+      expect(market.independent).toBe(false);
+      expect(market.independence).toMatch(/measured over 10 weeks/);
+    }
+    for (const s of r.streams) expect(s.independent).toBe(!s.correlations.some(isCorrelated) && !s.sharedConstraints.some((c) => c.binding));
+    expect(r.across.independentStreams).toBe(r.streams.filter((s) => s.independent).length);
+  });
+
+  it('keeps the declared coefficient, ASSUMED, for a pair the rows cannot measure', () => {
+    const r = evaluateGoalPortfolio({ ...limits, openings, measuredSeries: new Map([['lead', series(up)], ['peer', series(along.slice(0, 3))]]) }).streams!;
+    const declared = evaluateGoalPortfolio({ ...limits, openings }).streams!;
+    expect(r).toEqual(declared);
+  });
+
+  it('the plan\'s held reading is re-read against the ledger on the goal read (port05), without changing what was held', async () => {
+    const held = evaluateGoalPortfolio({ ...limits, openings }).streams!;
+    const snapshot = JSON.parse(JSON.stringify(held));
+    const measuredSeries = new Map(openings.map((o, i) => [o.opportunity.id, series(i % 2 === 0 ? up : against)] as const));
+    let asked: string[] = [];
+    const reading = await readPort05('wst_f6', new Date(), {
+      streams: () => held,
+      credits: async () => [],
+      offers: async () => [],
+      measured: async (ids) => {
+        asked = ids;
+        return measuredSeries;
+      },
+    });
+    expect(asked.sort()).toEqual(openings.map((o) => o.opportunity.id).sort());
+    const expected = withMeasuredCoMovement(held, measuredSeries);
+    if (!reading.streams.known) throw new Error('streams unknown');
+    expect(reading.streams.independentStreams).toBe(expected.across.independentStreams);
+    expect(reading.streams.streams.map((s) => s.independence)).toEqual(expected.streams.map((s) => s.independence));
+    expect(JSON.parse(JSON.stringify(held))).toEqual(snapshot);
+  });
+
+  it('builds the weekly series from ledger payments only: net of refunds, one currency per stream', () => {
+    const at = (day: number) => new Date(Date.UTC(2026, 9, 5 + day)).toISOString();
+    const out = weeklyPayments([
+      { opportunityId: 'a', kind: 'CUSTOMER_PAYMENT', amountCents: 10_000, currency: 'USD', occurredAt: at(0) },
+      { opportunityId: 'a', kind: 'CUSTOMER_PAYMENT', amountCents: 5_000, currency: 'USD', occurredAt: at(1) },
+      { opportunityId: 'a', kind: 'REFUND', amountCents: 2_000, currency: 'USD', occurredAt: at(2) },
+      { opportunityId: 'a', kind: 'CUSTOMER_PAYMENT', amountCents: 7_000, currency: 'USD', occurredAt: at(8) },
+      { opportunityId: 'a', kind: 'CUSTOMER_PAYMENT', amountCents: 99_000, currency: 'EUR', occurredAt: at(8) },
+      { opportunityId: 'a', kind: 'PIPELINE_AGREED', amountCents: 50_000, currency: 'USD', occurredAt: at(8) },
+      { opportunityId: 'a', kind: 'COST', amountCents: 3_000, currency: 'USD', occurredAt: at(8) },
+      { opportunityId: null, kind: 'CUSTOMER_PAYMENT', amountCents: 1_000, currency: 'USD', occurredAt: at(0) },
+    ]);
+    expect([...out.keys()]).toEqual(['a']);
+    const weekA = weekOf(at(0))!;
+    const weekB = weekOf(at(8))!;
+    expect(out.get('a')!.get(weekA)).toBe(130);
+    expect(out.get('a')!.get(weekB)).toBe(70);
+  });
+
+  it('names the declared coefficient for an unnamed risk group instead of a literal', () => {
+    const source = readFileSync(new URL('../server/services/goals/portfolio.ts', import.meta.url), 'utf8');
+    expect(source).not.toMatch(/defaultCorrelation:\s*[0-9.]+/);
+    expect(source).toMatch(/defaultCorrelation:\s*UNNAMED_RISK_GROUP_CORRELATION/);
+    expect(UNNAMED_RISK_GROUP_CORRELATION).toBeGreaterThan(0);
+    // Without rows the declared figure still stands, and says so.
+    const r = evaluateGoalPortfolio({ ...limits, openings }).streams!;
+    for (const c of r.streams.flatMap((s) => s.correlations)) expect(c.basis).toBe('ASSUMED');
+    expect(SHARED_OUTREACH_CORRELATION).toBeGreaterThan(0);
   });
 });

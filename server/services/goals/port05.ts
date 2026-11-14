@@ -19,13 +19,16 @@
  * the goal plan in this process and is not a row, so the plan hands it here
  * through `noteGoalPortfolio`; until it has, the streams read as unknown with
  * the reason, and nothing is invented in their place (invariant 39). Credit and
- * readiness are always read from rows. Nothing here writes.
+ * readiness are always read from rows, and so is the streams' co-movement: the
+ * weekly customer payments the ledger holds for each stream replace a declared
+ * correlation wherever two streams share enough weeks (`streams.ts`
+ * `withMeasuredCoMovement`). Nothing here writes.
  *
  * `model.ts` carries the result on `GoalView` (the one goal derivation, §29), so
  * the briefing and the goal page read it from the same place as everything else
  * about a goal.
  */
-import type { StreamRole, StreamsReading } from './streams.ts';
+import { withMeasuredCoMovement, weeklyPayments, type MeasuredSeries, type StreamRole, type StreamsReading } from './streams.ts';
 import type { CapabilityCredit } from './capabilityCredit.ts';
 import type { OfferReadiness } from './offerReadiness.ts';
 
@@ -157,6 +160,21 @@ export interface Port05Deps {
   streams?: (goalId: string) => StreamsReading | null;
   credits?: (goalId: string) => Promise<CapabilityCredit[]>;
   offers?: (goalId: string, now: Date) => Promise<{ opportunityId: string; readiness: OfferReadiness }[]>;
+  /** Weekly payments per stream; defaults to the ledger's rows. */
+  measured?: (opportunityIds: string[]) => Promise<MeasuredSeries>;
+}
+
+/** Each stream's weekly customer payments, from the append-only ledger. Writes nothing. */
+async function paymentsFromRows(opportunityIds: string[]): Promise<MeasuredSeries> {
+  const { getOpportunity } = await import('../../repos/cashPortfolio.ts');
+  const { listMoneyEntries } = await import('../../repos/cashLedger.ts');
+  const entries: Awaited<ReturnType<typeof listMoneyEntries>> = [];
+  for (const id of opportunityIds) {
+    const opportunity = await getOpportunity(id);
+    if (!opportunity) continue;
+    entries.push(...(await listMoneyEntries({ projectId: opportunity.projectId, opportunityId: id, limit: 2000 })));
+  }
+  return weeklyPayments(entries);
 }
 
 /** The live openings a goal pursues, each judged from its rows. Writes nothing. */
@@ -180,7 +198,8 @@ async function creditsFromRows(goalId: string): Promise<CapabilityCredit[]> {
 
 /** One goal's PORT-05 reading, from rows and the plan's latest portfolio. Writes nothing. */
 export async function readPort05(goalId: string, now: Date = new Date(), deps: Port05Deps = {}): Promise<Port05Reading> {
-  const streams = deps.streams ? deps.streams(goalId) : (latestStreams.get(goalId) ?? null);
+  const held = deps.streams ? deps.streams(goalId) : (latestStreams.get(goalId) ?? null);
+  const streams = held ? withMeasuredCoMovement(held, await (deps.measured ?? paymentsFromRows)(held.streams.map((s) => s.opportunityId))) : null;
   const credits = await (deps.credits ?? creditsFromRows)(goalId);
   const offers = await (deps.offers ?? (async (id: string, at: Date) => (await import('./offerReadiness.ts')).offerReadinessForGoal(id, at)))(goalId, now);
   return composePort05({ goalId, streams, credits, offers });

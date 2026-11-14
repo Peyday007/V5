@@ -91,7 +91,7 @@ describe('the composition', () => {
 
   it('takes the streams the goal plan handed over, and forgets them when the plan has none', async () => {
     noteGoalStreamsCleared();
-    const deps = { credits: async () => [], offers: async () => [] };
+    const deps = { credits: async () => [], offers: async () => [], measured: async () => new Map() };
     expect((await readPort05('wst_g', new Date(), deps)).streams.known).toBe(false);
     noteGoalPortfolio('wst_g', { streams: STREAMS });
     expect((await readPort05('wst_g', new Date(), deps)).streams).toMatchObject({ known: true, independentStreams: 2 });

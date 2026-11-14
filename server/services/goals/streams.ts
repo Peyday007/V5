@@ -18,6 +18,14 @@
  * Every figure says whether it is ESTABLISHED (each input it rests on is
  * evidence or Brain's own measurement) or ASSUMED (a swept range or a declared
  * assumption, such as the correlation of lines sharing one mailbox).
+ *
+ * Correlation is measured wherever the rows allow it. Two streams that have
+ * both taken money for long enough have a co-movement of their own: the
+ * Pearson correlation of their weekly customer payments over the weeks both
+ * were live (`measureCoMovement`, fed from the append-only ledger). A measured
+ * coefficient replaces the declared one for that pair, positive or negative,
+ * and is ESTABLISHED with the number of weeks it rests on; a pair without
+ * enough shared history keeps the declared coefficient and says ASSUMED.
  */
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 
@@ -65,10 +73,99 @@ export interface StreamWorlds {
 export interface StreamCorrelation {
   with: string;
   coefficient: number;
-  /** SHARED_RISK_GROUP: both fail through one factor; NONE_KNOWN: no shared factor is modelled, so independence is assumed. */
-  kind: 'SHARED_RISK_GROUP' | 'NONE_KNOWN';
+  /**
+   * MEASURED: the two streams' own weekly payments moved together by this
+   * much over `periods` shared weeks; SHARED_RISK_GROUP: both fail through one
+   * declared factor; NONE_KNOWN: no shared factor is modelled and nothing was
+   * measured, so independence is assumed.
+   */
+  kind: 'MEASURED' | 'SHARED_RISK_GROUP' | 'NONE_KNOWN';
   riskGroup: string | null;
   basis: FigureBasis;
+  /** Weeks a MEASURED coefficient rests on. */
+  periods?: number;
+  /** The declared coefficient a measurement replaced, kept so the change is visible. */
+  assumed?: number;
+}
+
+/**
+ * Observed outcomes per stream, period by period: opportunity id → period
+ * index (a week number) → amount received in it. Read from rows by the caller;
+ * this module only measures.
+ */
+export type MeasuredSeries = ReadonlyMap<string, ReadonlyMap<number, number>>;
+
+/** Fewer shared weeks than this locate no correlation: the coefficient's error would swamp it. */
+export const MIN_COMOVEMENT_PERIODS = 8;
+/** A measured co-movement at least this strong makes two streams dependent, as a shared risk group does. */
+export const CORRELATED_AT = 0.3;
+
+/** The week a timestamp falls in, counted from the Unix epoch: the period measured series are keyed by. */
+export function weekOf(iso: string): number | null {
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? Math.floor(t / (7 * 86_400_000)) : null;
+}
+
+/**
+ * The co-movement of two streams' observed outcomes, or null when the rows
+ * cannot locate one. Only the weeks both streams were live count — from the
+ * later first payment to the earlier last — and a week inside that window with
+ * no payment is a zero, because receiving nothing is an outcome. A series with
+ * no variation in the window says nothing about co-movement.
+ */
+export function measureCoMovement(a: ReadonlyMap<number, number> | undefined, b: ReadonlyMap<number, number> | undefined): { coefficient: number; periods: number } | null {
+  if (!a || !b || a.size === 0 || b.size === 0) return null;
+  const from = Math.max(Math.min(...a.keys()), Math.min(...b.keys()));
+  const to = Math.min(Math.max(...a.keys()), Math.max(...b.keys()));
+  const periods = to - from + 1;
+  if (periods < MIN_COMOVEMENT_PERIODS) return null;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (let w = from; w <= to; w++) {
+    xs.push(a.get(w) ?? 0);
+    ys.push(b.get(w) ?? 0);
+  }
+  const mean = (v: number[]) => v.reduce((n, x) => n + x, 0) / v.length;
+  const mx = mean(xs);
+  const my = mean(ys);
+  let sxy = 0;
+  let sxx = 0;
+  let syy = 0;
+  for (let i = 0; i < xs.length; i++) {
+    const dx = xs[i]! - mx;
+    const dy = ys[i]! - my;
+    sxy += dx * dy;
+    sxx += dx * dx;
+    syy += dy * dy;
+  }
+  if (!(sxx > 0) || !(syy > 0)) return null;
+  const r = Math.max(-1, Math.min(1, sxy / Math.sqrt(sxx * syy)));
+  return { coefficient: Math.round(r * 1000) / 1000, periods };
+}
+
+/** Correlations that make two streams move together: a declared shared factor, or a measured co-movement strong enough. */
+export function isCorrelated(c: Pick<StreamCorrelation, 'kind' | 'coefficient'>): boolean {
+  return c.kind === 'MEASURED' ? c.coefficient >= CORRELATED_AT : c.kind === 'SHARED_RISK_GROUP' && c.coefficient > 0;
+}
+
+function describeCorrelated(c: StreamCorrelation): string {
+  return c.kind === 'MEASURED'
+    ? `moves with ${c.with} (${c.coefficient}, measured over ${c.periods} weeks of payments)`
+    : `moves with ${c.with} through ${c.riskGroup} (${c.coefficient}, assumed)`;
+}
+
+function independenceOf(correlations: StreamCorrelation[], binding: SharedConstraint[], others: number): { independent: boolean; independence: string } {
+  const correlated = correlations.filter(isCorrelated);
+  const independent = binding.length === 0 && correlated.length === 0;
+  if (!independent) return { independent, independence: [...correlated.map(describeCorrelated), ...binding.map((c) => `shares the ${c.constraint} with the leading combination`)].join('; ') };
+  if (others === 0) return { independent, independence: 'no other leading line to depend on' };
+  const allMeasured = correlations.length > 0 && correlations.every((c) => c.kind === 'MEASURED');
+  return {
+    independent,
+    independence: allMeasured
+      ? 'shares no binding constraint with the leading combination, and its payments did not move with theirs (measured)'
+      : 'shares no binding constraint and no correlated risk with the leading combination (no shared factor is modelled; assumed)',
+  };
 }
 
 export interface SharedConstraint {
@@ -111,7 +208,7 @@ export interface StreamsReading {
   streams: PortfolioStream[];
   across: {
     /** Pairwise, over the leading combination and its alternates. */
-    correlations: Array<{ a: string; b: string; coefficient: number; kind: StreamCorrelation['kind']; basis: FigureBasis }>;
+    correlations: Array<{ a: string; b: string; coefficient: number; kind: StreamCorrelation['kind']; basis: FigureBasis; periods?: number }>;
     /** Cash the leading combination has settled by the end of each week, against the deadline. Members are summed world by world, without the shared-risk factor, and a repeatable line's deals are paced uniformly, so it is ASSUMED whenever either applies. */
     cashCurve: Array<{ week: number; dayEnd: number; p10: number; p50: number; p90: number }>;
     cashCurveBasis: FigureBasis;
@@ -139,6 +236,8 @@ export interface StreamsInput {
   /** Correlation inside a named risk group; a group not named takes `defaultCorrelation` (the optimizer's own default). */
   riskCorrelation: Record<string, number>;
   defaultCorrelation: number;
+  /** Observed weekly payments per stream; a pair with enough shared weeks gets a measured coefficient. */
+  measured?: MeasuredSeries | null;
 }
 
 const OUTREACH = 'outreach';
@@ -255,7 +354,6 @@ export function buildStreams(input: StreamsInput): StreamsReading {
 
     // Correlation with every leading member (and, for a leading member, the others).
     const correlations = others.map((o) => pairCorrelation(one, o));
-    const correlated = correlations.filter((c) => c.kind === 'SHARED_RISK_GROUP' && c.coefficient > 0);
 
     // Cash timing, obligations, workforce, QA.
     const settlementBasis = basisOf(isEstablished(one.daysToCash) && isEstablished(one.price));
@@ -316,10 +414,7 @@ export function buildStreams(input: StreamsInput): StreamsReading {
       });
     }
     const binding = sharedConstraints.filter((c) => c.binding);
-    const independent = binding.length === 0 && correlated.length === 0;
-    const independence = independent
-      ? others.length === 0 ? 'no other leading line to depend on' : 'shares no binding constraint and no correlated risk with the leading combination (no shared factor is modelled; assumed)'
-      : [...correlated.map((c) => `moves with ${c.with} through ${c.riskGroup} (${c.coefficient}, assumed)`), ...binding.map((c) => `shares the ${c.constraint} with the leading combination`)].join('; ');
+    const { independent, independence } = independenceOf(correlations, binding, others.length);
 
     streams.push({
       opportunityId: id,
@@ -352,7 +447,7 @@ export function buildStreams(input: StreamsInput): StreamsReading {
       const b = byId.get(pairIds[j]!);
       if (!a || !b) continue;
       const c = pairCorrelation(a, b);
-      pairs.push({ a: a.opportunity.id, b: b.opportunity.id, coefficient: c.coefficient, kind: c.kind, basis: c.basis });
+      pairs.push({ a: a.opportunity.id, b: b.opportunity.id, coefficient: c.coefficient, kind: c.kind, basis: c.basis, ...(c.periods !== undefined ? { periods: c.periods } : {}) });
     }
   }
   const weeks = Math.max(1, Math.ceil(input.deadlineDays / 7));
@@ -396,12 +491,12 @@ export function buildStreams(input: StreamsInput): StreamsReading {
   if (input.spendCeiling !== null) sharedAcross.push({ constraint: 'spend ceiling', limit: input.spendCeiling, used: leadingSpend, binding: leadingSpend > input.spendCeiling + 1e-9, basis: allBasis((s) => s.sharedConstraints.find((c) => c.constraint === 'spend ceiling')?.basis ?? 'ASSUMED') });
   for (const [r, used] of resourceUse) sharedAcross.push({ constraint: r, limit: 1, used, binding: used >= 1 - 1e-9, basis: outreachAcross.find((o) => o.resource === r)?.basis ?? 'ASSUMED' });
 
-  return {
+  const reading: StreamsReading = {
     streams,
     across: {
       correlations: pairs,
       cashCurve,
-      cashCurveBasis: basisOf(!memberWorlds.some((m) => m.paced) && leadingStreams.every((s) => s.cashTiming.basis === 'ESTABLISHED' && s.deliveryObligations.basis === 'ESTABLISHED') && !pairs.some((p) => p.kind === 'SHARED_RISK_GROUP' && leading.has(p.a) && leading.has(p.b))),
+      cashCurveBasis: basisOf(!memberWorlds.some((m) => m.paced) && leadingStreams.every((s) => s.cashTiming.basis === 'ESTABLISHED' && s.deliveryObligations.basis === 'ESTABLISHED') && !pairs.some((p) => movesTogether(p) && leading.has(p.a) && leading.has(p.b))),
       deliveryObligations: { agreedDeals: leadingStreams.reduce((n, s) => n + s.deliveryObligations.agreedDeals, 0), expectedDeals: leadingStreams.reduce((n, s) => n + s.deliveryObligations.expectedDeals.p50, 0), basis: allBasis((s) => s.deliveryObligations.basis) },
       workforceHours: { p50: leadingStreams.reduce((n, s) => n + s.workforce.hours.p50, 0), p90: leadingStreams.reduce((n, s) => n + s.workforce.hours.p90, 0), basis: allBasis((s) => s.workforce.basis) },
       qualityAssurance: { deliveriesToCheck: leadingStreams.reduce((n, s) => n + s.qualityAssurance.deliveriesToCheck.p50, 0), basis: allBasis((s) => s.qualityAssurance.basis) },
@@ -411,4 +506,77 @@ export function buildStreams(input: StreamsInput): StreamsReading {
       independentStreams: streams.filter((s) => s.independent).length,
     },
   };
+  return input.measured ? withMeasuredCoMovement(reading, input.measured) : reading;
+}
+
+/** The weekly curve sums members as if independent, so any dependency between two leading members makes it an assumption. */
+function movesTogether(p: { kind: StreamCorrelation['kind']; coefficient: number }): boolean {
+  return p.kind === 'MEASURED' ? Math.abs(p.coefficient) >= CORRELATED_AT : p.kind === 'SHARED_RISK_GROUP';
+}
+
+/**
+ * The same reading with every pair whose rows can locate a co-movement
+ * measured instead of declared (`measureCoMovement`). A measured coefficient
+ * replaces the declared one, keeps it as `assumed`, and is ESTABLISHED; a pair
+ * the rows cannot locate is left exactly as it was. Independence, the
+ * pairwise table and the curve's basis are re-read from the result. Pure: the
+ * reading passed in is not changed.
+ */
+export function withMeasuredCoMovement(reading: StreamsReading, measured: MeasuredSeries): StreamsReading {
+  // A co-movement needs two series: with fewer, nothing can be measured and the reading stands as it is.
+  if (measured.size < 2) return reading;
+  const measure = (a: string, c: StreamCorrelation): StreamCorrelation => {
+    const seen = measureCoMovement(measured.get(a), measured.get(c.with));
+    if (!seen) return c;
+    const assumed = c.kind === 'MEASURED' ? (c.assumed ?? 0) : c.coefficient;
+    return { with: c.with, coefficient: seen.coefficient, kind: 'MEASURED', riskGroup: c.riskGroup, basis: 'ESTABLISHED', periods: seen.periods, assumed };
+  };
+  const streams = reading.streams.map((s) => {
+    const correlations = s.correlations.map((c) => measure(s.opportunityId, c));
+    return { ...s, correlations, ...independenceOf(correlations, s.sharedConstraints.filter((c) => c.binding), correlations.length) };
+  });
+  const correlations = reading.across.correlations.map((p) => {
+    const m = measure(p.a, { with: p.b, coefficient: p.coefficient, kind: p.kind, riskGroup: null, basis: p.basis, ...(p.periods !== undefined ? { periods: p.periods } : {}) });
+    return { a: p.a, b: p.b, coefficient: m.coefficient, kind: m.kind, basis: m.basis, ...(m.periods !== undefined ? { periods: m.periods } : {}) };
+  });
+  const leading = new Set(streams.filter((s) => s.roles.includes('LEADING')).map((s) => s.opportunityId));
+  const curveDepends = correlations.some((p) => movesTogether(p) && leading.has(p.a) && leading.has(p.b));
+  return {
+    streams,
+    across: {
+      ...reading.across,
+      correlations,
+      cashCurveBasis: curveDepends ? 'ASSUMED' : reading.across.cashCurveBasis,
+      independentStreams: streams.filter((s) => s.independent).length,
+    },
+  };
+}
+
+/**
+ * Weekly customer payments per stream, from append-only ledger entries: the
+ * series `measureCoMovement` reads. Only money a buyer actually paid counts,
+ * net of refunds, in one currency per stream (the one it was mostly paid in —
+ * Brain converts at no rate nobody chose).
+ */
+export function weeklyPayments(entries: ReadonlyArray<{ opportunityId: string | null; kind: string; amountCents: number; currency: string; occurredAt: string }>): Map<string, Map<number, number>> {
+  const counted = entries.filter((e) => e.opportunityId && (e.kind === 'CUSTOMER_PAYMENT' || e.kind === 'REFUND'));
+  const currencyOf = new Map<string, string>();
+  const tally = new Map<string, Map<string, number>>();
+  for (const e of counted) {
+    const t = tally.get(e.opportunityId!) ?? new Map<string, number>();
+    t.set(e.currency, (t.get(e.currency) ?? 0) + 1);
+    tally.set(e.opportunityId!, t);
+  }
+  for (const [id, t] of tally) currencyOf.set(id, [...t].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))[0]![0]);
+  const out = new Map<string, Map<number, number>>();
+  for (const e of counted) {
+    if (e.currency !== currencyOf.get(e.opportunityId!)) continue;
+    const week = weekOf(e.occurredAt);
+    if (week === null) continue;
+    const series = out.get(e.opportunityId!) ?? new Map<number, number>();
+    const signed = e.kind === 'REFUND' ? -Math.abs(e.amountCents) : e.amountCents;
+    series.set(week, (series.get(week) ?? 0) + signed / 100);
+    out.set(e.opportunityId!, series);
+  }
+  return out;
 }
