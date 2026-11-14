@@ -66,6 +66,33 @@ export interface Activity {
    */
   spend?: number[];
   /**
+   * Its spend is paid from the buyer's own prepayment (§99 prepaid
+   * fulfilment): it still leaves the cash kept, but it does not count against
+   * the spending ceiling, which limits the owner's money only.
+   */
+  ceilingExempt?: boolean;
+  /**
+   * Part of its cash that arrives earlier than the rest (a deposit at signing),
+   * paired with `cash` by index: `cash` is then the balance, at `days`.
+   */
+  early?: { cash: number[]; days: number[] };
+  /** Deals it closes per sample, paired with `cash`: the units a market cap counts. */
+  deals?: number[];
+  /**
+   * The market its deals come from. Activities naming one market share it: in
+   * a world their deals together never exceed the market's volume, drawn once
+   * (`marketVolume`, paired with `cash`), and each member is cut in proportion.
+   */
+  market?: string;
+  marketVolume?: number[];
+  /** It may start only once some member's cash has settled by its start day (first proof). */
+  requiresProof?: boolean;
+  /**
+   * The same activity's samples when a gate (a purchase made after proof)
+   * has opened in the world: read instead of `cash`/`days`/`spend`/`deals`.
+   */
+  gated?: { gate: string; cash: number[]; days: number[]; spend?: number[]; deals?: number[]; early?: { cash: number[]; days: number[] } };
+  /**
    * What the samples rest on. Absent means nothing is stated, which is never read
    * as favourable: a probability claim needs a stated sample size.
    */
@@ -121,6 +148,22 @@ export interface PortfolioProblem {
   resourceFailure?: Record<string, number>;
   /** Controls to quantify against the best combination, over the same worlds. */
   safeguards?: Safeguard[];
+  /**
+   * What reaching the target means. `SETTLED` (the default, for callers whose
+   * target is gross receipts): cash settled by the deadline. `KEPT` (a goal's
+   * cash target, §99): settled cash less everything the combination paid out
+   * — its direct costs, buyer-funded or not, and `fixedCost`.
+   */
+  reachOn?: 'SETTLED' | 'KEPT';
+  /** Money already committed outside the activities (capacity or channels bought before proof); it leaves the cash kept in every world. */
+  fixedCost?: number;
+  /**
+   * Purchases made only after proof (§99 Q-7): in a world, a gate opens at
+   * `day` only if some cash has settled by then and the capital left covers
+   * its first `tranche`; then `cost` is paid, and activities naming it read
+   * their `gated` samples. A gate no member names is never bought.
+   */
+  gates?: Array<{ id: string; day: number; tranche: number; cost: number }>;
   worlds?: number;
   seed?: number;
 }
@@ -136,6 +179,10 @@ export interface PortfolioReading {
   capitalShort: number;
   /** Share of worlds whose combined spending broke the spending ceiling (0 when there is none). */
   overSpend: number;
+  /** Median cash kept (settled less paid out) across worlds. */
+  keptP50?: number;
+  /** Median deals closed across worlds, when members state their deals. */
+  dealsP50?: number;
   /**
    * Risk-adjusted collectible contribution: the mean over every world of the
    * cash its members settle by the deadline less everything they paid out —
@@ -297,6 +344,9 @@ function drawPicks(problem: PortfolioProblem, worlds: number): number[][] {
     const n = activity.cash.length;
     if (n === 0 || activity.days.length !== n) throw new Error(`Activity "${activity.key}" needs paired cash and days samples.`);
     if (activity.spend && activity.spend.length !== n) throw new Error(`Activity "${activity.key}" needs spend samples paired with its cash samples.`);
+    for (const [name, xs] of [['early', activity.early?.cash], ['deals', activity.deals], ['market volume', activity.marketVolume], ['gated', activity.gated?.cash]] as const) {
+      if (xs && xs.length !== n) throw new Error(`Activity "${activity.key}" needs ${name} samples paired with its cash samples.`);
+    }
     // Rank worlds by cash so a bad shared shock means low cash for every member.
     const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => activity.cash[a]! - activity.cash[b]!);
     const rng = makeRng(seed, seedOf(`activity:${activity.key}`));
@@ -352,36 +402,99 @@ function evaluateWorlds(problem: PortfolioProblem, members: number[], drawn: Wor
   if (refusal) return { reading: { keys, reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, capitalShort: 0, overSpend: 0, contribution: 0, capitalTurnover: 0, feasible: false, infeasibleBecause: refusal, basis: justified ? 'PROBABILITY' : 'COVERAGE' }, settled: [], allNeedsUp: 0 };
   const memberNeeds = [...new Set(members.flatMap((m) => problem.activities[m]!.needs ?? []))];
   let allUp = 0;
-  const ordered = [...members].sort((a, b) => (problem.activities[a]!.startDay ?? 0) - (problem.activities[b]!.startDay ?? 0));
+  const onKept = problem.reachOn === 'KEPT';
+  // A cost committed outside the activities leaves the cash kept; gross receipts are a different target.
+  const fixedCost = onKept ? Math.max(0, problem.fixedCost ?? 0) : 0;
+  // Gates a member names are bought in start order with the members; one nobody names is not bought.
+  const named = new Set(members.flatMap((m) => (problem.activities[m]!.gated ? [problem.activities[m]!.gated!.gate] : [])));
+  const gates = (problem.gates ?? []).filter((g) => named.has(g.id));
+  type Gate = (typeof gates)[number];
+  type Entry = { m: number; gate: null; start: number } | { m: -1; gate: Gate; start: number };
+  const ordered: Entry[] = [
+    ...members.map((m): Entry => ({ m, gate: null, start: problem.activities[m]!.startDay ?? 0 })),
+    ...gates.map((gate): Entry => ({ m: -1, gate, start: gate.day })),
+  ].sort((a, b) => a.start - b.start || (a.gate ? 1 : 0) - (b.gate ? 1 : 0));
+  // Members drawing on one market cap their deals together, world by world.
+  const markets = new Map<string, number[]>();
+  for (const m of members) {
+    const key = problem.activities[m]!.market;
+    if (key) markets.set(key, [...(markets.get(key) ?? []), m]);
+  }
+  const grouped = [...markets.values()].filter((g) => g.length > 1);
+  const anyDeals = members.some((m) => problem.activities[m]!.deals);
   const settled = new Float64Array(worlds);
+  const keptAt = new Float64Array(worlds);
+  const dealsAt = new Float64Array(worlds);
+  const scale = new Float64Array(problem.activities.length).fill(1);
+  const gateOpen = new Map<string, boolean>();
   let reached = 0;
   let short = 0;
   let over = 0;
   let contributed = 0;
   let tied = 0;
   let cycled = 0;
-  const pending: Array<{ day: number; cash: number }> = [];
+  const pending: Array<{ day: number; cash: number; back: number }> = [];
+  type Arrays = { cash: number[]; days: number[]; spend?: number[]; deals?: number[]; early?: { cash: number[]; days: number[] } };
+  const arraysOf = (act: Activity, open: boolean): Arrays => (open && act.gated ? act.gated : act);
+  /** What one member brings in one world from one set of its samples. */
+  const contribution = (act: Activity, a: Arrays, s: number, start: number, f: number) => {
+    const day = start + a.days[s]!;
+    const cash = a.cash[s]! * f;
+    const early = a.early ? { day: start + a.early.days[s]!, cash: a.early.cash[s]! * f } : null;
+    const inTime = (day <= problem.deadlineDays ? cash : 0) + (early && early.day <= problem.deadlineDays ? early.cash : 0);
+    const spend = (a.spend?.[s] ?? 0) * f;
+    return { day, cash, early, inTime, spend, ceiling: act.ceilingExempt ? 0 : spend, deals: (a.deals?.[s] ?? 0) * f };
+  };
+  const undecided: Array<{ act: Activity; s: number; start: number; f: number; gate: string }> = [];
   for (let i = 0; i < worlds; i++) {
     let capital = problem.startingCapital ?? Infinity;
     let total = 0;
     let wasShort = false;
     let spent = 0;
+    let ceilingSpent = 0;
+    let deals = 0;
     let held = 0;
     let lastDay = 0;
+    let proof = 0;
     pending.length = 0;
+    undecided.length = 0;
+    gateOpen.clear();
     if (memberNeeds.every((id) => down.get(id)![i] === 0)) allUp += 1;
-    for (const m of ordered) {
-      const act = problem.activities[m]!;
-      const s = picks[m]![i]!;
-      const start = act.startDay ?? 0;
-      const need = act.capital ?? 0;
+    // One market's members together sell at most what the market takes in this world (one draw), each cut in proportion.
+    for (const g of grouped) {
+      const volume = problem.activities[g[0]!]!.marketVolume?.[picks[g[0]!]![i]!];
+      let sum = 0;
+      for (const m of g) sum += problem.activities[m]!.deals?.[picks[m]![i]!] ?? 0;
+      const f = volume !== undefined && sum > volume ? Math.max(0, volume) / sum : 1;
+      for (const m of g) scale[m] = f;
+    }
+    for (const entry of ordered) {
+      const start = entry.start;
       // Cash settled by this start day returns to the pool, once.
       for (let p = pending.length - 1; p >= 0; p--) {
         if (pending[p]!.day <= start) {
-          capital += pending[p]!.cash;
+          capital += pending[p]!.cash + pending[p]!.back;
+          proof += pending[p]!.cash;
           pending.splice(p, 1);
         }
       }
+      if (entry.gate) {
+        // A purchase after proof: some cash has come back, and what is left covers its first tranche.
+        const g = entry.gate;
+        const open = proof >= 1 && g.tranche <= capital + 1e-9;
+        gateOpen.set(g.id, open);
+        if (open) {
+          capital -= g.tranche;
+          spent += g.cost;
+          ceilingSpent += g.cost;
+        }
+        continue;
+      }
+      const m = entry.m;
+      const act = problem.activities[m]!;
+      const s = picks[m]![i]!;
+      const need = act.capital ?? 0;
+      if (act.requiresProof && proof < 1) continue;
       if (need > capital + 1e-9) {
         wasShort = true;
         continue;
@@ -390,29 +503,74 @@ function evaluateWorlds(problem: PortfolioProblem, members: number[], drawn: Wor
       held += need;
       // A needed resource is down in this world: nothing settles, and the capital tied up is not recovered.
       if ((act.needs ?? []).some((id) => down.get(id)![i] === 1)) continue;
-      const day = start + act.days[s]!;
+      const f = scale[m]!;
+      const gate = act.gated?.gate;
+      if (gate !== undefined && !gateOpen.has(gate)) undecided.push({ act, s, start, f, gate });
+      // The hot path reads the samples in place: one combination is read over every world, hundreds of times a plan.
+      const a = arraysOf(act, gate !== undefined && gateOpen.get(gate) === true);
+      const day = start + a.days[s]!;
+      const cash = a.cash[s]! * f;
       if (day > lastDay) lastDay = day;
+      const spend = a.spend ? a.spend[s]! * f : 0;
+      spent += spend;
+      if (!act.ceilingExempt) ceilingSpent += spend;
+      if (a.deals) deals += a.deals[s]! * f;
       // Capital comes back with the cash it earned.
-      const cash = act.cash[s]!;
-      spent += act.spend?.[s] ?? 0;
-      pending.push({ day, cash: cash + need });
+      pending.push({ day, cash, back: need });
       if (day <= problem.deadlineDays) total += cash;
+      if (a.early) {
+        const earlyDay = start + a.early.days[s]!;
+        const earlyCash = a.early.cash[s]! * f;
+        pending.push({ day: earlyDay, cash: earlyCash, back: 0 });
+        if (earlyDay <= problem.deadlineDays) total += earlyCash;
+      }
+    }
+    // A member that started before its gate sold on the capacity it had; once the gate opened, on the capacity bought.
+    for (const u of undecided) {
+      if (!gateOpen.get(u.gate)) continue;
+      const before = contribution(u.act, arraysOf(u.act, false), u.s, u.start, u.f);
+      const after = contribution(u.act, arraysOf(u.act, true), u.s, u.start, u.f);
+      total += after.inTime - before.inTime;
+      spent += after.spend - before.spend;
+      ceilingSpent += after.ceiling - before.ceiling;
+      deals += after.deals - before.deals;
+      if (after.day > lastDay) lastDay = after.day;
     }
     settled[i] = total;
-    contributed += total - spent;
+    const keep = total - spent - fixedCost;
+    keptAt[i] = keep;
+    dealsAt[i] = deals;
+    contributed += keep;
     tied += held;
     cycled += lastDay;
-    const overCeiling = problem.spendCeiling !== undefined && spent > problem.spendCeiling + 1e-9;
+    const overCeiling = problem.spendCeiling !== undefined && ceilingSpent > problem.spendCeiling + 1e-9;
     if (overCeiling) over += 1;
-    if (total >= problem.target && !overCeiling) reached += 1;
+    if ((onKept ? keep : total) >= problem.target && !overCeiling) reached += 1;
     if (wasShort) short += 1;
   }
-  const sorted = Array.from(settled).sort((a, b) => a - b);
+  // Typed sorts are numeric and in place: no comparator call per pair.
+  const sorted = Array.from(settled.sort());
   const q = (p: number) => sorted[Math.min(worlds - 1, Math.floor(p * worlds))]!;
-  const contribution = contributed / worlds;
-  const turnover = capitalTurnover(contribution, tied / worlds, cycled / worlds) ?? 0;
+  const median = (xs: Float64Array) => xs.sort()[Math.min(worlds - 1, Math.floor(0.5 * worlds))]!;
+  const meanKept = contributed / worlds;
+  const turnover = capitalTurnover(meanKept, tied / worlds, cycled / worlds) ?? 0;
   return {
-    reading: { keys, reach: reached / worlds, settledP10: q(0.1), settledP50: q(0.5), settledP90: q(0.9), capitalShort: short / worlds, overSpend: over / worlds, contribution, capitalTurnover: turnover, feasible: true, infeasibleBecause: null, basis: justified ? 'PROBABILITY' : 'COVERAGE' },
+    reading: {
+      keys,
+      reach: reached / worlds,
+      settledP10: q(0.1),
+      settledP50: q(0.5),
+      settledP90: q(0.9),
+      capitalShort: short / worlds,
+      overSpend: over / worlds,
+      keptP50: median(keptAt),
+      ...(anyDeals ? { dealsP50: median(dealsAt) } : {}),
+      contribution: meanKept,
+      capitalTurnover: turnover,
+      feasible: true,
+      infeasibleBecause: null,
+      basis: justified ? 'PROBABILITY' : 'COVERAGE',
+    },
     settled: sorted,
     allNeedsUp: allUp / worlds,
   };
@@ -606,7 +764,10 @@ function withSafeguard(problem: PortfolioProblem, guard: Safeguard, members: num
   const activities = problem.activities.map((one) => {
     let next = one;
     if (guard.decorrelate?.includes(one.key) && one.riskGroup) next = { ...next, riskGroup: undefined };
-    if (guard.daysFactor?.activities.includes(one.key)) next = { ...next, days: one.days.map((d) => d * Math.min(1, Math.max(0, guard.daysFactor!.factor))) };
+    if (guard.daysFactor?.activities.includes(one.key)) {
+      const k = Math.min(1, Math.max(0, guard.daysFactor!.factor));
+      next = { ...next, days: one.days.map((d) => d * k), ...(one.early ? { early: { cash: one.early.cash, days: one.early.days.map((d) => d * k) } } : {}) };
+    }
     return next;
   });
   const capacity = { ...(problem.capacity ?? {}) };

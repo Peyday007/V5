@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { evaluateGoalPortfolio } from '../server/services/goals/portfolio.ts';
-import { reconstructPlan, renderReconstruction } from '../server/services/goals/reconstruction.ts';
+import { reconstructPlan, renderReconstruction, RETURN_BOUND } from '../server/services/goals/reconstruction.ts';
 import { ACQUISITION_LEVERS, dailyVolumePlan, purchaseCapacity } from '../server/services/goals/acquisitionLevers.ts';
 import { assessOutreachRecord } from '../server/services/goals/evidenceAuthority.ts';
 import { reconstructionDiagnosis } from '../server/services/goals/plan.ts';
@@ -91,6 +91,15 @@ describe('§99 regression: the $10K plan', () => {
     expect(r.floor!.reach).toBeLessThanOrEqual(r.best.reach + 0.02);
     expect(r.requiredReply === null || r.requiredReply > 0).toBe(true);
     expect(renderReconstruction(r).join('\n')).toMatch(/as-is/);
+  });
+
+  it('concludes on a plausible plan: its median is within the bound on the money behind it, or the reading is flagged and not concluded with (C-4)', () => {
+    const ratio = r.best.settledP50 / Math.max(1, r.best.committed + (portfolioInput.capitalCeiling ?? 0));
+    expect(ratio <= RETURN_BOUND || (r.best.implausible ?? []).some((f) => f.kind === 'RETURN')).toBe(true);
+    expect(r.best.implausible ?? []).toHaveLength(0);
+    // Production read p50 $34.5M on this goal's limits; the fixture read $76,826 on $364 before the repair.
+    expect(r.best.settledP50).toBeLessThan(RETURN_BOUND * (r.best.committed + 3000));
+    expect(r.best.reach).toBeLessThanOrEqual(r.headroom.reach + 0.02);
   });
 
   it('improves on what Brain produced before §99, and evaluates each strategy once', () => {
