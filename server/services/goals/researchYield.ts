@@ -762,6 +762,29 @@ async function attributionFacts(orchestrationIds: readonly string[], projectIds:
 }
 
 /**
+ * The purposes each bin serves, from the same rows and the same rules a job's
+ * attribution uses (`attributePurposes`): the bin's recorded purpose, its
+ * project, and what its research orchestration was asked for. A bin nothing
+ * attributes is UNATTRIBUTED. Reads only.
+ */
+export async function purposesOfBins(bins: readonly { id: string; orchestrationId: string | null; projectId: string; purpose?: string | null }[]): Promise<Map<string, PurposeKey[]>> {
+  const facts = await attributionFacts(
+    bins.map((b) => b.orchestrationId).filter((one): one is string => !!one),
+    bins.map((b) => b.projectId),
+  );
+  const out = new Map<string, PurposeKey[]>();
+  for (const b of bins) {
+    const attribution = attributePurposes({
+      ...facts.byProject.get(b.projectId),
+      ...(b.orchestrationId ? facts.byOrchestration.get(b.orchestrationId) : undefined),
+      binPurpose: b.purpose ?? null,
+    });
+    out.set(b.id, attribution.purposes);
+  }
+  return out;
+}
+
+/**
  * Research yield over one window, total, per lane and per purpose, from the
  * rows the work wrote. See `summarizeResearchYield` for the folding rules.
  */

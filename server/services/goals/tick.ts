@@ -59,14 +59,21 @@ import {
   RESEARCH_PURPOSES,
   SYSTEM_HEALTH_FLOOR,
   decideResearchAllocation,
+  binPriorityShift,
+  normalizeShares,
+  purposePriorityShifts,
+  purposesBelowFloor,
   type AllocationDecision,
   type AllocationInput,
   type BottleneckMeasurement,
   type LaneMeasurement,
   type LaneRemedy,
   type PurposeMeasurement,
+  type PriorityShift,
   type ResearchPurpose,
+  type SharesInForce,
 } from './researchAllocation.ts';
+import { getDb } from '../../db/database.ts';
 
 export interface GoalTickReport {
   goals: number;
@@ -80,6 +87,22 @@ export interface GoalTickReport {
    * not due; an error is reported here, never thrown into the tick.
    */
   research?: ResearchAllocationReport | { error: string } | null;
+  /**
+   * The decision in force applied to the work: each purpose's priority step and
+   * the bins it moved. Null when no decision is recorded, or it was held.
+   */
+  researchApplied?: ResearchApplication | null;
+}
+
+export interface ResearchApplication {
+  /** The decision applied, by its fingerprint. */
+  fingerprint: string | null;
+  shifts: Record<ResearchPurpose, PriorityShift>;
+  belowFloor: ResearchPurpose[];
+  /** Goal bins whose priority the step moved off their goal's rank. */
+  goalBins: { binId: string; purposes: string[]; shift: PriorityShift }[];
+  /** Bins no goal pursues, raised because a purpose they serve is below a protected floor. */
+  floorRaised: { binId: string; purposes: string[]; from: number; to: number }[];
 }
 
 const LIVE = new Set(['DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN']);
@@ -178,8 +201,20 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
     }
   }
 
+  // The research allocation is decided (at most hourly) before capacity is
+  // handed out, and the newest recorded decision is applied on every pass.
+  report.research = await reallocateResearchIfDue({ goals: snapshot.goals, now: options?.now });
+  const inForce = await researchInForce(snapshot.goals);
+  const application: ResearchApplication | null = inForce
+    ? { fingerprint: inForce.fingerprint, shifts: purposePriorityShifts(inForce.shares), belowFloor: purposesBelowFloor(inForce.shares), goalBins: [], floorRaised: [] }
+    : null;
+  const liveBins = application ? await liveBinRows() : [];
+  const binPurposes: Map<string, string[]> = application ? await (await import('./researchYield.ts')).purposesOfBins(liveBins) : new Map<string, string[]>();
+  const shiftOf = (binId: string): PriorityShift => (application ? binPriorityShift(binPurposes.get(binId) ?? [], application.shifts) : 0);
+
   // Allocation: a workable goal's rank maps to its live bins' priority, and a
-  // bin pursued by several goals takes the highest.
+  // bin pursued by several goals takes the highest. The research decision in
+  // force then steps it one up or down by the purposes the bin serves.
   const ranked = new Map(rankGoals(snapshot.facts).map((one) => [one.id, one]));
   const target = new Map<string, { priority: number; goalId: string }>();
   for (const [binId, { goals }] of owners) {
@@ -193,6 +228,24 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
       if (!current || priority > current.priority) target.set(binId, { priority, goalId: goal.id });
     }
   }
+  for (const [binId, entry] of target) {
+    const shift = shiftOf(binId);
+    if (shift === 0) continue;
+    entry.priority = Math.min(8, Math.max(0, entry.priority + shift));
+    application!.goalBins.push({ binId, purposes: binPurposes.get(binId) ?? [], shift });
+  }
+  // A bin no goal pursues has no rank to return to, so it is only ever raised,
+  // and only while a purpose it serves sits below a protected floor.
+  if (application && application.belowFloor.length > 0) {
+    const floorPriority = binPriorityForRank(0);
+    for (const bin of liveBins) {
+      if (owners.has(bin.id) || bin.heldByWorkstreamId || bin.priority >= floorPriority) continue;
+      const purposes = binPurposes.get(bin.id) ?? [];
+      if (!purposes.some((p) => (application.belowFloor as readonly string[]).includes(p))) continue;
+      if (await setLiveBinPriority(bin.id, floorPriority)) application.floorRaised.push({ binId: bin.id, purposes, from: bin.priority, to: floorPriority });
+    }
+  }
+  report.researchApplied = application;
   const changedPerGoal = new Map<string, string[]>();
   for (const [binId, { priority, goalId }] of target) {
     if (await setLiveBinPriority(binId, priority)) {
@@ -207,8 +260,8 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
     await recordWorkstreamEvent({
       workstreamId: goalId,
       kind: 'GOAL_CAPACITY_ALLOCATED',
-      summary: `${bins.length} bin(s) set to priority ${binPriorityForRank(rank?.rank ?? 99)} for this goal's position ${(rank?.rank ?? 0) + 1} among its owner's goals.`,
-      detail: { bins, rank: rank?.rank ?? null },
+      summary: `${bins.length} bin(s) set to priority ${binPriorityForRank(rank?.rank ?? 99)} for this goal's position ${(rank?.rank ?? 0) + 1} among its owner's goals${application?.goalBins.some((g) => bins.includes(g.binId)) ? ', stepped by the research allocation in force' : ''}.`,
+      detail: { bins, rank: rank?.rank ?? null, researchShift: application?.goalBins.filter((g) => bins.includes(g.binId)) ?? [], researchDecision: application?.fingerprint ?? null },
       actorRef: 'BRAIN',
     });
   }
@@ -234,8 +287,50 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
     report.moved.push({ goalId: rank.id, from: last ? last.rank : null, to: rank.rank, reason: why.reason });
   }
 
-  report.research = await reallocateResearchIfDue({ goals: snapshot.goals, now: options?.now });
   return report;
+}
+
+/** The live bins, with what attribution needs. */
+async function liveBinRows(): Promise<{ id: string; projectId: string; orchestrationId: string | null; purpose: string | null; priority: number; heldByWorkstreamId: string | null }[]> {
+  const rows = await getDb().all<{ id: string; project_id: string; orchestration_id: string | null; purpose: string | null; priority: number | string; held_by_workstream_id: string | null }>(
+    `SELECT id, project_id, orchestration_id, purpose, priority, held_by_workstream_id FROM bins
+      WHERE state IN ('DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN') ORDER BY id LIMIT 5000`,
+    [],
+  );
+  return rows.map((r) => ({ id: r.id, projectId: r.project_id, orchestrationId: r.orchestration_id, purpose: r.purpose, priority: Number(r.priority), heldByWorkstreamId: r.held_by_workstream_id }));
+}
+
+/** The shares a recorded decision's detail puts in force, or null when it carries none. Pure. */
+export function sharesInForceFrom(detail: Record<string, unknown> | null): (SharesInForce & { fingerprint: string | null }) | null {
+  if (!detail || typeof detail.shares !== 'object' || detail.shares === null) return null;
+  const read = (value: unknown): Record<ResearchPurpose, number> | null => {
+    if (!value || typeof value !== 'object') return null;
+    const v = value as Record<string, unknown>;
+    if (!RESEARCH_PURPOSES.every((p) => typeof v[p] === 'number' && Number.isFinite(v[p] as number))) return null;
+    return Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, v[p] as number])) as Record<ResearchPurpose, number>;
+  };
+  const shares = read(detail.shares);
+  const observed = read(detail.observed);
+  // A decision recorded before what the window gave each purpose was stored cannot be applied: nothing to compare.
+  if (!shares || !observed) return null;
+  const floors = detail.floors as { commercial?: unknown } | undefined;
+  return {
+    shares,
+    observed,
+    held: detail.held === true,
+    urgentCommercialGoal: typeof floors?.commercial === 'number',
+    fingerprint: typeof detail.fingerprint === 'string' ? detail.fingerprint : null,
+  };
+}
+
+/** The decision in force: the newest recorded on a live goal, unless it was held. */
+async function researchInForce(goals: GoalView[]): Promise<{ shares: SharesInForce; fingerprint: string | null } | null> {
+  const live = goals.filter((g) => g.lifecycle === 'ACTIVE');
+  if (live.length === 0) return null;
+  const ports = await productionResearchAllocationPorts();
+  const parsed = sharesInForceFrom(await ports.lastDecision(live[0]!.id));
+  if (!parsed || parsed.held) return null;
+  return { shares: parsed, fingerprint: parsed.fingerprint };
 }
 
 /* ------------------------------------------------------------------------- */
@@ -267,7 +362,12 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
  *   * A capacity change is only ever recorded as a recommendation naming the
  *     measured constraint and its cost. The pass starts no work, spends
  *     nothing, raises no limit and takes no worker's item. It does not write bin
- *     priorities either: the allocation stage above is their one writer.
+ *     priorities itself: the allocation stage is their one writer, and on every
+ *     pass it applies the newest recorded decision (`sharesInForceFrom`,
+ *     `purposePriorityShifts`) — a goal bin serving an under-served purpose is
+ *     stepped up from its rank's priority and one serving an over-served purpose
+ *     down, and a bin no goal pursues is raised while a purpose it serves sits
+ *     below a protected floor. That is what makes the shares move capacity.
  *
  * An unchanged decision writes nothing, so a quiet hour leaves no rows.
  */
@@ -387,9 +487,9 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const previous = live.length > 0 ? await ports.lastDecision(live[0]!.id) : null;
   const tried = triedRemediesFrom(previous);
   const reading = await ports.readYield(window);
-  const decision = decideResearchAllocation(
-    allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried }),
-  );
+  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried });
+  const decision = decideResearchAllocation(allocationInput);
+  const observed = normalizeShares(allocationInput.currentShares);
   const fingerprint = allocationFingerprint(decision);
   const floors = {
     exploration: EXPLORATION_FLOOR,
@@ -401,6 +501,8 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     fingerprint,
     window,
     shares: Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, round3(decision.shares[p])])),
+    // What the window actually gave each purpose: what the goals tick compares the decided shares with.
+    observed: Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, round3(observed[p])])),
     floors,
     held: decision.held,
     changes: decision.changes.map((c) => ({ purpose: c.purpose, from: round3(c.from), to: round3(c.to), reasons: c.reasons })),

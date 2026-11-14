@@ -504,3 +504,66 @@ export function laneYieldForWindow(jobs: ResearchJobRecord[], window: { from: st
   for (const row of lanes.values()) row.costPerUsefulResult = row.usefulResults > 0 ? row.cost / row.usefulResults : null;
   return [...lanes.values()].sort((a, b) => a.lane.localeCompare(b.lane));
 }
+
+/* ------------------------------------------------------------------------- */
+/* Applying the decision to the work (RES-07)                                  */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * A decided share moves capacity only through the lever the dispatcher and
+ * the assigner already read: a live bin's priority (`ORDER BY priority DESC`).
+ * The goals tick is its one writer, so the decision is applied there, every
+ * pass, from the newest recorded `GOAL_RESEARCH_REALLOCATED` decision.
+ *
+ * A purpose whose decided share is at least `SHARE_GAP_FOR_SHIFT` above the
+ * share it actually received in the window is under-served and its bins go one
+ * step up; one that far above its decided share goes one step down. A purpose
+ * below a protected floor — exploration, system health, the urgent commercial
+ * goal — always goes up, whatever the gap says, so the floors bind the work and
+ * not only the record. A held decision (nothing measured) moves nothing.
+ */
+export const SHARE_GAP_FOR_SHIFT = 0.05;
+export type PriorityShift = -1 | 0 | 1;
+
+export interface SharesInForce {
+  /** The decided shares. */
+  shares: Record<ResearchPurpose, number>;
+  /** The shares the window actually gave each purpose (its job time), normalized. */
+  observed: Record<ResearchPurpose, number>;
+  held: boolean;
+  urgentCommercialGoal: boolean;
+}
+
+/** Which purposes sit below a protected floor in what they actually received. Pure. */
+export function purposesBelowFloor(f: SharesInForce): ResearchPurpose[] {
+  if (f.held) return [];
+  const out: ResearchPurpose[] = [];
+  if (EXPLORATION_PURPOSES.reduce((s, p) => s + f.observed[p], 0) < EXPLORATION_FLOOR - 1e-9) out.push(...EXPLORATION_PURPOSES);
+  if (f.observed.SELF_IMPROVEMENT < SYSTEM_HEALTH_FLOOR - 1e-9) out.push('SELF_IMPROVEMENT');
+  if (f.urgentCommercialGoal && f.observed.TRANSACTION_ROUTES < COMMERCIAL_FLOOR - 1e-9) out.push('TRANSACTION_ROUTES');
+  return out;
+}
+
+/** The priority step each purpose's bins take under the decision in force. Pure. */
+export function purposePriorityShifts(f: SharesInForce): Record<ResearchPurpose, PriorityShift> {
+  const out = Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, 0])) as Record<ResearchPurpose, PriorityShift>;
+  if (f.held) return out;
+  for (const p of RESEARCH_PURPOSES) {
+    const gap = f.shares[p] - f.observed[p];
+    if (gap >= SHARE_GAP_FOR_SHIFT) out[p] = 1;
+    else if (gap <= -SHARE_GAP_FOR_SHIFT) out[p] = -1;
+  }
+  for (const p of purposesBelowFloor(f)) out[p] = 1;
+  return out;
+}
+
+/**
+ * One bin's step: the largest among the purposes it serves, so a bin that also
+ * serves an under-served purpose is never pushed down for the other. A bin no
+ * row attributes takes no step. Pure.
+ */
+export function binPriorityShift(purposes: readonly string[], shifts: Record<ResearchPurpose, PriorityShift>): PriorityShift {
+  const known = purposes.filter((p): p is ResearchPurpose => (RESEARCH_PURPOSES as readonly string[]).includes(p));
+  if (known.length === 0) return 0;
+  return Math.max(...known.map((p) => shifts[p])) as PriorityShift;
+}

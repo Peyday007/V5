@@ -16,9 +16,15 @@ import {
   allocationInputFrom,
   reallocateResearch,
   reallocateResearchIfDue,
+  sharesInForceFrom,
   triedRemediesFrom,
   type ResearchAllocationPorts,
 } from '../server/services/goals/tick.ts';
+import { binPriorityShift, purposePriorityShifts, purposesBelowFloor, COMMERCIAL_FLOOR } from '../server/services/goals/researchAllocation.ts';
+import { createWorkstream as createGoal, linkWorkstream, recordWorkstreamEvent } from '../server/repos/register.ts';
+import { createBin, getBin } from '../server/repos/bins.ts';
+import { launchMission, linkMission } from '../server/repos/russellMissions.ts';
+import type { BinManifest } from '../server/domain/types.ts';
 import { RESEARCH_PURPOSES, EXPLORATION_FLOOR, SYSTEM_HEALTH_FLOOR, type ResearchPurpose } from '../server/services/goals/researchAllocation.ts';
 import type { ResearchYieldReading, YieldBucket } from '../server/services/goals/researchYield.ts';
 import type { GoalView } from '../server/services/goals/model.ts';
@@ -171,5 +177,152 @@ describe('on production rows, through advanceGoals', () => {
     // Forced, the unchanged decision writes nothing more.
     await reallocateResearchIfDue({ goals: [goalView(goal.id, { projectId })] }, undefined, { force: true });
     expect((await listWorkstreamEvents(goal.id, 50)).filter((e) => e.kind === RESEARCH_REALLOCATED_EVENT)).toHaveLength(1);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* The decision is applied to the work, not only recorded (review finding F1) */
+/* ------------------------------------------------------------------------- */
+
+const shares = (over: Partial<Record<ResearchPurpose, number>>): Record<ResearchPurpose, number> => {
+  const base: Record<ResearchPurpose, number> = { BROAD_DISCOVERY: 0.2, TRANSACTION_ROUTES: 0.3, OPERATING_SUPPORT: 0.15, SELF_IMPROVEMENT: 0.15, FORWARD_EXPLORATION: 0.2 };
+  return { ...base, ...over };
+};
+
+describe('the decision in force moves capacity (pure)', () => {
+  it('steps an under-served purpose up, an over-served one down, and leaves a small gap alone', () => {
+    const shifts = purposePriorityShifts({
+      shares: shares({ BROAD_DISCOVERY: 0.3, TRANSACTION_ROUTES: 0.2 }),
+      observed: shares({ BROAD_DISCOVERY: 0.2, TRANSACTION_ROUTES: 0.35, OPERATING_SUPPORT: 0.13 }),
+      held: false,
+      urgentCommercialGoal: false,
+    });
+    expect(shifts.BROAD_DISCOVERY).toBe(1);
+    expect(shifts.TRANSACTION_ROUTES).toBe(-1);
+    expect(shifts.OPERATING_SUPPORT).toBe(0);
+  });
+
+  it('always raises a purpose below a protected floor, whatever the gap says', () => {
+    const f = {
+      shares: shares({ SELF_IMPROVEMENT: SYSTEM_HEALTH_FLOOR }),
+      observed: shares({ SELF_IMPROVEMENT: 0.02, BROAD_DISCOVERY: 0.05, FORWARD_EXPLORATION: 0.05, TRANSACTION_ROUTES: 0.1 }),
+      held: false,
+      urgentCommercialGoal: true,
+    };
+    expect(purposesBelowFloor(f).sort()).toEqual(['BROAD_DISCOVERY', 'FORWARD_EXPLORATION', 'SELF_IMPROVEMENT', 'TRANSACTION_ROUTES'].sort());
+    expect(f.observed.TRANSACTION_ROUTES).toBeLessThan(COMMERCIAL_FLOOR);
+    const shifts = purposePriorityShifts(f);
+    expect(shifts.SELF_IMPROVEMENT).toBe(1);
+    expect(shifts.BROAD_DISCOVERY).toBe(1);
+    expect(shifts.FORWARD_EXPLORATION).toBe(1);
+    expect(shifts.TRANSACTION_ROUTES).toBe(1);
+  });
+
+  it('moves nothing on a held decision, and a bin takes the largest step of the purposes it serves', () => {
+    const held = purposePriorityShifts({ shares: shares({ SELF_IMPROVEMENT: 0.5 }), observed: shares({ SELF_IMPROVEMENT: 0 }), held: true, urgentCommercialGoal: true });
+    expect(Object.values(held).every((v) => v === 0)).toBe(true);
+    const shifts = { BROAD_DISCOVERY: 1, TRANSACTION_ROUTES: -1, OPERATING_SUPPORT: 0, SELF_IMPROVEMENT: 0, FORWARD_EXPLORATION: 0 } as const;
+    expect(binPriorityShift(['TRANSACTION_ROUTES', 'BROAD_DISCOVERY'], shifts)).toBe(1);
+    expect(binPriorityShift(['TRANSACTION_ROUTES'], shifts)).toBe(-1);
+    expect(binPriorityShift(['UNATTRIBUTED'], shifts)).toBe(0);
+    expect(binPriorityShift([], shifts)).toBe(0);
+  });
+
+  it('reads the shares in force from a recorded decision, and refuses one that cannot be compared', () => {
+    const parsed = sharesInForceFrom({ fingerprint: 'f1', shares: shares({}), observed: shares({}), held: false, floors: { commercial: COMMERCIAL_FLOOR } });
+    expect(parsed).toMatchObject({ fingerprint: 'f1', held: false, urgentCommercialGoal: true });
+    expect(sharesInForceFrom({ shares: shares({}), held: false })).toBeNull();
+    expect(sharesInForceFrom(null)).toBeNull();
+  });
+
+  it('records what the window gave each purpose beside the decided shares, so the tick can compare them', async () => {
+    const { ports, events } = memoryPorts(reading());
+    await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-14T00:00:00.000Z' }, ports);
+    const detail = events.get('wst_a')!.at(-1)!;
+    const inForce = sharesInForceFrom(detail);
+    expect(inForce).not.toBeNull();
+    const total = RESEARCH_PURPOSES.reduce((sum, p) => sum + inForce!.observed[p], 0);
+    expect(total).toBeCloseTo(1, 2);
+  });
+});
+
+describe('advanceGoals applies the newest recorded decision to live bins (review finding F1)', () => {
+  let ownerId: string;
+  let projectId: string;
+  beforeEach(async () => {
+    projectId = (await freshProject()).project.id;
+    ownerId = (await createUser({ email: `apply-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+    // Spend this hour's decision pass so the seeded decision below is the one in force.
+    await reallocateResearchIfDue({ goals: [] }, memoryPorts(reading()).ports, { nowMs: Date.now(), force: true });
+  });
+
+  function manifest(): BinManifest {
+    return {
+      objective: 'Establish a value.', why: 'Exercise allocation.', lineage: { projectId, layerId: null, goal: null, orchestrationId: null },
+      units: [{ key: 'unit-1', establishes: 'The transform of input 1', input: 'one', transform: 'sha256', dependsOn: [] }],
+      acceptableSources: [], excludedSources: [], evidence: ['a recomputed value'], outputs: ['one unit result'],
+      authorizedActions: ['submit unit results'], prohibitedActions: ['anything with an external effect'], budgetUnits: 1,
+      retry: { maxAttempts: 3, backoffSeconds: 30 }, stoppingConditions: ['every unit verified'],
+    };
+  }
+
+  async function brainBin(priority: number): Promise<string> {
+    const bin = await createBin({ projectId, kind: 'DETERMINISTIC_CHECK', title: 'Method check', objective: 'Establish a value.', manifest: manifest(), completionContract: 'DETERMINISTIC_UNITS_V1', createdByType: 'SYSTEM', createdById: 'test', ready: true });
+    await getDb().run(`UPDATE bins SET purpose = 'BRAIN_IMPROVEMENT', priority = ? WHERE id = ?`, [priority, bin.id]);
+    return bin.id;
+  }
+
+  async function goalPursuing(binId: string): Promise<string> {
+    const { mission } = await launchMission({ projectId, visibility: 'SHARED', objective: 'Answer the question.', whyNow: 'A goal pursues it.', idempotencyKey: `m-${binId}` });
+    await linkMission({ missionId: mission.id, binId });
+    const goal = await createGoal({ projectId, title: 'Improve methods', intent: 'Better methods.', purpose: 'CAPABILITY', createdByUserId: ownerId });
+    await linkWorkstream({ workstreamId: goal.id, kind: 'MISSION', ref: mission.id, relation: 'PURSUES', recordedBy: 'PERSON' });
+    return goal.id;
+  }
+
+  async function decide(goalId: string, observed: Record<ResearchPurpose, number>, decided: Record<ResearchPurpose, number>): Promise<void> {
+    await recordWorkstreamEvent({
+      workstreamId: goalId, kind: RESEARCH_REALLOCATED_EVENT, summary: 'Research reallocated (seeded).', actorRef: 'BRAIN',
+      detail: { fingerprint: `seed-${Math.random()}`, shares: decided, observed, held: false, floors: { exploration: EXPLORATION_FLOOR, systemHealth: SYSTEM_HEALTH_FLOOR, commercial: null, perPurpose: 0.03 } },
+    });
+  }
+
+  it('raises a bin no goal pursues while system health is below its floor', async () => {
+    const owned = await brainBin(5);
+    const goalId = await goalPursuing(owned);
+    const loose = await brainBin(5);
+    await decide(goalId, shares({ SELF_IMPROVEMENT: 0.02 }), shares({ SELF_IMPROVEMENT: SYSTEM_HEALTH_FLOOR }));
+    const report = await advanceGoals();
+    expect(report.researchApplied?.belowFloor).toContain('SELF_IMPROVEMENT');
+    expect((await getBin(loose))!.priority).toBe(8);
+    expect(report.researchApplied?.floorRaised).toContainEqual(expect.objectContaining({ binId: loose, from: 5, to: 8 }));
+    // The goal's own bin is at its rank's priority (already the top), never past it.
+    expect((await getBin(owned))!.priority).toBe(8);
+  });
+
+  it('steps a goal bin of an over-served purpose down from its rank, and back when the decision changes', async () => {
+    const owned = await brainBin(5);
+    const goalId = await goalPursuing(owned);
+    await decide(goalId, shares({ SELF_IMPROVEMENT: 0.6 }), shares({ SELF_IMPROVEMENT: 0.3 }));
+    const report = await advanceGoals();
+    expect(report.researchApplied?.shifts.SELF_IMPROVEMENT).toBe(-1);
+    expect((await getBin(owned))!.priority).toBe(7);
+    expect(report.researchApplied?.goalBins).toContainEqual(expect.objectContaining({ binId: owned, shift: -1 }));
+    const allocated = (await listWorkstreamEvents(goalId, 50)).find((e) => e.kind === 'GOAL_CAPACITY_ALLOCATED');
+    expect((allocated!.detail as { researchShift: unknown[] }).researchShift).toHaveLength(1);
+
+    // A newer decision that finds the purpose in balance returns the bin to its rank's priority.
+    await decide(goalId, shares({}), shares({}));
+    await advanceGoals();
+    expect((await getBin(owned))!.priority).toBe(8);
+  });
+
+  it('a held decision moves no bin', async () => {
+    const owned = await brainBin(5);
+    const goalId = await goalPursuing(owned);
+    await recordWorkstreamEvent({ workstreamId: goalId, kind: RESEARCH_REALLOCATED_EVENT, summary: 'held', actorRef: 'BRAIN', detail: { fingerprint: 'h', shares: shares({ SELF_IMPROVEMENT: 0.6 }), observed: shares({ SELF_IMPROVEMENT: 0 }), held: true, floors: {} } });
+    const report = await advanceGoals();
+    expect(report.researchApplied).toBeNull();
+    expect((await getBin(owned))!.priority).toBe(8);
   });
 });
