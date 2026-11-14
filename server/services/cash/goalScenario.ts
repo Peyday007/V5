@@ -46,7 +46,8 @@ import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, measuredRateInput, type
 import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
-import type { ConstructedArrangement } from './construct.ts';
+import { TRANSFER_MATERIAL, type ConstructedArrangement } from './construct.ts';
+export { TRANSFER_MATERIAL };
 
 /**
  * Phase timings for a plan read, printed as they happen when BRAIN_PLAN_TRACE is
@@ -285,7 +286,6 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: { p
  * adjustment; the constructor records none yet, so every one is unbridged and
  * the estimate's range is widened by the COMPARABLE spread floor.
  */
-export const TRANSFER_MATERIAL = ['legal context', 'payment terms', 'sales cycle', 'capital', 'buyer behaviour'] as const;
 const Z90 = 1.2816;
 export function transferOf(one: Pick<ConstructedArrangement, 'origin' | 'precedent'> & { bridged?: readonly string[] }): { precedent: string; material: string[]; bridged: string[]; unbridged: string[] } | null {
   if (one.origin !== 'TRANSFER' || !one.precedent) return null;

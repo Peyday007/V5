@@ -825,7 +825,8 @@ describe('Persistence — constructed arrangements survive a restart', () => {
     } catch {
       tables = (await db.all<{ name: string }>(`SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema()`)).map((one) => one.name);
     }
-    const candidates = tables.filter((one) => /arrangement|construct/i.test(one) && !/^construction_facts$/.test(one));
+    // Storage may extend an existing owner (the monetization path tables, per the owner's reuse-existing-tables rule) rather than add a table.
+    const candidates = tables.filter((one) => (/arrangement|construct/i.test(one) && !/^construction_facts$/.test(one)) || /^monetization_path/.test(one));
     let rowsWithKeys = 0;
     let rows = 0;
     for (const table of candidates) {

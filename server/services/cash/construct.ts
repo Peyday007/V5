@@ -104,6 +104,12 @@ export interface Primitive {
  */
 export type ConstructionOrigin = 'FORWARD' | 'TRANSFER' | 'REVERSE';
 
+/**
+ * What a precedent proves about its own buyers and not about another
+ * population: each is a material difference a transfer must bridge.
+ */
+export const TRANSFER_MATERIAL = ['legal context', 'payment terms', 'sales cycle', 'capital', 'buyer behaviour'] as const;
+
 export interface ConstructedArrangement {
   key: string;
   structure: Structure;
@@ -112,6 +118,12 @@ export interface ConstructedArrangement {
   origin: ConstructionOrigin;
   /** A held opening whose evidenced design this one transfers, for TRANSFER. */
   precedent: { opportunityId: string; title: string } | null;
+  /**
+   * For TRANSFER: the material differences between the precedent's buyers and
+   * these, none established by the precedent (S-12, G2). Each is unbridged
+   * until a sourced adjustment bridges it; the research question names them.
+   */
+  differences?: Array<(typeof TRANSFER_MATERIAL)[number]>;
   sector: string | null;
   demand: Primitive;
   need: Primitive | null;
@@ -864,7 +876,7 @@ function compose(args: {
     ? ' Report also how many comparable shared or group runs fell short of their minimum and what happened to buyers then.'
     : '';
   const why = args.precedent
-    ? ` The same design is shown working for a different buyer ("${args.precedent.title.slice(0, 80)}"), so ask whether these buyers would pay for it the same way.`
+    ? ` The same design is shown working for a different buyer ("${args.precedent.title.slice(0, 80)}"), so ask whether these buyers would pay for it the same way. Material differences to bridge, none established by the precedent: ${TRANSFER_MATERIAL.join(', ')} — for each, report a source on how these buyers differ from the precedent's, or say none was found.`
     : '';
   const question =
     args.origin === 'REVERSE'
@@ -886,6 +898,7 @@ function compose(args: {
     design,
     origin: args.origin,
     precedent: args.precedent ? { opportunityId: args.precedent.id, title: args.precedent.title } : null,
+    ...(args.precedent ? { differences: [...TRANSFER_MATERIAL] } : {}),
     sector: args.sector,
     demand,
     need,
