@@ -107,6 +107,9 @@ jobs:
           RUNPOD_USD_PER_HOUR: ${{ vars.RUNPOD_USD_PER_HOUR }}
           # The most a recreated pod may cost (a repository variable); unset = the measured $0.24/h.
           RUNPOD_MAX_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_USD_PER_HOUR }}
+          # The most every Brain pod together may cost while runpod-bench/upgrade runs a second pod
+          # beside production (a repository variable); unset = runpod-bench.ts's default of $0.45/h.
+          RUNPOD_MAX_TOTAL_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_TOTAL_USD_PER_HOUR }}
           ACTION: ${{ inputs.action || 'runpod-auto' }}
           HOURS_INPUT: ${{ inputs.hours || '6' }}
           RECIPES_INPUT: ${{ inputs.recipes || '' }}

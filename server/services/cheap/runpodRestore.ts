@@ -60,6 +60,8 @@ export interface PodRecipe {
 const GPUS_24 = ['NVIDIA RTX A5000', 'NVIDIA GeForce RTX 3090', 'NVIDIA GeForce RTX 3090 Ti'];
 /** 20 GB and up, for a model whose weights and 64K window fit 20 GB: more cards, so more stock. */
 const GPUS_20 = ['NVIDIA RTX A5000', 'NVIDIA RTX A4500', 'NVIDIA RTX 4000 Ada Generation', 'NVIDIA GeForce RTX 3090', 'NVIDIA GeForce RTX 3090 Ti'];
+/** 48 GB cards from cheapest measured community price (runpod-survey 43281884981, 2026-11-12). */
+const GPUS_48 = ['NVIDIA RTX A6000', 'NVIDIA A40'];
 const CUDA_129 = ['12.9', '13.0'];
 const IMAGE_2026 = 'vllm/vllm-openai:v0.32.0-cu129';
 
@@ -194,6 +196,31 @@ export const RECIPES: Record<string, PodRecipe> = {
     minGpuGb: 24,
     clouds: ['COMMUNITY', 'SECURE'],
     note: 'MoE 26B/4B active, AWQ 17 GB, 64K',
+  },
+  /**
+   * A director-class model for the operator (Surge B H2-9): Qwen3-32B at 4 bits (~19 GB) on a
+   * 48 GB card, 64K by YaRN with an FP8 KV cache, hermes tool calls and qwen3 reasoning.
+   * runpod-survey 2026-11-12: RTX A6000 $0.33/h, A40 $0.35/h community — above the 0.24 default
+   * ceiling, so it is benched only when RUNPOD_MAX_USD_PER_HOUR and RUNPOD_MAX_TOTAL_USD_PER_HOUR
+   * are raised in the repository's variables; the code's defaults are unchanged.
+   */
+  'qwen3-32b-awq-48': {
+    key: 'qwen3-32b-awq-48',
+    model: 'Qwen/Qwen3-32B-AWQ',
+    served: 'Qwen/Qwen3-32B-AWQ',
+    gpus: GPUS_48,
+    image: IMAGE_2026,
+    cuda: CUDA_129,
+    maxModelLen: 65536,
+    args: [
+      '--gpu-memory-utilization', '0.92', '--max-num-seqs', '8', '--kv-cache-dtype', 'fp8',
+      '--rope-scaling', '{"rope_type":"yarn","factor":2.0,"original_max_position_embeddings":32768}',
+      '--enable-auto-tool-choice', '--tool-call-parser', 'hermes', '--reasoning-parser', 'qwen3',
+    ],
+    containerDiskInGb: 60,
+    minGpuGb: 48,
+    clouds: ['COMMUNITY', 'SECURE'],
+    note: 'dense 32B, AWQ ~19 GB on a 48 GB card (A6000/A40), 64K by YaRN with FP8 KV: the director-class operator model',
   },
 };
 

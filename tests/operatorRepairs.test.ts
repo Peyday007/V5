@@ -323,3 +323,151 @@ describe('H-6: a run is credited to the model that did the work', () => {
     expect(record.get('free:auto/best-coding')).toBeUndefined();
   });
 });
+
+/* ------------------------------------------------------------------------- */
+/* Surge B: Hermes directs an intelligence recovery through Brain's own rows  */
+/* ------------------------------------------------------------------------- */
+
+describe('Surge B: a standing mission, a findings inventory, and the next attempt', () => {
+  let projectId = '';
+  const uid = () => Math.random().toString(36).slice(2, 8).toUpperCase();
+  beforeEach(async () => {
+    projectId = (await freshProject()).project.id;
+  });
+
+  it('offers the new tools to Hermes, with the brief naming them, from the one registry', async () => {
+    const { OPERATOR_TOOL_NAMES, operatorBrief } = await import('../server/domain/operator.ts');
+    for (const name of ['brain_operator_inventory', 'brain_operator_reattempt']) {
+      expect(OPERATOR_TOOL_NAMES as readonly string[]).toContain(name);
+      expect(findTool(name)).not.toBeNull();
+      expect(operatorBrief({ nowIso: 'now', runId: 'opr_x' })).toContain(name);
+    }
+  });
+
+  it('a mission is a register row the brief opens with while it is open; the $10K goal is one goal among goals', async () => {
+    const { setMission, closeMission, missionForBrief, openMissions } = await import('../server/services/operator/inventory.ts');
+    const { operatorBrief } = await import('../server/domain/operator.ts');
+    const key = `SURGE:T${uid()}`;
+    expect((await setMission({ key, text: 'too short' }, { runId: null, actor: 'terminal' })).ok).toBe(false);
+    expect((await setMission({ key: 'OPERATOR:X', text: 'Recover the intelligence of Brain end to end.' }, { runId: null, actor: 'terminal' })).ok).toBe(false);
+    const set = await setMission({ key, text: "Recover Brain's intelligence: inventory every finding and verify each repair." }, { runId: null, actor: 'terminal' });
+    expect(set).toMatchObject({ ok: true, created: true });
+    const again = await setMission({ key, text: "Recover Brain's intelligence, version two: verify each repair on production." }, { runId: null, actor: 'terminal' });
+    expect(again).toMatchObject({ ok: true, created: false });
+    expect((await openMissions()).find((m) => m.key === key)?.text).toContain('version two');
+    const text = await missionForBrief();
+    expect(text).toContain('version two');
+    const brief = operatorBrief({ nowIso: 'now', runId: 'opr_x', mission: text, goals: 'GOALS' });
+    expect(brief.startsWith('STANDING MISSION')).toBe(true);
+    expect(brief).toContain('a cash goal — such as collecting $10,000 of settled cash — is one goal among them');
+    // The loop never advances a mission row (it is the operator's record, not engineering work).
+    const { advanceNow } = await import('../server/services/improvement/loop.ts');
+    expect((await advanceNow(set.ok ? set.mission.candidateId : '')).did).toBeNull();
+    expect((await closeMission(key, { runId: null, actor: 'terminal' })).ok).toBe(true);
+    expect(await missionForBrief()).not.toContain('version two');
+  });
+
+  it('inventory: list for a reader, change only for the operator, refuse incomplete findings, persist with history', async () => {
+    const tool = findTool('brain_operator_inventory')!;
+    const operator = principal(projectId, [...OPERATOR_SCOPES]);
+    const reader = principal(projectId, ['project:read']);
+    const id = `H2-T${uid()}`;
+    // Changing needs operator:act; the refusal is the same shape as elsewhere.
+    await expect(tool.run({ action: 'upsert', id, capability: 'x', symptom: 'y', evidence: 'z', severity: 'MAJOR' }, { principal: reader, requestId: 'r' })).rejects.toThrow();
+    // A new finding needs its fields; a bad id or severity is refused.
+    expect((await tool.run({ action: 'upsert', id, capability: 'operator mission' }, { principal: operator, requestId: 'r' })).value).toMatchObject({ ok: false });
+    expect((await tool.run({ action: 'upsert', id: 'bad id!', capability: 'a', symptom: 'b', evidence: 'c', severity: 'MAJOR' }, { principal: operator, requestId: 'r' })).value).toMatchObject({ ok: false });
+    expect((await tool.run({ action: 'upsert', id, capability: 'a', symptom: 'b', evidence: 'c', severity: 'HUGE' }, { principal: operator, requestId: 'r' })).value).toMatchObject({ ok: false });
+    const created = (await tool.run(
+      { action: 'upsert', id, capability: 'operator mission input', symptom: 'A run cannot be given the mission.', evidence: 'domain/operator.ts:148; run.ts:243', severity: 'BLOCKING', owner: 'server/domain/operator.ts' },
+      { principal: operator, requestId: 'r' },
+    )).value as { ok: boolean; created: boolean; candidateId: string; item: { status: string } };
+    expect(created).toMatchObject({ ok: true, created: true, item: { status: 'DISCOVERED' } });
+    // ROOT_CAUSE_CONFIRMED needs a root cause; then it moves.
+    expect((await tool.run({ action: 'set_status', id, status: 'ROOT_CAUSE_CONFIRMED' }, { principal: operator, requestId: 'r' })).value).toMatchObject({ ok: false });
+    await tool.run({ action: 'upsert', id, root_cause: 'operatorBrief takes no mission input' }, { principal: operator, requestId: 'r' });
+    expect((await tool.run({ action: 'set_status', id, status: 'ROOT_CAUSE_CONFIRMED' }, { principal: operator, requestId: 'r' })).value).toMatchObject({ ok: true, item: { status: 'ROOT_CAUSE_CONFIRMED' } });
+    // A reader can list it; the row is in §87's register under SURGE-B:<id>, and the loop leaves it alone.
+    const listed = (await tool.run({ action: 'list', id }, { principal: reader, requestId: 'r' })).value as { ok: boolean; item: { status: string }; history: unknown[] };
+    expect(listed.item.status).toBe('ROOT_CAUSE_CONFIRMED');
+    expect(listed.history.length).toBeGreaterThanOrEqual(3);
+    const row = await getDb().get<{ kind: string; weakness_key: string }>('SELECT kind, weakness_key FROM improvement_candidates WHERE id = ?', [created.candidateId]);
+    expect(row).toEqual({ kind: 'OPERATOR_INVENTORY', weakness_key: `SURGE-B:${id}` });
+    const { advanceNow } = await import('../server/services/improvement/loop.ts');
+    expect((await advanceNow(created.candidateId)).did).toBeNull();
+    // It reaches the brief.
+    const { inventoryBrief } = await import('../server/services/operator/inventory.ts');
+    expect(await inventoryBrief()).toContain(id);
+  });
+
+  it('VERIFIED_FIXED is refused without a verification reference, and recorded for a fix outside any commission', async () => {
+    const tool = findTool('brain_operator_inventory')!;
+    const operator = principal(projectId, [...OPERATOR_SCOPES]);
+    const id = `H2-V${uid()}`;
+    await tool.run({ action: 'upsert', id, capability: 'runpod ceiling', symptom: 'A 48 GB bench is impossible.', evidence: 'cheap-lane.yml:109', severity: 'MAJOR' }, { principal: operator, requestId: 'r' });
+    const run = (args: Record<string, unknown>) => tool.run({ action: 'set_status', id, status: 'VERIFIED_FIXED', ...args }, { principal: operator, requestId: 'r' }).then((o) => o.value as { ok: boolean; reason?: string });
+    // No criteria yet.
+    expect((await run({ verification: { kind: 'WORKFLOW_RUN', ref: '43399029412', detail: 'runpod-bench ran a 48 GB pod beside production' } })).reason).toMatch(/verification_criteria/);
+    await tool.run({ action: 'upsert', id, verification_criteria: 'runpod-bench benches the 48 GB recipe under the raised ceilings' }, { principal: operator, requestId: 'r' });
+    expect((await run({})).ok).toBe(false);
+    expect((await run({ verification: { kind: 'WORKFLOW_RUN', ref: 'yesterday', detail: 'runpod-bench ran a 48 GB pod beside production' } })).reason).toMatch(/run id/);
+    expect((await run({ verification: { kind: 'MEASUREMENT', ref: 'bench', detail: 'it seemed to work well overall today' } })).reason).toMatch(/number/);
+    expect((await run({ verification: { kind: 'DEPLOY', ref: 'abc', detail: 'deployed and the operator read it back' } })).reason).toMatch(/sha/);
+    const ok = (await tool.run(
+      { action: 'set_status', id, status: 'VERIFIED_FIXED', result: 'bench passed', verification: { kind: 'WORKFLOW_RUN', ref: '43399029412', detail: 'runpod-bench ran the 48 GB recipe at $0.33/h beside production' } },
+      { principal: operator, requestId: 'r' },
+    )).value as { ok: boolean; item: { status: string; verification: Record<string, unknown> } };
+    expect(ok.ok).toBe(true);
+    expect(ok.item.verification).toMatchObject({ kind: 'WORKFLOW_RUN', ref: '43399029412', source: 'OUTSIDE_COMMISSION' });
+    const events = await getDb().all<{ detail: string }>(
+      "SELECT e.detail FROM improvement_events e JOIN improvement_candidates c ON c.id = e.candidate_id WHERE c.weakness_key = ? AND e.kind = 'INVENTORY_CHANGED'",
+      [`SURGE-B:${id}`],
+    );
+    expect(events.some((e) => e.detail.includes('43399029412'))).toBe(true);
+    // A closed finding leaves the brief's open list.
+    const { inventoryBrief } = await import('../server/services/operator/inventory.ts');
+    expect(await inventoryBrief()).not.toContain(`- ${id} `);
+  });
+
+  it('re-attempt: refused for what is not a commission, still moving, or out of attempts; a failed one gets its next attempt', async () => {
+    const admin = `admin-${uid().toLowerCase()}@example.com`;
+    await createUser({ email: admin, displayName: 'Admin', password: 'correct horse battery staple 1', isBrainAdmin: true });
+    await setImprovementSwitch(false, admin, 'test: no Factory submission from this test');
+    const { upsertCandidate, decideCandidate, getCandidateByKey } = await import('../server/repos/improvement.ts');
+    const tool = findTool('brain_operator_reattempt')!;
+    const operator = principal(projectId, [...OPERATOR_SCOPES]);
+    const call = (args: Record<string, unknown>) => tool.run(args, { principal: operator, requestId: 'r' }).then((o) => o.value as { ok: boolean; reason: string; weaknessKey?: string; attempt?: number });
+    await expect(tool.run({ candidate_id: 'imp_x', reason: 'Factory failed twice on the same unit.' }, { principal: principal(projectId, ['project:read']), requestId: 'r' })).rejects.toThrow();
+    expect((await call({ candidate_id: 'imp_nothing', reason: 'Factory failed twice on the same unit.' })).ok).toBe(false);
+    const directive = { origin: 'OPERATOR', runId: null, goalId: null, deficiency: 'RECURRING_OPERATIONAL_FAILURE', intervention: 'ENGINEERING', priority: 5, urgency: 'NORMAL', acceptance: 'a test proves it', expectedBenefit: 'x', evaluation: 'y' };
+    const make = async (key: string, attempt = 1) =>
+      (
+        await upsertCandidate({
+          weaknessKey: key, kind: 'OPERATOR:RECURRING_OPERATIONAL_FAILURE', title: 't', problem: 'p', metric: 'READY_OPPORTUNITIES_PER_DAY', downstreamMetric: null,
+          ownerComponent: `server/x-${key}.ts`, frequency: 3, denominator: 3, scope: 'GENERAL', severity: 'MEDIUM', evidence: { directive, ownerPaths: [`server/x-${key}.ts`] }, attempt,
+        })
+      ).candidate;
+    // Still moving: building and touched just now.
+    const moving = await make(`OPERATOR:T:${uid()}`);
+    const refusedMoving = await call({ candidate_id: moving.id, reason: 'I think it is going too slowly.' });
+    expect(refusedMoving.ok).toBe(false);
+    expect(refusedMoving.reason).toMatch(/stalled only after 24 h/);
+    expect((await call({ candidate_id: moving.id, reason: 'short' })).ok).toBe(false);
+    // Out of attempts.
+    const last = await make(`OPERATOR:T:${uid()}#3`, 3);
+    await decideCandidate(last.id, 'REVERTED', 'regressed');
+    expect((await call({ candidate_id: last.id, reason: 'The third attempt regressed the metric.' })).reason).toMatch(/was the last/);
+    // Failed: decided KEPT_NO_EFFECT → attempt 2, keyed KEY#2, carrying the directive and the operator's reason.
+    const base = `OPERATOR:T:${uid()}`;
+    const failed = await make(base);
+    await decideCandidate(failed.id, 'KEPT_NO_EFFECT', 'no measured effect');
+    const out = await call({ candidate_id: failed.id, reason: 'The change shipped and the metric did not move.' });
+    expect(out).toMatchObject({ ok: true, weaknessKey: `${base}#2`, attempt: 2 });
+    const second = (await getCandidateByKey(`${base}#2`))!;
+    expect(second.parentId).toBe(failed.id);
+    expect((second.evidence['directive'] as Record<string, unknown>)['minimumModelClass']).toBe('STRONGEST');
+    expect(JSON.stringify(second.evidence['methodInadequacy'])).toContain('metric did not move');
+    // The same again: a later attempt already exists.
+    expect((await call({ candidate_id: failed.id, reason: 'The change shipped and the metric did not move.' })).ok).toBe(false);
+  });
+});

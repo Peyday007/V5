@@ -67,6 +67,27 @@ describe('recipes, benchmark pods and the account (§108)', () => {
     }
   });
 
+  it('the 48 GB director recipe serves Qwen3-32B-AWQ with hermes tools, qwen3 reasoning, 64K by YaRN and FP8 KV on an A6000 or A40', async () => {
+    const { RECIPES, podSpec, ACTIVE_RECIPE } = await import('../server/services/cheap/runpodRestore.ts');
+    const recipe = RECIPES['qwen3-32b-awq-48']!;
+    expect(recipe).toMatchObject({ model: 'Qwen/Qwen3-32B-AWQ', minGpuGb: 48, gpus: ['NVIDIA RTX A6000', 'NVIDIA A40'] });
+    const cmd = podSpec('v', undefined, 'COMMUNITY', recipe)['dockerStartCmd'] as string[];
+    expect(cmd[cmd.indexOf('--max-model-len') + 1]).toBe('65536');
+    expect(cmd[cmd.indexOf('--tool-call-parser') + 1]).toBe('hermes');
+    expect(cmd[cmd.indexOf('--reasoning-parser') + 1]).toBe('qwen3');
+    expect(cmd[cmd.indexOf('--kv-cache-dtype') + 1]).toBe('fp8');
+    expect(JSON.parse(cmd[cmd.indexOf('--rope-scaling') + 1]!)).toEqual({ rope_type: 'yarn', factor: 2.0, original_max_position_embeddings: 32768 });
+    // A challenger only: production's recipe and the price defaults are unchanged.
+    expect(ACTIVE_RECIPE).toBe('qwen3-4b-awq-tools');
+  });
+
+  it('cheap-lane passes both RunPod ceilings from repository variables to bench and upgrade', async () => {
+    const { readFileSync } = await import('node:fs');
+    const yml = readFileSync('.github/workflows/cheap-lane.yml', 'utf8');
+    expect(yml).toContain('RUNPOD_MAX_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_USD_PER_HOUR }}');
+    expect(yml).toContain('RUNPOD_MAX_TOTAL_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_TOTAL_USD_PER_HOUR }}');
+  });
+
   it('sweeps only benchmark pods older than the bound', async () => {
     const { sweepBenchPods } = await import('../server/services/cheap/runpodRestore.ts');
     const now = Date.parse('2026-11-12T20:00:00Z');

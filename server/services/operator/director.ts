@@ -51,10 +51,11 @@ import {
   type EngineeringStatus,
   type GoalMark,
   type Intervention,
+  type Urgency,
 } from '../../domain/engineeringDirector.ts';
 import { METRIC_KEYS, riskForScope, type MetricKey, type Weakness } from '../../domain/improvement.ts';
 import { RELEASE_EXCLUDED_PATHS } from '../../domain/factoryRelease.ts';
-import { getCandidate, listCandidates, listImprovementEvents, patchCandidate, recordImprovementEvent, type ImprovementCandidate } from '../../repos/improvement.ts';
+import { decideCandidate, getCandidate, listCandidates, listImprovementEvents, patchCandidate, recordImprovementEvent, type ImprovementCandidate } from '../../repos/improvement.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { listProjects } from '../../repos/projects.ts';
 import { getDb } from '../../db/database.ts';
@@ -641,6 +642,86 @@ export async function reprioritize(input: { candidateId: string; priority: numbe
     await recordEvent({ projectId, entityType: 'PROJECT', entityId: projectId, eventType: ENGINEERING_EVENTS.prioritized, payload: { candidateId: candidate.id, priority: input.priority, reason: input.reason, runId: input.runId, bins: applied } });
   }
   return { ok: true, reason: `priority ${input.priority}; ${applied} waiting bin(s) reordered, leased work untouched`, binsReprioritized: applied };
+}
+
+/** A commission with no Factory or register movement for this long is stalled, and may be re-attempted. */
+export const STALLED_HOURS = 24;
+
+/**
+ * Start §87's next attempt (at most three) of a commission that failed or stalled (Surge B H2-5).
+ *
+ * Eligible: Factory ended FAILED or CANCELLED; §87 decided it did not fix what it was for
+ * (KEPT_NO_EFFECT, REVERTED, REJECTED) or HELD it; Factory is BLOCKED; or nothing has moved on
+ * it for `STALLED_HOURS`. Refused while it is building and moving, while a delivered change
+ * waits for its measurement, once it is resolved, and after the third attempt. An open attempt
+ * is closed HELD with the operator's reason (the same word §87 uses for a cancelled or blocked
+ * objective), so the register keeps one live attempt per weakness; the new attempt carries the
+ * directive, is routed to the strongest workers (a second attempt is ARCHITECTURAL), and is
+ * advanced now exactly as a commission is.
+ */
+export async function reattempt(input: { candidateId: string; reason: string; runId: string | null }, now = new Date()): Promise<{ ok: boolean; reason: string; candidateId?: string; weaknessKey?: string; attempt?: number; started?: string[] }> {
+  const candidate = await getCandidate(input.candidateId);
+  const directive = candidate?.evidence['directive'] as Record<string, unknown> | undefined;
+  if (!candidate || !directive) return { ok: false, reason: 'no engineering the operator commissioned has that id (brain_operator_engineering lists them)' };
+  if (input.reason.trim().length < 15) return { ok: false, reason: 'reason must say why the attempt failed or stalled (15+ characters)' };
+  const outcome = (await engineeringOutcomes({ candidateIds: [candidate.id], limit: 1 }))[0];
+  if (!outcome) return { ok: false, reason: 'its outcome could not be read' };
+  const lastMoved = (await listImprovementEvents({ candidateId: candidate.id, limit: 1 }))[0]?.at ?? candidate.updatedAt;
+  const quietHours = (now.getTime() - Date.parse(lastMoved > candidate.updatedAt ? lastMoved : candidate.updatedAt)) / 3_600_000;
+  const failed = outcome.status === 'FAILED' || outcome.status === 'NOT_RESOLVED' || outcome.status === 'BLOCKED';
+  const stalled = (outcome.status === 'BUILDING' || outcome.status === 'NOT_STARTED') && quietHours >= STALLED_HOURS && candidate.decision !== 'COMBINED';
+  if (!failed && !stalled) {
+    const why =
+      outcome.status === 'RESOLVED'
+        ? 'it is resolved: KEPT on an improved measurement'
+        : outcome.status === 'DELIVERED_UNMEASURED'
+          ? 'it was delivered and §87 is measuring it; a new attempt now would not know whether this one worked'
+          : outcome.status === 'BUILDING' || outcome.status === 'NOT_STARTED'
+            ? `it is ${outcome.status} and moved ${quietHours.toFixed(1)} h ago; it is stalled only after ${STALLED_HOURS} h without movement`
+            : `its status is ${outcome.status}`;
+    return { ok: false, reason: `Not re-attempted: ${why}.` };
+  }
+  const { MAX_ATTEMPTS } = await import('../../domain/improvement.ts');
+  if (candidate.attempt >= MAX_ATTEMPTS) return { ok: false, reason: `Not re-attempted: attempt ${candidate.attempt} of ${MAX_ATTEMPTS} was the last; a failing improvement cannot loop. Change strategy or record it as a known limitation.` };
+  const reason = input.reason.trim().slice(0, 600);
+  if (!candidate.decision) {
+    await decideCandidate(candidate.id, 'HELD', `Operator re-attempt (${outcome.status}${stalled ? `, ${quietHours.toFixed(0)} h without movement` : ''}): ${reason}`, { heldOn: `superseded by the next attempt: ${reason}`.slice(0, 300) });
+    await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'HELD', by: 'operator re-attempt', runId: input.runId, status: outcome.status } });
+  }
+  const route = routeEngineering({
+    deficiency: String(directive['deficiency'] ?? 'RECURRING_OPERATIONAL_FAILURE') as DeficiencyClass,
+    ownerPaths: (candidate.evidence['ownerPaths'] as string[] | undefined) ?? [],
+    risk: riskForScope((candidate.evidence['mutationScope'] as string[] | undefined) ?? ['tests/**'], RELEASE_EXCLUDED_PATHS),
+    failedAttempts: candidate.attempt,
+    urgency: (directive['urgency'] as Urgency | undefined) ?? 'NORMAL',
+  });
+  const { registerNextAttempt, advanceNow } = await import('../improvement/loop.ts');
+  const next = await registerNextAttempt(candidate.id, {
+    reason,
+    evidence: {
+      ...candidate.evidence,
+      directive: { ...directive, runId: input.runId, complexity: route.complexity, minimumModelClass: route.minimumModelClass, routeWhy: route.why, reattemptOf: candidate.id, reattemptReason: reason },
+      goalBaseline: (await goalMark((directive['goalId'] as string | null) ?? null)).mark,
+    },
+  });
+  if (!next.ok) return { ok: false, reason: `Not re-attempted: ${next.reason}.` };
+  const { did } = await advanceNow(next.candidate.id, now);
+  const fresh = (await getCandidate(next.candidate.id))!;
+  if (fresh.campaignId && typeof directive['priority'] === 'number') await applyPriority(fresh.campaignId, directive['priority'] as number);
+  await recordImprovementEvent({ candidateId: fresh.id, kind: 'OPERATOR_REATTEMPTED', detail: { runId: input.runId, from: candidate.id, reason, advanced: did } });
+  const projectId = await anchorProject(await goalProject((directive['goalId'] as string | null) ?? null));
+  if (projectId) {
+    await recordEvent({ projectId, entityType: 'PROJECT', entityId: projectId, eventType: ENGINEERING_EVENTS.commissioned, payload: { runId: input.runId, goalId: directive['goalId'] ?? null, candidateId: fresh.id, weaknessKey: fresh.weaknessKey, reattemptOf: candidate.id, reason, changeRequestId: fresh.changeRequestId, campaignId: fresh.campaignId, researchGoalId: fresh.researchGoalId, advanced: did } });
+  }
+  const running = fresh.campaignId ? `Factory campaign ${fresh.campaignId}` : fresh.researchGoalId ? `method research goal ${fresh.researchGoalId}` : null;
+  return {
+    ok: true,
+    reason: `Attempt ${fresh.attempt} registered as ${fresh.weaknessKey}; ${running ?? did ?? 'it waits for its owner component to free (one live objective per owner)'}. Routed ${route.complexity} → ${route.minimumModelClass}.`,
+    candidateId: fresh.id,
+    weaknessKey: fresh.weaknessKey,
+    attempt: fresh.attempt,
+    started: running ? [running] : [],
+  };
 }
 
 /* ------------------------------------------------------------------------- */
