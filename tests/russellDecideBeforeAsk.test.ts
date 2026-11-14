@@ -24,6 +24,22 @@ vi.mock('../server/services/research/judgeRound.ts', async (importOriginal) => {
   };
 });
 
+const advance = vi.hoisted(() => ({ failNext: 0, calls: [] as string[] }));
+vi.mock('../server/services/research/packetRunner.ts', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../server/services/research/packetRunner.ts')>();
+  return {
+    ...original,
+    advancePacket: async (orchestrationId: string) => {
+      advance.calls.push(orchestrationId);
+      if (advance.failNext > 0) {
+        advance.failNext -= 1;
+        throw new Error('the runner could not reach the database');
+      }
+      return original.advancePacket(orchestrationId);
+    },
+  };
+});
+
 import { readFileSync } from 'node:fs';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -46,6 +62,8 @@ let userId = '';
 
 beforeEach(async () => {
   judge.resume = false;
+  advance.failNext = 0;
+  advance.calls = [];
   const fixture = await freshProject();
   projectId = fixture.project.id;
   layerId = (await fixture.layerByName('Monetization Logic')).id;
@@ -196,6 +214,36 @@ describe('parkStoppedMissions decides before it asks', () => {
     const planCard = await cardFor(plan.missionId);
     expect(planCard?.choices.map((c) => c.key)).toEqual(['APPROVE_PLAN', 'STOP']);
     expect(await decisionsFor(plan.missionId)).toMatchObject([{ declinedBecause: 'PLAN_AWAITING_APPROVAL' }]);
+  });
+
+  it('a filing whose advance failed is advanced again on the next pass, never turned into a card', async () => {
+    await grant();
+    const { missionId, orchestrationId } = await stoppedMission(['ACCEPTED', 'BLOCKED']);
+
+    // Brain decides and authorizes, but the advance that carries it out fails.
+    advance.calls = [];
+    advance.failNext = 1;
+    await parkStoppedMissions(10);
+    expect(await cardFor(missionId)).toBeUndefined();
+    const stuck = (await getOrchestration(orchestrationId))!;
+    expect(stuck.unresolvedGapPolicy).toBe('RECORD_GAPS');
+    expect(stuck.status).toBe('NEEDS_HUMAN');
+    expect(advance.calls.filter((id) => id === orchestrationId)).toHaveLength(1);
+
+    // The next pass finds the packet still stopped. It retries the advance; it does not ask the owner.
+    await parkStoppedMissions(10);
+    expect(await cardFor(missionId)).toBeUndefined();
+    expect((await getMission(missionId))!.state).not.toBe('NEEDS_HUMAN');
+    expect(advance.calls.filter((id) => id === orchestrationId)).toHaveLength(2);
+    expect((await getOrchestration(orchestrationId))!.status).not.toBe('NEEDS_HUMAN');
+    // One decision, recorded once; no "Brain did not decide" record either.
+    const records = await decisionsFor(missionId);
+    expect(records.filter((p) => p['decidedBy'] === 'BRAIN_UNDER_STANDING_AUTHORITY')).toHaveLength(1);
+    expect(records.filter((p) => p['declinedBecause'])).toHaveLength(0);
+
+    // The shared step says what it did with an already-authorized packet.
+    const again = await fileWithGapsUnderStandingGrant({ orchestration: (await getOrchestration(orchestrationId))!, missionId, why: 'test' });
+    expect(again).toMatchObject({ decided: false, because: 'ALREADY_FILED_WITH_GAPS' });
   });
 
   it('has one decide-and-file step, used by the park and by answerUnaskedParks', async () => {
