@@ -37,7 +37,7 @@ import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
 import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent } from '../../repos/register.ts';
 import { readCapabilities } from '../cash/capabilities.ts';
-import { checkCommercialAuthority, type CommercialDecision } from '../cash/authority.ts';
+import { BRAIN_PRINCIPAL, actionContext, checkCommercialAuthority, type CommercialDecision } from '../cash/authority.ts';
 import { composeBuyerMessage } from '../cash/outreach.ts';
 import { evidenceCard } from '../cash/card.ts';
 import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
@@ -1303,7 +1303,12 @@ function authorityFor(target: TargetReading, action: string): Promise<Commercial
   if (!byAction) authorityReadings.set(target, (byAction = new Map()));
   let answer = byAction.get(action);
   if (!answer) {
-    answer = checkCommercialAuthority({ projectId: target.projectId, action }, READING);
+    // The responsible principal is Brain's — the one that would act on the plan —
+    // so even a reading names who it is for rather than leaving it unknown.
+    answer = checkCommercialAuthority(
+      { projectId: target.projectId, action, ...actionContext({ principal: BRAIN_PRINCIPAL }) },
+      READING,
+    );
     byAction.set(action, answer);
   }
   return answer;

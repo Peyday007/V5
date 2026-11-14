@@ -48,6 +48,7 @@ import {
 import { cashEventsOfKindInProject, recordCashEvent } from '../../repos/cashMode.ts';
 import { needForKey, openNeedForKey } from '../../repos/cashPortfolio.ts';
 import { getProject } from '../../repos/projects.ts';
+import { scopedRead } from '../../repos/readScope.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import type { CashAuthority, CashNeed } from '../../domain/types.ts';
 
@@ -255,7 +256,9 @@ async function assessCommercialAuthority(input: CommercialCheckInput, record: bo
    * read-only checks, so this can only refuse more, never allow what a grant
    * does not.
    */
-  const authority = await liveAuthority(input.projectId, input.at);
+  const authority = await (record
+    ? liveAuthority(input.projectId, input.at)
+    : scopedRead(`authority:live:${input.projectId}:${input.at ?? ''}`, () => liveAuthority(input.projectId, input.at)));
   if (!authority && !(await getProject(input.projectId))) {
     // A project that does not exist has no history to append to and nobody to ask. It is refused in the
     // same words as a project with no grant (invariant 23), and nothing is written against an absent row.
@@ -1045,11 +1048,18 @@ export async function recordEffectReceipt(input: {
 async function judgeLive(input: JudgeInput, record = true): Promise<ActionDecision> {
   const klass = classifyAction(input.action);
   if (klass === 'INTERNAL' || !klass) return judgeAction({ ...input, emergencyStop: false }, { authority: null, revoked: false, heldCents: 0 });
-  const stopped = await emergencyStopOn(input.projectId);
-  const authority = await liveAuthority(input.projectId, input.at);
+  /*
+   * A reading inside a read scope (a plan pass asking about several actions)
+   * reads the stop, the live grant and the held sum once per scope rather than
+   * once per action; an action that records always reads them fresh.
+   */
+  const once = <T>(key: string, load: () => Promise<T>): Promise<T> =>
+    record ? load() : scopedRead(`authority:${key}:${input.projectId}:${input.at ?? ''}`, load);
+  const stopped = await once('stop', () => emergencyStopOn(input.projectId));
+  const authority = await once('live', () => liveAuthority(input.projectId, input.at));
   let revoked = false;
-  if (!authority) revoked = wasRevoked(await listAuthorities(input.projectId));
-  const held = await heldCentsForProject(input.projectId, authority?.currency);
+  if (!authority) revoked = wasRevoked(await once('all', () => listAuthorities(input.projectId)));
+  const held = await once(`held:${authority?.currency ?? ''}`, () => heldCentsForProject(input.projectId, authority?.currency));
   const decision = await applyStoredApproval(
     input,
     judgeAction({ ...input, emergencyStop: stopped }, { authority, revoked, heldCents: held }),
