@@ -29,7 +29,6 @@
  */
 import { Router } from 'express';
 import { handler, pathId, requirePerson, requireProject } from './helpers.ts';
-import { listWorkstreams } from '../repos/register.ts';
 import { listWorkItems } from '../repos/workQueue.ts';
 import { listBins } from '../repos/bins.ts';
 import { listOrchestrationsByProject } from '../repos/research.ts';
@@ -39,6 +38,7 @@ import { listInvoices } from '../repos/cashInvoices.ts';
 import { currenciesInLedger, listMoneyEntries, totalsByKind } from '../repos/cashLedger.ts';
 import { getMigrationReport } from '../db/database.ts';
 import { decideProjectAccess } from '../services/identity/policy.ts';
+import { assembleGoals, type GoalView } from '../services/goals/model.ts';
 import type { Bin, CashMoneyKind, Principal, WorkItem } from '../domain/types.ts';
 
 export const worldRouter = Router();
@@ -89,6 +89,12 @@ export interface WorldFact {
   lastChangedAt: string | null;
   blocker: string | null;
   nextAction: string | null;
+  /**
+   * Where the record has got to, in the words of the model that derives it
+   * (for a goal: the goal model's lifecycle, register state and its evidence).
+   * Absent or null when the record kind has no progress reading.
+   */
+  progress?: string | null;
   /** Which table and row this was read from. */
   source: { table: string; id: string };
   /** FRESH, STALE (a live record unchanged for a day), or MISSING (no change time recorded). */
@@ -305,7 +311,7 @@ function fact(input: Omit<WorldFact, 'freshness' | 'missing' | 'district'> & { m
     : !TERMINAL.has(input.state) && now - changed > STALE_AFTER_MS
       ? 'STALE'
       : 'FRESH';
-  return { ...input, missing: [...new Set(missing)], freshness, district: DISTRICT_OF.get(input.kind) ?? null };
+  return { progress: null, ...input, missing: [...new Set(missing)], freshness, district: DISTRICT_OF.get(input.kind) ?? null };
 }
 
 /**
@@ -422,6 +428,48 @@ async function readMoney(projectId: string, truncated: string[]): Promise<WorldM
   });
 }
 
+type GoalReading = Pick<
+  GoalView,
+  'lifecycle' | 'lifecycleReason' | 'state' | 'stateEvidence' | 'waiting' | 'work' | 'blockers' | 'decisions' | 'target' | 'pausedReason' | 'cancelledReason'
+>;
+
+/**
+ * A goal's world state, from the goal model's derivation (UI-27-1: never imply
+ * a false state). COMPLETE is the goal model's word — its rows or its ledger
+ * target say the outcome was reached. A goal is WORKING only while a worker
+ * holds an unexpired lease on its work; queued work is WAITING, never busy.
+ * UNKNOWN is kept for an active goal whose rows say nothing about where it
+ * has got to.
+ */
+export function goalWorldState(g: GoalReading): { state: WorldState; blocker: string | null } {
+  if (g.lifecycle === 'COMPLETE') return { state: 'SUCCEEDED', blocker: null };
+  if (g.lifecycle === 'CANCELLED') return { state: 'IDLE', blocker: `cancelled: ${g.cancelledReason ?? 'no reason recorded'}` };
+  if (g.lifecycle === 'ARCHIVED') return { state: 'IDLE', blocker: null };
+  if (g.lifecycle === 'PAUSED') return { state: 'BLOCKED', blocker: `paused: ${g.pausedReason ?? 'no reason recorded'}` };
+  if (g.decisions.length > 0 || g.waiting.kind === 'PERSON') {
+    return { state: 'NEEDS_APPROVAL', blocker: g.decisions[0]?.question ?? g.waiting.detail };
+  }
+  if (g.blockers.length > 0 || g.state === 'BLOCKED') return { state: 'BLOCKED', blocker: g.blockers[0]?.text ?? g.stateEvidence };
+  if (g.work.some((w) => w.workerOnIt)) return { state: 'WORKING', blocker: null };
+  if (g.state === 'DONE' || g.state === 'VERIFIED_LIVE') return { state: 'SUCCEEDED', blocker: null };
+  if (g.waiting.kind === 'NOTHING_LINKED') return { state: 'IDLE', blocker: null };
+  if (g.state !== 'UNKNOWN' || g.work.length > 0 || g.waiting.kind !== 'NOTHING') return { state: 'WAITING', blocker: null };
+  return { state: 'UNKNOWN', blocker: null };
+}
+
+/** A goal's progress in words, read from the goal model's own derivation. Never a percentage. */
+export function goalProgress(g: GoalReading): string {
+  const parts = [`${g.lifecycle}: ${g.lifecycleReason}`];
+  if (g.state !== 'UNKNOWN') parts.push(`register ${g.state} (${g.stateEvidence})`);
+  if (g.target) {
+    parts.push(
+      `${g.target.metricLabel}: ${g.target.achievedCents} of ${g.target.targetCents} ${g.target.currency} cents on the ledger${g.target.achieved ? ', reached' : ''}`,
+    );
+  }
+  if (g.waiting.kind !== 'NOTHING') parts.push(`waiting (${g.waiting.kind}): ${g.waiting.detail}`);
+  return parts.join('; ');
+}
+
 export async function composeWorld(projectId: string, principal: Principal, nowMs = Date.now()): Promise<World> {
   const now = nowMs;
   const truncated: string[] = [];
@@ -444,31 +492,36 @@ export async function composeWorld(projectId: string, principal: Principal, nowM
     explanations.push({ kind, text, recordKind: f.kind, recordId: f.recordId, href: f.href, lastChangedAt: f.lastChangedAt });
   };
 
-  // Goals.
-  const goals = (await listWorkstreams({ projectIds: [projectId] })).filter((g) => g.projectId === projectId);
-  for (const g of goals) {
-    const state: WorldState = g.cancelledAt ? 'IDLE' : g.pausedAt ? 'BLOCKED' : 'UNKNOWN';
-    facts.push(
-      fact(
-        {
-          kind: 'GOAL',
-          recordId: g.id,
-          href: `/api/goals/${g.id}`,
-          title: g.title,
-          owner: g.ownerUserId,
-          state,
-          recordState: g.cancelledAt ? 'CANCELLED' : g.pausedAt ? 'PAUSED' : 'OPEN',
-          startedAt: g.createdAt,
-          lastChangedAt: g.updatedAt,
-          blocker: g.pausedAt ? `paused: ${g.pausedReason ?? 'no reason recorded'}` : g.cancelledAt ? `cancelled: ${g.cancelledReason ?? 'no reason recorded'}` : null,
-          nextAction: null,
-          source: { table: 'workstreams', id: g.id },
-          // A goal's progress is derived by the goal model from its work; this adapter does not re-derive it.
-          missing: state === 'UNKNOWN' ? ['progress (read at the goal record)'] : [],
-        },
-        now,
-      ),
+  // Goals. Read through the goal model, which already derives each goal's
+  // lifecycle, register state, blockers, decisions and next action from its
+  // rows (the same owner /api/goals/:goalId serves); this adapter maps that
+  // derivation to a world state and does not re-derive it.
+  const goalViews = (await assembleGoals({ projectIds: [projectId], now: new Date(now).toISOString() })).goals.filter(
+    (g) => g.projectId === projectId,
+  );
+  for (const g of goalViews) {
+    const mapped = goalWorldState(g);
+    const f = fact(
+      {
+        kind: 'GOAL',
+        recordId: g.id,
+        href: `/api/goals/${g.id}`,
+        title: g.title,
+        owner: g.owner?.userId ?? null,
+        state: mapped.state,
+        recordState: g.state === 'UNKNOWN' ? g.lifecycle : `${g.lifecycle} · ${g.state}`,
+        startedAt: g.createdAt,
+        lastChangedAt: g.updatedAt,
+        blocker: mapped.blocker,
+        nextAction: g.next.action || null,
+        progress: goalProgress(g),
+        source: { table: 'workstreams', id: g.id },
+        missing: mapped.state === 'UNKNOWN' ? ['register state (no linked row says where this goal has got to)'] : [],
+      },
+      now,
     );
+    facts.push(f);
+    explain(f);
   }
 
   // Work units and bins, and the workers whose leases on them prove activity.
