@@ -50,7 +50,7 @@ import {
 } from '../../repos/goals.ts';
 import { assembleGoals, type GoalView } from './model.ts';
 import { rankGoals } from './priority.ts';
-import type { ResearchYieldReading } from './researchYield.ts';
+import type { LaneCapacityReading, ResearchYieldReading } from './researchYield.ts';
 import {
   COMMERCIAL_FLOOR,
   EXPLORATION_FLOOR,
@@ -423,6 +423,11 @@ export interface ResearchAllocationPorts {
    * recorded: an unknown is never read as a change made (invariant 39).
    */
   appliedRemedies?(goalIds: string[]): Promise<AppliedRemedy[]>;
+  /**
+   * Each lane's capacity as it stands now: queued work, its wait, headroom and
+   * incremental cost. Absent means unmeasured, and no capacity is added.
+   */
+  readLaneCapacity?(until: string): Promise<LaneCapacityReading[]>;
   /** The newest Brain-wide decision row, or null. */
   lastDecision(): Promise<{ detail: Record<string, unknown>; at: string } | null>;
   /** Write the Brain-wide decision row: once per changed decision, never per goal. */
@@ -502,6 +507,8 @@ export function allocationInputFrom(
     measuringRemedies?: Map<string, LaneRemedy>;
     /** Each purpose's deadline and decision value (`purposePressureFrom`). */
     pressure?: Partial<Record<ResearchPurpose, Pick<PurposePressure, 'nearestDeadlineDays' | 'decisionValue'>>>;
+    /** The work waiting on each lane now, its headroom and its cost; a lane absent here is unmeasured. */
+    capacity?: ReadonlyMap<string, LaneCapacityReading>;
   },
 ): AllocationInput {
   // The shares in force are where the capacity actually went: each purpose's job time in the window.
@@ -543,18 +550,19 @@ export function allocationInputFrom(
       measuringRemedy: context.measuringRemedies?.get(lane) ?? null,
     });
     const attempts = b.completions + b.failures.total;
+    // Waiting work is what is queued now, never the jobs that already started; headroom and cost are read, never assumed.
+    const cap = context.capacity?.get(lane) ?? null;
     bottlenecks.push({
       lane,
       purposes: served,
       resource: b.failures.rateLimited > 0 ? 'MODEL_RATE_LIMIT' : null,
-      qualifiedQueued: b.inFlight,
-      queueWaitMs: b.queueWait.medianMs,
+      qualifiedQueued: cap ? cap.queued : null,
+      queueWaitMs: cap ? cap.queueWaitMs : null,
       measuredMachineLimit: b.failures.rateLimited > 0,
-      // Nothing in the window measures quota headroom or the cost of another unit: unknown, never assumed.
-      quotaHeadroom: null,
+      quotaHeadroom: cap ? cap.quotaHeadroom : null,
       reliability: attempts > 0 ? b.completions / attempts : null,
       ownedByAnotherWorker: false,
-      incrementalCostPerUnit: null,
+      incrementalCostPerUnit: cap ? cap.incrementalCostPerUnit : null,
     });
   }
   return { currentShares, purposes, lanes, bottlenecks, urgentCommercialGoal: context.urgentCommercialGoal };
@@ -643,7 +651,9 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const { tried, measuring } = remediesFromApplied(applied, window);
   const reading = await ports.readYield(window);
   const pressure = purposePressureFrom(live, reading, untilMs);
-  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring, pressure });
+  const laneCapacity = ports.readLaneCapacity ? await ports.readLaneCapacity(window.until) : [];
+  const capacity = new Map(laneCapacity.map((one) => [one.lane, one]));
+  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring, pressure, capacity });
   const decision = decideResearchAllocation(allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
   const fingerprint = allocationFingerprint(decision);
@@ -675,6 +685,12 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
       utilization: round3(b.utilization),
       inFlight: b.inFlight,
       queueWaitMedianMs: b.queueWait.medianMs,
+      // What the capacity verdict read: work waiting now, never the jobs above that already started.
+      queuedNow: capacity.get(lane)?.queued ?? null,
+      queuedWaitMs: capacity.get(lane)?.queueWaitMs ?? null,
+      quotaHeadroom: capacity.get(lane)?.quotaHeadroom ?? null,
+      incrementalCostPerUnit: capacity.get(lane)?.incrementalCostPerUnit ?? null,
+      capacityBasis: capacity.get(lane)?.basis ?? ['not measured'],
       completions: b.completions,
       failures: b.failures.total,
       rateLimited: b.failures.rateLimited,
@@ -719,11 +735,12 @@ export async function latestResearchDecision(): Promise<{ detail: Record<string,
 
 /** The production rows: the yield reader, the goals' applied remedies, and the Brain-wide decision row. */
 export async function productionResearchAllocationPorts(): Promise<ResearchAllocationPorts> {
-  const { researchYieldByPurpose } = await import('./researchYield.ts');
+  const { researchYieldByPurpose, laneCapacityNow } = await import('./researchYield.ts');
   const { listWorkstreamEvents } = await import('../../repos/register.ts');
   const { recordImprovementEvent } = await import('../../repos/improvement.ts');
   return {
     readYield: (window) => researchYieldByPurpose(window),
+    readLaneCapacity: (until) => laneCapacityNow(until),
     lastDecision: () => latestResearchDecision(),
     async appliedRemedies(goalIds) {
       const out: AppliedRemedy[] = [];

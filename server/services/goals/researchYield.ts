@@ -945,6 +945,83 @@ export async function researchYieldByPurpose(input: { since: string; until?: str
   return summarizeResearchYield({ since, until, jobs, outputs });
 }
 
+/**
+ * What a lane's capacity verdict needs and the yield window cannot give: the
+ * work waiting on the lane NOW (never the jobs that already started), how long
+ * it has waited, how many more slots the lane is measured to sustain, and what
+ * one more slot costs. Each figure is read from a row or left null — an
+ * unmeasured headroom or cost is never assumed (invariant 39).
+ */
+export interface LaneCapacityReading {
+  lane: string;
+  /** Qualified jobs queued and claimable now on this lane. */
+  queued: number;
+  /** Median time those queued jobs have waited so far; null when none waits. */
+  queueWaitMs: number | null;
+  /** Slots the lane has held a full window without provider overload and is not running now; null when unmeasured. */
+  quotaHeadroom: number | null;
+  /** Money one more of those slots costs, in minor units; null when unmeasured. */
+  incrementalCostPerUnit: number | null;
+  basis: string[];
+}
+
+/**
+ * Free-lane capacity per model, from the queue as it stands and the §86
+ * controller's rows. Pure. The free-lane queue is shared — any model's slot
+ * takes the next claimable job — so every model's lane sees the same waiting
+ * work. Headroom is `stable_high − target`: concurrency the same provider
+ * already sustained without overload, which the controller is not running
+ * now. Inside that headroom one more slot is the same held capacity doing
+ * more work, and the lane records no per-item charge, so its incremental cost
+ * is 0; with no headroom the cost is not measured and stays null.
+ */
+export function freeLaneCapacityFrom(input: {
+  nowMs: number;
+  queuedAvailableAt: readonly string[];
+  controller: readonly { model: string; target: number; stableHigh: number }[];
+}): LaneCapacityReading[] {
+  const ages = input.queuedAvailableAt.map((at) => Date.parse(at)).filter((at) => Number.isFinite(at)).map((at) => Math.max(0, input.nowMs - at));
+  const queued = input.queuedAvailableAt.length;
+  const wait = queued > 0 ? percentile(ages, 50) : null;
+  return input.controller.map((row) => {
+    const target = Number(row.target);
+    const stableHigh = Number(row.stableHigh);
+    const measured = Number.isFinite(target) && Number.isFinite(stableHigh);
+    const headroom = measured ? Math.max(0, stableHigh - target) : null;
+    return {
+      lane: `free-lane:${row.model}`,
+      queued,
+      queueWaitMs: wait,
+      quotaHeadroom: headroom,
+      incrementalCostPerUnit: headroom !== null && headroom > 0 ? 0 : null,
+      basis: [
+        `${queued} research job(s) queued and claimable now on the shared free-lane queue`,
+        measured ? `controller target ${target}, measured sustainable ${stableHigh} (free_lane_capacity)` : 'controller row unreadable',
+        headroom !== null && headroom > 0 ? 'inside measured sustainable concurrency the lane runs on capacity it already holds; no per-item charge is recorded' : 'no measured headroom, so the cost of another slot is not measured',
+      ],
+    };
+  });
+}
+
+/**
+ * The production reading: the same claimable-now filter the §86 pool sizes
+ * itself by (`waitingNow`), with each job's wait, and the controller's rows.
+ */
+export async function laneCapacityNow(until = new Date().toISOString()): Promise<LaneCapacityReading[]> {
+  const rows = await getDb().all<{ available_at: string }>(
+    `SELECT w.available_at FROM work_items w
+      WHERE w.state = 'QUEUED' AND w.available_at <= ? AND w.attempt_count < w.max_attempts
+        AND w.work_type IN ('RESEARCH_PLAN', 'RESEARCH_FRAGMENT', 'RESEARCH_VERIFY', 'RESEARCH_SYNTHESIZE', 'RESEARCH_AUDIT')
+        AND EXISTS (SELECT 1 FROM bins b
+                     WHERE (b.id = w.bin_id OR (b.orchestration_id IS NOT NULL AND b.orchestration_id = w.orchestration_id))
+                       AND b.purpose IN ('PLAY_RESEARCH', 'GRUNT'))`,
+    [until],
+  );
+  const { readCapacity } = await import('../freeLane/capacity.ts');
+  const controller = await readCapacity();
+  return freeLaneCapacityFrom({ nowMs: Date.parse(until), queuedAvailableAt: rows.map((one) => one.available_at), controller });
+}
+
 /** The same reading over each of the TEL-07-1 windows ending at `until`. */
 export async function researchYieldWindows(until = new Date().toISOString()): Promise<Record<(typeof RESEARCH_YIELD_WINDOWS)[number]['key'], ResearchYieldReading>> {
   const end = Date.parse(until);
