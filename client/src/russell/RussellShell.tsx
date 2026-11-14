@@ -60,6 +60,7 @@ import { parseRoute, type Navigation, type Route } from '../lib/router.ts';
 import { CashSection } from './Cash.tsx';
 import { Devices } from './Devices.tsx';
 import { PeopleAndCapacityView } from './People.tsx';
+import { WorldPage } from '../world/WorldPage.tsx';
 
 /**
  * The six, and then everything else.
@@ -108,6 +109,12 @@ export const SECTIONS = [
   { name: 'INTEGRATIONS' as const, label: 'Integrations', primary: false },
   /* Magic Deck Lab: secondary, reached from More; never a primary destination. */
   { name: 'MAGIC' as const, label: 'Magic', primary: false },
+  /*
+   * The world (UI-27): the whole system as a scene, an operations table and a
+   * goal focus over one read, with the conversation docked beside it. Reached
+   * from More so the six stay six; its address is a deep link.
+   */
+  { name: 'WORLD' as const, label: 'World', primary: false },
 ];
 
 /** The systems the Business systems destination opens, and what each is for. */
@@ -133,6 +140,7 @@ const PROJECT_SCOPED = new Set<Route['name']>([
   'LABOR',
   'PUZZLES',
   'SCENARIOS',
+  'WORLD',
 ]);
 
 const PROJECT_KEY = 'brain.project';
@@ -660,6 +668,7 @@ export function RussellShell({
           />
         ) : null}
         {route.name === 'SCENARIOS' ? <ScenariosView projectId={projectId} /> : null}
+        {route.name === 'WORLD' ? <WorldPage projectId={projectId} conversationId={conversationId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
         {route.name === 'CASH' ? (
@@ -688,6 +697,8 @@ export function RussellShell({
         ) : null}
       </main>
 
+      {/* The world docks the conversation in its own column, grounded in the selection; one input per screen. */}
+      {route.name === 'WORLD' ? null : (
       <CommandBar
         conversationId={conversationId}
         draft={draft}
@@ -700,6 +711,7 @@ export function RussellShell({
           }
         }}
       />
+      )}
     </div>
   );
 }

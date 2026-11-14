@@ -25,6 +25,7 @@ import type {
 import { turnLabel } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { ApiError } from '../lib/api.ts';
+import { groundingPreface, type ConversationGrounding } from '../world/lens.ts';
 
 /** How often an unanswered turn asks the server whether it has been answered. */
 const PENDING_POLL_MS = 4_000;
@@ -93,6 +94,7 @@ export function Conversation({
   conversationId,
   showComposer = true,
   reloadToken = 0,
+  grounding = null,
 }: {
   conversationId: string;
   /**
@@ -106,6 +108,14 @@ export function Conversation({
   showComposer?: boolean;
   /** Bumped by whoever sent a message from outside, to re-read the thread. */
   reloadToken?: number;
+  /**
+   * The real record the person has selected (the world lenses), carried into
+   * the turn on the existing Russell turn route. Only a description of the
+   * record travels — its id, kind, address and state — so the turn is
+   * authorized exactly as any other, and anything Russell does about it goes
+   * through the routes that already decide whether it may.
+   */
+  grounding?: ConversationGrounding | null;
 }): JSX.Element {
   const thread = useAsync(() => RussellApi.thread(conversationId), [conversationId]);
   const [draft, setDraft] = useState('');
@@ -155,8 +165,10 @@ export function Conversation({
   }, [turns.length]);
 
   const send = useCallback(async () => {
-    const content = draft.trim();
-    if (!content || sending) return;
+    const words = draft.trim();
+    if (!words || sending) return;
+    const preface = groundingPreface(grounding);
+    const content = preface ? `${preface}\n${words}` : words;
     setSending(true);
     setProblem(null);
     try {
@@ -174,7 +186,7 @@ export function Conversation({
     } finally {
       setSending(false);
     }
-  }, [conversationId, draft, sending, thread]);
+  }, [conversationId, draft, grounding, sending, thread]);
 
   if (thread.loading && turns.length === 0) {
     return <p className="rs-state rs-state-loading">Opening the conversation…</p>;
@@ -211,6 +223,20 @@ export function Conversation({
         </p>
       ) : null}
 
+      {showComposer && grounding ? (
+        <p className="rs-thread-grounding" data-testid="conversation-grounding">
+          Asking about {grounding.title ?? `${grounding.kind} ${grounding.recordId}`}
+          {grounding.href ? (
+            <>
+              {' '}
+              (<a href={grounding.href}>{grounding.href}</a>)
+            </>
+          ) : (
+            ' (no record address)'
+          )}
+          {grounding.found ? '' : ' — not found in the current read'}
+        </p>
+      ) : null}
       {showComposer ? (
       <form
         className="rs-composer"
