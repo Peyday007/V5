@@ -23,6 +23,7 @@ import {
   heldFromRows,
   openWorld,
   openWorldHoldsOnRows,
+  openWorldLensSeeds,
   represented,
   withObserved,
   type ObservedInput,
@@ -177,5 +178,30 @@ describe('openWorldHoldsOnRows (r01.arch-01)', () => {
     expect(held.ok, held.detail).toBe(true);
     expect(held.detail).toMatch(/roles no record represents/);
     expect(held.detail).toMatch(/recorded price row/);
+  });
+});
+
+describe('the running Brain consumes the arrangements (review finding: openWorld had no consumer)', () => {
+  it('turns every constructed arrangement into a search angle that carries the arrangement and its evaluation', () => {
+    const reading = openWorld(lastMileDelivery(), NOTHING_HELD);
+    const seeds = openWorldLensSeeds('last-mile delivery', reading);
+    expect(seeds).toHaveLength(reading.arrangements.length);
+    expect(new Set(seeds.map((one) => one.key)).size).toBe(seeds.length);
+    seeds.forEach((one, i) => {
+      const a = reading.arrangements[i]!;
+      expect(one.record).toMatchObject({ subject: 'last-mile delivery', flowKey: a.flowKey, roleId: a.roleId, businessKey: a.business.key, viability: a.viability });
+      expect(one.angle).toContain(a.roleLabel);
+      expect(one.angle).toContain(a.business.label);
+      expect(one.angle).toContain('no record in Brain holds yet');
+    });
+  });
+
+  it('is called outside its own probe: goal discovery builds lenses from it and records the arrangement on the round it opens', () => {
+    const discovery = readFileSync('server/services/cash/discovery.ts', 'utf8');
+    expect(discovery).toMatch(/from '\.\.\/industry\/construction\/openWorld\.ts'/);
+    expect(discovery).toMatch(/openWorldLenses\(await openWorldLensSeedsFor\(/);
+    expect(discovery).toMatch(/openWorld: input\.openWorld/);
+    const source = readFileSync('server/services/industry/construction/openWorld.ts', 'utf8');
+    expect(source).toMatch(/openWorld\(evidence, held, input\.seeds/);
   });
 });

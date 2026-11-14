@@ -26,6 +26,7 @@ import { forgetKnowledge } from '../server/services/quant/knowledge.ts';
 import { getDb } from '../server/db/database.ts';
 import { getCandidate } from '../server/repos/russellCandidates.ts';
 import type { RoleLensSeed } from '../server/services/industry/construction/roles.ts';
+import type { OpenWorldLensSeed } from '../server/services/industry/construction/openWorld.ts';
 import { statesNamedIn } from '../server/domain/jurisdiction.ts';
 import {
   GOAL_LENSES,
@@ -41,6 +42,8 @@ import {
   questionFor,
   roleLenses,
   MAX_ROLE_LENSES,
+  openWorldLenses,
+  MAX_OPEN_WORLD_LENSES,
   type SearchBucket,
 } from '../server/services/cash/discovery.ts';
 import { OPPORTUNITY_ORIGINS, seedsFromFirstPrinciples, type GoalRow, type OpportunitySeed } from '../server/services/industry/construction/origins.ts';
@@ -238,6 +241,79 @@ describe('every round records the origin it was asked from', () => {
     expect(statement).toMatch(/whose value is not established|worth about USD/);
     expect(statement).toMatch(/may occupy it legally and contractually is (yes|no|unknown)/);
     expect(statement).toMatch(/its duties: .+; its risks: /);
+  });
+  it('a goal round is asked to test an arrangement no record holds, and its opening event records that arrangement (ARCH-01)', async () => {
+    const w = await goal();
+    const root = await createNode({ projectId, parentId: null, kind: 'SECTOR', name: 'commercial cleaning', origin: 'SEED' });
+    const buyer = await createNode({ projectId, parentId: root.node.id, kind: 'BUYER_TYPE', name: 'property managers', origin: 'SEED' });
+    await createNode({ projectId, parentId: buyer.node.id, kind: 'TRANSACTION_TYPE', name: 'monthly janitorial contract', description: 'paid monthly per building', origin: 'SEED' });
+
+    const target = (await readGoalPlan({ goalId: w.id, evaluations: 200 }))!.target;
+    for (let i = 0; i < GOAL_LENSES.length + 3 + 80; i += 1) {
+      await openGoalDiscovery({ goal: w, target, bestReach: null, now: now.toISOString(), liveCap: 300 });
+    }
+    const rows = await getDb().all<{ detail: string }>(`SELECT detail FROM cash_events WHERE project_id = ? AND kind = 'CASH_DISCOVERY_OPENED' ORDER BY created_at`, [projectId]);
+    type Opened = { bucketId: string; candidateId: string; origins: string[]; originSeeds: string[]; openWorld?: { subject: string; roleId: string; businessKey: string; viability: string; unpriced: string[] } };
+    const open = rows.map((row) => JSON.parse(row.detail) as Opened).filter((one) => one.bucketId.includes('-open-'));
+    expect(open.length).toBeGreaterThan(0);
+    for (const one of open) {
+      expect(one.origins).toEqual(['MEMORY']);
+      expect(one.originSeeds).toHaveLength(1);
+      expect(one.originSeeds[0]).toMatch(/^open:commercial cleaning:/);
+      // The arrangement itself is recorded: which role, which constructed business, how it was evaluated.
+      expect(one.openWorld).toBeDefined();
+      expect(one.openWorld!.subject).toBe('commercial cleaning');
+      expect(one.originSeeds[0]).toContain(one.openWorld!.roleId);
+      expect(one.openWorld!.businessKey.length).toBeGreaterThan(0);
+      expect(['VIABLE', 'CONDITIONAL', 'NOT_VIABLE', 'UNPRICED']).toContain(one.openWorld!.viability);
+      expect(Array.isArray(one.openWorld!.unpriced)).toBe(true);
+    }
+    // More than one role is asked about: not a single play.
+    expect(new Set(open.map((one) => one.openWorld!.roleId)).size).toBeGreaterThan(1);
+    // The broker role is among them when no record names it (the next test holds one that does).
+    expect(open.some((one) => one.openWorld!.roleId === 'broker_agent')).toBe(true);
+    const statement = (await getCandidate(open[0]!.candidateId))!.statement;
+    expect(statement).toMatch(/an arrangement no record in Brain holds yet: the .+ position in commercial cleaning/);
+    expect(statement).toMatch(/constructed as ".+" and evaluated (viable|conditional|not_viable|unpriced)/);
+  });
+
+  it('a role a held record already represents is not asked as an open-world arrangement', async () => {
+    const w = await goal();
+    const root = await createNode({ projectId, parentId: null, kind: 'SECTOR', name: 'commercial cleaning', origin: 'SEED' });
+    const buyer = await createNode({ projectId, parentId: root.node.id, kind: 'BUYER_TYPE', name: 'property managers', origin: 'SEED' });
+    await createNode({ projectId, parentId: buyer.node.id, kind: 'TRANSACTION_TYPE', name: 'monthly janitorial contract', description: 'paid monthly per building', origin: 'SEED' });
+    // A held record that names the broker role.
+    await createNode({ projectId, parentId: null, kind: 'SECTOR', name: 'cleaning broker network', origin: 'SEED' });
+
+    const target = (await readGoalPlan({ goalId: w.id, evaluations: 200 }))!.target;
+    for (let i = 0; i < GOAL_LENSES.length + 3 + 80; i += 1) {
+      await openGoalDiscovery({ goal: w, target, bestReach: null, now: now.toISOString(), liveCap: 300 });
+    }
+    const rows = await getDb().all<{ detail: string }>(`SELECT detail FROM cash_events WHERE project_id = ? AND kind = 'CASH_DISCOVERY_OPENED' ORDER BY created_at`, [projectId]);
+    const open = rows.map((row) => JSON.parse(row.detail) as { bucketId: string; openWorld?: { roleId: string } }).filter((one) => one.bucketId.includes('-open-'));
+    expect(open.length).toBeGreaterThan(0);
+    expect(open.some((one) => one.openWorld?.roleId === 'broker_agent')).toBe(false);
+  });
+});
+
+describe('open-world arrangements become goal lenses (ARCH-01)', () => {
+  const seed = (subject: string, roleId: string, angle = `an arrangement no record in Brain holds yet: the ${roleId} position in ${subject}`): OpenWorldLensSeed => ({
+    key: `open:${subject}:0:MONEY:a->b:${roleId}`,
+    subject,
+    angle,
+    record: { subject, flowKey: '0:MONEY:a->b', roleId, roleOrigin: 'SEED', businessKey: `b-${roleId}`, viability: 'UNPRICED', midContribution: null, unpriced: [] },
+  });
+
+  it('interleaves subjects, keeps each subject\'s order, and carries the arrangement on the lens', () => {
+    const seeds = [...['broker_agent', 'reseller'].map((r) => seed('laundry', r)), ...['marketplace'].map((r) => seed('towing', r))];
+    const lenses = openWorldLenses(seeds, 2);
+    expect(lenses.map((one) => one.seedKey)).toEqual(['open:laundry:0:MONEY:a->b:broker_agent', 'open:towing:0:MONEY:a->b:marketplace']);
+    for (const lens of openWorldLenses(seeds)) {
+      expect(lens.origin).toBe('MEMORY');
+      expect(lens.id).toMatch(/^open-[0-9a-z]+$/);
+      expect(lens.openWorld?.roleId).toBeDefined();
+    }
+    expect(openWorldLenses(Array.from({ length: 100 }, (_, n) => seed('s', `r${n}`))).length).toBe(MAX_OPEN_WORLD_LENSES);
   });
 });
 

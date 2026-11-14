@@ -307,3 +307,88 @@ export async function openWorldHoldsOnRows(): Promise<{ ok: boolean; detail: str
   if (adapted === 0) return { ok: false, detail: `${arrangements} open-world arrangement(s) constructed and ${observedRows} observed row(s) recorded, but no evaluation moved with them` };
   return { ok: true, detail: `${arrangements} arrangement(s) for roles no record represents, across ${subjects} subject(s); ${adapted} re-evaluated on recorded observations; e.g. ${example}; ${adaptedExample}` };
 }
+
+/* ------------------------------------------------------- the running consumer */
+
+/**
+ * What a goal round asked from an open-world arrangement records about it:
+ * the role, the business constructed for it and its evaluation, so the round's
+ * opening event says exactly which unrepresented arrangement it set out to test.
+ */
+export interface OpenWorldRecord {
+  subject: string;
+  flowKey: string;
+  roleId: string;
+  roleOrigin: CommercialRole['origin'];
+  businessKey: string;
+  viability: BusinessEconomics['viability'];
+  midContribution: number | null;
+  unpriced: FactKey[];
+}
+
+/** One open-world arrangement as a goal search angle (ARCH-01). */
+export interface OpenWorldLensSeed {
+  /** Subject, flow and role: one per arrangement. */
+  key: string;
+  subject: string;
+  angle: string;
+  record: OpenWorldRecord;
+}
+
+/**
+ * The arrangements a subject's reading constructed, each as the question a
+ * goal round asks: find who would transact through this role, and the figures
+ * that confirm or refute its evaluation. In the reading's own order (best
+ * evaluated first) and never filtered by role or industry. Pure.
+ */
+export function openWorldLensSeeds(subject: string, reading: OpenWorldReading): OpenWorldLensSeed[] {
+  return reading.arrangements.map((a) => {
+    const money = a.midContribution === null ? 'its contribution is not yet priced' : `about USD ${Math.round(a.midContribution)} a month of contribution at the middle case`;
+    const unpriced = a.unpriced.length ? `; still unknown: ${a.unpriced.join(', ')}` : '';
+    const payer = a.business.segmentName ? ` paid by ${a.business.segmentName}` : '';
+    const angle =
+      `an arrangement no record in Brain holds yet: the ${a.roleLabel} position in ${subject}${payer}, constructed as "${a.business.label}" and evaluated ${a.viability.toLowerCase()} (${money}${unpriced}). ` +
+      'Find buyers and suppliers who would actually transact through that position, and the published figures that confirm or refute that evaluation';
+    return {
+      key: `open:${subject.toLowerCase()}:${a.flowKey}:${a.roleId}`,
+      subject,
+      angle,
+      record: {
+        subject,
+        flowKey: a.flowKey,
+        roleId: a.roleId,
+        roleOrigin: a.roleOrigin,
+        businessKey: a.business.key,
+        viability: a.viability,
+        midContribution: a.midContribution,
+        unpriced: [...a.unpriced],
+      },
+    };
+  });
+}
+
+/**
+ * The open-world lens seeds of every subject on a project's industry map: each
+ * root's flows read as evidence, the roles no held record represents constructed
+ * and evaluated by `openWorld`. Reads nothing itself — the caller passes the
+ * rows it already loaded — so cash discovery consumes it in the pass it
+ * already runs, with no store or scheduler of its own.
+ */
+export async function openWorldLensSeedsFor(input: {
+  nodes: IndustryNode[];
+  constraints: Parameters<typeof evidenceFromMap>[1];
+  opportunities: Pick<CashOpportunity, 'title' | 'industry'>[];
+  seeds?: OpportunitySeed[];
+}): Promise<OpenWorldLensSeed[]> {
+  // Imported when used: the construction service reaches the goal modules, which reach discovery.
+  const { assembleEvidence, evidenceFromMap: fromMap, subtreeFor } = await import('./service.ts');
+  const held = heldFromRows(input.nodes, input.opportunities);
+  const out: OpenWorldLensSeed[] = [];
+  for (const root of input.nodes.filter((n) => n.parentId === null && !n.retiredAt)) {
+    const map = fromMap(subtreeFor(input.nodes, root.name), input.constraints);
+    if (map.flows.length === 0) continue;
+    const evidence = assembleEvidence({ text: root.name, industry: root.name, geography: null, map, recorded: [] });
+    out.push(...openWorldLensSeeds(root.name, openWorld(evidence, held, input.seeds ?? [])));
+  }
+  return out;
+}

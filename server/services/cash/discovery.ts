@@ -97,6 +97,7 @@ import { listConstraintsForProject, listNodes, openIndustryRoundsByCandidate } f
 import { OPPORTUNITY_ORIGINS, opportunityField, rankSubjectMarkets, seedsFromFirstPrinciples, type GoalRow, type OpportunityOrigin, type OpportunitySeed } from '../industry/construction/origins.ts';
 import { getWorkstream } from '../../repos/register.ts';
 import { commercialRoles, roleLensSeeds, type RoleLensSeed } from '../industry/construction/roles.ts';
+import { openWorldLensSeedsFor, type OpenWorldLensSeed, type OpenWorldRecord } from '../industry/construction/openWorld.ts';
 import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
 import { exclusionSentence, unionOf, type ExclusionClass } from './exclusions.ts';
 import { liveGoalLimits } from './worthResearching.ts';
@@ -605,6 +606,8 @@ async function openBucketRound(input: {
   origins: readonly OpportunityOrigin[];
   /** The opportunity-field seeds it was asked from, when it was seeded by one. */
   seedKeys?: readonly string[];
+  /** The open-world arrangement it was asked to test, when it was (ARCH-01). */
+  openWorld?: OpenWorldRecord;
 }): Promise<CashDiscoveryRound | null> {
   const { bucket, next, mode } = input;
   let round: CashDiscoveryRound;
@@ -649,6 +652,7 @@ async function openBucketRound(input: {
       objective: mode.objective,
       origins: [...input.origins],
       originSeeds: [...(input.seedKeys ?? [])],
+      ...(input.openWorld ? { openWorld: input.openWorld } : {}),
     },
   });
   return round;
@@ -714,6 +718,8 @@ export interface GoalLens {
   origin: OpportunityOrigin;
   /** The opportunity-field seed it was built from, when it was. */
   seedKey?: string;
+  /** The open-world arrangement the lens asks about, when it is one (ARCH-01). */
+  openWorld?: OpenWorldRecord;
 }
 
 /** At most this many opportunity-field seeds are offered as a goal's search angles at once. */
@@ -734,7 +740,7 @@ export function firstPrinciplesSeed(goal: GoalRow): OpportunitySeed | null {
  */
 /** A field or role lens ranks as if asked once already; a fixed angle or an industry does not. */
 function fieldPenalty(lens: GoalLens): number {
-  return lens.seedKey && (lens.id.startsWith('org-') || lens.id.startsWith('role-')) ? 1 : 0;
+  return lens.seedKey && (lens.id.startsWith('org-') || lens.id.startsWith('role-') || lens.id.startsWith('open-')) ? 1 : 0;
 }
 
 export function fixedLenses(backward: OpportunitySeed | null): GoalLens[] {
@@ -826,6 +832,40 @@ export async function roleLensSeedsFor(nodes: IndustryNode[], constraints: Oppor
     if (map.flows.length === 0) continue;
     const evidence = assembleEvidence({ text: root.name, industry: root.name, geography: null, map, recorded: [] });
     out.push(...roleLensSeeds(root.name, commercialRoles(evidence)));
+  }
+  return out;
+}
+
+/** At most this many open-world arrangements are offered as goal lenses at once (ARCH-01). */
+export const MAX_OPEN_WORLD_LENSES = 40;
+
+/**
+ * The arrangements `openWorld` constructed for roles no held record represents,
+ * as goal lenses (ARCH-01). This is where the running Brain uses them: a goal's
+ * research is asked to test one, and the round's opening event records which
+ * arrangement, how it was evaluated and what was still unpriced. Interleaved
+ * across subjects so a bounded set reaches each, keeping each subject's own
+ * evaluation order; no role, industry or category is preferred or filtered.
+ * Built from the remembered map, so the origin is MEMORY. Pure.
+ */
+export function openWorldLenses(seeds: readonly OpenWorldLensSeed[], max = MAX_OPEN_WORLD_LENSES): GoalLens[] {
+  const bySubject = new Map<string, OpenWorldLensSeed[]>();
+  for (const one of seeds) {
+    if (!safeExclusion(one.angle)) continue;
+    const list = bySubject.get(one.subject) ?? [];
+    list.push(one);
+    bySubject.set(one.subject, list);
+  }
+  const out: GoalLens[] = [];
+  for (let depth = 0; out.length < max; depth += 1) {
+    let added = false;
+    for (const list of bySubject.values()) {
+      const one = list[depth];
+      if (!one || out.length >= max) continue;
+      out.push({ id: `open-${lensId(one.key)}`, angle: one.angle.slice(0, 700), origin: 'MEMORY', seedKey: one.key, openWorld: one.record });
+      added = true;
+    }
+    if (!added) break;
   }
   return out;
 }
@@ -997,9 +1037,10 @@ export async function openGoalDiscovery(input: {
    */
   const goalRow = await getWorkstream(input.goal.id);
   const backward = goalRow ? firstPrinciplesSeed(goalRow) : null;
+  const opportunities = await listOpportunities({ projectId: t.projectId });
   const field = opportunityField({
     nodes,
-    opportunities: await listOpportunities({ projectId: t.projectId }),
+    opportunities,
     goals: goalRow ? [goalRow] : [],
     constraints,
   });
@@ -1008,7 +1049,13 @@ export async function openGoalDiscovery(input: {
    * per position, asked in the role model's own terms, after the field lenses.
    */
   const roles = roleLenses(await roleLensSeedsFor(nodes, constraints));
-  const lenses: GoalLens[] = [...fixedLenses(backward), ...industries, ...originLenses(field), ...roles];
+  /*
+   * And the arrangements nobody holds a record of (ARCH-01): for each mapped
+   * subject, the roles no held row represents, constructed and evaluated by
+   * `openWorld`, each a lens whose round tests that arrangement and records it.
+   */
+  const open = openWorldLenses(await openWorldLensSeedsFor({ nodes, constraints, opportunities, seeds: field }));
+  const lenses: GoalLens[] = [...fixedLenses(backward), ...industries, ...originLenses(field), ...roles, ...open];
   const choices = lenses.map((lens, index) => {
     const id = `${prefix}-${lens.id}`;
     const history = mine.filter((one) => one.bucketId === id);
@@ -1094,6 +1141,7 @@ export async function openGoalDiscovery(input: {
     statement: questionFor(bucket, mode.objective, next, history, heldLines, frame, unionOf(await liveGoalLimits(t.projectId, new Date().toISOString()))),
     origins,
     seedKeys,
+    ...(lens.openWorld ? { openWorld: lens.openWorld } : {}),
   });
   return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
 }
