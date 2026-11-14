@@ -22,7 +22,7 @@ import type { ConstructedArrangement, ConstructionJob } from '../../cash/constru
 import { DEFAULT_SWEEP_MS, type VariableSweep } from './variables.ts';
 
 export const MAX_THREADS = 4;
-/** An evaluation that takes longer than this on a thread is abandoned and run inline instead. */
+/** An evaluation that takes longer than this on a thread is abandoned: its thread is replaced, and that one evaluation runs inline. */
 export const EVALUATION_TIMEOUT_MS = 60_000;
 /** A construction pass on a thread is abandoned and run inline (yielding) after this long. */
 export const CONSTRUCTION_TIMEOUT_MS = 120_000;
@@ -88,43 +88,72 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
   const idle: Worker[] = [];
   const waiting: Array<() => void> = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pending = new Map<number, { resolve: (p: any) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
-  let broken = false;
+  const pending = new Map<number, { resolve: (p: any) => void; reject: (e: Error) => void; timer: NodeJS.Timeout; worker: Worker }>();
   let next = 1;
-  try {
-    for (let i = 0; i < threads; i++) {
-      const worker = new Worker(new URL('./evaluator-boot.mjs', import.meta.url), { resourceLimits: { maxOldGenerationSizeMb: 384 } });
-      worker.on('message', (message: { id: number; ok: boolean; result?: unknown; message?: string }) => {
-        const job = pending.get(message.id);
-        if (!job) return;
-        pending.delete(message.id);
-        clearTimeout(job.timer);
-        if (message.ok) job.resolve(message.result!);
-        else job.reject(new Error(message.message ?? 'evaluation failed'));
-      });
-      worker.on('error', () => {
-        broken = true;
-      });
-      worker.unref();
-      workers.push(worker);
-      idle.push(worker);
+  let closed = false;
+  /** Threads that failed or timed out: terminated, and replaced. */
+  const dead = new Set<Worker>();
+  const spawn = (): Worker => {
+    const worker = new Worker(new URL('./evaluator-boot.mjs', import.meta.url), { resourceLimits: { maxOldGenerationSizeMb: 384 } });
+    worker.on('message', (message: { id: number; ok: boolean; result?: unknown; message?: string }) => {
+      const job = pending.get(message.id);
+      if (!job) return;
+      pending.delete(message.id);
+      clearTimeout(job.timer);
+      if (message.ok) job.resolve(message.result!);
+      else job.reject(new Error(message.message ?? 'evaluation failed'));
+    });
+    worker.on('error', () => retire(worker));
+    worker.unref();
+    workers.push(worker);
+    return worker;
+  };
+  /**
+   * C-12: a thread that failed or timed out is terminated and replaced, so one slow evaluation never sends every later
+   * one — a minute-long sweep included — onto the server's own loop.
+   */
+  const retire = (worker: Worker): void => {
+    if (dead.has(worker)) return;
+    dead.add(worker);
+    for (const [id, job] of pending) {
+      if (job.worker !== worker) continue;
+      pending.delete(id);
+      clearTimeout(job.timer);
+      job.reject(new Error('its thread failed'));
     }
+    const at = idle.indexOf(worker);
+    if (at >= 0) idle.splice(at, 1);
+    void worker.terminate().catch(() => 0);
+    if (closed) return;
+    try {
+      idle.push(spawn());
+      waiting.shift()?.();
+    } catch {
+      // No replacement could start: the pool is one thread smaller.
+    }
+  };
+  try {
+    for (let i = 0; i < threads; i++) idle.push(spawn());
   } catch {
     for (const w of workers) void w.terminate();
     return inline;
   }
-  const take = async (): Promise<Worker> => {
-    while (idle.length === 0) await new Promise<void>((resolve) => waiting.push(resolve));
+  const take = async (): Promise<Worker | null> => {
+    while (idle.length === 0) {
+      if (workers.every((w) => dead.has(w))) return null;
+      await new Promise<void>((resolve) => waiting.push(resolve));
+    }
     return idle.pop()!;
   };
   const give = (w: Worker) => {
+    if (dead.has(w)) return;
     idle.push(w);
     waiting.shift()?.();
   };
-  /** One job on one thread; on a thread failure or a timeout, the same job inline — never a lost one. */
-  const onThread = async <T>(message: Record<string, unknown>, timeoutMs: number, fallback: () => Promise<T>): Promise<T> => {
-    if (broken) return fallback();
+  /** One job on one thread. On a failure or timeout the thread is replaced, and `fallback` decides what the caller gets. */
+  const onThread = async <T>(message: Record<string, unknown>, timeoutMs: number, fallback: (error: Error) => Promise<T>): Promise<T> => {
     const worker = await take();
+    if (!worker) return fallback(new Error('no evaluation thread is running'));
     try {
       return await new Promise<T>((resolve, reject) => {
         const id = next++;
@@ -132,22 +161,26 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
           pending.delete(id);
           reject(new Error('timed out on its thread'));
         }, timeoutMs);
-        pending.set(id, { resolve, reject, timer });
+        pending.set(id, { resolve, reject, timer, worker });
         worker.postMessage({ id, ...message });
       });
-    } catch {
-      broken = true;
-      return fallback();
+    } catch (error) {
+      retire(worker);
+      return fallback(error as Error);
     } finally {
       give(worker);
     }
   };
   return {
     threads,
+    // One failed evaluation (about a second) is rerun inline; the next goes to the replacement thread.
     evaluate: (input) => onThread<GoalPortfolio>({ kind: 'evaluate', input }, EVALUATION_TIMEOUT_MS, () => inline.evaluate(input)),
-    sweep: (job) => onThread<VariableSweep>({ kind: 'sweep', job }, (job.maxMs ?? DEFAULT_SWEEP_MS) + 120_000, () => inline.sweep(job)),
+    // A sweep is never run inline: it holds a loop for up to a minute. A failed one is no sweep, and the plan reads without it.
+    sweep: (job) => onThread<VariableSweep>({ kind: 'sweep', job }, (job.maxMs ?? DEFAULT_SWEEP_MS) + 120_000, (error) => Promise.reject(new Error(`variable sweep abandoned: ${error.message}`))),
+    // A failed construction is composed inline, handing the loop back every 25 ms (§109): its result is the plan's arrangements.
     construct: (job) => onThread<ConstructedArrangement[]>({ kind: 'construct', job }, CONSTRUCTION_TIMEOUT_MS, () => inline.construct!(job)),
     async close() {
+      closed = true;
       for (const job of pending.values()) clearTimeout(job.timer);
       await Promise.all(workers.map((w) => w.terminate().catch(() => 0)));
     },

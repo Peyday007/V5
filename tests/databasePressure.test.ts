@@ -10,9 +10,12 @@ import {
   MIN_SAMPLES,
   RECOVER_AFTER_MS,
   resetPressure,
+  SHEDDING_THROTTLE_INTERVAL_MS,
+  throttledDeferrals,
+  throttleUnderPressure,
 } from '../server/db/pressure.ts';
 import { countDatabaseFailure, noteStall, noteStatement, resetInfraCounters, resetStallLog } from '../server/db/infra.ts';
-import { DEFERRABLE_UNDER_PRESSURE, runPass } from '../server/services/russell/loop.ts';
+import { DEFERRABLE_UNDER_PRESSURE, runPass, settleGoalPlans, startGoalPlans } from '../server/services/russell/loop.ts';
 
 const fast = (n = MIN_SAMPLES) => Array.from({ length: n }, () => 40);
 const slow = (n = MIN_SAMPLES) => Array.from({ length: n }, () => ENTER_P90_MS + 1);
@@ -162,5 +165,68 @@ describe('the Russell tick under pressure', () => {
     ]) {
       expect(DEFERRABLE_UNDER_PRESSURE.has(essential), essential).toBe(false);
     }
+  });
+});
+
+describe('planning a live goal under pressure is throttled, not shed', () => {
+  beforeEach(() => {
+    resetInfraCounters();
+    resetPressure();
+  });
+
+  it('still runs goal-plans under SHEDDING, one goal per pass, and counts the throttled starts', async () => {
+    for (let i = 0; i < ENTER_FAILURES; i++) countDatabaseFailure('STATEMENT_TIMEOUT');
+    expect(databasePressure().state).toBe('SHEDDING');
+    const calls: { maxReads?: number }[] = [];
+    const run = async (options: { maxReads?: number }) => {
+      calls.push(options);
+    };
+
+    const first = { passFailures: [] as { pass: string; error: string }[], deferred: [] as string[] };
+    startGoalPlans(first, run);
+    await settleGoalPlans();
+    expect(calls).toEqual([{ maxReads: 1 }]);
+    expect(first.deferred).toEqual([]);
+
+    // Never back to back: the next tick inside the interval defers, and says so.
+    const second = { passFailures: [] as { pass: string; error: string }[], deferred: [] as string[] };
+    startGoalPlans(second, run);
+    await settleGoalPlans();
+    expect(calls).toHaveLength(1);
+    expect(second.deferred).toEqual(['goal-plans (throttled)']);
+    expect(throttledDeferrals()['goal-plans']).toBe(1);
+    expect(second.passFailures).toEqual([]);
+  });
+
+  it('lets a throttled pass start again once the interval has passed', () => {
+    for (let i = 0; i < ENTER_FAILURES; i++) countDatabaseFailure('STATEMENT_TIMEOUT');
+    const now = Date.now();
+    expect(throttleUnderPressure('goal-plans', now)).toBe('THROTTLED');
+    expect(throttleUnderPressure('goal-plans', now + SHEDDING_THROTTLE_INTERVAL_MS - 1)).toBe('DEFERRED');
+    expect(throttleUnderPressure('goal-plans', now + SHEDDING_THROTTLE_INTERVAL_MS)).toBe('THROTTLED');
+  });
+
+  it('runs goal-plans unthrottled when the database is answering', async () => {
+    const calls: { maxReads?: number }[] = [];
+    const report = { passFailures: [] as { pass: string; error: string }[], deferred: [] as string[] };
+    startGoalPlans(report, async (options) => {
+      calls.push(options);
+    });
+    await settleGoalPlans();
+    expect(calls).toEqual([{}]);
+    expect(report.deferred).toEqual([]);
+  });
+
+  it('still sheds the genuinely optional passes under SHEDDING', async () => {
+    for (let i = 0; i < ENTER_FAILURES; i++) countDatabaseFailure('STATEMENT_TIMEOUT');
+    expect(databasePressure().state).toBe('SHEDDING');
+    expect(DEFERRABLE_UNDER_PRESSURE.has('goal-plans')).toBe(false);
+    const report = { passFailures: [] as { pass: string; error: string }[], deferred: [] as string[] };
+    const ran: string[] = [];
+    for (const optional of ['frontier', 'lens-inquiries', 'improvement-loop', 'historical-memory']) {
+      expect(await runPass(report, optional, async () => ran.push(optional))).toBe(false);
+    }
+    expect(ran).toEqual([]);
+    expect(report.deferred).toEqual(['frontier', 'lens-inquiries', 'improvement-loop', 'historical-memory']);
   });
 });

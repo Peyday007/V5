@@ -43,6 +43,7 @@
  * requirement is not explored.
  */
 import type { ModelledOpportunity } from '../../cash/goalScenario.ts';
+import type { PlannedOpening } from '../portfolio.ts';
 import type { Dimension, StrategyChange, StrategyOperator, StrategyState, VariantReading } from '../reconstruction.ts';
 import { renderSweep, type VariableSweep } from './variables.ts';
 
@@ -55,6 +56,14 @@ export const MAX_GENERATIONS = 4;
 export const PRICE_ELASTICITY = 1.2;
 /** The challenge every leader must survive: its conversion halved. */
 export const CHALLENGE_FACTOR = 0.5;
+/**
+ * A direction may replace §99's plan only if, challenged, it still reaches at
+ * least this share of the requirement — or if what it holds on no assumed move
+ * beats the plan as held (§101, C-15). Half the requirement: a plan that falls
+ * below that once its conversion is halved or its assumptions are taken away
+ * rests on them, and the challenge exists to stop such a plan winning.
+ */
+export const WINNER_ALPHA = 0.5;
 /** Evaluations an exploration may spend per direction its budget allows: screening, challenges and generations together. */
 export const EVALUATIONS_PER_DIRECTION = 4;
 /** No exploration spends more evaluations than this, whatever its budget. */
@@ -102,8 +111,10 @@ export interface Direction {
 export interface DirectionReading {
   direction: Direction;
   reading: VariantReading;
-  /** The same plan with its conversion halved: what it holds if its assumptions are wrong. */
+  /** The weaker of its conversion halved and its assumptions removed: what it holds if its assumptions are wrong. */
   challenged: VariantReading | null;
+  /** The same plan with every assumed move taken away. */
+  bare?: VariantReading | null;
   /** The ranking score: reach and challenged reach weighed equally, so a fragile plan ranks below a robust one. */
   score: number;
   generation: number;
@@ -255,8 +266,62 @@ export function inScope(openings: ModelledOpportunity[], scope: Scope, remaining
   }
 }
 
-/** The price change a direction may make: from a quarter to four times. */
+/** The price change a direction may make: from a quarter to four times — of the card's own unit price, however many moves reach it. */
 export const clampPrice = (k: number) => Math.min(4, Math.max(0.25, k));
+
+/**
+ * Move one opening's unit price by `k`, held to ×0.25–×4 of the card's own
+ * price across every move that has touched it (price steps and transaction
+ * shapes alike), so moves never compound past the clamp (production,
+ * 2026-11-14: ×1.3 · ×3.38 · ×4 = ×17.6 on one opening). The demand curve
+ * moves both ways: close rate and the deals the market takes each move by
+ * k^-elasticity (assumed until selling measures it). Returns the factor
+ * actually applied (1 when the opening is already at the clamp).
+ */
+export function repriceOpening(o: PlannedOpening, k: number, why = 'price'): { opening: PlannedOpening; applied: number } {
+  const terms = o.terms ?? { priceFactor: 1, shape: null, units: 1 };
+  const target = clampPrice(terms.priceFactor * k);
+  const applied = target / terms.priceFactor;
+  if (Math.abs(applied - 1) < 1e-9) return { opening: o, applied: 1 };
+  const demand = Math.pow(applied, -PRICE_ELASTICITY);
+  const note = `${why} ×${applied.toFixed(2)} (unit price ×${target.toFixed(2)} of the card's): assumed ×${demand.toFixed(2)} (elasticity ${PRICE_ELASTICITY})`;
+  return {
+    opening: {
+      ...o,
+      price: scaleInput(o.price, applied),
+      close: { ...scaleInput(o.close, demand, 1), provenance: 'ASSUMPTION', note: `${o.close.note}; close ${note}` },
+      volume: { ...scaleInput(o.volume, demand), provenance: 'ASSUMPTION', note: `${o.volume.note}; deals the market takes ${note}` },
+      terms: { ...terms, priceFactor: target },
+    },
+    applied,
+  };
+}
+
+/**
+ * The family a transform belongs to: a program holds at most one move per
+ * family (one capacity purchase per lever, one acquisition per lever and
+ * target, one partner per target, one transaction shape, one price line, one
+ * focus). Null for a challenge.
+ */
+export function familyOf(t: Transform): string | null {
+  switch (t.op) {
+    case 'OPERATOR': {
+      const base = t.key.split('@')[0]!;
+      if (t.key.startsWith('acquisition:')) return `${base}>${t.target ?? ''}`;
+      if (t.key.startsWith('partner:')) return `partner>${t.target ?? ''}`;
+      if (t.key.startsWith('transaction:')) return 'transaction';
+      return base;
+    }
+    case 'PRICE':
+      return 'price';
+    case 'FOCUS':
+      return 'focus';
+    case 'DROP':
+      return `drop:${t.scope}`;
+    case 'STRESS':
+      return null;
+  }
+}
 
 const bucket = (k: number) => Math.round(Math.log2(Math.max(1e-6, k)) * 2) / 2;
 
@@ -333,18 +398,20 @@ export function applyProgram(
   let s: StrategyState = start;
   let skipped = 0;
   const change = (dimension: Dimension, label: string, detail: string, basis: StrategyChange['basis']): StrategyChange => ({ dimension, label, detail, cost: 0, basis, startDay: { low: 0, high: 0 } });
+  const record = (next: StrategyState, t: Transform): StrategyState => ({ ...next, program: [...(s.program ?? []), t] });
   for (const t of program) {
     if (t.op === 'OPERATOR') {
       const pool = t.target ? ctx.operatorsFor(t.target) : ctx.operators;
       const op = pool.find((o) => o.key === t.key) ?? pool.find((o) => o.key.startsWith(t.key));
-      // An operator already applied is not applied twice: its label is in the change set.
+      // An operator does nothing twice: it returns null when its move is already made (or a larger one of its family is),
+      // and replaces a smaller move of its family, appending the replacement last.
       const next = op ? op.apply(s) : null;
-      if (!next || next.changes.length === s.changes.length || s.changes.some((c) => c.label === next.changes[next.changes.length - 1]!.label && c.dimension === next.changes[next.changes.length - 1]!.dimension)) {
+      if (!next || next === s) {
         skipped++;
         continue;
       }
       if (skipAssumed && next.changes[next.changes.length - 1]!.basis === 'ASSUMPTION') continue;
-      s = next;
+      s = record(next, t);
       continue;
     }
     if (t.op === 'PRICE') {
@@ -355,31 +422,46 @@ export function applyProgram(
         skipped++;
         continue;
       }
-      const closeK = Math.pow(k, -PRICE_ELASTICITY);
-      s = {
-        ...s,
-        openings: s.openings.map((o) =>
-          ids.has(o.opportunity.id)
-            ? { ...o, price: scaleInput(o.price, k), close: { ...scaleInput(o.close, closeK, 1), provenance: 'ASSUMPTION', note: `${o.close.note}; price ×${k.toFixed(2)}: close assumed ×${closeK.toFixed(2)} (elasticity ${PRICE_ELASTICITY})` } }
-            : o,
-        ),
-        changes: [...s.changes, change('PRICE', `price×${k.toFixed(2)}@${t.scope}`, `${k > 1 ? 'raise' : 'lower'} price ×${k.toFixed(2)} on ${ids.size} opening(s) (${t.scope}); close assumed to move ×${closeK.toFixed(2)} until selling measures it`, 'ASSUMPTION')],
-      };
+      // One running factor per opening across every price and transaction move: a second move cannot carry it past the clamp.
+      let moved = 0;
+      const openings = s.openings.map((o) => {
+        if (!ids.has(o.opportunity.id)) return o;
+        const r = repriceOpening(o, k);
+        if (Math.abs(r.applied - 1) >= 0.05) moved++;
+        return r.applied === 1 ? o : r.opening;
+      });
+      if (moved === 0) {
+        skipped++;
+        continue;
+      }
+      const demandK = Math.pow(k, -PRICE_ELASTICITY);
+      s = record(
+        {
+          ...s,
+          openings,
+          changes: [...s.changes, change('PRICE', `price×${k.toFixed(2)}@${t.scope}`, `${k > 1 ? 'raise' : 'lower'} price ×${k.toFixed(2)} on ${moved} opening(s) (${t.scope}), each held within ×0.25–×4 of its card's unit price; close rate and the deals the market takes assumed to move ×${demandK.toFixed(2)} until selling measures it`, 'ASSUMPTION')],
+        },
+        t,
+      );
       continue;
     }
     if (t.op === 'FOCUS') {
       const n = Math.max(1, Math.round(t.count));
       const open = s.openings.filter((o) => o.agreedValue === 0);
-      if (open.length <= n) {
+      // One concentration per plan: a second focus is the first one renamed.
+      if (open.length <= n || s.changes.some((c) => c.dimension === 'PORTFOLIO' && c.label.startsWith('focus:'))) {
         skipped++;
         continue;
       }
       const keep = new Set([...open].sort((a, b) => valuePerInterested(b) - valuePerInterested(a)).slice(0, n).map((o) => o.opportunity.id));
-      s = {
-        ...s,
-        openings: s.openings.filter((o) => o.agreedValue > 0 || keep.has(o.opportunity.id)),
-        changes: [...s.changes, change('PORTFOLIO', `focus:${n}`, `concentrate outreach and money on the ${n} opening(s) that settle most per interested buyer, and drop ${open.length - n}`, 'ESTIMATE')],
-      };
+      s = record(
+        {
+          ...s,
+          openings: s.openings.filter((o) => o.agreedValue > 0 || keep.has(o.opportunity.id)),
+          changes: [...s.changes, change('PORTFOLIO', `focus:${n}`, `concentrate outreach and money on the ${n} opening(s) that settle most per interested buyer, and drop ${open.length - n}`, 'ESTIMATE')],
+        },
+        t,
+      );
       continue;
     }
     if (t.op === 'DROP') {
@@ -388,11 +470,14 @@ export function applyProgram(
         skipped++;
         continue;
       }
-      s = {
-        ...s,
-        openings: s.openings.filter((o) => !ids.has(o.opportunity.id)),
-        changes: [...s.changes, change('PORTFOLIO', `drop@${t.scope}`, `leave out ${ids.size} opening(s) (${t.scope}), freeing the capacity and money they held`, 'ESTIMATE')],
-      };
+      s = record(
+        {
+          ...s,
+          openings: s.openings.filter((o) => !ids.has(o.opportunity.id)),
+          changes: [...s.changes, change('PORTFOLIO', `drop@${t.scope}`, `leave out ${ids.size} opening(s) (${t.scope}), freeing the capacity and money they held`, 'ESTIMATE')],
+        },
+        t,
+      );
       continue;
     }
     // STRESS: a challenge, recorded as one so it can never pass as a plan.
@@ -461,7 +546,8 @@ export function seedDirections(ctx: Pick<ExploreContext, 'base' | 'greedy' | 'op
     const program: Transform[] = without.map((c) => ({ op: 'OPERATOR', key: opKeyOf(c, ops) })).filter((t): t is Transform & { op: 'OPERATOR' } => !!t.key);
     add({ name: `Middle-out: the plan without ${label}`, stance: 'MIDDLE_OUT', thinking: `Start from the strongest plan and ask whether ${label} carries its weight.`, from: 'BASELINE', program });
     const dim = ctx.greedy.changes.find((c) => c.label === label)?.dimension;
-    for (const alt of ops.filter((o) => o.dimension === dim && !o.key.endsWith(label)).slice(0, 3)) add({ name: `Middle-out: ${alt.key} in place of ${label}`, stance: 'MIDDLE_OUT', thinking: 'Keep the shape of the strongest plan and swap one of its moves for another of the same kind.', from: 'BASELINE', program: [...program, { op: 'OPERATOR', key: alt.key }] });
+    const own = opKeyOf(ctx.greedy.changes.find((c) => c.label === label)!, ops);
+    for (const alt of ops.filter((o) => o.dimension === dim && o.key !== own).slice(0, 3)) add({ name: `Middle-out: ${alt.key} in place of ${label}`, stance: 'MIDDLE_OUT', thinking: 'Keep the shape of the strongest plan and swap one of its moves for another of the same kind.', from: 'BASELINE', program: [...program, { op: 'OPERATOR', key: alt.key }] });
   }
 
   // CONSTRAINT: each binding factor, attacked by every operator that moves it.
@@ -496,16 +582,25 @@ export function seedDirections(ctx: Pick<ExploreContext, 'base' | 'greedy' | 'op
 }
 
 function opKeyOf(c: StrategyChange, ops: StrategyOperator[]): string {
-  // An operator's key ends with the change label it writes (capacity:x@375 writes x@375).
+  // A change names the operator that wrote it; an older change is matched by its label.
+  if (c.op) return c.op;
   const op = ops.find((o) => o.dimension === c.dimension && (o.key.endsWith(`:${c.label}`) || o.key.split(':')[1] === c.label));
   return op?.key ?? '';
+}
+
+/** A plan as the program that builds it from the plan as held: its recorded moves, or its operators when it records none. */
+export function programOf(state: StrategyState, ops: StrategyOperator[]): Transform[] {
+  if (state.program) return state.program;
+  return state.changes.map((c) => ({ op: 'OPERATOR' as const, key: opKeyOf(c, ops) })).filter((t) => t.key);
 }
 
 // ---------------------------------------------------------------- evolution
 
 /** Combine two directions of different stances: both programs, from the stronger start. */
 export function recombine(a: Direction, b: Direction): Direction {
-  const program = [...a.program, ...b.program.filter((t) => !a.program.some((x) => token(x) === token(t)))];
+  // One move per family: a move of `b` whose family `a` already holds (another budget, another price, another shape) is dropped, not stacked.
+  const held = new Set(a.program.map(familyOf).filter((f): f is string => !!f));
+  const program = [...a.program, ...b.program.filter((t) => !a.program.some((x) => token(x) === token(t)) && !(familyOf(t) !== null && held.has(familyOf(t)!)))];
   return makeDirection({
     name: `${a.name.slice(0, 60)} + ${b.name.slice(0, 60)}`,
     stance: a.stance === b.stance ? a.stance : `${a.stance}+${b.stance}`,
@@ -585,7 +680,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   const invented = ctx.invent ? ctx.invent(brief).catch((e: unknown) => ({ directions: [] as Direction[], calls: 0, proposed: 0, refused: 0, error: String((e as Error)?.message ?? e) })) : null;
 
   // §99's plan as a program, so every direction runs from the plan as held and can be challenged move by move.
-  const greedyProgram: Transform[] = ctx.greedy.changes.map((c) => ({ op: 'OPERATOR' as const, key: opKeyOf(c, ctx.operators) })).filter((t) => t.key);
+  const greedyProgram: Transform[] = programOf(ctx.greedy, ctx.operators);
   const full = (d: Direction): Transform[] => (d.from === 'GREEDY' ? [...greedyProgram, ...d.program] : d.program);
   const start = (_d: Direction) => ctx.base;
   const run = async (batch: Direction[], generation: number): Promise<DirectionReading[]> => {
@@ -598,7 +693,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
         seen.set(d.signature, placeholder);
         const { state, skipped } = applyProgram(start(d), full(d), ctx);
         const applied = skipped < full(d).length || full(d).length === 0;
-        if (!applied || (d.from === 'GREEDY' && state.changes.length <= greedyProgram.length)) {
+        if (!applied || (d.from === 'GREEDY' && (state.program?.length ?? state.changes.length) <= greedyProgram.length)) {
           seen.delete(d.signature);
           return null;
         }
@@ -620,7 +715,9 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
       [...rows].sort((a, b) => b.reading.reach - a.reading.reach),
       async (r) => {
         if (r.challenged || !r.reading.feasible || late()) return;
-        r.challenged = await challengeOf(full(r.direction));
+        const c = await challengeOf(full(r.direction));
+        r.challenged = c.weaker;
+        r.bare = c.bare;
         r.score = scoreOf(r.reading, r.challenged);
       },
     );
@@ -632,19 +729,29 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
    * that only reaches the target if its assumptions hold ranks below one that
    * holds without them.
    */
-  const challengeOf = async (program: Transform[]): Promise<VariantReading> => {
+  const challengeOf = async (program: Transform[]): Promise<{ weaker: VariantReading; bare: VariantReading }> => {
     evaluations += 2;
     const [halved, bare] = await Promise.all([
       ctx.evaluate(applyProgram(ctx.base, [...program, ...challengeProgram()], ctx).state, true, ' @challenge'),
       ctx.evaluate(applyProgram(ctx.base, program, ctx, true).state, true, ' @no-assumptions'),
     ]);
-    return halved.reach <= bare.reach ? halved : bare;
+    return { weaker: halved.reach <= bare.reach ? halved : bare, bare };
   };
+  /** A reading the plausibility critic flagged is kept for the record, but never leads and never wins (C-4). */
+  const plausible = (r: DirectionReading) => !(r.reading.implausible?.length);
+  /**
+   * C-15: a direction may replace §99's plan only if it holds once challenged — its challenged reach at least
+   * WINNER_ALPHA of the requirement — or what it holds on no assumed move beats the plan as held.
+   */
+  const eligible = (r: DirectionReading) =>
+    plausible(r) && !!r.challenged && (r.challenged.reach >= ctx.required * WINNER_ALPHA || (!!r.bare && r.bare.feasible && r.bare.reach >= ctx.baselineReading.reach + MATERIAL));
 
   // The plan §99 built is a direction too, and it is challenged like every other.
   const greedyDirection = makeDirection({ name: 'Greedy: §99 one dimension at a time', stance: 'GREEDY', origin: 'ALGORITHM', thinking: 'Change the dimension that helps most, then the next, while each helps.', from: 'GREEDY', program: [] });
   const greedyRow: DirectionReading = { direction: greedyDirection, reading: ctx.greedyReading, challenged: null, score: 0, generation: 0, applied: true };
-  greedyRow.challenged = await challengeOf(greedyProgram);
+  const greedyChallenge = await challengeOf(greedyProgram);
+  greedyRow.challenged = greedyChallenge.weaker;
+  greedyRow.bare = greedyChallenge.bare;
   greedyRow.score = scoreOf(ctx.greedyReading, greedyRow.challenged);
   const budget = explorationBudget({ openings: ctx.base.openings.length, operators: ctx.operators.length, binding: ctx.binding.filter((b) => b.liftReach > 0).length, reach: Math.min(ctx.greedyReading.reach, greedyRow.challenged?.reach ?? 0), required: ctx.required, structural: ctx.structural });
   evaluationCap = Math.min(MAX_EVALUATIONS, evaluations + EVALUATIONS_PER_DIRECTION * budget);
@@ -671,7 +778,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   const improving = (rows: DirectionReading[]) => rows.filter((r) => r.reading.feasible && r.reading.reach >= ctx.baselineReading.reach + MATERIAL);
   await challenge(improving(all));
   let leaders: DirectionReading[];
-  leaders = diverseLeaders([greedyRow, ...all]);
+  leaders = diverseLeaders([greedyRow, ...all.filter(plausible)]);
   let generations = 1;
   let bestScore = leaders[0]?.score ?? greedyRow.score;
   for (let g = 2; g <= MAX_GENERATIONS && budget > 0 && !late(); g++) {
@@ -689,7 +796,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
     if (evaluated.length === 0) break;
     generations = g;
     await challenge(improving(evaluated));
-    leaders = diverseLeaders([greedyRow, ...all]);
+    leaders = diverseLeaders([greedyRow, ...all.filter(plausible)]);
     const top = leaders[0]?.score ?? bestScore;
     if (top < bestScore + MATERIAL / 2) break;
     bestScore = top;
@@ -697,7 +804,8 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
 
   // 4. Conclude.
   const ranked = rank([greedyRow, ...all]);
-  const top = ranked[0]!;
+  // The strongest direction that may win: plausible, and holding once challenged (C-4, C-15).
+  const top = ranked.find((r) => r === greedyRow || eligible(r)) ?? greedyRow;
   const winner = top !== greedyRow && top.score > greedyRow.score + MATERIAL / 4 ? top : null;
   const baseReach = ctx.baselineReading.reach;
   const stanceOf = (s: string) => s.split('+');
@@ -740,7 +848,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
     greedy: { reach: ctx.greedyReading.reach, settledP50: ctx.greedyReading.settledP50, score: greedyRow.score, challengedReach: greedyRow.challenged?.reach ?? 0 },
     winner,
     replaced,
-    leaders: diverseLeaders(ranked),
+    leaders: diverseLeaders(ranked.filter((r) => r === greedyRow || plausible(r))),
     all,
     stanceYield,
     discoveries,

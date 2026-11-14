@@ -400,6 +400,16 @@ export function validationStage(one: ModelledOpportunity, checks: LinkCheck[], t
   const capital = one.capital.value;
   const limit = target.capitalBeforeProofCents !== null ? target.capitalBeforeProofCents / 100 : null;
   const cost = one.directCost.value;
+  // A first step the owner allows before any money comes in. A published capital
+  // figure inside the limit is one; so is an unpublished one whose worst case —
+  // the top of the range the model sweeps — is still inside it (commission and
+  // referral openings almost never publish one). Nothing favourable is assumed:
+  // without a limit, or without a bounded worst case, unknown capital stays a
+  // question (invariant 39).
+  const firstStepAllowed =
+    capital !== null
+      ? limit === null || capital <= limit
+      : one.capital.high !== null && limit !== null && one.capital.high <= limit;
   if (
     ok('REACHABLE_BUYER') &&
     !!o.offerScope &&
@@ -407,9 +417,7 @@ export function validationStage(one: ModelledOpportunity, checks: LinkCheck[], t
     price > 0 &&
     // A test is a few offers at the card's price, so the price itself is what it measures.
     (cost === null || cost < price) &&
-    // A first step the owner allows before any money comes in; unknown capital is a question, not a yes (invariant 39).
-    capital !== null &&
-    (limit === null || capital <= limit) &&
+    firstStepAllowed &&
     !one.competitiveAward
   ) {
     return 'C_MARKET_TEST_READY';
@@ -2127,7 +2135,16 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
   return opened;
 }
 
-export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean; onEvidence: number; resumed: number }> {
+export async function advanceGoalPlans(
+  now: Date = new Date(),
+  /**
+   * `maxReads`: read at most this many plans in this pass, and start no search
+   * top-ups once it is reached. The Russell loop passes 1 under database
+   * pressure, so planning keeps progressing one goal at a time instead of being
+   * shed (pressure.ts, `throttleUnderPressure`). Outcomes are still recorded.
+   */
+  options: { maxReads?: number } = {},
+): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean; onEvidence: number; resumed: number }> {
   const goals = await getDb().all<{ id: string; target_project_id: string | null; paused_at: string | null }>(
     `SELECT id, target_project_id, paused_at FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
   );
@@ -2145,6 +2162,7 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     // re-read, no search round, no construction (an operator PAUSE must stop
     // the planning and discovery spend, not only the queue's priority).
     if (pausedAt) continue;
+    if (options.maxReads !== undefined && read >= options.maxReads) continue;
     const last = await getDb().get<{ at: string | null }>(
       `SELECT MAX(created_at) AS at FROM goal_plan_readings WHERE workstream_id = ?`,
       [id],

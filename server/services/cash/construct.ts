@@ -598,9 +598,12 @@ function compose(args: {
   };
   const facts = designFacts(design);
   const shape = describeDesign(design);
+  // The need comes before the design description: the label is cut to 160
+  // characters, and two needs of one buyer under one long design description
+  // otherwise read as the same arrangement twice.
   const label = (args.origin === 'REVERSE'
     ? `Reverse: ${shape}`
-    : `${demand.name}: ${shape}${supply && supply.from !== 'CAPABILITY' ? ` (${supply.name})` : ''}`).slice(0, 160);
+    : `${demand.name}${need ? ` — ${need.name}` : ''}: ${shape}${supply && supply.from !== 'CAPABILITY' ? ` (${supply.name})` : ''}`).slice(0, 160);
   const established =
     value && value.distributionJustified
       ? ` What these buyers pay is already partly established (${input.currency} ${Math.round(value.p10)}–${Math.round(value.p90)} from ${value.used.length} published figure${value.used.length === 1 ? '' : 's'}), so confirm it rather than start over.`

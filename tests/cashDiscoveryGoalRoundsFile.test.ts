@@ -100,7 +100,7 @@ async function launchedPacket(candidateId: string | null, attempt = 1) {
     const inserted = await insertClaims(claims.map((one) => ({
       orchestrationId: orchestration.id, fragmentId: fragment!.id, passId: null, passKey: 'BROAD_SCAN' as const,
       claim: one.claim, sourceUrl: one.sourceUrl, sourceTitle: 'A listing', sourcePublisher: 'A marketplace',
-      sourceDate: '2026-10-10', evidenceExcerpt: one.claim, evidenceLocator: 'the body', evidenceLane: one.lane ?? SIGNAL_LANE,
+      sourceDate: new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10), evidenceExcerpt: one.claim, evidenceLocator: 'the body', evidenceLane: one.lane ?? SIGNAL_LANE,
       opportunitySignal: one.signal, closesOn: null, retrievedAt: '2026-10-12', confidence: 0.8,
       validationState: 'SOURCED' as const, validationDetail: null, sourced: true, claimType: 'SOURCED_FACT' as const,
       contentHash: `${one.claim}|${one.sourceUrl}`,

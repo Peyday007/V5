@@ -97,16 +97,61 @@ export async function modelsFor(env: NodeJS.ProcessEnv = process.env): Promise<O
   return rankOperatorModels(models, await operatorModelRecord().catch(() => new Map()), benchmarkToolScores(env));
 }
 
-/** Each model's operator runs, attributed to the model the run started on. */
+/**
+ * Which model of a run's chain did the work: the one the run reported
+ * (`OPERATOR_RUN_FINISHED`'s `model`, the served name Hermes ran on) matched to
+ * its label in the chain, else the first in the chain. Pure.
+ *
+ * Crediting the first in the chain always gave a fallback's success (or
+ * failure) to the model that had already failed over, so the ranking moved the
+ * wrong model.
+ */
+export function creditedModel(chain: string, reported: string | null | undefined): string | null {
+  const labels = chain.split(' → ').map((one) => one.trim()).filter(Boolean);
+  if (labels.length === 0) return null;
+  const served = (reported ?? '').trim();
+  if (served) {
+    const match = labels.find((label) => label === served || label.slice(label.indexOf(':') + 1) === served);
+    if (match) return match;
+  }
+  return labels[0]!;
+}
+
+/** The model each finished run reported, read from its `OPERATOR_RUN_FINISHED` event (anchor project, indexed by type). */
+async function reportedModels(runIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (runIds.length === 0) return out;
+  const anchor = (await listProjects())[0];
+  if (!anchor) return out;
+  const { getDb } = await import('../../db/database.ts');
+  const rows = await getDb().all<{ payload: string }>(
+    `SELECT payload FROM project_events WHERE project_id = ? AND event_type = 'OPERATOR_RUN_FINISHED' ORDER BY created_at DESC LIMIT ?`,
+    [anchor.id, Math.max(40, runIds.length * 2)],
+  );
+  const wanted = new Set(runIds);
+  for (const row of rows) {
+    try {
+      const p = JSON.parse(row.payload) as { runId?: unknown; model?: unknown };
+      if (typeof p.runId === 'string' && wanted.has(p.runId) && typeof p.model === 'string' && p.model.trim() && !out.has(p.runId)) out.set(p.runId, p.model);
+    } catch {
+      /* a malformed payload credits the first model, as before */
+    }
+  }
+  return out;
+}
+
+/** Each model's operator runs, attributed to the model the run reported doing the work on. */
 export async function operatorModelRecord(): Promise<Map<string, { runs: number; ok: number }>> {
   const record = new Map<string, { runs: number; ok: number }>();
-  for (const run of await recentOperatorRuns(20)) {
-    const first = (run.model ?? '').split(' → ')[0]?.trim();
-    if (!first || run.state === 'RUNNING') continue;
-    const r = record.get(first) ?? { runs: 0, ok: 0 };
+  const runs = (await recentOperatorRuns(20)).filter((run) => run.state !== 'RUNNING');
+  const reported = await reportedModels(runs.map((run) => run.id)).catch(() => new Map<string, string>());
+  for (const run of runs) {
+    const credited = creditedModel(run.model ?? '', reported.get(run.id));
+    if (!credited) continue;
+    const r = record.get(credited) ?? { runs: 0, ok: 0 };
     r.runs += 1;
     if (run.state === 'DONE') r.ok += 1;
-    record.set(first, r);
+    record.set(credited, r);
   }
   return record;
 }

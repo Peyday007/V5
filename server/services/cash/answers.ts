@@ -82,7 +82,7 @@ import { closeNeed } from './needs.ts';
 import { DELIVERABLE_CAPABILITY_PREFIX, readCapabilities } from './capabilities.ts';
 import { formatMoney, readMoneyFigures } from './figures.ts';
 import { NON_HUMAN_LAYERS } from '../../domain/types.ts';
-import { OPENING_FAMILY } from '../../domain/opportunitySignals.ts';
+import { isBuyerRequestSignal } from '../../domain/opportunitySignals.ts';
 import type {
   CashCardFact,
   CashNeed,
@@ -804,9 +804,7 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
    * piece captured by hand has no declared signal, and its text is what the
    * person recorded as the request, so it is still read.
    */
-  const buyerSide =
-    opportunity.opportunitySignal === null ||
-    OPENING_FAMILY[opportunity.opportunitySignal] === 'BUYER_REQUEST';
+  const buyerSide = isBuyerRequestSignal(opportunity.opportunitySignal);
   if (buyerSide) {
     if (signal && signal.kind === 'EVIDENCE') {
       sources.push({ text: signal.value, claimId: signal.claimId });

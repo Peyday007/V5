@@ -7,7 +7,7 @@
  * claimed, and on what basis, cannot be quietly revised afterwards.
  */
 import { parseLanes, serializeLanes } from '../domain/evidenceLanes.ts';
-import { isOpportunitySignal } from '../domain/opportunitySignals.ts';
+import { isOpportunitySignal, POINT_IN_TIME_SIGNALS, sellersOwnPage } from '../domain/opportunitySignals.ts';
 import { isCapabilityFinding } from '../domain/manufacturing.ts';
 import { isStructuralFinding } from '../domain/industry.ts';
 import { isMonetizationMethod } from '../domain/monetization.ts';
@@ -1580,7 +1580,23 @@ export function patternStatesBuying(text: string): boolean {
 export async function signalledClaims(input: {
   projectId: string;
   limit?: number;
+  /**
+   * An ISO date: a point-in-time observation (`POINT_IN_TIME_SIGNALS`, or an
+   * untagged request-lane claim) with no published deadline whose ISO-dated
+   * source is older than this is not read. The harvest skips it anyway
+   * (`observationExpiry`), and a skipped row is never filed, so without this
+   * a bounded read would fill with stale rows and re-read them for ever.
+   */
+  staleBefore?: string | null;
 }): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
+  const pointSignals = [...POINT_IN_TIME_SIGNALS];
+  const staleSql = input.staleBefore
+    ? // Every operand is non-null, so a NULL can never turn NOT (…) into "not read".
+      `AND NOT (c.closes_on IS NULL AND c.source_date IS NOT NULL AND c.source_date LIKE '____-__%' AND c.source_date < ?
+             AND (COALESCE(c.opportunity_signal, '') IN (${pointSignals.map(() => '?').join(', ')})
+                  OR (c.opportunity_signal IS NULL AND COALESCE(c.evidence_lane, '') = ?)))`
+    : '';
+  const staleParams = input.staleBefore ? [input.staleBefore, ...pointSignals, GOAL_REQUEST_LANE] : [];
   const rows = await getDb().all<ResearchClaimRow & { fragment_required_evidence: string | null }>(
     `SELECT c.*, f.required_evidence AS fragment_required_evidence FROM research_claims c
        JOIN research_fragments f ON f.id = c.fragment_id
@@ -1709,14 +1725,25 @@ export async function signalledClaims(input: {
           SELECT 1 FROM cash_opportunities filed
            WHERE filed.project_id = o.project_id AND filed.source_claim_id = c.id
         )
+        ${staleSql}
       ORDER BY c.created_at, c.rowid
       LIMIT ?`,
     [input.projectId, PATTERN_LANE, 'goal-%-mx-%', 'goal-%', GOAL_REQUEST_LANE, GOAL_REQUEST_LANE_DECLARED,
-      `%${GOAL_REQUEST_LANE_MEANS}%`, 'goal-%', Math.max(1, input.limit ?? 50)],
+      `%${GOAL_REQUEST_LANE_MEANS}%`, 'goal-%', ...staleParams, Math.max(1, input.limit ?? 50)],
   );
   return rows.filter((row) => {
+    // A worker's own tag is judged by the tag, as before.
+    if (row.opportunity_signal !== null) return true;
+    /*
+     * The lane says what a claim was meant to be; the source says whose page
+     * it is. A seller's own price page, rate card or supplier listing is not
+     * a buyer paying, whatever lane it was filed in — the test `proposeTerms`
+     * applies to a signal's figures, read from the source because an untagged
+     * claim has no signal to read it from.
+     */
+    if (sellersOwnPage({ claim: row.claim, sourceUrl: row.source_url, sourceTitle: row.source_title, sourcePublisher: row.source_publisher })) return false;
     // The exact half of the fragment check: the coarse LIKEs above cannot bind the phrase to the lane.
-    if (row.opportunity_signal !== null || row.evidence_lane !== GOAL_REQUEST_LANE) return true;
+    if (row.evidence_lane !== GOAL_REQUEST_LANE) return true;
     return declaresOpenRequestLane(row.fragment_required_evidence);
   }).map((row) => {
     const mapped = mapClaim(row);
