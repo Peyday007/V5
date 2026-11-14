@@ -99,6 +99,7 @@ import { getWorkstream } from '../../repos/register.ts';
 import { commercialRoles, roleLensSeeds, type RoleLensSeed } from '../industry/construction/roles.ts';
 import { openWorldLensSeedsFor, type OpenWorldLensSeed, type OpenWorldRecord } from '../industry/construction/openWorld.ts';
 import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
+import { INTERMEDIATION_BUCKETS, prioritizeIntermediation } from './intermediationBuckets.ts';
 import { commonTo, exclusionSentence, type ExclusionClass } from './exclusions.ts';
 import { liveGoalLimits } from './worthResearching.ts';
 import { GOAL_REQUEST_LANE, getClaim, signalledClaims } from '../../repos/research.ts';
@@ -474,6 +475,13 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
       'sources, what each side published, and what specifically one supplies to the other?',
   },
   ...BROAD_ECONOMY_BUCKETS,
+  /*
+   * Commercial intermediation's entry points (RES-15-4, S-0149): buyer-first
+   * and supply-first places to look, across buyer types and market structures
+   * (intermediationBuckets.ts). Their ordinary place is here, last; while the
+   * family's declaration is current `openDiscovery` asks them first.
+   */
+  ...INTERMEDIATION_BUCKETS,
 ]);
 
 const OPENED = 'CASH_DISCOVERY_OPENED';
@@ -565,7 +573,8 @@ export async function openDiscovery(input: {
   const out: OpenedDiscovery[] = [];
   const limit = Math.max(1, input.limit ?? 1);
   let frame: ExecutionFrame | null | undefined;
-  for (const bucket of fairOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds)) {
+  // While commercial intermediation's declaration is current its buckets are asked first (S-0148); when it lapses they keep their ordinary place.
+  for (const bucket of prioritizeIntermediation(fairOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds), now)) {
     if (out.length >= limit) break;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);
