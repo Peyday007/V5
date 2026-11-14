@@ -127,8 +127,18 @@ describe('backward from the goal', () => {
   });
 
   it('nothing settles with no days left', () => {
-    const none = requiredStructures({ remaining: 10_000, daysLeft: 1, currency: 'USD', perArrangement: null, spendCeiling: null, outreachPerDay: { low: 10, high: 60, stated: false } });
+    const none = requiredStructures({ remaining: 10_000, daysLeft: 0, currency: 'USD', perArrangement: null, spendCeiling: null, outreachPerDay: { low: 10, high: 60, stated: false } });
     expect(none.structures.every((x) => x.verdict === 'IMPOSSIBLE')).toBe(true);
+  });
+
+  it('a goal of a day or two is not impossible by arithmetic: only an outreach sale is (planning recovery G-3)', () => {
+    for (const daysLeft of [1, 2]) {
+      const short = requiredStructures({ remaining: 100, daysLeft, currency: 'USD', perArrangement: 0, spendCeiling: 0, outreachPerDay: { low: 10, high: 60, stated: false } });
+      const possible = short.structures.filter((x) => x.verdict !== 'IMPOSSIBLE');
+      expect(possible.length).toBeGreaterThan(0);
+      expect(possible.every((x) => x.kind === 'INSTANT' && x.verdict === 'NEEDS_INBOUND_CHANNEL')).toBe(true);
+      expect(short.structures.filter((x) => x.kind !== 'INSTANT').every((x) => x.verdict === 'IMPOSSIBLE')).toBe(true);
+    }
   });
 });
 
