@@ -24,7 +24,8 @@ import { setTarget } from '../server/services/goals/target.ts';
 import { advanceGoalPlans, forgetGoalReadings, readGoalPlan } from '../server/services/goals/plan.ts';
 import { forgetKnowledge } from '../server/services/quant/knowledge.ts';
 import { CAPTURE_KEY } from '../server/services/cash/tier.ts';
-import { DECISION_EVENT_KIND, decisionHistory, type DecisionRecord } from '../server/services/goals/decisionRecord.ts';
+import { DECISION_EVENT_KIND, WORLD_FACT_KINDS, decisionHistory, factValue, worldFactRefs, type DecisionRecord, type FactRows } from '../server/services/goals/decisionRecord.ts';
+import { canonicalJson, sha256 } from '../server/services/scenario/model.ts';
 import { CALIBRATION_PASS_EVERY_MS, reconcileCalibrationIfDue, type CalibrationPorts } from '../server/services/goals/calibration.ts';
 import {
   RECONSIDER_EVENT_KIND,
@@ -183,6 +184,135 @@ describe('a changed material fact, after a real plan used it', () => {
     await reconcileFactChanges({ goalId, ports });
     expect(await events(goalId, RECONSIDER_EVENT_KIND)).toHaveLength(1);
     expect(asked.length).toBe(1);
+  });
+});
+
+describe('every world fact a plan rests on is read back, not only prices (S-0471)', () => {
+  const ports = () => {
+    const asked: string[] = [];
+    return { asked, ports: { requestPlanPass: (id: string) => void asked.push(id) } };
+  };
+  async function decided(): Promise<{ o: CashOpportunity; goalId: string; record: DecisionRecord }> {
+    const o = await play(50_000);
+    const goalId = await goal(200_000);
+    await readGoalPlan({ goalId, evaluations: 2_000, persist: true });
+    await advanceGoals({ memory: noCalibration });
+    const record = JSON.parse((await events(goalId, DECISION_EVENT_KIND))[0]!.detail) as DecisionRecord;
+    return { o, goalId, record };
+  }
+
+  it('the record fingerprints the goal target, the capital constraint, the conversion rate and the contracts', async () => {
+    const { o, goalId, record } = await decided();
+    const kinds = new Set(record.evidence.map((e) => `${e.kind}:${e.sourceRowId}`));
+    expect(kinds.has(`GOAL_TARGET:${goalId}`)).toBe(true);
+    expect(kinds.has(`CAPITAL_CONSTRAINT:${goalId}`)).toBe(true);
+    expect(kinds.has(`CONVERSION_RATE:${projectId}:PRODUCTIZED_SERVICE`)).toBe(true);
+    expect(kinds.has(`CONTRACT_STATE:${o.id}`)).toBe(true);
+    expect(record.evidence.find((e) => e.kind === 'GOAL_TARGET')).toMatchObject({ value: { metric: 'SETTLED_CASH', amountCents: 200_000, currency: 'USD' } });
+    expect(record.evidence.find((e) => e.kind === 'CAPITAL_CONSTRAINT')).toMatchObject({ value: { capitalCeilingCents: null, hoursCeiling: 200 } });
+  });
+
+  it('a changed goal target or capital constraint reconsiders the decision and names every strategy as dependent', async () => {
+    const { o, goalId, record } = await decided();
+    const { asked, ports: p } = ports();
+    expect(await reconcileFactChanges({ goalId, ports: p })).toMatchObject({ unchanged: 1, reconsidered: [] });
+    expect((await setTarget({ goal: (await getWorkstream(goalId))!, metric: 'SETTLED_CASH', amountCents: 200_000, currency: 'USD', projectId, capitalCeilingCents: 5_000, hoursCeiling: 40, now: new Date(now.getTime() - 60_000) })).ok).toBe(true);
+    const report = await reconcileFactChanges({ goalId, ports: p });
+    const capital = report.reconsidered.find((r) => r.change.kind === 'CAPITAL_CONSTRAINT');
+    expect(capital).toBeDefined();
+    expect(capital!.change).toMatchObject({ sourceRowId: goalId, before: { capitalCeilingCents: null, hoursCeiling: 200 }, after: { capitalCeilingCents: 5_000, hoursCeiling: 40 } });
+    expect(capital!.dependents.opportunities).toEqual([o.id]);
+    expect(capital!.dependents.actions.some((a) => a.kind === 'PURSUES' && a.opportunityId === o.id)).toBe(true);
+    expect(asked).toEqual([goalId]);
+    expect(await activeTruth(goalId)).toEqual([]);
+    expect(JSON.parse((await events(goalId, DECISION_EVENT_KIND))[0]!.detail)).toEqual(record);
+  });
+
+  it('an account being disconnected reconsiders a decision taken while it was connected, once', async () => {
+    const integrationId = `acct-${Math.random().toString(36).slice(2, 10)}`;
+    const check = (state: string, at: string) =>
+      getDb().run(`INSERT INTO integration_events (id, integration_id, kind, state, detail, source, recorded_at) VALUES (?, ?, 'CHECK', ?, '', 'test', ?)`, [`ie_${Math.random().toString(36).slice(2)}`, integrationId, state, at]);
+    await check('CONNECTED', new Date(now.getTime() - 120_000).toISOString());
+    const { goalId, record } = await decided();
+    expect(record.evidence.find((e) => e.kind === 'ACCOUNT_STATE' && e.sourceRowId === integrationId)).toMatchObject({ value: { state: 'CONNECTED' } });
+    await check('DISCONNECTED', new Date(now.getTime() + 60_000).toISOString());
+    const { asked, ports: p } = ports();
+    const report = await reconcileFactChanges({ goalId, ports: p });
+    expect(report.reconsidered.map((r) => [r.change.kind, r.change.sourceRowId, r.change.after])).toEqual([['ACCOUNT_STATE', integrationId, { state: 'DISCONNECTED' }]]);
+    await reconcileFactChanges({ goalId, ports: p });
+    expect(asked).toEqual([goalId]);
+    expect(await events(goalId, RECONSIDER_EVENT_KIND)).toHaveLength(1);
+  });
+
+  it('a fulfilled contract reconsiders the decision taken before it was delivered', async () => {
+    const o = await play(50_000);
+    const at = new Date(now.getTime() - 30_000).toISOString();
+    await getDb().run(
+      `INSERT INTO cash_agreements (id, project_id, opportunity_id, amount_cents, currency, deliverable, acceptance_condition, evidence_kind, evidence_ref, state, request_key, recorded_by, created_at, updated_at)
+       VALUES (?, ?, ?, 50000, 'USD', 'One monthly report', 'Buyer accepts the report', 'WRITTEN_ACCEPTANCE', 'email:1', 'AGREED', ?, 'test', ?, ?)`,
+      ['cag_rc1', projectId, o.id, `rk-${o.id}`, at, at],
+    );
+    await getDb().run(
+      `INSERT INTO cash_fulfillments (id, project_id, opportunity_id, agreement_id, kind, performer, declared_by, created_at, updated_at) VALUES (?, ?, ?, ?, 'SOFTWARE', 'brain', 'test', ?, ?)`,
+      ['cfl_rc1', projectId, o.id, 'cag_rc1', at, at],
+    );
+    const goalId = await goal(200_000);
+    await readGoalPlan({ goalId, evaluations: 2_000, persist: true });
+    await advanceGoals({ memory: noCalibration });
+    const record = JSON.parse((await events(goalId, DECISION_EVENT_KIND))[0]!.detail) as DecisionRecord;
+    expect(record.evidence.find((e) => e.kind === 'CONTRACT_STATE')).toMatchObject({ sourceRowId: o.id, value: [{ id: 'cag_rc1', state: 'AGREED', fulfilment: null }] });
+    await getDb().run(
+      `INSERT INTO cash_fulfillment_events (id, project_id, fulfillment_id, opportunity_id, kind, detail, recorded_by, request_key, created_at) VALUES (?, ?, ?, ?, 'ACCEPTED', 'accepted', 'test', 'rk-acc', ?)`,
+      ['cfe_rc1', projectId, 'cfl_rc1', o.id, new Date().toISOString()],
+    );
+    const { ports: p } = ports();
+    const report = await reconcileFactChanges({ goalId, ports: p });
+    const contract = report.reconsidered.find((r) => r.change.kind === 'CONTRACT_STATE');
+    expect(contract?.change).toMatchObject({ sourceRowId: o.id, after: [{ id: 'cag_rc1', fulfilment: 'ACCEPTED' }] });
+    expect(contract?.dependents.opportunities).toEqual([o.id]);
+  });
+});
+
+describe('the pure reading of the wider facts', () => {
+  const rows: FactRows = {
+    opportunities: [
+      { id: 'cop_1', price_cents: 100, currency: 'USD', deadline: null, project_id: 'prj_1', mechanism: 'SERVICE' },
+      { id: 'cop_2', price_cents: 100, currency: 'USD', deadline: null, project_id: 'prj_1', mechanism: 'RESALE' },
+    ],
+    cashNeeds: [],
+    goal: { id: 'wst_1', target: null, dueAt: null },
+    conversions: [{ projectId: 'prj_1', mechanism: 'SERVICE', lessons: [{ channel: 'email', contacts: 40, answered: 6, agreements: 2 }] }],
+    contracts: [{ opportunityId: 'cop_1', agreements: [] }, { opportunityId: 'cop_2', agreements: [] }],
+    accounts: [{ integrationId: 'instantly', state: 'CONNECTED' }],
+  };
+  const refs = worldFactRefs(new Set(['cop_1', 'cop_2']), 'wst_1', rows).map((ref) => {
+    const value = factValue(ref, rows);
+    return { ...ref, value, fingerprint: sha256(canonicalJson(value)) };
+  });
+  const record = {
+    readingId: 'gpr_w', evidence: refs, predicted: null,
+    alternatives: [{ key: 'S1', label: 'S1', verdict: null, opportunityIds: ['cop_1', 'cop_2'], missing: [], constraintsFailed: [], chosen: true }],
+    authority: { actor: 'BRAIN' as const, policyVersion: null, policyEventId: null, verdict: 'CURRENT' as const, reason: '' },
+    chain: { actions: [] },
+  } as unknown as DecisionRecord;
+
+  it('no kind of world fact is skipped by the read-back', () => {
+    // These rows hold no cash need; every other world fact kind is on the record.
+    expect(new Set(refs.map((r) => r.kind))).toEqual(new Set([...WORLD_FACT_KINDS].filter((k) => k !== 'CASH_NEED_COST')));
+    expect(changedFacts(record, rows)).toEqual([]);
+  });
+
+  it('a measured conversion rate that moved reconsiders the opportunities of that mechanism only', () => {
+    const moved = { ...rows, conversions: [{ projectId: 'prj_1', mechanism: 'SERVICE', lessons: [{ channel: 'email', contacts: 80, answered: 6, agreements: 2 }] }] };
+    const changes = changedFacts(record, moved);
+    expect(changes.map((c) => [c.kind, c.sourceRowId])).toEqual([['CONVERSION_RATE', 'prj_1:SERVICE']]);
+    expect(dependentsOf(record, changes, moved).opportunities).toEqual(['cop_1']);
+  });
+
+  it('an account check that is gone is a change to nothing recorded', () => {
+    const changes = changedFacts(record, { ...rows, accounts: [] });
+    expect(changes).toEqual([expect.objectContaining({ kind: 'ACCOUNT_STATE', sourceRowId: 'instantly', after: null, gone: true })]);
+    expect(dependentsOf(record, changes, rows).opportunities).toEqual(['cop_1', 'cop_2']);
   });
 });
 

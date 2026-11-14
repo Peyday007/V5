@@ -45,7 +45,19 @@ import { getDb } from '../../db/database.ts';
 import { listWorkstreamEvents } from '../../repos/register.ts';
 import { canonicalJson, sha256 } from '../scenario/model.ts';
 import { POLICY_EVENT_READ_LIMIT } from './ownerPolicy.ts';
-import { DECISION_EVENT_KIND, decisionHistory, type DecisionRecord, type DecisionState, type EvidenceRef, type FactRows } from './decisionRecord.ts';
+import {
+  DECISION_EVENT_KIND,
+  GOAL_WIDE_KINDS,
+  WORLD_FACT_KINDS,
+  conversionSourceId,
+  decisionHistory,
+  factValue,
+  readFactRows,
+  type DecisionRecord,
+  type DecisionState,
+  type EvidenceRef,
+  type FactRows,
+} from './decisionRecord.ts';
 import type { WorkstreamEvent } from '../../domain/register.ts';
 
 export const RECONSIDER_EVENT_KIND = 'GOAL_DECISION_RECONSIDERED';
@@ -56,8 +68,12 @@ export const RECONSIDER_GOALS_PER_PASS = 50;
 /** How often the goals tick runs the reconsideration pass. */
 export const RECONSIDER_PASS_EVERY_MS = 5 * 60_000;
 
-/** The fact kinds read back from rows. A scenario id is the decision's own computation, not a fact of the world. */
-const READ_BACK: ReadonlySet<EvidenceRef['kind']> = new Set(['OPPORTUNITY_PRICE', 'OPPORTUNITY_DEADLINE', 'CASH_NEED_COST']);
+/**
+ * The fact kinds read back from rows: every world fact a record can hold
+ * (`WORLD_FACT_KINDS`). A scenario id is the decision's own computation, not a
+ * fact of the world, and is the only kind not read back.
+ */
+const READ_BACK: ReadonlySet<EvidenceRef['kind']> = WORLD_FACT_KINDS;
 
 const fingerprint = (value: unknown): string => sha256(canonicalJson(value));
 
@@ -81,16 +97,7 @@ export interface Dependents {
 
 /** The value a fact has now, in the shape the record fingerprinted it; undefined when its row is gone. Pure. */
 export function currentValue(ref: Pick<EvidenceRef, 'kind' | 'sourceRowId'>, facts: FactRows): unknown {
-  if (ref.kind === 'OPPORTUNITY_PRICE' || ref.kind === 'OPPORTUNITY_DEADLINE') {
-    const row = facts.opportunities.find((one) => one.id === ref.sourceRowId);
-    if (!row) return undefined;
-    return ref.kind === 'OPPORTUNITY_PRICE' ? { priceCents: row.price_cents, currency: row.currency } : row.deadline;
-  }
-  if (ref.kind === 'CASH_NEED_COST') {
-    const row = facts.cashNeeds.find((one) => one.id === ref.sourceRowId);
-    return row ? { expectedCostCents: row.expected_cost_cents, state: row.state } : undefined;
-  }
-  return undefined;
+  return factValue(ref, facts);
 }
 
 /** The facts behind a record whose fingerprint now differs from the one recorded. Pure. */
@@ -108,11 +115,21 @@ export function changedFacts(record: Pick<DecisionRecord, 'evidence'>, facts: Fa
   return out;
 }
 
-/** The opportunity a fact belongs to: the row itself, or the opportunity a cash need was raised for. Pure. */
-function opportunityOf(change: Pick<FactChange, 'kind' | 'sourceRowId'>, facts: FactRows): string | null {
-  if (change.kind === 'OPPORTUNITY_PRICE' || change.kind === 'OPPORTUNITY_DEADLINE') return change.sourceRowId;
-  if (change.kind === 'CASH_NEED_COST') return facts.cashNeeds.find((one) => one.id === change.sourceRowId)?.opportunity_id ?? null;
-  return null;
+/**
+ * The opportunities a fact belongs to: the row itself, the opportunity a cash
+ * need or an agreement was raised for, or every opportunity whose mechanism a
+ * conversion rate measures. Empty for a goal-wide fact. Pure.
+ */
+function opportunitiesOf(change: Pick<FactChange, 'kind' | 'sourceRowId'>, facts: FactRows): string[] {
+  if (change.kind === 'OPPORTUNITY_PRICE' || change.kind === 'OPPORTUNITY_DEADLINE' || change.kind === 'CONTRACT_STATE') return [change.sourceRowId];
+  if (change.kind === 'CASH_NEED_COST') {
+    const id = facts.cashNeeds.find((one) => one.id === change.sourceRowId)?.opportunity_id;
+    return id ? [id] : [];
+  }
+  if (change.kind === 'CONVERSION_RATE') {
+    return facts.opportunities.filter((one) => one.project_id && one.mechanism && conversionSourceId(one.project_id, one.mechanism) === change.sourceRowId).map((one) => one.id);
+  }
+  return [];
 }
 
 /**
@@ -122,8 +139,16 @@ function opportunityOf(change: Pick<FactChange, 'kind' | 'sourceRowId'>, facts: 
 export function dependentsOf(record: DecisionRecord, changes: readonly FactChange[], facts: FactRows, knownOpportunity: ReadonlyMap<string, string> = new Map()): Dependents {
   const touched = new Set<string>();
   for (const change of changes) {
-    const id = opportunityOf(change, facts) ?? knownOpportunity.get(change.sourceRowId) ?? null;
-    if (id) touched.add(id);
+    // A goal-wide fact — the target, the capital the plan may use, an account it works through — bears on every strategy.
+    if (GOAL_WIDE_KINDS.has(change.kind)) {
+      for (const id of record.alternatives.flatMap((alt) => alt.opportunityIds)) touched.add(id);
+      for (const action of record.chain.actions) if (action.kind === 'PURSUES') touched.add(action.opportunityId);
+      continue;
+    }
+    const ids = opportunitiesOf(change, facts);
+    const known = knownOpportunity.get(change.sourceRowId);
+    if (ids.length === 0 && known) ids.push(known);
+    for (const id of ids) touched.add(id);
   }
   const opportunities = [...new Set(record.alternatives.flatMap((alt) => alt.opportunityIds).filter((id) => touched.has(id)))].sort();
   for (const id of touched) if (!opportunities.includes(id)) opportunities.push(id);
@@ -164,20 +189,10 @@ export async function activeTruth(goalId: string): Promise<DecisionState[]> {
 }
 
 async function readFacts(record: DecisionRecord): Promise<FactRows> {
-  const opportunityIds = [...new Set(record.evidence.filter((e) => e.kind === 'OPPORTUNITY_PRICE' || e.kind === 'OPPORTUNITY_DEADLINE').map((e) => e.sourceRowId))];
+  const byOpportunity = new Set<EvidenceRef['kind']>(['OPPORTUNITY_PRICE', 'OPPORTUNITY_DEADLINE', 'CONTRACT_STATE']);
+  const opportunityIds = [...new Set([...record.evidence.filter((e) => byOpportunity.has(e.kind)).map((e) => e.sourceRowId), ...record.alternatives.flatMap((a) => a.opportunityIds)])];
   const needIds = [...new Set(record.evidence.filter((e) => e.kind === 'CASH_NEED_COST').map((e) => e.sourceRowId))];
-  const touchedOpportunities = [...new Set([...opportunityIds, ...record.alternatives.flatMap((a) => a.opportunityIds)])];
-  const db = getDb();
-  const marks = (n: number) => Array.from({ length: n }, () => '?').join(', ');
-  const opportunities = opportunityIds.length
-    ? await db.all<FactRows['opportunities'][number]>(`SELECT id, price_cents, currency, deadline FROM cash_opportunities WHERE id IN (${marks(opportunityIds.length)})`, opportunityIds)
-    : [];
-  const byNeed = needIds.length ? await db.all<FactRows['cashNeeds'][number]>(`SELECT id, opportunity_id, expected_cost_cents, state FROM cash_needs WHERE id IN (${marks(needIds.length)})`, needIds) : [];
-  const byOpportunity = touchedOpportunities.length
-    ? await db.all<FactRows['cashNeeds'][number]>(`SELECT id, opportunity_id, expected_cost_cents, state FROM cash_needs WHERE opportunity_id IN (${marks(touchedOpportunities.length)})`, touchedOpportunities)
-    : [];
-  const cashNeeds = [...new Map([...byNeed, ...byOpportunity].map((one) => [one.id, one])).values()];
-  return { opportunities, cashNeeds };
+  return readFactRows({ opportunityIds, goalId: record.goalId, needIds });
 }
 
 export interface Reconsideration {
