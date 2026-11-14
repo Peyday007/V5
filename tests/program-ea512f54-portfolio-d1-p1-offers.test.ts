@@ -6,13 +6,15 @@
  * limits and channel rule come from the existing owners.
  */
 import { readFileSync } from 'node:fs';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import { createOpportunity } from '../server/repos/cashPortfolio.ts';
 import { createAuthority } from '../server/repos/cashAuthority.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
+import { createWorkstream, listWorkstreamEvents, linkWorkstream } from '../server/repos/register.ts';
+import { salesOrderForProject } from '../server/services/goals/plan.ts';
 import { ALWAYS_PROHIBITED_COMMERCIAL } from '../server/services/cash/authority.ts';
 import { SQUEEZE_QUALIFICATION } from '../server/domain/goalPolicy.ts';
 import {
@@ -21,6 +23,13 @@ import {
   INTERNAL_WORK,
   decideOfferReadiness,
   offerReadinessFor,
+  actOnOfferReadiness,
+  forgetOffersReadyFirst,
+  offersReadyFirst,
+  productionOfferActPorts,
+  GOAL_OFFER_DECIDED,
+  type OfferActPorts,
+  type OfferReadiness,
   type ExternalAction,
   type OfferReadinessInput,
   type PermissionReading,
@@ -151,5 +160,144 @@ describe('offerReadinessFor on rows', () => {
     expect(blocked.map((a) => a.action)).toEqual(['CONTACT']);
     expect(blocked[0]!.blocker!.allowedBy).toContain('CONTACT_BUYER');
     expect(granted.lanes.research).toBe('RUNNABLE');
+  });
+});
+
+/* -------------------------------------------- F3: readiness is acted on */
+
+function fakePorts(over: {
+  readings: { opportunityId: string; readiness: OfferReadiness }[];
+  states: Record<string, string>;
+  sprint?: boolean;
+  readyOk?: boolean;
+}) {
+  const calls = { markReady: [] as string[], recorded: [] as { opportunityId: string; key: string; act: string; stopped: unknown }[] };
+  const last = new Map<string, string>();
+  const ports: OfferActPorts = {
+    readinessForGoal: async () => over.readings,
+    stateOf: async (id) => (over.states[id] ? { state: over.states[id]!, projectId: 'prj_x' } : null),
+    sprintActive: async () => over.sprint ?? true,
+    markReady: async (id) => {
+      calls.markReady.push(id);
+      return over.readyOk === false ? { ok: false, reason: 'the card is short' } : { ok: true, reason: 'ready' };
+    },
+    lastDecision: async () => new Map(last),
+    record: async ({ opportunityId, key, reading }) => {
+      last.set(opportunityId, key);
+      calls.recorded.push({ opportunityId, key, act: reading.act, stopped: reading.stopped });
+    },
+  };
+  return { ports, calls };
+}
+
+describe('F3: offer readiness is the trigger and the stop for an offer', () => {
+  beforeEach(() => forgetOffersReadyFirst());
+  const goal = [{ id: 'ws_goal', lifecycle: 'ACTIVE' }];
+  const offerable = decideOfferReadiness(input());
+  const noContact = (() => {
+    const authority = allAuthorized();
+    authority.CONTACT = { ok: false, reason: 'the commercial authority does not cover CONTACT_BUYER' };
+    return decideOfferReadiness(input({ authority }));
+  })();
+  const missingPayer = decideOfferReadiness(input({ answered: new Set<string>(SQUEEZE_QUALIFICATION.filter((k) => k !== 'payer')) }));
+
+  it('an authorized, offerable opening is readied through markReady and reached first by the sender', async () => {
+    const { ports, calls } = fakePorts({ readings: [{ opportunityId: 'opp_a', readiness: offerable }], states: { opp_a: 'EVIDENCE_CARD' } });
+    const out = await actOnOfferReadiness(goal, ports);
+    expect(calls.markReady).toEqual(['opp_a']);
+    expect(out.acted[0]!.act).toBe('READIED');
+    expect(offersReadyFirst('prj_x')).toEqual(['opp_a']);
+    // The order the sender reads (advanceWithinAuthority → salesOrderForProject) starts with it.
+    expect(salesOrderForProject('prj_x')[0]).toBe('opp_a');
+  });
+
+  it('an opening already READY is not readied again, and is still reached first', async () => {
+    const { ports, calls } = fakePorts({ readings: [{ opportunityId: 'opp_r', readiness: offerable }], states: { opp_r: 'READY' } });
+    const out = await actOnOfferReadiness(goal, ports);
+    expect(calls.markReady).toEqual([]);
+    expect(out.acted[0]!.act).toBe('OFFER_FIRST');
+    expect(salesOrderForProject('prj_x')[0]).toBe('opp_r');
+  });
+
+  it('a missing contact permission stops that offer: not readied, not promoted, the stopped action recorded', async () => {
+    const { ports, calls } = fakePorts({ readings: [{ opportunityId: 'opp_b', readiness: noContact }], states: { opp_b: 'EVIDENCE_CARD' } });
+    const out = await actOnOfferReadiness(goal, ports);
+    expect(calls.markReady).toEqual([]);
+    expect(offersReadyFirst('prj_x')).toEqual([]);
+    expect(out.acted[0]!.act).toBe('STOPPED');
+    expect(out.acted[0]!.stopped).toMatchObject({ action: 'CONTACT' });
+    expect(calls.recorded[0]!.stopped).toMatchObject({ action: 'CONTACT', allowedBy: expect.stringContaining('CONTACT_BUYER') });
+    // Research is never what a missing permission stops.
+    expect(noContact.lanes.research).toBe('RUNNABLE');
+  });
+
+  it('an unanswered qualification key holds the offer and names it', async () => {
+    const { ports, calls } = fakePorts({ readings: [{ opportunityId: 'opp_c', readiness: missingPayer }], states: { opp_c: 'DISCOVERED' } });
+    const out = await actOnOfferReadiness(goal, ports);
+    expect(calls.markReady).toEqual([]);
+    expect(out.acted[0]!.stopped).toMatchObject({ action: 'OFFER', reason: expect.stringContaining('payer') });
+  });
+
+  it('a project whose sprint is not running gets no new offer from Brain', async () => {
+    const { ports, calls } = fakePorts({ readings: [{ opportunityId: 'opp_d', readiness: offerable }], states: { opp_d: 'EVIDENCE_CARD' }, sprint: false });
+    const out = await actOnOfferReadiness(goal, ports);
+    expect(calls.markReady).toEqual([]);
+    expect(offersReadyFirst('prj_x')).toEqual([]);
+    expect(out.acted[0]!.act).toBe('SPRINT_NOT_ACTIVE');
+  });
+
+  it('a refused markReady is recorded with the refusal and not promoted', async () => {
+    const { ports } = fakePorts({ readings: [{ opportunityId: 'opp_e', readiness: offerable }], states: { opp_e: 'EVIDENCE_CARD' }, readyOk: false });
+    const out = await actOnOfferReadiness(goal, ports);
+    expect(out.acted[0]!.act).toBe('READY_REFUSED');
+    expect(out.acted[0]!.because).toContain('the card is short');
+    expect(offersReadyFirst('prj_x')).toEqual([]);
+  });
+
+  it('records a decision only when it changed, and acts only for active goals', async () => {
+    const { ports, calls } = fakePorts({ readings: [{ opportunityId: 'opp_b', readiness: noContact }], states: { opp_b: 'READY' } });
+    await actOnOfferReadiness(goal, ports);
+    await actOnOfferReadiness(goal, ports);
+    expect(calls.recorded).toHaveLength(1);
+    const paused = await actOnOfferReadiness([{ id: 'ws_goal', lifecycle: 'PAUSED' }], ports);
+    expect(paused.acted).toEqual([]);
+  });
+
+  it('a stopped opening loses its place at the front once it stops being offerable', async () => {
+    const a = fakePorts({ readings: [{ opportunityId: 'opp_f', readiness: offerable }], states: { opp_f: 'READY' } });
+    await actOnOfferReadiness(goal, a.ports);
+    expect(offersReadyFirst('prj_x')).toEqual(['opp_f']);
+    const b = fakePorts({ readings: [{ opportunityId: 'opp_f', readiness: noContact }], states: { opp_f: 'READY' } });
+    await actOnOfferReadiness(goal, b.ports);
+    expect(offersReadyFirst('prj_x')).toEqual([]);
+  });
+
+  it('the goals tick runs it, and the sender reads the order it sets', () => {
+    expect(readFileSync('server/services/goals/tick.ts', 'utf8')).toMatch(/actOnOfferReadiness\(snapshot\.goals, await productionOfferActPorts\(\)/);
+    expect(readFileSync('server/services/goals/plan.ts', 'utf8')).toMatch(/const out: string\[\] = offersReadyFirst\(projectId\)/);
+    expect(readFileSync('server/services/cash/operate.ts', 'utf8')).toMatch(/salesOrderForProject\(projectId\)/);
+  });
+
+  it('on rows: a goal whose opening may not be offered records the stop on its own history and readies nothing', async () => {
+    const { project } = await freshProject();
+    const user = await createUser({ email: `offers-act-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' });
+    const activated = await activate({ projectId: project.id, ownerUserId: user.id, actorUserId: user.id, objective: 'Maximize additional usable cash over the next few weeks.' });
+    expect(activated.ok).toBe(true);
+    const mode = (await getCashMode(project.id))!;
+    const opportunity = await createOpportunity({ projectId: project.id, cashModeId: mode.id, ownerUserId: user.id, title: 'A buyer published a paid request', mechanism: 'EXPLICIT_PAID_REQUEST', currency: mode.currency });
+    const ws = await createWorkstream({ projectId: project.id, title: 'Sell it', intent: 'Cash from a sale.', purpose: 'CAPABILITY', createdByUserId: user.id });
+    await linkWorkstream({ workstreamId: ws.id, kind: 'OPPORTUNITY', ref: opportunity.id, relation: 'PURSUES', recordedBy: 'PERSON' });
+
+    const out = await actOnOfferReadiness([{ id: ws.id, lifecycle: 'ACTIVE' }], await productionOfferActPorts());
+    expect(out.failed).toEqual([]);
+    expect(out.acted).toHaveLength(1);
+    expect(out.acted[0]!.act).toBe('STOPPED');
+    expect(offersReadyFirst(project.id)).toEqual([]);
+    const events = (await listWorkstreamEvents(ws.id)).filter((e) => e.kind === GOAL_OFFER_DECIDED);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.detail).toMatchObject({ opportunityId: opportunity.id, act: 'STOPPED' });
+    // A second pass on unchanged rows records nothing new.
+    await actOnOfferReadiness([{ id: ws.id, lifecycle: 'ACTIVE' }], await productionOfferActPorts());
+    expect((await listWorkstreamEvents(ws.id)).filter((e) => e.kind === GOAL_OFFER_DECIDED)).toHaveLength(1);
   });
 });
