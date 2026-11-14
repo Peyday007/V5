@@ -1,0 +1,83 @@
+/*
+ * World scene styles (UI-27-5). Uses only the application's design tokens
+ * from styles.css; a state is always also a word and a shape, never colour
+ * alone, and motion runs only in ANIMATED mode and never under
+ * prefers-reduced-motion.
+ */
+.world-scene {
+  display: grid;
+  gap: 12px;
+  color: var(--fg);
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  font-family: var(--sans);
+}
+.world-header { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; }
+.world-header p { margin: 0; }
+.world-sample {
+  padding: 2px 8px;
+  border: 1px dashed var(--amber);
+  color: var(--amber);
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+.world-working { font-weight: 600; }
+.world-refresh { color: var(--fg-muted); font-size: 0.9em; }
+.world-stage { position: relative; }
+.world-camera-controls { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+.world-camera-controls button,
+.world-link {
+  background: var(--bg-3);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 2px 8px;
+  cursor: pointer;
+  font: inherit;
+}
+.world-link { background: none; border: none; padding: 0; color: var(--accent-fg); text-decoration: underline; }
+.world-svg { width: 100%; height: auto; max-height: 70vh; background: var(--bg-0); border-radius: var(--radius); }
+.world-svg:focus-visible,
+.world-object:focus-visible,
+.world-camera-controls button:focus-visible,
+.world-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.world-district-tile { fill: var(--bg-3); stroke: var(--border-strong); stroke-width: 1; }
+.world-district-label { fill: var(--fg-dim); font-size: 13px; }
+.world-object { cursor: pointer; fill: var(--grey); stroke: var(--grey); }
+.world-object-glyph { fill: var(--fg-dim); stroke: none; font-size: 11px; }
+.world-state-working { fill: var(--green); stroke: var(--green); }
+.world-state-waiting { fill: var(--blue); stroke: var(--blue); }
+.world-state-blocked { fill: var(--red); stroke: var(--red); }
+.world-state-needs_approval { fill: var(--amber); stroke: var(--amber); }
+.world-state-succeeded { fill: var(--teal); stroke: var(--teal); }
+.world-state-failed { fill: var(--red); stroke: var(--red); }
+.world-state-idle { fill: var(--grey); stroke: var(--grey); }
+.world-state-unknown { fill: var(--purple); stroke: var(--purple); }
+.world-selected { stroke: var(--fg); stroke-width: 3; }
+.world-ambient { animation: world-pulse 2s ease-in-out infinite; }
+@keyframes world-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .world-ambient { animation: none; } }
+.world-details { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; }
+.world-details h3 { margin: 0 0 6px; }
+.world-details dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; }
+.world-details dt { color: var(--fg-muted); }
+.world-details dd { margin: 0; overflow-wrap: anywhere; }
+.world-note, .world-numbers-note { color: var(--fg-muted); margin: 0; }
+.world-facts { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+.world-facts caption { text-align: left; color: var(--fg-muted); padding-bottom: 4px; }
+.world-facts th, .world-facts td { border-bottom: 1px solid var(--border-soft); padding: 4px 6px; text-align: left; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .world-facts th:nth-child(5), .world-facts td:nth-child(5) { display: none; }
+}
+
+/* Prototype variants: the same facts, three distinct art directions. */
+.world-variant-citadel .world-svg { background: radial-gradient(circle at 50% 30%, var(--bg-3), var(--bg-0)); }
+.world-variant-ledger .world-svg { background: var(--bg-2); }
+.world-variant-ledger .world-district-tile { fill: none; stroke-dasharray: 4 3; }
+.world-variant-constellation .world-svg { background: var(--bg-0); }
+.world-variant-constellation .world-district-tile { fill: none; stroke: var(--accent-bg); }
+.world-variant-constellation .world-district-label { fill: var(--accent-fg); }
+.world-prototype-picker { display: flex; gap: 6px; flex-wrap: wrap; }
+.world-prototype-picker button[aria-pressed='true'] { border-color: var(--accent); color: var(--accent-fg); }
