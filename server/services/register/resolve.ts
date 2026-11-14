@@ -216,6 +216,27 @@ async function readMission(link: WorkstreamLink): Promise<LinkReading> {
 async function readCandidate(link: WorkstreamLink): Promise<LinkReading> {
   const candidate = await getCandidate(link.ref);
   if (!candidate) return unreadable(link, 'the idea this points at is gone');
+  /*
+   * An idea parked because its research round ended without a report is a
+   * finished answer, not a stop (§65: a dead end is a watch). Brain parked it
+   * itself and handles it itself, so it contributes no BLOCKED state and no
+   * blocker: reading it as one put a person in front of 67 ~320-hour-old goal
+   * rounds while 15 READY bins waited (production, 2026-11-14), asking a
+   * question nobody needs to answer (§44, CLAUDE.md rule 11).
+   */
+  if (candidate.state === 'PARKED' && researchedWithoutReport(candidate.judgment)) {
+    return {
+      linkId: link.id,
+      kind: link.kind,
+      ref: link.ref,
+      status: 'idea PARKED: round ended without a report',
+      state: null,
+      missing: false,
+      blocker: null,
+      evidence: 'russell_candidates.state = PARKED, judgment.researchedWithoutReport',
+      since: candidate.updatedAt,
+    };
+  }
   return {
     linkId: link.id,
     kind: link.kind,
@@ -227,6 +248,12 @@ async function readCandidate(link: WorkstreamLink): Promise<LinkReading> {
     evidence: `russell_candidates.state = ${candidate.state}`,
     since: candidate.updatedAt,
   };
+}
+
+/** Whether a parked idea's judgment records a research round that produced no report. */
+export function researchedWithoutReport(judgment: Record<string, unknown> | null | undefined): boolean {
+  const mark = judgment?.['researchedWithoutReport'];
+  return mark !== undefined && mark !== null && mark !== false;
 }
 
 async function readPacket(link: WorkstreamLink): Promise<LinkReading> {

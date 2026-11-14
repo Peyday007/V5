@@ -205,4 +205,48 @@ export function resetPressure(now = Date.now()): void {
   since = now;
   healthySince = null;
   reason = 'no pressure has been felt';
+  throttleStarts.clear();
+  throttleDeferrals.clear();
+}
+
+/*
+ * Throttled rather than shed (2026-11-14). Some work is not optional even under
+ * pressure: planning a live goal is what the goal is waiting on, and shedding
+ * it switched planning off exactly when planning was the main stall (one
+ * goal-plan scenario in six hours against a design of two an hour). Such work
+ * runs under SHEDDING at most once per `SHEDDING_THROTTLE_INTERVAL_MS` and in
+ * its smallest unit, never back to back, and each skipped start is counted so
+ * the throttling is visible rather than silent.
+ */
+export const SHEDDING_THROTTLE_INTERVAL_MS = 20 * 60_000;
+
+/** `RUN`: pressure is normal. `THROTTLED`: run its smallest unit. `DEFERRED`: wait. */
+export type ThrottleDecision = 'RUN' | 'THROTTLED' | 'DEFERRED';
+
+const throttleStarts = new Map<string, number>();
+const throttleDeferrals = new Map<string, number>();
+
+/**
+ * Whether work that must not be shed may start now. At NORMAL it always may;
+ * under SHEDDING the first call in each interval may start a throttled run,
+ * and every other call is a counted deferral.
+ */
+export function throttleUnderPressure(
+  name: string,
+  now = Date.now(),
+  intervalMs = SHEDDING_THROTTLE_INTERVAL_MS,
+): ThrottleDecision {
+  if (databasePressure(now).state !== 'SHEDDING') return 'RUN';
+  const last = throttleStarts.get(name);
+  if (last !== undefined && now - last < intervalMs) {
+    throttleDeferrals.set(name, (throttleDeferrals.get(name) ?? 0) + 1);
+    return 'DEFERRED';
+  }
+  throttleStarts.set(name, now);
+  return 'THROTTLED';
+}
+
+/** How many starts each throttled pass has deferred in this process. */
+export function throttledDeferrals(): Record<string, number> {
+  return Object.fromEntries(throttleDeferrals);
 }
