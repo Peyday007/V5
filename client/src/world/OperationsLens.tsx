@@ -14,8 +14,8 @@
  */
 import { useMemo, useState } from 'react';
 import type { World, WorldFact, WorldMoneyLine } from '../../../server/routes/world.ts';
-import type { LensAction, LensState } from './lens.ts';
-import { RecordDrawer } from './RecordDrawer.tsx';
+import { followInApp, type LensAction, type LensState } from './lens.ts';
+import { RecordDrawer, RecordLink, SourceAddress } from './RecordDrawer.tsx';
 import { displayFact, displayMoneyClass, displayState, type TruthContext } from './truth.ts';
 import './numbers.css';
 
@@ -46,7 +46,21 @@ export function sortFacts(facts: readonly WorldFact[], key: SortKey, dir: SortDi
 }
 
 /** The route a money line's figure can be checked at. */
-export function moneyLineHref(projectId: string, line: Pick<WorldMoneyLine, 'source'>): string {
+/**
+ * The page a money figure opens: the Cash destination, where the ledger and the
+ * invoices it was read from are shown. Never the `/api/…` address, which is JSON
+ * a person cannot read; that address is the line's source and is shown as one.
+ */
+export const CASH_VIEW = '/cash';
+/** The Fleet destination, where the workers behind the live-lease count are listed. */
+export const FLEET_VIEW = '/fleet';
+
+export function moneyLineHref(_projectId: string, _line: Pick<WorldMoneyLine, 'source'>): string {
+  return CASH_VIEW;
+}
+
+/** The API address a money line was read from, as provenance. */
+export function moneyLineSource(projectId: string, line: Pick<WorldMoneyLine, 'source'>): string {
   const p = encodeURIComponent(projectId);
   return line.source.table === 'cash_invoices' ? `/api/projects/${p}/cash/invoices` : `/api/projects/${p}/cash`;
 }
@@ -136,7 +150,7 @@ export function OperationsLens({ world, ctx, lens, onLensAction, onExport }: Ope
             <tr>
               <th scope="row">Workers holding a live lease</th>
               <td className="numbers-num">
-                <a className="numbers-link" href={`/api/russell/projects/${encodeURIComponent(world.projectId)}/fleet`}>
+                <a className="numbers-link" href={FLEET_VIEW} onClick={(e) => followInApp(e, FLEET_VIEW)} title={`source data /api/russell/projects/${world.projectId}/fleet`}>
                   {world.workingCount}
                 </a>
               </td>
@@ -221,7 +235,17 @@ export function OperationsLens({ world, ctx, lens, onLensAction, onExport }: Ope
                     {d.lastChangedAt}
                     {d.freshness !== 'CURRENT' ? ` (${d.freshness.toLowerCase()})` : ''}
                   </td>
-                  <td>{f.href ? <a className="numbers-link" href={f.href}>{d.source}</a> : d.source}</td>
+                  <td>
+                    <RecordLink kind={f.kind} recordId={f.recordId}>
+                      {d.source}
+                    </RecordLink>
+                    {f.href ? (
+                      <>
+                        {' '}
+                        <SourceAddress href={f.href} />
+                      </>
+                    ) : null}
+                  </td>
                 </tr>
               );
             })}
@@ -252,7 +276,9 @@ export function OperationsLens({ world, ctx, lens, onLensAction, onExport }: Ope
                   <td>{w.workerId}</td>
                   <td>{displayState(w.state).label}</td>
                   <td>
-                    {w.holding.map((h) => (h.href ? <a key={h.recordId} className="numbers-link" href={h.href}>{`${h.kind} ${h.recordId} `}</a> : <span key={h.recordId}>{`${h.kind} ${h.recordId} `}</span>))}
+                    {w.holding.map((h) => (
+                      <RecordLink key={h.recordId} kind={h.kind} recordId={h.recordId}>{`${h.kind} ${h.recordId} `}</RecordLink>
+                    ))}
                   </td>
                 </tr>
               ))
@@ -285,7 +311,12 @@ export function OperationsLens({ world, ctx, lens, onLensAction, onExport }: Ope
                     <td>{v.basisLabel}</td>
                     <td className="numbers-num">
                       {line ? (
-                        <a className="numbers-link" href={moneyLineHref(world.projectId, line)} title={v.source}>
+                        <a
+                          className="numbers-link"
+                          href={moneyLineHref(world.projectId, line)}
+                          onClick={(e) => followInApp(e, moneyLineHref(world.projectId, line))}
+                          title={`${v.source} — source data ${moneyLineSource(world.projectId, line)}`}
+                        >
                           {v.text}
                         </a>
                       ) : (

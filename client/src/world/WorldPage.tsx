@@ -48,6 +48,7 @@ import { WorldScene } from './WorldScene.tsx';
 import { OperationsLens } from './OperationsLens.tsx';
 import { GoalLens, type GoalFigure, type GoalPlan } from './GoalLens.tsx';
 import { displayState, type TruthContext } from './truth.ts';
+import { RecordLink, SourceAddress } from './RecordDrawer.tsx';
 import './numbers.css';
 
 export const WORLD_PATH = '/world';
@@ -335,6 +336,20 @@ export function WorldPage({ projectId, conversationId, renderMode }: WorldPagePr
                 onLensAction={dispatch}
               />
             ) : null}
+            {lens.mode === 'GOAL' && goal ? (
+              <p className="numbers-muted" data-testid="goal-record-pointer">
+                Plans, chain and uncertainty are read on the goal&rsquo;s own record:{' '}
+                <RecordLink kind="GOAL" recordId={goal.recordId}>
+                  {goal.title}
+                </RecordLink>
+                {goal.href ? (
+                  <>
+                    {' '}
+                    <SourceAddress href={goal.href} />
+                  </>
+                ) : null}
+              </p>
+            ) : null}
             {lens.mode === 'GOAL' && goalFocus ? (
               <div className="numbers-muted" data-testid="goal-read-state">
                 {!goalRead.data && !goalRead.error ? <p className="rs-state rs-state-loading">Reading the goal and its plan…</p> : null}
@@ -350,8 +365,12 @@ export function WorldPage({ projectId, conversationId, renderMode }: WorldPagePr
                 {goalRead.data?.constructionError ? <p role="alert">The goal&rsquo;s plan could not be read: {goalRead.data.constructionError}</p> : null}
                 {goalRead.data ? (
                   <p>
-                    Read from <a href={`/api/goals/${encodeURIComponent(goalFocus)}`}>the goal record</a> and{' '}
-                    <a href={`/api/goals/${encodeURIComponent(goalFocus)}/construction`}>its construction</a> at {goalRead.data.readAt}. No route records an accepted plan, so the
+                    Read from{' '}
+                    <RecordLink kind="GOAL" recordId={goalFocus}>
+                      the goal record
+                    </RecordLink>{' '}
+                    (<SourceAddress href={`/api/goals/${encodeURIComponent(goalFocus)}`} />) and its construction (
+                    <SourceAddress href={`/api/goals/${encodeURIComponent(goalFocus)}/construction`} />) at {goalRead.data.readAt}. No route records an accepted plan, so the
                     recommendation is shown as a candidate.
                   </p>
                 ) : null}
@@ -366,15 +385,9 @@ export function WorldPage({ projectId, conversationId, renderMode }: WorldPagePr
               {shown.explanations.map((e, i) => (
                 <li key={`${e.recordKind}:${e.recordId}:${i}`} data-kind={e.kind}>
                   <strong>{e.kind.toLowerCase()}</strong> — {e.text}{' '}
-                  {e.href ? (
-                    <a className="numbers-link" href={e.href}>
-                      {e.recordKind} {e.recordId}
-                    </a>
-                  ) : (
-                    <span>
-                      {e.recordKind} {e.recordId} (no route serves it alone)
-                    </span>
-                  )}{' '}
+                  <RecordLink kind={e.recordKind} recordId={e.recordId}>
+                    {e.recordKind} {e.recordId}
+                  </RecordLink>{' '}
                   <button type="button" className="numbers-link" onClick={() => dispatch({ type: 'SELECT', selection: { kind: e.recordKind, id: e.recordId } })}>
                     select
                   </button>{' '}

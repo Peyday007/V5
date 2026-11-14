@@ -13,7 +13,7 @@
  */
 import type { WorldFact } from '../../../server/routes/world.ts';
 import type { LensAction } from './lens.ts';
-import { RecordDrawer } from './RecordDrawer.tsx';
+import { RecordDrawer, SourceAddress } from './RecordDrawer.tsx';
 import { displayAmount, displayFact, type AmountBasis, type DisplayValue, type TruthContext } from './truth.ts';
 import './numbers.css';
 
@@ -33,6 +33,7 @@ export interface GoalPlan {
   id: string;
   title: string;
   status: PlanStatus;
+  /** The plan's source-data API address (JSON), shown as provenance and never followed as a page link. */
   href: string | null;
   figures: readonly GoalFigure[];
   /** How the plan acquires what it needs, verbatim from the plan record. */
@@ -103,15 +104,13 @@ function PlanSection({ title, plans, ctx, testId }: { title: string; plans: Goal
         return (
           <article key={p.id} data-plan={p.id} data-status={p.status}>
             <h4>
-              {p.href ? (
-                <a className="numbers-link" href={p.href}>
-                  {p.title}
-                </a>
-              ) : (
-                p.title
-              )}{' '}
-              <span className="numbers-tag">{p.status.toLowerCase()}</span>
+              {p.title} <span className="numbers-tag">{p.status.toLowerCase()}</span>
             </h4>
+            {p.href ? (
+              <p>
+                <SourceAddress href={p.href} />
+              </p>
+            ) : null}
             <p className="numbers-muted">Acquisition: {p.acquisition ?? 'unknown'}</p>
             <div className="numbers-columns">
               <FigureTable caption="Measured" rows={measured} testId={`${p.id}-measured`} />

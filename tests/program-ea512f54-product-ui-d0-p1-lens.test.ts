@@ -13,6 +13,7 @@ import {
   lensQuery,
   lensReducer,
   parseLensQuery,
+  recordViewHref,
   type LensState,
 } from '../client/src/world/lens.ts';
 import type { WorldFact } from '../server/routes/world.ts';
@@ -98,12 +99,26 @@ describe('lens state (UI-27-3)', () => {
     expect(g!.found).toBe(true);
     expect(g!.route).toBe(CONVERSATION_TURN_ROUTE);
     expect(groundingPreface(g)).toContain('/api/factory/campaigns/fcp_1');
+    expect(g!.view).toBe(recordViewHref('CAMPAIGN', 'fcp_1'));
+  });
+
+  it('a record view is an app page that restores the record selection, never an API address', () => {
+    const view = recordViewHref('CAMPAIGN', 'fcp_1');
+    expect(view.startsWith('/world?')).toBe(true);
+    const state = parseLensQuery(view.slice('/world'.length));
+    expect(state.mode).toBe('WORLD');
+    expect(state.selected).toEqual({ kind: 'CAMPAIGN', id: 'fcp_1' });
+    const goal = parseLensQuery(recordViewHref('GOAL', 'g1').slice('/world'.length));
+    expect(goal.mode).toBe('GOAL');
+    expect(goal.goalId).toBe('g1');
+    expect(goal.selected).toEqual({ kind: 'GOAL', id: 'g1' });
   });
 
   it('a selection the world read does not contain is grounded as UNKNOWN with no address, never a guess', () => {
     const g = conversationGrounding(chosen(), [fact({ recordId: 'other' })]);
     expect(g!.found).toBe(false);
     expect(g!.href).toBeNull();
+    expect(g!.view).toBeNull();
     expect(g!.state).toBe('UNKNOWN');
     expect(groundingPreface(g)).toContain('not found');
   });
