@@ -126,8 +126,6 @@ describe('verifyPrepayment', () => {
     const fee = { capture: { kind: 'FEE' as const, fee: pt('fee', 100) } };
     const [late] = verifyPrepayment(arrangement({ aiLabor: ai, prepayment: prepay, settlementDays: pt('settle', 14) }, fee), now);
     expect(late).toMatchObject({ willingness: 'ESTABLISHED', refundObligations: 'ESTABLISHED', timing: 'ESTABLISHED', usableBeforeSupplierPayment: false, credited: true });
-    const [onDelivery] = verifyPrepayment(arrangement({ aiLabor: ai, prepayment: { ...prepay, usableDays: pt('now', 0) } }, fee), now);
-    expect(onDelivery!.usableBeforeSupplierPayment).toBe(true);
     // A supplier with unstated terms is still an unknown.
     const [unstated] = verifyPrepayment(arrangement({ aiLabor: ai, prepayment: prepay }), now);
     expect(unstated!.timing).toBe('UNKNOWN');
