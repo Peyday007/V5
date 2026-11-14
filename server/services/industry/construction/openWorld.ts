@@ -12,8 +12,10 @@
  * has a row for is produced and scored exactly like one somebody has.
  *
  * Evaluation reads the evidence's observed facts, so it adapts when those
- * change: `withObserved` overlays a newly observed price, demand, capacity,
- * financing term or cash figure in memory, and `adaptation` reports what moved.
+ * change: `adaptationToRecorded` compares a subject's reading without and with
+ * the cash, demand, price, capacity and financing facts actually recorded
+ * against its goals, and `adaptation` reports what moved. `withObserved` is a
+ * pure what-if for callers and tests; the probe never uses it.
  *
  * Pure, except `openWorldHoldsOnRows`, which only reads. No store, scheduler or
  * authority path: the held records are read through the existing repositories.
@@ -25,6 +27,7 @@ import { solveEconomics, type BusinessEconomics } from './economics.ts';
 import { viabilityRank } from './strategy.ts';
 import { commercialRoles, type CommercialRole } from './roles.ts';
 import { opportunityField, type FieldInput, type OpportunitySeed } from './origins.ts';
+import type { assembleEvidence as assembleEvidenceFn, evidenceFromMap } from './service.ts';
 
 /** What the rows already hold, as text: a role is represented when a record names it. */
 export interface HeldRecords {
@@ -199,42 +202,100 @@ export function adaptation(before: OpenWorldReading, after: OpenWorldReading): {
   return { changed, detail: changed ? `${moved.length} arrangement(s) re-evaluated` : 'no arrangement moved' };
 }
 
+/* ------------------------------------------------------- recorded observations */
+
+const OBSERVED_KEYS = new Set<FactKey>(Object.values(OBSERVED_INPUTS).flat());
+
+/** Which observed input a recorded fact moves, or null when it moves none. */
+export function observedInputOf(key: FactKey): ObservedInput | null {
+  for (const [input, keys] of Object.entries(OBSERVED_INPUTS) as [ObservedInput, readonly FactKey[]][]) if (keys.includes(key)) return input;
+  return null;
+}
+
+/**
+ * How a subject's evaluation reacts to what was actually recorded: the reading
+ * without the recorded cash, demand, price, capacity and financing facts, and
+ * the reading with them. Both come from the same rows — nothing is invented,
+ * scaled or overlaid; a subject with no such row recorded has no adaptation to
+ * show, and says so. Pure.
+ */
+export function adaptationToRecorded(
+  input: { text: string; industry: string; map: ReturnType<typeof evidenceFromMap>; recorded: Fact[] },
+  assemble: typeof assembleEvidenceFn,
+  held: HeldRecords,
+  seeds: OpportunitySeed[] = [],
+): { before: OpenWorldReading; after: OpenWorldReading; observed: Fact[]; inputs: ObservedInput[]; changed: boolean; detail: string } {
+  const observed = input.recorded.filter((f) => OBSERVED_KEYS.has(f.key));
+  const rest = input.recorded.filter((f) => !OBSERVED_KEYS.has(f.key));
+  const common = { text: input.text, industry: input.industry, geography: null, map: input.map };
+  const before = openWorld(assemble({ ...common, recorded: rest }), held, seeds);
+  const after = observed.length ? openWorld(assemble({ ...common, recorded: input.recorded }), held, seeds) : before;
+  const inputs = [...new Set(observed.map((f) => observedInputOf(f.key)).filter((x): x is ObservedInput => x !== null))].sort();
+  const moved = observed.length ? adaptation(before, after) : { changed: false, detail: 'no observed cash, demand, price, capacity or financing row recorded' };
+  return { before, after, observed, inputs, changed: moved.changed, detail: moved.detail };
+}
+
 /* ------------------------------------------------------------------ the probe */
 
 /**
  * Read-only check for the r01.arch-01 probe: on the production industry maps,
  * at least one arrangement whose role no record represents is constructed and
- * evaluated, and its evaluation moves when an observed price changes (the
- * change is overlaid in memory; nothing is written).
+ * evaluated, and its evaluation moves with the cash, demand, price, capacity
+ * or financing facts actually recorded against the goals that work that
+ * subject (`construction_facts`). No figure is invented and nothing is written:
+ * a Brain with no such recorded row fails the probe and says so.
  */
 export async function openWorldHoldsOnRows(): Promise<{ ok: boolean; detail: string }> {
   const { getDb } = await import('../../../db/database.ts');
   const { listNodes, listConstraintsForProject } = await import('../../../repos/industry.ts');
   const { listOpportunities } = await import('../../../repos/cashPortfolio.ts');
+  const { listWorkstreams } = await import('../../../repos/register.ts');
+  const { listConstructionFacts } = await import('../../../repos/construction.ts');
   const { assembleEvidence, evidenceFromMap, subtreeFor } = await import('./service.ts');
+  const { interpretIntent } = await import('./intent.ts');
   const projects = await getDb().all<{ project_id: string }>(
     `SELECT DISTINCT project_id FROM industry_nodes WHERE retired_at IS NULL ORDER BY project_id`,
     [],
   );
   let arrangements = 0;
   let subjects = 0;
+  let observedRows = 0;
   let adapted = 0;
   let example = '';
+  let adaptedExample = '';
   for (const { project_id: projectId } of projects) {
-    const [nodes, constraints, opportunities] = await Promise.all([listNodes(projectId), listConstraintsForProject(projectId), listOpportunities({ projectId })]);
+    const [nodes, constraints, opportunities, goals] = await Promise.all([
+      listNodes(projectId),
+      listConstraintsForProject(projectId),
+      listOpportunities({ projectId }),
+      listWorkstreams({ projectIds: [projectId] }),
+    ]);
     const held = heldFromRows(nodes, opportunities);
     const field: FieldInput = { nodes, opportunities, goals: [], constraints };
     const seeds = opportunityField(field);
+    // The subjects each of this project's goals works, read the way goalConstruction reads them.
+    const goalSubjects: { roots: Set<string>; recorded: Fact[] }[] = [];
+    for (const g of goals.filter((x) => x.projectId === projectId)) {
+      const industry = interpretIntent([g.intent, g.outcome].filter(Boolean).join(' ')).industry;
+      const roots = new Set(subtreeFor(nodes, industry).filter((n) => n.parentId === null).map((n) => n.id));
+      if (roots.size === 0) continue;
+      const recorded = await listConstructionFacts(g.id);
+      if (recorded.length) goalSubjects.push({ roots, recorded });
+    }
     for (const root of nodes.filter((n) => n.parentId === null && !n.retiredAt)) {
       const map = evidenceFromMap(subtreeFor(nodes, root.name), constraints);
       if (map.flows.length === 0) continue;
-      const evidence = assembleEvidence({ text: root.name, industry: root.name, geography: null, map, recorded: [] });
-      const reading = openWorld(evidence, held, seeds);
+      const recorded = goalSubjects.filter((g) => g.roots.has(root.id)).flatMap((g) => g.recorded);
+      const reacted = adaptationToRecorded({ text: root.name, industry: root.name, map, recorded }, assembleEvidence, held, seeds);
+      const reading = reacted.after;
       if (reading.arrangements.length === 0) continue;
       subjects += 1;
       arrangements += reading.arrangements.length;
-      const after = openWorld(withObserved(evidence, 'PRICE', { set: { low: 50, high: 80 } }), held, seeds);
-      if (adaptation(reading, after).changed) adapted += 1;
+      observedRows += reacted.observed.length;
+      if (reacted.changed) {
+        adapted += 1;
+        if (!adaptedExample) adaptedExample = `"${root.name}" re-evaluated on ${reacted.observed.length} recorded ${reacted.inputs.join('/').toLowerCase()} row(s): ${reacted.detail}`;
+      }
       if (!example) {
         const a = reading.arrangements[0]!;
         example = `"${root.name}": ${a.roleLabel} as ${a.business.label} (${a.viability})`;
@@ -242,6 +303,7 @@ export async function openWorldHoldsOnRows(): Promise<{ ok: boolean; detail: str
     }
   }
   if (arrangements === 0) return { ok: false, detail: 'no production industry map yields a role that no record represents, so no open-world arrangement could be constructed' };
-  if (adapted === 0) return { ok: false, detail: `${arrangements} open-world arrangement(s) constructed, but none re-evaluated when an observed price changed` };
-  return { ok: true, detail: `${arrangements} arrangement(s) for roles no record represents, across ${subjects} subject(s); ${adapted} re-evaluated on an observed price change; e.g. ${example}` };
+  if (observedRows === 0) return { ok: false, detail: `${arrangements} open-world arrangement(s) constructed, but no cash, demand, price, capacity or financing fact is recorded against a goal working those subjects, so no adaptation to observed change can be shown` };
+  if (adapted === 0) return { ok: false, detail: `${arrangements} open-world arrangement(s) constructed and ${observedRows} observed row(s) recorded, but no evaluation moved with them` };
+  return { ok: true, detail: `${arrangements} arrangement(s) for roles no record represents, across ${subjects} subject(s); ${adapted} re-evaluated on recorded observations; e.g. ${example}; ${adaptedExample}` };
 }
