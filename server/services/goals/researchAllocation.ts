@@ -90,6 +90,66 @@ export const ACTIONABILITY_FLOOR = 0.1;
 /** Remedies for a low-actionability lane, in the order they are tried. */
 export const LANE_REMEDIES = ['QUESTION_DESIGN', 'EVIDENCE_SOURCES', 'MODEL_ROUTING'] as const;
 export type LaneRemedy = (typeof LANE_REMEDIES)[number];
+
+/**
+ * The remedies Brain can apply itself, and how. A remedy is only a remedy when
+ * something makes the change: recommending one and displaying it changed
+ * nothing, so a low-actionability lane sat at its first recommendation for
+ * ever and was refused capacity for ever (RES-15-5, S-0153).
+ *
+ * Question design and evidence sources are applied to the questions the goals
+ * loop asks for each goal (`pathResearch.ts` reads the applied remedies and
+ * puts each one's instruction into every question it raises). The `ref` names
+ * that change and its version, so the record says exactly what was changed.
+ * Model routing has no lever here — the free lane routes by its own measured
+ * failures (`freeLane/worker.ts`) — so it is never recorded as applied and never
+ * waited on: a remedy nothing can apply is not one a lane is held for.
+ */
+export const REMEDY_LEVERS: Partial<Record<LaneRemedy, { ref: string; instruction: string }>> = {
+  QUESTION_DESIGN: {
+    ref: 'goals/pathResearch:question-design:v1',
+    instruction:
+      'Answer in claims that each name a specific buyer or kind of buyer, the price or payment terms they are published as paying, ' +
+      'or a concrete fulfilment step, each with its source. A general statement about a market, a trend or an opportunity is not an answer; leave it out.',
+  },
+  EVIDENCE_SOURCES: {
+    ref: 'goals/pathResearch:evidence-sources:v1',
+    instruction:
+      'Take every figure from a primary source: the buyer’s or platform’s own published prices, terms or payout pages, official registers and filings, ' +
+      'procurement or contract-award records, or a named trade body’s published data. A blog, listicle or aggregator summary is not a source for a figure here.',
+  },
+};
+
+/** The remedies some lever applies, in trial order. */
+export const APPLICABLE_REMEDIES: readonly LaneRemedy[] = LANE_REMEDIES.filter((r) => REMEDY_LEVERS[r] !== undefined);
+
+/** The workstream event that records a remedy applied to a lane's research, on the goal whose questions it changed. */
+export const RESEARCH_REMEDY_APPLIED_EVENT = 'GOAL_RESEARCH_REMEDY_APPLIED';
+
+/**
+ * The remedies applied to one goal's research questions, in trial order: what
+ * the question builders put in force. Only a record naming its change counts.
+ */
+export async function remediesInForce(goalId: string): Promise<LaneRemedy[]> {
+  const { listWorkstreamEvents } = await import('../../repos/register.ts');
+  const found = new Set<LaneRemedy>();
+  for (const e of await listWorkstreamEvents(goalId, 500)) {
+    if (e.kind !== RESEARCH_REMEDY_APPLIED_EVENT) continue;
+    const d = (e.detail ?? {}) as { remedy?: unknown; ref?: unknown };
+    if (typeof d.ref !== 'string' || d.ref.trim() === '') continue;
+    if ((LANE_REMEDIES as readonly string[]).includes(String(d.remedy))) found.add(d.remedy as LaneRemedy);
+  }
+  return LANE_REMEDIES.filter((r) => found.has(r));
+}
+
+/** The instructions the applied remedies put into a research question, in trial order; empty when none applies. Pure. */
+export function remedyInstructions(applied: Iterable<LaneRemedy>): string {
+  const set = new Set(applied);
+  return LANE_REMEDIES.filter((r) => set.has(r))
+    .map((r) => REMEDY_LEVERS[r]?.instruction)
+    .filter((one): one is string => !!one)
+    .join(' ');
+}
 /** Measured reliability (0–1) below which capacity on a resource is not added. */
 export const MIN_RELIABILITY = 0.8;
 /** Queue wait of qualified jobs at or above which a delay is a measured constraint. */
@@ -159,6 +219,12 @@ export interface AllocationInput {
   bottlenecks?: BottleneckMeasurement[];
   /** An urgent commercial goal is open, so TRANSACTION_ROUTES keeps `COMMERCIAL_FLOOR`. */
   urgentCommercialGoal: boolean;
+  /**
+   * The remedies something can actually apply. Absent means every remedy, so a
+   * caller that names none waits on all three; the goals tick names the levers
+   * it has (`APPLICABLE_REMEDIES`).
+   */
+  remedyLevers?: readonly LaneRemedy[];
 }
 
 export interface ShareChange {
@@ -269,8 +335,8 @@ export function decideResearchAllocation(input: AllocationInput): AllocationDeci
   const notes: string[] = [];
   const reasons = new Map<ResearchPurpose, string[]>(RESEARCH_PURPOSES.map((p) => [p, []]));
 
-  const capacity = decideCapacity(input.bottlenecks ?? [], input.lanes ?? []);
-  const laneActions = decideLaneActions(input.lanes ?? []);
+  const capacity = decideCapacity(input.bottlenecks ?? [], input.lanes ?? [], input.remedyLevers);
+  const laneActions = decideLaneActions(input.lanes ?? [], input.remedyLevers);
 
   const yields = new Map<ResearchPurpose, number>();
   for (const p of RESEARCH_PURPOSES) {
@@ -388,12 +454,15 @@ const REMEDY_KIND: Record<LaneRemedy, 'CHANGE_QUESTION_DESIGN' | 'CHANGE_EVIDENC
 };
 
 /** For each low-actionability lane, the next remedy not yet tried — before any limit raise. */
-export function decideLaneActions(lanes: LaneMeasurement[]): LaneAction[] {
+export function decideLaneActions(lanes: LaneMeasurement[], levers: readonly LaneRemedy[] = LANE_REMEDIES): LaneAction[] {
   const out: LaneAction[] = [];
+  const applicable = new Set(levers);
+  const noLever = LANE_REMEDIES.filter((r) => !applicable.has(r));
   for (const lane of lanes) {
     if (!isLowActionability(lane)) continue;
     const tried = new Set(lane.triedRemedies ?? []);
-    const next = LANE_REMEDIES.find((r) => !tried.has(r));
+    // Only a remedy something can apply is waited on; one with no lever would hold the lane for ever.
+    const next = LANE_REMEDIES.find((r) => !tried.has(r) && applicable.has(r));
     const evidence = `${lane.actionableLinks} actionable buyer/price/fulfilment link(s) from ${lane.claims} claims`;
     const measuring = lane.measuringRemedy ?? null;
     if (measuring && !tried.has(measuring)) {
@@ -402,16 +471,24 @@ export function decideLaneActions(lanes: LaneMeasurement[]): LaneAction[] {
     } else if (next) {
       out.push({ lane: lane.lane, kind: REMEDY_KIND[next], remedy: next, limitRaiseAllowed: false, reason: `${evidence}; change ${next.toLowerCase().replace('_', ' ')} before raising this lane's job limit` });
     } else {
-      out.push({ lane: lane.lane, kind: 'REMEDIES_EXHAUSTED', remedy: null, limitRaiseAllowed: true, reason: `${evidence} after recorded changes to question design, evidence sources and model routing were each measured over a whole window; a limit raise may now be justified only by a measured bottleneck` });
+      const measured = LANE_REMEDIES.filter((r) => tried.has(r)).map((r) => r.toLowerCase().replace('_', ' '));
+      const missing = noLever.filter((r) => !tried.has(r)).map((r) => r.toLowerCase().replace('_', ' '));
+      out.push({
+        lane: lane.lane,
+        kind: 'REMEDIES_EXHAUSTED',
+        remedy: null,
+        limitRaiseAllowed: true,
+        reason: `${evidence} after recorded changes to ${measured.join(', ') || 'nothing'} were each measured over a whole window${missing.length ? ` (${missing.join(', ')} has no lever Brain can apply)` : ''}; a limit raise may now be justified only by a measured bottleneck`,
+      });
     }
   }
   return out;
 }
 
 /** Capacity to add or repurpose, only for a measured constraint with qualified work waiting. */
-export function decideCapacity(bottlenecks: BottleneckMeasurement[], lanes: LaneMeasurement[] = []): CapacityDecision[] {
+export function decideCapacity(bottlenecks: BottleneckMeasurement[], lanes: LaneMeasurement[] = [], levers: readonly LaneRemedy[] = LANE_REMEDIES): CapacityDecision[] {
   const out: CapacityDecision[] = [];
-  const pendingRemedy = new Set(decideLaneActions(lanes).filter((a) => !a.limitRaiseAllowed).map((a) => a.lane));
+  const pendingRemedy = new Set(decideLaneActions(lanes, levers).filter((a) => !a.limitRaiseAllowed).map((a) => a.lane));
   for (const b of bottlenecks) {
     const no = (reason: string): CapacityDecision => ({ lane: b.lane, kind: 'NO_CAPACITY', resource: b.resource, units: 0, incrementalCost: 0, reason });
     if (!known(b.qualifiedQueued) || b.qualifiedQueued <= 0) { out.push(no('no qualified useful job is measured waiting')); continue; }
