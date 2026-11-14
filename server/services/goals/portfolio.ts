@@ -34,10 +34,41 @@
  * evidence; otherwise it is coverage of the tested conditions and says so —
  * and says which inputs keep it from being one.
  */
-import { optimizePortfolio, type Activity, type PortfolioReading } from '../quant/portfolio.ts';
+import { optimizePortfolio, type Activity, type Assurance, type PortfolioReading, type Safeguard, type SafeguardEffect } from '../quant/portfolio.ts';
 import { makeRng } from '../scenario/random.ts';
+import { cachedCashKnowledge, type CashKnowledge } from '../quant/knowledge.ts';
+import { acquireMarketHistory, historyEvidence, type MarketHistory } from '../quant/history.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { assessOutreachRecord, type EvidenceAssessment, type OutreachCampaignRecord } from './evidenceAuthority.ts';
+import {
+  addAction,
+  addMoneyRoute,
+  addNode,
+  addRelation,
+  createGraph,
+  currentClaim,
+  declareType,
+  derive,
+  expandToFixpoint,
+  fullAccount,
+  linkGraphs,
+  makeFigure,
+  passVolume,
+  readMoneyRoute,
+  recordClaim,
+  trace as traceGraph,
+  unknownFigure,
+  type ChainReading,
+  type ChainStage,
+  type CausalGraph,
+  type Figure,
+  type FigureStatus,
+  type MoneyRoute,
+  type MoneyRouteReading,
+  type OperationalAction,
+  type SharedDependency,
+} from '../quant/graph.ts';
+import { decompose, type Subproblem } from '../quant/decompose.ts';
 
 export const PORTFOLIO_WORLDS = 2_000;
 /** The shares of the shared outreach an opening may be given. */
@@ -137,11 +168,89 @@ export interface GoalPortfolio {
     contactsPerDay: { value: number | null; low: number; high: number; source: string };
     correlation: number;
   };
+  /**
+   * What the best combination's reach may be called, from the quant engine's
+   * one judgment of it (`quant/portfolio.ts` `assess`): at least 90% only when
+   * the lower bound over the smallest real sample behind any member clears it,
+   * a defensible range when it does not, and "calibration unavailable" when an
+   * input is unvalidated or states no sample. `basis` says whether the inputs
+   * are evidence; this says what the number may claim (§95). Null when nothing
+   * was searched.
+   */
+  assurance?: Assurance | null;
+  /** The measured change to the downside of each candidate control, over the same worlds as the best combination. */
+  safeguards?: SafeguardEffect[];
+  /**
+   * Each modelled opening's market history, acquired from the project's
+   * research and outcomes (CAUSAL-14-7): bid/win record, transaction counts,
+   * actual prices and spreads, their sources, and what is still to research.
+   */
+  marketHistory?: MarketHistory[];
+  /**
+   * The causal graph of the combination, built from this Brain's own rows
+   * (CAUSAL-14-1..4): one graph per opening in it, the route to its money, the
+   * volume passed through every bottleneck, and what is shared between them.
+   */
+  causal?: PortfolioCausal | null;
   /** What keeps the reading from being a probability, or the target from being reached. */
   missing: string[];
   searched: number;
   /** The measured reply interval cold-outreach openings were sampled in, when one was passed. */
   measuredRates?: MeasuredRatesReading | null;
+}
+
+/**
+ * The independent real observations behind one opening's samples, or
+ * undefined when any input that is drawn states none (invariant 39: an
+ * unstated sample is never read as a large one). An inferred input carries the
+ * observations it was reconstructed from; a fixed term (a price, a cost, days
+ * to cash) is a fact rather than a draw and does not bound the sample; a fixed
+ * behavioural rate (reply, close, the deals a market takes) is a rate somebody
+ * measured on a sample nobody stated, so it does.
+ */
+const BEHAVIOURAL: ReadonlySet<keyof ModelledOpportunity> = new Set(['respond', 'close', 'volume']);
+export function sampleSizeOf(one: ModelledOpportunity): number | undefined {
+  if (one.agreedValue > 0) {
+    // Money a buyer already agreed still draws whether, and when, it settles:
+    // a signed contract is not settled cash, and the counterparty paying (or
+    // defaulting) is behaviour measured on a sample, never a certainty. Only
+    // a reconstructed record of real collections states that sample; a fixed
+    // days-to-cash term says when payment is due, not that it arrives, so it
+    // calibrates nothing (invariant 39).
+    const days = one.daysToCash;
+    return days.inferred ? days.inferred.observations : undefined;
+  }
+  const drawn: Array<keyof ModelledOpportunity> = one.repeatable ? INPUT_NAMES.map(([key]) => key) : ['price', 'daysToCash', 'close', 'directCost'];
+  let n = Number.POSITIVE_INFINITY;
+  for (const key of drawn) {
+    const input = one[key] as ModelInput;
+    if (input.inferred) n = Math.min(n, input.inferred.observations);
+    else if (input.value === null || BEHAVIOURAL.has(key)) return undefined;
+  }
+  return n;
+}
+
+/**
+ * The controls whose effect on the downside is measured against the best
+ * combination, derived from the goal's own structure rather than from a list
+ * of businesses: openings that share one outreach could be split onto
+ * independent channels; money the ceiling allows beyond what may be tied up
+ * before proof could be held back for contingency; and cash collected up front
+ * (prepayment) halves the days to usable cash. Each is a question the engine
+ * answers over identical worlds — none is assumed to help.
+ */
+export function candidateSafeguards(activities: readonly Activity[], startingCapital: number | null, capitalCeiling: number | null): Safeguard[] {
+  const out: Safeguard[] = [];
+  const shared = activities.filter((a) => a.riskGroup === 'shared-outreach').map((a) => a.key);
+  if (new Set(shared.map((k) => k.split('@')[0])).size >= 2) {
+    out.push({ key: 'independent-outreach-channels', kind: 'INDEPENDENT_CHANNEL', decorrelate: shared });
+  }
+  if (startingCapital !== null && capitalCeiling !== null && capitalCeiling > startingCapital) {
+    out.push({ key: 'contingency-reserve', kind: 'CONTINGENCY', capitalBonus: capitalCeiling - startingCapital });
+  }
+  const slow = activities.filter((a) => a.days.some((d) => d > 0)).map((a) => a.key);
+  if (slow.length > 0) out.push({ key: 'prepayment-terms', kind: 'FASTER_CASH_CYCLE', daysFactor: { activities: slow, factor: 0.5 } });
+  return out;
 }
 
 /** Whether an input may be read as a distribution of the world rather than a range swept. */
@@ -399,6 +508,15 @@ export function evaluateGoalPortfolio(input: {
   committed?: { capital: number; spend: number } | null;
   /** Internal: apply the measured record as binding regardless of its authority (the as-is floor). */
   forceMeasured?: boolean;
+  /**
+   * The project's research and outcomes, from which each opening's market
+   * history is acquired (CAUSAL-14-7). The goal compose passes what it read,
+   * so the history used is what the project holds, never what a cache
+   * happens to still have. Absent (a caller that read nothing), the fresh
+   * cached knowledge is used; with neither, or an explicit null, no history
+   * is acquired and every opening says so as a research need.
+   */
+  knowledge?: CashKnowledge | null;
   worlds?: number;
   seed?: number;
 }): GoalPortfolio {
@@ -427,6 +545,9 @@ export function evaluateGoalPortfolio(input: {
   const baseCapital = input.perWeek ?? input.beforeProof ?? input.capitalCeiling;
   const startingCapital = baseCapital === null ? null : Math.max(0, baseCapital - (committed?.capital ?? 0));
   const spendCeiling = input.capitalCeiling === null ? null : Math.max(0, input.capitalCeiling - (committed?.spend ?? 0));
+  const knowledgeFor = (projectId: string): CashKnowledge | null =>
+    input.knowledge !== undefined ? (input.knowledge && input.knowledge.projectId === projectId ? input.knowledge : null) : cachedCashKnowledge(projectId);
+  const histories = new Map<string, MarketHistory>();
   const activities: Activity[] = [];
   const memberOf = new Map<string, PortfolioMember>();
   const demand: DemandEstimate[] = [];
@@ -483,6 +604,12 @@ export function evaluateGoalPortfolio(input: {
     });
     if (refused) continue;
     const shares: number[] = one.channel ? [1] : one.repeatable && one.agreedValue === 0 ? [...OUTREACH_SHARES] : [0];
+    // The outreach a day is drawn too: unless the owner stated it, it states no sample.
+    const sampleSize = one.repeatable && one.agreedValue === 0 && stated === null ? undefined : sampleSizeOf(one);
+    // The market's own historical record, acquired from the research and outcomes the project holds.
+    const knowledge = knowledgeFor(one.opportunity.projectId);
+    const history = knowledge ? acquireMarketHistory(knowledge, one.opportunity) : null;
+    if (history) histories.set(id, history);
     const keys = shares.map((share) => `${id}@${share}`);
     for (const share of shares) {
       const w = share === 1 ? full : demandWorlds(one, share, input.daysLeft, reach, worlds, seed);
@@ -496,6 +623,7 @@ export function evaluateGoalPortfolio(input: {
         // A cost the buyer's prepayment funds is not the owner's money at risk (§99).
         spend: one.fundedByBuyer ? w.spend.map(() => 0) : w.spend,
         justified: unestablished.length === 0,
+        evidence: { ...(sampleSize !== undefined ? { sampleSize } : {}), ...(history ? { history: historyEvidence(history) } : {}) },
         capital: capital.amount,
         startDay: 0,
         ...(one.channel ? { uses: { [one.channel.resource]: 1 }, riskGroup: one.channel.riskGroup } : share > 0 ? { uses: { outreach: share }, riskGroup: 'shared-outreach' } : {}),
@@ -511,6 +639,7 @@ export function evaluateGoalPortfolio(input: {
     ...(startingCapital !== null ? { startingCapital } : {}),
     ...(spendCeiling !== null ? { spendCeiling } : {}),
     riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
+    safeguards: candidateSafeguards(activities, startingCapital, input.capitalCeiling),
     worlds,
     seed,
   });
@@ -540,8 +669,10 @@ export function evaluateGoalPortfolio(input: {
   const basis: GoalPortfolio['basis'] = members.length > 0 && members.every((one) => one.justified) ? 'PROBABILITY' : 'COVERAGE';
   const missing: string[] = [];
   for (const one of members) if (!one.justified) missing.push(`${one.title.slice(0, 60)}: ${one.unestablished.join(', ')} not established`);
-  if (best && best.reach < 0.9) {
-    missing.push(`the best combination reaches the target in ${(best.reach * 100).toFixed(0)}% of worlds; more openings, or better-evidenced ones, are needed for 90%`);
+  // Whether the plan may claim 90% is the engine's one judgment, read over the evidence behind it — never the point reading.
+  const assurance = result.assurance ?? null;
+  if (best && assurance && !assurance.claimsAtLeast90) {
+    missing.push(`the best combination reaches the target in ${(best.reach * 100).toFixed(0)}% of worlds, which is not a defensible 90%: ${assurance.reason}`);
   }
   if (!best) missing.push('no combination of the openings held can run inside the limits');
   if (measuredRates && measuredRates.applied === 'AS_IS_FLOOR_ONLY' && !input.forceMeasured) {
@@ -551,6 +682,15 @@ export function evaluateGoalPortfolio(input: {
       ? { reach: floor.best.reach, settledP10: floor.best.settledP10, settledP50: floor.best.settledP50, settledP90: floor.best.settledP90 }
       : null;
   }
+  // Historical data the best combination still lacks is targeted research, named, never assumed.
+  for (const need of assurance?.researchNeeds ?? []) missing.push(`research: ${need}`);
+  const causal = causalOf(
+    input.openings.filter((one) => (memberIds.size > 0 ? memberIds.has(one.opportunity.id) : demand.some((d) => d.opportunityId === one.opportunity.id && !d.refused))),
+    demand,
+    input.daysLeft,
+  );
+  // What the graph's decision answers depend on and nobody established goes to research or to an authorized action, by name.
+  for (const one of causal?.decisionUnknowns ?? []) missing.push(`${one.sendTo}: ${one.unknown}`);
   return {
     basis,
     worlds,
@@ -566,8 +706,702 @@ export function evaluateGoalPortfolio(input: {
       contactsPerDay: { value: stated, low: contactsPerDay.low ?? 0, high: contactsPerDay.high ?? 0, source: stated !== null ? 'stated by the owner on the goal' : input.measuredCapacity && input.measuredCapacity.perDay > CONTACTS_PER_DAY_BOUNDS.low ? `measured: up to ${input.measuredCapacity.perDay}/day on ${input.measuredCapacity.accounts} healthy Instantly accounts (shared); swept` : 'not stated; swept' },
       correlation: SHARED_OUTREACH_CORRELATION,
     },
+    assurance,
+    marketHistory: [...histories.values()],
+    causal,
+    safeguards: result.safeguardEffects ?? [],
     missing,
     searched: result.searched,
     measuredRates,
   };
+}
+
+/* ------------------------------------------------------------------------- */
+/* The causal graph, from Brain's own rows (CAUSAL-14-1..4)                  */
+/* ------------------------------------------------------------------------- */
+
+export interface OpeningCausal {
+  opportunityId: string;
+  title: string;
+  nodes: number;
+  relations: number;
+  actions: number;
+  /** Who pays, for what, under which terms, through which channel, and what is free to use (per deal, minor units). */
+  route: MoneyRouteReading;
+  /** Contacts passed through reply, close and the deals the market takes; revenue is read only from its output. */
+  chain: ChainReading;
+  /** Variables the graph implied and Brain added; each names what implied it. */
+  discovered: string[];
+  /** Inputs nobody has stated, shown as unknown rather than filled. */
+  unknowns: string[];
+  /**
+   * The decision questions asked of this opening's own graph on every
+   * evaluation (CAUSAL-14-4): each change propagated through the money route,
+   * cash timing, capital and the chain of this opening and of every opening a
+   * shared party or resource ties to it.
+   */
+  whatIf: WhatIfAnswer[];
+  /**
+   * An opening Brain itself would fulfil — an AI business — decomposed into the
+   * observable causal subproblems that settle it (CAUSAL-14-7). Null when a
+   * supplier or person fulfils it.
+   */
+  decomposition: Subproblem[] | null;
+}
+
+/** What one change does to one opening, before and after, through the figures it moves. */
+export interface PropagatedEffect {
+  opportunityId: string;
+  title: string;
+  /** Why the change reaches this opening: it is the opening changed, or the shared party or resource that ties it there. */
+  via: string;
+  before: Record<string, number | null>;
+  after: Record<string, number | null>;
+  note: string;
+}
+
+export interface WhatIfAnswer {
+  id: string;
+  opportunityId: string;
+  question: string;
+  change: string;
+  effects: PropagatedEffect[];
+  /** What in the graph the change stops or delays, read by tracing forward from what changed. */
+  breaks: string[];
+  /** A different route the change opens, added to the opening's graph beside the original when it is viable. */
+  branch: { routeId: string; viable: boolean; why: string } | null;
+  /** What the answer depends on that nobody has established, and where it is sent. */
+  unknowns: DecisionUnknown[];
+}
+
+export interface DecisionUnknown {
+  opportunityId: string;
+  unknown: string;
+  /** Research when evidence could settle it; an authorized action when only asking the counterparty can. */
+  sendTo: 'research' | 'authorized action';
+}
+
+export interface PortfolioCausal {
+  members: OpeningCausal[];
+  /** One party or resource more than one opening depends on: a failure of it is every dependent's failure. */
+  shared: SharedDependency[];
+  /** The whole portfolio graph, unsummarised, for the owner who asks for the complete account. */
+  account: ReturnType<typeof fullAccount> | null;
+  /** Every decision-critical unknown the what-if answers depend on, each sent to research or to an authorized action. */
+  decisionUnknowns: DecisionUnknown[];
+}
+
+const PROVENANCE_STATUS: Record<string, FigureStatus> = { EVIDENCE: 'EVIDENCED', HISTORICAL: 'OBSERVED', ASSUMPTION: 'ASSUMED', HYPOTHETICAL: 'ASSUMED' };
+
+/** A model input as a figure: its lineage is the input's own source, and one with none is unknown, never a number. */
+function figureOf(input: ModelInput, meaning: string, unit: string, scale = 1): Figure {
+  const status = PROVENANCE_STATUS[input.provenance];
+  const source = input.source ? `${input.source.kind}:${input.source.ref}` : input.note.trim() || null;
+  if (!status || input.value === null || !source) return unknownFigure(meaning, unit, ['the input is stated with a source']);
+  const bounded = status !== 'ASSUMED' && input.low !== null && input.high !== null && input.low <= input.value && input.value <= input.high;
+  const made = makeFigure({
+    meaning, unit, value: input.value * scale, status, source,
+    bounds: bounded ? { low: (input.low as number) * scale, high: (input.high as number) * scale } : null,
+    invalidatedBy: ['a newer outcome or research claim on this opening'],
+  });
+  return made.ok ? made.figure : unknownFigure(meaning, unit);
+}
+
+/** A stated row field, trimmed; null when nobody stated it. */
+const stated = (value: string | null | undefined): string | null => (typeof value === 'string' && value.trim() ? value.trim() : null);
+/** A stated list ("a; b, c" or one per line) as its items. */
+const listed = (value: string | null | undefined): string[] =>
+  (stated(value) ?? '').split(/\s*(?:;|\n|,)\s*/).map((one) => one.trim()).filter((one) => one.length >= 3);
+const BRAIN_FULFILLER = /^(brain|ai|the ai|brain itself|brain's own)\b/i;
+/** Money the opening ties up before it settles, in minor units; null when nobody stated it. */
+const capitalCentsOf = (one: ModelledOpportunity): number | null =>
+  one.opportunity.peakFundingCents ?? (one.capital.value !== null && one.capital.value > 0 ? Math.round(one.capital.value * 100) : null);
+
+/**
+ * How an opening reaches its money, read from its own row: whether a buyer has
+ * already agreed, whether an award gate stands between us and the work, and
+ * whether prospects have to be found and answer first. Nothing is assumed: an
+ * opening with neither an agreement, an award gate nor a repeatable outreach
+ * route is sold to the one buyer its row names.
+ */
+type Acquisition = 'AGREED' | 'AWARD' | 'OUTREACH' | 'NAMED_BUYER';
+function acquisitionOf(one: ModelledOpportunity): Acquisition {
+  if (one.agreed || one.agreedValue > 0) return 'AGREED';
+  if (one.competitiveAward) return 'AWARD';
+  if (one.repeatable) return 'OUTREACH';
+  return 'NAMED_BUYER';
+}
+
+/** Who fulfils, as a source or a person stated it; null when nobody has. */
+function fulfillerOf(one: ModelledOpportunity): string | null {
+  return stated(one.fulfilledBy?.value) ?? stated(one.opportunity.fulfillmentOwner);
+}
+
+const DAY_MS = 86_400_000;
+/** A stated date as YYYY-MM-DD; null when nothing parseable was stated. */
+function isoDay(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? new Date(at).toISOString().slice(0, 10) : null;
+}
+const plusDays = (day: string, days: number): string => new Date(Date.parse(day) + Math.round(days) * DAY_MS).toISOString().slice(0, 10);
+/** The whole price is paid before the work is delivered. A deposit is not: its share is unstated. */
+const PREPAID = /\b(pre-?paid|prepay(?:ment)?|up-?front|in advance|paid (?:at|on) (?:order|booking|checkout)|before (?:work|delivery|fulfil+ment) (?:starts|begins)?)/i;
+/** Payment falls due only once the work is delivered or accepted. */
+const AFTER_DELIVERY = /\b(net\s*\d{1,3}|(?:on|upon|after) (?:delivery|completion|acceptance|receipt of (?:the )?(?:goods|work|deliverable))|in arrears|due on receipt)\b/i;
+const NET_DAYS = /\bnet\s*(\d{1,3})\b/i;
+
+export interface Settlement {
+  invoicedAt: string | null;
+  collectedAt: string | null;
+  dateBasis: { invoiced: string | null; collected: string | null };
+  /** Collected money that stays owed against fulfilment or refund; unknown only when nothing in the row decides it. */
+  heldAgainstCents: Figure;
+  /** When the work's direct cost leaves, from the delivery date the row states. */
+  costAt: string | null;
+}
+
+/**
+ * When the money is invoiced and collected, and how much of it stays owed
+ * against fulfilment or refund — read from the opening's own row: its payment
+ * terms, its delivery deadline, its acceptance condition and the modelled days
+ * to cash measured from when the opening was recorded. A date or hold nothing
+ * in the row decides stays unknown and is named; nothing is filled with a guess.
+ */
+export function settlementOf(one: ModelledOpportunity, price: Figure): Settlement {
+  const o = one.opportunity;
+  const row = `cash_opportunity:${o.id}`;
+  const terms = stated(o.paymentTerms);
+  const start = isoDay(o.createdAt);
+  const deadline = isoDay(o.deadline);
+  const days = one.daysToCash.value;
+  const prepaid = terms !== null && PREPAID.test(terms);
+  const net = terms ? NET_DAYS.exec(terms) : null;
+  const netDays = net ? Number(net[1]) : null;
+  const afterDelivery = !prepaid && ((terms !== null && AFTER_DELIVERY.test(terms)) || stated(o.acceptanceCondition) !== null || one.competitiveAward);
+
+  let invoicedAt: string | null = null;
+  let invoiced: string | null = null;
+  let collectedAt: string | null = null;
+  let collected: string | null = null;
+  if (start && days !== null && Number.isFinite(days) && days >= 0) {
+    collectedAt = plusDays(start, days);
+    collected = `${row} recorded ${start}, plus ${days} days to cash (${one.daysToCash.provenance.toLowerCase()})`;
+  }
+  if (prepaid && start) {
+    invoicedAt = start;
+    invoiced = `${row} terms "${terms}": invoiced when ordered`;
+  } else if (netDays !== null && collectedAt) {
+    invoicedAt = plusDays(collectedAt, -netDays);
+    invoiced = `${row} terms "${terms}": collection date less ${netDays} days`;
+  } else if (deadline && afterDelivery) {
+    invoicedAt = deadline;
+    invoiced = `${row} invoiced on delivery, by the stated deadline ${deadline}`;
+  }
+  if (!collectedAt && invoicedAt && netDays !== null) {
+    collectedAt = plusDays(invoicedAt, netDays);
+    collected = `${invoiced}, plus ${netDays} days`;
+  }
+
+  let heldAgainstCents: Figure;
+  if (prepaid) {
+    // Collected before delivery: all of it is owed back if the work is not delivered.
+    heldAgainstCents = derive('held against fulfilment until delivery', 'cents', [price], ([p]) => p ?? 0);
+  } else if (afterDelivery) {
+    const made = makeFigure({
+      meaning: 'held against refund or fulfilment', unit: 'cents', value: 0, status: 'MODELED',
+      source: `${row} ${terms ? `terms "${terms}"` : one.competitiveAward ? 'paid on the award\'s completion' : 'acceptance condition'}: collected only after delivery, so nothing stays owed against fulfilment`,
+      invalidatedBy: ['a refund, chargeback or warranty right in the agreement'],
+    });
+    heldAgainstCents = made.ok ? made.figure : unknownFigure('held against refund or fulfilment', 'cents', ['a refund or fulfilment term is stated']);
+  } else {
+    heldAgainstCents = unknownFigure('held against refund or fulfilment', 'cents', ['a refund or fulfilment term is stated']);
+  }
+  return { invoicedAt, collectedAt, dateBasis: { invoiced, collected }, heldAgainstCents, costAt: deadline };
+}
+
+interface BuiltGraph {
+  graph: CausalGraph;
+  /** What discovery added, each naming what in the arrangement implied it. */
+  discovered: string[];
+}
+
+/**
+ * One opening's graph, from its own row and modelled inputs — never a fixed
+ * template. Each node, relation, action and chain stage exists because a field
+ * of this arrangement states or implies it: the payer, channel, offer scope,
+ * acceptance condition, payment terms, fulfiller, delivery route, required
+ * inputs and capabilities, deadline, money tied up, an award gate, an agreement
+ * already made, a dependency on another opening. A role the seed vocabulary has
+ * no word for is declared with the reason, and discovery then expands the graph
+ * to its fixpoint from the routes and actions, so what Brain added is returned
+ * by name. Nothing here comes from a caller.
+ */
+function buildCausalGraph(one: ModelledOpportunity): BuiltGraph {
+  const o = one.opportunity;
+  const g = createGraph(`opening:${o.id}`);
+  const ok = (r: { ok: boolean }): void => void r;
+  const node = (id: string, type: string, label: string, attributes: Record<string, string | number | boolean | null> = {}): void => ok(addNode(g, { id, type, label, attributes }));
+  const relate = (id: string, type: string, from: string, to: string): void => {
+    if (g.nodes.has(from) && g.nodes.has(to)) ok(addRelation(g, { id, type, from, to }));
+  };
+  const declare = (kind: 'node' | 'relation', name: string, reason: string): void => ok(declareType(g, kind, name, reason));
+
+  const acquisition = acquisitionOf(one);
+  const payer = stated(o.payer);
+  const channel = stated(o.reachableChannel);
+  const scope = stated(o.offerScope);
+  const acceptance = stated(o.acceptanceCondition);
+  const terms = stated(o.paymentTerms);
+  const fulfiller = fulfillerOf(one);
+  const external = fulfiller !== null && !BRAIN_FULFILLER.test(fulfiller);
+  const delivery = stated(o.deliveryMethod);
+  const deadline = stated(o.deadline);
+  const capitalCents = capitalCentsOf(one);
+  const days = one.daysToCash.value;
+  const timing = terms ?? (days !== null ? `cash after about ${days} days` : '');
+
+  // The offer is what the payer is paying for, in the row's words.
+  node('offer', 'offer', scope ?? o.title, {
+    mechanism: String(o.mechanism),
+    signal: o.opportunitySignal ?? null,
+    industry: o.industry ?? null,
+    repeatable: one.repeatable,
+    acquisition,
+    ...(one.estimated ? { estimatedArrangement: one.estimated.arrangementKey } : {}),
+  });
+  if (payer) node('payer', 'payer', payer);
+  if (channel) node('channel', 'channel', channel);
+  if (payer && channel) relate('channel-reaches-payer', 'causes', 'channel', 'payer');
+  if (payer) relate('payer-pays-offer', 'pays', 'payer', 'offer');
+  node('payment', 'payment', terms ? `payment on ${terms}` : 'cleared payment', { daysToCash: days, terms });
+  relate('offer-delivers-payment', 'delivers', 'offer', 'payment');
+
+  // How a buyer is won is the arrangement's own, not a funnel every opening shares.
+  if (acquisition === 'AGREED') {
+    node('contract', 'contract', `agreement already recorded (${one.agreedDeals || 1})`, { agreedValue: one.agreedValue, deals: one.agreedDeals });
+    relate('contract-obliges-offer', 'obliges', 'contract', 'offer');
+    if (payer) relate('payer-signed-contract', 'authorizes', 'payer', 'contract');
+  } else if (acquisition === 'AWARD') {
+    node('award', 'approval', `award by ${payer ?? 'the awarding body'}`);
+    relate('award-authorizes-offer', 'authorizes', 'award', 'offer');
+    node('lost-award', 'failure_mode', 'the award goes to another bidder');
+    relate('award-depends-on-loss', 'depends_on', 'award', 'lost-award');
+  } else if (acquisition === 'OUTREACH') {
+    node('reach', 'acquisition_event', `prospects reached${channel ? ` through ${channel}` : ''}`);
+    if (channel) relate('channel-causes-reach', 'causes', 'channel', 'reach');
+    relate('reach-causes-offer', 'causes', 'reach', 'offer');
+    node('volume', 'capacity_limit', 'deals the market takes', { deals: one.volume.value });
+    relate('volume-constrains-offer', 'constrains', 'volume', 'offer');
+    node('no-reply', 'failure_mode', 'prospects do not answer');
+    relate('reach-depends-on-reply', 'depends_on', 'reach', 'no-reply');
+  } else {
+    node('no-sale', 'failure_mode', `${payer ?? 'the named buyer'} does not choose us`);
+    relate('offer-depends-on-choice', 'depends_on', 'offer', 'no-sale');
+  }
+
+  // Who does the work: a supplier the arrangement depends on, or Brain's own capability.
+  if (external) {
+    node('fulfiller', 'supplier', fulfiller as string);
+    relate('fulfiller-delivers-offer', 'delivers', 'fulfiller', 'offer');
+    node('supplier-fails', 'failure_mode', `${fulfiller} does not deliver`);
+    relate('fulfiller-depends-on-failure', 'depends_on', 'fulfiller', 'supplier-fails');
+  } else if (fulfiller) {
+    node('fulfiller', 'capability', fulfiller);
+    relate('fulfiller-delivers-offer', 'delivers', 'fulfiller', 'offer');
+  }
+  for (const [i, capability] of (o.requiredCapabilities ?? []).entries()) {
+    node(`capability-${i + 1}`, 'capability', capability);
+    relate(`offer-requires-capability-${i + 1}`, 'requires', 'offer', `capability-${i + 1}`);
+  }
+  for (const [i, input] of listed(o.requiredInputs).entries()) {
+    node(`input-${i + 1}`, 'resource', input);
+    relate(`offer-requires-input-${i + 1}`, 'requires', 'offer', `input-${i + 1}`);
+  }
+  if (delivery) {
+    declare('node', 'delivery_route', 'The arrangement states how its output reaches the payer; no seed type names the route a delivery travels.');
+    node('delivery', 'delivery_route', delivery);
+    relate('offer-requires-delivery', 'requires', 'offer', 'delivery');
+  }
+  if (acceptance) {
+    node('acceptance', 'acceptance_condition', acceptance);
+    relate('payment-requires-acceptance', 'requires', 'payment', 'acceptance');
+  }
+  if (deadline) {
+    node('deadline', 'time_dependency', `by ${deadline}`);
+    relate('deadline-constrains-offer', 'constrains', 'deadline', 'offer');
+  }
+  if (capitalCents !== null && capitalCents > 0) {
+    node('capital', 'resource', 'money tied up before it settles', { cents: capitalCents });
+    relate('offer-requires-capital', 'requires', 'offer', 'capital');
+  }
+  if (stated(o.dependsOnId)) {
+    declare('node', 'opening', 'This arrangement depends on another opening; no seed type names a business that belongs to the portfolio beside this one.');
+    node('upstream', 'opening', `opening ${o.dependsOnId}`, { opportunityId: o.dependsOnId });
+    relate('offer-depends-on-upstream', 'depends_on', 'offer', 'upstream');
+  }
+
+  // The operation, step by step, as this arrangement requires it.
+  const evidence = [`cash_opportunity:${o.id}`, ...(o.sourceClaimId ? [`research_claim:${o.sourceClaimId}`] : [])];
+  const permissions = ['the owner\'s approval of this opening'];
+  const spending = 'the commercial authority\'s spending limits';
+  const steps: string[] = [];
+  const step = (action: Omit<OperationalAction, 'prerequisites' | 'evidence'> & { evidence?: string[] }): void => {
+    const added = addAction(g, { ...action, prerequisites: steps.length > 0 ? [steps[steps.length - 1] as string] : [], evidence: action.evidence ?? evidence });
+    if (added.ok) steps.push(action.id);
+  };
+  if (acquisition === 'OUTREACH') {
+    step({
+      id: 'reach', label: `reach buyers${channel ? ` through ${channel}` : ''}`, actor: 'Brain, for the owner', permissions: [...permissions, spending],
+      effect: 'prospects hear of the offer and some answer', timing: 'inside the goal\'s window',
+      externalDependencies: [channel ?? 'the owner\'s sending accounts'], completionCondition: 'an interested prospect has answered',
+    });
+  }
+  if (acquisition === 'AWARD') {
+    step({
+      id: 'bid', label: `bid for ${o.title}`, actor: 'Brain, for the owner', permissions: [...permissions, spending],
+      effect: 'a compliant bid is on file', timing: deadline ? `before ${deadline}` : 'before the solicitation closes',
+      externalDependencies: [payer ?? 'the awarding body'], completionCondition: 'the award is announced',
+    });
+  }
+  if (acquisition !== 'AGREED') {
+    step({
+      id: 'agree', label: `agree terms with ${payer ?? 'the buyer'}`, actor: 'Brain, for the owner', permissions,
+      effect: `${payer ?? 'the buyer'} commits to pay for ${scope ?? o.title}`, timing: deadline ? `before ${deadline}` : 'inside the goal\'s window',
+      externalDependencies: [payer ?? 'the buyer'], completionCondition: 'a signed or recorded agreement exists',
+    });
+  }
+  if (capitalCents !== null && capitalCents > 0) {
+    step({
+      id: 'fund', label: 'commit the money the work ties up', actor: 'the owner, through the commercial authority', permissions: [spending],
+      effect: `${(capitalCents / 100).toFixed(2)} ${o.currency} is committed until it settles`, timing: 'before fulfilment starts',
+      externalDependencies: ['the owner\'s account'], completionCondition: 'the commitment is recorded inside its ceiling',
+    });
+  }
+  step({
+    id: 'fulfil', label: `deliver ${scope ?? o.title}${delivery ? ` by ${delivery}` : ''}`, actor: fulfiller ?? 'a fulfiller nobody has named yet', permissions: external ? [...permissions, spending] : permissions,
+    effect: 'the output reaches the payer', timing: deadline ? `by ${deadline}` : 'not established',
+    externalDependencies: [...(external ? [fulfiller as string] : []), ...listed(o.requiredInputs)], completionCondition: 'the output is delivered',
+  });
+  if (acceptance) {
+    step({
+      id: 'accept', label: 'obtain acceptance', actor: payer ?? 'the buyer', permissions: ['none'],
+      effect: 'the delivery is accepted', timing: 'after delivery', externalDependencies: [payer ?? 'the buyer'], completionCondition: acceptance,
+    });
+  }
+  step({
+    id: 'collect', label: `collect from ${payer ?? 'the buyer'}`, actor: 'Brain, for the owner', permissions,
+    effect: 'cash clears into the owner\'s account', timing: timing || 'days to cash not established',
+    externalDependencies: [payer ?? 'the buyer'], completionCondition: 'the payment is cleared into the owner\'s account',
+  });
+
+  const price = figureOf(one.price, 'price per deal', 'cents', 100);
+  const cost = figureOf(one.directCost, 'direct cost per deal', 'cents', 100);
+  const settlement = settlementOf(one, price);
+  ok(addMoneyRoute(g, {
+    id: 'sale',
+    payer: payer ?? '',
+    for: scope ?? o.title,
+    terms: timing,
+    channel: acquisition === 'AGREED' ? (channel ?? 'the agreement already recorded') : (channel ?? ''),
+    invoicedAt: settlement.invoicedAt,
+    collectedAt: settlement.collectedAt,
+    dateBasis: settlement.dateBasis,
+    collectedCents: price,
+    heldAgainstCents: settlement.heldAgainstCents,
+    // The deal's direct cost is an outflow whether or not anybody has priced it: an unknown cost stays on the route as unknown.
+    outflows: [{ to: external ? (fulfiller as string) : 'direct cost of delivery', reason: 'cost of one deal', amountCents: cost.value, at: settlement.costAt }],
+  }));
+  recordClaim(g, 'price', price);
+  recordClaim(g, 'directCost', cost);
+  if (acquisition === 'OUTREACH') recordClaim(g, 'respond', figureOf(one.respond, 'reply rate', 'ratio'));
+  if (acquisition !== 'AGREED') recordClaim(g, 'close', figureOf(one.close, acquisition === 'AWARD' ? 'award rate' : 'close rate', 'ratio'));
+  const expanded = expandToFixpoint(g);
+  return { graph: g, discovered: expanded.ok ? expanded.value.map((d) => d.because) : [expanded.reason] };
+}
+
+/**
+ * An opening's money route, read with its outflow's own figure.
+ *
+ * `readMoneyRoute` carries an outflow as a bare amount and reads the stated
+ * total as CONTRACTED from "route outflows", whatever the amount actually was.
+ * The one outflow an opening's route has is its direct cost per deal, priced
+ * from the `directCost` claim — often ASSUMED or MODELED — so reading it as
+ * contracted raised the derived "free to use" figure's status and dropped the
+ * cost's source. Here the free amount is derived from the claim itself, so its
+ * status is no stronger than the cost's and its lineage points at the claim.
+ * The arithmetic, the gaps, the ledger and the break-even are the route's own
+ * reading, unchanged. A route whose outflows are not the one cost outflow the
+ * claim priced is read as the route states it: no claim is attached to an
+ * amount it did not produce.
+ */
+function readOpeningRoute(g: CausalGraph, route: MoneyRoute): MoneyRouteReading {
+  const reading = readMoneyRoute(route);
+  const cost = currentClaim(g, 'directCost');
+  const only = route.outflows.length === 1 ? route.outflows[0] : undefined;
+  if (!cost || !only || only.amountCents !== cost.value) return reading;
+  const outflow: Figure = { ...cost, meaning: 'outflows', source: cost.source ? `claim directCost: ${cost.source}` : 'claim directCost' };
+  const freeCents = derive('free to use', 'cents', [route.collectedCents, route.heldAgainstCents, outflow], ([collected, held, out]) => (collected ?? 0) - (held ?? 0) - (out ?? 0));
+  return { ...reading, freeCents };
+}
+
+/** One opening's graph, from its own row and modelled inputs. Nothing here comes from a caller. */
+export function causalGraphOf(one: ModelledOpportunity): CausalGraph {
+  return buildCausalGraph(one).graph;
+}
+
+/** The opening's own chain: only the stages its route to money passes through. */
+function chainOf(one: ModelledOpportunity, contacts: number): ChainReading {
+  const acquisition = acquisitionOf(one);
+  const stages: ChainStage[] = [];
+  if (acquisition === 'OUTREACH') {
+    stages.push({ name: 'reply', yield: figureOf(one.respond, 'reply rate', 'ratio') });
+    stages.push({ name: 'close', yield: figureOf(one.close, 'close rate', 'ratio'), capacity: figureOf(one.volume, 'deals the market takes', 'deals') });
+  } else if (acquisition === 'AWARD') {
+    stages.push({ name: 'award', yield: figureOf(one.close, 'award rate', 'ratio') });
+  } else if (acquisition === 'NAMED_BUYER') {
+    stages.push({ name: 'close', yield: figureOf(one.close, 'close rate', 'ratio') });
+  }
+  // An agreement already recorded passes no acquisition stage: its deals are the ones agreed.
+  const start = acquisition === 'OUTREACH' ? contacts : acquisition === 'AGREED' ? Math.max(1, one.agreedDeals) : 1;
+  return passVolume(start, stages);
+}
+
+/** The causal reading of the openings a combination holds, from the rows that built it; null when none. */
+export function causalOf(openings: ModelledOpportunity[], demand: DemandEstimate[], daysLeft: number | null = null): PortfolioCausal | null {
+  if (openings.length === 0) return null;
+  const built = openings.map(buildCausalGraph);
+  const graphs = built.map((one) => one.graph);
+  const linked = graphs.length > 1 ? linkGraphs('portfolio', graphs) : null;
+  const shared = linked && linked.ok ? linked.value.shared : [];
+  const chains = openings.map((one) => chainOf(one, demand.find((d) => d.opportunityId === one.opportunity.id)?.contacted.p50 ?? 0));
+  const routes = built.map(({ graph }) => readOpeningRoute(graph, [...graph.routes.values()][0]!));
+  const context: WhatIfContext = { openings, graphs, chains, routes, shared, daysLeft };
+  const members: OpeningCausal[] = openings.map((one, i) => {
+    const { graph: g, discovered } = built[i] as BuiltGraph;
+    const route = routes[i] as MoneyRouteReading;
+    const whatIf = whatIfOf(context, i);
+    return {
+      opportunityId: one.opportunity.id,
+      title: one.opportunity.title,
+      nodes: g.nodes.size,
+      relations: g.relations.size,
+      actions: g.actions.size,
+      route,
+      chain: chains[i] as ChainReading,
+      discovered,
+      unknowns: [...route.gaps, ...whatIf.flatMap((answer) => answer.unknowns.map((one) => one.unknown))],
+      whatIf,
+      decomposition: decompositionOf(one, g),
+    };
+  });
+  const seen = new Set<string>();
+  const decisionUnknowns = members.flatMap((one) => one.whatIf.flatMap((answer) => answer.unknowns)).filter((one) => {
+    const key = `${one.opportunityId}|${one.unknown}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return {
+    members,
+    shared,
+    // Built after the what-ifs, so a viable branch they opened is in the complete account.
+    account: linked && linked.ok ? fullAccount((linkGraphs('portfolio', graphs) as { ok: true; value: { graph: CausalGraph } }).value.graph) : fullAccount(graphs[0] as CausalGraph),
+    decisionUnknowns,
+  };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Asking the graph: what-if, propagated across connected openings          */
+/* ------------------------------------------------------------------------- */
+
+interface WhatIfContext {
+  openings: ModelledOpportunity[];
+  graphs: CausalGraph[];
+  chains: ChainReading[];
+  routes: MoneyRouteReading[];
+  shared: SharedDependency[];
+  daysLeft: number | null;
+}
+
+/** The other openings a member node of opening i is shared with, through one party or resource. */
+function sharedWith(context: WhatIfContext, i: number, node: string): { index: number; via: string }[] {
+  const id = `${(context.graphs[i] as CausalGraph).subject}::${node}`;
+  const out: { index: number; via: string }[] = [];
+  for (const dep of context.shared) {
+    if (!dep.members.includes(id)) continue;
+    for (const member of dep.members) {
+      const subject = member.slice(0, member.indexOf('::'));
+      const index = context.graphs.findIndex((g) => g.subject === subject);
+      if (index >= 0 && index !== i && !out.some((one) => one.index === index)) out.push({ index, via: `shares the ${dep.type} ${dep.label}` });
+    }
+  }
+  return out;
+}
+
+const centsOf = (figure: Figure): number | null => (figure.status === 'UNKNOWN' ? null : figure.value);
+
+/**
+ * The decision questions the owner asks of a business, asked of this
+ * opening's own graph on every evaluation rather than only when somebody posts
+ * one: what changes if the buyer prepays, what breaks if the supplier is late,
+ * where an added $1,000 of advertising goes. Each answer carries the change
+ * through the money route, cash timing, capital and the chain, to this opening
+ * and to every opening a shared party or resource ties to it; a change that
+ * opens a different viable route adds it to the graph as a branch; and what the
+ * answer depends on that nobody established is sent to research or to an
+ * authorized action. Nothing is filled in: an unknown input makes its answer
+ * unknown and says so.
+ */
+function whatIfOf(context: WhatIfContext, i: number): WhatIfAnswer[] {
+  const one = context.openings[i] as ModelledOpportunity;
+  const o = one.opportunity;
+  const g = context.graphs[i] as CausalGraph;
+  const chain = context.chains[i] as ChainReading;
+  const reading = context.routes[i] as MoneyRouteReading;
+  const base = [...g.routes.values()][0]!;
+  const payer = stated(o.payer) ?? 'the buyer';
+  const answers: WhatIfAnswer[] = [];
+  const days = one.daysToCash.value;
+  const capital = capitalCentsOf(one);
+  const price = centsOf(base.collectedCents);
+  const costKnown = base.outflows.every((out) => out.amountCents !== null && Number.isFinite(out.amountCents));
+  const cost = costKnown ? base.outflows.reduce((sum, out) => sum + (out.amountCents ?? 0), 0) : null;
+
+  // 1. Prepayment: the payer pays in full before delivery.
+  if (!/\b(pre-?paid|prepay|up-?front|in advance)\b/i.test(base.terms)) {
+    const unknowns: DecisionUnknown[] = [{ opportunityId: o.id, unknown: `whether ${payer} will pay in full before delivery`, sendTo: 'authorized action' }];
+    const branchRoute = {
+      ...base,
+      id: 'sale:prepaid',
+      terms: 'paid in full before delivery',
+      heldAgainstCents: derive('held against fulfilment until delivery', 'cents', [base.collectedCents], ([p]) => p ?? 0),
+    };
+    const branchReading = readOpeningRoute(g, branchRoute);
+    const capitalAfter = capital === null ? null : price === null ? null : Math.max(0, capital - price);
+    const marginAfterDelivery = price !== null && cost !== null ? price - cost : null;
+    const viable = marginAfterDelivery !== null && marginAfterDelivery >= 0;
+    if (price === null) unknowns.push({ opportunityId: o.id, unknown: 'the price per deal', sendTo: 'research' });
+    if (cost === null) unknowns.push({ opportunityId: o.id, unknown: 'the direct cost per deal', sendTo: 'research' });
+    if (viable) addMoneyRoute(g, branchRoute);
+    const freed = capital !== null && capitalAfter !== null ? capital - capitalAfter : null;
+    const effects: PropagatedEffect[] = [{
+      opportunityId: o.id, title: o.title, via: 'the opening changed',
+      before: { freeCents: reading.freeCents.value, daysToCash: days, capitalCents: capital },
+      after: { freeCents: branchReading.freeCents.value, freeCentsOnDelivery: marginAfterDelivery, daysToCash: days === null ? null : 0, capitalCents: capitalAfter },
+      note: price === null
+        ? 'the price is unknown, so neither the hold nor the capital it would free can be computed'
+        : `the whole ${price} cents collected is held against fulfilment until delivery, then released; cash arrives at order instead of after ${days ?? 'an unknown number of'} days`,
+    }];
+    // Capital the prepayment frees is the goal's shared ceiling: every other opening that ties money up gets the room.
+    if (freed !== null && freed > 0) {
+      context.openings.forEach((other, j) => {
+        const need = capitalCentsOf(other);
+        if (j === i || need === null || need <= 0) return;
+        effects.push({
+          opportunityId: other.opportunity.id, title: other.opportunity.title, via: 'draws on the same capital ceiling',
+          before: { capitalCents: need, ceilingRoomFreedCents: 0 }, after: { capitalCents: need, ceilingRoomFreedCents: freed },
+          note: `${freed} cents of the ceiling this opening no longer ties up can fund ${need <= freed ? 'all' : 'part'} of this opening's ${need} cents`,
+        });
+      });
+    }
+    answers.push({
+      id: `${o.id}:prepaid`, opportunityId: o.id,
+      question: `What happens if ${payer} prepays?`,
+      change: `terms "${base.terms || 'unstated'}" → paid in full before delivery`,
+      effects, breaks: [],
+      branch: {
+        routeId: 'sale:prepaid', viable,
+        why: viable
+          ? `prepaid, the deal still leaves ${marginAfterDelivery} cents once delivery releases the hold, and cash arrives at order`
+          : marginAfterDelivery === null ? 'not established: the price or the direct cost is unknown' : `prepaid, the deal still loses ${-marginAfterDelivery} cents after delivery`,
+      },
+      unknowns,
+    });
+  }
+
+  // 2. The supplier is late: what stops, here and in every opening that depends on the same supplier.
+  if (g.nodes.get('fulfiller')?.type === 'supplier') {
+    const supplier = g.nodes.get('fulfiller')!.label;
+    const traced = traceGraph(g, 'fulfiller', 'forward');
+    const breaks = [...new Set((traced?.reached ?? []).filter((r) => r.node.type !== 'failure_mode').map((r) => `${r.node.type}: ${r.node.label}`))];
+    for (const step of ['fulfil', 'accept', 'collect']) if (g.actions.has(step)) breaks.push(`action: ${g.actions.get(step)!.label}`);
+    const affected = [{ index: i, via: `fulfilled by ${supplier}` }, ...sharedWith(context, i, 'fulfiller')];
+    const effects: PropagatedEffect[] = affected.map(({ index, via }) => {
+      const member = context.openings[index] as ModelledOpportunity;
+      const d = member.daysToCash.value;
+      const slack = context.daysLeft !== null && d !== null ? Math.max(0, Math.floor(context.daysLeft - d)) : null;
+      return {
+        opportunityId: member.opportunity.id, title: member.opportunity.title, via,
+        before: { daysToCash: d, freeCentsPerDeal: (context.routes[index] as MoneyRouteReading).freeCents.value },
+        after: { daysToCashPerDayLate: d === null ? null : 1, toleratesDelayDays: slack },
+        note: slack === null
+          ? 'each day the supplier is late moves collection a day later; when that passes the goal\'s deadline is unknown'
+          : `each day late moves collection a day later; after ${slack} days late the cash lands past the goal's deadline and does not count`,
+      };
+    });
+    answers.push({
+      id: `${o.id}:supplier-late`, opportunityId: o.id,
+      question: `What breaks if ${supplier} delivers late?`,
+      change: `${supplier} delivers later than planned`,
+      effects, breaks, branch: null,
+      unknowns: [{ opportunityId: o.id, unknown: `how reliably ${supplier} delivers on time`, sendTo: 'research' }],
+    });
+  }
+
+  // 3. An added $1,000 of advertising: where it goes, and whether a constraint stops it becoming sales.
+  if (acquisitionOf(one) === 'OUTREACH') {
+    const channel = stated(o.reachableChannel) ?? 'the outreach channel';
+    const cap = chain.stages.find((stage) => stage.capped);
+    const unknowns: DecisionUnknown[] = [];
+    if (!cap) unknowns.push({ opportunityId: o.id, unknown: `how many buyers $1,000 of advertising reaches through ${channel}, and at what reply rate as spend grows`, sendTo: 'research' });
+    const effects: PropagatedEffect[] = [{
+      opportunityId: o.id, title: o.title, via: 'the opening changed',
+      before: { outputUnits: chain.outputUnits },
+      after: { outputUnits: cap ? chain.outputUnits : null },
+      note: cap
+        ? `${cap.name} already caps sales, so the $1,000 buys no more deals here`
+        : 'the spend enters at reach; what it buys is unknown, so sales after it are unknown rather than the old rate scaled up',
+    }];
+    for (const { index, via } of sharedWith(context, i, 'channel')) {
+      const other = context.chains[index] as ChainReading;
+      effects.push({
+        opportunityId: (context.openings[index] as ModelledOpportunity).opportunity.id, title: (context.openings[index] as ModelledOpportunity).opportunity.title, via,
+        before: { outputUnits: other.outputUnits }, after: { outputUnits: null },
+        note: 'the same channel carries this opening too: added spend competes for its buyers, so its sales after the change are unknown',
+      });
+    }
+    answers.push({
+      id: `${o.id}:advertising`, opportunityId: o.id,
+      question: 'Where does an added $1,000 of advertising go?',
+      change: `100000 cents more spent reaching buyers through ${channel}`,
+      effects, breaks: [], branch: null, unknowns,
+    });
+  }
+  return answers;
+}
+
+/**
+ * An opening Brain itself fulfils is an AI business; it is decomposed into the
+ * same observable causal subproblems as any other, with what its row already
+ * says toward each attached and every one left UNKNOWN until observed.
+ */
+function decompositionOf(one: ModelledOpportunity, g: CausalGraph): Subproblem[] | null {
+  const fulfiller = fulfillerOf(one);
+  if (fulfiller === null || !BRAIN_FULFILLER.test(fulfiller)) return null;
+  const o = one.opportunity;
+  const route = [...g.routes.values()][0];
+  const decomposed = decompose(new Map(), [], {
+    demand: stated(o.payer),
+    access: stated(o.reachableChannel),
+    capability: `fulfilled by ${fulfiller}${o.requiredCapabilities.length > 0 ? `; needs ${o.requiredCapabilities.join(', ')}` : ''}`,
+    'unit-cost': one.directCost.value === null ? null : `${one.directCost.value} ${o.currency} per deal (${one.directCost.provenance.toLowerCase()})`,
+    capacity: one.volume.value === null ? null : `${one.volume.value} deals the market takes (${one.volume.provenance.toLowerCase()})`,
+    purchase: one.agreed ? `${one.agreedDeals} agreement(s) recorded` : null,
+    acceptance: stated(o.acceptanceCondition),
+    payment: stated(o.paymentTerms),
+    obligations: route && route.outflows.length > 0 ? route.outflows.map((out) => `${out.to}: ${out.reason}`).join('; ') : null,
+    failure: null,
+  });
+  return decomposed.ok ? decomposed.subproblems : null;
 }

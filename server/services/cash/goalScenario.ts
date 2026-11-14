@@ -707,6 +707,14 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       resources: target.resources,
       measuredCapacity: await instantlyCapacity().catch(() => null),
       measuredRates: await instantlyMeasuredRates().catch(() => null),
+      /*
+       * The knowledge this compose already read for the project, passed
+       * explicitly (CAUSAL-14-7, review F4-2): left out, the portfolio fell back
+       * to the module cache, so whether an opening's market history was acquired
+       * depended on whether that cache was still warm. Null means the project's
+       * evidence could not be read, reported as a research need, never guessed.
+       */
+      knowledge,
     };
     /*
      * The baseline evaluation is the same synchronous engine §101 moved onto worker threads:

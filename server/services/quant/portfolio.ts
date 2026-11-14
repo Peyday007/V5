@@ -17,6 +17,11 @@
  *     starting capital plus cash already settled by its start day covers what
  *     it ties up, otherwise it does not run in that world;
  *   * only cash that settles by the deadline counts toward the target.
+ *   * a resource an activity needs (a platform, a supplier) is drawn up or down
+ *     once per world, so every activity that needs it fails in the same
+ *     worlds; streams sharing a resource are never summed at their best case.
+ *     `quant/graph.ts` reads shared-resource streams through this evaluator,
+ *     so there is one treatment of shared capacity, risk and failure.
  *
  * Search is exhaustive over subsets up to `EXHAUSTIVE_LIMIT` activities and
  * greedy beyond it. The answer is a share of worlds; it is a probability only
@@ -46,12 +51,59 @@ export interface Activity {
   /** Keys it cannot run alongside (one market, one buyer, one slot). */
   excludes?: string[];
   /**
+   * Resources it cannot run without (a platform, a supplier, a licence). In a
+   * world where any of them has failed it settles nothing and the capital it
+   * tied up does not come back. Each needs a failure probability in the
+   * problem's `resourceFailure`; one without is refused, never assumed reliable.
+   * Activities needing the same resource fail together in the same worlds.
+   */
+  needs?: string[];
+  /**
    * Money it pays out in each world, paired with `cash` by index (what it buys
    * to fulfil, what it pays a subcontractor, what it spends to reach buyers).
    * Read against the problem's `spendCeiling`, because a spending limit binds on
    * the combination in one world, never on an activity's average.
    */
   spend?: number[];
+  /**
+   * What the samples rest on. Absent means nothing is stated, which is never read
+   * as favourable: a probability claim needs a stated sample size.
+   */
+  evidence?: {
+    /** Independent real observations behind the samples (not the number of simulated draws). */
+    sampleSize?: number;
+    /** True when conditions have changed since the observations, so they may not transfer. */
+    conditionsChanged?: boolean;
+    /**
+     * The market's own historical record, acquired from research and outcomes
+     * (`quant/history.ts`, CAUSAL-14-7): bid/win counts, transaction counts,
+     * actual prices. Its bids are real outcomes of the behavioural rate, so
+     * when no sample is otherwise stated they are the sample; what it lacks is
+     * a research need, never a favourable assumption.
+     */
+    history?: {
+      sampleSize?: number;
+      winRate?: { wins: number; bids: number };
+      marketTransactions?: number;
+      priceObservations: number;
+      sources: string[];
+      researchNeeds: string[];
+    };
+  };
+}
+
+/** A control whose effect on the downside is measured, not asserted. */
+export interface Safeguard {
+  key: string;
+  kind: 'INDEPENDENT_CHANNEL' | 'DIVERSIFIED_COUNTERPARTY' | 'RESERVE_CAPACITY' | 'FASTER_CASH_CYCLE' | 'CONTINGENCY';
+  /** Members of a risk group stop sharing its shock (independent channel, diversified counterparty). */
+  decorrelate?: string[];
+  /** Added capacity per resource (reserve capacity). */
+  capacityBonus?: Record<string, number>;
+  /** Multiplies days-to-cash of the named activities, 0 < f <= 1 (faster cash cycle). */
+  daysFactor?: { activities: string[]; factor: number };
+  /** Added starting capital held back for contingency. */
+  capitalBonus?: number;
 }
 
 export interface PortfolioProblem {
@@ -65,6 +117,10 @@ export interface PortfolioProblem {
   riskCorrelation?: Record<string, number>;
   /** Total money the combination may pay out in one world. A world over it does not reach the target. */
   spendCeiling?: number;
+  /** Probability, for the period, that a resource some activity `needs` fails. */
+  resourceFailure?: Record<string, number>;
+  /** Controls to quantify against the best combination, over the same worlds. */
+  safeguards?: Safeguard[];
   worlds?: number;
   seed?: number;
 }
@@ -104,7 +160,77 @@ export interface PortfolioResult {
   /** Combinations refused before any world was drawn. */
   refused: Array<{ keys: string[]; reason: string }>;
   searched: number;
+  /** What the best combination's number may be called. Added alongside, never replacing, the readings. */
+  assurance?: Assurance;
+  /** Measured change to the downside from each safeguard, on the identical worlds. Present when safeguards were given. */
+  safeguardEffects?: SafeguardEffect[];
 }
+
+export interface SafeguardEffect {
+  key: string;
+  kind: Safeguard['kind'];
+  reachBefore: number;
+  reachAfter: number;
+  /** Change in the share of worlds reaching the target (positive helps). */
+  reachChange: number;
+  /** Change in the tenth-percentile settled cash: the bad-world outcome. */
+  downsideChange: number;
+  capitalShortChange: number;
+}
+
+export type AssuranceStatus = 'CLAIMS_AT_LEAST_90' | 'RANGE' | 'CALIBRATION_UNAVAILABLE';
+
+export interface Assurance {
+  status: AssuranceStatus;
+  /** The strongest defensible range for reaching the target; null when calibration is unavailable. */
+  range: { low: number; high: number } | null;
+  /** True only when status is CLAIMS_AT_LEAST_90. */
+  claimsAtLeast90: boolean;
+  /** Share of simulated worlds reaching the target. Coverage of scenarios; not a probability unless status says so. */
+  coverage: number | null;
+  /** Inputs that make the figure a validation problem, never a favourable assumption. */
+  validationProblems: string[];
+  /** Tail: what the tenth-percentile world settles, against the target. */
+  tailSettledP10: number | null;
+  /**
+   * The historical market data each member's figure used (CAUSAL-14-7): where
+   * its sample came from, the bid/win record and transaction counts acquired,
+   * and the sources. Empty when no member carried any history.
+   */
+  history?: Array<{
+    key: string;
+    sampleFrom: 'STATED' | 'HISTORY' | 'NONE';
+    sampleSize: number | null;
+    winRate: { wins: number; bids: number; rate: number } | null;
+    marketTransactions: number | null;
+    priceObservations: number;
+    sources: string[];
+  }>;
+  /** Historical data a member still needs before its figure is calibrated: targeted research, not an assumption. */
+  researchNeeds?: string[];
+  reason: string;
+}
+
+/**
+ * The sample behind one activity's figure. A stated sample (the observations
+ * its inputs were reconstructed from) stands; where none is stated, the bids
+ * of the market's acquired bid/win history are real outcomes of the very rate
+ * the figure rests on and are the sample. An absent sample is never read as a large one.
+ */
+export function effectiveSample(one: Activity): { size: number | undefined; from: 'STATED' | 'HISTORY' | 'NONE' } {
+  // A sample is a count of real observations: an infinite or non-numeric one
+  // is no sample at all, and would collapse the interval to a certainty.
+  const stated = one.evidence?.sampleSize;
+  if (stated !== undefined && Number.isFinite(stated)) return { size: stated, from: 'STATED' };
+  const fromHistory = one.evidence?.history?.sampleSize;
+  if (fromHistory !== undefined && Number.isFinite(fromHistory) && fromHistory > 0) return { size: fromHistory, from: 'HISTORY' };
+  return { size: undefined, from: 'NONE' };
+}
+
+export const MIN_EVIDENCE_SAMPLE = 20;
+/** One-sided 95% normal quantile, used for the lower bound of a claim. */
+const Z95 = 1.6449;
+export const CLAIM_THRESHOLD = 0.9;
 
 export const EXHAUSTIVE_LIMIT = 12;
 const DEFAULT_WORLDS = 2_000;
@@ -115,8 +241,46 @@ function seedOf(text: string): number {
   return h >>> 0;
 }
 
-/** Each activity's sample index per world, drawn once so every combination sees the same worlds. */
-function drawWorlds(problem: PortfolioProblem, worlds: number): number[][] {
+/**
+ * Every world, drawn once so every combination sees the same worlds: each
+ * activity's sample index, and which needed resources are down. A resource is
+ * drawn once per world, so every activity needing it fails in the same world.
+ */
+interface Worlds {
+  picks: number[][];
+  /** Resource → 1 in the worlds where it has failed. */
+  down: Map<string, Uint8Array>;
+}
+
+/** Resources some activity needs whose failure probability is absent or impossible. */
+export function missingResourceFailure(problem: PortfolioProblem): string[] {
+  const needed = [...new Set(problem.activities.flatMap((one) => one.needs ?? []))];
+  return needed.filter((id) => {
+    const p = problem.resourceFailure?.[id];
+    return p === undefined || !(p >= 0 && p <= 1);
+  });
+}
+
+function drawOutages(problem: PortfolioProblem, worlds: number): Map<string, Uint8Array> {
+  const seed = problem.seed ?? 20261031;
+  const missing = missingResourceFailure(problem);
+  if (missing.length > 0) throw new Error(`No failure probability is stated for ${missing.join(', ')}.`);
+  const down = new Map<string, Uint8Array>();
+  for (const id of [...new Set(problem.activities.flatMap((one) => one.needs ?? []))].sort()) {
+    const p = problem.resourceFailure![id]!;
+    const rng = makeRng(seed, seedOf(`resource:${id}`));
+    const out = new Uint8Array(worlds);
+    for (let i = 0; i < worlds; i++) out[i] = rng() < p ? 1 : 0;
+    down.set(id, out);
+  }
+  return down;
+}
+
+function drawWorlds(problem: PortfolioProblem, worlds: number): Worlds {
+  return { picks: drawPicks(problem, worlds), down: drawOutages(problem, worlds) };
+}
+
+function drawPicks(problem: PortfolioProblem, worlds: number): number[][] {
   const seed = problem.seed ?? 20261031;
   const groups = new Map<string, Float64Array>();
   const factor = (group: string) => {
@@ -168,11 +332,26 @@ function round(x: number): number {
   return Math.round(x * 100) / 100;
 }
 
-function evaluate(problem: PortfolioProblem, members: number[], picks: number[][], worlds: number): PortfolioReading {
+function evaluate(problem: PortfolioProblem, members: number[], drawn: Worlds, worlds: number): PortfolioReading {
+  return evaluateWorlds(problem, members, drawn, worlds).reading;
+}
+
+interface WorldsReading {
+  reading: PortfolioReading;
+  /** Settled cash per world, ascending. Empty when the combination cannot run. */
+  settled: number[];
+  /** Share of worlds in which no resource any member needs has failed. */
+  allNeedsUp: number;
+}
+
+function evaluateWorlds(problem: PortfolioProblem, members: number[], drawn: Worlds, worlds: number): WorldsReading {
+  const { picks, down } = drawn;
   const keys = members.map((m) => problem.activities[m]!.key);
   const refusal = refuse(problem, members);
   const justified = members.every((m) => problem.activities[m]!.justified);
-  if (refusal) return { keys, reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, capitalShort: 0, overSpend: 0, contribution: 0, capitalTurnover: 0, feasible: false, infeasibleBecause: refusal, basis: justified ? 'PROBABILITY' : 'COVERAGE' };
+  if (refusal) return { reading: { keys, reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, capitalShort: 0, overSpend: 0, contribution: 0, capitalTurnover: 0, feasible: false, infeasibleBecause: refusal, basis: justified ? 'PROBABILITY' : 'COVERAGE' }, settled: [], allNeedsUp: 0 };
+  const memberNeeds = [...new Set(members.flatMap((m) => problem.activities[m]!.needs ?? []))];
+  let allUp = 0;
   const ordered = [...members].sort((a, b) => (problem.activities[a]!.startDay ?? 0) - (problem.activities[b]!.startDay ?? 0));
   const settled = new Float64Array(worlds);
   let reached = 0;
@@ -190,6 +369,7 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
     let held = 0;
     let lastDay = 0;
     pending.length = 0;
+    if (memberNeeds.every((id) => down.get(id)![i] === 0)) allUp += 1;
     for (const m of ordered) {
       const act = problem.activities[m]!;
       const s = picks[m]![i]!;
@@ -208,6 +388,8 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
       }
       capital -= need;
       held += need;
+      // A needed resource is down in this world: nothing settles, and the capital tied up is not recovered.
+      if ((act.needs ?? []).some((id) => down.get(id)![i] === 1)) continue;
       const day = start + act.days[s]!;
       if (day > lastDay) lastDay = day;
       // Capital comes back with the cash it earned.
@@ -229,7 +411,38 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
   const q = (p: number) => sorted[Math.min(worlds - 1, Math.floor(p * worlds))]!;
   const contribution = contributed / worlds;
   const turnover = capitalTurnover(contribution, tied / worlds, cycled / worlds) ?? 0;
-  return { keys, reach: reached / worlds, settledP10: q(0.1), settledP50: q(0.5), settledP90: q(0.9), capitalShort: short / worlds, overSpend: over / worlds, contribution, capitalTurnover: turnover, feasible: true, infeasibleBecause: null, basis: justified ? 'PROBABILITY' : 'COVERAGE' };
+  return {
+    reading: { keys, reach: reached / worlds, settledP10: q(0.1), settledP50: q(0.5), settledP90: q(0.9), capitalShort: short / worlds, overSpend: over / worlds, contribution, capitalTurnover: turnover, feasible: true, infeasibleBecause: null, basis: justified ? 'PROBABILITY' : 'COVERAGE' },
+    settled: sorted,
+    allNeedsUp: allUp / worlds,
+  };
+}
+
+export interface CombinationReading extends PortfolioReading {
+  /** Mean settled cash across worlds. */
+  settledMean: number;
+  /** Share of worlds in which every resource some member needs is up. */
+  allNeedsUp: number;
+  /** Share of worlds settling at or below `atOrBelow`, when it was asked for. */
+  shareAtOrBelow: number | null;
+  worlds: number;
+}
+
+/**
+ * Evaluate every activity of the problem running together, over the same
+ * drawn worlds the optimizer uses — the one evaluator for shared capacity,
+ * shared risk and shared resource failure. Refuses a needed resource with no
+ * stated failure probability rather than assuming it reliable.
+ */
+export function evaluateCombination(problem: PortfolioProblem, atOrBelow?: number): CombinationReading | { missing: string[] } {
+  const missing = missingResourceFailure(problem);
+  if (missing.length > 0) return { missing };
+  const worlds = problem.worlds ?? DEFAULT_WORLDS;
+  const members = problem.activities.map((_, i) => i);
+  const { reading, settled, allNeedsUp } = evaluateWorlds(problem, members, drawWorlds(problem, worlds), worlds);
+  const settledMean = settled.length ? settled.reduce((sum, x) => sum + x, 0) / settled.length : 0;
+  const shareAtOrBelow = atOrBelow === undefined || !settled.length ? null : settled.filter((x) => x <= atOrBelow + 1e-9).length / settled.length;
+  return { ...reading, settledMean, allNeedsUp, shareAtOrBelow, worlds };
 }
 
 /**
@@ -261,6 +474,8 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
   const worlds = problem.worlds ?? DEFAULT_WORLDS;
   const n = problem.activities.length;
   if (n === 0) return { best: null, ranked: [], singles: [], refused: [], searched: 0 };
+  const missing = missingResourceFailure(problem);
+  if (missing.length > 0) throw new Error(`No failure probability is stated for ${missing.join(', ')}.`);
   const picks = drawWorlds(problem, worlds);
   const readings: PortfolioReading[] = [];
   const refused: PortfolioResult['refused'] = [];
@@ -296,5 +511,109 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
   }
   const ranked = [...readings].sort(better);
   const best = ranked.find((one) => one.feasible) ?? null;
-  return { best, ranked: ranked.slice(0, 8), singles, refused, searched: readings.length };
+  const result: PortfolioResult = { best, ranked: ranked.slice(0, 8), singles, refused, searched: readings.length, assurance: assess(problem, best) };
+  if (best && problem.safeguards?.length) {
+    const members = best.keys.map((k) => problem.activities.findIndex((a) => a.key === k));
+    result.safeguardEffects = problem.safeguards.map((guard) => {
+      const after = withSafeguard(problem, guard, members, worlds, picks);
+      return {
+        key: guard.key,
+        kind: guard.kind,
+        reachBefore: best.reach,
+        reachAfter: after.reach,
+        reachChange: after.reach - best.reach,
+        downsideChange: after.settledP10 - best.settledP10,
+        capitalShortChange: after.capitalShort - best.capitalShort,
+      };
+    });
+  }
+  return result;
+}
+
+/**
+ * What the best combination's figure may be called. A probability is claimed only
+ * when every member's samples rest on evidence with a stated sample size and
+ * unchanged conditions; the range widens with the smallest sample behind any
+ * member (the weakest link bounds the claim); at least 90% is claimed only when
+ * the lower bound clears it. Otherwise the answer is a range, or that
+ * calibration is unavailable. An input without evidence is a validation problem
+ * and is never read as favourable.
+ */
+export function assess(problem: PortfolioProblem, best: PortfolioReading | null): Assurance {
+  if (!best) {
+    return { status: 'CALIBRATION_UNAVAILABLE', range: null, claimsAtLeast90: false, coverage: null, validationProblems: ['no feasible combination'], tailSettledP10: null, history: [], researchNeeds: [], reason: 'no feasible combination exists, so there is nothing to calibrate' };
+  }
+  const members = problem.activities.filter((one) => best.keys.includes(one.key));
+  const problems: string[] = [];
+  const samples = new Map(members.map((one) => [one.key, effectiveSample(one)]));
+  for (const one of members) {
+    const sample = samples.get(one.key)!;
+    if (!one.justified) problems.push(`"${one.key}": samples are not evidence-backed (invented or unvalidated inputs)`);
+    else if (sample.size === undefined || !(sample.size >= MIN_EVIDENCE_SAMPLE)) {
+      problems.push(`"${one.key}": sample size ${sample.size === undefined ? 'is not stated and no bid/win history was acquired' : `${sample.size} is under ${MIN_EVIDENCE_SAMPLE}${sample.from === 'HISTORY' ? ' (from acquired bid/win history)' : ''}`}`);
+    }
+    if (one.evidence?.conditionsChanged) problems.push(`"${one.key}": conditions changed since its observations, so they may not transfer`);
+  }
+  const history = members
+    .filter((one) => one.evidence?.history)
+    .map((one) => {
+      const h = one.evidence!.history!;
+      const sample = samples.get(one.key)!;
+      return {
+        key: one.key,
+        sampleFrom: sample.from,
+        sampleSize: sample.size ?? null,
+        winRate: h.winRate && h.winRate.bids > 0 ? { ...h.winRate, rate: h.winRate.wins / h.winRate.bids } : null,
+        marketTransactions: h.marketTransactions ?? null,
+        priceObservations: h.priceObservations,
+        sources: h.sources,
+      };
+    });
+  const researchNeeds = [
+    ...new Set(
+      members.flatMap((one) => {
+        if (samples.get(one.key)!.from === 'STATED' && one.justified) return [];
+        const needs = one.evidence?.history?.researchNeeds ?? [];
+        return needs.length > 0 || one.evidence?.history ? needs : [`"${one.key}": acquire the market's historical record (transaction counts, actual prices and spreads, bid/win rates)`];
+      }),
+    ),
+  ];
+  const base = { coverage: best.reach, tailSettledP10: best.settledP10, validationProblems: problems, history, researchNeeds };
+  if (problems.length > 0) {
+    return { ...base, status: 'CALIBRATION_UNAVAILABLE', range: null, claimsAtLeast90: false, reason: `calibration is unavailable: ${problems.length} input(s) fail validation; the ${round(best.reach * 100)}% is share of scenarios covered, not a probability` };
+  }
+  const nMin = Math.min(...members.map((one) => samples.get(one.key)!.size!));
+  // Wilson interval on the weakest sample: unlike the normal interval it never collapses to zero width at 0% or 100%.
+  const z2 = Z95 * Z95;
+  const centre = (best.reach + z2 / (2 * nMin)) / (1 + z2 / nMin);
+  const half = (Z95 * Math.sqrt((best.reach * (1 - best.reach)) / nMin + z2 / (4 * nMin * nMin))) / (1 + z2 / nMin);
+  const low = Math.max(0, centre - half);
+  const high = Math.min(1, centre + half);
+  const claims = low >= CLAIM_THRESHOLD;
+  return {
+    ...base,
+    status: claims ? 'CLAIMS_AT_LEAST_90' : 'RANGE',
+    range: { low, high },
+    claimsAtLeast90: claims,
+    reason: claims
+      ? `calibrated evidence (smallest sample ${nMin}) puts the lower bound at ${round(low * 100)}%, above ${CLAIM_THRESHOLD * 100}%`
+      : `strongest defensible range is ${round(low * 100)}%–${round(high * 100)}% (smallest sample ${nMin}); the lower bound does not reach ${CLAIM_THRESHOLD * 100}%`,
+  };
+}
+
+/** Re-evaluates `members` with a safeguard applied, over the very same drawn worlds. */
+function withSafeguard(problem: PortfolioProblem, guard: Safeguard, members: number[], worlds: number, picks: Worlds): PortfolioReading {
+  const activities = problem.activities.map((one) => {
+    let next = one;
+    if (guard.decorrelate?.includes(one.key) && one.riskGroup) next = { ...next, riskGroup: undefined };
+    if (guard.daysFactor?.activities.includes(one.key)) next = { ...next, days: one.days.map((d) => d * Math.min(1, Math.max(0, guard.daysFactor!.factor))) };
+    return next;
+  });
+  const capacity = { ...(problem.capacity ?? {}) };
+  for (const [r, extra] of Object.entries(guard.capacityBonus ?? {})) capacity[r] = (capacity[r] ?? 0) + extra;
+  const startingCapital = problem.startingCapital === undefined ? undefined : problem.startingCapital + (guard.capitalBonus ?? 0);
+  const adjusted: PortfolioProblem = { ...problem, activities, capacity, startingCapital };
+  // Decorrelating changes how worlds are drawn, so redraw only then; every other safeguard reuses the same picks.
+  const usePicks = guard.decorrelate?.length ? { picks: drawPicks(adjusted, worlds), down: picks.down } : picks;
+  return evaluate(adjusted, members, usePicks, worlds);
 }

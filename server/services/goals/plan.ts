@@ -62,6 +62,7 @@ import type { Workstream } from '../../domain/register.ts';
 import { decideResearch, type ResearchDecision } from '../quant/deadline.ts';
 import { goalExecutionPolicy, MAX_CONCURRENT_SALES, type GoalExecutionPolicy } from '../../domain/goalPolicy.ts';
 import type { GoalPortfolio } from './portfolio.ts';
+import { sendPortfolioNeeds } from './portfolioNeeds.ts';
 import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
 import { readPathways, type BrainCapabilities, type PathwayReading } from './pathways.ts';
@@ -2200,6 +2201,16 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     if (reading?.acceptance.status === 'ACCEPTED') {
       const { notifyPlanReady } = await import('./planReady.ts');
       await notifyPlanReady(id, reading).catch((error: unknown) => console.warn(`plan-ready notice: ${String((error as Error)?.message ?? error)}`));
+    }
+    // What the portfolio could not establish is sent, not only listed (review F2-2):
+    // decision unknowns to research or an authorized action, missing history to research.
+    // Keyed per goal, opening and unknown, so a re-read raises nothing new.
+    if (reading?.portfolio && !reading.target.achieved) {
+      try {
+        await sendPortfolioNeeds({ goalId: id, projectId: reading.target.projectId, portfolio: reading.portfolio });
+      } catch (error) {
+        console.warn(`goal ${id}: sending the portfolio's needs failed: ${String((error as Error)?.message ?? error)}`);
+      }
     }
     // What Brain holds cannot reach the goal however it is combined: look for
     // more, through the same discovery every bucket uses, instead of reading
