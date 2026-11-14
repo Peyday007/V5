@@ -224,9 +224,9 @@ export interface PrepaymentVerification {
   arrangement: string;
   willingness: Establishment;
   refundObligations: Establishment;
-  /** Both the days until prepaid money is usable and the days until the supplier must be paid. */
+  /** Both the days until prepaid money is usable and the days until the supplier must be paid (delivery, day 0, when there is no supplier). */
   timing: Establishment;
-  /** Whether prepaid money is usable before the supplier is paid; null unless timing is established. */
+  /** Whether prepaid money is usable before the supplier is paid (or by delivery, with no supplier); null unless timing is established. */
   usableBeforeSupplierPayment: boolean | null;
   /** Whether the composer took the exposure credit (it never does on an unstated part). */
   credited: boolean;
@@ -249,15 +249,18 @@ export function verifyPrepayment(a: Arrangement, now: Date = new Date()): Prepay
   const willing = resolveOne(k('prepay_willingness'));
   const refund = resolveOne(k('prepay_refund_share'));
   const usable = resolveOne(k('prepay_usable_days'));
-  const supplier = resolveOne(k('supplier_payment_days'));
+  // With no supplier the arrangement has no supplier term: its outlay is paid at delivery (day 0).
+  const hasSupplierTerm = composed.graph.nodes.some((n) => n.key === k('supplier_payment_days'));
+  const supplier = hasSupplierTerm ? resolveOne(k('supplier_payment_days')) : undefined;
+  const payBy = hasSupplierTerm ? (supplier ? { p10: supplier.p10, p90: supplier.p90 } : null) : { p10: 0, p90: 0 };
   const willingness = establishes(willing);
   const refundObligations = establishes(refund);
-  const timing: Establishment = establishes(usable) === 'ESTABLISHED' && establishes(supplier) === 'ESTABLISHED' ? 'ESTABLISHED' : 'UNKNOWN';
-  const usableBeforeSupplierPayment = timing === 'ESTABLISHED' ? usable!.p90 <= supplier!.p10 ? true : usable!.p10 > supplier!.p90 ? false : null : null;
+  const timing: Establishment = establishes(usable) === 'ESTABLISHED' && (!hasSupplierTerm || establishes(supplier) === 'ESTABLISHED') ? 'ESTABLISHED' : 'UNKNOWN';
+  const usableBeforeSupplierPayment = timing === 'ESTABLISHED' && payBy ? usable!.p90 <= payBy.p10 ? true : usable!.p10 > payBy.p90 ? false : null : null;
   const tasks = [
     willingness === 'UNKNOWN' ? 'establish what share of these buyers will prepay, from a source' : null,
     refundObligations === 'UNKNOWN' ? 'establish the refund obligations on prepaid money (terms, law, observed refund share)' : null,
-    timing === 'UNKNOWN' ? 'establish when prepaid funds become usable and when the supplier must be paid' : null,
+    timing === 'UNKNOWN' ? (hasSupplierTerm ? 'establish when prepaid funds become usable and when the supplier must be paid' : 'establish when prepaid funds become usable') : null,
     timing === 'ESTABLISHED' && usableBeforeSupplierPayment === null ? 'the usable-funds and supplier-payment ranges overlap: narrow them' : null,
   ].filter((one): one is string => !!one);
   return [{ arrangement: a.key, willingness, refundObligations, timing, usableBeforeSupplierPayment, credited: composed.prepayment?.credited ?? false, tasks }];

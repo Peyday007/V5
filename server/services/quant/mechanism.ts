@@ -310,8 +310,17 @@ function composeLevers(a: Arrangement, L: Levers, k: (n: string) => string, part
   const margin = node('margin', 'Margin per transaction after every lever', c, 'REAL', `${k('capture')} - ${costs.join(' - ')}`);
 
   // Supplier days: the fulfilment terms, or what the prepayment lever states.
+  // Only an arrangement with a supplier has a supplier to pay. One Brain fulfils
+  // itself (AI labor, no supply side, no supply cost) pays its own outlay at
+  // delivery, so its cash conversion is measured from delivery (day 0) and
+  // never waits on a supplier term that does not exist.
+  const hasSupplier = !!L.fulfilment || !!a.supply || a.capture.kind === 'MARGIN';
   const supplierDaysPart = L.fulfilment?.paymentDays ?? L.prepayment?.supplierPaymentDays;
-  const supplierDays = part('supplier_payment_days', 'Days after delivery the supplier must be paid', 'days', 'POSITIVE', supplierDaysPart ?? {}, { min: 0 });
+  const supplierDays = hasSupplier || stated(supplierDaysPart)
+    ? part('supplier_payment_days', 'Days after delivery the supplier must be paid', 'days', 'POSITIVE', supplierDaysPart ?? {}, { min: 0 })
+    : null;
+  /** When our own outlay leaves: the supplier's term, or delivery itself when there is no supplier. */
+  const payDay = supplierDays ?? '0';
 
   // Prepayment: verified willingness, refunds and timing, or no credit at all.
   let credit: string | null = null;
@@ -326,11 +335,16 @@ function composeLevers(a: Arrangement, L: Levers, k: (n: string) => string, part
       stated(L.prepayment.willingness) ? null : 'buyer willingness',
       stated(L.prepayment.refundShare) ? null : 'refund obligations',
       stated(L.prepayment.usableDays) ? null : 'when prepaid funds are usable',
-      stated(supplierDaysPart) ? null : 'when the supplier must be paid',
+      !supplierDays || stated(supplierDaysPart) ? null : 'when the supplier must be paid',
     ].filter((one): one is string => !!one);
     if (missing.length === 0) {
-      credit = node('prepay_credit', 'Share of the outlay prepayment funds before the supplier is paid', 'share', 'RATE', `if(${usable} <= ${supplierDays}, ${willingness} * (1 - ${refund}), 0)`, { min: 0, max: 1 });
-      prepayment = { credited: true, reason: 'Willingness, refunds and timing are stated; the credit applies only where prepaid funds are usable before the supplier is paid.' };
+      credit = node('prepay_credit', 'Share of the outlay prepayment funds before the supplier is paid', 'share', 'RATE', `if(${usable} <= ${payDay}, ${willingness} * (1 - ${refund}), 0)`, { min: 0, max: 1 });
+      prepayment = {
+        credited: true,
+        reason: supplierDays
+          ? 'Willingness, refunds and timing are stated; the credit applies only where prepaid funds are usable before the supplier is paid.'
+          : 'Willingness, refunds and timing are stated; with no supplier, the credit applies only where prepaid funds are usable by delivery, when the outlay is paid.',
+      };
     } else {
       prepayment = { credited: false, reason: `Not credited: ${missing.join(', ')} unstated — an unknown is never read as favourable.` };
     }
@@ -340,10 +354,9 @@ function composeLevers(a: Arrangement, L: Levers, k: (n: string) => string, part
 
   const settlement = part('settlement_days', 'Days after delivery until a buyer who did not prepay has paid', 'days', 'POSITIVE', L.settlementDays ?? {}, { min: 0 });
   const inflowDays = credit ? `${credit} * ${k('prepay_usable_days')} + (1 - ${credit}) * ${settlement}` : settlement;
-  const cashConversion = node('cash_conversion', 'Days from paying supply to holding usable cash', 'days', 'REAL', `${inflowDays} - ${supplierDays}`);
+  const cashConversion = node('cash_conversion', 'Days from paying supply to holding usable cash', 'days', 'REAL', supplierDays ? `${inflowDays} - ${supplierDays}` : inflowDays);
 
   // Supplier risk: stated for a supplier, unknown where supply exists unstated, nothing where there is no supplier.
-  const hasSupplier = !!L.fulfilment || !!a.supply || a.capture.kind === 'MARGIN';
   const failure = L.fulfilment
     ? part('supplier_failure_rate', 'Share of supplier deliveries that fail', 'share', 'RATE', L.fulfilment.failureRate)
     : hasSupplier

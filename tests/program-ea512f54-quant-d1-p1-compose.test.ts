@@ -180,3 +180,37 @@ describe('COM-13-2 composable leverage', () => {
     ]);
   });
 });
+
+describe('an arrangement Brain fulfils itself has no supplier term to wait on', () => {
+  const aiOnly = (levers: Levers): Arrangement => base(levers, { capture: { kind: 'FEE', fee: pt('fee', 100) } });
+
+  it('emits no supplier payment part, and cash conversion is established from evidenced settlement alone', () => {
+    const c = composeArrangement(aiOnly({ aiLabor: all.aiLabor!, settlementDays: pt('settle', 14) }));
+    expect(c.graph.nodes.some((n) => n.key === 'lev_supplier_payment_days')).toBe(false);
+    expect(c.formulas.lev_cash_conversion).not.toMatch(/supplier/);
+    const conversion = reconstruct(c.graph, 'lev_cash_conversion', now).estimates['lev_cash_conversion']!;
+    expect(conversion.tier).not.toBe('UNKNOWN');
+    expect(conversion.p50).toBeCloseTo(14, 0);
+  });
+
+  it('still leaves cash conversion unknown when settlement itself is unstated', () => {
+    const c = composeArrangement(aiOnly({ aiLabor: all.aiLabor! }));
+    expect(reconstruct(c.graph, 'lev_cash_conversion', now).estimates['lev_cash_conversion']!.tier).toBe('UNKNOWN');
+  });
+
+  it('judges prepayment timing against delivery, not an absent supplier term', () => {
+    const prepay = { willingness: rate('willing', 50, 100), refundShare: rate('refund', 10, 100), usableDays: pt('usable', 0) };
+    const c = composeArrangement(aiOnly({ aiLabor: all.aiLabor!, prepayment: prepay, settlementDays: pt('settle', 14) }));
+    expect(c.prepayment!.credited).toBe(true);
+    expect(c.prepayment!.reason).toMatch(/usable by delivery/);
+    // Prepaid money usable only after delivery funds nothing before Brain's own outlay leaves.
+    const late = composeArrangement(aiOnly({ aiLabor: all.aiLabor!, prepayment: { ...prepay, usableDays: pt('usable', 5) }, settlementDays: pt('settle', 14) }));
+    expect(reconstruct(late.graph, 'lev_prepay_credit', now).estimates['lev_prepay_credit']!.p50).toBe(0);
+  });
+
+  it('keeps the supplier term wherever there is a supplier, so an unstated one stays a question', () => {
+    const c = composeArrangement(base({ aiLabor: all.aiLabor!, settlementDays: pt('settle', 14) }));
+    expect(c.graph.nodes.some((n) => n.key === 'lev_supplier_payment_days')).toBe(true);
+    expect(reconstruct(c.graph, 'lev_cash_conversion', now).estimates['lev_cash_conversion']!.tier).toBe('UNKNOWN');
+  });
+});
