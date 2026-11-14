@@ -34,6 +34,7 @@ import {
   waveForVersion,
 } from '../domain/version.ts';
 import { getDb, inTransaction } from '../db/database.ts';
+import { deferUntilEffectCommit } from './effects/postCommit.ts';
 import { documentIdsWithAudits, getLatestAuditForLayer } from '../repos/audits.ts';
 import { getDocument, listDocuments, listDocumentsByLayer, updateDocument } from '../repos/documents.ts';
 import { listEventsByLayer, recordEvent } from '../repos/events.ts';
@@ -51,7 +52,15 @@ import {
   refreshProjectDependencies,
   withNameLookups,
 } from './dependencies.ts';
-import { objectExistence, objectExists, prefetchExistence, storageKeyOf, withExistenceMemo } from './storage.ts';
+import {
+  currentExistenceMemo,
+  objectExistence,
+  objectExists,
+  prefetchExistence,
+  storageKeyOf,
+  withExistenceMemo,
+  withExistenceMemoFrom,
+} from './storage.ts';
 import { writeProjectState, writesRuntimeSnapshot } from './runtimeState.ts';
 
 /** Runs that still owe the project something, and therefore shape layer state. */
@@ -800,6 +809,23 @@ export async function withProjectExistence<T>(projectId: string, work: () => Pro
  * snapshot written for the UI.
  */
 export async function recomputeProject(projectId: string): Promise<LayerStateSnapshot[]> {
+  /*
+   * Inside an effect's transaction (a judge submission, a filing, a work
+   * completion) the recompute is registered to run once that transaction has
+   * committed, keyed by project so several requests in one effect run once.
+   * Done here, it held the effect's pooled connection and row locks across a
+   * store round trip per document and a whole re-derivation — the top
+   * connection holder in every stalled production process, 2026-11-14 (see
+   * `effects/postCommit.ts`). A recompute only re-derives from rows, so after
+   * the commit it writes exactly what it would have written inside it. The
+   * caller gets no snapshots back and derives the one layer it reports. The
+   * deferred recompute re-enters the existence memo the effect had open, so it
+   * asks the store exactly what it asked when it ran inside the effect.
+   */
+  const memo = currentExistenceMemo();
+  if (deferUntilEffectCommit(`recompute:${projectId}`, () => withExistenceMemoFrom(memo, () => recomputeProject(projectId)))) {
+    return [];
+  }
   /*
    * Every document's bytes are asked about once, up front and concurrently,
    * before the transaction opens — rather than three times each, serially,

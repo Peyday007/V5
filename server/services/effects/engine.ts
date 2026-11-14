@@ -55,6 +55,7 @@ import {
 } from '../../repos/idempotency.ts';
 import { proveLeaseOwnership, type OwnershipProof } from '../../repos/workQueue.ts';
 import { failureDetail } from './failureDetail.ts';
+import { postCommitScope } from './postCommit.ts';
 import {
   FINGERPRINT_VERSION,
   assertValidKey,
@@ -253,8 +254,15 @@ export async function runIdempotent<T>(
     requestId: input.correlationId ?? null,
   });
 
+  /*
+   * Re-derivation the effect asks for (a project recompute, and the storage
+   * questions it asks) is registered in this scope and run after the commit,
+   * on no connection of the effect's — see `postCommit.ts`. The transaction
+   * holds only the fence, the domain writes and the success record.
+   */
+  const deferred = postCommitScope();
   try {
-    const value = await getDb().transaction(async () => {
+    const value = await deferred.run(() => getDb().transaction(async () => {
       // The fence, first, as a write. Everything after this either commits with
       // it or does not commit at all.
       if (input.fence) {
@@ -275,12 +283,19 @@ export async function runIdempotent<T>(
         throw new OperationInProgress(operation);
       }
       return produced.value;
-    });
+    }));
 
     await closeAttempt(attempt.id, { phase: 'CONFIRMED', outcome: 'SUCCEEDED' });
     const settled = (await getOperation(operation.id)) ?? operation;
+    // Committed and recorded. What was deferred runs now, before the caller is
+    // answered, so the reply still reflects state that includes this effect. Its
+    // failure is not the effect's: the effect is in the table.
+    await deferred.flush((key, error) => {
+      console.warn(`[effects] post-commit ${key} after ${operation.id} failed: ${failureDetail(error)}`);
+    });
     return { status: 'EXECUTED', operation: settled, value };
   } catch (error) {
+    deferred.discard();
     const terminal = error instanceof TerminalEffectFailure;
     const category: EffectFailureCategory = terminal
       ? error.category

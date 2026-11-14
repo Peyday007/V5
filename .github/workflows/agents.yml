@@ -33,7 +33,8 @@
 #            and point the Brain at it (BRAIN_OPERATOR_URL/_KEY; one restart).
 #   operator-status — the machine, its log, and the probe from the Brain.
 #   operator-run    — one operator run now, from the Brain, waited on; prints
-#            what the operator did (scripts/operator.ts run).
+#            what the operator did (scripts/operator.ts run). Input `mission`
+#            (base64) sets or refreshes the standing mission (SURGE:B) first.
 #   operator-prove  — one run, then the proof from its rows (§108): it read a real
 #            goal and plan, committed a decision, acted, observed, and learned.
 #   operator-show   — the operator's runs, memory, lessons and actions.
@@ -47,6 +48,10 @@ on:
         description: 'deploy | status | prove | sales | sales-prove | disconnect | operator-deploy | operator-status | operator-run | operator-prove | operator-show | operator-engineering | operator-disconnect'
         required: true
         default: status
+      mission:
+        description: 'operator-run only: a standing mission to set or refresh before the run (base64 of its text; key SURGE:B). Empty keeps the current one.'
+        required: false
+        default: ''
 
 concurrency:
   group: open-source-agents
@@ -71,6 +76,7 @@ jobs:
           # Creating a second app needs the organization token the browser and cheap lane use.
           FLY_ORG_TOKEN: ${{ secrets.FLY_ORG_TOKEN }}
           ACTION: ${{ inputs.action }}
+          MISSION: ${{ inputs.mission }}
         run: |
           set -eu
           exec > >(tee agents.txt) 2>&1
@@ -189,8 +195,14 @@ jobs:
               on_brain "node --import tsx scripts/operator.ts probe" || true
               ;;
             operator-run)
+              # A mission travels as base64 so no quote in its text reaches the remote shell.
+              mission_args=""
+              if [ -n "${MISSION:-}" ]; then
+                printf '%s' "$MISSION" | grep -Eq '^[A-Za-z0-9+/=]+$' || { echo "::error::mission must be base64 of the mission text"; exit 1; }
+                mission_args="--mission-b64 $MISSION"
+              fi
               set +e
-              on_brain "node --import tsx scripts/operator.ts run" 2>&1 | tee operator.txt
+              on_brain "node --import tsx scripts/operator.ts run $mission_args" 2>&1 | tee operator.txt
               set -e
               grep -q '^OPERATOR-RUN: OK' operator.txt
               ;;

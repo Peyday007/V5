@@ -1,0 +1,142 @@
+/**
+ * Lens Q reproduction (Surge B). TEMPORARY — deleted after the run.
+ * A defensible comparable conversion estimate (three independent sourced
+ * comparables, n=200 each) is reconstructed, exported as EMPIRICAL evidence,
+ * and still cannot make a plan ACCEPTED.
+ */
+import { describe, expect, it } from 'vitest';
+import { reconstruct } from '../server/services/quant/reconstruct.ts';
+import { toScenarioInput } from '../server/services/quant/export.ts';
+import { readRate } from '../server/services/quant/knowledge.ts';
+import { evaluateGoalPortfolio, sampleSizeOf, established } from '../server/services/goals/portfolio.ts';
+import { judgeAcceptance } from '../server/services/goals/plan.ts';
+import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
+import type { QuantityNode } from '../server/domain/quant.ts';
+
+const fixed = (value: number): ModelInput => ({ value, low: value, high: value, provenance: 'EVIDENCE', source: null, note: '' });
+const now = new Date('2026-11-14T00:00:00Z');
+
+function comparableRate(key: string, counts: Array<[number, number]>): { input: ModelInput; est: ReturnType<typeof reconstruct>['estimates'][string] } {
+  const node: QuantityNode = {
+    key,
+    label: key,
+    unit: 'share',
+    kind: 'RATE',
+    min: 0,
+    max: 1,
+    context: { opportunity: 'target', mechanism: 'SERVICE_FEE', industry: 'dental' },
+    material: ['mechanism'],
+    freshDays: 1095,
+    observations: counts.map(([s, n], i) => ({
+      id: `${key}-src${i}`,
+      value: { kind: 'COUNT' as const, successes: s, trials: n },
+      // same mechanism, a different opening and industry: immaterial differences, discounted
+      context: { opportunity: `other${i}`, mechanism: 'SERVICE_FEE', industry: `industry${i}` },
+      lineage: [`url:publisher${i}.example/study`],
+      source: { kind: 'CLAIM' as const, ref: `claim-${key}-${i}` },
+      observedAt: '2026-06-01T00:00:00Z',
+    })),
+  };
+  const est = reconstruct({ nodes: [node] }, key, now).estimates[key]!;
+  const exported = toScenarioInput(est);
+  // exactly what goalScenario.inferOr builds
+  const input: ModelInput = {
+    value: null,
+    low: est.p05,
+    high: est.p95,
+    provenance: exported.provenance,
+    source: exported.sources[0] ?? null,
+    note: `inferred: ${exported.note}`,
+    distribution: exported.spec,
+    inferred: { tier: est.tier, justified: exported.provenance === 'EVIDENCE', p10: est.p10, p50: est.p50, p90: est.p90, observations: est.used.length },
+  };
+  return { input, est };
+}
+
+function opening(over: Partial<ModelledOpportunity>): ModelledOpportunity {
+  return {
+    opportunity: { id: 'cop_target', title: 'Target opening' } as ModelledOpportunity['opportunity'],
+    index: 1,
+    tier: 'QUALIFIED',
+    repeatable: true,
+    price: fixed(1500),
+    capital: fixed(60),
+    hours: fixed(2),
+    daysToCash: fixed(3),
+    close: fixed(0.2),
+    respond: fixed(0.2),
+    directCost: fixed(10),
+    volume: fixed(500),
+    agreed: false,
+    agreedValue: 0,
+    agreedDeals: 0,
+    fulfilledBy: null,
+    competitiveAward: false,
+    ...over,
+  };
+}
+
+const limits = { remaining: 10_000, daysLeft: 24, capitalCeiling: 3000, beforeProof: 375, perWeek: 750, resources: '100 emails a day from three warmed mailboxes', worlds: 2000, seed: 7 };
+
+describe('lens Q: a defensible comparable conversion estimate is refused', () => {
+  const close = comparableRate('close', [[40, 200], [46, 200], [36, 200]]); // ~20%, n=600 events across 3 independent populations
+  const respond = comparableRate('respond', [[40, 200], [44, 200], [38, 200]]);
+
+  it('reconstructs COMPARABLE, distribution-justified, exported as EMPIRICAL evidence', () => {
+    console.log('close est', close.est.tier, close.est.p10.toFixed(3), close.est.p50.toFixed(3), close.est.p90.toFixed(3), 'used', close.est.used.length, 'effectiveSample', close.est.effectiveSample.toFixed(2), 'tau', close.est.heterogeneity);
+    expect(close.est.tier).toBe('COMPARABLE');
+    expect(close.est.distributionJustified).toBe(true);
+    expect(close.input.provenance).toBe('EVIDENCE');
+    expect(close.input.distribution?.kind).toBe('EMPIRICAL');
+    expect(established(close.input)).toBe(true);
+    // the "sample" the engine will carry forward is the number of studies, not the 600 events
+    expect(close.input.inferred!.observations).toBe(3);
+  });
+
+  it('volume fixed on evidence (what MARKET_VOLUME requires) makes the sample unstated', () => {
+    const one = opening({ close: close.input, respond: respond.input });
+    expect(sampleSizeOf(one)).toBeUndefined();
+    const r = evaluateGoalPortfolio({ ...limits, openings: [one] });
+    console.log('A basis', r.basis, 'reach', r.best?.reach, 'assurance', r.assurance?.status, r.assurance?.reason);
+    expect(r.basis).toBe('PROBABILITY');
+    expect(r.assurance?.claimsAtLeast90).toBe(false);
+  });
+
+  it('even with every behavioural input inferred, the sample is 3 studies (< 20) and calibration is unavailable', () => {
+    const volume: ModelInput = { ...fixed(500), value: null, distribution: { kind: 'EMPIRICAL', values: Array(101).fill(500) }, inferred: { tier: 'DIRECT', justified: true, p10: 500, p50: 500, p90: 500, observations: 600 } };
+    const one = opening({ close: close.input, respond: respond.input, volume });
+    expect(sampleSizeOf(one)).toBe(3);
+    const r = evaluateGoalPortfolio({ ...limits, openings: [one] });
+    console.log('B basis', r.basis, 'reach', r.best?.reach, 'settledP10', r.best?.settledP10, 'assurance', r.assurance?.status, '|', r.assurance?.reason, '|', r.assurance?.validationProblems, 'researchNeeds', r.assurance?.researchNeeds);
+    expect(r.basis).toBe('PROBABILITY');
+    expect(r.best!.reach).toBeGreaterThan(0.9);
+    expect(r.assurance?.status).toBe('CALIBRATION_UNAVAILABLE');
+    const acc = judgeAcceptance({ achieved: false, chosen: null, portfolio: r, measuredChance: null, considered: [{ opportunityId: 'cop_target', missing: [] }] });
+    console.log('B acceptance', acc.status, acc.shortfalls);
+    expect(acc.status).toBe('CANDIDATE_ONLY');
+    // And in production the chain adds a second refusal: CONVERSION ok only for provenance HISTORICAL.
+    const acc2 = judgeAcceptance({ achieved: false, chosen: null, portfolio: r, measuredChance: null, considered: [{ opportunityId: 'cop_target', missing: ['CONVERSION'] }] });
+    console.log('B acceptance with chain', acc2.shortfalls[0]);
+  });
+
+  it("Brain's own measured close (lesson path, HISTORICAL range) is not 'established' and states no sample", () => {
+    const lesson: ModelInput = { value: null, low: 0.15, high: 0.26, provenance: 'HISTORICAL', source: null, note: 'measured on this Brain: 40 of 200 contacts agreed' };
+    expect(established(lesson)).toBe(false);
+    const one = opening({ close: lesson, respond: { ...fixed(1), provenance: 'HISTORICAL' } });
+    expect(sampleSizeOf(one)).toBeUndefined();
+    const r = evaluateGoalPortfolio({ ...limits, openings: [one] });
+    console.log('C basis', r.basis, r.demand[0]!.unestablished);
+    expect(r.basis).toBe('COVERAGE');
+  });
+
+  it('a sized published rate is read unsized by readRate', () => {
+    const v = readRate('In a 2025 study of 200 qualified leads, 20% converted (n=200).', 'close');
+    console.log('readRate', v);
+    expect(v).toEqual({ kind: 'POINT', value: 0.2 });
+  });
+
+  it('Wilson over study count vs over events', () => {
+    const w = (p: number, n: number) => { const z = 1.6449, z2 = z * z; const c = (p + z2 / (2 * n)) / (1 + z2 / n); const h = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / (1 + z2 / n); return c - h; };
+    console.log('reach 1.0 n=3', w(1, 3).toFixed(3), 'n=20', w(1, 20).toFixed(3), 'n=25', w(1, 25).toFixed(3), '| reach .97 n=600', w(0.97, 600).toFixed(3), '| reach .95 n=100', w(0.95, 100).toFixed(3));
+  });
+});

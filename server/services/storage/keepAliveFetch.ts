@@ -61,7 +61,25 @@ function bodyBytes(body: RequestInit['body']): Buffer | null {
   throw new TypeError('keepAliveFetch sends string or byte bodies only');
 }
 
-export const keepAliveFetch: typeof fetch = (input, init = {}) =>
+/**
+ * A bound on one request that starts when it is *sent*, not when it is asked.
+ *
+ * The provider used to bound every request with `AbortSignal.timeout`, whose
+ * clock starts the moment the request is created. Behind eight sockets, a
+ * burst of existence checks spent its whole 30 s queued in the agent and was
+ * aborted before it reached the wire (production, 2026-11-14: constant
+ * AbortError / StorageConfigurationError construction, and every abort of a
+ * request that did hold a socket destroyed that socket, so 64–73 new TLS
+ * connections a minute replaced them). `deadlineMs` starts on the socket the
+ * agent assigns, so time spent waiting for a free connection is not counted
+ * against the store, and no timer or AbortSignal exists for a request still
+ * in the queue. It covers the headers and the body.
+ */
+export interface KeepAliveInit extends RequestInit {
+  deadlineMs?: number;
+}
+
+export const keepAliveFetch: typeof fetch = (input, init: KeepAliveInit = {}) =>
   new Promise<Response>((resolve, reject) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
     const secure = url.protocol === 'https:';
@@ -111,6 +129,26 @@ export const keepAliveFetch: typeof fetch = (input, init = {}) =>
         res.on('error', reject);
       },
     );
+    const deadlineMs = init.deadlineMs;
+    if (deadlineMs !== undefined && deadlineMs > 0) {
+      let timer: NodeJS.Timeout | null = null;
+      const clear = (): void => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+      };
+      req.once('socket', () => {
+        timer = setTimeout(
+          () => req.destroy(new Error(`the document store did not answer within ${Math.round(deadlineMs / 1000)} s of sending`)),
+          deadlineMs,
+        );
+        timer.unref?.();
+      });
+      req.once('close', clear);
+      req.once('response', (res) => {
+        res.once('end', clear);
+        res.once('close', clear);
+      });
+    }
     req.setTimeout(idleMs(), () => req.destroy(new Error(`the document store sent nothing for ${Math.round(idleMs() / 1000)} s`)));
     req.on('error', reject);
     if (body) req.end(body);

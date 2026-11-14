@@ -1019,7 +1019,8 @@ export type IndustryRoundPurpose = (typeof INDUSTRY_ROUND_PURPOSES)[number];
 export interface IndustryRoundRow {
   id: string;
   project_id: string;
-  cash_mode_id: string;
+  /** Null for a round asked under a standing research grant rather than a sprint (152). */
+  cash_mode_id: string | null;
   node_id: string | null;
   purpose: string;
   bucket_id: string | null;
@@ -1037,7 +1038,11 @@ export interface IndustryRoundRow {
 export interface IndustryRound {
   id: string;
   projectId: string;
-  cashModeId: string;
+  /**
+   * The sprint this round was asked under, or null when a standing research
+   * grant asked it. A sprint's wind-down stops only its own rounds.
+   */
+  cashModeId: string | null;
   nodeId: string | null;
   purpose: IndustryRoundPurpose;
   bucketId: string | null;
@@ -11432,5 +11437,40 @@ export interface GoalObjectiveReadingRow {
   decision: string;
   calls: string;
   error: string | null;
+  created_at: string;
+}
+
+/** One owner money entry for inbox procurement (`repos/inboxes.ts`, migration 149, §110). */
+export interface InboxFundRow {
+  id: string;
+  kind: string;
+  amount_cents: number;
+  actor: string;
+  note: string | null;
+  created_at: string;
+}
+
+/** One inbox order attempt, its quote recorded before it was placed (migration 149, §110). */
+export interface InboxPurchaseRow {
+  id: string;
+  purchase_key: string;
+  provider: string;
+  kind: string;
+  domain: string;
+  mailboxes: number;
+  upfront_cents: number;
+  monthly_cents: number;
+  quote: string;
+  actor: string;
+  created_at: string;
+}
+
+/** What a provider said about one inbox order, appended (migration 149, §110). */
+export interface InboxPurchaseOutcomeRow {
+  id: string;
+  purchase_id: string;
+  outcome: string;
+  detail: string;
+  receipt: string;
   created_at: string;
 }

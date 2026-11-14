@@ -80,6 +80,12 @@ export interface Observation {
   broad?: boolean;
   /** A note a reader can check: what exactly the figure measures. */
   measures?: string;
+  /**
+   * A demand rate somebody chose to publish (a vendor's case study, a
+   * benchmark page) rather than one this Brain measured: read through the
+   * selection discount (`pool.ts` `PUBLISHED_RATE_SELECTION`).
+   */
+  published?: boolean;
 }
 
 /**
@@ -174,6 +180,23 @@ export interface Estimate {
   trace: string[];
   /** Natural-scale samples of the predictive distribution, for propagation. Not serialized by readers. */
   samples: number[];
+  /**
+   * The evidence behind it in units a plan compares (Q2-1/Q2-2, 2026-11-14):
+   * independent populations kept after lineage collapse, those whose source
+   * stated a sample, and the predictive distribution's worth in events
+   * (p(1−p)/Var(p) for a rate; one per measured case for a magnitude; the
+   * weakest part for a rebuilt quantity; 0 when no distribution is justified).
+   */
+  populations?: number;
+  sizedPopulations?: number;
+  events?: number;
+  /**
+   * Sized observations of it disagree beyond what their own sampling explains
+   * (L-1, 2026-11-14): the two furthest apart, and why. A contested estimate
+   * is widened to the spread between them, is bounds only, and never
+   * establishes a link or supports a verified probability.
+   */
+  contested?: { ids: string[]; reason: string };
 }
 
 export interface Reconstruction {
