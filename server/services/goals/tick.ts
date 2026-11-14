@@ -418,10 +418,88 @@ export interface ResearchAllocationPorts {
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
+/**
+ * What each purpose's research bears on: the live goals it serves, the
+ * nearest of their deadlines, and the expected decision value of its next
+ * unit of research (RES-07: reallocation "based on ... impending deadlines,
+ * expected decision value and bottlenecks").
+ *
+ * A goal is served by a purpose for one of two recorded reasons, and the basis
+ * names which:
+ *
+ *  - the goal itself says so — a target not yet reached is deal development
+ *    (TRANSACTION_ROUTES); a verified customer payment against it is a business
+ *    already operating (OPERATING_SUPPORT); a CAPABILITY goal is capability
+ *    improvement (SELF_IMPROVEMENT); a LONG_TERM goal, or one with no target
+ *    yet, is future-goal preparation (FORWARD_EXPLORATION), the same rule
+ *    `attributePurposes` applies to a job;
+ *  - research in the window was attributed to a purpose on that goal's behalf —
+ *    its basis names the goal's discovery round (`goal-<id>…`) or the goal.
+ *
+ * The nearest deadline is the soonest future due date among the goals a purpose
+ * serves. The decision value is the owner's own ordering of those goals: each
+ * ranked, unfinished goal contributes `1 / rank`, so research that bears on the
+ * first-ranked goal is worth more than research that bears on the fifth, and
+ * research bearing on several goals is worth their sum. It is one scale for
+ * every purpose — a capability goal is ranked on the same list as a cash goal —
+ * so no purpose is favoured by the unit its value happens to be stated in. A
+ * purpose that serves no ranked goal has no decision value (null): an unknown
+ * is never a favourable assumption (invariant 39), and the floors still hold
+ * for it. Pure.
+ */
+export interface PurposeStake {
+  nearestDeadlineDays: number | null;
+  decisionValue: number | null;
+  goals: string[];
+  basis: string[];
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** The purposes a goal is served by, with the reason for each. Pure. */
+export function goalServedBy(goal: GoalView, reading: Pick<ResearchYieldReading, 'attributions'> | null): Map<ResearchPurpose, string> {
+  const out = new Map<ResearchPurpose, string>();
+  const add = (p: ResearchPurpose, why: string) => { if (!out.has(p)) out.set(p, why); };
+  if (goal.target && goal.target.achieved !== true) add('TRANSACTION_ROUTES', 'its target is not yet reached');
+  if (goal.target?.proven === true) add('OPERATING_SUPPORT', 'a verified customer payment has arrived against its target');
+  if (goal.purpose === 'CAPABILITY') add('SELF_IMPROVEMENT', 'it is a capability goal');
+  if (goal.purpose === 'LONG_TERM') add('FORWARD_EXPLORATION', 'it serves a longer-term goal');
+  else if (!goal.target && goal.purpose !== 'CAPABILITY') add('FORWARD_EXPLORATION', 'it has no target yet');
+  if (reading) {
+    const mention = new RegExp(`goal[- ]${escapeRe(goal.id)}(?![A-Za-z0-9_])`);
+    for (const a of reading.attributions) {
+      if (!a.basis.some((line) => mention.test(line))) continue;
+      for (const p of a.purposes) if (p !== 'UNATTRIBUTED') add(p, `research job ${a.jobId} in the window was attributed to it`);
+    }
+  }
+  return out;
+}
+
+export function purposeStakesFrom(goals: GoalView[], reading: Pick<ResearchYieldReading, 'attributions'> | null, nowMs: number): Record<ResearchPurpose, PurposeStake> {
+  const empty = (): PurposeStake => ({ nearestDeadlineDays: null, decisionValue: null, goals: [], basis: [] });
+  const out = Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, empty()])) as Record<ResearchPurpose, PurposeStake>;
+  for (const goal of goals) {
+    if (goal.lifecycle !== 'ACTIVE') continue;
+    const due = goal.dueAt ? Date.parse(goal.dueAt) : NaN;
+    const days = Number.isFinite(due) && due > nowMs ? (due - nowMs) / 86_400_000 : null;
+    const rank = goal.priority?.rank;
+    const finished = goal.target?.achieved === true;
+    const value = !finished && typeof rank === 'number' && Number.isFinite(rank) && rank >= 1 ? 1 / rank : null;
+    for (const [p, why] of goalServedBy(goal, reading)) {
+      const s = out[p];
+      s.goals.push(goal.id);
+      if (days !== null && (s.nearestDeadlineDays === null || days < s.nearestDeadlineDays)) s.nearestDeadlineDays = days;
+      if (value !== null) s.decisionValue = (s.decisionValue ?? 0) + value;
+      s.basis.push(`goal ${goal.id}: ${why}${days !== null ? `; due in ${days.toFixed(1)} day(s)` : ''}${value !== null ? `; ranked ${rank}, decision value ${value.toFixed(3)}` : '; not ranked, no decision value'}`);
+    }
+  }
+  return out;
+}
+
 /** The measured inputs one window gives the decision. Pure. */
 export function allocationInputFrom(
   reading: ResearchYieldReading,
-  context: { urgentCommercialGoal: boolean; nearestDeadlineDays: number | null; triedRemedies: Map<string, LaneRemedy[]>; measuringRemedies?: Map<string, LaneRemedy> },
+  context: { urgentCommercialGoal: boolean; nearestDeadlineDays: number | null; triedRemedies: Map<string, LaneRemedy[]>; measuringRemedies?: Map<string, LaneRemedy>; stakes?: Partial<Record<ResearchPurpose, PurposeStake>> },
 ): AllocationInput {
   // The shares in force are where the capacity actually went: each purpose's job time in the window.
   const currentShares: Partial<Record<ResearchPurpose, number>> = {};
@@ -429,12 +507,16 @@ export function allocationInputFrom(
   const purposes: PurposeMeasurement[] = RESEARCH_PURPOSES.map((p) => {
     const b = reading.purposes[p];
     const ran = !!b && b.submissions + b.completions > 0 && b.jobMs > 0;
+    const stake = context.stakes?.[p];
+    // The urgent commercial goal's deadline is deal development's; every purpose's own goals' deadlines are its own.
+    const deadlines = [stake?.nearestDeadlineDays, p === 'TRANSACTION_ROUTES' ? context.nearestDeadlineDays : null].filter((d): d is number => typeof d === 'number' && Number.isFinite(d));
     return {
       purpose: p,
       usefulResults: ran ? b!.usefulResults : null,
       // Job time is the cost every job records; it is split once across a job's purposes.
       cost: ran ? b!.jobMs : null,
-      ...(p === 'TRANSACTION_ROUTES' && context.nearestDeadlineDays !== null ? { nearestDeadlineDays: context.nearestDeadlineDays } : {}),
+      ...(deadlines.length > 0 ? { nearestDeadlineDays: Math.min(...deadlines) } : {}),
+      ...(typeof stake?.decisionValue === 'number' && Number.isFinite(stake.decisionValue) ? { decisionValue: stake.decisionValue } : {}),
     };
   });
   const lanePurposes = new Map<string, Set<ResearchPurpose>>();
@@ -554,7 +636,8 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const applied = ports.appliedRemedies && live.length > 0 ? await ports.appliedRemedies(live.map((g) => g.id)) : [];
   const { tried, measuring } = remediesFromApplied(applied, window);
   const reading = await ports.readYield(window);
-  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring });
+  const stakes = purposeStakesFrom(live, reading, untilMs);
+  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring, stakes });
   const decision = decideResearchAllocation(allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
   const fingerprint = allocationFingerprint(decision);
@@ -580,6 +663,16 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     })),
     capacity: decision.capacity.map((c) => ({ ...c, recommendationOnly: true })),
     bottlenecks: decision.capacity.filter((c) => c.resource !== null).map((c) => ({ lane: c.lane, resource: c.resource })),
+    // What each purpose's research bears on: its goals, nearest deadline and decision value, with the basis.
+    stakes: Object.fromEntries(RESEARCH_PURPOSES.map((p) => {
+      const m = allocationInput.purposes.find((one) => one.purpose === p);
+      return [p, {
+        nearestDeadlineDays: typeof m?.nearestDeadlineDays === 'number' ? round3(m.nearestDeadlineDays) : null,
+        decisionValue: typeof m?.decisionValue === 'number' ? round3(m.decisionValue) : null,
+        goals: stakes[p].goals,
+        basis: stakes[p].basis.slice(0, 10),
+      }];
+    })),
     costCountedOnce: reading.costCountedOnce,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };

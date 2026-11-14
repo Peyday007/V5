@@ -18,6 +18,8 @@ import {
   reallocateResearch,
   recordRemedyApplied,
   reallocateResearchIfDue,
+  goalServedBy,
+  purposeStakesFrom,
   sharesInForceFrom,
   triedRemediesFrom,
   type AppliedRemedy,
@@ -374,5 +376,80 @@ describe('advanceGoals applies the newest recorded decision to live bins (review
     const report = await advanceGoals();
     expect(report.researchApplied).toBeNull();
     expect((await getBin(owned))!.priority).toBe(8);
+  });
+});
+
+describe('deadlines and expected decision value reach every purpose (finding F4)', () => {
+  const now = '2026-11-14T00:00:00.000Z';
+  const nowMs = Date.parse(now);
+  const ranked = (rank: number) => ({ rank } as GoalView['priority']);
+
+  it('maps each goal to the purposes it is served by, from the goal and from the window’s attributions', () => {
+    const r = reading();
+    r.attributions = [
+      { jobId: 'job_a', lane: 'free-lane', purposes: ['BROAD_DISCOVERY'], basis: ['BROAD_DISCOVERY: discovery round goal-wst_cash-r3'] },
+      { jobId: 'job_b', lane: 'free-lane', purposes: ['BROAD_DISCOVERY'], basis: ['BROAD_DISCOVERY: discovery round goal-wst_cash2-r1'] },
+    ];
+    const cash = goalServedBy(goalView('wst_cash', { purpose: 'REVENUE_DIRECT', target: { achieved: false, proven: true } as GoalView['target'] }), r);
+    expect([...cash.keys()].sort()).toEqual(['BROAD_DISCOVERY', 'OPERATING_SUPPORT', 'TRANSACTION_ROUTES']);
+    // An id that is a prefix of another goal's is not that goal.
+    expect(cash.get('BROAD_DISCOVERY')).toContain('job_a');
+    expect([...goalServedBy(goalView('wst_cap', { purpose: 'CAPABILITY' }), r).keys()]).toEqual(['SELF_IMPROVEMENT']);
+    expect([...goalServedBy(goalView('wst_far', { purpose: 'LONG_TERM' }), r).keys()]).toEqual(['FORWARD_EXPLORATION']);
+    expect([...goalServedBy(goalView('wst_open', { purpose: 'REVENUE_ENABLING' }), r).keys()]).toEqual(['FORWARD_EXPLORATION']);
+  });
+
+  it('gives every purpose its own nearest deadline and a decision value on one shared scale', () => {
+    const goals = [
+      goalView('wst_cash', { purpose: 'REVENUE_DIRECT', target: { achieved: false } as GoalView['target'], dueAt: '2026-11-24T00:00:00.000Z', priority: ranked(1) }),
+      goalView('wst_cap', { purpose: 'CAPABILITY', dueAt: '2026-11-17T00:00:00.000Z', priority: ranked(2) }),
+      goalView('wst_far', { purpose: 'LONG_TERM', dueAt: '2027-03-01T00:00:00.000Z', priority: ranked(4) }),
+      goalView('wst_past', { purpose: 'CAPABILITY', dueAt: '2026-11-01T00:00:00.000Z' }),
+      goalView('wst_paused', { purpose: 'CAPABILITY', lifecycle: 'PAUSED' as GoalView['lifecycle'], dueAt: '2026-11-15T00:00:00.000Z', priority: ranked(1) }),
+    ];
+    const stakes = purposeStakesFrom(goals, reading(), nowMs);
+    expect(stakes.TRANSACTION_ROUTES.nearestDeadlineDays).toBeCloseTo(10, 6);
+    expect(stakes.TRANSACTION_ROUTES.decisionValue).toBeCloseTo(1, 6);
+    // System health's own deadline and value — not only the commercial goal's.
+    expect(stakes.SELF_IMPROVEMENT.nearestDeadlineDays).toBeCloseTo(3, 6);
+    expect(stakes.SELF_IMPROVEMENT.decisionValue).toBeCloseTo(0.5, 6);
+    expect(stakes.SELF_IMPROVEMENT.goals).toEqual(['wst_cap', 'wst_past']);
+    expect(stakes.FORWARD_EXPLORATION.decisionValue).toBeCloseTo(0.25, 6);
+    // A purpose that serves no ranked goal has no value: unknown is never favourable.
+    expect(stakes.OPERATING_SUPPORT.decisionValue).toBeNull();
+    expect(stakes.OPERATING_SUPPORT.nearestDeadlineDays).toBeNull();
+    // A reached target carries no decision value.
+    const done = purposeStakesFrom([goalView('wst_done', { purpose: 'CAPABILITY', target: { achieved: true } as GoalView['target'], priority: ranked(1) })], null, nowMs);
+    expect(done.SELF_IMPROVEMENT.decisionValue).toBeNull();
+  });
+
+  it('every non-commercial purpose’s deadline and decision value reach the decision input', () => {
+    const stakes = purposeStakesFrom([
+      goalView('wst_cap', { purpose: 'CAPABILITY', dueAt: '2026-11-16T00:00:00.000Z', priority: ranked(1) }),
+      goalView('wst_far', { purpose: 'LONG_TERM', priority: ranked(3) }),
+    ], reading(), nowMs);
+    const input = allocationInputFrom(reading(), { urgentCommercialGoal: false, nearestDeadlineDays: null, triedRemedies: new Map(), stakes });
+    const self = input.purposes.find((p) => p.purpose === 'SELF_IMPROVEMENT')!;
+    expect(self.nearestDeadlineDays).toBeCloseTo(2, 6);
+    expect(self.decisionValue).toBeCloseTo(1, 6);
+    expect(input.purposes.find((p) => p.purpose === 'FORWARD_EXPLORATION')!.decisionValue).toBeCloseTo(1 / 3, 6);
+    expect(input.purposes.find((p) => p.purpose === 'OPERATING_SUPPORT')!.decisionValue).toBeUndefined();
+  });
+
+  it('a pass reallocates toward the purpose whose ranked goal is due, and records the stakes it used', async () => {
+    const baseline = memoryPorts(reading());
+    const plain = await reallocateResearch({ goals: [goalView('wst_cap', { purpose: 'CAPABILITY' })], now }, baseline.ports);
+    const { ports } = memoryPorts(reading());
+    const goal = goalView('wst_cap', { purpose: 'CAPABILITY', dueAt: '2026-11-15T00:00:00.000Z', priority: ranked(1) });
+    const report = await reallocateResearch({ goals: [goal], now }, ports);
+    expect(report.shares.SELF_IMPROVEMENT).toBeGreaterThan(plain.shares.SELF_IMPROVEMENT + 0.005);
+    const recorded = await ports.lastDecision('wst_cap');
+    const stakes = recorded!.stakes as Record<string, { nearestDeadlineDays: number | null; decisionValue: number | null; goals: string[]; basis: string[] }>;
+    expect(stakes.SELF_IMPROVEMENT!.nearestDeadlineDays).toBe(1);
+    expect(stakes.SELF_IMPROVEMENT!.decisionValue).toBe(1);
+    expect(stakes.SELF_IMPROVEMENT!.goals).toEqual(['wst_cap']);
+    expect(stakes.SELF_IMPROVEMENT!.basis[0]).toMatch(/capability goal.*due in 1\.0 day.*ranked 1/);
+    const change = (recorded!.changes as { purpose: string; reasons: string[] }[]).find((c) => c.purpose === 'SELF_IMPROVEMENT');
+    expect(change?.reasons.join(' ')).toMatch(/deadline in 1 day.*expected decision value 1\.00 of the highest/);
   });
 });
