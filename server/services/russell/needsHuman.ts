@@ -525,7 +525,16 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
        * the only thing that can move it: the shared step files the packet and
        * moves the mission NEEDS_HUMAN -> RUNNING. Undecided, it stays parked
        * and is not re-parked or re-recorded (it was recorded when it parked).
+       *
+       * An ANSWERED card is a person's decision on its way to the resume step,
+       * so it is left to that step — the same exclusion `answerUnaskedParks`
+       * makes — and Brain never decides over an answer someone gave.
        */
+      const answered = await getDb().get<{ id: string }>(
+        `SELECT id FROM russell_human_requests WHERE mission_id = ? AND state IN ('OPEN', 'ANSWERED') LIMIT 1`,
+        [mission.id],
+      );
+      if (answered) continue;
       const { decideAtPark } = await import('./routineDecisions.ts');
       await decideAtPark({
         missionId: mission.id,
