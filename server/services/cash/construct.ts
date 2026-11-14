@@ -338,32 +338,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
     }
   }
 
-  // Published prices the project holds, as observations about the buyers who paid them.
-  const priced = opportunities
-    .filter((one) => one.payer && one.priceCents && one.priceCents > 0 && one.currency === input.currency && allowed(one.title))
-    .map((one): Observation => ({
-      id: `opp:${one.id}`,
-      value: { kind: 'POINT', value: one.priceCents! / 100 },
-      context: { payer: norm(one.payer), industry: norm(one.industry), arrangement: 'held' },
-      lineage: [one.sourceClaimId ? `claim:${one.sourceClaimId}` : `opp:${one.id}`],
-      source: one.sourceClaimId ? { kind: 'CLAIM', ref: one.sourceClaimId } : { kind: 'CASH_OPPORTUNITY', ref: one.id },
-      measures: `the price on "${one.title.slice(0, 60)}"`,
-    }));
-  // Repeat business a delivered, accepted deal's buyer gave afterwards: new economic evidence about what that payer pays (LIFE-29-2).
-  const repeat = await repeatBusinessObservations(input.projectId, input.currency);
-  priced.push(...repeat);
-  // What deals for these buyers tied up before money came in: evidence for a run's or a deal's exposure.
-  const tiedUp = opportunities
-    .filter((one) => one.payer && one.peakFundingCents !== null && one.peakFundingCents > 0 && one.currency === input.currency && allowed(one.title))
-    .map((one): Observation => ({
-      id: `cap:${one.id}`,
-      value: { kind: 'POINT', value: one.peakFundingCents! / 100 },
-      context: { payer: norm(one.payer), industry: norm(one.industry), arrangement: 'held' },
-      lineage: [one.sourceClaimId ? `claim:${one.sourceClaimId}` : `opp:${one.id}`],
-      source: one.sourceClaimId ? { kind: 'CLAIM', ref: one.sourceClaimId } : { kind: 'CASH_OPPORTUNITY', ref: one.id },
-      measures: `money tied up on "${one.title.slice(0, 60)}"`,
-    }));
-  const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables', path: `CAPABILITY:${input.delivers.map(norm).sort().join('>')}` } : null;
+  const { priced, tiedUp, capability } = await heldEvidence(input, opportunities, allowed);
   /*
    * The same inputs construct the same arrangements, so a plan re-read whose map, openings,
    * facts and limits did not move reuses the last construction instead of composing up to
@@ -416,6 +391,106 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
     at: now.toISOString(),
   });
   return ranked;
+}
+
+/** The published prices, money tied up and proved capability every composition reads. */
+async function heldEvidence(input: ConstructionInput, opportunities: CashOpportunity[], allowed: (text: string | null | undefined) => boolean): Promise<{ priced: Observation[]; tiedUp: Observation[]; capability: Primitive | null }> {
+  // Published prices the project holds, as observations about the buyers who paid them.
+  const priced = opportunities
+    .filter((one) => one.payer && one.priceCents && one.priceCents > 0 && one.currency === input.currency && allowed(one.title))
+    .map((one): Observation => ({
+      id: `opp:${one.id}`,
+      value: { kind: 'POINT', value: one.priceCents! / 100 },
+      context: { payer: norm(one.payer), industry: norm(one.industry), arrangement: 'held' },
+      lineage: [one.sourceClaimId ? `claim:${one.sourceClaimId}` : `opp:${one.id}`],
+      source: one.sourceClaimId ? { kind: 'CLAIM', ref: one.sourceClaimId } : { kind: 'CASH_OPPORTUNITY', ref: one.id },
+      measures: `the price on "${one.title.slice(0, 60)}"`,
+    }));
+  // Repeat business a delivered, accepted deal's buyer gave afterwards: new economic evidence about what that payer pays (LIFE-29-2).
+  const repeat = await repeatBusinessObservations(input.projectId, input.currency);
+  priced.push(...repeat);
+  // What deals for these buyers tied up before money came in: evidence for a run's or a deal's exposure.
+  const tiedUp = opportunities
+    .filter((one) => one.payer && one.peakFundingCents !== null && one.peakFundingCents > 0 && one.currency === input.currency && allowed(one.title))
+    .map((one): Observation => ({
+      id: `cap:${one.id}`,
+      value: { kind: 'POINT', value: one.peakFundingCents! / 100 },
+      context: { payer: norm(one.payer), industry: norm(one.industry), arrangement: 'held' },
+      lineage: [one.sourceClaimId ? `claim:${one.sourceClaimId}` : `opp:${one.id}`],
+      source: one.sourceClaimId ? { kind: 'CLAIM', ref: one.sourceClaimId } : { kind: 'CASH_OPPORTUNITY', ref: one.id },
+      measures: `money tied up on "${one.title.slice(0, 60)}"`,
+    }));
+  const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables', path: `CAPABILITY:${input.delivers.map(norm).sort().join('>')}` } : null;
+  return { priced, tiedUp, capability };
+}
+
+// ---------------------------------------------------------------- designs a model invents (lens S, S-11)
+
+/**
+ * A transaction design a reasoning model proposed for a buyer population the
+ * project may not hold (§101): the design tuple, who pays, and optionally what
+ * they pay for. It is a hypothesis about structure, never a figure: nothing a
+ * model says becomes a price, a rate or a count.
+ */
+export interface InventedDesign {
+  design: Design;
+  /** The buyer population, in the model's words. */
+  population: string;
+  /** What they pay to have dealt with, when the model named it. */
+  need: string | null;
+}
+
+/** Everything composing an invented design reads, gathered once per exploration. */
+export interface InventionContext {
+  opportunities: CashOpportunity[];
+  priced: Observation[];
+  tiedUp: Observation[];
+  capability: Primitive | null;
+  input: ConstructionInput;
+  limits: GoalLimits;
+  targets: EconomicProperty[];
+  exclusions: readonly ExclusionClass[];
+  now: Date;
+}
+
+/** Read what an invented design is composed against: the same rows `constructArrangements` reads, without its enumeration. */
+export async function inventionContext(input: ConstructionInput): Promise<InventionContext> {
+  const now = input.now ?? new Date();
+  const exclusions = input.exclusions ?? [];
+  const limits: GoalLimits = input.limits ?? { daysLeft: input.daysLeft, remainingCents: Number.MAX_SAFE_INTEGER, capitalCeilingCents: input.capitalCeilingCents, capitalBeforeProofCents: null, bestReachCents: null };
+  const allowed = (text: string | null | undefined) => !excludedBy(text, exclusions);
+  const opportunities = (await listOpportunities({ projectId: input.projectId })).filter((one) => !one.duplicateOfId && one.state !== 'DECLINED' && one.state !== 'ARCHIVED');
+  const { priced, tiedUp, capability } = await heldEvidence(input, opportunities, allowed);
+  return { opportunities, priced, tiedUp, capability, input, limits, targets: targetProperties(limits).map((one) => one.property), exclusions, now };
+}
+
+/**
+ * Compose a model's invented design through the one construction path
+ * (`compose`), exactly as a forward arrangement is composed — the population
+ * is a part the world is asked for (`from: 'REVERSE'`), so nothing about it is
+ * evidenced until research establishes it, and what these buyers pay is
+ * reconstructed only from published prices *these* buyers paid. Refused, with
+ * the reason, when the design is incoherent, needs a deliverable Brain has not
+ * proved, names a state or an action Brain may not take, is excluded by the
+ * goal's owner, or puts physical work on the owner. Pure over the context.
+ */
+export function composeInvented(spec: InventedDesign, ctx: InventionContext): ConstructedArrangement | { refused: string } {
+  const { design } = spec;
+  if (!STRUCTURE_KEYS.includes(design.base) || !allDesigns([design.base]).some((d) => designKey(d) === designKey(design))) return { refused: `the design ${designKey(design)} is not a coherent transaction design` };
+  const def = STRUCTURES[design.base];
+  if (def.needsDeliverable && !ctx.capability) return { refused: `${design.base} needs a deliverable Brain has proved it can produce, and none is proved in this process` };
+  const population = clean(spec.population);
+  const need = spec.need ? clean(spec.need) : null;
+  if (population.length < 3) return { refused: 'it names no buyer population' };
+  if (!safeName(population) || (need !== null && !safeName(need))) return { refused: 'its buyers or need name a jurisdiction or an action Brain may not take' };
+  if (excludedBy(population, ctx.exclusions) || excludedBy(need, ctx.exclusions)) return { refused: "the goal's owner excluded what it is" };
+  if (!def.needsSupply && need && breaksOperatingModel(operatingFit({ title: need }))) return { refused: 'Brain would have to produce physical work itself' };
+  const related = ctx.opportunities.filter((one) => norm(one.payer) === norm(population));
+  if (isDefaultDesign(design) && related.some((one) => (def.alreadyHeldAs as readonly string[]).includes(one.mechanism))) return { refused: 'these buyers are already held sold exactly this way: it is not a new mechanism' };
+  const demand: Primitive = { name: population, claimId: null, from: 'REVERSE', ref: `invented:${norm(population)}`, path: `INVENTED_BUYER:${norm(population)}` };
+  const needPart: Primitive | null = need ? { name: need, claimId: null, from: 'REVERSE', ref: `invented-need:${norm(need)}`, path: `INVENTED_NEED:${norm(need)}` } : null;
+  const supply = def.needsSupply ? null : ctx.capability;
+  return compose({ ...ctx, design, origin: 'FORWARD', precedent: null, sector: null, demand, need: needPart, supply, related });
 }
 
 /** What the last construction for a project considered, composed, cut and reused. */

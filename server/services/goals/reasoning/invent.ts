@@ -50,13 +50,21 @@ export function inventPrompt(brief: InventBrief, slot: number, avoid: string[]):
         ]
       : []),
     'scope: ALL, OUTREACH, SMALL_TICKET, LARGE_TICKET, FAST_CASH, SLOW_CASH, TOP, REST, or id:<opening id>.',
+    ...(brief.designs
+      ? [
+          'A method may also bring in a NEW arrangement nobody holds: a different buyer, a different way of being paid. Add "design" to the method:',
+          '{"structure":"<structure>","funding":"<funding>","aggregation":"<aggregation>","repeat":"<repeat>","population":"<who pays, in words>","need":"<what they pay to have dealt with, optional>"}',
+          `structure: ${brief.designs.structures.map((s) => `${s.key} (${s.label})`).join('; ')}. funding: ${brief.designs.funding.join(', ')}. aggregation: ${brief.designs.aggregation.join(', ')}. repeat: ${brief.designs.repeat.join(', ')}.`,
+          'Give no figures for a design: Brain composes it and treats every number of it as unknown until research establishes it. Its program may be empty or add steps.',
+        ]
+      : []),
     '"from": "BASELINE" rebuilds the strategy from scratch; "GREEDY" modifies the best plan above.',
     '',
     `Stances already covered — invent OTHER ways of reasoning: ${[...new Set([...brief.stancesTried, ...avoid])].join(', ')}.`,
     brief.bestKnown.length ? `Methods that worked before on other plans: ${brief.bestKnown.map((m) => `${m.stance}: ${m.thinking}`).join(' / ')}` : '',
     `You are strategist ${slot + 1}; others are answering too, so take an angle they are unlikely to take.`,
     'Give 5 to 8 methods. For each, name the assumption of the current plan it challenges, and if it needs a fact the openings do not show, put the question in "ask".',
-    'Reply exactly: {"methods":[{"name":"short name","stance":"ONE_OR_TWO_WORDS","thinking":"one or two sentences: how this way of reasoning sees the problem","challenges":"the assumption it attacks","from":"BASELINE|GREEDY","program":[...],"ask":"optional question"}]}',
+    `Reply exactly: {"methods":[{"name":"short name","stance":"ONE_OR_TWO_WORDS","thinking":"one or two sentences: how this way of reasoning sees the problem","challenges":"the assumption it attacks","from":"BASELINE|GREEDY","program":[...],${brief.designs ? '"design":{...optional},' : ''}"ask":"optional question"}]}`,
   ]
     .filter(Boolean)
     .join('\n');
@@ -70,11 +78,16 @@ export interface InventOptions {
   env?: NodeJS.ProcessEnv;
 }
 
-export async function inventDirections(brief: InventBrief, options: InventOptions = {}): Promise<{ directions: Direction[]; calls: number; proposed: number; refused: number; error: string | null }> {
+/** Whether the model would be asked at all: off on purpose, or no lane configured. */
+export function inventEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env['BRAIN_REASONING_MODEL'] ?? '').trim().toLowerCase() !== 'off' && !!laneConfig(env);
+}
+
+export async function inventDirections(brief: InventBrief, options: InventOptions = {}): Promise<{ directions: Direction[]; calls: number; proposed: number; refused: number; error: string | null; rejections: string[] }> {
   const env = options.env ?? process.env;
-  if ((env['BRAIN_REASONING_MODEL'] ?? '').trim().toLowerCase() === 'off') return { directions: [], calls: 0, proposed: 0, refused: 0, error: 'off by BRAIN_REASONING_MODEL' };
+  if ((env['BRAIN_REASONING_MODEL'] ?? '').trim().toLowerCase() === 'off') return { directions: [], calls: 0, proposed: 0, refused: 0, error: 'off by BRAIN_REASONING_MODEL', rejections: [] };
   const config = options.config === undefined ? laneConfig(env) : options.config;
-  if (!config) return { directions: [], calls: 0, proposed: 0, refused: 0, error: 'no model lane configured' };
+  if (!config) return { directions: [], calls: 0, proposed: 0, refused: 0, error: 'no model lane configured', rejections: [] };
   const complete = options.completer ?? httpCompleter;
   const calls = Math.max(1, Math.min(INVENT_CALLS_MAX, options.calls ?? config.models.length * 2));
   const model = (i: number) => config.models[i % config.models.length]!;
@@ -91,6 +104,7 @@ export async function inventDirections(brief: InventBrief, options: InventOption
   let proposed = 0;
   let refused = 0;
   const errors: string[] = [];
+  const rejections: string[] = [];
   for (const a of answers) {
     if (a.status === 'rejected') {
       errors.push(String((a.reason as Error)?.message ?? a.reason).slice(0, 120));
@@ -99,7 +113,8 @@ export async function inventDirections(brief: InventBrief, options: InventOption
     const parsed = parseInvented(a.value, brief);
     proposed += parsed.proposed;
     refused += parsed.refused;
+    rejections.push(...parsed.rejections);
     directions.push(...parsed.directions);
   }
-  return { directions, calls, proposed, refused, error: errors.length ? `${errors.length} of ${calls} call(s) failed: ${errors[0]}` : null };
+  return { directions, calls, proposed, refused, error: errors.length ? `${errors.length} of ${calls} call(s) failed: ${errors[0]}` : null, rejections };
 }
