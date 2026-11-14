@@ -114,8 +114,15 @@ export interface LaneMeasurement {
   claims: number | null;
   /** Claims that link to an actionable buyer, price or fulfilment. */
   actionableLinks: number | null;
-  /** Remedies already applied to this lane and not yet shown to work. */
+  /**
+   * Remedies a recorded change applied to this lane before the whole window
+   * began, so the window measured the lane after them — and it is still
+   * low-actionability. Only an applied change counts: a remedy Brain merely
+   * recommended was not tried (RES-15-5).
+   */
   triedRemedies?: LaneRemedy[];
+  /** A remedy applied inside the window: its effect is not yet measured over a whole window. */
+  measuringRemedy?: LaneRemedy | null;
 }
 
 /** A measured constraint on a lane's throughput. */
@@ -158,6 +165,7 @@ export interface ShareChange {
 
 export type LaneAction =
   | { lane: string; kind: 'CHANGE_QUESTION_DESIGN' | 'CHANGE_EVIDENCE_SOURCES' | 'CHANGE_MODEL_ROUTING'; remedy: LaneRemedy; limitRaiseAllowed: false; reason: string }
+  | { lane: string; kind: 'MEASURING_REMEDY'; remedy: LaneRemedy; limitRaiseAllowed: false; reason: string }
   | { lane: string; kind: 'REMEDIES_EXHAUSTED'; remedy: null; limitRaiseAllowed: true; reason: string };
 
 export type CapacityDecision =
@@ -382,10 +390,14 @@ export function decideLaneActions(lanes: LaneMeasurement[]): LaneAction[] {
     const tried = new Set(lane.triedRemedies ?? []);
     const next = LANE_REMEDIES.find((r) => !tried.has(r));
     const evidence = `${lane.actionableLinks} actionable buyer/price/fulfilment link(s) from ${lane.claims} claims`;
-    if (next) {
+    const measuring = lane.measuringRemedy ?? null;
+    if (measuring && !tried.has(measuring)) {
+      // A change was made and has not yet been measured over a whole window: wait for its result, escalate nothing.
+      out.push({ lane: lane.lane, kind: 'MEASURING_REMEDY', remedy: measuring, limitRaiseAllowed: false, reason: `${evidence}; the ${measuring.toLowerCase().replace('_', ' ')} change applied inside this window is measured over a whole window before the next remedy or any limit raise` });
+    } else if (next) {
       out.push({ lane: lane.lane, kind: REMEDY_KIND[next], remedy: next, limitRaiseAllowed: false, reason: `${evidence}; change ${next.toLowerCase().replace('_', ' ')} before raising this lane's job limit` });
     } else {
-      out.push({ lane: lane.lane, kind: 'REMEDIES_EXHAUSTED', remedy: null, limitRaiseAllowed: true, reason: `${evidence} after question design, evidence sources and model routing were all changed; a limit raise may now be justified only by a measured bottleneck` });
+      out.push({ lane: lane.lane, kind: 'REMEDIES_EXHAUSTED', remedy: null, limitRaiseAllowed: true, reason: `${evidence} after recorded changes to question design, evidence sources and model routing were each measured over a whole window; a limit raise may now be justified only by a measured bottleneck` });
     }
   }
   return out;

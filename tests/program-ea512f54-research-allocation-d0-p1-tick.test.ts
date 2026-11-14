@@ -14,10 +14,13 @@ import {
   RESEARCH_REALLOCATED_EVENT,
   advanceGoals,
   allocationInputFrom,
+  productionResearchAllocationPorts,
   reallocateResearch,
+  recordRemedyApplied,
   reallocateResearchIfDue,
   sharesInForceFrom,
   triedRemediesFrom,
+  type AppliedRemedy,
   type ResearchAllocationPorts,
 } from '../server/services/goals/tick.ts';
 import { binPriorityShift, purposePriorityShifts, purposesBelowFloor, COMMERCIAL_FLOOR } from '../server/services/goals/researchAllocation.ts';
@@ -68,14 +71,16 @@ function goalView(id: string, over: Partial<GoalView> = {}): GoalView {
 
 function memoryPorts(yieldReading: ResearchYieldReading) {
   const events = new Map<string, Record<string, unknown>[]>();
+  const applied: AppliedRemedy[] = [];
   const ports: ResearchAllocationPorts = {
     readYield: async () => yieldReading,
+    appliedRemedies: async () => [...applied],
     lastDecision: async (goalId) => events.get(goalId)?.at(-1) ?? null,
     recordGoal: async (goalId, _summary, detail) => {
       events.set(goalId, [...(events.get(goalId) ?? []), detail]);
     },
   };
-  return { ports, events };
+  return { ports, events, apply: (one: AppliedRemedy) => applied.push(one) };
 }
 
 describe('the research allocation decision in the tick', () => {
@@ -96,15 +101,51 @@ describe('the research allocation decision in the tick', () => {
     expect(detail.costCountedOnce).toMatchObject({ holds: true });
   });
 
-  it('gives a claims-heavy, link-poor lane a question-design change before any limit is raised, then the next remedy', async () => {
-    const { ports, events } = memoryPorts(reading());
+  it('gives a claims-heavy, link-poor lane a question-design change before any limit is raised, then the next remedy once that change was applied and measured', async () => {
+    const { ports, events, apply } = memoryPorts(reading());
     const first = await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-14T00:00:00.000Z' }, ports);
     const lane = first.laneActions.find((a) => a.lane === 'free-lane');
     expect(lane?.kind).toBe('CHANGE_QUESTION_DESIGN');
     expect(lane?.limitRaiseAllowed).toBe(false);
-    expect(triedRemediesFrom(events.get('wst_a')!.at(-1)!).get('free-lane')).toEqual(['QUESTION_DESIGN']);
-    const second = await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-14T01:00:00.000Z' }, ports);
+    // Recommending a change is not making it.
+    expect(triedRemediesFrom(events.get('wst_a')!.at(-1)!).get('free-lane')).toEqual([]);
+    // The change is made and recorded, then measured over a whole window after it.
+    apply({ lane: 'free-lane', remedy: 'QUESTION_DESIGN', appliedAt: '2026-11-14T00:30:00.000Z', ref: 'prompt-v2' });
+    const measuring = await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-14T12:00:00.000Z' }, ports);
+    expect(measuring.laneActions.find((a) => a.lane === 'free-lane')).toMatchObject({ kind: 'MEASURING_REMEDY', remedy: 'QUESTION_DESIGN', limitRaiseAllowed: false });
+    const second = await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-15T01:00:00.000Z' }, ports);
     expect(second.laneActions.find((a) => a.lane === 'free-lane')?.kind).toBe('CHANGE_EVIDENCE_SOURCES');
+    expect(triedRemediesFrom(events.get('wst_a')!.at(-1)!).get('free-lane')).toEqual(['QUESTION_DESIGN']);
+  });
+
+  it('never walks a lane to a limit raise when no remedy was ever applied', async () => {
+    const { ports, events } = memoryPorts(reading());
+    const kinds: string[] = [];
+    for (let hour = 0; hour < 6; hour += 1) {
+      const report = await reallocateResearch({ goals: [goalView('wst_a')], now: new Date(Date.parse('2026-11-14T00:00:00.000Z') + hour * 3_600_000).toISOString() }, ports);
+      const lane = report.laneActions.find((a) => a.lane === 'free-lane')!;
+      kinds.push(lane.kind);
+      expect(lane.limitRaiseAllowed).toBe(false);
+    }
+    expect(new Set(kinds)).toEqual(new Set(['CHANGE_QUESTION_DESIGN']));
+    // The same recommendation hour after hour is one row, not one an hour.
+    expect(events.get('wst_a')).toHaveLength(1);
+  });
+
+  it('a remedy record that names no change is not a change', async () => {
+    const { ports, apply } = memoryPorts(reading());
+    apply({ lane: 'free-lane', remedy: 'QUESTION_DESIGN', appliedAt: '2026-11-01T00:00:00.000Z', ref: ' ' });
+    const report = await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-14T00:00:00.000Z' }, ports);
+    expect(report.laneActions.find((a) => a.lane === 'free-lane')?.kind).toBe('CHANGE_QUESTION_DESIGN');
+  });
+
+  it('reaches REMEDIES_EXHAUSTED only after all three changes were applied and measured', async () => {
+    const { ports, apply } = memoryPorts(reading());
+    apply({ lane: 'free-lane', remedy: 'QUESTION_DESIGN', appliedAt: '2026-11-01T00:00:00.000Z', ref: 'prompt-v2' });
+    apply({ lane: 'free-lane', remedy: 'EVIDENCE_SOURCES', appliedAt: '2026-11-05T00:00:00.000Z', ref: 'sources-v2' });
+    apply({ lane: 'free-lane', remedy: 'MODEL_ROUTING', appliedAt: '2026-11-09T00:00:00.000Z', ref: 'routing-v2' });
+    const report = await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-14T00:00:00.000Z' }, ports);
+    expect(report.laneActions.find((a) => a.lane === 'free-lane')).toMatchObject({ kind: 'REMEDIES_EXHAUSTED', limitRaiseAllowed: true });
   });
 
   it('never adds capacity on an unmeasured quota: a capacity change is a recommendation, and none is made here', async () => {
@@ -177,6 +218,15 @@ describe('on production rows, through advanceGoals', () => {
     // Forced, the unchanged decision writes nothing more.
     await reallocateResearchIfDue({ goals: [goalView(goal.id, { projectId })] }, undefined, { force: true });
     expect((await listWorkstreamEvents(goal.id, 50)).filter((e) => e.kind === RESEARCH_REALLOCATED_EVENT)).toHaveLength(1);
+  });
+
+  it('reads an applied remedy from the goal’s own events, and refuses one that names no change', async () => {
+    const goal = await createWorkstream({ projectId, title: 'Remedy goal', intent: 'Collect cash.', purpose: 'REVENUE_DIRECT', createdByUserId: ownerId });
+    const ports = await productionResearchAllocationPorts();
+    expect(await ports.appliedRemedies!([goal.id])).toEqual([]);
+    await expect(recordRemedyApplied({ goalId: goal.id, lane: 'free-lane', remedy: 'QUESTION_DESIGN', ref: '  ', actorRef: 'BRAIN' })).rejects.toThrow(/name the change/);
+    await recordRemedyApplied({ goalId: goal.id, lane: 'free-lane', remedy: 'QUESTION_DESIGN', ref: 'prompt-v2', actorRef: 'BRAIN' });
+    expect(await ports.appliedRemedies!([goal.id])).toMatchObject([{ lane: 'free-lane', remedy: 'QUESTION_DESIGN', ref: 'prompt-v2' }]);
   });
 });
 

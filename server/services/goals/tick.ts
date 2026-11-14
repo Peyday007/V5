@@ -389,8 +389,28 @@ export interface ResearchAllocationReport {
   fingerprint: string;
 }
 
+/**
+ * A remedy actually applied to a lane: a recorded change to its question
+ * design, evidence sources or model routing, with a reference to the change
+ * itself. This — never a recommendation — is what makes a remedy tried.
+ */
+export interface AppliedRemedy {
+  lane: string;
+  remedy: LaneRemedy;
+  appliedAt: string;
+  /** What was changed: a commit, a configuration id, a prompt version. Required. */
+  ref: string;
+}
+
+export const RESEARCH_REMEDY_APPLIED_EVENT = 'GOAL_RESEARCH_REMEDY_APPLIED';
+
 export interface ResearchAllocationPorts {
   readYield(window: { since: string; until: string }): Promise<ResearchYieldReading>;
+  /**
+   * Remedies recorded as applied on these goals' research. Absent means none is
+   * recorded: an unknown is never read as a change made (invariant 39).
+   */
+  appliedRemedies?(goalIds: string[]): Promise<AppliedRemedy[]>;
   /** The newest recorded decision's detail on a goal, or null. */
   lastDecision(goalId: string): Promise<Record<string, unknown> | null>;
   recordGoal(goalId: string, summary: string, detail: Record<string, unknown>): Promise<void>;
@@ -401,7 +421,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 /** The measured inputs one window gives the decision. Pure. */
 export function allocationInputFrom(
   reading: ResearchYieldReading,
-  context: { urgentCommercialGoal: boolean; nearestDeadlineDays: number | null; triedRemedies: Map<string, LaneRemedy[]> },
+  context: { urgentCommercialGoal: boolean; nearestDeadlineDays: number | null; triedRemedies: Map<string, LaneRemedy[]>; measuringRemedies?: Map<string, LaneRemedy> },
 ): AllocationInput {
   // The shares in force are where the capacity actually went: each purpose's job time in the window.
   const currentShares: Partial<Record<ResearchPurpose, number>> = {};
@@ -434,6 +454,7 @@ export function allocationInputFrom(
       // An actionable link: a qualified position (buyer, price, fulfilment), an executable offer or a paid transaction.
       actionableLinks: b.qualifiedPositions + b.executableOffers + b.paidTransactions,
       triedRemedies: context.triedRemedies.get(lane) ?? [],
+      measuringRemedy: context.measuringRemedies?.get(lane) ?? null,
     });
     const attempts = b.completions + b.failures.total;
     bottlenecks.push({
@@ -462,17 +483,61 @@ export function allocationFingerprint(decision: AllocationDecision): string {
   });
 }
 
-/** Remedies already recorded for each lane, from the newest decision: passed back so the next one is tried. */
+/**
+ * Remedies a recorded decision says were tried on each lane. Only the `tried`
+ * list counts — it is built from applied changes (`remediesFromApplied`) — and
+ * never the decision's own recommended `remedy`: recommending a change is not
+ * making it, and reading it as made let a lane escalate to a limit raise with
+ * nothing ever changed.
+ */
 export function triedRemediesFrom(detail: Record<string, unknown> | null): Map<string, LaneRemedy[]> {
   const out = new Map<string, LaneRemedy[]>();
-  const actions = Array.isArray(detail?.laneActions) ? (detail!.laneActions as { lane?: unknown; remedy?: unknown; tried?: unknown }[]) : [];
+  const actions = Array.isArray(detail?.laneActions) ? (detail!.laneActions as { lane?: unknown; tried?: unknown }[]) : [];
   for (const a of actions) {
     if (typeof a.lane !== 'string') continue;
     const tried = Array.isArray(a.tried) ? a.tried.filter((r): r is LaneRemedy => (LANE_REMEDIES as readonly string[]).includes(String(r))) : [];
-    const now = typeof a.remedy === 'string' && (LANE_REMEDIES as readonly string[]).includes(a.remedy) ? [a.remedy as LaneRemedy] : [];
-    out.set(a.lane, [...new Set([...tried, ...now])]);
+    out.set(a.lane, [...new Set(tried)]);
   }
   return out;
+}
+
+/**
+ * From applied changes, per lane: the remedies measured over a whole window
+ * after they were made (`tried`), and the newest one made inside the window,
+ * whose effect is not yet measured (`measuring`). A record without a
+ * reference to the change, or with an unreadable time, is not a change. Pure.
+ */
+export function remediesFromApplied(applied: readonly AppliedRemedy[], window: { since: string }): { tried: Map<string, LaneRemedy[]>; measuring: Map<string, LaneRemedy> } {
+  const since = Date.parse(window.since);
+  const tried = new Map<string, LaneRemedy[]>();
+  const measuring = new Map<string, { remedy: LaneRemedy; at: number }>();
+  for (const a of applied) {
+    if (!(LANE_REMEDIES as readonly string[]).includes(a.remedy) || typeof a.ref !== 'string' || a.ref.trim() === '') continue;
+    const at = Date.parse(a.appliedAt);
+    if (!Number.isFinite(at)) continue;
+    if (at <= since) {
+      const list = tried.get(a.lane) ?? [];
+      if (!list.includes(a.remedy)) list.push(a.remedy);
+      tried.set(a.lane, list);
+    } else {
+      const prior = measuring.get(a.lane);
+      if (!prior || at > prior.at) measuring.set(a.lane, { remedy: a.remedy, at });
+    }
+  }
+  return { tried, measuring: new Map([...measuring].map(([lane, m]) => [lane, m.remedy])) };
+}
+
+/** Record that a remedy was applied to a lane, naming the change. The only way a remedy becomes tried. */
+export async function recordRemedyApplied(input: { goalId: string; lane: string; remedy: LaneRemedy; ref: string; actorRef: string }): Promise<void> {
+  if (!(LANE_REMEDIES as readonly string[]).includes(input.remedy)) throw new Error(`unknown remedy ${input.remedy}`);
+  if (input.ref.trim() === '') throw new Error('a remedy applied must name the change it made');
+  await recordWorkstreamEvent({
+    workstreamId: input.goalId,
+    kind: RESEARCH_REMEDY_APPLIED_EVENT,
+    summary: `Research remedy applied to ${input.lane}: ${input.remedy}`.slice(0, 400),
+    detail: { lane: input.lane, remedy: input.remedy, ref: input.ref },
+    actorRef: input.actorRef,
+  });
 }
 
 /** One allocation pass over the live goals. */
@@ -485,9 +550,11 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     .map((g) => (Date.parse(g.dueAt!) - untilMs) / 86_400_000);
   const urgentCommercialGoal = deadlines.length > 0;
   const previous = live.length > 0 ? await ports.lastDecision(live[0]!.id) : null;
-  const tried = triedRemediesFrom(previous);
+  // Tried means a recorded change was made, never that the last decision recommended one.
+  const applied = ports.appliedRemedies && live.length > 0 ? await ports.appliedRemedies(live.map((g) => g.id)) : [];
+  const { tried, measuring } = remediesFromApplied(applied, window);
   const reading = await ports.readYield(window);
-  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried });
+  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring });
   const decision = decideResearchAllocation(allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
   const fingerprint = allocationFingerprint(decision);
@@ -506,7 +573,11 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     floors,
     held: decision.held,
     changes: decision.changes.map((c) => ({ purpose: c.purpose, from: round3(c.from), to: round3(c.to), reasons: c.reasons })),
-    laneActions: decision.laneActions.map((a) => ({ ...a, tried: tried.get(a.lane) ?? [] })),
+    laneActions: decision.laneActions.map((a) => ({
+      ...a,
+      tried: tried.get(a.lane) ?? [],
+      applied: applied.filter((one) => one.lane === a.lane).map((one) => ({ remedy: one.remedy, appliedAt: one.appliedAt, ref: one.ref })),
+    })),
     capacity: decision.capacity.map((c) => ({ ...c, recommendationOnly: true })),
     bottlenecks: decision.capacity.filter((c) => c.resource !== null).map((c) => ({ lane: c.lane, resource: c.resource })),
     costCountedOnce: reading.costCountedOnce,
@@ -545,6 +616,18 @@ export async function productionResearchAllocationPorts(): Promise<ResearchAlloc
       const events = await listWorkstreamEvents(goalId, 200);
       const newest = events.find((e) => e.kind === RESEARCH_REALLOCATED_EVENT);
       return newest ? (newest.detail as Record<string, unknown>) : null;
+    },
+    async appliedRemedies(goalIds) {
+      const out: AppliedRemedy[] = [];
+      for (const goalId of goalIds) {
+        for (const e of await listWorkstreamEvents(goalId, 200)) {
+          if (e.kind !== RESEARCH_REMEDY_APPLIED_EVENT) continue;
+          const d = e.detail as { lane?: unknown; remedy?: unknown; ref?: unknown };
+          if (typeof d.lane !== 'string' || typeof d.remedy !== 'string' || typeof d.ref !== 'string') continue;
+          out.push({ lane: d.lane, remedy: d.remedy as LaneRemedy, appliedAt: e.createdAt, ref: d.ref });
+        }
+      }
+      return out;
     },
     async recordGoal(goalId, summary, detail) {
       await recordWorkstreamEvent({ workstreamId: goalId, kind: RESEARCH_REALLOCATED_EVENT, summary, detail, actorRef: 'BRAIN' });

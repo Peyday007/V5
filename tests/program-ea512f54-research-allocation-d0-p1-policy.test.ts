@@ -142,6 +142,9 @@ describe('A02: actionability remedies before limits; capacity only for a measure
     expect(decideLaneActions([{ ...lowLane, triedRemedies: ['QUESTION_DESIGN', 'EVIDENCE_SOURCES'] }])[0]).toMatchObject({ kind: 'CHANGE_MODEL_ROUTING' });
     expect(decideLaneActions([{ ...lowLane, triedRemedies: ['EVIDENCE_SOURCES'] }])[0]).toMatchObject({ kind: 'CHANGE_QUESTION_DESIGN' });
     expect(decideLaneActions([{ ...lowLane, triedRemedies: ['QUESTION_DESIGN', 'EVIDENCE_SOURCES', 'MODEL_ROUTING'] }])[0]).toMatchObject({ kind: 'REMEDIES_EXHAUSTED', limitRaiseAllowed: true });
+    // A change applied inside the window is measured before anything escalates, and allows no limit raise.
+    expect(decideLaneActions([{ ...lowLane, measuringRemedy: 'QUESTION_DESIGN' }])[0]).toMatchObject({ kind: 'MEASURING_REMEDY', remedy: 'QUESTION_DESIGN', limitRaiseAllowed: false });
+    expect(decideLaneActions([{ ...lowLane, triedRemedies: ['QUESTION_DESIGN', 'EVIDENCE_SOURCES'], measuringRemedy: 'MODEL_ROUTING' }])[0]).toMatchObject({ kind: 'MEASURING_REMEDY', limitRaiseAllowed: false });
   });
 
   it('a lane with healthy actionability, too few claims or unmeasured claims gets no remedy', () => {
