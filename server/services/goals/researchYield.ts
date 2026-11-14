@@ -418,3 +418,500 @@ export async function goalPipelineSpeed(input: { goalId: string; projectId: stri
     gpu: { jobMs: gpuJobMs, runningMs, busySlots: runningMs > 0 ? Math.round((100 * gpuJobMs) / runningMs) / 100 : null },
   };
 }
+
+/* ------------------------------------------------------------------------- */
+/* Research yield by lane and by purpose, over one window (RES-07, RES-15-5)  */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * What the research Brain ran in one window produced, per lane and per
+ * purpose, read from the rows the work already wrote (invariant 45: nothing
+ * is stored here).
+ *
+ * A **job** is one unit of spent capacity: a free-lane item (one
+ * `FREE_LANE_ITEM` event, carrying its model and duration) or one bin handed
+ * to a worker (`BIN_ASSIGNED`, running until the lease closes). Its **lane** is
+ * where the capacity came from — `free-lane:<model>` (the RunPod GPU's models
+ * start `runpod/`) or `bin:<provider>`.
+ *
+ * Every job is **attributed** to one or more of five purposes from what its
+ * rows already say — the bin's recorded purpose, the project, the goal the
+ * research belongs to, the discovery round that asked it, the opening it is
+ * about and whether that opening has been paid — and the basis is recorded.
+ * Nothing is attributed by category or industry, and a job nothing attributes
+ * is reported as `UNATTRIBUTED`, never dropped.
+ *
+ * A job serving several purposes appears in each purpose's *output*, but its
+ * *cost* (job time, and money where a row records it) is split evenly between
+ * them, so the purposes' costs sum exactly to the total and the total sums each
+ * distinct job once — `costCountedOnce` says whether that held.
+ */
+export const RESEARCH_PURPOSES = ['BROAD_DISCOVERY', 'TRANSACTION_ROUTES', 'OPERATING_SUPPORT', 'SELF_IMPROVEMENT', 'FORWARD_EXPLORATION'] as const;
+export type ResearchPurpose = (typeof RESEARCH_PURPOSES)[number];
+export type PurposeKey = ResearchPurpose | 'UNATTRIBUTED';
+
+/** What the rows say about the work a job did, for attribution. */
+export interface PurposeFacts {
+  /** The bin's recorded purpose (`domain/binPurpose.ts`), when the job was a bin. */
+  binPurpose?: string | null;
+  projectSlug?: string | null;
+  projectPurpose?: string | null;
+  /** The goal the research belongs to, and whether that goal has a target set. */
+  goalId?: string | null;
+  goalHasTarget?: boolean;
+  /** Discovery-round buckets whose idea this research asked. */
+  buckets?: readonly string[];
+  /** The research asks about an opening already filed (its deep dive or a narrow need). */
+  aboutOpening?: boolean;
+  /** That opening has a verified customer payment: a business already operating. */
+  openingPaid?: boolean;
+}
+
+export interface PurposeAttribution {
+  purposes: PurposeKey[];
+  /** One line per purpose, naming the row that decided it. */
+  basis: string[];
+}
+
+/** Brain's own project slug (`domain/binPurpose.ts` BRAIN_PROJECT_SLUG). */
+const BRAIN_PROJECT = 'brain-architecture';
+
+/** Which of the five purposes a job served, from its rows. Pure. */
+export function attributePurposes(facts: PurposeFacts): PurposeAttribution {
+  const purposes: PurposeKey[] = [];
+  const basis: string[] = [];
+  // Every row that bears on a purpose is recorded, even when an earlier one already decided it.
+  const add = (purpose: ResearchPurpose, why: string) => {
+    if (!purposes.includes(purpose)) purposes.push(purpose);
+    basis.push(`${purpose}: ${why}`);
+  };
+  if (facts.binPurpose === 'BRAIN_IMPROVEMENT') add('SELF_IMPROVEMENT', 'bin purpose BRAIN_IMPROVEMENT');
+  if (facts.projectSlug === BRAIN_PROJECT) add('SELF_IMPROVEMENT', `project ${BRAIN_PROJECT}`);
+  if (facts.projectPurpose === 'TECHNICAL') add('SELF_IMPROVEMENT', 'project purpose TECHNICAL');
+  const buckets = facts.buckets ?? [];
+  if (facts.openingPaid) add('OPERATING_SUPPORT', 'asks about an opening with a verified customer payment');
+  if (facts.aboutOpening) add('TRANSACTION_ROUTES', 'asks about an opening already filed');
+  const constructed = buckets.filter((b) => /-mx-/.test(b));
+  if (constructed.length > 0) add('TRANSACTION_ROUTES', `constructed arrangement round ${constructed[0]}`);
+  const broad = buckets.filter((b) => !/-mx-/.test(b));
+  if (broad.length > 0) add('BROAD_DISCOVERY', `discovery round ${broad[0]}`);
+  if (facts.goalId && facts.goalHasTarget === false) add('FORWARD_EXPLORATION', `goal ${facts.goalId} has no target yet`);
+  if (purposes.length === 0) return { purposes: ['UNATTRIBUTED'], basis: ['UNATTRIBUTED: no row names what this work was for'] };
+  return { purposes, basis };
+}
+
+/** A failure reason that is a provider's rate limit or quota, not a fault in the work. */
+export function isRateLimited(reason: string | null): boolean {
+  return /rate.?limit|\b429\b|quota|too many requests/i.test(String(reason ?? ''));
+}
+
+export interface YieldJob {
+  id: string;
+  lane: string;
+  purposes: PurposeKey[];
+  basis: string[];
+  /** When the job began running (ms). */
+  startMs: number;
+  durationMs: number;
+  /** Time it waited in the queue before it began; null when unknown. */
+  queueWaitMs: number | null;
+  outcome: 'COMPLETED' | 'FAILED' | 'IN_FLIGHT';
+  /** Grouped failure reason; null unless FAILED. */
+  failureCause: string | null;
+  rateLimited: boolean;
+  /** Money a row records this job cost, in minor units; null when no row records it. */
+  costMinor: number | null;
+}
+
+export const YIELD_OUTPUT_KINDS = ['ACCEPTED_CLAIM', 'PACKET_FILED', 'NEW_MECHANISM', 'QUALIFIED_POSITION', 'EXECUTABLE_OFFER', 'PAID_TRANSACTION'] as const;
+export type YieldOutputKind = (typeof YIELD_OUTPUT_KINDS)[number];
+/** Outputs that are a commercially usable result rather than an intermediate (a claim). */
+export const USEFUL_KINDS: readonly YieldOutputKind[] = ['PACKET_FILED', 'QUALIFIED_POSITION', 'EXECUTABLE_OFFER', 'PAID_TRANSACTION'];
+
+export interface YieldOutput {
+  kind: YieldOutputKind;
+  id: string;
+  lane: string;
+  purposes: PurposeKey[];
+  /** For an accepted claim: how its source was classified. */
+  source?: 'PRIMARY' | 'SECONDARY' | 'UNRETRIEVED';
+}
+
+export interface YieldBucket {
+  submissions: number;
+  completions: number;
+  inFlight: number;
+  failures: { total: number; rateLimited: number; other: number; causes: { cause: string; n: number }[] };
+  queueWait: { measured: number; medianMs: number | null; p90Ms: number | null };
+  acceptedClaims: number;
+  sourceQuality: { primary: number; secondary: number; unretrieved: number; primaryShare: number | null };
+  packetsFiled: number;
+  newMechanisms: number;
+  qualifiedPositions: number;
+  executableOffers: number;
+  paidTransactions: number;
+  /** Packets, qualified positions, executable offers and paid transactions. */
+  usefulResults: number;
+  /** Job time charged here; for a purpose, a multi-purpose job's share. */
+  jobMs: number;
+  /** Money charged here, or null when no job here has a recorded cost. */
+  costMinor: number | null;
+  /** Jobs whose money cost no row records. */
+  uncostedJobs: number;
+  msPerUsefulResult: number | null;
+  costMinorPerUsefulResult: number | null;
+  /** Average jobs running at once over the window (time-weighted); 1 = one slot busy throughout. */
+  utilization: number;
+}
+
+export interface ResearchYieldReading {
+  window: { since: string; until: string; ms: number };
+  total: YieldBucket;
+  lanes: Record<string, YieldBucket>;
+  purposes: Record<PurposeKey, YieldBucket>;
+  /** Distinct jobs, the job time and money they spent, and whether every purpose's share sums back to it. */
+  costCountedOnce: { jobs: number; totalJobMs: number; purposeJobMs: number; totalCostMinor: number | null; purposeCostMinor: number | null; holds: boolean };
+  /** Each job's attribution basis, so "why is this job SELF_IMPROVEMENT" is answerable. */
+  attributions: { jobId: string; lane: string; purposes: PurposeKey[]; basis: string[] }[];
+  notes: string[];
+}
+
+function emptyBucket(): YieldBucket {
+  return {
+    submissions: 0, completions: 0, inFlight: 0,
+    failures: { total: 0, rateLimited: 0, other: 0, causes: [] },
+    queueWait: { measured: 0, medianMs: null, p90Ms: null },
+    acceptedClaims: 0, sourceQuality: { primary: 0, secondary: 0, unretrieved: 0, primaryShare: null },
+    packetsFiled: 0, newMechanisms: 0, qualifiedPositions: 0, executableOffers: 0, paidTransactions: 0, usefulResults: 0,
+    jobMs: 0, costMinor: null, uncostedJobs: 0, msPerUsefulResult: null, costMinorPerUsefulResult: null, utilization: 0,
+  };
+}
+
+/**
+ * Fold jobs and outputs into total, per-lane and per-purpose buckets over one
+ * window. Pure. A job's cost goes to the total once and is split evenly between
+ * its purposes; its counts and its outputs go to every purpose it served.
+ */
+export function summarizeResearchYield(input: { since: string; until: string; jobs: readonly YieldJob[]; outputs: readonly YieldOutput[] }): ResearchYieldReading {
+  const from = Date.parse(input.since);
+  const to = Date.parse(input.until);
+  const windowMs = Math.max(0, to - from);
+  const total = emptyBucket();
+  const lanes: Record<string, YieldBucket> = {};
+  const purposes = Object.fromEntries([...RESEARCH_PURPOSES, 'UNATTRIBUTED'].map((p) => [p, emptyBucket()])) as Record<PurposeKey, YieldBucket>;
+  const waits = new Map<YieldBucket, number[]>();
+  const causes = new Map<YieldBucket, Map<string, number>>();
+  const intervals = new Map<YieldBucket, { start: number; end: number }[]>();
+  const lane = (key: string) => (lanes[key] ??= emptyBucket());
+  const seen = new Set<string>();
+  const countJob = (bucket: YieldBucket, job: YieldJob, share: number) => {
+    bucket.submissions += 1;
+    if (job.outcome === 'COMPLETED') bucket.completions += 1;
+    else if (job.outcome === 'IN_FLIGHT') bucket.inFlight += 1;
+    else {
+      bucket.failures.total += 1;
+      if (job.rateLimited) bucket.failures.rateLimited += 1;
+      else bucket.failures.other += 1;
+      const cause = job.rateLimited ? 'rate limit or quota' : (job.failureCause ?? '(no reason)');
+      const m = causes.get(bucket) ?? new Map<string, number>();
+      m.set(cause, (m.get(cause) ?? 0) + 1);
+      causes.set(bucket, m);
+    }
+    if (job.queueWaitMs !== null) (waits.get(bucket) ?? waits.set(bucket, []).get(bucket)!).push(job.queueWaitMs);
+    (intervals.get(bucket) ?? intervals.set(bucket, []).get(bucket)!).push({ start: job.startMs, end: job.startMs + job.durationMs });
+    bucket.jobMs += job.durationMs * share;
+    if (job.costMinor === null) bucket.uncostedJobs += 1;
+    else bucket.costMinor = (bucket.costMinor ?? 0) + job.costMinor * share;
+  };
+  for (const job of input.jobs) {
+    if (seen.has(job.id)) continue;
+    seen.add(job.id);
+    countJob(total, job, 1);
+    countJob(lane(job.lane), job, 1);
+    const served = job.purposes.length > 0 ? job.purposes : (['UNATTRIBUTED'] as PurposeKey[]);
+    for (const p of served) countJob(purposes[p], job, 1 / served.length);
+  }
+  const outputSeen = new Set<string>();
+  const countOutput = (bucket: YieldBucket, out: YieldOutput) => {
+    switch (out.kind) {
+      case 'ACCEPTED_CLAIM':
+        bucket.acceptedClaims += 1;
+        if (out.source === 'PRIMARY') bucket.sourceQuality.primary += 1;
+        else if (out.source === 'UNRETRIEVED') bucket.sourceQuality.unretrieved += 1;
+        else bucket.sourceQuality.secondary += 1;
+        break;
+      case 'PACKET_FILED': bucket.packetsFiled += 1; break;
+      case 'NEW_MECHANISM': bucket.newMechanisms += 1; break;
+      case 'QUALIFIED_POSITION': bucket.qualifiedPositions += 1; break;
+      case 'EXECUTABLE_OFFER': bucket.executableOffers += 1; break;
+      case 'PAID_TRANSACTION': bucket.paidTransactions += 1; break;
+    }
+    if (USEFUL_KINDS.includes(out.kind)) bucket.usefulResults += 1;
+  };
+  for (const out of input.outputs) {
+    const key = `${out.kind}:${out.id}`;
+    if (outputSeen.has(key)) continue;
+    outputSeen.add(key);
+    countOutput(total, out);
+    countOutput(lane(out.lane), out);
+    const served = out.purposes.length > 0 ? out.purposes : (['UNATTRIBUTED'] as PurposeKey[]);
+    for (const p of served) countOutput(purposes[p], out);
+  }
+  const finish = (bucket: YieldBucket) => {
+    const w = waits.get(bucket) ?? [];
+    bucket.queueWait = { measured: w.length, medianMs: percentile(w, 50), p90Ms: percentile(w, 90) };
+    bucket.failures.causes = [...(causes.get(bucket) ?? new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 8).map(([cause, n]) => ({ cause, n }));
+    const rated = bucket.sourceQuality.primary + bucket.sourceQuality.secondary + bucket.sourceQuality.unretrieved;
+    bucket.sourceQuality.primaryShare = rated > 0 ? Math.round((1000 * bucket.sourceQuality.primary) / rated) / 1000 : null;
+    bucket.jobMs = Math.round(bucket.jobMs * 1000) / 1000;
+    if (bucket.costMinor !== null) bucket.costMinor = Math.round(bucket.costMinor * 1000) / 1000;
+    bucket.msPerUsefulResult = bucket.usefulResults > 0 ? Math.round(bucket.jobMs / bucket.usefulResults) : null;
+    bucket.costMinorPerUsefulResult = bucket.usefulResults > 0 && bucket.costMinor !== null && bucket.uncostedJobs === 0 ? Math.round(bucket.costMinor / bucket.usefulResults) : null;
+    bucket.utilization = overlap(intervals.get(bucket) ?? [], from, to).average;
+  };
+  finish(total);
+  for (const bucket of Object.values(lanes)) finish(bucket);
+  for (const bucket of Object.values(purposes)) finish(bucket);
+  const purposeJobMs = Math.round(Object.values(purposes).reduce((sum, b) => sum + b.jobMs, 0) * 1000) / 1000;
+  const costed = Object.values(purposes).filter((b) => b.costMinor !== null);
+  const purposeCostMinor = costed.length > 0 ? Math.round(costed.reduce((sum, b) => sum + (b.costMinor ?? 0), 0) * 1000) / 1000 : null;
+  const close = (a: number | null, b: number | null) => (a === null || b === null ? a === b : Math.abs(a - b) < 0.01);
+  return {
+    window: { since: input.since, until: input.until, ms: windowMs },
+    total,
+    lanes,
+    purposes,
+    costCountedOnce: {
+      jobs: seen.size,
+      totalJobMs: total.jobMs,
+      purposeJobMs,
+      totalCostMinor: total.costMinor,
+      purposeCostMinor,
+      holds: close(total.jobMs, purposeJobMs) && close(total.costMinor, purposeCostMinor),
+    },
+    attributions: input.jobs.filter((job, i, all) => all.findIndex((o) => o.id === job.id) === i).map((job) => ({ jobId: job.id, lane: job.lane, purposes: job.purposes.length ? job.purposes : ['UNATTRIBUTED'], basis: job.basis })),
+    notes: [
+      'a job is a free-lane item or a bin handed to a worker; its cost is job time, and money only where a row records it',
+      'a job serving several purposes counts in each purpose, with its cost split evenly so purposes sum to the total once',
+      'source quality: PRIMARY when the claim says its source produced the data, UNRETRIEVED when the source was not read, otherwise SECONDARY',
+      'useful results: packets filed, evidence-qualified positions, executable offers and verified customer payments',
+    ],
+  };
+}
+
+/** The windows TEL-07-1 reads (`cash/screenMetrics.ts`), so yield and telemetry compare like with like. */
+export const RESEARCH_YIELD_WINDOWS = [
+  { key: '1h', ms: 3_600_000 },
+  { key: '6h', ms: 6 * 3_600_000 },
+  { key: '24h', ms: 24 * 3_600_000 },
+] as const;
+
+const CHUNK = 400;
+async function inChunks<T>(ids: readonly string[], read: (chunk: string[], marks: string) => Promise<T[]>): Promise<T[]> {
+  const out: T[] = [];
+  const unique = [...new Set(ids.filter(Boolean))];
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const chunk = unique.slice(i, i + CHUNK);
+    out.push(...(await read(chunk, chunk.map(() => '?').join(', '))));
+  }
+  return out;
+}
+
+/** Who ran a dispatched bin: its event's provider, else the latest fire for it (`screenMetrics.ts` BIN_PROVIDER). Alias `e`. */
+const DISPATCH_PROVIDER = `COALESCE(e.provider,
+  (SELECT d.provider FROM bin_events d
+    WHERE d.event_type = 'DISPATCH_SENT' AND d.bin_id = e.bin_id AND d.at <= e.at
+    ORDER BY d.at DESC LIMIT 1),
+  '(none)')`;
+
+/** The attribution facts of every orchestration and project named, read in batches. */
+async function attributionFacts(orchestrationIds: readonly string[], projectIds: readonly string[]): Promise<{ byOrchestration: Map<string, PurposeFacts>; byProject: Map<string, PurposeFacts> }> {
+  const db = getDb();
+  const projects = await inChunks(projectIds, (c, m) => db.all<{ id: string; slug: string; purpose: string | null }>(`SELECT id, slug, purpose FROM projects WHERE id IN (${m})`, c));
+  const byProject = new Map(projects.map((p) => [p.id, { projectSlug: p.slug, projectPurpose: p.purpose } as PurposeFacts]));
+  const orchestrations = await inChunks(orchestrationIds, (c, m) =>
+    db.all<{ id: string; goal_id: string | null; project_id: string; slug: string | null; purpose: string | null }>(
+      `SELECT o.id, o.goal_id, o.project_id, p.slug, p.purpose FROM research_orchestrations o LEFT JOIN projects p ON p.id = o.project_id WHERE o.id IN (${m})`, c));
+  const missions = await inChunks(orchestrationIds, (c, m) =>
+    db.all<{ orchestration_id: string; candidate_id: string | null; goal_id: string | null }>(`SELECT orchestration_id, candidate_id, goal_id FROM russell_missions WHERE orchestration_id IN (${m})`, c));
+  const candidates = missions.map((one) => one.candidate_id).filter((one): one is string => !!one);
+  const rounds = await inChunks(candidates, (c, m) => db.all<{ candidate_id: string; bucket_id: string }>(`SELECT candidate_id, bucket_id FROM cash_discovery_rounds WHERE candidate_id IN (${m})`, c));
+  const aboutDirect = await inChunks(candidates, (c, m) => db.all<{ candidate_id: string; id: string }>(`SELECT candidate_id, id FROM cash_opportunities WHERE candidate_id IN (${m})`, c));
+  const aboutNeed = await inChunks(candidates, (c, m) => db.all<{ candidate_id: string; id: string | null }>(`SELECT candidate_id, opportunity_id AS id FROM cash_needs WHERE opportunity_id IS NOT NULL AND candidate_id IN (${m})`, c));
+  const openingIds = [...aboutDirect, ...aboutNeed].map((one) => one.id).filter((one): one is string => !!one);
+  const paid = new Set((await inChunks(openingIds, (c, m) => db.all<{ id: string }>(`SELECT DISTINCT opportunity_id AS id FROM cash_money_entries WHERE kind = 'CUSTOMER_PAYMENT' AND opportunity_id IN (${m})`, c))).map((one) => one.id));
+  const goalIds = [...orchestrations.map((o) => o.goal_id), ...missions.map((one) => one.goal_id)].filter((one): one is string => !!one);
+  const goals = new Map((await inChunks(goalIds, (c, m) => db.all<{ id: string; target_set_at: string | null; target_amount_cents: number | null }>(`SELECT id, target_set_at, target_amount_cents FROM workstreams WHERE id IN (${m})`, c))).map((g) => [g.id, g.target_amount_cents !== null && g.target_amount_cents !== undefined]));
+  const byOrchestration = new Map<string, PurposeFacts>();
+  for (const o of orchestrations) {
+    const mine = missions.filter((one) => one.orchestration_id === o.id);
+    const cands = new Set(mine.map((one) => one.candidate_id).filter(Boolean));
+    const openings = [...aboutDirect, ...aboutNeed].filter((one) => cands.has(one.candidate_id) && one.id).map((one) => one.id!);
+    const goalId = o.goal_id ?? mine.find((one) => one.goal_id)?.goal_id ?? null;
+    byOrchestration.set(o.id, {
+      projectSlug: o.slug,
+      projectPurpose: o.purpose,
+      goalId,
+      ...(goalId ? { goalHasTarget: goals.get(goalId) ?? false } : {}),
+      buckets: rounds.filter((r) => cands.has(r.candidate_id)).map((r) => r.bucket_id),
+      aboutOpening: openings.length > 0,
+      openingPaid: openings.some((id) => paid.has(id)),
+    });
+  }
+  return { byOrchestration, byProject };
+}
+
+/**
+ * Research yield over one window, total, per lane and per purpose, from the
+ * rows the work wrote. See `summarizeResearchYield` for the folding rules.
+ */
+export async function researchYieldByPurpose(input: { since: string; until?: string }): Promise<ResearchYieldReading> {
+  const db = getDb();
+  const since = input.since;
+  const until = input.until ?? new Date().toISOString();
+  const untilMs = Date.parse(until);
+  const laneRows = await db.all<{ id: string; at: string; ms: number | string | null; reason: string | null; outcome: string | null; eo: string | null; wo: string | null; fragment_id: string | null; queued_at: string | null; project_id: string | null; wp: string | null; bp: string | null }>(
+    `SELECT e.id, e.at, e.duration_ms AS ms, e.reason, e.outcome, e.orchestration_id AS eo, w.orchestration_id AS wo, w.fragment_id,
+            w.created_at AS queued_at, e.project_id, w.project_id AS wp, b.purpose AS bp
+       FROM bin_events e LEFT JOIN work_items w ON w.id = e.work_item_id LEFT JOIN bins b ON b.id = w.bin_id
+      WHERE e.event_type = 'FREE_LANE_ITEM' AND e.at >= ? AND e.at < ?`,
+    [since, until],
+  );
+  const binRows = await db.all<{ id: string; at: string; bin_id: string | null; provider: string | null; orchestration_id: string | null; project_id: string | null; purpose: string | null; ready_at: string | null; created_at: string | null; state: string | null }>(
+    `SELECT e.id, e.at, e.bin_id, ${DISPATCH_PROVIDER} AS provider, b.orchestration_id, b.project_id, b.purpose, b.ready_at, b.created_at, b.state
+       FROM bin_events e LEFT JOIN bins b ON b.id = e.bin_id
+      WHERE e.event_type = 'BIN_ASSIGNED' AND e.at >= ? AND e.at < ?`,
+    [since, until],
+  );
+  const closes = await inChunks(binRows.map((one) => one.bin_id ?? ''), (c, m) =>
+    db.all<{ bin_id: string; event_type: string; at: string; reason: string | null }>(
+      `SELECT bin_id, event_type, at, reason FROM bin_events
+        WHERE bin_id IN (${m}) AND at >= ? AND event_type IN ('BIN_TERMINAL', 'BIN_RELEASED', 'BIN_LEASE_EXPIRED', 'BIN_TAKEOVER')`,
+      [...c, since]));
+  const claimRows = await db.all<{ id: string; orchestration_id: string | null; fragment_id: string | null; primary_source: number | string | null; sourced: number | string | null; retrieval_state: string | null }>(
+    `SELECT id, orchestration_id, fragment_id, primary_source, sourced, retrieval_state FROM research_claims WHERE accepted = 1 AND created_at >= ? AND created_at < ?`,
+    [since, until],
+  );
+  const packetRows = await db.all<{ id: string; project_id: string }>(
+    `SELECT id, project_id FROM research_orchestrations WHERE document_id IS NOT NULL AND completed_at >= ? AND completed_at < ?`,
+    [since, until],
+  );
+  const openingRows = await db.all<{ id: string; project_id: string; mechanism: string | null; orchestration_id: string | null; fragment_id: string | null; payer: string | null; price_cents: number | null; fulfillment_owner: string | null; buying_signal: string | null; offer_scope: string | null; acceptance_condition: string | null; created_at: string }>(
+    `SELECT id, project_id, mechanism, orchestration_id, fragment_id, payer, price_cents, fulfillment_owner, buying_signal, offer_scope, acceptance_condition, created_at
+       FROM cash_opportunities WHERE duplicate_of_id IS NULL AND created_at >= ? AND created_at < ?`,
+    [since, until],
+  );
+  const priorMechanisms = new Set(
+    (await db.all<{ mechanism: string }>(`SELECT DISTINCT mechanism FROM cash_opportunities WHERE duplicate_of_id IS NULL AND mechanism IS NOT NULL AND created_at < ?`, [since])).map((one) => one.mechanism),
+  );
+  const paymentRows = await db.all<{ id: string; project_id: string; opportunity_id: string | null; orchestration_id: string | null; fragment_id: string | null }>(
+    `SELECT m.id, m.project_id, m.opportunity_id, o.orchestration_id, o.fragment_id FROM cash_money_entries m LEFT JOIN cash_opportunities o ON o.id = m.opportunity_id
+      WHERE m.kind = 'CUSTOMER_PAYMENT' AND m.created_at >= ? AND m.created_at < ?`,
+    [since, until],
+  );
+  // Which free-lane model answered each fragment an output came from, inside the window or before it.
+  const fragmentModel = new Map<string, string>();
+  for (const row of laneRows) if (row.fragment_id && row.outcome === 'SUBMITTED') fragmentModel.set(row.fragment_id, modelOfReason(row.reason));
+  const outputFragments = [...claimRows, ...openingRows, ...paymentRows].map((one) => one.fragment_id).filter((one): one is string => !!one && !fragmentModel.has(one));
+  for (const row of await inChunks(outputFragments, (c, m) =>
+    db.all<{ fragment_id: string; reason: string | null }>(
+      `SELECT w.fragment_id, e.reason FROM bin_events e JOIN work_items w ON w.id = e.work_item_id
+        WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND w.fragment_id IN (${m})`, c))) {
+    fragmentModel.set(row.fragment_id, modelOfReason(row.reason));
+  }
+  const orchestrationLane = new Map<string, string>();
+  for (const row of binRows) if (row.orchestration_id) orchestrationLane.set(row.orchestration_id, `bin:${row.provider ?? '(none)'}`);
+  const orchestrationIds = [
+    ...laneRows.map((one) => one.wo ?? one.eo), ...binRows.map((one) => one.orchestration_id),
+    ...claimRows.map((one) => one.orchestration_id), ...packetRows.map((one) => one.id),
+    ...openingRows.map((one) => one.orchestration_id), ...paymentRows.map((one) => one.orchestration_id),
+  ].filter((one): one is string => !!one);
+  const projectIds = [...laneRows.map((one) => one.wp ?? one.project_id), ...binRows.map((one) => one.project_id)].filter((one): one is string => !!one);
+  const facts = await attributionFacts(orchestrationIds, projectIds);
+  const factsOf = (orchestrationId: string | null, projectId: string | null, binPurpose: string | null): PurposeFacts => ({
+    ...(projectId ? facts.byProject.get(projectId) : undefined),
+    ...(orchestrationId ? facts.byOrchestration.get(orchestrationId) : undefined),
+    binPurpose,
+  });
+  const jobs: YieldJob[] = [];
+  for (const row of laneRows) {
+    const duration = Math.max(0, Number(row.ms ?? 0));
+    const start = Date.parse(row.at) - duration;
+    const attribution = attributePurposes(factsOf(row.wo ?? row.eo, row.wp ?? row.project_id, row.bp));
+    const failed = row.outcome !== 'SUBMITTED';
+    jobs.push({
+      id: `lane:${row.id}`,
+      lane: `free-lane:${modelOfReason(row.reason)}`,
+      purposes: attribution.purposes,
+      basis: attribution.basis,
+      startMs: start,
+      durationMs: duration,
+      queueWaitMs: row.queued_at ? Math.max(0, start - Date.parse(row.queued_at)) : null,
+      outcome: failed ? 'FAILED' : 'COMPLETED',
+      failureCause: failed ? failureClass(row.reason) : null,
+      rateLimited: failed && isRateLimited(row.reason),
+      // The free lane runs on capacity Brain already holds; no row records a per-item charge.
+      costMinor: null,
+    });
+  }
+  for (const row of binRows) {
+    const at = Date.parse(row.at);
+    const close = closes.filter((one) => one.bin_id === row.bin_id && Date.parse(one.at) > at).sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0];
+    const end = close ? Date.parse(close.at) : row.state === 'LEASED' ? untilMs : at;
+    const completed = close?.event_type === 'BIN_TERMINAL' && row.state === 'COMPLETE';
+    const reason = close ? (close.event_type === 'BIN_TERMINAL' ? `terminal ${row.state ?? ''}`.trim() : close.event_type.replace('BIN_', '').toLowerCase().replace('_', ' ')) : null;
+    const attribution = attributePurposes(factsOf(row.orchestration_id, row.project_id, row.purpose));
+    const queuedFrom = row.ready_at ?? row.created_at;
+    jobs.push({
+      id: `bin:${row.id}`,
+      lane: `bin:${row.provider ?? '(none)'}`,
+      purposes: attribution.purposes,
+      basis: attribution.basis,
+      startMs: at,
+      durationMs: Math.max(0, end - at),
+      queueWaitMs: queuedFrom ? Math.max(0, at - Date.parse(queuedFrom)) : null,
+      outcome: !close ? 'IN_FLIGHT' : completed ? 'COMPLETED' : 'FAILED',
+      failureCause: close && !completed ? reason : null,
+      rateLimited: !!close && !completed && isRateLimited(close.reason),
+      costMinor: null,
+    });
+  }
+  const laneOf = (fragmentId: string | null, orchestrationId: string | null): string => {
+    if (fragmentId && fragmentModel.has(fragmentId)) return `free-lane:${fragmentModel.get(fragmentId)}`;
+    if (orchestrationId && orchestrationLane.has(orchestrationId)) return orchestrationLane.get(orchestrationId)!;
+    return '(no job on record)';
+  };
+  const purposesOf = (orchestrationId: string | null, projectId: string | null, extra?: ResearchPurpose): PurposeKey[] => {
+    const found = attributePurposes(factsOf(orchestrationId, projectId, null)).purposes.filter((p) => p !== 'UNATTRIBUTED');
+    if (extra && !found.includes(extra)) found.push(extra);
+    return found.length > 0 ? found : ['UNATTRIBUTED'];
+  };
+  const outputs: YieldOutput[] = [];
+  for (const row of claimRows) {
+    const source: YieldOutput['source'] = Number(row.sourced ?? 0) !== 1 || (row.retrieval_state ?? 'RETRIEVED') !== 'RETRIEVED' ? 'UNRETRIEVED' : Number(row.primary_source ?? 0) === 1 ? 'PRIMARY' : 'SECONDARY';
+    outputs.push({ kind: 'ACCEPTED_CLAIM', id: row.id, lane: laneOf(row.fragment_id, row.orchestration_id), purposes: purposesOf(row.orchestration_id, null), source });
+  }
+  for (const row of packetRows) outputs.push({ kind: 'PACKET_FILED', id: row.id, lane: laneOf(null, row.id), purposes: purposesOf(row.id, row.project_id) });
+  const newMechanism = new Set<string>();
+  for (const row of [...openingRows].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))) {
+    const lane = laneOf(row.fragment_id, row.orchestration_id);
+    const served = purposesOf(row.orchestration_id, row.project_id);
+    if (row.mechanism && !priorMechanisms.has(row.mechanism) && !newMechanism.has(row.mechanism)) {
+      newMechanism.add(row.mechanism);
+      outputs.push({ kind: 'NEW_MECHANISM', id: row.mechanism, lane, purposes: served });
+    }
+    if (row.payer && row.price_cents !== null && row.fulfillment_owner && row.buying_signal) outputs.push({ kind: 'QUALIFIED_POSITION', id: row.id, lane, purposes: served });
+    if (row.offer_scope && row.acceptance_condition && row.price_cents !== null) outputs.push({ kind: 'EXECUTABLE_OFFER', id: row.id, lane, purposes: served });
+  }
+  // A verified customer payment is a business operating: it always serves OPERATING_SUPPORT, beside whatever found it.
+  for (const row of paymentRows) outputs.push({ kind: 'PAID_TRANSACTION', id: row.id, lane: laneOf(row.fragment_id, row.orchestration_id), purposes: purposesOf(row.orchestration_id, row.project_id, 'OPERATING_SUPPORT') });
+  return summarizeResearchYield({ since, until, jobs, outputs });
+}
+
+/** The same reading over each of the TEL-07-1 windows ending at `until`. */
+export async function researchYieldWindows(until = new Date().toISOString()): Promise<Record<(typeof RESEARCH_YIELD_WINDOWS)[number]['key'], ResearchYieldReading>> {
+  const end = Date.parse(until);
+  const out = {} as Record<(typeof RESEARCH_YIELD_WINDOWS)[number]['key'], ResearchYieldReading>;
+  for (const w of RESEARCH_YIELD_WINDOWS) out[w.key] = await researchYieldByPurpose({ since: new Date(end - w.ms).toISOString(), until });
+  return out;
+}
