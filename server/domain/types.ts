@@ -11402,3 +11402,38 @@ export interface GoalObjectiveReadingRow {
   error: string | null;
   created_at: string;
 }
+
+/** One owner money entry for inbox procurement (`repos/inboxes.ts`, migration 149, §110). */
+export interface InboxFundRow {
+  id: string;
+  kind: string;
+  amount_cents: number;
+  actor: string;
+  note: string | null;
+  created_at: string;
+}
+
+/** One inbox order attempt, its quote recorded before it was placed (migration 149, §110). */
+export interface InboxPurchaseRow {
+  id: string;
+  purchase_key: string;
+  provider: string;
+  kind: string;
+  domain: string;
+  mailboxes: number;
+  upfront_cents: number;
+  monthly_cents: number;
+  quote: string;
+  actor: string;
+  created_at: string;
+}
+
+/** What a provider said about one inbox order, appended (migration 149, §110). */
+export interface InboxPurchaseOutcomeRow {
+  id: string;
+  purchase_id: string;
+  outcome: string;
+  detail: string;
+  receipt: string;
+  created_at: string;
+}

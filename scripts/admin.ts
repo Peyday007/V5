@@ -467,6 +467,8 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@example.com]
 
   people    list | foundation | rename <user|email> "<name>"
+  inboxes   status | fund [--add <usd>] [--monthly <usd>] | quote | buy | sync   (§110: buy sending inboxes with money put in)
+            quote|buy --kind prewarmed|new --count <mailboxes> [--provider instantly|inboxkit] [--first F --last L --seed domain.com]
   brain-only show [<bin_…> …] | on | off   (Claude routines take only Brain-improvement work, §84)
   utilization show | run   (every capacity pool: waiting, running, capacity, idle beside work, §98)
   free-lane show | run [ticks]             (free models do the displaced research, §85)
@@ -2561,6 +2563,89 @@ async function main(): Promise<void> {
      * decides when the subject is asked about, the discovery grant decides
      * whether that may run, and the evidence gate decides what may be claimed.
      */
+    /*
+     * Inbox procurement (§110). `fund` is the owner putting money in: it adds
+     * to the one-off pot and/or sets the monthly ceiling, attributed to an
+     * administrator, and those rows are the only thing `buy` may spend.
+     * `quote` prices real orders at the provider and places none; `buy`
+     * places them inside what is left; `sync` reconciles lost answers and
+     * turns on warmup (the integrations tick also runs it hourly).
+     */
+    case 'inboxes status':
+    case 'inboxes fund':
+    case 'inboxes quote':
+    case 'inboxes buy':
+    case 'inboxes sync': {
+      const { buyInboxes, fundInboxes, inboxBudget, syncInboxes } = await import('../server/services/inboxes/procure.ts');
+      const { inboxKitConfigured, inboxKitWallet, ctxOf } = await import('../server/services/inboxes/providers.ts');
+      const usd = (c: number): string => `$${(c / 100).toFixed(2)}`;
+      const toCents = (name: string): number | undefined => {
+        const raw = flag(name);
+        if (raw === null) return undefined;
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value < 0 || value > 100_000) fail(`--${name} is a dollar amount between 0 and 100000.`);
+        return Math.round(value * 100);
+      };
+      const printBudget = (b: Awaited<ReturnType<typeof inboxBudget>>): void => {
+        console.log(`  funds            ${usd(b.fundedCents)} put in, ${usd(b.spentCents)} spent, ${usd(b.remainingCents)} left`);
+        console.log(`  monthly          ${usd(b.monthlyCommittedCents)} a month committed of a ${usd(b.monthlyCeilingCents)} ceiling (${usd(b.monthlyRemainingCents)} left)`);
+        console.log(`  mailboxes        ${b.mailboxesOwned} bought`);
+        for (const one of b.purchases) {
+          console.log(`  purchase         ${one.createdAt.slice(0, 10)} ${one.provider} ${one.kind} ${one.domain} ${one.mailboxes} mailbox(es) ${usd(one.upfrontCents)} + ${usd(one.monthlyCents)}/mo  ${one.state ?? 'IN FLIGHT'}${one.warmupEnabled ? ' warming' : ''}${one.detail ? ` — ${one.detail}` : ''}`);
+        }
+      };
+      if (command === 'status') {
+        printBudget(await inboxBudget());
+        const kit = inboxKitConfigured();
+        if (kit.ok) {
+          const wallet = await inboxKitWallet(ctxOf());
+          console.log(`  inboxkit         connected; wallet ${wallet.ok ? `${wallet.creditsRemaining ?? '?'} credits left` : wallet.detail}`);
+        } else {
+          console.log(`  inboxkit         not connected (missing ${kit.missing.join(', ')}); new inboxes are bought from Instantly`);
+        }
+        break;
+      }
+      if (command === 'sync') {
+        const result = await syncInboxes();
+        console.log(`  reconciled       ${result.reconciled.join(', ') || 'none'}`);
+        console.log(`  warmup on        ${result.warmupEnabled.map((w) => `${w.domain} (${w.accounts})`).join(', ') || 'none'}`);
+        console.log(`  waiting          ${result.waiting.join(', ') || 'none'}`);
+        for (const note of result.notes) console.log(`  note             ${note}`);
+        break;
+      }
+      // A quote changes nothing and needs nobody's authority; money in and money out do.
+      const actor = command === 'quote' ? null : await administrator();
+      if (command === 'fund') {
+        const addCents = toCents('add');
+        const monthlyCeilingCents = toCents('monthly');
+        if (addCents === undefined && monthlyCeilingCents === undefined) fail('Give --add <usd>, --monthly <usd>, or both.');
+        printBudget(await fundInboxes({ addCents, monthlyCeilingCents, actor: actor!.email ?? actor!.id, note: flag('reason') ?? undefined }));
+        break;
+      }
+      const kind = (flag('kind') ?? '').toLowerCase();
+      if (kind !== 'prewarmed' && kind !== 'new') fail('--kind prewarmed or --kind new');
+      const count = Number(flag('count') ?? '');
+      const provider = (flag('provider') ?? '').toUpperCase();
+      if (provider && provider !== 'INSTANTLY' && provider !== 'INBOXKIT') fail('--provider instantly or --provider inboxkit');
+      const persona: Record<string, string> = {};
+      if (flag('first')) persona.firstName = flag('first')!;
+      if (flag('last')) persona.lastName = flag('last')!;
+      if (flag('seed')) persona.seedDomain = flag('seed')!.toLowerCase();
+      const result = await buyInboxes({
+        kind: kind === 'prewarmed' ? 'PREWARMED' : 'NEW', mailboxes: count, dryRun: command === 'quote', actor: actor ? actor.email ?? actor.id : 'quote',
+        persona, provider: (provider || undefined) as 'INSTANTLY' | 'INBOXKIT' | undefined,
+      });
+      console.log(`  seller           ${result.provider ?? '-'}${command === 'quote' ? '  (quote only: nothing was ordered)' : ''}`);
+      for (const line of result.lines) {
+        console.log(`  ${line.outcome.padEnd(16)} ${line.domain} ${line.mailboxes} mailbox(es) ${usd(line.upfrontCents)} now + ${usd(line.monthlyCents)}/mo — ${line.detail}`);
+      }
+      const now = result.lines.filter((l) => l.outcome === 'QUOTED' || l.outcome === 'PLACED');
+      console.log(`  total            ${usd(now.reduce((s, l) => s + l.upfrontCents, 0))} now + ${usd(now.reduce((s, l) => s + l.monthlyCents, 0))}/mo for ${now.reduce((s, l) => s + l.mailboxes, 0)} mailbox(es)`);
+      printBudget(result.budget);
+      if (result.stopped) fail(result.stopped);
+      if (!result.ok) fail('Not every domain was bought; see the lines above.');
+      break;
+    }
     case 'cash instantly': {
       /*
        * Read-only (§94): the owner's Instantly workspace as Brain sees it —

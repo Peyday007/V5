@@ -294,7 +294,7 @@ There must be no workflow where the user has to remember "now go update the data
     time to revenue and whether it can be done, and a goal's constraint binds
     that goal, only while it runs.
 
-## 8–109. The architecture record
+## 8–110. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -405,6 +405,7 @@ resolves. Read the section for the area you are changing before you change it
 - §107. Sellbird's whole sales mind works every business, and Brain still decides, sends through Instantly and keeps the record.
 - §108. A model is chosen by what it does on Brain's work, and a decision is judged by what it predicted.
 - §109. The operator directs engineering, and a merged pull request is not the improvement.
+- §110. Sending inboxes are bought with money the owner put in, priced by the seller first, and never bought twice.
 
 ## Conventions
 

@@ -134,6 +134,25 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
       'repository secret INSTANTLY_API_KEY; the next Integrations run puts it on Brain.',
   },
   {
+    id: 'inboxkit',
+    name: 'InboxKit',
+    purpose: 'New sending inboxes Brain builds itself (§110): domain, DNS, Google mailboxes, exported into Instantly.',
+    heldBy: 'BRAIN',
+    credentials: [
+      fly('INBOXKIT_API_KEY', ['GITHUB_SECRET', 'OWNER'], { required: false, shape: /^\S{20,}$/ }),
+      fly('INBOXKIT_WORKSPACE_ID', ['GITHUB_SECRET', 'OWNER'], { required: false }),
+      fly('INBOXKIT_CONTACT_JSON', ['GITHUB_SECRET', 'OWNER'], { required: false, shape: /^\{[\s\S]*\}$/ }),
+    ],
+    consumers: [{ component: 'Inbox procurement: new inboxes', path: 'server/services/inboxes/providers.ts' }],
+    capabilities: ['BUY_SENDING_INBOXES'],
+    probe: null,
+    dailyCeiling: null,
+    ownerAction:
+      'Create an InboxKit account, add a payment method and wallet credit, connect Instantly under Sequencers, then save ' +
+      'the API key, the workspace id and the domain registrant details (JSON) as the GitHub repository secrets ' +
+      'INBOXKIT_API_KEY, INBOXKIT_WORKSPACE_ID and INBOXKIT_CONTACT_JSON; until then new inboxes are bought from Instantly.',
+  },
+  {
     id: 'google-places',
     name: 'Google Places (through V2)',
     purpose: "Business discovery: V2's Places API (New) key, used by Brain through V2's signed bridge, never copied.",
