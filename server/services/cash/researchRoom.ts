@@ -35,6 +35,7 @@ import { databasePressure } from '../../db/pressure.ts';
 import { getDb } from '../../db/database.ts';
 import { sharedFleetSnapshot } from '../dispatch/candidates.ts';
 import { surfaceIneligibility } from '../dispatch/router.ts';
+import { familyCurrent, INTERMEDIATION_FAMILY, type FamilyDeclaration } from './intermediationPositions.ts';
 
 export interface ResearchCapacity {
   /** The grant's `AT_ONCE` ceiling, or null when no grant governs research here. */
@@ -57,6 +58,38 @@ export interface ResearchRoom {
   inFlight: number;
   limitedBy: RoomLimit;
   reason: string;
+  /**
+   * Which research family the room was offered to first, and why (RES-15-4).
+   * Present only while a family declaration is current and the reading was
+   * asked about a family; absent otherwise, so a lapsed declaration leaves the
+   * reading exactly as it was before families existed.
+   */
+  family?: RoomFamily;
+}
+
+/** The family a reading's room was given to, so the allocation can be inspected. */
+export interface RoomFamily {
+  /** The declared priority family, e.g. COMMERCIAL_INTERMEDIATION. */
+  key: string;
+  /** Whether the work this reading was asked for is that family's work. */
+  given: 'FAMILY_FIRST' | 'AFTER_FAMILY';
+  /** Room held for the family's waiting work before this kind of work was offered any. */
+  heldForFamily: number;
+  reviewBy: string;
+  why: string;
+}
+
+/**
+ * Which family the work asking for room belongs to, and the declared priority
+ * family's demand beside it. `kind` is the asking work's family key (null for
+ * research that belongs to none); `familyWaiting` is the declared family's work
+ * that is eligible and waiting for room now.
+ */
+export interface FamilyAsk {
+  kind: string | null;
+  familyWaiting?: number;
+  declaration?: FamilyDeclaration;
+  now?: Date | string;
 }
 
 /**
@@ -69,6 +102,50 @@ export interface ResearchRoom {
  * counted again.
  */
 export function researchRoomFrom(input: {
+  capacity: ResearchCapacity;
+  inFlight: number;
+  unlaunched: number;
+  /** Optional: offer the room to a current priority family first (RES-15-4). */
+  family?: FamilyAsk;
+}): ResearchRoom {
+  const base = baseResearchRoom(input);
+  return input.family ? offerToFamily(base, input.family) : base;
+}
+
+/**
+ * Offer a computed room to a current priority family first.
+ *
+ * The family never gets more than the room already computed: the grant's free
+ * slots, the surface count and SHEDDING decided that, and nothing here raises
+ * it. While the declaration is current, the family's own work is offered the
+ * whole room, and any other optional research is offered only what the
+ * family's waiting work leaves. When the declaration lapses — or there is no
+ * room at all — the reading is returned untouched.
+ */
+export function offerToFamily(room: ResearchRoom, ask: FamilyAsk): ResearchRoom {
+  const declaration = ask.declaration ?? INTERMEDIATION_FAMILY;
+  if (room.room <= 0) return room;
+  if (!familyCurrent(declaration, ask.now ?? new Date())) return room;
+  const waiting = Math.max(0, Math.trunc(ask.familyWaiting ?? 0));
+  const isFamily = ask.kind === declaration.key;
+  const held = isFamily ? 0 : Math.min(room.room, waiting);
+  const left = room.room - held;
+  const family: RoomFamily = {
+    key: declaration.key,
+    given: isFamily ? 'FAMILY_FIRST' : 'AFTER_FAMILY',
+    heldForFamily: held,
+    reviewBy: declaration.reviewBy,
+    why: declaration.why,
+  };
+  const words = isFamily
+    ? `; offered first to ${declaration.key}, a current high-priority family until ${declaration.reviewBy}, because ${declaration.why}`
+    : held > 0
+      ? `; ${held} held for ${waiting} waiting ${declaration.key} item(s) first, a current high-priority family until ${declaration.reviewBy}`
+      : `; ${declaration.key} has nothing waiting, so the room is offered on`;
+  return { ...room, room: left, cap: room.inFlight + left, reason: room.reason + words, family };
+}
+
+function baseResearchRoom(input: {
   capacity: ResearchCapacity;
   inFlight: number;
   unlaunched: number;
@@ -345,6 +422,7 @@ export function applyOperatorMax(room: ResearchRoom, max: number | null, spare =
   const allowed = Math.max(0, max + lift - room.inFlight);
   if (allowed >= room.room) return room;
   return {
+    ...room,
     room: allowed,
     cap: room.inFlight + allowed,
     inFlight: room.inFlight,
@@ -417,11 +495,13 @@ export async function researchRoom(input: {
   projectId: string;
   inFlight: number;
   unlaunched: number;
+  family?: FamilyAsk;
 }): Promise<ResearchRoom> {
   const room = researchRoomFrom({
     capacity: await researchCapacity(input.projectId),
     inFlight: input.inFlight,
     unlaunched: input.unlaunched,
+    ...(input.family ? { family: input.family } : {}),
   });
   if (room.room <= 0) return room;
   const max = operatorResearchMax();
