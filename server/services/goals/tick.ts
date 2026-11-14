@@ -50,7 +50,7 @@ import {
 } from '../../repos/goals.ts';
 import { assembleGoals, type GoalView } from './model.ts';
 import { rankGoals } from './priority.ts';
-import type { ResearchYieldReading } from './researchYield.ts';
+import type { LaneCapacity, ResearchYieldReading } from './researchYield.ts';
 import {
   COMMERCIAL_FLOOR,
   EXPLORATION_FLOOR,
@@ -394,6 +394,13 @@ export interface ResearchAllocationPorts {
   /** The newest recorded decision's detail on a goal, or null. */
   lastDecision(goalId: string): Promise<Record<string, unknown> | null>;
   recordGoal(goalId: string, summary: string, detail: Record<string, unknown>): Promise<void>;
+  /**
+   * Each lane's capacity now — qualified work waiting and not started, how long
+   * it has waited, the slots running and busy, the ceiling and the cost of one
+   * more slot (`researchCapacityNow`). Without it nothing is measured and no
+   * capacity is ever recommended.
+   */
+  readCapacity?(now: string): Promise<Map<string, LaneCapacity>>;
 }
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -401,7 +408,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 /** The measured inputs one window gives the decision. Pure. */
 export function allocationInputFrom(
   reading: ResearchYieldReading,
-  context: { urgentCommercialGoal: boolean; nearestDeadlineDays: number | null; triedRemedies: Map<string, LaneRemedy[]> },
+  context: { urgentCommercialGoal: boolean; nearestDeadlineDays: number | null; triedRemedies: Map<string, LaneRemedy[]>; capacity?: Map<string, LaneCapacity> | null },
 ): AllocationInput {
   // The shares in force are where the capacity actually went: each purpose's job time in the window.
   const currentShares: Partial<Record<ResearchPurpose, number>> = {};
@@ -436,21 +443,50 @@ export function allocationInputFrom(
       triedRemedies: context.triedRemedies.get(lane) ?? [],
     });
     const attempts = b.completions + b.failures.total;
-    bottlenecks.push({
-      lane,
-      purposes: served,
-      resource: b.failures.rateLimited > 0 ? 'MODEL_RATE_LIMIT' : null,
-      qualifiedQueued: b.inFlight,
-      queueWaitMs: b.queueWait.medianMs,
-      measuredMachineLimit: b.failures.rateLimited > 0,
-      // Nothing in the window measures quota headroom or the cost of another unit: unknown, never assumed.
-      quotaHeadroom: null,
-      reliability: attempts > 0 ? b.completions / attempts : null,
-      ownedByAnotherWorker: false,
-      incrementalCostPerUnit: null,
-    });
+    bottlenecks.push(bottleneckOf(lane, served, b, context.capacity?.get(lane) ?? null, attempts > 0 ? b.completions / attempts : null));
   }
   return { currentShares, purposes, lanes, bottlenecks, urgentCommercialGoal: context.urgentCommercialGoal };
+}
+
+/**
+ * One lane's bottleneck, from the window and the lane's capacity now. Pure.
+ *
+ * Queued work is work that is waiting and has not started — never the jobs
+ * already running — and its wait is how long it has been waiting now. Two
+ * machine limits are measured:
+ *
+ *   * a provider refusing the lane's calls in the window (`MODEL_RATE_LIMIT`):
+ *     that quota is spent, so its headroom is a measured zero and no capacity
+ *     is added on it;
+ *   * every slot the lane runs busy while work waits (`WORKER`): the room left
+ *     is the controller's ceiling less the slots it runs, and one more slot
+ *     costs what the capacity reading establishes.
+ *
+ * A lane without a capacity reading has nothing measured, and every field
+ * that would need one stays null.
+ */
+export function bottleneckOf(
+  lane: string,
+  purposes: ResearchPurpose[],
+  b: ResearchYieldReading['lanes'][string],
+  cap: LaneCapacity | null,
+  reliability: number | null,
+): BottleneckMeasurement {
+  const rateLimited = b.failures.rateLimited > 0;
+  const saturated = !!cap && cap.busy !== null && cap.slots !== null && cap.slots > 0 && cap.busy >= cap.slots && (cap.waiting ?? 0) > 0;
+  const resource: BottleneckMeasurement['resource'] = rateLimited ? 'MODEL_RATE_LIMIT' : saturated ? 'WORKER' : null;
+  return {
+    lane,
+    purposes,
+    resource,
+    qualifiedQueued: cap ? cap.waiting : null,
+    queueWaitMs: cap ? cap.waitingMs : null,
+    measuredMachineLimit: rateLimited || saturated,
+    quotaHeadroom: rateLimited ? 0 : saturated && cap!.ceiling !== null ? Math.max(0, cap!.ceiling - cap!.slots!) : null,
+    reliability,
+    ownedByAnotherWorker: false,
+    incrementalCostPerUnit: resource === 'WORKER' ? cap!.incrementalCostPerUnit : null,
+  };
 }
 
 /** What makes two decisions the same: shares to a tenth of a percent, lane remedies and capacity verdicts. */
@@ -487,7 +523,8 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const previous = live.length > 0 ? await ports.lastDecision(live[0]!.id) : null;
   const tried = triedRemediesFrom(previous);
   const reading = await ports.readYield(window);
-  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried });
+  const capacity = ports.readCapacity ? await ports.readCapacity(window.until) : null;
+  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, capacity });
   const decision = decideResearchAllocation(allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
   const fingerprint = allocationFingerprint(decision);
@@ -510,6 +547,8 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     capacity: decision.capacity.map((c) => ({ ...c, recommendationOnly: true })),
     bottlenecks: decision.capacity.filter((c) => c.resource !== null).map((c) => ({ lane: c.lane, resource: c.resource })),
     costCountedOnce: reading.costCountedOnce,
+    // What each lane's capacity measured now: the inputs any capacity verdict rests on.
+    capacityNow: capacity ? Object.fromEntries([...capacity].map(([lane, c]) => [lane, { waiting: c.waiting, waitingMs: c.waitingMs, slots: c.slots, busy: c.busy, ceiling: c.ceiling, incrementalCostPerUnit: c.incrementalCostPerUnit }])) : null,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
   const recordedOn: string[] = [];
@@ -537,10 +576,11 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
 
 /** The production rows: the yield reader, the goal's own event history, and the project event log. */
 export async function productionResearchAllocationPorts(): Promise<ResearchAllocationPorts> {
-  const { researchYieldByPurpose } = await import('./researchYield.ts');
+  const { researchYieldByPurpose, researchCapacityNow } = await import('./researchYield.ts');
   const { listWorkstreamEvents } = await import('../../repos/register.ts');
   return {
     readYield: (window) => researchYieldByPurpose(window),
+    readCapacity: (now) => researchCapacityNow(now),
     async lastDecision(goalId) {
       const events = await listWorkstreamEvents(goalId, 200);
       const newest = events.find((e) => e.kind === RESEARCH_REALLOCATED_EVENT);

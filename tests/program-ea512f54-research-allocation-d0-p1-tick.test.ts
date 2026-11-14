@@ -14,6 +14,7 @@ import {
   RESEARCH_REALLOCATED_EVENT,
   advanceGoals,
   allocationInputFrom,
+  bottleneckOf,
   reallocateResearch,
   reallocateResearchIfDue,
   sharesInForceFrom,
@@ -26,7 +27,9 @@ import { createBin, getBin } from '../server/repos/bins.ts';
 import { launchMission, linkMission } from '../server/repos/russellMissions.ts';
 import type { BinManifest } from '../server/domain/types.ts';
 import { RESEARCH_PURPOSES, EXPLORATION_FLOOR, SYSTEM_HEALTH_FLOOR, type ResearchPurpose } from '../server/services/goals/researchAllocation.ts';
-import type { ResearchYieldReading, YieldBucket } from '../server/services/goals/researchYield.ts';
+import { researchCapacityNow, type LaneCapacity, type ResearchYieldReading, type YieldBucket } from '../server/services/goals/researchYield.ts';
+import { decideCapacity, MAX_CAPACITY_STEP, QUEUE_WAIT_CONSTRAINT_MS } from '../server/services/goals/researchAllocation.ts';
+import { enqueueWork } from '../server/repos/workQueue.ts';
 import type { GoalView } from '../server/services/goals/model.ts';
 
 function bucket(over: Partial<YieldBucket> = {}): YieldBucket {
@@ -324,5 +327,129 @@ describe('advanceGoals applies the newest recorded decision to live bins (review
     const report = await advanceGoals();
     expect(report.researchApplied).toBeNull();
     expect((await getBin(owned))!.priority).toBe(8);
+  });
+});
+
+/* F3: capacity is decided from what production measures, not from hand-built inputs. */
+
+function capacityReading(over: Partial<LaneCapacity> = {}): LaneCapacity {
+  return { waiting: 12, waitingMs: 40 * 60_000, slots: 4, busy: 4, ceiling: 12, incrementalCostPerUnit: 0, basis: ['test'], ...over };
+}
+
+/** A free lane that is reliable, link-rich (so no remedy comes first) and saturated. */
+function saturatedReading(over: Partial<YieldBucket> = {}): ResearchYieldReading {
+  const r = reading();
+  r.lanes = {
+    'free-lane:m1': bucket({ submissions: 40, completions: 38, acceptedClaims: 40, qualifiedPositions: 10, jobMs: 7_200_000, inFlight: 0, failures: { total: 2, rateLimited: 0, other: 2, causes: [] }, ...over }),
+  };
+  r.attributions = [{ jobId: 'job_1', lane: 'free-lane:m1', purposes: ['TRANSACTION_ROUTES'], basis: ['test'] }];
+  return r;
+}
+
+describe('capacity is reachable from production measurements (F3)', () => {
+  it('a saturated lane with work waiting past the threshold gets a costed ADD_CAPACITY within the ceiling', () => {
+    const input = allocationInputFrom(saturatedReading(), { urgentCommercialGoal: false, nearestDeadlineDays: null, triedRemedies: new Map(), capacity: new Map([['free-lane:m1', capacityReading()]]) });
+    const b = input.bottlenecks!.find((x) => x.lane === 'free-lane:m1')!;
+    expect(b).toMatchObject({ resource: 'WORKER', measuredMachineLimit: true, qualifiedQueued: 12, queueWaitMs: 40 * 60_000, quotaHeadroom: 8, incrementalCostPerUnit: 0 });
+    const [verdict] = decideCapacity(input.bottlenecks!, input.lanes!);
+    expect(verdict).toMatchObject({ lane: 'free-lane:m1', kind: 'ADD_CAPACITY', resource: 'WORKER', units: Math.min(MAX_CAPACITY_STEP, 8, 12), incrementalCost: 0 });
+  });
+
+  it('counts only work that is waiting and not started: running jobs are not a queue', () => {
+    // Thirty jobs running, nothing waiting: no capacity, whatever the started jobs once waited.
+    const r = saturatedReading({ inFlight: 30, queueWait: { measured: 30, medianMs: 90 * 60_000, p90Ms: 120 * 60_000 } });
+    const input = allocationInputFrom(r, { urgentCommercialGoal: false, nearestDeadlineDays: null, triedRemedies: new Map(), capacity: new Map([['free-lane:m1', capacityReading({ waiting: 0, waitingMs: null })]]) });
+    const b = input.bottlenecks![0]!;
+    expect(b.qualifiedQueued).toBe(0);
+    expect(b.queueWaitMs).toBeNull();
+    expect(decideCapacity(input.bottlenecks!, input.lanes!)[0]).toMatchObject({ kind: 'NO_CAPACITY', reason: 'no qualified useful job is measured waiting' });
+    // Without any capacity reading nothing is measured: the started jobs' wait is not used as the queue's.
+    const unmeasured = allocationInputFrom(r, { urgentCommercialGoal: false, nearestDeadlineDays: null, triedRemedies: new Map() });
+    expect(unmeasured.bottlenecks![0]).toMatchObject({ qualifiedQueued: null, queueWaitMs: null, quotaHeadroom: null, incrementalCostPerUnit: null });
+  });
+
+  it('work that has not waited past the threshold, or slots not all busy, add nothing', () => {
+    const fresh = allocationInputFrom(saturatedReading(), { urgentCommercialGoal: false, nearestDeadlineDays: null, triedRemedies: new Map(), capacity: new Map([['free-lane:m1', capacityReading({ waitingMs: QUEUE_WAIT_CONSTRAINT_MS - 1 })]]) });
+    expect(decideCapacity(fresh.bottlenecks!, fresh.lanes!)[0]!.kind).toBe('NO_CAPACITY');
+    const idle = allocationInputFrom(saturatedReading(), { urgentCommercialGoal: false, nearestDeadlineDays: null, triedRemedies: new Map(), capacity: new Map([['free-lane:m1', capacityReading({ busy: 2 })]]) });
+    expect(idle.bottlenecks![0]).toMatchObject({ resource: null, measuredMachineLimit: false });
+    expect(decideCapacity(idle.bottlenecks!, idle.lanes!)[0]).toMatchObject({ kind: 'NO_CAPACITY', reason: 'the delay is not attributed to a measured machine limit' });
+    const full = allocationInputFrom(saturatedReading(), { urgentCommercialGoal: false, nearestDeadlineDays: null, triedRemedies: new Map(), capacity: new Map([['free-lane:m1', capacityReading({ slots: 12, busy: 12 })]]) });
+    expect(decideCapacity(full.bottlenecks!, full.lanes!)[0]).toMatchObject({ kind: 'NO_CAPACITY', reason: 'the WORKER has no measured quota headroom' });
+  });
+
+  it('a provider refusing the lane is a measured zero headroom, never a reason to add slots', () => {
+    const r = saturatedReading({ failures: { total: 2, rateLimited: 2, other: 0, causes: [] } });
+    const b = bottleneckOf('free-lane:m1', ['TRANSACTION_ROUTES'], r.lanes['free-lane:m1']!, capacityReading(), 0.95);
+    expect(b).toMatchObject({ resource: 'MODEL_RATE_LIMIT', quotaHeadroom: 0, incrementalCostPerUnit: null, measuredMachineLimit: true });
+    expect(decideCapacity([b])[0]).toMatchObject({ kind: 'NO_CAPACITY', reason: 'the MODEL_RATE_LIMIT has no measured quota headroom' });
+  });
+
+  it('the tick pass reads capacity through its ports and records the recommendation with what it measured', async () => {
+    const { ports, events } = memoryPorts(saturatedReading());
+    let askedAt: string | null = null;
+    ports.readCapacity = async (now) => {
+      askedAt = now;
+      return new Map([['free-lane:m1', capacityReading()]]);
+    };
+    const report = await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-14T00:00:00.000Z' }, ports);
+    expect(askedAt).toBe('2026-11-14T00:00:00.000Z');
+    expect(report.capacity).toContainEqual(expect.objectContaining({ lane: 'free-lane:m1', kind: 'ADD_CAPACITY', resource: 'WORKER', incrementalCost: 0 }));
+    const recorded = events.get('wst_a')![0]!;
+    expect((recorded.capacity as { kind: string; recommendationOnly: boolean }[]).find((c) => c.kind === 'ADD_CAPACITY')!.recommendationOnly).toBe(true);
+    expect(recorded.capacityNow).toMatchObject({ 'free-lane:m1': { waiting: 12, slots: 4, busy: 4, ceiling: 12, incrementalCostPerUnit: 0 } });
+  });
+
+  it('the production ports read capacity from the rows', async () => {
+    const { productionResearchAllocationPorts } = await import('../server/services/goals/tick.ts');
+    expect(typeof (await productionResearchAllocationPorts()).readCapacity).toBe('function');
+  });
+});
+
+describe('researchCapacityNow reads the free lane\'s queue and controller from the rows (F3)', () => {
+  let projectId: string;
+  beforeEach(async () => {
+    projectId = (await freshProject()).project.id;
+  });
+
+  it('counts claimable unstarted free-lane items, how long they have waited, and each model\'s slots and ceiling', async () => {
+    const bin = await createBin({
+      projectId, kind: 'DETERMINISTIC_CHECK', title: 'Free-lane research', objective: 'Research.',
+      manifest: {
+        objective: 'Research.', why: 'Test.', lineage: { projectId, layerId: null, goal: null, orchestrationId: null },
+        units: [{ key: 'u', establishes: 'x', input: 'x', transform: 'sha256', dependsOn: [] }],
+        acceptableSources: [], excludedSources: [], evidence: ['x'], outputs: ['x'], authorizedActions: ['x'], prohibitedActions: ['x'], budgetUnits: 1,
+        retry: { maxAttempts: 3, backoffSeconds: 30 }, stoppingConditions: ['x'],
+      } as BinManifest,
+      completionContract: 'DETERMINISTIC_UNITS_V1', createdByType: 'SYSTEM', createdById: 'test', ready: true,
+    });
+    await getDb().run(`UPDATE bins SET purpose = 'PLAY_RESEARCH' WHERE id = ?`, [bin.id]);
+    const now = new Date('2026-11-14T12:00:00.000Z');
+    const at = (minutesAgo: number) => new Date(now.getTime() - minutesAgo * 60_000).toISOString();
+    for (const m of [20, 40, 60]) await enqueueWork({ projectId, workType: 'RESEARCH_FRAGMENT', binId: bin.id, availableAt: at(m), createdByType: 'SYSTEM' });
+    // Not yet claimable, and not free-lane work: neither is in the queue.
+    await enqueueWork({ projectId, workType: 'RESEARCH_FRAGMENT', binId: bin.id, availableAt: new Date(now.getTime() + 60_000).toISOString(), createdByType: 'SYSTEM' });
+    await enqueueWork({ projectId, workType: 'SOMETHING_ELSE', binId: bin.id, availableAt: at(30), createdByType: 'SYSTEM' });
+    await getDb().run(`INSERT INTO free_lane_capacity (model, target, stable_high, updated_at, reason) VALUES (?, ?, ?, ?, ?)`, ['test-model', 6, 6, now.toISOString(), 'test']);
+    const capacity = await researchCapacityNow(now.toISOString());
+    const lane = capacity.get('free-lane:test-model')!;
+    expect(lane).toMatchObject({ waiting: 3, waitingMs: 40 * 60_000, slots: 6, incrementalCostPerUnit: 0 });
+    expect(lane.ceiling).toBeGreaterThanOrEqual(1);
+    // No controller runs in this process and no item finished lately: nobody was busy.
+    expect(lane.busy).toBe(0);
+    expect(lane.basis.join(' ')).toMatch(/claimable now and not started/);
+  });
+
+  it('reads how busy a model was from its item rows when no controller reading is held, so saturation is measurable', async () => {
+    const now = new Date('2026-11-14T12:00:00.000Z');
+    await getDb().run(`INSERT INTO free_lane_capacity (model, target, stable_high, updated_at, reason) VALUES (?, ?, ?, ?, ?)`, ['busy-model', 2, 2, now.toISOString(), 'test']);
+    // Two slots, each busy for the whole last three minutes.
+    for (let i = 0; i < 2; i++) {
+      await getDb().run(`INSERT INTO bin_events (id, event_type, at, duration_ms, outcome, reason) VALUES (?, 'FREE_LANE_ITEM', ?, ?, 'SUBMITTED', 'model busy-model')`, [`bev_busy_${i}`, now.toISOString(), 4 * 60_000]);
+    }
+    const lane = (await researchCapacityNow(now.toISOString())).get('free-lane:busy-model')!;
+    expect(lane.slots).toBe(2);
+    expect(lane.busy).toBe(2);
+    expect(lane.basis.join(' ')).toMatch(/FREE_LANE_ITEM rows/);
   });
 });

@@ -938,3 +938,116 @@ export async function researchYieldWindows(until = new Date().toISOString()): Pr
   for (const w of RESEARCH_YIELD_WINDOWS) out[w.key] = await researchYieldByPurpose({ since: new Date(end - w.ms).toISOString(), until });
   return out;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Research capacity now, per lane (RES-15-5: capacity to a measured constraint) */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * What a lane's capacity is at this moment, from the rows and the running
+ * controller: the measurements the allocation needs before it may recommend
+ * adding or repurposing capacity. The yield window says what ran; this says
+ * what is waiting now and how much room is left. Every field is null when
+ * nothing measures it — never assumed.
+ */
+export interface LaneCapacity {
+  /** Qualified jobs queued and claimable now that have not started. */
+  waiting: number | null;
+  /** Median time those waiting jobs have already waited, now. */
+  waitingMs: number | null;
+  /** Slots the lane runs at now (its controller's target). */
+  slots: number | null;
+  /** Slots busy at once: the controller's last step, else the time-weighted average from the lane's recent item rows. */
+  busy: number | null;
+  /** The most slots the lane may run at: the GPU's guard, else its share of the database pool. */
+  ceiling: number | null;
+  /** Money one more slot costs, in minor units; null when nothing establishes it. */
+  incrementalCostPerUnit: number | null;
+  /** Where each figure came from. */
+  basis: string[];
+}
+
+/** How far back the rows are read for how busy a model was, when no controller reading is held: the controller's own window. */
+export const BUSY_WINDOW_MS = 3 * 60_000;
+
+/** The work types the free lane answers, as `freeLane/capacity.ts` `waitingNow` counts them. */
+const FREE_LANE_WORK = "('RESEARCH_PLAN', 'RESEARCH_FRAGMENT', 'RESEARCH_VERIFY', 'RESEARCH_SYNTHESIZE', 'RESEARCH_AUDIT')";
+
+/** Median of a list, or null when empty. Pure. */
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+/**
+ * Each free-lane model's capacity now, keyed by its yield lane
+ * (`free-lane:<model>`). The queue is the free lane's own — the same items
+ * `waitingNow` counts, claimable now and not started — and its wait is how
+ * long those items have been claimable, not how long jobs that already ran had
+ * waited. Slots are the persisted controller target (`free_lane_capacity`),
+ * busy is the controller's last reading in this process, and the ceiling is
+ * the one the controller itself holds the model to. One more slot inside that
+ * ceiling costs no money: the lane runs on capacity Brain already holds and no
+ * row records a per-item charge (`researchYieldByPurpose`), so the cost is the
+ * mechanism's, stated with its basis.
+ */
+export async function researchCapacityNow(now = new Date().toISOString()): Promise<Map<string, LaneCapacity>> {
+  const nowMs = Date.parse(now);
+  const queued = await getDb().all<{ available_at: string | null }>(
+    `SELECT w.available_at FROM work_items w
+      WHERE w.state = 'QUEUED' AND w.available_at <= ? AND w.attempt_count < w.max_attempts
+        AND w.work_type IN ${FREE_LANE_WORK}
+        AND EXISTS (SELECT 1 FROM bins b
+                     WHERE (b.id = w.bin_id OR (b.orchestration_id IS NOT NULL AND b.orchestration_id = w.orchestration_id))
+                       AND b.purpose IN ('PLAY_RESEARCH', 'GRUNT'))
+      LIMIT 5000`,
+    [now],
+  );
+  const waits = queued.map((one) => (one.available_at ? Math.max(0, nowMs - Date.parse(one.available_at)) : null)).filter((one): one is number => one !== null && Number.isFinite(one));
+  const { readCapacity, lastControlReading, gpuCeiling, slotShare, SAFETY_CEILING } = await import('../freeLane/capacity.ts');
+  const { isRunpodSlot } = await import('../cheap/runpod.ts');
+  const rows = await readCapacity();
+  const live = lastControlReading();
+  // Where this process holds no controller reading, the rows say how busy each model was: the
+  // time-weighted jobs at once over the last few minutes, from the items it finished in them.
+  const recentFrom = nowMs - BUSY_WINDOW_MS;
+  const recent = live ? [] : await getDb().all<{ at: string; ms: number | string | null; reason: string | null }>(
+    `SELECT at, duration_ms AS ms, reason FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND at <= ?`,
+    [new Date(recentFrom).toISOString(), now],
+  );
+  const busyMs = new Map<string, number>();
+  for (const one of recent) {
+    const end = Date.parse(one.at);
+    const start = end - Math.max(0, Number(one.ms ?? 0));
+    const overlap = Math.max(0, Math.min(end, nowMs) - Math.max(start, recentFrom));
+    const model = modelOfReason(one.reason);
+    busyMs.set(model, (busyMs.get(model) ?? 0) + overlap);
+  }
+  const share = slotShare(rows.length);
+  const out = new Map<string, LaneCapacity>();
+  for (const row of rows) {
+    const reading = live?.models.find((m) => m.model === row.model) ?? null;
+    const fromRows = live ? null : Math.round(((busyMs.get(row.model) ?? 0) / BUSY_WINDOW_MS) * 10) / 10;
+    const busy = reading ? reading.busy : fromRows;
+    const gpu = isRunpodSlot(row.model);
+    const ceiling = gpu ? gpuCeiling() : (share ?? SAFETY_CEILING);
+    out.set(`free-lane:${row.model}`, {
+      waiting: queued.length,
+      waitingMs: median(waits),
+      slots: row.target,
+      busy,
+      ceiling,
+      incrementalCostPerUnit: 0,
+      basis: [
+        `waiting: ${queued.length} free-lane item(s) claimable now and not started (work_items)`,
+        `slots: controller target ${row.target} (free_lane_capacity, ${row.updatedAt})`,
+        reading ? `busy: ${reading.busy} at the controller's last step` : `busy: ${fromRows} jobs at once on average over the last ${BUSY_WINDOW_MS / 60_000} min (FREE_LANE_ITEM rows; no controller reading in this process)`,
+        gpu ? `ceiling: the GPU's slot guard ${ceiling}` : share !== null ? `ceiling: its share of the database pool, ${share}` : `ceiling: the runaway guard ${SAFETY_CEILING} (database pool not measured)`,
+        'cost: a slot inside the ceiling runs on capacity Brain already holds; no row records a per-item charge',
+      ],
+    });
+  }
+  return out;
+}
