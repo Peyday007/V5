@@ -67,6 +67,7 @@ import type { EvidenceTier } from '../../domain/quant.ts';
 import { readPathways, type BrainCapabilities, type PathwayReading } from './pathways.ts';
 import { reconstructPlan, type Reconstruction } from './reconstruction.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
+import { offersReadyFirst } from './offerReadiness.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
@@ -1400,7 +1401,9 @@ async function pursueSales(goal: Workstream, reading: PlanReading): Promise<void
  * reading each goal took in this process. Empty when nothing has been read yet.
  */
 export function salesOrderForProject(projectId: string): string[] {
-  const out: string[] = [];
+  // First, what a live goal's offer readiness says may be offered now
+  // (`actOnOfferReadiness`, PORT-05 S-0065): authorized and offerable is sold first.
+  const out: string[] = offersReadyFirst(projectId);
   for (const reading of lastReadings.values()) {
     if (reading.target.projectId !== projectId || reading.executionPolicy !== 'SQUEEZE') continue;
     for (const sale of reading.sales) if (!out.includes(sale.opportunityId)) out.push(sale.opportunityId);

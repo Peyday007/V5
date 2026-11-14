@@ -30,7 +30,12 @@
  *      naming the fact that moved it, so "why did this change" is answered
  *      from a row rather than from a re-run.
  *
- * Nothing here starts work, approves anything, spends anything, re-enqueues a
+ *   4. **Offers.** Each active goal's offer readiness is acted on
+ *      (`actOnOfferReadiness`): an opening authorized and offerable is readied
+ *      through the existing gate and reached first by the existing sender; one
+ *      that is not is left alone with the stopped action recorded.
+ *
+ * Nothing here sends, approves anything, spends anything, re-enqueues a
  * failed item or retries an external effect. Releasing a hold makes work that
  * was already authorized claimable again; it never makes new work. And a hold
  * never touches a bin another live goal is pursuing — one person pausing their
@@ -51,6 +56,7 @@ import {
 import { assembleGoals, type GoalView } from './model.ts';
 import { rankGoals } from './priority.ts';
 import { refreshCoMovementIfDue } from './coMovement.ts';
+import { actOnOfferReadiness, productionOfferActPorts, type OfferActReading } from './offerReadiness.ts';
 
 export interface GoalTickReport {
   goals: number;
@@ -58,6 +64,8 @@ export interface GoalTickReport {
   released: { binId: string; goalId: string; why: string }[];
   reprioritized: { binId: string; goalId: string; priority: number }[];
   moved: { goalId: string; from: number | null; to: number; reason: string }[];
+  /** Each active goal's openings acted on by their offer readiness (PORT-05, S-0065). */
+  offers?: { acted: OfferActReading[]; failed: { goalId: string; opportunityId: string | null; error: string }[] } | { error: string };
 }
 
 const LIVE = new Set(['DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN']);
@@ -212,6 +220,15 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
       reason: why.reason,
     });
     report.moved.push({ goalId: rank.id, from: last ? last.rank : null, to: rank.rank, reason: why.reason });
+  }
+
+  // Offers: an opening a live goal may offer now is readied and reached first;
+  // one it may not is left alone with the stopped action recorded (S-0065).
+  // Its own failure domain: an offer pass that threw stops none of the above.
+  try {
+    report.offers = await actOnOfferReadiness(snapshot.goals, await productionOfferActPorts(), options?.now ? new Date(options.now) : new Date());
+  } catch (error) {
+    report.offers = { error: error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300) };
   }
 
   return report;
