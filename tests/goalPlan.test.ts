@@ -107,6 +107,8 @@ async function play(input: { title: string; priceCents: number; days?: number; c
 async function goal(amountCents: number, capitalCents: number | null = null, days = 30): Promise<string> {
   const g = await createWorkstream({ projectId, title: 'Collect cash fast', intent: 'Collect settled cash within the window.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
   await setTerms(g.id, { dueAt: inDays(days), ownerUserId: userId }, `person:${userId}`);
+  // One live target per project ledger (G-7): a test reading a second variant retires the first.
+  await getDb().run(`UPDATE workstreams SET cancelled_at = ? WHERE target_project_id = ? AND cancelled_at IS NULL AND id <> ?`, [now.toISOString(), projectId, g.id]);
   const set = await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents, currency: 'USD', projectId, capitalCeilingCents: capitalCents, hoursCeiling: 200, now: new Date(now.getTime() - 60_000) });
   expect(set.ok).toBe(true);
   return g.id;
@@ -306,6 +308,15 @@ describe('the gate', () => {
     expect((await advanceGoalPlans(now)).read).toBe(1);
     expect((await advanceGoalPlans(new Date(now.getTime() + 60_000))).read).toBe(0);
     expect(await listReadings(id)).toHaveLength(1);
+  });
+
+  it('reads at most one goal per pass when throttled under pressure, and the next pass reads the other', async () => {
+    await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    await goal(100_000);
+    await goal(200_000);
+    expect((await advanceGoalPlans(now, { maxReads: 1 })).read).toBe(1);
+    expect((await advanceGoalPlans(new Date(now.getTime() + 60_000), { maxReads: 1 })).read).toBe(1);
+    expect((await advanceGoalPlans(new Date(now.getTime() + 120_000), { maxReads: 1 })).read).toBe(0);
   });
 
   it('re-reads the plan as soon as an opening arrives, not on the next half-hour, and only when something changed', async () => {

@@ -100,7 +100,7 @@ import { liveGoalLimits } from './worthResearching.ts';
 import { GOAL_REQUEST_LANE, getClaim, signalledClaims } from '../../repos/research.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
-import { mechanismForSignal } from '../../domain/opportunitySignals.ts';
+import { mechanismForSignal, observationExpiry, openingTitle } from '../../domain/opportunitySignals.ts';
 import { OPPORTUNITY_SIGNALS } from '../../domain/types.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { cashPosition } from './money.ts';
@@ -1465,11 +1465,16 @@ export interface Harvested {
 export async function harvest(input: {
   projectId: string;
   limit?: number;
+  now?: Date;
 }): Promise<Harvested[]> {
   const mode = await getCashMode(input.projectId);
   if (!mode) return [];
 
   const limit = Math.max(1, input.limit ?? 20);
+  const now = input.now ?? new Date();
+  // The goal plan owns the freshness bar; read lazily, because the plan imports this module.
+  const { RECOMMENDATION_POLICY } = await import('../goals/plan.ts');
+  const freshDays = RECOMMENDATION_POLICY.demandFreshDays;
 
   /*
    * Which round each orchestration belongs to, where one does.
@@ -1549,7 +1554,11 @@ export async function harvest(input: {
     return settledByOrchestration.get(orchestrationId) ?? null;
   };
 
-  const signalled = await signalledClaims({ projectId: input.projectId, limit: limit * 4 });
+  const signalled = await signalledClaims({
+    projectId: input.projectId,
+    limit: limit * 4,
+    staleBefore: new Date(now.getTime() - freshDays * 86_400_000).toISOString(),
+  });
 
   const out: Harvested[] = [];
 
@@ -1567,6 +1576,16 @@ export async function harvest(input: {
      * *nobody is asking* into the portfolio as a piece of work.
      */
     if (claim.claimType === 'NEGATIVE_EXISTENCE') continue;
+
+    /*
+     * An observation is "now" for a bounded time. A request, a price or a
+     * listing with no published deadline expires `demandFreshDays` after its
+     * source's date, and one already older than that is history, not an
+     * opening: production modelled an April 2026 Coachella resale price on
+     * 2026-11-14 because nothing gave it an end.
+     */
+    const timing = observationExpiry({ signal, closesOn: claim.closesOn ?? null, sourceDate: claim.sourceDate, freshDays, now });
+    if (timing.stale) continue;
 
     const context = roundByOrchestration.get(entry.orchestrationId) ?? (await settledRoundFor(entry.orchestrationId));
 
@@ -1600,7 +1619,15 @@ export async function harvest(input: {
       projectId: input.projectId,
       cashModeId: mode.id,
       ownerUserId: mode.ownerUserId,
-      title: clamp(claim.claim, 160),
+      // Named from what it is — its kind, its buyers, its publisher — and never
+      // from the source's sentence, which is kept whole as the buying signal.
+      title: openingTitle({
+        signal,
+        population: claim.population,
+        deliverable: context?.bucket.deliverable ? DELIVERABLE_LABEL[context.bucket.deliverable] : null,
+        publisher: claim.sourcePublisher,
+        sourceUrl: claim.sourceUrl,
+      }),
       // From the claim's own signal rather than from the bucket that asked.
       // One broad question turns up openings of several kinds, and filing all
       // of them under the bucket's heading is wrong for most of them.
@@ -1614,9 +1641,11 @@ export async function harvest(input: {
       requiredCapabilities: context?.bucket.deliverable
         ? [deliverableCapabilityId(context.bucket.deliverable)]
         : [],
-      // The deadline the source publishes, as the worker declared it. Null
-      // when it states none, which `closedBy` reads as never closed, not open.
-      expiresAt: claim.closesOn ?? null,
+      // The deadline the source publishes, as the worker declared it; else, for
+      // an observation of a moment, the end of its freshness window. Null only
+      // for a pattern or an undated source, which `closedBy` reads as never
+      // closed, not open.
+      expiresAt: timing.expiresAt,
       source: claim.sourcePublisher ?? claim.sourceTitle ?? claim.sourceUrl,
       discoveredByCandidateId: context ? context.round.candidateId : null,
       // The subject whose scan found it, where a kernel scan did. Null where
@@ -1649,7 +1678,9 @@ export async function harvest(input: {
      */
     const withSignal = await updateOpportunity(created.id, {
       buying_signal: clamp(claim.claim, 1_000),
-      signal_observed_at: claim.sourceDate ?? claim.retrievedAt ?? null,
+      // When the source says it was seen — never when Brain read it, which
+      // made an undated years-old page look like this week's demand.
+      signal_observed_at: timing.observedAt,
     });
 
     const missionId = await missionFor(entry.orchestrationId);

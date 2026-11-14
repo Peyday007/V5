@@ -130,6 +130,7 @@ export const OPERATOR_TOOL_NAMES = [
   'brain_operator_decide',
   'brain_operator_verify',
   'brain_operator_set_goal_focus',
+  'brain_operator_create_goal',
   // §109: the engineering director.
   'brain_operator_deficiencies',
   'brain_operator_commission',

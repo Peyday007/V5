@@ -269,7 +269,7 @@ export function pickEstimatedArrangements(
   arrangements: readonly ConstructedArrangement[],
   input: { projectId: string; currency: string; beforeProofCents: number | null; remaining: number; exclusions: Parameters<typeof excludedBy>[1]; limit?: number },
 ): ModelledOpportunity[] {
-  const scored: { one: ModelledOpportunity; score: number }[] = [];
+  const scored: { one: ModelledOpportunity; score: number; population: string }[] = [];
   for (const arrangement of arrangements) {
     // Judged on what the arrangement is — its label, sector and buyer — never on its research question,
     // which carries Brain's own instructions ("leave out government contracts", "the owner does no
@@ -281,10 +281,20 @@ export function pickEstimatedArrangements(
     if (!one) continue;
     const p50 = arrangement.value.p50;
     const deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(input.remaining / Math.max(1, p50))) : 1;
-    scored.push({ one, score: Math.min(input.remaining, p50 * deals) });
+    scored.push({ one, score: Math.min(input.remaining, p50 * deals), population: arrangement.demand.ref });
   }
   scored.sort((a, b) => b.score - a.score || a.one.opportunity.id.localeCompare(b.one.opportunity.id));
-  return scored.slice(0, input.limit ?? MAX_ESTIMATED_ARRANGEMENTS).map((one) => one.one);
+  // One buyer population is one market, however many designs reach it: its value
+  // observations are keyed by the buyer, so every design over it carries the same
+  // estimate, and summing them counts the same buyers' money once per design.
+  // The highest-scoring arrangement stands for the population.
+  const seen = new Set<string>();
+  const distinct = scored.filter((entry) => {
+    if (seen.has(entry.population)) return false;
+    seen.add(entry.population);
+    return true;
+  });
+  return distinct.slice(0, input.limit ?? MAX_ESTIMATED_ARRANGEMENTS).map((one) => one.one);
 }
 
 /**
@@ -594,6 +604,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   if (target.achieved) return refuse('The target is already met.');
 
   const trace = planTrace('compose');
+  // The goal plan owns the freshness bar; read lazily, because the plan imports this module.
+  const freshDays = (await import('../goals/plan.ts')).RECOMMENDATION_POLICY.demandFreshDays;
   const frontier = await sharedFrontier({ projectId: target.projectId });
   trace(`shared frontier: ${frontier.opportunities.length} opening(s)`);
   const tierOf = new Map(frontier.opportunities.map((one) => [one.id, one.tier.tier as string]));
@@ -629,13 +641,15 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   const exclusions = await goalExclusions(input.goal);
   for (const opportunity of ordered) {
     const tier = tierOf.get(opportunity.id) ?? 'SIGNAL';
-    const excludedClass = IN_FLIGHT.has(opportunity.state) ? null : excludedBy(`${opportunity.title} ${opportunity.payer ?? ''} ${opportunity.industry ?? ''}`, exclusions);
+    // A harvested opening's title is its structured name; what the source said
+    // it is lives in its buying signal, so both are what the opening is.
+    const excludedClass = IN_FLIGHT.has(opportunity.state) ? null : excludedBy(`${opportunity.title} ${opportunity.buyingSignal ?? ''} ${opportunity.payer ?? ''} ${opportunity.industry ?? ''}`, exclusions);
     if (excludedClass) {
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `left out by the goal: ${EXCLUSION_CLASSES[excludedClass].label}` });
       continue;
     }
     // The standing operating rule: a plan never rests on the owner's physical work.
-    const fit = operatingFit(operatingFactsOf(opportunity));
+    const fit = operatingFit(operatingFactsOf({ ...opportunity, title: [opportunity.title, opportunity.buyingSignal].filter(Boolean).join(' \n ') }));
     if (breaksOperatingModel(fit)) {
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `needs the owner's physical work: ${fit.because}` });
       continue;
@@ -654,8 +668,28 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     }
     const modelled = await modelOpportunity(opportunity, 0, tier, target.currency, lessons, knowledge, input.now ?? new Date(), target.daysLeft);
     trace(`modelled ${opportunity.id}`);
-    if ('reason' in modelled) excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: modelled.reason });
-    else candidates.push(modelled);
+    if ('reason' in modelled) {
+      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: modelled.reason });
+      continue;
+    }
+    // An observation with no end of its own is "now" only while it is fresh: a
+    // one-off resale price seen in April contributes nothing in November.
+    // Openings filed before the harvest gave such observations an expiry carry
+    // none, so the age of the observation itself decides. A repeatable play is
+    // a pattern rather than a moment, and work under way is not an observation.
+    const observedMs = opportunity.signalObservedAt ? Date.parse(opportunity.signalObservedAt) : Number.NaN;
+    if (
+      !opportunity.expiresAt &&
+      !Number.isNaN(observedMs) &&
+      !IN_FLIGHT.has(opportunity.state) &&
+      !modelled.repeatable &&
+      !modelled.agreed &&
+      (input.now ?? new Date()).getTime() - observedMs > freshDays * 86_400_000
+    ) {
+      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `signal older than ${freshDays} days (seen ${opportunity.signalObservedAt!.slice(0, 10)})` });
+      continue;
+    }
+    candidates.push(modelled);
   }
   /*
    * Constructed arrangements compete in the same portfolio on their
@@ -837,7 +871,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   }
   derived.push({ key: 'settled_in_window', label: 'Cash settled before the deadline', unit: target.currency, expr: cashIn.join(' + ') });
   const metrics: NonNullable<ScenarioModelDefinition['metrics']> = [
-    { key: 'goal_met', label: 'Reaches the target in time', unit: 'flag', expr: 'if(settled_in_window >= remaining, 1, 0)', better: 'HIGHER' },
+    // The target is cash kept: what settles in time less the direct costs of the deals that earned it (§99 Q-3).
+    { key: 'goal_met', label: 'Reaches the target in time', unit: 'flag', expr: `if(settled_in_window - (${included.map((one) => `o${one.index}_won * o${one.index}_cost`).join(' + ') || '0'}) >= remaining, 1, 0)`, better: 'HIGHER' },
     { key: 'settled', label: 'Settled before the deadline', unit: target.currency, expr: 'settled_in_window', better: 'HIGHER' },
     { key: 'exposure', label: 'Money tied up', unit: target.currency, expr: exposure.join(' + '), better: 'LOWER', role: 'CAPITAL_EXPOSURE' },
     { key: 'labour', label: 'Hours of work', unit: 'hours', expr: labour.join(' + '), better: 'LOWER', role: 'LABOR_HOURS' },

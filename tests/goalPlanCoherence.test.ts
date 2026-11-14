@@ -94,8 +94,9 @@ function reconstruction(over: Partial<Reconstruction> = {}): Reconstruction {
     searchBrief: 'Reconstruction (§99): the fixed template.',
     evaluations: 10,
     exploration: null,
+    flags: [],
     ...over,
-  };
+  } as Reconstruction;
 }
 
 const openings = [
@@ -136,11 +137,17 @@ describe('C-6: one plan', () => {
   });
 
   it('keeps the plan as held and says the reconstruction is hypothetical when it is flagged implausible', () => {
-    const r = reconstruction({ ...({ implausible: true, flags: ['price ×9 with close unchanged'] } as object) } as Partial<Reconstruction>);
+    const base = reconstruction();
+    const r = reconstruction({ flags: [{ key: base.best.key, reach: base.best.reach, settledP50: base.best.settledP50, flags: [{ kind: 'RETURN', detail: 'price ×9 with close unchanged' }] }] });
     const out = adoptReconstruction({ reconstruction: r, baseline: portfolio({ reach: 0.011, basis: 'COVERAGE' }), openings });
     expect(out.candidate).toBeNull();
     expect(out.adoption).toMatchObject({ source: 'BASELINE', hypothetical: true });
-    expect(out.adoption.reason).toMatch(/implausible/);
+    expect(out.adoption.reason).toMatch(/implausible.*price ×9/);
+  });
+
+  it('a flag on some other reading does not stop the strongest plan being adopted', () => {
+    const r = reconstruction({ flags: [{ key: 'TRANSACTION:bundle ×50', reach: 1, settledP50: 900_000, flags: [{ kind: 'DEALS', detail: 'more deals than the market holds' }] }] });
+    expect(adoptReconstruction({ reconstruction: r, baseline: portfolio({ reach: 0.011, basis: 'COVERAGE' }), openings }).adoption.source).toBe('RECONSTRUCTED');
   });
 
   it('keeps the plan as held when the reconstruction does not beat it, and says so', () => {

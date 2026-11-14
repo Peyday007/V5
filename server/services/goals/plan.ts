@@ -462,6 +462,16 @@ export function validationStage(one: ModelledOpportunity, checks: LinkCheck[], t
   const capital = one.capital.value;
   const limit = target.capitalBeforeProofCents !== null ? target.capitalBeforeProofCents / 100 : null;
   const cost = one.directCost.value;
+  // A first step the owner allows before any money comes in. A published capital
+  // figure inside the limit is one; so is an unpublished one whose worst case —
+  // the top of the range the model sweeps — is still inside it (commission and
+  // referral openings almost never publish one). Nothing favourable is assumed:
+  // without a limit, or without a bounded worst case, unknown capital stays a
+  // question (invariant 39).
+  const firstStepAllowed =
+    capital !== null
+      ? limit === null || capital <= limit
+      : one.capital.high !== null && limit !== null && one.capital.high <= limit;
   if (
     ok('REACHABLE_BUYER') &&
     !!o.offerScope &&
@@ -469,9 +479,7 @@ export function validationStage(one: ModelledOpportunity, checks: LinkCheck[], t
     price > 0 &&
     // A test is a few offers at the card's price, so the price itself is what it measures.
     (cost === null || cost < price) &&
-    // A first step the owner allows before any money comes in; unknown capital is a question, not a yes (invariant 39).
-    capital !== null &&
-    (limit === null || capital <= limit) &&
+    firstStepAllowed &&
     !one.competitiveAward
   ) {
     return 'C_MARKET_TEST_READY';
@@ -1494,18 +1502,15 @@ const pctOf = (x: number) => `${Math.round(x * 1000) / 10}%`;
 const moneyOf = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 
 /**
- * A field another engineer's plausibility check sets on a reconstruction or
- * its strongest plan. Read defensively: whatever its shape, a truthy
- * `implausible` or a non-empty `flags` keeps the reconstruction hypothetical.
+ * Why the reconstruction's strongest plan is implausible, or null: its key is
+ * among the readings the plausibility critic flagged (`Reconstruction.flags`),
+ * or the reading itself carries flags.
  */
-function implausibility(x: unknown): string | null {
-  if (!x || typeof x !== 'object') return null;
-  const o = x as Record<string, unknown>;
-  const flags = o['flags'];
-  const list = Array.isArray(flags) ? flags.map((f) => (typeof f === 'string' ? f : JSON.stringify(f))) : [];
-  if (o['implausible']) return typeof o['implausible'] === 'string' ? o['implausible'] : list.join('; ') || 'flagged implausible';
-  if (list.length > 0) return list.join('; ');
-  return null;
+function implausibility(r: Reconstruction): string | null {
+  const row = (r.flags ?? []).find((one) => one.key === r.best.key);
+  const flags = row?.flags ?? r.best.implausible ?? [];
+  if (!row && flags.length === 0) return null;
+  return flags.map((x) => `${x.kind}: ${x.detail}`).join('; ') || 'flagged implausible';
 }
 
 /**
@@ -1531,7 +1536,7 @@ export function adoptReconstruction(input: {
   const r = input.reconstruction;
   if (!r) return { adoption: { source: 'BASELINE', hypothetical: false, reason: 'no reconstruction ran: the plan is accepted, or nothing could be reconstructed' }, candidate: null };
   const hypothetical = (reason: string) => ({ adoption: { source: 'BASELINE' as const, hypothetical: true, reason }, candidate: null });
-  const flagged = implausibility(r) ?? implausibility(r.best);
+  const flagged = implausibility(r);
   if (flagged) return hypothetical(`the reconstruction is flagged implausible (${flagged.slice(0, 300)}), so its ${pctOf(r.best.reach)} is not adopted`);
   if (!r.best.feasible) return hypothetical(`the reconstruction's strongest plan does not run inside the limits${r.best.why ? ` (${r.best.why})` : ''}`);
   const real = r.best.changes.filter((c) => !c.label.startsWith('test:'));
@@ -2857,7 +2862,16 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
   return opened;
 }
 
-export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean; onEvidence: number; resumed: number }> {
+export async function advanceGoalPlans(
+  now: Date = new Date(),
+  /**
+   * `maxReads`: read at most this many plans in this pass, and start no search
+   * top-ups once it is reached. The Russell loop passes 1 under database
+   * pressure, so planning keeps progressing one goal at a time instead of being
+   * shed (pressure.ts, `throttleUnderPressure`). Outcomes are still recorded.
+   */
+  options: { maxReads?: number } = {},
+): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean; onEvidence: number; resumed: number }> {
   const goals = await getDb().all<{ id: string; target_project_id: string | null; paused_at: string | null; due_at: string | null }>(
     `SELECT id, target_project_id, paused_at, due_at FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
   );
@@ -2879,6 +2893,7 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     // re-read, no search round, no construction (an operator PAUSE must stop
     // the planning and discovery spend, not only the queue's priority).
     if (pausedAt) continue;
+    if (options.maxReads !== undefined && read >= options.maxReads) continue;
     const last = await getDb().get<{ at: string | null }>(
       `SELECT MAX(created_at) AS at FROM goal_plan_readings WHERE workstream_id = ?`,
       [id],

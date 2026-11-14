@@ -15301,6 +15301,19 @@ knowledge.
 - **The fix:** the pool now reads `researchMissionSlots(projectId)` in `russell/launch.ts`. That is the same grant and the same live-hold arithmetic that `reserve` enforces, so the watchdog can only call slots idle when a launch would actually be accepted.
 - **A gate that moved under it:** #661's Deploy and Postgres suite both failed `ocr.test.ts` ("a scan too poor to trust") because `ubuntu-latest` moved from 24.04 to 26.04 between two runs, taking tesseract from 5.3 to 5.5, and 5.5 reads the deliberately poor fixture as text. Production's image is Debian bookworm with tesseract 5.3, so the test jobs are now pinned to `ubuntu-24.04`. CI now checks the OCR engine production actually runs, and the refusal test still means what it says.
 
+**The economics repair (2026-11-14).** Production read the $10K / 30-day / $3K goal's best plan at p50 $34,533,142 (97.9% coverage); the fixture read $76,826 on $364 committed. Each cause was a family of moves the model let compound, fixed once for the family:
+- **One move per family.** `applyProgram` and `recombine` hold one capacity purchase per lever (a larger budget replaces a smaller one, its money refunded), one acquisition per lever and target, one partner per target, one transaction shape per opening, one focus. Price is one running factor per opening (`terms.priceFactor`), held to ×0.25–×4 of the card's unit price across price steps and transaction discounts alike; the sweep uses the same clamp.
+- **The demand curve moves volume too.** A price change moves close rate and the deals the market takes by k^-1.2. The diagnosis's PRICE test uses it, and the headroom no longer counts a price rise as favourable.
+- **The target is cash kept.** `quant/portfolio.ts` reads reach on `reachOn: 'KEPT'` for goals: settled cash less every direct cost and what was committed. Prepaid fulfilment (`ceilingExempt`) lifts only the spending ceiling. `goal_met` in the scenario model subtracts direct costs too.
+- **A deposit is a share.** 30–50% (assumed) arrives at signing; the balance keeps the opening's own timing.
+- **Clones share their market.** A channel or partner clone carries its original's `marketKey`; in a world their deals together are capped by one draw of its volume.
+- **After proof means after proof.** A purchase over the before-proof limit is a gate: bought only in a world where cash has come back by day 7 and the first weekly tranche fits, sending only once its last tranche is paid.
+- **The floor is bare.** The as-is floor rebuilds the plan with every assumed move removed, then binds the measured record.
+- **A critic.** A reading whose median is over 20× the money behind it, whose deals exceed 25× what Brain's measured record produced, whose deals exceed its markets, or whose reach exceeds the headroom is flagged (`Reconstruction.flags`) and never concluded with. A §101 winner must hold at least half the requirement once challenged, or beat the plan as held on no assumed move.
+- **One timeout is one thread.** The evaluator pool replaces a thread that failed or timed out; a sweep never runs inline.
+
+After: the fixture concludes at reach 90.1%, p50 $35,028 on $364; the constructed-arrangement case at 90.2%, p50 $35,540 (was 99.8%, $328,908); a $1M goal on $3K concludes on the plan as held at 0%.
+
 ## 100. A change is recognized where it happens, and the work it enables resumes without a person restating it.
 
 **Owner's order, 2026-11-10.** Brain recognizes meaningful changes across the whole system — accounts, connectors, Routines, workers, credentials, configuration, providers, GPU pods, capacity, Factory campaigns and dependencies, research, opportunities, budgets and constraints — reconciles its records, and resumes, reroutes or reprioritizes the work the change enables. Event-driven wherever an event exists; a bounded periodic check only where none does. A person is asked only for authorization, a missing credential, or what Brain cannot do safely. No second control system.
@@ -16221,6 +16234,38 @@ of everything construction reads:
 
 When any of these changes, the arrangements are rebuilt. A caller is always handed a copy of
 the held result, never the result itself.
+
+**The quant engine is cheaper at its root, and the construction pass is off the loop too
+(2026-11-14).** #869 and #871 each moved one caller. The class was the engine itself, so it was
+measured where it ran. On the 40- and 60-opening project of `goalPlan.test.ts`, one portfolio
+evaluation took 8.9 s and 29 s. Almost all of that was `quant/portfolio.ts`'s per-world loop,
+re-run from scratch for every greedy candidate. That test's plan read then timed out at 120 s
+(Postgres suite 43570017131, and locally on SQLite). Four changes, and every reading is the
+same as before: the evaluations hash identically, and `tests/quantOffLoop.test.ts` holds them
+against the old evaluator.
+
+- **The prefix is reused.** A combination's worlds after its start-ordered prefix are held, so a
+  greedy candidate costs one member per world. The 60-opening evaluation went from 29 s to 1.2–2 s,
+  and the 40-opening one from 8.9 s to 1.0–1.3 s.
+- **A fact's text is read once.** `acquireMarketHistory` keeps it by text. Before, it ran four
+  regex readers over every fact for every opening of every evaluation.
+- **Each key's normals are drawn once.** `reconstruct` keeps them by (key, stream), and sorts only
+  the children it reads by quantile. A construction compose went from a median of 32 ms to 6–15 ms.
+- **`inverseNormal`'s coefficients are constants.** They were array literals allocated on every
+  call.
+
+The construction pass (`composeConstruction`) now runs on the evaluator pool (`Evaluator.construct`),
+like the evaluation and the sweep. Only when no thread can start does it run inline, yielding every
+25 ms. Plan-read phases on the 40/60-opening test went from 11.6 s / 19.1 s to 1.2 s / 3.3 s for
+the portfolio. The reconstruction went from 65.6 s to 22.5 s on the first read; before, the second
+read never finished. The test now passes in 80 s on a loaded machine.
+
+The economics repair (cash kept, a fixed cost, buyer-funded spend, deposits, shared market volume,
+purchases after proof) came after this measurement. The prefix is reused only where it gives the
+same reading: no member is gated and no two members share a market. Any other combination is read
+in full. Against the repaired evaluator, the 43- and 63-opening evaluations went from 4.2 s / 14.6 s
+to 0.8 s / 1.6 s, and the readings hash identically. `reconstructPlan` with no evaluator given now
+borrows the shared pool, not the inline one.
 
 **Research could not read its sources, and the plan got no evidence (2026-11-14).** Brain's
 plan stays below 90% because its candidate rests on assumptions, and only research turns

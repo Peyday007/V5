@@ -131,7 +131,13 @@ export async function operatorHistory(goalId: string | null): Promise<Record<str
 export async function readGoalPlanSummary(goalId: string): Promise<Record<string, unknown>> {
   const { latestReading } = await import('../goals/plan.ts');
   const row = await latestReading(goalId);
-  if (!row) return { goalId, reading: null, note: 'Brain has no plan reading for this goal yet.' };
+  if (!row) {
+    // A goal with no cash target is planned by `goals/objectivePlan.ts` (G-1).
+    const { latestObjectiveReading } = await import('../../repos/objectiveReadings.ts');
+    const objective = await latestObjectiveReading(goalId);
+    if (objective) return { goalId, kind: 'OBJECTIVE', readAt: objective.createdAt, verdict: objective.verdict, chosenStrategy: objective.chosenStrategy, decision: objective.decision, interpretation: objective.interpretation, strategies: objective.strategies.slice(0, 8), error: objective.error };
+    return { goalId, reading: null, note: 'Brain has no plan reading for this goal yet.' };
+  }
   const parse = (text: string | null): unknown => {
     if (!text) return null;
     try {
@@ -222,15 +228,102 @@ export async function withdrawMootRequest(input: { requestId: string; runId: str
   return { ok: true, reason };
 }
 
-/** Continue every idle pool through its own scheduler (§98), and say what moved. */
-export async function continueIdleCapacity(runId: string | null): Promise<Record<string, unknown>> {
-  const { watchUtilization } = await import('../engineering/watchdog.ts');
-  const result = await watchUtilization({ continueWork: true });
+type ContinuationPass = () => Promise<{ pools: { pool: string; waiting: number; running: number; capacity: number; idle: boolean; because: string }[]; recorded: string[]; continued: string[] }>;
+
+/** The continuation pass now under way in this process, if any: a second call never starts another. */
+let continuation: { startedAt: string; runId: string | null; promise: Promise<unknown> } | null = null;
+/** How the last pass this process started ended: the next call reports it. */
+let lastContinuation: { startedAt: string; finishedAt: string; runId: string | null; continued: string[]; recordedIdle: string[]; error: string | null } | null = null;
+
+/**
+ * How long the operator's call waits on the pass before returning what it
+ * started. Production, 2026-11-13: `brain_operator_continue_idle` read every
+ * pool live and then ran a dispatch pass inside the 180 s MCP call, during
+ * event-loop stalls, and failed on the limit — the operator could not tell
+ * whether anything moved.
+ */
+export const CONTINUE_WAIT_MS = 15_000;
+
+/** Tests. */
+export function forgetContinuation(): void {
+  continuation = null;
+  lastContinuation = null;
+}
+
+const poolView = (pool: { pool: string; waiting: number; running: number; capacity: number; idle: boolean; because: string }) => ({
+  pool: pool.pool, waiting: pool.waiting, running: pool.running, capacity: pool.capacity, idle: pool.idle, because: pool.because,
+});
+
+/**
+ * Continue every idle pool through its own scheduler (§98): the watchdog's own
+ * pass (`watchUtilization`) — one guarded dispatch pass for routines and the
+ * Factory line, the free lane controller's step — started in the background.
+ * Returns within `waitMs` with what it started: the pass's result when it
+ * finished in that time, otherwise that it is running, the last reading of the
+ * pools with its age, and how the previous pass ended. Never a second pass
+ * while one runs.
+ */
+export async function continueIdleCapacity(runId: string | null, options: { waitMs?: number; pass?: ContinuationPass } = {}): Promise<Record<string, unknown>> {
+  const previous = lastContinuation;
+  if (continuation) {
+    return {
+      runId,
+      started: false,
+      running: true,
+      runningSince: continuation.startedAt,
+      reason: `a continuation pass started at ${continuation.startedAt} is still running; a second was not started`,
+      previous,
+    };
+  }
+  const pass: ContinuationPass = options.pass ?? (async () => (await import('../engineering/watchdog.ts')).watchUtilization({ continueWork: true }));
+  const startedAt = new Date().toISOString();
+  const promise = pass()
+    .then((result) => {
+      lastContinuation = { startedAt, finishedAt: new Date().toISOString(), runId, continued: result.continued, recordedIdle: result.recorded, error: null };
+      return result;
+    })
+    .catch((error: unknown) => {
+      lastContinuation = { startedAt, finishedAt: new Date().toISOString(), runId, continued: [], recordedIdle: [], error: String((error as Error)?.message ?? error).slice(0, 300) };
+      return null;
+    })
+    .finally(() => {
+      if (continuation?.promise === promise) continuation = null;
+    });
+  continuation = { startedAt, runId, promise };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const waited = new Promise<'RUNNING'>((resolve) => {
+    timer = setTimeout(() => resolve('RUNNING'), Math.max(0, options.waitMs ?? CONTINUE_WAIT_MS));
+    (timer as { unref?: () => void }).unref?.();
+  });
+  const outcome = await Promise.race([promise, waited]);
+  if (timer) clearTimeout(timer);
+  const started = 'one continuation pass: every pool read, each idle one recorded, one guarded dispatch pass for ROUTINES/FACTORY and the free lane controller step for FREE_LANE';
+  if (outcome === null) {
+    return { runId, started, finished: true, failed: true, error: lastContinuation?.error ?? null, continued: [], previous };
+  }
+  if (outcome !== 'RUNNING') {
+    return {
+      runId,
+      started,
+      finished: true,
+      pools: outcome.pools.map(poolView),
+      recordedIdle: outcome.recorded,
+      continued: outcome.continued,
+      previous,
+    };
+  }
+  const { cachedUtilization } = await import('../engineering/watchdog.ts');
+  // The reading already held, never a second live read beside the pass that is making one.
+  const held = cachedUtilization();
   return {
     runId,
-    pools: result.pools.map((pool) => ({ pool: pool.pool, waiting: pool.waiting, running: pool.running, capacity: pool.capacity, idle: pool.idle, because: pool.because })),
-    recordedIdle: result.recorded,
-    continued: result.continued,
+    started,
+    finished: false,
+    running: true,
+    startedAt,
+    note: `the pass is still running after ${Math.round((options.waitMs ?? CONTINUE_WAIT_MS) / 1000)} s and continues in the background; nothing is reported as continued until it finishes — read brain_operator_capacity (or call this again for how it ended) in a minute`,
+    lastReading: held?.pools ? { readAt: held.readAt, ageSeconds: held.ageSeconds, pools: held.pools.map(poolView) } : null,
+    previous,
   };
 }
 

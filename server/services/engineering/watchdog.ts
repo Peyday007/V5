@@ -260,7 +260,98 @@ export async function brainUtilization(now = new Date()): Promise<PoolReading[]>
   pools.push(await researchSlotPool(now));
   const factory = await factoryPool(now);
   if (factory) pools.push(factory);
+  lastUtilization = { pools, readAt: now.toISOString() };
   return pools;
+}
+
+/* ------------------------------------------------------------------------- */
+/* A reading served within a caller's time limit                              */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The last complete reading of every pool this process took, by any caller
+ * (the tick's watch, the operator's read, a continuation pass). Lost on
+ * restart, which only means the first bounded read after one may have nothing
+ * older to fall back to.
+ */
+let lastUtilization: { pools: PoolReading[]; readAt: string } | null = null;
+/** A live read already under way: a second caller waits on it rather than starting another. */
+let liveUtilization: Promise<PoolReading[]> | null = null;
+
+/**
+ * How long a caller with a hard limit (the operator's MCP call, 180 s) waits
+ * for a live read before it is served the last complete one. Production,
+ * 2026-11-13: `brain_operator_capacity` ran past the call limit during
+ * event-loop stalls — five pools read live, each a handful of statements, with
+ * the pool saturated — and Hermes received nothing at all.
+ */
+export const UTILIZATION_READ_BOUND_MS = 20_000;
+
+export interface BoundedUtilization {
+  pools: PoolReading[] | null;
+  /** When the served reading was taken, or null when Brain holds none. */
+  readAt: string | null;
+  ageSeconds: number | null;
+  source: 'LIVE' | 'CACHED' | 'NONE';
+  note: string | null;
+}
+
+/** The last complete reading this process holds, with its age; nothing is read. */
+export function cachedUtilization(nowMs = Date.now()): { pools: PoolReading[]; readAt: string; ageSeconds: number } | null {
+  if (!lastUtilization) return null;
+  return { ...lastUtilization, ageSeconds: Math.max(0, Math.round((nowMs - Date.parse(lastUtilization.readAt)) / 1000)) };
+}
+
+/** Tests. */
+export function forgetUtilization(): void {
+  lastUtilization = null;
+  liveUtilization = null;
+}
+
+/**
+ * Every pool, read live when that finishes within `boundMs`; otherwise the last
+ * complete reading, with its age, while the live read finishes in the
+ * background and becomes the next caller's answer. Never longer than the bound.
+ */
+export async function utilizationWithin(
+  boundMs = UTILIZATION_READ_BOUND_MS,
+  read: () => Promise<PoolReading[]> = () => brainUtilization(),
+): Promise<BoundedUtilization> {
+  if (!liveUtilization) {
+    const started = read()
+      .then((pools) => {
+        // A read through `brainUtilization` already cached itself; one injected here is cached the same way.
+        if (!lastUtilization || lastUtilization.pools !== pools) lastUtilization = { pools, readAt: new Date().toISOString() };
+        return pools;
+      })
+      .finally(() => {
+        if (liveUtilization === started) liveUtilization = null;
+      });
+    // Nobody may be waiting by the time it settles: a failure is never an unhandled rejection.
+    started.catch(() => undefined);
+    liveUtilization = started;
+  }
+  const live = liveUtilization;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<'TIMEOUT'>((resolve) => {
+    timer = setTimeout(() => resolve('TIMEOUT'), Math.max(0, boundMs));
+    (timer as { unref?: () => void }).unref?.();
+  });
+  let error: string | null = null;
+  const outcome = await Promise.race([live.catch((e: unknown) => {
+    error = String((e as Error)?.message ?? e).slice(0, 200);
+    return 'FAILED' as const;
+  }), timedOut]);
+  if (timer) clearTimeout(timer);
+  if (Array.isArray(outcome)) {
+    return { pools: outcome, readAt: lastUtilization?.readAt ?? new Date().toISOString(), ageSeconds: 0, source: 'LIVE', note: null };
+  }
+  const why = outcome === 'TIMEOUT'
+    ? `a live read did not finish within ${Math.round(boundMs / 1000)} s; it continues in the background and the next read serves it`
+    : `the live read failed (${error ?? 'unknown error'})`;
+  if (!lastUtilization) return { pools: null, readAt: null, ageSeconds: null, source: 'NONE', note: `${why}; Brain holds no earlier reading` };
+  const ageSeconds = Math.max(0, Math.round((Date.now() - Date.parse(lastUtilization.readAt)) / 1000));
+  return { pools: lastUtilization.pools, readAt: lastUtilization.readAt, ageSeconds, source: 'CACHED', note: `${why}; served the reading taken ${ageSeconds} s ago` };
 }
 
 /**

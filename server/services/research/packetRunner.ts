@@ -55,7 +55,7 @@ import type {
   WorkItem,
   WorkerScope,
 } from '../../domain/types.ts';
-import { blockCauseOf, exampleIdentity, laneFloor } from './gate.ts';
+import { blockCauseOf, exampleIdentity, laneFloor, type BlockCause } from './gate.ts';
 import type { ClaimJudgement, GateCondition, GateResult, LaneCoverage } from './gate.ts';
 import { countIndependentSources, duplicateGroups } from './standards.ts';
 import {
@@ -2682,9 +2682,10 @@ export function noFragmentClearedDetail(
     .filter((fragment) => fragment.status === 'BLOCKED')
     .slice(0, 4)
     .map((fragment) => {
-      const failed = (fragment.blockedReason ?? 'no reason recorded').split(/(?<=\.)\s/)[0]!.slice(0, 220);
+      const cause = blockCauseOf(fragment);
+      const failed = blockCauseSentence(fragment, cause).slice(0, 220);
       const refusal = refusals.get(fragment.id);
-      return `${fragment.fragmentKey} (attempt ${fragment.attempt}): ${failed}` + (refusal ? ` Not retried: ${refusal}.` : '');
+      return `${fragment.fragmentKey} (attempt ${fragment.attempt}, ${cause}): ${failed}` + (refusal ? ` Not retried: ${refusal}.` : '');
     });
   const more = fragments.filter((fragment) => fragment.status === 'BLOCKED').length - parts.length;
   return (
@@ -2693,6 +2694,41 @@ export function noFragmentClearedDetail(
     ' Every claim the gate accepted is kept and stays citable. Continuing needs a narrower or ' +
     'different question, approved as a new plan, or stopping the work.'
   );
+}
+
+/**
+ * The gate's own sentence that states a block cause.
+ *
+ * The gate writes its reasons in the order it checks them, not in the order
+ * they matter: an open conditional lane — which by definition does not block —
+ * is written before the verifier's verdict that actually did. Taking the first
+ * sentence taught goals "3 conditional lanes are open and do not block" as the
+ * cause. The cause comes from `blockCauseOf` (the stored column, else the
+ * classifier); the sentence is the reason line that says it, and a line that
+ * declares itself non-blocking is never one.
+ */
+const CAUSE_SENTENCE: Partial<Record<BlockCause, RegExp>> = {
+  NO_CLAIMS: /^No claim in this fragment/,
+  NOTHING_SURVIVED: /^No claim in this fragment survived/,
+  SOURCES_UNREADABLE: /could not be checked because their source/,
+  REQUIRED_LANE_EMPTY: /required evidence lane\(s\) have no accepted claim/,
+  MOSTLY_REJECTED: /claims were rejected|refuted claim was left unresolved/,
+  INDEPENDENT_SOURCES_SHORT: /independent source\(s\), below/,
+  VERIFIER_INSUFFICIENT: /^Verification judged the answer incomplete even though/,
+};
+const NON_BLOCKING_SENTENCE = /do not block|do not fail the fragment/;
+
+export function blockCauseSentence(fragment: ResearchFragment, cause: BlockCause): string {
+  const reason = fragment.blockedReason ?? '';
+  const gate = fragment.verdictDetail as { reasons?: unknown } | null;
+  const lines =
+    gate && typeof gate === 'object' && Array.isArray(gate.reasons) && gate.reasons.length > 0
+      ? gate.reasons.filter((line): line is string => typeof line === 'string')
+      : reason.split(/(?<=\.)\s/);
+  const pattern = CAUSE_SENTENCE[cause];
+  const matching = pattern ? lines.find((line) => pattern.test(line)) : undefined;
+  const fallback = lines.find((line) => line.trim().length > 0 && !NON_BLOCKING_SENTENCE.test(line));
+  return matching ?? fallback ?? (reason || 'no reason recorded');
 }
 
 export function verdictStopReason(verdict: string, repairs: RepairAssessment): string {
