@@ -291,6 +291,15 @@ describe('the gate', () => {
     expect(await listReadings(id)).toHaveLength(1);
   });
 
+  it('reads at most one goal per pass when throttled under pressure, and the next pass reads the other', async () => {
+    await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    await goal(100_000);
+    await goal(200_000);
+    expect((await advanceGoalPlans(now, { maxReads: 1 })).read).toBe(1);
+    expect((await advanceGoalPlans(new Date(now.getTime() + 60_000), { maxReads: 1 })).read).toBe(1);
+    expect((await advanceGoalPlans(new Date(now.getTime() + 120_000), { maxReads: 1 })).read).toBe(0);
+  });
+
   it('re-reads the plan as soon as an opening arrives, not on the next half-hour, and only when something changed', async () => {
     await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
     await goal(100_000);
