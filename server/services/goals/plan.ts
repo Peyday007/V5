@@ -52,6 +52,7 @@ import { exemptSales, recordMateriality } from './materiality.ts';
 import { withReadScope } from '../../repos/readScope.ts';
 import { cashSpareSurfaces } from '../cash/researchRoom.ts';
 import { researchGoalPaths } from './pathResearch.ts';
+import { sendPortfolioNeeds } from './portfolioNeeds.ts';
 import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
 import { getScenarioModel } from '../../repos/scenario.ts';
 import { runModel, saveModel } from '../scenario/service.ts';
@@ -2078,6 +2079,23 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     }
     if (reading) lastReadings.set(id, reading);
     else lastReadings.delete(id);
+    /*
+     * What the portfolio says it does not know goes where it said it goes
+     * (CAUSAL-14-4, CAUSAL-14-7): each decision unknown to research or an
+     * authorized action, each missing kind of market history to research —
+     * through `sendNeeds` and `requestMarketHistory`, idempotently by the
+     * opening, so the next pass writes nothing it already wrote. One goal's
+     * refusal never stops another goal's pass.
+     */
+    if (reading?.portfolio) {
+      try {
+        const sent = await sendPortfolioNeeds({ projectId: reading.target.projectId, portfolio: reading.portfolio });
+        researched += sent.created;
+        for (const one of sent.refused) console.warn(`goal ${id}: ${one.subject.slice(0, 80)} on ${one.opportunityId} was refused: ${one.reason}`);
+      } catch (error) {
+        console.warn(`goal ${id}: sending the portfolio's needs failed: ${String((error as Error)?.message ?? error)}`);
+      }
+    }
     // What Brain holds cannot reach the goal however it is combined: look for
     // more, through the same discovery every bucket uses, instead of reading
     // the same openings again in thirty minutes.
