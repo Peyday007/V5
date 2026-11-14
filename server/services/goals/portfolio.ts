@@ -585,6 +585,14 @@ export function evaluateGoalPortfolio(input: {
    * is acquired and every opening says so as a research need.
    */
   knowledge?: CashKnowledge | null;
+  /**
+   * Build the causal reading (graph, what-if answers, decompositions). Default
+   * true. A strategy search that reads only the best combination's reach and
+   * settled cash passes false: the causal reading propagates every decision
+   * question through every opening a shared party ties to it, and asked on each
+   * of a search's many evaluations it made a 40-opening plan read take minutes.
+   */
+  causal?: boolean;
   worlds?: number;
   seed?: number;
 }): GoalPortfolio {
@@ -677,7 +685,7 @@ export function evaluateGoalPortfolio(input: {
     // The outreach a day is drawn too: unless the owner stated it, it states no sample.
     const sampleSize = one.repeatable && one.agreedValue === 0 && stated === null ? undefined : sampleSizeOf(one);
     // The market's own historical record, acquired from the research and outcomes the project holds.
-    const knowledge = knowledgeFor(one.opportunity.projectId);
+    const knowledge = input.causal === false ? null : knowledgeFor(one.opportunity.projectId);
     const history = knowledge ? acquireMarketHistory(knowledge, one.opportunity) : null;
     if (history) histories.set(id, history);
     const keys = shares.map((share) => `${id}@${share}`);
@@ -723,7 +731,7 @@ export function evaluateGoalPortfolio(input: {
     ...(startingCapital !== null ? { startingCapital } : {}),
     ...(spendCeiling !== null ? { spendCeiling } : {}),
     riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
-    safeguards: candidateSafeguards(activities, startingCapital, input.capitalCeiling),
+    ...(input.causal === false ? {} : { safeguards: candidateSafeguards(activities, startingCapital, input.capitalCeiling) }),
     // A goal's target is cash kept: settled less direct costs and what was committed to reach buyers (§99).
     reachOn: 'KEPT',
     fixedCost: committed?.spend ?? 0,
@@ -767,14 +775,14 @@ export function evaluateGoalPortfolio(input: {
   if (!best) missing.push('no combination of the openings held can run inside the limits');
   if (measuredRates && measuredRates.applied === 'AS_IS_FLOOR_ONLY' && !input.forceMeasured) {
     // The record answers one question: what if the new campaign does no better than the old ones?
-    const floor = evaluateGoalPortfolio({ ...input, forceMeasured: true, worlds: Math.min(worlds, 600) });
+    const floor = evaluateGoalPortfolio({ ...input, forceMeasured: true, causal: false, worlds: Math.min(worlds, 600) });
     measuredRates.asIs = floor.best
       ? { reach: floor.best.reach, settledP10: floor.best.settledP10, settledP50: floor.best.settledP50, settledP90: floor.best.settledP90 }
       : null;
   }
   // Historical data the best combination still lacks is targeted research, named, never assumed.
   for (const need of assurance?.researchNeeds ?? []) missing.push(`research: ${need}`);
-  const causal = causalOf(
+  const causal = input.causal === false ? null : causalOf(
     input.openings.filter((one) => (memberIds.size > 0 ? memberIds.has(one.opportunity.id) : demand.some((d) => d.opportunityId === one.opportunity.id && !d.refused))),
     demand,
     input.daysLeft,

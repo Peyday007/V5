@@ -321,6 +321,8 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
         ...(gates.length ? { gates } : {}),
         committed: { capital: Math.min(before, allowed.beforeProof), spend: before },
         ...(forceMeasured ? { forceMeasured: true } : {}),
+        // A search reads reach and settled cash only; the causal reading belongs to the plan's own portfolio.
+        causal: false,
         ...(state.committed < 0 ? { capitalCeiling: (limits.capitalCeiling ?? 0) * 2, perWeek: (limits.perWeek ?? 0) * 2, beforeProof: (limits.beforeProof ?? 0) * 2, committed: null } : {}),
         worlds: w,
       });

@@ -57,7 +57,7 @@ import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactsFor } from '../../repos/cashCardFacts.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { actionsFor, recordAction } from '../../repos/cashActions.ts';
-import { checkCommercialAuthority } from './authority.ts';
+import { actionContext, checkCommercialAuthority } from './authority.ts';
 import { raiseNeed } from './needs.ts';
 import { cashTier } from './tier.ts';
 import { cashEngineCard } from './engineCard.ts';
@@ -183,7 +183,7 @@ export async function handOffReadyTests(projectId: string): Promise<FactoryHando
       continue;
     }
 
-    const decision = await checkCommercialAuthority({ projectId, action: BUILD_ACTION });
+    const decision = await checkCommercialAuthority({ projectId, action: BUILD_ACTION, ...actionContext({ principal: BRAIN }) });
     if (!decision.ok || !decision.authority) {
       await waitOn(pass, opportunity, `Brain may not hand it to the Factory: ${decision.reason}.`, {
         key: `factory-handoff:authority:${opportunity.id}`,

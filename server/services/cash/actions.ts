@@ -17,7 +17,7 @@
 import { getOpportunity } from '../../repos/cashPortfolio.ts';
 import { recordAction } from '../../repos/cashActions.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
-import { COMMERCIAL_ACTIONS, checkCommercialAuthority, isCommercialAction } from './authority.ts';
+import { COMMERCIAL_ACTIONS, actionContext, checkCommercialAuthority, isCommercialAction } from './authority.ts';
 import { refuse, type Outcome } from './opportunities.ts';
 import type { CashActionPerformer, CashOpportunity } from '../../domain/types.ts';
 
@@ -64,6 +64,7 @@ export async function recordFurtherAction(input: {
   const decision = await checkCommercialAuthority({
     projectId: opportunity.projectId,
     action: input.action,
+    ...actionContext({ principal: input.actorRef, performedBy: input.performedBy }),
   });
   if (!decision.ok || !decision.authority) {
     return refuse(
