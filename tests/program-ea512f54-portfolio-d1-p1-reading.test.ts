@@ -6,14 +6,38 @@
  * is unknown, and the whole-Brain tick does not pay for it.
  */
 import { readFileSync } from 'node:fs';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Count, without changing, the reads a goals read pays for (finding F5): the
+// real owners answer; the counters only say how often they were asked.
+const reads = vi.hoisted(() => ({ authority: 0, capabilities: 0 }));
+vi.mock('../server/services/cash/authority.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../server/services/cash/authority.ts')>();
+  return {
+    ...actual,
+    checkCommercialAuthority: (...args: Parameters<typeof actual.checkCommercialAuthority>) => {
+      reads.authority += 1;
+      return actual.checkCommercialAuthority(...args);
+    },
+  };
+});
+vi.mock('../server/services/cash/capabilities.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../server/services/cash/capabilities.ts')>();
+  return {
+    ...actual,
+    readAllCapabilities: () => {
+      reads.capabilities += 1;
+      return actual.readAllCapabilities();
+    },
+  };
+});
 import { freshProject, teardown } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { capture } from '../server/services/cash/opportunities.ts';
 import { createWorkstream, linkWorkstream } from '../server/repos/register.ts';
 import { assembleGoals } from '../server/services/goals/model.ts';
-import { composePort05, noteGoalPortfolio, noteGoalStreamsCleared, readPort05 } from '../server/services/goals/port05.ts';
+import { composePort05, noteGoalPortfolio, noteGoalStreamsCleared, port05ReadContext, readPort05 } from '../server/services/goals/port05.ts';
 import type { StreamsReading, PortfolioStream } from '../server/services/goals/streams.ts';
 import type { CapabilityCredit } from '../server/services/goals/capabilityCredit.ts';
 import type { OfferReadiness } from '../server/services/goals/offerReadiness.ts';
@@ -137,6 +161,60 @@ describe('GoalView carries it, from rows', () => {
 
     const tick = await assembleGoals({ projectIds: null, includeArchived: false });
     expect(tick.goals.find((one) => one.id === goal.id)!.port05 ?? null).toBeNull();
+  });
+
+  it('a read of many goals reads what they share once, not once per goal and opening (F5)', async () => {
+    const opened = await capture({ projectId, actorRef: userId, ownerUserId: userId, title: 'Quarterly payroll filings for clinics', mechanism: 'EXPLICIT_PAID_REQUEST', currency: 'USD', industry: 'clinics', source: 'https://example.com/c' });
+    if (!opened.ok) throw new Error(opened.reason);
+    const second = await capture({ projectId, actorRef: userId, ownerUserId: userId, title: 'Inventory reconciliation for retailers', mechanism: 'EXPLICIT_PAID_REQUEST', currency: 'USD', industry: 'retail', source: 'https://example.com/d' });
+    if (!second.ok) throw new Error(second.reason);
+    const goals: string[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      const goal = await createWorkstream({ projectId, title: `Collect cash ${i}`, intent: 'Collect settled cash.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+      for (const ref of [opened.value.id, second.value.id]) {
+        await linkWorkstream({ workstreamId: goal.id, kind: 'OPPORTUNITY', ref, relation: 'PURSUES', recordedBy: 'PERSON', recordedByUserId: userId });
+      }
+      goals.push(goal.id);
+    }
+
+    reads.authority = 0;
+    reads.capabilities = 0;
+    const read = await assembleGoals({ projectIds: [projectId] });
+    // Every goal still carries its full reading of both openings ...
+    for (const id of goals) {
+      const p5 = read.goals.find((one) => one.id === id)!.port05!;
+      expect(p5.credits.map((c) => c.opportunityId).sort()).toEqual([opened.value.id, second.value.id].sort());
+      expect(p5.offers).toHaveLength(2);
+      expect(p5.offers.every((o) => o.blocked.some((b) => b.action === 'CONTACT'))).toBe(true);
+    }
+    // ... but the project's five grants were checked once and the capabilities read once,
+    // where the per-goal loop asked 4 goals x 2 openings x 5 = 40 times and read capabilities 4 times.
+    expect(reads.authority).toBe(5);
+    expect(reads.capabilities).toBe(1);
+
+    // A second read asks again: nothing is held past the read it served.
+    await assembleGoals({ projectIds: [projectId] });
+    expect(reads.authority).toBe(10);
+    expect(reads.capabilities).toBe(2);
+  });
+
+  it('a read context bounds how many goals are derived at once', async () => {
+    const context = port05ReadContext(new Date(), 2);
+    let active = 0;
+    let peak = 0;
+    const deps = {
+      streams: () => null,
+      credits: async () => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        active -= 1;
+        return [];
+      },
+      offers: async () => [],
+    };
+    await Promise.all(Array.from({ length: 6 }, (_, i) => readPort05(`wst_${i}`, new Date(), deps, context)));
+    expect(peak).toBe(2);
   });
 
   it('creates no second derivation of goal state: model.ts calls the composition and port05.ts writes nothing', () => {

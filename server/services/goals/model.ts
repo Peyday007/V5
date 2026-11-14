@@ -64,7 +64,7 @@ import { listRoutines } from '../../repos/fleet.ts';
 import { sharedFleetSnapshot, type FleetSnapshot } from '../dispatch/candidates.ts';
 import { listMembershipsForProject } from '../../repos/identity.ts';
 import { readTarget, type TargetReading } from './target.ts';
-import { readPort05, type Port05Reading } from './port05.ts';
+import { port05ReadContext, readPort05, type Port05Reading } from './port05.ts';
 
 // ---------------------------------------------------------------------------
 // The shape
@@ -662,6 +662,9 @@ export async function assembleGoals(options: {
   port05?: boolean;
 }): Promise<GoalsSnapshot> {
   const withPort05 = options.port05 ?? options.projectIds !== null;
+  // One context for the whole read: capabilities, grants, policies and openings are read once, not per goal.
+  const port05Context = withPort05 ? port05ReadContext(new Date(options.now ?? Date.now())) : null;
+  const port05Reads: { view: GoalView; read: Promise<{ ok: true; reading: Port05Reading } | { ok: false; error: unknown }> }[] = [];
   const now = options.now ?? new Date().toISOString();
   let fleet: Promise<FleetSnapshot> | null = null;
   const remedies = new Map<string, ReturnType<typeof surfaceRemedy>>();
@@ -919,15 +922,16 @@ export async function assembleGoals(options: {
 
     const rank = ranked.get(goal.id);
     const snapshot = snapshots.get(goal.id);
-    let port05: Port05Reading | null = null;
-    if (withPort05 && lifecycle !== 'COMPLETE' && lifecycle !== 'CANCELLED' && lifecycle !== 'ARCHIVED') {
-      try {
-        port05 = await readPort05(goal.id, new Date(now));
-      } catch {
-        // A reading that cannot be taken is left out, never guessed; the rest of the goal still shows.
-        port05 = null;
-      }
-    }
+    // Started here and awaited once after the loop: goals are read concurrently
+    // (bounded by the context) and share every row they have in common.
+    const port05Read =
+      port05Context && lifecycle !== 'COMPLETE' && lifecycle !== 'CANCELLED' && lifecycle !== 'ARCHIVED'
+        ? // Settled into a value at once, so a rejection waiting for the loop to end is never an unhandled one.
+          readPort05(goal.id, new Date(now), {}, port05Context).then(
+            (reading) => ({ ok: true as const, reading }),
+            (error: unknown) => ({ ok: false as const, error }),
+          )
+        : null;
     goals.push({
       id: goal.id,
       title: goal.title,
@@ -971,7 +975,7 @@ export async function assembleGoals(options: {
               : null,
           }
         : null,
-      port05,
+      port05: null,
       pausedAt: goal.pausedAt,
       pausedReason: goal.pausedReason,
       cancelledAt: goal.cancelledAt,
@@ -980,6 +984,23 @@ export async function assembleGoals(options: {
       createdAt: goal.createdAt,
       updatedAt: goal.updatedAt,
     });
+    if (port05Read) port05Reads.push({ view: goals[goals.length - 1]!, read: port05Read });
+  }
+
+  if (port05Reads.length > 0) {
+    const failures: string[] = [];
+    for (const { view, read } of port05Reads) {
+      const settled = await read;
+      if (settled.ok) {
+        view.port05 = settled.reading;
+      } else {
+        // A reading that cannot be taken is left out, never guessed; the rest
+        // of the goal still shows, and the failure is said rather than hidden.
+        view.port05 = null;
+        failures.push(`${view.id}: ${settled.error instanceof Error ? settled.error.message : String(settled.error)}`);
+      }
+    }
+    if (failures.length > 0) console.warn(`[goals] PORT-05 reading unavailable for ${failures.length} goal(s): ${failures.join('; ')}`);
   }
 
   goals.sort((a, b) => {

@@ -27,7 +27,9 @@
  */
 import type { StreamRole, StreamsReading } from './streams.ts';
 import type { CapabilityCredit } from './capabilityCredit.ts';
-import type { OfferReadiness } from './offerReadiness.ts';
+import type { OfferReadiness, OfferReadMemo } from './offerReadiness.ts';
+import type { CapabilityReading } from '../cash/capabilities.ts';
+import type { CashOpportunity } from '../../domain/types.ts';
 
 export interface Port05Stream {
   opportunityId: string;
@@ -159,29 +161,114 @@ export interface Port05Deps {
   offers?: (goalId: string, now: Date) => Promise<{ opportunityId: string; readiness: OfferReadiness }[]>;
 }
 
-/** The live openings a goal pursues, each judged from its rows. Writes nothing. */
-async function creditsFromRows(goalId: string): Promise<CapabilityCredit[]> {
-  const { listLinks } = await import('../../repos/register.ts');
-  const { getOpportunity } = await import('../../repos/cashPortfolio.ts');
-  const { readAllCapabilities } = await import('../cash/capabilities.ts');
-  const { readCreditCase, judgeCapabilityCredit } = await import('./capabilityCredit.ts');
-  const out: CapabilityCredit[] = [];
-  let readings: Awaited<ReturnType<typeof readAllCapabilities>> | null = null;
-  for (const link of await listLinks(goalId)) {
-    if (link.kind !== 'OPPORTUNITY') continue;
-    const opportunity = await getOpportunity(link.ref);
-    if (!opportunity || opportunity.state === 'ARCHIVED' || opportunity.state === 'DECLINED' || opportunity.state === 'COLLECTED') continue;
-    readings ??= await readAllCapabilities();
-    const credit = await readCreditCase(opportunity.id, readings);
-    if (credit) out.push(judgeCapabilityCredit(credit));
-  }
-  return out;
+/**
+ * What one read of many goals shares. A person's goals read derives PORT-05 for
+ * every live goal, and without this each goal re-read every capability, every
+ * project's commercial grants (five checks per opening) and its policy, and each
+ * opening twice — N goals × M openings × ~10 queries on the main goals route.
+ * Within one read the capabilities are read once, each project's grants and
+ * policy once, each opening once and each opening's credit and readiness once
+ * even when several goals pursue it. Scoped to one read and one `now`: a
+ * capability lost an hour ago is never credited by a context that outlived it.
+ */
+export interface Port05ReadContext {
+  now: Date;
+  opening(id: string): Promise<CashOpportunity | null>;
+  credit(opening: CashOpportunity): Promise<CapabilityCredit | null>;
+  readiness(opening: CashOpportunity): Promise<OfferReadiness>;
+  /** Run one goal's reading under the read's concurrency bound. */
+  run<T>(task: () => Promise<T>): Promise<T>;
 }
 
-/** One goal's PORT-05 reading, from rows and the plan's latest portfolio. Writes nothing. */
-export async function readPort05(goalId: string, now: Date = new Date(), deps: Port05Deps = {}): Promise<Port05Reading> {
-  const streams = deps.streams ? deps.streams(goalId) : (latestStreams.get(goalId) ?? null);
-  const credits = await (deps.credits ?? creditsFromRows)(goalId);
-  const offers = await (deps.offers ?? (async (id: string, at: Date) => (await import('./offerReadiness.ts')).offerReadinessForGoal(id, at)))(goalId, now);
-  return composePort05({ goalId, streams, credits, offers });
+/** How many goals one read derives at once: concurrent, without taking the whole pool. */
+export const PORT05_READ_CONCURRENCY = 4;
+
+function memoize<K, V>(compute: (key: K) => Promise<V>): (key: K) => Promise<V> {
+  const held = new Map<K, Promise<V>>();
+  return (key) => {
+    let found = held.get(key);
+    if (!found) {
+      found = compute(key);
+      held.set(key, found);
+    }
+    return found;
+  };
+}
+
+/** A context for one read. Reads rows lazily and at most once per key; writes nothing. */
+export function port05ReadContext(now: Date = new Date(), concurrency = PORT05_READ_CONCURRENCY): Port05ReadContext {
+  let capabilities: Promise<ReadonlyMap<string, CapabilityReading>> | null = null;
+  let memo: Promise<OfferReadMemo> | null = null;
+  const opening = memoize(async (id: string) => (await import('../../repos/cashPortfolio.ts')).getOpportunity(id));
+  const creditById = memoize(async (id: string): Promise<CapabilityCredit | null> => {
+    const { readAllCapabilities } = await import('../cash/capabilities.ts');
+    const { readCreditCase, judgeCapabilityCredit } = await import('./capabilityCredit.ts');
+    capabilities ??= readAllCapabilities();
+    const found = await readCreditCase(id, await capabilities);
+    return found ? judgeCapabilityCredit(found) : null;
+  });
+  const readinessById = new Map<string, Promise<OfferReadiness>>();
+  let active = 0;
+  const waiting: (() => void)[] = [];
+  return {
+    now,
+    opening,
+    credit: (one) => creditById(one.id),
+    readiness(one) {
+      let found = readinessById.get(one.id);
+      if (!found) {
+        found = (async () => {
+          const readiness = await import('./offerReadiness.ts');
+          memo ??= Promise.resolve(readiness.offerReadMemo());
+          return readiness.offerReadinessFor(one, now, await memo);
+        })();
+        readinessById.set(one.id, found);
+      }
+      return found;
+    },
+    async run(task) {
+      if (active >= Math.max(1, concurrency)) await new Promise<void>((resolve) => waiting.push(resolve));
+      active += 1;
+      try {
+        return await task();
+      } finally {
+        active -= 1;
+        waiting.shift()?.();
+      }
+    },
+  };
+}
+
+async function liveOpenings(goalId: string, context: Port05ReadContext): Promise<CashOpportunity[]> {
+  const { liveOpeningsForGoal } = await import('./offerReadiness.ts');
+  return liveOpeningsForGoal(goalId, context.opening);
+}
+
+/** The live openings a goal pursues, each judged from its rows. Writes nothing. */
+async function creditsFromRows(goalId: string, context: Port05ReadContext): Promise<CapabilityCredit[]> {
+  const credits = await Promise.all((await liveOpenings(goalId, context)).map((one) => context.credit(one)));
+  return credits.filter((one): one is CapabilityCredit => one !== null);
+}
+
+async function offersFromRows(goalId: string, context: Port05ReadContext): Promise<{ opportunityId: string; readiness: OfferReadiness }[]> {
+  return Promise.all(
+    (await liveOpenings(goalId, context)).map(async (one) => ({ opportunityId: one.id, readiness: await context.readiness(one) })),
+  );
+}
+
+/**
+ * One goal's PORT-05 reading, from rows and the plan's latest portfolio. Writes
+ * nothing. Pass the read's `context` when reading many goals, so what they share
+ * is read once; without one, the goal gets a context of its own.
+ */
+export async function readPort05(goalId: string, now: Date = new Date(), deps: Port05Deps = {}, context?: Port05ReadContext): Promise<Port05Reading> {
+  const ctx = context ?? port05ReadContext(now);
+  return ctx.run(async () => {
+    const streams = deps.streams ? deps.streams(goalId) : (latestStreams.get(goalId) ?? null);
+    const [credits, offers] = await Promise.all([
+      deps.credits ? deps.credits(goalId) : creditsFromRows(goalId, ctx),
+      deps.offers ? deps.offers(goalId, now) : offersFromRows(goalId, ctx),
+    ]);
+    return composePort05({ goalId, streams, credits, offers });
+  });
 }
