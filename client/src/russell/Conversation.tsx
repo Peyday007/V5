@@ -167,8 +167,16 @@ export function Conversation({
   const send = useCallback(async () => {
     const words = draft.trim();
     if (!words || sending) return;
-    const preface = groundingPreface(grounding);
-    const content = preface ? `${preface}\n${words}` : words;
+    /*
+     * Exactly what the person sent, and nothing else.
+     *
+     * The stored turn is the person's own words, so nothing is added to it
+     * behind their back — a preface prepended here would be recorded as text
+     * they typed. The selected record reaches the turn only when the person
+     * puts it into the draft themselves (the "Mention this record" control),
+     * where they can see it, edit it or delete it before sending.
+     */
+    const content = words;
     setSending(true);
     setProblem(null);
     try {
@@ -186,7 +194,19 @@ export function Conversation({
     } finally {
       setSending(false);
     }
-  }, [conversationId, draft, grounding, sending, thread]);
+  }, [conversationId, draft, sending, thread]);
+
+  /*
+   * Put the selected record into the draft, visibly.
+   *
+   * The person sees the reference in their own text box and sends it as their
+   * own words, or edits it away. It is never added on submit.
+   */
+  const mention = useCallback(() => {
+    const reference = groundingPreface(grounding);
+    if (!reference) return;
+    setDraft((current) => (current.includes(reference) ? current : current.trim() ? `${reference}\n${current}` : `${reference}\n`));
+  }, [grounding]);
 
   if (thread.loading && turns.length === 0) {
     return <p className="rs-state rs-state-loading">Opening the conversation…</p>;
@@ -234,7 +254,10 @@ export function Conversation({
           ) : (
             ' (no record address)'
           )}
-          {grounding.found ? '' : ' — not found in the current read'}
+          {grounding.found ? '' : ' — not found in the current read'}{' '}
+          <button type="button" className="rs-thread-grounding-mention" onClick={mention}>
+            Mention this record
+          </button>
         </p>
       ) : null}
       {showComposer ? (
