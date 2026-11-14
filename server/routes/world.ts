@@ -105,7 +105,7 @@ export interface WorldWorker {
   holding: Array<{ kind: 'BIN' | 'WORK_UNIT'; recordId: string; href: string | null; heartbeatAt: string | null; leaseExpiresAt: string | null }>;
 }
 
-export const MONEY_CLASSES = ['received', 'due', 'spent', 'reserved', 'invested', 'transferred', 'projected', 'simulated'] as const;
+export const MONEY_CLASSES = ['received', 'due', 'spent', 'reserved', 'invested', 'transferred', 'projected', 'released', 'simulated'] as const;
 export type MoneyClass = (typeof MONEY_CLASSES)[number];
 
 export interface WorldMoneyLine {
@@ -316,11 +316,8 @@ function fact(input: Omit<WorldFact, 'freshness' | 'missing' | 'district'> & { m
 const MONEY_KINDS: Record<MoneyClass, { meaning: string; kinds: Array<{ kind: CashMoneyKind; direction: WorldMoneyLine['direction'] }> }> = {
   received: { meaning: 'Cash a customer actually paid', kinds: [{ kind: 'CUSTOMER_PAYMENT', direction: 'IN' }] },
   due: {
-    meaning: 'Issued and unpaid invoices owed to this project, unpaid supplier commitments owed by it, and commitments released (no longer owed), each on its own line',
-    kinds: [
-      { kind: 'UNPAID_COMMITMENT', direction: 'OUT' },
-      { kind: 'COMMITMENT_RELEASED', direction: 'OUT' },
-    ],
+    meaning: 'Issued and unpaid invoices owed to this project and unpaid supplier commitments owed by it, each on its own line',
+    kinds: [{ kind: 'UNPAID_COMMITMENT', direction: 'OUT' }],
   },
   spent: {
     meaning: 'Cash that has left: costs, commitments paid and refunds',
@@ -346,9 +343,17 @@ const MONEY_KINDS: Record<MoneyClass, { meaning: string; kinds: Array<{ kind: Ca
     ],
   },
   projected: {
-    meaning: 'Agreed work not yet invoiced, and agreements released: a pipeline, not cash',
+    meaning: 'Agreed work not yet invoiced: a pipeline, not cash',
+    kinds: [{ kind: 'PIPELINE_AGREED', direction: 'IN' }],
+  },
+  // What was undone before it settled. A released commitment is owed no
+  // longer and a released agreement will not be billed, so neither may sit
+  // beside live obligations in `due` or live pipeline in `projected`
+  // (S-0430: signed-but-unsettled obligations are distinguished).
+  released: {
+    meaning: 'Supplier commitments released before payment (no longer owed) and agreements released before billing (no longer expected), each on its own line: neither is owed, due or cash',
     kinds: [
-      { kind: 'PIPELINE_AGREED', direction: 'IN' },
+      { kind: 'COMMITMENT_RELEASED', direction: 'OUT' },
       { kind: 'PIPELINE_RELEASED', direction: 'IN' },
     ],
   },

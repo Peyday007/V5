@@ -68,7 +68,7 @@ export const BASIS: Readonly<Record<AmountBasis, BasisSpec>> = {
   COLLECTED: { label: 'Cash collected', confidence: 'MEASURED', notA: null },
   SIGNED_UNSETTLED: { label: 'Signed obligation, unsettled', confidence: 'MEASURED', notA: 'COLLECTED' },
   INVOICED: { label: 'Invoiced, unpaid', confidence: 'MEASURED', notA: 'COLLECTED' },
-  RELEASED: { label: 'Commitment released', confidence: 'MEASURED', notA: null },
+  RELEASED: { label: 'Released — no longer owed or expected', confidence: 'MEASURED', notA: null },
   SPENT: { label: 'Spent', confidence: 'MEASURED', notA: null },
   RESERVED: { label: 'Reserved', confidence: 'MEASURED', notA: null },
   INVESTED: { label: 'Capital invested', confidence: 'MEASURED', notA: null },
@@ -94,7 +94,6 @@ export function basisOfMoneyLine(cls: MoneyClass, line: Pick<WorldMoneyLine, 'ki
     case 'due':
       if (line.kind.startsWith('INVOICE_')) return 'INVOICED';
       if (line.kind === 'UNPAID_COMMITMENT') return 'SIGNED_UNSETTLED';
-      if (line.kind === 'COMMITMENT_RELEASED') return 'RELEASED';
       return null;
     case 'spent':
       return 'SPENT';
@@ -106,6 +105,8 @@ export function basisOfMoneyLine(cls: MoneyClass, line: Pick<WorldMoneyLine, 'ki
       return 'TRANSFERRED';
     case 'projected':
       return 'PROJECTED';
+    case 'released':
+      return 'RELEASED';
     case 'simulated':
       return 'SIMULATED';
   }

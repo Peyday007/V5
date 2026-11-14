@@ -158,6 +158,10 @@ function seed(): void {
     money.run('cme_agreed', project, 'PIPELINE_AGREED', 90_000, 'USD', now, now);
     money.run('cme_cost', project, 'COST', 3_000, 'USD', now, now);
     money.run('cme_eur', project, 'CUSTOMER_PAYMENT', 500, 'EUR', now, now);
+    // A supplier commitment, part of it released before payment, and an agreement released before billing.
+    money.run('cme_owed', project, 'UNPAID_COMMITMENT', 4_000, 'USD', now, now);
+    money.run('cme_owed_released', project, 'COMMITMENT_RELEASED', 1_500, 'USD', now, now);
+    money.run('cme_agreed_released', project, 'PIPELINE_RELEASED', 20_000, 'USD', now, now);
   } finally {
     db.close();
   }
@@ -291,7 +295,7 @@ describe('money stays in its classes', () => {
   it('keeps every class separate, with ledger sources, and never sums across them or across currencies', async () => {
     const { body } = await call('GET', WORLD(), { cookie: memberCookie });
     const classes = body.money.map((m: any) => m.class);
-    expect(classes).toEqual(['received', 'due', 'spent', 'reserved', 'invested', 'transferred', 'projected', 'simulated']);
+    expect(classes).toEqual(['received', 'due', 'spent', 'reserved', 'invested', 'transferred', 'projected', 'released', 'simulated']);
     const of = (cls: string) => body.money.find((m: any) => m.class === cls);
     expect(of('received').lines.map((l: any) => [l.kind, l.currency, l.amountCents]).sort()).toEqual([
       ['CUSTOMER_PAYMENT', 'EUR', 500],
@@ -306,6 +310,24 @@ describe('money stays in its classes', () => {
       }
       expect('total' in m).toBe(false);
     }
+  });
+
+  it('a released commitment or agreement is never due or projected: it has its own class, line by line', async () => {
+    const { body } = await call('GET', WORLD(), { cookie: memberCookie });
+    const of = (cls: string) => body.money.find((m: any) => m.class === cls);
+    const kindsIn = (cls: string) => of(cls).lines.map((l: any) => l.kind);
+    // Due holds only what is still owed.
+    expect(of('due').lines.map((l: any) => [l.kind, l.amountCents])).toEqual([['UNPAID_COMMITMENT', 4_000]]);
+    for (const cls of ['due', 'projected', 'received', 'spent']) {
+      expect(kindsIn(cls)).not.toContain('COMMITMENT_RELEASED');
+      expect(kindsIn(cls)).not.toContain('PIPELINE_RELEASED');
+    }
+    expect(of('released').lines.map((l: any) => [l.kind, l.direction, l.amountCents]).sort()).toEqual([
+      ['COMMITMENT_RELEASED', 'OUT', 1_500],
+      ['PIPELINE_RELEASED', 'IN', 20_000],
+    ]);
+    expect(of('released').meaning).toMatch(/no longer owed/);
+    expect(of('due').meaning).not.toMatch(/released/);
   });
 
   it('never labels a projected or simulated amount received, and an empty class says why rather than reading zero', async () => {

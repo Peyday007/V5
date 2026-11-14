@@ -85,6 +85,15 @@ describe('truth: money labels', () => {
     expect(basisOfMoneyLine('due', { kind: 'UNPAID_COMMITMENT' })).toBe('SIGNED_UNSETTLED');
   });
 
+  it('a released commitment is never read as due: only the released class gives it the released label', () => {
+    expect(basisOfMoneyLine('due', { kind: 'COMMITMENT_RELEASED' })).toBeNull();
+    expect(basisOfMoneyLine('released', { kind: 'COMMITMENT_RELEASED' })).toBe('RELEASED');
+    expect(basisOfMoneyLine('released', { kind: 'PIPELINE_RELEASED' })).toBe('RELEASED');
+    expect(BASIS.RELEASED.label).not.toBe(BASIS.SIGNED_UNSETTLED.label);
+    expect(BASIS.RELEASED.label).not.toBe(BASIS.PROJECTED.label);
+    expect(REALISED_LABELS).not.toContain(BASIS.RELEASED.label);
+  });
+
   it('carries unit, time range, owner, source, confidence and freshness on every line', () => {
     const money: WorldMoney = {
       class: 'received',
