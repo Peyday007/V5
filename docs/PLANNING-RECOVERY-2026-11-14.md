@@ -46,13 +46,13 @@ failures; repairing the cause is the unit of work, not the symptom.
 | RC | root cause | issues it explains | repair owner (branch) | status |
 |---|---|---|---|---|
 | RC-1 | **Synchronous CPU-heavy quant work on the server's main event loop, recomputed every read** (2-CPU machine, heap ~840 MB/1 GB). Surfaces as "database" errors, 503s, tick passes that never settle, MCP timeouts after restart, DNS failures in research, failed release verification, the operator pausing goals | P-1, P-2, P-3, P-4, P-5, P-6, P-8, P-9, P-11, H-2 (partly), H-3 (in-run timeouts), H-7, C-12 | main-loop CPU repair | REPAIRING |
-| RC-2 | **No economic plausibility in the plan search**: moves stack without a family limit, price rises are nearly free, supplier cost vanishes under prepaid fulfilment, a deposit pulls all cash to day 3, cloned channels resell one market, after-proof money is spent in every world, and nothing flags an absurd result | Q-1…Q-9, C-1…C-4, C-14, P-7 | quant engine economics repair | REPAIRING |
+| RC-2 | **No economic plausibility in the plan search**: moves stack without a family limit, price rises are nearly free, supplier cost vanishes under prepaid fulfilment, a deposit pulls all cash to day 3, cloned channels resell one market, after-proof money is spent in every world, and nothing flags an absurd result | Q-1…Q-9, C-1…C-4, C-14, P-7 | quant engine economics repair | AWAITING VERIFICATION (merged 035061f) |
 | RC-3 | **Three readings, three different "plans"**: verdict, acceptance candidate and reconstruction each pick their own; revision never reaches the plan; no dated actionable steps; research ranked against the wrong plan; the 90% gate counts simulated worlds as evidence | C-6, C-7, C-8, C-9, C-11, C-13, C-15 | plan coherence repair | REPAIRING |
 | RC-4 | **No termination by arithmetic**: an impossible objective keeps searching past its deadline; no INFEASIBLE / NOT_SUPPORTED verdict | G-6, C-10 | plan coherence repair | REPAIRING |
-| RC-5 | **Planning is defined only for a person-typed cash target**: no objective reader, no non-cash planner, constants tuned to the $10K case | G-1, G-2, G-3, G-4, G-5, G-7, G-10 | intake repair; non-cash planner repair; G-3 done here | REPAIRING |
-| RC-6 | **Research claims become openings without an offer, a buyer, a price or a date**: titles are claim sentences, supplier rate cards pass as demand, expired events are modelled, one buyer population is counted once per design, capital-unknown blocks the validation ladder | O-1, O-2, O-3, O-5, O-6, O-7, C-5, H-9 | opening-quality repair | REPAIRING |
-| RC-7 | **A goal's state is read from its worst link**: one parked research dead end marks a multi-path goal BLOCKED waiting on a PERSON, and the operator plans from that | O-4, H-1 | goal-state repair | REPAIRING |
-| RC-8 | **The operator acts on what it cannot see or do**: read tools gated on the act scope, interventions that only write a lesson while reporting work queued, a 4B GPU model as the high-impact challenger, ranking credited to the wrong model | H-3, H-4, H-5, H-6 | operator repair | REPAIRING |
+| RC-5 | **Planning is defined only for a person-typed cash target**: no objective reader, no non-cash planner, constants tuned to the $10K case | G-1, G-2, G-3, G-4, G-5, G-7, G-10 | intake repair; non-cash planner repair; G-3 done here | PARTLY MERGED: G-1 e084488, G-3 6f472cc; intake pending |
+| RC-6 | **Research claims become openings without an offer, a buyer, a price or a date**: titles are claim sentences, supplier rate cards pass as demand, expired events are modelled, one buyer population is counted once per design, capital-unknown blocks the validation ladder | O-1, O-2, O-3, O-5, O-6, O-7, C-5, H-9 | opening-quality repair | AWAITING VERIFICATION (merged 533350e) |
+| RC-7 | **A goal's state is read from its worst link**: one parked research dead end marks a multi-path goal BLOCKED waiting on a PERSON, and the operator plans from that | O-4, H-1 | goal-state repair | AWAITING VERIFICATION (merged 55a1620) |
+| RC-8 | **The operator acts on what it cannot see or do**: read tools gated on the act scope, interventions that only write a lesson while reporting work queued, a 4B GPU model as the high-impact challenger, ranking credited to the wrong model | H-3, H-4, H-5, H-6 | operator repair | AWAITING VERIFICATION (merged ff2f2b7) |
 
 Not root-caused to code (external or operational): H-8 (GitHub drops scheduled
 runs), P-10 (merges land faster than the release gate — a release-cadence
@@ -141,3 +141,18 @@ guess at undiscovered defects.
 - Not yet examined: Russell research-mission internals beyond the gate summary
   (O-6 verifier share), the client UI's goal surface, Postgres-specific plan
   queries beyond the statement budget.
+
+## Independent acceptance (evaluator-written, not the planner's own critics)
+
+`tests/planningAcceptance.test.ts`: four objectives outside the $10K case
+($100/48h/$0 digital goods; $100K/90d/$10K B2B implementation; $1M/1y/$50K
+wholesale; $1M/48h/$0 infeasible) plus the $10K production case and a changed
+capital constraint. Assertions: never spends money not set aside; never claims
+more than the held markets could pay; reach never above the openings' own
+headroom; assumed moves are coverage, never probability; a flagged reading is
+never the kept plan; an arithmetic impossibility reads impossible.
+
+| code | result |
+|---|---|
+| pre-recovery production (c941980) | 6 of 7 FAIL — e.g. $100K plan reach 0.72 above its 0.21 headroom; $1M/1y reach 0.865 above 0.02; $10K median $181,158 |
+| integrated recovery branch | 7 of 7 PASS |
