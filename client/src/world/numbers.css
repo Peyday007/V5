@@ -1,0 +1,34 @@
+/*
+ * Numbers-first lenses (UI-27-3, UI-27-5): Operations, Goal and the record
+ * drawer. Uses only the design tokens from styles.css, stands alone without
+ * the world scene, and collapses to one column on a narrow viewport.
+ */
+.numbers-lens { display: grid; gap: 16px; color: var(--fg); background: var(--bg-1); font-family: var(--sans); padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); }
+.numbers-lens h2, .numbers-lens h3 { margin: 0 0 6px; }
+.numbers-section { display: grid; gap: 6px; }
+.numbers-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.numbers-controls label { display: inline-flex; gap: 4px; align-items: center; color: var(--fg-dim); }
+.numbers-controls select, .numbers-controls input { background: var(--bg-2); color: var(--fg); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 2px 6px; font: inherit; }
+.numbers-button { background: var(--bg-3); color: var(--fg); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 2px 8px; cursor: pointer; font: inherit; }
+.numbers-button:focus-visible, .numbers-link:focus-visible, .numbers-sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.numbers-link { color: var(--accent-fg); text-decoration: underline; background: none; border: none; padding: 0; font: inherit; cursor: pointer; }
+.numbers-sort { background: none; border: none; color: inherit; font: inherit; font-weight: 600; cursor: pointer; padding: 0; }
+.numbers-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+.numbers-table caption { text-align: left; color: var(--fg-muted); padding-bottom: 4px; }
+.numbers-table th, .numbers-table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border-soft); overflow-wrap: anywhere; }
+.numbers-table td.numbers-num { text-align: right; font-family: var(--mono); }
+.numbers-muted { color: var(--fg-muted); margin: 0; }
+.numbers-tag { display: inline-block; padding: 0 6px; border: 1px solid var(--border-strong); border-radius: var(--radius); font-size: 0.85em; }
+.numbers-tag-measured { border-color: var(--green); }
+.numbers-tag-modelled { border-style: dashed; border-color: var(--amber); }
+.numbers-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.numbers-drawer { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; }
+.numbers-drawer-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.numbers-dl { display: grid; gap: 2px; margin: 6px 0; }
+.numbers-dl-row { display: grid; grid-template-columns: 12em 1fr; gap: 8px; }
+.numbers-dl dt { color: var(--fg-muted); }
+.numbers-dl dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .numbers-columns { grid-template-columns: 1fr; }
+  .numbers-dl-row { grid-template-columns: 1fr; }
+}
