@@ -16223,3 +16223,5 @@ targets were 19–26. The threshold is now 1 s (`LAG_SHRINK_MS`).
 
 The report's scaling call no longer says "research is not queueing" when items wait with
 nothing running.
+
+**2026-11-14 — the operator paused the owner's directed goal.** At 06:00Z a Hermes run committed PAUSE_GOAL on `wst_7b4fcbb5f2384f31b6c3` "to conserve capacity while infrastructure pools are congested" — four hours after the owner's order "THE PRIORITY IS THE PLAN. FOCUS RESOURCES THERE." A pause holds every bin the goal pursues, so the one goal the owner directed resources to stopped receiving any. `setGoalFocus` now refuses PAUSE on a goal in `OWNER_DIRECTED_GOALS` (a person still can), and the Russell pass `owner-directed-goals` resumes such a goal when its latest GOAL_PAUSED row was written by an `operator:` actor; a person's pause stands. Congestion is answered by removing what slows the goal, never by stopping it.
