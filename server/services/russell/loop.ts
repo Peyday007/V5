@@ -1432,6 +1432,12 @@ async function tickOnce(owner: string): Promise<TickReport> {
       operationsReportTick();
     });
 
+    // The owner's directed goal is never left paused by the operator (2026-11-14).
+    await runPass(report, 'owner-directed-goals', async () => {
+      const { restoreOwnerDirectedGoals } = await import('../operator/decisions.ts');
+      await restoreOwnerDirectedGoals();
+    });
+
     /*
      * And the self-model, when the last reading has stopped being about this
      * system.

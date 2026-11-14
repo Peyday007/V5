@@ -245,6 +245,35 @@ export function operatorCalibration(
 }
 
 /**
+ * Goals the owner has directed Brain's resources to (2026-11-14: "THE PRIORITY IS
+ * THE PLAN. FOCUS RESOURCES THERE."). The operator may never pause one; a person
+ * can. Kept equal to the operations report's goal, which is the same order.
+ */
+export const OWNER_DIRECTED_GOALS: ReadonlySet<string> = new Set(['wst_7b4fcbb5f2384f31b6c3']);
+
+/**
+ * Undo an operator pause of an owner-directed goal. Only a pause whose latest
+ * GOAL_PAUSED row an operator run wrote is undone — a person's pause stands.
+ * Returns the goals it resumed.
+ */
+export async function restoreOwnerDirectedGoals(): Promise<string[]> {
+  const resumed: string[] = [];
+  for (const goalId of OWNER_DIRECTED_GOALS) {
+    const goal = await getWorkstream(goalId);
+    if (!goal || !goal.pausedAt) continue;
+    const last = await getDb().get<{ actor_ref: string }>(
+      `SELECT actor_ref FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_PAUSED' ORDER BY created_at DESC LIMIT 1`,
+      [goalId],
+    );
+    if (!last || !last.actor_ref.startsWith('operator:')) continue;
+    const { resume } = await import('../goals/decide.ts');
+    const result = await resume(goalId, 'owner-directive:2026-11-14');
+    if (result.ok) resumed.push(goalId);
+  }
+  return resumed;
+}
+
+/**
  * Move capacity between goals by pausing or resuming one, under a committed
  * decision of that kind. Never a goal owed to a customer or committed to
  * somebody (those are the person's to pause), and never without the decision.
@@ -262,6 +291,12 @@ export async function setGoalFocus(
   if (!goal || !goal.projectId || !ctx.projectIds.includes(goal.projectId)) return { ok: false, reason: 'no such goal in a project the operator directs' };
   if (input.action === 'PAUSE' && goal.commitment !== 'NONE') {
     return { ok: false, reason: `the goal is committed (${goal.commitment}); only a person pauses a commitment` };
+  }
+  if (input.action === 'PAUSE' && OWNER_DIRECTED_GOALS.has(input.goalId)) {
+    return {
+      ok: false,
+      reason: 'the owner directed Brain to put its resources on this goal; only a person pauses it — when capacity is short, remove what is slowing it rather than stopping it',
+    };
   }
   const { pause, resume } = await import('../goals/decide.ts');
   const actor = `operator:${ctx.runId ?? 'run'}`;

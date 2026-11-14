@@ -130,6 +130,27 @@ describe('decide, verify, move capacity (against the database)', () => {
     expect(again.reason).toMatch(/committed/);
   });
 
+  it("never lets the operator pause the owner's directed goal, and undoes an operator pause of it", async () => {
+    const { OWNER_DIRECTED_GOALS, restoreOwnerDirectedGoals } = await import('../server/services/operator/decisions.ts');
+    const { pause } = await import('../server/services/goals/decide.ts');
+    const owned = [...OWNER_DIRECTED_GOALS][0]!;
+    await getDb().run(`UPDATE workstreams SET id = ? WHERE id = ?`, [owned, goalId]);
+    const d = await decide({ ...base, kind: 'PAUSE_GOAL', goalId: owned, answeredChallenge: 'n/a' }, ctx());
+    const refused = await setGoalFocus({ goalId: owned, action: 'PAUSE', decisionId: d.decisionId!, reason: 'infrastructure congested' }, ctx());
+    expect(refused).toMatchObject({ ok: false });
+    expect(refused.reason).toMatch(/owner directed/);
+    expect((await getWorkstream(owned))!.pausedAt).toBeNull();
+
+    // A pause an operator run already made (before this guard) is undone…
+    expect((await pause(owned, 'congested', 'operator:opr_old')).ok).toBe(true);
+    expect(await restoreOwnerDirectedGoals()).toEqual([owned]);
+    expect((await getWorkstream(owned))!.pausedAt).toBeNull();
+    // …and a person's pause stands.
+    expect((await pause(owned, 'owner holds it', 'user:usr_owner')).ok).toBe(true);
+    expect(await restoreOwnerDirectedGoals()).toEqual([]);
+    expect((await getWorkstream(owned))!.pausedAt).not.toBeNull();
+  });
+
   it('calibration speaks only over enough comparable outcomes', () => {
     const preds = Array.from({ length: 12 }, (_, i) => ({ id: `p${i}`, comparableKey: 'operator:X', probability: 0.9 }));
     const outs = preds.map((p, i) => ({ predictionId: p.id, occurred: i < 4 }));
