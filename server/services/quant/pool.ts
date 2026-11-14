@@ -162,6 +162,62 @@ export function onScale(obs: Observation, kind: QuantityKind): { y: number; v: n
   return { y: (lo + hi) / 2, v: sd * sd };
 }
 
+/** Information halves this many times at most for age, so a very old observation stays finite and retained. */
+const MAX_AGE_HALVINGS = 30;
+/** The half-life an observation with its own `validUntil` ages by when its quantity names no window. */
+export const DEFAULT_HALF_LIFE_DAYS = 365;
+
+export interface Aging {
+  /** When full weight ends (ISO), or null when nothing dates the observation. */
+  windowEnd: string | null;
+  /** Where that end came from. */
+  windowFrom: 'VALID_UNTIL' | 'DEFAULT' | null;
+  /** Days past the window (0 while inside it). */
+  pastDays: number;
+  /** Share of its information the observation keeps: 1 inside the window, halving every half-life after. */
+  weight: number;
+  halfLifeDays: number | null;
+  note: string;
+}
+
+/**
+ * How far an observation has aged past its validity window (W-12).
+ *
+ * The window is the observation's own `validUntil` when its source declared
+ * one, else `observedAt` plus the quantity's `freshDays`. Inside it the
+ * observation counts in full. Past it the observation's information halves
+ * every half-life (the quantity's `freshDays`, or `DEFAULT_HALF_LIFE_DAYS`) —
+ * a decay, not the cliff that used to exclude it: old evidence widens the
+ * interval and keeps its time context, and is never dropped for age alone.
+ */
+export function ageOf(obs: Observation, freshDays: number | undefined, now: Date): Aging {
+  const halfLife = freshDays && freshDays > 0 ? freshDays : DEFAULT_HALF_LIFE_DAYS;
+  let end: number | null = null;
+  let from: Aging['windowFrom'] = null;
+  if (obs.validUntil) {
+    const raw = /^\d{4}-\d{2}-\d{2}$/.test(obs.validUntil) ? `${obs.validUntil}T23:59:59.999Z` : obs.validUntil;
+    const at = Date.parse(raw);
+    if (!Number.isNaN(at)) {
+      end = at;
+      from = 'VALID_UNTIL';
+    }
+  }
+  if (end === null && freshDays && obs.observedAt) {
+    const at = Date.parse(obs.observedAt);
+    if (!Number.isNaN(at)) {
+      end = at + freshDays * 86_400_000;
+      from = 'DEFAULT';
+    }
+  }
+  if (end === null) return { windowEnd: null, windowFrom: null, pastDays: 0, weight: 1, halfLifeDays: null, note: '' };
+  const pastDays = Math.max(0, (now.getTime() - end) / 86_400_000);
+  const halvings = Math.min(MAX_AGE_HALVINGS, pastDays / halfLife);
+  const weight = pastDays > 0 ? 0.5 ** halvings : 1;
+  const window = from === 'VALID_UNTIL' ? `its declared validity (until ${new Date(end).toISOString().slice(0, 10)})` : `the ${freshDays}-day window`;
+  const note = pastDays > 0 ? `aged: ${Math.round(pastDays)} days past ${window}, weight ×${weight.toPrecision(2)} (half-life ${halfLife} days)` : '';
+  return { windowEnd: new Date(end).toISOString(), windowFrom: from, pastDays, weight, halfLifeDays: halfLife, note };
+}
+
 export interface Classified {
   direct: Scaled[];
   comparable: Scaled[];
@@ -176,25 +232,29 @@ export function classify(node: QuantityNode, now: Date): Classified {
   const material = new Set(node.material ?? []);
   const scale = scaleFor(node.kind);
   for (const obs of node.observations ?? []) {
-    if (node.freshDays && obs.observedAt) {
-      const age = (now.getTime() - Date.parse(obs.observedAt)) / 86_400_000;
-      if (age > node.freshDays) {
-        out.excluded.push({ id: obs.id, reason: `stale: observed ${Math.round(age)} days ago, older than the ${node.freshDays}-day window` });
-        continue;
-      }
+    if (obs.invalidation?.metAt) {
+      const note = obs.invalidation.note ? ` (${obs.invalidation.note})` : '';
+      out.excluded.push({ id: obs.id, reason: `invalidated: its condition "${obs.invalidation.condition}" was recorded as met on ${obs.invalidation.metAt.slice(0, 10)}${note}` });
+      continue;
     }
-    const base = onScale(obs, node.kind);
-    if (!base) {
+    const raw = onScale(obs, node.kind);
+    if (!raw) {
       out.excluded.push({ id: obs.id, reason: `its value cannot describe a ${node.kind.toLowerCase()} quantity` });
       continue;
     }
+    // Age widens, it never excludes (W-12): past its window an observation keeps its time context and loses weight.
+    const aging = ageOf(obs, node.freshDays, now);
+    const base = aging.weight < 1
+      ? { ...raw, v: raw.v / aging.weight, ...(raw.spread !== undefined ? { spread: raw.spread / Math.sqrt(aging.weight) } : {}) }
+      : raw;
+    const aged = aging.weight < 1 ? [aging.note] : [];
     if (obs.broad) {
-      out.broad.push({ obs, y: base.y, v: base.v, distance: 99, adjusted: [], unsized: base.unsized, spread: base.spread });
+      out.broad.push({ obs, y: base.y, v: base.v, distance: 99, adjusted: aged, unsized: base.unsized, spread: base.spread });
       continue;
     }
     let { y, v } = base;
     let immaterial = 0;
-    const adjusted: string[] = [];
+    const adjusted: string[] = [...aged];
     let refusal: string | null = null;
     if (obs.published && node.kind === 'RATE') {
       // Selection: a published demand rate is shifted down and widened, never taken at face value.
@@ -229,7 +289,7 @@ export function classify(node: QuantityNode, now: Date): Classified {
       continue;
     }
     if (immaterial > 0) v = v / IMMATERIAL_DISCOUNT ** immaterial;
-    const distance = immaterial + adjusted.length;
+    const distance = immaterial + adjusted.length - aged.length;
     const scaled = { obs, y, v, distance: distance === 0 ? 0 : distance + 1, adjusted, unsized: base.unsized, spread: base.spread };
     if (distance === 0) out.direct.push(scaled);
     else out.comparable.push(scaled);

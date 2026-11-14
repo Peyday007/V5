@@ -29,11 +29,13 @@
  */
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
-import { claimSources } from '../../repos/research.ts';
+import { claimSources, type ClaimSource } from '../../repos/research.ts';
 import { cashOutcomeLessons, type CashLesson } from '../cash/journey/learning.ts';
 import { readMoneyFigures } from '../cash/figures.ts';
 import type { CashCardFact, CashOpportunity } from '../../domain/types.ts';
 import type { Estimate, Observation, QuantityNode } from '../../domain/quant.ts';
+import { ageOf } from './pool.ts';
+import type { LimitingInput } from './portfolio.ts';
 import { reconstruct } from './reconstruct.ts';
 import { rankRoutesFromLedger, routeMoneyStatement, type RouteMoneyVelocity, type RouteScore } from './deadline.ts';
 import { keepCashLedger, readLedger } from './ledger.ts';
@@ -78,7 +80,7 @@ export interface CashKnowledge {
   opportunities: Map<string, CashOpportunity>;
   facts: CashCardFact[];
   lessons: CashLesson[];
-  sources: Map<string, { sourceUrl: string | null; sourcePublisher: string | null; sourceDate: string | null }>;
+  sources: Map<string, ClaimSource>;
   watermark: string;
   /**
    * What the project's own money ledger measured on each route (MONEY-13-4),
@@ -893,6 +895,10 @@ export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity
     }
     if (!value) continue;
     const src = fact.claimId ? knowledge.sources.get(fact.claimId) : null;
+    // A sample the worker declared on the claim sizes a point the prose left unsized (W-11).
+    if (value.kind === 'POINT' && !value.exact && value.sampleSize === undefined && src?.sampleSize && src.sampleSize > 0) {
+      value = { ...value, sampleSize: src.sampleSize };
+    }
     const rate = quantity === 'respond' || quantity === 'close';
     const cites = rate ? citedStudyOf(fact.value) : null;
     out.push({
@@ -904,6 +910,10 @@ export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity
       ...(rate ? { published: true } : {}),
       source: fact.claimId ? { kind: 'CLAIM', ref: fact.claimId, note: src?.sourcePublisher ?? undefined } : { kind: 'CARD_FACT', ref: fact.id },
       observedAt: src?.sourceDate && !Number.isNaN(Date.parse(src.sourceDate)) ? new Date(Date.parse(src.sourceDate)).toISOString() : fact.createdAt,
+      // How it was measured and how long it holds, from the claim itself (W-11/W-12).
+      ...(src?.validUntil ? { validUntil: src.validUntil } : {}),
+      ...(src?.measurementMethod ? { method: src.measurementMethod } : {}),
+      ...(src?.invalidatedBy ? { invalidation: { condition: src.invalidatedBy, metAt: src.invalidationMetAt ?? null, note: src.invalidationNote ?? null } } : {}),
       broad: opportunity.mechanism !== target.mechanism,
       measures: `${fact.field} on "${opportunity.title.slice(0, 60)}"`,
     });
@@ -948,4 +958,89 @@ export function inferCashQuantity(knowledge: CashKnowledge, quantity: CashQuanti
   const out = est.tier === 'UNKNOWN' ? null : est;
   if (key) knowledge.estimates.set(key, out);
   return out;
+}
+
+/** Which cash quantity a planned opening's field is inferred as (`goals/portfolio.ts` PARAMETER_FIELDS). */
+const QUANTITY_OF_FIELD: Record<string, CashQuantity> = {
+  daysToCash: 'daysToCash',
+  directCost: 'costShare',
+  capital: 'capitalShare',
+  respond: 'respond',
+  close: 'close',
+};
+
+/** One aged observation, and how much refreshing it could move the strongest plan (W-12). */
+export interface StaleRefresh {
+  observationId: string;
+  /** The claim behind it, when it came from research: what a refresh re-asks. */
+  claimId: string | null;
+  quantity: CashQuantity;
+  /** The plan's openings whose input it feeds (empty when the plan does not rest on it). */
+  opportunityIds: string[];
+  /** The plan input's |Spearman rho| with reach (`LimitingInput.sensitivity`), 0 when the plan does not rest on it. */
+  sensitivity: number;
+  pastDays: number;
+  /** Share of its information it still carries. */
+  weight: number;
+  windowFrom: 'VALID_UNTIL' | 'DEFAULT';
+  reason: string;
+}
+
+/**
+ * Which aged evidence to refresh first: the observations past their validity
+ * window, ranked by how much the strongest plan's reach moves with the input
+ * they feed (W-12).
+ *
+ * It does not measure plan impact itself. The plan already did: the outer
+ * parameter loop in `goals/portfolio.ts` ranks each input by its |Spearman rho|
+ * with reach (`LimitingInput`, the same list `assess` names as "limited most
+ * by"). This reads that list, finds the observations each input's estimate
+ * actually pooled, and orders the stale ones by the input's sensitivity, so
+ * research re-asks what could change the plan
+ * before what could not. Aged evidence the plan does not rest on is still
+ * listed, after it, by how far it has aged; nothing is dropped.
+ */
+export function staleRefreshPriority(knowledge: CashKnowledge, limiting: readonly LimitingInput[], now: Date = new Date()): StaleRefresh[] {
+  const found = new Map<string, StaleRefresh>();
+  const consider = (quantity: CashQuantity, target: CashOpportunity, sensitivity: number, opportunityIds: readonly string[]) => {
+    const spec = CASH_QUANTITIES[quantity];
+    // Only what the plan's estimate actually pooled can move it: the rest of the evidence was set aside for a closer tier.
+    const used = sensitivity > 0 ? new Set(inferCashQuantity(knowledge, quantity, target, now)?.used ?? []) : null;
+    for (const obs of observationsFor(knowledge, quantity, target)) {
+      if (obs.invalidation?.metAt) continue;
+      if (used && !used.has(obs.id)) continue;
+      const aging = ageOf(obs, spec.freshDays, now);
+      if (!(aging.pastDays > 0) || aging.windowFrom === null) continue;
+      const key = `${quantity}|${obs.id}`;
+      const seen = found.get(key);
+      if (seen) {
+        seen.opportunityIds = [...new Set([...seen.opportunityIds, ...opportunityIds])];
+        if (sensitivity > seen.sensitivity) seen.sensitivity = sensitivity;
+        continue;
+      }
+      found.set(key, {
+        observationId: obs.id,
+        claimId: obs.source.kind === 'CLAIM' ? obs.source.ref : null,
+        quantity,
+        opportunityIds: [...opportunityIds],
+        sensitivity,
+        pastDays: Math.round(aging.pastDays),
+        weight: aging.weight,
+        windowFrom: aging.windowFrom,
+        reason: aging.note,
+      });
+    }
+  };
+  for (const input of limiting) {
+    const quantity = input.field ? QUANTITY_OF_FIELD[input.field] : undefined;
+    if (!quantity) continue;
+    for (const id of input.opportunityIds) {
+      const target = knowledge.opportunities.get(id);
+      if (target) consider(quantity, target, input.sensitivity, input.opportunityIds);
+    }
+  }
+  // Everything else aged: staleness does not depend on the target, so any opening enumerates it, at no plan weight.
+  const any = [...knowledge.opportunities.values()].find((one) => !one.duplicateOfId);
+  if (any) for (const quantity of Object.keys(CASH_QUANTITIES) as CashQuantity[]) consider(quantity, any, 0, []);
+  return [...found.values()].sort((a, b) => b.sensitivity - a.sensitivity || b.pastDays - a.pastDays || a.observationId.localeCompare(b.observationId));
 }

@@ -76,6 +76,20 @@ export interface Observation {
   source: SourceRef;
   /** When it was observed (ISO), for staleness. */
   observedAt?: string | null;
+  /**
+   * Until when its source says it holds (YYYY-MM-DD or ISO), W-12. When set it
+   * replaces the quantity's default window; past it the observation ages
+   * exactly as one past the default does — down-weighted, never dropped.
+   */
+  validUntil?: string | null;
+  /** How the source measured it, as the source states it (W-11). */
+  method?: string | null;
+  /**
+   * The condition its source said would make it wrong, and when that was
+   * recorded as met (W-12). An observation whose condition is met is excluded
+   * with this as the reason; while `metAt` is null it counts as usual.
+   */
+  invalidation?: { condition: string; metAt: string | null; note?: string | null } | null;
   /** True when this observation is about broad economics rather than any activity. */
   broad?: boolean;
   /** A note a reader can check: what exactly the figure measures. */
@@ -129,7 +143,12 @@ export interface QuantityNode {
    * a positive quantity, the absolute width p90 − p10 for a rate or a real.
    */
   sufficientWidth?: number;
-  /** Observations older than this many days are stale and not used. */
+  /**
+   * How many days an observation counts at full weight, and the half-life it
+   * ages by afterwards (W-12): past the window its information halves every
+   * `freshDays`, widening the interval, but it is never excluded for age. An
+   * observation's own `validUntil` replaces the window.
+   */
   freshDays?: number;
   /** A person's stated value, used only when nothing else answers. Never a distribution. */
   assumed?: { low: number; high: number; source: SourceRef };
