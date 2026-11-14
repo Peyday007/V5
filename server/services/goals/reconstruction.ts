@@ -227,6 +227,8 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
         ...(state.contactsPerDay ? { contactsPerDay: state.contactsPerDay } : {}),
         committed: { capital: Math.min(state.committed, allowed.beforeProof), spend: state.committed },
         ...(forceMeasured ? { forceMeasured: true } : {}),
+        // A search reads reach and settled cash only; the causal reading belongs to the plan's own portfolio.
+        causal: false,
         ...(state.committed < 0 ? { capitalCeiling: (limits.capitalCeiling ?? 0) * 2, perWeek: (limits.perWeek ?? 0) * 2, beforeProof: (limits.beforeProof ?? 0) * 2, committed: null } : {}),
         worlds: w,
       });
