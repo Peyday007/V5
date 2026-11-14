@@ -81,7 +81,8 @@ export async function goalAcceptanceHoldsOnRows(): Promise<ProbeResult> {
         AND archived_at IS NULL AND cancelled_at IS NULL AND paused_at IS NULL ORDER BY id`,
     [new Date().toISOString()],
   );
-  if (goals.length === 0) return { ok: false, detail: 'no live goal carries a target and a deadline: nothing to read the constraints from' };
+  // No live goal is an absence, not a contradiction: UNKNOWN, asked again (§39).
+  if (goals.length === 0) return { ok: null, detail: 'no live goal carries a target and a deadline: nothing to read the constraints from' };
 
   const targeted = new Set(goals.map((g) => g.target_project_id));
   for (const g of goals) {
