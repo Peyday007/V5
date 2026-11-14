@@ -1602,7 +1602,63 @@ export function reconstructionSummary(r: Reconstruction | null): Record<string, 
   };
 }
 
+/**
+ * The verdict a persisted reading may carry under the owner's acceptance rule
+ * (2026-11-09, GOAL-09): RECOMMENDABLE — "meets the objective" — only with an
+ * ACCEPTED acceptance. A candidate keeps its pursuit and its sale, never that
+ * word. Pure.
+ */
+export function persistableVerdict(verdict: PlanVerdict, acceptance: Pick<PlanAcceptance, 'status'>): PlanVerdict {
+  return verdict === 'RECOMMENDABLE' && acceptance.status !== 'ACCEPTED' ? 'NEEDS_EVIDENCE' : verdict;
+}
+
+/**
+ * Whether a stored reading's forecast carries the acceptance record. A row the
+ * Brain released before the acceptance writer wrote has none (production
+ * 2026-11-10, gpr_8c679e2aefba4625a30f): it is history and is never rewritten,
+ * but it must not stand as the goal's latest reading, so the next read writes
+ * a stamped one even when nothing else moved. Pure.
+ */
+export function forecastCarriesAcceptance(forecast: string | null): boolean {
+  if (!forecast) return false;
+  try {
+    const parsed = JSON.parse(forecast) as { acceptance?: { status?: unknown } } | null;
+    return !!parsed && typeof parsed === 'object' && typeof parsed.acceptance?.status === 'string';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The acceptance a persisted reading stores. Pure.
+ *
+ * A non-ACCEPTED acceptance never holds a probability or an accepted plan —
+ * `judgeAcceptance` returns both null for CANDIDATE_ONLY and NO_CANDIDATE — so
+ * for anything it produced this returns the acceptance unchanged, and stores
+ * everything a candidate carries: its label, its opportunities, its settled P50
+ * and its coverage figure, which lives in `candidate.reach` with
+ * `candidate.reachBasis` saying whether it is a probability or only coverage.
+ * Nothing a reader of stored readings uses is discarded (the readers —
+ * `latestReading`, `listReadings`, the summary digest and the GOAL-09 probe —
+ * read `status`, `probability.basis` and `candidate`).
+ *
+ * Only a malformed acceptance, one that pairs a candidate status with a
+ * probability or an accepted plan, is changed: those two fields are the claim
+ * "this meets the objective", which a candidate may never store (GOAL-09). The
+ * candidate itself is kept exactly as it was.
+ */
+export function storableAcceptance(acceptance: PlanAcceptance): PlanAcceptance {
+  if (acceptance.status === 'ACCEPTED') return acceptance;
+  if (acceptance.probability === null && acceptance.accepted === null) return acceptance;
+  return { ...acceptance, probability: null, accepted: null };
+}
+
 async function persistReading(goal: Workstream, reading: PlanReading, chosen: StrategyReading | null): Promise<void> {
+  // A candidate is never stored as an accepted plan: the verdict follows the acceptance, and the
+  // acceptance is stored whole, candidate and coverage included (`storableAcceptance`).
+  if (reading.acceptance.status !== 'ACCEPTED') {
+    reading = { ...reading, verdict: persistableVerdict(reading.verdict, reading.acceptance), acceptance: storableAcceptance(reading.acceptance) };
+  }
   const summary = {
     verdict: reading.verdict,
     chosen: reading.chosen,
@@ -1620,7 +1676,7 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
   };
   const digest = sha256(canonicalJson(summary));
   const last = await latestReading(goal.id);
-  if (last && last.digest === digest) return;
+  if (last && last.digest === digest && forecastCarriesAcceptance(last.forecast)) return;
   const forecast = {
     ...(chosen ? { conservativeSettled: chosen.conservativeSettled, sweep: chosen.sweep } : {}),
     acceptance: reading.acceptance,
