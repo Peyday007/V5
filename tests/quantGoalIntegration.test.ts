@@ -87,9 +87,13 @@ describe('an unknown is reconstructed from what other openings established', () 
     const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
     const inferred = reading.inferred.find((one) => one.opportunityId === target.id && one.field === 'daysToCash');
     expect(inferred?.tier).toBe('COMPARABLE');
-    // The gate is unchanged: an inference never establishes a link.
+    // Q2-7 (2026-11-14): an evidenced reconstruction establishes the link at its cautious end, as it
+    // refuses one (the next test). Three comparable payment terms, p90 inside the 30 days left: TRANSFERRED.
+    // This assertion said "an inference never establishes a link" — the asymmetry lens Q found.
     const only = reading.strategies.find((one) => one.opportunityIds.length === 1 && one.opportunityIds[0] === target.id);
-    expect(only?.links.find((one) => one.link === 'SETTLES_IN_TIME')?.ok).toBe(false);
+    const settles = only?.links.find((one) => one.link === 'SETTLES_IN_TIME');
+    expect(settles?.ok).toBe(true);
+    expect(settles?.basis).toMatch(/^TRANSFERRED: \d+ days to usable cash at p90/);
     expect(Array.isArray(reading.researchPriority)).toBe(true);
   });
 

@@ -98,27 +98,27 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | S-10 | learning | stance yield computed, never fed back | MAJOR | search-selection | DISCOVERED (not repaired; stance yield still unused) |
 | S-11 | invention | model-invented methods only retune 4 operations on held openings | MAJOR | search-selection | PARTIAL (INCLUDE move added; new-design invention not yet) |
 | S-12 | transfer | transfers model no material differences; precedent bonus outranks gated evidence | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
-| S-13 | correlation | = Q2-10 | MAJOR | acceptance | REPAIRING |
+| S-13 | correlation | = Q2-10 | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 | S-15 | wiring | `bestReachCents` never reaches construction (10-min cache) | MINOR | arrangement-library | REPAIRING |
 | S-16 | screening | factorial screen drops levels that matter only in combination | MINOR | — | DISCOVERED |
 | S-17 | traceability | nothing records what was cut | MINOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
-| Q2-1 | acceptance | chain link and assurance accept mutually exclusive input forms → EVIDENCED_PORTFOLIO unreachable (repro: 3 sized comparables → basis PROBABILITY, still CANDIDATE_ONLY) | BLOCKING | acceptance | REPAIRING |
-| Q2-2 | statistics | "sample" = number of studies ≥ 20; Wilson bound double-counts (`quant/portfolio.ts:1027,1061`) | BLOCKING | acceptance | REPAIRING |
-| Q2-3 | conversion | CONVERSION only from Brain's own sales (`plan.ts:549`) | MAJOR | acceptance | REPAIRING |
-| Q2-4 | evidence | Brain's own outreach record relabelled UNKNOWN (`portfolio.ts:440`) | MAJOR | acceptance | REPAIRING |
-| Q2-5 | evidence parsing | `readRate` never reads N; unsized ranges counted as ~57 trials | MAJOR | acceptance | REPAIRING |
-| Q2-6 | improvement loop | below threshold → empty or generic research needs; next test blocked on contact permission → loop | MAJOR | acceptance | REPAIRING |
-| Q2-7 | cash timing | inferred days-to-cash can only refuse, never establish | MAJOR | acceptance | REPAIRING |
-| Q2-8 | verdicts | CONSTRUCTED vs IMPROVEMENT_REQUIRED collapse to CANDIDATE_ONLY; Hermes challenge only after ACCEPTED (never fires) | MAJOR | acceptance | REPAIRING |
-| Q2-9 | calibration | MEASURED_RECORD deadlocked on RECOMMENDABLE readings | MAJOR | acceptance | REPAIRING |
-| Q2-10 | correlation | shared-comparable rates drawn independently → invented diversification | MAJOR | acceptance | REPAIRING |
-| Q2-11 | statistics | no small-k predictive interval, no vendor-figure bias discount, funnel stage not material, lineage only by URL, no model uncertainty | MAJOR | acceptance | REPAIRING (partial) |
+| Q2-1 | acceptance | chain link and assurance accept mutually exclusive input forms → EVIDENCED_PORTFOLIO unreachable (repro: 3 sized comparables → basis PROBABILITY, still CANDIDATE_ONLY) | BLOCKING | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-2 | statistics | "sample" = number of studies ≥ 20; Wilson bound double-counts (`quant/portfolio.ts:1027,1061`) | BLOCKING | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-3 | conversion | CONVERSION only from Brain's own sales (`plan.ts:549`) | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-4 | evidence | Brain's own outreach record relabelled UNKNOWN (`portfolio.ts:440`) | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-5 | evidence parsing | `readRate` never reads N; unsized ranges counted as ~57 trials | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-6 | improvement loop | below threshold → empty or generic research needs; next test blocked on contact permission → loop | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-7 | cash timing | inferred days-to-cash can only refuse, never establish | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-8 | verdicts | CONSTRUCTED vs IMPROVEMENT_REQUIRED collapse to CANDIDATE_ONLY; Hermes challenge only after ACCEPTED (never fires) | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-9 | calibration | MEASURED_RECORD deadlocked on RECOMMENDABLE readings | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-10 | correlation | shared-comparable rates drawn independently → invented diversification | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-11 | statistics | no small-k predictive interval, no vendor-figure bias discount, funnel stage not material, lineage only by URL, no model uncertainty | MAJOR | acceptance | PARTIAL (t-widening, vendor discount, funnel stage, study-level lineage done; model uncertainty not) |
 | E-1 | cash timing | a signed $20K contract paying a deposit + milestone ($14K) inside the window counts $0 toward the goal (independent evaluation case E) | MAJOR | follow-up (portfolio cash timing) | REPAIRED, AWAITING VERIFICATION (paymentSchedule; eval case E passes) |
-| L-1 | evidence interpretation | contradictory sources ($8K vs $45K for one quantity) pooled silently into a DIRECT-tier confident distribution; no contradiction surfaced (case L) | MAJOR | acceptance | REPAIRING |
+| L-1 | evidence interpretation | contradictory sources ($8K vs $45K for one quantity) pooled silently into a DIRECT-tier confident distribution; no contradiction surfaced (case L) | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 | I-1 | capital restructuring | under a capital ceiling a presale design (reach 0.863) was refused as IMPLAUSIBLE: the plausibility critic compared gross settled cash ($50.6K, ~34×) to capital, though most passes back to the supplier; kept cash is ~12× (`reconstruction.ts:285`) | MAJOR | follow-up | REPAIRED, AWAITING VERIFICATION (critic reads kept cash; eval case I passes) |
 | P-SPEED | planning speed | production `goals plan` on the $10K goal (run 43635941750, e37e0ff): 26 min 41 s for one full read (target 1–5 min) | MAJOR | planning-speed (algorithmic); runtime half (thread copy, 384 MB heap) → Surge A | ROOT CAUSE CONFIRMED → REPAIRING: local 316 s cold read, reconstruction 88% (each of ~207 evaluations carries all 500 openings, `reconstruction.ts:248`); DB only ~8–17 s of the 26 min (lens-P) |
 | PRICE-POOL | economic model | production read: every constructed arrangement — anime production committees, HVAC firms, homeowners, contractors — shows the identical price E 281, fulfil 0–43,661, capital 0–72,769: arrangements are priced from one project-wide observation pool, not their own buyer's evidence (production instance of S-13) | MAJOR | arrangement-library | ROOT CAUSE CONFIRMED → REPAIRING: `construct.ts:545` hands every held price to every arrangement; `goalScenario.ts:198-261` derives cost and capital from the borrowed top price (lens-P) |
-| Q2-12 | robustness | assurance sample regex-parses prose (`plan.ts:852`) | MINOR | acceptance | REPAIRING |
+| Q2-12 | robustness | assurance sample regex-parses prose (`plan.ts:852`) | MINOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 
 ### Economic knowledge baseline (production, 2026-11-14 19:53Z, Goals run 43634448117)
 
@@ -177,6 +177,17 @@ dropped by key string), PERSIST 0/3. Full table:
 Independent evaluation after these: **13 → 14 of 18 cases pass** (E, I, SEL newly
 pass; remaining: G2 transfer differences, L contradiction, O interval/certify,
 PERSIST — owned by in-flight streams).
+
+| acceptance | 367b2f5 | one evidence representation for links and assurance; certification = 5th percentile of reach under parameter draws ≥ 90%; TRANSFERRED conversion; own outreach record HISTORICAL; sized `readRate`; contested sources (L-1); verdict classes QUANTITATIVELY_CONSTRUCTED / CONFIDENCE_VERIFIED / IMPROVEMENT_REQUIRED / NOT_SUPPORTED | `tests/planningConfidence.test.ts` 17/17; 10 acceptance/selection/economics files 106/106 |
+| integration | this branch | `estimateInput` (one estimate→input conversion); Brain's measured close rate carries its counts | eval case O passes |
+
+**Independent evaluation now: 16 of 18 (baseline 11).** Remaining: G2 (transfer
+names differences in its text — S-12 lists unbridged dimensions structurally;
+the evaluator's check reads the label), PERSIST (arrangement-library stream, in
+flight). Decision recorded: three sized comparables *can* certify at 90% when
+the margin is large (5th-percentile reach 98.75% at 2,100 contacts for 7 deals);
+unsized, single-source, assumed and contested evidence never certifies, and more
+simulated worlds never raise confidence.
 
 ### Handed to Surge A
 

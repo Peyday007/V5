@@ -41,7 +41,7 @@ import { evaluateGoalPortfolio, type PlannedOpening } from '../server/services/g
 import { reconstructPlan, type Reconstruction } from '../server/services/goals/reconstruction.ts';
 import { requiredStructures } from '../server/services/goals/pathways.ts';
 import { judgeAcceptance, readGoalPlan, forgetGoalReadings } from '../server/services/goals/plan.ts';
-import { pickEstimatedArrangements, type ModelInput, type ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
+import { estimateInput, pickEstimatedArrangements, type ModelInput, type ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 import { clearConstructionMemo, constructArrangements, type ConstructedArrangement } from '../server/services/cash/construct.ts';
 import { reconstruct } from '../server/services/quant/reconstruct.ts';
 import { toScenarioInput } from '../server/services/quant/export.ts';
@@ -196,17 +196,8 @@ function comparableRate(key: string, obs: Array<Observation['value']>, now = new
     })),
   };
   const est = reconstruct({ nodes: [node] }, key, now).estimates[key]!;
-  const exported = toScenarioInput(est);
-  const input: ModelInput = {
-    value: null,
-    low: est.p05,
-    high: est.p95,
-    provenance: exported.provenance,
-    source: exported.sources[0] ?? null,
-    note: `inferred: ${exported.note}`,
-    distribution: exported.spec,
-    inferred: { tier: est.tier, justified: exported.provenance === 'EVIDENCE', p10: est.p10, p50: est.p50, p90: est.p90, observations: est.used.length },
-  };
+  // The production conversion, not a copy of it (a copy dropped the sample the assurance reads).
+  const input: ModelInput = estimateInput(est);
   return { input, est };
 }
 

@@ -30,7 +30,7 @@ import { compile, identifiers, parse } from '../scenario/expr.ts';
 import { cholesky, inverseNormal, makeRng, normalCdf } from '../scenario/random.ts';
 import { DISTRIBUTION_TIERS, QUANT_LIMITS, type Estimate, type EvidenceTier, type QuantGraph, type QuantityNode, type Reconstruction } from '../../domain/quant.ts';
 import type { SourceRef } from '../../domain/scenario.ts';
-import { allUnsized, classify, collapseLineage, combine, fromScale, pool, scaleFor, SPREAD_FLOOR, toScale, type Scale, type Scaled } from './pool.ts';
+import { allUnsized, classify, collapseLineage, combine, contestOf, fromScale, pool, scaleFor, SPREAD_FLOOR, studentT, toScale, type Pooled, type Scale, type Scaled } from './pool.ts';
 
 export class ReconstructionError extends Error {}
 
@@ -84,6 +84,66 @@ function fromNormal(node: QuantityNode, scale: Scale, mean: number, sd: number):
   const samples = new Array<number>(QUANT_LIMITS.samples);
   for (let i = 0; i < samples.length; i++) samples[i] = at(zs[i]!);
   return { mean, sd, p05: at(Q.p05), p10: at(Q.p10), p50: at(Q.p50), p90: at(Q.p90), p95: at(Q.p95), samples };
+}
+
+/*
+ * Few populations (Q2-11, 2026-11-14). The pooled mean of two or three studies
+ * is uncertain by more than a normal says: its standard error is itself an
+ * estimate from k studies. The predictive draw is read Hartung–Knapp style —
+ * the mean's error on Student's t with k − 1 degrees of freedom, plus the
+ * between-population spread τ (floored per tier) as a normal — so three
+ * comparables put p90 at ~1.9 standard errors from the centre, not 1.28. One
+ * observation is a sampled rate, read on its own sampling error as before.
+ */
+function fromPooled(node: QuantityNode, scale: Scale, pooled: Pooled): Pick<Estimate, 'mean' | 'sd' | 'p05' | 'p10' | 'p50' | 'p90' | 'p95' | 'samples'> {
+  if (pooled.k < 2) return fromNormal(node, scale, pooled.mean, pooled.sd);
+  const df = pooled.k - 1;
+  const z1 = standardNormals(node.key, 7);
+  const z2 = standardNormals(node.key, 9);
+  const onScale = new Float64Array(QUANT_LIMITS.samples);
+  for (let i = 0; i < onScale.length; i++) onScale[i] = pooled.mean + pooled.se * studentT(normalCdf(z1[i]!), df, z1[i]!) + pooled.tau * z2[i]!;
+  const sorted = Float64Array.from(onScale).sort();
+  const at = (p: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(p * (sorted.length - 1))))]!;
+  // A robust spread on the scale (half the 16–84% width): a t with one degree of freedom has no variance.
+  const sd = (at(0.8413) - at(0.1587)) / 2;
+  const samples = new Array<number>(onScale.length);
+  for (let i = 0; i < samples.length; i++) samples[i] = bound(node, fromScale(scale, onScale[i]!));
+  const q = (p: number) => bound(node, fromScale(scale, at(p)));
+  return { mean: pooled.mean, sd, p05: q(0.05), p10: q(0.1), p50: q(0.5), p90: q(0.9), p95: q(0.95), samples };
+}
+
+/**
+ * The evidence behind an estimate in units a plan can compare (Q2-1/Q2-2):
+ * independent populations, those with a stated sample, and the sample its
+ * predictive distribution is worth in events — p(1−p)/Var(p) for a rate, read
+ * by the delta method from the predictive spread on the logit scale (a robust
+ * spread: a t with few degrees of freedom has no variance). So three
+ * comparables of 200 each are worth what their spread allows (τ ≥ 0.3 caps
+ * transferred evidence near 70 events, and the t on three studies lower),
+ * never the number of studies and never 600 contacts as if they were one
+ * population. A magnitude counts one event per independent measured case.
+ */
+function evidenceOf(kind: QuantityNode['kind'], kept: readonly Scaled[], p50: number, sdOnScale: number, justified: boolean): Pick<Estimate, 'populations' | 'sizedPopulations' | 'events'> {
+  const populations = kept.length;
+  const sizedPopulations = kept.filter((one) => !one.unsized).length;
+  let events = sizedPopulations;
+  if (kind === 'RATE') {
+    const p = Math.min(0.999, Math.max(0.001, p50));
+    events = sdOnScale > 0 ? Math.round(1 / (p * (1 - p) * sdOnScale * sdOnScale)) : 0;
+  }
+  return { populations, sizedPopulations, events: justified ? events : 0 };
+}
+
+/**
+ * A pooled set whose sized members contradict each other (L-1): the spread
+ * between them becomes the between-population spread, so the interval is as
+ * wide as the disagreement rather than as tight as the pooled mean.
+ */
+function contested(items: readonly Scaled[], pooled: Pooled): { pooled: Pooled; contest: { ids: string[]; reason: string } | null } {
+  const contest = contestOf(items);
+  if (!contest) return { pooled, contest: null };
+  const tau = Math.max(pooled.tau, contest.spread);
+  return { pooled: { ...pooled, tau, sd: Math.sqrt(pooled.se * pooled.se + tau * tau) }, contest: { ids: contest.ids, reason: contest.reason } };
 }
 
 function quantile(sorted: number[], p: number): number {
@@ -175,18 +235,24 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
   // DIRECT
   const direct = collapseLineage(sorted.direct);
   if (direct.kept.length > 0) {
-    const pooled = pool(direct.kept, SPREAD_FLOOR.DIRECT)!;
+    const read = contested(direct.kept, pool(direct.kept, SPREAD_FLOOR.DIRECT)!);
+    const pooled = read.pooled;
+    const drawn = fromPooled(node, scale, pooled);
+    // A rate nobody stated a sample for locates the answer and bounds it; a contradiction is bounds too.
+    const justified = !allUnsized(direct.kept) && !read.contest;
     const est: Estimate = {
       ...blank(node, 'DIRECT'),
-      ...fromNormal(node, scale, pooled.mean, pooled.sd),
+      ...drawn,
       effectiveSample: pooled.effective,
       heterogeneity: pooled.tau,
-      // A rate nobody stated a sample for locates the answer and bounds it.
-      distributionJustified: !allUnsized(direct.kept),
+      distributionJustified: justified,
       sources: sourcesOf(direct.kept),
       used: direct.kept.map((one) => one.obs.id),
       collapsed: direct.collapsed,
+      ...evidenceOf(node.kind, direct.kept, drawn.p50, drawn.sd, justified),
+      ...(read.contest ? { contested: read.contest } : {}),
     };
+    if (read.contest) trace.push(`DIRECT: CONTESTED — ${read.contest.reason}; widened to the spread between them and reported as bounds, never as a probability.`);
     candidates.push(est);
     if (!est.distributionJustified) trace.push('DIRECT: every observation is a published rate with no stated sample, so it locates the answer but cannot justify a distribution: bounds only.');
     if (sufficient(node, est) && est.distributionJustified) {
@@ -202,20 +268,26 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
   const pooledSet = collapseLineage([...sorted.direct, ...sorted.comparable]);
   const comparableUsed = pooledSet.kept.some((one) => one.distance > 0);
   if (sorted.comparable.length > 0) {
-    const pooled = pool(pooledSet.kept, comparableUsed ? SPREAD_FLOOR.COMPARABLE : SPREAD_FLOOR.DIRECT)!;
+    const read = contested(pooledSet.kept, pool(pooledSet.kept, comparableUsed ? SPREAD_FLOOR.COMPARABLE : SPREAD_FLOOR.DIRECT)!);
+    const pooled = read.pooled;
+    const drawn = fromPooled(node, scale, pooled);
+    // One other population is an anecdote, not a pattern: with no direct
+    // evidence beside it, a lone comparable bounds the answer and never
+    // becomes a distribution.
+    const justified = (pooledSet.kept.length >= MIN_COMPARABLE_POPULATIONS || pooledSet.kept.some((one) => one.distance === 0)) && !allUnsized(pooledSet.kept) && !read.contest;
     const est: Estimate = {
       ...blank(node, 'COMPARABLE'),
-      ...fromNormal(node, scale, pooled.mean, pooled.sd),
+      ...drawn,
       effectiveSample: pooled.effective,
       heterogeneity: pooled.tau,
-      // One other population is an anecdote, not a pattern: with no direct
-      // evidence beside it, a lone comparable bounds the answer and never
-      // becomes a distribution.
-      distributionJustified: (pooledSet.kept.length >= MIN_COMPARABLE_POPULATIONS || pooledSet.kept.some((one) => one.distance === 0)) && !allUnsized(pooledSet.kept),
+      distributionJustified: justified,
       sources: sourcesOf(pooledSet.kept),
       used: pooledSet.kept.map((one) => one.obs.id),
       collapsed: pooledSet.collapsed,
+      ...evidenceOf(node.kind, pooledSet.kept, drawn.p50, drawn.sd, justified),
+      ...(read.contest ? { contested: read.contest } : {}),
     };
+    if (read.contest) trace.push(`COMPARABLE: CONTESTED — ${read.contest.reason}; widened to the spread between them and reported as bounds, never as a probability.`);
     candidates.push(est);
     const adjusted = pooledSet.kept.filter((one) => one.adjusted.length > 0).map((one) => `${one.obs.id} (${one.adjusted.join('; ')})`);
     trace.push(
@@ -266,6 +338,11 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
         samples,
         effectiveSample: Math.min(...children.map((child) => child.effectiveSample || 0)),
         distributionJustified: justified,
+        // A rebuilt quantity is as well evidenced as its weakest part.
+        populations: Math.min(...children.map((child) => child.populations ?? 0)),
+        sizedPopulations: Math.min(...children.map((child) => child.sizedPopulations ?? 0)),
+        events: justified ? Math.min(...children.map((child) => child.events ?? 0)) : 0,
+        ...(children.some((child) => child.contested) ? { contested: children.find((child) => child.contested)!.contested! } : {}),
         sources: children.flatMap((child) => child.sources),
         used: children.flatMap((child) => child.used),
         children: names,
@@ -317,6 +394,9 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
     const pooled = pool(broad.kept, SPREAD_FLOOR.MECHANISM)!;
     const est: Estimate = {
       ...blank(node, 'MECHANISM'),
+      populations: broad.kept.length,
+      sizedPopulations: broad.kept.filter((one) => !one.unsized).length,
+      events: 0,
       ...fromNormal(node, scale, pooled.mean, pooled.sd),
       effectiveSample: pooled.effective,
       heterogeneity: pooled.tau,

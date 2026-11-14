@@ -41,8 +41,8 @@ import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, t
 import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
 import { inferCashQuantity, loadCashKnowledge, type CashKnowledge, type CashQuantity } from '../quant/knowledge.ts';
-import { toScenarioInput } from '../quant/export.ts';
-import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, type GoalPortfolio, type PlannedOpening } from '../goals/portfolio.ts';
+import { inputSample, toScenarioInput, type InputSample } from '../quant/export.ts';
+import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, measuredRateInput, type GoalPortfolio, type PlannedOpening } from '../goals/portfolio.ts';
 import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
@@ -99,7 +99,8 @@ export interface ModelInput {
    * causal chain, it only replaces a blind sweep with an evidenced one.
    */
   distribution?: VariableSpec;
-  inferred?: { tier: EvidenceTier; justified: boolean; p10: number; p50: number; p90: number; observations: number };
+  /** `observations` counts studies; the evidence in events and populations is `InputSample` (Q2-2). */
+  inferred?: { tier: EvidenceTier; justified: boolean; p10: number; p50: number; p90: number; observations: number } & Partial<InputSample>;
 }
 
 export interface ModelledOpportunity {
@@ -626,6 +627,15 @@ function inferOr(knowledge: CashKnowledge | null, quantity: CashQuantity, opport
     est = null;
   }
   if (!est) return fallback;
+  return estimateInput(est, scale, what);
+}
+
+/**
+ * A reconstructed estimate as a model input: the one conversion every caller
+ * uses, so the evidence it carries (tier, observations, and the sample the
+ * assurance redraws from, Q2-1/Q2-12) is never dropped by a hand-built copy.
+ */
+export function estimateInput(est: Estimate, scale = 1, what = ''): ModelInput {
   const scaled: Estimate = scale === 1 ? est : { ...est, p05: est.p05 * scale, p10: est.p10 * scale, p50: est.p50 * scale, p90: est.p90 * scale, p95: est.p95 * scale, samples: est.samples.map((x) => x * scale) };
   const exported = toScenarioInput(scaled);
   return {
@@ -636,7 +646,7 @@ function inferOr(knowledge: CashKnowledge | null, quantity: CashQuantity, opport
     source: exported.sources[0] ?? null,
     note: `inferred${what}: ${exported.note}`,
     distribution: exported.spec,
-    inferred: { tier: est.tier, justified: exported.provenance === 'EVIDENCE', p10: scaled.p10, p50: scaled.p50, p90: scaled.p90, observations: est.used.length },
+    inferred: { tier: est.tier, justified: exported.provenance === 'EVIDENCE', p10: scaled.p10, p50: scaled.p50, p90: scaled.p90, observations: est.used.length, ...inputSample(est) },
   };
 }
 
@@ -718,11 +728,10 @@ async function modelOpportunity(
   // rate the next buyer will match. More buyers need a measured rate of their own.
   let close: ModelInput;
   if (lesson) {
-    const bounds = wilson(lesson.agreements, lesson.contacts);
+    // Brain's own record carries its counts, so the assurance reads it as a
+    // sized sample (Surge B, Q2-4 follow-up), not as bounds without a size.
     close = {
-      value: null,
-      low: bounds.low,
-      high: bounds.high,
+      ...measuredRateInput({ trials: lesson.contacts, low: lesson.agreements, high: lesson.agreements }),
       provenance: 'HISTORICAL',
       source: { kind: 'OTHER', ref: `cash_outcomes:${opportunity.mechanism}`, note: `${lesson.agreements} agreements from ${lesson.contacts} contacts` },
       note: `measured on this Brain: ${lesson.agreements} of ${lesson.contacts} contacts agreed`,

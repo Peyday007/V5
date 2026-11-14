@@ -14963,6 +14963,41 @@ monthly retainer and implementation engagement on cash collectible before
 the deadline (`transactionShapes`; a retainer's months after the deadline
 count for nothing), and asks the world what buyers pay at each size.
 
+**The gate could not pass, and how it can now (Surge B, lens Q, 2026-11-14).**
+As first built, EVIDENCED_PORTFOLIO was unreachable by construction: each
+input passed its chain link only in a shape the basis or the assurance then
+refused (a HISTORICAL close range passed CONVERSION but was not a
+distribution; an inferred EVIDENCE close was a distribution but failed
+CONVERSION), the "smallest sample" was the number of *studies* an input was
+rebuilt from, and a Wilson bound over that count put ≥90% out of reach of
+anything under 25 independent studies. Now:
+
+* One representation, `inputEvidence` (`goals/portfolio.ts`), is read by the
+  chain links and the assurance alike: tier, independent and sized
+  populations, and the events the predictive distribution is worth
+  (p(1−p)/Var(p) by the delta method on the logit spread). DIRECT, COMPARABLE
+  over ≥2 sized populations, and COMPONENT of evidence establish links;
+  SINGLE_COMPARABLE, UNSIZED, CONTESTED, MECHANISM, ASSUMED and UNKNOWN never do.
+* CONVERSION has a TRANSFERRED state beside HISTORICAL; ECONOMICS,
+  SETTLES_IN_TIME and MARKET_VOLUME accept an evidenced reconstruction at its
+  cautious end (p90 cost, days and capital; p10 volume) — the same estimate
+  that can refuse a strategy can establish its link.
+* The claim is read under parameter uncertainty: an outer loop holds every
+  input at one quantile of its distribution (the pooled mean's error on a t
+  with k−1 degrees of freedom plus τ), shared by every opening drawing the same
+  estimate, and the inner worlds carry only who replies and buys. At least 90%
+  is claimed only when the 5th percentile of reach over the draws clears it.
+  More inner worlds narrow nothing that matters.
+* `PlanAcceptance.verdict` names CONFIDENCE_VERIFIED (iff ACCEPTED),
+  QUANTITATIVELY_CONSTRUCTED (all evidence, all links, interval below 90%),
+  IMPROVEMENT_REQUIRED and NOT_SUPPORTED; `construction` (result A) always
+  states the candidate's reach, interval, evidence, assumptions and what would
+  raise it. A failed threshold sends the inputs that limit the 5th percentile
+  as targeted research (`sendPortfolioNeeds`), not generic bid/win history.
+* Sized observations that contradict each other beyond their sampling error by
+  a factor of two (L-1) are CONTESTED: widened to their spread, bounds only,
+  both sources named.
+
 ## 96. A specification is the authority, and a program is DONE only when every requirement it states is verified on production.
 
 **The gap.** Every safeguard the Factory had was per campaign: one change
