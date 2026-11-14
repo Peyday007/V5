@@ -318,6 +318,37 @@ What still limits it is evidence, not software: 11 openings, 0 market-test-ready
 programmes that pay in one lump after the deadline. That is an evidence gap the
 plan now states, not a defect that hides it.
 
+## Scope adjustment (owner, 2026-11-14 22:09Z)
+
+This surge is now the **down curve**: making the existing systems operational,
+stable and verified. A second, concurrent surge owns intelligence and
+capability (economic knowledge, money-tree construction, cross-industry
+knowledge, quantitative inference policy, strategic reasoning, plan-acceptance
+philosophy, Hermes' higher reasoning). The two surges share one $100 ceiling;
+this surge has committed about $0.30/day (the Fly VM 4 GB). The clock runs from
+08:07Z on 11-14, so the 48-hour mark is 08:07Z on 11-16.
+
+The stopping rule is the five conditions in the owner's message. The only known
+critical blocker within scope is the **post-restart `/healthz` stall**. At 22:11Z
+production answered in 0.6–32 s, during Deploy 1068. Its owner is the stability
+agent.
+
+Transferred to the second surge (capability, not reliability):
+- The $10K plan's evidence gap: no buyer-validated or market-test-ready
+  opening, and unmeasured conversion.
+- O-6: the dominant cause of research rounds ending without a report
+  (verifier versus unreachable sources).
+- The starting-capital fallback chain.
+
+These stay on the operational backlog as noncritical:
+- F10: goal creation is not idempotent on a retried request.
+- Filing's own upload still runs inside its effect transaction.
+- The baseline heap has not been profiled.
+- `retrospective.ts` and `composeLedger` are CPU hotspots.
+- H-8: GitHub drops scheduled `cheap-lane.yml` runs.
+- The release gate livelocks when merges arrive faster than verification.
+- The RunPod balance needs a top-up before about 11-20 (owner).
+
 ## Final report
 
 **Status at 2026-11-14 21:10Z (13 h after the order).** Every recovery repair is
