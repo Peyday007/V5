@@ -54,6 +54,7 @@ import type { ResearchYieldReading } from './researchYield.ts';
 import {
   COMMERCIAL_FLOOR,
   EXPLORATION_FLOOR,
+  EXPLORATION_PURPOSES,
   LANE_REMEDIES,
   MIN_PURPOSE_SHARE,
   RESEARCH_PURPOSES,
@@ -351,11 +352,14 @@ async function researchInForce(goals: GoalView[]): Promise<{ shares: SharesInFor
  *
  *   * It records one append-only `GOAL_RESEARCH_REALLOCATED` event on every live
  *     goal, carrying the five shares, the floors that held, every reason, the
- *     lane remedies and the capacity verdicts. That is the decision made
- *     visible on the surface that already shows a goal's history (the goal's
- *     events). The research purposes are Brain-wide, so every live goal carries
- *     the same decision; the closed project event vocabulary has no member for
- *     it, and this pass does not widen it.
+ *     lane remedies and the capacity verdicts, read for that goal
+ *     (`goalBearing`): whether its own deadline holds the commercial floor and
+ *     what share serves it. The event's summary is the line the product shows
+ *     in the goal's history (`GET /api/goals/:id`, `GET
+ *     /api/register/workstreams/:id`, rendered by the Register history), and it
+ *     names the capacity verdicts and lane remedies, not only the shares. A
+ *     goal is written again only when the decision, or what it means for that
+ *     goal, changed.
  *   * A low-actionability lane is given its next remedy (question design, then
  *     evidence sources, then model routing) before any limit is raised for it,
  *     and a remedy already recorded for a lane is passed back as tried.
@@ -475,6 +479,59 @@ export function triedRemediesFrom(detail: Record<string, unknown> | null): Map<s
   return out;
 }
 
+/** What one Brain-wide decision means for one goal. Pure. */
+export interface GoalBearing {
+  /** The goal-specific part of the fingerprint: changes only when what the decision means for this goal changes. */
+  key: string;
+  sentence: string;
+  detail: {
+    goalId: string;
+    deadlineDays: number | null;
+    holdsCommercialFloor: boolean;
+    nearestDeadline: boolean;
+    commercialShare: number;
+    explorationShare: number;
+    systemHealthShare: number;
+  };
+}
+
+export function goalBearing(
+  goal: Pick<GoalView, 'id' | 'dueAt' | 'target'>,
+  context: { untilMs: number; nearestDeadlineDays: number | null; decision: AllocationDecision },
+): GoalBearing {
+  const { decision } = context;
+  const due = goal.target && goal.dueAt ? (Date.parse(goal.dueAt) - context.untilMs) / 86_400_000 : null;
+  const deadlineDays = due !== null && due > 0 ? Math.round(due * 10) / 10 : null;
+  const holdsCommercialFloor = deadlineDays !== null;
+  const nearestDeadline = holdsCommercialFloor && context.nearestDeadlineDays !== null && Math.abs((due ?? 0) - context.nearestDeadlineDays) < 1e-9;
+  const commercialShare = round3(decision.shares.TRANSACTION_ROUTES);
+  const explorationShare = round3(EXPLORATION_PURPOSES.reduce((sum, p) => sum + decision.shares[p], 0));
+  const systemHealthShare = round3(decision.shares.SELF_IMPROVEMENT);
+  const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+  const sentence = holdsCommercialFloor
+    ? `this goal is due in ${deadlineDays} days${nearestDeadline ? ', the nearest deadline,' : ''} so it holds the commercial floor: ${pct(commercialShare)} of research goes to transaction routes (floor ${pct(COMMERCIAL_FLOOR)})`
+    : `this goal has no dated target, so it holds no commercial floor; ${pct(commercialShare)} of research goes to transaction routes`;
+  return {
+    key: `${holdsCommercialFloor ? 'FLOOR' : 'NO_FLOOR'}${nearestDeadline ? ':NEAREST' : ''}`,
+    sentence,
+    detail: { goalId: goal.id, deadlineDays, holdsCommercialFloor, nearestDeadline, commercialShare, explorationShare, systemHealthShare },
+  };
+}
+
+/** The line the goal's history renders: the goal's bearing, the shares, capacity and lane decisions. Pure. */
+export function describeDecisionForGoal(decision: AllocationDecision, bearing: GoalBearing): string {
+  if (decision.held) return `Research allocation held: nothing in the window was measured; ${bearing.sentence}.`;
+  const shares = RESEARCH_PURPOSES.map((p) => `${p} ${(decision.shares[p] * 100).toFixed(1)}%`).join(', ');
+  const added = decision.capacity.filter((c) => c.kind === 'ADD_CAPACITY');
+  const capacity = added.length
+    ? `capacity: recommend ${added.map((c) => `+${c.units} ${c.resource} on ${c.lane}`).join('; ')}`
+    : 'capacity: no change (no measured constraint justifies one)';
+  const lanes = decision.laneActions.length
+    ? `lanes: ${decision.laneActions.map((a) => `${a.lane} ${a.kind.toLowerCase().replace(/_/g, ' ')}`).join('; ')}`
+    : 'lanes: no remedy needed';
+  return `Research reallocated — ${bearing.sentence}. Shares: ${shares}. ${capacity}. ${lanes}.`;
+}
+
 /** One allocation pass over the live goals. */
 export async function reallocateResearch(input: { goals: GoalView[]; now?: string }, ports: ResearchAllocationPorts): Promise<ResearchAllocationReport> {
   const untilMs = input.now ? Date.parse(input.now) : Date.now();
@@ -513,13 +570,23 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
   const recordedOn: string[] = [];
+  const nearest = deadlines.length ? Math.min(...deadlines) : null;
   for (const goal of live) {
+    /*
+     * One decision, read for this goal (finding F6). The shares are Brain-wide,
+     * but what they mean for a goal is not: whether its own deadline is what
+     * holds the commercial floor, and how much of the capacity serves the
+     * purpose its work draws on. The summary is the line the goal's history
+     * shows (`/api/goals/:id` and `/api/register/workstreams/:id` events,
+     * rendered by the Register history), so it carries the capacity verdicts
+     * and lane remedies as well as the shares — not only the detail row.
+     */
+    const bearing = goalBearing(goal, { untilMs, nearestDeadlineDays: nearest, decision });
+    const goalFingerprint = `${fingerprint}|${bearing.key}`;
     const last = goal.id === live[0]?.id ? previous : await ports.lastDecision(goal.id);
-    if (last && last.fingerprint === fingerprint) continue;
-    const summary = decision.held
-      ? 'Research allocation held: nothing in the window was measured.'
-      : `Research reallocated: ${RESEARCH_PURPOSES.map((p) => `${p} ${(decision.shares[p] * 100).toFixed(1)}%`).join(', ')}`;
-    await ports.recordGoal(goal.id, summary.slice(0, 400), detail);
+    if (last && (last.goalFingerprint ?? last.fingerprint) === goalFingerprint) continue;
+    const summary = describeDecisionForGoal(decision, bearing);
+    await ports.recordGoal(goal.id, summary.slice(0, 400), { ...detail, goalFingerprint, forGoal: bearing.detail });
     recordedOn.push(goal.id);
   }
   return {

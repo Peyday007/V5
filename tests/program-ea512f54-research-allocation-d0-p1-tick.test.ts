@@ -5,7 +5,14 @@
  * recommendation; nothing is started, spent or raised
  * (`server/services/goals/tick.ts`).
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import express from 'express';
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { grantMembership } from '../server/repos/identity.ts';
+import { attachContext, newRequestId } from '../server/services/identity/context.ts';
+import { goalsRouter } from '../server/routes/goals.ts';
+import type { Principal } from '../server/domain/types.ts';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createWorkstream, listWorkstreamEvents } from '../server/repos/register.ts';
@@ -324,5 +331,107 @@ describe('advanceGoals applies the newest recorded decision to live bins (review
     const report = await advanceGoals();
     expect(report.researchApplied).toBeNull();
     expect((await getBin(owned))!.priority).toBe(8);
+  });
+});
+
+/*
+ * Finding F6: the decision was copied onto every live goal with identical
+ * Brain-wide content, and no product surface was confirmed to show research
+ * capacity and allocation decisions. Each goal now carries what the decision
+ * means for it, and the line its history shows names the capacity verdicts
+ * and lane remedies — read back here through the product's own goal route.
+ */
+describe('each goal sees what the allocation decision means for it (F6)', () => {
+  it('records a different, goal-specific reading on a dated goal and an undated one', async () => {
+    const { ports, events } = memoryPorts(reading());
+    const summaries = new Map<string, string>();
+    const recordGoal = ports.recordGoal;
+    ports.recordGoal = async (goalId, summary, detail) => {
+      summaries.set(goalId, summary);
+      await recordGoal(goalId, summary, detail);
+    };
+    await reallocateResearch(
+      {
+        goals: [
+          goalView('wst_due', { dueAt: '2026-11-20T00:00:00.000Z', target: {} as GoalView['target'] }),
+          goalView('wst_open'),
+        ],
+        now: '2026-11-14T00:00:00.000Z',
+      },
+      ports,
+    );
+    const due = events.get('wst_due')!.at(-1)!;
+    const open = events.get('wst_open')!.at(-1)!;
+    expect(due.forGoal).toMatchObject({ goalId: 'wst_due', deadlineDays: 6, holdsCommercialFloor: true, nearestDeadline: true });
+    expect(open.forGoal).toMatchObject({ goalId: 'wst_open', deadlineDays: null, holdsCommercialFloor: false, nearestDeadline: false });
+    expect(due.goalFingerprint).not.toEqual(open.goalFingerprint);
+    expect(summaries.get('wst_due')).not.toEqual(summaries.get('wst_open'));
+    expect(summaries.get('wst_due')).toMatch(/due in 6 days, the nearest deadline, so it holds the commercial floor/);
+    expect(summaries.get('wst_open')).toMatch(/no dated target, so it holds no commercial floor/);
+    // The rendered line carries the decisions, not only the shares.
+    for (const line of summaries.values()) {
+      expect(line).toMatch(/capacity: /);
+      expect(line).toMatch(/lanes: free-lane change question design/);
+      expect(line.length).toBeLessThanOrEqual(400);
+    }
+  });
+
+  it('writes a goal again only when what the decision means for it changes', async () => {
+    // No lane needs a remedy, so the same window gives the same Brain-wide decision each pass.
+    const steady = reading();
+    steady.lanes = {};
+    const { ports, events } = memoryPorts(steady);
+    const goals = (dueAt: string | null) => [goalView('wst_a', dueAt ? { dueAt, target: {} as GoalView['target'] } : {})];
+    await reallocateResearch({ goals: goals(null), now: '2026-11-14T00:00:00.000Z' }, ports);
+    // The same decision, the same bearing: nothing more.
+    await reallocateResearch({ goals: goals(null), now: '2026-11-14T00:00:00.000Z' }, ports);
+    expect(events.get('wst_a')).toHaveLength(1);
+    // The goal gains a deadline: its reading changed, so it is written once more.
+    await reallocateResearch({ goals: goals('2026-11-20T00:00:00.000Z'), now: '2026-11-14T00:00:00.000Z' }, ports);
+    expect(events.get('wst_a')).toHaveLength(2);
+    expect(events.get('wst_a')!.at(-1)!.forGoal).toMatchObject({ holdsCommercialFloor: true });
+  });
+});
+
+describe('the decision is visible in the product: the goal page route returns it', () => {
+  let server: Server | null = null;
+  afterEach(async () => {
+    if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
+    server = null;
+  });
+
+  it('GET /api/goals/:id carries the goal-specific research allocation line in the goal history', async () => {
+    const projectId = (await freshProject()).project.id;
+    const userId = (await createUser({ email: `alloc-view-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+    await grantMembership({ projectId, principalType: 'HUMAN', principalId: userId, role: 'ADMIN', scopes: ['project:read'], grantedByType: 'SYSTEM', grantedById: 'test' });
+    const goal = await createWorkstream({ projectId, title: 'Collect cash', intent: 'Collect cash.', purpose: 'CAPABILITY', createdByUserId: userId });
+    const { productionResearchAllocationPorts } = await import('../server/services/goals/tick.ts');
+    const ports = await productionResearchAllocationPorts();
+    ports.readYield = async () => reading();
+    await reallocateResearch({ goals: [goalView(goal.id, { projectId })], now: '2026-11-14T00:00:00.000Z' }, ports);
+
+    const principal = {
+      type: 'HUMAN', id: userId, handle: 'owner@example.test', displayName: 'Owner', isBrainAdmin: false, mustChangePassword: false,
+      credentialId: 'ses_browser', authMethod: 'SESSION_COOKIE', requestId: 'req',
+      memberships: [{ id: 'mem', projectId, principalType: 'HUMAN', principalId: userId, role: 'ADMIN', scopes: ['project:read'], grantedByType: 'SYSTEM', grantedById: 'test', grantedAt: '2026-01-01T00:00:00.000Z', active: true }],
+    } as Principal;
+    const app = express();
+    app.use((req, _res, next) => {
+      attachContext(req, { principal, requestId: newRequestId(), method: req.method, path: req.path, remoteAddr: null, userAgent: null });
+      next();
+    });
+    app.use('/api', goalsRouter);
+    server = app.listen(0);
+    await new Promise<void>((resolve) => server!.once('listening', resolve));
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const response = await fetch(`${base}/api/goals/${goal.id}`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { events: { kind: string; summary: string; detail: Record<string, unknown> }[] };
+    const shown = body.events.find((e) => e.kind === RESEARCH_REALLOCATED_EVENT);
+    expect(shown).toBeDefined();
+    expect(shown!.summary).toMatch(/^Research reallocated — this goal has no dated target/);
+    expect(shown!.summary).toMatch(/capacity: /);
+    expect(shown!.summary).toMatch(/lanes: free-lane change question design/);
+    expect(shown!.detail.forGoal).toMatchObject({ goalId: goal.id });
   });
 });
