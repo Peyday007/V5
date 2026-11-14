@@ -385,3 +385,93 @@ export async function judgeAndRecordCapabilityCredit(opportunityId: string, port
   const { recorded } = await recordCapabilityCredit(credit, ports ?? (await productionCreditPorts()));
   return { ...credit, recorded };
 }
+
+/* --------------------------------------------------- the scheduled recording */
+
+/**
+ * How often the whole-Brain goals tick re-judges and records the openings live
+ * goals pursue. A judgment is written only when it changed, so this bounds the
+ * reading cost (one capability read, then each opening's rows), not the rows.
+ */
+export const CREDIT_RECORD_EVERY_MS = 30 * 60_000;
+
+/** Opening states whose delivery is no longer a question: never re-judged. */
+const SETTLED_STATES: ReadonlySet<string> = new Set(['ARCHIVED', 'DECLINED', 'COLLECTED']);
+
+export interface CreditRecordingReport {
+  judged: number;
+  recorded: number;
+  /** Openings whose judgment could not be taken, with why; the rest still recorded. */
+  failed: { opportunityId: string; error: string }[];
+}
+
+export interface CreditRecordingDeps {
+  ports?: CreditRecordPorts;
+  readCase?: (opportunityId: string, readings: ReadonlyMap<string, CapabilityReading>) => Promise<CreditCase | null>;
+  readCapabilities?: () => Promise<ReadonlyMap<string, CapabilityReading>>;
+  /** The opening's state, so settled ones are skipped; null when it does not exist. */
+  stateOf?: (opportunityId: string) => Promise<string | null>;
+}
+
+/**
+ * Judge each opening from its rows and record the judgment on its own ledger
+ * when it differs from the newest one there (the approved reading of S-0064:
+ * Brain judges fitness per case from evidence and records the judgment).
+ * Capabilities are read once for the pass, so every opening is judged against
+ * the same moment. One opening failing never stops the others.
+ */
+export async function recordCapabilityCredits(opportunityIds: readonly string[], deps: CreditRecordingDeps = {}): Promise<CreditRecordingReport> {
+  const report: CreditRecordingReport = { judged: 0, recorded: 0, failed: [] };
+  const unique = [...new Set(opportunityIds.filter(Boolean))];
+  if (unique.length === 0) return report;
+  const ports = deps.ports ?? (await productionCreditPorts());
+  const stateOf =
+    deps.stateOf ??
+    (async (id: string) => {
+      const { getOpportunity } = await import('../../repos/cashPortfolio.ts');
+      return (await getOpportunity(id))?.state ?? null;
+    });
+  const readings = await (deps.readCapabilities ?? (async () => (await import('../cash/capabilities.ts')).readAllCapabilities()))();
+  const readCase = deps.readCase ?? readCreditCase;
+  for (const id of unique) {
+    try {
+      const state = await stateOf(id);
+      if (state === null || SETTLED_STATES.has(state)) continue;
+      const input = await readCase(id, readings);
+      if (!input) continue;
+      const { recorded } = await recordCapabilityCredit(judgeCapabilityCredit(input), ports);
+      report.judged += 1;
+      if (recorded) report.recorded += 1;
+    } catch (error) {
+      report.failed.push({ opportunityId: id, error: error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300) });
+    }
+  }
+  return report;
+}
+
+let lastCreditRecording = 0;
+
+/**
+ * At most once per `CREDIT_RECORD_EVERY_MS`, from the whole-Brain goals tick
+ * (`assembleGoals` with `projectIds: null`). Null when not due. A failure is
+ * returned, never thrown into the tick.
+ */
+export async function recordCapabilityCreditsIfDue(
+  opportunityIds: readonly string[],
+  clock: { nowMs?: number; force?: boolean } = {},
+  deps: CreditRecordingDeps = {},
+): Promise<CreditRecordingReport | { error: string } | null> {
+  const nowMs = clock.nowMs ?? Date.now();
+  if (!clock.force && nowMs - lastCreditRecording < CREDIT_RECORD_EVERY_MS) return null;
+  lastCreditRecording = nowMs;
+  try {
+    return await recordCapabilityCredits(opportunityIds, deps);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300) };
+  }
+}
+
+/** Tests: forget when the last pass ran. */
+export function forgetCreditRecording(): void {
+  lastCreditRecording = 0;
+}

@@ -65,6 +65,7 @@ import { sharedFleetSnapshot, type FleetSnapshot } from '../dispatch/candidates.
 import { listMembershipsForProject } from '../../repos/identity.ts';
 import { readTarget, type TargetReading } from './target.ts';
 import { readPort05, type Port05Reading } from './port05.ts';
+import { recordCapabilityCreditsIfDue, type CreditRecordingReport } from './capabilityCredit.ts';
 
 // ---------------------------------------------------------------------------
 // The shape
@@ -631,6 +632,12 @@ export interface GoalsSnapshot {
   /** Live bins per goal id, for the tick. Never sent to a client. */
   binsByGoal: Map<string, Bin[]>;
   generatedAt: string;
+  /**
+   * The whole-Brain tick's capability-credit pass (PORT-05, S-0064): each
+   * opening a live goal pursues judged from its rows and the judgment recorded
+   * on its ledger when it changed. Null when not due or not the whole-Brain read.
+   */
+  creditJudgments?: CreditRecordingReport | { error: string } | null;
 }
 
 /**
@@ -775,9 +782,14 @@ export async function assembleGoals(options: {
 
   const goals: GoalView[] = [];
   const binsByGoal = new Map<string, Bin[]>();
+  // The openings live goals pursue, for the whole-Brain tick's credit pass.
+  const pursued: string[] = [];
   for (const { goal, view, lifecycle, reason, resolved } of base.values()) {
     const own = linksBy.get(goal.id) ?? [];
     binsByGoal.set(goal.id, resolved.bins);
+    if (options.projectIds === null && lifecycle !== 'COMPLETE' && lifecycle !== 'CANCELLED' && lifecycle !== 'ARCHIVED') {
+      for (const link of own) if (link.kind === 'OPPORTUNITY') pursued.push(link.ref);
+    }
     if (!visible.has(goal.id)) continue;
     if (lifecycle === 'ARCHIVED' && !options.includeArchived) continue;
     if (!view) continue;
@@ -987,7 +999,10 @@ export async function assembleGoals(options: {
     const bp = b.priority ? b.priority.rank : 99;
     return ap - bp || (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0);
   });
-  return { goals, facts, binsByGoal, generatedAt: now };
+  // Brain judges each pursued opening's delivery from evidence and records the
+  // judgment (S-0064); the whole-Brain tick is the scheduled reader that does it.
+  const creditJudgments = options.projectIds === null ? await recordCapabilityCreditsIfDue(pursued, { nowMs: Date.parse(now) }) : null;
+  return { goals, facts, binsByGoal, generatedAt: now, creditJudgments };
 }
 
 /**

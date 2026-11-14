@@ -5,20 +5,30 @@
  * physically absent. The judgment is per case, from rows, and recorded with
  * its evidence and reason (`server/services/goals/capabilityCredit.ts`).
  */
-import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { afterAll, describe, expect, it } from 'vitest';
 import type { CapabilityState } from '../server/services/cash/capabilities.ts';
 import {
   AI_PERFORMABLE_WORK,
   CAPABILITY_CREDIT_EVENT,
   creditFingerprint,
   judgeCapabilityCredit,
+  CREDIT_RECORD_EVERY_MS,
+  forgetCreditRecording,
   productionCreditPorts,
   recordCapabilityCredit,
+  recordCapabilityCredits,
+  recordCapabilityCreditsIfDue,
   type CreditCase,
   type CreditRecordPorts,
 } from '../server/services/goals/capabilityCredit.ts';
 import { cashEventsOfKind } from '../server/repos/cashMode.ts';
-import { freshProject } from './helpers.ts';
+import { freshProject, teardown } from './helpers.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { activate } from '../server/services/cash/lifecycle.ts';
+import { capture } from '../server/services/cash/opportunities.ts';
+import { createWorkstream, linkWorkstream } from '../server/repos/register.ts';
+import { assembleGoals } from '../server/services/goals/model.ts';
 
 const states = (entries: Record<string, CapabilityState>): Map<string, CapabilityState> => new Map(Object.entries(entries));
 
@@ -191,5 +201,71 @@ describe('capability credit: recorded once, with evidence and reason', () => {
     expect(detail.evidence).toContainEqual(expect.objectContaining({ kind: 'CAPABILITY', ref: 'PRODUCE_DOCUMENT' }));
     expect(detail.missingEvidence).toEqual([]);
     expect(events[0]!.summary).toContain('Brain is credited');
+  });
+});
+
+describe('capability credit: the judgment is recorded by the running Brain, not only by a caller', () => {
+  afterAll(async () => {
+    await teardown();
+  });
+
+  async function pursuedOpening(title: string) {
+    const projectId = (await freshProject()).project.id;
+    const userId = (await createUser({ email: `cc-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+    expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+    const goal = await createWorkstream({ projectId, title: 'Collect cash', intent: 'Collect settled cash.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    const opened = await capture({ projectId, actorRef: userId, ownerUserId: userId, title, mechanism: 'EXPLICIT_PAID_REQUEST', currency: 'USD', industry: 'any', source: 'https://example.com/c' });
+    if (!opened.ok) throw new Error(opened.reason);
+    await linkWorkstream({ workstreamId: goal.id, kind: 'OPPORTUNITY', ref: opened.value.id, relation: 'PURSUES', recordedBy: 'PERSON', recordedByUserId: userId });
+    return { projectId, goalId: goal.id, opportunityId: opened.value.id };
+  }
+
+  it('the whole-Brain goals tick judges each pursued opening from its rows and records it on the opening\'s ledger', async () => {
+    const { projectId, opportunityId } = await pursuedOpening('Weekly report assembly for clinics');
+    forgetCreditRecording();
+    // A person's read does not write.
+    await assembleGoals({ projectIds: [projectId] });
+    expect(await cashEventsOfKind(opportunityId, CAPABILITY_CREDIT_EVENT)).toHaveLength(0);
+
+    const tick = await assembleGoals({ projectIds: null, includeArchived: false });
+    expect(tick.creditJudgments).toMatchObject({ failed: [] });
+    const events = await cashEventsOfKind(opportunityId, CAPABILITY_CREDIT_EVENT);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.detail).toMatchObject({ credited: false });
+    expect(Array.isArray(events[0]!.detail.missingEvidence)).toBe(true);
+    expect(typeof events[0]!.detail.fingerprint).toBe('string');
+
+    // Not due again inside the interval; and when due, an unchanged judgment writes nothing.
+    const again = await assembleGoals({ projectIds: null, includeArchived: false });
+    expect(again.creditJudgments ?? null).toBeNull();
+    const forced = await recordCapabilityCreditsIfDue([opportunityId], { force: true });
+    expect(forced).toMatchObject({ judged: 1, recorded: 0 });
+    expect(await cashEventsOfKind(opportunityId, CAPABILITY_CREDIT_EVENT)).toHaveLength(1);
+  });
+
+  it('runs at most once per interval, and one failing opening never stops the others', async () => {
+    forgetCreditRecording();
+    const written: string[] = [];
+    const ports: CreditRecordPorts = { latestFingerprint: async () => null, record: async (c) => void written.push(c.opportunityId) };
+    const deps = {
+      ports,
+      readCapabilities: async () => new Map(),
+      stateOf: async (id: string) => (id === 'opp_gone' ? null : id === 'opp_done' ? 'COLLECTED' : 'READY'),
+      readCase: async (id: string) => {
+        if (id === 'opp_bad') throw new Error('row unreadable');
+        return opening({ opportunityId: id });
+      },
+    };
+    const first = await recordCapabilityCreditsIfDue(['opp_a', 'opp_bad', 'opp_gone', 'opp_done', 'opp_b', 'opp_a'], { nowMs: 10_000_000_000 }, deps);
+    expect(first).toMatchObject({ judged: 2, recorded: 2, failed: [{ opportunityId: 'opp_bad' }] });
+    expect(written).toEqual(['opp_a', 'opp_b']);
+    expect(await recordCapabilityCreditsIfDue(['opp_a'], { nowMs: 10_000_000_000 + CREDIT_RECORD_EVERY_MS - 1 }, deps)).toBeNull();
+    expect(await recordCapabilityCreditsIfDue(['opp_a'], { nowMs: 10_000_000_000 + CREDIT_RECORD_EVERY_MS }, deps)).toMatchObject({ judged: 1 });
+    expect(await recordCapabilityCredits([], deps)).toEqual({ judged: 0, recorded: 0, failed: [] });
+  });
+
+  it('the recorder has a production caller: model.ts runs it on the whole-Brain read', () => {
+    const model = readFileSync('server/services/goals/model.ts', 'utf8');
+    expect(model).toMatch(/recordCapabilityCreditsIfDue\(pursued/);
   });
 });
