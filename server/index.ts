@@ -61,7 +61,7 @@ import { recoverInterruptedResearch } from './services/research/queue.ts';
 import { recoverDispatchAtBoot, startDispatcher } from './services/dispatch/loop.ts';
 import { recordProcessStart, startInfraIncidentRecorder } from './services/infra/incidents.ts';
 import { settleTokenTouches } from './services/identity/tokenTouch.ts';
-import { startRussell } from './services/russell/loop.ts';
+import { afterBootGrace, startRussell } from './services/russell/loop.ts';
 import { startConnectRefresh } from './services/connect/loop.ts';
 import { startIntegrationsLoop } from './services/integrations/loop.ts';
 import { startFactoryRemoteLoop } from './services/factory/remoteLoop.ts';
@@ -780,10 +780,18 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
     void import('./services/cash/deliverables/capabilities.ts')
       .then((module) => module.proveCapabilities())
       .catch((error) => console.error('[brain] the deliverable proof failed:', error));
-    const resumed = (await afterListenStep('resume worker-driven packets', resumePulledPackets)) ?? 0;
-    if (resumed > 0) {
-      console.log(`  ${resumed} worker-driven research packet(s) picked back up from their rows`);
-    }
+    //
+    // After the boot grace, not now (2026-11-14): on a restart this pass ran
+    // past its 90 s bound in exactly the window the release's after-restart
+    // verification measures, and it held the event loop the /healthz check
+    // waits on. Its result is a function of rows, so later converges.
+    afterBootGrace('resume worker-driven packets', () => {
+      void afterListenStep('resume worker-driven packets', resumePulledPackets).then((resumed) => {
+        if ((resumed ?? 0) > 0) {
+          console.log(`  ${resumed} worker-driven research packet(s) picked back up from their rows`);
+        }
+      });
+    });
 
     // Dispatch intent the last shutdown never sent.
     //
@@ -855,8 +863,11 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
      * `unref` so it never holds the process open — a Brain shutting down should
      * not wait to find out about itself.
      */
-    const BOOT_SCAN_DELAY_MS = 60_000;
-    setTimeout(() => {
+    // Since 2026-11-14 the delay is the boot grace rather than a minute: a
+    // minute in was still inside the after-restart verification, and the
+    // scan's thousand-odd row updates were the costliest statements of the
+    // restarted process's first five minutes.
+    afterBootGrace('the self-model scan', () => {
       void scanIfStale()
         .then((report) => {
           if (report && report.drift.length > 0) {
@@ -872,7 +883,7 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
             }`,
           );
         });
-    }, BOOT_SCAN_DELAY_MS).unref();
+    });
 
     /*
      * Russell's loop, beside the dispatcher and after recovery.
@@ -922,18 +933,23 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
     const unread = (await afterListenStep('queue unread documents', queueUnreadDocuments)) ?? 0;
     if (unread > 0) console.log(`  reading ${unread} document(s) in the background`);
 
-    await afterListenStep('rebuild derived state', async () => {
-      for (const project of await listProjects()) {
-        try {
-          await recomputeProject(project.id);
-          if (writesRuntimeSnapshot()) await writeProjectState(project.id);
-        } catch (error) {
-          console.error(`[brain] boot recompute of ${project.id} failed; serving on:`, error);
+    // After the boot grace (2026-11-14): 88 s of recomputing every project in
+    // the after-restart verification's window. Every route that reads derived
+    // state recomputes the rows it needs (§6), so nothing waits on this.
+    afterBootGrace('rebuild derived state', () => {
+      void afterListenStep('rebuild derived state', async () => {
+        for (const project of await listProjects()) {
+          try {
+            await recomputeProject(project.id);
+            if (writesRuntimeSnapshot()) await writeProjectState(project.id);
+          } catch (error) {
+            console.error(`[brain] boot recompute of ${project.id} failed; serving on:`, error);
+          }
         }
-      }
-      // One runtime file, so it describes the project the app opens on.
-      const primary = await getDefaultProject();
-      if (primary && writesRuntimeSnapshot()) await writeProjectState(primary.id);
+        // One runtime file, so it describes the project the app opens on.
+        const primary = await getDefaultProject();
+        if (primary && writesRuntimeSnapshot()) await writeProjectState(primary.id);
+      });
     });
   })().catch((error: unknown) => {
     console.error('[brain] the after-listen recovery could not run; serving on:', error);

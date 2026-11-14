@@ -690,7 +690,14 @@ export async function runPass(
   fn: () => Promise<unknown>,
   limitMs?: number,
 ): Promise<boolean> {
-  if (DEFERRABLE_UNDER_PRESSURE.has(name) && shedding(report, name)) return false;
+  if (DEFERRABLE_UNDER_PRESSURE.has(name)) {
+    // Optional work waits out the boot grace, as the goal-plan pass does.
+    if (bootGraceRemainingMs() > 0) {
+      (report.deferred ??= []).push(`${name} (boot grace)`);
+      return false;
+    }
+    if (shedding(report, name)) return false;
+  }
   /*
    * Isolating passes must not turn a database outage into forty-five timeouts
    * in a row: once three passes on this tick have failed because the database
@@ -3545,6 +3552,55 @@ export const GOAL_PLANS_PASS_LIMIT_MS = 30 * 60_000;
 /** When this process started, and how long after it the goal-plan pass waits (the operator's own boot grace is 12 minutes). */
 const PROCESS_STARTED_MS = Date.now();
 export const GOAL_PLANS_BOOT_GRACE_MS = Number(process.env.BRAIN_GOAL_PLANS_BOOT_GRACE_MS ?? 10 * 60_000);
+
+/**
+ * The same boot grace, for the rest of the optional work (§63) and the boot's
+ * own re-derivations (production stability, 2026-11-14).
+ *
+ * Deploy 43641501207 failed one check, after the restart: `/healthz` took
+ * 10.2 s while a scenario ran two minutes after boot (the run itself took
+ * 15.3 s against 1.0 s before the restart). The restarted process was doing,
+ * in exactly that window, the boot's two re-derivations — resuming every
+ * pending packet (still running when its 90 s bound passed) and recomputing
+ * every project (88 s after the restart against 21 s on the first boot) —
+ * beside the self-model scan's thousand-odd row updates at +60 s and every
+ * optional Russell pass on the first ticks; it was SHEDDING by +3 min. All of
+ * it is derived from rows and loses nothing by starting minutes later, which
+ * is the reasoning that put the goal-plan pass behind this grace. So it is the
+ * one grace, measured from the one process start; it is not a scheduler.
+ *
+ * Off under vitest unless a suite sets it, for `stallsFeedPressure`'s reason:
+ * a test that runs a tick asserts on the passes it runs.
+ */
+let optionalBootGraceMs = Number(
+  process.env.BRAIN_OPTIONAL_BOOT_GRACE_MS ?? (process.env['VITEST'] ? 0 : GOAL_PLANS_BOOT_GRACE_MS),
+);
+
+/** Tests only: set the optional-work boot grace; returns the previous value. */
+export function setOptionalBootGraceMs(ms: number): number {
+  const previous = optionalBootGraceMs;
+  optionalBootGraceMs = ms;
+  return previous;
+}
+
+/** Milliseconds left of the optional-work boot grace (0 once it has passed). */
+export function bootGraceRemainingMs(nowMs = Date.now()): number {
+  return Math.max(0, PROCESS_STARTED_MS + optionalBootGraceMs - nowMs);
+}
+
+/**
+ * Run `work` once the boot grace has passed: now, if it already has. The timer
+ * is unref'd, so it never holds a shutting-down process open.
+ */
+export function afterBootGrace(name: string, work: () => void): void {
+  const wait = bootGraceRemainingMs();
+  if (wait <= 0) {
+    work();
+    return;
+  }
+  console.log(`  boot: ${name} waits ${Math.round(wait / 1000)}s, until the boot grace has passed`);
+  setTimeout(work, wait).unref?.();
+}
 
 export function startGoalPlans(
   report: Pick<TickReport, 'passFailures' | 'deferred'>,
