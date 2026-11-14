@@ -521,6 +521,28 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       continue;
     }
 
+    /*
+     * Decide before asking (§80, rule 11).
+     *
+     * 305 of 334 cards in seven days were "accepts a report with unresolved
+     * questions in it", a question the project's standing grant already
+     * answers — `answerRoutineParks` answered them RECORD_GAPS, but only after
+     * a grace period in which each one sat in front of the owner. Where the
+     * offer includes RECORD_GAPS, no plan awaits approval, the project holds a
+     * live standing grant whose owner resolves and no corrected judge round is
+     * about to run, Brain files it now through the one shared step and no card
+     * is opened. Otherwise the park asks exactly as before, and why Brain did
+     * not decide is recorded once on the mission. Loaded lazily:
+     * `routineDecisions.ts` imports this module.
+     */
+    const { decideAtPark } = await import('./routineDecisions.ts');
+    const decision = await decideAtPark({
+      missionId: mission.id,
+      orchestration,
+      choiceKeys: choicesFor(shape).map((choice) => choice.key),
+    });
+    if (decision.decided) continue;
+
     const moved = await transitionMission({
       missionId: mission.id,
       from: mission.state,
@@ -528,6 +550,21 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       waitingOn,
     });
     if (!moved) continue;
+
+    await recordEvent({
+      projectId: mission.projectId,
+      entityType: 'RUSSELL_MISSION',
+      entityId: mission.id,
+      eventType: 'RUSSELL_ROUTINE_DECISION',
+      payload: {
+        orchestrationId: orchestration.id,
+        missionId: mission.id,
+        choice: null,
+        decidedBy: 'PERSON',
+        declinedBecause: decision.because,
+        reason: `Brain did not decide this park itself: ${decision.reason}.`,
+      },
+    });
 
     const { request, created } = await askHuman({
       projectId: mission.projectId,

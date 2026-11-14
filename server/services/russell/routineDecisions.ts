@@ -247,38 +247,156 @@ export async function answerUnaskedParks(input: { limit?: number; nowMs?: number
   for (const row of rows) {
     const orchestration = await getOrchestration(row.id);
     if (!orchestration || orchestration.status !== 'NEEDS_HUMAN') continue;
-    const { assessJudgeRound } = await import('../research/judgeRound.ts');
-    const assessment = await assessJudgeRound(orchestration);
-    if (assessment.kind === 'RESUME') {
-      out.push({ orchestrationId: row.id, decided: false, reason: 'Brain is about to run a corrected round on it' });
-      continue;
-    }
-    const grant = (await listGoals(row.project_id)).find((g) => g.state === 'ACTIVE' && (!g.expiresAt || g.expiresAt > now));
-    if (!grant) continue;
-    const { getUser } = await import('../../repos/identity.ts');
-    const owner = await getUser(grant.ownerUserId);
-    if (!owner) {
-      out.push({ orchestrationId: row.id, decided: false, reason: 'the grant owner cannot be resolved' });
-      continue;
-    }
-    const why =
-      'the packet has accepted evidence and nothing left Brain may attempt, so its audited report is filed with the ' +
-      'unresolved questions named rather than held for a person nobody asked';
-    const reason = `Decided by Brain under the standing research grant “${grant.name}” (${grant.id}): ${why}.`;
-    const { authorizeUnresolvedGaps } = await import('../research/gapPolicy.ts');
-    await authorizeUnresolvedGaps({ orchestrationId: row.id, authorizedBy: { id: owner.id, email: owner.email } });
-    await recordEvent({
-      projectId: row.project_id,
-      entityType: 'PROJECT',
-      entityId: row.project_id,
-      eventType: 'RUSSELL_ROUTINE_DECISION',
-      payload: { orchestrationId: row.id, missionId: null, choice: 'RECORD_GAPS', grantId: grant.id, decidedBy: 'BRAIN_UNDER_STANDING_AUTHORITY', reason },
+    const filed = await fileWithGapsUnderStandingGrant({
+      orchestration,
+      missionId: null,
+      nowMs,
+      why:
+        'the packet has accepted evidence and nothing left Brain may attempt, so its audited report is filed with the ' +
+        'unresolved questions named rather than held for a person nobody asked',
     });
-    const { advancePacket } = await import('../research/packetRunner.ts');
-    const advanced = await advancePacket(row.id).catch((error: unknown) => ({ status: `advance failed: ${String((error as Error)?.message ?? error).slice(0, 120)}` }));
-    out.push({ orchestrationId: row.id, decided: true, reason: `filed with gaps named; the packet is now ${advanced.status}` });
+    if (filed.decided) {
+      out.push({ orchestrationId: row.id, decided: true, reason: `filed with gaps named; the packet is now ${filed.status}` });
+    } else if (filed.because !== 'NO_LIVE_GRANT') {
+      out.push({ orchestrationId: row.id, decided: false, reason: filed.reason });
+    }
   }
   return out;
+}
+
+/**
+ * Why Brain declined to file a stopped packet itself — one name per condition,
+ * so the cards that still reach a person are attributable by cause.
+ */
+export type DeclinedBecause =
+  | 'NOT_OFFERED'
+  | 'PLAN_AWAITING_APPROVAL'
+  | 'JUDGE_ROUND_RESUMING'
+  | 'NO_LIVE_GRANT'
+  | 'GRANT_OWNER_UNRESOLVED'
+  | 'ALREADY_FILED_WITH_GAPS';
+
+export type StandingFiling =
+  | { decided: true; grantId: string; reason: string; status: string }
+  | { decided: false; because: DeclinedBecause; reason: string };
+
+/**
+ * The one decide-and-file step (§80): file a stopped packet's audited report
+ * with its unresolved questions named, under the project's live standing
+ * grant, recorded against the grant's owner.
+ *
+ * Shared by the park itself (`decideAtPark`, called before a card would be
+ * opened) and by `answerUnaskedParks` (a park no card was ever opened for).
+ * Its conditions are the ones `decide` applies to a card: a live STANDING
+ * grant whose owner resolves, and a packet Brain is not about to correct by
+ * itself (`assessJudgeRound` RESUME). It lowers no bar — `advancePacket` files
+ * only what the evidence gate accepted — and spends nothing beyond the grant.
+ *
+ * Idempotent: a packet already authorized to record its gaps is not decided a
+ * second time, so no second decision is recorded.
+ */
+export async function fileWithGapsUnderStandingGrant(input: {
+  orchestration: ResearchOrchestration;
+  missionId: string | null;
+  why: string;
+  nowMs?: number;
+}): Promise<StandingFiling> {
+  const { orchestration } = input;
+  if (orchestration.unresolvedGapPolicy === 'RECORD_GAPS') {
+    return { decided: false, because: 'ALREADY_FILED_WITH_GAPS', reason: 'the packet is already authorized to record its gaps' };
+  }
+  const { assessJudgeRound } = await import('../research/judgeRound.ts');
+  if ((await assessJudgeRound(orchestration)).kind === 'RESUME') {
+    return { decided: false, because: 'JUDGE_ROUND_RESUMING', reason: 'Brain is about to run a corrected round on it' };
+  }
+  const now = new Date(input.nowMs ?? Date.now()).toISOString();
+  const grant = (await listGoals(orchestration.projectId)).find(
+    (goal) => goal.state === 'ACTIVE' && (!goal.expiresAt || goal.expiresAt > now),
+  );
+  if (!grant) {
+    return { decided: false, because: 'NO_LIVE_GRANT', reason: 'the project has no live standing research grant' };
+  }
+  const { getUser } = await import('../../repos/identity.ts');
+  const owner = await getUser(grant.ownerUserId);
+  if (!owner) {
+    return { decided: false, because: 'GRANT_OWNER_UNRESOLVED', reason: 'the grant owner cannot be resolved' };
+  }
+
+  const reason = `Decided by Brain under the standing research grant “${grant.name}” (${grant.id}): ${input.why}.`;
+  const { authorizeUnresolvedGaps } = await import('../research/gapPolicy.ts');
+  const authorized = await authorizeUnresolvedGaps({
+    orchestrationId: orchestration.id,
+    authorizedBy: { id: owner.id, email: owner.email },
+  });
+  // Another writer authorized it between the read above and here: theirs is the decision.
+  if (authorized.status === 'ALREADY_AUTHORIZED') {
+    return { decided: false, because: 'ALREADY_FILED_WITH_GAPS', reason: 'the packet is already authorized to record its gaps' };
+  }
+  await recordEvent({
+    projectId: orchestration.projectId,
+    entityType: input.missionId ? 'RUSSELL_MISSION' : 'PROJECT',
+    entityId: input.missionId ?? orchestration.projectId,
+    eventType: 'RUSSELL_ROUTINE_DECISION',
+    payload: {
+      orchestrationId: orchestration.id,
+      missionId: input.missionId,
+      choice: 'RECORD_GAPS',
+      grantId: grant.id,
+      decidedBy: 'BRAIN_UNDER_STANDING_AUTHORITY',
+      reason,
+    },
+  });
+  if (input.missionId) {
+    // A mission parked before this pass existed goes back to running before the packet moves (see `recordGaps`).
+    const mission = await getMission(input.missionId);
+    if (mission?.state === 'NEEDS_HUMAN') {
+      const { transitionMission } = await import('../../repos/russellMissions.ts');
+      await transitionMission({ missionId: mission.id, from: 'NEEDS_HUMAN', to: 'RUNNING', waitingOn: null });
+    }
+  }
+  const { advancePacket } = await import('../research/packetRunner.ts');
+  const advanced = await advancePacket(orchestration.id).catch((error: unknown) => ({
+    status: `advance failed: ${String((error as Error)?.message ?? error).slice(0, 120)}`,
+  }));
+  return { decided: true, grantId: grant.id, reason, status: advanced.status };
+}
+
+/**
+ * Decide at the park, instead of opening a card and answering it later.
+ *
+ * Production, seven days to 2026-11-14: 305 of 334 Needs-You cards read
+ * "Deciding whether this project accepts a report with unresolved questions in
+ * it". `answerRoutineParks` answers exactly that card RECORD_GAPS under a live
+ * standing grant — but only after `ROUTINE_DECISION_GRACE_MS`, so every one was
+ * first put in front of the owner, and any the window missed waited for him.
+ * The grace exists so the repair passes act first; for this shape the only
+ * repair is a corrected judge round, which `assessJudgeRound` detects here.
+ *
+ * Brain decides when the offer includes RECORD_GAPS and no plan awaits
+ * approval (authorizing a plan is never within the grant), and the shared step
+ * above finds a live grant and no round about to resume. Anything else is
+ * returned undecided with its named cause, and the park asks as before.
+ */
+export async function decideAtPark(input: {
+  missionId: string;
+  orchestration: ResearchOrchestration;
+  choiceKeys: readonly string[];
+  nowMs?: number;
+}): Promise<StandingFiling> {
+  const keys = new Set(input.choiceKeys);
+  if (keys.has(NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key)) {
+    return { decided: false, because: 'PLAN_AWAITING_APPROVAL', reason: 'authorizing a plan is not within the standing grant' };
+  }
+  if (!keys.has(NEEDS_HUMAN_CHOICES.RECORD_GAPS.key)) {
+    return { decided: false, because: 'NOT_OFFERED', reason: 'nothing in the packet cleared its evidence gate, so there is no report to file' };
+  }
+  const picked = routineChoiceFor({ choiceKeys: input.choiceKeys, brainCompiled: input.orchestration.approvalEnvelopeId != null });
+  return fileWithGapsUnderStandingGrant({
+    orchestration: input.orchestration,
+    missionId: input.missionId,
+    nowMs: input.nowMs,
+    why: picked.why,
+  });
 }
 
 /** The 60 most recent NEEDS_HUMAN packets and what decides whether Brain may file it: for `admin packets parks` (newest first, so today's parks are not hidden behind September's). */
