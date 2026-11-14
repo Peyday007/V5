@@ -232,6 +232,59 @@ export interface IndependentCheck {
   agrees: boolean;
   /** What it read, when it read the same quantity (share of worlds reaching the target). */
   reach?: number;
+  /** The assumptions it named as hidden (an independent model's challenge). */
+  assumptions?: string[];
+  /** The stronger alternative it raised, when it raised one. */
+  alternative?: string | null;
+  /** Its own reasons, as it gave them. */
+  reasons?: string;
+}
+
+// ─── The existing model challenger, as an independent check ─────────────────
+
+/**
+ * What Brain's existing independent-model challenger answers
+ * (`operator/decisions.ts` `challengeDecision`, `domain/decision.ts`
+ * `Challenge`) — and what `domain/planReady.ts` reads back as
+ * `hermes.challenge`. Structural, so either shape is accepted as it stands.
+ */
+export interface ModelChallenge {
+  verdict: string;
+  model: string;
+  hiddenAssumptions: string[];
+  missingVariables?: string[];
+  strongerAlternative: string | null;
+  reasons: string;
+}
+
+/**
+ * The data the model challenger reads: a fresh prompt over the decision
+ * record, with none of the producing conversation and none of the
+ * optimizer's samples — so it is a different model over different data from
+ * {@link OPTIMIZER_PRODUCER}.
+ */
+export const MODEL_CHALLENGE_SOURCE = 'operator challenger prompt over the decision record';
+
+/**
+ * The existing challenger's verdict as an independent check (method
+ * `INDEPENDENT_MODEL`): PROCEED agrees, REVISE disagrees and carries the
+ * assumptions and the alternative it named. Any other verdict was not read,
+ * and an unread challenge is no check at all — never a passing one.
+ */
+export function checkFromModelChallenge(c: ModelChallenge | null | undefined): IndependentCheck | null {
+  if (!c) return null;
+  const verdict = String(c.verdict ?? '').toUpperCase();
+  if (verdict !== 'PROCEED' && verdict !== 'REVISE') return null;
+  const named = [...(c.hiddenAssumptions ?? []), ...(c.missingVariables ?? []).map((v) => `${v} does not change the choice`)].map(String).filter((x) => x.trim());
+  return {
+    method: 'INDEPENDENT_MODEL',
+    by: String(c.model || 'unnamed challenger model'),
+    dataSource: MODEL_CHALLENGE_SOURCE,
+    agrees: verdict === 'PROCEED',
+    ...(named.length ? { assumptions: named.slice(0, 8) } : {}),
+    alternative: c.strongerAlternative && c.strongerAlternative.trim() ? c.strongerAlternative : null,
+    ...(c.reasons ? { reasons: String(c.reasons).slice(0, 800) } : {}),
+  };
 }
 
 /** An outcome that actually happened (`quant/ledger.ts`), kept apart from every forecast. */
@@ -634,12 +687,15 @@ export function challenge(input: ChallengeInput): ChallengeReport {
     }
   }
   for (const c of disagreeing) {
+    const named = c.assumptions?.length ? `; it names: ${c.assumptions.slice(0, 4).join('; ')}` : '';
     findings.push({
       mode: 'SELF_AGREEMENT',
       subject: best?.keys.join('+') ?? 'plan',
-      assumption: `the conclusion holds although an independent ${c.method.toLowerCase().replace('_', ' ')} by "${c.by}" disagrees${c.reach !== undefined ? ` (it reads ${pct(c.reach)})` : ''}`,
-      test: `reconcile the two readings on the same inputs and find the input they differ on`,
-      saferStructure: 'plan on the lower of the two readings until the difference is explained',
+      assumption: `the conclusion holds although an independent ${c.method.toLowerCase().replace('_', ' ')} by "${c.by}" disagrees${c.reach !== undefined ? ` (it reads ${pct(c.reach)})` : ''}${named}`,
+      test: c.assumptions?.length
+        ? `observe each assumption it named (${c.assumptions.slice(0, 4).join('; ')}) on real records, or reconcile the two readings on the same inputs`
+        : `reconcile the two readings on the same inputs and find the input they differ on`,
+      saferStructure: c.alternative ? `${c.alternative} — or plan on the lower of the two readings until the difference is explained` : 'plan on the lower of the two readings until the difference is explained',
       severity: 'MATERIAL',
       method: c.method,
     });
@@ -730,6 +786,37 @@ export interface ChallengeSummary {
   steps: StepClearance[];
   /** Keys of the steps cleared to proceed now: what a caller may act on without waiting for the heavy review. */
   proceedNow: string[];
+  /**
+   * Whether this plan's consequence requires the heavier independent-model
+   * challenge (`operator/decisions.ts` `challengeDecision`), routed by the
+   * tier: required when the plan or any of its steps earns a deep review,
+   * never for a plan whose every step is basic or standard — so a minor
+   * reversible action is not sent to a second model. `verdict` is what that
+   * challenger answered, when its answer was supplied; `due` is required and
+   * not yet answered.
+   */
+  modelChallenge: ModelChallengeRouting;
+}
+
+export interface ModelChallengeRouting {
+  required: boolean;
+  because: string[];
+  verdict: 'PROCEED' | 'REVISE' | null;
+  by: string | null;
+  due: boolean;
+}
+
+/**
+ * Route the consequence tier to the model challenger: deep for the plan, or
+ * for any one step, requires it; anything lighter does not.
+ */
+export function modelChallengeRouting(scrutiny: Scrutiny, steps: Array<Pick<StepClearance, 'key' | 'scrutiny'>>, supplied: IndependentCheck | null): ModelChallengeRouting {
+  const because: string[] = [];
+  if (scrutiny.tier === 'DEEP') because.push(`the plan earns a deep review: ${scrutiny.because.join('; ')}`);
+  for (const s of steps) if (s.scrutiny.tier === 'DEEP') because.push(`step ${s.key} earns a deep review: ${s.scrutiny.because.join('; ')}`);
+  const required = because.length > 0;
+  const verdict = supplied ? (supplied.agrees ? 'PROCEED' : 'REVISE') : null;
+  return { required, because, verdict, by: supplied?.by ?? null, due: required && verdict === null };
 }
 
 /** One commitment the plan is made of. */
@@ -763,6 +850,8 @@ export interface PlanChallengeOptions {
   producedBy?: { model: string; dataSource: string };
   thresholds?: ScrutinyThresholds;
   now?: string;
+  /** The existing model challenger's answer on this plan (`challengeDecision`, or `hermes.challenge` as planReady reads it). */
+  modelChallenge?: ModelChallenge | null;
 }
 
 /** The model that produced an optimizer result: a check from it is self-agreement. */
@@ -920,7 +1009,7 @@ export function clearSteps(steps: PlanStep[], summary: Pick<ChallengeSummary, 'r
 
 /** Reduce a report to what travels with the plan read. */
 export function summarizeChallenge(report: ChallengeReport, action: ScrutinyInput, steps: PlanStep[] = [], thresholds?: ScrutinyThresholds): ChallengeSummary {
-  const summary: Omit<ChallengeSummary, 'steps' | 'proceedNow'> = {
+  const summary: Omit<ChallengeSummary, 'steps' | 'proceedNow' | 'modelChallenge'> = {
     scrutiny: report.scrutiny,
     action,
     ran: report.ran,
@@ -951,7 +1040,8 @@ export function summarizeChallenge(report: ChallengeReport, action: ScrutinyInpu
     verdict: report.verdict,
   };
   const cleared = clearSteps(steps, summary, thresholds);
-  return { ...summary, steps: cleared, proceedNow: cleared.filter((c) => c.mayProceed).map((c) => c.key) };
+  const supplied = report.independentValidation.counted.find((c) => c.method === 'INDEPENDENT_MODEL' && c.dataSource === MODEL_CHALLENGE_SOURCE) ?? null;
+  return { ...summary, steps: cleared, proceedNow: cleared.filter((c) => c.mayProceed).map((c) => c.key), modelChallenge: modelChallengeRouting(report.scrutiny, cleared, supplied) };
 }
 
 // ─── What the running Brain supplies itself ──────────────────────────────────
@@ -1112,7 +1202,8 @@ export function challengePlan(problem: PortfolioProblem, result: PortfolioResult
     const facts: Record<string, ActivityFacts> = { ...derived };
     for (const [key, f] of Object.entries(options.facts ?? {})) facts[key] = { ...(derived[key] ?? {}), ...f };
     const history = productionHistoryCheck(problem, result);
-    const checks = [...(history ? [history] : []), ...(options.checks ?? [])];
+    const model = checkFromModelChallenge(options.modelChallenge);
+    const checks = [...(history ? [history] : []), ...(model ? [model] : []), ...(options.checks ?? [])];
     const report = challenge({
       problem,
       result,
@@ -1128,7 +1219,7 @@ export function challengePlan(problem: PortfolioProblem, result: PortfolioResult
     return summarizeChallenge(report, action, steps, options.thresholds);
   } catch (err) {
     const assurance = result.assurance ?? assess(problem, result.best);
-    const failed: Omit<ChallengeSummary, 'steps' | 'proceedNow'> = {
+    const failed: Omit<ChallengeSummary, 'steps' | 'proceedNow' | 'modelChallenge'> = {
       scrutiny: scrutinyFor(action, options.thresholds),
       action,
       ran: [],
@@ -1148,6 +1239,7 @@ export function challengePlan(problem: PortfolioProblem, result: PortfolioResult
       verdict: 'CHALLENGE_FAILED',
       error: err instanceof Error ? err.message : String(err),
     };
-    return { ...failed, steps: clearSteps(steps, failed, options.thresholds), proceedNow: [] };
+    const cleared = clearSteps(steps, failed, options.thresholds);
+    return { ...failed, steps: cleared, proceedNow: [], modelChallenge: modelChallengeRouting(failed.scrutiny, cleared, null) };
   }
 }
