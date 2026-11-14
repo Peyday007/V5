@@ -246,9 +246,10 @@ describe('account, trace and claim', () => {
     expect(r.body.needs).toEqual([
       { subject: 'route rt: when tax is paid', question: 'What is the when tax is paid for route rt, and what evidences it?', route: 'RESEARCH', permissions: [] },
     ]);
-    // Sent to an owner that acts on it, not merely named: a need in the review, written once
-    // (an earlier request in this file may already have sent this graph's need).
-    expect(r.body.sent).toEqual([{ subject: 'route rt: when tax is paid', sent: true, to: 'REVIEW_NEED', ref: expect.stringMatching(/^cnd_/), created: expect.any(Boolean) }]);
+    // Sent to an owner that acts on it, not merely named: research opened as an idea the research
+    // path runs, pointed at by its need, written once (an earlier request in this file may already
+    // have sent this graph's need).
+    expect(r.body.sent).toEqual([{ subject: 'route rt: when tax is paid', sent: true, to: 'RESEARCH_CANDIDATE', ref: expect.stringMatching(/^rcn_/), needId: expect.stringMatching(/^cnd_/), created: expect.any(Boolean) }]);
     const again = await call('POST', `${CAUSAL()}/account`, { cookie: adminCookie, body: { graph: GRAPH() } });
     expect(again.body.sent).toEqual([{ ...r.body.sent[0], created: false }]);
   });
