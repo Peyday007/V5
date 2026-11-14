@@ -23,6 +23,11 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { WorldFact } from '../../../server/routes/world.ts';
+import type { GoalView } from '../../../server/services/goals/model.ts';
+import type { Construction } from '../../../server/services/industry/construction/construction.ts';
+import type { Strategy } from '../../../server/services/industry/construction/strategy.ts';
+import { api } from '../lib/api.ts';
+import { GoalsApi } from '../lib/goalsApi.ts';
 import { WorldApi } from '../lib/worldApi.ts';
 import { useAsync } from '../russell/useAsync.ts';
 import { Conversation } from '../russell/Conversation.tsx';
@@ -41,7 +46,7 @@ import {
 } from './lens.ts';
 import { WorldScene } from './WorldScene.tsx';
 import { OperationsLens } from './OperationsLens.tsx';
-import { GoalLens } from './GoalLens.tsx';
+import { GoalLens, type GoalFigure, type GoalPlan } from './GoalLens.tsx';
 import { displayState, type TruthContext } from './truth.ts';
 import './numbers.css';
 
@@ -72,6 +77,135 @@ export function factsInTimeframe(facts: readonly WorldFact[], timeframe: Timefra
     const t = Date.parse(f.lastChangedAt);
     return !Number.isFinite(t) || (t >= from && t <= to);
   });
+}
+
+/**
+ * What Goal mode draws, read from the goal's own routes (S-0421): the goal
+ * record (`GET /api/goals/:id`) for its work, dependencies, blockers and next
+ * step, and its construction (`GET /api/goals/:id/construction`) for the
+ * recommended plan, the alternatives it was compared with, their costs and
+ * revenue, how each acquires its first business, and what is uncertain.
+ *
+ * Nothing here is derived beyond relabelling. The construction's
+ * recommendation is a candidate — no route serves an acceptance of it, so the
+ * accepted section stays empty rather than promoting a recommendation into a
+ * plan (S-0406: never show an estimate as a contract). Every money figure is
+ * an estimate or projection and is labelled so. A record the world read holds
+ * is drawn from the world's own fact, so its state is the adapter's; one the
+ * world read does not hold is drawn UNKNOWN with its record's status verbatim.
+ */
+export interface GoalRead {
+  view: GoalView | null;
+  viewError: string | null;
+  construction: Construction | null;
+  constructionError: string | null;
+  /** When the construction was read: it is composed on request, so this is its as-of. */
+  readAt: string;
+}
+
+export interface GoalLensInputs {
+  plans: GoalPlan[];
+  chain: WorldFact[];
+  dependencies: WorldFact[];
+  uncertainty: string | null;
+}
+
+const toCents = (dollars: number | null | undefined): number | null =>
+  dollars === null || dollars === undefined || !Number.isFinite(dollars) ? null : Math.round(dollars * 100);
+
+function strategyFigures(s: Strategy, source: string, asOf: string): GoalFigure[] {
+  const entry = s.stages[0]?.economics ?? null;
+  const fig = (label: string, basis: GoalFigure['basis'], dollars: number | null | undefined): GoalFigure => ({ label, basis, amountCents: toCents(dollars), currency: 'USD', asOf, source });
+  return [
+    fig('Entry exposure, worst case', 'ESTIMATED', s.entryExposure),
+    fig('Entry upfront cost', 'ESTIMATED', entry?.mid?.upfront),
+    fig('Entry monthly cost (direct + fixed)', 'ESTIMATED', entry?.mid ? entry.mid.directCost + entry.mid.indirectCost : null),
+    fig('Entry monthly revenue', 'PROJECTED', entry?.mid?.revenue),
+    fig('Monthly operating profit once every stage runs', 'PROJECTED', s.finalContribution),
+  ];
+}
+
+function strategyAcquisition(s: Strategy): string {
+  const path = s.stages.map((st) => `${st.business.label}${st.accounts > 1 ? ` ×${st.accounts}` : ''}`).join(' → ');
+  const cash = s.firstCashDays === null ? 'first cash: unknown' : `first cash in about ${Math.round(s.firstCashDays)} days`;
+  return `${path || 'no stages'}; ${cash}${s.feasible ? '' : `; not feasible: ${s.infeasibleBecause ?? 'no reason recorded'}`}`;
+}
+
+function unreadFact(kind: WorldFact['kind'], recordId: string, title: string, href: string | null, recordState: string | null, lastChangedAt: string | null, blocker: string | null, nextAction: string | null, table: string): WorldFact {
+  const missing = ['owner', 'startedAt', ...(lastChangedAt ? [] : ['lastChangedAt'])];
+  return {
+    kind,
+    recordId,
+    href,
+    title,
+    owner: null,
+    state: 'UNKNOWN',
+    recordState,
+    startedAt: null,
+    lastChangedAt,
+    blocker,
+    nextAction,
+    source: { table, id: recordId },
+    freshness: lastChangedAt ? 'FRESH' : 'MISSING',
+    missing,
+    district: null,
+  };
+}
+
+export function goalLensInputs(goalId: string, read: GoalRead, facts: readonly WorldFact[]): GoalLensInputs {
+  const byKey = new Map(facts.map((f) => [`${f.kind}:${f.recordId}`, f] as const));
+  const view = read.view;
+  const chain: WorldFact[] = (view?.work ?? []).map(
+    (w) =>
+      byKey.get(`BIN:${w.binId}`) ??
+      unreadFact('BIN', w.binId, `Bin ${w.binId}`, null, w.state, w.updatedAt, w.heldReason ?? w.dispatch?.refusal ?? null, w.dispatch?.message ?? null, 'bins'),
+  );
+  const dependencies: WorldFact[] = (view?.dependencies ?? []).map((d) => {
+    const seen = byKey.get(`GOAL:${d.goalId}`);
+    if (seen) return seen;
+    const f = unreadFact('GOAL', d.goalId, d.title ?? `Goal ${d.goalId} (not readable by you)`, d.title ? `/api/goals/${encodeURIComponent(d.goalId)}` : null, d.lifecycle, null, d.met === false ? 'not met yet' : null, null, 'workstreams');
+    return d.met === true ? { ...f, state: 'SUCCEEDED' } : d.met === false ? { ...f, state: 'WAITING' } : f;
+  });
+
+  const c = read.construction;
+  const source = `/api/goals/${encodeURIComponent(goalId)}/construction`;
+  const plans: GoalPlan[] = [];
+  if (c?.recommended) {
+    plans.push({
+      id: `recommended:${c.recommended.key}`,
+      title: `Recommended: ${c.decision.headline}`,
+      status: 'CANDIDATE',
+      href: source,
+      figures: strategyFigures(c.recommended, source, read.readAt),
+      acquisition: strategyAcquisition(c.recommended),
+    });
+  }
+  for (const [i, a] of (c?.alternatives ?? []).entries()) {
+    plans.push({ id: `alternative:${i}:${a.strategy}`, title: `Alternative: ${a.entry}`, status: 'CANDIDATE', href: source, figures: [], acquisition: `lost on ${a.lostOn} — ${a.detail}` });
+  }
+
+  const uncertain: string[] = [];
+  if (c) {
+    if (c.decision.decisiveObstacle) uncertain.push(`Decisive obstacle: ${c.decision.decisiveObstacle}`);
+    for (const q of c.research.filter((r) => r.decisive)) uncertain.push(`Open question (${q.status}): ${q.question}`);
+    for (const ch of c.challenges.filter((x) => x.verdict !== 'HOLDS')) uncertain.push(`Assumption ${ch.verdict.toLowerCase()}: ${ch.assumption} — ${ch.because}`);
+  }
+  return { plans, chain, dependencies, uncertainty: uncertain.length ? uncertain.join(' · ') : null };
+}
+
+async function readGoal(goalId: string): Promise<GoalRead> {
+  const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+  const [view, construction] = await Promise.allSettled([
+    GoalsApi.goal(goalId),
+    api<{ construction: Construction }>(`/api/goals/${encodeURIComponent(goalId)}/construction`),
+  ]);
+  return {
+    view: view.status === 'fulfilled' ? view.value.goal : null,
+    viewError: view.status === 'rejected' ? message(view.reason) : null,
+    construction: construction.status === 'fulfilled' ? construction.value.construction : null,
+    constructionError: construction.status === 'rejected' ? message(construction.reason) : null,
+    readAt: new Date().toISOString(),
+  };
 }
 
 /** The lens state the current address describes. */
@@ -110,6 +244,16 @@ export function WorldPage({ projectId, conversationId, renderMode }: WorldPagePr
   const grounding = useMemo(() => conversationGrounding(lens, world.data?.facts ?? []), [lens, world.data]);
   const goals = (world.data?.facts ?? []).filter((f) => f.kind === 'GOAL');
   const goal = goals.find((g) => g.recordId === lens.goalId) ?? null;
+  const goalFocus = lens.mode === 'GOAL' ? lens.goalId : null;
+  const goalRead = useAsync(() => (goalFocus ? readGoal(goalFocus) : Promise.resolve(null)), [goalFocus]);
+  const goalInputs = useMemo(
+    () => (goalFocus && goalRead.data ? goalLensInputs(goalFocus, goalRead.data, world.data?.facts ?? []) : { plans: [], chain: [], dependencies: [], uncertainty: null }),
+    [goalFocus, goalRead.data, world.data],
+  );
+  // The goal record's own blocker and next step, so Goal mode names them even when the world read carries none.
+  const goalShown = goal && goalRead.data?.view
+    ? { ...goal, blocker: goal.blocker ?? goalRead.data.view.blockers[0]?.text ?? null, nextAction: goal.nextAction ?? goalRead.data.view.next.action ?? null }
+    : goal;
   const selectedFact = lens.selected ? (world.data?.facts ?? []).find((f) => f.kind === lens.selected!.kind && f.recordId === lens.selected!.id) ?? null : null;
 
   if (!projectId) {
@@ -180,12 +324,38 @@ export function WorldPage({ projectId, conversationId, renderMode }: WorldPagePr
             {lens.mode === 'WORLD' ? <WorldScene facts={shown.facts} mode={mode} lens={lens} onLensAction={dispatch} ctx={ctx} /> : null}
             {lens.mode === 'OPERATIONS' ? <OperationsLens world={shown} ctx={ctx} lens={lens} onLensAction={dispatch} /> : null}
             {lens.mode === 'GOAL' ? (
-              <GoalLens goal={goal} plans={[]} chain={[]} dependencies={[]} uncertainty={null} ctx={ctx} selected={selectedFact} onLensAction={dispatch} />
+              <GoalLens
+                goal={goalShown}
+                plans={goalInputs.plans}
+                chain={goalInputs.chain}
+                dependencies={goalInputs.dependencies}
+                uncertainty={goalInputs.uncertainty}
+                ctx={ctx}
+                selected={selectedFact}
+                onLensAction={dispatch}
+              />
             ) : null}
-            {lens.mode === 'GOAL' && goal?.href ? (
-              <p className="numbers-muted">
-                Plans, chain and uncertainty are read on the goal&rsquo;s own record: <a href={goal.href}>{goal.href}</a>
-              </p>
+            {lens.mode === 'GOAL' && goalFocus ? (
+              <div className="numbers-muted" data-testid="goal-read-state">
+                {!goalRead.data && !goalRead.error ? <p className="rs-state rs-state-loading">Reading the goal and its plan…</p> : null}
+                {goalRead.error ? (
+                  <p className="rs-state rs-state-error" role="alert">
+                    Brain could not read this goal: {goalRead.error.message}{' '}
+                    <button type="button" onClick={goalRead.reload}>
+                      Try again
+                    </button>
+                  </p>
+                ) : null}
+                {goalRead.data?.viewError ? <p role="alert">The goal record could not be read: {goalRead.data.viewError}</p> : null}
+                {goalRead.data?.constructionError ? <p role="alert">The goal&rsquo;s plan could not be read: {goalRead.data.constructionError}</p> : null}
+                {goalRead.data ? (
+                  <p>
+                    Read from <a href={`/api/goals/${encodeURIComponent(goalFocus)}`}>the goal record</a> and{' '}
+                    <a href={`/api/goals/${encodeURIComponent(goalFocus)}/construction`}>its construction</a> at {goalRead.data.readAt}. No route records an accepted plan, so the
+                    recommendation is shown as a candidate.
+                  </p>
+                ) : null}
+              </div>
             ) : null}
           </div>
 
