@@ -194,6 +194,8 @@ export interface LimitingInput {
   opportunityIds: string[];
   /** The input, by name ("close rate"). */
   input: string;
+  /** The planned-opening field it is (`close`, `respond`, `daysToCash`…), so evidence behind it can be found (W-12). */
+  field?: string;
   /** |Spearman ρ| between the input's draw and the reach of that draw: its share of the uncertainty that matters. */
   sensitivity: number;
   have: { tier: string; events: number; populations: number; sizedPopulations: number };

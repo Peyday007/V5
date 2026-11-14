@@ -511,6 +511,73 @@ export function parsePlanPass(text: string): ParseResult<PlanPassOutput> {
 // Fragment research passes — the claims themselves
 // ---------------------------------------------------------------------------
 
+/** A claim's measurement metadata, validated (W-11). Every field optional. */
+export interface ClaimMeasurement {
+  measurementMethod: string | null;
+  sampleSize: number | null;
+  limitations: string | null;
+  validUntil: string | null;
+  invalidatedBy: string | null;
+}
+
+const MAX_MEASUREMENT_CHARS = 1000;
+
+/**
+ * How a claim's figure was measured and how long it holds (lens W, W-11).
+ *
+ * One rule for both submission doors, for the reason `validateClosesOn`
+ * gives. Every field is optional — a worker that declares none is not
+ * refused, which is what most existing workers send — but a declared one must
+ * mean something: a sample is a positive whole number, and a validity window
+ * is a real calendar date as YYYY-MM-DD, because `pool.ts` compares it with
+ * the clock and anything looser would be a guess about which day was meant.
+ */
+export function validateMeasurement(input: {
+  where: string;
+  method: unknown;
+  sampleSize: unknown;
+  limitations: unknown;
+  validUntil: unknown;
+  invalidatedBy: unknown;
+  names?: { method: string; sampleSize: string; limitations: string; validUntil: string; invalidatedBy: string };
+}): ParseResult<ClaimMeasurement> {
+  const names = input.names ?? { method: 'method', sampleSize: 'sample_size', limitations: 'limitations', validUntil: 'valid_until', invalidatedBy: 'invalidated_by' };
+  const text = (value: unknown, name: string): ParseResult<string | null> => {
+    if (value === undefined || value === null) return { ok: true, value: null };
+    if (typeof value !== 'string') return fail(`${input.where}: ${name} must be a string, or omitted.`);
+    const trimmed = value.trim();
+    if (trimmed.length > MAX_MEASUREMENT_CHARS) return fail(`${input.where}: ${name} must be at most ${MAX_MEASUREMENT_CHARS} characters.`);
+    return { ok: true, value: trimmed || null };
+  };
+  const method = text(input.method, names.method);
+  if (!method.ok) return method;
+  const limitations = text(input.limitations, names.limitations);
+  if (!limitations.ok) return limitations;
+  const invalidatedBy = text(input.invalidatedBy, names.invalidatedBy);
+  if (!invalidatedBy.ok) return invalidatedBy;
+  let sampleSize: number | null = null;
+  if (input.sampleSize !== undefined && input.sampleSize !== null) {
+    const n = input.sampleSize;
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < 1) {
+      return fail(`${input.where}: ${names.sampleSize} must be the number of cases the source measured, a whole number of at least 1, or omitted.`);
+    }
+    sampleSize = n;
+  }
+  let validUntil: string | null = null;
+  if (input.validUntil !== undefined && input.validUntil !== null && input.validUntil !== '') {
+    const v = input.validUntil;
+    if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      return fail(`${input.where}: ${names.validUntil} must be the date the source says the figure holds until, as YYYY-MM-DD, or omitted.`);
+    }
+    const parsed = new Date(`${v}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== v) {
+      return fail(`${input.where}: ${names.validUntil} ${v} is not a calendar date.`);
+    }
+    validUntil = v;
+  }
+  return { ok: true, value: { measurementMethod: method.value, sampleSize, limitations: limitations.value, validUntil, invalidatedBy: invalidatedBy.value } };
+}
+
 export interface ParsedClaim {
   claim: string;
   /** What kind of claim this is, which decides what would count as evidence. */
@@ -532,6 +599,12 @@ export interface ParsedClaim {
   opportunitySignal: OpportunitySignal | null;
   /** The deadline the source publishes for that opening, YYYY-MM-DD, or null. */
   closesOn?: string | null;
+  /** How the figure was measured, on how many cases, its limits, its window, what voids it (W-11). */
+  measurementMethod?: string | null;
+  sampleSize?: number | null;
+  limitations?: string | null;
+  validUntil?: string | null;
+  invalidatedBy?: string | null;
   /**
    * And how the source says money would be made from that opening.
    *
@@ -787,6 +860,18 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   });
   if (!closesOn.ok) return closesOn;
 
+  /* How it was measured and how long it holds: `validateMeasurement`, which the MCP tool calls too. */
+  const measurement = validateMeasurement({
+    where,
+    method: row['measurementMethod'],
+    sampleSize: row['sampleSize'],
+    limitations: row['limitations'],
+    validUntil: row['validUntil'],
+    invalidatedBy: row['invalidatedBy'],
+    names: { method: 'measurementMethod', sampleSize: 'sampleSize', limitations: 'limitations', validUntil: 'validUntil', invalidatedBy: 'invalidatedBy' },
+  });
+  if (!measurement.ok) return measurement;
+
   /*
    * The structural fact about an industry, if this claim establishes one.
    *
@@ -911,6 +996,7 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       opportunitySignal,
       monetizationMethod: method.value,
       closesOn: closesOn.value,
+      ...measurement.value,
       structuralFinding: structural.value.finding,
       structuralSubject: structural.value.subject,
       structuralQualifier: structural.value.qualifier,

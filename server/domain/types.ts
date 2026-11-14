@@ -2268,6 +2268,14 @@ export interface ResearchClaimRow {
   opportunity_signal: string | null;
   monetization_method: string | null;
   closes_on: string | null;
+  /** Migration 154 (W-11/W-12). Absent on a row read before it ran. */
+  measurement_method?: string | null;
+  sample_size?: number | null;
+  limitations?: string | null;
+  valid_until?: string | null;
+  invalidated_by?: string | null;
+  invalidation_met_at?: string | null;
+  invalidation_note?: string | null;
   structural_finding: string | null;
   structural_subject: string | null;
   structural_qualifier: string | null;
@@ -3458,6 +3466,23 @@ export interface ResearchClaim {
    * means the source stated none, which is never read as "open".
    */
   closesOn: string | null;
+  /**
+   * How the figure was measured (survey, audited accounts, platform export…),
+   * as the source states it, or null (W-11).
+   */
+  measurementMethod?: string | null;
+  /** How many cases the figure was measured on, where the source states it. */
+  sampleSize?: number | null;
+  /** What the source itself says limits the figure. */
+  limitations?: string | null;
+  /** Until when the source says the figure holds, YYYY-MM-DD, or null for the quantity's default. */
+  validUntil?: string | null;
+  /** The condition that would make the claim wrong, in words, or null. */
+  invalidatedBy?: string | null;
+  /** When that condition was recorded as met, or null while it has not been. */
+  invalidationMetAt?: string | null;
+  /** What met it. */
+  invalidationNote?: string | null;
   /**
    * The structural fact about an industry this claim establishes, if any.
    *
