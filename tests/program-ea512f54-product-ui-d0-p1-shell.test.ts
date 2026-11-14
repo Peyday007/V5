@@ -132,7 +132,7 @@ describe('the docked conversation', () => {
     }
   });
 
-  it('a turn carries the selected record id and href on the existing turn route', async () => {
+  it('stores exactly the words the person typed: the selection is never prepended behind their back', async () => {
     const say = vi.spyOn(RussellApi, 'say').mockResolvedValue({} as Awaited<ReturnType<typeof RussellApi.say>>);
     await renderPage('/world?lens=goal&sel=CAMPAIGN:c1', 'STATIC');
     expect(screen.getByTestId('conversation-grounding').textContent).toContain('/api/factory/campaigns/c1');
@@ -144,9 +144,31 @@ describe('the docked conversation', () => {
     expect(say).toHaveBeenCalledOnce();
     const [conversationId, content] = say.mock.calls[0]!;
     expect(conversationId).toBe('rcv_1');
-    expect(content).toContain('CAMPAIGN c1');
-    expect(content).toContain('/api/factory/campaigns/c1');
-    expect(content).toContain('Why is this blocked?');
+    expect(content).toBe('Why is this blocked?');
+    expect(content).not.toContain('CAMPAIGN c1');
+    expect(content).not.toContain('/api/factory/campaigns/c1');
+  });
+
+  it('a turn carries the selected record id and href on the existing turn route when the person puts it in their own draft', async () => {
+    const say = vi.spyOn(RussellApi, 'say').mockResolvedValue({} as Awaited<ReturnType<typeof RussellApi.say>>);
+    await renderPage('/world?lens=goal&sel=CAMPAIGN:c1', 'STATIC');
+    const docked = screen.getByTestId('world-conversation');
+    const box = within(docked).getByLabelText('Say something to Russell') as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: 'Why is this blocked?' } });
+    fireEvent.click(within(docked).getByRole('button', { name: 'Mention this record' }));
+    // The reference is in the person's own text box, visible before sending.
+    expect(box.value).toContain('CAMPAIGN c1');
+    expect(box.value).toContain('/api/factory/campaigns/c1');
+    expect(box.value).toContain('Why is this blocked?');
+    const draft = box.value;
+    await act(async () => {
+      fireEvent.submit(box.closest('form')!);
+    });
+    expect(say).toHaveBeenCalledOnce();
+    const [conversationId, content] = say.mock.calls[0]!;
+    expect(conversationId).toBe('rcv_1');
+    // What is stored is exactly what the person saw and sent — nothing added.
+    expect(content).toBe(draft.trim());
   });
 
   it('never reports an action as done: a failed turn shows the server refusal and keeps the words', async () => {
