@@ -18,7 +18,7 @@
 import { Readable } from 'node:stream';
 import crypto from 'node:crypto';
 import { assertSafeKey, contentTypeFor } from './keys.ts';
-import { keepAliveFetch } from './keepAliveFetch.ts';
+import { keepAliveFetch, type KeepAliveInit } from './keepAliveFetch.ts';
 import {
   ObjectNotFoundError,
   StorageConfigurationError,
@@ -77,6 +77,45 @@ function retryAfterMs(response: Response, attempt: number): number {
 export const STORE_REQUEST_TIMEOUT_MS = 30_000;
 /** Moving a document's bytes in or out. */
 export const STORE_TRANSFER_TIMEOUT_MS = 120_000;
+/**
+ * How long a "this object is there" answer is reused, by every caller.
+ *
+ * Only PRESENT is kept. Outside a recompute's memo every `documentPresence`
+ * (each `deriveLayer`, each plan read) asked the store again, unbounded, and
+ * production opened 64–73 TLS connections a minute doing it. An object a
+ * Brain stored does not vanish — superseded documents keep their bytes (§5) —
+ * so a reused PRESENT is the safe direction; an ABSENT is never reused, so a
+ * document another machine has just uploaded is never read as missing. This
+ * process's own writes and deletes update the answer at once.
+ */
+export const STORE_PRESENCE_TTL_MS = 15_000;
+const STORE_PRESENCE_MAX_KEYS = 50_000;
+/**
+ * How many existence questions (a keyed listing or a folder listing) may be on
+ * the wire at once. Below the agent's eight sockets, so a burst of them never
+ * holds every connection a document read or an upload needs.
+ */
+export const STORE_EXISTENCE_CONCURRENCY = 4;
+
+/** A counting gate: at most `limit` holders, the rest wait in order. */
+class Gate {
+  #free: number;
+  #waiting: Array<() => void> = [];
+  constructor(limit: number) {
+    this.#free = limit;
+  }
+  async run<T>(work: () => Promise<T>): Promise<T> {
+    if (this.#free > 0) this.#free -= 1;
+    else await new Promise<void>((resolve) => this.#waiting.push(resolve));
+    try {
+      return await work();
+    } finally {
+      const next = this.#waiting.shift();
+      if (next) next();
+      else this.#free += 1;
+    }
+  }
+}
 
 export class SupabaseStorageProvider implements StorageProvider {
   readonly kind = 'supabase' as const;
@@ -87,6 +126,11 @@ export class SupabaseStorageProvider implements StorageProvider {
   #fetch: typeof fetch;
   #requestMs: number;
   #transferMs: number;
+  /** key → when its PRESENT answer stops being reused. Shared by every caller of this provider. */
+  #present = new Map<string, number>();
+  /** One question per key on the wire; a second asker shares the first's answer. */
+  #asking = new Map<string, Promise<boolean>>();
+  #existenceGate = new Gate(STORE_EXISTENCE_CONCURRENCY);
 
   constructor(options: SupabaseStorageOptions) {
     this.#base = options.url.replace(/\/+$/, '');
@@ -139,7 +183,11 @@ export class SupabaseStorageProvider implements StorageProvider {
   ): Promise<Response> {
     let response: Response;
     try {
-      response = await this.#fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+      // The bound starts when the request is sent (see `KeepAliveInit`); an
+      // injected fetch has no socket to start it on, so it keeps the signal.
+      const bounded: KeepAliveInit =
+        this.#fetch === keepAliveFetch ? { ...init, deadlineMs: timeoutMs } : { ...init, signal: AbortSignal.timeout(timeoutMs) };
+      response = await this.#fetch(url, bounded);
     } catch (error) {
       throw new StorageConfigurationError(
         `Could not reach the document store at ${this.describe()} to ${what}.`,
@@ -190,6 +238,7 @@ export class SupabaseStorageProvider implements StorageProvider {
       );
     }
 
+    this.#markPresent(key);
     return {
       key,
       size: input.body.byteLength,
@@ -313,11 +362,46 @@ export class SupabaseStorageProvider implements StorageProvider {
 
   async exists(key: string): Promise<boolean> {
     const safe = assertSafeKey(key);
+    if (this.#knownPresent(safe)) return true;
+    const asking = this.#asking.get(safe);
+    if (asking) return await asking;
     const slash = safe.lastIndexOf('/');
     const prefix = slash === -1 ? '' : safe.slice(0, slash);
     const name = slash === -1 ? safe : safe.slice(slash + 1);
-    const entries = await this.#listRaw(prefix, name);
-    return entries.some((entry) => entry.name === name);
+    const asked = this.#existenceGate
+      .run(() => this.#listRaw(prefix, name))
+      .then((entries) => {
+        const present = entries.some((entry) => entry.name === name);
+        if (present) this.#markPresent(safe);
+        return present;
+      })
+      .finally(() => this.#asking.delete(safe));
+    this.#asking.set(safe, asked);
+    return await asked;
+  }
+
+  #knownPresent(key: string): boolean {
+    const until = this.#present.get(key);
+    if (until === undefined) return false;
+    if (until > Date.now()) return true;
+    this.#present.delete(key);
+    return false;
+  }
+
+  #markPresent(key: string): void {
+    this.#present.delete(key);
+    if (this.#present.size >= STORE_PRESENCE_MAX_KEYS) {
+      // Oldest first: a Map iterates in insertion order.
+      for (const old of this.#present.keys()) {
+        this.#present.delete(old);
+        if (this.#present.size < STORE_PRESENCE_MAX_KEYS * 0.9) break;
+      }
+    }
+    this.#present.set(key, Date.now() + STORE_PRESENCE_TTL_MS);
+  }
+
+  #forget(key: string): void {
+    this.#present.delete(key);
   }
 
   /**
@@ -331,10 +415,13 @@ export class SupabaseStorageProvider implements StorageProvider {
   async namesIn(prefix: string): Promise<string[] | null> {
     const clean = prefix.replace(/^\/+|\/+$/g, '');
     if (clean) assertSafeKey(clean);
-    const entries = await this.#listRaw(clean);
-    if (entries.length >= LIST_PAGE) return null;
+    const entries = await this.#existenceGate.run(() => this.#listRaw(clean));
     // Supabase reports a folder as an entry with no id.
-    return entries.filter((entry) => entry.id).map((entry) => entry.name);
+    const names = entries.filter((entry) => entry.id).map((entry) => entry.name);
+    // Every name listed is there now, whether or not the page was complete.
+    for (const name of names) this.#markPresent(clean ? `${clean}/${name}` : name);
+    if (entries.length >= LIST_PAGE) return null;
+    return names;
   }
 
   async move(fromKey: string, toKey: string): Promise<StoredObjectMeta> {
@@ -345,6 +432,8 @@ export class SupabaseStorageProvider implements StorageProvider {
       if (!existing) throw new ObjectNotFoundError(from);
       return existing;
     }
+    // Whatever the store answers, the source may no longer be where it was.
+    this.#forget(from);
     const response = await this.#request(
       `${this.#base}/storage/v1/object/move`,
       {
@@ -367,6 +456,9 @@ export class SupabaseStorageProvider implements StorageProvider {
   }
 
   async remove(key: string): Promise<void> {
+    // Forgotten before the request: a delete whose outcome is unknown must not
+    // leave a PRESENT answer standing for it.
+    this.#forget(assertSafeKey(key));
     const response = await this.#request(
       this.#objectUrl(key),
       { method: 'DELETE', headers: this.#headers() },
