@@ -38,6 +38,7 @@ import { optimizePortfolio, type Activity, type PortfolioReading } from '../quan
 import { makeRng } from '../scenario/random.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { assessOutreachRecord, type EvidenceAssessment, type OutreachCampaignRecord } from './evidenceAuthority.ts';
+import { buildStreams, type StreamWorlds, type StreamsReading } from './streams.ts';
 
 export const PORTFOLIO_WORLDS = 2_000;
 /** The shares of the shared outreach an opening may be given. */
@@ -142,6 +143,13 @@ export interface GoalPortfolio {
   searched: number;
   /** The measured reply interval cold-outreach openings were sampled in, when one was passed. */
   measuredRates?: MeasuredRatesReading | null;
+  /**
+   * The same reading as streams (PORT-05): each opening's role — leading,
+   * alternate, contingency, working operation or future bet — and the
+   * correlation, cash timing, obligations, workforce, quality assurance,
+   * outreach, crowding and shared constraints across them (`streams.ts`).
+   */
+  streams?: StreamsReading;
 }
 
 /** Whether an input may be read as a distribution of the world rather than a range swept. */
@@ -430,9 +438,12 @@ export function evaluateGoalPortfolio(input: {
   const activities: Activity[] = [];
   const memberOf = new Map<string, PortfolioMember>();
   const demand: DemandEstimate[] = [];
+  const worldsOf = new Map<string, StreamWorlds>();
+  const modelled: ModelledOpportunity[] = [];
   for (const card of input.openings) {
     const one = measuredRates && applied !== 'AS_IS_FLOOR_ONLY' ? withMeasuredReply(card, measuredRates, applied) : card;
     const id = one.opportunity.id;
+    modelled.push(one);
     const capital = capitalAtStart(one);
     const unestablished = INPUT_NAMES.filter(([key]) => !established(one[key] as ModelInput)).map(([, name]) => name);
     if (!capital.established) unestablished.push('money tied up');
@@ -487,6 +498,7 @@ export function evaluateGoalPortfolio(input: {
     for (const share of shares) {
       const w = share === 1 ? full : demandWorlds(one, share, input.daysLeft, reach, worlds, seed);
       const key = `${id}@${share}`;
+      worldsOf.set(key, { cash: w.cash, days: w.days, paced: one.repeatable && one.agreedValue === 0 });
       memberOf.set(key, { opportunityId: id, title: one.opportunity.title, share: share > 0 ? share : null });
       activities.push({
         key,
@@ -551,6 +563,19 @@ export function evaluateGoalPortfolio(input: {
       ? { reach: floor.best.reach, settledP10: floor.best.settledP10, settledP50: floor.best.settledP50, settledP90: floor.best.settledP90 }
       : null;
   }
+  const streams = buildStreams({
+    openings: modelled,
+    demand,
+    best,
+    alternatives,
+    memberWorlds: new Map((best?.members ?? []).map((m) => [m.opportunityId, worldsOf.get(`${m.opportunityId}@${m.share ?? 0}`)!] as const).filter(([, w]) => Boolean(w))),
+    deadlineDays: input.daysLeft,
+    startingCapital,
+    spendCeiling,
+    contactsPerDay,
+    riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
+    defaultCorrelation: 0.5,
+  });
   return {
     basis,
     worlds,
@@ -569,5 +594,6 @@ export function evaluateGoalPortfolio(input: {
     missing,
     searched: result.searched,
     measuredRates,
+    streams,
   };
 }
