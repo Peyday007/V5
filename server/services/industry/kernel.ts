@@ -5,42 +5,71 @@
  * Derived on the tick, never hooked to a moment
  * ---------------------------------------------------------------------------
  *
- * Everything here is re-derived from rows on every pass, which is the fifth
- * time this repository has needed that distinction: a hook fixes one entrance
- * and a derivation reaches every entrance plus everything already stranded. A
- * sprint that was activated before this kernel existed gets a map on the next
- * tick with nobody pressing anything; a tick that dies halfway leaves rows the
- * next one reads correctly; and two instances running it produce one round,
- * because the arbiter is a unique index rather than a check-then-write.
+ * Everything here is re-derived from rows on every pass: a hook fixes one
+ * entrance and a derivation reaches every entrance plus everything already
+ * stranded. A tick that dies halfway leaves rows the next one reads correctly,
+ * and two instances running it produce one round, because the arbiter is a
+ * unique index rather than a check-then-write.
  *
  * ---------------------------------------------------------------------------
- * It is bounded by concurrency, and by nothing else
+ * Two authorities, and each one's off switch stops only its own rounds
  * ---------------------------------------------------------------------------
  *
- * There is no lifetime quota on how many subjects Brain may map or scan. §24
- * removed exactly that kind of number from the standing authority and recorded
- * why: nothing it rationed was scarce, so it measured a starting point and
- * then became a permanent ceiling. What bounds this is how many questions may
- * be *open at once*, which is real — provider capacity, and the same slot the
- * deep dives compete for.
+ * Growing Brain's map of the economy is a standing capability, not a cash
+ * sprint's (W-1, docs/INTELLIGENCE-RECOVERY-2026-11-14.md). So a pass runs
+ * under one of two authorities:
+ *
+ * - **SPRINT** — an ACTIVE Cash Mode sprint. Its rounds are filed under the
+ *   sprint, carry its objective, ask every purpose, and stop when a person
+ *   winds the sprint down (`launchableUnderCashMode`).
+ * - **STANDING** — no active sprint, and a live standing research grant other
+ *   than the sprint's own (§80's grant shape). Its rounds are filed with no
+ *   sprint (`cash_mode_id` NULL, migration 152), carry the neutral standing
+ *   context line, and ask only the structural questions (BOOTSTRAP and MAP):
+ *   an opening search files openings into a sprint's portfolio, and there is
+ *   none. Revoking or letting that grant expire is what stops it. The sprint's
+ *   own grant never counts here, because a person winding the sprint down has
+ *   said to stop the discovery that grant carried. It runs only in a project
+ *   that already holds economic work — a sprint row, a map, or a live money
+ *   goal — so a grant given for something else never starts mapping the economy.
+ *
+ * Absorbing runs whatever the authority says: filing what research already
+ * found is not new discovery, the spending happened when it ran.
  *
  * ---------------------------------------------------------------------------
- * It refuses to run where discovery is refused
+ * Bounded by concurrency and by database pressure, and by nothing else
  * ---------------------------------------------------------------------------
  *
- * Opening a kernel round is new discovery, so it is behind `discoveryAllowed`
- * — the same gate the buckets are behind. Absorbing is not: filing what
- * research already found is not new discovery, the spending happened when it
- * ran, and dropping results because the sprint wound down would throw away
- * work already paid for. §30's rule that winding down ends new discovery and
- * never a customer's obligation, applied one table along.
+ * There is no lifetime quota (§24). How many questions may be open at once is
+ * `kernelConcurrency`: a floor plus the research surfaces sitting idle,
+ * capped by the grant the rounds launch under. Under database pressure (§63)
+ * the sprint kernel keeps running, as the tick has always let it, and the
+ * standing kernel opens nothing: it is optional work whose output nobody is
+ * waiting on this minute. The pressure reading is read here, never changed.
  */
 import { getCashMode } from '../../repos/cashMode.ts';
-import { listCapitalForProject } from '../../repos/industry.ts';
+import {
+  countLiveNodes,
+  listCapitalForProject,
+  openIndustryRoundsByCandidate,
+} from '../../repos/industry.ts';
+import { listGoals, liveGoalNamed } from '../../repos/russellAuthority.ts';
+import { listWorkstreams } from '../../repos/register.ts';
+import { databasePressure } from '../../db/pressure.ts';
 import { discoveryAllowed } from '../cash/lifecycle.ts';
-import { allocate, MAX_OPEN_KERNEL_ROUNDS, type Ask } from './allocate.ts';
+import { CASH_DISCOVERY_AUTHORITY_NAME } from '../cash/discoveryAuthority.ts';
+import { RESEARCH_WORK_CLASS } from '../russell/launch.ts';
+import {
+  allocate,
+  kernelConcurrency,
+  NO_SIGNALS,
+  type Ask,
+  type SubjectSignals,
+} from './allocate.ts';
 import { absorb, openAsks, type Absorbed, type OpenedRound } from './expand.ts';
 import { graphSnapshot, type GraphSnapshot } from './graph.ts';
+import type { CashMode, IndustryRoundPurpose, RussellGoal } from '../../domain/types.ts';
+import type { Workstream } from '../../domain/register.ts';
 
 export interface KernelPass {
   /** Rounds opened this pass, each carrying why the allocator chose it. */
@@ -52,36 +81,139 @@ export interface KernelPass {
   /** The map as it stood when the decision was made. */
   nodes: number;
   openRounds: number;
+  /** Which authority this pass ran under; null when none allowed opening. */
+  basis?: KernelBasis | null;
+  /** The asks chosen, with their score parts, before they were opened. */
+  asks?: Ask[];
   /** What failed this pass, in words. A failure in one step no longer stops the others. */
   failures?: string[];
 }
 
+export type KernelBasis = 'SPRINT' | 'STANDING';
+
+/** What may open kernel rounds in a project, and under whose name. */
+export interface KernelAuthority {
+  allowed: boolean;
+  basis: KernelBasis | null;
+  /** The sprint row rounds are filed under; null under the standing grant. */
+  cashModeId: string | null;
+  /** The sprint's objective; null under the standing grant (neutral wording). */
+  objective: string | null;
+  /** The concurrency of the grant the rounds launch under; null when unknown. */
+  grantCap: number | null;
+  /** Which purposes this authority asks. */
+  purposes: readonly IndustryRoundPurpose[] | undefined;
+  /** In words, always naming what would change the answer. */
+  reason: string;
+}
+
+/** The structural questions: all the standing authority asks. */
+export const STANDING_PURPOSES: readonly IndustryRoundPurpose[] = Object.freeze(['BOOTSTRAP', 'MAP']);
+
+const NOTHING_ABSORBED: Absorbed = { nodes: [], constraints: [], capital: [], settled: [], refused: [] };
+
 const EMPTY: KernelPass = {
   opened: [],
-  absorbed: { nodes: [], constraints: [], capital: [], settled: [], refused: [] },
+  absorbed: NOTHING_ABSORBED,
   declined: [],
   nodes: 0,
   openRounds: 0,
+  basis: null,
 };
 
+/**
+ * The live standing research grant the world map may run under: STANDING,
+ * ACTIVE, started, unexpired, allowing RESEARCH, and not the sprint's own.
+ */
+export function standingWorldGrant(goals: readonly RussellGoal[], now: string): RussellGoal | null {
+  return (
+    goals.find(
+      (goal) =>
+        (goal.purpose ?? 'STANDING') === 'STANDING' &&
+        goal.state === 'ACTIVE' &&
+        goal.startsAt <= now &&
+        (!goal.expiresAt || goal.expiresAt > now) &&
+        goal.allowedWork.includes(RESEARCH_WORK_CLASS) &&
+        goal.name !== CASH_DISCOVERY_AUTHORITY_NAME,
+    ) ?? null
+  );
+}
+
+/** Whether a goal is live: not archived, cancelled or paused. */
+function liveGoal(goal: Workstream): boolean {
+  return !goal.archivedAt && !goal.cancelledAt && !goal.pausedAt;
+}
+
+/**
+ * Which authority, if any, may open kernel rounds in this project now.
+ *
+ * `mode` and `goals` may be passed by a caller that has already read them.
+ */
+export async function kernelAuthority(
+  projectId: string,
+  input: { mode?: CashMode | null; now?: string } = {},
+): Promise<KernelAuthority> {
+  const now = input.now ?? new Date().toISOString();
+  const mode = input.mode !== undefined ? input.mode : await getCashMode(projectId);
+  if (mode?.state === 'ACTIVE') {
+    const grant = await liveGoalNamed(projectId, CASH_DISCOVERY_AUTHORITY_NAME);
+    return {
+      allowed: true,
+      basis: 'SPRINT',
+      cashModeId: mode.id,
+      objective: mode.objective,
+      grantCap: grant?.maxConcurrent ?? null,
+      purposes: undefined,
+      reason: 'Cash Mode is active.',
+    };
+  }
+  const grant = standingWorldGrant(await listGoals(projectId), now);
+  if (!grant) {
+    const sprint = mode ? `${(await discoveryAllowed(projectId)).reason} ` : '';
+    return {
+      allowed: false,
+      basis: null,
+      cashModeId: null,
+      objective: null,
+      grantCap: null,
+      purposes: undefined,
+      reason:
+        `${sprint}No standing research grant other than the sprint's own is live, so nothing may be ` +
+        'spent mapping the economy here; a person granting one resumes it.',
+    };
+  }
+  return {
+    allowed: true,
+    basis: 'STANDING',
+    cashModeId: null,
+    objective: null,
+    grantCap: grant.maxConcurrent,
+    purposes: STANDING_PURPOSES,
+    reason: `The standing research grant "${grant.name}" (${grant.id}) authorizes growing the map with no sprint.`,
+  };
+}
+
 export async function runIndustryKernel(projectId: string): Promise<KernelPass> {
-  // One read answers it for the many projects that hold no sprint at all,
-  // which is what makes this cheap enough to run for every project every tick.
-  if (!(await getCashMode(projectId))) return EMPTY;
+  const mode = await getCashMode(projectId);
+  /*
+   * Cheap for the many projects with no economic work at all: no sprint row,
+   * no map, no round still to absorb, and no standing grant over a money goal.
+   */
+  if (!mode) {
+    const grant = standingWorldGrant(await listGoals(projectId), new Date().toISOString());
+    const nothingToAbsorb = async () => (await openIndustryRoundsByCandidate(projectId)).size === 0;
+    if (!grant) {
+      // Two reads for the ordinary project: no sprint, no grant, nothing still running.
+      if (await nothingToAbsorb()) return EMPTY;
+    } else if ((await countLiveNodes(projectId)) === 0 && !(await holdsMoneyGoal(projectId)) && (await nothingToAbsorb())) {
+      return EMPTY;
+    }
+  }
 
   /*
-   * Absorb first, deliberately.
-   *
-   * A round that settled on the previous pass has children, constraints or
-   * capital entries to file, and filing them changes what the allocator sees:
-   * a subject that has just gained five sub-industries should be deciding
-   * about those on this pass rather than on the next one. Allocating first
-   * would make every discovery a tick late, for ever.
-   */
-  /*
-   * A finding that will not absorb must not stop the map growing. Production,
-   * 2026-11-02: four rounds in the project's whole history, four asks reported
-   * ready and never opened, and the tick swallowed whatever threw here.
+   * Absorb first, deliberately: what a settled round filed changes what the
+   * allocator sees, and allocating first would make every discovery a tick late.
+   * A finding that will not absorb must not stop the map growing (2026-11-02).
    */
   const failures: string[] = [];
   let absorbed: Absorbed;
@@ -89,25 +221,59 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
     absorbed = await absorb({ projectId });
   } catch (error) {
     failures.push(`absorb: ${error instanceof Error ? error.message : String(error)}`);
-    absorbed = { nodes: [], constraints: [], capital: [], settled: [], refused: [] };
+    absorbed = NOTHING_ABSORBED;
   }
 
   const snapshot = await graphSnapshot(projectId);
-  const gate = await discoveryAllowed(projectId);
-  if (!gate.allowed) {
+  const counts = {
+    nodes: snapshot.nodes.filter((one) => one.retiredAt === null).length,
+    openRounds: snapshot.rounds.filter((one) => one.state === 'OPEN').length,
+  };
+  const authority = await kernelAuthority(projectId, { mode });
+  if (!authority.allowed) {
     return {
       opened: [],
       absorbed,
-      declined: [{ subject: 'every subject on the map', why: gate.reason }],
-      nodes: snapshot.nodes.filter((one) => one.retiredAt === null).length,
-      openRounds: snapshot.rounds.filter((one) => one.state === 'OPEN').length,
+      declined: [{ subject: 'every subject on the map', why: authority.reason }],
+      ...counts,
+      basis: null,
+      failures,
     };
   }
+  if (authority.basis === 'STANDING') {
+    if (!mode && counts.nodes === 0 && !(await holdsMoneyGoal(projectId))) {
+      return { ...EMPTY, absorbed, ...counts, failures };
+    }
+    if (databasePressure().state === 'SHEDDING') {
+      return {
+        opened: [],
+        absorbed,
+        declined: [
+          {
+            subject: 'every subject on the map',
+            why:
+              'The database is shedding optional work (§63), and the standing map is optional: ' +
+              'it opens again on the first tick at NORMAL.',
+          },
+        ],
+        ...counts,
+        basis: 'STANDING',
+        failures,
+      };
+    }
+  }
 
-  const plan = await planFrom(snapshot);
+  const cap = kernelConcurrency({ spare: await spareSurfaces(projectId), grantCap: authority.grantCap });
+  const plan = await planFrom(snapshot, { cap, purposes: authority.purposes });
   let opened: OpenedRound[] = [];
   try {
-    opened = await openAsks({ projectId, asks: plan.asks, snapshot });
+    opened = await openAsks({
+      projectId,
+      asks: plan.asks,
+      snapshot,
+      filing: { cashModeId: authority.cashModeId, objective: authority.objective },
+      cap,
+    });
   } catch (error) {
     failures.push(`open: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -116,8 +282,9 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
     opened,
     absorbed,
     declined: plan.declined,
-    nodes: snapshot.nodes.filter((one) => one.retiredAt === null).length,
-    openRounds: snapshot.rounds.filter((one) => one.state === 'OPEN').length,
+    ...counts,
+    basis: authority.basis,
+    asks: plan.asks,
     failures,
   };
 }
@@ -127,17 +294,104 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
  *
  * Exported separately from the pass that acts on it so that a person — or a
  * test — can ask *what would Brain do next* without anything being created.
- * `services/realize/prove.ts` splits reading from applying for the same
- * reason: somebody should be able to look before anything moves.
+ * The signals (goals reaching each subject, unpriced positions) are read here
+ * so the plan a person reads is the plan the pass would make.
  */
 export async function planFrom(
   snapshot: GraphSnapshot,
+  options: { cap?: number; purposes?: readonly IndustryRoundPurpose[]; signals?: SubjectSignals } = {},
 ): Promise<{ asks: Ask[]; declined: { subject: string; why: string }[] }> {
   const openRounds = snapshot.rounds.filter((one) => one.state === 'OPEN').length;
   const capital = await listCapitalForProject(snapshot.projectId);
+  const cap = options.cap ?? kernelConcurrency({ spare: 0, grantCap: null });
   return allocate({
     snapshot,
-    slots: Math.max(0, MAX_OPEN_KERNEL_ROUNDS - openRounds),
+    slots: Math.max(0, cap - openRounds),
     capitalDecomposed: new Set(capital.map((one) => one.opportunityId)),
+    signals: options.signals ?? (await subjectSignals(snapshot)),
+    purposes: options.purposes,
   });
 }
+
+/** Idle research surfaces this project may use; null when unreadable (lifts nothing). */
+async function spareSurfaces(projectId: string): Promise<number | null> {
+  try {
+    const { cashSpareSurfaces } = await import('../cash/researchRoom.ts');
+    return await cashSpareSurfaces(projectId);
+  } catch {
+    return null;
+  }
+}
+
+async function holdsMoneyGoal(projectId: string): Promise<boolean> {
+  const goals = await listWorkstreams({ projectIds: [projectId] });
+  return goals.some((goal) => goal.projectId === projectId && liveGoal(goal) && goal.target !== null);
+}
+
+/**
+ * What the allocator reads beside the snapshot: which live goals reach each
+ * subject, and how many facts leave the positions in each subject's subtree
+ * unpriced. A failure reads as no signal — never as a favourable one.
+ */
+export async function subjectSignals(snapshot: GraphSnapshot): Promise<SubjectSignals> {
+  if (snapshot.nodes.length === 0) return NO_SIGNALS;
+  const goalsReaching = new Map<string, number>();
+  const goalReachedAt = new Map<string, string>();
+  try {
+    const { interpretIntent } = await import('./construction/intent.ts');
+    const { subtreeFor } = await import('./construction/service.ts');
+    const goals = (await listWorkstreams({ projectIds: [snapshot.projectId] })).filter(
+      (goal) => goal.projectId === snapshot.projectId && liveGoal(goal),
+    );
+    for (const goal of goals) {
+      const text = [goal.title, goal.intent, goal.outcome].filter(Boolean).join(' ');
+      const industry = interpretIntent(text).industry;
+      for (const node of subtreeFor(snapshot.nodes, industry)) {
+        goalsReaching.set(node.id, (goalsReaching.get(node.id) ?? 0) + 1);
+        const held = goalReachedAt.get(node.id);
+        if (!held || goal.createdAt > held) goalReachedAt.set(node.id, goal.createdAt);
+      }
+    }
+  } catch {
+    /* no goal signal */
+  }
+  return { goalsReaching, goalReachedAt, unpriced: await unpricedBySubject(snapshot) };
+}
+
+/**
+ * Distinct unpriced fact keys over the open positions of each root's subtree,
+ * credited to every subject in it. The construction engine is pure but not
+ * cheap, so the reading is kept until the map, its constraints or its openings
+ * change.
+ */
+async function unpricedBySubject(snapshot: GraphSnapshot): Promise<Map<string, number>> {
+  const fingerprint = [
+    snapshot.nodes.length,
+    snapshot.nodes.reduce((newest, one) => (one.updatedAt > newest ? one.updatedAt : newest), ''),
+    snapshot.constraints.length,
+    snapshot.opportunities.length,
+  ].join('|');
+  const held = unpricedMemo.get(snapshot.projectId);
+  if (held && held.fingerprint === fingerprint) return held.reading;
+  const reading = new Map<string, number>();
+  try {
+    const { assembleEvidence, evidenceFromMap, subtreeFor } = await import('./construction/service.ts');
+    const { heldFromRows, openWorld } = await import('./construction/openWorld.ts');
+    const records = heldFromRows(snapshot.nodes, snapshot.opportunities);
+    const roots = snapshot.nodes.filter((one) => one.parentId === null && one.retiredAt === null);
+    for (const root of roots) {
+      const subtree = subtreeFor(snapshot.nodes, root.name);
+      const map = evidenceFromMap(subtree, snapshot.constraints);
+      if (map.flows.length === 0) continue;
+      const evidence = assembleEvidence({ text: root.name, industry: root.name, geography: null, map, recorded: [] });
+      const keys = new Set<string>();
+      for (const one of openWorld(evidence, records).arrangements) for (const key of one.unpriced) keys.add(key);
+      for (const node of subtree) reading.set(node.id, Math.max(reading.get(node.id) ?? 0, keys.size));
+    }
+  } catch {
+    /* no pricing signal */
+  }
+  unpricedMemo.set(snapshot.projectId, { fingerprint, reading });
+  return reading;
+}
+const unpricedMemo = new Map<string, { fingerprint: string; reading: Map<string, number> }>();
