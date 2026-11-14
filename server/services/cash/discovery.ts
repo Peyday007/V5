@@ -95,6 +95,7 @@ import {
 } from '../../repos/cashDiscovery.ts';
 import { listConstraintsForProject, listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
 import { OPPORTUNITY_ORIGINS, opportunityField, type OpportunityOrigin, type OpportunitySeed } from '../industry/construction/origins.ts';
+import { openWorldForProject, openWorldLenses, type OpenWorldLens } from '../industry/construction/openWorld.ts';
 import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
 import { exclusionSentence, unionOf, type ExclusionClass } from './exclusions.ts';
 import { liveGoalLimits } from './worthResearching.ts';
@@ -601,6 +602,8 @@ async function openBucketRound(input: {
   origins: readonly OpportunityOrigin[];
   /** The opportunity-field seeds it was asked from, when it was seeded by one. */
   seedKeys?: readonly string[];
+  /** The open-world arrangement it puts to real sources, when it asks one (ARCH-01). */
+  construction?: RoundConstruction | null;
 }): Promise<CashDiscoveryRound | null> {
   const { bucket, next, mode } = input;
   let round: CashDiscoveryRound;
@@ -645,6 +648,7 @@ async function openBucketRound(input: {
       objective: mode.objective,
       origins: [...input.origins],
       originSeeds: [...(input.seedKeys ?? [])],
+      ...(input.construction ? { construction: input.construction } : {}),
     },
   });
   return round;
@@ -703,6 +707,20 @@ export const GOAL_LENSES: readonly { id: string; angle: string }[] = Object.free
 /** At most this many industries from the map are offered as search angles. */
 export const MAX_INDUSTRY_LENSES = 60;
 
+/** What an open-world round puts to real sources, as recorded on its opening event (ARCH-01). */
+export interface RoundConstruction {
+  subject: string;
+  flowKey: string;
+  roleId: string;
+  roleLabel: string;
+  roleOrigin: 'SEED' | 'EVIDENCE';
+  business: string;
+  viability: string;
+  midContribution: number | null;
+  midFirstCashDays: number | null;
+  unpriced: string[];
+}
+
 /** A goal's search angle, with the origin of the question it asks (OPP-03). */
 export interface GoalLens {
   id: string;
@@ -710,6 +728,46 @@ export interface GoalLens {
   origin: OpportunityOrigin;
   /** The opportunity-field seed it was built from, when it was. */
   seedKey?: string;
+  /** Further origins the question answers (the field seeds a constructed arrangement touches). */
+  alsoOrigins?: OpportunityOrigin[];
+  /** The open-world arrangement it asks about, when it is one. */
+  construction?: RoundConstruction;
+}
+
+/**
+ * The open-world arrangements (`industry/construction/openWorld.ts`) as goal
+ * lenses: a commercial role no record of this operation represents,
+ * constructed and evaluated on the project's own map, asked of real sources.
+ * Constructed backward from what an economy's flows allow, so FIRST_PRINCIPLES,
+ * plus the origins of any field seeds that touch the subject. A lens whose
+ * words would read as a jurisdiction is left out, as a field seed is.
+ */
+export function openWorldGoalLenses(lenses: readonly OpenWorldLens[]): GoalLens[] {
+  return lenses
+    .filter((one) => safeExclusion(one.angle))
+    .map((one) => {
+      const a = one.arrangement;
+      const also = [...new Set(a.seeds.map((s) => s.origin))].filter((o) => o !== 'FIRST_PRINCIPLES');
+      return {
+        id: `ow-${lensId(one.key)}`,
+        angle: one.angle.slice(0, 600),
+        origin: 'FIRST_PRINCIPLES' as const,
+        seedKey: one.key,
+        ...(also.length ? { alsoOrigins: also } : {}),
+        construction: {
+          subject: one.subject,
+          flowKey: a.flowKey,
+          roleId: a.roleId,
+          roleLabel: a.roleLabel,
+          roleOrigin: a.roleOrigin,
+          business: a.business.label,
+          viability: a.viability,
+          midContribution: a.midContribution,
+          midFirstCashDays: a.midFirstCashDays,
+          unpriced: [...a.unpriced],
+        },
+      };
+    });
 }
 
 /** At most this many opportunity-field seeds are offered as a goal's search angles at once. */
@@ -902,13 +960,18 @@ export async function openGoalDiscovery(input: {
    * own. No category list filters them; they come after the fixed angles and
    * the industries, interleaved so every origin is reached within a cycle.
    */
-  const field = opportunityField({
-    nodes,
-    opportunities: await listOpportunities({ projectId: t.projectId }),
-    goals: [],
-    constraints: await listConstraintsForProject(t.projectId),
-  });
-  const lenses: GoalLens[] = [...GOAL_LENSES.map((one) => ({ ...one, origin: 'FIRST_PRINCIPLES' as const })), ...industries, ...originLenses(field)];
+  const opportunities = await listOpportunities({ projectId: t.projectId });
+  const constraints = await listConstraintsForProject(t.projectId);
+  const field = opportunityField({ nodes, opportunities, goals: [], constraints });
+  /*
+   * And the roles nobody holds (ARCH-01): on each subject of the map with
+   * recorded flows, every commercial role no record represents is constructed
+   * and evaluated (`openWorldForProject`), and each arrangement is a lens that
+   * puts it to real sources. Read fresh on every pass, so a changed price,
+   * buyer, gate or constraint in the rows changes what is asked next.
+   */
+  const constructed = openWorldGoalLenses(openWorldLenses(await openWorldForProject({ nodes, constraints, opportunities })));
+  const lenses: GoalLens[] = [...GOAL_LENSES.map((one) => ({ ...one, origin: 'FIRST_PRINCIPLES' as const })), ...industries, ...constructed, ...originLenses(field)];
   const choices = lenses.map((lens, index) => {
     const id = `${prefix}-${lens.id}`;
     const history = mine.filter((one) => one.bucketId === id);
@@ -921,7 +984,7 @@ export async function openGoalDiscovery(input: {
   const choice = choices[0];
   if (!choice) return null;
   const { lens, id, history, next } = choice;
-  const origins: OpportunityOrigin[] = [lens.origin];
+  const origins: OpportunityOrigin[] = [lens.origin, ...(lens.alsoOrigins ?? [])];
   const seedKeys = lens.seedKey ? [lens.seedKey] : [];
 
   const amount = `${t.currency} ${(t.remainingCents / 100).toFixed(0)}`;
@@ -994,6 +1057,7 @@ export async function openGoalDiscovery(input: {
     statement: questionFor(bucket, mode.objective, next, history, heldLines, frame, unionOf(await liveGoalLimits(t.projectId, new Date().toISOString()))),
     origins,
     seedKeys,
+    construction: lens.construction ?? null,
   });
   return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
 }

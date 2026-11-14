@@ -7,7 +7,8 @@ import { readFileSync } from 'node:fs';
 import { afterAll, describe, expect, it } from 'vitest';
 import { freshProject, teardown } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
-import { createNode } from '../server/repos/industry.ts';
+import { createNode, listConstraintsForProject, listNodes } from '../server/repos/industry.ts';
+import { listOpportunities } from '../server/repos/cashPortfolio.ts';
 import { lastMileDelivery } from '../server/services/industry/construction/references.ts';
 import { constructBusinesses } from '../server/services/industry/construction/businesses.ts';
 import { commercialRoles } from '../server/services/industry/construction/roles.ts';
@@ -15,8 +16,11 @@ import {
   OBSERVED_INPUTS,
   adaptation,
   heldFromRows,
+  MAX_OPEN_WORLD_LENSES,
   openWorld,
+  openWorldForProject,
   openWorldHoldsOnRows,
+  openWorldLenses,
   represented,
   withObserved,
   type ObservedInput,
@@ -123,5 +127,51 @@ describe('openWorldHoldsOnRows (r01.arch-01)', () => {
     expect(await count()).toEqual(before);
     expect(held.ok, held.detail).toBe(true);
     expect(held.detail).toMatch(/roles no record represents/);
+  });
+});
+
+describe('the running Brain constructs from a project’s own rows (ARCH-01)', () => {
+  afterAll(teardown);
+
+  it('builds arrangements from the recorded map, offers them as lenses, and re-reads them when the rows change', async () => {
+    const { project } = await freshProject();
+    const rows = async () => ({ nodes: await listNodes(project.id), constraints: await listConstraintsForProject(project.id), opportunities: await listOpportunities({ projectId: project.id }) });
+    expect(await openWorldForProject(await rows())).toEqual([]);
+
+    const root = await createNode({ projectId: project.id, parentId: null, kind: 'SECTOR', name: 'commercial cleaning', origin: 'SEED' });
+    const buyer = await createNode({ projectId: project.id, parentId: root.node.id, kind: 'BUYER_TYPE', name: 'property managers', origin: 'SEED' });
+    await createNode({ projectId: project.id, parentId: buyer.node.id, kind: 'TRANSACTION_TYPE', name: 'monthly janitorial contract', description: 'paid monthly per building', origin: 'SEED' });
+    const first = await openWorldForProject(await rows());
+    expect(first).toHaveLength(1);
+    expect(first[0]!.subject).toBe('commercial cleaning');
+    const roles = first[0]!.reading.arrangements.map((a) => a.roleId);
+    expect(roles.length).toBeGreaterThan(0);
+
+    const lenses = openWorldLenses(first);
+    expect(lenses.length).toBeGreaterThan(0);
+    expect(lenses.length).toBeLessThanOrEqual(MAX_OPEN_WORLD_LENSES);
+    for (const lens of lenses) {
+      expect(lens.key).toBe(`openworld:${root.node.id}:${lens.arrangement.flowKey}:${lens.arrangement.roleId}`);
+      expect(lens.arrangement.viability).not.toBe('NOT_VIABLE');
+      expect(lens.angle).toContain(lens.arrangement.roleLabel);
+    }
+    // The same rows give the same keys, so a lens keeps its history across passes.
+    expect(openWorldLenses(await openWorldForProject(await rows())).map((l) => l.key)).toEqual(lenses.map((l) => l.key));
+
+    // A record that now represents one of those roles changes what is constructed next.
+    const role = first[0]!.reading.arrangements[0]!;
+    await createNode({ projectId: project.id, parentId: root.node.id, kind: 'BUYER_TYPE', name: `${role.roleLabel} network`, origin: 'SEED' });
+    const after = await openWorldForProject(await rows());
+    expect(after[0]!.reading.arrangements.some((a) => a.roleId === role.roleId)).toBe(false);
+    expect(after[0]!.reading.representedRoles.length).toBeGreaterThan(first[0]!.reading.representedRoles.length);
+  });
+
+  it('interleaves subjects so one cannot take every slot, and caps the set', () => {
+    const e = lastMileDelivery();
+    const reading = openWorld(e, NOTHING_HELD);
+    const two = [{ rootId: 'a', subject: 'A', reading }, { rootId: 'b', subject: 'B', reading }];
+    const lenses = openWorldLenses(two, 4);
+    expect(lenses).toHaveLength(4);
+    expect(lenses.map((l) => l.subject)).toEqual(['A', 'B', 'A', 'B']);
   });
 });

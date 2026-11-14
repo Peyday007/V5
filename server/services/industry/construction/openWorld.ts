@@ -15,11 +15,18 @@
  * change: `withObserved` overlays a newly observed price, demand, capacity,
  * financing term or cash figure in memory, and `adaptation` reports what moved.
  *
- * Pure, except `openWorldHoldsOnRows`, which only reads. No store, scheduler or
- * authority path: the held records are read through the existing repositories.
+ * The running Brain asks it on every goal search pass: `openGoalDiscovery`
+ * (`cash/discovery.ts`) reads the project's rows, calls `openWorldForProject`,
+ * and offers each constructed arrangement as a lens of its own, so the
+ * arrangement is put to real sources as a round and recorded on that round's
+ * opening event. What the round finds comes back through the existing harvest.
+ *
+ * Pure, except `openWorldForProject` and `openWorldHoldsOnRows`, which only
+ * read. No store, scheduler or authority path: the held records are read
+ * through the existing repositories.
  */
 import type { Fact, FactKey, IndustryEvidence } from '../../../domain/construction.ts';
-import type { CashOpportunity, IndustryNode } from '../../../domain/types.ts';
+import type { CashOpportunity, IndustryNode, OpportunityConstraint } from '../../../domain/types.ts';
 import { constructBusinesses, positionKey, type Business } from './businesses.ts';
 import { solveEconomics, type BusinessEconomics } from './economics.ts';
 import { viabilityRank } from './strategy.ts';
@@ -197,6 +204,98 @@ export function adaptation(before: OpenWorldReading, after: OpenWorldReading): {
     return !b || figures(b) !== figures(a);
   });
   return { changed, detail: changed ? `${moved.length} arrangement(s) re-evaluated` : 'no arrangement moved' };
+}
+
+/* ------------------------------------------------------- the running Brain */
+
+/** At most this many top-level subjects of a project's map are constructed in one pass. */
+export const MAX_OPEN_WORLD_SUBJECTS = 12;
+/** At most this many constructed arrangements are offered to a goal's search at once. */
+export const MAX_OPEN_WORLD_LENSES = 20;
+
+/** The rows one project holds, read by the caller through the existing repositories. */
+export interface ProjectRows {
+  nodes: IndustryNode[];
+  constraints: OpportunityConstraint[];
+  opportunities: CashOpportunity[];
+}
+
+export interface SubjectReading {
+  /** The top-level node of the project's map the reading was built from. */
+  rootId: string;
+  subject: string;
+  reading: OpenWorldReading;
+}
+
+/**
+ * Open-world construction over one project's own map: for each top-level
+ * subject that has recorded flows, the roles no held record represents are
+ * constructed and evaluated against the evidence those rows give — so a newly
+ * recorded price, buyer, gate or constraint changes the next reading. Reads
+ * nothing itself; the caller passes the rows.
+ */
+export async function openWorldForProject(rows: ProjectRows, maxSubjects = MAX_OPEN_WORLD_SUBJECTS): Promise<SubjectReading[]> {
+  const { assembleEvidence, evidenceFromMap, subtreeFor } = await import('./service.ts');
+  const held = heldFromRows(rows.nodes, rows.opportunities);
+  const seeds = opportunityField({ nodes: rows.nodes, opportunities: rows.opportunities, goals: [], constraints: rows.constraints });
+  const out: SubjectReading[] = [];
+  for (const root of rows.nodes.filter((n) => n.parentId === null && !n.retiredAt)) {
+    if (out.length >= maxSubjects) break;
+    const map = evidenceFromMap(subtreeFor(rows.nodes, root.name), rows.constraints);
+    if (map.flows.length === 0) continue;
+    const evidence = assembleEvidence({ text: root.name, industry: root.name, geography: null, map, recorded: [] });
+    const reading = openWorld(evidence, held, seeds);
+    if (reading.arrangements.length === 0) continue;
+    out.push({ rootId: root.id, subject: root.name, reading });
+  }
+  return out;
+}
+
+/** One constructed arrangement, as a question a goal's search can ask. */
+export interface OpenWorldLens {
+  /** Stable across passes for the same subject, flow and role, so its history accumulates. */
+  key: string;
+  subject: string;
+  angle: string;
+  arrangement: OpenArrangement;
+}
+
+function money(x: number | null): string {
+  return x === null ? 'not yet priced' : `about USD ${Math.round(x)}`;
+}
+
+/**
+ * The constructed arrangements as search angles, best-ranked first and
+ * interleaved across subjects so one subject cannot take every slot. The
+ * question asks the world to confirm or refute the construction — who
+ * occupies the role now, what it is paid, and whether an operation could
+ * stand there — so an arrangement nobody holds a record of is tested on real
+ * sources, never assumed. Pure.
+ */
+export function openWorldLenses(readings: readonly SubjectReading[], max = MAX_OPEN_WORLD_LENSES): OpenWorldLens[] {
+  const queues = readings.map((r) => ({ r, items: [...r.reading.arrangements].filter((a) => a.viability !== 'NOT_VIABLE') }));
+  const out: OpenWorldLens[] = [];
+  for (let depth = 0; out.length < max; depth += 1) {
+    let added = false;
+    for (const { r, items } of queues) {
+      const a = items[depth];
+      if (!a || out.length >= max) continue;
+      added = true;
+      const unpriced = a.unpriced.length ? ` Still unpriced: ${a.unpriced.slice(0, 4).join(', ').replace(/_/g, ' ')}.` : '';
+      out.push({
+        key: `openworld:${r.rootId}:${a.flowKey}:${a.roleId}`,
+        subject: r.subject,
+        arrangement: a,
+        angle:
+          `a position no record of this operation holds: standing as ${a.roleLabel} in ${r.subject}, run as ${a.business.label}` +
+          (a.business.segmentName ? ` for ${a.business.segmentName}` : '') +
+          ` (constructed and evaluated as ${a.viability.toLowerCase()}: monthly contribution ${money(a.midContribution)}, first cash ${a.midFirstCashDays === null ? 'not yet known' : `in about ${Math.round(a.midFirstCashDays)} days`}).${unpriced}` +
+          ' Confirm or refute it from real sources: who occupies that position now, what they are paid and on what terms, and whether an operation could stand there without doing the physical work itself',
+      });
+    }
+    if (!added) break;
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------ the probe */
