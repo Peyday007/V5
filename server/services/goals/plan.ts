@@ -1745,6 +1745,32 @@ export async function planInputsFingerprint(projectId: string, goalId: string): 
 }
 
 /**
+ * The parts of `planInputsFingerprint` only a new opening moves: the project's
+ * opening count and the newest opening's `created_at` (positions 0 and 2).
+ */
+const ARRIVAL_PARTS = new Set([0, 2]);
+
+/**
+ * The inputs a reading was actually taken over. Pure.
+ *
+ * Reading a plan runs a scenario and is slow, and an opening harvested while it
+ * runs is not in the model the reading used. So what a new opening moves (its
+ * count and newest `created_at`) comes from `before`, taken before the read,
+ * and an opening filed during the read still reads as new evidence on the next
+ * pass instead of waiting out the half-hour. What the pass's own writes move
+ * (the openings' and value layers' `updated_at`, the money entries, the goal
+ * row) comes from `after`, taken once the pass is over, so the plan's own
+ * research on its openings never causes a perpetual re-read. Duplicate or late
+ * triggers stay bounded by the evidence floor and the one scenario slot.
+ */
+export function inputsTakenOver(before: string, after: string): string {
+  const b = before.split('|');
+  const a = after.split('|');
+  if (b.length !== a.length) return after;
+  return a.map((part, i) => (ARRIVAL_PARTS.has(i) ? b[i]! : part)).join('|');
+}
+
+/**
  * Whether a goal's plan is due now. Pure. Never read: due. Past the half-hour:
  * due. Inside it: due once the floor has passed and the inputs differ from the
  * ones the last reading was taken over (unknown after a restart counts as
@@ -2170,6 +2196,8 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
       }
       continue;
     }
+    // What a new opening moves, as it stood when this read began (`inputsTakenOver`).
+    const before = inputs ?? (await fingerprint());
     let reading: PlanReading | null;
     try {
       reading = await readGoalPlan({ goalId: id, now, persist: true });
@@ -2223,9 +2251,11 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
       researched += more.researched;
     }
     // Taken after this pass's own writes (the research it started on openings
-    // touches their rows), so only what arrives from elsewhere reads as new.
+    // touches their rows), so only what arrives from elsewhere reads as new —
+    // and an opening filed while the plan was being read is not folded in
+    // (`inputsTakenOver`): the reading never saw it, so the next pass reads it.
     const after = await fingerprint();
-    if (after !== null) lastInputs.set(id, after);
+    if (after !== null) lastInputs.set(id, before !== null ? inputsTakenOver(before, after) : after);
   }
   return { read, outcomes, asked, constructed, researched, busy, onEvidence, resumed };
 }
