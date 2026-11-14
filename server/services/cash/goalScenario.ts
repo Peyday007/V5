@@ -46,7 +46,7 @@ import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, measuredRateInput, type
 import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
-import { TRANSFER_MATERIAL, type ConstructedArrangement } from './construct.ts';
+import { composeInvented, inventionContext, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
 export { TRANSFER_MATERIAL };
 
 /**
@@ -176,6 +176,8 @@ export interface ModelledOpportunity {
     observations: number;
     /** A transferred design's material dimensions and which are bridged (S-12). */
     transfer?: { precedent: string; material: string[]; bridged: string[]; unbridged: string[] };
+    /** A design Brain's reasoning model invented (S-11): a hypothesis about structure, every input of it unestablished. */
+    invented?: boolean;
   };
 }
 
@@ -221,6 +223,16 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: { p
     // Swept over the reconstruction's range: an estimate carries no distribution (only evidence may).
     inferred: { tier: one.value.tier as EvidenceTier, justified: false, p10, p50, p90, observations: one.value.observations },
   };
+  return arrangementOpening(one, input, price, high, transfer);
+}
+
+/**
+ * A constructed arrangement as a model candidate on a price already read: the
+ * links nobody has established swept exactly as for an opening with nothing on
+ * its card. Shared by the estimated and the invented conversions. Pure.
+ */
+function arrangementOpening(one: ConstructedArrangement, input: { projectId: string; currency: string }, price: ModelInput, high: number, transfer: ReturnType<typeof transferOf>, invented = false): ModelledOpportunity {
+  const ref: SourceRef = price.source ?? { kind: 'OTHER', ref: `arrangement:${one.key}` };
   const worst = one.stress.worstCaseCents === null ? null : one.stress.worstCaseCents / 100;
   const capital: ModelInput =
     one.stress.exposure === 'SAFE'
@@ -232,7 +244,7 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: { p
   const opportunity = {
     id: `${ARRANGEMENT_ID_PREFIX}${one.key}`,
     projectId: input.projectId,
-    title: `Constructed: ${one.label}`.slice(0, 200),
+    title: `${invented ? 'Invented' : 'Constructed'}: ${one.label}`.slice(0, 200),
     mechanism: 'OTHER',
     industry: one.sector,
     source: null,
@@ -272,7 +284,62 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: { p
     agreedDeals: 0,
     fulfilledBy: null,
     competitiveAward: false,
-    estimated: { arrangementKey: one.key, tier: one.value.tier, observations: one.value.observations, ...(transfer ? { transfer } : {}) },
+    estimated: { arrangementKey: one.key, tier: price.inferred?.tier ?? one.value.tier, observations: price.inferred?.observations ?? one.value.observations, ...(transfer ? { transfer } : {}), ...(invented ? { invented: true } : {}) },
+  };
+}
+
+/**
+ * A design Brain's reasoning model invented (S-11), composed by the one
+ * construction path, as a model candidate — or the reason it cannot be one.
+ *
+ * Where its reconstruction holds what *these* buyers paid, it enters exactly
+ * as an estimated arrangement does. Otherwise nothing establishes its price,
+ * and it is not given one: it is swept across the prices other buyers in this
+ * project are published as paying — MECHANISM bounds, provenance UNKNOWN,
+ * never a distribution — so the engine can say what the design would
+ * contribute if research found these buyers pay like those, and nothing it
+ * contributes can certify a plan (every link is unestablished, `inputEvidence`).
+ * With no published price in the project at all, nothing bounds it, and it
+ * stays a research question. Nothing the model said is a number here. Pure.
+ */
+export function inventedFromArrangement(
+  one: ConstructedArrangement,
+  input: { projectId: string; currency: string; beforeProofCents: number | null; otherPrices: readonly number[] },
+): PlannedOpening | { refused: string } {
+  if (one.stress.exposure === 'EXCEEDS') return { refused: "its known worst case exceeds the goal's limits" };
+  const marketKey = populationMarket(one.demand.ref);
+  const estimated = estimatedFromArrangement(one, input);
+  if (estimated)
+    return { ...estimated, marketKey, opportunity: { ...estimated.opportunity, title: `Invented: ${one.label}`.slice(0, 200) }, estimated: { ...estimated.estimated!, invented: true } };
+  const prices = input.otherPrices.filter((x) => Number.isFinite(x) && x > 0).sort((a, b) => a - b);
+  if (prices.length === 0) return { refused: 'nothing bounds what these buyers pay: the project holds no published price, so the design stays a research question' };
+  const low = prices[0]!;
+  const high = Math.max(low + 0.01, prices[prices.length - 1]!);
+  const p50 = prices[Math.floor(prices.length / 2)]!;
+  const price: ModelInput = {
+    value: null,
+    low,
+    high,
+    provenance: 'UNKNOWN',
+    source: { kind: 'OTHER', ref: `arrangement:${one.key}`, note: 'an invented design: no figure from these buyers' },
+    note: `invented design: nothing establishes what these buyers pay; swept ${Math.round(low)}–${Math.round(high)} across the ${prices.length} price(s) other buyers in this project are published as paying (mechanism bounds, not these buyers')`,
+    inferred: { tier: 'MECHANISM', justified: false, p10: low, p50, p90: high, observations: prices.length },
+  };
+  return { ...arrangementOpening(one, input, price, high, null, true), marketKey };
+}
+
+/**
+ * The composer an exploration hands invented designs to (§101, S-11): reads
+ * the construction context once, then composes each design through
+ * `composeInvented` and converts it with `inventedFromArrangement`.
+ */
+export async function inventedDesigner(input: Parameters<typeof inventionContext>[0]): Promise<(spec: InventedDesign) => PlannedOpening | { refused: string }> {
+  const ctx = await inventionContext(input);
+  const otherPrices = ctx.priced.filter((o) => o.value.kind === 'POINT').map((o) => (o.value as { value: number }).value);
+  return (spec) => {
+    const made = composeInvented(spec, ctx);
+    if ('refused' in made) return made;
+    return inventedFromArrangement(made, { projectId: input.projectId, currency: input.currency, beforeProofCents: ctx.limits.capitalBeforeProofCents, otherPrices });
   };
 }
 

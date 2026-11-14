@@ -96,7 +96,7 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | S-8 | transfer of methods | learned methods keyed by opening ids; don't transfer across goals | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-9 | learning stats | repeat reads of one goal counted as independent | MINOR | adaptive-search | REPAIRED on branch (91030b6), AWAITING RELEASE |
 | S-10 | learning | stance yield computed, never fed back | MAJOR | adaptive-search | REPAIRED on branch (91030b6): stance seed budget by posterior with floor; surgeBAdaptiveSearch 7/7 |
-| S-11 | invention | model-invented methods only retune 4 operations on held openings | MAJOR | search-selection | PARTIAL — REPAIRING (invented designs as candidates) |
+| S-11 | invention | model-invented methods only retune 4 operations on held openings | MAJOR | search-selection | REPAIRED on branch (9f4f908): a model-invented design + buyer population is composed by construction and enters as a MECHANISM-tier, never-certifiable candidate; refusals carry reasons. surgeBInventedDesign 4/4 |
 | S-12 | transfer | transfers model no material differences; precedent bonus outranks gated evidence | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-13 | correlation | = Q2-10 | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 | S-15 | wiring | `bestReachCents` never reaches construction (10-min cache) | MINOR | arrangement-library | REPAIRING |

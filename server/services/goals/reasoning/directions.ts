@@ -43,6 +43,8 @@
  * requirement is not explored.
  */
 import type { ModelledOpportunity } from '../../cash/goalScenario.ts';
+import type { InventedDesign } from '../../cash/construct.ts';
+import { AGGREGATION, coherent, FUNDING, REPEAT, STRUCTURE_KEYS, STRUCTURES, type Design } from '../../cash/properties.ts';
 import type { PlannedOpening } from '../portfolio.ts';
 import type { Dimension, StrategyChange, StrategyOperator, StrategyState, VariantReading } from '../reconstruction.ts';
 import { renderSweep, type VariableSweep } from './variables.ts';
@@ -122,6 +124,12 @@ export interface Direction {
   parents?: string[];
   /** A question the openings held cannot answer, which this direction needs answered. */
   ask?: string;
+  /**
+   * A transaction design for a buyer population the model proposed (S-11):
+   * composed by the construction path when the model's methods arrive, and
+   * brought into the plan by an INCLUDE of the arrangement it composes to.
+   */
+  design?: InventedDesign;
 }
 
 export interface DirectionReading {
@@ -173,8 +181,8 @@ export interface Exploration {
    * method is recorded without this goal's ids and transfers to another (S-8).
    */
   roles?: Record<string, string>;
-  /** The model's part: calls made, methods proposed, methods refused as off-shape or unexecutable. */
-  model: { calls: number; proposed: number; refused: number; error: string | null };
+  /** The model's part: calls made, methods proposed, methods refused as off-shape or unexecutable, and why each invented design was refused. */
+  model: { calls: number; proposed: number; refused: number; error: string | null; rejections?: string[] };
   /** The variable sweep (§102) whose strategies entered this exploration, when one ran. */
   sweep?: VariableSweep | null;
   sentence: string;
@@ -202,7 +210,13 @@ export interface ExploreContext {
   /** What each stance has yielded across goals (`loadStancePrior`): the seed budget is allocated by it (S-10). */
   stancePrior?: StancePrior;
   /** The model's methods, already parsed; generated concurrently with the screen. */
-  invent?: (brief: InventBrief) => Promise<{ directions: Direction[]; calls: number; proposed: number; refused: number; error: string | null }>;
+  invent?: (brief: InventBrief) => Promise<{ directions: Direction[]; calls: number; proposed: number; refused: number; error: string | null; rejections?: string[] }>;
+  /**
+   * Composes a design the model invented through the construction path into
+   * an estimated opening, or says why it cannot be one (S-11). Absent, the
+   * model is not offered designs.
+   */
+  design?: (spec: InventedDesign) => PlannedOpening | { refused: string };
   /** Wall-clock budget for the whole exploration. */
   maxMs?: number;
   now?: () => number;
@@ -236,6 +250,8 @@ export interface InventBrief {
   operators: Array<{ key: string; dimension: string }>;
   /** Constructed arrangements outside the plan that an INCLUDE step may bring in. */
   reserve?: Array<{ id: string; title: string; price: number | null; repeatable: boolean }>;
+  /** Present when a method may carry a new transaction design: the vocabulary it is written in (S-11). */
+  designs?: { structures: Array<{ key: string; label: string }>; funding: readonly string[]; aggregation: readonly string[]; repeat: readonly string[] };
   /** Stances already covered, so the model is asked for ones that are not. */
   stancesTried: string[];
   /** Methods that worked best before. */
@@ -506,11 +522,14 @@ export function applyProgram(
         skipped++;
         continue;
       }
+      // A design the model invented is a hypothesis about structure: the plan without it is what holds on no assumption (S-11).
+      const invented = !!one.estimated?.invented;
+      if (skipAssumed && invented) continue;
       s = record(
         {
           ...s,
           openings: [...s.openings, one],
-          changes: [...s.changes, change('PORTFOLIO', `include:${t.key}`, `bring in "${one.opportunity.title.slice(0, 80)}", ${one.estimated ? 'a constructed arrangement the first cut left out, on its reconstructed estimates' : 'an opening the reconstruction held outside the openings it moves, on its own estimates'}`, 'ESTIMATE')],
+          changes: [...s.changes, change('PORTFOLIO', `include:${t.key}`, `bring in "${one.opportunity.title.slice(0, 80)}", ${invented ? "a design Brain's model invented, composed by construction, every input of it unestablished" : one.estimated ? 'a constructed arrangement the first cut left out, on its reconstructed estimates' : 'an opening the reconstruction held outside the openings it moves, on its own estimates'}`, invented ? 'ASSUMPTION' : 'ESTIMATE')],
         },
         t,
       );
@@ -910,14 +929,21 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   await run(pool, 1);
 
   // The model's directions join as soon as they arrive.
+  const rejections: string[] = [];
   if (invented && budget > 0) {
     const got = await invented;
     model.calls = got.calls;
     model.proposed = got.proposed;
     model.refused = got.refused;
     model.error = got.error;
+    rejections.push(...(('rejections' in got ? got.rejections : undefined) ?? []));
+    // A method carrying a new design is composed first: its arrangement joins the reserve its INCLUDE reads (S-11).
+    const composed = composeInventedDesigns(got.directions, ctx);
+    model.refused += composed.rejections.length;
+    rejections.push(...composed.rejections);
+    if (composed.reserve.length) ctx = { ...ctx, reserve: [...(ctx.reserve ?? []), ...composed.reserve] };
     const room = Math.max(0, budget - all.length) + Math.ceil(budget / 4);
-    await run(distinct(got.directions, room, all.map((r) => r.direction)), 1);
+    await run(distinct(composed.directions, room, all.map((r) => r.direction)), 1);
   }
 
   // 3. Evolve: the leaders challenge, combine, modify and replace one another.
@@ -1000,7 +1026,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
     stanceYield,
     discoveries,
     asks,
-    model,
+    model: rejections.length ? { ...model, rejections: rejections.slice(0, 20) } : model,
     roles,
     sweep: ctx.sweep ?? null,
     sentence: ctx.sweep ? `${sentence} Variable sweep: ${ctx.sweep.variations.toLocaleString('en-US')} variation(s) read, ${swept.length} strategy(ies) handed to the engine.` : sentence,
@@ -1121,6 +1147,7 @@ export function inventBrief(ctx: ExploreContext): InventBrief {
       .map((o) => ({ id: o.opportunity.id, title: o.opportunity.title.slice(0, 80), price: n(mid(o.price)), close: n(mid(o.close)), respond: n(mid(o.respond)), volume: n(mid(o.volume)), daysToCash: n(mid(o.daysToCash)), outreach: outreach(o), agreed: o.agreedValue > 0 })),
     operators: ctx.operators.map((o) => ({ key: o.key, dimension: o.dimension })),
     ...(ctx.reserve?.length ? { reserve: ctx.reserve.slice(0, BRIEF_RESERVE).map((o) => ({ id: o.opportunity.id, title: o.opportunity.title.slice(0, 80), price: n(rankValue(o.price)), repeatable: o.repeatable })) } : {}),
+    ...(ctx.design ? { designs: { structures: STRUCTURE_KEYS.map((key) => ({ key, label: STRUCTURES[key].label })), funding: FUNDING, aggregation: AGGREGATION, repeat: REPEAT } } : {}),
     stancesTried: ['BACKWARD', 'FORWARD', 'MIDDLE_OUT', 'CONSTRAINT', 'RESOURCE', 'RELATIONSHIP', 'INVERSION', 'OPPORTUNITY', 'TRANSACTION', 'PORTFOLIO', 'INCLUSION', ...new Set((ctx.library ?? []).map((d) => d.stance))],
     bestKnown: (ctx.library ?? []).slice(0, 6).map((d) => ({ name: d.name, stance: d.stance, thinking: d.thinking })),
   };
@@ -1136,17 +1163,18 @@ const SCOPES = ['ALL', 'OUTREACH', 'SMALL_TICKET', 'LARGE_TICKET', 'FAST_CASH', 
  * never repaired; a transform naming an operator or opening that does not
  * exist is refused with it. A model may name any stance.
  */
-export function parseInvented(text: string, brief: Pick<InventBrief, 'operators' | 'openings' | 'reserve'>): { directions: Direction[]; proposed: number; refused: number } {
+export function parseInvented(text: string, brief: Pick<InventBrief, 'operators' | 'openings' | 'reserve' | 'designs'>): { directions: Direction[]; proposed: number; refused: number; rejections: string[] } {
   const match = /\{[\s\S]*\}/.exec(text);
-  if (!match) return { directions: [], proposed: 0, refused: 0 };
+  if (!match) return { directions: [], proposed: 0, refused: 0, rejections: [] };
   let body: unknown;
   try {
     body = JSON.parse(match[0]);
   } catch {
-    return { directions: [], proposed: 0, refused: 1 };
+    return { directions: [], proposed: 0, refused: 1, rejections: ['the answer is not JSON'] };
   }
   const methods = (body as { methods?: unknown }).methods;
-  if (!Array.isArray(methods)) return { directions: [], proposed: 0, refused: 1 };
+  if (!Array.isArray(methods)) return { directions: [], proposed: 0, refused: 1, rejections: ['the answer holds no "methods" list'] };
+  const rejections: string[] = [];
   const ops = new Set(brief.operators.map((o) => o.key));
   const opPrefix = (k: string) => ops.has(k) || [...ops].some((o) => o.startsWith(k) && k.length >= 4);
   const ids = new Set(brief.openings.map((o) => o.id));
@@ -1158,8 +1186,15 @@ export function parseInvented(text: string, brief: Pick<InventBrief, 'operators'
     const name = typeof r['name'] === 'string' ? r['name'].trim().slice(0, 120) : '';
     const stance = typeof r['stance'] === 'string' ? r['stance'].trim().toUpperCase().replace(/[^A-Z0-9_+-]+/g, '_').slice(0, 40) : '';
     const thinking = typeof r['thinking'] === 'string' ? r['thinking'].trim().slice(0, 400) : '';
-    const program = Array.isArray(r['program']) ? r['program'] : null;
-    if (!name || !stance || !thinking || !program || program.length === 0 || program.length > 6) {
+    // A method may carry a new transaction design for a buyer population (S-11), when the brief offered the vocabulary.
+    const designed = r['design'] === undefined ? null : brief.designs ? parseDesign(r['design']) : { refused: 'designs are not offered in this read' };
+    if (designed && 'refused' in designed) {
+      refused++;
+      rejections.push(`"${name || 'unnamed'}": ${designed.refused}`);
+      continue;
+    }
+    const program = Array.isArray(r['program']) ? r['program'] : designed ? [] : null;
+    if (!name || !stance || !thinking || !program || (program.length === 0 && !designed) || program.length > 6) {
       refused++;
       continue;
     }
@@ -1181,16 +1216,83 @@ export function parseInvented(text: string, brief: Pick<InventBrief, 'operators'
         transforms.push({ op: 'INCLUDE', key: x['key'] });
       } else bad = true;
     }
-    if (bad || transforms.length === 0) {
+    if (bad || (transforms.length === 0 && !designed)) {
       refused++;
+      if (designed) rejections.push(`"${name}": its program uses a step outside the vocabulary`);
       continue;
     }
     const from = r['from'] === 'BASELINE' ? 'BASELINE' : 'GREEDY';
     const ask = typeof r['ask'] === 'string' && r['ask'].trim().length > 10 ? r['ask'].trim().slice(0, 300) : undefined;
     const challenges = typeof r['challenges'] === 'string' ? r['challenges'].trim().slice(0, 200) : undefined;
-    directions.push(makeDirection({ name, stance, origin: 'MODEL', thinking, from, program: transforms, ...(ask ? { ask } : {}), ...(challenges ? { challenges } : {}) }));
+    directions.push(makeDirection({ name, stance, origin: 'MODEL', thinking, from, program: transforms, ...(ask ? { ask } : {}), ...(challenges ? { challenges } : {}), ...(designed ? { design: designed } : {}) }));
   }
-  return { directions, proposed: methods.length, refused };
+  return { directions, proposed: methods.length, refused, rejections };
+}
+
+const oneOf = <T extends string>(xs: readonly T[], x: unknown): T | null => (typeof x === 'string' && (xs as readonly string[]).includes(x) ? (x as T) : null);
+
+/**
+ * A model's design, checked for shape only: the four parts of the design
+ * tuple from their closed vocabularies, a coherent combination, and a buyer
+ * population in words. Any number it carries is ignored — a design is
+ * structure, never a figure. Refused with the reason, never repaired.
+ */
+export function parseDesign(raw: unknown): InventedDesign | { refused: string } {
+  if (!raw || typeof raw !== 'object') return { refused: 'its design is not an object' };
+  const x = raw as Record<string, unknown>;
+  const base = oneOf(STRUCTURE_KEYS, x['structure'] ?? x['base']);
+  if (!base) return { refused: `its design names no structure of ${STRUCTURE_KEYS.join(', ')}` };
+  const funding = oneOf(FUNDING, x['funding'] ?? 'ON_DELIVERY');
+  const aggregation = oneOf(AGGREGATION, x['aggregation'] ?? (base === 'POOL' ? 'POOLED_BUYERS' : 'SINGLE'));
+  const repeat = oneOf(REPEAT, x['repeat'] ?? 'ONE_OFF');
+  if (!funding || !aggregation || !repeat) return { refused: 'its design uses a funding, aggregation or repeat outside the vocabulary' };
+  const design: Design = { base, funding, aggregation, repeat };
+  if (!coherent(design)) return { refused: `its design ${base}/${funding}/${aggregation}/${repeat} cannot exist (incoherent)` };
+  const population = typeof x['population'] === 'string' ? x['population'].trim().slice(0, 120) : '';
+  if (population.length < 3) return { refused: 'its design names no buyer population' };
+  const need = typeof x['need'] === 'string' && x['need'].trim().length >= 3 ? x['need'].trim().slice(0, 120) : null;
+  return { design, population, need };
+}
+
+/**
+ * Compose every invented design through the construction path (S-11): a
+ * design that composes becomes a reserve opening, and its method gains the
+ * INCLUDE that brings it in; one that does not is dropped with the reason.
+ * Methods without a design pass through. The same design over the same buyers
+ * composes once.
+ */
+export function composeInventedDesigns(directions: Direction[], ctx: Pick<ExploreContext, 'design' | 'reserve'>): { directions: Direction[]; reserve: PlannedOpening[]; rejections: string[] } {
+  const out: Direction[] = [];
+  const reserve: PlannedOpening[] = [];
+  const rejections: string[] = [];
+  const held = new Set((ctx.reserve ?? []).map((o) => o.opportunity.id));
+  for (const d of directions) {
+    if (!d.design) {
+      out.push(d);
+      continue;
+    }
+    if (!ctx.design) {
+      rejections.push(`"${d.name}": no construction path is offered in this read`);
+      continue;
+    }
+    let made: PlannedOpening | { refused: string };
+    try {
+      made = ctx.design(d.design);
+    } catch (error) {
+      made = { refused: `construction failed: ${String((error as Error)?.message ?? error).slice(0, 120)}` };
+    }
+    if ('refused' in made) {
+      rejections.push(`"${d.name}": ${made.refused}`);
+      continue;
+    }
+    const id = made.opportunity.id;
+    if (!held.has(id)) {
+      held.add(id);
+      reserve.push(made);
+    }
+    out.push(makeDirection({ ...d, program: [...d.program.filter((t) => !(t.op === 'INCLUDE' && t.key === id)), { op: 'INCLUDE', key: id }] }));
+  }
+  return { directions: out, reserve, rejections };
 }
 
 void FIELDS;
