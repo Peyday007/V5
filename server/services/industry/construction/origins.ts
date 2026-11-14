@@ -48,7 +48,7 @@ import type { CashOpportunity, IndustryNode, OpportunityConstraint } from '../..
 import type { Workstream } from '../../../domain/register.ts';
 import type { FactKey, IndustryEvidence } from '../../../domain/construction.ts';
 import { resolveFact } from './model.ts';
-import type { FlowRoles } from './roles.ts';
+import type { CommercialRole, FlowRoles } from './roles.ts';
 
 export const OPPORTUNITY_ORIGINS = ['MEMORY', 'WORLD', 'FIRST_PRINCIPLES', 'RECOMBINATION', 'CONSTRAINT'] as const;
 export type OpportunityOrigin = (typeof OPPORTUNITY_ORIGINS)[number];
@@ -208,6 +208,22 @@ export interface MarketCandidate {
   daysToCash: number | null;
   /** Share 0..1 of the execution Brain can control without anyone being physically present. */
   remoteControl: number;
+  /**
+   * Money that must be paid before the first transaction, in dollars, at its
+   * high bound: the recorded gates' upfront cost plus the deposit or purchase
+   * of capacity a position leases or owns. Null (or absent) is unknown, and an
+   * unknown is scored unfavourably, never as free (invariant 39).
+   */
+  capitalUsd?: number | null;
+  /**
+   * Share 0..1 of the roles not refused whose occupiable answer is YES; an
+   * UNKNOWN role counts at `UNKNOWN_ROLE_WEIGHT`. Null or absent is unknown.
+   */
+  feasibility?: number | null;
+  /** Recorded failure modes and constraints that apply to the roles: each is a risk against the subject. */
+  failureModes?: number | null;
+  /** The share of units that fail, at its high bound; null or absent is unmeasured and takes `UNKNOWN_FAILURE_RATE`. */
+  failureRate?: number | null;
 }
 
 /**
@@ -219,18 +235,85 @@ export interface RankingContext {
   ownerLocation?: string | null;
 }
 
+/** The weight an UNKNOWN role carries in feasibility: less than a YES, never as much (invariant 39). */
+export const UNKNOWN_ROLE_WEIGHT = 0.5;
+/** Feasibility taken when nothing states it. */
+export const UNKNOWN_FEASIBILITY = UNKNOWN_ROLE_WEIGHT;
+/** Failure rate taken when no fact measures it: unmeasured is not zero. */
+export const UNKNOWN_FAILURE_RATE = 0.25;
+/** The share of the score each recorded failure mode keeps. */
+export const FAILURE_MODE_DECAY = 0.85;
+/** The capital factor taken when the upfront capital is unknown: as bad as capital three times a month's contribution. */
+export const UNKNOWN_CAPITAL_FACTOR = 0.25;
+/** The worst bounded time to cash, taken when it is unknown. */
+export const UNKNOWN_DAYS_TO_CASH = 365;
+
 /**
- * An unknown is never a favourable assumption (invariant 39): an unknown
- * margin or volume scores zero, an unknown time to cash takes the worst
- * bounded value.
+ * Each criterion a market competes on, as the score reads it (META-18-1, S-0191):
+ * estimated economics and achievable scale (margin × volume), time to usable
+ * cash, capital requirement, feasibility, risk, and remote control. Every input
+ * is a figure read from evidence; none is a name, a kind, a seed origin or a
+ * place, so the order can be argued with criterion by criterion.
  */
-export function marketScore(m: MarketCandidate): number {
-  const monthly = Math.max(0, m.marginUsd ?? 0) * Math.max(0, m.monthlyVolume ?? 0);
-  const days = m.daysToCash === null ? 365 : Math.max(1, m.daysToCash);
-  const remote = Math.min(1, Math.max(0, m.remoteControl));
-  return (monthly / Math.sqrt(days)) * remote;
+export interface MarketCriteria {
+  /** Contribution per month: margin × volume, the scale the market can reach. Zero when either is unknown. */
+  monthlyContributionUsd: number;
+  daysToCash: number;
+  timeFactor: number;
+  capitalUsd: number | null;
+  capitalFactor: number;
+  feasibility: number;
+  failureModes: number;
+  failureRate: number;
+  riskFactor: number;
+  remoteControl: number;
+  score: number;
+  /** The criteria taken at their unfavourable default because no evidence stated them. */
+  unknown: string[];
 }
 
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+const finite = (n: number | null | undefined): n is number => typeof n === 'number' && Number.isFinite(n);
+
+/** The per-criterion reading of one market. An unknown is never a favourable assumption (invariant 39). Pure. */
+export function marketCriteria(m: MarketCandidate): MarketCriteria {
+  const unknown: string[] = [];
+  if (!finite(m.marginUsd)) unknown.push('margin');
+  if (!finite(m.monthlyVolume)) unknown.push('volume');
+  const monthly = Math.max(0, m.marginUsd ?? 0) * Math.max(0, m.monthlyVolume ?? 0);
+  if (!finite(m.daysToCash)) unknown.push('time to cash');
+  const days = finite(m.daysToCash) ? Math.max(1, m.daysToCash) : UNKNOWN_DAYS_TO_CASH;
+  const timeFactor = 1 / Math.sqrt(days);
+  const capital = finite(m.capitalUsd) ? Math.max(0, m.capitalUsd) : null;
+  if (capital === null) unknown.push('capital');
+  const capitalFactor = capital === null ? UNKNOWN_CAPITAL_FACTOR : capital === 0 ? 1 : monthly > 0 ? monthly / (monthly + capital) : 0;
+  if (!finite(m.feasibility)) unknown.push('feasibility');
+  const feasibility = finite(m.feasibility) ? clamp01(m.feasibility) : UNKNOWN_FEASIBILITY;
+  if (!finite(m.failureRate)) unknown.push('failure rate');
+  const failureRate = finite(m.failureRate) ? clamp01(m.failureRate) : UNKNOWN_FAILURE_RATE;
+  const failureModes = finite(m.failureModes) ? Math.max(0, Math.floor(m.failureModes)) : 0;
+  const riskFactor = (1 - failureRate) * FAILURE_MODE_DECAY ** failureModes;
+  const remoteControl = clamp01(m.remoteControl);
+  const score = monthly * timeFactor * capitalFactor * feasibility * riskFactor * remoteControl;
+  return { monthlyContributionUsd: monthly, daysToCash: days, timeFactor, capitalUsd: capital, capitalFactor, feasibility, failureModes, failureRate, riskFactor, remoteControl, score, unknown };
+}
+
+/**
+ * A market's score: economics and scale, time to usable cash, capital
+ * requirement, feasibility, risk and remote control, multiplied — so a market
+ * weak on any one of them cannot hide it behind another. An unknown margin or
+ * volume scores zero; every other unknown takes its unfavourable default.
+ */
+export function marketScore(m: MarketCandidate): number {
+  return marketCriteria(m).score;
+}
+
+/**
+ * Every market, best first. Nothing is dropped and no count is fixed: the
+ * order is the score, and a tie keeps the key order. No category, label, kind
+ * or origin is read, so an unfamiliar subject with better evidence outranks
+ * every familiar one (META-18-1).
+ */
 export function rankMarkets(markets: MarketCandidate[], _context: RankingContext = {}): MarketCandidate[] {
   return [...markets].sort((a, b) => marketScore(b) - marketScore(a) || a.key.localeCompare(b.key));
 }
@@ -244,6 +327,35 @@ function bound(e: IndustryEvidence, key: FactKey, segment: string | null, side: 
 }
 
 /**
+ * Upfront capital one role needs, at its high bound: its recorded gates plus
+ * the cheapest of its positions' capacity (a lease deposit, or a purchase).
+ * Null when any gate's cost or a needed asset cost is unstated. Pure.
+ */
+function roleCapital(e: IndustryEvidence, role: CommercialRole, segment: string | null): number | null {
+  let gates = 0;
+  for (const id of role.occupiable.gates) {
+    const gate = e.gates.find((g) => g.id === id);
+    if (!gate || gate.upfrontHigh === null || !Number.isFinite(gate.upfrontHigh)) return null;
+    gates += gate.upfrontHigh;
+  }
+  if (role.occupiable.answer === 'UNKNOWN' && role.occupiable.gates.length === 0) return null;
+  const assets: number[] = [];
+  for (const { position } of role.positions) {
+    if (position.assets === 'LEASED') {
+      const deposit = bound(e, 'asset_lease_deposit', segment, 'high');
+      if (deposit !== null) assets.push(deposit);
+    } else if (position.assets === 'OWNED') {
+      const purchase = bound(e, 'asset_purchase_cost', segment, 'high');
+      if (purchase !== null) assets.push(purchase);
+    } else {
+      assets.push(0);
+    }
+  }
+  if (assets.length === 0) return null;
+  return gates + Math.min(...assets);
+}
+
+/**
  * One subject of the map as a market, read from its evidence and the role sets
  * of its flows. Each flow is read at its own paying segment, and the subject is
  * its best flow by `marketScore`. Every figure takes its unfavourable bound and
@@ -252,12 +364,18 @@ function bound(e: IndustryEvidence, key: FactKey, segment: string | null, side: 
  * account per month times reachable accounts, both at their low bounds; the
  * time to cash is the sales cycle plus the buyer's payment days, both at their
  * high bounds; remote control is the share of those roles Brain could run
- * without anyone on site. Nothing here reads a place, the owner's or any
- * other. Pure.
+ * without anyone on site; capital is the least upfront money any of those roles
+ * needs (its gates and its capacity) at the high bound; feasibility is the
+ * share of them that may be occupied (YES, with UNKNOWN counted at
+ * `UNKNOWN_ROLE_WEIGHT`); risk is the recorded failure modes and constraints
+ * that apply to them and the measured failure rate at its high bound. Nothing
+ * here reads a place, the owner's or any other, nor the subject's name, kind or
+ * origin. Pure.
  */
 export function marketOfEvidence(key: string, evidence: IndustryEvidence, sets: readonly FlowRoles[]): MarketCandidate {
-  const none: MarketCandidate = { key, geography: evidence.geography, marginUsd: null, monthlyVolume: null, daysToCash: null, remoteControl: 0 };
+  const none: MarketCandidate = { key, geography: evidence.geography, marginUsd: null, monthlyVolume: null, daysToCash: null, remoteControl: 0, capitalUsd: null, feasibility: null, failureModes: null, failureRate: null };
   let best = none;
+  const failureRate = bound(evidence, 'failure_rate', null, 'high');
   for (const set of sets) {
     const roles = set.roles.filter((role) => role.occupiable.answer !== 'NO');
     if (roles.length === 0) continue;
@@ -266,6 +384,11 @@ export function marketOfEvidence(key: string, evidence: IndustryEvidence, sets: 
     const accounts = bound(evidence, 'accounts_reachable', set.segmentId, 'low');
     const cycle = bound(evidence, 'sales_cycle_days', set.segmentId, 'high');
     const payment = bound(evidence, 'buyer_payment_days', set.segmentId, 'high');
+    const capitals = roles.map((role) => roleCapital(evidence, role, set.segmentId)).filter((v): v is number => v !== null);
+    const yes = roles.filter((role) => role.occupiable.answer === 'YES').length;
+    const maybe = roles.filter((role) => role.occupiable.answer === 'UNKNOWN').length;
+    const statements = new Set(roles.flatMap((role) => role.risks));
+    const failureModes = evidence.failures.filter((f) => statements.has(f.statement)).length;
     const one: MarketCandidate = {
       key,
       geography: evidence.geography,
@@ -273,6 +396,10 @@ export function marketOfEvidence(key: string, evidence: IndustryEvidence, sets: 
       monthlyVolume: perAccount !== null && accounts !== null ? perAccount * accounts : null,
       daysToCash: cycle !== null && payment !== null ? cycle + payment : null,
       remoteControl: roles.filter((role) => role.remotelyOperable).length / roles.length,
+      capitalUsd: capitals.length > 0 ? Math.min(...capitals) : null,
+      feasibility: (yes + UNKNOWN_ROLE_WEIGHT * maybe) / roles.length,
+      failureModes,
+      failureRate,
     };
     if (best === none || marketScore(one) > marketScore(best)) best = one;
   }
@@ -290,6 +417,13 @@ function subtreeOf(nodes: readonly IndustryNode[], rootId: string): IndustryNode
   return nodes.filter((n) => keep.has(n.id));
 }
 
+/** One ranked subject, with the reading of each criterion its place rests on. */
+export interface RankedSubject {
+  node: IndustryNode;
+  market: MarketCandidate;
+  criteria: MarketCriteria;
+}
+
 /**
  * The map's live subjects in market order: each node with its subtree is
  * assembled into evidence exactly as the construction engine reads a subject
@@ -298,12 +432,13 @@ function subtreeOf(nodes: readonly IndustryNode[], rootId: string): IndustryNode
  * same keep the order the rows gave them. No owner location is read or
  * accepted. Reads nothing beyond its arguments.
  */
-export async function rankSubjectMarkets(nodes: readonly IndustryNode[], constraints: readonly OpportunityConstraint[]): Promise<{ node: IndustryNode; market: MarketCandidate }[]> {
+export async function rankSubjectMarkets(nodes: readonly IndustryNode[], constraints: readonly OpportunityConstraint[]): Promise<RankedSubject[]> {
   const { assembleEvidence, evidenceFromMap } = await import('./service.ts');
   const { commercialRoles } = await import('./roles.ts');
   const live = nodes.filter((n) => !n.retiredAt);
   const width = String(live.length).length;
   const byKey = new Map<string, { node: IndustryNode; market: MarketCandidate }>();
+  // Every live subject is ranked and returned: no shortlist, fixed count or quota per category.
   live.forEach((node, index) => {
     const map = evidenceFromMap(subtreeOf(live, node.id), [...constraints]);
     const evidence = assembleEvidence({ text: node.name, industry: node.name, geography: null, map, recorded: [] });
@@ -311,7 +446,7 @@ export async function rankSubjectMarkets(nodes: readonly IndustryNode[], constra
     const key = `${String(index).padStart(width, '0')}:${node.id}`;
     byKey.set(key, { node, market: marketOfEvidence(key, evidence, commercialRoles(evidence)) });
   });
-  return rankMarkets([...byKey.values()].map((one) => one.market)).map((m) => byKey.get(m.key)!);
+  return rankMarkets([...byKey.values()].map((one) => one.market)).map((m) => ({ ...byKey.get(m.key)!, criteria: marketCriteria(m) }));
 }
 
 // ---------------------------------------------------------------------------
