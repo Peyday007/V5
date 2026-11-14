@@ -449,6 +449,15 @@ const mid = (f: PathFact): number | null =>
         ? (f.low + f.high) / 2
         : geometric(Math.max(f.low, 1e-6), Math.max(f.high, 1e-6))
       : null;
+/**
+ * The centre of a pathway's net per deal, as the quantitative engine reads it: price at its middle
+ * less direct cost at its middle less a known acquisition cost. Internal to fit, contribution and
+ * information value; a published UNKNOWN net carries no value (OPP-04). Pure.
+ */
+export function netCentreOf(revenuePerDeal: PathFact, fulfilmentCost: PathFact, acquisitionCost: PathFact): number | null {
+  const price = mid(revenuePerDeal);
+  return price !== null ? price - (mid(fulfilmentCost) ?? 0) - (typeof acquisitionCost.value === 'number' ? acquisitionCost.value : 0) : null;
+}
 const lowOf = (f: PathFact): number | null => (typeof f.value === 'number' && f.status === 'PROVEN' ? f.value : f.low);
 const highOf = (f: PathFact): number | null => (typeof f.value === 'number' && f.status === 'PROVEN' ? f.value : f.high);
 
@@ -615,7 +624,7 @@ export function pathwayOf(
     : { value: null, low: null, high: null, status: 'UNKNOWN', basis: 'no channel yet, so no cost to reach a buyer' };
   const netLow = lowOf(revenuePerDeal) !== null ? lowOf(revenuePerDeal)! - (highOf(fulfilmentCost) ?? lowOf(revenuePerDeal)!) - (acquisitionCost.high ?? 0) : null;
   const netHigh = highOf(revenuePerDeal) !== null ? highOf(revenuePerDeal)! - (lowOf(fulfilmentCost) ?? 0) - (acquisitionCost.low ?? 0) : null;
-  const netMid = mid(revenuePerDeal) !== null ? mid(revenuePerDeal)! - (mid(fulfilmentCost) ?? 0) - (typeof acquisitionCost.value === 'number' ? acquisitionCost.value : 0) : null;
+  const netMid = netCentreOf(revenuePerDeal, fulfilmentCost, acquisitionCost);
   const weakest = (a: FactStatus, b: FactStatus): FactStatus => (a === 'UNKNOWN' || b === 'UNKNOWN' ? 'UNKNOWN' : a === 'ESTIMATED' || b === 'ESTIMATED' ? 'ESTIMATED' : 'PROVEN');
   const netStatus: FactStatus = revenuePerDeal.status === 'UNKNOWN' ? 'UNKNOWN' : weakest(revenuePerDeal.status, fulfilmentCost.status === 'UNKNOWN' ? 'ESTIMATED' : fulfilmentCost.status);
   const net: PathFact = {
@@ -627,6 +636,14 @@ export function pathwayOf(
     status: netStatus,
     basis: fulfilmentCost.status === 'UNKNOWN' ? 'price less a direct cost nobody has established (swept)' : 'price less the direct cost',
   };
+  /*
+   * The quantity the engine reasons with is not the fact it publishes. A published UNKNOWN net
+   * states no value, but fit and contribution still need the centre the model has always used —
+   * price at its middle less cost at its middle (netCentreOf) — not a middle re-derived from the
+   * swept net bounds, which would re-rank every unknown-price pathway (review finding F2). It is
+   * handed only to the quantitative readers and never published.
+   */
+  const quantNet: PathFact = { ...net, value: netMid };
   const respond = factOf(one.respond);
   const close = factOf(one.close);
   const conversionStatus = weakest(respond.status, close.status);
@@ -683,11 +700,11 @@ export function pathwayOf(
   if (!constructed && !resale && !supply && !one.repeatable && !judged?.competitiveAward && (smallTicket || ONE_BUYER.test(o.title))) gaps.push('ONE_BUYER');
   if (o.expiresAt && Date.parse(o.expiresAt) < input.now.getTime()) gaps.push('CLOSED');
 
-  const fit = fitOf({ net, conversion, volume, daysToCash, repeatable: one.repeatable, remaining: input.remaining, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, competitiveAward: !!judged?.competitiveAward, outreachBound: acquisition.method === 'COLD_OUTREACH' || acquisition.method === 'DIRECTORY' || acquisition.method === 'UNKNOWN' });
+  const fit = fitOf({ net: quantNet, conversion, volume, daysToCash, repeatable: one.repeatable, remaining: input.remaining, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, competitiveAward: !!judged?.competitiveAward, outreachBound: acquisition.method === 'COLD_OUTREACH' || acquisition.method === 'DIRECTORY' || acquisition.method === 'UNKNOWN' });
   // The quantity transforms the strategy (§93): a share that needs more prospects a day than the channel reaches is a channel problem, so the channel is what changes.
   if (fit.lever.variable === 'CHANNEL') gaps.push('REACH_SHORTFALL');
   const moves = constructMoves({ one, gaps, fit, revenuePerDeal, fulfilmentCost, net, remaining: input.remaining, daysLeft: input.daysLeft, currency: input.currency, constructed, permissionsMissing: input.permissionsMissing, produces, paysOnce: !!judged?.paysOnce || !!judged?.competitiveAward, daysToCash: lowOf(daysToCash) });
-  const contribution = contributionOf({ net, conversion, volume, repeatable: one.repeatable, daysToCash, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, closed: gaps.includes('CLOSED') });
+  const contribution = contributionOf({ net: quantNet, conversion, volume, repeatable: one.repeatable, daysToCash, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, closed: gaps.includes('CLOSED') });
   const gross = contributionOf({ net: revenuePerDeal, conversion, volume, repeatable: one.repeatable, daysToCash, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, closed: gaps.includes('CLOSED') });
   const notExecutable: string[] = [];
   const blocking: GapKind[] = ['NO_BUYER', 'SUPPLY_WITHOUT_BUYER', 'NO_CHANNEL', 'NO_OFFER', 'NO_PRICE', 'NO_SUPPLIER', 'NO_MARGIN', 'OVER_CAPITAL', 'CLOSED'];
@@ -1107,7 +1124,7 @@ export function informationValue(pathways: TransactionPathway[], input: { remain
   const FIELD: Record<InformationValue['variable'], InformationValue['field']> = { price: 'revenueRange', directCost: 'directCosts', conversion: 'conversionRates', volume: 'buyerVolume', daysToCash: 'timeToFirstCash' };
   for (const p of pathways) {
     if (p.gaps.includes('CLOSED')) continue;
-    const base = { net: p.net, conversion: p.conversion, volume: p.volume, repeatable: p.frequency.value === 'repeats', daysToCash: p.daysToCash, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, closed: false };
+    const base = { net: { ...p.net, value: netCentreOf(p.revenuePerDeal, p.fulfilmentCost, p.acquisitionCost) }, conversion: p.conversion, volume: p.volume, repeatable: p.frequency.value === 'repeats', daysToCash: p.daysToCash, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, closed: false };
     const pin = (f: PathFact, v: number | null): PathFact => ({ ...f, value: v, low: v, high: v, status: 'PROVEN' });
     const vary: [InformationValue['variable'], PathFact, (f: PathFact) => Partial<typeof base>][] = [
       ['price', p.revenuePerDeal, (f) => ({ net: { ...p.net, value: mid(f) === null ? null : mid(f)! - (mid(p.fulfilmentCost) ?? 0), low: null, high: null } })],
