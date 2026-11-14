@@ -11,6 +11,12 @@
  *         role question, and records it on the round.
  *   E04 — `absorb` still reads no sentence: `file` inspects only the declared
  *         finding, so the origin cannot be anything but a lookup.
+ *   E05 — review finding: `unrepresentedRoleAsks` was never called, so nothing
+ *         in production asked about a role no record represents. The kernel's
+ *         own pass (`runIndustryKernel` → `openAsks`) now opens them in the
+ *         slots the allocator leaves free, holds one slot for one while none
+ *         is open, never goes above MAX_OPEN_KERNEL_ROUNDS, and never asks one
+ *         subject and role twice.
  */
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -176,5 +182,128 @@ describe('E04: absorbing stays a lookup', () => {
     expect(body).not.toMatch(/\.test\(claim\./);
     expect(body).toMatch(/originOfFinding\(finding\)/);
     expect(source).toMatch(/origins: out\.origins/);
+  });
+});
+
+describe('E05: the production pass asks about unrepresented roles (review finding)', () => {
+  let projectId = '';
+  let userId = '';
+
+  beforeEach(async () => {
+    const fixture = await freshProject();
+    projectId = fixture.project.id;
+    const user = await createUser({
+      email: `expand-wired-${Math.random().toString(36).slice(2, 10)}@example.test`,
+      displayName: 'Owner',
+      password: 'correct horse battery staple',
+    });
+    userId = user.id;
+    const outcome = await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize additional usable cash over the next few weeks.' });
+    expect(outcome.ok).toBe(true);
+  });
+
+  /** A mapped subject: a sector with a buyer, a transaction and an independent fulfiller recorded under it. */
+  async function mapSubject(): Promise<string> {
+    const { seedSubject } = await import('../server/services/industry/seed.ts');
+    const root = await seedSubject({ projectId, name: 'Commercial cleaning', actorRef: userId });
+    const buyer = await seedSubject({ projectId, name: 'Office managers', kind: 'BUYER_TYPE', parentId: root.node.id, actorRef: userId });
+    await seedSubject({ projectId, name: 'Monthly cleaning contract', kind: 'TRANSACTION_TYPE', parentId: buyer.node.id, actorRef: userId });
+    await seedSubject({ projectId, name: 'Independent cleaning crews', kind: 'FULFILMENT_SOURCE', parentId: root.node.id, actorRef: userId });
+    return root.node.id;
+  }
+
+  it('roleAsksFromSnapshot reads the mapped subject from the snapshot alone', async () => {
+    const { graphSnapshot } = await import('../server/services/industry/graph.ts');
+    const { roleAsksFromSnapshot } = await import('../server/services/industry/expand.ts');
+    const rootId = await mapSubject();
+    const asks = await roleAsksFromSnapshot(await graphSnapshot(projectId), 99);
+    expect(asks.length).toBeGreaterThan(0);
+    for (const ask of asks) {
+      expect(ask.nodeId).toBe(rootId);
+      expect(ask.purpose).toBe('SCAN');
+      expect(roleIdOfBucket(ask.bucketId)).not.toBeNull();
+    }
+    expect(await roleAsksFromSnapshot(await graphSnapshot(projectId), 0)).toHaveLength(0);
+  });
+
+  it('openAsks with no allocator asks opens role rounds in the free slots, and never twice', async () => {
+    const { graphSnapshot } = await import('../server/services/industry/graph.ts');
+    const { openAsks } = await import('../server/services/industry/expand.ts');
+    const { MAX_OPEN_KERNEL_ROUNDS } = await import('../server/services/industry/allocate.ts');
+    const rootId = await mapSubject();
+
+    const opened = await openAsks({ projectId, asks: [], snapshot: await graphSnapshot(projectId) });
+    expect(opened.length).toBeGreaterThan(0);
+    expect(opened.length).toBeLessThanOrEqual(MAX_OPEN_KERNEL_ROUNDS);
+    for (const one of opened) {
+      expect(one.nodeId).toBe(rootId);
+      expect(roleIdOfBucket(one.bucketId)).not.toBeNull();
+      expect(one.question).toMatch(/legally and contractually/);
+      expect(one.why).toMatch(/No record represents/);
+    }
+
+    // The next pass sees those rounds: whatever it opens is a role not yet asked, and the cap holds.
+    const snapshot = await graphSnapshot(projectId);
+    const openNow = snapshot.rounds.filter((one) => one.state === 'OPEN').length;
+    const again = await openAsks({ projectId, asks: [], snapshot });
+    expect(openNow + again.length).toBeLessThanOrEqual(MAX_OPEN_KERNEL_ROUNDS);
+    const first = new Set(opened.map((one) => one.bucketId));
+    for (const one of again) expect(first.has(one.bucketId)).toBe(false);
+  });
+
+  it('a full allocation yields one slot to a role question while none is open, and none once one is', async () => {
+    const { graphSnapshot } = await import('../server/services/industry/graph.ts');
+    const { openAsks } = await import('../server/services/industry/expand.ts');
+    const { MAX_OPEN_KERNEL_ROUNDS } = await import('../server/services/industry/allocate.ts');
+    await mapSubject();
+    const full = (at: string, from: number) =>
+      Array.from({ length: MAX_OPEN_KERNEL_ROUNDS }, (_, i) => ({
+        purpose: 'BOOTSTRAP' as const,
+        nodeId: null,
+        bucketId: null,
+        opportunityId: null,
+        round: from + i,
+        rank: 0,
+        subject: 'the economy',
+        since: at,
+        why: 'allocator',
+      }));
+    const snapshot = await graphSnapshot(projectId);
+    const opened = await openAsks({ projectId, asks: full(snapshot.at, 1), snapshot });
+    expect(opened).toHaveLength(MAX_OPEN_KERNEL_ROUNDS);
+    expect(opened.filter((one) => roleIdOfBucket(one.bucketId) !== null)).toHaveLength(1);
+    // The allocator's earliest asks are kept; only its last yielded.
+    expect(opened.slice(0, MAX_OPEN_KERNEL_ROUNDS - 1).map((one) => one.round)).toEqual([1, 2, 3]);
+
+    // A role question is open now, so a further full allocation keeps every slot it can take.
+    const next = await graphSnapshot(projectId);
+    const more = await openAsks({ projectId, asks: full(next.at, 10), snapshot: next });
+    expect(more.every((one) => roleIdOfBucket(one.bucketId) === null)).toBe(true);
+  });
+
+  it('never takes the only ask the allocator gave', async () => {
+    const { graphSnapshot } = await import('../server/services/industry/graph.ts');
+    const { openAsks } = await import('../server/services/industry/expand.ts');
+    const { MAX_OPEN_KERNEL_ROUNDS } = await import('../server/services/industry/allocate.ts');
+    await mapSubject();
+    const snapshot = await graphSnapshot(projectId);
+    // Pretend the kernel already has every slot but one taken: free is zero once the single ask is counted.
+    const busy = { ...snapshot, rounds: [...snapshot.rounds, ...Array.from({ length: MAX_OPEN_KERNEL_ROUNDS - 1 }, (_, i) => ({ ...({} as never as import('../server/domain/types.ts').IndustryRound), id: `r${i}`, state: 'OPEN' as const, nodeId: null, bucketId: null }))] };
+    const opened = await openAsks({ projectId, asks: [{ purpose: 'BOOTSTRAP', nodeId: null, bucketId: null, opportunityId: null, round: 1, rank: 0, subject: 'the economy', since: snapshot.at, why: 'allocator' }], snapshot: busy });
+    expect(opened.every((one) => roleIdOfBucket(one.bucketId) === null)).toBe(true);
+  });
+
+  it('runIndustryKernel, the tick entrance, reaches the role branch', async () => {
+    const { runIndustryKernel } = await import('../server/services/industry/kernel.ts');
+    const { graphSnapshot } = await import('../server/services/industry/graph.ts');
+    const { MAX_OPEN_KERNEL_ROUNDS } = await import('../server/services/industry/allocate.ts');
+    await mapSubject();
+    // One pass: the allocator has more questions than slots, and a role question still opens.
+    const pass = await runIndustryKernel(projectId);
+    expect(pass.failures ?? []).toEqual([]);
+    expect(pass.opened.some((one) => roleIdOfBucket(one.bucketId) !== null)).toBe(true);
+    const rounds = (await graphSnapshot(projectId)).rounds;
+    expect(rounds.filter((one) => one.state === 'OPEN').length).toBeLessThanOrEqual(MAX_OPEN_KERNEL_ROUNDS);
+    expect(rounds.some((one) => roleIdOfBucket(one.bucketId) !== null)).toBe(true);
   });
 });

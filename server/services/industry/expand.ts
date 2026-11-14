@@ -40,6 +40,14 @@
  * They are ordinary SCAN asks whose bucket names the role, so they open
  * through `openAsks` and `createCandidate` exactly like every other question:
  * no second research pipeline, no new purpose, no migration.
+ *
+ * `openAsks` is what calls it in production: whatever slots the allocator's
+ * own asks leave free under `MAX_OPEN_KERNEL_ROUNDS`, it fills with
+ * `roleAsksFromSnapshot` — the role asks of every mapped subject that no round
+ * has asked yet — and, while no role question is open, it holds one slot for
+ * one, taken from the allocator's lowest-ranked ask, which is planned again
+ * next pass. The cap is the one the allocator works under, so role questions
+ * never raise what the kernel may have open.
  */
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -78,8 +86,8 @@ import {
 } from './questions.ts';
 import { sprintGoalLine } from '../../domain/operatingModel.ts';
 import type { OpportunityOrigin } from './construction/origins.ts';
-import { SEED_ROLES, type FlowRoles } from './construction/roles.ts';
-import type { Ask } from './allocate.ts';
+import { commercialRoles, SEED_ROLES, type FlowRoles } from './construction/roles.ts';
+import { MAX_OPEN_KERNEL_ROUNDS, type Ask } from './allocate.ts';
 import type { GraphSnapshot } from './graph.ts';
 import type {
   CapitalStructure,
@@ -164,6 +172,41 @@ export function unrepresentedRoleAsks(input: {
   }));
 }
 
+/**
+ * The role asks Brain has not opened yet, read from the snapshot it already holds.
+ *
+ * One pass per subject on the map (a root node): its recorded subtree and
+ * constraints become evidence exactly as the r01.com-13-1 probe reads them
+ * (`evidenceFromMap` → `assembleEvidence` → `commercialRoles`), and
+ * `unrepresentedRoleAsks` names the roles no record represents. A subject and
+ * role that already have a round of any state are skipped: the round key is
+ * the subject and the bucket, so it is asked once and its answer is absorbed
+ * like any other. Ordered by when Brain came to know the subject, then by
+ * role order. At most `limit`. Reads nothing beyond the snapshot.
+ */
+export async function roleAsksFromSnapshot(snapshot: GraphSnapshot, limit: number): Promise<Ask[]> {
+  const room = Math.max(0, Math.trunc(limit));
+  if (room === 0) return [];
+  const { assembleEvidence, evidenceFromMap, subtreeFor } = await import('./construction/service.ts');
+  const asked = new Set(snapshot.rounds.filter((one) => one.nodeId && one.bucketId).map((one) => `${one.nodeId}|${one.bucketId}`));
+  const roots = snapshot.nodes
+    .filter((one) => one.parentId === null && one.retiredAt === null)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  const out: Ask[] = [];
+  for (const root of roots) {
+    const map = evidenceFromMap(subtreeFor(snapshot.nodes, root.name), snapshot.constraints);
+    if (map.flows.length === 0) continue;
+    const evidence = assembleEvidence({ text: root.name, industry: root.name, geography: null, map, recorded: [] });
+    const asks = unrepresentedRoleAsks({ nodeId: root.id, subject: root.name, since: root.createdAt, sets: commercialRoles(evidence) });
+    for (const ask of asks) {
+      if (asked.has(`${ask.nodeId}|${ask.bucketId}`)) continue;
+      out.push(ask);
+      if (out.length >= room) return out;
+    }
+  }
+  return out;
+}
+
 function roleTitle(label: string, path: readonly string[]): string {
   return `Who could stand as ${label} — in ${path[path.length - 1] ?? 'this subject'}`;
 }
@@ -229,7 +272,29 @@ export async function openAsks(input: {
   const coverageByNode = new Map(input.snapshot.coverage.map((one) => [one.node.id, one]));
   const out: OpenedRound[] = [];
 
-  for (const ask of input.asks) {
+  /*
+   * Roles no record represents (ARCH-01, COM-13-1), in the slots the
+   * allocator's own asks leave free. Without this nothing in production ever
+   * asked about them: `unrepresentedRoleAsks` existed and no path called it.
+   */
+  const open = input.snapshot.rounds.filter((one) => one.state === 'OPEN');
+  const free = MAX_OPEN_KERNEL_ROUNDS - open.length - input.asks.length;
+  /*
+   * The allocator fills every slot whenever its own queue is longer than the
+   * cap, which on a growing map is always, so free slots alone would starve
+   * this branch exactly as the missing call did. While no role question is
+   * open, one slot is held for one: the allocator's lowest-ranked ask (its
+   * last) yields it and is simply planned again next pass. Never the only ask
+   * the allocator gave, and never above the cap.
+   */
+  const roleOpen = open.some((one) => roleIdOfBucket(one.bucketId) !== null);
+  const reserve = !roleOpen && free <= 0 && input.asks.length >= 2 && open.length + 1 <= MAX_OPEN_KERNEL_ROUNDS;
+  const given = new Set(input.asks.map((one) => `${one.nodeId}|${one.bucketId}`));
+  const roleAsks = (await roleAsksFromSnapshot(input.snapshot, reserve ? 1 : free)).filter((one) => !given.has(`${one.nodeId}|${one.bucketId}`));
+  const allocated = reserve && roleAsks.length > 0 ? input.asks.slice(0, Math.max(0, MAX_OPEN_KERNEL_ROUNDS - open.length - 1)) : input.asks;
+  const asks = [...allocated, ...roleAsks];
+
+  for (const ask of asks) {
     const composed = await compose({ ask, mode, byId, coverage: coverageByNode });
     if (!composed) continue;
 
