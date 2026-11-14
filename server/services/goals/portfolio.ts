@@ -593,6 +593,12 @@ export function evaluateGoalPortfolio(input: {
    * of a search's many evaluations it made a 40-opening plan read take minutes.
    */
   causal?: boolean;
+  /**
+   * Constructed arrangements the goal compose's screen cut (lens S, S-6): never
+   * read by this engine, carried with the plan's inputs so a reconstruction can
+   * bring one in (§101 INCLUDE) and judge it here like any other opening.
+   */
+  reserve?: PlannedOpening[];
   worlds?: number;
   seed?: number;
 }): GoalPortfolio {

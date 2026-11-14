@@ -46,6 +46,7 @@ import { createHash } from 'node:crypto';
 import { sharedEvaluator, type Evaluator } from './reasoning/evaluatorPool.ts';
 import { applyProgram, exploreDirections, programOf, renderExploration, repriceOpening, PRICE_ELASTICITY, type ExploreContext, type Exploration, type Transform } from './reasoning/directions.ts';
 import { sweepVariables, type VariableSweep } from './reasoning/variables.ts';
+import { valuePerInterested } from './reasoning/rank.ts';
 
 /** A change smaller than this, in reach and in median settled cash, is not an improvement. */
 export const MATERIAL_REACH = 0.02;
@@ -266,7 +267,10 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
 }
 
 async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluator): Promise<Reconstruction> {
-  input = { ...input, openings: movableOpenings(input.openings, input.baseline) };
+  // Arrangements the compose's screen cut ride with the plan's inputs; only an INCLUDE move reads them, never the engine (S-6).
+  const { reserve: reserveIn, ...portfolioIn } = input.portfolio;
+  const reserve = (reserveIn ?? []).filter((r) => !input.openings.some((o) => o.opportunity.id === r.opportunity.id));
+  input = { ...input, portfolio: portfolioIn, openings: movableOpenings(input.openings, input.baseline) };
   const levers = input.levers ?? ACQUISITION_LEVERS;
   const worlds = input.worlds ?? Math.max(SCREEN_MIN_WORLDS, Math.min(SCREEN_WORLDS, Math.round(SCREEN_WORK / Math.max(1, input.openings.length))));
   const seen = new Map<string, VariantReading>();
@@ -478,6 +482,7 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
       baselineReading: baseline,
       operators,
       operatorsFor,
+      reserve,
       sweep,
       evaluate: (state, screen, tag = '') => evaluate(state, screen ? screenWorlds : worlds, false, tag),
       required: input.required,
@@ -511,7 +516,7 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
   }
   // Robustness: the strongest plan if the new campaign does no better than the old record — rebuilt with every
   // assumed move taken away, then read on the measured record (Q-5).
-  const bare = applyProgram(base, programOf(current, operators), { operators, operatorsFor, remaining: limits.remaining }, true).state;
+  const bare = applyProgram(base, programOf(current, operators), { operators, operatorsFor, remaining: limits.remaining, reserve }, true).state;
   const floor = limits.measuredRates ? await evaluate(bare, worlds, true, ' @as-is-record') : null;
   // The conversion it needs: the lowest reply rate (shared by every outreach opening) at which it reaches the requirement.
   const replyAt = (rate: number) =>
@@ -733,10 +738,6 @@ export function sweepFor(job: SweepJob): Promise<VariableSweep> {
 
 function allowedFor(limits: ReconstructionInput['portfolio']) {
   return budgetsAllowed(limits);
-}
-
-function valuePerInterested(o: ModelledOpportunity): number {
-  return (knownMid(o.price) ?? 0) * (knownMid(o.close) ?? 0);
 }
 
 function currentContacts(limits: ReconstructionInput['portfolio'], baseline: GoalPortfolio): ModelInput {
@@ -988,7 +989,8 @@ export function buildOperators(ctx: { input: ReconstructionInput; levers?: reado
 
 function pickTarget(sellable: ModelledOpportunity[], id?: string): ModelledOpportunity | undefined {
   if (id) return sellable.find((o) => o.opportunity.id === id);
-  return [...sellable].sort((a, b) => valuePerInterested(b) - valuePerInterested(a))[0];
+  // Ranked with unknowns at their low end (invariant 39, S-5): the least-known opening is never the default target.
+  return [...sellable].sort((a, b) => valuePerInterested(b) - valuePerInterested(a) || (a.opportunity.id < b.opportunity.id ? -1 : 1))[0];
 }
 
 export function wilsonLower(k: number, n: number, z = 1.645): number {
