@@ -26,6 +26,7 @@ import {
   listReadings,
   persistableVerdict,
   readGoalPlan,
+  storableAcceptance,
   RECOMMENDATION_POLICY,
 } from '../server/services/goals/plan.ts';
 import { readingProblem } from '../server/services/factory/program/release01/acceptanceProbe.ts';
@@ -145,6 +146,32 @@ describe('GOAL-09: hypothetical coverage is never 90% proof', () => {
     expect(persistableVerdict('RECOMMENDABLE', { status: 'NO_CANDIDATE' })).toBe('NEEDS_EVIDENCE');
     expect(persistableVerdict('RECOMMENDABLE', { status: 'ACCEPTED' })).toBe('RECOMMENDABLE');
     expect(persistableVerdict('NOT_VIABLE', { status: 'CANDIDATE_ONLY' })).toBe('NOT_VIABLE');
+  });
+
+  it('a candidate is stored whole: its coverage figure survives, and nothing the acceptance produced is discarded', () => {
+    const a = judgeAcceptance({ achieved: false, chosen: null, portfolio: portfolio('COVERAGE', 0.97), measuredChance: null, considered: [{ opportunityId: 'cop_a', missing: [] }] });
+    expect(a.status).toBe('CANDIDATE_ONLY');
+    const stored = storableAcceptance(a);
+    // Unchanged, field for field: the coverage reading lives in the candidate, not in `probability`.
+    expect(stored).toEqual(a);
+    expect(stored.candidate?.reach).toBe(0.97);
+    expect(stored.candidate?.reachBasis).toBe('COVERAGE');
+    expect(readingProblem('NEEDS_EVIDENCE', stored as never, RECOMMENDATION_POLICY.requiredProbability)).toBeNull();
+    // An accepted plan is stored as it is.
+    const accepted = judgeAcceptance({ achieved: true, chosen: null, portfolio: null, measuredChance: null, considered: [] });
+    expect(storableAcceptance(accepted)).toBe(accepted);
+  });
+
+  it('a malformed candidate that claims a probability loses only that claim, never its candidate', () => {
+    const a = judgeAcceptance({ achieved: false, chosen: null, portfolio: portfolio('COVERAGE', 0.97), measuredChance: null, considered: [{ opportunityId: 'cop_a', missing: [] }] });
+    const malformed = { ...a, probability: { value: 0.97, lowerBound: 0.95, basis: 'EVIDENCED_PORTFOLIO' as const, sample: 100, note: 'x' }, accepted: { label: 'x', opportunityIds: ['cop_a'] } };
+    expect(readingProblem('NEEDS_EVIDENCE', malformed as never, RECOMMENDATION_POLICY.requiredProbability)).toBe('is only a candidate yet holds an accepted plan or a probability');
+    const stored = storableAcceptance(malformed);
+    expect(stored.probability).toBeNull();
+    expect(stored.accepted).toBeNull();
+    expect(stored.candidate).toEqual(a.candidate);
+    expect(stored.shortfalls).toEqual(a.shortfalls);
+    expect(readingProblem('NEEDS_EVIDENCE', stored as never, RECOMMENDATION_POLICY.requiredProbability)).toBeNull();
   });
 
   it('a stored forecast is read for its acceptance, and a malformed one carries none', () => {

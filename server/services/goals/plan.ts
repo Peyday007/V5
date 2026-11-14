@@ -1574,10 +1574,35 @@ export function forecastCarriesAcceptance(forecast: string | null): boolean {
   }
 }
 
+/**
+ * The acceptance a persisted reading stores. Pure.
+ *
+ * A non-ACCEPTED acceptance never holds a probability or an accepted plan —
+ * `judgeAcceptance` returns both null for CANDIDATE_ONLY and NO_CANDIDATE — so
+ * for anything it produced this returns the acceptance unchanged, and stores
+ * everything a candidate carries: its label, its opportunities, its settled P50
+ * and its coverage figure, which lives in `candidate.reach` with
+ * `candidate.reachBasis` saying whether it is a probability or only coverage.
+ * Nothing a reader of stored readings uses is discarded (the readers —
+ * `latestReading`, `listReadings`, the summary digest and the GOAL-09 probe —
+ * read `status`, `probability.basis` and `candidate`).
+ *
+ * Only a malformed acceptance, one that pairs a candidate status with a
+ * probability or an accepted plan, is changed: those two fields are the claim
+ * "this meets the objective", which a candidate may never store (GOAL-09). The
+ * candidate itself is kept exactly as it was.
+ */
+export function storableAcceptance(acceptance: PlanAcceptance): PlanAcceptance {
+  if (acceptance.status === 'ACCEPTED') return acceptance;
+  if (acceptance.probability === null && acceptance.accepted === null) return acceptance;
+  return { ...acceptance, probability: null, accepted: null };
+}
+
 async function persistReading(goal: Workstream, reading: PlanReading, chosen: StrategyReading | null): Promise<void> {
-  // A candidate is never stored as an accepted plan: verdict, probability and accepted plan follow the acceptance.
+  // A candidate is never stored as an accepted plan: the verdict follows the acceptance, and the
+  // acceptance is stored whole, candidate and coverage included (`storableAcceptance`).
   if (reading.acceptance.status !== 'ACCEPTED') {
-    reading = { ...reading, verdict: persistableVerdict(reading.verdict, reading.acceptance), acceptance: { ...reading.acceptance, probability: null, accepted: null } };
+    reading = { ...reading, verdict: persistableVerdict(reading.verdict, reading.acceptance), acceptance: storableAcceptance(reading.acceptance) };
   }
   const summary = {
     verdict: reading.verdict,
