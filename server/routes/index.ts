@@ -27,6 +27,7 @@ import { laborRouter } from './labor.ts';
 import { manufacturingRouter } from './manufacturing.ts';
 import { scenarioRouter } from './scenario.ts';
 import { causalRouter } from './causal.ts';
+import { worldRouter } from './world.ts';
 import { invitationsRouter } from './invitations.ts';
 import { passkeyRouter } from './passkeys.ts';
 import { peopleRouter } from './people.ts';
@@ -145,6 +146,9 @@ export function createApiRouter(): Router {
   // The causal graph's door (CAUSAL-14-4). Root-mounted before the projects
   // router for the same reason: its routes carry their own prefix.
   router.use(causalRouter);
+  // The world's read model (UI-27-2). Root-mounted before the projects router
+  // for the same reason: its one route carries its own `/projects/:id/world`.
+  router.use(worldRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);
