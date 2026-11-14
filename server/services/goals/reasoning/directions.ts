@@ -71,6 +71,14 @@ export const EVALUATIONS_PER_DIRECTION = 4;
 export const MAX_EVALUATIONS = 400;
 /** Nor more time than this (production evaluations cost about a second each). */
 export const DEFAULT_MAX_MS = 3 * 60_000;
+/**
+ * Reserve entries a model's brief lists, strongest first. The reserve now also
+ * holds every opening a reconstruction does not move (hundreds on production,
+ * `MOVABLE_UNRANKED`); a brief listing them all is a prompt of hundreds of lines
+ * for moves the strongest few already represent. Every entry stays reachable
+ * by the seeded and mutated INCLUDE moves.
+ */
+export const BRIEF_RESERVE = 16;
 
 export type Field = 'price' | 'close' | 'respond' | 'volume' | 'daysToCash' | 'directCost';
 /** Which openings a transform touches. `id:<opportunityId>` names one. */
@@ -204,6 +212,13 @@ export interface ExploreContext {
   sweep?: VariableSweep | null;
   /** Constructed arrangements the compose's screen cut, strongest first: what an INCLUDE move may bring in (S-6). */
   reserve?: PlannedOpening[];
+  /**
+   * Openings the reconstruction holds in the reserve instead of moving them
+   * (`MOVABLE_UNRANKED`). They are still the problem's openings, so the budget
+   * counts them as it did when every one was moved: bounding what each
+   * evaluation carries must not also shrink how widely the plan is explored.
+   */
+  heldOpenings?: number;
 }
 
 /** What the model is told about the problem. */
@@ -493,7 +508,7 @@ export function applyProgram(
         {
           ...s,
           openings: [...s.openings, one],
-          changes: [...s.changes, change('PORTFOLIO', `include:${t.key}`, `bring in "${one.opportunity.title.slice(0, 80)}", a constructed arrangement the first cut left out, on its reconstructed estimates`, 'ESTIMATE')],
+          changes: [...s.changes, change('PORTFOLIO', `include:${t.key}`, `bring in "${one.opportunity.title.slice(0, 80)}", ${one.estimated ? 'a constructed arrangement the first cut left out, on its reconstructed estimates' : 'an opening the reconstruction held outside the openings it moves, on its own estimates'}`, 'ESTIMATE')],
         },
         t,
       );
@@ -804,7 +819,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   greedyRow.challenged = greedyChallenge.weaker;
   greedyRow.bare = greedyChallenge.bare;
   greedyRow.score = scoreOf(ctx.greedyReading, greedyRow.challenged);
-  const budget = explorationBudget({ openings: ctx.base.openings.length, operators: ctx.operators.length, binding: ctx.binding.filter((b) => b.liftReach > 0).length, reach: Math.min(ctx.greedyReading.reach, greedyRow.challenged?.reach ?? 0), required: ctx.required, structural: ctx.structural });
+  const budget = explorationBudget({ openings: ctx.base.openings.length + (ctx.heldOpenings ?? 0), operators: ctx.operators.length, binding: ctx.binding.filter((b) => b.liftReach > 0).length, reach: Math.min(ctx.greedyReading.reach, greedyRow.challenged?.reach ?? 0), required: ctx.required, structural: ctx.structural });
   evaluationCap = Math.min(MAX_EVALUATIONS, evaluations + EVALUATIONS_PER_DIRECTION * budget);
 
   // 1–2. Generate and screen: the library first (what worked), then the cheap seeds, kept distinct.
@@ -1026,7 +1041,7 @@ export function inventBrief(ctx: ExploreContext): InventBrief {
       .slice(0, 14)
       .map((o) => ({ id: o.opportunity.id, title: o.opportunity.title.slice(0, 80), price: n(mid(o.price)), close: n(mid(o.close)), respond: n(mid(o.respond)), volume: n(mid(o.volume)), daysToCash: n(mid(o.daysToCash)), outreach: outreach(o), agreed: o.agreedValue > 0 })),
     operators: ctx.operators.map((o) => ({ key: o.key, dimension: o.dimension })),
-    ...(ctx.reserve?.length ? { reserve: ctx.reserve.map((o) => ({ id: o.opportunity.id, title: o.opportunity.title.slice(0, 80), price: n(rankValue(o.price)), repeatable: o.repeatable })) } : {}),
+    ...(ctx.reserve?.length ? { reserve: ctx.reserve.slice(0, BRIEF_RESERVE).map((o) => ({ id: o.opportunity.id, title: o.opportunity.title.slice(0, 80), price: n(rankValue(o.price)), repeatable: o.repeatable })) } : {}),
     stancesTried: ['BACKWARD', 'FORWARD', 'MIDDLE_OUT', 'CONSTRAINT', 'RESOURCE', 'RELATIONSHIP', 'INVERSION', 'OPPORTUNITY', 'TRANSACTION', 'PORTFOLIO', 'INCLUSION', ...new Set((ctx.library ?? []).map((d) => d.stance))],
     bestKnown: (ctx.library ?? []).slice(0, 6).map((d) => ({ name: d.name, stance: d.stance, thinking: d.thinking })),
   };

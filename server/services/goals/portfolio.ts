@@ -658,8 +658,56 @@ export function measuredRateInput(count: { trials: number; low: number; high: nu
   };
 }
 
-/** One opening's demand and cash, world by world, at one share of the shared outreach. */
+/**
+ * Worlds the per-opening draw cache may hold at once, summed over its entries
+ * (about 100 bytes a world across a reading's arrays, so about 20 MB). A
+ * reconstruction's evaluations differ from each other in the few openings a
+ * move touched (lens P, 2026-11-14: each of ~200 evaluations re-drew every
+ * opening's worlds, 13% of a cold plan read), so the bound only has to hold a
+ * few evaluations' worth; the pool's worker heap is capped at 384 MB.
+ */
+export const DEMAND_CACHE_WORLDS = 200_000;
+const demandCache = new Map<string, Worlds>();
+let demandCached = 0;
+const drawn = (x: ModelInput) => [x.value, x.low, x.high, x.distribution ?? null];
+
+/**
+ * One opening's demand and cash, world by world, at one share of the shared outreach.
+ *
+ * Pure in exactly the inputs its key names — the opening's index (its random
+ * stream), the six sampled inputs as `sampler` reads them, how it sells
+ * (repeatable, agreed money, deposit, payment terms), the share, the window,
+ * the outreach a day, the worlds and the seed — so a reading is reused across
+ * evaluations instead of re-drawn, and is identical to the one it replaces.
+ * The returned arrays are shared: callers read them and never write them.
+ */
 export function demandWorlds(one: PlannedOpening, share: number, daysLeft: number, contactsPerDay: ModelInput, worlds: number, seed: number): Worlds {
+  const key = JSON.stringify([
+    one.index, one.repeatable, one.agreedValue, one.deposit ?? null, one.opportunity.paymentTerms ?? null,
+    drawn(one.price), drawn(one.daysToCash), drawn(one.respond), drawn(one.close), drawn(one.directCost), drawn(one.volume),
+    share, daysLeft, drawn(contactsPerDay), worlds, seed,
+  ]);
+  const hit = demandCache.get(key);
+  if (hit) {
+    // Most recently used last: eviction takes the oldest first.
+    demandCache.delete(key);
+    demandCache.set(key, hit);
+    return hit;
+  }
+  const fresh = drawDemandWorlds(one, share, daysLeft, contactsPerDay, worlds, seed);
+  if (worlds <= DEMAND_CACHE_WORLDS) {
+    demandCache.set(key, fresh);
+    demandCached += worlds;
+    for (const [k, v] of demandCache) {
+      if (demandCached <= DEMAND_CACHE_WORLDS) break;
+      demandCache.delete(k);
+      demandCached -= v.cash.length;
+    }
+  }
+  return fresh;
+}
+
+function drawDemandWorlds(one: PlannedOpening, share: number, daysLeft: number, contactsPerDay: ModelInput, worlds: number, seed: number): Worlds {
   const rng = makeRng(seed, one.index * 97 + Math.round(share * 100));
   const draw = {
     price: sampler(one.price, rng),
