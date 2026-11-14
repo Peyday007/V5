@@ -201,7 +201,7 @@ describe('GoalView carries it, from rows', () => {
 
   it('creates no second derivation of goal state: model.ts calls the composition and port05.ts writes nothing', () => {
     const model = readFileSync('server/services/goals/model.ts', 'utf8');
-    expect(model).toMatch(/readPort05\(goal\.id/);
+    expect(model).toMatch(/readPort05ForGoals\(/);
     // The hand-off is made where the streams are built, so no caller can forget it.
     expect(readFileSync('server/services/goals/portfolio.ts', 'utf8')).toMatch(/notePlanStreams\(\{ openings: input\.openings/);
     const source = readFileSync('server/services/goals/port05.ts', 'utf8');
