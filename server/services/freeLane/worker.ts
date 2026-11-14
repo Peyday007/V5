@@ -387,6 +387,28 @@ function workerFor(workers: FreeWorker[], item: Pick<WorkItemRow, 'work_type' | 
 /* ------------------------------------------------------------------------- */
 
 /**
+ * Where the bracket opened at `open` closes, or -1: brackets are counted and
+ * strings skipped, so prose after the list ("… per [S1]") is not part of it.
+ */
+function closingBracket(text: string, open: number): number {
+  let depth = 0;
+  let inString = false;
+  for (let i = open; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === '\\') i += 1;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') inString = true;
+    else if (ch === '[' || ch === '{') depth += 1;
+    else if (ch === ']' || ch === '}') {
+      depth -= 1;
+      if (depth === 0) return ch === ']' ? i : -1;
+    }
+  }
+  return -1;
+}
+
+/**
  * The first JSON object in a model's reply, or null. Fenced or bare.
  *
  * A reasoning model's `<think>…</think>` preamble is not the answer, so it is
@@ -417,7 +439,7 @@ export function firstJson(text: string): Record<string, unknown> | null {
   const open = body.indexOf('[');
   if (open >= 0 && (start < 0 || open < start)) {
     try {
-      const list = JSON.parse(body.slice(open, body.lastIndexOf(']') + 1)) as unknown;
+      const list = JSON.parse(body.slice(open, closingBracket(body, open) + 1)) as unknown;
       if (Array.isArray(list) && list.length > 0 && list.every((one) => one && typeof one === 'object' && !Array.isArray(one))) return { claims: list };
     } catch {
       // Not a list after all ("[S1.2] says …"): read the object below.
