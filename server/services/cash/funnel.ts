@@ -28,7 +28,7 @@ import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { listCapitalForProject, listConstraintsForProject } from '../../repos/industry.ts';
 import { countRoleEconomics, OPENING_ROLE_COLUMNS, openingRoleText, ownerStatementsFor, roleRecordWithStatements, type OpeningRoleRow, type RoleEconomics } from './exclusions.ts';
-import { checkCommercialAuthority } from './authority.ts';
+import { BRAIN_PRINCIPAL, actionContext, checkCommercialAuthority } from './authority.ts';
 import { instantlySendingStanding } from './providers/instantly.ts';
 
 export const FUNNEL_WEEKS = 8;
@@ -947,7 +947,8 @@ export async function mechanismsFromRows(projectId: string, evidence: OutreachEv
 
 /** Read what states permission and sending capacity: the authority row and the workspace reading. */
 export async function outreachEvidenceFor(projectId: string): Promise<OutreachEvidence> {
-  const decision = await checkCommercialAuthority({ projectId, action: 'CONTACT_BUYER' });
+  // A view of standing: Brain asks for itself, and reading it records nothing.
+  const decision = await checkCommercialAuthority({ projectId, action: 'CONTACT_BUYER', ...actionContext({ principal: BRAIN_PRINCIPAL }) }, { record: false });
   const permission: StageInput = decision.ok
     ? { basis: 'MEASURED', value: 1 }
     : decision.authority

@@ -48,6 +48,8 @@ import type { AdapterHealth, EffectAdapter, EffectRequest, SendOutcome } from '.
 import { INSTANTLY_CAMPAIGN_ENV, INSTANTLY_KEY_ENV, messagingConfig, secretValue } from './config.ts';
 import { providerRequest, type FetchLike, type ProviderAnswer } from './http.ts';
 import { validateBuyerMessage } from './resend.ts';
+import { BRAIN_PRINCIPAL, AUTHORITY_DECISION_KIND, decideAction, recordEffectReceipt, type ActionDecision, type JudgeInput, type ThirdPartyAccountScope } from '../authority.ts';
+import { cashEventsOfKind, cashEventsOfKindInProject } from '../../../repos/cashMode.ts';
 
 export const INSTANTLY_ADAPTER_NAME = 'instantly.contact_buyer';
 export const INSTANTLY_API = 'https://api.instantly.ai/api/v2';
@@ -259,6 +261,11 @@ export async function instantlyMeasuredRates(options: { fetch?: FetchLike; env?:
 /* Brain's campaign (created as a draft) and lead lists               */
 /* ------------------------------------------------------------------ */
 
+/** The most Brain's campaign mails a day: the healthy accounts' shared capacity, capped at 300. */
+export function brainDailyLimit(workspace: Pick<InstantlyWorkspace, 'dailyCapacity'>): number {
+  return Math.max(1, Math.min(workspace.dailyCapacity, 300));
+}
+
 /** The draft Brain's campaign is created as: one step mailing each lead its own offer. */
 export function brainCampaignDefinition(input: { sendingAccounts: string[]; dailyLimit: number }): Record<string, unknown> {
   return {
@@ -288,10 +295,18 @@ export function brainCampaignDefinition(input: { sendingAccounts: string[]; dail
  * nobody until the authorized effect activates it.
  */
 export async function ensureBrainCampaign(options: { fetch?: FetchLike; env?: NodeJS.ProcessEnv; create?: boolean } = {}): Promise<{ ok: true; id: string; status: number | null; created: boolean } | { ok: false; reason: string }> {
-  const ctx = ctxOf(options);
-  const named = secretValue(INSTANTLY_CAMPAIGN_ENV, ctx.env);
   const read = await readInstantlyWorkspace(options);
   if (!read.ok) return read;
+  return resolveBrainCampaign(ctxOf(options), read, options.create);
+}
+
+/** `ensureBrainCampaign` over a workspace already read, so the effect reads the workspace once. */
+async function resolveBrainCampaign(
+  ctx: Ctx,
+  read: { ok: true; workspace: InstantlyWorkspace },
+  create?: boolean,
+): Promise<{ ok: true; id: string; status: number | null; created: boolean } | { ok: false; reason: string }> {
+  const named = secretValue(INSTANTLY_CAMPAIGN_ENV, ctx.env);
   if (named) {
     const found = read.workspace.campaigns.find((one) => one.id === named);
     if (!found) return { ok: false, reason: `${INSTANTLY_CAMPAIGN_ENV} names a campaign this workspace does not have` };
@@ -299,9 +314,9 @@ export async function ensureBrainCampaign(options: { fetch?: FetchLike; env?: No
   }
   const own = read.workspace.campaigns.find((one) => one.name === BRAIN_CAMPAIGN_NAME);
   if (own) return { ok: true, id: own.id, status: own.status, created: false };
-  if (options.create === false) return { ok: false, reason: 'Brain has no campaign in this workspace yet' };
+  if (create === false) return { ok: false, reason: 'Brain has no campaign in this workspace yet' };
   if (read.workspace.healthyAccounts.length === 0) return { ok: false, reason: 'the workspace has no healthy sending account to mail from' };
-  const answer = await call(ctx, 'POST', '/campaigns', brainCampaignDefinition({ sendingAccounts: read.workspace.healthyAccounts, dailyLimit: Math.max(1, Math.min(read.workspace.dailyCapacity, 300)) }));
+  const answer = await call(ctx, 'POST', '/campaigns', brainCampaignDefinition({ sendingAccounts: read.workspace.healthyAccounts, dailyLimit: brainDailyLimit(read.workspace) }));
   if (answer.kind !== 'OK' || typeof answer.body.id !== 'string') {
     return { ok: false, reason: `creating Brain's draft campaign: ${answer.kind === 'OK' ? 'no id returned' : answer.kind === 'REFUSED' ? answer.detail : answer.reason}` };
   }
@@ -350,10 +365,98 @@ export async function prepareInstantlyLeads(input: { listName: string; leads: Pr
 }
 
 /* ------------------------------------------------------------------ */
+/* The workspace is a third-party account, judged in its own scope     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The reference the owner's workspace is judged and ledgered under. It names
+ * the account and never carries its key.
+ */
+export const INSTANTLY_ACCOUNT_REF = 'instantly:workspace';
+
+/**
+ * The opportunity a CONTACT_BUYER effect is for, read from the correlation id
+ * the engine hands the adapter as its business id (`cash/effects.ts
+ * effectCorrelation`: `cash:<opportunity>:<action>:<occurrence>[:<retry>]`).
+ * Null for anything else.
+ */
+export function opportunityOfCorrelation(businessId: string): string | null {
+  const m = /^cash:([^:]+):CONTACT_BUYER:/.exec(businessId);
+  return m ? m[1]! : null;
+}
+
+/**
+ * What the ledger says Brain already put through this workspace today (UTC):
+ * the AUTHENTICATED_OPERATION decisions on this account that were allowed.
+ * Counted from the project's own AUTHORITY_DECISION rows, so the rate limit is
+ * measured rather than assumed.
+ */
+export async function operationsToday(projectId: string, now: Date = new Date()): Promise<number> {
+  const day = now.toISOString().slice(0, 10);
+  const rows = await cashEventsOfKindInProject(projectId, AUTHORITY_DECISION_KIND);
+  return rows.filter((row) => {
+    const d = row.detail as Record<string, unknown>;
+    const scope = d.scope as Record<string, unknown> | undefined;
+    return d.action === 'AUTHENTICATED_OPERATION' && d.ok === true && scope?.accountRef === INSTANTLY_ACCOUNT_REF && String(d.decidedAt ?? row.createdAt).slice(0, 10) === day;
+  }).length;
+}
+
+/**
+ * The workspace's scope as its own records state it (AUTH-20-3, AUTH-34):
+ *
+ *  - in scope: the owner's workspace key is configured for this deployment, and
+ *    this send carries the intent `cash/effects.ts` wrote for this project under
+ *    a standing grant — the account is connected to this project by the
+ *    owner's own configuration and grant, not by Brain;
+ *  - approved action types: reading the workspace, and operating it (adding a
+ *    lead, drafting and activating Brain's own campaign) only when that intent
+ *    names the standing grant checked for it — nothing else is approved;
+ *  - rate limit: what Brain already put through today against the most Brain's
+ *    campaign may mail a day (`brainDailyLimit`), both measured;
+ *  - credential: the key is read from the deployment's secret configuration
+ *    (`secretValue`), never from a payload, prompt or source.
+ */
+export function instantlyAccountScope(input: {
+  keyConfigured: boolean;
+  intent: { projectId: string; authorityId: string | null } | null;
+  projectId: string;
+  workspace: Pick<InstantlyWorkspace, 'dailyCapacity'>;
+  usedToday: number;
+}): ThirdPartyAccountScope {
+  const granted = !!input.intent && input.intent.projectId === input.projectId && typeof input.intent.authorityId === 'string' && input.intent.authorityId !== '';
+  return {
+    ref: INSTANTLY_ACCOUNT_REF,
+    inScope: input.keyConfigured && !!input.intent && input.intent.projectId === input.projectId,
+    approvedActionTypes: granted ? ['AUTHENTICATED_READ', 'AUTHENTICATED_OPERATION'] : ['AUTHENTICATED_READ'],
+    rateLimit: { used: input.usedToday, max: brainDailyLimit(input.workspace) },
+    credentialFromSecretsStore: input.keyConfigured,
+  };
+}
+
+/** The intent row this send was recorded under, and the project it belongs to. */
+async function intentOf(businessId: string): Promise<{ projectId: string; authorityId: string | null } | null> {
+  const opportunityId = opportunityOfCorrelation(businessId);
+  if (!opportunityId) return null;
+  for (const event of await cashEventsOfKind(opportunityId, 'CASH_EFFECT_INTENT')) {
+    const detail = event.detail as Record<string, unknown>;
+    if (detail.correlationId !== businessId) continue;
+    return { projectId: event.projectId, authorityId: typeof detail.authorityId === 'string' ? detail.authorityId : null };
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
 /* The CONTACT_BUYER effect                                           */
 /* ------------------------------------------------------------------ */
 
-export function createInstantlyAdapter(options: { fetch?: FetchLike; env?: NodeJS.ProcessEnv; namespace: string }): EffectAdapter {
+export function createInstantlyAdapter(options: {
+  fetch?: FetchLike;
+  env?: NodeJS.ProcessEnv;
+  namespace: string;
+  /** The authority judgment; defaults to `cash/authority.ts decideAction`, which ledgers every decision. */
+  decide?: (input: JudgeInput) => Promise<ActionDecision>;
+}): EffectAdapter {
+  const decide = options.decide ?? decideAction;
   const ctx = (): Ctx => ctxOf({ fetch: options.fetch, env: options.env });
   return {
     name: INSTANTLY_ADAPTER_NAME,
@@ -372,9 +475,51 @@ export function createInstantlyAdapter(options: { fetch?: FetchLike; env?: NodeJ
       if (!secretValue(INSTANTLY_KEY_ENV, c.env)) {
         return { kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true, detail: `${INSTANTLY_KEY_ENV} is not configured, so nothing was sent` };
       }
+      const read = await readInstantlyWorkspace({ fetch: c.fetch, env: c.env });
+      if (!read.ok) return { kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true, detail: `nothing was sent: ${read.reason}` };
+      // The workspace is the owner's authenticated account: before anything is written to it (a draft
+      // campaign, a lead, an activation) the operation is judged inside the account's own scope — consent,
+      // approved action types, rate limit, credential from the secrets store — and the decision is ledgered.
+      const intent = await intentOf(request.businessId);
+      if (!intent) {
+        return { kind: 'REJECTED', category: 'NOT_AUTHORIZED', retryable: false, detail: 'nothing was sent: no recorded intent ties this send to a project, so no account scope is established' };
+      }
+      const decision = await decide({
+        projectId: intent.projectId,
+        action: 'AUTHENTICATED_OPERATION',
+        path: 'API',
+        access: 'OPERATE',
+        mode: 'PERFORM',
+        principal: BRAIN_PRINCIPAL,
+        account: instantlyAccountScope({
+          keyConfigured: true,
+          intent,
+          projectId: intent.projectId,
+          workspace: read.workspace,
+          usedToday: await operationsToday(intent.projectId),
+        }),
+      });
+      if (!decision.ok) {
+        return { kind: 'REJECTED', category: 'NOT_AUTHORIZED', retryable: false, detail: `nothing was sent: ${decision.reason}` };
+      }
+      const receipt = async (disposition: 'PERFORMED' | 'FAILED' | 'UNKNOWN', receiptRef: string | null) => {
+        await recordEffectReceipt({
+          projectId: intent.projectId,
+          opportunityId: opportunityOfCorrelation(request.businessId),
+          action: 'AUTHENTICATED_OPERATION',
+          decisionId: decision.decisionId,
+          disposition,
+          receiptRef,
+          operationId: request.businessId,
+          actorRef: BRAIN_PRINCIPAL,
+        }).catch(() => undefined);
+      };
       // Nothing is mailed until a lead sits in an active campaign; finding or drafting the campaign sends nothing.
-      const campaign = await ensureBrainCampaign({ fetch: c.fetch, env: c.env });
-      if (!campaign.ok) return { kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true, detail: `nothing was sent: ${campaign.reason}` };
+      const campaign = await resolveBrainCampaign(c, read);
+      if (!campaign.ok) {
+        await receipt('FAILED', null);
+        return { kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true, detail: `nothing was sent: ${campaign.reason}` };
+      }
       const payload = request.payload;
       const lead = await call(c, 'POST', '/leads', {
         campaign: campaign.id,
@@ -387,22 +532,34 @@ export function createInstantlyAdapter(options: { fetch?: FetchLike; env?: NodeJ
           [OPPORTUNITY_VARIABLE]: request.businessId,
         },
       });
-      if (lead.kind === 'REFUSED') return { kind: 'REJECTED', category: lead.category, retryable: lead.retryable, detail: lead.detail };
-      if (lead.kind === 'UNKNOWN') return { kind: 'UNCERTAIN', reason: lead.reason };
+      if (lead.kind === 'REFUSED') {
+        await receipt('FAILED', null);
+        return { kind: 'REJECTED', category: lead.category, retryable: lead.retryable, detail: lead.detail };
+      }
+      if (lead.kind === 'UNKNOWN') {
+        await receipt('UNKNOWN', null);
+        return { kind: 'UNCERTAIN', reason: lead.reason };
+      }
       const leadId = lead.body.id;
       if (typeof leadId !== 'string' || leadId === '') {
         // Instantly skips a lead the workspace already holds, and then nobody new is mailed.
+        await receipt('UNKNOWN', null);
         return { kind: 'UNCERTAIN', reason: 'Instantly accepted the lead and returned no lead id (it may already be in the workspace)' };
       }
       // The lead is in the campaign; the campaign mails it only while active. Activated here, inside the granted effect.
       if (campaign.status !== 1) {
         const activated = await call(c, 'POST', `/campaigns/${campaign.id}/activate`, {});
-        if (activated.kind === 'UNKNOWN') return { kind: 'UNCERTAIN', reason: `the lead was added (${leadId}) and activating the campaign gave no answer: ${activated.reason}` };
+        if (activated.kind === 'UNKNOWN') {
+          await receipt('UNKNOWN', leadId);
+          return { kind: 'UNCERTAIN', reason: `the lead was added (${leadId}) and activating the campaign gave no answer: ${activated.reason}` };
+        }
         if (activated.kind === 'REFUSED') {
           // The lead is held and nothing is mailed yet: a person must see that the campaign did not start.
+          await receipt('UNKNOWN', leadId);
           return { kind: 'UNCERTAIN', reason: `the lead was added (${leadId}) but the campaign did not activate (${activated.detail}), so it is not being mailed yet` };
         }
       }
+      await receipt('PERFORMED', leadId);
       return { kind: 'CONFIRMED', receiptRef: leadId, receiptMeta: { provider: 'instantly', campaignId: campaign.id } };
     },
     redactReceipt: (meta) => ({ provider: meta.provider === 'instantly' ? 'instantly' : null, campaignId: typeof meta.campaignId === 'string' ? meta.campaignId : null }),

@@ -28,7 +28,7 @@
  */
 import type { CashMoneyEntry } from '../../../domain/types.ts';
 import { authorizeRefund } from '../journey/fulfillment.ts';
-import { checkCommercialAuthority, type CommercialAction } from '../authority.ts';
+import { BRAIN_PRINCIPAL, actionContext, checkCommercialAuthority, type CommercialAction } from '../authority.ts';
 import { createHash } from 'node:crypto';
 import type { CashNeed } from '../../../domain/types.ts';
 import { cashEventsOfKind, getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
@@ -387,7 +387,7 @@ export async function remedyAuthorityFor(input: { projectId: string; currency: s
     if (!action || COMMITTING_REMEDIES.includes(remedy)) continue;
     let decision = decisions.get(action);
     if (!decision) {
-      decision = await checkCommercialAuthority({ projectId: input.projectId, action, at: input.at });
+      decision = await checkCommercialAuthority({ projectId: input.projectId, action, at: input.at, ...actionContext({ principal: BRAIN_PRINCIPAL }) });
       decisions.set(action, decision);
     }
     if (decision.authority) {

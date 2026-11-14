@@ -37,7 +37,31 @@ import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
 import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent } from '../../repos/register.ts';
 import { readCapabilities } from '../cash/capabilities.ts';
+// A plan is a reading: it asks whether an action is granted and performs none, so
+// every check here passes { record: false } — no AUTHORITY_DECISION row and no
+// approval request is written by a plan pass (AUTH-34: did versus proposed).
 import { checkCommercialAuthority } from '../cash/authority.ts';
+
+/*
+ * A plan read asks whether an action is authorized once per opening, and the
+ * answer is the project's grant, not the opening's: asked unmemoised it read
+ * the authority rows several times per opening (40 openings, 272 statements
+ * against a guard of 140). The read records nothing (`record: false`) and is a
+ * view, so one answer per project and action is shared for a few seconds — a
+ * read, never a decision an action could act on.
+ */
+const PLAN_AUTHORITY_MEMO_MS = 10_000;
+const planAuthorityMemo = new Map<string, { at: number; decision: ReturnType<typeof checkCommercialAuthority> }>();
+function planAuthority(projectId: string, action: string): ReturnType<typeof checkCommercialAuthority> {
+  const key = `${projectId}\u0000${action}`;
+  const now = Date.now();
+  const held = planAuthorityMemo.get(key);
+  if (held && now - held.at < PLAN_AUTHORITY_MEMO_MS) return held.decision;
+  const decision = checkCommercialAuthority({ projectId, action }, { record: false });
+  planAuthorityMemo.set(key, { at: now, decision });
+  decision.catch(() => planAuthorityMemo.delete(key));
+  return decision;
+}
 import { composeBuyerMessage } from '../cash/outreach.ts';
 import { evidenceCard } from '../cash/card.ts';
 import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
@@ -526,7 +550,7 @@ async function nextTestFor(link: ChainLink, one: ModelledOpportunity, projectId:
   const title = one.opportunity.title.slice(0, 80);
   switch (link) {
     case 'CONVERSION': {
-      const contact = await checkCommercialAuthority({ projectId, action: 'CONTACT_BUYER' });
+      const contact = await planAuthority(projectId, 'CONTACT_BUYER');
       const message = (await readCapabilities(['SEND_A_MESSAGE']))[0];
       const test = `A bounded offer test for "${title}": send the offer to a few reachable buyers and count who agrees. Fewer agreements than the plan needs downgrades it.`;
       if (!contact.ok) return { link, test, by: 'PERSON', blocker: `Brain has no standing permission to contact buyers here (${contact.reason}). Grant CONTACT_BUYER under the commercial authority to let it run this test.` };
@@ -731,7 +755,7 @@ export function judgeAcceptance(input: {
 async function missingPermissions(projectId: string): Promise<string[]> {
   const out: string[] = [];
   for (const action of ['CONTACT_BUYER', 'QUOTE_AND_INVOICE', 'ACCEPT_PAYMENT']) {
-    if (!(await checkCommercialAuthority({ projectId, action })).ok) out.push(action);
+    if (!(await planAuthority(projectId, action)).ok) out.push(action);
   }
   const caps = new Map((await readCapabilities(['SEND_A_MESSAGE', 'TAKE_A_PAYMENT'])).map((cap) => [cap.id, cap.state]));
   if (caps.get('SEND_A_MESSAGE') !== 'PRESENT') out.push('Instantly connected (messaging)');
@@ -1385,7 +1409,7 @@ export async function missingForSale(one: ModelledOpportunity, target: TargetRea
   const send: string[] = [];
   const collect: string[] = [];
   let sendByPerson = false;
-  const granted = async (action: string) => (await checkCommercialAuthority({ projectId: target.projectId, action })).ok;
+  const granted = async (action: string) => (await planAuthority(target.projectId, action)).ok;
   const caps = new Map((await readCapabilities(['SEND_A_MESSAGE', 'ISSUE_AN_INVOICE', 'TAKE_A_PAYMENT'])).map((cap) => [cap.id, cap.state]));
   if (!(await granted('CONTACT_BUYER'))) {
     send.push('a standing commercial authority granting CONTACT_BUYER (none exists for this project)');

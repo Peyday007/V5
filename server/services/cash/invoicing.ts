@@ -40,7 +40,7 @@ import { getOpportunity, needForKey } from '../../repos/cashPortfolio.ts';
 import { draftInvoice, getInvoice, listInvoices, moveInvoice } from '../../repos/cashInvoices.ts';
 import { recordAction } from '../../repos/cashActions.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
-import { checkCommercialAuthority } from './authority.ts';
+import { actionContext, checkCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
 import { listAttempts } from '../../repos/idempotency.ts';
 import { ISSUE_INVOICE_NAMESPACE, issueInvoiceOperation, issueInvoiceReserved, sendIssueInvoice, adapterStatus, commercialOperationsFor } from './effects.ts';
@@ -378,7 +378,11 @@ async function settleIssue(
     if (!moved) return;
   }
 
-  const authority = await checkCommercialAuthority({ projectId: invoice.projectId, action: INVOICE_ACTION });
+  const authority = await checkCommercialAuthority({
+    projectId: invoice.projectId,
+    action: INVOICE_ACTION,
+    ...actionContext({ principal: BRAIN, amountCents: invoice.amountCents }),
+  });
   if (authority.authority) {
     await recordAction({
       projectId: invoice.projectId,
@@ -404,7 +408,11 @@ async function settleIssue(
 export async function issueOne(invoice: CashInvoice, pass: InvoicingPass): Promise<void> {
   const projectId = invoice.projectId;
   if (invoice.state === 'DRAFTED') {
-    const decision = await checkCommercialAuthority({ projectId, action: INVOICE_ACTION });
+    const decision = await checkCommercialAuthority({
+      projectId,
+      action: INVOICE_ACTION,
+      ...actionContext({ principal: BRAIN, amountCents: invoice.amountCents }),
+    });
     if (!decision.ok) {
       await holdWithReason(invoice, `Not authorized to ${INVOICE_ACTION}: ${decision.reason}.`, pass);
       return;
