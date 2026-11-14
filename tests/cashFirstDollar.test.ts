@@ -393,6 +393,12 @@ describe('F01: the sandbox first-dollar journey', () => {
     const [contacted] = await actionsFor(piece.id);
     expect(contacted).toMatchObject({ action: 'CONTACT_BUYER', performedBy: 'BRAIN', reference: 'msg-1' });
 
+    // An invoice is refused until something is agreed — and a bare amount in
+    // the ledger is not an agreement. Asked before the buyer answers, because
+    // an acceptance of the sent offer becomes its agreement on the tick
+    // (LIFE-29-1), so after it there is something agreed to bill.
+    expect((await requestInvoice(piece.id)).status).toBe(422);
+
     // The buyer's reply is evidence, not hidden state.
     const reply = await act(piece.id, 'observe', {
       kind: 'BUYER_ACCEPTED',
@@ -408,12 +414,15 @@ describe('F01: the sandbox first-dollar journey', () => {
     await tick();
     expect(contact.sends).toHaveLength(1);
 
-    // An invoice is refused until something is agreed — and a bare amount in
-    // the ledger is not an agreement.
-    expect((await requestInvoice(piece.id)).status).toBe(422);
-
-    // The agreement: amount, deliverable, acceptance condition, evidence.
-    const agreement = await agree(piece.id, 120_000, reply.body.observation.id);
+    // The agreement: amount, deliverable, acceptance condition, evidence. The
+    // tick records it from the acceptance when the sent offer's terms are on
+    // its rows; otherwise a person records it. Either way exactly one answers
+    // the acceptance, at the offered amount.
+    const fromTick = (await agreementsFor(piece.id)).filter((one) => one.observationId === reply.body.observation.id);
+    expect(fromTick.length).toBeLessThanOrEqual(1);
+    const agreement = fromTick[0] ?? (await agree(piece.id, 120_000, reply.body.observation.id));
+    expect(agreement.amountCents).toBe(120_000);
+    expect((await agreementsFor(piece.id)).filter((one) => one.observationId === reply.body.observation.id)).toHaveLength(1);
 
     // The invoice: Brain's amount (the agreement's), the person's terms.
     const drafted = await requestInvoice(piece.id, { ...TERMS, amountCents: 1 });
