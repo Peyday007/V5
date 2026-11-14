@@ -673,6 +673,57 @@ describe('the free research lane', () => {
     expect(citationFailure({ sentences: ['the first one'] }, one)).toBe('citation not readable as sentence numbers');
   });
 
+  it('reads the claim list in every shape a model sends it, and the lane a label names (FREE_LANE:CITATION_DROPPED#3)', async () => {
+    const { listedClaims, laneFor, citedExcerpt, sentencesOf } = await import('../server/services/freeLane/worker.ts');
+    const one = { claim: 'The median hourly wage was $17.39.', source: 1, sentences: [3], evidence_lane: 'wage' };
+    const two = { claim: 'Employment shows little change.', source: 1, sentences: [4], evidence_lane: 'wage' };
+    // Production shapes that were read as "0 claim(s) offered": each now lists its claims.
+    expect(listedClaims(firstJson(JSON.stringify([one]))!)).toEqual([one]);
+    expect(listedClaims(firstJson(JSON.stringify([one, two]))!)).toEqual([one, two]);
+    expect(listedClaims(firstJson(JSON.stringify({ Claims: [one, two] }))!)).toEqual([one, two]);
+    expect(listedClaims(firstJson(JSON.stringify({ claims: one }))!)).toEqual([one]);
+    expect(listedClaims(firstJson(JSON.stringify(one))!)).toEqual([one]);
+    const thinking = `<think>The answer looks like {"claims":[]} or \`\`\`json\n{"x":1}\n\`\`\` maybe.</think>\n${JSON.stringify({ claims: [one] })}`;
+    expect(listedClaims(firstJson(thinking)!)).toEqual([one]);
+    expect(listedClaims(firstJson(`<think>{"claim": "draft"}</think>\n${JSON.stringify([one, two])}`)!)).toEqual([one, two]);
+    // Prose with a bracketed reference before the object is still the object.
+    expect(firstJson(`Per [S1.3]: ${JSON.stringify({ claims: [one] })}`)).toEqual({ claims: [one] });
+    expect(listedClaims({ claims: [] })).toEqual([]);
+    expect(listedClaims({ answer: 'none' })).toEqual([]);
+    // Each listed claim still has to cite a sentence Brain fetched.
+    const numbered = [{ url: PAGE_URL, sentences: sentencesOf(PAGE) }];
+    expect(PAGE).toContain(citedExcerpt(listedClaims(firstJson(JSON.stringify([one]))!)[0]!, numbered)!.excerpt);
+    expect(citedExcerpt({ claim: 'x' }, numbered)).toBeNull();
+    expect(citedExcerpt({ claim: 'x', source: 1, sentences: [999] }, numbered)).toBeNull();
+    // A lane label that names one declared lane is that lane; an ambiguous or unknown one names none.
+    const lanes = [{ id: 'lane_1', description: 'an official wage statistic' }, { id: 'L2', description: 'primary sources' }];
+    expect(laneFor('Lane 1', lanes)).toBe('lane_1');
+    expect(laneFor('LANE-1', lanes)).toBe('lane_1');
+    expect(laneFor('L2: primary sources', lanes)).toBe('L2');
+    expect(laneFor('An official wage statistic.', lanes)).toBe('lane_1');
+    expect(laneFor('lane_1', lanes)).toBe('lane_1');
+    expect(laneFor('Lane 1', [{ id: 'lane_1', description: 'a' }, { id: 'lane-1', description: 'b' }])).toBeNull();
+    expect(laneFor('Lane 3', lanes)).toBeNull();
+    expect(laneFor('', lanes)).toBeNull();
+  });
+
+  it('submits cited claims from a top-level array behind a <think> block, where it once offered none', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const base = model();
+    const completer: Completer = async (config, name, system, prompt, opts) => {
+      const reply = await base.completer(config, name, system, prompt, opts);
+      if (!prompt.includes('Extract the material claims')) return reply;
+      const claims = (JSON.parse(reply) as { claims: unknown[] }).claims;
+      return `<think>Maybe {"claims": []}? No: cite the sentence.</think>\n${JSON.stringify(claims)}`;
+    };
+    const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource, search: async () => [] });
+    expect(tick.submitted).toBe(1);
+    const claims = await listClaimsForFragment(fragment.id);
+    expect(claims).toHaveLength(1);
+    expect(PAGE).toContain(String(claims[0]!.evidenceExcerpt));
+  });
+
   it('accepts a quote that differs from the page only in typography, and never in words', () => {
     const page = 'The median hourly wage for receptionists was $17.39 in May 2024 \u2014 the \u201Cnational\u201D figure.';
     expect(quotedIn('wage for receptionists was $17.39 in May 2024 - the "national" figure.', page)).toBe(true);

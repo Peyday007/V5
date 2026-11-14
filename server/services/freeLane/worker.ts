@@ -386,12 +386,30 @@ function workerFor(workers: FreeWorker[], item: Pick<WorkItemRow, 'work_type' | 
 /* The model                                                                  */
 /* ------------------------------------------------------------------------- */
 
-/** The first JSON object in a model's reply, or null. Fenced or bare. */
+/**
+ * The first JSON object in a model's reply, or null. Fenced or bare.
+ *
+ * A reasoning model's `<think>…</think>` preamble is not the answer, so it is
+ * removed first: its braces or a fenced example in it were read as the reply.
+ * A reply that is a top-level array (production, 2026-11-14: Qwen3-4B answered
+ * `[{"claim":…}]`, read as one object with no `claims`, or as nothing) is that
+ * list, returned as `{claims:[…]}`. What a claim must prove is unchanged.
+ */
 export function firstJson(text: string): Record<string, unknown> | null {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(text);
-  const body = fenced ? fenced[1]! : text;
+  const answer = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(answer);
+  const body = fenced ? fenced[1]! : answer;
   const start = body.indexOf('{');
   const end = body.lastIndexOf('}');
+  const open = body.indexOf('[');
+  if (open >= 0 && (start < 0 || open < start)) {
+    try {
+      const list = JSON.parse(body.slice(open, body.lastIndexOf(']') + 1)) as unknown;
+      if (Array.isArray(list) && list.length > 0 && list.every((one) => one && typeof one === 'object' && !Array.isArray(one))) return { claims: list };
+    } catch {
+      // Not a list after all ("[S1.2] says …"): read the object below.
+    }
+  }
   if (start < 0 || end <= start) return null;
   try {
     const parsed = JSON.parse(body.slice(start, end + 1)) as unknown;
@@ -399,6 +417,53 @@ export function firstJson(text: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The claims an answer lists, wherever a model put the list: `claims` in any
+ * case, one claim object under `claims`, or an answer that is itself one claim.
+ * Production, 2026-11-14: "0 claim(s) offered, dropped {}" was most of the
+ * recorded drops. Every claim read here still meets every check after it.
+ */
+export function listedClaims(raw: Record<string, unknown>): Record<string, unknown>[] {
+  const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  const key = 'claims' in raw ? 'claims' : Object.keys(raw).find((k) => k.trim().toLowerCase() === 'claims');
+  const value = key === undefined ? undefined : raw[key];
+  if (Array.isArray(value)) return value.filter(isObject);
+  if (isObject(value) && typeof value['claim'] === 'string') return [value];
+  if (value === undefined && typeof raw['claim'] === 'string') return [raw];
+  return [];
+}
+
+/**
+ * The declared lane a model's label names, or null. An exact id wins; then a
+ * label equal to an id or a description ignoring case; then a label whose id
+ * part ("Lane 1", "L1: primary sources") or whole text equals exactly one
+ * lane's id or description once case, punctuation and spacing are ignored. A
+ * label that fits two lanes, or none, names no lane.
+ */
+export function laneFor(label: unknown, lanes: { id: string; description: string }[]): string | null {
+  const given = String(label ?? '').trim();
+  if (given === '') return null;
+  if (lanes.some((l) => l.id === given)) return given;
+  const lower = given.toLowerCase();
+  const plain = lanes.filter((l) => l.description.toLowerCase() === lower || l.id.toLowerCase() === lower);
+  if (plain.length > 0) return plain[0]!.id;
+  const squash = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const whole = squash(given);
+  const parts = given.split(/\s*(?::|\s[-\u2013\u2014]\s|\()\s*/);
+  const head = squash(parts[0] ?? '');
+  const tail = squash(parts.slice(1).join(' '));
+  const ids = new Set(
+    lanes
+      .filter((l) => {
+        const id = squash(l.id);
+        const description = squash(l.description);
+        return (id !== '' && (id === whole || id === head)) || (description !== '' && (description === whole || description === tail));
+      })
+      .map((l) => l.id),
+  );
+  return ids.size === 1 ? [...ids][0]! : null;
 }
 
 /** A tool's input schema with the lease fields and the long prose removed, for a model to fill. */
@@ -1044,8 +1109,8 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     if (out['closes_on'] !== undefined && (out['opportunity_signal'] === undefined || out['opportunity_signal'] === null || out['opportunity_signal'] === '')) delete out['closes_on'];
     return out;
   };
-  const finalize =(raw: Record<string, unknown>): Record<string, unknown> | null => {
-    const listed = Array.isArray(raw['claims']) ? (raw['claims'] as Record<string, unknown>[]) : [];
+  const finalize = (raw: Record<string, unknown>): Record<string, unknown> | null => {
+    const listed = listedClaims(raw);
     const claims: Record<string, unknown>[] = [];
     const dropped: Record<string, number> = {};
     const drop = (why: string): void => {
@@ -1056,9 +1121,8 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       // lane named by its description rather than its id is still that lane.
       if (onlyLane && !laneIds.has(String(c['evidence_lane']))) c['evidence_lane'] = onlyLane;
       if (!laneIds.has(String(c['evidence_lane']))) {
-        const named = String(c['evidence_lane'] ?? '').trim().toLowerCase();
-        const match = lanes.find((l) => named.length > 0 && (l.description.toLowerCase() === named || l.id.toLowerCase() === named));
-        if (match) c['evidence_lane'] = match.id;
+        const match = laneFor(c['evidence_lane'], lanes);
+        if (match) c['evidence_lane'] = match;
       }
       if (typeof c['claim'] !== 'string') {
         drop('no claim text');
