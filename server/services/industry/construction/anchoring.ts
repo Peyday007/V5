@@ -68,6 +68,15 @@ export interface WhitelistFinding {
 export interface SubjectCheck {
   live: number;
   ranked: number;
+  /** Ranked subjects whose evidence gives them a score above zero. */
+  scored: number;
+  /**
+   * Whether the evidence decides this project's order: at least two subjects
+   * with different scores. When every score is equal (typically all zero, no
+   * economics recorded) the order is the row order, and label-invariance and
+   * origin-neutrality hold trivially — they demonstrate nothing.
+   */
+  discriminating: boolean;
   violations: AnchoringViolation[];
 }
 
@@ -77,6 +86,10 @@ export interface AnchoringReport {
   projects: number;
   live: number;
   ranked: number;
+  /** Ranked subjects scored above zero by their evidence. */
+  scored: number;
+  /** Projects whose order the evidence decides (two or more distinct scores); a pass needs at least one. */
+  discriminating: number;
   /** Live subjects a person seeded, and those Brain discovered: both are ranked by the same criteria. */
   seeded: number;
   discovered: number;
@@ -129,7 +142,7 @@ export async function checkSubjects(
   const score = options.score ?? (await defaultScorer());
   const violations: AnchoringViolation[] = [];
   const live = nodes.filter((n) => !n.retiredAt);
-  if (live.length === 0) return { live: 0, ranked: 0, violations };
+  if (live.length === 0) return { live: 0, ranked: 0, scored: 0, discriminating: false, violations };
   const ranked = await rank(nodes, constraints);
   const order = orderOf(ranked);
 
@@ -189,7 +202,10 @@ export async function checkSubjects(
   }
   if (lacking.size > 0) violations.push({ kind: 'CRITERIA_MISSING', projectId, detail: `no finite reading for ${[...lacking].join(', ')}` });
 
-  return { live: live.length, ranked: order.length, violations };
+  const scores = ranked.map((r) => r.criteria.score).filter((v) => Number.isFinite(v));
+  const scored = scores.filter((v) => v > 0).length;
+  const discriminating = new Set(scores).size >= 2;
+  return { live: live.length, ranked: order.length, scored, discriminating, violations };
 }
 
 /**
@@ -235,6 +251,8 @@ export async function noAnchoringHoldsOnRows(): Promise<AnchoringReport> {
   const violations: AnchoringViolation[] = [];
   let live = 0;
   let ranked = 0;
+  let scored = 0;
+  let discriminating = 0;
   let seeded = 0;
   let discovered = 0;
   const score = await defaultScorer();
@@ -244,6 +262,8 @@ export async function noAnchoringHoldsOnRows(): Promise<AnchoringReport> {
     const check = await checkSubjects(p.id, nodes, constraints, { score });
     live += check.live;
     ranked += check.ranked;
+    scored += check.scored;
+    if (check.discriminating) discriminating += 1;
     violations.push(...check.violations);
   }
 
@@ -263,12 +283,18 @@ export async function noAnchoringHoldsOnRows(): Promise<AnchoringReport> {
   const criteria = Object.keys(RANKING_CRITERIA) as RankingCriterion[];
   const counts: Partial<Record<AnchoringViolationKind, number>> = {};
   for (const v of violations) counts[v.kind] = (counts[v.kind] ?? 0) + 1;
-  const ok = live > 0 && violations.length === 0 && scanError === null;
+  // A pass must demonstrate something: an order the evidence decides somewhere, not only row order.
+  const ok = live > 0 && discriminating > 0 && violations.length === 0 && scanError === null;
   const detail =
     `${ranked} of ${live} live subject(s) ranked across ${projects.length} project(s) (${seeded} seeded, ${discovered} discovered); ` +
+    `${scored} scored above zero, ${discriminating} project(s) whose order the evidence decides; ` +
     `criteria: ${criteria.join(', ')}; ` +
     (scanError ? `source scan failed: ${scanError}; ` : `${files.length} industry source file(s) scanned, ${whitelists.length} category whitelist(s); `) +
     (violations.length === 0 ? 'order label-invariant and origin-neutral' : `violations: ${Object.entries(counts).map(([k, n]) => `${k}=${n}`).join(', ')} — ${violations.slice(0, 5).map((v) => v.detail).join('; ')}`) +
-    (live === 0 ? '; no live subject to demonstrate on' : '');
-  return { ok, detail, projects: projects.length, live, ranked, seeded, discovered, criteria, filesScanned: files.length, whitelists, violations };
+    (live === 0
+      ? '; no live subject to demonstrate on'
+      : discriminating === 0
+        ? '; vacuous: no project has two subjects its evidence scores differently, so the order is row order and the invariance demonstrates nothing'
+        : '');
+  return { ok, detail, projects: projects.length, live, ranked, scored, discriminating, seeded, discovered, criteria, filesScanned: files.length, whitelists, violations };
 }

@@ -41,10 +41,21 @@ describe('checkSubjects: the demonstrations on one project’s rows', () => {
     expect(check.live).toBe(5);
     expect(check.ranked).toBe(5);
     expect(check.violations).toEqual([]);
+    // Last-mile delivery has recorded economics and the rest do not: the evidence decides the order.
+    expect(check.scored).toBeGreaterThanOrEqual(1);
+    expect(check.discriminating).toBe(true);
   });
 
   it('a project with no live subject has nothing to violate', async () => {
-    expect(await checkSubjects('prj_x', [ROWS[5]!], [])).toEqual({ live: 0, ranked: 0, violations: [] });
+    expect(await checkSubjects('prj_x', [ROWS[5]!], [])).toEqual({ live: 0, ranked: 0, scored: 0, discriminating: false, violations: [] });
+  });
+
+  it('marks a map whose evidence separates no subject as not discriminating', async () => {
+    const unevidenced = [subject('ind_q', 'Qorvian lattice tuning', 'DISCOVERED'), subject('ind_t', 'Thrund swaps', 'SEED'), subject('ind_o', 'Ovatic mesh', 'SEED')];
+    const check = await checkSubjects('prj_x', unevidenced, []);
+    expect(check.violations).toEqual([]);
+    expect(check.scored).toBe(0);
+    expect(check.discriminating).toBe(false);
   });
 
   it('detects a shortlist (UNRANKED)', async () => {
@@ -125,7 +136,22 @@ describe('noAnchoringHoldsOnRows', () => {
     expect(report.ranked).toBe(report.live);
     expect(report.filesScanned).toBeGreaterThan(5);
     expect(report.whitelists).toEqual([]);
+    expect(report.scored).toBeGreaterThanOrEqual(1);
+    expect(report.discriminating).toBeGreaterThanOrEqual(1);
     expect(report.detail).toMatch(/label-invariant and origin-neutral/);
+  });
+
+  it('does not hold when no subject\u2019s evidence separates it from another: the invariance would demonstrate nothing', async () => {
+    const { project } = await freshProject();
+    await createNode({ projectId: project.id, parentId: null, kind: 'SECTOR', name: 'Qorvian lattice tuning', origin: 'SEED' });
+    await createNode({ projectId: project.id, parentId: null, kind: 'SECTOR', name: 'Thrund swaps', origin: 'SEED' });
+    const report = await noAnchoringHoldsOnRows();
+    expect(report.live).toBe(2);
+    expect(report.violations).toEqual([]);
+    expect(report.scored).toBe(0);
+    expect(report.discriminating).toBe(0);
+    expect(report.ok).toBe(false);
+    expect(report.detail).toMatch(/vacuous/);
   });
 
   it('does not hold when there is nothing to demonstrate on', async () => {
