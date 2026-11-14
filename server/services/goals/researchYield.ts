@@ -18,6 +18,7 @@
  *    many the quant model takes, and the plan's own reach over time.
  */
 import { getDb } from '../../db/database.ts';
+import { RESEARCH_PURPOSES, type ResearchPurpose } from './researchAllocation.ts';
 import type { ChainLink, ConsideredOpening } from './plan.ts';
 
 const DATA_CAUSES = [
@@ -446,8 +447,8 @@ export async function goalPipelineSpeed(input: { goalId: string; projectId: stri
  * them, so the purposes' costs sum exactly to the total and the total sums each
  * distinct job once — `costCountedOnce` says whether that held.
  */
-export const RESEARCH_PURPOSES = ['BROAD_DISCOVERY', 'TRANSACTION_ROUTES', 'OPERATING_SUPPORT', 'SELF_IMPROVEMENT', 'FORWARD_EXPLORATION'] as const;
-export type ResearchPurpose = (typeof RESEARCH_PURPOSES)[number];
+// The purposes are defined once, in the pure allocation module; re-exported for this module's readers.
+export { RESEARCH_PURPOSES, type ResearchPurpose };
 export type PurposeKey = ResearchPurpose | 'UNATTRIBUTED';
 
 /** What the rows say about the work a job did, for attribution. */

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   COMMERCIAL_FLOOR,
@@ -6,17 +7,18 @@ import {
   MIN_PURPOSE_SHARE,
   RESEARCH_PURPOSES,
   SYSTEM_HEALTH_FLOOR,
-  attributeJobCosts,
   decideCapacity,
   decideLaneActions,
   decideResearchAllocation,
   enforceFloors,
-  laneYieldForWindow,
   type AllocationInput,
   type BottleneckMeasurement,
   type PurposeMeasurement,
   type ResearchPurpose,
 } from '../server/services/goals/researchAllocation.ts';
+import * as allocation from '../server/services/goals/researchAllocation.ts';
+import * as researchYield from '../server/services/goals/researchYield.ts';
+import { summarizeResearchYield, type YieldJob, type YieldOutput } from '../server/services/goals/researchYield.ts';
 
 const equal = Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, 0.2])) as Record<ResearchPurpose, number>;
 
@@ -195,29 +197,52 @@ describe('A02: actionability remedies before limits; capacity only for a measure
 });
 
 describe('cost counted once and per-lane yield per window', () => {
-  const jobs = [
-    { id: 'j1', lane: 'a', purposes: ['BROAD_DISCOVERY', 'TRANSACTION_ROUTES', 'FORWARD_EXPLORATION'] as ResearchPurpose[], cost: 9, submittedAt: '2026-11-01T00:00:00Z', completedAt: '2026-11-01T01:00:00Z', acceptedClaims: 4, actionableLinks: 1, usefulResults: 1 },
-    { id: 'j1', lane: 'a', purposes: ['BROAD_DISCOVERY'] as ResearchPurpose[], cost: 9, submittedAt: '2026-11-01T00:00:00Z' },
-    { id: 'j2', lane: 'b', purposes: ['SELF_IMPROVEMENT'] as ResearchPurpose[], cost: 3, submittedAt: '2026-11-02T00:00:00Z' },
-    { id: 'j3', lane: 'a', purposes: ['OPERATING_SUPPORT'] as ResearchPurpose[], cost: 5, submittedAt: '2026-11-09T00:00:00Z', completedAt: '2026-11-09T02:00:00Z', usefulResults: 2 },
+  // Measured by the one implementation production uses (`summarizeResearchYield`), not a second copy.
+  const at = (iso: string) => Date.parse(iso);
+  const job = (over: Partial<YieldJob> & { id: string; lane: string; startMs: number }): YieldJob => ({
+    purposes: ['BROAD_DISCOVERY'], basis: [], durationMs: 1_000, queueWaitMs: null, outcome: 'IN_FLIGHT', failureCause: null, rateLimited: false, costMinor: null, ...over,
+  });
+  const jobs: YieldJob[] = [
+    job({ id: 'j1', lane: 'a', purposes: ['BROAD_DISCOVERY', 'TRANSACTION_ROUTES', 'FORWARD_EXPLORATION'], costMinor: 9, startMs: at('2026-11-01T00:00:00Z'), outcome: 'COMPLETED' }),
+    job({ id: 'j1', lane: 'a', purposes: ['BROAD_DISCOVERY'], costMinor: 9, startMs: at('2026-11-01T00:00:00Z') }),
+    job({ id: 'j2', lane: 'b', purposes: ['SELF_IMPROVEMENT'], costMinor: 3, startMs: at('2026-11-02T00:00:00Z') }),
+    job({ id: 'j3', lane: 'a', purposes: ['OPERATING_SUPPORT'], costMinor: 5, startMs: at('2026-11-09T00:00:00Z'), outcome: 'COMPLETED' }),
   ];
+  const outputs: YieldOutput[] = [
+    ...['c1', 'c2', 'c3', 'c4'].map((id): YieldOutput => ({ kind: 'ACCEPTED_CLAIM', id, lane: 'a', purposes: ['BROAD_DISCOVERY'] })),
+    { kind: 'QUALIFIED_POSITION', id: 'q1', lane: 'a', purposes: ['TRANSACTION_ROUTES'] },
+  ];
+  const week1 = { since: '2026-11-01T00:00:00Z', until: '2026-11-08T00:00:00Z' };
+  const week2 = { since: '2026-11-08T00:00:00Z', until: '2026-11-15T00:00:00Z' };
+  // The reader selects a window's jobs by when they ran (`researchYieldByPurpose`); this is that selection.
+  const inWindow = (w: { since: string; until: string }) => jobs.filter((j) => j.startMs >= at(w.since) && j.startMs < at(w.until));
 
   it('a job serving several purposes has its cost counted once', () => {
-    const a = attributeJobCosts(jobs);
-    expect(a.totalCost).toBe(17);
-    const sum = RESEARCH_PURPOSES.reduce((s, p) => s + a.byPurpose[p], 0);
+    const r = summarizeResearchYield({ since: '2026-11-01T00:00:00Z', until: '2026-11-15T00:00:00Z', jobs, outputs });
+    expect(r.total.costMinor).toBe(17);
+    expect(r.costCountedOnce).toMatchObject({ jobs: 3, totalCostMinor: 17, purposeCostMinor: 17, holds: true });
+    const sum = RESEARCH_PURPOSES.reduce((s, p) => s + (r.purposes[p].costMinor ?? 0), 0);
     expect(sum).toBeCloseTo(17, 9);
-    expect(a.byPurpose.BROAD_DISCOVERY).toBeCloseTo(3, 9);
-    expect(a.jobsByPurpose.TRANSACTION_ROUTES).toBe(1);
+    expect(r.purposes.BROAD_DISCOVERY.costMinor).toBeCloseTo(3, 9);
+    expect(r.purposes.TRANSACTION_ROUTES.submissions).toBe(1);
   });
 
   it('per-lane yield is read over a consistent window', () => {
-    const week = laneYieldForWindow(jobs, { from: '2026-11-01T00:00:00Z', to: '2026-11-08T00:00:00Z' });
-    expect(week).toEqual([
-      { lane: 'a', submissions: 1, completions: 1, acceptedClaims: 4, actionableLinks: 1, usefulResults: 1, cost: 9, costPerUsefulResult: 9 },
-      { lane: 'b', submissions: 1, completions: 0, acceptedClaims: 0, actionableLinks: 0, usefulResults: 0, cost: 3, costPerUsefulResult: null },
-    ]);
-    const next = laneYieldForWindow(jobs, { from: '2026-11-08T00:00:00Z', to: '2026-11-15T00:00:00Z' });
-    expect(next).toEqual([{ lane: 'a', submissions: 1, completions: 1, acceptedClaims: 0, actionableLinks: 0, usefulResults: 2, cost: 5, costPerUsefulResult: 2.5 }]);
+    const first = summarizeResearchYield({ ...week1, jobs: inWindow(week1), outputs });
+    expect(Object.keys(first.lanes).sort()).toEqual(['a', 'b']);
+    expect(first.lanes.a).toMatchObject({ submissions: 1, completions: 1, acceptedClaims: 4, qualifiedPositions: 1, usefulResults: 1, costMinor: 9, costMinorPerUsefulResult: 9 });
+    expect(first.lanes.b).toMatchObject({ submissions: 1, completions: 0, acceptedClaims: 0, qualifiedPositions: 0, usefulResults: 0, costMinor: 3, costMinorPerUsefulResult: null });
+    const second = summarizeResearchYield({ ...week2, jobs: inWindow(week2), outputs: [{ kind: 'PACKET_FILED', id: 'pk1', lane: 'a', purposes: ['OPERATING_SUPPORT'] }, { kind: 'EXECUTABLE_OFFER', id: 'x1', lane: 'a', purposes: ['OPERATING_SUPPORT'] }] });
+    expect(Object.keys(second.lanes)).toEqual(['a']);
+    expect(second.lanes.a).toMatchObject({ submissions: 1, completions: 1, acceptedClaims: 0, qualifiedPositions: 0, usefulResults: 2, costMinor: 5, costMinorPerUsefulResult: 3 });
+  });
+
+  it('has one definition of the purposes and one cost-attribution implementation', () => {
+    // The yield reader's purposes are the allocation module's, not a second list that could drift.
+    expect(researchYield.RESEARCH_PURPOSES).toBe(allocation.RESEARCH_PURPOSES);
+    expect(Object.keys(allocation)).not.toEqual(expect.arrayContaining(['attributeJobCosts']));
+    expect(Object.keys(allocation)).not.toEqual(expect.arrayContaining(['laneYieldForWindow']));
+    const source = readFileSync('server/services/goals/researchYield.ts', 'utf8');
+    expect(source).not.toMatch(/export const RESEARCH_PURPOSES\s*=/);
   });
 });
