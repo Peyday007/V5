@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'show | file | pause | resume | cancel | reinstate | depends | terms | create | target | plan | construct | industry'
+        description: 'show | file | pause | resume | cancel | reinstate | depends | terms | create | target | plan | construct | industry | census'
         required: true
         default: show
       goal:
@@ -99,7 +99,7 @@ jobs:
 
           # The allowlist is the control; the input's description is a label.
           case "$G_COMMAND" in
-            show|file|pause|resume|cancel|reinstate|depends|terms|create|target|plan|construct|industry) ;;
+            show|file|pause|resume|cancel|reinstate|depends|terms|create|target|plan|construct|industry|census) ;;
             *) echo "::error::Refusing '$G_COMMAND'."; exit 1 ;;
           esac
 
@@ -122,7 +122,7 @@ jobs:
             '') ;;
             *[!A-Za-z0-9_.@+-]*) echo "::error::Refusing the administrator address."; exit 1 ;;
           esac
-          if [ "$G_COMMAND" != show ] && [ "$G_COMMAND" != plan ] && [ "$G_COMMAND" != industry ] && [ -z "$G_ADMIN" ]; then
+          if [ "$G_COMMAND" != show ] && [ "$G_COMMAND" != plan ] && [ "$G_COMMAND" != industry ] && [ "$G_COMMAND" != census ] && [ -z "$G_ADMIN" ]; then
             echo "::error::'$G_COMMAND' changes something, so it needs an administrator."
             exit 1
           fi
@@ -144,9 +144,17 @@ jobs:
 
           echo "goals $args"
           set +e
-          flyctl ssh console --app "$app" \
-            -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/goals.sh $args" \
-            2>&1 | tee goals.txt
+          if [ "$G_COMMAND" = census ]; then
+            # The economic knowledge census (Surge B): read-only counts of what
+            # Brain durably holds, from the rows (scripts/knowledge-census.ts).
+            flyctl ssh console --app "$app" \
+              -C "env BRAIN_DATABASE_POOL_SIZE=1 sh -c 'cd /app && nice -n 19 node --import tsx scripts/knowledge-census.ts --json'" \
+              2>&1 | tee goals.txt
+          else
+            flyctl ssh console --app "$app" \
+              -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/goals.sh $args" \
+              2>&1 | tee goals.txt
+          fi
           set -e
           # The verdict is a line the script printed, never an exit code that
           # had to survive an SSH session, a shell and a CLI.
