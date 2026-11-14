@@ -96,7 +96,7 @@ import { MATERIAL_P50, MATERIAL_REACH, reconstructPlan, type Reconstruction } fr
 import { recordEvent } from '../../repos/events.ts';
 import { sharedEvaluator } from './reasoning/evaluatorPool.ts';
 import { inventDirections } from './reasoning/invent.ts';
-import { loadLibrary, recordExploration } from './reasoning/learning.ts';
+import { loadLibrary, loadStancePrior, recordExploration } from './reasoning/learning.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
@@ -1605,7 +1605,7 @@ export function inventDue(goalId: string | undefined, now = Date.now()): boolean
 export async function reconstructionFor(
   model: { portfolio: GoalPortfolio | null; portfolioInput?: Parameters<typeof reconstructPlan>[0]['portfolio'] & { openings: Parameters<typeof reconstructPlan>[0]['openings'] } | null },
   required: number,
-  context: { goalId?: string; persist?: boolean; degraded?: string[]; reconstruct?: typeof reconstructPlan; library?: typeof loadLibrary } = {},
+  context: { goalId?: string; persist?: boolean; degraded?: string[]; reconstruct?: typeof reconstructPlan; library?: typeof loadLibrary; stancePrior?: typeof loadStancePrior } = {},
 ): Promise<Reconstruction | null> {
   if (!model.portfolio || !model.portfolioInput || model.portfolioInput.openings.length === 0) return null;
   const degraded = context.degraded ?? [];
@@ -1621,6 +1621,11 @@ export async function reconstructionFor(
       degraded.push(`reasoning library: ${errorText(error)} (explored without the methods that worked before)`);
       return [];
     });
+    // What each stance has yielded across goals allocates the seed budget (lens S, S-10); without it every stance is even.
+    const stancePrior = await (context.stancePrior ?? loadStancePrior)().catch((error: unknown) => {
+      degraded.push(`reasoning stance record: ${errorText(error)} (seeds allocated evenly across stances)`);
+      return {};
+    });
     const r = await reconstruct({
       openings,
       portfolio,
@@ -1628,11 +1633,12 @@ export async function reconstructionFor(
       required,
       evaluator,
       // The model is asked at most every INVENT_EVERY_MS per goal; between, the library carries what it invented.
-      explore: { library, ...(inventDue(context.goalId) ? { invent: (brief) => inventDirections(brief) } : {}) },
+      explore: { library, stancePrior, ...(inventDue(context.goalId) ? { invent: (brief) => inventDirections(brief) } : {}) },
     });
     if (context.goalId) explored.set(context.goalId, { key: inputsKey, at: Date.now(), reconstruction: r });
     if (context.persist && context.goalId && r.exploration) {
-      await recordExploration(context.goalId, r.exploration).catch((error: unknown) => {
+      // Credited once per (goal, inputs): a re-read of unchanged inputs is the same trial (lens S, S-9).
+      await recordExploration(context.goalId, r.exploration, inputsKey).catch((error: unknown) => {
         degraded.push(`reasoning record: ${errorText(error)} (this exploration is not in the library)`);
       });
     }

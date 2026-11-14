@@ -199,7 +199,7 @@ export interface ReconstructionInput {
   /** Where evaluations run (§101): a pool of threads, or inline when omitted. */
   evaluator?: Evaluator;
   /** The multidirectional exploration's inputs (library, model, time); null turns it off. */
-  explore?: (Pick<ExploreContext, 'library' | 'invent' | 'maxMs'> & { sweepMs?: number; maxVariations?: number }) | null;
+  explore?: (Pick<ExploreContext, 'library' | 'stancePrior' | 'invent' | 'maxMs'> & { sweepMs?: number; maxVariations?: number }) | null;
 }
 
 /** A strategy state the operators transform. */

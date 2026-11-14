@@ -199,6 +199,8 @@ export interface ExploreContext {
   threads: number;
   /** What worked before, best first (`learning.ts`). */
   library?: Direction[];
+  /** What each stance has yielded across goals (`loadStancePrior`): the seed budget is allocated by it (S-10). */
+  stancePrior?: StancePrior;
   /** The model's methods, already parsed; generated concurrently with the screen. */
   invent?: (brief: InventBrief) => Promise<{ directions: Direction[]; calls: number; proposed: number; refused: number; error: string | null }>;
   /** Wall-clock budget for the whole exploration. */
@@ -638,6 +640,81 @@ export function seedDirections(ctx: Pick<ExploreContext, 'base' | 'greedy' | 'op
   return out;
 }
 
+// ---------------------------------------------------------------- seed budget by stance (lens S, S-10)
+
+/** A stance's record across every goal, as the learning store holds it. */
+export interface StanceRecord {
+  tries: number;
+  improvements: number;
+  wins: number;
+}
+export type StancePrior = Record<string, StanceRecord>;
+
+/** Each stance keeps at least this share of an even split of the seed budget, however poorly it has done. */
+export const STANCE_FLOOR = 0.5;
+
+/** The posterior mean of a stance's chance to improve the plan: Beta(1, 1) updated by its credited tries. */
+export function stancePosterior(r: StanceRecord | undefined): number {
+  const tries = Math.max(0, r?.tries ?? 0);
+  return (1 + Math.min(tries, Math.max(0, r?.improvements ?? 0))) / (2 + tries);
+}
+
+/**
+ * How many of `slots` seeds each stance gets. Every stance first receives its
+ * floor — `STANCE_FLOOR` of an even share, at least one, never more than it
+ * has seeds — strongest posterior first, so a budget smaller than the number
+ * of stances still goes to the best; the rest is split in proportion to each
+ * stance's posterior. With no record every stance is even.
+ */
+export function stanceQuotas(available: Map<string, number>, slots: number, prior: StancePrior = {}): Map<string, number> {
+  const post = new Map([...available.keys()].map((s) => [s, stancePosterior(prior[s])]));
+  const order = [...available.keys()].sort((a, b) => post.get(b)! - post.get(a)! || (a < b ? -1 : a > b ? 1 : 0));
+  const quota = new Map(order.map((s) => [s, 0]));
+  if (order.length === 0 || slots <= 0) return quota;
+  let left = slots;
+  const floor = Math.max(1, Math.floor((STANCE_FLOOR * slots) / order.length));
+  for (const s of order) {
+    const give = Math.min(floor, available.get(s)!, left);
+    quota.set(s, give);
+    left -= give;
+  }
+  while (left > 0) {
+    const open = order.filter((s) => quota.get(s)! < available.get(s)!);
+    if (open.length === 0) break;
+    const weight = open.reduce((n, s) => n + post.get(s)!, 0);
+    let given = 0;
+    for (const s of open) {
+      const g = Math.min(Math.floor((left * post.get(s)!) / weight), available.get(s)! - quota.get(s)!);
+      quota.set(s, quota.get(s)! + g);
+      given += g;
+    }
+    // Shares below one seed each: the strongest stance with room takes the next.
+    if (given === 0) {
+      quota.set(open[0]!, quota.get(open[0]!)! + 1);
+      given = 1;
+    }
+    left -= given;
+  }
+  return quota;
+}
+
+/**
+ * The seeds in the order the pool takes them: each stance's quota for `slots`
+ * interleaved strongest stance first, then every seed left over in the order
+ * it was generated, for slots near-copies free up. Without this the pool took
+ * the seeds in generation order, so the same stances filled it every read.
+ */
+export function allocateSeeds(seeds: Direction[], slots: number, prior: StancePrior = {}): Direction[] {
+  const byStance = new Map<string, Direction[]>();
+  for (const d of seeds) byStance.set(d.stance, [...(byStance.get(d.stance) ?? []), d]);
+  const quota = stanceQuotas(new Map([...byStance].map(([s, ds]) => [s, ds.length])), slots, prior);
+  const first: Direction[] = [];
+  const most = Math.max(0, ...quota.values());
+  for (let r = 0; r < most; r++) for (const [s, q] of quota) if (r < q) first.push(byStance.get(s)![r]!);
+  const taken = new Set(first);
+  return [...first, ...seeds.filter((d) => !taken.has(d))];
+}
+
 function opKeyOf(c: StrategyChange, ops: StrategyOperator[]): string {
   // A change names the operator that wrote it; an older change is matched by its label.
   if (c.op) return c.op;
@@ -827,7 +904,9 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   const swept = ctx.sweep?.directions ?? [];
   // A learned method names roles, not this goal's ids (S-8): resolved here, and one that names what this problem lacks is dropped, never given a slot.
   const library = (ctx.library ?? []).map((d) => resolveRoles(d, roleIds)).filter((d): d is Direction => !!d);
-  const pool = budget > 0 ? distinct([...swept, ...library, ...seedDirections(ctx)], budget + swept.length) : [];
+  // The seeds' share of the budget is allocated by stance, by what each stance has yielded across goals (S-10).
+  const seeds = allocateSeeds(seedDirections(ctx), Math.max(0, budget - library.length), ctx.stancePrior);
+  const pool = budget > 0 ? distinct([...swept, ...library, ...seeds], budget + swept.length) : [];
   await run(pool, 1);
 
   // The model's directions join as soon as they arrive.

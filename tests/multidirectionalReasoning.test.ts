@@ -151,8 +151,10 @@ describe('§101 mechanics', () => {
     expect(library.map((d) => d.signature)).toContain(lessonOf(x, x.winner!)!.direction.signature);
     const y = await methodYield();
     expect(y.some((r) => r.origin === 'MODEL' && (r.stance === 'SUPPLIER_FIRST' || r.stance === 'TEMPO'))).toBe(true);
-    // A reading the plausibility critic flagged teaches nothing and is not recorded (S-7).
-    expect(y.reduce((n, r) => n + r.tries, 0)).toBe(2 * x.all.filter((r) => lessonOf(x, r)).length);
+    // A reading the plausibility critic flagged teaches nothing and is not recorded (S-7), and the same goal's
+    // exploration of the same inputs, recorded twice, credits each method once (S-9).
+    const credited = new Set(x.all.map((r) => lessonOf(x, r)?.direction.signature).filter((s): s is string => !!s));
+    expect(y.reduce((n, r) => n + r.tries, 0)).toBe(credited.size);
     // A later exploration of the same goal starts from the library.
     const again = await reconstructPlan({ openings: GOAL_10K_OPENINGS, portfolio: portfolioInput, baseline, required: 0.9, explore: { library } });
     expect(again.exploration!.byOrigin.LIBRARY).toBeGreaterThan(0);
