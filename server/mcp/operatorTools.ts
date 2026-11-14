@@ -50,10 +50,12 @@ function requireOperator(principal: Principal): string[] {
 }
 
 /**
- * Reading Brain-wide operator state (capacity, integrations, deficiencies,
- * engineering results, the operator's own record) needs `project:read` on at
- * least one project, exactly as reading goals does — not `operator:act`, which
- * is for changing things. A caller with no readable project is refused with the
+ * Reading Brain-wide state that carries no project's content (capacity pools,
+ * integration health) needs `project:read` on at least one project, exactly as
+ * reading goals does — not `operator:act`, which is for changing things. The
+ * operator's own record, deficiencies and engineering results carry goals,
+ * lessons and event payloads from every project, so they stay behind
+ * `operator:act` (invariants 17, 28, 41; planning recovery review F1). A caller with no readable project is refused with the
  * same not-found every other refusal on this door gives (invariants 23, 30).
  */
 async function requireReader(principal: Principal): Promise<string[]> {
@@ -213,7 +215,7 @@ const historyTool: McpTool = {
   },
   annotations: { title: 'Operator: history', ...READ_ONLY },
   run: async (args, { principal }) => {
-    const projects = await requireReader(principal);
+    const projects = requireOperator(principal);
     const goalId = optionalString(args, 'goal_id');
     if (goalId) {
       // Lessons about one goal are that goal's project's to read; absent and forbidden refuse alike.
@@ -312,7 +314,7 @@ const deficienciesTool: McpTool = {
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   annotations: { title: 'Operator: deficiencies', ...READ_ONLY },
   run: async (_args, { principal }) => {
-    await requireReader(principal);
+    requireOperator(principal);
     const { readDeficiencies, readingId } = await import('../services/operator/director.ts');
     const found = await readDeficiencies();
     return { projectId: null, value: { deficiencies: found.map((one) => ({ id: readingId(one), intervention: one.intervention, why: one.why, ...one.diagnosis })) } };
@@ -406,7 +408,7 @@ const engineeringTool: McpTool = {
   },
   annotations: { title: 'Operator: engineering results', ...READ_ONLY },
   run: async (args, { principal }) => {
-    await requireReader(principal);
+    requireOperator(principal);
     const { engineeringOutcomes } = await import('../services/operator/director.ts');
     const includeClosed = args['include_closed'] === undefined ? true : optionalBoolean(args, 'include_closed');
     return { projectId: null, value: { engineering: (await engineeringOutcomes({ includeClosed, limit: 10 })).map((one) => ({ ...one })) } };

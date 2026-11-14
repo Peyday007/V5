@@ -24,6 +24,11 @@ import { DEFAULT_SWEEP_MS, type VariableSweep } from './variables.ts';
 export const MAX_THREADS = 4;
 /** An evaluation that takes longer than this on a thread is abandoned: its thread is replaced, and that one evaluation runs inline. */
 export const EVALUATION_TIMEOUT_MS = 60_000;
+/** At most this many threads are replaced in REPLACEMENT_WINDOW_MS; past it the pool runs short instead of respawning for ever. */
+export const REPLACEMENTS_PER_WINDOW = 3;
+export const REPLACEMENT_WINDOW_MS = 10 * 60_000;
+/** The errors that mean the thread itself is unusable, not that one evaluation failed. */
+const THREAD_FAULT = /timed out on its thread|its thread failed/;
 /** A construction pass on a thread is abandoned and run inline (yielding) after this long. */
 export const CONSTRUCTION_TIMEOUT_MS = 120_000;
 
@@ -93,6 +98,7 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
   let closed = false;
   /** Threads that failed or timed out: terminated, and replaced. */
   const dead = new Set<Worker>();
+  const replaced: number[] = [];
   const spawn = (): Worker => {
     const worker = new Worker(new URL('./evaluator-boot.mjs', import.meta.url), { resourceLimits: { maxOldGenerationSizeMb: 384 } });
     worker.on('message', (message: { id: number; ok: boolean; result?: unknown; message?: string }) => {
@@ -123,8 +129,19 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
     }
     const at = idle.indexOf(worker);
     if (at >= 0) idle.splice(at, 1);
+    const listed = workers.indexOf(worker);
+    if (listed >= 0) workers.splice(listed, 1);
     void worker.terminate().catch(() => 0);
     if (closed) return;
+    // A thread that cannot boot would otherwise fail, be replaced and fail again for ever (review F6):
+    // at most REPLACEMENTS_PER_WINDOW replacements in a window, then the pool runs a thread short.
+    const now = Date.now();
+    while (replaced.length && now - replaced[0]! > REPLACEMENT_WINDOW_MS) replaced.shift();
+    if (replaced.length >= REPLACEMENTS_PER_WINDOW) {
+      if (workers.length === 0) for (const wake of waiting.splice(0)) wake();
+      return;
+    }
+    replaced.push(now);
     try {
       idle.push(spawn());
       waiting.shift()?.();
@@ -140,7 +157,7 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
   }
   const take = async (): Promise<Worker | null> => {
     while (idle.length === 0) {
-      if (workers.every((w) => dead.has(w))) return null;
+      if (workers.length === 0 || workers.every((w) => dead.has(w))) return null;
       await new Promise<void>((resolve) => waiting.push(resolve));
     }
     return idle.pop()!;
@@ -165,7 +182,9 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
         worker.postMessage({ id, ...message });
       });
     } catch (error) {
-      retire(worker);
+      // Only a thread that timed out or died is replaced; an evaluation that answered with an error leaves a
+      // healthy thread in the pool (review F6).
+      if (THREAD_FAULT.test((error as Error).message)) retire(worker);
       return fallback(error as Error);
     } finally {
       give(worker);

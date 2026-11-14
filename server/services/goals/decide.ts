@@ -36,6 +36,9 @@ import { getProject } from '../../repos/projects.ts';
 import { readObjective, type ObjectiveReading } from '../industry/construction/intent.ts';
 import { liveTargetOn, setTarget, sharedLedgerReason } from './target.ts';
 
+
+/** An `unread` entry about a money figure the objective reader could not place (review F4). */
+const UNPLACED_MONEY = /could not place|a second amount|a rate, not a total|a range, not one figure|a second (?:capital|per-week|before-proof)/;
 export interface DecisionResult {
   ok: boolean;
   /** Why not, in words, when it did not happen. An ordinary outcome. */
@@ -106,6 +109,12 @@ export async function createGoal(input: {
     ];
     if (missing.length) {
       return { ok: false, reason: `This reads as a cash objective, but the words do not state ${missing.join(' or ')}; nothing was created.${reading.unread.length ? ` Unread: ${reading.unread.join('; ')}.` : ''}`, reading };
+    }
+    // A money figure the reader could not place may be a limit the owner set; a goal created without it
+    // would plan as if no ceiling existed (invariant 38; review F4). Ask for it to be restated instead.
+    const unplacedMoney = reading.unread.filter((one) => UNPLACED_MONEY.test(one));
+    if (unplacedMoney.length) {
+      return { ok: false, reason: `These money figures could not be read as the amount or a limit: ${unplacedMoney.join('; ')}. Restate them (for example "with at most $3,000 of capital", "$375 a week"); nothing was created.`, reading };
     }
     target = {
       metric: reading.metric ?? 'SETTLED_CASH',

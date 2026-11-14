@@ -342,6 +342,13 @@ export interface InfeasibleConclusion {
   relax: Array<{ constraint: 'DEADLINE' | 'CAPITAL' | 'TARGET'; suggestion: string }>;
   headroomReach: number;
   required: number;
+  /**
+   * Only an instant (checkout or marketplace) sale could still close the gap in
+   * time, and none is held. The verdict stands for every way of selling Brain
+   * holds, but a buyer already at a checkout is not ruled out by arithmetic, so
+   * the search narrows to that instead of stopping (§65; review F2).
+   */
+  instantOnly: boolean;
 }
 
 export interface InferredInput {
@@ -923,7 +930,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       considered: [],
       // No accepted plan: keep constructing while there is time (a goal without a deadline always has),
       // never past its deadline or outcome, and never on a goal arithmetic rules out (C-10).
-      needsMoreOpenings: continueSearch({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy: goalExecutionPolicy(target), acceptance: refusedAcceptance.status }),
+      needsMoreOpenings: continueSearch({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy: goalExecutionPolicy(target), acceptance: refusedAcceptance.status, instantOnly: refusedInfeasible?.instantOnly }),
       inferred: inferredInputs(model.considered),
       researchPriority: planResearchPriority({
         reconstruction: refusedReconstruction,
@@ -1301,7 +1308,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     // until the target is met (owner, 2026-11-06): a recommendation is no reason to stop looking.
     // No accepted plan means keep constructing, modifying, combining and comparing (owner, 2026-11-09) —
     // but never past the deadline or a recorded outcome, nor on a goal arithmetic rules out (C-10).
-    needsMoreOpenings: continueSearch({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy, acceptance: acceptance.status }),
+    needsMoreOpenings: continueSearch({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy, acceptance: acceptance.status, instantOnly: infeasible?.instantOnly }),
     inferred: inferredInputs(model.considered),
     // The questions the plan Brain holds needs answered, then the run's own (C-9).
     researchPriority: planResearchPriority({
@@ -1641,7 +1648,8 @@ export function judgeFeasibility(input: {
   const reason = allImpossible
     ? `every transaction structure that could close ${moneyOf(input.remaining)} is impossible by arithmetic (${firstImpossible?.reason ?? 'no time'}), and the openings held reach ${pctOf(r.headroom.reach)} even with every estimate at its favourable end`
     : `no structure direct outreach can sell closes ${moneyOf(input.remaining)} in ${input.daysLeft ?? 0} day(s)${firstImpossible ? ` (${firstImpossible.reason})` : ''}, only buyers already at a checkout could pay in time, and the openings held reach ${pctOf(r.headroom.reach)} of the required ${pctOf(input.required)} even with every estimate at its favourable end`;
-  return { reason, relax, headroomReach: r.headroom.reach, required: input.required };
+  const instantOnly = !allImpossible && s.structures.some((one) => one.kind === 'INSTANT' && one.verdict !== 'IMPOSSIBLE');
+  return { reason, relax, headroomReach: r.headroom.reach, required: input.required, instantOnly };
 }
 
 /** The acceptance a NOT_SUPPORTED goal reads: no plan, the arithmetic, and which constraint to relax. */
@@ -1652,15 +1660,19 @@ export function notSupported(acceptance: PlanAcceptance, infeasible: InfeasibleC
     probability: null,
     accepted: null,
     shortfalls: [infeasible.reason, ...acceptance.shortfalls],
-    sentence: `INFEASIBLE AS STATED: ${infeasible.reason}. To make it supportable, ${infeasible.relax.map((one) => `${one.constraint.toLowerCase()}: ${one.suggestion}`).join('; or ')}. Brain stops widening research for this goal until its terms or inputs change.`,
+    sentence: `INFEASIBLE AS STATED: ${infeasible.reason}. To make it supportable, ${infeasible.relax.map((one) => `${one.constraint.toLowerCase()}: ${one.suggestion}`).join('; or ')}. ${
+      infeasible.instantOnly
+        ? 'Arithmetic still allows a sale to buyers already at a checkout or on a marketplace, so Brain keeps searching, and its search brief asks for buyers who come to the offer.'
+        : 'Brain stops widening research for this goal until its terms or inputs change.'
+    }`,
   };
 }
 
 /** Whether the goal's search keeps widening (C-10): not after the deadline, an outcome, or arithmetic infeasibility. Pure. */
-export function continueSearch(input: { achieved: boolean; daysLeft: number | null; outcomeRecorded: boolean; policy: string; acceptance: PlanAcceptance['status'] }): boolean {
+export function continueSearch(input: { achieved: boolean; daysLeft: number | null; outcomeRecorded: boolean; policy: string; acceptance: PlanAcceptance['status']; instantOnly?: boolean }): boolean {
   if (input.achieved || input.outcomeRecorded) return false;
   if (input.daysLeft !== null && input.daysLeft <= 0) return false;
-  if (input.acceptance === 'NOT_SUPPORTED') return false;
+  if (input.acceptance === 'NOT_SUPPORTED') return input.instantOnly === true;
   // A SQUEEZE goal keeps discovering while it sells; no accepted plan means keep constructing (owner, 2026-11-06, 2026-11-09).
   return input.policy === 'SQUEEZE' || input.acceptance !== 'ACCEPTED';
 }

@@ -623,6 +623,9 @@ function goalState(
   work: GoalWork[],
 ): { state: WorkstreamState; stateEvidence: string } {
   if (view.state !== 'BLOCKED' || !goal.target) return { state: view.state, stateEvidence: view.stateEvidence };
+  // Only a blocked idea (one path among many) yields to live work. A mission or packet waiting on a
+  // person, or a linked row gone, is the goal's own blocker and still reads BLOCKED (review F5).
+  if (view.readings.some((one) => one.state === 'BLOCKED' && one.kind !== 'CANDIDATE')) return { state: view.state, stateEvidence: view.stateEvidence };
   const live = work.filter(liveWork);
   const progressing = view.readings.filter(
     (one) => one.state !== null && one.state !== 'BLOCKED' && STATE_RANK[one.state] >= STATE_RANK.IN_PROGRESS,
@@ -1103,7 +1106,8 @@ function waitingAndNext(input: {
   const binIds = new Set(work.map((one) => one.binId));
   const pathOnly = goal.target !== null && work.some(liveWork);
   const operator = input.blockers.find(
-    (one) => (one.by === 'OPERATOR' || one.by === 'PERSON') && !(pathOnly && !binIds.has(one.ref)),
+    // Only an idea's blocker (a CANDIDATE path, rcn_…) gives way to live work; a person-blocked mission or packet does not (review F5).
+    (one) => (one.by === 'OPERATOR' || one.by === 'PERSON') && !(pathOnly && !binIds.has(one.ref) && one.ref.startsWith('rcn_')),
   );
   if (operator) {
     return {

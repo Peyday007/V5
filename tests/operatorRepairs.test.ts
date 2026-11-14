@@ -63,11 +63,17 @@ describe('H-3: reading operator state needs project:read, not operator:act', () 
     projectId = (await freshProject()).project.id;
   });
 
-  it('serves every read-only operator tool to a reader, and refuses a non-member exactly as a missing thing', async () => {
+  it('serves the project-free read tools to a reader, keeps Brain-wide records behind operator:act, and refuses alike', async () => {
     const reader = principal(projectId, ['project:read']);
-    for (const name of ['brain_operator_integrations', 'brain_operator_history', 'brain_operator_deficiencies', 'brain_operator_engineering']) {
+    for (const name of ['brain_operator_integrations']) {
       const out = await findTool(name)!.run({}, { principal: reader, requestId: 'r' });
       expect(out.value, name).toBeTruthy();
+    }
+    // History, deficiencies and engineering carry every project's goals, lessons and events (review F1):
+    // a reader of one project gets the same refusal as a stranger.
+    for (const name of ['brain_operator_history', 'brain_operator_deficiencies', 'brain_operator_engineering']) {
+      const refused = await findTool(name)!.run({}, { principal: reader, requestId: 'r' }).then(() => null, (e: Error) => e.message);
+      expect(refused, `${name} must refuse a mere reader`).not.toBeNull();
     }
     const stranger = principal('prj_not_mine', ['project:read']);
     const noScope = principal(projectId, ['queue:read']);
@@ -85,7 +91,7 @@ describe('H-3: reading operator state needs project:read, not operator:act', () 
     await expect(findTool('brain_operator_continue_idle')!.run({}, { principal: reader, requestId: 'r' })).rejects.toThrow();
   });
 
-  it("refuses one goal's lessons outside the reader's projects the same way as a goal that does not exist", async () => {
+  it("refuses one goal's lessons to a reader the same way as a goal that does not exist", async () => {
     const other = (await freshProject()).project.id;
     const g = await createWorkstream({ projectId: other, title: 'elsewhere', intent: 'x', purpose: 'REVENUE_DIRECT', createdByUserId: null });
     const reader = principal(projectId, ['project:read']);
@@ -93,8 +99,6 @@ describe('H-3: reading operator state needs project:read, not operator:act', () 
     const absent = await findTool('brain_operator_history')!.run({ goal_id: 'wst_nothing' }, { principal: reader, requestId: 'r' }).then(() => null, (e: Error) => e.message);
     expect(forbidden).not.toBeNull();
     expect(forbidden).toBe(absent);
-    const owner = principal(other, ['project:read']);
-    expect((await findTool('brain_operator_history')!.run({ goal_id: g.id }, { principal: owner, requestId: 'r' })).value).toHaveProperty('learnings');
   });
 });
 

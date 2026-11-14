@@ -77,6 +77,8 @@ export const SCREEN_MIN_WORLDS = 150;
 export const RETURN_BOUND = 20;
 export const DEAL_CAPACITY_MULTIPLE = 25;
 export const HEADROOM_SLACK = 0.02;
+/** Change dimensions that create reach the headroom reading never measured. */
+const HEADROOM_EXEMPT: ReadonlySet<string> = new Set(['ACQUISITION', 'PARTNER', 'CAPACITY', 'TRANSACTION', 'CAPITAL']);
 /** A deposit at signing collects this share of the price: an assumption until a buyer agrees to it. */
 export const DEPOSIT_SHARE = { low: 0.3, high: 0.5 } as const;
 
@@ -288,7 +290,11 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
     for (const o of state.openings) if (ids.has(o.opportunity.id) && o.repeatable && o.agreedValue === 0) markets.set(o.marketKey ?? o.opportunity.id, Math.max(markets.get(o.marketKey ?? o.opportunity.id) ?? 0, o.volume.high ?? o.volume.value ?? Infinity));
     const room = [...markets.values()].reduce((n, v) => n + v, 0);
     if (markets.size > 0 && ![...ids].some((id) => !state.openings.find((o) => o.opportunity.id === id)?.repeatable) && deals > room + 1e-9) out.push({ kind: 'MARKET', detail: `median ${Math.round(deals)} deals from markets that take at most ${Math.round(room)}` });
-    if (headroomReach !== null && b.reach > headroomReach + HEADROOM_SLACK) out.push({ kind: 'HEADROOM', detail: `reaches ${pct(b.reach)}, above the ${pct(headroomReach)} every estimate at its favourable end reaches` });
+    // Headroom is the openings held at their favourable estimates. A plan that adds a channel, a partner,
+    // bought capacity, a transaction shape or financing creates reach headroom never measured, so only a
+    // plan made of the held openings alone contradicts it (review F3).
+    const createsReach = state.changes.some((c) => HEADROOM_EXEMPT.has(c.dimension));
+    if (headroomReach !== null && !createsReach && b.reach > headroomReach + HEADROOM_SLACK) out.push({ kind: 'HEADROOM', detail: `reaches ${pct(b.reach)}, above the ${pct(headroomReach)} every estimate at its favourable end reaches` });
     return out;
   };
   const evaluate = async (state: StrategyState, w = worlds, forceMeasured = false, tag = ''): Promise<VariantReading> => {

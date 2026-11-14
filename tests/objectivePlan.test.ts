@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
-import { createWorkstream, listWorkstreamEvents } from '../server/repos/register.ts';
+import { createWorkstream, linkWorkstream, listWorkstreamEvents } from '../server/repos/register.ts';
 import { latestObjectiveReading } from '../server/repos/objectiveReadings.ts';
 import {
   advanceObjectivePlans,
@@ -79,7 +79,8 @@ function fakeModel(script: { generate: (intentRef: string) => string; critique?:
   let critiques = 0;
   const model: ObjectiveModel = async (role, _system, prompt) => {
     calls.push({ role, prompt });
-    const intentRef = /(goal:[a-z0-9_]+:intent)/i.exec(prompt)?.[1] ?? 'none';
+    // Cite a linked record when the goal has one (real evidence), else the owner's intent (which is not evidence, review F8).
+    const intentRef = /(link:PASSAGE:[a-z0-9_]+)/i.exec(prompt)?.[1] ?? /(goal:[a-z0-9_]+:intent)/i.exec(prompt)?.[1] ?? 'none';
     const keys = [...prompt.matchAll(/^- (S\d+) \|/gm)].map((m) => m[1]!);
     if (role === 'STRATEGIST') return script.generate(intentRef);
     if (role === 'CRITIC') return (script.critique ?? (() => '{"findings":[]}'))(keys, ++critiques);
@@ -138,7 +139,8 @@ describe('planObjective', () => {
     expect(judged.length).toBe(4); // the fifth repeated the first's mechanism
     expect(new Set(judged.map((j) => j.strategy.mechanism)).size).toBe(4);
     // A fabricated source is relabelled an assumption; a given one is kept.
-    expect(judged[0]!.strategy.assumptions.filter((a) => a.basis === 'EVIDENCE').every((a) => a.source?.startsWith('goal:'))).toBe(true);
+    // Citing the owner's own words is not evidence (review F8): with no recorded evidence linked, nothing reads EVIDENCE.
+    expect(judged[0]!.strategy.assumptions.filter((a) => a.basis === 'EVIDENCE')).toHaveLength(0);
     expect(judged[0]!.strategy.assumptions.some((a) => a.basis === 'ASSUMPTION' && /fabricated/.test(JSON.stringify(a)))).toBe(true);
     // S2 (broken dependency, found by code) and S3 (critic) were revised once and survived the re-critique.
     expect(judged.filter((j) => j.original).map((j) => j.strategy.key).sort()).toEqual(['S2', 'S3']);
@@ -157,8 +159,9 @@ describe('planObjective', () => {
     expect(Number(projectEvents[0]!.n)).toBe(1);
   });
 
-  it('is PLAN_READY when a strategy survives on evidence and a success measure is stated', async () => {
+  it('is PLAN_READY only when a strategy survives on recorded evidence (a linked passage) and a success measure is stated', async () => {
     const id = await goal('Build or expand a cleaning business in Harrisburg', 'Ten recurring commercial clients under contract');
+    await linkWorkstream({ workstreamId: id, kind: 'PASSAGE', ref: 'psg_facility_rates', relation: 'EVIDENCE', label: 'facility managers quote recurring cleaning rates', recordedBy: 'BRAIN' });
     const { model } = fakeModel({ generate: (ref) => JSON.stringify({ strategies: FIVE.slice(0, 4).map((s) => strategy(s, ref)) }) });
     const reading = (await planObjective(id, { now, model, construction: false }))!.reading;
     expect(reading.verdict).toBe('PLAN_READY');

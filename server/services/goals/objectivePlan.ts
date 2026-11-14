@@ -231,7 +231,8 @@ export function parseStrategy(raw: unknown, sources: ReadonlySet<string>, key: s
     const statement = str(x?.['statement'], 300);
     if (!statement) continue;
     const source = str(x?.['source'], 200);
-    const cited = x?.['basis'] === 'EVIDENCE' && sources.has(source);
+    // The owner's own words state what is wanted, not that a strategy works: citing them is not evidence (review F8).
+    const cited = x?.['basis'] === 'EVIDENCE' && sources.has(source) && !/^goal:[^:]+:(?:intent|outcome)$/.test(source);
     assumptions.push({ statement, basis: cited ? 'EVIDENCE' : 'ASSUMPTION', source: cited ? source : null });
   }
   if (steps.length === 0 || assumptions.length === 0) return null;

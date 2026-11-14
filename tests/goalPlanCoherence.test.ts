@@ -172,7 +172,21 @@ describe('C-10: an infeasible goal is concluded by arithmetic, and only by arith
     const a = notSupported(base, infeasible!);
     expect(a.status).toBe('NOT_SUPPORTED');
     expect(a.sentence).toMatch(/^INFEASIBLE AS STATED/);
-    expect(continueSearch({ achieved: false, daysLeft: 2, outcomeRecorded: false, policy: 'SQUEEZE', acceptance: a.status })).toBe(false);
+    // A checkout sale is not ruled out by arithmetic in 48 hours, so the search narrows rather than stops (§65; review F2).
+    expect(infeasible!.instantOnly).toBe(true);
+    expect(a.sentence).toMatch(/keeps searching/);
+    expect(continueSearch({ achieved: false, daysLeft: 2, outcomeRecorded: false, policy: 'SQUEEZE', acceptance: a.status, instantOnly: infeasible!.instantOnly })).toBe(true);
+  });
+
+  it('stops the search when no structure at all, instant sales included, can close the gap', () => {
+    const none = requiredStructures({ remaining: 1_000_000, daysLeft: 0, currency: 'USD', perArrangement: 0, spendCeiling: 0, outreachPerDay: { low: 400, high: 945, stated: true } });
+    const r = reconstruction({ headroom: { reach: 0, settledP50: 0 }, best: variant({ reach: 0, settledP50: 0 }) });
+    const infeasible = judgeFeasibility({ reconstruction: r, structures: none, required: 0.9, remaining: 1_000_000, daysLeft: 0, capitalCeiling: 0 })!;
+    expect(infeasible.instantOnly).toBe(false);
+    const base: PlanAcceptance = { status: 'CANDIDATE_ONLY', required: 0.9, probability: null, accepted: null, candidate: null, shortfalls: [], sentence: '' };
+    const a = notSupported(base, infeasible);
+    expect(a.sentence).toMatch(/stops widening/);
+    expect(continueSearch({ achieved: false, daysLeft: 1, outcomeRecorded: false, policy: 'SQUEEZE', acceptance: a.status, instantOnly: infeasible.instantOnly })).toBe(false);
   });
 
   it('never reads the $10K goal as infeasible: weak openings are a reason to search, not a verdict (§65)', () => {

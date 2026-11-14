@@ -89,8 +89,9 @@ describe('planning recovery: general-purpose cash planning holds its economics a
       expect(r.best.committed).toBeLessThanOrEqual(o.limits.capitalCeiling + 1e-6);
       // Never claims more than the markets it holds could pay.
       expect(r.best.settledP50).toBeLessThanOrEqual(marketBound(o.openings));
-      // Never more than the arithmetic allows: the kept plan's reach never exceeds what the openings could do at their best.
-      expect(r.best.reach).toBeLessThanOrEqual(r.headroom.reach + 0.02);
+      // Never more than the arithmetic allows: a plan made only of the openings held never reaches more than they do at their best.
+      const createsReach = r.best.changes.some((c) => ['ACQUISITION', 'PARTNER', 'CAPACITY', 'TRANSACTION', 'CAPITAL'].includes(c.dimension));
+      if (!createsReach) expect(r.best.reach).toBeLessThanOrEqual(r.headroom.reach + 0.02);
       // An assumed change is coverage, never a probability.
       if (r.best.changes.some((c) => c.basis === 'ASSUMPTION')) expect(r.confidence.basis).toBe('COVERAGE');
       // A flagged (implausible) reading is never the kept plan.

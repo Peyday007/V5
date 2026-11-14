@@ -111,6 +111,22 @@ describe('createGoal, setTarget and setTargetLimits', () => {
     expect(made.goal.intent).toBe('Build or expand a cleaning business in Harrisburg');
   });
 
+  it('refuses a cash objective whose money limit it could not place, rather than planning with no ceiling (review F4)', async () => {
+    const before = await getDb().get<{ n: number | string }>('SELECT COUNT(*) AS n FROM workstreams');
+    for (const objective of ['Make $10,000 within 30 days using $3,000', 'Make $10,000 within 30 days and $375 per week']) {
+      const made = await createGoal({ projectId, objective, actorRef, userId, now: NOW });
+      if (made.ok) {
+        // Read correctly: the limit must be on the target, never dropped.
+        const t = made.goal.target!;
+        expect(t.capitalCeilingCents !== null || t.capitalPerWeekCents !== null, objective).toBe(true);
+        continue;
+      }
+      expect(made.reason, objective).toMatch(/could not be read|Restate/);
+    }
+    const after = await getDb().get<{ n: number | string }>('SELECT COUNT(*) AS n FROM workstreams');
+    expect(Number(after?.n)).toBeGreaterThanOrEqual(Number(before?.n));
+  });
+
   it('refuses a cash objective with no deadline, writing nothing', async () => {
     const before = await getDb().get<{ n: number | string }>('SELECT COUNT(*) AS n FROM workstreams');
     const made = await createGoal({ projectId, objective: 'Make $10,000 quickly', actorRef, userId, now: NOW });

@@ -81,7 +81,10 @@ export function weakChallenger(model: OperatorModel): boolean {
  * the best model reading it cold is still a second reading.
  */
 export function challengerModels(ranked: OperatorModel[]): OperatorModel[] {
-  return ranked.filter((m) => !weakChallenger(m));
+  const strong = ranked.filter((m) => !weakChallenger(m));
+  // A weak challenger is better than none: with only the small GPU model up, it still attacks the decision
+  // last-resort rather than letting a high-impact decision commit unchallenged (review F11).
+  return strong.length > 0 ? strong : ranked;
 }
 
 /** Ask a second model to attack the decision. Null when no model answered within the budget. */

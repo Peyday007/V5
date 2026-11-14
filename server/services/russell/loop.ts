@@ -3540,8 +3540,9 @@ export function startGoalPlans(
   report: Pick<TickReport, 'passFailures' | 'deferred'>,
   run: (options: { maxReads?: number }) => Promise<unknown> = async (options) => {
     await advanceGoalPlans(new Date(), options);
-    // Goals with no cash target are planned beside them (planning recovery G-1).
-    await advanceObjectivePlans();
+    // Goals with no cash target are planned beside them (planning recovery G-1), but not while the pass is
+    // throttled under pressure: model calls of up to a minute each would hold the next cash read (review F9).
+    if (options.maxReads === undefined) await advanceObjectivePlans();
   },
 ): void {
   if (goalPlansFailure) {
