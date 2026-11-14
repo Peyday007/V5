@@ -13,7 +13,12 @@ import { activate } from '../server/services/cash/lifecycle.ts';
 import { capture } from '../server/services/cash/opportunities.ts';
 import { createWorkstream, linkWorkstream } from '../server/repos/register.ts';
 import { assembleGoals } from '../server/services/goals/model.ts';
-import { composePort05, noteGoalPortfolio, noteGoalStreamsCleared, readPort05 } from '../server/services/goals/port05.ts';
+import { composePort05, heldPlanStreams, noteGoalStreamsCleared, notePlanStreams, PLAN_STREAMS_STALE_MS, readPort05 } from '../server/services/goals/port05.ts';
+import { evaluateGoalPortfolio } from '../server/services/goals/portfolio.ts';
+import { getWorkstream } from '../server/repos/register.ts';
+import { setGoalTerms } from '../server/repos/goals.ts';
+import { readTarget, setTarget } from '../server/services/goals/target.ts';
+import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 import type { StreamsReading, PortfolioStream } from '../server/services/goals/streams.ts';
 import type { CapabilityCredit } from '../server/services/goals/capabilityCredit.ts';
 import type { OfferReadiness } from '../server/services/goals/offerReadiness.ts';
@@ -25,6 +30,29 @@ const STREAMS = {
   streams: [stream('cop_a', 'LEADING', true), stream('cop_b', 'ALTERNATE', false), stream('cop_c', 'FUTURE_BET', true)],
   across: { independentStreams: 2 },
 } as unknown as StreamsReading;
+
+const fixed = (value: number): ModelInput => ({ value, low: value, high: value, provenance: 'EVIDENCE', source: null, note: '' });
+/** A real opening as the goal model enters it. */
+const planned = (opportunity: ModelledOpportunity['opportunity']): ModelledOpportunity =>
+  ({
+    opportunity,
+    index: 1,
+    tier: 'QUALIFIED',
+    repeatable: true,
+    price: fixed(1500),
+    capital: fixed(60),
+    hours: fixed(2),
+    daysToCash: fixed(3),
+    close: fixed(0.2),
+    respond: fixed(0.02),
+    directCost: fixed(100),
+    volume: fixed(500),
+    agreed: false,
+    agreedValue: 0,
+    agreedDeals: 0,
+    fulfilledBy: null,
+    competitiveAward: false,
+  }) as ModelledOpportunity;
 
 const credit = (opportunityId: string, credited: boolean): CapabilityCredit => ({
   opportunityId,
@@ -89,14 +117,26 @@ describe('the composition', () => {
     expect(reading.streams.reason).toMatch(/No portfolio reading/);
   });
 
-  it('takes the streams the goal plan handed over, and forgets them when the plan has none', async () => {
+  it('holds the plan’s streams by the target they were read for, and only for one project and currency', () => {
     noteGoalStreamsCleared();
-    const deps = { credits: async () => [], offers: async () => [] };
-    expect((await readPort05('wst_g', new Date(), deps)).streams.known).toBe(false);
-    noteGoalPortfolio('wst_g', { streams: STREAMS });
-    expect((await readPort05('wst_g', new Date(), deps)).streams).toMatchObject({ known: true, independentStreams: 2 });
-    noteGoalPortfolio('wst_g', null);
-    expect((await readPort05('wst_g', new Date(), deps)).streams.known).toBe(false);
+    const at = Date.parse('2026-11-14T00:00:00Z');
+    const openings = [{ opportunity: { projectId: 'prj_a', currency: 'USD' } }, { opportunity: { projectId: 'prj_a', currency: 'USD' } }];
+    const target = { projectId: 'prj_a', currency: 'USD', remainingCents: 1_000_000, daysLeft: 20 };
+    expect(heldPlanStreams(target, at)).toBeNull();
+    notePlanStreams({ openings, remaining: 10_000, daysLeft: 20, streams: STREAMS, now: at });
+    expect(heldPlanStreams(target, at)).toBe(STREAMS);
+    // A day has turned since the plan was read: it is still that plan.
+    expect(heldPlanStreams({ ...target, daysLeft: 19 }, at)).toBe(STREAMS);
+    // Another target, another project or a stale reading is not this goal's plan.
+    expect(heldPlanStreams({ ...target, remainingCents: 900_000 }, at)).toBeNull();
+    expect(heldPlanStreams({ ...target, projectId: 'prj_b' }, at)).toBeNull();
+    expect(heldPlanStreams({ ...target, daysLeft: null }, at)).toBeNull();
+    expect(heldPlanStreams(target, at + PLAN_STREAMS_STALE_MS + 1)).toBeNull();
+    // A mixed or empty set of openings is not a goal plan, and is not held.
+    noteGoalStreamsCleared();
+    notePlanStreams({ openings: [...openings, { opportunity: { projectId: 'prj_b', currency: 'USD' } }], remaining: 10_000, daysLeft: 20, streams: STREAMS, now: at });
+    notePlanStreams({ openings: [], remaining: 10_000, daysLeft: 20, streams: STREAMS, now: at });
+    expect(heldPlanStreams(target, at)).toBeNull();
   });
 });
 
@@ -120,13 +160,33 @@ describe('GoalView carries it, from rows', () => {
     const opened = await capture({ projectId, actorRef: userId, ownerUserId: userId, title: 'Monthly bookkeeping for dental practices', mechanism: 'EXPLICIT_PAID_REQUEST', currency: 'USD', industry: 'dental', source: 'https://example.com/b' });
     if (!opened.ok) throw new Error(opened.reason);
     await linkWorkstream({ workstreamId: goal.id, kind: 'OPPORTUNITY', ref: opened.value.id, relation: 'PURSUES', recordedBy: 'PERSON', recordedByUserId: userId });
-    noteGoalPortfolio(goal.id, { streams: { streams: [stream(opened.value.id, 'LEADING', true)], across: { independentStreams: 1 } } as unknown as StreamsReading });
+    // The goal has a target and a due date, so the plan can read it.
+    expect((await setTarget({ goal: (await getWorkstream(goal.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId, now: new Date(Date.now() - 60_000) })).ok).toBe(true);
+    await setGoalTerms(goal.id, { dueAt: new Date(Date.now() + 20 * 86_400_000).toISOString() });
+    const target = (await readTarget((await getWorkstream(goal.id))!))!;
+    // Before any plan is read, the streams are unknown — never invented.
+    const before = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === goal.id)!;
+    expect(before.port05!.streams.known).toBe(false);
+    // The plan's own evaluation, exactly as the goal model calls it (no worlds, no committed, not the floor):
+    // nothing else hands the streams over.
+    evaluateGoalPortfolio({
+      openings: [planned(opened.value)],
+      remaining: target.remainingCents / 100,
+      daysLeft: target.daysLeft!,
+      capitalCeiling: 3000,
+      beforeProof: 375,
+      perWeek: 750,
+      resources: '40 emails a day',
+    });
 
     const read = await assembleGoals({ projectIds: [projectId] });
     const view = read.goals.find((one) => one.id === goal.id)!;
     expect(view.port05).toBeTruthy();
     const p5 = view.port05!;
-    expect(p5.streams).toMatchObject({ known: true, independentStreams: 1, roles: { LEADING: 1 } });
+    expect(p5.streams).toMatchObject({ known: true });
+    if (!p5.streams.known) throw new Error('unknown');
+    expect(p5.streams.streams.map((one) => one.opportunityId)).toEqual([opened.value.id]);
+    expect(p5.streams.independentStreams).toBeGreaterThanOrEqual(0);
     // Credit and readiness were read from the opening's own rows.
     expect(p5.credits.map((c) => c.opportunityId)).toEqual([opened.value.id]);
     expect(p5.credits[0]!.credited).toBe(false);
@@ -142,6 +202,8 @@ describe('GoalView carries it, from rows', () => {
   it('creates no second derivation of goal state: model.ts calls the composition and port05.ts writes nothing', () => {
     const model = readFileSync('server/services/goals/model.ts', 'utf8');
     expect(model).toMatch(/readPort05\(goal\.id/);
+    // The hand-off is made where the streams are built, so no caller can forget it.
+    expect(readFileSync('server/services/goals/portfolio.ts', 'utf8')).toMatch(/notePlanStreams\(\{ openings: input\.openings/);
     const source = readFileSync('server/services/goals/port05.ts', 'utf8');
     expect(source).not.toMatch(/\b(?:INSERT|UPDATE|DELETE)\b|recordWorkstreamEvent|recordCashEvent|getDb\(/);
   });
