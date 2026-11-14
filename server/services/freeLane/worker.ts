@@ -437,10 +437,15 @@ export function listedClaims(raw: Record<string, unknown>): Record<string, unkno
 
 /**
  * The declared lane a model's label names, or null. An exact id wins; then a
- * label equal to an id or a description ignoring case; then a label whose id
- * part ("Lane 1", "L1: primary sources") or whole text equals exactly one
- * lane's id or description once case, punctuation and spacing are ignored. A
- * label that fits two lanes, or none, names no lane.
+ * label equal to an id or a description ignoring case; then a label whose
+ * whole text equals exactly one lane's id or description once case,
+ * punctuation and spacing are ignored. A label in two parts ("L1: primary
+ * sources", "primary sources (L2)") names a lane only through its first part:
+ * that part must name exactly one lane, and the second part, if it names a
+ * lane at all, must name the same one. The second part alone never decides,
+ * so "Lane 3 (primary sources)" — a lane nobody declared — names no lane
+ * rather than the lane whose description it happens to repeat. A label that
+ * fits two lanes, or none, names no lane.
  */
 export function laneFor(label: unknown, lanes: { id: string; description: string }[]): string | null {
   const given = String(label ?? '').trim();
@@ -450,20 +455,17 @@ export function laneFor(label: unknown, lanes: { id: string; description: string
   const plain = lanes.filter((l) => l.description.toLowerCase() === lower || l.id.toLowerCase() === lower);
   if (plain.length > 0) return plain[0]!.id;
   const squash = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
-  const whole = squash(given);
+  /** The declared lanes a squashed piece of label names, by id or by description. */
+  const naming = (piece: string): Set<string> =>
+    new Set(piece === '' ? [] : lanes.filter((l) => squash(l.id) === piece || squash(l.description) === piece).map((l) => l.id));
+  const only = (ids: Set<string>): string | null => (ids.size === 1 ? [...ids][0]! : null);
+  const whole = naming(squash(given));
+  if (whole.size > 0) return only(whole);
   const parts = given.split(/\s*(?::|\s[-\u2013\u2014]\s|\()\s*/);
-  const head = squash(parts[0] ?? '');
-  const tail = squash(parts.slice(1).join(' '));
-  const ids = new Set(
-    lanes
-      .filter((l) => {
-        const id = squash(l.id);
-        const description = squash(l.description);
-        return (id !== '' && (id === whole || id === head)) || (description !== '' && (description === whole || description === tail));
-      })
-      .map((l) => l.id),
-  );
-  return ids.size === 1 ? [...ids][0]! : null;
+  const head = only(naming(squash(parts[0] ?? '')));
+  if (head === null) return null;
+  const tail = naming(squash(parts.slice(1).join(' ')));
+  return tail.size === 0 || (tail.size === 1 && tail.has(head)) ? head : null;
 }
 
 /** A tool's input schema with the lease fields and the long prose removed, for a model to fill. */
