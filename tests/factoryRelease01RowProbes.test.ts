@@ -132,3 +132,43 @@ describe('GOV-22-1: promoted from a measured blocker, demoted with the requireme
     expect(promotionHolds([ev('PROGRAM_CAPABILITY_PROMOTED', { requirement: 'X', reasons: ['r'], evidence: ['3 blocked transactions'], mapVersion: 4 })]).ok).toBe(true);
   });
 });
+
+describe('CAUSAL-14-1..15-2: judged on the portfolios live goals compose', async () => {
+  const c = await import('../server/services/factory/program/release01/causalProbe.ts');
+  type PS = Parameters<typeof c.graphHolds>[0];
+  const fig = (status: string, value: number | null, source: string | null) => ({ meaning: 'free', unit: 'cents', value, source, derivedFrom: [], status, window: null, geography: null });
+  const member = (over: Record<string, unknown> = {}) => ({
+    opportunityId: 'cop_1', title: 't', nodes: 4, relations: 3, actions: 1,
+    route: { route: 'buyer pays on delivery', freeCents: fig('ASSUMED', 100, 'row:cop_1') },
+    chain: { stages: [{}], outputUnits: 2, bindingConstraint: 'close', firstUnknown: null },
+    discovered: [], unknowns: [],
+    whatIf: [{ id: 'w1', opportunityId: 'cop_1', question: 'q', change: 'x', effects: [{ opportunityId: 'cop_1', title: 't', via: 'v', before: { a: 1 }, after: { a: 2 }, note: '' }], breaks: [], branch: null, unknowns: [] }],
+    decomposition: [{ id: 's1', question: 'q', observable: 'a paid order', dependsOn: [], origin: 'starting', status: 'UNKNOWN' }],
+    ...over,
+  });
+  const ps = (members: unknown[], extra: Record<string, unknown> = {}): PS => [{ goalId: 'g1', portfolio: { basis: 'COVERAGE', causal: { members, shared: [], account: {}, decisionUnknowns: [] }, assurance: { claimsAtLeast90: false, validationProblems: ['x'] }, marketHistory: [], ...extra } }] as unknown as PS;
+
+  it.each(['r01.causal-14-1', 'r01.causal-14-2', 'r01.causal-14-3', 'r01.causal-14-4', 'r01.causal-14-5', 'r01.causal-14-7', 'r01.causal-15-2'])('%s is registered and UNKNOWN on an empty Brain', async (name) => {
+    await freshProject();
+    expect((await getProbe(name)!({})).ok).toBeNull();
+  });
+  it('passes a well-formed reading on every judgment', () => {
+    const p = ps([member()]);
+    for (const judge of [c.graphHolds, c.lineageHolds, c.chainHolds, c.whatIfHolds, c.assuranceHolds, c.calibrationHolds, c.decompositionHolds]) expect(judge(p).ok).toBe(true);
+  });
+  it('is UNKNOWN with no members, and with nothing propagated or decomposed', () => {
+    expect(c.graphHolds(ps([])).ok).toBeNull();
+    expect(c.whatIfHolds(ps([member({ whatIf: [] })])).ok).toBeNull();
+    expect(c.decompositionHolds(ps([member({ decomposition: null })])).ok).toBeNull();
+    expect(c.assuranceHolds(ps([member()], { assurance: null })).ok).toBeNull();
+  });
+  it('fails each contradiction', () => {
+    expect(c.graphHolds(ps([member({ route: { route: ' ', freeCents: fig('UNKNOWN', null, null) } })])).ok).toBe(false);
+    expect(c.lineageHolds(ps([member({ route: { route: 'r', freeCents: fig('EVIDENCED', 5, null) } })])).ok).toBe(false);
+    expect(c.lineageHolds(ps([member({ route: { route: 'r', freeCents: fig('UNKNOWN', 5, null) } })])).ok).toBe(false);
+    expect(c.chainHolds(ps([member({ chain: { stages: [{}], outputUnits: 3, bindingConstraint: null, firstUnknown: 'reply' } })])).ok).toBe(false);
+    expect(c.assuranceHolds(ps([member()], { assurance: { claimsAtLeast90: true, validationProblems: ['an assumed rate'] } })).ok).toBe(false);
+    expect(c.calibrationHolds(ps([member()], { assurance: { claimsAtLeast90: true, validationProblems: [] } })).ok).toBe(false);
+    expect(c.decompositionHolds(ps([member({ decomposition: [{ id: 's', question: 'q', observable: ' ', dependsOn: [], origin: 'starting', status: 'UNKNOWN' }] })])).ok).toBe(false);
+  });
+});
