@@ -135,6 +135,28 @@ describe('COM-13-2 composable leverage', () => {
     expect(p50(base(variants[0]!), 'lev_cash_exposure').p50 / none).toBeCloseTo(1, 1);
   });
 
+  it('a person\'s assumed range or bare bounds never earns the prepayment credit (repair: credit only on evidence)', () => {
+    const none = p50(base({ ...all, prepayment: undefined }), 'lev_cash_exposure').p50;
+    const guess = (low: number, high: number): Part => ({ assumed: { low, high, source: src('https://example.test/guess') } });
+    const assumedOnly: Levers = {
+      ...all,
+      fulfilment: { ...all.fulfilment!, paymentDays: guess(30, 40) },
+      prepayment: { willingness: guess(0.8, 0.9), refundShare: guess(0, 0.05), usableDays: guess(0, 2) },
+    };
+    const boundsOnly: Levers = { ...all, prepayment: { willingness: { min: 0, max: 1 }, refundShare: { min: 0, max: 1 }, usableDays: { min: 0, max: 365 } } };
+    // One assumed condition beside three evidenced ones is still not verified.
+    const oneAssumed: Levers = { ...all, prepayment: { ...all.prepayment!, willingness: guess(0.4, 0.6) } };
+    for (const levers of [assumedOnly, boundsOnly, oneAssumed]) {
+      const c = composeArrangement(base(levers), { now });
+      expect(c.prepayment!.credited).toBe(false);
+      expect(c.prepayment!.reason).toMatch(/not established by evidence/);
+      expect(c.formulas.lev_cash_exposure).not.toMatch(/prepay/);
+    }
+    expect(p50(base(oneAssumed), 'lev_cash_exposure').p50 / none).toBeCloseTo(1, 1);
+    // The evidenced version of the same lever is credited, so the refusal is about evidence, not about prepayment.
+    expect(composeArrangement(base(all), { now }).prepayment!.credited).toBe(true);
+  });
+
   it('refund obligations and supplier defaults add to liability', () => {
     const withBoth = p50(base(all), 'lev_liability').p50;
     const noRefund = p50(base({ ...all, prepayment: undefined }), 'lev_liability').p50;

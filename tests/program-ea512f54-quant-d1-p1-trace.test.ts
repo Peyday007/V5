@@ -108,6 +108,20 @@ describe('verifyPrepayment', () => {
     expect(v).toMatchObject({ willingness: 'UNKNOWN', refundObligations: 'UNKNOWN', timing: 'UNKNOWN', usableBeforeSupplierPayment: null });
     expect(v!.tasks).toHaveLength(3);
   });
+  it('never reports a credit the evidence does not support: credited agrees with the verification', () => {
+    const guess = (low: number, high: number): Part => ({ assumed: { low, high, source: src('https://example.test/guess') } });
+    const assumed = arrangement({ fulfilment: { ...fulfil, paymentDays: guess(30, 40) }, prepayment: { willingness: guess(0.8, 0.9), refundShare: guess(0, 0.05), usableDays: guess(0, 2) } });
+    const [v] = verifyPrepayment(assumed, now);
+    expect(v).toMatchObject({ willingness: 'UNKNOWN', refundObligations: 'UNKNOWN', timing: 'UNKNOWN', credited: false });
+    const t = traceLeverage(assumed, {}, { now });
+    const withPrepay = t.combinations.find((c) => c.levers.join('+') === 'fulfilment+prepayment')!;
+    const without = t.combinations.find((c) => c.levers.join('+') === 'fulfilment')!;
+    expect(withPrepay.prepaymentCredited).toBe(false);
+    expect(withPrepay.cashExposure.p50! / without.cashExposure.p50!).toBeCloseTo(1, 1);
+    // Evidence on every condition: established and credited together.
+    const [e] = verifyPrepayment(arrangement({ fulfilment: fulfil, prepayment: prepay }), now);
+    expect(e!.credited).toBe(e!.willingness === 'ESTABLISHED' && e!.refundObligations === 'ESTABLISHED' && e!.timing === 'ESTABLISHED');
+  });
   it('returns nothing for an arrangement without a prepayment lever', () => {
     expect(verifyPrepayment(arrangement({ aiLabor: ai }), now)).toEqual([]);
   });

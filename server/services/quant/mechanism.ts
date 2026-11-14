@@ -21,7 +21,8 @@
  * the whole thing is resolved by `reconstruct` exactly like any other graph,
  * and a part may itself be rebuilt from deeper parts.
  */
-import type { QuantGraph, QuantityNode } from '../../domain/quant.ts';
+import type { Estimate, QuantGraph, QuantityNode } from '../../domain/quant.ts';
+import { reconstruct } from './reconstruct.ts';
 
 /** A part of an arrangement: a node without its key, which the composer assigns. */
 export type Part = Omit<QuantityNode, 'key' | 'label' | 'unit' | 'kind'> & { label?: string };
@@ -149,7 +150,7 @@ export interface ComposedArrangement {
 }
 
 /** Compose an arrangement into a reconstruction graph. */
-export function composeArrangement(a: Arrangement): ComposedArrangement {
+export function composeArrangement(a: Arrangement, options: { now?: Date } = {}): ComposedArrangement {
   const k = (name: string) => `${a.key}_${name}`;
   const nodes: QuantityNode[] = [];
   const part = (name: string, label: string, unit: string, kind: QuantityNode['kind'], p: Part, bounds?: { min?: number; max?: number }) => {
@@ -211,7 +212,7 @@ export function composeArrangement(a: Arrangement): ComposedArrangement {
   );
   let leverResult: Pick<ComposedArrangement, 'traced' | 'prepayment'> | null = null;
   if (L) {
-    leverResult = composeLevers(a, L, k, part, nodes, formulas);
+    leverResult = composeLevers(a, L, k, part, nodes, formulas, options.now ?? new Date());
     const contributionNode = nodes.find((one) => one.key === k('contribution'))!;
     contributionNode.formula = formulas[k('contribution')];
   }
@@ -222,9 +223,23 @@ export function composeArrangement(a: Arrangement): ComposedArrangement {
 
 type PartFn = (name: string, label: string, unit: string, kind: QuantityNode['kind'], p: Part, bounds?: { min?: number; max?: number }) => string;
 
-/** A part somebody actually stated: evidence, a formula or a person's range. An empty part is a question, never an answer. */
-function stated(p: Part | undefined): boolean {
-  return !!p && ((p.observations?.length ?? 0) > 0 || !!p.formula || !!p.assumed);
+/**
+ * Whether a resolved quantity is established by evidence: a distribution its
+ * observations justify. An assumed range, bounds or nothing resolve to an
+ * estimate that is not, so they never pass. The one test for a prepayment
+ * condition, shared by the composer's credit and `verifyPrepayment`.
+ */
+export function establishedEstimate(est: Estimate | undefined): boolean {
+  return !!est && est.distributionJustified && est.samples.length > 0;
+}
+
+/** Whether `key` resolves on `graph` to an estimate established by evidence. Unresolvable is not established. */
+function evidencedIn(graph: QuantGraph, key: string, now: Date): boolean {
+  try {
+    return establishedEstimate(reconstruct(graph, key, now).estimates[key]);
+  } catch {
+    return false;
+  }
 }
 
 /** A key in the graph, emitted once: the given part when there is one, an empty question otherwise. */
@@ -268,7 +283,7 @@ function composeCapacity(a: Arrangement, L: Levers, k: (n: string) => string, pa
 }
 
 /** Trace the levers through margin, exposure, cash conversion, supplier risk, liability, speed and repeatability. */
-function composeLevers(a: Arrangement, L: Levers, k: (n: string) => string, part: PartFn, nodes: QuantityNode[], formulas: Record<string, string>): Pick<ComposedArrangement, 'traced' | 'prepayment'> {
+function composeLevers(a: Arrangement, L: Levers, k: (n: string) => string, part: PartFn, nodes: QuantityNode[], formulas: Record<string, string>, now: Date): Pick<ComposedArrangement, 'traced' | 'prepayment'> {
   const t = k('transactions');
   const c = a.currency;
   const node = (name: string, label: string, unit: string, kind: QuantityNode['kind'], formula: string, bounds?: { min?: number; max?: number }) => {
@@ -322,17 +337,24 @@ function composeLevers(a: Arrangement, L: Levers, k: (n: string) => string, part
     willingness = part('prepay_willingness', 'Share of buyers verified willing to prepay', 'share', 'RATE', L.prepayment.willingness);
     refund = part('prepay_refund_share', 'Share of prepaid money that may have to be refunded', 'share', 'RATE', L.prepayment.refundShare);
     const usable = part('prepay_usable_days', 'Days until prepaid money is usable', 'days', 'POSITIVE', L.prepayment.usableDays, { min: 0 });
+    /*
+     * Each condition must be established by evidence: the same test
+     * `verifyPrepayment` applies (`establishedEstimate`). A person's assumed
+     * range, bare bounds or nothing at all is a question, so it never earns
+     * the credit (S-0103, invariant 39).
+     */
+    const graphNow: QuantGraph = { nodes: [...nodes, ...(a.extra ?? [])], correlations: a.correlations };
     const missing = [
-      stated(L.prepayment.willingness) ? null : 'buyer willingness',
-      stated(L.prepayment.refundShare) ? null : 'refund obligations',
-      stated(L.prepayment.usableDays) ? null : 'when prepaid funds are usable',
-      stated(supplierDaysPart) ? null : 'when the supplier must be paid',
+      evidencedIn(graphNow, willingness, now) ? null : 'buyer willingness',
+      evidencedIn(graphNow, refund, now) ? null : 'refund obligations',
+      evidencedIn(graphNow, usable, now) ? null : 'when prepaid funds are usable',
+      evidencedIn(graphNow, supplierDays, now) ? null : 'when the supplier must be paid',
     ].filter((one): one is string => !!one);
     if (missing.length === 0) {
       credit = node('prepay_credit', 'Share of the outlay prepayment funds before the supplier is paid', 'share', 'RATE', `if(${usable} <= ${supplierDays}, ${willingness} * (1 - ${refund}), 0)`, { min: 0, max: 1 });
-      prepayment = { credited: true, reason: 'Willingness, refunds and timing are stated; the credit applies only where prepaid funds are usable before the supplier is paid.' };
+      prepayment = { credited: true, reason: 'Willingness, refunds and timing are established by evidence; the credit applies only where prepaid funds are usable before the supplier is paid.' };
     } else {
-      prepayment = { credited: false, reason: `Not credited: ${missing.join(', ')} unstated — an unknown is never read as favourable.` };
+      prepayment = { credited: false, reason: `Not credited: ${missing.join(', ')} not established by evidence (unstated, bounds only or a person's assumed range) — an unknown is never read as favourable.` };
     }
   }
   const exposureParts = [outlayKey, advance ? `(1 - ${advance})` : null, credit ? `(1 - ${credit})` : null].filter((one): one is string => !!one);

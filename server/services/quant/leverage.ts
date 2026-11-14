@@ -25,7 +25,7 @@
  * No store, scheduler or authority path of its own: it composes through the
  * existing composer and resolves through the existing `reconstruct`.
  */
-import { composeArrangement, type Arrangement, type Levers, type Part, type TracedDimensions } from './mechanism.ts';
+import { composeArrangement, establishedEstimate, type Arrangement, type Levers, type Part, type TracedDimensions } from './mechanism.ts';
 import { reconstruct } from './reconstruct.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 
@@ -125,7 +125,7 @@ function read(estimates: Record<string, Estimate>, key: string): Reading {
  * and shares the memo. The root itself is never read.
  */
 function resolveTraced(a: Arrangement, now: Date): { traced: TracedDimensions; transactions: string; estimates: Record<string, Estimate>; credited: boolean; formulas: Record<string, string> } {
-  const composed = composeArrangement(a);
+  const composed = composeArrangement(a, { now });
   const traced = composed.traced!;
   const targets = [...DIMENSIONS.map((d) => traced[d]), traced.cashExposure, composed.transactions];
   const root = `${a.key}_trace_root`;
@@ -234,7 +234,7 @@ export interface PrepaymentVerification {
   tasks: string[];
 }
 
-const establishes = (est: Estimate | undefined): Establishment => (est && est.distributionJustified && est.samples.length > 0 ? 'ESTABLISHED' : 'UNKNOWN');
+const establishes = (est: Estimate | undefined): Establishment => (establishedEstimate(est) ? 'ESTABLISHED' : 'UNKNOWN');
 
 /**
  * Per prepayment lever (an arrangement carries at most one): whether each
@@ -243,7 +243,7 @@ const establishes = (est: Estimate | undefined): Establishment => (est && est.di
  */
 export function verifyPrepayment(a: Arrangement, now: Date = new Date()): PrepaymentVerification[] {
   if (!a.levers?.prepayment) return [];
-  const composed = composeArrangement(withLevers(a, leversOf(a)));
+  const composed = composeArrangement(withLevers(a, leversOf(a)), { now });
   const k = (n: string) => `${a.key}_${n}`;
   const resolveOne = (key: string) => (composed.graph.nodes.some((n) => n.key === key) ? reconstruct(composed.graph, key, now).estimates[key] : undefined);
   const willing = resolveOne(k('prepay_willingness'));
