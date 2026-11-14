@@ -1763,42 +1763,18 @@ const ARRIVAL_PARTS = new Set([0, 2]);
  * research on its openings never causes a perpetual re-read. Duplicate or late
  * triggers stay bounded by the evidence floor and the one scenario slot.
  */
-export function inputsTakenOver(before: string, after: string, ownArrivals = 0): string {
+export function inputsTakenOver(before: string, after: string): string {
   const b = before.split('|');
   const a = after.split('|');
   if (b.length !== a.length) return after;
   /*
-   * Openings the pass filed itself, from rounds it opened after the read, are
-   * the pass's own writes like any other: when they are every opening that
-   * arrived since `before`, the arrival parts come from `after` too, so a goal
-   * that constructs often is not re-read for its own rounds. When anything
-   * else also arrived, the count no longer matches and `before` is kept, so an
-   * opening from elsewhere still reads as new evidence.
+   * There is one rule for what counts as an arrival, and no exception for the
+   * pass's own rounds: a round opened by `widenGoalSearch` files nothing during
+   * the pass (its openings are harvested fragment by fragment once research is
+   * gated, in a later tick), so every opening it finds arrives after the
+   * reading and is evidence that reading never saw.
    */
-  if (ownArrivals > 0 && Number(a[0]) - Number(b[0]) === ownArrivals) return after;
   return a.map((part, i) => (ARRIVAL_PARTS.has(i) ? b[i]! : part)).join('|');
-}
-
-/** `base` with what only a new opening moves taken from `from`. Pure. */
-export function withArrivals(base: string, from: string): string {
-  const b = base.split('|');
-  const f = from.split('|');
-  if (b.length !== f.length) return base;
-  return b.map((part, i) => (ARRIVAL_PARTS.has(i) ? f[i]! : part)).join('|');
-}
-
-/**
- * How many of the project's openings were found by the rounds a pass opened
- * itself (`discovered_by_candidate_id`). Those rounds are new this pass, so
- * every opening they found arrived after the read began.
- */
-export async function openingsFoundBy(projectId: string, candidateIds: readonly string[]): Promise<number> {
-  if (candidateIds.length === 0) return 0;
-  const row = await getDb().get<{ n: number | string }>(
-    `SELECT COUNT(*) AS n FROM cash_opportunities WHERE project_id = ? AND discovered_by_candidate_id IN (${candidateIds.map(() => '?').join(', ')})`,
-    [projectId, ...candidateIds],
-  );
-  return Number(row?.n ?? 0);
 }
 
 /**
@@ -2222,26 +2198,16 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
         lastTopUp.set(id, now.getTime());
         const spare = await cashSpareSurfaces(held.target.projectId);
         if (spare > 0) {
-          // A top-up's own rounds are not new evidence either: the plan was not re-read, so
-          // its inputs move only if nothing else had arrived since the last reading.
-          const taken = lastInputs.get(id);
-          const pre = taken !== undefined ? await fingerprint() : null;
           const more = await widenGoalSearch(id, held, now, spare);
           asked += more.asked;
           constructed += more.constructed;
           researched += more.researched;
-          if (taken !== undefined && pre === taken && more.opened.length > 0 && projectId) {
-            const post = await fingerprint();
-            const own = await openingsFoundBy(projectId, more.opened);
-            if (post !== null && own > 0 && Number(post.split('|')[0]) - Number(pre.split('|')[0]) === own) lastInputs.set(id, withArrivals(taken, post));
-          }
         }
       }
       continue;
     }
     // What a new opening moves, as it stood when this read began (`inputsTakenOver`).
     const before = inputs ?? (await fingerprint());
-    const openedThisPass: string[] = [];
     let reading: PlanReading | null;
     try {
       reading = await readGoalPlan({ goalId: id, now, persist: true });
@@ -2293,16 +2259,13 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
       asked += more.asked;
       constructed += more.constructed;
       researched += more.researched;
-      openedThisPass.push(...more.opened);
     }
     // Taken after this pass's own writes (the research it started on openings
     // touches their rows), so only what arrives from elsewhere reads as new —
     // and an opening filed while the plan was being read is not folded in
     // (`inputsTakenOver`): the reading never saw it, so the next pass reads it.
     const after = await fingerprint();
-    // Openings the pass's own new rounds filed are its own writes, not arrivals.
-    const own = projectId ? await openingsFoundBy(projectId, openedThisPass) : 0;
-    if (after !== null) lastInputs.set(id, before !== null ? inputsTakenOver(before, after, own) : after);
+    if (after !== null) lastInputs.set(id, before !== null ? inputsTakenOver(before, after) : after);
   }
   return { read, outcomes, asked, constructed, researched, busy, onEvidence, resumed };
 }
