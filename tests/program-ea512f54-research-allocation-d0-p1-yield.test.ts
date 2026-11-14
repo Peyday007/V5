@@ -216,6 +216,10 @@ describe('research yield read from production rows', () => {
     const goalJob = reading.attributions.find((a) => a.lane === 'free-lane:runpod/Qwen/Qwen3-4B')!;
     expect(goalJob.purposes.sort()).toEqual(['OPERATING_SUPPORT', 'TRANSACTION_ROUTES']);
     expect(goalJob.basis.join(' ')).toContain('-mx-k1');
+    // The job names the goal it served, so the goal's deadline and remaining target reach these purposes (F4).
+    expect(goalJob.goalId).toBe(g.id);
+    expect(goalJob.jobMs).toBe(4_000);
+    expect(reading.attributions.find((a) => a.lane === 'bin:claude')!.goalId).toBeUndefined();
     expect(reading.attributions.find((a) => a.lane === 'bin:claude')!.purposes).toEqual(['SELF_IMPROVEMENT']);
     expect(reading.purposes.UNATTRIBUTED.submissions).toBe(1);
 

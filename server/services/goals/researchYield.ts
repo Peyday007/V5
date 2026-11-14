@@ -522,6 +522,8 @@ export interface YieldJob {
   rateLimited: boolean;
   /** Money a row records this job cost, in minor units; null when no row records it. */
   costMinor: number | null;
+  /** The goal this research belongs to, when a row names one; how a goal's deadline and stake reach the purposes its work served. */
+  goalId?: string | null;
 }
 
 export const YIELD_OUTPUT_KINDS = ['ACCEPTED_CLAIM', 'PACKET_FILED', 'NEW_MECHANISM', 'QUALIFIED_POSITION', 'EXECUTABLE_OFFER', 'PAID_TRANSACTION'] as const;
@@ -573,7 +575,7 @@ export interface ResearchYieldReading {
   /** Distinct jobs, the job time and money they spent, and whether every purpose's share sums back to it. */
   costCountedOnce: { jobs: number; totalJobMs: number; purposeJobMs: number; totalCostMinor: number | null; purposeCostMinor: number | null; holds: boolean };
   /** Each job's attribution basis, so "why is this job SELF_IMPROVEMENT" is answerable. */
-  attributions: { jobId: string; lane: string; purposes: PurposeKey[]; basis: string[] }[];
+  attributions: { jobId: string; lane: string; purposes: PurposeKey[]; basis: string[]; goalId?: string | null; jobMs?: number }[];
   notes: string[];
 }
 
@@ -690,7 +692,7 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
       purposeCostMinor,
       holds: close(total.jobMs, purposeJobMs) && close(total.costMinor, purposeCostMinor),
     },
-    attributions: input.jobs.filter((job, i, all) => all.findIndex((o) => o.id === job.id) === i).map((job) => ({ jobId: job.id, lane: job.lane, purposes: job.purposes.length ? job.purposes : ['UNATTRIBUTED'], basis: job.basis })),
+    attributions: input.jobs.filter((job, i, all) => all.findIndex((o) => o.id === job.id) === i).map((job) => ({ jobId: job.id, lane: job.lane, purposes: job.purposes.length ? job.purposes : ['UNATTRIBUTED'], basis: job.basis, ...(job.goalId ? { goalId: job.goalId } : {}), jobMs: job.durationMs })),
     notes: [
       'a job is a free-lane item or a bin handed to a worker; its cost is job time, and money only where a row records it',
       'a job serving several purposes counts in each purpose, with its cost split evenly so purposes sum to the total once',
@@ -725,6 +727,12 @@ const DISPATCH_PROVIDER = `COALESCE(e.provider,
     ORDER BY d.at DESC LIMIT 1),
   '(none)')`;
 
+/** The goal a discovery round's bucket belongs to (`goal-<goalId>-…`, as `plan.ts` names them), or null. Pure. */
+export function goalOfBucket(bucketId: string): string | null {
+  const m = /^goal-([^-]+)-/.exec(bucketId);
+  return m ? m[1]! : null;
+}
+
 /** The attribution facts of every orchestration and project named, read in batches. */
 async function attributionFacts(orchestrationIds: readonly string[], projectIds: readonly string[]): Promise<{ byOrchestration: Map<string, PurposeFacts>; byProject: Map<string, PurposeFacts> }> {
   const db = getDb();
@@ -741,14 +749,15 @@ async function attributionFacts(orchestrationIds: readonly string[], projectIds:
   const aboutNeed = await inChunks(candidates, (c, m) => db.all<{ candidate_id: string; id: string | null }>(`SELECT candidate_id, opportunity_id AS id FROM cash_needs WHERE opportunity_id IS NOT NULL AND candidate_id IN (${m})`, c));
   const openingIds = [...aboutDirect, ...aboutNeed].map((one) => one.id).filter((one): one is string => !!one);
   const paid = new Set((await inChunks(openingIds, (c, m) => db.all<{ id: string }>(`SELECT DISTINCT opportunity_id AS id FROM cash_money_entries WHERE kind = 'CUSTOMER_PAYMENT' AND opportunity_id IN (${m})`, c))).map((one) => one.id));
-  const goalIds = [...orchestrations.map((o) => o.goal_id), ...missions.map((one) => one.goal_id)].filter((one): one is string => !!one);
+  const goalIds = [...orchestrations.map((o) => o.goal_id), ...missions.map((one) => one.goal_id), ...rounds.map((r) => goalOfBucket(r.bucket_id))].filter((one): one is string => !!one);
   const goals = new Map((await inChunks(goalIds, (c, m) => db.all<{ id: string; target_set_at: string | null; target_amount_cents: number | null }>(`SELECT id, target_set_at, target_amount_cents FROM workstreams WHERE id IN (${m})`, c))).map((g) => [g.id, g.target_amount_cents !== null && g.target_amount_cents !== undefined]));
   const byOrchestration = new Map<string, PurposeFacts>();
   for (const o of orchestrations) {
     const mine = missions.filter((one) => one.orchestration_id === o.id);
     const cands = new Set(mine.map((one) => one.candidate_id).filter(Boolean));
     const openings = [...aboutDirect, ...aboutNeed].filter((one) => cands.has(one.candidate_id) && one.id).map((one) => one.id!);
-    const goalId = o.goal_id ?? mine.find((one) => one.goal_id)?.goal_id ?? null;
+    // A goal's own rounds are bucketed `goal-<id>-…` and their missions need not name it, so the bucket names it too.
+    const goalId = o.goal_id ?? mine.find((one) => one.goal_id)?.goal_id ?? rounds.filter((r) => cands.has(r.candidate_id)).map((r) => goalOfBucket(r.bucket_id)).find((one) => !!one) ?? null;
     byOrchestration.set(o.id, {
       projectSlug: o.slug,
       projectPurpose: o.purpose,
@@ -861,7 +870,8 @@ export async function researchYieldByPurpose(input: { since: string; until?: str
   for (const row of laneRows) {
     const duration = Math.max(0, Number(row.ms ?? 0));
     const start = Date.parse(row.at) - duration;
-    const attribution = attributePurposes(factsOf(row.wo ?? row.eo, row.wp ?? row.project_id, row.bp));
+    const rowFacts = factsOf(row.wo ?? row.eo, row.wp ?? row.project_id, row.bp);
+    const attribution = attributePurposes(rowFacts);
     const failed = row.outcome !== 'SUBMITTED';
     jobs.push({
       id: `lane:${row.id}`,
@@ -876,6 +886,7 @@ export async function researchYieldByPurpose(input: { since: string; until?: str
       rateLimited: failed && isRateLimited(row.reason),
       // The free lane runs on capacity Brain already holds; no row records a per-item charge.
       costMinor: null,
+      goalId: rowFacts.goalId ?? null,
     });
   }
   for (const row of binRows) {
@@ -884,7 +895,8 @@ export async function researchYieldByPurpose(input: { since: string; until?: str
     const end = close ? Date.parse(close.at) : row.state === 'LEASED' ? untilMs : at;
     const completed = close?.event_type === 'BIN_TERMINAL' && row.state === 'COMPLETE';
     const reason = close ? (close.event_type === 'BIN_TERMINAL' ? `terminal ${row.state ?? ''}`.trim() : close.event_type.replace('BIN_', '').toLowerCase().replace('_', ' ')) : null;
-    const attribution = attributePurposes(factsOf(row.orchestration_id, row.project_id, row.purpose));
+    const binFacts = factsOf(row.orchestration_id, row.project_id, row.purpose);
+    const attribution = attributePurposes(binFacts);
     const queuedFrom = row.ready_at ?? row.created_at;
     jobs.push({
       id: `bin:${row.id}`,
@@ -898,6 +910,7 @@ export async function researchYieldByPurpose(input: { since: string; until?: str
       failureCause: close && !completed ? reason : null,
       rateLimited: !!close && !completed && isRateLimited(close.reason),
       costMinor: null,
+      goalId: binFacts.goalId ?? null,
     });
   }
   const laneOf = (fragmentId: string | null, orchestrationId: string | null): string => {
