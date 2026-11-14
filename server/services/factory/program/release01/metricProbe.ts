@@ -75,7 +75,8 @@ export async function goalMetricsHoldOnRows(): Promise<ProbeResult> {
         AND archived_at IS NULL AND cancelled_at IS NULL AND paused_at IS NULL ORDER BY id`,
     [now.toISOString()],
   );
-  if (goals.length === 0) return { ok: false, detail: 'no live goal carries a target and a deadline: no metric to read' };
+  // No live goal is an absence, not a contradiction: UNKNOWN, asked again (§39).
+  if (goals.length === 0) return { ok: null, detail: 'no live goal carries a target and a deadline: no metric to read' };
   const shapes = new Set<string>();
   for (const goal of goals) {
     const ws = await getWorkstream(goal.id);
