@@ -26,7 +26,7 @@
  * the briefing and the goal page read it from the same place as everything else
  * about a goal.
  */
-import type { StreamRole, StreamsReading } from './streams.ts';
+import { applyMeasuredCoMovement, type StreamCorrelation, type StreamRole, type StreamsReading } from './streams.ts';
 import type { CapabilityCredit } from './capabilityCredit.ts';
 import type { OfferReadiness } from './offerReadiness.ts';
 
@@ -38,6 +38,8 @@ export interface Port05Stream {
   independent: boolean;
   independence: string;
   reason: string;
+  /** Each correlation with a leading member: MEASURED from the ledger when enough shared history exists, otherwise an assumption that says so. */
+  correlations: Array<Pick<StreamCorrelation, 'with' | 'coefficient' | 'kind' | 'basis' | 'weeks'>>;
 }
 
 export interface Port05Credit {
@@ -94,6 +96,7 @@ export function composePort05(input: {
       independent: one.independent,
       independence: one.independence,
       reason: one.reason,
+      correlations: (one.correlations ?? []).map((c) => ({ with: c.with, coefficient: c.coefficient, kind: c.kind, basis: c.basis, ...(c.weeks !== undefined ? { weeks: c.weeks } : {}) })),
     }));
     const roles: Partial<Record<StreamRole, number>> = {};
     for (const one of list) roles[one.role] = (roles[one.role] ?? 0) + 1;
@@ -213,7 +216,12 @@ async function streamsFromPlan(goalId: string, now: Date): Promise<StreamsReadin
   const goal = await getWorkstream(goalId);
   if (!goal) return null;
   const target = await readTarget(goal, now);
-  return target ? heldPlanStreams(target, now.getTime()) : null;
+  const held = target ? heldPlanStreams(target, now.getTime()) : null;
+  if (!target || !held) return held;
+  // The plan's correlations are assumptions; the ledger says how these openings actually moved together (finding F6).
+  const { readCoMovement } = await import('./coMovement.ts');
+  const measured = await readCoMovement({ projectId: target.projectId, currency: target.currency, opportunityIds: held.streams.map((s) => s.opportunityId), now });
+  return applyMeasuredCoMovement(held, measured);
 }
 
 /* ------------------------------------------------------------------ reader */

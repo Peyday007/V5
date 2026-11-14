@@ -38,7 +38,7 @@ import { optimizePortfolio, type Activity, type PortfolioReading } from '../quan
 import { makeRng } from '../scenario/random.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { assessOutreachRecord, type EvidenceAssessment, type OutreachCampaignRecord } from './evidenceAuthority.ts';
-import { buildStreams, type StreamWorlds, type StreamsReading } from './streams.ts';
+import { buildStreams, type MeasuredCoMovement, type StreamWorlds, type StreamsReading } from './streams.ts';
 import { notePlanStreams } from './port05.ts';
 
 export const PORTFOLIO_WORLDS = 2_000;
@@ -50,6 +50,13 @@ export const OUTREACH_SHARES = [0.25, 0.5, 1] as const;
  * hits every line that shares the mailbox. It is stated on the reading.
  */
 export const SHARED_OUTREACH_CORRELATION = 0.5;
+/**
+ * The coefficient `quant/portfolio.ts` gives a risk group nobody named (its
+ * own `?? 0.5`), stated here so the streams reading uses the optimizer's
+ * figure rather than a second copy. An assumption; a pair with measured
+ * co-movement (`coMovement.ts`) takes the measurement instead.
+ */
+export const OPTIMIZER_DEFAULT_CORRELATION = 0.5;
 /**
  * Prospects one online operation can contact a day when nobody has said: one
  * to two warmed mailboxes. Bounds only — the reading cannot be a probability
@@ -406,6 +413,11 @@ export function evaluateGoalPortfolio(input: {
    */
   contactsPerDay?: ModelInput;
   committed?: { capital: number; spend: number } | null;
+  /**
+   * How the openings' recorded cash actually moved together (`coMovement.ts`).
+   * A measured pair replaces its assumed correlation in the streams reading.
+   */
+  measuredCoMovement?: readonly MeasuredCoMovement[] | null;
   /** Internal: apply the measured record as binding regardless of its authority (the as-is floor). */
   forceMeasured?: boolean;
   worlds?: number;
@@ -575,7 +587,8 @@ export function evaluateGoalPortfolio(input: {
     spendCeiling,
     contactsPerDay,
     riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
-    defaultCorrelation: 0.5,
+    defaultCorrelation: OPTIMIZER_DEFAULT_CORRELATION,
+    measured: input.measuredCoMovement ?? [],
   });
   /*
    * The goal plan's own reading is the only top-level evaluation: the as-is
