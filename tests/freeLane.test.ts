@@ -688,6 +688,13 @@ describe('the free research lane', () => {
     expect(listedClaims(firstJson(`<think>{"claim": "draft"}</think>\n${JSON.stringify([one, two])}`)!)).toEqual([one, two]);
     // Prose with a bracketed reference before the object is still the object.
     expect(firstJson(`Per [S1.3]: ${JSON.stringify({ claims: [one] })}`)).toEqual({ claims: [one] });
+    // Reasoning that was never closed (cut off, or the template never closes it): its own braces are not the answer.
+    expect(firstJson('<think>unfinished {"claims":[]} reasoning\n[{"claim":"a"}]')).toEqual({ claims: [{ claim: 'a' }] });
+    expect(listedClaims(firstJson(`<think>maybe {"claims":[]} or [S1.2] says "}" ${JSON.stringify({ claims: [one, two] })}`)!)).toEqual([one, two]);
+    expect(firstJson('<think>still reasoning about {"claims":[]} when the reply was cut off')).toEqual({ claims: [] });
+    expect(firstJson('<think>no answer at all [S1.2] and {broken')).toBeNull();
+    // A template that opened the block itself leaves only its close: the reasoning before it is not the answer.
+    expect(listedClaims(firstJson(`draft {"claims":[]} here</think>\n${JSON.stringify([one])}`)!)).toEqual([one]);
     expect(listedClaims({ claims: [] })).toEqual([]);
     expect(listedClaims({ answer: 'none' })).toEqual([]);
     // Each listed claim still has to cite a sentence Brain fetched.

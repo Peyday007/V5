@@ -394,9 +394,22 @@ function workerFor(workers: FreeWorker[], item: Pick<WorkItemRow, 'work_type' | 
  * A reply that is a top-level array (production, 2026-11-14: Qwen3-4B answered
  * `[{"claim":…}]`, read as one object with no `claims`, or as nothing) is that
  * list, returned as `{claims:[…]}`. What a claim must prove is unchanged.
+ *
+ * Reasoning is not always closed. A reply cut off inside `<think>` (or one that
+ * opens it and never closes it) has no end to strip at, and stripping only a
+ * closed block read the reasoning's own braces as the reply — a draft
+ * `{"claims":[]}` turned a real answer after it into nothing. There the answer
+ * is the last whole JSON value. A reply whose template opened the block, so
+ * only `</think>` appears, starts after it.
  */
 export function firstJson(text: string): Record<string, unknown> | null {
-  const answer = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  let answer = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  // A chat template that opens the think block itself leaves only its close in the reply: what precedes it is reasoning.
+  const closed = answer.search(/<\/think>(?![\s\S]*<\/think>)/i);
+  if (closed >= 0) answer = answer.slice(closed + '</think>'.length);
+  // A think block never closed (reasoning cut off) has no boundary: the answer, if any, is its last whole JSON value.
+  const unclosed = answer.search(/<think>/i);
+  if (unclosed >= 0) return lastJsonValue(answer.slice(unclosed + '<think>'.length));
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(answer);
   const body = fenced ? fenced[1]! : answer;
   const start = body.indexOf('{');
@@ -417,6 +430,56 @@ export function firstJson(text: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+/** An object, or a non-empty list of objects as `{claims:[…]}`; anything else is not an answer. */
+function asAnswer(value: unknown): Record<string, unknown> | null {
+  if (Array.isArray(value)) {
+    return value.length > 0 && value.every((one) => one && typeof one === 'object' && !Array.isArray(one)) ? { claims: value } : null;
+  }
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+/**
+ * The last top-level `{…}` or `[…]` in a text that parses as an answer, or
+ * null. Brackets inside JSON strings do not count, so a quote containing "}" or
+ * "[S1.2]" does not end or start a value. Used where reasoning was never closed:
+ * a draft or an example earlier in it is not the answer, the final value is.
+ */
+function lastJsonValue(text: string): Record<string, unknown> | null {
+  const spans: [number, number][] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      if (depth > 0) inString = true;
+    } else if (ch === '{' || ch === '[') {
+      if (depth === 0) start = i;
+      depth += 1;
+    } else if ((ch === '}' || ch === ']') && depth > 0) {
+      depth -= 1;
+      if (depth === 0) spans.push([start, i + 1]);
+    }
+  }
+  for (let k = spans.length - 1; k >= 0; k -= 1) {
+    const [from, to] = spans[k]!;
+    try {
+      const answer = asAnswer(JSON.parse(text.slice(from, to)) as unknown);
+      if (answer) return answer;
+    } catch {
+      // Prose in brackets ("[S1.2] says …"), or a value cut off: try the one before.
+    }
+  }
+  return null;
 }
 
 /**
