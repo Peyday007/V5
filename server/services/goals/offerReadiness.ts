@@ -150,35 +150,85 @@ export function decideOfferReadiness(input: OfferReadinessInput): OfferReadiness
 
 /* ------------------------------------------------------------------ readers */
 
-/** Reads one opening's rows and decides. Writes nothing. */
-export async function offerReadinessFor(opportunity: CashOpportunity, now: Date = new Date()): Promise<OfferReadiness> {
+/**
+ * What one read shares across every opening it decides. A commercial grant and
+ * an execution policy belong to a project, not to an opening, so a read that
+ * decides many openings of one project asks for each once — instead of five
+ * authority checks and a policy read per opening on every goal of every person's
+ * read. Scoped to one read (one `now`), so nothing outlives the answer it
+ * served; a later read asks again.
+ */
+export interface OfferReadMemo {
+  authority(projectId: string, now: Date): Promise<Record<ExternalAction, PermissionReading>>;
+  policy(projectId: string, now: Date): Promise<GoalExecutionPolicy>;
+}
 
-  const policy = await executionPolicyForProject(opportunity.projectId, now);
+async function authorityFromRows(projectId: string, now: Date): Promise<Record<ExternalAction, PermissionReading>> {
+  const at = now.toISOString();
+  const decisions = await Promise.all(
+    EXTERNAL_ACTION_LIST.map((action) => checkCommercialAuthority({ projectId, action: EXTERNAL_ACTIONS[action], at })),
+  );
+  const authority = {} as Record<ExternalAction, PermissionReading>;
+  EXTERNAL_ACTION_LIST.forEach((action, i) => {
+    const d = decisions[i]!;
+    authority[action] = { ok: d.ok, reason: d.reason };
+  });
+  return authority;
+}
+
+/** A memo for one read. Every project's grant and policy is read at most once through it. */
+export function offerReadMemo(): OfferReadMemo {
+  const authority = new Map<string, Promise<Record<ExternalAction, PermissionReading>>>();
+  const policy = new Map<string, Promise<GoalExecutionPolicy>>();
+  return {
+    authority(projectId, now) {
+      let found = authority.get(projectId);
+      if (!found) {
+        found = authorityFromRows(projectId, now);
+        authority.set(projectId, found);
+      }
+      return found;
+    },
+    policy(projectId, now) {
+      let found = policy.get(projectId);
+      if (!found) {
+        found = executionPolicyForProject(projectId, now);
+        policy.set(projectId, found);
+      }
+      return found;
+    },
+  };
+}
+
+/** Reads one opening's rows and decides. Writes nothing. */
+export async function offerReadinessFor(opportunity: CashOpportunity, now: Date = new Date(), memo?: OfferReadMemo): Promise<OfferReadiness> {
+  const [policy, facts, authority, spendingRefusal] = await Promise.all([
+    memo ? memo.policy(opportunity.projectId, now) : executionPolicyForProject(opportunity.projectId, now),
+    cardFactsFor(opportunity.id),
+    memo ? memo.authority(opportunity.projectId, now) : authorityFromRows(opportunity.projectId, now),
+    goalSpendingRefusal({ opportunity, neededCents: opportunity.peakFundingCents ?? 0, now }),
+  ]);
   const testFirstPlay = isTestFirstPlay(opportunity);
   const required = qualificationKeys(opportunity.opportunitySignal ?? null, policy === 'SQUEEZE' ? false : testFirstPlay, policy);
-  const card = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id), now: now.toISOString() });
+  const card = cashEngineCard({ opportunity, facts, now: now.toISOString() });
   const answered = new Set(card.entries.filter((e) => e.value !== null).map((e) => e.key as string));
-
-  const authority = {} as Record<ExternalAction, PermissionReading>;
-  for (const action of EXTERNAL_ACTION_LIST) {
-    const d = await checkCommercialAuthority({ projectId: opportunity.projectId, action: EXTERNAL_ACTIONS[action], at: now.toISOString() });
-    authority[action] = { ok: d.ok, reason: d.reason };
-  }
   const recipient = recipientFromChannel(opportunity.reachableChannel);
   const channel: PermissionReading = recipient.ok ? { ok: true, reason: 'one published address' } : { ok: false, reason: recipient.reason };
-  const spendingRefusal = await goalSpendingRefusal({ opportunity, neededCents: opportunity.peakFundingCents ?? 0, now });
 
   return decideOfferReadiness({ policy, required, answered, testFirstPlay, authority, spendingRefusal, channel });
 }
 
+/** The live openings a goal pursues: its OPPORTUNITY links whose opening is still open. Writes nothing. */
+export async function liveOpeningsForGoal(goalId: string, getOpening: (id: string) => Promise<CashOpportunity | null> = getOpportunity): Promise<CashOpportunity[]> {
+  const ids = (await listLinks(goalId)).filter((link) => link.kind === 'OPPORTUNITY').map((link) => link.ref);
+  const openings = await Promise.all(ids.map((id) => getOpening(id)));
+  return openings.filter(
+    (one): one is CashOpportunity => !!one && one.state !== 'ARCHIVED' && one.state !== 'DECLINED' && one.state !== 'COLLECTED',
+  );
+}
+
 /** Every live opening a goal pursues, each decided independently. Writes nothing. */
-export async function offerReadinessForGoal(goalId: string, now: Date = new Date()): Promise<{ opportunityId: string; readiness: OfferReadiness }[]> {
-  const out: { opportunityId: string; readiness: OfferReadiness }[] = [];
-  for (const link of await listLinks(goalId)) {
-    if (link.kind !== 'OPPORTUNITY') continue;
-    const opportunity = await getOpportunity(link.ref);
-    if (!opportunity || opportunity.state === 'ARCHIVED' || opportunity.state === 'DECLINED' || opportunity.state === 'COLLECTED') continue;
-    out.push({ opportunityId: opportunity.id, readiness: await offerReadinessFor(opportunity, now) });
-  }
-  return out;
+export async function offerReadinessForGoal(goalId: string, now: Date = new Date(), memo: OfferReadMemo = offerReadMemo()): Promise<{ opportunityId: string; readiness: OfferReadiness }[]> {
+  const openings = await liveOpeningsForGoal(goalId);
+  return await Promise.all(openings.map(async (opportunity) => ({ opportunityId: opportunity.id, readiness: await offerReadinessFor(opportunity, now, memo) })));
 }
