@@ -1,0 +1,99 @@
+# Inbox procurement on the deployed Brain (§110): put money in, quote, buy, sync.
+#
+# Narrow on purpose, like `routing.yml`: it reaches exactly one area of
+# `scripts/admin.ts`, `inboxes`. Reaching this is the authentication —
+# dispatching it needs write access to the repository and the Fly token —
+# and `--admin` is the attribution `admin.ts` resolves against the database.
+# Money only moves inside what `fund` recorded; `quote` and `status` change
+# nothing.
+name: Inboxes
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'status | quote | buy | fund | sync'
+        required: true
+        default: status
+      kind:
+        description: 'quote/buy: prewarmed | new'
+        required: false
+        default: ''
+      count:
+        description: 'quote/buy: how many mailboxes (rounded up to domains of five)'
+        required: false
+        default: ''
+      provider:
+        description: 'quote/buy new: instantly | inboxkit (empty: InboxKit when connected)'
+        required: false
+        default: ''
+      add:
+        description: 'fund: dollars to add to the one-off funds'
+        required: false
+        default: ''
+      monthly:
+        description: 'fund: the monthly ceiling in dollars'
+        required: false
+        default: ''
+      admin:
+        description: '--admin <email>: the administrator fund/buy is recorded against'
+        required: false
+        default: ''
+
+# Never at the same time as itself: two buys at once are safe, but pointless.
+concurrency:
+  group: brain-console-inboxes
+  cancel-in-progress: false
+
+jobs:
+  inboxes:
+    name: Inboxes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: ./.github/actions/await-release
+
+      - name: Run
+        timeout-minutes: 20
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Through the environment, never interpolated into the shell.
+          INBOX_COMMAND: ${{ inputs.command }}
+          INBOX_KIND: ${{ inputs.kind }}
+          INBOX_COUNT: ${{ inputs.count }}
+          INBOX_PROVIDER: ${{ inputs.provider }}
+          INBOX_ADD: ${{ inputs.add }}
+          INBOX_MONTHLY: ${{ inputs.monthly }}
+          INBOX_ADMIN: ${{ inputs.admin }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+
+          case "$INBOX_COMMAND" in
+            status|quote|buy|fund|sync) ;;
+            *) echo "::error::Refusing '$INBOX_COMMAND': one of status, quote, buy, fund, sync."; exit 1 ;;
+          esac
+          case "$INBOX_KIND" in ''|prewarmed|new) ;; *) echo "::error::kind is prewarmed or new."; exit 1 ;; esac
+          case "$INBOX_PROVIDER" in ''|instantly|inboxkit) ;; *) echo "::error::provider is instantly or inboxkit."; exit 1 ;; esac
+          for value in "$INBOX_COUNT" "$INBOX_ADD" "$INBOX_MONTHLY"; do
+            case "$value" in ''|*[!0-9.]*) [ -z "$value" ] || { echo "::error::Refusing '$value': a number."; exit 1; } ;; esac
+          done
+          case "$INBOX_ADMIN" in
+            '') ;;
+            *[!A-Za-z0-9_.@+-]*) echo "::error::Refusing the administrator address: that is not an address."; exit 1 ;;
+          esac
+
+          args="inboxes $INBOX_COMMAND"
+          if [ -n "$INBOX_KIND" ]; then args="$args --kind $INBOX_KIND"; fi
+          if [ -n "$INBOX_COUNT" ]; then args="$args --count $INBOX_COUNT"; fi
+          if [ -n "$INBOX_PROVIDER" ]; then args="$args --provider $INBOX_PROVIDER"; fi
+          if [ -n "$INBOX_ADD" ]; then args="$args --add $INBOX_ADD"; fi
+          if [ -n "$INBOX_MONTHLY" ]; then args="$args --monthly $INBOX_MONTHLY"; fi
+          if [ -n "$INBOX_ADMIN" ]; then args="$args --admin $INBOX_ADMIN"; fi
+
+          echo "admin $args"
+          set +e
+          flyctl ssh console --app "$app" -C "sh /app/scripts/admin.sh $args" 2>&1 | tee inboxes.txt
+          set -e
+          # The verdict comes from a line the command printed.
+          grep -q '^ADMIN: OK' inboxes.txt
