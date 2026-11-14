@@ -36,6 +36,7 @@ import { allocate, MAX_OPEN_LABOR_ROUNDS } from './allocate.ts';
 import { layerIsHuman, questionAnsweredBy } from '../../domain/labor.ts';
 import { AUTOMATED_CHANNELS, PRODUCTION_LAYERS } from '../../domain/types.ts';
 import type { LaborBlockerKind } from './necessity.ts';
+import { projectCounterparties, type ProjectCounterpartyReading } from './counterparties/operations.ts';
 import type {
   HumanNecessityReason,
   LaborChannel,
@@ -175,11 +176,19 @@ export interface LaborView {
   declined: { subject: string; why: string }[];
   /** One sentence a person can read without opening anything. */
   summary: string;
+  /**
+   * Who performs the project's commercial commitments (CP-31): every
+   * opportunity whose rows name a fulfiller, read through the counterparty
+   * model — primary and alternative, verified versus pending, compared, the
+   * reserve the live grant permits, the transfer a failure would plan, and
+   * whether the sale is deliverable — with its steps and one workforce plan.
+   */
+  counterparties: ProjectCounterpartyReading;
 }
 
 export async function laborView(projectId: string): Promise<LaborView> {
   const snapshot = await laborSnapshot(projectId);
-  return composeView(snapshot, plan(snapshot));
+  return { ...composeView(snapshot, plan(snapshot)), counterparties: await projectCounterparties(projectId, { at: snapshot.at }) };
 }
 
 /**
@@ -212,7 +221,7 @@ export function plan(snapshot: LaborSnapshot): {
 export function composeView(
   snapshot: LaborSnapshot,
   planned: { asks: { subject: string; purpose: string; why: string }[]; declined: { subject: string; why: string }[] },
-): LaborView {
+): Omit<LaborView, 'counterparties'> {
   const live = snapshot.coverage;
 
   return {
