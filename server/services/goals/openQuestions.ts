@@ -375,7 +375,8 @@ export async function productionRegisterPorts(): Promise<RegisterPassPorts> {
   return {
     check: () => checkRegisterOnProduction(),
     async latest() {
-      const [newest] = await listFactoryEvents(null, { kinds: [REGISTER_EVENT_KINDS.current, REGISTER_EVENT_KINDS.behind], limit: 1 });
+      // `listFactoryEvents` answers oldest first: the newest outcome is the last row, not the first.
+      const newest = (await listFactoryEvents(null, { kinds: [REGISTER_EVENT_KINDS.current, REGISTER_EVENT_KINDS.behind], limit: 5000 })).at(-1);
       return newest ? { kind: newest.kind, detail: newest.detail } : null;
     },
     async record(kind, detail) {
