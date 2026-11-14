@@ -16387,3 +16387,59 @@ through `registerNextAttempt` — the family's own rules, at most three, routed 
 refuses a commission that is building and moving, being measured, resolved, or out of
 attempts. RunPod gained the 48 GB director recipe `qwen3-32b-awq-48`, and cheap-lane passes
 `RUNPOD_MAX_TOTAL_USD_PER_HOUR` beside `RUNPOD_MAX_USD_PER_HOUR`; the code's ceilings are unchanged.
+
+## 110. Sending inboxes are bought with money the owner put in, priced by the seller first, and never bought twice.
+
+**Owner's order, 2026-11-14.** "Make a system where I give you money and you go
+buy pre warmed emails and emails that need to be warmed up … no resellers … legit
+pre-warmed accounts for the best price you can find … for the ones we make
+ourselves, set up the whole thing where I can just put in money and then they
+buy the domains and do everything needed."
+
+**Who sells what (researched 2026-11-14; prices quoted live where an API allowed).**
+
+| seller | new inbox | pre-warmed | ordered by a program? |
+|---|---|---|---|
+| Instantly DFY (owner's workspace) | $5/mo Google (AirMail $4) + $15/yr domain | $10/mo, sold as a domain of 5: $65 now, $50/mo | yes, with a no-charge `simulation` quote |
+| InboxKit | $3/mo Google or Microsoft (monthly billing; $2.50 annual) | $6–9/mo by warmup age | new: yes (one call: domain, DNS, mailboxes, export to Instantly); pre-warmed: dashboard only |
+| Zapmail | $3.90–2.50/mo, bundles from $39 | ~$6–8/mo | API on the $299/mo Pro plan only |
+| Mailforge / Infraforge | $2–4/mo (shared / dedicated IP) | vendor-claimed no surcharge / $14 per domain add-on | not verified |
+
+Aged or "warmed" consumer Gmail accounts from resellers are refused outright:
+they are someone else's identity, against Google's terms, and get the owner's
+real domains blocklisted. Every inbox here is a Workspace mailbox on a domain the
+owner holds.
+
+**The decision.** Pre-warmed: Instantly (the one seller whose pre-warmed stock a
+program can buy, quoted in simulation before every order). New, built by Brain:
+InboxKit when connected — 40% under Instantly's own new inboxes, and its single
+order call registers the domain, sets SPF/DKIM/DMARC, creates five Google
+mailboxes and exports them into Instantly, whose warmup is free (InboxKit's paid
+warmup add-on is never turned on). Until InboxKit is connected, new inboxes come
+from Instantly DFY. Domains are found near the owner's main domain and redirect
+to it; the sender is the name the owner already mails as.
+
+**The money** (`server/services/inboxes/`, `repos/inboxes.ts`, migration 149/140):
+
+- The owner puts money in with `inboxes fund --add <usd> --monthly <usd>`: an
+  append-only one-off pot and a ceiling on the recurring total. Nothing else
+  can be spent; with neither set, nothing is bought (invariants 18, 38).
+- Every order is one domain, priced by its seller first, and goes only if both
+  the pot and the monthly ceiling still cover it with every recorded purchase
+  counted — re-read after the purchase row is written, so two buyers at once
+  each see the other.
+- The purchase row is written before the order with a unique key (seller, kind,
+  domain): the same order can never be attempted twice (20, 27).
+- A lost answer is UNKNOWN, counted as spent, never retried (26); `sync`
+  appends PLACED when the domain appears on the seller's order list.
+- No balance is stored (37): `inboxBudget` derives it from the rows.
+- InboxKit's prepaid wallet is a second, seller-held ceiling: an order it does
+  not cover is refused whole (402) and spends nothing.
+
+**After the order.** The integrations tick runs `syncInboxes` hourly while any
+purchase is unsettled: reconcile lost answers, and turn on Instantly warmup for
+each bought domain once its mailboxes reach Instantly.
+
+**Doors.** `npm run admin -- inboxes status | fund | quote | buy | sync`, and on
+production the `Inboxes` workflow (`.github/workflows/inboxes.yml`), narrow like
+`Routing`: `status` and `quote` change nothing; `fund` and `buy` need `--admin`.

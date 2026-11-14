@@ -54,10 +54,10 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 
 | id | capability | symptom | sev | owner | status |
 |---|---|---|---|---|---|
-| W-1 | world expansion | kernel needs an ACTIVE sprint; questions worded as sprint work (`industry/kernel.ts:70,96`) | BLOCKING | world-expansion | REPAIRING |
-| W-2 | adaptive selection | six fixed-order rules, oldest-first, constant concurrency 4 (`allocate.ts:16-23,97,369`) | MAJOR | world-expansion | REPAIRING |
-| W-3 | expansion | root question and each breakdown asked once; repeat branch unreachable (`allocate.ts:152,260,313`) | MAJOR | world-expansion | REPAIRING |
-| W-4 | exploration | barren after 3 scans is permanent (`verdict.ts:123-136`) | MAJOR | world-expansion | REPAIRING |
+| W-1 | world expansion | kernel needs an ACTIVE sprint; questions worded as sprint work (`industry/kernel.ts:70,96`) | BLOCKING | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 149/140) |
+| W-2 | adaptive selection | six fixed-order rules, oldest-first, constant concurrency 4 (`allocate.ts:16-23,97,369`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 149/140) |
+| W-3 | expansion | root question and each breakdown asked once; repeat branch unreachable (`allocate.ts:152,260,313`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 149/140) |
+| W-4 | exploration | barren after 3 scans is permanent (`verdict.ts:123-136`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 149/140) |
 | W-5 | quantitative knowledge | construction facts written only by a person, per goal; map-built roles unpriced (`construction/service.ts:57-96`) | BLOCKING | construction-knowledge | REPAIRING |
 | W-6 | decomposition | role-occupant answer asked once, never read back (`expand.ts:196,214`) | MAJOR | construction-knowledge | REPAIRING |
 | W-7 | money-tree positions | closed logistics-shaped position vocabulary; 4 economics branches; no resale/subscription/finance/rent (`domain/construction.ts:31-224`) | MAJOR | construction-knowledge | REPAIRING |
@@ -179,6 +179,7 @@ pass; remaining: G2 transfer differences, L contradiction, O interval/certify,
 PERSIST — owned by in-flight streams).
 
 | acceptance | 367b2f5 | one evidence representation for links and assurance; certification = 5th percentile of reach under parameter draws ≥ 90%; TRANSFERRED conversion; own outreach record HISTORICAL; sized `readRate`; contested sources (L-1); verdict classes QUANTITATIVELY_CONSTRUCTED / CONFIDENCE_VERIFIED / IMPROVEMENT_REQUIRED / NOT_SUPPORTED | `tests/planningConfidence.test.ts` 17/17; 10 acceptance/selection/economics files 106/106 |
+| world-expansion | 6862da0 | kernel runs under a standing research grant with no sprint (sprint wind-down stops only sprint rounds; revoking the grant stops standing rounds); scored selection (information + relevance + transfer + novelty) with a 1-in-4 exploration pick; root question re-asked after 90 d, breakdowns after 60 d; barren → WATCH with reopen conditions | `tests/industryKernelStanding.test.ts` 15/15; kernel 41/41; migrations + deploymentOwnership pass |
 | integration | this branch | `estimateInput` (one estimate→input conversion); Brain's measured close rate carries its counts | eval case O passes |
 
 **Independent evaluation now: 16 of 18 (baseline 11).** Remaining: G2 (transfer
