@@ -317,3 +317,63 @@ What still limits it is evidence, not software: 11 openings, 0 market-test-ready
 0 buyer-validated; the openings research produced are mostly award-paid public
 programmes that pay in one lump after the deadline. That is an evidence gap the
 plan now states, not a defect that hides it.
+
+## Final report
+
+**Status at 2026-11-14 21:10Z (13 h after the order).** Every recovery repair is
+merged into `production` and released by **Deploy 43635818969 (e37e0ff), verified
+by the hosted verification before and after a real restart** — the first fully
+verified release since the morning. `/healthz` answers in 0.2–0.7 s (it answered
+503 after 35 s at 18:17 and 20:24 before the stability layers shipped).
+
+**What was wrong with Brain.** Fifty-nine issues under eight root causes, plus a
+second production layer found after release:
+1. Plan computation ran on the server's main thread (minutes per read).
+2. Nothing checked a plan's economics: stacked price moves, vanishing supplier
+   cost, a market sold twice — a $34.5M median for a $10K goal.
+3. Three different "plans" per reading; revision never reached the plan; the
+   90% gate counted simulated worlds as evidence.
+4. No "infeasible" verdict; impossible goals searched past their deadline.
+5. Planning existed only for a hand-typed cash target.
+6. Research sentences and expired events became openings.
+7. A goal's state was read from its worst link (BLOCKED on a person for a
+   research dead end).
+8. The operator acted on what it could not see or do.
+9. (Production, after release) memory starvation and an effect transaction
+   holding its connection across storage HTTP — GC 16–31 s/min, pool 8/8.
+
+**Repairs:** PRs #884 (the eight causes, F1–F11 review fixes), #892 (boot grace,
+record), #893 (two clock/load-dependent tests), #894 (4 GB VM, 2560 MB heap,
+run reads without text), #896 (effects release their connection before the
+recompute; bounded, cached storage checks; goals workflow files an objective in
+words).
+
+**Verified planning capability.** Independent acceptance suite
+(`tests/planningAcceptance.test.ts`): 6 of 7 fail on the pre-recovery code, 7 of
+7 pass — $100/48h, $100K/90d, $1M/1y, infeasible $1M/48h, the $10K case and a
+changed constraint. Non-cash objectives (`tests/objectivePlan.test.ts`): ≥4
+distinct strategies, independent critique, revision, code verdict (PLAN_READY
+only on recorded evidence; NOT_SUPPORTED names the failed constraint). Objective
+in words (`tests/objectiveIntake.test.ts`). On production the $10K plan reads one
+coherent candidate (39.3% coverage, p50 $51K, committed $0), CANDIDATE_ONLY, with
+dated steps and kill criteria.
+
+**$10K case.** Not an accepted plan, correctly: no opening is market-test-ready
+or buyer-validated, conversion is unmeasured, and the openings research found are
+mostly award-paid public programmes. That is an evidence gap, not a software
+defect.
+
+**Agents and models.** 18 Claude subagents on this session's model (6 discovery,
+8 repair, 1 adversarial review, 1 fixture triage, 2 production stability), up to
+8 concurrently; no open-source agent framework (no self-hosted model strong
+enough; no paid API). Hermes repaired, not used as director.
+
+**Money.** Additional spend: the Fly VM 2 → 4 GB, about $9/month (~$0.30/day)
+from 18:15Z. Nothing else; no temporary infrastructure to terminate.
+
+**Remaining, non-blocking.** Filing's own upload still inside its effect
+transaction; ~680 MB baseline heap unprofiled; CPU hotspots in
+`retrospective.ts`/`composeLedger` (1–3 s/min); F10 (goal creation not
+idempotent on retry); the starting-capital fallback chain; release-gate livelock
+(merges arrive faster than verification); RunPod balance needs a top-up before
+about 11-20 (owner).
