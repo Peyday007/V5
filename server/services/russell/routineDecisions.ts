@@ -278,7 +278,7 @@ export type DeclinedBecause =
 
 export type StandingFiling =
   | { decided: true; grantId: string; reason: string; status: string }
-  | { decided: false; because: DeclinedBecause; reason: string };
+  | { decided: false; because: DeclinedBecause; reason: string; status?: string };
 
 /**
  * The one decide-and-file step (§80): file a stopped packet's audited report
@@ -303,7 +303,20 @@ export async function fileWithGapsUnderStandingGrant(input: {
 }): Promise<StandingFiling> {
   const { orchestration } = input;
   if (orchestration.unresolvedGapPolicy === 'RECORD_GAPS') {
-    return { decided: false, because: 'ALREADY_FILED_WITH_GAPS', reason: 'the packet is already authorized to record its gaps' };
+    /*
+     * Already decided: by Brain on an earlier pass whose advance failed, or by
+     * a person. What is left is carrying it out, which needs nobody, so the
+     * packet is advanced again — never put back in front of the owner as a
+     * card asking a question that already has its answer. No second decision
+     * is recorded.
+     */
+    const status = await advanceFiled(orchestration.id);
+    return {
+      decided: false,
+      because: 'ALREADY_FILED_WITH_GAPS',
+      reason: `the packet is already authorized to record its gaps; Brain advanced it again and it is now ${status}`,
+      status,
+    };
   }
   const { assessJudgeRound } = await import('../research/judgeRound.ts');
   if ((await assessJudgeRound(orchestration)).kind === 'RESUME') {
@@ -354,11 +367,16 @@ export async function fileWithGapsUnderStandingGrant(input: {
       await transitionMission({ missionId: mission.id, from: 'NEEDS_HUMAN', to: 'RUNNING', waitingOn: null });
     }
   }
+  return { decided: true, grantId: grant.id, reason, status: await advanceFiled(orchestration.id) };
+}
+
+/** Advance a packet authorized to record its gaps; a failure is its status, retried on the next pass. */
+async function advanceFiled(orchestrationId: string): Promise<string> {
   const { advancePacket } = await import('../research/packetRunner.ts');
-  const advanced = await advancePacket(orchestration.id).catch((error: unknown) => ({
+  const advanced = await advancePacket(orchestrationId).catch((error: unknown) => ({
     status: `advance failed: ${String((error as Error)?.message ?? error).slice(0, 120)}`,
   }));
-  return { decided: true, grantId: grant.id, reason, status: advanced.status };
+  return advanced.status;
 }
 
 /**

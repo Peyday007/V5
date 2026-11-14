@@ -541,7 +541,8 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       orchestration,
       choiceKeys: choicesFor(shape).map((choice) => choice.key),
     });
-    if (decision.decided) continue;
+    // Decided now, or already decided and only being carried out: either way no question is left for a person.
+    if (decision.decided || decision.because === 'ALREADY_FILED_WITH_GAPS') continue;
 
     const moved = await transitionMission({
       missionId: mission.id,
