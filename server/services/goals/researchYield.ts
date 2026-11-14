@@ -915,3 +915,123 @@ export async function researchYieldWindows(until = new Date().toISOString()): Pr
   for (const w of RESEARCH_YIELD_WINDOWS) out[w.key] = await researchYieldByPurpose({ since: new Date(end - w.ms).toISOString(), until });
   return out;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Capacity now, per lane (RES-15-5: capacity only to a measured constraint)  */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * What a lane's capacity looks like at the moment the allocation is decided,
+ * read from the rows that own it — never from the window's finished jobs.
+ *
+ * The window's yield says what ran; it cannot say what is *waiting*, because a
+ * job enters the window only once it has started. So the allocation's capacity
+ * question ("qualified useful jobs queued, delayed by a measured machine limit,
+ * with headroom, at a known incremental cost") is answered here:
+ *
+ *   - `waiting` — research items queued and claimable now on the free lane's
+ *     queue (the same selection `waitingNow` feeds the §86 controller), shared
+ *     by every free-lane model, since each takes the other's roles when its own
+ *     queue is empty;
+ *   - `waitingMedianAgeMs` — how long those not-yet-started items have been
+ *     claimable, not the wait of jobs that already began;
+ *   - `target` / `proven` — the controller's slot target and the highest
+ *     concurrency it has run stably (`free_lane_capacity`); `headroom` is the
+ *     proven-stable concurrency not in use, capped by the lane's runaway
+ *     ceiling. A lane with no row has no measured headroom (null);
+ *   - `busyNow` — the model's worker's live leases, so "every slot is full
+ *     while work waits" is a measured worker limit;
+ *   - `incrementalCostPerUnitMinor` — 0 for a model the lane reaches without a
+ *     paid call (§86: "Cost is $0"), null for the RunPod GPU, whose pod time
+ *     no row prices.
+ */
+export interface LaneCapacityReading {
+  lane: string;
+  waiting: number;
+  waitingMedianAgeMs: number | null;
+  target: number | null;
+  proven: number | null;
+  ceiling: number;
+  headroom: number | null;
+  busyNow: number | null;
+  slotsFull: boolean;
+  incrementalCostPerUnitMinor: number | null;
+}
+
+export interface LaneCapacityRow {
+  model: string;
+  target: number | null;
+  proven: number | null;
+  ceiling: number;
+  busyNow: number | null;
+  /** The model makes no paid call (every model but the RunPod GPU). */
+  unpaid: boolean;
+}
+
+/** Fold the rows into one reading per free-lane model. Pure. */
+export function laneCapacityFrom(input: { models: readonly LaneCapacityRow[]; waitingAgesMs: readonly number[] }): Record<string, LaneCapacityReading> {
+  const ages = [...input.waitingAgesMs].filter((n) => Number.isFinite(n) && n >= 0).sort((a, b) => a - b);
+  const median = percentile(ages, 50);
+  const out: Record<string, LaneCapacityReading> = {};
+  for (const m of input.models) {
+    const headroom = m.target === null || m.proven === null ? null : Math.max(0, Math.min(m.ceiling, m.proven) - m.target);
+    out[`free-lane:${m.model}`] = {
+      lane: `free-lane:${m.model}`,
+      waiting: ages.length,
+      waitingMedianAgeMs: ages.length > 0 ? median : null,
+      target: m.target,
+      proven: m.proven,
+      ceiling: m.ceiling,
+      headroom,
+      busyNow: m.busyNow,
+      slotsFull: m.target !== null && m.busyNow !== null && ages.length > 0 && m.busyNow >= m.target,
+      incrementalCostPerUnitMinor: m.unpaid ? 0 : null,
+    };
+  }
+  return out;
+}
+
+/** Capacity per free-lane model now, from `free_lane_capacity`, the queue and the workers' live leases. */
+export async function researchCapacityNow(now = new Date().toISOString()): Promise<Record<string, LaneCapacityReading>> {
+  const { laneConfig } = await import('../cheap/lane.ts');
+  const config = laneConfig();
+  if (!config) return {};
+  const { readCapacity, SAFETY_CEILING, gpuCeiling } = await import('../freeLane/capacity.ts');
+  const { isRunpodSlot } = await import('../cheap/runpod.ts');
+  const db = getDb();
+  const models = config.models.length > 1 ? config.models.slice(0, 2) : [config.models[0] ?? 'auto'];
+  const recorded = new Map((await readCapacity()).map((r) => [r.model, r]));
+  const workerNames = ['free-lane-a', 'free-lane-b'];
+  const busy = await db.all<{ name: string; n: number | string }>(
+    `SELECT k.name, COUNT(*) AS n FROM work_items w JOIN workers k ON k.id = w.worker_id
+      WHERE w.state = 'LEASED' AND w.lease_expires_at > ? AND k.name IN ('free-lane-a', 'free-lane-b') GROUP BY k.name`,
+    [now],
+  );
+  const waitingRows = await db.all<{ available_at: string | null; created_at: string }>(
+    `SELECT w.available_at, w.created_at FROM work_items w
+      WHERE w.state = 'QUEUED' AND w.available_at <= ? AND w.attempt_count < w.max_attempts
+        AND w.work_type IN ('RESEARCH_PLAN', 'RESEARCH_FRAGMENT', 'RESEARCH_VERIFY', 'RESEARCH_SYNTHESIZE', 'RESEARCH_AUDIT')
+        AND EXISTS (SELECT 1 FROM bins b
+                     WHERE (b.id = w.bin_id OR (b.orchestration_id IS NOT NULL AND b.orchestration_id = w.orchestration_id))
+                       AND b.purpose IN ('PLAY_RESEARCH', 'GRUNT'))
+      LIMIT 5000`,
+    [now],
+  );
+  const nowMs = Date.parse(now);
+  const waitingAgesMs = waitingRows.map((r) => nowMs - Date.parse(r.available_at ?? r.created_at));
+  return laneCapacityFrom({
+    waitingAgesMs,
+    models: models.map((model, i) => {
+      const row = recorded.get(model);
+      const b = busy.find((one) => one.name === workerNames[i]);
+      return {
+        model,
+        target: row ? row.target : null,
+        proven: row ? row.stableHigh : null,
+        ceiling: isRunpodSlot(model) ? gpuCeiling() : SAFETY_CEILING,
+        busyNow: Number(b?.n ?? 0),
+        unpaid: !isRunpodSlot(model),
+      };
+    }),
+  });
+}

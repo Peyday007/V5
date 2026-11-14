@@ -6,21 +6,28 @@
  * (`server/services/goals/tick.ts`).
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { freshProject } from './helpers.ts';
-import { createUser } from '../server/repos/identity.ts';
+import { freshProject, type TestProject } from './helpers.ts';
 import { createWorkstream, listWorkstreamEvents } from '../server/repos/register.ts';
 import { getDb } from '../server/db/database.ts';
 import {
   RESEARCH_REALLOCATED_EVENT,
   advanceGoals,
   allocationInputFrom,
+  bottleneckFrom,
+  productionResearchAllocationPorts,
   reallocateResearch,
   reallocateResearchIfDue,
   triedRemediesFrom,
   type ResearchAllocationPorts,
 } from '../server/services/goals/tick.ts';
 import { RESEARCH_PURPOSES, EXPLORATION_FLOOR, SYSTEM_HEALTH_FLOOR, type ResearchPurpose } from '../server/services/goals/researchAllocation.ts';
-import type { ResearchYieldReading, YieldBucket } from '../server/services/goals/researchYield.ts';
+import { laneCapacityFrom, researchCapacityNow, type LaneCapacityReading, type ResearchYieldReading, type YieldBucket } from '../server/services/goals/researchYield.ts';
+import { createBin, recordBinEvent } from '../server/repos/bins.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createFragments, createOrchestration } from '../server/repos/research.ts';
+import { enqueueWork } from '../server/repos/workQueue.ts';
+import { workType } from '../server/services/queue/workTypes.ts';
+import { createUser, createWorker, getWorkerByName } from '../server/repos/identity.ts';
 import type { GoalView } from '../server/services/goals/model.ts';
 
 function bucket(over: Partial<YieldBucket> = {}): YieldBucket {
@@ -101,11 +108,43 @@ describe('the research allocation decision in the tick', () => {
     expect(second.laneActions.find((a) => a.lane === 'free-lane')?.kind).toBe('CHANGE_EVIDENCE_SOURCES');
   });
 
-  it('never adds capacity on an unmeasured quota: a capacity change is a recommendation, and none is made here', async () => {
+  it('never adds capacity without a live capacity reading: a running job is not a waiting one', async () => {
+    // The window's lane has 30 jobs running and a 40-minute wait on jobs that already began — neither is work waiting.
+    const input = allocationInputFrom(reading(), { urgentCommercialGoal: false, nearestDeadlineDays: null, triedRemedies: new Map() });
+    const lane = input.bottlenecks!.find((b) => b.lane === 'free-lane')!;
+    expect(lane.qualifiedQueued).toBeNull();
+    expect(lane.queueWaitMs).toBeNull();
     const { ports, events } = memoryPorts(reading());
     const report = await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-14T00:00:00.000Z' }, ports);
     expect(report.capacity.every((c) => c.kind === 'NO_CAPACITY')).toBe(true);
     expect((events.get('wst_a')![0]!.capacity as { recommendationOnly: boolean }[]).every((c) => c.recommendationOnly)).toBe(true);
+  });
+
+  it('recommends capacity when qualified work is waiting on full slots with proven headroom at a known cost', async () => {
+    const r = reading();
+    // A lane that turns claims into links, completes reliably and was never refused by its provider.
+    r.lanes = { 'free-lane:brain-a': bucket({ submissions: 40, completions: 40, acceptedClaims: 40, qualifiedPositions: 12, jobMs: 3_600_000 }) };
+    r.attributions = [{ jobId: 'job_1', lane: 'free-lane:brain-a', purposes: ['TRANSACTION_ROUTES'], basis: ['goal round'] }];
+    const capacity: Record<string, LaneCapacityReading> = {
+      'free-lane:brain-a': { lane: 'free-lane:brain-a', waiting: 12, waitingMedianAgeMs: 30 * 60_000, target: 4, proven: 10, ceiling: 256, headroom: 6, busyNow: 4, slotsFull: true, incrementalCostPerUnitMinor: 0 },
+    };
+    const { ports, events } = memoryPorts(r);
+    ports.readCapacity = async () => capacity;
+    const report = await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-14T00:00:00.000Z' }, ports);
+    const add = report.capacity.find((c) => c.lane === 'free-lane:brain-a');
+    expect(add).toMatchObject({ kind: 'ADD_CAPACITY', resource: 'WORKER', units: 4, incrementalCost: 0 });
+    const detail = events.get('wst_a')![0]!;
+    expect((detail.capacity as { kind: string; recommendationOnly: boolean }[]).find((c) => c.kind === 'ADD_CAPACITY')?.recommendationOnly).toBe(true);
+    expect((detail.capacityNow as { lane: string; waiting: number }[])[0]).toMatchObject({ lane: 'free-lane:brain-a', waiting: 12 });
+  });
+
+  it('adds nothing for a provider that refused a measured share of attempts, or for slots that are not full', () => {
+    const lane = bucket({ submissions: 20, completions: 18, acceptedClaims: 5, qualifiedPositions: 3, jobMs: 1_000_000, failures: { total: 2, rateLimited: 2, other: 0, causes: [] } });
+    const c: LaneCapacityReading = { lane: 'free-lane:m', waiting: 9, waitingMedianAgeMs: 60 * 60_000, target: 2, proven: 8, ceiling: 256, headroom: 6, busyNow: 2, slotsFull: true, incrementalCostPerUnitMinor: 0 };
+    const limited = bottleneckFrom('free-lane:m', lane, c, []);
+    expect(limited).toMatchObject({ resource: 'MODEL_RATE_LIMIT', quotaHeadroom: 0, measuredMachineLimit: true, qualifiedQueued: 9 });
+    const calm = bottleneckFrom('free-lane:m', bucket({ completions: 20, submissions: 20 }), { ...c, slotsFull: false, busyNow: 1 }, []);
+    expect(calm).toMatchObject({ resource: null, measuredMachineLimit: false, quotaHeadroom: null });
   });
 
   it('writes nothing when the decision is unchanged', async () => {
@@ -171,5 +210,81 @@ describe('on production rows, through advanceGoals', () => {
     // Forced, the unchanged decision writes nothing more.
     await reallocateResearchIfDue({ goals: [goalView(goal.id, { projectId })] }, undefined, { force: true });
     expect((await listWorkstreamEvents(goal.id, 50)).filter((e) => e.kind === RESEARCH_REALLOCATED_EVENT)).toHaveLength(1);
+  });
+});
+
+describe('capacity read from the rows that own it', () => {
+  it('folds waiting ages, target, proven concurrency and live leases into one reading per model', () => {
+    const out = laneCapacityFrom({
+      waitingAgesMs: [60_000, 20 * 60_000, 40 * 60_000],
+      models: [
+        { model: 'a', target: 3, proven: 9, ceiling: 256, busyNow: 3, unpaid: true },
+        { model: 'runpod:gpu', target: 4, proven: 40, ceiling: 32, busyNow: 1, unpaid: false },
+        { model: 'new', target: null, proven: null, ceiling: 256, busyNow: 0, unpaid: true },
+      ],
+    });
+    expect(out['free-lane:a']).toMatchObject({ waiting: 3, waitingMedianAgeMs: 20 * 60_000, headroom: 6, slotsFull: true, incrementalCostPerUnitMinor: 0 });
+    // Headroom never passes the lane's ceiling, and the GPU's pod time has no recorded price.
+    expect(out['free-lane:runpod:gpu']).toMatchObject({ headroom: 28, slotsFull: false, incrementalCostPerUnitMinor: null });
+    expect(out['free-lane:new']).toMatchObject({ headroom: null, slotsFull: false });
+  });
+
+  let play: TestProject;
+  async function queueFragments(n: number): Promise<string[]> {
+    const layerId = (await play.layerByName('Monetization Logic')).id;
+    const ids: string[] = [];
+    for (let i = 0; i < n; i += 1) {
+      const run = await createRun({ projectId: play.project.id, layerId, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: `p${i}` });
+      const orchestration = await createOrchestration({ projectId: play.project.id, layerId, runId: run.id, title: `Wage ${i}`, assignment: 'wage', provider: 'WORKER', autoApprove: false });
+      const [fragment] = await createFragments([{
+        orchestrationId: orchestration.id, projectId: play.project.id, layerId, fragmentIndex: 0, fragmentKey: `wage-${i}`,
+        question: 'What is the US median hourly wage of a receptionist?', geography: 'United States', timeframe: '2024',
+        population: 'Receptionists', definitions: 'Median hourly wage',
+        requiredEvidence: [{ id: 'wage', description: 'official wage statistic', necessity: 'REQUIRED' }],
+        acceptableSourceTypes: [], excludedSourceTypes: [], completionCriteria: ['one figure'], dependsOn: [], minIndependentSources: 1, status: 'QUEUED',
+      }]);
+      await createBin({
+        projectId: play.project.id, kind: 'RESEARCH_PACKET', title: `Wage ${i}`, objective: 'wage', orchestrationId: orchestration.id,
+        manifest: { objective: 'wage', why: 't', lineage: { projectId: play.project.id, layerId, goal: 'wage', orchestrationId: orchestration.id }, units: [], acceptableSources: [], excludedSources: [], evidence: [], outputs: [], authorizedActions: [], prohibitedActions: [], budgetUnits: 1, retry: { maxAttempts: 3, backoffSeconds: 60 }, stoppingConditions: [] },
+        completionContract: 'RESEARCH_PACKET_V1', createdByType: 'SYSTEM', createdById: 'test', ready: true,
+      });
+      const def = workType('RESEARCH_FRAGMENT');
+      const item = await enqueueWork({ projectId: play.project.id, workType: 'RESEARCH_FRAGMENT', payload: def.validate({}), requiredScopes: def.requiredScopes, orchestrationId: orchestration.id, fragmentId: fragment!.id, createdByType: 'SYSTEM' });
+      ids.push(item.id);
+    }
+    return ids;
+  }
+
+  it('on production rows, the tick recommends capacity for a lane whose full slots leave qualified work waiting', async () => {
+    play = await freshProject();
+    process.env['BRAIN_CHEAP_LLM_URL'] = 'http://lane.test/v1';
+    process.env['BRAIN_CHEAP_LLM_MODELS'] = 'brain-a';
+    try {
+      const ids = await queueFragments(8);
+      const db = getDb();
+      const worker = (await getWorkerByName('free-lane-a')) ?? (await createWorker({ name: 'free-lane-a', displayName: 'free-lane-a', createdByType: 'SYSTEM', createdById: 'test' }));
+      const now = Date.now();
+      // Two items leased by the lane's only slots; six queued and claimable for the last 40 minutes.
+      await db.run(`UPDATE work_items SET state = 'LEASED', lease_id = 'lse_test_' || id, worker_id = ?, lease_expires_at = ? WHERE id IN (?, ?)`, [worker.id, new Date(now + 10 * 60_000).toISOString(), ids[0]!, ids[1]!]);
+      await db.run(`UPDATE work_items SET available_at = ? WHERE state = 'QUEUED'`, [new Date(now - 40 * 60_000).toISOString()]);
+      await db.run('DELETE FROM free_lane_capacity', []);
+      await db.run("INSERT INTO free_lane_capacity (model, target, stable_high, updated_at, reason) VALUES ('brain-a', 2, 12, ?, 'test')", [new Date(now).toISOString()]);
+      // The lane completed its recent work reliably.
+      for (let i = 0; i < 10; i += 1) await recordBinEvent({ eventType: 'FREE_LANE_ITEM', workloadClass: 'RESEARCH_FRAGMENT', outcome: 'SUBMITTED', reason: 'model brain-a', durationMs: 60_000 });
+
+      const capacity = await researchCapacityNow(new Date(now + 1000).toISOString());
+      expect(capacity['free-lane:brain-a']).toMatchObject({ waiting: 6, target: 2, proven: 12, headroom: 10, busyNow: 2, slotsFull: true, incrementalCostPerUnitMinor: 0 });
+      expect(capacity['free-lane:brain-a']!.waitingMedianAgeMs!).toBeGreaterThanOrEqual(39 * 60_000);
+
+      const report = await reallocateResearch({ goals: [goalView('wst_x')], now: new Date(now + 1000).toISOString() }, {
+        ...(await productionResearchAllocationPorts()),
+        lastDecision: async () => null,
+        recordGoal: async () => {},
+      });
+      expect(report.capacity.find((c) => c.lane === 'free-lane:brain-a')).toMatchObject({ kind: 'ADD_CAPACITY', resource: 'WORKER', units: 4, incrementalCost: 0 });
+    } finally {
+      delete process.env['BRAIN_CHEAP_LLM_URL'];
+      delete process.env['BRAIN_CHEAP_LLM_MODELS'];
+    }
   });
 });
