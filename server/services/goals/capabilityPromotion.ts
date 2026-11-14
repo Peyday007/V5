@@ -452,7 +452,8 @@ export async function productionCapabilityPorts(): Promise<CapabilityPorts> {
   const { listDiscoveredDependencies } = await import('../../repos/factoryProgram.ts');
   const { listProjects } = await import('../../repos/projects.ts');
   const { listNeeds, getOpportunity } = await import('../../repos/cashPortfolio.ts');
-  const { listFactoryEvents, recordFactoryEvent } = await import('../../repos/factoryFleet.ts');
+  const { recordFactoryEvent } = await import('../../repos/factoryFleet.ts');
+  const { newestFactoryEvent, newestFactoryEvents } = await import('./newestEvents.ts');
   const ports = productionPorts();
   return {
     async programs() {
@@ -474,13 +475,13 @@ export async function productionCapabilityPorts(): Promise<CapabilityPorts> {
     },
     opportunity: getOpportunity,
     async promotedHere(programId) {
-      const events = await listFactoryEvents(null, { kinds: [CAPABILITY_EVENT_KINDS.promoted, CAPABILITY_EVENT_KINDS.demoted], limit: 5000 });
+      // Newest first: the first event seen for a requirement is its current
+      // state, so a later demotion overrides the promotion it follows. The whole
+      // ledger is read, never its oldest 5000 (`listFactoryEvents` is oldest first).
       const latest = new Map<string, string>();
-      // `listFactoryEvents` answers oldest first, so the last event seen for a
-      // requirement is its current state: a later demotion overrides the promotion.
-      for (const e of events) {
+      for await (const e of newestFactoryEvents([CAPABILITY_EVENT_KINDS.promoted, CAPABILITY_EVENT_KINDS.demoted])) {
         const requirement = e.detail.requirement;
-        if (e.detail.programId !== programId || typeof requirement !== 'string') continue;
+        if (e.detail.programId !== programId || typeof requirement !== 'string' || latest.has(requirement)) continue;
         latest.set(requirement, e.kind);
       }
       return new Set([...latest].filter(([, kind]) => kind === CAPABILITY_EVENT_KINDS.promoted).map(([key]) => key));
@@ -493,9 +494,7 @@ export async function productionCapabilityPorts(): Promise<CapabilityPorts> {
       await recordFactoryEvent({ kind, evidenceClass: 'MEASURED', detail });
     },
     async latestReview(programId) {
-      // Oldest first, so the newest review of this program is the last one.
-      const events = await listFactoryEvents(null, { kinds: [CAPABILITY_EVENT_KINDS.reviewed], limit: 5000 });
-      const newest = events.filter((e) => e.detail.programId === programId).at(-1);
+      const newest = await newestFactoryEvent([CAPABILITY_EVENT_KINDS.reviewed], (e) => e.detail.programId === programId);
       return newest && typeof newest.detail.fingerprint === 'string' ? newest.detail.fingerprint : null;
     },
     // Free slots from the fleet's own rows (§23, §98): the safe concurrency target
@@ -532,7 +531,7 @@ export async function reconcilePreparedCapabilitiesIfDue(now = Date.now()): Prom
 
 export interface ComparisonEvidence {
   program: { id: string; map: RequirementMap; mapVersion: number } | null;
-  /** Promoted, demoted and reviewed events, oldest first, as `listFactoryEvents` answers. */
+  /** This program's promotions and demotions oldest first, then its newest review. */
   events: { kind: string; detail: Record<string, unknown> }[];
 }
 
@@ -595,14 +594,16 @@ export async function comparisonEvidenceOnProduction(): Promise<ComparisonEviden
   const { getDb } = await import('../../db/database.ts');
   const { getProgram, getMap } = await import('../../repos/factoryProgram.ts');
   const { ARCHITECTURE_PROGRAM_KEY } = await import('../factory/program/probes.ts');
-  const { listFactoryEvents } = await import('../../repos/factoryFleet.ts');
+  const { allFactoryEventsOldestFirst, newestFactoryEvent } = await import('./newestEvents.ts');
   const row = await getDb().get<{ id: string }>(`SELECT id FROM factory_programs WHERE submission_key = ? ORDER BY created_at LIMIT 1`, [ARCHITECTURE_PROGRAM_KEY]);
   const program = row ? await getProgram(row.id) : null;
   const map = program && program.state === 'APPROVED' ? await getMap(program.id) : null;
-  const events = await listFactoryEvents(null, {
-    kinds: [CAPABILITY_EVENT_KINDS.promoted, CAPABILITY_EVENT_KINDS.demoted, CAPABILITY_EVENT_KINDS.reviewed],
-    limit: 5000,
-  });
+  // Every transition of this program (oldest first) and its newest review — read
+  // newest first, so neither is lost once a kind passes `listFactoryEvents`' cap.
+  const mine = (e: { detail: Record<string, unknown> }) => program !== null && e.detail.programId === program.id;
+  const transitions = program ? await allFactoryEventsOldestFirst([CAPABILITY_EVENT_KINDS.promoted, CAPABILITY_EVENT_KINDS.demoted], mine) : [];
+  const review = program ? await newestFactoryEvent([CAPABILITY_EVENT_KINDS.reviewed], mine) : null;
+  const events = review ? [...transitions, review] : transitions;
   return {
     program: program && map ? { id: program.id, map: map.map, mapVersion: map.version } : null,
     events: events.map((e) => ({ kind: e.kind, detail: e.detail })),
