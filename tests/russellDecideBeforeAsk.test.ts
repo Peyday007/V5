@@ -167,6 +167,10 @@ describe('parkStoppedMissions decides before it asks', () => {
     const declined = await decisionsFor(missionId);
     expect(declined).toHaveLength(1);
     expect(declined[0]).toMatchObject({ choice: null, declinedBecause: 'NO_LIVE_GRANT' });
+    // Declining is not a decision: no person has answered the card yet, so the
+    // row says the decision is pending with one, never that a person made it.
+    expect(declined[0]!['decidedBy']).toBe('PENDING_PERSON');
+    expect((await decisionsFor(missionId)).filter((p) => p['decidedBy'] === 'PERSON')).toEqual([]);
 
     // Recorded once: the parked mission is not re-declined on the next pass.
     await parkStoppedMissions(10);

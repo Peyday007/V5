@@ -560,7 +560,11 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
         orchestrationId: orchestration.id,
         missionId: mission.id,
         choice: null,
-        decidedBy: 'PERSON',
+        // Nobody has decided yet: Brain declined, and the decision is pending
+        // with a person. `PERSON` here would read as a person's answer before
+        // any person had given one. The answer itself is recorded when it
+        // arrives, by whichever writer moves the mission.
+        decidedBy: 'PENDING_PERSON',
         declinedBecause: decision.because,
         reason: `Brain did not decide this park itself: ${decision.reason}.`,
       },
