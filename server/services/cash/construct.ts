@@ -75,6 +75,17 @@ import {
   type Structure,
 } from './properties.ts';
 import { excludedBy, exclusionSentence, type ExclusionClass } from './exclusions.ts';
+import {
+  ENTRY_POINTS,
+  EVIDENCE_FIELDS,
+  INTERMEDIATION_FAMILY,
+  positionEvidenceGaps,
+  positionsToExamine,
+  type EvidenceBasis,
+  type EvidenceField,
+  type PositionFacts,
+  type ResolvedPosition,
+} from './intermediationPositions.ts';
 
 export { STRUCTURES, STRUCTURE_KEYS, type Structure } from './properties.ts';
 
@@ -132,6 +143,31 @@ export interface ConstructedArrangement {
    * and their sum. Absent or zero is unknown, never "will not return" (LIFE-29-2).
    */
   repeatBusiness?: { observations: number; statedValueCents: number };
+  /**
+   * For an arrangement that needs supply, the alternative positions the same
+   * transaction can be held from, each with its own research question
+   * (RES-15-4; S-0148, S-0150). Absent for a structure Brain fulfils itself.
+   */
+  positionQuestions?: PositionResearchQuestion[];
+}
+
+/**
+ * One decomposed research question at one exact position of an intermediated
+ * transaction. `POSITION` asks the S-0150 fields still missing there plus the
+ * position's contracts, rights, liabilities, restrictions and counterparty
+ * expectations; `BUYER_ACCESS` and `CONVERSION` are asked separately when what
+ * is established is only an asking price or a market size.
+ */
+export interface PositionResearchQuestion {
+  kind: 'POSITION' | 'BUYER_ACCESS' | 'CONVERSION';
+  /** The position as research holds it: its catalogue label, or the name Brain discovered. */
+  position: string;
+  catalogued: string | null;
+  /** The S-0150 fields this question asks; empty for the separate access and conversion questions. */
+  asks: EvidenceField[];
+  /** The S-0150 fields already established for this arrangement, which are not asked again. */
+  established: EvidenceField[];
+  question: string;
 }
 
 /** At most this many arrangements are composed per goal pass (they are ranked and few are asked). */
@@ -656,7 +692,116 @@ function compose(args: {
     relatedOpenings: args.related.map((one) => one.id),
     question,
     repeatBusiness,
+    ...(def.needsSupply ? { positionQuestions: positionResearchQuestions({ demand, need, supply, estimates, exclusions: args.exclusions }) } : {}),
   };
+}
+
+const justified = (estimates: Record<string, Estimate>, part: string): string | null => {
+  const est = estimates[`a_${part}`];
+  return est && est.distributionJustified ? `${Math.round(est.p10)}–${Math.round(est.p90)}` : null;
+};
+
+/**
+ * What an arrangement already establishes, in S-0150's terms. Only a part
+ * resting on a gated claim or a justified reconstruction counts; everything
+ * else is missing. The bases say what kind of source established it: a
+ * published price on an opening is an asking price and a buyer count is a
+ * market size, and neither says anybody can be reached or will buy.
+ */
+export function arrangementPositionFacts(args: {
+  demand: Primitive;
+  need: Primitive | null;
+  supply: Primitive | null;
+  estimates: Record<string, Estimate>;
+}): PositionFacts {
+  const { demand, need, supply, estimates } = args;
+  const fields: PositionFacts['fields'] = {
+    payer: demand.claimId && demand.from !== 'REVERSE' ? demand.name : null,
+    demand: need?.claimId && need.from === 'OPENING' ? need.name : null,
+    supply: supply?.claimId && supply.from !== 'CAPABILITY' && supply.from !== 'REVERSE' ? supply.name : null,
+    price: justified(estimates, 'value'),
+    spread: justified(estimates, 'commission') ?? justified(estimates, 'fee'),
+    throughput: justified(estimates, 'supply_units'),
+    cashStructure: justified(estimates, 'prepay_share'),
+  };
+  const bases: EvidenceBasis[] = [];
+  if (fields.price) bases.push('PUBLIC_ASKING_PRICE');
+  if (justified(estimates, 'buyers')) bases.push('TOTAL_MARKET_SIZE');
+  if (justified(estimates, 'conversion')) bases.push('OBSERVED_TRANSACTION');
+  if (fields.demand) bases.push('BUYER_INQUIRY');
+  return { fields, bases };
+}
+
+const list = (items: readonly string[]) => items.join('; ');
+
+/**
+ * Expand a supply-needing arrangement into one research question per lawful,
+ * economically distinct position the transaction can be held from, each
+ * asking only what is missing at that position plus what holds there
+ * contractually. Pure; ranking is untouched.
+ */
+export function positionResearchQuestions(args: {
+  demand: Primitive;
+  need: Primitive | null;
+  supply: Primitive | null;
+  estimates: Record<string, Estimate>;
+  exclusions: readonly ExclusionClass[];
+  positions?: ResolvedPosition[];
+}): PositionResearchQuestion[] {
+  const facts = arrangementPositionFacts(args);
+  const established = (Object.keys(EVIDENCE_FIELDS) as EvidenceField[]).filter((field) => {
+    const v = facts.fields[field];
+    return v !== null && v !== undefined && String(v).trim().length > 0;
+  });
+  const { demand, need, supply } = args;
+  const buyers = demand.from === 'REVERSE' ? 'buyers still to be found, of any type and in any market structure' : `buyers described as "${demand.name}"`;
+  const subject =
+    `${buyers}${need ? `, paying to deal with "${need.name}"` : ''}, fulfilled by ${supply && supply.from !== 'CAPABILITY' ? `"${supply.name}"` : 'a supplier or capacity source still to be found'}`;
+  const scope =
+    ` Look from both ends: buyer-first (${list(ENTRY_POINTS.BUYER_FIRST)}) and supply-first (${list(ENTRY_POINTS.SUPPLY_FIRST)}); these are examples of where to look, not limits, and so are industries such as ${INTERMEDIATION_FAMILY.examples.join(', ')}.` +
+    ` Do not default to ${INTERMEDIATION_FAMILY.notDefaults.join(', ')}.`;
+  const knownText = established.length ? ` Already established, so do not research again: ${established.join(', ')}.` : '';
+  const out: PositionResearchQuestion[] = [];
+  for (const position of args.positions ?? positionsToExamine()) {
+    const label = position.definition?.label ?? position.name;
+    const gaps = positionEvidenceGaps(position, facts);
+    const asks = gaps.flatMap((gap) => (gap.kind === 'FIELD' ? [gap.field] : []));
+    const inv = position.definition?.investigate;
+    const investigate = inv
+      ? ` At exactly this position, investigate: contracts (${list(inv.contracts)}); rights (${list(inv.rights)}); liabilities (${list(inv.liabilities)}); restrictions (${list(inv.restrictions)}); counterparty expectations (${list(inv.counterpartyExpectations)}).`
+      : ' At exactly this position, investigate the contracts, rights, liabilities, restrictions and counterparty expectations that hold there.';
+    const holds = position.definition ? ` — one that ${position.definition.holds}` : '';
+    const fieldText = asks.length ? ` For this position, find a source for each of: ${asks.map((field) => `${field}: ${EVIDENCE_FIELDS[field]}`).join('; ')}.` : '';
+    out.push({
+      kind: 'POSITION',
+      position: label,
+      catalogued: position.catalogued,
+      asks,
+      established,
+      question:
+        `Brain is examining one potential transaction — ${subject} — held from the ${label} position${holds}. ` +
+        'Return commercially usable evidence for this exact position, never industry facts or market overviews.' +
+        `${fieldText}${knownText}${investigate}${scope}${exclusionSentence(args.exclusions)} ` +
+        OPENING_SENTENCE +
+        'Where this position is unlawful or uneconomic for these buyers, say so plainly — that rules the position out and is a useful answer.',
+    });
+    for (const gap of gaps) {
+      if (gap.kind === 'FIELD') continue;
+      out.push({
+        kind: gap.kind,
+        position: label,
+        catalogued: position.catalogued,
+        asks: [],
+        established,
+        question:
+          `Brain is examining one potential transaction — ${subject} — held from the ${label} position. ` +
+          `What is established is only ${facts.bases?.includes('PUBLIC_ASKING_PRICE') ? 'a public asking price' : ''}${facts.bases?.includes('PUBLIC_ASKING_PRICE') && facts.bases?.includes('TOTAL_MARKET_SIZE') ? ' and ' : ''}${facts.bases?.includes('TOTAL_MARKET_SIZE') ? 'a total market size' : ''}, ` +
+          `which does not answer this on its own, so investigate it separately: ${gap.ask}.${exclusionSentence(args.exclusions)} ` +
+          'Where no source shows it, say so plainly.',
+      });
+    }
+  }
+  return out;
 }
 
 /**
