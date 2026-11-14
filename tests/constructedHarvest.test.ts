@@ -94,9 +94,9 @@ describe('a constructed round turns its repeating-buyer pattern into an opening'
     const filed = await harvest({ projectId });
     expect(filed.length).toBeGreaterThanOrEqual(1);
     const openings = await listOpportunities({ projectId });
-    const hvac = openings.find((one) => one.title.startsWith('HVAC firms repeatedly pay'));
+    const hvac = openings.find((one) => (one.buyingSignal ?? '').startsWith('HVAC firms repeatedly pay'));
     expect(hvac?.opportunitySignal).toBe('RECURRING_OUTSOURCED_WORK');
-    expect(openings.some((one) => one.title.startsWith('Dentists'))).toBe(false);
+    expect(openings.some((one) => (one.buyingSignal ?? '').startsWith('Dentists'))).toBe(false);
   });
 });
 
@@ -128,7 +128,7 @@ describe('an approved goal’s own research goes first in the shared queue', () 
     expect(await servesGoalSearch(other.id)).toBe(false);
     // A dive on the opening that round filed is the goal's too.
     await harvest({ projectId });
-    const opening = (await listOpportunities({ projectId })).find((one) => one.title.startsWith('Firms repeatedly pay brokers'))!;
+    const opening = (await listOpportunities({ projectId })).find((one) => (one.buyingSignal ?? '').startsWith('Firms repeatedly pay brokers'))!;
     const dive = await createOrchestration({ projectId, layerId: layer.id, runId: run.id, title: 'dive', assignment: 'dive', provider: 'WORKER', autoApprove: false });
     await getDb().run('UPDATE cash_opportunities SET validation_orchestration_id = ? WHERE id = ?', [dive.id, opening.id]);
     const { createCandidate } = await import('../server/repos/russellCandidates.ts');

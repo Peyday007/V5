@@ -104,12 +104,12 @@ async function play(input: { title: string; priceCents: number; days?: number; c
   return o;
 }
 
-async function goal(amountCents: number, capitalCents: number | null = null, days = 30): Promise<string> {
+async function goal(amountCents: number, capitalCents: number | null = null, days = 30, metric: 'SETTLED_CASH' | 'COLLECTED_CASH' = 'SETTLED_CASH'): Promise<string> {
   const g = await createWorkstream({ projectId, title: 'Collect cash fast', intent: 'Collect settled cash within the window.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
   await setTerms(g.id, { dueAt: inDays(days), ownerUserId: userId }, `person:${userId}`);
-  // One live target per project ledger (G-7): a test reading a second variant retires the first.
-  await getDb().run(`UPDATE workstreams SET cancelled_at = ? WHERE target_project_id = ? AND cancelled_at IS NULL AND id <> ?`, [now.toISOString(), projectId, g.id]);
-  const set = await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents, currency: 'USD', projectId, capitalCeilingCents: capitalCents, hoursCeiling: 200, now: new Date(now.getTime() - 60_000) });
+  // One live target per figure on a project ledger (G-7): a test reading a second variant of the same figure retires the first.
+  await getDb().run(`UPDATE workstreams SET cancelled_at = ? WHERE target_project_id = ? AND target_metric = ? AND cancelled_at IS NULL AND id <> ?`, [now.toISOString(), projectId, metric, g.id]);
+  const set = await setTarget({ goal: (await getWorkstream(g.id))!, metric, amountCents, currency: 'USD', projectId, capitalCeilingCents: capitalCents, hoursCeiling: 200, now: new Date(now.getTime() - 60_000) });
   expect(set.ok).toBe(true);
   return g.id;
 }
@@ -313,7 +313,8 @@ describe('the gate', () => {
   it('reads at most one goal per pass when throttled under pressure, and the next pass reads the other', async () => {
     await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
     await goal(100_000);
-    await goal(200_000);
+    // Two live goals on one ledger read different figures (G-7 refuses two of one figure).
+    await goal(200_000, null, 30, 'COLLECTED_CASH');
     expect((await advanceGoalPlans(now, { maxReads: 1 })).read).toBe(1);
     expect((await advanceGoalPlans(new Date(now.getTime() + 60_000), { maxReads: 1 })).read).toBe(1);
     expect((await advanceGoalPlans(new Date(now.getTime() + 120_000), { maxReads: 1 })).read).toBe(0);
@@ -1133,7 +1134,11 @@ describe('a goal arithmetic rules out is concluded, not searched for ever (C-10)
     expect(reading.acceptance.status).toBe('NOT_SUPPORTED');
     expect(reading.acceptance.sentence).toMatch(/^INFEASIBLE AS STATED/);
     expect(reading.verdict).toBe('NOT_VIABLE');
-    expect(reading.needsMoreOpenings).toBe(false);
+    // A checkout sale is not ruled out by arithmetic in 48 hours, so the search narrows to it
+    // rather than stopping (§65; review F2, aa10998) — the same case goalPlanCoherence reads.
+    expect(reading.infeasible!.instantOnly).toBe(true);
+    expect(reading.acceptance.sentence).toMatch(/keeps searching/);
+    expect(reading.needsMoreOpenings).toBe(true);
     expect(reading.infeasible!.relax.map((one) => one.constraint)).toContain('DEADLINE');
     expect(reading.steps).toEqual([]);
   }, 180_000);

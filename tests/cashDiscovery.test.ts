@@ -74,6 +74,10 @@ beforeEach(async () => {
   userId = user.id;
 });
 
+/** A source dated within the demand-freshness window of the run (`RECOMMENDATION_POLICY.demandFreshDays`). */
+const RECENT_SOURCE_DATE = new Date(Date.now() - 4 * 86_400_000).toISOString().slice(0, 10);
+const RECENT_RETRIEVED_AT = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
+
 async function activated(): Promise<void> {
   const outcome = await activate({
     projectId,
@@ -175,13 +179,14 @@ async function finishedMission(input: {
       sourceUrl: one.sourceUrl,
       sourceTitle: 'A listing',
       sourcePublisher: 'A marketplace',
-      sourceDate: one.sourceDate === undefined ? '2026-09-10' : one.sourceDate,
+      // A few days before the run, so the demand is still "now" (`observationExpiry`).
+      sourceDate: one.sourceDate === undefined ? RECENT_SOURCE_DATE : one.sourceDate,
       evidenceExcerpt: one.claim,
       evidenceLocator: 'the listing body',
       evidenceLane: one.lane,
       opportunitySignal: one.signal ?? null,
       closesOn: one.closesOn ?? null,
-      retrievedAt: '2026-09-12',
+      retrievedAt: RECENT_RETRIEVED_AT,
       confidence: 0.8,
       validationState: 'SOURCED' as const,
       validationDetail: null,
@@ -538,7 +543,7 @@ describe('harvesting what discovery found', () => {
     // From the claim's own signal, never from the bucket that asked (`harvest`).
     expect(opportunity.mechanism).toBe('EXPLICIT_PAID_REQUEST');
     expect(opportunity.buyingSignal).toContain('drain commission');
-    expect(opportunity.signalObservedAt).toBe('2026-09-10');
+    expect(opportunity.signalObservedAt?.slice(0, 10)).toBe(RECENT_SOURCE_DATE);
   });
 
   it('leaves the card blank, so every unknown arrives as a task', async () => {
@@ -1452,7 +1457,7 @@ describe('the wider economy (2026-10-28)', () => {
     });
     await harvest({ projectId });
     expect((await bucketRounds(priced!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 1]]);
-    const filed = (await listOpportunities({ projectId })).find((one) => one.title.startsWith('Property managers repeatedly pay bookkeeping firms'));
+    const filed = (await listOpportunities({ projectId })).find((one) => (one.buyingSignal ?? '').startsWith('Property managers repeatedly pay bookkeeping firms'));
     expect(filed?.opportunitySignal).toBe('RECURRING_OUTSOURCED_WORK');
 
     // The lane alone does not say what a lens round's buyers pay for: without the figure the
@@ -1465,7 +1470,7 @@ describe('the wider economy (2026-10-28)', () => {
     });
     await harvest({ projectId });
     expect((await bucketRounds(unpriced!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 0]]);
-    expect((await listOpportunities({ projectId })).some((one) => one.title.startsWith('Dentists'))).toBe(false);
+    expect((await listOpportunities({ projectId })).some((one) => (one.buyingSignal ?? '').startsWith('Dentists'))).toBe(false);
 
     // A figure with no buyer paying is not a pattern of buyers paying.
     const figureOnly = await openGoalDiscovery({ goal: w, target, bestReach: null });
@@ -1488,7 +1493,7 @@ describe('the wider economy (2026-10-28)', () => {
     });
     await harvest({ projectId });
     expect((await bucketRounds(dated!.bucketId)).map((one) => [one.state, one.found])).toEqual([['HARVESTED', 0]]);
-    expect((await listOpportunities({ projectId })).some((one) => one.title.startsWith('Dentists repeatedly pay outside firms for appointment reminders (examples'))).toBe(false);
+    expect((await listOpportunities({ projectId })).some((one) => (one.buyingSignal ?? '').startsWith('Dentists repeatedly pay outside firms for appointment reminders (examples'))).toBe(false);
 
     // A currency-first price files, as the trailing-currency one above did.
     const dollars = await openGoalDiscovery({ goal: w, target, bestReach: null });

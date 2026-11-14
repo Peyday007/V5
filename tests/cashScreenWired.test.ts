@@ -24,9 +24,9 @@ beforeEach(async () => {
   cashModeId = (await getCashMode(projectId))!.id;
 });
 
-async function goal(capitalCeilingCents: number): Promise<void> {
+async function goal(capitalCeilingCents: number, metric: 'SETTLED_CASH' | 'COLLECTED_CASH' = 'SETTLED_CASH'): Promise<void> {
   const g = await createWorkstream({ projectId, title: 'Cash', intent: 'Collect cash.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
-  const set = await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 100_000, currency: 'USD', projectId, capitalCeilingCents, now: new Date(now.getTime() - 60_000) });
+  const set = await setTarget({ goal: (await getWorkstream(g.id))!, metric, amountCents: 100_000, currency: 'USD', projectId, capitalCeilingCents, now: new Date(now.getTime() - 60_000) });
   expect(set.ok).toBe(true);
 }
 
@@ -43,7 +43,8 @@ describe('the goal screen at research launch', () => {
     const reason = await notWorthResearching(o, { now: now.toISOString() });
     expect(reason).toMatchObject({ kind: 'SCREENED_OUT', reason: 'CAPITAL_TOO_HIGH' });
     expect(describeNotWorthResearching(reason!)).toContain('capital ceiling');
-    await goal(5_000_000);
+    // A second live goal on the same ledger reads a different figure (G-7 refuses two of one figure).
+    await goal(5_000_000, 'COLLECTED_CASH');
     expect(await notWorthResearching(o, { now: now.toISOString() })).toBeNull();
   });
 
