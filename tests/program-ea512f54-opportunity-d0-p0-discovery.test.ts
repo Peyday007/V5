@@ -19,6 +19,8 @@ import { setTarget } from '../server/services/goals/target.ts';
 import { forgetGoalReadings, readGoalPlan } from '../server/services/goals/plan.ts';
 import { forgetKnowledge } from '../server/services/quant/knowledge.ts';
 import { getDb } from '../server/db/database.ts';
+import { getCandidate } from '../server/repos/russellCandidates.ts';
+import type { RoleLensSeed } from '../server/services/industry/construction/roles.ts';
 import { statesNamedIn } from '../server/domain/jurisdiction.ts';
 import {
   GOAL_LENSES,
@@ -30,6 +32,8 @@ import {
   openGoalDiscovery,
   originLenses,
   questionFor,
+  roleLenses,
+  MAX_ROLE_LENSES,
   type SearchBucket,
 } from '../server/services/cash/discovery.ts';
 import { OPPORTUNITY_ORIGINS, type OpportunitySeed } from '../server/services/industry/construction/origins.ts';
@@ -169,6 +173,60 @@ describe('every round records the origin it was asked from', () => {
     const seeded = events.filter((one) => one.bucketId.includes('-org-'));
     expect(seeded.length).toBeGreaterThan(0);
     for (const one of seeded) expect(one.originSeeds).toHaveLength(1);
+  });
+
+  it('a goal round is asked from a recorded flow’s commercial role, in the role model’s own terms', async () => {
+    const w = await goal();
+    // A recorded flow: a sector, its buyer and the transaction it pays for.
+    const root = await createNode({ projectId, parentId: null, kind: 'SECTOR', name: 'commercial cleaning', origin: 'SEED' });
+    const buyer = await createNode({ projectId, parentId: root.node.id, kind: 'BUYER_TYPE', name: 'property managers', origin: 'SEED' });
+    await createNode({ projectId, parentId: buyer.node.id, kind: 'TRANSACTION_TYPE', name: 'monthly janitorial contract', description: 'paid monthly per building', origin: 'SEED' });
+
+    const target = (await readGoalPlan({ goalId: w.id, evaluations: 200 }))!.target;
+    for (let i = 0; i < GOAL_LENSES.length + 3 + 40; i += 1) {
+      await openGoalDiscovery({ goal: w, target, bestReach: null, now: now.toISOString(), liveCap: 200 });
+    }
+    const events = await openedOrigins();
+    const roleRounds = events.filter((one) => one.bucketId.includes('-role-'));
+    expect(roleRounds.length).toBeGreaterThan(0);
+    for (const one of roleRounds) {
+      expect(one.origins).toEqual(['MEMORY']);
+      expect(one.originSeeds).toHaveLength(1);
+      expect(one.originSeeds[0]).toMatch(/^role:commercial cleaning:/);
+    }
+    // The recorded question carries the role's position, controls, value, occupiability, duties and risks.
+    const rows = await getDb().all<{ detail: string }>(`SELECT detail FROM cash_events WHERE project_id = ? AND kind = 'CASH_DISCOVERY_OPENED' ORDER BY created_at`, [projectId]);
+    const candidateIds = rows.map((row) => JSON.parse(row.detail) as { bucketId: string; candidateId: string }).filter((one) => one.bucketId.includes('-role-')).map((one) => one.candidateId);
+    const statement = (await getCandidate(candidateIds[0]!))!.statement;
+    expect(statement).toMatch(/position in commercial cleaning, on the flow from /);
+    expect(statement).toMatch(/it controls /);
+    expect(statement).toMatch(/whose value is not established|worth about USD/);
+    expect(statement).toMatch(/may occupy it legally and contractually is (yes|no|unknown)/);
+    expect(statement).toMatch(/its duties: .+; its risks: /);
+  });
+});
+
+describe('commercial roles become goal lenses (COM-13-1)', () => {
+  const seed = (subject: string, roleId: string, angle = `the ${roleId} position in ${subject}: it controls demand`): RoleLensSeed => ({
+    key: `role:${subject}:${roleId}`, subject, roleId, flowKey: '0:MONEY:a->b', roleKey: `0:MONEY:a->b#${roleId}`, occupiable: 'UNKNOWN', angle,
+  });
+
+  it('interleaves subjects so a bounded set reaches each, as MEMORY lenses keyed by role', () => {
+    const seeds = [...['broker_agent', 'reseller', 'lead_source'].map((r) => seed('laundry', r)), ...['broker_agent', 'marketplace'].map((r) => seed('towing', r))];
+    const lenses = roleLenses(seeds, 2);
+    expect(lenses.map((one) => one.seedKey)).toEqual(['role:laundry:broker_agent', 'role:towing:broker_agent']);
+    for (const lens of roleLenses(seeds)) {
+      expect(lens.origin).toBe('MEMORY');
+      expect(lens.id).toMatch(/^role-[0-9a-z]+$/);
+    }
+    expect(roleLenses(seeds)).toHaveLength(5);
+    expect(roleLenses(Array.from({ length: 100 }, (_, n) => seed('s', `r${n}`))).length).toBe(MAX_ROLE_LENSES);
+  });
+
+  it('leaves out an angle the compiler would read as a jurisdiction', () => {
+    const named = statesNamedIn('in Texas').length > 0;
+    const lenses = roleLenses([seed('s', 'r', 'the broker position in Texas')]);
+    expect(lenses).toHaveLength(named ? 0 : 1);
   });
 });
 
