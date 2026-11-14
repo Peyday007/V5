@@ -416,12 +416,14 @@ export async function reconcileRegister(ports: RegisterPassPorts): Promise<Regis
 
 /** The ports production runs on, imported lazily so the goals tick does not load the factory at module load. */
 export async function productionRegisterPorts(): Promise<RegisterPassPorts> {
-  const { listFactoryEvents, recordFactoryEvent } = await import('../../repos/factoryFleet.ts');
+  const { recordFactoryEvent } = await import('../../repos/factoryFleet.ts');
+  const { newestFactoryEvent } = await import('./newestEvents.ts');
   return {
     check: () => checkRegisterOnProduction(),
     async latest() {
-      // `listFactoryEvents` answers oldest first: the newest outcome is the last row, not the first.
-      const newest = (await listFactoryEvents(null, { kinds: [REGISTER_EVENT_KINDS.current, REGISTER_EVENT_KINDS.behind], limit: 5000 })).at(-1);
+      // Newest first, so the newest outcome is read whatever the ledger's size —
+      // `listFactoryEvents` is oldest first under a 5000-row cap.
+      const newest = await newestFactoryEvent([REGISTER_EVENT_KINDS.current, REGISTER_EVENT_KINDS.behind]);
       return newest ? { kind: newest.kind, detail: newest.detail } : null;
     },
     async record(kind, detail) {
