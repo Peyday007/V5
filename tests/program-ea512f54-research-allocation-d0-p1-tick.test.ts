@@ -14,6 +14,8 @@ import {
   RESEARCH_REALLOCATED_EVENT,
   advanceGoals,
   allocationInputFrom,
+  purposeStakesFrom,
+  purposesGoalDependsOn,
   reallocateResearch,
   reallocateResearchIfDue,
   triedRemediesFrom,
@@ -140,6 +142,116 @@ describe('the research allocation decision in the tick', () => {
     );
     expect(report.floors.commercial).toBe(0.2);
     expect(report.shares.TRANSACTION_ROUTES).toBeGreaterThanOrEqual(0.2 - 1e-9);
+  });
+});
+
+describe('every purpose gets its impending deadline and expected decision value from the goals that depend on it', () => {
+  const NOW = '2026-11-14T00:00:00.000Z';
+  const nowMs = Date.parse(NOW);
+  const inDays = (d: number) => new Date(nowMs + d * 86_400_000).toISOString();
+  const target = (over: Partial<NonNullable<GoalView['target']>> = {}) =>
+    ({ achieved: false, remainingCents: 500_000, proven: false, ...over }) as NonNullable<GoalView['target']>;
+
+  it('maps each goal to the purposes its rows say it depends on', () => {
+    const purposes = (g: GoalView) => purposesGoalDependsOn(g).map((x) => x.purpose).sort();
+    expect(purposes(goalView('g', { target: target(), purpose: 'REVENUE_DIRECT' } as Partial<GoalView>))).toEqual(['BROAD_DISCOVERY', 'TRANSACTION_ROUTES']);
+    expect(
+      purposes(goalView('g', { target: target({ proven: true }), purpose: 'REVENUE_DIRECT', linked: [{ kind: 'OPPORTUNITY' }] } as unknown as Partial<GoalView>)),
+    ).toEqual(['OPERATING_SUPPORT', 'TRANSACTION_ROUTES']);
+    expect(purposes(goalView('g', { purpose: 'CAPABILITY' } as Partial<GoalView>))).toEqual(['FORWARD_EXPLORATION', 'SELF_IMPROVEMENT']);
+    expect(purposes(goalView('g', { target: target({ achieved: true }), purpose: 'REVENUE_DIRECT' } as Partial<GoalView>))).toEqual([]);
+  });
+
+  it('gives deadlines to purposes other than transaction routes, and decision value wherever a money stake reaches', () => {
+    const stakes = purposeStakesFrom(
+      [
+        goalView('cash', { target: target({ remainingCents: 500_000, proven: true }), purpose: 'REVENUE_DIRECT', dueAt: inDays(10) } as Partial<GoalView>),
+        goalView('repair', { purpose: 'CAPABILITY', dueAt: inDays(3) } as Partial<GoalView>),
+        goalView('enable', { target: target({ remainingCents: 200_000 }), purpose: 'REVENUE_ENABLING', dueAt: inDays(6) } as Partial<GoalView>),
+        goalView('later', { purpose: 'LONG_TERM', dueAt: inDays(30) } as Partial<GoalView>),
+        goalView('paused', { lifecycle: 'PAUSED', purpose: 'CAPABILITY', dueAt: inDays(1) } as Partial<GoalView>),
+      ],
+      nowMs,
+    );
+    expect(stakes.TRANSACTION_ROUTES.nearestDeadlineDays).toBeCloseTo(6);
+    expect(stakes.TRANSACTION_ROUTES.decisionValue).toBe(700_000);
+    expect(stakes.BROAD_DISCOVERY.decisionValue).toBe(700_000);
+    expect(stakes.OPERATING_SUPPORT).toMatchObject({ decisionValue: 500_000 });
+    expect(stakes.OPERATING_SUPPORT.nearestDeadlineDays).toBeCloseTo(10);
+    // A paused goal's nearer deadline does not count; the CAPABILITY goal's does.
+    expect(stakes.SELF_IMPROVEMENT.nearestDeadlineDays).toBeCloseTo(3);
+    // The REVENUE_ENABLING goal's open target is the self-improvement stake.
+    expect(stakes.SELF_IMPROVEMENT.decisionValue).toBe(200_000);
+    expect(stakes.FORWARD_EXPLORATION.nearestDeadlineDays).toBeCloseTo(3);
+    // No goal with a money stake depends on forward exploration: unknown, never zero.
+    expect(stakes.FORWARD_EXPLORATION.decisionValue).toBeNull();
+    expect(stakes.SELF_IMPROVEMENT.goals.map((g) => g.goalId)).toEqual(['repair', 'enable']);
+  });
+
+  it('carries the stakes into every purpose measurement the decision reads', () => {
+    const stakes = purposeStakesFrom(
+      [
+        goalView('cash', { target: target({ remainingCents: 900_000 }), purpose: 'REVENUE_DIRECT', dueAt: inDays(4) } as Partial<GoalView>),
+        goalView('repair', { target: target({ remainingCents: 100_000 }), purpose: 'CAPABILITY', dueAt: inDays(2) } as Partial<GoalView>),
+      ],
+      nowMs,
+    );
+    const input = allocationInputFrom(reading(), { urgentCommercialGoal: true, stakes, triedRemedies: new Map() });
+    const by = new Map(input.purposes.map((m) => [m.purpose, m]));
+    expect(by.get('TRANSACTION_ROUTES')).toMatchObject({ decisionValue: 1_000_000 });
+    expect(by.get('SELF_IMPROVEMENT')).toMatchObject({ decisionValue: 100_000 });
+    expect(by.get('SELF_IMPROVEMENT')!.nearestDeadlineDays).toBeCloseTo(2);
+    expect(by.get('BROAD_DISCOVERY')!.nearestDeadlineDays).toBeCloseTo(2);
+    expect(by.get('FORWARD_EXPLORATION')!.decisionValue).toBeUndefined();
+    expect(by.get('OPERATING_SUPPORT')!.nearestDeadlineDays).toBeUndefined();
+  });
+
+  it('moves share in the tick toward a purpose with an impending deadline, and records the stakes', async () => {
+    const steady = reading();
+    steady.lanes = {};
+    const base = memoryPorts(steady);
+    const without = await reallocateResearch({ goals: [goalView('wst_a', { purpose: 'REVENUE_DIRECT' } as Partial<GoalView>)], now: NOW }, base.ports);
+    const pressed = memoryPorts(steady);
+    const withDeadline = await reallocateResearch(
+      {
+        goals: [
+          goalView('wst_a', { purpose: 'REVENUE_DIRECT' } as Partial<GoalView>),
+          goalView('wst_fix', { purpose: 'CAPABILITY', dueAt: inDays(1) } as Partial<GoalView>),
+        ],
+        now: NOW,
+      },
+      pressed.ports,
+    );
+    expect(withDeadline.stakes.SELF_IMPROVEMENT.nearestDeadlineDays).toBeCloseTo(1);
+    expect(withDeadline.shares.SELF_IMPROVEMENT).toBeGreaterThan(without.shares.SELF_IMPROVEMENT + 0.005);
+    const detail = pressed.events.get('wst_fix')![0]!;
+    const recorded = detail.stakes as Record<string, { decisionValue: number | null; nearestDeadlineDays: number | null; goals: { goalId: string }[] }>;
+    expect(recorded.SELF_IMPROVEMENT!.nearestDeadlineDays).toBeCloseTo(1);
+    expect(recorded.SELF_IMPROVEMENT!.decisionValue).toBeNull();
+    expect(recorded.SELF_IMPROVEMENT!.goals.map((g) => g.goalId)).toEqual(['wst_fix']);
+    const change = (detail.changes as { purpose: string; reasons: string[] }[]).find((c) => c.purpose === 'SELF_IMPROVEMENT');
+    expect(change?.reasons.some((r) => r.startsWith('a deadline in'))).toBe(true);
+  });
+
+  it('moves share in the tick by expected decision value, the larger open stake pulling harder', async () => {
+    const steady = reading();
+    steady.lanes = {};
+    const goals = (enablingCents: number) => [
+      goalView('wst_cash', { purpose: 'REVENUE_DIRECT', target: target({ remainingCents: 1_000_000 }), linked: [{ kind: 'OPPORTUNITY' }] } as unknown as Partial<GoalView>),
+      goalView('wst_enable', { purpose: 'REVENUE_ENABLING', target: target({ remainingCents: enablingCents }), linked: [{ kind: 'OPPORTUNITY' }] } as unknown as Partial<GoalView>),
+    ];
+    const small = memoryPorts(steady);
+    const low = await reallocateResearch({ goals: goals(10_000), now: NOW }, small.ports);
+    const large = memoryPorts(steady);
+    const high = await reallocateResearch({ goals: goals(1_000_000), now: NOW }, large.ports);
+    expect(high.stakes.SELF_IMPROVEMENT.decisionValue).toBe(1_000_000);
+    // The move is bounded by MAX_STEP across all purposes, so the difference is small but always in this direction.
+    expect(high.shares.SELF_IMPROVEMENT).toBeGreaterThan(low.shares.SELF_IMPROVEMENT);
+    const detail = large.events.get('wst_enable')![0]!;
+    // The recorded change names decision value as a reason the share moved.
+    const change = (detail.changes as { purpose: string; reasons: string[] }[]).find((c) => c.purpose === 'TRANSACTION_ROUTES');
+    expect(change?.reasons.some((r) => r.startsWith('expected decision value'))).toBe(true);
+    expect((detail.stakes as Record<string, { decisionValue: number | null }>).TRANSACTION_ROUTES!.decisionValue).toBe(2_000_000);
   });
 });
 

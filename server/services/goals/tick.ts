@@ -248,7 +248,8 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
  * measured yield (`researchYieldByPurpose`: per-lane and per-purpose jobs,
  * claims, useful results and job time, each job's cost counted once), hands it
  * to the pure decision (`decideResearchAllocation`: marginal useful outcome per
- * unit of cost, deadlines and bottlenecks move the shares, floors keep
+ * unit of cost, each purpose's impending deadline and expected decision value
+ * (`purposeStakesFrom`), and bottlenecks move the shares, floors keep
  * exploration, system health and the urgent commercial goal), and records the
  * decision when it changed.
  *
@@ -287,6 +288,8 @@ export interface ResearchAllocationReport {
   capacity: AllocationDecision['capacity'];
   recordedOn: string[];
   fingerprint: string;
+  /** The deadline and decision value each purpose was given, and the goals they came from. */
+  stakes: Record<ResearchPurpose, PurposeStake>;
 }
 
 export interface ResearchAllocationPorts {
@@ -298,14 +301,109 @@ export interface ResearchAllocationPorts {
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
+/**
+ * What rides on one purpose's research, read from the live goals that depend
+ * on it: the nearest impending deadline among them and the expected decision
+ * value of the next unit of research for them.
+ *
+ * A goal depends on a purpose by its own rows, never by category:
+ *
+ *   - a goal with an unmet money target depends on TRANSACTION_ROUTES (turning
+ *     what was found into a sale), on BROAD_DISCOVERY while it pursues no
+ *     opening yet (there is nothing to convert), and on OPERATING_SUPPORT once a
+ *     verified customer payment has arrived (a business already operating);
+ *   - a CAPABILITY or REVENUE_ENABLING goal depends on SELF_IMPROVEMENT
+ *     (capability, reliability and repair);
+ *   - a goal with no target, or a LONG_TERM one, depends on FORWARD_EXPLORATION
+ *     (the same reading `attributePurposes` gives a job for a target-less goal).
+ *
+ * The decision value is the money the dependent goals still have open — the
+ * target's remaining amount, in the target's minor units — because that is
+ * what the decisions this research informs can still move. One scale is shared
+ * by every purpose, and only the ratio between purposes is used. A goal with no
+ * money target has no measured stake: it adds a deadline when it has one and
+ * no decision value, and a purpose no measured stake reaches reads null, never
+ * zero and never a favourable guess (invariant 39).
+ */
+export interface PurposeStake {
+  /** Days to the nearest future due date among the goals that depend on this purpose. */
+  nearestDeadlineDays: number | null;
+  /** Sum of the dependent goals' open target amounts (minor units), or null when none is measured. */
+  decisionValue: number | null;
+  /** The goals that depend on this purpose, and the row that says so. */
+  goals: { goalId: string; because: string }[];
+}
+
+const knownNumber = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
+
+/** Which purposes one live goal's research serves, with the reason read from its row. Pure. */
+export function purposesGoalDependsOn(goal: GoalView): { purpose: ResearchPurpose; because: string }[] {
+  const out: { purpose: ResearchPurpose; because: string }[] = [];
+  const target = goal.target;
+  const openTarget = !!target && target.achieved !== true;
+  if (openTarget) {
+    out.push({ purpose: 'TRANSACTION_ROUTES', because: 'its money target is not yet met' });
+    const pursues = (goal.linked ?? []).some((l) => l.kind === 'OPPORTUNITY');
+    if (!pursues) out.push({ purpose: 'BROAD_DISCOVERY', because: 'it has a money target and pursues no opening yet' });
+    if (target.proven === true) out.push({ purpose: 'OPERATING_SUPPORT', because: 'a verified customer payment has arrived since its target was set' });
+  }
+  if (goal.purpose === 'CAPABILITY' || goal.purpose === 'REVENUE_ENABLING') {
+    out.push({ purpose: 'SELF_IMPROVEMENT', because: `its purpose is ${goal.purpose}` });
+  }
+  if (!target || goal.purpose === 'LONG_TERM') {
+    out.push({ purpose: 'FORWARD_EXPLORATION', because: target ? 'its purpose is LONG_TERM' : 'it has no target yet' });
+  }
+  return out;
+}
+
+/** Each purpose's deadline and decision value, from the live goals that depend on it. Pure. */
+export function purposeStakesFrom(goals: readonly GoalView[], nowMs: number): Record<ResearchPurpose, PurposeStake> {
+  const stakes = Object.fromEntries(
+    RESEARCH_PURPOSES.map((p): [ResearchPurpose, PurposeStake] => [p, { nearestDeadlineDays: null, decisionValue: null, goals: [] }]),
+  ) as Record<ResearchPurpose, PurposeStake>;
+  for (const goal of goals) {
+    if (goal.lifecycle !== 'ACTIVE') continue;
+    const due = goal.dueAt ? Date.parse(goal.dueAt) : NaN;
+    const days = Number.isFinite(due) && due > nowMs ? (due - nowMs) / 86_400_000 : null;
+    const remaining = goal.target && goal.target.achieved !== true && knownNumber(goal.target.remainingCents) && goal.target.remainingCents > 0
+      ? goal.target.remainingCents
+      : null;
+    for (const { purpose, because } of purposesGoalDependsOn(goal)) {
+      const stake = stakes[purpose];
+      stake.goals.push({ goalId: goal.id, because });
+      if (days !== null) stake.nearestDeadlineDays = stake.nearestDeadlineDays === null ? days : Math.min(stake.nearestDeadlineDays, days);
+      if (remaining !== null) stake.decisionValue = (stake.decisionValue ?? 0) + remaining;
+    }
+  }
+  return stakes;
+}
+
 /** The measured inputs one window gives the decision. Pure. */
 export function allocationInputFrom(
   reading: ResearchYieldReading,
-  context: { urgentCommercialGoal: boolean; nearestDeadlineDays: number | null; triedRemedies: Map<string, LaneRemedy[]> },
+  context: {
+    urgentCommercialGoal: boolean;
+    /** Each purpose's deadline and decision value (`purposeStakesFrom`). */
+    stakes?: Partial<Record<ResearchPurpose, PurposeStake>>;
+    /** A deadline for TRANSACTION_ROUTES alone, used only when no stakes are given for it. */
+    nearestDeadlineDays?: number | null;
+    triedRemedies: Map<string, LaneRemedy[]>;
+  },
 ): AllocationInput {
   // The shares in force are where the capacity actually went: each purpose's job time in the window.
   const currentShares: Partial<Record<ResearchPurpose, number>> = {};
   for (const p of RESEARCH_PURPOSES) currentShares[p] = reading.purposes[p]?.jobMs ?? 0;
+  const stakeFields = (p: ResearchPurpose): Pick<PurposeMeasurement, 'nearestDeadlineDays' | 'decisionValue'> => {
+    const stake = context.stakes?.[p];
+    if (stake) {
+      return {
+        ...(stake.nearestDeadlineDays !== null ? { nearestDeadlineDays: stake.nearestDeadlineDays } : {}),
+        ...(stake.decisionValue !== null ? { decisionValue: stake.decisionValue } : {}),
+      };
+    }
+    const legacy = context.nearestDeadlineDays;
+    return p === 'TRANSACTION_ROUTES' && knownNumber(legacy) ? { nearestDeadlineDays: legacy } : {};
+  };
   const purposes: PurposeMeasurement[] = RESEARCH_PURPOSES.map((p) => {
     const b = reading.purposes[p];
     const ran = !!b && b.submissions + b.completions > 0 && b.jobMs > 0;
@@ -314,7 +412,7 @@ export function allocationInputFrom(
       usefulResults: ran ? b!.usefulResults : null,
       // Job time is the cost every job records; it is split once across a job's purposes.
       cost: ran ? b!.jobMs : null,
-      ...(p === 'TRANSACTION_ROUTES' && context.nearestDeadlineDays !== null ? { nearestDeadlineDays: context.nearestDeadlineDays } : {}),
+      ...stakeFields(p),
     };
   });
   const lanePurposes = new Map<string, Set<ResearchPurpose>>();
@@ -384,12 +482,11 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     .filter((g) => g.target && g.dueAt && Date.parse(g.dueAt) > untilMs)
     .map((g) => (Date.parse(g.dueAt!) - untilMs) / 86_400_000);
   const urgentCommercialGoal = deadlines.length > 0;
+  const stakes = purposeStakesFrom(live, untilMs);
   const previous = live.length > 0 ? await ports.lastDecision(live[0]!.id) : null;
   const tried = triedRemediesFrom(previous);
   const reading = await ports.readYield(window);
-  const decision = decideResearchAllocation(
-    allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried }),
-  );
+  const decision = decideResearchAllocation(allocationInputFrom(reading, { urgentCommercialGoal, stakes, triedRemedies: tried }));
   const fingerprint = allocationFingerprint(decision);
   const floors = {
     exploration: EXPLORATION_FLOOR,
@@ -407,6 +504,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     laneActions: decision.laneActions.map((a) => ({ ...a, tried: tried.get(a.lane) ?? [] })),
     capacity: decision.capacity.map((c) => ({ ...c, recommendationOnly: true })),
     bottlenecks: decision.capacity.filter((c) => c.resource !== null).map((c) => ({ lane: c.lane, resource: c.resource })),
+    stakes: stakesDetail(stakes),
     costCountedOnce: reading.costCountedOnce,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
@@ -430,7 +528,22 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     capacity: decision.capacity,
     recordedOn,
     fingerprint,
+    stakes,
   };
+}
+
+/** The stakes as recorded on the decision row: what deadline and decision value each purpose was given, and from which goals. */
+function stakesDetail(stakes: Record<ResearchPurpose, PurposeStake>): Record<string, unknown> {
+  return Object.fromEntries(
+    RESEARCH_PURPOSES.map((p) => [
+      p,
+      {
+        nearestDeadlineDays: stakes[p].nearestDeadlineDays === null ? null : round3(stakes[p].nearestDeadlineDays!),
+        decisionValue: stakes[p].decisionValue,
+        goals: stakes[p].goals.slice(0, 20),
+      },
+    ]),
+  );
 }
 
 /** The production rows: the yield reader, the goal's own event history, and the project event log. */
