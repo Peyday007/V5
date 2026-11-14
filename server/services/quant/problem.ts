@@ -232,7 +232,7 @@ export function solveProblem(problem: QuantProblem, now: Date = new Date()): Pro
               return { ...one, cash: cash.samples.slice(0, n), days: days.slice(0, n), spend: spend?.slice(0, n) };
             });
             const members = acts.filter((one) => best.keys.includes(one.key));
-            return optimizePortfolio({ activities: members, target: p.target, deadlineDays: p.deadlineDays, capacity: p.capacity, startingCapital: p.startingCapital, riskCorrelation: p.riskCorrelation, spendCeiling: p.spendCeiling }).ranked.find((one) => one.keys.length === members.length)?.reach ?? 0;
+            return optimizePortfolio({ activities: members, target: p.target, deadlineDays: p.deadlineDays, capacity: p.capacity, startingCapital: p.startingCapital, riskCorrelation: p.riskCorrelation, spendCeiling: p.spendCeiling, challenge: false }).ranked.find((one) => one.keys.length === members.length)?.reach ?? 0;
           };
           const low = pinned(leaf.p10);
           const high = pinned(leaf.p90);
