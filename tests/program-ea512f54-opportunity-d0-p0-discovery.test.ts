@@ -27,12 +27,13 @@ import {
   SEARCH_BUCKETS,
   openConstructedRound,
   openDiscovery,
+  firstPrinciplesSeedFor,
   openGoalDiscovery,
   originLenses,
   questionFor,
   type SearchBucket,
 } from '../server/services/cash/discovery.ts';
-import { OPPORTUNITY_ORIGINS, type OpportunitySeed } from '../server/services/industry/construction/origins.ts';
+import { OPPORTUNITY_ORIGINS, goalsSearchedFor, seedsFromFirstPrinciples, type OpportunitySeed } from '../server/services/industry/construction/origins.ts';
 
 const seedOf = (origin: OpportunitySeed['origin'], n: number, prompt = `explore ${origin} ${n}`, category: string | null = null): OpportunitySeed => ({
   key: `${origin}:x/${n}`,
@@ -169,6 +170,75 @@ describe('every round records the origin it was asked from', () => {
     const seeded = events.filter((one) => one.bucketId.includes('-org-'));
     expect(seeded.length).toBeGreaterThan(0);
     for (const one of seeded) expect(one.originSeeds).toHaveLength(1);
+  });
+});
+
+describe('a first-principles round is reasoned backward from the goal’s own row', () => {
+  let projectId = '';
+  let userId = '';
+  const now = new Date();
+  const inDays = (n: number) => new Date(now.getTime() + n * 86_400_000).toISOString();
+
+  beforeEach(async () => {
+    forgetKnowledge();
+    forgetGoalReadings();
+    const fixture = await freshProject();
+    projectId = fixture.project.id;
+    userId = (await createUser({ email: `fp-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+    expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+  });
+
+  async function opened(): Promise<{ bucketId: string; origins: string[]; originSeeds: string[] }[]> {
+    const rows = await getDb().all<{ detail: string }>(`SELECT detail FROM cash_events WHERE project_id = ? AND kind = 'CASH_DISCOVERY_OPENED' ORDER BY created_at`, [projectId]);
+    return rows.map((row) => JSON.parse(row.detail) as { bucketId: string; origins: string[]; originSeeds: string[] });
+  }
+
+  async function targetedGoal(title: string) {
+    const g = await createWorkstream({ projectId, title, intent: 'Collect settled cash.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: inDays(25), ownerUserId: userId }, `person:${userId}`);
+    expect(
+      (await setTarget({
+        goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId,
+        capitalCeilingCents: 300_000, capitalBeforeProofCents: 37_500, hoursCeiling: 200, now: new Date(now.getTime() - 60_000),
+      } as Parameters<typeof setTarget>[0])).ok,
+    ).toBe(true);
+    return (await getWorkstream(g.id))!;
+  }
+
+  it('records the seed the field derived from the goal, the same seed the probe reader counts', async () => {
+    const w = await targetedGoal('Collect cash fast');
+    const target = (await readGoalPlan({ goalId: w.id, evaluations: 200 }))!.target;
+    for (let i = 0; i < 3; i += 1) await openGoalDiscovery({ goal: w, target, bestReach: null, now: now.toISOString(), liveCap: 100 });
+    const firstPrinciples = (await opened()).filter((one) => one.origins.includes('FIRST_PRINCIPLES'));
+    expect(firstPrinciples.length).toBeGreaterThan(0);
+    const expected = seedsFromFirstPrinciples([w]).map((one) => one.key);
+    expect(expected).toEqual([`FIRST_PRINCIPLES:workstreams/${w.id}`]);
+    for (const one of firstPrinciples) expect(one.originSeeds).toEqual(expected);
+    // The reader counts exactly this goal's seed for the project its rounds search.
+    const counted = seedsFromFirstPrinciples(goalsSearchedFor(projectId, [w])).map((one) => one.key);
+    expect(counted).toEqual(expected);
+  });
+
+  it('passes off no fixed angle as first principles when the field holds no seed for the goal', async () => {
+    const w = await targetedGoal('Collect cash fast');
+    const target = (await readGoalPlan({ goalId: w.id, evaluations: 200 }))!.target;
+    // A goal with no target of its own yields no first-principles seed.
+    const bare = await createWorkstream({ projectId, title: 'Untargeted goal', intent: 'Something.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    expect(seedsFromFirstPrinciples([bare])).toEqual([]);
+    await createNode({ projectId, parentId: null, kind: 'SECTOR', name: 'Commercial laundry', origin: 'SEED' });
+    for (let i = 0; i < 3; i += 1) await openGoalDiscovery({ goal: bare, target, bestReach: null, now: now.toISOString(), liveCap: 100 });
+    const events = await opened();
+    expect(events.length).toBeGreaterThan(0);
+    for (const one of events) expect(one.origins).not.toContain('FIRST_PRINCIPLES');
+  });
+
+  it('finds the goal’s seed by its workstream row and nothing else', () => {
+    const field: OpportunitySeed[] = [
+      { key: 'FIRST_PRINCIPLES:workstreams/wks_other', origin: 'FIRST_PRINCIPLES', prompt: 'p', category: null, sources: [{ table: 'workstreams', id: 'wks_other' }] },
+      { key: 'MEMORY:workstreams/wks_a', origin: 'MEMORY', prompt: 'p', category: null, sources: [{ table: 'workstreams', id: 'wks_a' }] },
+    ];
+    expect(firstPrinciplesSeedFor(field, 'wks_a')).toBeNull();
+    expect(firstPrinciplesSeedFor(field, 'wks_other')?.key).toBe('FIRST_PRINCIPLES:workstreams/wks_other');
   });
 });
 

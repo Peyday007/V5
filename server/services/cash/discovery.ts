@@ -94,6 +94,7 @@ import {
   openRoundsByCandidate,
 } from '../../repos/cashDiscovery.ts';
 import { listConstraintsForProject, listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
+import { getWorkstream } from '../../repos/register.ts';
 import { OPPORTUNITY_ORIGINS, opportunityField, type OpportunityOrigin, type OpportunitySeed } from '../industry/construction/origins.ts';
 import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
 import { exclusionSentence, unionOf, type ExclusionClass } from './exclusions.ts';
@@ -712,6 +713,14 @@ export interface GoalLens {
   seedKey?: string;
 }
 
+/**
+ * The first-principles seed the field derived from this goal's own row, if
+ * any: the structure a goal round decomposes when it asks from a fixed angle.
+ */
+export function firstPrinciplesSeedFor(field: readonly OpportunitySeed[], goalId: string): OpportunitySeed | null {
+  return field.find((one) => one.origin === 'FIRST_PRINCIPLES' && one.sources.some((ref) => ref.table === 'workstreams' && ref.id === goalId)) ?? null;
+}
+
 /** At most this many opportunity-field seeds are offered as a goal's search angles at once. */
 export const MAX_ORIGIN_LENSES = 40;
 
@@ -902,13 +911,25 @@ export async function openGoalDiscovery(input: {
    * own. No category list filters them; they come after the fixed angles and
    * the industries, interleaved so every origin is reached within a cycle.
    */
+  /*
+   * FIRST_PRINCIPLES is the goal itself, reasoned backward: the field is fed
+   * this goal's own row, and the fixed angles are offered only as
+   * decompositions of the seed it yields — each such round records that seed,
+   * so its origin resolves to the workstream it was inferred from. A goal the
+   * field does not seed (paused, cancelled, archived, no target) has no
+   * first-principles structure to decompose, and the fixed angles are not
+   * passed off as one (OPP-03; the reader counts the same seed).
+   */
+  const goalRow = await getWorkstream(input.goal.id);
   const field = opportunityField({
     nodes,
     opportunities: await listOpportunities({ projectId: t.projectId }),
-    goals: [],
+    goals: goalRow ? [goalRow] : [],
     constraints: await listConstraintsForProject(t.projectId),
   });
-  const lenses: GoalLens[] = [...GOAL_LENSES.map((one) => ({ ...one, origin: 'FIRST_PRINCIPLES' as const })), ...industries, ...originLenses(field)];
+  const goalSeed = firstPrinciplesSeedFor(field, input.goal.id);
+  const fixed: GoalLens[] = goalSeed ? GOAL_LENSES.map((one) => ({ ...one, origin: 'FIRST_PRINCIPLES' as const })) : [];
+  const lenses: GoalLens[] = [...fixed, ...industries, ...originLenses(field.filter((one) => one !== goalSeed))];
   const choices = lenses.map((lens, index) => {
     const id = `${prefix}-${lens.id}`;
     const history = mine.filter((one) => one.bucketId === id);
@@ -922,7 +943,7 @@ export async function openGoalDiscovery(input: {
   if (!choice) return null;
   const { lens, id, history, next } = choice;
   const origins: OpportunityOrigin[] = [lens.origin];
-  const seedKeys = lens.seedKey ? [lens.seedKey] : [];
+  const seedKeys = lens.seedKey ? [lens.seedKey] : lens.origin === 'FIRST_PRINCIPLES' && goalSeed ? [goalSeed.key] : [];
 
   const amount = `${t.currency} ${(t.remainingCents / 100).toFixed(0)}`;
   const held =

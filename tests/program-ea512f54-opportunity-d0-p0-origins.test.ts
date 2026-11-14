@@ -12,6 +12,7 @@ import { createNode } from '../server/repos/industry.ts';
 import {
   OPPORTUNITY_ORIGINS,
   countByOrigin,
+  goalsSearchedFor,
   opportunityField,
   opportunityFieldHoldsOnRows,
   rankMarkets,
@@ -129,6 +130,28 @@ describe('market preference', () => {
     for (const ownerLocation of ['Detroit, MI', 'London', 'Texas', null]) {
       expect(rankMarkets(markets, { ownerLocation }).map((m) => m.key)).toEqual(base);
     }
+  });
+});
+
+describe('the reader counts the goals production rounds are seeded from', () => {
+  const target = (projectId: string) => ({ metric: 'SETTLED_CASH', amountCents: 100_000, currency: 'USD', projectId, capitalCeilingCents: null, hoursCeiling: null, resources: null, capitalBeforeProofCents: null, capitalPerWeekCents: null, setAt: '2026-11-01T00:00:00.000Z' }) as GoalRow['target'];
+  const g = (id: string, t: GoalRow['target']): GoalRow => ({ id, title: id, intent: 'x', outcome: null, archivedAt: null, cancelledAt: null, pausedAt: null, target: t });
+
+  it('feeds a project only the goals whose target is read from its ledger', () => {
+    const goals = [g('wks_here', target('prj_a')), g('wks_there', target('prj_b')), g('wks_none', null)];
+    expect(goalsSearchedFor('prj_a', goals).map((one) => one.id)).toEqual(['wks_here']);
+    expect(goalsSearchedFor('prj_c', goals)).toEqual([]);
+  });
+
+  it('does not count a goal no round is reasoned backward from', () => {
+    // The reader passes the same goals to the field that a goal round does, never a separate tally.
+    const source = readFileSync('server/services/industry/construction/origins.ts', 'utf8');
+    const reader = source.slice(source.indexOf('export async function opportunityFieldHoldsOnRows'));
+    expect(reader).toMatch(/goals: goalsSearchedFor\(p\.id, goals\)/);
+    expect(reader).not.toMatch(/seedsFromFirstPrinciples\(/);
+    expect(reader).not.toMatch(/goals: \[\]/);
+    const discovery = readFileSync('server/services/cash/discovery.ts', 'utf8');
+    expect(discovery).not.toMatch(/goals: \[\],/);
   });
 });
 

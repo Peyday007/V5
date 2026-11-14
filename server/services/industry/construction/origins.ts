@@ -160,6 +160,15 @@ export function seedsFromConstraints(constraints: ConstraintRow[]): OpportunityS
   });
 }
 
+/**
+ * The goals a project's discovery rounds are reasoned backward from: those
+ * whose target is read from that project's ledger. The same rows production
+ * feeds the field, so the reader counts no seed a round is never asked from.
+ */
+export function goalsSearchedFor(projectId: string, goals: readonly GoalRow[]): GoalRow[] {
+  return goals.filter((g) => g.target?.projectId === projectId);
+}
+
 export interface FieldInput {
   nodes: NodeRow[];
   opportunities: OpportunityRow[];
@@ -252,15 +261,15 @@ export async function opportunityFieldHoldsOnRows(): Promise<FieldReport> {
   const counts = countByOrigin([]);
   const categories = new Set<string>();
   const goals = await listWorkstreams({ projectIds: projects.map((p) => p.id) });
-  const firstPrinciples = seedsFromFirstPrinciples(goals);
-  for (const s of firstPrinciples) counts[s.origin] += 1;
   for (const p of projects) {
     const [nodes, opportunities, constraints] = await Promise.all([
       listNodes(p.id),
       listOpportunities({ projectId: p.id }),
       listConstraintsForProject(p.id),
     ]);
-    const field = opportunityField({ nodes, opportunities, goals: [], constraints });
+    // Exactly what a goal round feeds the field: the goals whose target is read from this
+    // project's ledger, the project `openGoalDiscovery` searches for (cash/discovery.ts).
+    const field = opportunityField({ nodes, opportunities, goals: goalsSearchedFor(p.id, goals), constraints });
     for (const s of field) {
       counts[s.origin] += 1;
       if (s.category) categories.add(s.category);
