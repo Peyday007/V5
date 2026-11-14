@@ -184,6 +184,7 @@ import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { advanceGoals, type GoalTickReport } from '../goals/tick.ts';
 import { advanceGoalPlans } from '../goals/plan.ts';
+import { advanceObjectivePlans } from '../goals/objectivePlan.ts';
 import { advanceResearchGoals, type GoalContinuationReport } from '../research/goalContinuation.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
 import { watchIdleOnTick } from '../engineering/watchdog.ts';
@@ -3533,6 +3534,7 @@ export function startGoalPlans(report: Pick<TickReport, 'passFailures' | 'deferr
   const own: Pick<TickReport, 'passFailures' | 'deferred'> = { passFailures: [], deferred: [] };
   goalPlansInFlight = runPass(own, 'goal-plans', async () => {
     await advanceGoalPlans();
+    await advanceObjectivePlans();
   })
     .then(() => {
       const failure = own.passFailures[0];
