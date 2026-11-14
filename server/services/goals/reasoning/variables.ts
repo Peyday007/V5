@@ -44,6 +44,7 @@
  */
 import type { ModelInput, ModelledOpportunity } from '../../cash/goalScenario.ts';
 import type { StrategyOperator, StrategyState } from '../reconstruction.ts';
+import type { PlannedOpening } from '../portfolio.ts';
 import { clampPrice, inScope, makeDirection, PRICE_ELASTICITY, type Direction, type Scope, type Transform } from './directions.ts';
 
 /** No sweep evaluates more combinations than this. */
@@ -62,6 +63,12 @@ export const SCREEN_SAMPLE = 4_000;
 export const MIN_EFFECT = 0.002;
 /** Directions the sweep hands the engine. */
 export const SWEEP_DIRECTIONS = 14;
+/**
+ * The fast reading's stand-in for "proof arrives": a purchase made only after
+ * proof is counted at this share of what it adds. A ranking device only — the
+ * engine decides world by world whether proof came.
+ */
+export const PROOF_SHARE = 0.5;
 /** Factors a condition is read at: the range the evidence states, and then outside it (mathematical only). */
 export const CONDITION_FACTORS = [0.5, 1, 2] as const;
 
@@ -226,7 +233,16 @@ interface Compiled {
   perDay: number;
   capital: number;
   refused: boolean;
+  /** Its direct cost is paid from the buyer's prepayment: exempt from the ceiling, never from the cash kept. */
   funded: boolean;
+  /** The market it sells into: a clone shares its original's (Q-6). */
+  market: string;
+  /** Unit price as a multiple of the card's, across every move so far (held within ×0.25–×4). */
+  priceFactor: number;
+  /** A deposit's middle share and the day it arrives, when one is asked. */
+  deposit: { share: number; days: number } | null;
+  /** Sells only once a purchase after proof is made: read at PROOF_SHARE in the fast reading. */
+  gated: boolean;
   /** Squared coefficient of variation of a deal count's drivers, and of price. */
   cvDeals: number;
   cvPrice: number;
@@ -254,7 +270,7 @@ function capitalOf(o: ModelledOpportunity, beforeProof: number | null): { amount
 }
 
 export function compile(state: StrategyState, beforeProof: number | null): Compiled[] {
-  return state.openings.map((o) => {
+  return state.openings.map((o: PlannedOpening) => {
     const kind: Compiled['kind'] = o.agreedValue > 0 ? 'AGREED' : !o.repeatable ? 'ONE_OFF' : o.channel ? 'CHANNEL' : 'SHARED';
     const cap = capitalOf(o, beforeProof);
     const c = {
@@ -271,6 +287,10 @@ export function compile(state: StrategyState, beforeProof: number | null): Compi
       capital: cap.amount,
       refused: cap.refused,
       funded: !!o.fundedByBuyer,
+      market: o.marketKey ?? o.opportunity.id,
+      priceFactor: o.terms?.priceFactor ?? 1,
+      deposit: o.deposit && o.repeatable && o.agreedValue === 0 ? { share: (o.deposit.low + o.deposit.high) / 2, days: o.deposit.days } : null,
+      gated: !!o.gate,
       cvDeals: cv2(o.respond) + cv2(o.close) + (o.channel ? cv2(o.channel.perDay) : 0),
       cvPrice: cv2(o.price),
       vpi: 0,
@@ -325,6 +345,9 @@ export function fastReading(rows: Compiled[], L: Limits, committed: number, adj:
   let timeBound = false;
   // Highest value per contact first; agreed and one-off money does not compete for contacts.
   const order = rows.map((r, i) => i).sort((a, b) => rows[b]!.vpi - rows[a]!.vpi || (rows[a]!.id < rows[b]!.id ? -1 : 1));
+  // One market, however many ways it is reached: what an opening sells comes out of what its clones can (Q-6).
+  const marketLeft = new Map<string, number>();
+  let ceilingSpend = 0;
   for (const i of order) {
     const r = rows[i]!;
     if (r.refused) continue;
@@ -336,10 +359,13 @@ export function fastReading(rows: Compiled[], L: Limits, committed: number, adj:
     const close = Math.min(1, r.close * k(r.id, adj.close));
     const respond = Math.min(1, r.respond * k(r.id, adj.respond));
     const dCash = r.days * k(r.id, adj.daysToCash);
-    if (dCash > days) {
+    // With a deposit a sale made later still pays its deposit in time; only its balance must wait for the opening's own timing.
+    const dFirst = r.deposit ? Math.min(dCash, r.deposit.days * k(r.id, adj.daysToCash)) : dCash;
+    if (dFirst > days) {
       timeBound = true;
       continue;
     }
+    const inTime = r.deposit ? r.deposit.share + (1 - r.deposit.share) * (Math.max(0, days - dCash) / Math.max(1e-9, days - dFirst)) : 1;
     if (r.capital > capitalLeft + 1e-9) {
       capitalBound = true;
       continue;
@@ -350,12 +376,13 @@ export function fastReading(rows: Compiled[], L: Limits, committed: number, adj:
       const v = close * (1 - close) * price * price;
       varIndep += v;
     } else {
-      const selling = Math.max(0, days - dCash);
-      const volume = r.volume * k(r.id, adj.volume);
+      const selling = Math.max(0, days - dFirst);
+      const left = marketLeft.get(r.market) ?? r.volume * k(r.id, adj.volume);
+      const volume = Math.min(r.volume * k(r.id, adj.volume), left);
       const perContact = respond * close;
       if (perContact <= 0 || selling <= 0 || volume <= 0) continue;
       if (r.kind === 'CHANNEL') {
-        deals = Math.min(volume, r.perDay * selling * perContact);
+        deals = Math.min(volume, r.perDay * selling * perContact * (r.gated ? PROOF_SHARE : 1));
         if (deals >= volume - 1e-9) marketBound = true;
       } else {
         const want = volume / perContact / selling;
@@ -369,6 +396,7 @@ export function fastReading(rows: Compiled[], L: Limits, committed: number, adj:
         if (take < want - 1e-9) capacityBound = true;
         else marketBound = true;
       }
+      marketLeft.set(r.market, Math.max(0, left - deals));
       const sd = deals * price * Math.sqrt(r.cvDeals + r.cvPrice + (r.kind === 'SHARED' ? L.cvContacts : 0));
       // Count noise: a Poisson number of deals.
       varIndep += deals * price * price;
@@ -376,13 +404,17 @@ export function fastReading(rows: Compiled[], L: Limits, committed: number, adj:
       else varIndep += sd * sd;
     }
     capitalLeft -= r.capital;
-    mean += deals * price;
-    if (!r.funded) spend += deals * r.cost * k(r.id, adj.directCost);
+    mean += deals * price * inTime;
+    // Every direct cost leaves the cash kept; only the owner's own money counts against the ceiling (Q-3).
+    const cost = deals * r.cost * k(r.id, adj.directCost);
+    spend += cost;
+    if (!r.funded) ceilingSpend += cost;
   }
   // Direct costs beyond what may be spent cannot be fulfilled: the excess settles nothing.
-  if (spend > L.spendCeiling - committed && spend > 0) {
-    const room = Math.max(0, L.spendCeiling - committed);
-    mean *= Math.max(0, room / spend);
+  if (ceilingSpend > L.spendCeiling - committed && ceilingSpend > 0) {
+    const f = Math.max(0, Math.max(0, L.spendCeiling - committed) / ceilingSpend);
+    mean *= f;
+    spend *= f;
     capitalBound = true;
   }
   // Openings drawing on the shared outreach move together (the engine's correlation); half their spread is common.
@@ -392,7 +424,9 @@ export function fastReading(rows: Compiled[], L: Limits, committed: number, adj:
   const s = Math.sqrt(s2);
   const mu = Math.log(mean) - s2 / 2;
   const q = (z: number) => Math.exp(mu + z * s);
-  const reach = L.remaining <= 0 ? 1 : s > 0 ? 1 - phi((Math.log(L.remaining) - mu) / s) : mean >= L.remaining ? 1 : 0;
+  // The target is cash kept: settled cash must also cover the direct costs and what was committed (Q-3).
+  const need = L.remaining + spend + Math.max(0, committed);
+  const reach = L.remaining <= 0 ? 1 : s > 0 ? 1 - phi((Math.log(need) - mu) / s) : mean >= need ? 1 : 0;
   const binding: FastReading['binding'] = capacityBound ? 'CAPACITY' : marketBound ? 'MARKET' : capitalBound ? 'CAPITAL' : timeBound ? 'TIME' : 'CONVERSION';
   return { feasible: true, mean, p10: q(-1.2816), p50: q(0), p90: q(1.2816), reach, committed, binding };
 }
@@ -584,7 +618,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
         const pool = t.target ? opsFor(t.target) : ctx.operators;
         const op = pool.find((o) => o.key === t.key);
         const next = op?.apply(s) ?? null;
-        if (!next || next.changes.length === s.changes.length) {
+        if (!next || next === s) {
           if (stateCache.size < 20_000) stateCache.set(key, null);
           return null;
         }
@@ -592,7 +626,11 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
         s = next;
       }
     }
-    const out = { state: s, rows: compile(s, ctx.limits.beforeProof), L: L0(s.contactsPerDay ?? ctx.contactsPerDay), assumed };
+    // Capacity bought after proof is read at PROOF_SHARE of what it adds; the engine decides world by world.
+    const late = s.changes.filter((c) => c.afterProof && c.dimension === 'CAPACITY' && c.contacts);
+    const L = L0(s.contactsPerDay ?? ctx.contactsPerDay);
+    for (const c of late) L.contacts += PROOF_SHARE * ((c.contacts!.low + c.contacts!.high) / 2);
+    const out = { state: s, rows: compile(s, ctx.limits.beforeProof), L, assumed };
     if (stateCache.size < 20_000) stateCache.set(key, out);
     return out;
   };
@@ -618,9 +656,18 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
         if (t.op === 'PRICE') {
           const ids = scopeIds(opKey, os.state, t.scope);
           if (ids.size === 0) return null;
-          const k = clampPrice(t.factor);
-          const ck = Math.pow(k, -PRICE_ELASTICITY);
-          rows = rows.map((r) => (ids.has(r.id) ? { ...r, price: r.price * k, close: Math.min(1, r.close * ck), vpi: r.price * k * Math.min(1, r.close * ck) * r.respond } : r));
+          // The same running clamp as the engine's programs: unit price within ×0.25–×4 of the card's, with a bundle's discount
+          // counted, and the demand curve moving close rate and market volume together (Q-1, Q-2).
+          const asked = clampPrice(t.factor);
+          rows = rows.map((r) => {
+            if (!ids.has(r.id)) return r;
+            const target = clampPrice(r.priceFactor * asked);
+            const k = target / r.priceFactor;
+            const ck = Math.pow(k, -PRICE_ELASTICITY);
+            const close = Math.min(1, r.close * ck);
+            return { ...r, price: r.price * k, close, volume: r.volume * ck, priceFactor: target, vpi: r.price * k * close * r.respond };
+          });
+          const k = asked;
           assumed++;
           sig.push(`p${t.scope}${k}`);
         } else if (t.op === 'FOCUS') {
@@ -640,7 +687,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
       }
     }
     // The plan itself, not the route to it: two combinations that leave the same openings at the same terms are one variation.
-    return { rows, L: os.L, committed: os.state.committed, assumed, sig: `${os.state.committed.toFixed(0)}|${os.L.contacts.toFixed(1)}|${rows.map((r) => `${r.id}:${r.price.toFixed(2)}:${r.close.toFixed(5)}:${r.days.toFixed(2)}:${r.funded ? 1 : 0}`).join(',')}` };
+    return { rows, L: os.L, committed: os.state.committed, assumed, sig: `${os.state.committed.toFixed(0)}|${os.L.contacts.toFixed(1)}|${rows.map((r) => `${r.id}:${r.price.toFixed(2)}:${r.close.toFixed(5)}:${r.volume.toFixed(2)}:${r.days.toFixed(2)}:${r.funded ? 1 : 0}:${r.deposit ? 1 : 0}`).join(',')}` };
   };
 
   // Combinations are keyed by number, not string: a sweep of 250,000 holds two sets of numbers, not 250,000 objects.
@@ -746,7 +793,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
   const baseline = read(zero, 'BASELINE')!;
   // §99's plan in the variable space: each of its changes matched to the level that makes it.
   const greedyLevels = variables.map((v) => {
-    const idx = v.levels.findIndex((l, j) => j > 0 && l.transforms.length > 0 && l.transforms.every((t) => t.op === 'OPERATOR' && !t.target && ctx.greedy.changes.some((c) => t.key.endsWith(`:${c.label}`) || t.key.split(':')[1] === c.label)));
+    const idx = v.levels.findIndex((l, j) => j > 0 && l.transforms.length > 0 && l.transforms.every((t) => t.op === 'OPERATOR' && !t.target && ctx.greedy.changes.some((c) => (c.op ? c.op === t.key : t.key.endsWith(`:${c.label}`) || t.key.split(':')[1] === c.label))));
     return Math.max(0, idx);
   });
   const greedy = read(greedyLevels, 'MIDDLE_OUT') ?? baseline;

@@ -54,9 +54,14 @@ afterAll(async () => {
 });
 
 describe('§101 regression: the $10K plan, before and after', () => {
-  it('before: §99 alone walks one path and keeps a plan that rests on spending $2,999 before any cash is proven', () => {
+  it('before: §99 alone walks one path, and its plan rests on assumptions — none of them money spent past the before-proof limit in a world without proof', () => {
+    // Until 2026-11-14 this read "keeps a plan resting on $2,999 spent before proof": that plan only won because the
+    // purchase was spent and its capacity counted in every world (Q-7). A purchase past the limit is now bought only
+    // where cash has come back, in weekly tranches, and §99's plan no longer leans on it.
     expect(before.exploration ?? null).toBeNull();
-    expect(before.best.changes.some((c) => c.dimension === 'CAPACITY' && c.basis === 'ASSUMPTION' && c.cost > 2000)).toBe(true);
+    expect(before.best.changes.some((c) => c.basis === 'ASSUMPTION')).toBe(true);
+    for (const c of before.best.changes.filter((c) => c.cost > (portfolioInput.beforeProof ?? 0))) expect(c.afterProof).toBe(true);
+    expect(before.best.implausible ?? []).toHaveLength(0);
   });
 
   it('generates substantially different directions — many stances, distinct programs, its own model\'s among them', () => {
@@ -78,10 +83,13 @@ describe('§101 regression: the $10K plan, before and after', () => {
 
   it('challenges the original assumptions and adopts a stronger plan: one that still holds when its assumptions are taken away', () => {
     expect(x.winner).not.toBeNull();
-    expect(x.winner!.challenged!.reach).toBeGreaterThan(x.greedy.challengedReach + 0.05);
+    // A winner holds once challenged (C-15): at least half the requirement with its conversion halved and its
+    // assumptions removed, and never weaker there than §99's plan. Until 2026-11-14 this asserted a 5-point gain over
+    // §99 and a full replacement; both held only because §99's plan was the inflated $2,999-before-proof one.
+    expect(x.winner!.challenged!.reach).toBeGreaterThanOrEqual(0.45);
+    expect(x.winner!.challenged!.reach).toBeGreaterThanOrEqual(x.greedy.challengedReach);
     expect(x.winner!.score).toBeGreaterThan(x.greedy.score);
-    // The strategy was rebuilt, not refined, and the plan Brain concludes with is the winner.
-    expect(x.replaced).toBe(true);
+    expect(x.winner!.reading.implausible ?? []).toHaveLength(0);
     expect(after.best.key).not.toBe(before.best.key);
     // It rests on a move that is an estimate, not an assumption, that §99's plan did not have, and still reaches the target in most worlds.
     const beforeLabels = new Set(before.best.changes.map((c) => c.label));
@@ -146,5 +154,6 @@ describe('§101 mechanics', () => {
     // A later exploration of the same goal starts from the library.
     const again = await reconstructPlan({ openings: GOAL_10K_OPENINGS, portfolio: portfolioInput, baseline, required: 0.9, explore: { library } });
     expect(again.exploration!.byOrigin.LIBRARY).toBeGreaterThan(0);
-  });
+    // A full exploration inline: a bought capacity now reads each shared opening with and without it (Q-7).
+  }, 180_000);
 });

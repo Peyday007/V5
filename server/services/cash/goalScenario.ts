@@ -837,7 +837,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   }
   derived.push({ key: 'settled_in_window', label: 'Cash settled before the deadline', unit: target.currency, expr: cashIn.join(' + ') });
   const metrics: NonNullable<ScenarioModelDefinition['metrics']> = [
-    { key: 'goal_met', label: 'Reaches the target in time', unit: 'flag', expr: 'if(settled_in_window >= remaining, 1, 0)', better: 'HIGHER' },
+    // The target is cash kept: what settles in time less the direct costs of the deals that earned it (§99 Q-3).
+    { key: 'goal_met', label: 'Reaches the target in time', unit: 'flag', expr: `if(settled_in_window - (${included.map((one) => `o${one.index}_won * o${one.index}_cost`).join(' + ') || '0'}) >= remaining, 1, 0)`, better: 'HIGHER' },
     { key: 'settled', label: 'Settled before the deadline', unit: target.currency, expr: 'settled_in_window', better: 'HIGHER' },
     { key: 'exposure', label: 'Money tied up', unit: target.currency, expr: exposure.join(' + '), better: 'LOWER', role: 'CAPITAL_EXPOSURE' },
     { key: 'labour', label: 'Hours of work', unit: 'hours', expr: labour.join(' + '), better: 'LOWER', role: 'LABOR_HOURS' },
