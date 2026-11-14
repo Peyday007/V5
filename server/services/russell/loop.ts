@@ -1392,8 +1392,14 @@ async function tickOnce(owner: string): Promise<TickReport> {
      * conclusion changed. Under database pressure it is throttled, not shed:
      * planning for a live goal is not optional work (§63), so it reads one goal
      * at most once per throttle interval and counts every deferred start.
+     *
+     * Not in the first minutes after a boot (planning recovery, Deploy 43587706522):
+     * a restart's first plan reads competed with everything a fresh process does,
+     * and the release's after-restart verification answered too slowly to finish.
+     * The cadence is read from rows, so nothing is lost by starting a few minutes late.
      */
-    startGoalPlans(report);
+    if (Date.now() - PROCESS_STARTED_MS >= GOAL_PLANS_BOOT_GRACE_MS) startGoalPlans(report);
+    else (report.deferred ??= []).push('goal-plans (boot grace)');
 
     /*
      * Rule 9 of the engineering policy: executable work beside idle capacity is
@@ -3535,6 +3541,10 @@ let goalPlansFailure: string | null = null;
  * failures for a plan read that was still progressing.
  */
 export const GOAL_PLANS_PASS_LIMIT_MS = 30 * 60_000;
+
+/** When this process started, and how long after it the goal-plan pass waits (the operator's own boot grace is 12 minutes). */
+const PROCESS_STARTED_MS = Date.now();
+export const GOAL_PLANS_BOOT_GRACE_MS = Number(process.env.BRAIN_GOAL_PLANS_BOOT_GRACE_MS ?? 10 * 60_000);
 
 export function startGoalPlans(
   report: Pick<TickReport, 'passFailures' | 'deferred'>,
