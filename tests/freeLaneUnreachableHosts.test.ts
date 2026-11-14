@@ -114,13 +114,23 @@ beforeEach(async () => {
 
 describe('unreachable host memory', () => {
   it('remembers only host-level refusals, and forgets them after the TTL', () => {
-    rememberUnreachable('https://dead.example/a', 'DNS_FAILED', 1_000);
+    rememberUnreachable('https://dead.example/a', 'DNS_FAILED', 1_000, 'getaddrinfo ENOTFOUND dead.example');
     rememberUnreachable('https://notfound.example/a', 'HTTP_ERROR', 1_000);
     rememberUnreachable('https://empty.example/a', 'EMPTY', 1_000);
     expect(isRememberedUnreachable('https://dead.example/other', 2_000)).toBe(true);
     expect(isRememberedUnreachable('https://notfound.example/b', 2_000)).toBe(false);
     expect(isRememberedUnreachable('https://empty.example/b', 2_000)).toBe(false);
     expect(isRememberedUnreachable('https://dead.example/other', 1_000 + 11 * 60_000)).toBe(false);
+  });
+
+  it('a temporary resolver failure or a reset connection is a strike, not a verdict (production 2026-11-14)', () => {
+    rememberUnreachable('https://busy.example/a', 'DNS_FAILED', 1_000, 'getaddrinfo EAI_AGAIN busy.example');
+    expect(isRememberedUnreachable('https://busy.example/b', 2_000)).toBe(false);
+    rememberUnreachable('https://reset.example/a', 'NETWORK_ERROR', 1_000, 'fetch failed: ECONNRESET');
+    expect(isRememberedUnreachable('https://reset.example/b', 2_000)).toBe(false);
+    // Twice inside the TTL, it is remembered like two timeouts.
+    rememberUnreachable('https://busy.example/a', 'DNS_FAILED', 3_000, 'getaddrinfo EAI_AGAIN busy.example');
+    expect(isRememberedUnreachable('https://busy.example/b', 4_000)).toBe(true);
   });
 
   it('a single timeout does not hide a live host; a second inside the TTL does; a success clears the strike', () => {
@@ -138,7 +148,7 @@ describe('unreachable host memory', () => {
     const fetched: string[] = [];
     const fetchSource = async (url: string): Promise<SourceFetch> => {
       fetched.push(url);
-      return refused(url, 'DNS_FAILED');
+      return { ...(refused(url, 'DNS_FAILED') as Extract<SourceFetch, { readable: false }>), detail: `getaddrinfo ENOTFOUND ${new URL(url).hostname}` };
     };
     const prompts: string[] = [];
     const completer: Completer = async (_c, _n, _s, prompt) => {

@@ -120,14 +120,23 @@ function hostOf(url: string): string | null {
   }
 }
 
-export function rememberUnreachable(url: string, reason: string, now = Date.now()): void {
+/**
+ * Only a name the resolver says does not exist is shut on one answer. A temporary resolver
+ * failure (EAI_AGAIN — the resolver's threads busy) or a reset connection is what a live host
+ * looks like from a loaded machine: production, 2026-11-14, research fragments failing with
+ * "no readable source among 0 candidate page(s)" because every host had been marked shut during
+ * event-loop stalls. Those count as strikes, like a timeout.
+ */
+const DEFINITE_ABSENCE = /ENOTFOUND|NXDOMAIN|resolved to no address/i;
+
+export function rememberUnreachable(url: string, reason: string, now = Date.now(), detail = ''): void {
   const host = hostOf(url);
   if (!host) return;
-  if (HOST_LEVEL_REFUSALS.has(reason)) {
+  if (HOST_LEVEL_REFUSALS.has(reason) && reason === 'DNS_FAILED' && DEFINITE_ABSENCE.test(detail)) {
     unreachableHosts.set(host, now + UNREACHABLE_TTL_MS);
     return;
   }
-  if (reason === TIMEOUT_REASON) {
+  if (reason === TIMEOUT_REASON || HOST_LEVEL_REFUSALS.has(reason)) {
     const first = timeoutStrikes.get(host);
     if (first !== undefined && first > now) {
       unreachableHosts.set(host, now + UNREACHABLE_TTL_MS);
@@ -951,7 +960,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
         }
         const host = hostOf(url);
         if (fetched.readable && host) forgiveHost(url);
-        if (!fetched.readable) rememberUnreachable(url, String(fetched.reason));
+        if (!fetched.readable) rememberUnreachable(url, String(fetched.reason), Date.now(), String(fetched.detail ?? ''));
         if (fetched.readable && fetched.text.trim().length > 200 && readable.length < MAX_SOURCES) {
           readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, SOURCE_CHARS) });
         } else if (!(fetched.readable && fetched.text.trim().length > 200)) {

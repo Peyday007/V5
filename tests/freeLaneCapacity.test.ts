@@ -43,7 +43,7 @@ describe('the decision', () => {
   it('halves when the provider overloads, and when Brain is under pressure', () => {
     expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 5, content: 1, transient: 6 }, pressure: calm }).target).toBe(16);
     expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 9, content: 0, transient: 0 }, pressure: { ...calm, db: true } }).target).toBe(16);
-    expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 9, content: 0, transient: 0 }, pressure: { ...calm, lagMs: 900 } }).target).toBe(16);
+    expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 9, content: 0, transient: 0 }, pressure: { ...calm, lagMs: 1_500 } }).target).toBe(16);
   });
   it('holds, rather than shrinks, while database connections are only contended', () => {
     const d = decideTarget({ target: 16, active: 16, waiting: 99, window: { ok: 9, content: 1, transient: 0 }, pressure: { ...calm, dbContended: true } });

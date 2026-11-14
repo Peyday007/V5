@@ -50,6 +50,8 @@ const START_TARGET = 2;
 const WINDOW_MS = 3 * 60_000;
 const CONTROL_MS = 30_000;
 const IDLE_SLEEP_MS = 20_000;
+/** Mean event-loop lag over a control window above which every model's slots halve. */
+export const LAG_SHRINK_MS = 1_000;
 
 export interface Window {
   ok: number;
@@ -88,7 +90,10 @@ export function decideTarget(input: {
   const okRate = samples > 0 ? window.ok / samples : 1;
   const half = Math.max(MIN_TARGET, Math.floor(target / 2));
   if (pressure.db) return { target: half, reason: 'Brain database saturated', stable: false };
-  if (pressure.lagMs > 300) return { target: half, reason: `Brain event loop lagging ${Math.round(pressure.lagMs)} ms`, stable: false };
+  // The lane's slots wait on HTTP; the mean lag that should shrink them is Brain's own stall,
+  // not a busy loop. At 300 ms the lane sat at one slot through ordinary bursts (production
+  // 2026-11-14: halved at 474–974 ms with highest stable targets of 19–26).
+  if (pressure.lagMs > LAG_SHRINK_MS) return { target: half, reason: `Brain event loop lagging ${Math.round(pressure.lagMs)} ms`, stable: false };
   if (pressure.cpu > 0.85) return { target: half, reason: `Brain CPU at ${Math.round(pressure.cpu * 100)}%`, stable: false };
   if (samples >= 4 && transientRate >= 0.3) {
     return { target: half, reason: `provider overloaded: ${Math.round(transientRate * 100)}% of ${samples} calls failed`, stable: false };
