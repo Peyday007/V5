@@ -246,9 +246,48 @@ function knownMid(input: ModelInput): number | null {
  * information (production test, 2026-11-09: 40 one-offs took a plan read from 5 s to 23 s).
  */
 export function movableOpenings(openings: ModelledOpportunity[], baseline: GoalPortfolio): ModelledOpportunity[] {
+  return partitionOpenings(openings, baseline).movable;
+}
+
+/**
+ * Repeatable openings outside every ranked combination that a reconstruction
+ * still moves, strongest by the cash its own demand settles in the baseline.
+ * Lens P, 2026-11-14: with ~500 held openings every one of a reconstruction's
+ * ~200 evaluations carried all of them (3 activities each) through the engine,
+ * whose greedy step is quadratic in activities, and a cold plan read took
+ * 26 min 41 s on production — yet the moves read only the members, the
+ * alternatives and the openings strong enough to join them. 24 is three times
+ * the eight the scenario model fits (`MAX_MODEL_OPPORTUNITIES`), so a move
+ * that frees capacity still finds three times as many unranked contenders as
+ * the plan could hold; the rest are not discarded but held in reserve, where
+ * an INCLUDE move brings any one of them in and the engine judges it (S-6).
+ */
+export const MOVABLE_UNRANKED = 24;
+
+/**
+ * Which openings a reconstruction evaluates, and which it holds in reserve.
+ * `movable` keeps the input's order: every member of a combination the engine
+ * ranked, and the `MOVABLE_UNRANKED` strongest repeatable openings it did not
+ * refuse. `held` is every other such opening, strongest first. A one-off the
+ * engine left out of every combination is in neither: capacity, reply rate,
+ * channel or financing cannot move it, so re-evaluating it on every variant is
+ * cost without information (production test, 2026-11-09: 40 one-offs took a
+ * plan read from 5 s to 23 s).
+ */
+export function partitionOpenings(openings: ModelledOpportunity[], baseline: GoalPortfolio): { movable: ModelledOpportunity[]; held: ModelledOpportunity[] } {
   const ranked = new Set([...(baseline.best?.members ?? []), ...baseline.alternatives.flatMap((a) => a.members)].map((m) => m.opportunityId));
   const refused = new Set(baseline.demand.filter((d) => d.refused).map((d) => d.opportunityId));
-  return openings.filter((o) => ranked.has(o.opportunity.id) || (o.repeatable && o.agreedValue === 0 && !refused.has(o.opportunity.id)));
+  const demand = new Map(baseline.demand.map((d) => [d.opportunityId, d.revenue]));
+  const order = new Map(openings.map((o, i) => [o.opportunity.id, i]));
+  const contenders = openings
+    .filter((o) => !ranked.has(o.opportunity.id) && o.repeatable && o.agreedValue === 0 && !refused.has(o.opportunity.id))
+    .sort((a, b) => {
+      const x = demand.get(a.opportunity.id);
+      const y = demand.get(b.opportunity.id);
+      return (y?.p50 ?? 0) - (x?.p50 ?? 0) || (y?.p90 ?? 0) - (x?.p90 ?? 0) || order.get(a.opportunity.id)! - order.get(b.opportunity.id)!;
+    });
+  const kept = new Set([...ranked, ...contenders.slice(0, MOVABLE_UNRANKED).map((o) => o.opportunity.id)]);
+  return { movable: openings.filter((o) => kept.has(o.opportunity.id)), held: contenders.slice(MOVABLE_UNRANKED) };
 }
 
 /**
@@ -270,8 +309,10 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
 async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluator): Promise<Reconstruction> {
   // Arrangements the compose's screen cut ride with the plan's inputs; only an INCLUDE move reads them, never the engine (S-6).
   const { reserve: reserveIn, ...portfolioIn } = input.portfolio;
-  const reserve = (reserveIn ?? []).filter((r) => !input.openings.some((o) => o.opportunity.id === r.opportunity.id));
-  input = { ...input, portfolio: portfolioIn, openings: movableOpenings(input.openings, input.baseline) };
+  const { movable, held } = partitionOpenings(input.openings, input.baseline);
+  // The cut arrangements first (strongest first), then the held openings outside the bounded set, strongest first.
+  const reserve: PlannedOpening[] = [...(reserveIn ?? []).filter((r) => !input.openings.some((o) => o.opportunity.id === r.opportunity.id)), ...held];
+  input = { ...input, portfolio: portfolioIn, openings: movable };
   const levers = input.levers ?? ACQUISITION_LEVERS;
   const worlds = input.worlds ?? Math.max(SCREEN_MIN_WORLDS, Math.min(SCREEN_WORLDS, Math.round(SCREEN_WORK / Math.max(1, input.openings.length))));
   const seen = new Map<string, VariantReading>();
@@ -488,6 +529,7 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
       operators,
       operatorsFor,
       reserve,
+      heldOpenings: held.length,
       sweep,
       evaluate: (state, screen, tag = '') => evaluate(state, screen ? screenWorlds : worlds, false, tag),
       required: input.required,
