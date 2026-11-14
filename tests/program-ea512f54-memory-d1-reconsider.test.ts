@@ -29,12 +29,16 @@ import { canonicalJson, sha256 } from '../server/services/scenario/model.ts';
 import { CALIBRATION_PASS_EVERY_MS, reconcileCalibrationIfDue, type CalibrationPorts } from '../server/services/goals/calibration.ts';
 import {
   RECONSIDER_EVENT_KIND,
+  RECONSIDER_PASS_EVERY_MS,
   activeTruth,
   changedFacts,
   dependentsOf,
   forgetReconsiderPass,
+  goalWindow,
   reconcileFactChanges,
+  reconcileFactChangesIfDue,
   reconsiderationId,
+  resetReconsiderProcess,
 } from '../server/services/goals/reconsider.ts';
 import { advanceGoals } from '../server/services/goals/tick.ts';
 import type { MissCause, OutcomeRow, PredictionRow } from '../server/services/quant/forecast.ts';
@@ -411,5 +415,77 @@ describe('the goals tick runs the decision-history passes', () => {
     expect(report.memory.calibration).toEqual({ error: 'ledger unavailable' });
     expect(reconsiderRan).toBe(true);
     expect(report.memory.reconsidered).toBeNull();
+  });
+});
+
+describe('the reconsideration pass reaches every goal, not only the first page (finding F4)', () => {
+  /** A live goal with a decision event: eligible for the pass, with no record in force to read. */
+  async function eligibleGoal(): Promise<string> {
+    const g = await createWorkstream({ projectId, title: 'Rotation goal', intent: 'Be examined in turn.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await getDb().run(
+      `INSERT INTO workstream_events (id, workstream_id, kind, summary, detail, actor_ref, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [`wse_rot_${g.id}`, g.id, DECISION_EVENT_KIND, 'stub', '{}', 'BRAIN', new Date().toISOString()],
+    );
+    return g.id;
+  }
+  const allEligible = async () =>
+    (
+      await getDb().all<{ id: string }>(
+        `SELECT w.id FROM workstreams w WHERE w.archived_at IS NULL AND w.cancelled_at IS NULL
+           AND EXISTS (SELECT 1 FROM workstream_events e WHERE e.workstream_id = w.id AND e.kind = ?) ORDER BY w.id`,
+        [DECISION_EVENT_KIND],
+      )
+    ).map((one) => one.id);
+
+  it('consecutive passes rotate past the per-pass limit and wrap, so a goal beyond the first window is examined', async () => {
+    const mine: string[] = [];
+    for (let i = 0; i < 7; i += 1) mine.push(await eligibleGoal());
+    const eligible = await allEligible();
+    const limit = 3;
+    expect(eligible.length).toBeGreaterThan(limit);
+    const ports = { requestPlanPass: () => undefined };
+    forgetReconsiderPass();
+    const seen = new Set<string>();
+    const passes = Math.ceil(eligible.length / limit);
+    let t = Date.now();
+    for (let i = 0; i < passes; i += 1) {
+      const report = await reconcileFactChangesIfDue(t, { ports, limit });
+      expect(report && 'goalIds' in report).toBe(true);
+      const ids = (report as { goalIds: string[]; goals: number }).goalIds;
+      expect(ids.length).toBe(limit);
+      for (const id of ids) seen.add(id);
+      t += RECONSIDER_PASS_EVERY_MS;
+    }
+    // Every eligible goal — including the ones whose ids sort past the first window — was examined.
+    expect([...seen].sort()).toEqual(eligible);
+    for (const id of mine) expect(seen.has(id)).toBe(true);
+    // The window wraps to the first id rather than stopping at the end.
+    const next = await reconcileFactChangesIfDue(t, { ports, limit });
+    expect((next as { goalIds: string[] }).goalIds.length).toBe(limit);
+  });
+
+  it('a window is keyset: it resumes after the cursor, wraps to the start, and needs no cursor when it held every goal', async () => {
+    for (let i = 0; i < 5; i += 1) await eligibleGoal();
+    const eligible = await allEligible();
+    const first = await goalWindow(null, 2);
+    expect(first).toEqual({ goals: eligible.slice(0, 2), nextCursor: eligible[1] });
+    const last = await goalWindow(eligible.at(-2)!, 3);
+    expect(last.goals).toEqual([eligible.at(-1)!, eligible[0]!, eligible[1]!]);
+    expect(last.nextCursor).toBe(eligible[1]);
+    expect(await goalWindow(null, eligible.length + 1)).toEqual({ goals: eligible, nextCursor: null });
+  });
+
+  it('a fresh process does not always begin at the first id: its first pass starts at a clock-derived window', async () => {
+    for (let i = 0; i < 6; i += 1) await eligibleGoal();
+    const eligible = await allEligible();
+    const limit = 2;
+    const ports = { requestPlanPass: () => undefined };
+    const starts = new Set<string>();
+    for (let k = 0; k < Math.ceil(eligible.length / limit); k += 1) {
+      resetReconsiderProcess();
+      const report = (await reconcileFactChangesIfDue(k * RECONSIDER_PASS_EVERY_MS + RECONSIDER_PASS_EVERY_MS, { ports, limit })) as { goalIds: string[] };
+      starts.add(report.goalIds[0]!);
+    }
+    expect(starts.size).toBeGreaterThan(1);
   });
 });

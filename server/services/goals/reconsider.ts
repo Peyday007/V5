@@ -63,7 +63,11 @@ import type { WorkstreamEvent } from '../../domain/register.ts';
 export const RECONSIDER_EVENT_KIND = 'GOAL_DECISION_RECONSIDERED';
 /** The event id is derived from the reading, the fact and its new fingerprint: once per fact version. */
 export const RECONSIDER_EVENT_PREFIX = 'wse_gdx_';
-/** Goals examined per pass; the rest wait for the next one. */
+/**
+ * Goals examined per pass. The rest are not dropped: a pass resumes after the
+ * last goal the previous one examined (`after`) and wraps to the first, so
+ * every goal is examined within ceil(goals / limit) passes.
+ */
 export const RECONSIDER_GOALS_PER_PASS = 50;
 /** How often the goals tick runs the reconsideration pass. */
 export const RECONSIDER_PASS_EVERY_MS = 5 * 60_000;
@@ -210,6 +214,10 @@ export interface ReconsiderPassReport {
   reconsidered: Reconsideration[];
   /** Goals whose plan was asked to read again. */
   replanned: string[];
+  /** The goals this pass examined, in the order it examined them. */
+  goalIds: string[];
+  /** Where the next pass resumes: the last goal examined, or null when this pass saw every goal. */
+  nextCursor: string | null;
 }
 
 export interface ReconsiderPorts {
@@ -226,22 +234,61 @@ async function productionPorts(): Promise<ReconsiderPorts> {
  * One pass: every live goal's decisions in force, their facts read again, a
  * changed fact reconsidered once and its goal's plan asked to read again.
  */
-export async function reconcileFactChanges(options: { goalId?: string; limit?: number; now?: Date; ports?: ReconsiderPorts } = {}): Promise<ReconsiderPassReport> {
+const GOAL_WITH_DECISIONS = `w.archived_at IS NULL AND w.cancelled_at IS NULL
+              AND EXISTS (SELECT 1 FROM workstream_events e WHERE e.workstream_id = w.id AND e.kind = ?)`;
+
+/**
+ * The goals one pass examines: up to `limit` live goals with a decision
+ * record, in id order, starting after `after` and wrapping to the first id, so
+ * no goal waits behind a fixed first page. Keyset, not offset: a goal added or
+ * archived between passes moves no other goal out of its turn.
+ */
+export async function goalWindow(after: string | null, limit: number): Promise<{ goals: string[]; nextCursor: string | null }> {
+  if (limit <= 0) return { goals: [], nextCursor: after };
+  const db = getDb();
+  const head = after
+    ? await db.all<{ id: string }>(`SELECT w.id FROM workstreams w WHERE ${GOAL_WITH_DECISIONS} AND w.id > ? ORDER BY w.id LIMIT ?`, [DECISION_EVENT_KIND, after, limit])
+    : await db.all<{ id: string }>(`SELECT w.id FROM workstreams w WHERE ${GOAL_WITH_DECISIONS} ORDER BY w.id LIMIT ?`, [DECISION_EVENT_KIND, limit]);
+  const goals = head.map((one) => one.id);
+  if (goals.length < limit && after) {
+    // Wrap: the goals at or before the cursor, up to the room left.
+    const tail = await db.all<{ id: string }>(`SELECT w.id FROM workstreams w WHERE ${GOAL_WITH_DECISIONS} AND w.id <= ? ORDER BY w.id LIMIT ?`, [DECISION_EVENT_KIND, after, limit - goals.length]);
+    goals.push(...tail.map((one) => one.id));
+  }
+  // A window that held every goal needs no cursor; otherwise resume after its last goal.
+  const total = goals.length < limit ? goals.length : null;
+  const nextCursor = total !== null ? null : (goals[goals.length - 1] ?? null);
+  return { goals, nextCursor };
+}
+
+/**
+ * A process that has just started has no cursor. Seeding it at the first id
+ * would let frequent restarts starve the goals past the first page, so the
+ * first pass of a process starts at a position derived from the clock: each
+ * pass period starts one window further on.
+ */
+async function seedCursor(now: number, limit: number): Promise<string | null> {
+  const count = Number((await getDb().get<{ n: number | string }>(`SELECT COUNT(*) AS n FROM workstreams w WHERE ${GOAL_WITH_DECISIONS}`, [DECISION_EVENT_KIND]))?.n ?? 0);
+  if (count <= limit) return null;
+  const offset = (Math.floor(now / RECONSIDER_PASS_EVERY_MS) * limit) % count;
+  if (offset === 0) return null;
+  const row = await getDb().get<{ id: string }>(`SELECT w.id FROM workstreams w WHERE ${GOAL_WITH_DECISIONS} ORDER BY w.id LIMIT 1 OFFSET ?`, [DECISION_EVENT_KIND, offset - 1]);
+  return row?.id ?? null;
+}
+
+export async function reconcileFactChanges(options: { goalId?: string; limit?: number; now?: Date; ports?: ReconsiderPorts; after?: string | null } = {}): Promise<ReconsiderPassReport> {
   const limit = options.limit ?? RECONSIDER_GOALS_PER_PASS;
   const now = (options.now ?? new Date()).toISOString();
   const ports = options.ports ?? (await productionPorts());
-  const goals = options.goalId
-    ? [options.goalId]
-    : (
-        await getDb().all<{ id: string }>(
-          `SELECT w.id FROM workstreams w
-            WHERE w.archived_at IS NULL AND w.cancelled_at IS NULL
-              AND EXISTS (SELECT 1 FROM workstream_events e WHERE e.workstream_id = w.id AND e.kind = ?)
-            ORDER BY w.id LIMIT ?`,
-          [DECISION_EVENT_KIND, limit],
-        )
-      ).map((one) => one.id);
-  const report: ReconsiderPassReport = { goals: goals.length, checked: 0, unchanged: 0, reconsidered: [], replanned: [] };
+  let goals: string[];
+  let nextCursor: string | null = null;
+  if (options.goalId) goals = [options.goalId];
+  else {
+    const window = await goalWindow(options.after ?? null, limit);
+    goals = window.goals;
+    nextCursor = window.nextCursor;
+  }
+  const report: ReconsiderPassReport = { goals: goals.length, checked: 0, unchanged: 0, reconsidered: [], replanned: [], goalIds: [...goals], nextCursor };
   for (const goalId of goals) {
     const reasons: string[] = [];
     for (const state of await activeTruth(goalId)) {
@@ -285,19 +332,32 @@ export async function reconcileFactChanges(options: { goalId?: string; limit?: n
 }
 
 let lastReconsiderPass = 0;
+/** Where the next pass resumes; undefined until this process has run one. */
+let reconsiderCursor: string | null | undefined;
 
 /** At most every five minutes, from the goals tick. A failure is reported, never thrown into the tick. */
-export async function reconcileFactChangesIfDue(now = Date.now(), options: { ports?: ReconsiderPorts } = {}): Promise<ReconsiderPassReport | { error: string } | null> {
+export async function reconcileFactChangesIfDue(now = Date.now(), options: { ports?: ReconsiderPorts; limit?: number } = {}): Promise<ReconsiderPassReport | { error: string } | null> {
   if (now - lastReconsiderPass < RECONSIDER_PASS_EVERY_MS) return null;
   lastReconsiderPass = now;
   try {
-    return await reconcileFactChanges({ now: new Date(now), ...(options.ports ? { ports: options.ports } : {}) });
+    const limit = options.limit ?? RECONSIDER_GOALS_PER_PASS;
+    const after = reconsiderCursor === undefined ? await seedCursor(now, limit) : reconsiderCursor;
+    const report = await reconcileFactChanges({ now: new Date(now), limit, after, ...(options.ports ? { ports: options.ports } : {}) });
+    reconsiderCursor = report.nextCursor;
+    return report;
   } catch (error) {
     return { error: error instanceof Error ? error.message.slice(0, 300) : String(error) };
   }
 }
 
-/** Tests: let the next call run regardless of the cadence. */
+/** Tests: let the next call run regardless of the cadence, from the first goal. */
 export function forgetReconsiderPass(): void {
   lastReconsiderPass = 0;
+  reconsiderCursor = null;
+}
+
+/** Tests: behave as a process that has just started — no cadence, no cursor, so the first pass seeds one. */
+export function resetReconsiderProcess(): void {
+  lastReconsiderPass = 0;
+  reconsiderCursor = undefined;
 }
