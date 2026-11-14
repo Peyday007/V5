@@ -25,6 +25,7 @@ import type { WorldRenderMode } from './capability.ts';
 import type { LensAction, LensState } from './lens.ts';
 import { DRAGON_THEME, present, type PresentedFact, type ThemeDefinition } from './theme.ts';
 import { displayFact, displayState, type TruthContext } from './truth.ts';
+import { RecordLink, SourceAddress } from './RecordDrawer.tsx';
 import './world.css';
 
 export type SceneLayout = 'ISOMETRIC' | 'GRID' | 'RADIAL';
@@ -286,7 +287,14 @@ export function WorldScene({ facts, mode, lens, onLensAction, ctx, theme = DRAGO
             ) : null}
           </dl>
           {selected.note ? <p className="world-note">{selected.note}</p> : null}
-          {selected.href ? <a href={selected.href}>Open the record</a> : <p>No route serves this record alone.</p>}
+          {selectedFact ? (
+            <p>
+              <RecordLink kind={selectedFact.kind} recordId={selectedFact.recordId} className="">
+                Link to this record
+              </RecordLink>{' '}
+              {selectedFact.href ? <SourceAddress href={selectedFact.href} /> : <span>No route serves this record&rsquo;s data alone.</span>}
+            </p>
+          ) : null}
         </aside>
       ) : null}
 

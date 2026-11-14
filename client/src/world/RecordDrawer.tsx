@@ -8,11 +8,34 @@
  * never zero, never a favourable default (invariant 39). It stands alone: the
  * world scene, the operations table and the goal lens all open the same one.
  */
-import { useEffect, useState } from 'react';
-import type { WorldFact } from '../../../server/routes/world.ts';
+import { useEffect, useState, type ReactNode } from 'react';
+import type { WorldEntityKind, WorldFact } from '../../../server/routes/world.ts';
 import { api } from '../lib/api.ts';
 import { displayFact, type TruthContext } from './truth.ts';
+import { followInApp, recordViewHref } from './lens.ts';
 import './numbers.css';
+
+/**
+ * A link to a record's page in this app — never to its `/api/…` address, which
+ * is JSON a person cannot read. Clicking it moves the app there in place.
+ */
+export function RecordLink({ kind, recordId, className = 'numbers-link', children }: { kind: WorldEntityKind; recordId: string; className?: string; children: ReactNode }): JSX.Element {
+  const href = recordViewHref(kind, recordId);
+  return (
+    <a className={className} href={href} data-record={`${kind}:${recordId}`} onClick={(e) => followInApp(e, href)}>
+      {children}
+    </a>
+  );
+}
+
+/** A record's API address shown as provenance text, not as a link a person is sent through. */
+export function SourceAddress({ href }: { href: string }): JSX.Element {
+  return (
+    <span className="numbers-muted" data-field="Source address">
+      source data <code>{href}</code>
+    </span>
+  );
+}
 
 export const UNKNOWN = 'unknown';
 
@@ -237,13 +260,12 @@ export function RecordDrawer({ fact, ctx, detail, onClose }: RecordDrawerProps) 
         ) : null}
       </dl>
       {d.note ? <p className="numbers-muted">{d.note}</p> : null}
-      {fact.href ? (
-        <a className="numbers-link" href={fact.href}>
-          Open the record
-        </a>
-      ) : (
-        <p className="numbers-muted">No route serves this record alone.</p>
-      )}
+      <p>
+        <RecordLink kind={fact.kind} recordId={fact.recordId}>
+          Link to this record
+        </RecordLink>{' '}
+        {fact.href ? <SourceAddress href={fact.href} /> : <span className="numbers-muted">No route serves this record&rsquo;s data alone.</span>}
+      </p>
     </aside>
   );
 }

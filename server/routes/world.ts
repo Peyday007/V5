@@ -78,7 +78,11 @@ export const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 export interface WorldFact {
   kind: WorldEntityKind;
   recordId: string;
-  /** The existing API address that resolves to the record, or null when no route serves it alone. */
+  /**
+   * The existing API address that resolves to the record, or null when no route serves it alone.
+   * It is the record's source data (JSON), not a page: a client sends a person to the record's
+   * view (`recordViewHref` in `client/src/world/lens.ts`) and shows this address as provenance.
+   */
   href: string | null;
   title: string;
   owner: string | null;

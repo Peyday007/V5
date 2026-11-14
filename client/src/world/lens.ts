@@ -197,8 +197,15 @@ export interface ConversationGrounding {
   version: typeof LENS_STATE_VERSION;
   kind: WorldEntityKind;
   recordId: string;
-  /** The record's own API address from the world contract, or null when it served none or the record was not found. */
+  /**
+   * The record's API address from the world contract, or null when it served
+   * none or the record was not found. It is the record's *source data* — JSON a
+   * reader or the conversation model consumes — never the page a person is sent
+   * to; that is `view`.
+   */
   href: string | null;
+  /** The in-app page that opens this record (`recordViewHref`), or null when the record was not found. */
+  view: string | null;
   title: string | null;
   /** The world contract's state word; UNKNOWN when the record is not among the facts read. */
   state: WorldState;
@@ -229,6 +236,7 @@ export function conversationGrounding(state: LensState, facts: readonly WorldFac
     kind,
     recordId: id,
     href: fact?.href ?? null,
+    view: fact ? recordViewHref(kind, id) : null,
     title: fact?.title ?? null,
     state: fact?.state ?? 'UNKNOWN',
     recordState: fact?.recordState ?? null,
@@ -255,4 +263,51 @@ export function groundingPreface(grounding: ConversationGrounding | null): strin
     grounding.blocker ? `blocker: ${grounding.blocker}` : null,
   ];
   return `[${parts.filter((p): p is string => p !== null).join('; ')}]`;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Linking a person to a record                                               */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The page that shows one record to a person.
+ *
+ * A fact's `href` is the record's API address: following it as a link lands a
+ * person on raw JSON. The record's view in this app is the world with the
+ * record selected — its drawer shows ownership, times, blocker, next action and
+ * source — and a goal opens Goal mode focused on itself. Built from the lens
+ * state, so the link is exactly the deep link the lens would write and
+ * `parseLensQuery` reads it back to the same selection.
+ */
+export function recordViewHref(kind: WorldEntityKind, recordId: string): string {
+  const state = initialLensState();
+  state.mode = kind === 'GOAL' ? 'GOAL' : 'WORLD';
+  state.selected = { kind, id: recordId };
+  if (kind === 'GOAL') state.goalId = recordId;
+  return `/world?${lensQuery(state)}`;
+}
+
+/** The parts of a click event `followInApp` reads, so it is testable without a DOM. */
+export interface InAppClick {
+  button: number;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+  defaultPrevented: boolean;
+  preventDefault(): void;
+}
+
+/**
+ * Follow an in-app record link without reloading the app: push the address and
+ * announce it as a navigation, so the shell's router and the world page's lens
+ * (both of which listen for `popstate`) move to it together. A modified or
+ * non-primary click is left to the browser, so "open in new tab" still works.
+ */
+export function followInApp(event: InAppClick, href: string): void {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if (typeof window === 'undefined') return;
+  event.preventDefault();
+  window.history.pushState({}, '', href);
+  window.dispatchEvent(new PopStateEvent('popstate'));
 }
