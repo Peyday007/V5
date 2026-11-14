@@ -11,24 +11,36 @@
  * buyer's answer and are skipped. `journey/learning.ts` turns these into the
  * measured reply rates the plan's quant engine uses in place of a sweep.
  *
+ * A reply is also an answer when — and only when — Instantly states one: its
+ * interest status on the email (`answerFromInterestStatus`) reads won, which
+ * is a `BUYER_ACCEPTED`, or not interested / lost, which is a `BUYER_DECLINED`.
+ * That is the provider's record, set in the unibox, never a reading of the
+ * reply's words (§8). Each answer is one more PROVIDER observation keyed by the
+ * email id and the kind, so a status set after the reply was first read is
+ * still recorded on a later pass, and none is recorded twice. Instantly has no
+ * counter-offer status, so a counter (which must carry the buyer's amount) is
+ * never recorded from here.
+ *
  * Read-only toward Instantly: nothing is sent, marked or moved there.
  */
 import { contactByReference } from '../../../repos/cashActions.ts';
 import { recordObservation } from '../journey/deal.ts';
 import { messagingConfig } from './config.ts';
-import { ensureBrainCampaign, readInstantlyReplies } from './instantly.ts';
+import { answerFromInterestStatus, ensureBrainCampaign, readInstantlyReplies } from './instantly.ts';
 import type { FetchLike } from './http.ts';
 
 export interface ReplySyncReport {
   read: number;
   recorded: number;
+  /** Buyer answers the provider stated (accepted or declined), newly recorded on this pass. */
+  answers: number;
   unmatched: number;
   autoReplies: number;
   skipped: string | null;
 }
 
 export async function syncInstantlyReplies(projectId: string, options: { fetch?: FetchLike; env?: NodeJS.ProcessEnv } = {}): Promise<ReplySyncReport> {
-  const report: ReplySyncReport = { read: 0, recorded: 0, unmatched: 0, autoReplies: 0, skipped: null };
+  const report: ReplySyncReport = { read: 0, recorded: 0, answers: 0, unmatched: 0, autoReplies: 0, skipped: null };
   const config = messagingConfig(options.env ?? process.env);
   if (config.provider !== 'instantly' || !config.configured) {
     report.skipped = 'Instantly is not the configured messaging provider';
@@ -68,6 +80,21 @@ export async function syncInstantlyReplies(projectId: string, options: { fetch?:
       requestKey: `observation:instantly:${reply.emailId}`,
     });
     if (written.ok && written.message === 'Recorded.') report.recorded += 1;
+    const answer = answerFromInterestStatus(reply.interestStatus);
+    if (answer) {
+      const answered = await recordObservation({
+        opportunityId: contact.opportunityId,
+        kind: answer,
+        source: 'PROVIDER',
+        evidenceRef: `instantly:email:${reply.emailId}:i_status:${reply.interestStatus}`,
+        channel: 'email (Instantly)',
+        observedAt: reply.at ?? undefined,
+        note: `Instantly's interest status on this reply (${reply.interestStatus}) states the buyer ${answer === 'BUYER_ACCEPTED' ? 'accepted' : 'declined'}.`,
+        actorRef: 'BRAIN',
+        requestKey: `observation:instantly:${reply.emailId}:${answer}`,
+      });
+      if (answered.ok && answered.message === 'Recorded.') report.answers += 1;
+    }
   }
   return report;
 }

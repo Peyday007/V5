@@ -80,6 +80,7 @@ import {
   receiptOf,
   sendCommercialEffect,
   type CommercialOperation,
+  type PaymentTerms,
   type PerformableAction,
 } from './effects.ts';
 import type { CashOpportunity, IdempotencyOperation } from '../../domain/types.ts';
@@ -91,6 +92,7 @@ import { listInvoices } from '../../repos/cashInvoices.ts';
 import { usableAdapter } from './effects.ts';
 import { decideCommitmentContinuation } from '../effects/posture.ts';
 import { continuationAlternativesFor, primaryChannel } from './alternatives.ts';
+import { agreementsFor, recordAgreement } from './journey/deal.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -433,6 +435,16 @@ export async function recordConfirmedEffect(input: {
         requestKey: unattributedEffectKey(opportunity.id, operation.id),
       });
     }
+    if (mode && amount !== null && amount > 0) {
+      await agreementFromPayment({
+        opportunity,
+        terms: intent?.terms ?? null,
+        amountCents: amount,
+        currency: mode.currency,
+        receiptRef,
+        actorRef: input.actorRef,
+      });
+    }
   }
 
   const already = (await actionsFor(opportunity.id)).some((one) => one.requestKey === requestKey);
@@ -551,6 +563,75 @@ export async function recordConfirmedEffect(input: {
 
 /** How long an UNCERTAIN operation sits unchanged before the tick asks its provider again. */
 export const UNCERTAIN_REASK_AFTER_MS = 5 * 60_000;
+/** The key a payment's missing agreement terms are asked for under. */
+export function paymentTermsKey(opportunityId: string, receiptRef: string): string {
+  return `payment-terms:${opportunityId}:${receiptRef}`;
+}
+
+/**
+ * A payment the provider confirmed is a commitment, and the commitment model
+ * reads commitments by agreement (`deliverables/commitments.ts`). A payment
+ * taken with no agreement on record — a transaction that skipped straight to
+ * paying — therefore records its agreement here, through the one writer
+ * (`recordAgreement`), with the provider's receipt as the evidence: keyed on
+ * the receipt, so a replay or the tick writes nothing a second time.
+ *
+ * The terms are the ones the send was made under (`EffectIntent.terms`), never
+ * re-read from a card that may since have changed. A term nobody stated is
+ * never invented: no agreement is written and an open need names what is
+ * missing (§39). A payment drawn against an existing agreement adds nothing.
+ */
+async function agreementFromPayment(input: {
+  opportunity: CashOpportunity;
+  terms: PaymentTerms | null;
+  amountCents: number;
+  currency: string;
+  receiptRef: string;
+  actorRef: string;
+}): Promise<void> {
+  const { opportunity, terms, receiptRef } = input;
+  if (!terms && (await agreementsFor(opportunity.id)).some((one) => one.state === 'AGREED')) return;
+  const missing = [
+    terms?.deliverable ? null : 'what is being delivered',
+    terms?.acceptanceCondition ? null : 'what counts as acceptance',
+  ].filter((one): one is string => one !== null);
+  let refused: string | null = null;
+  if (missing.length === 0) {
+    const agreed = await recordAgreement({
+      opportunityId: opportunity.id,
+      amountCents: input.amountCents,
+      currency: input.currency,
+      deliverable: terms!.deliverable!,
+      acceptanceCondition: terms!.acceptanceCondition!,
+      evidenceKind: 'PROVIDER_RECORD',
+      evidenceRef: receiptRef,
+      actorRef: input.actorRef,
+    });
+    if (agreed.ok) return;
+    refused = agreed.reason;
+  }
+  await raiseNeed({
+    projectId: opportunity.projectId,
+    opportunityId: opportunity.id,
+    actorRef: BRAIN,
+    blockedAction: `Record the agreement behind the payment taken for "${opportunity.title}"`,
+    whyItMatters:
+      `The provider confirmed a payment (reference ${receiptRef}) and no agreement is on record for ` +
+      'it, so nothing says what the buyer is owed for it. ' +
+      (refused
+        ? `Recording the agreement was refused: ${refused}`
+        : `Brain was not told ${missing.join(' or ')}, and will not invent a term nobody stated.`),
+    recommendedPath:
+      'Record the agreement on this piece with the deliverable, the acceptance condition and the ' +
+      "provider's reference as its evidence.",
+    setupEffort: 'A minute.',
+    nextStep: refused
+      ? `Record the agreement for reference ${receiptRef}.`
+      : `State ${missing.join(' and ')} for the payment with reference ${receiptRef}.`,
+    completionCondition: `An agreement stands behind the payment with reference ${receiptRef}.`,
+    requestKey: paymentTermsKey(opportunity.id, receiptRef),
+  });
+}
 
 /**
  * Ask the provider about every attempt whose executor stopped mid-send.
@@ -774,6 +855,8 @@ interface Prepared {
   amountCents: number | null;
   /** The journey row this send is for: the agreement an invoice bills. */
   subjectRef: string | null;
+  /** The terms of a payment taken with no agreement on record (`EffectIntent.terms`). */
+  terms?: PaymentTerms | null;
 }
 
 /**
@@ -837,12 +920,42 @@ export async function prepare(
   const position = await dealPosition({ opportunity, currency: mode.currency });
   const p = position.pnl;
   if (p.agreedRevenueCents <= 0) {
-    return refuse(
-      p.unbackedAgreedCents > 0
-        ? 'An amount is recorded as agreed with no agreement behind it. Record the agreement before ' +
-            'anything is collected.'
-        : 'No agreement is recorded for this piece, so nothing is owed to collect.',
-    );
+    if (p.unbackedAgreedCents > 0) {
+      return refuse(
+        'An amount is recorded as agreed with no agreement behind it. Record the agreement before ' +
+          'anything is collected.',
+      );
+    }
+    /*
+     * A transaction may skip straight to payment (LIFE-29-1): the buyer pays
+     * the price on the card for the deliverable and acceptance condition the
+     * card states, and the provider's record of that payment is the evidence
+     * of the agreement, written by `recordConfirmedEffect` from these terms.
+     * Only when the card states all three: a payment for unstated terms is a
+     * charge nothing could be held to, and no term is invented here (§39).
+     */
+    const deliverable = opportunity.offerScope?.trim() || null;
+    const acceptanceCondition = opportunity.acceptanceCondition?.trim() || null;
+    const price = opportunity.priceCents;
+    if (!deliverable || !acceptanceCondition || !price || price <= 0 || opportunity.currency !== mode.currency) {
+      return refuse(
+        'No agreement is recorded for this piece, and its card does not state the offer, the ' +
+          `acceptance condition and a price in ${mode.currency} to take a payment against, so nothing ` +
+          'is owed to collect.',
+      );
+    }
+    const due = price - p.creditedGrossCents;
+    if (due <= 0) return refuse('The price on the card has already been paid.');
+    return {
+      ok: true,
+      value: {
+        payload: { payer, amountCents: due, currency: mode.currency, invoiceReference: null },
+        amountCents: due,
+        subjectRef: null,
+        terms: { deliverable, acceptanceCondition },
+      },
+      message: 'Prepared.',
+    };
   }
   /*
    * An invoice open for this money is how the buyer pays it. Charging beside
@@ -1351,6 +1464,7 @@ export async function performCommercialAction(input: {
       stateAtSend: opportunity.state,
       subjectRef: prepared.value.subjectRef,
       via: continuing.value.via,
+      terms: prepared.value.terms ?? null,
     });
   } catch (error) {
     if (error instanceof OperationInProgress) {
