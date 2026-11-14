@@ -62,7 +62,8 @@ export async function opportunityPathsMarkedOnRows(): Promise<ProbeResult> {
         AND archived_at IS NULL AND cancelled_at IS NULL AND paused_at IS NULL ORDER BY id`,
     [new Date().toISOString()],
   );
-  if (goals.length === 0) return { ok: false, detail: 'no live goal carries a target and a deadline: no pathway to read' };
+  // No live goal is an absence, not a contradiction: UNKNOWN, asked again (§39).
+  if (goals.length === 0) return { ok: null, detail: 'no live goal carries a target and a deadline: no pathway to read' };
   let pathways = 0;
   let unknownFacts = 0;
   let shortfalls = 0;

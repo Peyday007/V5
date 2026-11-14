@@ -784,7 +784,7 @@ describe('the loop keeps going without anybody watching', () => {
       failureReason: 'The evidence bar was not met and the repair ladder is spent.',
     });
 
-    const parked = await tick('instance-a');
+    const parked = await parkAsPerson(() => tick('instance-a'));
     expect(parked.needsHuman.map((entry) => entry.missionId)).toContain(mission.id);
     expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
 
@@ -872,7 +872,7 @@ describe('the loop keeps going without anybody watching', () => {
       status: 'NEEDS_HUMAN',
       failureReason: 'The evidence bar was not met and the repair ladder is spent.',
     });
-    await parkStoppedMissions(10);
+    await parkAsPerson(() => parkStoppedMissions(10));
     await renewLiveMissionReservations(10);
     expect((await getMission(parked.id))!.state).toBe('NEEDS_HUMAN');
     // The one slot is now taken by live research.
@@ -928,14 +928,59 @@ describe('the loop keeps going without anybody watching', () => {
       failureReason: 'The evidence bar was not met and the repair ladder is spent.',
     });
 
+    /*
+     * Decided at the park, with no card (§80, rule 11). It used to open a card
+     * and answer it after `ROUTINE_DECISION_GRACE_MS`, so every routine park
+     * was first put in front of a person: 305 of 334 cards in seven days.
+     */
     await tick('instance-a');
-    const request = (await listOpenRequests(projectId)).find((entry) => entry.missionId === mission.id)!;
-    expect(request).toBeDefined();
+    expect((await listOpenRequests(projectId)).find((entry) => entry.missionId === mission.id)).toBeUndefined();
+    const orchestration = await getOrchestration(mission.orchestrationId!);
+    expect(orchestration!.unresolvedGapPolicy).toBe('RECORD_GAPS');
+    expect(orchestration!.unresolvedGapAuthorizedBy).toBe(userId);
+    const decisions = (await listEvents(projectId)).filter(
+      (e) => e.eventType === 'RUSSELL_ROUTINE_DECISION' && (e.payload as Record<string, unknown>)['decidedBy'] === 'BRAIN_UNDER_STANDING_AUTHORITY',
+    );
+    expect(decisions).toHaveLength(1);
+    expect(String((decisions[0]!.payload as Record<string, unknown>)['reason'])).toMatch(/Decided by Brain under the standing research grant/);
+    expect(String((decisions[0]!.payload as Record<string, unknown>)['reason'])).toContain(goal.id);
 
-    // Inside the grace period nothing is decided: the repair passes go first.
+    // A card opened while the grant had lapsed is still answered after the grace period, once the grant is live.
     const { answerRoutineParks, ROUTINE_DECISION_GRACE_MS } = await import(
       '../server/services/russell/routineDecisions.ts'
     );
+    const second = await launch({
+      projectId,
+      layerId,
+      candidateId: (await capture({
+        title: 'Florida bonding',
+        statement: 'establish the Florida broker surety bond position from the 2026 statute',
+        projectId,
+        visibility: 'SHARED',
+      })).candidate!.id,
+      visibility: 'SHARED',
+      title: 'Florida broker bonding',
+      assignment: 'Under Florida law as in force in 2026, is a broker surety bond required?',
+      objective: 'Settle the Florida bond position.',
+      whyNow: 'The layer names Florida as open.',
+      acceptableSources: ['Florida Statutes'],
+      excludedSources: [],
+      evidence: ['the exact section'],
+      startedBy: { kind: 'PERSON', id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+    expect(second.ok, second.reason).toBe(true);
+    const lapsed = second.mission!;
+    await withResearch(lapsed.orchestrationId!, layerId, projectId);
+    await updateOrchestration(lapsed.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'The evidence bar was not met and the repair ladder is spent.',
+    });
+    await parkAsPerson(() => parkStoppedMissions(10));
+    const request = (await listOpenRequests(projectId)).find((entry) => entry.missionId === lapsed.id)!;
+    expect(request).toBeDefined();
+    // Inside the grace period nothing is decided: the repair passes go first.
     expect((await answerRoutineParks()).filter((d) => d.choice)).toHaveLength(0);
     expect((await getHumanRequest(request.id))!.state).toBe('OPEN');
 
@@ -950,9 +995,7 @@ describe('the loop keeps going without anybody watching', () => {
     expect(answered.answeredByUserId).toBe(userId);
     expect(answered.answeredReason).toMatch(/Decided by Brain under the standing research grant/);
     expect(answered.answeredReason).toContain(goal.id);
-    const orchestration = await getOrchestration(mission.orchestrationId!);
-    expect(orchestration!.unresolvedGapPolicy).toBe('RECORD_GAPS');
-    expect((await listEvents(projectId)).some((e) => e.eventType === 'RUSSELL_ROUTINE_DECISION')).toBe(true);
+    expect((await getOrchestration(lapsed.orchestrationId!))!.unresolvedGapPolicy).toBe('RECORD_GAPS');
     // And a second pass decides nothing again.
     expect((await answerRoutineParks()).filter((d) => d.requestId === request.id)).toHaveLength(0);
   });
@@ -2295,7 +2338,7 @@ describe('the loop keeps going without anybody watching', () => {
       status: 'NEEDS_HUMAN',
       failureReason: 'The evidence bar was not met and the repair ladder is spent.',
     });
-    await tick('instance-a');
+    await parkAsPerson(() => tick('instance-a'));
     const request = (await listOpenRequests(projectId)).find(
       (entry) => entry.missionId === mission.id,
     )!;
@@ -4199,3 +4242,25 @@ describe('a light probe looks where Brain says, and stops when Brain says', () =
     expect((await listProbesForCandidate(candidate.id)).length).toBe(1);
   });
 });
+
+/**
+ * Park while the project's standing grant has lapsed, so a person is asked.
+ *
+ * Brain now decides a RECORD_GAPS park itself at the moment of parking under a
+ * live standing grant (`decideAtPark`, §80), and every launch holds one. The
+ * person's path — a card, an answer, the same mission resuming — still exists
+ * wherever no live grant covers the park, so tests of that path park with the
+ * grant lapsed and restore it afterwards.
+ */
+async function parkAsPerson<T>(park: () => Promise<T>): Promise<T> {
+  const live = await getDb().all<{ id: string }>(
+    `SELECT id FROM russell_goals WHERE project_id = ? AND purpose = 'STANDING' AND state = 'ACTIVE'`,
+    [projectId],
+  );
+  for (const goal of live) await getDb().run(`UPDATE russell_goals SET state = 'REVOKED' WHERE id = ?`, [goal.id]);
+  try {
+    return await park();
+  } finally {
+    for (const goal of live) await getDb().run(`UPDATE russell_goals SET state = 'ACTIVE' WHERE id = ?`, [goal.id]);
+  }
+}

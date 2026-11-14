@@ -2382,11 +2382,68 @@ export function readingDigest(reading: PlanReading): string {
   return sha256(canonicalJson(summary));
 }
 
+/**
+ * The verdict a persisted reading may carry under the owner's acceptance rule
+ * (2026-11-09, GOAL-09): RECOMMENDABLE — "meets the objective" — only with an
+ * ACCEPTED acceptance. A candidate keeps its pursuit and its sale, never that
+ * word. Pure.
+ */
+export function persistableVerdict(verdict: PlanVerdict, acceptance: Pick<PlanAcceptance, 'status'>): PlanVerdict {
+  return verdict === 'RECOMMENDABLE' && acceptance.status !== 'ACCEPTED' ? 'NEEDS_EVIDENCE' : verdict;
+}
+
+/**
+ * Whether a stored reading's forecast carries the acceptance record. A row the
+ * Brain released before the acceptance writer wrote has none (production
+ * 2026-11-10, gpr_8c679e2aefba4625a30f): it is history and is never rewritten,
+ * but it must not stand as the goal's latest reading, so the next read writes
+ * a stamped one even when nothing else moved. Pure.
+ */
+export function forecastCarriesAcceptance(forecast: string | null): boolean {
+  if (!forecast) return false;
+  try {
+    const parsed = JSON.parse(forecast) as { acceptance?: { status?: unknown } } | null;
+    return !!parsed && typeof parsed === 'object' && typeof parsed.acceptance?.status === 'string';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The acceptance a persisted reading stores. Pure.
+ *
+ * A non-ACCEPTED acceptance never holds a probability or an accepted plan —
+ * `judgeAcceptance` returns both null for CANDIDATE_ONLY and NO_CANDIDATE — so
+ * for anything it produced this returns the acceptance unchanged, and stores
+ * everything a candidate carries: its label, its opportunities, its settled P50
+ * and its coverage figure, which lives in `candidate.reach` with
+ * `candidate.reachBasis` saying whether it is a probability or only coverage.
+ * Nothing a reader of stored readings uses is discarded (the readers —
+ * `latestReading`, `listReadings`, the summary digest and the GOAL-09 probe —
+ * read `status`, `probability.basis` and `candidate`).
+ *
+ * Only a malformed acceptance, one that pairs a candidate status with a
+ * probability or an accepted plan, is changed: those two fields are the claim
+ * "this meets the objective", which a candidate may never store (GOAL-09). The
+ * candidate itself is kept exactly as it was.
+ */
+export function storableAcceptance(acceptance: PlanAcceptance): PlanAcceptance {
+  if (acceptance.status === 'ACCEPTED') return acceptance;
+  if (acceptance.probability === null && acceptance.accepted === null) return acceptance;
+  return { ...acceptance, probability: null, accepted: null };
+}
+
 async function persistReading(goal: Workstream, reading: PlanReading, chosen: StrategyReading | null): Promise<void> {
+  // A candidate is never stored as an accepted plan: the verdict follows the acceptance, and the
+  // acceptance is stored whole, candidate and coverage included (`storableAcceptance`).
+  if (reading.acceptance.status !== 'ACCEPTED') {
+    reading = { ...reading, verdict: persistableVerdict(reading.verdict, reading.acceptance), acceptance: storableAcceptance(reading.acceptance) };
+  }
   // Progress toward the goal is part of the conclusion (owner, 2026-11-05); search churn is not (C-11).
   const digest = readingDigest(reading);
   const last = await latestReading(goal.id);
-  if (last && last.digest === digest) return;
+  // A stored reading released before the acceptance writer has none, and must not stand as the latest (GOAL-09).
+  if (last && last.digest === digest && forecastCarriesAcceptance(last.forecast)) return;
   const forecast = {
     ...(chosen ? { conservativeSettled: chosen.conservativeSettled, sweep: chosen.sweep } : {}),
     acceptance: reading.acceptance,
@@ -2516,6 +2573,39 @@ export async function planInputsFingerprint(projectId: string, goalId: string): 
 }
 
 /**
+ * The parts of `planInputsFingerprint` only a new opening moves: the project's
+ * opening count and the newest opening's `created_at` (positions 0 and 2).
+ */
+const ARRIVAL_PARTS = new Set([0, 2]);
+
+/**
+ * The inputs a reading was actually taken over. Pure.
+ *
+ * Reading a plan runs a scenario and is slow, and an opening harvested while it
+ * runs is not in the model the reading used. So what a new opening moves (its
+ * count and newest `created_at`) comes from `before`, taken before the read,
+ * and an opening filed during the read still reads as new evidence on the next
+ * pass instead of waiting out the half-hour. What the pass's own writes move
+ * (the openings' and value layers' `updated_at`, the money entries, the goal
+ * row) comes from `after`, taken once the pass is over, so the plan's own
+ * research on its openings never causes a perpetual re-read. Duplicate or late
+ * triggers stay bounded by the evidence floor and the one scenario slot.
+ */
+export function inputsTakenOver(before: string, after: string): string {
+  const b = before.split('|');
+  const a = after.split('|');
+  if (b.length !== a.length) return after;
+  /*
+   * There is one rule for what counts as an arrival, and no exception for the
+   * pass's own rounds: a round opened by `widenGoalSearch` files nothing during
+   * the pass (its openings are harvested fragment by fragment once research is
+   * gated, in a later tick), so every opening it finds arrives after the
+   * reading and is evidence that reading never saw.
+   */
+  return a.map((part, i) => (ARRIVAL_PARTS.has(i) ? b[i]! : part)).join('|');
+}
+
+/**
  * Whether a goal's plan is due now. Pure. Never read: due. Past the half-hour:
  * due. Inside it: due once the floor has passed and the inputs differ from the
  * ones the last reading was taken over (unknown after a restart counts as
@@ -2562,9 +2652,10 @@ export function forgetGoalReadings(): void {
  * round is linked to the goal, so the goal's rank reaches the bins it creates.
  * When work queues up the spare is zero and this is exactly the old behaviour.
  */
-async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, spare: number): Promise<{ asked: number; constructed: number; researched: number }> {
+async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, spare: number): Promise<{ asked: number; constructed: number; researched: number; opened: string[] }> {
   const goal = await getWorkstream(goalId);
-  if (!goal) return { asked: 0, constructed: 0, researched: 0 };
+  if (!goal) return { asked: 0, constructed: 0, researched: 0, opened: [] };
+  const opened: string[] = [];
   let asked = 0;
   const attempts = 1 + spare;
   /*
@@ -2578,10 +2669,11 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
   const fromPathways = await askPathwayConstructions(goal, reading, now, MAX_LIVE_GOAL_ROUNDS + spare);
   const constructed = [...fromPathways, ...(await askConstructedArrangements(goal, reading, now, Math.max(1, Math.ceil(attempts / 2)), MAX_LIVE_GOAL_ROUNDS + spare))];
   for (const candidateId of constructed) {
+    opened.push(candidateId);
     await linkWorkstream({ workstreamId: goal.id, kind: 'CANDIDATE', ref: candidateId, relation: 'PURSUES', recordedBy: 'BRAIN', recordedByUserId: null });
   }
   for (let i = 0; i < attempts; i += 1) {
-    const opened = await openGoalDiscovery({
+    const lens = await openGoalDiscovery({
       goal,
       target: reading.target,
       bestReach: reading.bestReach,
@@ -2591,12 +2683,13 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
       now: now.toISOString(),
       liveCap: MAX_LIVE_GOAL_ROUNDS + spare,
     });
-    if (!opened) break;
+    if (!lens) break;
     asked += 1;
+    opened.push(lens.candidateId);
     await linkWorkstream({
       workstreamId: goal.id,
       kind: 'CANDIDATE',
-      ref: opened.candidateId,
+      ref: lens.candidateId,
       relation: 'PURSUES',
       recordedBy: 'BRAIN',
       recordedByUserId: null,
@@ -2604,7 +2697,7 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
   }
   // And dig into the openings already held: the path to their money.
   const researched = (await researchGoalPaths({ reading, projectId: reading.target.projectId, now, spare })).length;
-  return { asked, constructed: constructed.length, researched };
+  return { asked, constructed: constructed.length, researched, opened };
 }
 
 /** At most this many pathway constructions open a round per pass; they share construction's half of the live cap. */
@@ -2962,6 +3055,8 @@ export async function advanceGoalPlans(
       }
       continue;
     }
+    // What a new opening moves, as it stood when this read began (`inputsTakenOver`).
+    const before = inputs ?? (await fingerprint());
     let reading: PlanReading | null;
     try {
       reading = await readGoalPlan({ goalId: id, now, persist: true });
@@ -3024,9 +3119,11 @@ export async function advanceGoalPlans(
       researched += more.researched;
     }
     // Taken after this pass's own writes (the research it started on openings
-    // touches their rows), so only what arrives from elsewhere reads as new.
+    // touches their rows), so only what arrives from elsewhere reads as new —
+    // and an opening filed while the plan was being read is not folded in
+    // (`inputsTakenOver`): the reading never saw it, so the next pass reads it.
     const after = await fingerprint();
-    if (after !== null) lastInputs.set(id, after);
+    if (after !== null) lastInputs.set(id, before !== null ? inputsTakenOver(before, after) : after);
   }
   return { read, outcomes, asked, constructed, researched, busy, onEvidence, resumed };
 }

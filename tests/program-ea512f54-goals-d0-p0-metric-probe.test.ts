@@ -37,7 +37,7 @@ describe('probe r01.goal-02 on rows', () => {
   it('is registered once targets are loaded, and fails with no live goal rather than passing on nothing', async () => {
     expect(getProbe('r01.goal-02')).not.toBeNull();
     const r = await probe();
-    expect(r.ok).toBe(false);
+    expect(r.ok).toBeNull();
     expect(r.detail).toMatch(/no live goal/);
   });
 

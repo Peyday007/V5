@@ -80,7 +80,7 @@ describe('probe r01.goal-09 on rows', () => {
 
   it('fails when no live goal exists, rather than passing on nothing', async () => {
     const r = await probe();
-    expect(r.ok).toBe(false);
+    expect(r.ok).toBeNull();
     expect(r.detail).toMatch(/no live goal/);
   });
 

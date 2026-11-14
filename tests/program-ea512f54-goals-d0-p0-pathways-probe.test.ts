@@ -94,7 +94,7 @@ describe('probe r01.opp-04 on rows', () => {
 
   it('fails with no live goal, and with a live goal that has no pathway, rather than passing on nothing', async () => {
     const none = await getProbe('r01.opp-04')!({});
-    expect(none.ok).toBe(false);
+    expect(none.ok).toBeNull();
     expect(none.detail).toMatch(/no live goal/);
 
     const { project } = await freshProject();

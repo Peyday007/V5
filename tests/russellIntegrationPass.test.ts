@@ -593,7 +593,8 @@ describe('one question, walked the whole way', () => {
         'Broadening it is not Russell to decide.',
     });
 
-    const parked = await tick('journey');
+    // Parked with the standing grant lapsed: under a live one Brain files this itself (§80).
+    const parked = await parkAsPerson(() => tick('journey'));
     expect(parked.needsHuman.map((entry) => entry.missionId)).toContain(mission.id);
     expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
 
@@ -1176,3 +1177,25 @@ describe('a plan the standing envelope will not approve', () => {
     expect(reservation[0]!.state).toBe('SETTLED');
   }, 60_000);
 });
+
+/**
+ * Park while the project's standing grant has lapsed, so a person is asked.
+ *
+ * Brain now decides a RECORD_GAPS park itself at the moment of parking under a
+ * live standing grant (`decideAtPark`, §80), and every launch holds one. The
+ * person's path — a card, an answer, the same mission resuming — still exists
+ * wherever no live grant covers the park, so tests of that path park with the
+ * grant lapsed and restore it afterwards.
+ */
+async function parkAsPerson<T>(park: () => Promise<T>): Promise<T> {
+  const live = await getDb().all<{ id: string }>(
+    `SELECT id FROM russell_goals WHERE project_id = ? AND purpose = 'STANDING' AND state = 'ACTIVE'`,
+    [projectId],
+  );
+  for (const goal of live) await getDb().run(`UPDATE russell_goals SET state = 'REVOKED' WHERE id = ?`, [goal.id]);
+  try {
+    return await park();
+  } finally {
+    for (const goal of live) await getDb().run(`UPDATE russell_goals SET state = 'ACTIVE' WHERE id = ?`, [goal.id]);
+  }
+}
