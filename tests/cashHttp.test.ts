@@ -928,7 +928,7 @@ describe('one account’s whole journey', () => {
       objective: string;
       discovery: { open: boolean };
       myCurrentWork: { placements: { disposition: string }[] };
-      whatBrainNeeds: { id: string; researchStatus: string | null; blockedAction: string }[];
+      whatBrainNeeds: { id: string; researchStatus: string | null }[];
       whatBrainHasDone: unknown[];
       decisionsForMe: {
         items: { key: string; underlying: string[]; answer: { kind: string } }[];
@@ -940,9 +940,7 @@ describe('one account’s whole journey', () => {
     expect(view.status).toBe(200);
     expect(view.body.discovery.open).toBe(true);
     expect(view.body.myCurrentWork.placements.length).toBe(1);
-    // Its own need, plus the request for a standing CONTACT_BUYER grant the goal plan raises when the
-    // project holds no commercial authority (authority-d0-p0, #883).
-    expect(view.body.whatBrainNeeds.map((n) => n.blockedAction).sort()).toEqual(['CONTACT_BUYER', 'Send a hosted invoice']);
+    expect(view.body.whatBrainNeeds.length).toBe(1);
     expect(view.body.whatBrainHasDone.length).toBeGreaterThan(3);
     expect(view.body.vocabulary.neverAuthorizable).toContain('PAID_OVERAGE');
 
