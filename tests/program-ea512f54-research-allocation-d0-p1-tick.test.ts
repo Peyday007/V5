@@ -31,6 +31,7 @@ import type { BinManifest } from '../server/domain/types.ts';
 import { RESEARCH_PURPOSES, EXPLORATION_FLOOR, SYSTEM_HEALTH_FLOOR, type ResearchPurpose } from '../server/services/goals/researchAllocation.ts';
 import type { ResearchYieldReading, YieldBucket } from '../server/services/goals/researchYield.ts';
 import type { GoalView } from '../server/services/goals/model.ts';
+import { claimableResearchWaits, freeLaneCapacity, measuredLaneCapacity } from '../server/services/goals/researchCapacity.ts';
 
 function bucket(over: Partial<YieldBucket> = {}): YieldBucket {
   return {
@@ -374,5 +375,85 @@ describe('advanceGoals applies the newest recorded decision to live bins (review
     const report = await advanceGoals();
     expect(report.researchApplied).toBeNull();
     expect((await getBin(owned))!.priority).toBe(8);
+  });
+});
+
+/*
+ * Review finding F3: ADD_CAPACITY could never come from production inputs. The
+ * tick read already-running jobs as "qualified queued", the median wait of jobs
+ * that had already started as the queue's wait, and set quota headroom and the
+ * incremental cost of a slot to null. Capacity is now read as measured now —
+ * jobs that have not started, how long they have waited, whether every slot is
+ * busy, and the controller's own headroom — through the `readCapacity` port.
+ */
+describe('capacity is decided from what is measured waiting now (review finding F3)', () => {
+  const lane = 'free-lane:m1';
+  function saturatedReading(): ResearchYieldReading {
+    const r = reading();
+    // A healthy lane: no rate limit, mostly completing, and not claims-heavy (no remedy owed first).
+    r.lanes = { [lane]: bucket({ submissions: 20, completions: 19, failures: { total: 1, rateLimited: 0, other: 1, causes: [] }, acceptedClaims: 10, packetsFiled: 3, usefulResults: 3, jobMs: 3_600_000, inFlight: 25 }) };
+    r.attributions = [{ jobId: 'job_1', lane, purposes: ['TRANSACTION_ROUTES'], basis: ['goal'] }];
+    return r;
+  }
+  const control = (busy: number, target = 4) => ({ models: [{ model: 'm1', target, busy, window: { ok: 19, content: 1, transient: 0 } }] });
+
+  it('measures the free lane from the controller and the queue: waiting jobs, their wait, saturation, headroom, a zero-cost slot', () => {
+    const [m] = freeLaneCapacity({ control: control(4), waiting: 9, waitsMs: [20 * 60_000, 30 * 60_000, 50 * 60_000], ceilingOf: () => 256, isGpu: () => false, dbShare: 6 });
+    expect(m).toMatchObject({ lane, resource: 'WORKER', qualifiedQueued: 9, queueWaitMs: 30 * 60_000, saturated: true, quotaHeadroom: 2, incrementalCostPerUnit: 0, reliability: 0.95 });
+    const gpu = freeLaneCapacity({ control: { models: [{ model: 'runpod/x', target: 2, busy: 2, window: { ok: 0, content: 0, transient: 0 } }] }, waiting: 1, waitsMs: [1], ceilingOf: () => 32, isGpu: () => true, dbShare: null });
+    expect(gpu[0]).toMatchObject({ resource: 'GPU', quotaHeadroom: 30, reliability: null });
+  });
+
+  it('one idle slot anywhere means the delay is not a machine limit, and an absent controller measures nothing', () => {
+    const two = { models: [{ model: 'm1', target: 4, busy: 4, window: { ok: 1, content: 0, transient: 0 } }, { model: 'm2', target: 4, busy: 1, window: { ok: 1, content: 0, transient: 0 } }] };
+    const out = freeLaneCapacity({ control: two, waiting: 10, waitsMs: [60 * 60_000], ceilingOf: () => 256, isGpu: () => false, dbShare: null });
+    expect(out.every((m) => !m.saturated)).toBe(true);
+    // The shared queue is split between the lanes that could take it, never counted whole on each.
+    expect(out.map((m) => m.qualifiedQueued)).toEqual([5, 5]);
+    expect(freeLaneCapacity({ control: null, waiting: 10, waitsMs: [1], ceilingOf: () => 1, isGpu: () => false, dbShare: null })).toEqual([]);
+  });
+
+  it('adds capacity when qualified jobs have waited past the threshold on saturated slots with measured headroom', async () => {
+    const { ports, events } = memoryPorts(saturatedReading());
+    ports.readCapacity = async () => freeLaneCapacity({ control: control(4), waiting: 6, waitsMs: [40 * 60_000], ceilingOf: () => 256, isGpu: () => false, dbShare: null });
+    const report = await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-14T00:00:00.000Z' }, ports);
+    const verdict = report.capacity.find((c) => c.lane === lane);
+    expect(verdict).toMatchObject({ kind: 'ADD_CAPACITY', resource: 'WORKER', incrementalCost: 0 });
+    expect(verdict!.units).toBeGreaterThan(0);
+    const recorded = (events.get('wst_a')![0]!.capacity as { lane: string; recommendationOnly: boolean; measured: string | null }[]).find((c) => c.lane === lane)!;
+    expect(recorded.recommendationOnly).toBe(true);
+    expect(recorded.measured).toMatch(/4 of 4 slot\(s\) busy/);
+  });
+
+  it('running jobs are not waiting jobs, and the wait of started jobs is not the queue’s wait', async () => {
+    const r = saturatedReading();
+    r.lanes[lane] = { ...r.lanes[lane]!, inFlight: 40, queueWait: { measured: 40, medianMs: 90 * 60_000, p90Ms: 120 * 60_000 } };
+    // Nothing measured waiting now: the busy lane's in-flight jobs and their past waits add no capacity.
+    const input = allocationInputFrom(r, { urgentCommercialGoal: false, nearestDeadlineDays: null, triedRemedies: new Map(), capacity: [] });
+    expect(input.bottlenecks!.find((b) => b.lane === lane)).toMatchObject({ qualifiedQueued: null, queueWaitMs: null, measuredMachineLimit: false });
+    const { ports } = memoryPorts(r);
+    ports.readCapacity = async () => freeLaneCapacity({ control: control(4), waiting: 0, waitsMs: [], ceilingOf: () => 256, isGpu: () => false, dbShare: null });
+    const report = await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-14T00:00:00.000Z' }, ports);
+    expect(report.capacity.find((c) => c.lane === lane)).toMatchObject({ kind: 'NO_CAPACITY', reason: 'no qualified useful job is measured waiting' });
+  });
+
+  it('a short wait, an unsaturated lane, or a rate-limited provider adds nothing', async () => {
+    const cases: [ReturnType<typeof control>, number, boolean][] = [[control(4), 5 * 60_000, false], [control(2), 40 * 60_000, false], [control(4), 40 * 60_000, true]];
+    for (const [ctl, wait, rateLimited] of cases) {
+      const r = saturatedReading();
+      if (rateLimited) r.lanes[lane] = { ...r.lanes[lane]!, failures: { total: 1, rateLimited: 1, other: 0, causes: [] } };
+      const { ports } = memoryPorts(r);
+      ports.readCapacity = async () => freeLaneCapacity({ control: ctl, waiting: 6, waitsMs: [wait], ceilingOf: () => 256, isGpu: () => false, dbShare: null });
+      const report = await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-14T00:00:00.000Z' }, ports);
+      expect(report.capacity.find((c) => c.lane === lane)?.kind).toBe('NO_CAPACITY');
+    }
+  });
+
+  it('the production ports read capacity, and with no controller running in the process they measure nothing', async () => {
+    const ports = await productionResearchAllocationPorts();
+    expect(typeof ports.readCapacity).toBe('function');
+    expect(await measuredLaneCapacity()).toEqual([]);
+    // The queue read runs on the real schema; an empty queue has no wait.
+    expect(await claimableResearchWaits(Date.now())).toEqual([]);
   });
 });
