@@ -113,6 +113,9 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | Q2-9 | calibration | MEASURED_RECORD deadlocked on RECOMMENDABLE readings | MAJOR | acceptance | REPAIRING |
 | Q2-10 | correlation | shared-comparable rates drawn independently → invented diversification | MAJOR | acceptance | REPAIRING |
 | Q2-11 | statistics | no small-k predictive interval, no vendor-figure bias discount, funnel stage not material, lineage only by URL, no model uncertainty | MAJOR | acceptance | REPAIRING (partial) |
+| E-1 | cash timing | a signed $20K contract paying a deposit + milestone ($14K) inside the window counts $0 toward the goal (independent evaluation case E) | MAJOR | follow-up (portfolio cash timing) | ROOT CAUSE TO CONFIRM |
+| L-1 | evidence interpretation | contradictory sources ($8K vs $45K for one quantity) pooled silently into a DIRECT-tier confident distribution; no contradiction surfaced (case L) | MAJOR | acceptance | REPAIRING |
+| I-1 | capital restructuring | under a capital ceiling a presale design that beats self-funding is not chosen; reach stays 0 (case I) | MAJOR | follow-up | ROOT CAUSE TO CONFIRM |
 | Q2-12 | robustness | assurance sample regex-parses prose (`plan.ts:852`) | MINOR | acceptance | REPAIRING |
 
 ### Economic knowledge baseline (production, 2026-11-14 19:53Z, Goals run 43634448117)
@@ -148,6 +151,18 @@ stored quantities (0 construction facts), and nothing it constructs. "400
 arrangements per pass" were 0 durable arrangements. 100 plan readings exist for
 one goal and none was ever accepted — consistent with Q2-1 (acceptance
 unreachable).
+
+### Independent evaluation baseline (pre-repair code)
+
+`tests/intelligenceEvaluation.test.ts` (kept beside the record as
+`docs/intelligence-recovery/intelligenceEvaluation.test.ts.txt` until the
+repairs land, so the release gate is not run against known failures), written by
+an evaluator who did not read the repair branches: **18 cases, 11 pass, 7 fail;
+61/76 assertions**. Failing: E (deposit+milestone $0), G2 (transfer names no
+differences), I (no capital restructuring), L (contradiction pooled), O4/O5
+(no interval; strong comparables never certified), SEL (strong arrangement
+dropped by key string), PERSIST 0/3. Full table:
+`docs/intelligence-recovery/evaluation-baseline.md`.
 
 ### Measurement
 
