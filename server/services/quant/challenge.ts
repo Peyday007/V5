@@ -954,6 +954,143 @@ export function summarizeChallenge(report: ChallengeReport, action: ScrutinyInpu
   return { ...summary, steps: cleared, proceedNow: cleared.filter((c) => c.mayProceed).map((c) => c.key) };
 }
 
+// ─── What the running Brain supplies itself ──────────────────────────────────
+
+/**
+ * The facts a plan's own activities already carry, read into the challenge's
+ * terms so a production plan is judged on them rather than on "fact absent".
+ * Only what the record states is read: an acquired history with actual paid
+ * prices makes the price kind `PAID`; a same-mechanism bid/win record is the
+ * conversion and the attempts it rests on. Nothing is inferred from a missing
+ * record, and nothing favourable is assumed (invariant 39) — a fact the
+ * activities do not carry stays absent and its failure mode still fires.
+ */
+export function factsFromProblem(problem: PortfolioProblem): Record<string, ActivityFacts> {
+  const out: Record<string, ActivityFacts> = {};
+  for (const a of problem.activities) {
+    const history = a.evidence?.history;
+    if (!history) continue;
+    const f: ActivityFacts = {};
+    // `priceBand` is built from actual prices paid (quant/history.ts), never posted ones.
+    if (history.priceObservations > 0) f.priceKind = 'PAID';
+    if (history.winRate && history.winRate.bids > 0) {
+      f.conversion = { rate: history.winRate.wins / history.winRate.bids, attempts: history.winRate.bids };
+    }
+    if (Object.keys(f).length) out[a.key] = f;
+  }
+  return out;
+}
+
+/** The production-history check's identity: a different model over different data from the optimizer's. */
+export const PRODUCTION_HISTORY_PRODUCER = { model: 'quant/challenge production-history recheck', dataSource: 'market history bid/win outcomes' };
+
+/** Upper end of the Wilson score interval for wins out of bids (z = 1.96). */
+function wilsonUpper(wins: number, bids: number, z = 1.96): number {
+  if (bids <= 0) return 1;
+  const p = wins / bids;
+  const denom = 1 + (z * z) / bids;
+  const centre = p + (z * z) / (2 * bids);
+  const margin = z * Math.sqrt((p * (1 - p)) / bids + (z * z) / (4 * bids * bids));
+  return Math.min(1, (centre + margin) / denom);
+}
+
+/** Every paired sample array repeated `k` times per index, so the distribution is unchanged and a share can be thinned finely. */
+function expandSamples(a: Activity, k: number): Activity {
+  if (k <= 1) return a;
+  const rep = (xs: number[] | undefined) => xs?.flatMap((x) => Array.from({ length: k }, () => x));
+  return {
+    ...a,
+    cash: rep(a.cash)!,
+    days: rep(a.days)!,
+    ...(a.spend ? { spend: rep(a.spend)! } : {}),
+    ...(a.deals ? { deals: rep(a.deals)! } : {}),
+    ...(a.marketVolume ? { marketVolume: rep(a.marketVolume)! } : {}),
+    ...(a.early ? { early: { cash: rep(a.early.cash)!, days: rep(a.early.days)! } } : {}),
+    ...(a.gated
+      ? {
+          gated: {
+            ...a.gated,
+            cash: rep(a.gated.cash)!,
+            days: rep(a.gated.days)!,
+            ...(a.gated.spend ? { spend: rep(a.gated.spend)! } : {}),
+            ...(a.gated.deals ? { deals: rep(a.gated.deals)! } : {}),
+            ...(a.gated.early ? { early: { cash: rep(a.gated.early.cash)!, days: rep(a.gated.early.days)! } } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
+/** The listed sample indices settle nothing but a `keep` share of them, spread evenly; every cash-bearing sample is zeroed together. */
+function thinWorlds(a: Activity, successful: number[], keep: number): Activity {
+  const drop = new Set<number>();
+  successful.forEach((index, i) => {
+    if (Math.floor((i + 1) * keep) === Math.floor(i * keep)) drop.add(index);
+  });
+  const zero = (xs: number[] | undefined) => xs?.map((x, i) => (drop.has(i) ? 0 : x));
+  return {
+    ...a,
+    cash: zero(a.cash)!,
+    ...(a.deals ? { deals: zero(a.deals)! } : {}),
+    ...(a.early ? { early: { ...a.early, cash: zero(a.early.cash)! } } : {}),
+    ...(a.gated ? { gated: { ...a.gated, cash: zero(a.gated.cash)!, ...(a.gated.deals ? { deals: zero(a.gated.deals)! } : {}), ...(a.gated.early ? { early: { ...a.gated.early, cash: zero(a.gated.early.cash)! } } : {}) } } : {}),
+  };
+}
+
+/** Sample indices a member is resolved to before thinning, so a short sample list is not thinned in whole steps. */
+const HISTORY_RESOLUTION = 1000;
+
+/** How far the history-bounded reach may sit below the plan's own before the check disagrees. */
+export const PRODUCTION_HISTORY_TOLERANCE = 0.05;
+
+/**
+ * An independent check of the recommendation from production-derived
+ * history: the market's own bid/win record, which the optimizer's samples are
+ * not built from. Each member's share of worlds that settle anything is held
+ * to the upper end of what its historical win rate allows; where the samples
+ * are more optimistic, their successful worlds are thinned on the same worlds
+ * to that bound, and the combination is re-read. The check agrees when the
+ * history-bounded reach stays within {@link PRODUCTION_HISTORY_TOLERANCE} of
+ * the plan's own.
+ *
+ * It speaks only where it can: every member of the recommended combination
+ * must carry a same-mechanism bid/win record, and no member may close more
+ * than one deal in a world (a per-world share is then not a per-bid rate).
+ * Otherwise there is no check — never a passing one — and a deep step stays
+ * held for want of independent validation.
+ */
+export function productionHistoryCheck(problem: PortfolioProblem, result: PortfolioResult): IndependentCheck | null {
+  const best = result.best;
+  if (!best || best.keys.length === 0) return null;
+  const byKey = new Map(problem.activities.map((a) => [a.key, a]));
+  const members = best.keys.map((k) => byKey.get(k));
+  if (members.some((a) => !a || !a.evidence?.history?.winRate || a.evidence.history.winRate.bids <= 0)) return null;
+  if (members.some((a) => [...(a!.deals ?? []), ...(a!.gated?.deals ?? [])].some((d) => d > 1))) return null;
+  const expanded = new Map<string, Activity>();
+  const thinned = new Map<string, Activity>();
+  for (const a of members as Activity[]) {
+    const { wins, bids } = a.evidence!.history!.winRate!;
+    const successfulOf = (x: Activity) => x.cash.flatMap((c, i) => (c > 0 || (x.gated?.cash[i] ?? 0) > 0 || (x.early?.cash[i] ?? 0) > 0 ? [i] : []));
+    const share = a.cash.length ? successfulOf(a).length / a.cash.length : 0;
+    const bound = wilsonUpper(wins, bids);
+    if (!(share > bound)) continue;
+    const wide = expandSamples(a, Math.ceil(HISTORY_RESOLUTION / Math.max(1, a.cash.length)));
+    expanded.set(a.key, wide);
+    thinned.set(a.key, thinWorlds(wide, successfulOf(wide), bound / share));
+  }
+  // Baseline and recheck are read on the same expanded samples, so the only difference between them is the history bound.
+  const baseline = expanded.size === 0 ? best : readKeys({ ...problem, activities: problem.activities.map((a) => expanded.get(a.key) ?? a) }, best.keys);
+  const reread = thinned.size === 0 ? best : readKeys({ ...problem, activities: problem.activities.map((a) => thinned.get(a.key) ?? a) }, best.keys);
+  if (!baseline || !reread) return null;
+  return {
+    method: 'PRODUCTION_HISTORY',
+    by: PRODUCTION_HISTORY_PRODUCER.model,
+    dataSource: PRODUCTION_HISTORY_PRODUCER.dataSource,
+    agrees: reread.reach >= baseline.reach - PRODUCTION_HISTORY_TOLERANCE,
+    reach: reread.reach,
+  };
+}
+
 /**
  * Challenge an optimizer's own recommendation at the depth its consequence
  * earns — the entry point `optimizePortfolio` uses, so every plan Brain reads
@@ -965,14 +1102,25 @@ export function challengePlan(problem: PortfolioProblem, result: PortfolioResult
   let steps: PlanStep[] = [];
   try {
     steps = stepsOfPlan(problem, result);
+    /*
+     * The running Brain supplies its own facts and its own independent check,
+     * from what the plan's activities carry; a caller's facts refine them field
+     * by field and a caller's checks are added. Without this, every production
+     * plan was read with no facts and no checks at all.
+     */
+    const derived = factsFromProblem(problem);
+    const facts: Record<string, ActivityFacts> = { ...derived };
+    for (const [key, f] of Object.entries(options.facts ?? {})) facts[key] = { ...(derived[key] ?? {}), ...f };
+    const history = productionHistoryCheck(problem, result);
+    const checks = [...(history ? [history] : []), ...(options.checks ?? [])];
     const report = challenge({
       problem,
       result,
       action,
       producedBy: options.producedBy ?? OPTIMIZER_PRODUCER,
       ...(options.thresholds ? { thresholds: options.thresholds } : {}),
-      ...(options.facts ? { facts: options.facts } : {}),
-      ...(options.checks ? { checks: options.checks } : {}),
+      ...(Object.keys(facts).length ? { facts } : {}),
+      ...(checks.length ? { checks } : {}),
       ...(options.accepted ? { accepted: options.accepted } : {}),
       ...(options.actual ? { actual: options.actual } : {}),
       ...(options.now ? { now: options.now } : {}),
