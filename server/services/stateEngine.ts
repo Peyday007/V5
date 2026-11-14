@@ -20,7 +20,6 @@ import type {
   Layer,
   LayerStateSnapshot,
   LayerStatus,
-  ResearchRun,
   RunStatus,
   VersionPolicy,
 } from '../domain/types.ts';
@@ -40,7 +39,8 @@ import { getDocument, listDocuments, listDocumentsByLayer, updateDocument } from
 import { listEventsByLayer, recordEvent } from '../repos/events.ts';
 import { getLayer, listLayers, updateLayer, type UpdateLayerInput } from '../repos/layers.ts';
 import { getProject, updateProject } from '../repos/projects.ts';
-import { listRuns, listRunsByLayer, updateRun } from '../repos/runs.ts';
+import { listRunSummariesByLayer, listRunSummariesInStatus, updateRun } from '../repos/runs.ts';
+import type { ResearchRunSummary } from '../repos/runs.ts';
 import { listRunDependenciesForProject } from '../repos/dependencies.ts';
 import {
   checkCanonicalNames,
@@ -105,7 +105,7 @@ function runSentence(layerName: string, version: string): string {
   return `Run ${buildCanonicalName(layerName, version)}.`;
 }
 
-function describeTarget(layerName: string, run: ResearchRun): string {
+function describeTarget(layerName: string, run: ResearchRunSummary): string {
   return run.targetVersion ? buildCanonicalName(layerName, run.targetVersion) : layerName;
 }
 
@@ -124,8 +124,8 @@ function deriveStatus(input: {
   policy: VersionPolicy;
   documents: Document[];
   presentDocuments: Document[];
-  runs: ResearchRun[];
-  activeRuns: ResearchRun[];
+  runs: ResearchRunSummary[];
+  activeRuns: ResearchRunSummary[];
   expectedVersions: string[];
   missingVersions: string[];
   currentVersion: string | null;
@@ -398,7 +398,8 @@ async function deriveLayerUnmemoized(layerId: string): Promise<LayerDerivation> 
   const policy: VersionPolicy = project?.versionPolicy ?? DEFAULT_VERSION_POLICY;
 
   const documents = await listDocumentsByLayer(layerId);
-  const runs = await listRunsByLayer(layerId);
+  // Without the prompt and result text, which no derivation reads (see `ResearchRunSummary`).
+  const runs = await listRunSummariesByLayer(layerId);
   const activeRuns = runs.filter((run) => ACTIVE_RUN_STATUSES.has(run.status));
 
   // One stat per document: the store is consulted, not assumed. The presence of
@@ -732,9 +733,10 @@ export async function recomputeRunReadiness(projectId: string): Promise<{ unbloc
   const blocked: string[] = [];
 
   const dependenciesByRun = await listRunDependenciesForProject(projectId);
-  for (const run of await listRuns(projectId)) {
-    // Only runs that have not started yet; a finished run's status is history.
-    if (run.status !== 'BLOCKED' && run.status !== 'READY' && run.status !== 'PLANNED') continue;
+  // Only runs that have not started yet; a finished run's status is history.
+  // Filtered in the statement, and without the text columns: this ran on every
+  // recompute and used to read every run of the project, prompts included.
+  for (const run of await listRunSummariesInStatus(projectId, ['BLOCKED', 'READY', 'PLANNED'])) {
     const ready =
       run.dependencyOverride ||
       (await checkRunDependencyRows(projectId, dependenciesByRun.get(run.id) ?? [])).ready;
