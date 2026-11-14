@@ -41,7 +41,7 @@
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { evaluateGoalPortfolio, type GateInput, type GoalPortfolio, type PlannedOpening } from './portfolio.ts';
 import { ACQUISITION_LEVERS, DAYS_TO_FIRST_PROOF, PARTNER_TERMS, budgetsAllowed, purchaseCapacity, buyInbound, dailyVolumePlan, type AcquisitionLever, type VolumePlan } from './acquisitionLevers.ts';
-import { MATERIAL_SHARE, SHAPE_MULTIPLES } from './pathways.ts';
+import { CONVERSION_BOUNDS, MATERIAL_SHARE, SHAPE_MULTIPLES } from './pathways.ts';
 import { createHash } from 'node:crypto';
 import { sharedEvaluator, type Evaluator } from './reasoning/evaluatorPool.ts';
 import { applyProgram, exploreDirections, programOf, renderExploration, repriceOpening, PRICE_ELASTICITY, type ExploreContext, type Exploration, type Transform } from './reasoning/directions.ts';
@@ -573,7 +573,7 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
 
   // The cost of daily volumes asked about.
   const capacityLever = levers.find((l) => l.kind === 'SENDING_CAPACITY');
-  const volumePlans = capacityLever ? (input.volumeQuestions ?? [10_000]).map((perDay) => dailyVolumePlan(capacityLever, perDay, daysLeft, limits)) : [];
+  const volumePlans = capacityLever ? (input.volumeQuestions ?? volumeQuestionsFor(input.openings, input.portfolio.remaining, daysLeft)).map((perDay) => dailyVolumePlan(capacityLever, perDay, daysLeft, limits)) : [];
 
   // 5. Conclude.
   const binding = diagnosis[0];
@@ -1013,4 +1013,22 @@ export function renderReconstruction(r: Reconstruction, limit = 8): string[] {
   if (r.exploration) lines.push(...renderExploration(r.exploration));
   if (r.searchBrief) lines.push(`    brief     ${r.searchBrief}`);
   return lines;
+}
+
+/**
+ * The daily volumes worth costing for this goal (planning recovery G-4): the
+ * contacts a day its own remaining amount needs at the middle of the
+ * conversion bounds and the openings' median price, beside the 10,000 a day the
+ * owner asked about on the $10K goal. A fixed question only fits one goal.
+ */
+export function volumeQuestionsFor(openings: readonly ModelledOpportunity[], remaining: number, daysLeft: number): number[] {
+  const prices = openings
+    .map((o) => (o.price.low !== null && o.price.high !== null ? Math.sqrt(Math.max(1, o.price.low) * Math.max(1, o.price.high)) : o.price.value))
+    .filter((p): p is number => typeof p === 'number' && p > 0)
+    .sort((a, b) => a - b);
+  const median = prices.length ? prices[Math.floor(prices.length / 2)]! : null;
+  const middle = Math.sqrt(CONVERSION_BOUNDS.replyLow * CONVERSION_BOUNDS.replyHigh) * Math.sqrt(CONVERSION_BOUNDS.closeLow * CONVERSION_BOUNDS.closeHigh);
+  const needed = median && daysLeft > 0 && remaining > 0 ? Math.ceil(remaining / daysLeft / (median * middle)) : null;
+  const questions = needed && Number.isFinite(needed) && needed > 0 && needed !== 10_000 ? [needed, 10_000] : [10_000];
+  return questions;
 }

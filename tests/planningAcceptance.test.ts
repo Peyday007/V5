@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { evaluateGoalPortfolio } from '../server/services/goals/portfolio.ts';
-import { reconstructPlan } from '../server/services/goals/reconstruction.ts';
+import { reconstructPlan, volumeQuestionsFor } from '../server/services/goals/reconstruction.ts';
 import { requiredStructures } from '../server/services/goals/pathways.ts';
 import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 import { GOAL_10K_LIMITS, GOAL_10K_OPENINGS, GOAL_10K_RECORD } from './fixtures/goal10k.ts';
@@ -125,4 +125,12 @@ describe('planning recovery: general-purpose cash planning holds its economics a
     const { r } = await plan(tight);
     expect(r.best.committed).toBeLessThanOrEqual(500);
   }, 240_000);
+
+  it('asks the volume question its own goal needs, not the $10K goal\'s', () => {
+    const o = OBJECTIVES[1]!;
+    const q = volumeQuestionsFor(o.openings, o.limits.remaining, o.limits.daysLeft);
+    expect(q[0]).not.toBe(10_000);
+    expect(q[0]).toBeGreaterThan(0);
+    expect(q).toContain(10_000);
+  });
 });
