@@ -431,10 +431,78 @@ export interface ResearchAllocationPorts {
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
+/** What live goals put on one purpose: the nearest deadline its research serves, and the stake its next unit can decide. */
+export interface PurposePressure {
+  nearestDeadlineDays: number | null;
+  /** Remaining target money (minor units) of the goals this purpose's research serves, split by the job time it gave each. Null when no goal with a target is served. */
+  decisionValue: number | null;
+  /** One line per goal that put pressure here. */
+  basis: string[];
+}
+
+/**
+ * Deadlines and expected decision value per purpose, from the live goals and
+ * the research the window actually did for each (RES-07).
+ *
+ * A goal's deadline bears on every purpose its research served in the window,
+ * and its remaining target is the value at stake in that research's decisions,
+ * split between those purposes by the job time each received — so a goal's
+ * stake is counted once, like a job's cost. A goal no job in the window names
+ * still has a deadline and a stake: a goal with a target puts them on
+ * TRANSACTION_ROUTES (turning arrangements into transactions is what moves a
+ * target), and a goal without one puts its deadline on FORWARD_EXPLORATION
+ * (future goal preparation, the same rule `attributePurposes` uses). A goal with
+ * no target has no money at stake and adds no decision value: an unknown is
+ * never a favourable assumption (invariant 39). Pure.
+ */
+export function purposePressureFrom(goals: readonly GoalView[], reading: Pick<ResearchYieldReading, 'attributions'>, nowMs: number): Record<ResearchPurpose, PurposePressure> {
+  const out = Object.fromEntries(RESEARCH_PURPOSES.map((p): [ResearchPurpose, PurposePressure] => [p, { nearestDeadlineDays: null, decisionValue: null, basis: [] }])) as Record<ResearchPurpose, PurposePressure>;
+  const isPurpose = (p: string): p is ResearchPurpose => (RESEARCH_PURPOSES as readonly string[]).includes(p);
+  // Job time each goal's research gave each purpose, a multi-purpose job split evenly (as `summarizeResearchYield` splits cost).
+  const served = new Map<string, Map<ResearchPurpose, number>>();
+  for (const a of reading.attributions) {
+    if (!a.goalId) continue;
+    const ps = a.purposes.filter(isPurpose);
+    if (ps.length === 0) continue;
+    const weight = Math.max(1, Number(a.jobMs ?? 0)) / ps.length;
+    const m = served.get(a.goalId) ?? new Map<ResearchPurpose, number>();
+    for (const p of ps) m.set(p, (m.get(p) ?? 0) + weight);
+    served.set(a.goalId, m);
+  }
+  for (const g of goals) {
+    if (g.lifecycle !== 'ACTIVE') continue;
+    const due = g.dueAt ? Date.parse(g.dueAt) : NaN;
+    const days = Number.isFinite(due) && due > nowMs ? (due - nowMs) / 86_400_000 : null;
+    const remaining = g.target && !g.target.achieved && g.target.remainingCents > 0 ? g.target.remainingCents : null;
+    if (days === null && remaining === null) continue;
+    const measured = served.get(g.id);
+    const split: [ResearchPurpose, number][] = measured && measured.size > 0
+      ? [...measured]
+      : [[g.target ? 'TRANSACTION_ROUTES' : 'FORWARD_EXPLORATION', 1]];
+    const total = split.reduce((s, [, w]) => s + w, 0);
+    const how = measured && measured.size > 0 ? 'its research in the window served this purpose' : g.target ? 'no job in the window names it; a target is moved by transaction routes' : 'no job in the window names it; a goal without a target is future goal preparation';
+    for (const [p, w] of split) {
+      const slot = out[p];
+      if (days !== null) slot.nearestDeadlineDays = slot.nearestDeadlineDays === null ? days : Math.min(slot.nearestDeadlineDays, days);
+      if (remaining !== null) slot.decisionValue = (slot.decisionValue ?? 0) + (remaining * w) / total;
+      slot.basis.push(`goal ${g.id}${days !== null ? ` due in ${days.toFixed(1)} day(s)` : ''}${remaining !== null ? `, ${Math.round((remaining * w) / total)} of ${remaining} remaining` : ''}: ${how}`);
+    }
+  }
+  return out;
+}
+
 /** The measured inputs one window gives the decision. Pure. */
 export function allocationInputFrom(
   reading: ResearchYieldReading,
-  context: { urgentCommercialGoal: boolean; nearestDeadlineDays: number | null; triedRemedies: Map<string, LaneRemedy[]>; measuringRemedies?: Map<string, LaneRemedy> },
+  context: {
+    urgentCommercialGoal: boolean;
+    /** Legacy: one deadline for TRANSACTION_ROUTES. `pressure`, when given, replaces it for every purpose. */
+    nearestDeadlineDays: number | null;
+    triedRemedies: Map<string, LaneRemedy[]>;
+    measuringRemedies?: Map<string, LaneRemedy>;
+    /** Each purpose's deadline and decision value (`purposePressureFrom`). */
+    pressure?: Partial<Record<ResearchPurpose, Pick<PurposePressure, 'nearestDeadlineDays' | 'decisionValue'>>>;
+  },
 ): AllocationInput {
   // The shares in force are where the capacity actually went: each purpose's job time in the window.
   const currentShares: Partial<Record<ResearchPurpose, number>> = {};
@@ -447,7 +515,12 @@ export function allocationInputFrom(
       usefulResults: ran ? b!.usefulResults : null,
       // Job time is the cost every job records; it is split once across a job's purposes.
       cost: ran ? b!.jobMs : null,
-      ...(p === 'TRANSACTION_ROUTES' && context.nearestDeadlineDays !== null ? { nearestDeadlineDays: context.nearestDeadlineDays } : {}),
+      ...(context.pressure
+        ? {
+            ...(context.pressure[p]?.nearestDeadlineDays != null ? { nearestDeadlineDays: context.pressure[p]!.nearestDeadlineDays } : {}),
+            ...(context.pressure[p]?.decisionValue != null ? { decisionValue: context.pressure[p]!.decisionValue } : {}),
+          }
+        : p === 'TRANSACTION_ROUTES' && context.nearestDeadlineDays !== null ? { nearestDeadlineDays: context.nearestDeadlineDays } : {}),
     };
   });
   const lanePurposes = new Map<string, Set<ResearchPurpose>>();
@@ -569,7 +642,8 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const applied = ports.appliedRemedies && live.length > 0 ? await ports.appliedRemedies(live.map((g) => g.id)) : [];
   const { tried, measuring } = remediesFromApplied(applied, window);
   const reading = await ports.readYield(window);
-  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring });
+  const pressure = purposePressureFrom(live, reading, untilMs);
+  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring, pressure });
   const decision = decideResearchAllocation(allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
   const fingerprint = allocationFingerprint(decision);
@@ -606,6 +680,12 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
       rateLimited: b.failures.rateLimited,
     })),
     deadlineGoals,
+    // Each purpose's deadline and expected decision value, and the goals that put them there.
+    pressure: Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, {
+      nearestDeadlineDays: pressure[p].nearestDeadlineDays === null ? null : round3(pressure[p].nearestDeadlineDays!),
+      decisionValue: pressure[p].decisionValue === null ? null : Math.round(pressure[p].decisionValue!),
+      basis: pressure[p].basis.slice(0, 10),
+    }])),
     liveGoals: live.length,
     costCountedOnce: reading.costCountedOnce,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),

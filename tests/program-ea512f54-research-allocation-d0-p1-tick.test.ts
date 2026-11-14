@@ -17,6 +17,7 @@ import {
   advanceGoals,
   latestResearchDecision,
   allocationInputFrom,
+  purposePressureFrom,
   productionResearchAllocationPorts,
   reallocateResearch,
   recordRemedyApplied,
@@ -439,5 +440,68 @@ describe('advanceGoals applies the newest recorded decision to live bins (review
     const report = await advanceGoals();
     expect(report.researchApplied).toBeNull();
     expect((await getBin(owned))!.priority).toBe(8);
+  });
+});
+
+describe('deadlines and expected decision value reach every purpose a goal’s research serves (F4)', () => {
+  const now = '2026-11-14T00:00:00.000Z';
+  const nowMs = Date.parse(now);
+  const target = (remainingCents: number, achieved = false) => ({ remainingCents, achieved }) as GoalView['target'];
+  const job = (goalId: string | undefined, purposes: string[], jobMs: number) =>
+    ({ jobId: `j_${goalId}_${purposes.join('_')}`, lane: 'free-lane', purposes, basis: [], ...(goalId ? { goalId } : {}), jobMs }) as ResearchYieldReading['attributions'][number];
+
+  it('splits a goal’s remaining target across the purposes its research served, by job time, counted once', () => {
+    const goals = [goalView('wst_cash', { dueAt: '2026-11-17T00:00:00.000Z', target: target(1_000_000) })];
+    const p = purposePressureFrom(goals, { attributions: [job('wst_cash', ['BROAD_DISCOVERY'], 3_000), job('wst_cash', ['TRANSACTION_ROUTES'], 1_000)] }, nowMs);
+    expect(p.BROAD_DISCOVERY.decisionValue).toBeCloseTo(750_000, 6);
+    expect(p.TRANSACTION_ROUTES.decisionValue).toBeCloseTo(250_000, 6);
+    // The stake is counted once across purposes, like a job's cost.
+    expect(RESEARCH_PURPOSES.reduce((s, one) => s + (p[one].decisionValue ?? 0), 0)).toBeCloseTo(1_000_000, 6);
+    // The deadline bears on every purpose the goal's research served — not only TRANSACTION_ROUTES.
+    expect(p.BROAD_DISCOVERY.nearestDeadlineDays).toBeCloseTo(3, 6);
+    expect(p.TRANSACTION_ROUTES.nearestDeadlineDays).toBeCloseTo(3, 6);
+    expect(p.SELF_IMPROVEMENT).toMatchObject({ nearestDeadlineDays: null, decisionValue: null });
+  });
+
+  it('a goal no job names puts its target on transaction routes, and a goal without a target its deadline on forward exploration with no invented value', () => {
+    const goals = [
+      goalView('wst_cash', { dueAt: '2026-11-24T00:00:00.000Z', target: target(500_000) }),
+      goalView('wst_next', { dueAt: '2026-11-16T00:00:00.000Z', target: null }),
+      goalView('wst_done', { dueAt: '2026-11-15T00:00:00.000Z', target: target(0, true) }),
+      goalView('wst_paused', { lifecycle: 'PAUSED', dueAt: '2026-11-15T00:00:00.000Z', target: target(9_000_000) } as Partial<GoalView>),
+    ];
+    const p = purposePressureFrom(goals, { attributions: [job(undefined, ['SELF_IMPROVEMENT'], 5_000)] }, nowMs);
+    expect(p.TRANSACTION_ROUTES.decisionValue).toBe(500_000);
+    expect(p.FORWARD_EXPLORATION.nearestDeadlineDays).toBeCloseTo(2, 6);
+    expect(p.FORWARD_EXPLORATION.decisionValue).toBeNull();
+    // An achieved target is a deadline with nothing left at stake; a paused goal is not live.
+    expect(p.TRANSACTION_ROUTES.nearestDeadlineDays).toBeCloseTo(1, 6);
+    expect(p.SELF_IMPROVEMENT.decisionValue).toBeNull();
+  });
+
+  it('the production pass gives the decision a decision value and a deadline beyond TRANSACTION_ROUTES, and records them', async () => {
+    const r = reading();
+    r.attributions = [job('wst_cash', ['BROAD_DISCOVERY'], 9_000), job('wst_cash', ['TRANSACTION_ROUTES'], 1_000), job('wst_next', ['FORWARD_EXPLORATION'], 1_000)];
+    const goals = [
+      goalView('wst_cash', { dueAt: '2026-11-16T00:00:00.000Z', target: target(2_000_000) }),
+      goalView('wst_next', { dueAt: '2026-11-15T00:00:00.000Z', target: null }),
+    ];
+    const pressure = purposePressureFrom(goals, r, nowMs);
+    const input = allocationInputFrom(r, { urgentCommercialGoal: true, nearestDeadlineDays: 2, triedRemedies: new Map(), pressure });
+    const by = new Map(input.purposes.map((m) => [m.purpose, m]));
+    expect(by.get('BROAD_DISCOVERY')!.decisionValue).toBeCloseTo(1_800_000, 6);
+    expect(by.get('BROAD_DISCOVERY')!.nearestDeadlineDays).toBeCloseTo(2, 6);
+    expect(by.get('FORWARD_EXPLORATION')!.nearestDeadlineDays).toBeCloseTo(1, 6);
+    expect(by.get('SELF_IMPROVEMENT')!.decisionValue).toBeUndefined();
+
+    const { ports, decisions } = memoryPorts(r);
+    await reallocateResearch({ goals, now }, ports);
+    const detail = decisions[0]! as { pressure: Record<string, { decisionValue: number | null; nearestDeadlineDays: number | null; basis: string[] }>; changes: { purpose: string; reasons: string[] }[] };
+    expect(detail.pressure.BROAD_DISCOVERY!.decisionValue).toBe(1_800_000);
+    expect(detail.pressure.FORWARD_EXPLORATION!.nearestDeadlineDays).toBe(1);
+    expect(detail.pressure.TRANSACTION_ROUTES!.basis.join(' ')).toContain('wst_cash');
+    const reasons = detail.changes.flatMap((c) => c.reasons).join(' | ');
+    expect(reasons).toContain('expected decision value');
+    expect(detail.changes.find((c) => c.purpose === 'FORWARD_EXPLORATION')?.reasons.join(' ') ?? '').toContain('a deadline in 1 day(s)');
   });
 });
