@@ -131,7 +131,13 @@ export async function operatorHistory(goalId: string | null): Promise<Record<str
 export async function readGoalPlanSummary(goalId: string): Promise<Record<string, unknown>> {
   const { latestReading } = await import('../goals/plan.ts');
   const row = await latestReading(goalId);
-  if (!row) return { goalId, reading: null, note: 'Brain has no plan reading for this goal yet.' };
+  if (!row) {
+    // A goal with no cash target is planned by `goals/objectivePlan.ts` (G-1).
+    const { latestObjectiveReading } = await import('../../repos/objectiveReadings.ts');
+    const objective = await latestObjectiveReading(goalId);
+    if (objective) return { goalId, kind: 'OBJECTIVE', readAt: objective.createdAt, verdict: objective.verdict, chosenStrategy: objective.chosenStrategy, decision: objective.decision, interpretation: objective.interpretation, strategies: objective.strategies.slice(0, 8), error: objective.error };
+    return { goalId, reading: null, note: 'Brain has no plan reading for this goal yet.' };
+  }
   const parse = (text: string | null): unknown => {
     if (!text) return null;
     try {
