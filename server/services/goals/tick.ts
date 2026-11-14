@@ -204,7 +204,7 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
   // The research allocation is decided (at most hourly) before capacity is
   // handed out, and the newest recorded decision is applied on every pass.
   report.research = await reallocateResearchIfDue({ goals: snapshot.goals, now: options?.now });
-  const inForce = await researchInForce(snapshot.goals);
+  const inForce = await researchInForce();
   const application: ResearchApplication | null = inForce
     ? { fingerprint: inForce.fingerprint, shifts: purposePriorityShifts(inForce.shares), belowFloor: purposesBelowFloor(inForce.shares), goalBins: [], floorRaised: [] }
     : null;
@@ -323,12 +323,14 @@ export function sharesInForceFrom(detail: Record<string, unknown> | null): (Shar
   };
 }
 
-/** The decision in force: the newest recorded on a live goal, unless it was held. */
-async function researchInForce(goals: GoalView[]): Promise<{ shares: SharesInForce; fingerprint: string | null } | null> {
-  const live = goals.filter((g) => g.lifecycle === 'ACTIVE');
-  if (live.length === 0) return null;
+/**
+ * The decision in force: the newest Brain-wide decision row, unless it was
+ * held. It is one row for the whole Brain, so which goals are live, and in
+ * which order, cannot change which decision is applied.
+ */
+async function researchInForce(): Promise<{ shares: SharesInForce; fingerprint: string | null } | null> {
   const ports = await productionResearchAllocationPorts();
-  const parsed = sharesInForceFrom(await ports.lastDecision(live[0]!.id));
+  const parsed = sharesInForceFrom((await ports.lastDecision())?.detail ?? null);
   if (!parsed || parsed.held) return null;
   return { shares: parsed, fingerprint: parsed.fingerprint };
 }
@@ -349,13 +351,16 @@ async function researchInForce(goals: GoalView[]): Promise<{ shares: SharesInFor
  *
  * What the pass does with the decision, and what it never does:
  *
- *   * It records one append-only `GOAL_RESEARCH_REALLOCATED` event on every live
- *     goal, carrying the five shares, the floors that held, every reason, the
- *     lane remedies and the capacity verdicts. That is the decision made
- *     visible on the surface that already shows a goal's history (the goal's
- *     events). The research purposes are Brain-wide, so every live goal carries
- *     the same decision; the closed project event vocabulary has no member for
- *     it, and this pass does not widen it.
+ *   * It records the decision once, as one append-only Brain-wide row
+ *     (`RESEARCH_ALLOCATION_DECIDED` in `improvement_events`, the Brain-wide
+ *     operations log, with no candidate), carrying the five shares, what the
+ *     window gave each, the floors that held, every reason, the lane remedies,
+ *     the capacity each lane was measured at and the capacity verdicts. The
+ *     purposes are Brain-wide, so the decision is not copied onto every goal:
+ *     a goal's own history carries only what the decision did to that goal
+ *     (`GOAL_CAPACITY_ALLOCATED` names the bins it stepped and the decision's
+ *     fingerprint), and the goals briefing (`briefing.ts`, rendered by Home and
+ *     the goals page) shows the decision in force and the capacity it found.
  *   * A low-actionability lane is given its next remedy (question design, then
  *     evidence sources, then model routing) before any limit is raised for it,
  *     and a remedy already recorded for a lane is passed back as tried.
@@ -374,7 +379,13 @@ async function researchInForce(goals: GoalView[]): Promise<{ shares: SharesInFor
 export const RESEARCH_ALLOCATION_EVERY_MS = 60 * 60_000;
 /** The consistent window each decision is measured over. */
 export const RESEARCH_ALLOCATION_WINDOW_MS = 24 * 60 * 60_000;
+/**
+ * The per-goal kind earlier passes wrote: the same Brain-wide decision copied
+ * onto every live goal. No longer written or read; kept so old rows stay named.
+ */
 export const RESEARCH_REALLOCATED_EVENT = 'GOAL_RESEARCH_REALLOCATED';
+/** The one Brain-wide decision row, in `improvement_events` with no candidate. */
+export const RESEARCH_ALLOCATION_DECIDED = 'RESEARCH_ALLOCATION_DECIDED';
 
 export interface ResearchAllocationReport {
   window: { since: string; until: string };
@@ -385,7 +396,8 @@ export interface ResearchAllocationReport {
   laneActions: AllocationDecision['laneActions'];
   /** Capacity verdicts; an ADD_CAPACITY is a recommendation only. */
   capacity: AllocationDecision['capacity'];
-  recordedOn: string[];
+  /** Whether this pass wrote the Brain-wide decision row (once, never per goal). */
+  recorded: boolean;
   fingerprint: string;
 }
 
@@ -411,9 +423,10 @@ export interface ResearchAllocationPorts {
    * recorded: an unknown is never read as a change made (invariant 39).
    */
   appliedRemedies?(goalIds: string[]): Promise<AppliedRemedy[]>;
-  /** The newest recorded decision's detail on a goal, or null. */
-  lastDecision(goalId: string): Promise<Record<string, unknown> | null>;
-  recordGoal(goalId: string, summary: string, detail: Record<string, unknown>): Promise<void>;
+  /** The newest Brain-wide decision row, or null. */
+  lastDecision(): Promise<{ detail: Record<string, unknown>; at: string } | null>;
+  /** Write the Brain-wide decision row: once per changed decision, never per goal. */
+  recordDecision(summary: string, detail: Record<string, unknown>): Promise<void>;
 }
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -549,7 +562,9 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     .filter((g) => g.target && g.dueAt && Date.parse(g.dueAt) > untilMs)
     .map((g) => (Date.parse(g.dueAt!) - untilMs) / 86_400_000);
   const urgentCommercialGoal = deadlines.length > 0;
-  const previous = live.length > 0 ? await ports.lastDecision(live[0]!.id) : null;
+  // The goals whose own deadlines put the commercial floor in force: what the decision means for a goal.
+  const deadlineGoals = live.filter((g) => g.target && g.dueAt && Date.parse(g.dueAt) > untilMs).map((g) => g.id);
+  const previous = await ports.lastDecision();
   // Tried means a recorded change was made, never that the last decision recommended one.
   const applied = ports.appliedRemedies && live.length > 0 ? await ports.appliedRemedies(live.map((g) => g.id)) : [];
   const { tried, measuring } = remediesFromApplied(applied, window);
@@ -580,43 +595,56 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     })),
     capacity: decision.capacity.map((c) => ({ ...c, recommendationOnly: true })),
     bottlenecks: decision.capacity.filter((c) => c.resource !== null).map((c) => ({ lane: c.lane, resource: c.resource })),
+    // The research capacity each lane was measured at in the window: what the capacity verdicts read.
+    laneCapacity: Object.entries(reading.lanes).map(([lane, b]) => ({
+      lane,
+      utilization: round3(b.utilization),
+      inFlight: b.inFlight,
+      queueWaitMedianMs: b.queueWait.medianMs,
+      completions: b.completions,
+      failures: b.failures.total,
+      rateLimited: b.failures.rateLimited,
+    })),
+    deadlineGoals,
+    liveGoals: live.length,
     costCountedOnce: reading.costCountedOnce,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
-  const recordedOn: string[] = [];
-  for (const goal of live) {
-    const last = goal.id === live[0]?.id ? previous : await ports.lastDecision(goal.id);
-    if (last && last.fingerprint === fingerprint) continue;
+  const recorded = !(previous && previous.detail.fingerprint === fingerprint);
+  if (recorded) {
     const summary = decision.held
       ? 'Research allocation held: nothing in the window was measured.'
       : `Research reallocated: ${RESEARCH_PURPOSES.map((p) => `${p} ${(decision.shares[p] * 100).toFixed(1)}%`).join(', ')}`;
-    await ports.recordGoal(goal.id, summary.slice(0, 400), detail);
-    recordedOn.push(goal.id);
+    await ports.recordDecision(summary.slice(0, 400), { ...detail, summary: summary.slice(0, 400) });
   }
   return {
     window,
     shares: decision.shares,
     floors,
-    changed: recordedOn.length > 0,
+    changed: recorded,
     held: decision.held,
     laneActions: decision.laneActions,
     capacity: decision.capacity,
-    recordedOn,
+    recorded,
     fingerprint,
   };
 }
 
-/** The production rows: the yield reader, the goal's own event history, and the project event log. */
+/** The newest Brain-wide research allocation decision row, or null. */
+export async function latestResearchDecision(): Promise<{ detail: Record<string, unknown>; at: string } | null> {
+  const { listImprovementEvents } = await import('../../repos/improvement.ts');
+  const newest = (await listImprovementEvents({ kinds: [RESEARCH_ALLOCATION_DECIDED], limit: 1 }))[0];
+  return newest ? { detail: newest.detail, at: newest.at } : null;
+}
+
+/** The production rows: the yield reader, the goals' applied remedies, and the Brain-wide decision row. */
 export async function productionResearchAllocationPorts(): Promise<ResearchAllocationPorts> {
   const { researchYieldByPurpose } = await import('./researchYield.ts');
   const { listWorkstreamEvents } = await import('../../repos/register.ts');
+  const { recordImprovementEvent } = await import('../../repos/improvement.ts');
   return {
     readYield: (window) => researchYieldByPurpose(window),
-    async lastDecision(goalId) {
-      const events = await listWorkstreamEvents(goalId, 200);
-      const newest = events.find((e) => e.kind === RESEARCH_REALLOCATED_EVENT);
-      return newest ? (newest.detail as Record<string, unknown>) : null;
-    },
+    lastDecision: () => latestResearchDecision(),
     async appliedRemedies(goalIds) {
       const out: AppliedRemedy[] = [];
       for (const goalId of goalIds) {
@@ -629,8 +657,8 @@ export async function productionResearchAllocationPorts(): Promise<ResearchAlloc
       }
       return out;
     },
-    async recordGoal(goalId, summary, detail) {
-      await recordWorkstreamEvent({ workstreamId: goalId, kind: RESEARCH_REALLOCATED_EVENT, summary, detail, actorRef: 'BRAIN' });
+    async recordDecision(_summary, detail) {
+      await recordImprovementEvent({ candidateId: null, kind: RESEARCH_ALLOCATION_DECIDED, detail });
     },
   };
 }
