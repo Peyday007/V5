@@ -13,9 +13,11 @@
  *   R03 — a range crossing zero is still judged from its bounds and keeps a positive upside.
  *   R04 — an established price with an unknown direct cost stays ESTIMATED with a value.
  *   R05 — across every shape the builder produces, no UNKNOWN fact states a value.
+ *   R06 — review finding F1: a move's variant is published too, so `publishedFacts` lists its facts
+ *         and the final pass holds them to the same rule (they were copied before it ran).
  */
 import { describe, expect, it } from 'vitest';
-import { pathwayOf } from '../server/services/goals/pathways.ts';
+import { pathwayOf, publishedFacts } from '../server/services/goals/pathways.ts';
 import { pathwayProblem } from '../server/services/factory/program/release01/pathwaysProbe.ts';
 import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 import type { CashOpportunity } from '../server/domain/types.ts';
@@ -105,4 +107,37 @@ describe('R05: no UNKNOWN fact states a value, whatever the shape', () => {
       expect(pathwayProblem(p)).toBeNull();
     });
   }
+});
+
+describe('R06: move variants are held to the rule (review finding F1)', () => {
+  // One buyer, an established price, a direct cost nobody has established: the ONE_BUYER move copies
+  // revenuePerDeal, fulfilmentCost and net into its "same deliverable to buyers like it" variant.
+  const unestablishedCost: ModelInput = { value: null, low: 50, high: 300, provenance: 'EVIDENCE', source: null, note: 'no cost on the card' };
+  const oneBuyer = () => opening({ price: evidence(900), directCost: unestablishedCost }, { title: 'A single equipment delivery' });
+
+  it('builds a variant whose copied unknown facts state no value', () => {
+    const p = pathwayOf(oneBuyer(), null, ctx);
+    const variants = p.moves.flatMap((m) => (m.variant ? [m.variant] : []));
+    expect(variants.length).toBeGreaterThan(0);
+    const facts = variants.flatMap((v) => [v.revenuePerDeal, v.costPerDeal, v.net]);
+    expect(facts.some((f) => f.status === 'UNKNOWN')).toBe(true);
+    for (const f of facts) if (f.status === 'UNKNOWN') expect(f.value).toBeNull();
+  });
+
+  it('publishedFacts lists every variant fact by identity, beside the sixteen pathway facts', () => {
+    const p = pathwayOf(oneBuyer(), null, ctx);
+    const listed = publishedFacts(p);
+    for (const fact of [p.buyer, p.motivation, p.channel, p.offer, p.fulfiller, p.revenuePerDeal, p.acquisitionCost, p.fulfilmentCost, p.net, p.conversion, p.volume, p.frequency, p.daysToCash, p.capital, p.rights, p.capacity]) {
+      expect(listed).toContain(fact);
+    }
+    for (const m of p.moves) if (m.variant) for (const f of [m.variant.revenuePerDeal, m.variant.costPerDeal, m.variant.net]) expect(listed).toContain(f);
+  });
+
+  it('across every shape, no published fact — variants included — is UNKNOWN with a value', () => {
+    const shapes = [oneBuyer(), opening(), opening({ repeatable: true, price: unknown(5, 50), directCost: unknown(1, 10), volume: unknown(1, 500) }), opening({ price: evidence(40) }, { title: 'one listing for a single buyer' })];
+    for (const one of shapes) {
+      const p = pathwayOf(one, null, ctx);
+      for (const f of publishedFacts(p)) if (f.status === 'UNKNOWN') expect(f.value).toBeNull();
+    }
+  });
 });

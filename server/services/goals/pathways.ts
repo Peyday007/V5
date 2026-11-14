@@ -698,15 +698,7 @@ export function pathwayOf(
   const counts = { proven: 0, estimated: 0, unknown: 0 };
   // `facts` are the fourteen commercial facts and none can be DENIED; `rights` (the only denial) and `capacity` are read beside the tally.
   for (const fact of facts) counts[fact.status === 'PROVEN' ? 'proven' : fact.status === 'ESTIMATED' ? 'estimated' : 'unknown'] += 1;
-  /*
-   * One rule over every fact the pathway publishes: an UNKNOWN states no value (OPP-04, §39).
-   * `net` above is the site production caught, and this is the defence for every other derived
-   * fact — constructed designs, commission and unit-sale variants — so a new derivation cannot
-   * reintroduce a point guess under an unknown. The swept low/high stay: fit and contribution have
-   * already read them, and a partial arrangement is kept rather than abandoned.
-   */
-  for (const fact of [...facts, rights, capacity]) if (fact.status === 'UNKNOWN' && fact.value !== null) fact.value = null;
-  return {
+  const pathway: TransactionPathway = {
     opportunityId: o.id,
     title: o.title,
     origin: constructed ? 'CONSTRUCTED' : 'FOUND',
@@ -741,6 +733,27 @@ export function pathwayOf(
     correlationGroup: correlationGroupOf(one),
     counts,
   };
+  /*
+   * One rule over every fact the pathway publishes: an UNKNOWN states no value (OPP-04, §39).
+   * `net` above is the site production caught, and this is the defence for every other derived
+   * fact — constructed designs, commission and unit-sale variants — so a new derivation cannot
+   * reintroduce a point guess under an unknown. It runs on the assembled pathway, after
+   * `constructMoves` copied facts into its variants, and `publishedFacts` is the one list of what
+   * is published, so a variant is held to the rule rather than trusted to its source. The swept
+   * low/high stay: fit and contribution have already read them, and a partial arrangement is kept
+   * rather than abandoned.
+   */
+  for (const fact of publishedFacts(pathway)) if (fact.status === 'UNKNOWN' && fact.value !== null) fact.value = null;
+  return pathway;
+}
+
+/** Every fact a pathway publishes: the fourteen commercial facts, rights, capacity, and each move variant's facts. Pure. */
+export function publishedFacts(p: TransactionPathway): PathFact[] {
+  return [
+    p.buyer, p.motivation, p.channel, p.offer, p.fulfiller, p.revenuePerDeal, p.acquisitionCost, p.fulfilmentCost, p.net,
+    p.conversion, p.volume, p.frequency, p.daysToCash, p.capital, p.rights, p.capacity,
+    ...p.moves.flatMap((m) => (m.variant ? [m.variant.revenuePerDeal, m.variant.costPerDeal, m.variant.net] : [])),
+  ];
 }
 
 export const GAP_LABEL: Record<GapKind, string> = {
