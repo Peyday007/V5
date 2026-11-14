@@ -60,6 +60,13 @@ export type Route =
   | { name: 'MAGIC'; section: MagicSection | null }
   | { name: 'SEARCH' }
   /**
+   * The world (UI-27): the same facts as a spatial scene, an operations table
+   * and a goal focus. The lens state — mode, selection, timeframe, goal and
+   * filters — rides in the query string (`world/lens.ts`), so `/world?…` is a
+   * deep link that restores exactly what was on screen.
+   */
+  | { name: 'WORLD' }
+  /**
    * Where an invitation link lands.
    *
    * The only address in this shell that a person with no Brain account may
@@ -143,6 +150,8 @@ export function parseRoute(pathname: string): Route {
     }
     case 'search':
       return { name: 'SEARCH' };
+    case 'world':
+      return parts.length === 1 ? { name: 'WORLD' } : { name: 'NOT_FOUND', path: pathname };
     case 'invite':
       return { name: 'INVITE' };
     case 'enrol':
@@ -202,6 +211,8 @@ export function pathFor(route: Route): string {
       return route.section ? `/magic/${route.section}` : '/magic';
     case 'SEARCH':
       return '/search';
+    case 'WORLD':
+      return '/world';
     case 'INVITE':
       return '/invite';
     case 'ENROL':
@@ -237,6 +248,7 @@ export function useRoute(): Navigation {
 
   const go = useCallback((next: Route) => {
     const path = pathFor(next);
+    // The world's lens lives in the query string; WorldPage writes it, so arriving at /world keeps any query already there.
     if (path !== window.location.pathname) window.history.pushState({}, '', path);
     setRoute(next);
   }, []);
