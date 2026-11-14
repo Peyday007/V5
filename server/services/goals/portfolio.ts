@@ -40,6 +40,7 @@ import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { assessOutreachRecord, type EvidenceAssessment, type OutreachCampaignRecord } from './evidenceAuthority.ts';
 import { buildStreams, type StreamWorlds, type StreamsReading } from './streams.ts';
 import { notePlanStreams } from './port05.ts';
+import { cachedCoMovement, pairKey, type MeasuredCoMovement } from './coMovement.ts';
 
 export const PORTFOLIO_WORLDS = 2_000;
 /** The shares of the shared outreach an opening may be given. */
@@ -50,6 +51,31 @@ export const OUTREACH_SHARES = [0.25, 0.5, 1] as const;
  * hits every line that shares the mailbox. It is stated on the reading.
  */
 export const SHARED_OUTREACH_CORRELATION = 0.5;
+/** The coefficient a named risk group no measurement or configuration covers takes: the optimizer's own default, and an assumption. */
+export const DEFAULT_RISK_CORRELATION = 0.5;
+
+/**
+ * The coefficient the shared outreach is simulated at: the mean measured
+ * co-movement of the pairs of openings that share it, when the ledger measured
+ * any (floored at zero and bounded like the optimizer's, since a shared
+ * mailbox cannot make lines hedge each other), else the declared assumption.
+ * Pure.
+ */
+export function sharedOutreachCorrelation(
+  sharing: readonly string[],
+  coMovement: ReadonlyMap<string, MeasuredCoMovement> | undefined,
+): { coefficient: number; basis: 'MEASURED' | 'ASSUMED'; pairs: number; weeks: number } {
+  const measured: MeasuredCoMovement[] = [];
+  for (let i = 0; i < sharing.length; i++) {
+    for (let j = i + 1; j < sharing.length; j++) {
+      const m = coMovement?.get(pairKey(sharing[i]!, sharing[j]!));
+      if (m) measured.push(m);
+    }
+  }
+  if (measured.length === 0) return { coefficient: SHARED_OUTREACH_CORRELATION, basis: 'ASSUMED', pairs: 0, weeks: 0 };
+  const mean = measured.reduce((s, m) => s + m.coefficient, 0) / measured.length;
+  return { coefficient: Math.min(0.95, Math.max(0, mean)), basis: 'MEASURED', pairs: measured.length, weeks: Math.min(...measured.map((m) => m.weeks)) };
+}
 /**
  * Prospects one online operation can contact a day when nobody has said: one
  * to two warmed mailboxes. Bounds only — the reading cannot be a probability
@@ -138,6 +164,8 @@ export interface GoalPortfolio {
     spendCeiling: number | null;
     contactsPerDay: { value: number | null; low: number; high: number; source: string };
     correlation: number;
+    /** Whether `correlation` was measured from the ledger or assumed, and over what. */
+    correlationBasis?: string;
   };
   /** What keeps the reading from being a probability, or the target from being reached. */
   missing: string[];
@@ -410,8 +438,11 @@ export function evaluateGoalPortfolio(input: {
   forceMeasured?: boolean;
   worlds?: number;
   seed?: number;
+  /** Measured co-movement between openings by `pairKey`; absent reads the goals tick's last measurement (`coMovement.ts`). */
+  coMovement?: ReadonlyMap<string, MeasuredCoMovement> | null;
 }): GoalPortfolio {
   const worlds = input.worlds ?? PORTFOLIO_WORLDS;
+  const coMovement = input.coMovement === undefined ? cachedCoMovement()?.pairs : input.coMovement ?? undefined;
   const seed = input.seed ?? 20261103;
   const stated = statedContactsPerDay(input.resources);
   const interval = input.measuredRates ? measuredReplyInterval(input.measuredRates) : null;
@@ -516,6 +547,11 @@ export function evaluateGoalPortfolio(input: {
       });
     }
   }
+  // The shared outreach's coefficient is measured where the ledger can, and assumed only where it cannot (F6).
+  const outreachCorrelation = sharedOutreachCorrelation(
+    input.openings.filter((one) => !one.channel && one.repeatable && one.agreedValue === 0).map((one) => one.opportunity.id),
+    coMovement,
+  );
   const result = optimizePortfolio({
     activities,
     target: input.remaining,
@@ -523,7 +559,7 @@ export function evaluateGoalPortfolio(input: {
     capacity: { outreach: 1, ...Object.fromEntries(input.openings.filter((o) => o.channel).map((o) => [o.channel!.resource, 1])) },
     ...(startingCapital !== null ? { startingCapital } : {}),
     ...(spendCeiling !== null ? { spendCeiling } : {}),
-    riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
+    riskCorrelation: { 'shared-outreach': outreachCorrelation.coefficient },
     worlds,
     seed,
   });
@@ -574,8 +610,9 @@ export function evaluateGoalPortfolio(input: {
     startingCapital,
     spendCeiling,
     contactsPerDay,
-    riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
-    defaultCorrelation: 0.5,
+    riskCorrelation: { 'shared-outreach': outreachCorrelation.coefficient },
+    defaultCorrelation: DEFAULT_RISK_CORRELATION,
+    ...(coMovement ? { coMovement } : {}),
   });
   /*
    * The goal plan's own reading is the only top-level evaluation: the as-is
@@ -599,7 +636,10 @@ export function evaluateGoalPortfolio(input: {
       perArrangement: input.beforeProof,
       spendCeiling,
       contactsPerDay: { value: stated, low: contactsPerDay.low ?? 0, high: contactsPerDay.high ?? 0, source: stated !== null ? 'stated by the owner on the goal' : input.measuredCapacity && input.measuredCapacity.perDay > CONTACTS_PER_DAY_BOUNDS.low ? `measured: up to ${input.measuredCapacity.perDay}/day on ${input.measuredCapacity.accounts} healthy Instantly accounts (shared); swept` : 'not stated; swept' },
-      correlation: SHARED_OUTREACH_CORRELATION,
+      correlation: outreachCorrelation.coefficient,
+      correlationBasis: outreachCorrelation.basis === 'MEASURED'
+        ? `measured: mean weekly cash co-movement of ${outreachCorrelation.pairs} pair(s) sharing the outreach, over at least ${outreachCorrelation.weeks} week(s)`
+        : 'assumed: no pair sharing the outreach has enough weeks of cash on the ledger to measure',
     },
     missing,
     searched: result.searched,

@@ -20,6 +20,7 @@
  * assumption, such as the correlation of lines sharing one mailbox).
  */
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
+import { pairKey, type MeasuredCoMovement } from './coMovement.ts';
 
 export type StreamRole = 'LEADING' | 'ALTERNATE' | 'CONTINGENCY' | 'WORKING_OPERATION' | 'FUTURE_BET';
 export type FigureBasis = 'ESTABLISHED' | 'ASSUMED';
@@ -65,10 +66,16 @@ export interface StreamWorlds {
 export interface StreamCorrelation {
   with: string;
   coefficient: number;
-  /** SHARED_RISK_GROUP: both fail through one factor; NONE_KNOWN: no shared factor is modelled, so independence is assumed. */
-  kind: 'SHARED_RISK_GROUP' | 'NONE_KNOWN';
+  /**
+   * MEASURED_CO_MOVEMENT: the two streams' own weekly cash moved together on the ledger (`coMovement.ts`);
+   * SHARED_RISK_GROUP: both fail through one factor, at an assumed coefficient; NONE_KNOWN: no shared
+   * factor is modelled and nothing was measured, so independence is assumed.
+   */
+  kind: 'MEASURED_CO_MOVEMENT' | 'SHARED_RISK_GROUP' | 'NONE_KNOWN';
   riskGroup: string | null;
   basis: FigureBasis;
+  /** What the coefficient was measured over, when it was measured. */
+  measured?: { weeks: number; source: string };
 }
 
 export interface SharedConstraint {
@@ -139,9 +146,13 @@ export interface StreamsInput {
   /** Correlation inside a named risk group; a group not named takes `defaultCorrelation` (the optimizer's own default). */
   riskCorrelation: Record<string, number>;
   defaultCorrelation: number;
+  /** Measured co-movement by `pairKey` (`coMovement.ts`). A measured pair takes its measurement over any assumption. */
+  coMovement?: ReadonlyMap<string, MeasuredCoMovement>;
 }
 
 const OUTREACH = 'outreach';
+/** A measured co-movement at or above this makes two streams dependent. */
+export const MEASURED_DEPENDENCE = 0.2;
 const SHARED_OUTREACH = 'shared-outreach';
 
 function isEstablished(input: ModelInput | undefined): boolean {
@@ -192,6 +203,8 @@ export function buildStreams(input: StreamsInput): StreamsReading {
   const pairCorrelation = (a: ModelledOpportunity, b: ModelledOpportunity): StreamCorrelation => {
     const ga = drawsOn(a).riskGroup;
     const gb = drawsOn(b).riskGroup;
+    const m = input.coMovement?.get(pairKey(a.opportunity.id, b.opportunity.id));
+    if (m) return { with: b.opportunity.id, coefficient: m.coefficient, kind: 'MEASURED_CO_MOVEMENT', riskGroup: ga !== null && ga === gb ? ga : null, basis: 'ESTABLISHED', measured: { weeks: m.weeks, source: m.source } };
     if (ga !== null && ga === gb) return { with: b.opportunity.id, coefficient: corr(ga), kind: 'SHARED_RISK_GROUP', riskGroup: ga, basis: 'ASSUMED' };
     return { with: b.opportunity.id, coefficient: 0, kind: 'NONE_KNOWN', riskGroup: null, basis: 'ASSUMED' };
   };
@@ -255,7 +268,8 @@ export function buildStreams(input: StreamsInput): StreamsReading {
 
     // Correlation with every leading member (and, for a leading member, the others).
     const correlations = others.map((o) => pairCorrelation(one, o));
-    const correlated = correlations.filter((c) => c.kind === 'SHARED_RISK_GROUP' && c.coefficient > 0);
+    // A measured pair is judged on its measurement: it moves with a leading line only when its cash measurably did.
+    const correlated = correlations.filter((c) => (c.kind === 'SHARED_RISK_GROUP' && c.coefficient > 0) || (c.kind === 'MEASURED_CO_MOVEMENT' && c.coefficient >= MEASURED_DEPENDENCE));
 
     // Cash timing, obligations, workforce, QA.
     const settlementBasis = basisOf(isEstablished(one.daysToCash) && isEstablished(one.price));
@@ -318,8 +332,13 @@ export function buildStreams(input: StreamsInput): StreamsReading {
     const binding = sharedConstraints.filter((c) => c.binding);
     const independent = binding.length === 0 && correlated.length === 0;
     const independence = independent
-      ? others.length === 0 ? 'no other leading line to depend on' : 'shares no binding constraint and no correlated risk with the leading combination (no shared factor is modelled; assumed)'
-      : [...correlated.map((c) => `moves with ${c.with} through ${c.riskGroup} (${c.coefficient}, assumed)`), ...binding.map((c) => `shares the ${c.constraint} with the leading combination`)].join('; ');
+      ? others.length === 0 ? 'no other leading line to depend on'
+        : correlations.every((c) => c.kind === 'MEASURED_CO_MOVEMENT')
+          ? 'shares no binding constraint with the leading combination, and its cash measurably did not move with theirs'
+          : 'shares no binding constraint and no correlated risk with the leading combination (no shared factor is modelled; assumed)'
+      : [...correlated.map((c) => (c.kind === 'MEASURED_CO_MOVEMENT'
+          ? `moves with ${c.with}: measured ${c.coefficient.toFixed(2)} over ${c.measured?.weeks ?? 0} week(s) of cash`
+          : `moves with ${c.with} through ${c.riskGroup} (${c.coefficient}, assumed)`)), ...binding.map((c) => `shares the ${c.constraint} with the leading combination`)].join('; ');
 
     streams.push({
       opportunityId: id,

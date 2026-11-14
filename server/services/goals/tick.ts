@@ -50,6 +50,7 @@ import {
 } from '../../repos/goals.ts';
 import { assembleGoals, type GoalView } from './model.ts';
 import { rankGoals } from './priority.ts';
+import { refreshCoMovementIfDue } from './coMovement.ts';
 
 export interface GoalTickReport {
   goals: number;
@@ -74,6 +75,8 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
   // Archived goals are not derived here: they hold nothing and rank nowhere,
   // and there are more of them after every deploy. A hold one left behind is
   // released below, and its owner read directly (tests/goalTickCost.test.ts).
+  // The portfolio reads measured co-movement between streams from here (PORT-05 F6); at most hourly, never thrown.
+  await refreshCoMovementIfDue();
   const snapshot = await assembleGoals({ projectIds: null, includeArchived: false, now: options?.now });
   const report: GoalTickReport = { goals: snapshot.goals.length, held: [], released: [], reprioritized: [], moved: [] };
   const byId = new Map(snapshot.goals.map((goal) => [goal.id, goal]));
