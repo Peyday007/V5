@@ -230,6 +230,61 @@ describe('commercial roles become goal lenses (COM-13-1)', () => {
   });
 });
 
+describe('open-world arrangements are asked by the running goal search (ARCH-01)', () => {
+  let projectId = '';
+  let userId = '';
+  const now = new Date();
+  const inDays = (n: number) => new Date(now.getTime() + n * 86_400_000).toISOString();
+
+  beforeEach(async () => {
+    forgetKnowledge();
+    forgetGoalReadings();
+    const fixture = await freshProject();
+    projectId = fixture.project.id;
+    userId = (await createUser({ email: `ow-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+    expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+  });
+
+  it('constructs roles no record represents from the project’s map, opens a round for them, and records the arrangement on the round', async () => {
+    const g = await createWorkstream({ projectId, title: 'Collect cash fast', intent: 'Collect settled cash.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: inDays(25), ownerUserId: userId }, `person:${userId}`);
+    expect((await setTarget({
+      goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId,
+      capitalCeilingCents: 300_000, capitalBeforeProofCents: 37_500, hoursCeiling: 200, now: new Date(now.getTime() - 60_000),
+    } as Parameters<typeof setTarget>[0])).ok).toBe(true);
+    const w = (await getWorkstream(g.id))!;
+    // A recorded flow on the map: who buys what from whom. No opening, no record of any role on it.
+    const root = await createNode({ projectId, parentId: null, kind: 'SECTOR', name: 'commercial cleaning', origin: 'SEED' });
+    const buyer = await createNode({ projectId, parentId: root.node.id, kind: 'BUYER_TYPE', name: 'property managers', origin: 'SEED' });
+    await createNode({ projectId, parentId: buyer.node.id, kind: 'TRANSACTION_TYPE', name: 'monthly janitorial contract', description: 'paid monthly per building', origin: 'SEED' });
+
+    const target = (await readGoalPlan({ goalId: w.id, evaluations: 200 }))!.target;
+    for (let i = 0; i < GOAL_LENSES.length + 3 + 4; i += 1) {
+      await openGoalDiscovery({ goal: w, target, bestReach: null, now: now.toISOString(), liveCap: 100 });
+    }
+    const rows = await getDb().all<{ detail: string }>(`SELECT detail FROM cash_events WHERE project_id = ? AND kind = 'CASH_DISCOVERY_OPENED' ORDER BY created_at`, [projectId]);
+    const events = rows.map((row) => JSON.parse(row.detail) as { bucketId: string; origins: string[]; originSeeds: string[]; construction?: { subject: string; roleId: string; roleLabel: string; business: string; viability: string } });
+    const asked = events.filter((one) => one.construction);
+    expect(asked.length).toBeGreaterThan(0);
+    for (const one of asked) {
+      expect(one.bucketId).toContain('-ow-');
+      expect(one.origins[0]).toBe('FIRST_PRINCIPLES');
+      expect(one.originSeeds).toHaveLength(1);
+      expect(one.originSeeds[0]).toMatch(/^openworld:/);
+      expect(one.construction!.subject).toBe('commercial cleaning');
+      expect(one.construction!.business.length).toBeGreaterThan(0);
+      expect(one.construction!.viability).not.toBe('NOT_VIABLE');
+    }
+    // The question itself puts the arrangement to real sources.
+    const candidate = await getDb().get<{ statement: string }>(
+      `SELECT c.statement FROM russell_candidates c JOIN cash_discovery_rounds r ON r.candidate_id = c.id WHERE r.project_id = ? AND r.bucket_id = ?`,
+      [projectId, asked[0]!.bucketId],
+    );
+    expect(candidate!.statement).toContain(`standing as ${asked[0]!.construction!.roleLabel}`);
+    expect(candidate!.statement).toMatch(/Confirm or refute it from real sources/);
+  });
+});
+
 describe('the existing owner does the work', () => {
   it('adds no scheduler and no migration: discovery imports the field and records origin in the event it already writes', () => {
     const source = readFileSync('server/services/cash/discovery.ts', 'utf8');
