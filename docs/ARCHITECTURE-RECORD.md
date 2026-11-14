@@ -16184,3 +16184,20 @@ Two related changes:
   minutes of a new plan reading, or of a report whose main bottleneck moved, as an engineering
   outcome already did.
 - **The report's first section** is now `$10K PLAN — ACTIVE BOTTLENECK ELIMINATION`.
+
+**An unchanged construction is reused (2026-11-14).** The reading taken after #869
+(`ffe10e5`, a process 16 minutes old) still showed `quant/reconstruct.ts` at ~11 s of CPU a
+minute on the main thread, plus 18 s of garbage collection, with the heap at 839/1010 MB. That
+work was the construction pass: each plan read composed up to `MAX_CONSTRUCTIONS` arrangements,
+several reconstructions each, from inputs that had not moved since the last read.
+
+`constructArrangements` now keeps the last construction for 30 minutes. It is keyed by a digest
+of everything construction reads:
+- the industry-map sectors;
+- the openings, by id, payer, mechanism, state and update time;
+- precedents and prices;
+- the goal's limits and exclusions;
+- the day.
+
+When any of these changes, the arrangements are rebuilt. A caller is always handed a copy of
+the held result, never the result itself.

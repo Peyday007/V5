@@ -349,3 +349,24 @@ describe('arrangements Brain constructs from what it knows', () => {
     expect(new Set(keys).size).toBe(3);
   });
 });
+
+describe('an unchanged construction is reused, a changed one is rebuilt', () => {
+  it('returns the same arrangements for the same inputs without composing again, and rebuilds when an opening changes', async () => {
+    const { project } = await freshProject();
+    await createNode({ projectId: project.id, parentId: null, kind: 'BUYER_TYPE', name: 'Dental practices', origin: 'SEED' });
+    const now = new Date('2026-11-14T00:00:00Z');
+    const args = { projectId: project.id, currency: 'USD', delivers: ['spreadsheets'], capitalCeilingCents: null, daysLeft: 30, now };
+    const t0 = Date.now();
+    const first = await constructArrangements(args);
+    const cold = Date.now() - t0;
+    const t1 = Date.now();
+    const second = await constructArrangements(args);
+    const warm = Date.now() - t1;
+    expect(second).toEqual(first);
+    expect(second).not.toBe(first); // a copy: a caller's edit never reaches the held result
+    expect(warm).toBeLessThanOrEqual(Math.max(cold, 50));
+    await createNode({ projectId: project.id, parentId: null, kind: 'BUYER_TYPE', name: 'Veterinary clinics', origin: 'SEED' });
+    const third = await constructArrangements(args);
+    expect(third.some((one) => one.demand.name === 'Veterinary clinics')).toBe(true);
+  });
+});
