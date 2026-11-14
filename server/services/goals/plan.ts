@@ -52,6 +52,7 @@ import { exemptSales, recordMateriality } from './materiality.ts';
 import { withReadScope } from '../../repos/readScope.ts';
 import { cashSpareSurfaces } from '../cash/researchRoom.ts';
 import { researchGoalPaths } from './pathResearch.ts';
+import { remediesInForce, remedyInstructions } from './researchAllocation.ts';
 import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
 import { getScenarioModel } from '../../repos/scenario.ts';
 import { runModel, saveModel } from '../scenario/service.ts';
@@ -1790,6 +1791,8 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
   if (!goal) return { asked: 0, constructed: 0, researched: 0 };
   let asked = 0;
   const attempts = 1 + spare;
+  // The lane remedies the research allocation applied to this goal (RES-15-5): how its questions are now asked.
+  const remedyInstruction = remedyInstructions(await remediesInForce(goal.id));
   /*
    * New mechanisms first (§81): arrangements Brain composed itself from the
    * buyer populations, needs and supply it knows of, decomposed so the round
@@ -1810,7 +1813,7 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
       bestReach: reading.bestReach,
       heldTitles: reading.considered.map((one) => one.title),
       // The quantity shapes the search (§93): the shape of transaction the gap needs, then why research fell short.
-      diagnosis: [reading.pathways?.structures.searchBrief ?? '', diagnosisInstructions(reading.researchDiagnosis)].filter(Boolean).join(' '),
+      diagnosis: [reading.pathways?.structures.searchBrief ?? '', diagnosisInstructions(reading.researchDiagnosis), remedyInstruction].filter(Boolean).join(' '),
       now: now.toISOString(),
       liveCap: MAX_LIVE_GOAL_ROUNDS + spare,
     });
@@ -1826,7 +1829,7 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
     });
   }
   // And dig into the openings already held: the path to their money.
-  const researched = (await researchGoalPaths({ reading, projectId: reading.target.projectId, now, spare })).length;
+  const researched = (await researchGoalPaths({ reading, projectId: reading.target.projectId, now, spare, remedyInstruction })).length;
   return { asked, constructed: constructed.length, researched };
 }
 

@@ -52,9 +52,12 @@ import { assembleGoals, type GoalView } from './model.ts';
 import { rankGoals } from './priority.ts';
 import type { LaneCapacityReading, ResearchYieldReading } from './researchYield.ts';
 import {
+  APPLICABLE_REMEDIES,
   COMMERCIAL_FLOOR,
   EXPLORATION_FLOOR,
   LANE_REMEDIES,
+  REMEDY_LEVERS,
+  RESEARCH_REMEDY_APPLIED_EVENT,
   MIN_PURPOSE_SHARE,
   RESEARCH_PURPOSES,
   SYSTEM_HEALTH_FLOOR,
@@ -399,6 +402,8 @@ export interface ResearchAllocationReport {
   /** Whether this pass wrote the Brain-wide decision row (once, never per goal). */
   recorded: boolean;
   fingerprint: string;
+  /** Remedies this pass applied: each a change to how the live goals' research is asked, recorded with its reference. */
+  applied: { lane: string; remedy: LaneRemedy; ref: string }[];
 }
 
 /**
@@ -414,7 +419,7 @@ export interface AppliedRemedy {
   ref: string;
 }
 
-export const RESEARCH_REMEDY_APPLIED_EVENT = 'GOAL_RESEARCH_REMEDY_APPLIED';
+export { RESEARCH_REMEDY_APPLIED_EVENT };
 
 export interface ResearchAllocationPorts {
   readYield(window: { since: string; until: string }): Promise<ResearchYieldReading>;
@@ -428,6 +433,12 @@ export interface ResearchAllocationPorts {
    * incremental cost. Absent means unmeasured, and no capacity is added.
    */
   readLaneCapacity?(until: string): Promise<LaneCapacityReading[]>;
+  /**
+   * Put a remedy in force on these goals' research and record it applied. The
+   * record is the switch: the question builders read it (`remediesInForce`).
+   * Absent means nothing applies here, and nothing is recorded as applied.
+   */
+  applyRemedy?(input: { lane: string; remedy: LaneRemedy; ref: string; goalIds: string[] }): Promise<void>;
   /** The newest Brain-wide decision row, or null. */
   lastDecision(): Promise<{ detail: Record<string, unknown>; at: string } | null>;
   /** Write the Brain-wide decision row: once per changed decision, never per goal. */
@@ -509,6 +520,8 @@ export function allocationInputFrom(
     pressure?: Partial<Record<ResearchPurpose, Pick<PurposePressure, 'nearestDeadlineDays' | 'decisionValue'>>>;
     /** The work waiting on each lane now, its headroom and its cost; a lane absent here is unmeasured. */
     capacity?: ReadonlyMap<string, LaneCapacityReading>;
+    /** The remedies a lever can apply; absent means every remedy is waited on. */
+    remedyLevers?: readonly LaneRemedy[];
   },
 ): AllocationInput {
   // The shares in force are where the capacity actually went: each purpose's job time in the window.
@@ -565,7 +578,7 @@ export function allocationInputFrom(
       incrementalCostPerUnit: cap ? cap.incrementalCostPerUnit : null,
     });
   }
-  return { currentShares, purposes, lanes, bottlenecks, urgentCommercialGoal: context.urgentCommercialGoal };
+  return { currentShares, purposes, lanes, bottlenecks, urgentCommercialGoal: context.urgentCommercialGoal, ...(context.remedyLevers ? { remedyLevers: context.remedyLevers } : {}) };
 }
 
 /** What makes two decisions the same: shares to a tenth of a percent, lane remedies and capacity verdicts. */
@@ -621,6 +634,23 @@ export function remediesFromApplied(applied: readonly AppliedRemedy[], window: {
   return { tried, measuring: new Map([...measuring].map(([lane, m]) => [lane, m.remedy])) };
 }
 
+/**
+ * The remedies a decision recommends that a lever can apply and no record says
+ * were applied to that lane yet: what the pass puts in force. A lane already
+ * measuring a change, or one whose next remedy has no lever, gets nothing. Pure.
+ */
+export function remediesToApply(actions: AllocationDecision['laneActions'], applied: readonly AppliedRemedy[]): { lane: string; remedy: LaneRemedy; ref: string }[] {
+  const out: { lane: string; remedy: LaneRemedy; ref: string }[] = [];
+  for (const a of actions) {
+    if (a.kind !== 'CHANGE_QUESTION_DESIGN' && a.kind !== 'CHANGE_EVIDENCE_SOURCES' && a.kind !== 'CHANGE_MODEL_ROUTING') continue;
+    const lever = REMEDY_LEVERS[a.remedy];
+    if (!lever) continue;
+    if (applied.some((one) => one.lane === a.lane && one.remedy === a.remedy && one.ref.trim() !== '')) continue;
+    out.push({ lane: a.lane, remedy: a.remedy, ref: lever.ref });
+  }
+  return out;
+}
+
 /** Record that a remedy was applied to a lane, naming the change. The only way a remedy becomes tried. */
 export async function recordRemedyApplied(input: { goalId: string; lane: string; remedy: LaneRemedy; ref: string; actorRef: string }): Promise<void> {
   if (!(LANE_REMEDIES as readonly string[]).includes(input.remedy)) throw new Error(`unknown remedy ${input.remedy}`);
@@ -653,7 +683,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const pressure = purposePressureFrom(live, reading, untilMs);
   const laneCapacity = ports.readLaneCapacity ? await ports.readLaneCapacity(window.until) : [];
   const capacity = new Map(laneCapacity.map((one) => [one.lane, one]));
-  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring, pressure, capacity });
+  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring, pressure, capacity, remedyLevers: APPLICABLE_REMEDIES });
   const decision = decideResearchAllocation(allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
   const fingerprint = allocationFingerprint(decision);
@@ -713,7 +743,16 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
       : `Research reallocated: ${RESEARCH_PURPOSES.map((p) => `${p} ${(decision.shares[p] * 100).toFixed(1)}%`).join(', ')}`;
     await ports.recordDecision(summary.slice(0, 400), { ...detail, summary: summary.slice(0, 400) });
   }
+  const toApply = remediesToApply(decision.laneActions, applied);
+  const done: ResearchAllocationReport['applied'] = [];
+  if (ports.applyRemedy && live.length > 0) {
+    for (const one of toApply) {
+      await ports.applyRemedy({ ...one, goalIds: live.map((g) => g.id) });
+      done.push(one);
+    }
+  }
   return {
+    applied: done,
     window,
     shares: decision.shares,
     floors,
@@ -745,7 +784,7 @@ export async function productionResearchAllocationPorts(): Promise<ResearchAlloc
     async appliedRemedies(goalIds) {
       const out: AppliedRemedy[] = [];
       for (const goalId of goalIds) {
-        for (const e of await listWorkstreamEvents(goalId, 200)) {
+        for (const e of await listWorkstreamEvents(goalId, 500)) {
           if (e.kind !== RESEARCH_REMEDY_APPLIED_EVENT) continue;
           const d = e.detail as { lane?: unknown; remedy?: unknown; ref?: unknown };
           if (typeof d.lane !== 'string' || typeof d.remedy !== 'string' || typeof d.ref !== 'string') continue;
@@ -753,6 +792,9 @@ export async function productionResearchAllocationPorts(): Promise<ResearchAlloc
         }
       }
       return out;
+    },
+    async applyRemedy({ lane, remedy, ref, goalIds }) {
+      for (const goalId of goalIds) await recordRemedyApplied({ goalId, lane, remedy, ref, actorRef: 'BRAIN' });
     },
     async recordDecision(_summary, detail) {
       await recordImprovementEvent({ candidateId: null, kind: RESEARCH_ALLOCATION_DECIDED, detail });
