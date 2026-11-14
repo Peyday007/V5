@@ -465,8 +465,10 @@ export function demandWorlds(one: PlannedOpening, share: number, daysLeft: numbe
   };
   // A deposit's share is its own draw, so an opening without one reads exactly as it did.
   const deposit = one.deposit && one.repeatable && one.agreedValue === 0 ? one.deposit : null;
+  // A single sale (agreed money or a one-off) paid in stated tranches: what is due before the balance arrives early.
+  const schedule = !deposit && (one.agreedValue > 0 || !one.repeatable) ? paymentSchedule(one.opportunity.paymentTerms ?? null, one.deposit?.days ?? 0) : null;
   const depositRng = deposit ? makeRng(seed, one.index * 97 + Math.round(share * 100) + 7919) : null;
-  const out: Worlds = { cash: [], days: [], spend: [], contacted: [], interested: [], deals: [], price: [], respond: [], close: [], volume: [], ...(deposit ? { early: { cash: [], days: [] } } : {}) };
+  const out: Worlds = { cash: [], days: [], spend: [], contacted: [], interested: [], deals: [], price: [], respond: [], close: [], volume: [], ...(deposit || schedule ? { early: { cash: [], days: [] } } : {}) };
   for (let i = 0; i < worlds; i++) {
     const price = Math.max(0, draw.price());
     const days = Math.max(0, draw.days());
@@ -511,6 +513,12 @@ export function demandWorlds(one: PlannedOpening, share: number, daysLeft: numbe
         balanceDeals *= 1 - paid;
       }
     }
+    if (schedule) {
+      const sold = one.agreedValue > 0 ? one.agreedValue : balanceDeals * price;
+      early = sold * schedule.share;
+      earlyDays = schedule.day;
+      out.cash.push(sold - early);
+    } else
     out.cash.push(one.agreedValue + balanceDeals * price);
     if (out.early) {
       out.early.cash.push(early);
@@ -527,6 +535,21 @@ export function demandWorlds(one: PlannedOpening, share: number, daysLeft: numbe
     out.volume.push(volume);
   }
   return out;
+}
+
+/** Shares of the price the stated terms pay before the balance, merged at the latest such day (conservative). */
+export function paymentSchedule(terms: string | null, signingDay: number): { share: number; day: number } | null {
+  if (!terms) return null;
+  let share = 0;
+  let day = 0;
+  for (const part of terms.split(/[,;]|\band\b/i)) {
+    const pct = /(\d{1,3}(?:\.\d+)?)\s*%/.exec(part);
+    if (!pct) continue;
+    const at = /\bday\s*(\d{1,4})\b/i.exec(part);
+    if (at) { share += Number(pct[1]) / 100; day = Math.max(day, Number(at[1])); continue; }
+    if (/\b(at|on) (signing|order|booking)|\bdeposit\b|up-?front|in advance/i.test(part) && !/\bbalance\b|net\s*\d/i.test(part)) { share += Number(pct[1]) / 100; day = Math.max(day, signingDay); }
+  }
+  return share > 0 && share <= 1 ? { share, day } : null;
 }
 
 /** The money an opening ties up when it starts: established, or the top of its range (invariant 39). */
@@ -667,7 +690,7 @@ export function evaluateGoalPortfolio(input: {
     }
     const reach = one.channel?.perDay ?? contactsPerDay;
     const full = demandWorlds(one, 1, input.daysLeft, reach, worlds, seed);
-    const revenue = one.deposit && full.early ? full.cash.map((c, i) => c + full.early!.cash[i]!) : full.cash;
+    const revenue = full.early ? full.cash.map((c, i) => c + full.early!.cash[i]!) : full.cash;
     demand.push({
       opportunityId: id,
       title: one.opportunity.title,

@@ -63,7 +63,8 @@ export const SCREEN_MIN_WORLDS = 150;
 /**
  * The plausibility critic (C-4). A reading is IMPLAUSIBLE — kept and shown,
  * never the plan Brain concludes with — when any of these is broken:
- *   RETURN: its median settled cash is more than RETURN_BOUND times the money
+ *   RETURN: its median kept cash (settled less what passes back to suppliers)
+ *     is more than RETURN_BOUND times the money
  *     behind it (what it commits plus the goal's capital ceiling). No record
  *     Brain holds turns a month's money twentyfold, and the production reading
  *     of 2026-11-14 read $34.5M on $3K.
@@ -286,7 +287,11 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
     if (!b) return [];
     const out: PlausibilityFlag[] = [];
     const behind = Math.max(1, Math.max(0, state.committed) + (limits.capitalCeiling ?? 0));
-    if (b.settledP50 / behind > RETURN_BOUND) out.push({ kind: 'RETURN', detail: `median settled ${money(b.settledP50)} is ${(b.settledP50 / behind).toFixed(0)}× the ${money(behind)} behind it (bound ×${RETURN_BOUND})` });
+    // Kept cash, not gross receipts: in resale or brokerage most revenue passes
+    // straight back to the supplier, so gross settled cash overstates the
+    // return on the money at risk (I-1, Surge B independent evaluation case I).
+    const kept = b.keptP50 ?? b.settledP50;
+    if (kept / behind > RETURN_BOUND) out.push({ kind: 'RETURN', detail: `median kept ${money(kept)} is ${(kept / behind).toFixed(0)}× the ${money(behind)} behind it (bound ×${RETURN_BOUND})` });
     const deals = b.dealsP50 ?? 0;
     if (measuredDeals !== null && deals > measuredDeals * DEAL_CAPACITY_MULTIPLE) out.push({ kind: 'DEALS', detail: `median ${Math.round(deals)} deals, over ${DEAL_CAPACITY_MULTIPLE}× the ${measuredDeals} opportunit${measuredDeals === 1 ? 'y' : 'ies'} Brain's measured record produced` });
     const ids = new Set(b.members.map((m) => m.opportunityId));
