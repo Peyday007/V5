@@ -10,6 +10,12 @@
  *
  * "Delivered" is evidence, never a claim: a goal appears there only with the
  * row that says it delivered, and "recently" is the time of that row.
+ *
+ * Research capacity and the allocation decision (RES-07, RES-15-5) are
+ * Brain-wide, so they are shown once, here, and never as a copy per goal:
+ * `research` reads the one newest `RESEARCH_ALLOCATION_DECIDED` row the goals
+ * tick wrote, and its sentence ends the headline that Home and the goals page
+ * render. Nothing here decides; it only reads the row.
  */
 import { assembleGoals, type GoalDecision, type GoalView } from './model.ts';
 
@@ -22,10 +28,83 @@ export interface GoalBriefing {
   commitments: { goalId: string; title: string; commitment: string; dueAt: string | null; overdue: boolean; obligations: string[] }[];
   decisions: (GoalDecision & { goalId: string; goalTitle: string })[];
   counts: { active: number; paused: number; cancelled: number; complete: number; needsYou: number; blocked: number };
+  /** The research allocation in force and the capacity it was measured at; null when no decision was recorded. */
+  research?: ResearchBriefing | null;
   generatedAt: string;
 }
 
-export function briefFrom(goals: GoalView[], generatedAt: string): GoalBriefing {
+const RESEARCH_PURPOSE_WORDS: Record<string, string> = {
+  BROAD_DISCOVERY: 'broad discovery',
+  TRANSACTION_ROUTES: 'transaction routes',
+  OPERATING_SUPPORT: 'operating support',
+  SELF_IMPROVEMENT: 'self-improvement',
+  FORWARD_EXPLORATION: 'forward exploration',
+};
+
+export interface ResearchBriefing {
+  /** The sentence the headline carries. */
+  line: string;
+  decidedAt: string | null;
+  window: { since: string; until: string } | null;
+  held: boolean;
+  /** Decided share per purpose, and what the window actually gave it. */
+  shares: { purpose: string; share: number; observed: number | null }[];
+  floors: { exploration: number | null; systemHealth: number | null; commercial: number | null };
+  /** The goals whose own deadlines put the commercial floor in force. */
+  deadlineGoals: string[];
+  /** Research capacity per lane, as the window measured it. */
+  laneCapacity: { lane: string; utilization: number | null; inFlight: number | null; queueWaitMedianMs: number | null; rateLimited: number | null }[];
+  /** Capacity verdicts per lane; an addition is a recommendation only. */
+  capacity: { lane: string; kind: string; units: number; resource: string | null; reason: string }[];
+  /** Lane remedies, each tried before any limit is raised. */
+  laneActions: { lane: string; kind: string; reason: string }[];
+}
+
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+const records = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => !!x && typeof x === 'object') : []);
+const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
+const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+
+/** The Brain-wide decision row, read for a person. Pure; a row that carries no shares reads as none. */
+export function researchBriefingFrom(detail: Record<string, unknown> | null, decidedAt: string | null): ResearchBriefing | null {
+  if (!detail) return null;
+  const sharesIn = obj(detail.shares);
+  const observedIn = obj(detail.observed);
+  const shares = Object.keys(RESEARCH_PURPOSE_WORDS)
+    .filter((p) => num(sharesIn[p]) !== null)
+    .map((p) => ({ purpose: p, share: num(sharesIn[p])!, observed: num(observedIn[p]) }));
+  if (shares.length === 0) return null;
+  const floorsIn = obj(detail.floors);
+  const floors = { exploration: num(floorsIn.exploration), systemHealth: num(floorsIn.systemHealth), commercial: num(floorsIn.commercial) };
+  const laneCapacity = records(detail.laneCapacity).map((c) => ({ lane: str(c.lane), utilization: num(c.utilization), inFlight: num(c.inFlight), queueWaitMedianMs: num(c.queueWaitMedianMs), rateLimited: num(c.rateLimited) }));
+  const capacity = records(detail.capacity).map((c) => ({ lane: str(c.lane), kind: str(c.kind), units: num(c.units) ?? 0, resource: typeof c.resource === 'string' ? c.resource : null, reason: str(c.reason) }));
+  const laneActions = records(detail.laneActions).map((a) => ({ lane: str(a.lane), kind: str(a.kind), reason: str(a.reason) }));
+  const deadlineGoals = Array.isArray(detail.deadlineGoals) ? detail.deadlineGoals.filter((g): g is string => typeof g === 'string') : [];
+  const w = obj(detail.window);
+  const window = typeof w.since === 'string' && typeof w.until === 'string' ? { since: w.since, until: w.until } : null;
+  const held = detail.held === true;
+
+  const parts: string[] = [];
+  if (held) parts.push('Research allocation held: nothing in the last window was measured');
+  else parts.push(`Research: ${shares.map((s) => `${RESEARCH_PURPOSE_WORDS[s.purpose]} ${pct(s.share)}${s.observed !== null ? ` (got ${pct(s.observed)})` : ''}`).join(', ')}`);
+  const kept = [
+    floors.exploration !== null ? `exploration ≥ ${pct(floors.exploration)}` : null,
+    floors.systemHealth !== null ? `system health ≥ ${pct(floors.systemHealth)}` : null,
+    floors.commercial !== null ? `commercial ≥ ${pct(floors.commercial)} (${deadlineGoals.length} goal deadline(s))` : null,
+  ].filter(Boolean);
+  if (kept.length) parts.push(`floors ${kept.join(', ')}`);
+  if (laneCapacity.length) {
+    parts.push(`capacity: ${laneCapacity.map((c) => `${c.lane} ${c.utilization !== null ? `avg ${c.utilization.toFixed(1)} running` : 'unmeasured'}${c.inFlight ? `, ${c.inFlight} in flight` : ''}${c.queueWaitMedianMs !== null ? `, wait ${Math.round(c.queueWaitMedianMs / 60_000)}m` : ''}${c.rateLimited ? `, ${c.rateLimited} rate-limited` : ''}`).join('; ')}`);
+  }
+  const added = capacity.filter((c) => c.kind === 'ADD_CAPACITY');
+  if (added.length) parts.push(`capacity recommended: ${added.map((c) => `${c.lane} +${c.units} (${c.resource ?? 'unknown'})`).join(', ')}`);
+  else parts.push('no capacity added');
+  if (laneActions.length) parts.push(`lanes: ${laneActions.map((a) => `${a.lane} ${a.kind.toLowerCase().replace(/_/g, ' ')}`).join(', ')}`);
+  return { line: `${parts.join('; ')}.`, decidedAt, window, held, shares, floors, deadlineGoals, laneCapacity, capacity, laneActions };
+}
+
+export function briefFrom(goals: GoalView[], generatedAt: string, research: ResearchBriefing | null = null): GoalBriefing {
   const live = goals.filter((one) => one.lifecycle !== 'ARCHIVED');
   const active = live.filter((one) => one.lifecycle === 'ACTIVE');
 
@@ -84,7 +163,7 @@ export function briefFrom(goals: GoalView[], generatedAt: string): GoalBriefing 
   }
 
   return {
-    headline: live.length === 0 ? parts[0]! : `${parts.join(' · ')}.`,
+    headline: [live.length === 0 ? parts[0]! : `${parts.join(' · ')}.`, research?.line].filter(Boolean).join(' '),
     delivered,
     active: active.map((goal) => ({
       goalId: goal.id,
@@ -114,11 +193,15 @@ export function briefFrom(goals: GoalView[], generatedAt: string): GoalBriefing 
       })),
     decisions,
     counts,
+    research,
     generatedAt,
   };
 }
 
 export async function goalBriefing(projectIds: string[]): Promise<{ briefing: GoalBriefing; goals: GoalView[] }> {
   const snapshot = await assembleGoals({ projectIds });
-  return { briefing: briefFrom(snapshot.goals, snapshot.generatedAt), goals: snapshot.goals };
+  const { latestResearchDecision } = await import('./tick.ts');
+  const decided = await latestResearchDecision();
+  const research = decided ? researchBriefingFrom(decided.detail, decided.at) : null;
+  return { briefing: briefFrom(snapshot.goals, snapshot.generatedAt, research), goals: snapshot.goals };
 }
