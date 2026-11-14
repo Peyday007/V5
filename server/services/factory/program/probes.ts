@@ -300,6 +300,14 @@ define('r01.learn-15-1', async () => (await import('./release01/continuityProbe.
 /* GOV-11 and GOV-22-1, for factory-program-d0-p1 (release01/governanceProbe.ts). */
 define('r01.gov-11', async () => (await import('./release01/governanceProbe.ts')).registerHoldsOnProduction());
 define('r01.gov-22-1', async () => (await import('./release01/governanceProbe.ts')).promotionOnRows());
+/* CAUSAL-14-1..5, 14-7 and 15-2, for causal-model-d0-p1 (release01/causalProbe.ts). */
+define('r01.causal-14-1', async () => (await import('./release01/causalProbe.ts')).causalGraphOnRows());
+define('r01.causal-14-2', async () => (await import('./release01/causalProbe.ts')).causalLineageOnRows());
+define('r01.causal-14-3', async () => (await import('./release01/causalProbe.ts')).causalChainOnRows());
+define('r01.causal-14-4', async () => (await import('./release01/causalProbe.ts')).causalWhatIfOnRows());
+define('r01.causal-14-5', async () => (await import('./release01/causalProbe.ts')).causalAssuranceOnRows());
+define('r01.causal-14-7', async () => (await import('./release01/causalProbe.ts')).causalCalibrationOnRows());
+define('r01.causal-15-2', async () => (await import('./release01/causalProbe.ts')).causalDecompositionOnRows());
 /**
  * CAP-16-3 is both halves: throughput restored first, and every stage measured
  * (release01/capacityProbe.ts). A throughput failure answers first; otherwise

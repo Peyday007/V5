@@ -25,6 +25,8 @@ export async function registerHoldsOnProduction(): Promise<ProbeResult> {
   }
   if (!check) return { ok: null, detail: 'the open-questions register is not deployed in this Brain yet' };
   const r = await check();
+  // No program filed is an absence, not a register that contradicts it (§39).
+  if (!r.ok && /no architecture program is filed/.test(r.detail)) return { ok: null, detail: r.detail };
   return { ok: r.ok, detail: r.detail };
 }
 
