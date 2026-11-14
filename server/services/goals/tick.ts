@@ -50,6 +50,9 @@ import {
 } from '../../repos/goals.ts';
 import { assembleGoals, type GoalView } from './model.ts';
 import { rankGoals } from './priority.ts';
+import { recordDecisionsIfDue } from './decisionRecord.ts';
+import { reconcileCalibrationIfDue, type CalibrationPassReport } from './calibration.ts';
+import { reconcileFactChangesIfDue, type ReconsiderPassReport } from './reconsider.ts';
 
 export interface GoalTickReport {
   goals: number;
@@ -57,6 +60,59 @@ export interface GoalTickReport {
   released: { binId: string; goalId: string; why: string }[];
   reprioritized: { binId: string; goalId: string; priority: number }[];
   moved: { goalId: string; from: number | null; to: number; reason: string }[];
+  /**
+   * The decision-history passes (MEM-32): each plan reading recorded as a
+   * decision, predictions judged against results, and a changed fact
+   * reconsidering the decisions that rested on it. Each is bounded, a pass not
+   * yet due is null, and a failure is reported here rather than thrown.
+   */
+  memory: {
+    decisions: { recorded: number; pending: number } | { error: string };
+    calibration: CalibrationPassReport[] | { error: string } | null;
+    reconsidered: ReconsiderPassReport | { error: string } | null;
+  };
+}
+
+/** The three decision-history passes, injectable for tests. */
+export interface MemoryPasses {
+  decisions(): Promise<{ recorded: number; pending: number }>;
+  calibration(now: number): Promise<CalibrationPassReport[] | { error: string } | null>;
+  reconsider(now: number): Promise<ReconsiderPassReport | { error: string } | null>;
+}
+
+const PRODUCTION_MEMORY: MemoryPasses = {
+  decisions: () => recordDecisionsIfDue(),
+  calibration: (now) => reconcileCalibrationIfDue(now),
+  reconsider: (now) => reconcileFactChangesIfDue(now),
+};
+
+const failure = (error: unknown): { error: string } => ({ error: error instanceof Error ? error.message.slice(0, 300) : String(error) });
+
+/**
+ * Record decisions first, so a reading made since the last tick is a record
+ * the reconsideration pass can read; then calibration; then reconsideration.
+ * One failing pass never stops the others or the tick.
+ */
+async function runMemoryPasses(passes: MemoryPasses, now: number): Promise<GoalTickReport['memory']> {
+  let decisions: GoalTickReport['memory']['decisions'];
+  try {
+    decisions = await passes.decisions();
+  } catch (error) {
+    decisions = failure(error);
+  }
+  let calibration: GoalTickReport['memory']['calibration'];
+  try {
+    calibration = await passes.calibration(now);
+  } catch (error) {
+    calibration = failure(error);
+  }
+  let reconsidered: GoalTickReport['memory']['reconsidered'];
+  try {
+    reconsidered = await passes.reconsider(now);
+  } catch (error) {
+    reconsidered = failure(error);
+  }
+  return { decisions, calibration, reconsidered };
 }
 
 const LIVE = new Set(['DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN']);
@@ -70,12 +126,19 @@ function holdReasonFor(goal: GoalView): HoldReason | null {
   return null;
 }
 
-export async function advanceGoals(options?: { now?: string }): Promise<GoalTickReport> {
+export async function advanceGoals(options?: { now?: string; memory?: Partial<MemoryPasses> }): Promise<GoalTickReport> {
   // Archived goals are not derived here: they hold nothing and rank nowhere,
   // and there are more of them after every deploy. A hold one left behind is
   // released below, and its owner read directly (tests/goalTickCost.test.ts).
   const snapshot = await assembleGoals({ projectIds: null, includeArchived: false, now: options?.now });
-  const report: GoalTickReport = { goals: snapshot.goals.length, held: [], released: [], reprioritized: [], moved: [] };
+  const report: GoalTickReport = {
+    goals: snapshot.goals.length,
+    held: [],
+    released: [],
+    reprioritized: [],
+    moved: [],
+    memory: { decisions: { recorded: 0, pending: 0 }, calibration: null, reconsidered: null },
+  };
   const byId = new Map(snapshot.goals.map((goal) => [goal.id, goal]));
 
   // Which goals own each live bin. A bin may be pursued by more than one goal,
@@ -210,6 +273,9 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
     });
     report.moved.push({ goalId: rank.id, from: last ? last.rank : null, to: rank.rank, reason: why.reason });
   }
+
+  const now = options?.now ? Date.parse(options.now) : Date.now();
+  report.memory = await runMemoryPasses({ ...PRODUCTION_MEMORY, ...(options?.memory ?? {}) }, Number.isFinite(now) ? now : Date.now());
 
   return report;
 }
