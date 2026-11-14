@@ -93,7 +93,8 @@ import {
   openRound,
   openRoundsByCandidate,
 } from '../../repos/cashDiscovery.ts';
-import { listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
+import { listConstraintsForProject, listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
+import { OPPORTUNITY_ORIGINS, opportunityField, type OpportunityOrigin, type OpportunitySeed } from '../industry/construction/origins.ts';
 import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
 import { exclusionSentence, unionOf, type ExclusionClass } from './exclusions.ts';
 import { liveGoalLimits } from './worthResearching.ts';
@@ -577,6 +578,8 @@ export async function openDiscovery(input: {
       bucket,
       next,
       statement: questionFor(bucket, mode.objective, next, history, held, frame, unionOf(await liveGoalLimits(input.projectId, new Date().toISOString()))),
+      // A search bucket asks the world what has been published outside Brain's own records.
+      origins: ['WORLD'],
     });
     if (!round) continue;
     out.push({ bucketId: bucket.id, candidateId: round.candidateId, round: next });
@@ -594,6 +597,10 @@ async function openBucketRound(input: {
   bucket: SearchBucket;
   next: number;
   statement: string;
+  /** Where this round's question came from (OPP-03); recorded on the opening event. */
+  origins: readonly OpportunityOrigin[];
+  /** The opportunity-field seeds it was asked from, when it was seeded by one. */
+  seedKeys?: readonly string[];
 }): Promise<CashDiscoveryRound | null> {
   const { bucket, next, mode } = input;
   let round: CashDiscoveryRound;
@@ -636,6 +643,8 @@ async function openBucketRound(input: {
       cashModeId: mode.id,
       round: next,
       objective: mode.objective,
+      origins: [...input.origins],
+      originSeeds: [...(input.seedKeys ?? [])],
     },
   });
   return round;
@@ -693,6 +702,62 @@ export const GOAL_LENSES: readonly { id: string; angle: string }[] = Object.free
 
 /** At most this many industries from the map are offered as search angles. */
 export const MAX_INDUSTRY_LENSES = 60;
+
+/** A goal's search angle, with the origin of the question it asks (OPP-03). */
+export interface GoalLens {
+  id: string;
+  angle: string;
+  origin: OpportunityOrigin;
+  /** The opportunity-field seed it was built from, when it was. */
+  seedKey?: string;
+}
+
+/** At most this many opportunity-field seeds are offered as a goal's search angles at once. */
+export const MAX_ORIGIN_LENSES = 40;
+
+function lensId(key: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i += 1) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
+}
+
+/**
+ * The opportunity field as goal lenses: one per seed, interleaved across the
+ * five origins so a bounded set still reaches each of them, never filtered by
+ * category. A seed whose words would read as a jurisdiction or as Brain's own
+ * action is left out, exactly as a held opening's title is (`safeExclusion`):
+ * the compiler reads both out of a question's prose.
+ */
+export function originLenses(seeds: readonly OpportunitySeed[], max = MAX_ORIGIN_LENSES): GoalLens[] {
+  const byOrigin = new Map<OpportunityOrigin, OpportunitySeed[]>(OPPORTUNITY_ORIGINS.map((origin) => [origin, []]));
+  for (const one of seeds) {
+    if (!safeExclusion(one.prompt)) continue;
+    byOrigin.get(one.origin)!.push(one);
+  }
+  const out: GoalLens[] = [];
+  for (let depth = 0; out.length < max; depth += 1) {
+    let added = false;
+    for (const origin of OPPORTUNITY_ORIGINS) {
+      const one = byOrigin.get(origin)![depth];
+      if (!one || out.length >= max) continue;
+      out.push({ id: `org-${origin.toLowerCase()}-${lensId(one.key)}`, angle: one.prompt.slice(0, 400), origin, seedKey: one.key });
+      added = true;
+    }
+    if (!added) break;
+  }
+  return out;
+}
+
+/**
+ * Markets are preferred for their economics and for how far the work can be
+ * run remotely, never for where the owner happens to be (OPP-03). In every
+ * question, so no round defaults to one place.
+ */
+export const MARKET_PREFERENCE_SENTENCE =
+  'Prefer markets for their economics and for how much of the work can be run remotely; do not default to any one place, including wherever the owner is.';
 
 /**
  * At most this many of a goal's own rounds are open at once. A concurrency
@@ -825,21 +890,39 @@ export async function openGoalDiscovery(input: {
    * comes first; after that, an industry nobody has looked at outranks an
    * angle asked again.
    */
-  const industries = (await listNodes(t.projectId))
+  const nodes = await listNodes(t.projectId);
+  const industries: GoalLens[] = nodes
     .filter((node) => !node.retiredAt)
     .slice(0, MAX_INDUSTRY_LENSES)
-    .map((node) => ({ id: `ind-${node.id}`, angle: `the ${node.name} industry, and the businesses that supply, serve or buy from it` }));
-  const lenses = [...GOAL_LENSES, ...industries];
+    .map((node) => ({ id: `ind-${node.id}`, angle: `the ${node.name} industry, and the businesses that supply, serve or buy from it`, origin: 'MEMORY' as const }));
+  /*
+   * And past the map, the opportunity field (OPP-03): remembered businesses and
+   * transactions, what the world reported, recombinations of prior businesses —
+   * unsuccessful ones included — and recorded constraints, each a lens of its
+   * own. No category list filters them; they come after the fixed angles and
+   * the industries, interleaved so every origin is reached within a cycle.
+   */
+  const field = opportunityField({
+    nodes,
+    opportunities: await listOpportunities({ projectId: t.projectId }),
+    goals: [],
+    constraints: await listConstraintsForProject(t.projectId),
+  });
+  const lenses: GoalLens[] = [...GOAL_LENSES.map((one) => ({ ...one, origin: 'FIRST_PRINCIPLES' as const })), ...industries, ...originLenses(field)];
   const choices = lenses.map((lens, index) => {
     const id = `${prefix}-${lens.id}`;
     const history = mine.filter((one) => one.bucketId === id);
     return { lens, index, id, history, next: nextGoalRoundFor(history, now) };
   })
     .filter((one): one is typeof one & { next: number } => one.next !== null)
-    .sort((a, b) => a.history.length - b.history.length || a.index - b.index);
+    // A field lens ranks as if asked once already: it is asked whenever the fixed angles and the
+    // industries are cooling off, and never pushes ahead of re-asking one of them that is due.
+    .sort((a, b) => a.history.length + (a.lens.seedKey ? 1 : 0) - (b.history.length + (b.lens.seedKey ? 1 : 0)) || a.index - b.index);
   const choice = choices[0];
   if (!choice) return null;
   const { lens, id, history, next } = choice;
+  const origins: OpportunityOrigin[] = [lens.origin];
+  const seedKeys = lens.seedKey ? [lens.seedKey] : [];
 
   const amount = `${t.currency} ${(t.remainingCents / 100).toFixed(0)}`;
   const held =
@@ -909,6 +992,8 @@ export async function openGoalDiscovery(input: {
     bucket,
     next,
     statement: questionFor(bucket, mode.objective, next, history, heldLines, frame, unionOf(await liveGoalLimits(t.projectId, new Date().toISOString()))),
+    origins,
+    seedKeys,
   });
   return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
 }
@@ -933,6 +1018,12 @@ export async function openConstructedRound(input: {
   question: string;
   now?: string;
   liveCap?: number;
+  /**
+   * Where the arrangement came from. Constructed backward from the goal unless
+   * the construction says it was seeded otherwise (OPP-03).
+   */
+  origins?: readonly OpportunityOrigin[];
+  seedKeys?: readonly string[];
 }): Promise<OpenedDiscovery | null> {
   const gate = await discoveryAllowed(input.projectId);
   if (!gate.allowed || !gate.mode) return null;
@@ -975,7 +1066,15 @@ export async function openConstructedRound(input: {
   bucket.title = input.title.slice(0, 160);
   const frame = await executionFrame(input.projectId, mode.currency);
   const held = await heldExclusions({ projectId: input.projectId, bucket, history });
-  const round = await openBucketRound({ projectId: input.projectId, mode, bucket, next, statement: questionFor(bucket, mode.objective, next, history, held, frame) });
+  const round = await openBucketRound({
+    projectId: input.projectId,
+    mode,
+    bucket,
+    next,
+    statement: questionFor(bucket, mode.objective, next, history, held, frame),
+    origins: input.origins && input.origins.length > 0 ? input.origins : ['FIRST_PRINCIPLES'],
+    seedKeys: input.seedKeys ?? [],
+  });
   return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
 }
 
@@ -1148,7 +1247,7 @@ export function questionFor(
   frame: ExecutionFrame | null = null,
   exclusions: readonly ExclusionClass[] = [],
 ): string {
-  const parts = [bucket.question, `This is for a short cash sprint whose goal is: ${objective}`];
+  const parts = [bucket.question, `This is for a short cash sprint whose goal is: ${objective}`, MARKET_PREFERENCE_SENTENCE];
   // The standing operating rule is in every question: inside the frame when there is one, on its own otherwise.
   parts.push(frame ? executionFrameSentence(frame) : OPERATING_MODEL_SENTENCE);
   // What a live goal's owner excluded is said in the question, so a worker never
