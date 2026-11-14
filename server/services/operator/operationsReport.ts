@@ -227,7 +227,7 @@ async function readWindowInto(db: ReturnType<typeof getDb>, start: string, end: 
     }
   }
   const lessons = Number((await safe({ n: Number.NaN }, async () => (await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM operator_learnings WHERE recorded_at >= ? AND recorded_at < ?', [start, end])) ?? { n: 0 }, missing, 'operator lessons')).n ?? 0);
-  const actingTools = ['brain_operator_withdraw_moot_request', 'brain_operator_continue_idle', 'brain_operator_submit_fix', 'brain_operator_commission', 'brain_operator_set_goal_focus', 'brain_operator_prioritize_engineering'];
+  const actingTools = ['brain_operator_withdraw_moot_request', 'brain_operator_continue_idle', 'brain_operator_submit_fix', 'brain_operator_commission', 'brain_operator_set_goal_focus', 'brain_operator_prioritize_engineering', 'brain_operator_reattempt'];
   // Pipeline ----------------------------------------------------------------
   const count = async (sql: string, what: string, params: unknown[] = [start, end]): Promise<number> =>
     Number((await safe({ n: Number.NaN }, async () => (await db.get<{ n: number }>(sql, params as never[])) ?? { n: 0 }, missing, what)).n ?? 0);
