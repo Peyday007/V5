@@ -229,6 +229,31 @@ describe('a model agreeing with itself is not independent validation', () => {
     expect(disagree.independentValidation.disagreeing.length).toBe(1);
     expect(disagree.findings.find((f) => f.mode === 'SELF_AGREEMENT')!.assumption).toContain('disagrees');
   });
+
+  it('`ran` names a counted independent check and never a refused one', () => {
+    const refused = challenge(input({
+      checks: [
+        { method: 'INDEPENDENT_MODEL', by: 'brain-portfolio', dataSource: 'research:run-2', agrees: true },
+        { method: 'HELD_OUT_EVIDENCE', by: 'other-model', dataSource: 'research:run-1', agrees: true },
+      ],
+    }));
+    expect(refused.ran).not.toContain('INDEPENDENT_MODEL');
+    expect(refused.ran).not.toContain('HELD_OUT_EVIDENCE');
+
+    const counted = challenge(input({ checks: [{ method: 'INDEPENDENT_MODEL', by: 'other-model', dataSource: 'research:run-9', agrees: true }] }));
+    expect(counted.independentValidation.counted.length).toBe(1);
+    expect(counted.ran).toContain('INDEPENDENT_MODEL');
+
+    const mixed = challenge(input({
+      checks: [
+        { method: 'PRODUCTION_HISTORY', by: 'ledger', dataSource: 'ledger:outcomes', agrees: true },
+        { method: 'INDEPENDENT_MODEL', by: 'brain-portfolio', dataSource: 'research:run-1', agrees: true },
+      ],
+    }));
+    expect(mixed.ran).toContain('PRODUCTION_HISTORY');
+    expect(mixed.ran).not.toContain('INDEPENDENT_MODEL');
+    expect(new Set(mixed.ran).size).toBe(mixed.ran.length);
+  });
 });
 
 describe('four kinds of figure stay four', () => {

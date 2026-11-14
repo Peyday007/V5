@@ -644,7 +644,10 @@ export function challenge(input: ChallengeInput): ChallengeReport {
       method: c.method,
     });
   }
-  if (refusedAsSelfAgreement.length) ran.push('INDEPENDENT_MODEL');
+  // `ran` reports methods that actually ran and were counted. A check refused as
+  // self-agreement did not run as independent validation, so it adds nothing;
+  // each counted check adds its own method, once.
+  for (const c of counted) if (!ran.includes(c.method)) ran.push(c.method);
 
   const assurance = result.assurance ?? assess(problem, best);
   const improvements: string[] = [];
