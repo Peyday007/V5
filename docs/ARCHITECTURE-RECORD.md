@@ -16201,3 +16201,25 @@ of everything construction reads:
 
 When any of these changes, the arrangements are rebuilt. A caller is always handed a copy of
 the held result, never the result itself.
+
+**Research could not read its sources, and the plan got no evidence (2026-11-14).** Brain's
+plan stays below 90% because its candidate rests on assumptions, and only research turns
+assumptions into evidence. On production the free lane was running (86 jobs an hour), but it
+yielded 4 accepted claims an hour, and fragments failed with "no readable source among 0
+candidate page(s)": every URL was skipped as a remembered-unreachable host.
+
+The cause was the host memory. One DNS failure or network error marked a host shut for 10
+minutes. During the event-loop stalls, the resolver's threads were busy (`EAI_AGAIN`) and
+connections reset, so host after host was marked shut. Fragments then had nothing they were
+allowed to fetch.
+
+Now only a name the resolver says does not exist (`ENOTFOUND`) is shut on one answer. A
+temporary resolver failure or a reset counts as a strike, as a timeout already did: two within
+the TTL remember the host.
+
+The lane's controller also halved every model's slots whenever the mean event-loop lag passed
+300 ms. That pinned it at one slot through ordinary bursts, although its highest stable
+targets were 19–26. The threshold is now 1 s (`LAG_SHRINK_MS`).
+
+The report's scaling call no longer says "research is not queueing" when items wait with
+nothing running.

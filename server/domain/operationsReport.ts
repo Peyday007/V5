@@ -323,7 +323,9 @@ export function scalingDecisions(now: OpsWindow, plan: PlanReadingFacts | null):
         ? { call: 'YES', why: `Resource: one more research surface (a Claude routine account). Why: evidence is the binding shortfall and ${r.queued} item(s) have waited up to ${Math.round(r.oldestWaitMin ?? 0)} min behind ${r.running} running. Expected: those items start sooner and the plan's evidence arrives earlier. Cost: one account's subscription — not recorded in Brain. Confidence: medium. Smallest test: one more surface for a day, measured by fragments accepted.` }
         : r.failed >= r.completed && r.failed > 0
           ? { call: 'NO', why: 'Research is failing more than completing; more of it would fail the same way.' }
-          : { call: 'NO', why: `Research is not queueing (${r.queued} waiting, ${r.running} running): capacity is not the limit.` };
+          : r.queued > 0 && r.running === 0
+            ? { call: 'NO', why: `${r.queued} research item(s) wait with none running: no surface is taking work, so the fault is dispatch (an idle or refused surface), not capacity — adding a surface that would sit idle the same way buys nothing. Fix the dispatch first (bottleneck list).` }
+            : { call: 'NO', why: `Research is not queueing (${r.queued} waiting, ${r.running} running): capacity is not the limit.` };
   const capitalShort = plan?.binding?.toLowerCase().includes('capital') || (plan?.shortfalls ?? []).some((s) => /capital/i.test(s));
   const capital: ScalingCall = capitalShort
     ? { call: 'INSUFFICIENT EVIDENCE', why: `The plan names capital as a constraint, but the $3,000 limit is yours; Brain will not propose exceeding it without a plan that clears acceptance at the higher figure.` }
