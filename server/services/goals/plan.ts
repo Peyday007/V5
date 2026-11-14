@@ -2128,8 +2128,8 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
 }
 
 export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean; onEvidence: number; resumed: number }> {
-  const goals = await getDb().all<{ id: string; target_project_id: string | null }>(
-    `SELECT id, target_project_id FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
+  const goals = await getDb().all<{ id: string; target_project_id: string | null; paused_at: string | null }>(
+    `SELECT id, target_project_id, paused_at FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
   );
   let read = 0;
   let outcomes = 0;
@@ -2139,8 +2139,12 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
   let busy = false;
   let onEvidence = 0;
   let resumed = 0;
-  for (const { id, target_project_id: projectId } of goals) {
+  for (const { id, target_project_id: projectId, paused_at: pausedAt } of goals) {
     if (await recordGoalOutcome(id, now)) outcomes += 1;
+    // A paused goal keeps its outcome on the record and spends nothing: no
+    // re-read, no search round, no construction (an operator PAUSE must stop
+    // the planning and discovery spend, not only the queue's priority).
+    if (pausedAt) continue;
     const last = await getDb().get<{ at: string | null }>(
       `SELECT MAX(created_at) AS at FROM goal_plan_readings WHERE workstream_id = ?`,
       [id],
