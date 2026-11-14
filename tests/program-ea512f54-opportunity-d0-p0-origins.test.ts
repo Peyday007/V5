@@ -212,4 +212,26 @@ describe('opportunityFieldHoldsOnRows', () => {
     expect(report.counts.MEMORY).toBeGreaterThan(0);
     for (const origin of OPPORTUNITY_ORIGINS) expect(report.detail).toContain(`${origin}=`);
   });
+
+  it('counts a goal’s first-principles seed only through the field a goal round builds, once per goal', async () => {
+    const { project } = await freshProject();
+    const { createUser } = await import('../server/repos/identity.ts');
+    const { createWorkstream, getWorkstream } = await import('../server/repos/register.ts');
+    const { setTerms } = await import('../server/services/goals/decide.ts');
+    const { setTarget } = await import('../server/services/goals/target.ts');
+    const user = await createUser({ email: `or-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' });
+    const w = await createWorkstream({ projectId: project.id, title: 'Collect cash', intent: 'Collect settled cash.', purpose: 'REVENUE_DIRECT', createdByUserId: user.id });
+    const before = (await opportunityFieldHoldsOnRows()).counts.FIRST_PRINCIPLES;
+    // Targetless: not reasoned backward from, by the probe or by a round.
+    expect(seedsFromFirstPrinciples([(await getWorkstream(w.id))!])).toHaveLength(0);
+    await setTerms(w.id, { dueAt: new Date(Date.now() + 25 * 86_400_000).toISOString(), ownerUserId: user.id }, `person:${user.id}`);
+    expect(
+      (await setTarget({
+        goal: (await getWorkstream(w.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId: project.id,
+        capitalCeilingCents: 300_000, capitalBeforeProofCents: 37_500, hoursCeiling: 200, now: new Date(Date.now() - 60_000),
+      } as Parameters<typeof setTarget>[0])).ok,
+    ).toBe(true);
+    // Exactly one more: the project's own goal, fed into that project's field — not a count kept beside it.
+    expect((await opportunityFieldHoldsOnRows()).counts.FIRST_PRINCIPLES).toBe(before + 1);
+  });
 });
