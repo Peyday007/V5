@@ -149,4 +149,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 # INTERRUPTED at the next boot.
 #
 # Exec form, so this is PID 1 and receives the signal itself.
-CMD ["node", "--import", "tsx", "server/index.ts"]
+# A heap ceiling sized to the 4 GB machine (fly.toml), leaving room for the evaluator and verifier threads.
+CMD ["node", "--max-old-space-size=2560", "--import", "tsx", "server/index.ts"]
