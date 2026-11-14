@@ -35,7 +35,7 @@ import { createFragments, getOrchestration, insertClaims, updateOrchestration } 
 import { capture } from '../server/services/russell/judgment.ts';
 import { launch } from '../server/services/russell/launch.ts';
 import { parkStoppedMissions } from '../server/services/russell/needsHuman.ts';
-import { fileWithGapsUnderStandingGrant } from '../server/services/russell/routineDecisions.ts';
+import { answerUnaskedParks, fileWithGapsUnderStandingGrant, ROUTINE_DECISION_GRACE_MS } from '../server/services/russell/routineDecisions.ts';
 
 const ACCEPTS_A_REPORT = 'Deciding whether this project accepts a report with unresolved questions in it';
 const SPENT = 'The evidence bar was not met and the repair ladder is spent.';
@@ -205,5 +205,60 @@ describe('parkStoppedMissions decides before it asks', () => {
     expect(unasked).not.toContain('authorizeUnresolvedGaps');
     expect(source.match(/authorizeUnresolvedGaps\(/g)).toHaveLength(1);
     expect(typeof fileWithGapsUnderStandingGrant).toBe('function');
+  });
+
+  /*
+   * Reviewer finding F3: the shared step's NEEDS_HUMAN -> RUNNING move never ran.
+   * The park reached `decideAtPark` only for missions not yet NEEDS_HUMAN, and
+   * `answerUnaskedParks` passed `missionId: null`, so a mission already parked
+   * with no card stayed NEEDS_HUMAN while its packet was filed underneath it.
+   */
+  async function parkedWithoutCard(): Promise<{ missionId: string; orchestrationId: string }> {
+    const stopped = await stoppedMission(['ACCEPTED', 'BLOCKED']);
+    await getDb().run(`UPDATE russell_missions SET state = 'NEEDS_HUMAN', waiting_on = 'a person' WHERE id = ?`, [stopped.missionId]);
+    expect(await cardFor(stopped.missionId)).toBeUndefined();
+    return stopped;
+  }
+
+  it('moves a mission already parked with no card back to running when answerUnaskedParks files its packet', async () => {
+    await grant();
+    const { missionId, orchestrationId } = await parkedWithoutCard();
+    const nowMs = Date.now() + ROUTINE_DECISION_GRACE_MS + 60_000;
+
+    const decided = await answerUnaskedParks({ nowMs, ignoreBootGrace: true, limit: 50 });
+
+    expect(decided.find((d) => d.orchestrationId === orchestrationId)?.decided).toBe(true);
+    expect((await getOrchestration(orchestrationId))!.unresolvedGapPolicy).toBe('RECORD_GAPS');
+    expect((await getMission(missionId))!.state).not.toBe('NEEDS_HUMAN');
+    const recorded = (await decisionsFor(missionId)).filter((p) => p['decidedBy'] === 'BRAIN_UNDER_STANDING_AUTHORITY');
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ choice: 'RECORD_GAPS', orchestrationId });
+  });
+
+  it('decides at the park for a mission already parked with no card, and moves it back to running', async () => {
+    await grant();
+    const { missionId, orchestrationId } = await parkedWithoutCard();
+
+    await parkStoppedMissions(10);
+
+    expect(await cardFor(missionId)).toBeUndefined();
+    expect((await getOrchestration(orchestrationId))!.unresolvedGapPolicy).toBe('RECORD_GAPS');
+    expect((await getMission(missionId))!.state).not.toBe('NEEDS_HUMAN');
+    expect((await decisionsFor(missionId)).filter((p) => p['decidedBy'] === 'BRAIN_UNDER_STANDING_AUTHORITY')).toHaveLength(1);
+  });
+
+  it('leaves a parked mission with an open card to its card, deciding nothing at the park', async () => {
+    await grant();
+    const { missionId, orchestrationId } = await stoppedMission(['ACCEPTED', 'BLOCKED']);
+    await getDb().run(`UPDATE russell_goals SET state = 'REVOKED' WHERE project_id = ?`, [projectId]);
+    await parkStoppedMissions(10); // no live grant: it parks and asks
+    expect(await cardFor(missionId)).toBeDefined();
+    await getDb().run(`UPDATE russell_goals SET state = 'ACTIVE' WHERE project_id = ?`, [projectId]);
+
+    await parkStoppedMissions(10);
+
+    expect(await cardFor(missionId)).toBeDefined();
+    expect((await getMission(missionId))!.state).toBe('NEEDS_HUMAN');
+    expect((await getOrchestration(orchestrationId))!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
   });
 });

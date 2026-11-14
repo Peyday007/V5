@@ -37,7 +37,7 @@ import { getDb } from '../../db/database.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { getOrchestration } from '../../repos/research.ts';
 import { listGoals } from '../../repos/russellAuthority.ts';
-import { answerHumanRequest, getHumanRequest, getMission } from '../../repos/russellMissions.ts';
+import { answerHumanRequest, getHumanRequest, getMission, getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import type { RussellHumanRequest, ResearchOrchestration } from '../../domain/types.ts';
 import { NEEDS_HUMAN_CHOICES } from './needsHuman.ts';
 
@@ -247,9 +247,18 @@ export async function answerUnaskedParks(input: { limit?: number; nowMs?: number
   for (const row of rows) {
     const orchestration = await getOrchestration(row.id);
     if (!orchestration || orchestration.status !== 'NEEDS_HUMAN') continue;
+    /*
+     * "No card" is not "no mission". A mission parked at NEEDS_HUMAN whose card
+     * was cancelled, or that was parked before any card was opened, is selected
+     * here too — and passing `null` left it reading NEEDS_HUMAN while its packet
+     * was filed and moved on, so the shared step's NEEDS_HUMAN -> RUNNING move
+     * never ran. The packet's own mission is named, so the decision is recorded
+     * against it and it goes back to running before the packet advances.
+     */
+    const mission = await getMissionByOrchestration(row.id);
     const filed = await fileWithGapsUnderStandingGrant({
       orchestration,
-      missionId: null,
+      missionId: mission?.id ?? null,
       nowMs,
       why:
         'the packet has accepted evidence and nothing left Brain may attempt, so its audited report is filed with the ' +

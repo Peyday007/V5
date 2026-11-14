@@ -517,7 +517,21 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
         if (!same) {
           await reofferRequest({ requestId: open.id, choices: wanted, ...words });
         }
+        continue;
       }
+      /*
+       * Parked with no open card — parked before Brain decided at the park, or
+       * its card was withdrawn. Nobody is being asked, so the decision below is
+       * the only thing that can move it: the shared step files the packet and
+       * moves the mission NEEDS_HUMAN -> RUNNING. Undecided, it stays parked
+       * and is not re-parked or re-recorded (it was recorded when it parked).
+       */
+      const { decideAtPark } = await import('./routineDecisions.ts');
+      await decideAtPark({
+        missionId: mission.id,
+        orchestration,
+        choiceKeys: choicesFor(shape).map((choice) => choice.key),
+      });
       continue;
     }
 
