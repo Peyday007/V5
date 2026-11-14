@@ -263,3 +263,19 @@ mechanism: scheduled task `trig_01KSy4xRxmNaWXLLeLhNsMxE`, fire time
   on evidence, and the recovery does not pretend otherwise. Its shortfall is
   evidence (no measured conversion, no buyer-validated opening), not a software
   defect.
+
+## Release of the recovery
+
+- PR #884 merged as 75c6fb6; the Postgres suite failed one test there
+  (`cashHttp` whole-section read) that also failed on production before the
+  merge (40e9b66); the parallel session's #885 fixed it at the root.
+- Production tip 205517d (all recovery repairs + #885): **Postgres suite green**
+  (run 43587706174). Deploy 43587706522 **released** it; hosted verification
+  **passed before the restart**. After the restart the 50,000-evaluation
+  scenario check took 30 s against a 20 s budget and the pass was stopped for
+  slowness — the same check failed on Deploys of 11-12 and 11-13 before this
+  operation (P-4). Remaining RC-1 symptom: a restart's first plan reads compete
+  with the post-boot verification. Repair: the goal-plan pass now waits a boot
+  grace (10 minutes) after a process starts, as the operator already does.
+- Production serves the new code: its MCP surface lists
+  `brain_operator_create_goal`.
