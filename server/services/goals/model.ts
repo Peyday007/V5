@@ -64,6 +64,7 @@ import { listRoutines } from '../../repos/fleet.ts';
 import { sharedFleetSnapshot, type FleetSnapshot } from '../dispatch/candidates.ts';
 import { listMembershipsForProject } from '../../repos/identity.ts';
 import { readTarget, type TargetReading } from './target.ts';
+import { readPort05, type Port05Reading } from './port05.ts';
 
 // ---------------------------------------------------------------------------
 // The shape
@@ -185,6 +186,14 @@ export interface GoalView {
   obligations: string[];
 
   priority: GoalPriority | null;
+  /**
+   * PORT-05, read from rows (`port05.ts`): the streams of the goal's latest
+   * portfolio with their roles and independence, the delivery capabilities
+   * Brain is credited with and on what evidence, and the offers going out or
+   * blocked on which permission. Derived for a person's read of live goals;
+   * null for the whole-Brain tick and for goals that are not live.
+   */
+  port05?: Port05Reading | null;
   pausedAt: string | null;
   pausedReason: string | null;
   cancelledAt: string | null;
@@ -645,7 +654,14 @@ export async function assembleGoals(options: {
    */
   onlyArchivedGoal?: string;
   now?: string;
+  /**
+   * Derive each live goal's PORT-05 reading. On by default for a person's read
+   * (`projectIds` given) and off for the whole-Brain tick, which acts on
+   * priority and holds and would only pay for rows nobody reads there.
+   */
+  port05?: boolean;
 }): Promise<GoalsSnapshot> {
+  const withPort05 = options.port05 ?? options.projectIds !== null;
   const now = options.now ?? new Date().toISOString();
   let fleet: Promise<FleetSnapshot> | null = null;
   const remedies = new Map<string, ReturnType<typeof surfaceRemedy>>();
@@ -903,6 +919,15 @@ export async function assembleGoals(options: {
 
     const rank = ranked.get(goal.id);
     const snapshot = snapshots.get(goal.id);
+    let port05: Port05Reading | null = null;
+    if (withPort05 && lifecycle !== 'COMPLETE' && lifecycle !== 'CANCELLED' && lifecycle !== 'ARCHIVED') {
+      try {
+        port05 = await readPort05(goal.id, new Date(now));
+      } catch {
+        // A reading that cannot be taken is left out, never guessed; the rest of the goal still shows.
+        port05 = null;
+      }
+    }
     goals.push({
       id: goal.id,
       title: goal.title,
@@ -946,6 +971,7 @@ export async function assembleGoals(options: {
               : null,
           }
         : null,
+      port05,
       pausedAt: goal.pausedAt,
       pausedReason: goal.pausedReason,
       cancelledAt: goal.cancelledAt,
