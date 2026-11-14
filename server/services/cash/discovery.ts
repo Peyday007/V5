@@ -94,7 +94,7 @@ import {
   openRoundsByCandidate,
 } from '../../repos/cashDiscovery.ts';
 import { listConstraintsForProject, listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
-import { OPPORTUNITY_ORIGINS, opportunityField, type OpportunityOrigin, type OpportunitySeed } from '../industry/construction/origins.ts';
+import { OPPORTUNITY_ORIGINS, opportunityField, rankSubjectMarkets, type OpportunityOrigin, type OpportunitySeed } from '../industry/construction/origins.ts';
 import { commercialRoles, roleLensSeeds, type RoleLensSeed } from '../industry/construction/roles.ts';
 import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
 import { exclusionSentence, unionOf, type ExclusionClass } from './exclusions.ts';
@@ -946,10 +946,17 @@ export async function openGoalDiscovery(input: {
    * angle asked again.
    */
   const nodes = await listNodes(t.projectId);
-  const industries: GoalLens[] = nodes
-    .filter((node) => !node.retiredAt)
+  const constraints = await listConstraintsForProject(t.projectId);
+  /*
+   * Which industries, in which order, is a market preference (OPP-03): by each
+   * subject's own economics and how much of its work can be run remotely
+   * (`rankSubjectMarkets`), never by where the owner is and never by the order
+   * rows happen to come back in. That order is what decides which subjects make
+   * the MAX_INDUSTRY_LENSES cut and which of two equally-asked angles goes first.
+   */
+  const industries: GoalLens[] = (await rankSubjectMarkets(nodes, constraints))
     .slice(0, MAX_INDUSTRY_LENSES)
-    .map((node) => ({ id: `ind-${node.id}`, angle: `the ${node.name} industry, and the businesses that supply, serve or buy from it`, origin: 'MEMORY' as const }));
+    .map(({ node }) => ({ id: `ind-${node.id}`, angle: `the ${node.name} industry, and the businesses that supply, serve or buy from it`, origin: 'MEMORY' as const }));
   /*
    * And past the map, the opportunity field (OPP-03): remembered businesses and
    * transactions, what the world reported, recombinations of prior businesses —
@@ -957,7 +964,6 @@ export async function openGoalDiscovery(input: {
    * own. No category list filters them; they come after the fixed angles and
    * the industries, interleaved so every origin is reached within a cycle.
    */
-  const constraints = await listConstraintsForProject(t.projectId);
   const field = opportunityField({
     nodes,
     opportunities: await listOpportunities({ projectId: t.projectId }),

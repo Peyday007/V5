@@ -3,18 +3,29 @@
  * candidate with its source rows, no category allow-list, recombination from
  * unsuccessful businesses, market preference by economics and remote control
  * and never by the owner's location, and a read-only probe reader.
+ *
+ * Review finding (repair-opp03-market-ranking-unused): rankMarkets had no
+ * production caller. `rankSubjectMarkets` now scores each map subject from its
+ * own evidence (`marketOfEvidence`) and `openGoalDiscovery` takes its industry
+ * angles in that order; the tests under "markets in production" hold it there.
  */
 import { readFileSync } from 'node:fs';
 import { afterAll, describe, expect, it } from 'vitest';
 import { freshProject, teardown } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createNode } from '../server/repos/industry.ts';
+import { assembleEvidence, evidenceFromMap } from '../server/services/industry/construction/service.ts';
+import { commercialRoles } from '../server/services/industry/construction/roles.ts';
+import type { IndustryNode } from '../server/domain/types.ts';
 import {
   OPPORTUNITY_ORIGINS,
   countByOrigin,
   opportunityField,
   opportunityFieldHoldsOnRows,
+  marketOfEvidence,
+  marketScore,
   rankMarkets,
+  rankSubjectMarkets,
   seedsFromConstraints,
   seedsFromFirstPrinciples,
   seedsFromMemory,
@@ -129,6 +140,60 @@ describe('market preference', () => {
     for (const ownerLocation of ['Detroit, MI', 'London', 'Texas', null]) {
       expect(rankMarkets(markets, { ownerLocation }).map((m) => m.key)).toEqual(base);
     }
+  });
+});
+
+describe('markets in production: a subject is scored from its own evidence', () => {
+  const subject = (id: string, name: string, at: string, retiredAt: string | null = null): IndustryNode =>
+    ({ id, projectId: 'prj_x', parentId: null, kind: 'SECTOR', name, description: '', origin: 'SEED', sourceClaimId: null, retiredAt, createdAt: at, updatedAt: at }) as IndustryNode;
+  const evidenceOf = (name: string) => assembleEvidence({ text: name, industry: name, geography: null, map: evidenceFromMap([], []), recorded: [] });
+
+  it('reads each figure at its unfavourable bound, and an unstated figure as unknown', () => {
+    const delivery = evidenceOf('Last-mile delivery');
+    const m = marketOfEvidence('d', delivery, commercialRoles(delivery));
+    expect(m.marginUsd).not.toBeNull();
+    expect(m.monthlyVolume).not.toBeNull();
+    expect(m.daysToCash).not.toBeNull();
+    expect(m.remoteControl).toBeGreaterThan(0);
+    expect(m.remoteControl).toBeLessThanOrEqual(1);
+    expect(marketScore(m)).toBeGreaterThan(0);
+
+    const bare = evidenceOf('Dog grooming');
+    const u = marketOfEvidence('u', bare, commercialRoles(bare));
+    expect(u).toMatchObject({ marginUsd: null, monthlyVolume: null, daysToCash: null });
+    expect(marketScore(u)).toBe(0);
+  });
+
+  it('does not read where the evidence was measured: the same economics elsewhere score the same', () => {
+    const delivery = evidenceOf('Last-mile delivery');
+    const here = marketOfEvidence('d', delivery, commercialRoles(delivery));
+    const moved = { ...delivery, geography: 'Somewhere else entirely' };
+    const there = marketOfEvidence('d', moved, commercialRoles(moved));
+    expect(marketScore(there)).toBe(marketScore(here));
+  });
+
+  it('orders the map by economics and remote control, not by row order, and keeps row order for ties', async () => {
+    const rows = [
+      subject('ind_a', 'Commercial cleaning', '2026-11-01T00:00:00.000Z'),
+      subject('ind_b', 'Dog grooming', '2026-11-02T00:00:00.000Z'),
+      subject('ind_c', 'Last-mile delivery', '2026-11-03T00:00:00.000Z'),
+      subject('ind_r', 'Retired courier work', '2026-11-04T00:00:00.000Z', '2026-11-05T00:00:00.000Z'),
+    ];
+    const ranked = await rankSubjectMarkets(rows, []);
+    expect(ranked.map((one) => one.node.id)).toEqual(['ind_c', 'ind_a', 'ind_b']);
+    expect(marketScore(ranked[0]!.market)).toBeGreaterThan(0);
+  });
+
+  it('takes no owner location at all', () => {
+    expect(rankSubjectMarkets.length).toBe(2);
+    const source = readFileSync('server/services/industry/construction/origins.ts', 'utf8');
+    const body = source.slice(source.indexOf('export function marketOfEvidence'), source.indexOf('// The probe reader'));
+    expect(body).not.toMatch(/ownerLocation|owner\.location|homeLocation/);
+  });
+
+  it('is what goal discovery takes its industry angles from', () => {
+    const source = readFileSync('server/services/cash/discovery.ts', 'utf8');
+    expect(source).toMatch(/await rankSubjectMarkets\(nodes, constraints\)\)\s*\.slice\(0, MAX_INDUSTRY_LENSES\)/);
   });
 });
 

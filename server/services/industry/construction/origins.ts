@@ -31,7 +31,11 @@
  * Market preference is a function of economics and of how much of the
  * execution can be controlled remotely. The owner's location is not an input:
  * `rankMarkets` takes a context that may carry it precisely so that a test can
- * prove it changes nothing.
+ * prove it changes nothing. In production it orders the subjects of Brain's
+ * industry map before a goal's search takes its industry angles from them
+ * (`rankSubjectMarkets`, called by `cash/discovery.ts` `openGoalDiscovery`),
+ * each scored from its own evidence: the construction engine's unit facts
+ * and the role sets of its flows (`marketOfEvidence`).
  *
  * No table, scheduler or store: the origin travels in the seed itself, and the
  * seeds are derived from rows the existing repositories already serve.
@@ -42,6 +46,9 @@ import { listWorkstreams } from '../../../repos/register.ts';
 import { listProjects } from '../../../repos/projects.ts';
 import type { CashOpportunity, IndustryNode, OpportunityConstraint } from '../../../domain/types.ts';
 import type { Workstream } from '../../../domain/register.ts';
+import type { FactKey, IndustryEvidence } from '../../../domain/construction.ts';
+import { resolveFact } from './model.ts';
+import type { FlowRoles } from './roles.ts';
 
 export const OPPORTUNITY_ORIGINS = ['MEMORY', 'WORLD', 'FIRST_PRINCIPLES', 'RECOMBINATION', 'CONSTRAINT'] as const;
 export type OpportunityOrigin = (typeof OPPORTUNITY_ORIGINS)[number];
@@ -226,6 +233,85 @@ export function marketScore(m: MarketCandidate): number {
 
 export function rankMarkets(markets: MarketCandidate[], _context: RankingContext = {}): MarketCandidate[] {
   return [...markets].sort((a, b) => marketScore(b) - marketScore(a) || a.key.localeCompare(b.key));
+}
+
+/** The bound of a fact the evidence states for a segment (or market-wide), or null when nothing states it. */
+function bound(e: IndustryEvidence, key: FactKey, segment: string | null, side: 'low' | 'high'): number | null {
+  const f = resolveFact(e.facts, key, segment);
+  if (f.status === 'UNKNOWN') return null;
+  const v = side === 'low' ? f.low : f.high;
+  return Number.isFinite(v) ? v : null;
+}
+
+/**
+ * One subject of the map as a market, read from its evidence and the role sets
+ * of its flows. Each flow is read at its own paying segment, and the subject is
+ * its best flow by `marketScore`. Every figure takes its unfavourable bound and
+ * an unstated one is null (invariant 39): the margin is the best low per-unit
+ * value a role Brain is not refused from can capture; the volume is units per
+ * account per month times reachable accounts, both at their low bounds; the
+ * time to cash is the sales cycle plus the buyer's payment days, both at their
+ * high bounds; remote control is the share of those roles Brain could run
+ * without anyone on site. Nothing here reads a place, the owner's or any
+ * other. Pure.
+ */
+export function marketOfEvidence(key: string, evidence: IndustryEvidence, sets: readonly FlowRoles[]): MarketCandidate {
+  const none: MarketCandidate = { key, geography: evidence.geography, marginUsd: null, monthlyVolume: null, daysToCash: null, remoteControl: 0 };
+  let best = none;
+  for (const set of sets) {
+    const roles = set.roles.filter((role) => role.occupiable.answer !== 'NO');
+    if (roles.length === 0) continue;
+    const values = roles.map((role) => role.controlValue.lowUsdPerUnit).filter((v): v is number => v !== null && Number.isFinite(v));
+    const perAccount = bound(evidence, 'account_units_per_month', set.segmentId, 'low');
+    const accounts = bound(evidence, 'accounts_reachable', set.segmentId, 'low');
+    const cycle = bound(evidence, 'sales_cycle_days', set.segmentId, 'high');
+    const payment = bound(evidence, 'buyer_payment_days', set.segmentId, 'high');
+    const one: MarketCandidate = {
+      key,
+      geography: evidence.geography,
+      marginUsd: values.length > 0 ? Math.max(...values) : null,
+      monthlyVolume: perAccount !== null && accounts !== null ? perAccount * accounts : null,
+      daysToCash: cycle !== null && payment !== null ? cycle + payment : null,
+      remoteControl: roles.filter((role) => role.remotelyOperable).length / roles.length,
+    };
+    if (best === none || marketScore(one) > marketScore(best)) best = one;
+  }
+  return best;
+}
+
+/** A node and everything recorded beneath it. Pure. */
+function subtreeOf(nodes: readonly IndustryNode[], rootId: string): IndustryNode[] {
+  const keep = new Set([rootId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const n of nodes) if (n.parentId && keep.has(n.parentId) && !keep.has(n.id)) { keep.add(n.id); grew = true; }
+  }
+  return nodes.filter((n) => keep.has(n.id));
+}
+
+/**
+ * The map's live subjects in market order: each node with its subtree is
+ * assembled into evidence exactly as the construction engine reads a subject
+ * (`evidenceFromMap` → `assembleEvidence` → `commercialRoles`), scored by
+ * `marketOfEvidence`, and ordered by `rankMarkets`. Subjects that score the
+ * same keep the order the rows gave them. No owner location is read or
+ * accepted. Reads nothing beyond its arguments.
+ */
+export async function rankSubjectMarkets(nodes: readonly IndustryNode[], constraints: readonly OpportunityConstraint[]): Promise<{ node: IndustryNode; market: MarketCandidate }[]> {
+  const { assembleEvidence, evidenceFromMap } = await import('./service.ts');
+  const { commercialRoles } = await import('./roles.ts');
+  const live = nodes.filter((n) => !n.retiredAt);
+  const width = String(live.length).length;
+  const byKey = new Map<string, { node: IndustryNode; market: MarketCandidate }>();
+  live.forEach((node, index) => {
+    const map = evidenceFromMap(subtreeOf(live, node.id), [...constraints]);
+    const evidence = assembleEvidence({ text: node.name, industry: node.name, geography: null, map, recorded: [] });
+    // The key carries the row order, so a tie keeps it rather than falling back to an id.
+    const key = `${String(index).padStart(width, '0')}:${node.id}`;
+    byKey.set(key, { node, market: marketOfEvidence(key, evidence, commercialRoles(evidence)) });
+  });
+  return rankMarkets([...byKey.values()].map((one) => one.market)).map((m) => byKey.get(m.key)!);
 }
 
 // ---------------------------------------------------------------------------

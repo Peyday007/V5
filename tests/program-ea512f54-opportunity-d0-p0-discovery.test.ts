@@ -5,6 +5,11 @@
  * round's opening event which origin(s) it was asked from, treats the search
  * buckets and goal lenses as prompts rather than a closed list, and never
  * defaults a question to where the owner happens to be.
+ *
+ * Review finding (repair-opp03-market-ranking-unused): a goal's industry angles
+ * were taken in row order. They are now taken in market order
+ * (`rankSubjectMarkets`), so the first industry a goal searches is the subject
+ * whose evidence shows the better economics and remote control.
  */
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -227,6 +232,52 @@ describe('commercial roles become goal lenses (COM-13-1)', () => {
     const named = statesNamedIn('in Texas').length > 0;
     const lenses = roleLenses([seed('s', 'r', 'the broker position in Texas')]);
     expect(lenses).toHaveLength(named ? 0 : 1);
+  });
+});
+
+describe('a goal searches industries in market order (review finding)', () => {
+  let projectId = '';
+  let userId = '';
+  const now = new Date();
+  const inDays = (n: number) => new Date(now.getTime() + n * 86_400_000).toISOString();
+
+  beforeEach(async () => {
+    forgetKnowledge();
+    forgetGoalReadings();
+    const fixture = await freshProject();
+    projectId = fixture.project.id;
+    userId = (await createUser({ email: `om-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+    expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+  });
+
+  it('asks first about the subject with evidenced economics, though it was recorded last', async () => {
+    const g = await createWorkstream({ projectId, title: 'Collect cash fast', intent: 'Collect settled cash.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: inDays(25), ownerUserId: userId }, `person:${userId}`);
+    expect(
+      (await setTarget({
+        goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId,
+        capitalCeilingCents: 300_000, capitalBeforeProofCents: 37_500, hoursCeiling: 200, now: new Date(now.getTime() - 60_000),
+      } as Parameters<typeof setTarget>[0])).ok,
+    ).toBe(true);
+    const w = (await getWorkstream(g.id))!;
+    // Recorded first, and nothing evidences its economics.
+    const first = await createNode({ projectId, parentId: null, kind: 'SECTOR', name: 'Dog grooming', origin: 'SEED' });
+    // Recorded second, and the construction engine's evidence prices it.
+    const second = await createNode({ projectId, parentId: null, kind: 'SECTOR', name: 'Last-mile delivery', origin: 'SEED' });
+    const firstId = first.node.id;
+    const secondId = second.node.id;
+
+    const target = (await readGoalPlan({ goalId: w.id, evaluations: 200 }))!.target;
+    // Every fixed angle comes first; the pass after them asks the first industry angle.
+    for (let i = 0; i < GOAL_LENSES.length + 1; i += 1) {
+      await openGoalDiscovery({ goal: w, target, bestReach: null, now: now.toISOString(), liveCap: 100 });
+    }
+    const rows = await getDb().all<{ detail: string }>(`SELECT detail FROM cash_events WHERE project_id = ? AND kind = 'CASH_DISCOVERY_OPENED' ORDER BY created_at`, [projectId]);
+    const buckets = rows.map((row) => (JSON.parse(row.detail) as { bucketId: string }).bucketId);
+    const industry = buckets.filter((one) => one.includes('-ind-'));
+    expect(industry.length).toBeGreaterThan(0);
+    expect(industry[0]).toContain(secondId);
+    expect(industry[0]).not.toContain(firstId);
   });
 });
 
