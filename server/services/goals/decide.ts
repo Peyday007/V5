@@ -119,7 +119,7 @@ export async function createGoal(input: {
   }
   if (target) {
     if (!dueAt) return { ok: false, reason: 'A goal with a target needs a deadline: with none there is no window to count money in.', reading };
-    const other = await liveTargetOn(input.projectId, target.currency, null);
+    const other = await liveTargetOn(input.projectId, target.currency, null, target.metric);
     if (other) return { ok: false, reason: sharedLedgerReason(other, target.currency), reading };
   }
 

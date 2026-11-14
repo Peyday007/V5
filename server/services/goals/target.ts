@@ -152,24 +152,27 @@ export async function readTarget(goal: Workstream, now: Date = new Date()): Prom
 export type SetTargetResult = { ok: true; target: GoalTarget } | { ok: false; reason: string };
 
 /**
- * The live targeted goal already counting this project's ledger in this
- * currency, other than `exceptGoalId` (G-7). Progress is the ledger total since
- * the target was set, so two live targets on one project and currency would
- * both count the same dollars; the second one is refused instead.
+ * The live targeted goal already counting the same figure on this project's
+ * ledger in this currency, other than `exceptGoalId` (G-7). Progress is the
+ * ledger total since the target was set, so two live targets of one metric on
+ * one project and currency would both count the same dollars; the second one
+ * is refused instead. Two goals reading different figures of one ledger
+ * (settled cash and collected cash, GOAL-02) measure different things and
+ * stay allowed.
  */
-export async function liveTargetOn(projectId: string, currency: string, exceptGoalId: string | null): Promise<{ id: string; title: string } | null> {
+export async function liveTargetOn(projectId: string, currency: string, exceptGoalId: string | null, metric: string): Promise<{ id: string; title: string } | null> {
   const row = await getDb().get<{ id: string; title: string }>(
     `SELECT id, title FROM workstreams
-      WHERE target_project_id = ? AND target_currency = ? AND target_metric IS NOT NULL AND target_set_at IS NOT NULL
+      WHERE target_project_id = ? AND target_currency = ? AND target_metric = ? AND target_set_at IS NOT NULL
         AND archived_at IS NULL AND cancelled_at IS NULL AND id <> ?
       ORDER BY created_at, id LIMIT 1`,
-    [projectId, currency, exceptGoalId ?? ''],
+    [projectId, currency, metric, exceptGoalId ?? ''],
   );
   return row ?? null;
 }
 
 export function sharedLedgerReason(other: { id: string; title: string }, currency: string): string {
-  return `Goal ${other.id} ("${other.title.slice(0, 80)}") already counts this project's ${currency} ledger; two live targets on one ledger would both count the same money. Cancel or archive it, or use another project.`;
+  return `Goal ${other.id} ("${other.title.slice(0, 80)}") already counts this figure on this project's ${currency} ledger; two live targets of one figure on one ledger would both count the same money. Cancel or archive it, or use another project.`;
 }
 
 interface TargetLimits {
@@ -219,7 +222,7 @@ export async function setTarget(input: {
   if (!(await getProject(input.projectId))) return { ok: false, reason: 'No project with that id.' };
   const bad = badLimit(input);
   if (bad) return { ok: false, reason: bad };
-  const other = await liveTargetOn(input.projectId, input.currency, input.goal.id);
+  const other = await liveTargetOn(input.projectId, input.currency, input.goal.id, input.metric);
   if (other) return { ok: false, reason: sharedLedgerReason(other, input.currency) };
   const resources = input.resources?.trim() ? input.resources.trim().slice(0, 2000) : null;
   const now = (input.now ?? new Date()).toISOString();
