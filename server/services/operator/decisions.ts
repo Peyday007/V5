@@ -43,11 +43,65 @@ export interface DecideResult {
   next: string;
 }
 
-/** Ask a second model to attack the decision. Null when no model answered in time. */
-export async function challengeDecision(input: DecisionInput, review: DecisionReview, models: OperatorModel[], fetchImpl: typeof fetch = fetch): Promise<Challenge | null> {
+/**
+ * All challenge attempts together end inside this, so the decision is committed
+ * or returned before the operator's 180 s MCP call gives up. Production,
+ * 2026-11-13: three 120 s attempts in sequence (360 s) could commit a decision
+ * after Hermes had already been told the call timed out.
+ */
+export const CHALLENGE_BUDGET_MS = 150_000;
+/** One model's longest turn at the challenge. */
+export const CHALLENGE_ATTEMPT_MS = 120_000;
+/** An attempt with less than this left is not started: it could not answer in time. */
+const CHALLENGE_MIN_ATTEMPT_MS = 5_000;
+
+/** A model's parameter count in billions from its served name ("Qwen/Qwen3-4B-AWQ" → 4), or null. */
+export function parameterBillions(model: string): number | null {
+  const name = model.split('/').pop() ?? model;
+  const match = /(\d+(?:\.\d+)?)b(?![a-z])/i.exec(name);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * The GPU's small model (Qwen3-4B, 4B parameters or fewer): measured weakest on
+ * Brain's own tasks (§108, quality 0.65 against 0.98), so it never challenges a
+ * stronger model's decision.
+ */
+export function weakChallenger(model: OperatorModel): boolean {
+  if (!model.label.startsWith('gpu:')) return false;
+  const size = parameterBillions(model.model);
+  return size !== null && size <= 4;
+}
+
+/**
+ * Who challenges, in order: the models as `rankOperatorModels` ordered them by
+ * their run record and benchmark — best first — less the weak GPU model. The
+ * old order moved the best model last, so the 4B GPU model challenged first.
+ * The challenge is a fresh prompt with none of the operator's conversation, so
+ * the best model reading it cold is still a second reading.
+ */
+export function challengerModels(ranked: OperatorModel[]): OperatorModel[] {
+  const strong = ranked.filter((m) => !weakChallenger(m));
+  // A weak challenger is better than none: with only the small GPU model up, it still attacks the decision
+  // last-resort rather than letting a high-impact decision commit unchallenged (review F11).
+  return strong.length > 0 ? strong : ranked;
+}
+
+/** Ask a second model to attack the decision. Null when no model answered within the budget. */
+export async function challengeDecision(
+  input: DecisionInput,
+  review: DecisionReview,
+  models: OperatorModel[],
+  fetchImpl: typeof fetch = fetch,
+  bounds: { budgetMs?: number; minAttemptMs?: number; clock?: () => number } = {},
+): Promise<Challenge | null> {
   const prompt = challengePrompt(input, review);
-  for (const model of models) {
-    const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetchImpl, 120_000);
+  const clock = bounds.clock ?? Date.now;
+  const deadline = clock() + Math.min(CHALLENGE_BUDGET_MS, bounds.budgetMs ?? CHALLENGE_BUDGET_MS);
+  for (const model of challengerModels(models)) {
+    const left = deadline - clock();
+    if (left < (bounds.minAttemptMs ?? CHALLENGE_MIN_ATTEMPT_MS)) break;
+    const chat = chatFor({ label: model.label, url: model.baseUrl, key: model.apiKey, model: model.model, usdPerHour: null }, fetchImpl, Math.min(CHALLENGE_ATTEMPT_MS, left));
     const r = await chat(
       [
         { role: 'system', content: 'You are a rigorous challenger. Answer with exactly one JSON object.' },

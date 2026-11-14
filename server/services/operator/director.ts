@@ -211,6 +211,12 @@ export interface CommissionResult {
   route?: { complexity: string; minimumModelClass: string; why: string };
   /** What was done instead, for an intervention that is not engineering. */
   action?: string;
+  /** Work this call actually started (a campaign, a research round, a pass): empty when nothing runs. */
+  started?: string[];
+  /** What was only written down — a lesson, a request for a later pass — and runs nothing by itself. */
+  recordedOnly?: string[];
+  /** The goal research round an EVIDENCE or STRATEGY intervention opened. */
+  roundCandidateId?: string;
 }
 
 async function anchorProject(goalProjectId: string | null): Promise<string | null> {
@@ -265,30 +271,142 @@ export async function commission(input: DiagnosisRequest, now = new Date()): Pro
   const base = { intervention: decision.intervention, why: decision.why, overruled: decision.overruled };
   switch (decision.intervention) {
     case 'ENGINEERING':
-    case 'EVIDENCE':
       return engineerOrResearch(diagnosis, decision.intervention, input.runId, goal, base, now, input.standing === true);
+    case 'EVIDENCE': {
+      // The cause is not established: §87's loop researches the defect's cause, and the goal's own search is asked
+      // again with this diagnosis so the goal does not wait on the answer.
+      const researched = await engineerOrResearch(diagnosis, decision.intervention, input.runId, goal, base, now, input.standing === true);
+      const round = await openGoalResearchRound(diagnosis, 'EVIDENCE', input.runId, now);
+      return {
+        ...researched,
+        reason: `${researched.reason} Goal research: ${round.line}`,
+        started: [...(researched.started ?? []), ...round.started],
+        recordedOnly: [...(researched.recordedOnly ?? []), ...round.recordedOnly],
+        ...(round.opened ? { roundCandidateId: round.opened.candidateId } : {}),
+      };
+    }
     case 'CAPACITY': {
       const { continueIdleCapacity } = await import('./actions.ts');
       const moved = await continueIdleCapacity(input.runId);
-      await learn(diagnosis, input.runId, `CAPACITY: continued idle pools (${JSON.stringify(moved['continued'] ?? []).slice(0, 200)}); engineering follows only if the work still waits.`);
-      return { ok: true, reason: 'Continued idle capacity through its own scheduler; engineering is next if the work still waits.', ...base, action: 'continued idle capacity' };
+      const finished = moved['finished'] === true && moved['failed'] !== true;
+      const continued = Array.isArray(moved['continued']) ? (moved['continued'] as string[]) : [];
+      const line = moved['started'] === false
+        ? `no new pass: ${String(moved['reason'] ?? 'one is already running')}`
+        : finished
+          ? `a continuation pass finished and continued ${continued.length ? continued.join(', ') : 'nothing (no pool was idle beside work it could take)'}`
+          : moved['failed'] === true
+            ? `a continuation pass failed: ${String(moved['error'] ?? 'unknown error')}`
+            : 'a continuation pass was started and is still running in the background; what it continued is not known yet';
+      await learn(diagnosis, input.runId, `CAPACITY: ${line}; engineering follows only if the work still waits.`);
+      return {
+        ok: true,
+        reason: `Capacity: ${line}. Engineering is next if the work still waits.`,
+        ...base,
+        action: 'continuation pass',
+        started: moved['started'] === false ? [] : ['a continuation pass over every idle pool (dispatch, free lane controller)'],
+        recordedOnly: ['a lesson'],
+      };
+    }
+    case 'STRATEGY': {
+      const round = await openGoalResearchRound(diagnosis, 'STRATEGY', input.runId, now);
+      const learning = await learn(diagnosis, input.runId, `STRATEGY: ${decision.why}. Goal research: ${round.line}`);
+      return {
+        ok: true,
+        reason: `Not a coding assignment — ${decision.why}. Goal research: ${round.line} Lesson ${learning} recorded.`,
+        ...base,
+        action: round.opened ? `goal research round ${round.opened.candidateId}` : `lesson ${learning}`,
+        started: round.started,
+        recordedOnly: [...round.recordedOnly, `lesson ${learning}`],
+        ...(round.opened ? { roundCandidateId: round.opened.candidateId } : {}),
+      };
     }
     case 'MODEL':
-    case 'STRATEGY':
     case 'PERSON':
     case 'WATCH': {
+      // Nothing is started for these, and the result says so: no executor runs on a lesson.
       const what =
         decision.intervention === 'MODEL'
-          ? "a better model or recipe on capacity Brain already has (the free switchboard, the RunPod GPU's recipes)"
-          : decision.intervention === 'STRATEGY'
-            ? 'a change of strategy, recorded so the next run pursues a different lever'
-            : decision.intervention === 'PERSON'
-              ? 'the person who holds it (reported in the run summary, rule 11)'
-              : 'a watch: recorded, and engineered if it recurs';
-      const learning = await learn(diagnosis, input.runId, `${decision.intervention}: ${decision.why}. Remedy: ${what}.`);
-      return { ok: true, reason: `Not a coding assignment — ${decision.why}. Recorded for ${what}.`, ...base, action: `lesson ${learning}` };
+          ? "nothing started: Brain has no request a benchmark run picks up — the model benchmark runs only when cheap-lane.yml " +
+            'runpod-bench is dispatched, and the operator\'s own model order already re-ranks itself from each run\'s record ' +
+            '(rankOperatorModels). Recorded as a lesson so the next run sees it'
+          : decision.intervention === 'PERSON'
+            ? 'nothing started: only a person holds it; report it in the run summary (rule 11). Recorded as a lesson'
+            : 'nothing started: a watch, recorded as a lesson, and engineered if it recurs';
+      const learning = await learn(diagnosis, input.runId, `${decision.intervention}: ${decision.why}. ${what}.`);
+      return {
+        ok: true,
+        reason: `Not a coding assignment — ${decision.why}. ${what} (lesson ${learning}).`,
+        ...base,
+        action: `lesson ${learning}`,
+        started: [],
+        recordedOnly: [`lesson ${learning}`],
+      };
     }
   }
+}
+
+/**
+ * Ask the goal's own search again with the operator's diagnosis: one round
+ * through `openGoalDiscovery`, the door every goal lens uses (the discovery
+ * gate, the live-round cap, each lens's cool-off, focus), linked to the goal
+ * exactly as the plan pass links its rounds. When no round can open now the
+ * goal pass is asked to re-read the plan on its next tick (`requestGoalPlanPass`),
+ * and the result says that nothing was opened.
+ */
+async function openGoalResearchRound(
+  d: Diagnosis,
+  intervention: 'STRATEGY' | 'EVIDENCE',
+  runId: string | null,
+  now: Date,
+): Promise<{ opened: { candidateId: string; bucketId: string; round: number } | null; line: string; started: string[]; recordedOnly: string[] }> {
+  const none = (line: string, recordedOnly: string[] = []) => ({ opened: null, line, started: [] as string[], recordedOnly });
+  if (!d.goalId) return none('none opened — the diagnosis names no goal.');
+  const { getWorkstream, linkWorkstream } = await import('../../repos/register.ts');
+  const goal = await getWorkstream(d.goalId);
+  if (!goal) return none(`none opened — no goal ${d.goalId}.`);
+  if (goal.pausedAt) return none('none opened — the goal is paused, and a paused goal spends nothing on research.');
+  const { readTarget } = await import('../goals/target.ts');
+  const target = await readTarget(goal, now);
+  if (!target) return none('none opened — the goal has no money target for a goal round to search toward.');
+  const { heldReading, latestReading, requestGoalPlanPass } = await import('../goals/plan.ts');
+  const held = heldReading(goal.id);
+  let bestReach = held?.bestReach ?? null;
+  if (!held) {
+    const row = await latestReading(goal.id).catch(() => null);
+    try {
+      const forecast = row?.forecast ? (JSON.parse(row.forecast) as Record<string, unknown>) : null;
+      bestReach = typeof forecast?.['bestReach'] === 'number' ? (forecast['bestReach'] as number) : null;
+    } catch {
+      bestReach = null;
+    }
+  }
+  const { openGoalDiscovery } = await import('../cash/discovery.ts');
+  const diagnosis =
+    `Brain's operator found a ${intervention === 'STRATEGY' ? 'strategy' : 'evidence'} gap in this goal's search: ${d.title}. ${d.observed}` +
+    (d.cause ? ` Its suspected cause: ${d.cause}.` : '') +
+    ' Search so that the answer can change that — not the way the earlier rounds did.';
+  const opened = await openGoalDiscovery({
+    goal: { id: goal.id, title: goal.title },
+    target,
+    bestReach,
+    heldTitles: held?.considered.map((one) => one.title) ?? [],
+    diagnosis: diagnosis.slice(0, 1200),
+    now: now.toISOString(),
+  });
+  if (opened) {
+    await linkWorkstream({ workstreamId: goal.id, kind: 'CANDIDATE', ref: opened.candidateId, relation: 'PURSUES', detail: { by: 'operator', runId, intervention }, recordedBy: 'BRAIN', recordedByUserId: null });
+    return {
+      opened,
+      line: `opened research round ${opened.round} (${opened.bucketId}, idea ${opened.candidateId}) for goal ${goal.id}.`,
+      started: [`goal research round ${opened.candidateId}`],
+      recordedOnly: [],
+    };
+  }
+  requestGoalPlanPass(goal.id, `operator ${intervention}: ${d.title}`.slice(0, 200));
+  return none(
+    `none opened now (the discovery gate, the goal's live-round cap, every lens's cool-off, or focus refused it); the goal pass was asked to re-read the plan on its next tick, which widens the search if the plan still needs openings.`,
+    ['a request for the next goal pass to re-read the plan'],
+  );
 }
 
 async function goalProject(goalId: string | null): Promise<string | null> {
@@ -466,7 +584,21 @@ async function engineerOrResearch(
       : fresh.decision
         ? `decided ${fresh.decision}: ${fresh.decisionReason ?? ''}`
         : `registered as ${fresh.weaknessKey}; ${did ?? 'waits for its owner component to free (one live objective per owner)'}`;
+  // Only what this call put in motion counts as started; the same defect again starts nothing new.
+  const running = fresh.campaignId ? `Factory campaign ${fresh.campaignId}` : fresh.researchGoalId ? `method research goal ${fresh.researchGoalId}` : null;
+  const started = !duplicate && running && !fresh.decision ? [running] : [];
+  const recordedOnly = started.length
+    ? []
+    : [
+        fresh.decision
+          ? `already decided ${fresh.decision}; nothing new started`
+          : duplicate && running
+            ? `already running before this call: ${running}`
+            : `register row ${fresh.weaknessKey} (nothing runs until its owner frees or the loop's tick admits it)`,
+      ];
   return {
+    started,
+    recordedOnly,
     ok: true,
     reason: `${duplicate ? 'Already commissioned — the same campaign, not a second: ' : 'Acknowledged: '}${where}. Priority ${priority.priority} (${priority.urgency}); ${route.complexity} → ${route.minimumModelClass} workers.`,
     ...base,

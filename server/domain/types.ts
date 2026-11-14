@@ -539,6 +539,10 @@ export const EVENT_TYPES = [
   'OWNER_PLAN_READY_NOTIFIED',
   // The hourly operations report waiting for the owner's conversation (operator/operationsReport.ts).
   'OWNER_OPERATIONS_REPORT',
+  // A goal's plan read absorbed a failure (construction, library, reconstruction) and was read thinner (goals/plan.ts).
+  'GOAL_PLAN_DEGRADED',
+  // A goal with no cash target was planned: strategies, critique, revision, verdict (goals/objectivePlan.ts).
+  'GOAL_OBJECTIVE_PLAN_READ',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -11375,4 +11379,21 @@ export interface OperatorLearningRow {
   lesson: string;
   evidence: string;
   recorded_at: string;
+}
+
+/** One objective-plan reading of a goal with no cash target (`goals/objectivePlan.ts`, migration 148). */
+export interface GoalObjectiveReadingRow {
+  id: string;
+  workstream_id: string;
+  reading_key: string;
+  inputs_digest: string;
+  verdict: string;
+  chosen_strategy: string | null;
+  interpretation: string;
+  strategies: string;
+  critique: string;
+  decision: string;
+  calls: string;
+  error: string | null;
+  created_at: string;
 }

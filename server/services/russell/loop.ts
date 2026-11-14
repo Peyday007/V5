@@ -184,10 +184,11 @@ import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { advanceGoals, type GoalTickReport } from '../goals/tick.ts';
 import { advanceGoalPlans } from '../goals/plan.ts';
+import { advanceObjectivePlans } from '../goals/objectivePlan.ts';
 import { advanceResearchGoals, type GoalContinuationReport } from '../research/goalContinuation.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
 import { watchIdleOnTick } from '../engineering/watchdog.ts';
-import { databasePressure } from '../../db/pressure.ts';
+import { databasePressure, throttleUnderPressure } from '../../db/pressure.ts';
 import { withArchiveMemo } from '../reconcile/coverage.ts';
 import { runMemoryPass, type MemoryPassReport } from '../memory/pipeline.ts';
 
@@ -687,6 +688,7 @@ export async function runPass(
   report: Pick<TickReport, 'passFailures' | 'deferred'>,
   name: string,
   fn: () => Promise<unknown>,
+  limitMs?: number,
 ): Promise<boolean> {
   if (DEFERRABLE_UNDER_PRESSURE.has(name) && shedding(report, name)) return false;
   /*
@@ -710,7 +712,7 @@ export async function runPass(
     return false;
   }
   try {
-    await boundedPass(name, () => withActivity(`russell:${name}`, fn));
+    await boundedPass(name, () => withActivity(`russell:${name}`, fn), limitMs);
     return true;
   } catch (error) {
     const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
@@ -1386,10 +1388,12 @@ async function tickOnce(owner: string): Promise<TickReport> {
      * A targeted goal's plan: compose the scenario model from rows, run the
      * existing engine, apply the evidence gate, and record what actually
      * happened once the target is met or the due date passes. At most every
-     * half hour per goal, deferred under database pressure, and it writes only
-     * an append-only reading when the conclusion changed.
+     * half hour per goal, and it writes only an append-only reading when the
+     * conclusion changed. Under database pressure it is throttled, not shed:
+     * planning for a live goal is not optional work (§63), so it reads one goal
+     * at most once per throttle interval and counts every deferred start.
      */
-    if (!shedding(report, 'goal-plans')) startGoalPlans(report);
+    startGoalPlans(report);
 
     /*
      * Rule 9 of the engineering policy: executable work beside idle capacity is
@@ -3524,16 +3528,50 @@ async function parkResearchedIdea(candidateId: string, refusal: string): Promise
 let goalPlansInFlight: Promise<void> | null = null;
 let goalPlansFailure: string | null = null;
 
-export function startGoalPlans(report: Pick<TickReport, 'passFailures' | 'deferred'>): void {
+/**
+ * The goal-plan pass's own bound. It runs beside the tick and holds nothing the
+ * tick waits for, and a quant reconstruction under load can outlast the
+ * ordinary five-minute pass bound; marking it hung there only produced "skipped"
+ * failures for a plan read that was still progressing.
+ */
+export const GOAL_PLANS_PASS_LIMIT_MS = 30 * 60_000;
+
+export function startGoalPlans(
+  report: Pick<TickReport, 'passFailures' | 'deferred'>,
+  run: (options: { maxReads?: number }) => Promise<unknown> = async (options) => {
+    await advanceGoalPlans(new Date(), options);
+    // Goals with no cash target are planned beside them (planning recovery G-1), but not while the pass is
+    // throttled under pressure: model calls of up to a minute each would hold the next cash read (review F9).
+    if (options.maxReads === undefined) await advanceObjectivePlans();
+  },
+): void {
   if (goalPlansFailure) {
     report.passFailures.push({ pass: 'goal-plans', error: goalPlansFailure });
     goalPlansFailure = null;
   }
   if (goalPlansInFlight) return;
+  /*
+   * Under SHEDDING the planning pass is throttled rather than shed (§63): one
+   * goal per pass, at most once per throttle interval, never back to back
+   * (the in-flight guard above). Planning is itself a stall source, so it must
+   * not run freely under pressure — but switching it off left a live goal with
+   * one scenario in six hours.
+   */
+  const decision = throttleUnderPressure('goal-plans');
+  if (decision === 'DEFERRED') {
+    (report.deferred ??= []).push('goal-plans (throttled)');
+    return;
+  }
+  const options = decision === 'THROTTLED' ? { maxReads: 1 } : {};
   const own: Pick<TickReport, 'passFailures' | 'deferred'> = { passFailures: [], deferred: [] };
-  goalPlansInFlight = runPass(own, 'goal-plans', async () => {
-    await advanceGoalPlans();
-  })
+  goalPlansInFlight = runPass(
+    own,
+    'goal-plans',
+    async () => {
+      await run(options);
+    },
+    Math.max(passLimitMs(), GOAL_PLANS_PASS_LIMIT_MS),
+  )
     .then(() => {
       const failure = own.passFailures[0];
       if (failure) goalPlansFailure = failure.error;

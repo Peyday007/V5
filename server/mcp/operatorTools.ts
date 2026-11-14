@@ -49,6 +49,21 @@ function requireOperator(principal: Principal): string[] {
   return projects;
 }
 
+/**
+ * Reading Brain-wide state that carries no project's content (capacity pools,
+ * integration health) needs `project:read` on at least one project, exactly as
+ * reading goals does — not `operator:act`, which is for changing things. The
+ * operator's own record, deficiencies and engineering results carry goals,
+ * lessons and event payloads from every project, so they stay behind
+ * `operator:act` (invariants 17, 28, 41; planning recovery review F1). A caller with no readable project is refused with the
+ * same not-found every other refusal on this door gives (invariants 23, 30).
+ */
+async function requireReader(principal: Principal): Promise<string[]> {
+  const projects = await readableProjects(principal);
+  if (projects.length === 0) throw notFoundError();
+  return projects;
+}
+
 async function currentRunId(): Promise<string | null> {
   return (await runningOperatorRun())?.id ?? null;
 }
@@ -164,7 +179,7 @@ const integrationsTool: McpTool = {
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   annotations: { title: 'Operator: integrations', ...READ_ONLY },
   run: async (_args, { principal }) => {
-    requireOperator(principal);
+    await requireReader(principal);
     return { projectId: null, value: { integrations: await readIntegrations() } };
   },
 };
@@ -174,14 +189,16 @@ const capacityTool: McpTool = {
   title: 'Operator: capacity',
   description:
     "Brain's four pools of capacity (Claude routines, the free model lane and GPU, research slots, the Factory line): " +
-    'what waits, what runs, the capacity, and whether a pool is idle beside waiting work.',
+    'what waits, what runs, the capacity, and whether a pool is idle beside waiting work. Answers within seconds: when a ' +
+    'live read takes longer, the last complete reading is served with its age (source CACHED, ageSeconds) while the live ' +
+    'read finishes for the next call.',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   annotations: { title: 'Operator: capacity', ...READ_ONLY },
   run: async (_args, { principal }) => {
-    requireOperator(principal);
-    const { brainUtilization } = await import('../services/engineering/watchdog.ts');
-    const pools = await brainUtilization();
-    return { projectId: null, value: { pools } };
+    await requireReader(principal);
+    const { utilizationWithin } = await import('../services/engineering/watchdog.ts');
+    const reading = await utilizationWithin();
+    return { projectId: null, value: { ...reading } };
   },
 };
 
@@ -198,8 +215,15 @@ const historyTool: McpTool = {
   },
   annotations: { title: 'Operator: history', ...READ_ONLY },
   run: async (args, { principal }) => {
-    requireOperator(principal);
-    return { projectId: null, value: await operatorHistory(optionalString(args, 'goal_id')) };
+    const projects = requireOperator(principal);
+    const goalId = optionalString(args, 'goal_id');
+    if (goalId) {
+      // Lessons about one goal are that goal's project's to read; absent and forbidden refuse alike.
+      const { getWorkstream } = await import('../repos/register.ts');
+      const goal = await getWorkstream(goalId);
+      if (!goal || !goal.projectId || !projects.includes(goal.projectId)) throw notFoundError();
+    }
+    return { projectId: null, value: await operatorHistory(goalId) };
   },
 };
 
@@ -250,7 +274,9 @@ const continueTool: McpTool = {
   title: 'Operator: continue idle capacity',
   description:
     'Continue every pool that is idle beside waiting work, each through its own scheduler (dispatch, the free lane ' +
-    'controller), and report what moved.',
+    'controller). The pass is started in the background and this returns within seconds: finished=true with what was ' +
+    'continued, or finished=false and running=true with the last pool reading — nothing is claimed as moved until the ' +
+    'pass reports it (call again later for how it ended).',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   annotations: { title: 'Operator: continue idle capacity', ...MUTATING },
   run: async (_args, { principal }) => {
@@ -606,8 +632,8 @@ const decideTool: McpTool = {
         irreversible: args['irreversible'] === true,
         answeredChallenge: optionalString(args, 'answered_challenge'),
       },
-      // The challenger is a different model from the one deciding when Brain has two.
-      { runId: await currentRunId(), projectIds: projects, models: models.length > 1 ? [...models.slice(1), models[0]!] : models },
+      // Ranked by run record and benchmark; `challengerModels` drops the weak GPU model and the challenge is time-bounded.
+      { runId: await currentRunId(), projectIds: projects, models },
     );
     const goalId = optionalString(args, 'goal_id');
     if (result.committed && args['kind'] === 'ADOPT_PLAN' && goalId) {
@@ -694,6 +720,37 @@ const focusTool: McpTool = {
   },
 };
 
+const createGoalTool: McpTool = {
+  name: 'brain_operator_create_goal',
+  title: 'Operator: create a goal from an objective in words',
+  description:
+    'Create a goal from the owner\'s objective exactly as stated, e.g. "Generate $10,000 within 30 days using at most ' +
+    '$3,000 in starting capital." Brain reads the amount, currency, deadline and limits itself (the reading is ' +
+    'returned, with anything it could not read under unread). A cash objective gets its due date and its target on ' +
+    "the project's ledger; any other objective becomes a goal with its words as the intent. Refused when a cash " +
+    'objective names no currency or deadline, or when another live goal already counts that project\'s ledger.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      project_id: { type: 'string', description: 'The project (prj_…) the goal belongs to; its ledger is what a cash target counts.' },
+      text: { type: 'string', description: 'The objective, verbatim in the owner\'s words.' },
+    },
+    required: ['project_id', 'text'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Operator: create a goal', ...MUTATING, idempotentHint: false },
+  run: async (args, { principal }) => {
+    const projects = requireOperator(principal);
+    const projectId = requiredString(args, 'project_id');
+    if (!projects.includes(projectId)) throw notFoundError();
+    const { createGoal } = await import('../services/goals/decide.ts');
+    const runId = await currentRunId();
+    const result = await createGoal({ projectId, objective: requiredString(args, 'text'), actorRef: `operator:${runId ?? 'run'}`, userId: null });
+    if (!result.ok) return { projectId, value: { ok: false, refused: true, reason: result.reason, reading: result.reading } };
+    return { projectId, value: { ok: true, goalId: result.goal.id, title: result.goal.title, dueAt: result.goal.dueAt, target: result.target, reading: result.reading, consequence: result.consequence } };
+  },
+};
+
 export const OPERATOR_TOOLS: readonly McpTool[] = [
   goalsTool,
   goalTool,
@@ -709,6 +766,7 @@ export const OPERATOR_TOOLS: readonly McpTool[] = [
   decideTool,
   verifyTool,
   focusTool,
+  createGoalTool,
   deficienciesTool,
   commissionTool,
   engineeringTool,

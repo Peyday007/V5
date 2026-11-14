@@ -20,7 +20,7 @@ import { recordMoney } from '../server/repos/cashLedger.ts';
 import { createWorkstream, getWorkstream, listLinks } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { readTarget, setTarget } from '../server/services/goals/target.ts';
-import { advanceGoalPlans, listReadings, PLAN_EVIDENCE_FLOOR_MS, PLAN_REFRESH_MS, planDue, readGoalPlan, recordGoalOutcome, requestGoalPlanPass } from '../server/services/goals/plan.ts';
+import { advanceGoalPlans, listReadings, PLAN_EVIDENCE_FLOOR_MS, PLAN_REFRESH_MS, planDue, readGoalPlan, recordGoalOutcome, requestGoalPlanPass, stepAsNextTest, type PlanReading } from '../server/services/goals/plan.ts';
 import { MAX_MODEL_OPPORTUNITIES } from '../server/services/cash/goalScenario.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { getCandidate } from '../server/repos/russellCandidates.ts';
@@ -38,6 +38,21 @@ let userId = '';
 let cashModeId = '';
 const now = new Date();
 const inDays = (n: number) => new Date(now.getTime() + n * 86_400_000).toISOString();
+
+/** The evidence gate's verdict on the chosen strategy; the reading's verdict follows the one adopted plan (C-6). */
+function gateVerdict(reading: PlanReading): string | undefined {
+  return reading.strategies.find((one) => one.key === reading.chosen)?.verdict;
+}
+/** The evidence gate's next test on the chosen strategy; the reading's next step is the adopted plan's when it is reconstructed. */
+function gateNext(reading: PlanReading): PlanReading['nextTest'] {
+  if (reading.adoption.source === 'RECONSTRUCTED') {
+    const gate = reading.strategies.find((one) => one.key === reading.chosen)?.nextTest ?? null;
+    // The adopted plan's first step, unless the owner's own decision about the goal (how much may be committed) comes first.
+    expect(reading.nextTest).toEqual(gate?.by === 'PERSON' && gate.link === 'ECONOMICS' ? gate : stepAsNextTest(reading.steps[0]!, reading.reconstruction ?? null));
+    return gate;
+  }
+  return reading.nextTest;
+}
 
 beforeEach(async () => {
   projectId = (await freshProject()).project.id;
@@ -89,10 +104,12 @@ async function play(input: { title: string; priceCents: number; days?: number; c
   return o;
 }
 
-async function goal(amountCents: number, capitalCents: number | null = null, days = 30): Promise<string> {
+async function goal(amountCents: number, capitalCents: number | null = null, days = 30, metric: 'SETTLED_CASH' | 'COLLECTED_CASH' = 'SETTLED_CASH'): Promise<string> {
   const g = await createWorkstream({ projectId, title: 'Collect cash fast', intent: 'Collect settled cash within the window.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
   await setTerms(g.id, { dueAt: inDays(days), ownerUserId: userId }, `person:${userId}`);
-  const set = await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents, currency: 'USD', projectId, capitalCeilingCents: capitalCents, hoursCeiling: 200, now: new Date(now.getTime() - 60_000) });
+  // One live target per figure on a project ledger (G-7): a test reading a second variant of the same figure retires the first.
+  await getDb().run(`UPDATE workstreams SET cancelled_at = ? WHERE target_project_id = ? AND target_metric = ? AND cancelled_at IS NULL AND id <> ?`, [now.toISOString(), projectId, metric, g.id]);
+  const set = await setTarget({ goal: (await getWorkstream(g.id))!, metric, amountCents, currency: 'USD', projectId, capitalCeilingCents: capitalCents, hoursCeiling: 200, now: new Date(now.getTime() - 60_000) });
   expect(set.ok).toBe(true);
   return g.id;
 }
@@ -132,10 +149,12 @@ describe('the gate', () => {
     const id = await goal(200_000);
     const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
     expect(reading.verdict).toBe('NEEDS_EVIDENCE');
-    expect(reading.nextTest?.link).toBe('CONVERSION');
+    // The gate's own test on the strategy (C-6: the reading's next step is the adopted plan's).
+    const gateTest = gateNext(reading);
+    expect(gateTest?.link).toBe('CONVERSION');
     // No commercial grant exists, so a person has to allow the test.
-    expect(reading.nextTest?.by).toBe('PERSON');
-    expect(reading.nextTest?.blocker).toMatch(/CONTACT_BUYER/);
+    expect(gateTest?.by).toBe('PERSON');
+    expect(gateTest?.blocker).toMatch(/CONTACT_BUYER/);
     expect(reading.measuredChance).toBeNull();
     // Unknown agreement rates are swept: coverage, never a probability.
     expect(reading.strategies[0]!.sweep.probabilistic).toBe(false);
@@ -169,7 +188,7 @@ describe('the gate', () => {
     await play({ title: 'Needs stock up front', priceCents: 1_200_000, days: 7, capitalCents: 400_000, hours: 3, costCents: 2_000 });
     const id = await goal(1_000_000, 50_000);
     const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
-    expect(reading.verdict).toBe('NOT_VIABLE');
+    expect(gateVerdict(reading)).toBe('NOT_VIABLE');
     expect(reading.strategies[0]!.constraintsFailed.join(' ')).toMatch(/more than the 500 the owner said this goal may commit/);
   });
 
@@ -188,7 +207,7 @@ describe('the gate', () => {
     expect(reading.acceptance.accepted).toBeNull();
     expect(reading.acceptance.candidate?.opportunityIds).toContain(o.id);
     expect(reading.acceptance.shortfalls.join(' ')).toMatch(/point reading, not a 90% probability/);
-    expect(reading.summary).toMatch(/qualified candidate, not an accepted plan/);
+    expect(reading.summary).toMatch(reading.adoption.source === 'RECONSTRUCTED' ? /^The plan is the reconstruction/ : /qualified candidate, not an accepted plan/);
     expect(reading.strategies[0]!.chainComplete).toBe(true);
     expect(reading.strategies[0]!.links.every((one) => one.ok)).toBe(true);
     // Keeps constructing, modifying and comparing while nothing is accepted.
@@ -234,7 +253,7 @@ describe('the gate', () => {
     const id = await goal(1_000_000);
     const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
     expect(reading.verdict).toBe('NEEDS_EVIDENCE');
-    expect(reading.nextTest?.link).toBe('CONVERSION');
+    expect(gateNext(reading)?.link).toBe('CONVERSION');
   });
 
   it('records a reading only when the conclusion changes, and the outcome once', async () => {
@@ -289,6 +308,16 @@ describe('the gate', () => {
     expect((await advanceGoalPlans(now)).read).toBe(1);
     expect((await advanceGoalPlans(new Date(now.getTime() + 60_000))).read).toBe(0);
     expect(await listReadings(id)).toHaveLength(1);
+  });
+
+  it('reads at most one goal per pass when throttled under pressure, and the next pass reads the other', async () => {
+    await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    await goal(100_000);
+    // Two live goals on one ledger read different figures (G-7 refuses two of one figure).
+    await goal(200_000, null, 30, 'COLLECTED_CASH');
+    expect((await advanceGoalPlans(now, { maxReads: 1 })).read).toBe(1);
+    expect((await advanceGoalPlans(new Date(now.getTime() + 60_000), { maxReads: 1 })).read).toBe(1);
+    expect((await advanceGoalPlans(new Date(now.getTime() + 120_000), { maxReads: 1 })).read).toBe(0);
   });
 
   it('re-reads the plan as soon as an opening arrives, not on the next half-hour, and only when something changed', async () => {
@@ -417,7 +446,7 @@ describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
     expect(roomy.verdict).toBe('NEEDS_EVIDENCE');
     // The owner says less: not viable, and it says why.
     const tight = (await readGoalPlan({ goalId: await goal(1_000_000, 100_000), evaluations: 2_000 }))!;
-    expect(tight.verdict).toBe('NOT_VIABLE');
+    expect(gateVerdict(tight)).toBe('NOT_VIABLE');
     expect(tight.strategies[0]!.constraintsFailed.join(' ')).toMatch(/ties up 4000 USD, more than the 1000/);
   });
 
@@ -573,8 +602,8 @@ describe("the owner's pace: a test stage before money arrives, then spread over 
     expect(spendingRuleSentence(target)).toBe('at most USD 300 before any money comes in; at most USD 750 newly tied up a week; at most USD 3000 in all');
     await pursued(id, 'A campaign', 20_000, false, 2_000_000);
     const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
-    expect(reading.nextTest?.link).toBe('CONVERSION');
-    expect(reading.nextTest?.test).toMatch(/no more than 300 USD until money comes in/);
+    expect(gateNext(reading)?.link).toBe('CONVERSION');
+    expect(gateNext(reading)?.test).toMatch(/no more than 300 USD until money comes in/);
   });
 
   it('changes nothing for a goal whose owner set no pace', async () => {
@@ -629,7 +658,7 @@ describe('how the money actually arrives (2026-10-28)', () => {
   it("refuses a plan that only pays in one lump after somebody else decides, when the owner wants it step by step", async () => {
     await oneOff({ title: 'NEH grant: cooperative agreement for archives', priceCents: 2_000_000, days: 10 });
     const reading = (await readGoalPlan({ goalId: await pacedGoalFor(), evaluations: 2_000 }))!;
-    expect(reading.verdict).toBe('NOT_VIABLE');
+    expect(gateVerdict(reading)).toBe('NOT_VIABLE');
     expect(reading.strategies[0]!.constraintsFailed.join(' ')).toMatch(/not little by little/);
   });
 
@@ -767,9 +796,15 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(sale.test.blocker).toMatch(/^This sale waits for authorization\. Terms: sells "/);
     // A $400 sale cannot make a $10K plan viable: the goal's own step stays Brain's
     // planning work, never the authorization (owner, 2026-11-07).
-    expect(reading.verdict).toBe('NOT_VIABLE');
-    expect(reading.nextTest?.by).toBe('BRAIN');
-    expect(reading.nextTest?.test).toMatch(/^Discover, construct and research openings/);
+    expect(gateVerdict(reading)).toBe('NOT_VIABLE');
+    if (reading.adoption.source === 'RECONSTRUCTED') {
+      // One plan (C-6): the adopted reconstruction's first step is the goal's step, never the sale's authorization.
+      expect(reading.nextTest?.test.startsWith(reading.steps[0]!.label)).toBe(true);
+      expect(reading.nextTest?.blocker ?? '').not.toMatch(/This sale waits for authorization/);
+    } else {
+      expect(reading.nextTest?.by).toBe('BRAIN');
+      expect(reading.nextTest?.test).toMatch(/^Discover, construct and research openings/);
+    }
     // The goal pursues it now, without a RECOMMENDABLE verdict, so its money limits bind it.
     expect(reading.verdict).not.toBe('RECOMMENDABLE');
     const links = await listLinks(id);
@@ -1089,4 +1124,22 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
       for (const envelope of cash) expect(describesOwnAction(text, envelope.forbiddenActions), `${lens.id} ${envelope.id}`).toBe(false);
     }
   });
+});
+
+describe('a goal arithmetic rules out is concluded, not searched for ever (C-10)', () => {
+  it('reads $1M in 48 hours with $0 committed as NOT_SUPPORTED, with no widening and a constraint to relax', async () => {
+    const id = await goal(100_000_000, 0, 2);
+    await play({ title: 'Monthly rent-roll report', priceCents: 50_000, days: 5, capitalCents: 0, hours: 2, costCents: 0 });
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 400 }))!;
+    expect(reading.acceptance.status).toBe('NOT_SUPPORTED');
+    expect(reading.acceptance.sentence).toMatch(/^INFEASIBLE AS STATED/);
+    expect(reading.verdict).toBe('NOT_VIABLE');
+    // A checkout sale is not ruled out by arithmetic in 48 hours, so the search narrows to it
+    // rather than stopping (§65; review F2, aa10998) — the same case goalPlanCoherence reads.
+    expect(reading.infeasible!.instantOnly).toBe(true);
+    expect(reading.acceptance.sentence).toMatch(/keeps searching/);
+    expect(reading.needsMoreOpenings).toBe(true);
+    expect(reading.infeasible!.relax.map((one) => one.constraint)).toContain('DEADLINE');
+    expect(reading.steps).toEqual([]);
+  }, 180_000);
 });

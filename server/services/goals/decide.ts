@@ -29,10 +29,16 @@
  */
 import { getDb } from '../../db/database.ts';
 import type { GoalCommitment } from '../../domain/goals.ts';
-import type { WorkstreamLink } from '../../domain/register.ts';
-import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent, updateWorkstream } from '../../repos/register.ts';
+import type { GoalTarget, Workstream, WorkstreamLink, WorkstreamPurpose } from '../../domain/register.ts';
+import { createWorkstream, getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent, updateWorkstream } from '../../repos/register.ts';
 import { binsHeldBy, cancelGoal, pauseGoal, reinstateGoal, resumeGoal, setGoalTerms } from '../../repos/goals.ts';
+import { getProject } from '../../repos/projects.ts';
+import { readObjective, type ObjectiveReading } from '../industry/construction/intent.ts';
+import { liveTargetOn, setTarget, sharedLedgerReason } from './target.ts';
 
+
+/** An `unread` entry about a money figure the objective reader could not place (review F4). */
+const UNPLACED_MONEY = /could not place|a second amount|a rate, not a total|a range, not one figure|a second (?:capital|per-week|before-proof)/;
 export interface DecisionResult {
   ok: boolean;
   /** Why not, in words, when it did not happen. An ordinary outcome. */
@@ -41,6 +47,146 @@ export interface DecisionResult {
   consequence: string;
   /** Effects in this goal's project recorded as UNCERTAIN, never auto-retried. */
   uncertainEffects?: number;
+}
+
+/** A target stated as figures rather than words: the terminal's METRIC-AMOUNT-CURRENCY spec. */
+export interface ExplicitTarget {
+  metric: string;
+  amountCents: number;
+  currency: string;
+  capitalCeilingCents?: number | null;
+  hoursCeiling?: number | null;
+  capitalBeforeProofCents?: number | null;
+  capitalPerWeekCents?: number | null;
+}
+
+export type CreateGoalResult =
+  | { ok: true; goal: Workstream; reading: ObjectiveReading; target: GoalTarget | null; consequence: string }
+  | { ok: false; reason: string; reading: ObjectiveReading };
+
+const toCents = (major: number | null): number | null => (major === null ? null : Math.round(major * 100));
+
+/**
+ * The one writer of a new goal from a person's objective (G-2). The HTTP route,
+ * the operator's `brain_operator_create_goal` and `npm run goals -- create`
+ * all call this, so a goal stated in words and a goal stated as a spec are made
+ * the same way: the register row, its terms (the due date), and — for a cash
+ * objective — its target on the project's ledger.
+ *
+ * The words are read by `readObjective`, the construction's own reader, and
+ * anything the caller states explicitly (`dueAt`, `target`) wins over the words.
+ * A cash objective the words do not fully state — no currency, no deadline — is
+ * refused with what was missing, before anything is written; so is one whose
+ * ledger another live goal already counts (G-7). An objective that is not about
+ * a sum of money is never refused: it becomes a goal measured by its delivered
+ * work, its words as the intent.
+ */
+export async function createGoal(input: {
+  projectId: string;
+  objective: string;
+  title?: string;
+  purpose?: WorkstreamPurpose;
+  dueAt?: string;
+  target?: ExplicitTarget;
+  resources?: string | null;
+  actorRef: string;
+  userId: string | null;
+  now?: Date;
+}): Promise<CreateGoalResult> {
+  const now = input.now ?? new Date();
+  const objective = input.objective.replace(/\s+/g, ' ').trim();
+  const reading = readObjective(objective, now);
+  if (!objective) return { ok: false, reason: 'State the objective in words.', reading };
+  if (!(await getProject(input.projectId))) return { ok: false, reason: 'No project with that id.', reading };
+
+  const dueAt = input.dueAt ?? reading.deadline ?? undefined;
+  if (dueAt !== undefined && !Number.isFinite(Date.parse(dueAt))) return { ok: false, reason: 'The due date must be a date.', reading };
+  let target: (ExplicitTarget & { amountCents: number }) | null = input.target ?? null;
+  if (!target && reading.kind === 'CASH') {
+    const missing = [
+      ...(reading.currency ? [] : ['the currency']),
+      ...(dueAt ? [] : ['a deadline ("within 30 days", "by 2026-12-31")']),
+    ];
+    if (missing.length) {
+      return { ok: false, reason: `This reads as a cash objective, but the words do not state ${missing.join(' or ')}; nothing was created.${reading.unread.length ? ` Unread: ${reading.unread.join('; ')}.` : ''}`, reading };
+    }
+    // A money figure the reader could not place may be a limit the owner set; a goal created without it
+    // would plan as if no ceiling existed (invariant 38; review F4). Ask for it to be restated instead.
+    const unplacedMoney = reading.unread.filter((one) => UNPLACED_MONEY.test(one));
+    if (unplacedMoney.length) {
+      return { ok: false, reason: `These money figures could not be read as the amount or a limit: ${unplacedMoney.join('; ')}. Restate them (for example "with at most $3,000 of capital", "$375 a week"); nothing was created.`, reading };
+    }
+    target = {
+      metric: reading.metric ?? 'SETTLED_CASH',
+      amountCents: toCents(reading.amount)!,
+      currency: reading.currency!,
+      capitalCeilingCents: toCents(reading.capitalCeiling),
+      hoursCeiling: reading.hoursCeiling === null ? null : Math.round(reading.hoursCeiling),
+      capitalBeforeProofCents: toCents(reading.beforeProof),
+      capitalPerWeekCents: toCents(reading.capitalPerWeek),
+    };
+  }
+  if (target) {
+    if (!dueAt) return { ok: false, reason: 'A goal with a target needs a deadline: with none there is no window to count money in.', reading };
+    const other = await liveTargetOn(input.projectId, target.currency, null, target.metric);
+    if (other) return { ok: false, reason: sharedLedgerReason(other, target.currency), reading };
+  }
+
+  const goal = await createWorkstream({
+    projectId: input.projectId,
+    title: (input.title ?? objective).slice(0, 160),
+    intent: objective,
+    purpose: input.purpose ?? (target ? 'REVENUE_DIRECT' : 'LONG_TERM'),
+    createdByUserId: input.userId,
+  });
+  await recordWorkstreamEvent({
+    workstreamId: goal.id,
+    kind: 'WORKSTREAM_OPENED',
+    summary: `Created from the objective in words: ${objective.slice(0, 200)}`,
+    detail: { reading },
+    actorRef: input.actorRef,
+  });
+  const outcome = target ? `${target.metric} of at least ${target.amountCents / 100} ${target.currency}, verified on the ledger` : undefined;
+  if (dueAt || outcome || input.userId) {
+    await setTerms(goal.id, { outcome, dueAt: dueAt ? new Date(dueAt).toISOString() : undefined, ownerUserId: input.userId ?? undefined }, input.actorRef);
+  }
+  let set: GoalTarget | null = null;
+  if (target) {
+    const result = await setTarget({
+      goal: (await getWorkstream(goal.id))!,
+      metric: target.metric,
+      amountCents: target.amountCents,
+      currency: target.currency,
+      projectId: input.projectId,
+      capitalCeilingCents: target.capitalCeilingCents ?? null,
+      hoursCeiling: target.hoursCeiling ?? null,
+      resources: input.resources ?? null,
+      capitalBeforeProofCents: target.capitalBeforeProofCents ?? null,
+      capitalPerWeekCents: target.capitalPerWeekCents ?? null,
+      now,
+    });
+    if (!result.ok) {
+      // Refused after the row was written (a second writer got there first): the goal is cancelled with the reason, not left half-made.
+      await cancel(goal.id, `The target was refused: ${result.reason}`, input.actorRef);
+      return { ok: false, reason: result.reason, reading };
+    }
+    set = result.target;
+    await recordWorkstreamEvent({
+      workstreamId: goal.id,
+      kind: 'GOAL_TARGET_SET',
+      summary: `Target: ${target.metric} ${target.amountCents / 100} ${target.currency}${set.capitalCeilingCents !== null ? `, at most ${set.capitalCeilingCents / 100} tied up` : ''}${set.hoursCeiling !== null ? `, at most ${set.hoursCeiling} hours` : ''}. Counted from now.`,
+      actorRef: input.actorRef,
+    });
+  }
+  return {
+    ok: true,
+    goal: (await getWorkstream(goal.id))!,
+    reading,
+    target: set,
+    consequence: set
+      ? `The goal counts ${set.metric} on this project's ${set.currency} ledger from ${set.setAt}; the goal tick plans and searches for it on its next pass.`
+      : 'The goal has no figure: it is measured by the work linked to it, and its words are its intent.',
+  };
 }
 
 async function uncertainEffectsFor(projectId: string | null): Promise<number> {

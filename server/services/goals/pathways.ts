@@ -83,7 +83,7 @@ export interface PathFact {
 /* 1. Backward from the goal                                           */
 /* ------------------------------------------------------------------ */
 
-export const STRUCTURE_KINDS = ['HIGH_TICKET', 'MID_TICKET', 'HIGH_FREQUENCY', 'RECURRING', 'COMBINATION'] as const;
+export const STRUCTURE_KINDS = ['HIGH_TICKET', 'MID_TICKET', 'HIGH_FREQUENCY', 'RECURRING', 'COMBINATION', 'INSTANT'] as const;
 export type StructureKind = (typeof STRUCTURE_KINDS)[number];
 
 /**
@@ -237,6 +237,33 @@ export function requiredStructures(input: {
       capitalPerDeal: input.perArrangement,
       verdict: j.verdict,
       reason: `${j.reason}; two independent sources fail apart unless they share a buyer or a channel`,
+    });
+  }
+  // An instant sale: a buyer already looking pays at checkout (a marketplace
+  // listing, a storefront, a resale, a gig a buyer posted). No reply-then-yes
+  // cycle and no invoice, so a goal of a day or two is not impossible by
+  // arithmetic — it needs buyers who come to the offer, which outreach cannot
+  // measure. Without this, every goal of three days or less read all-IMPOSSIBLE
+  // whatever its size (planning recovery G-3).
+  for (const deals of [1, 10, 100]) {
+    const instantWindow = Math.max(0, input.daysLeft ?? 0);
+    const possible = instantWindow > 0;
+    structures.push({
+      kind: 'INSTANT',
+      label: `${deals} instant sale${deals === 1 ? '' : 's'} netting ${money(remaining / deals)} ${input.currency} each, paid at checkout`,
+      deals,
+      netPerDeal: remaining / deals,
+      paymentsPerBuyer: 1,
+      prospects: { best: Math.ceil(deals / CONVERSION_BOUNDS.closeHigh), middle: Math.ceil(deals / geometric(CONVERSION_BOUNDS.closeLow, CONVERSION_BOUNDS.closeHigh)) },
+      perDay: possible
+        ? { best: Math.ceil(deals / CONVERSION_BOUNDS.closeHigh) / instantWindow, middle: Math.ceil(deals / geometric(CONVERSION_BOUNDS.closeLow, CONVERSION_BOUNDS.closeHigh)) / instantWindow }
+        : { best: Infinity, middle: Infinity },
+      sellingDays: instantWindow,
+      capitalPerDeal: input.perArrangement,
+      verdict: possible ? 'NEEDS_INBOUND_CHANNEL' : 'IMPOSSIBLE',
+      reason: possible
+        ? `a checkout or marketplace sale settles the same day, so the ${instantWindow} day${instantWindow === 1 ? '' : 's'} left are enough by arithmetic; it needs buyers already searching for the offer (a listing, a storefront, a posted request), whose arrival outreach cannot measure`
+        : 'no time is left for even a same-day sale',
     });
   }
   // The smallest net per deal outreach alone can carry at the middle of the conversion bounds.

@@ -114,3 +114,51 @@ export async function sendPortfolioNeeds(
   }
   return out;
 }
+
+/** At most this many of the adopted plan's own questions are sent per plan read (C-9). */
+export const PLAN_QUESTIONS_PER_READ = 3;
+
+/** The graph the adopted plan's own questions belong to: the goal's plan, not one opening. */
+export function goalPlanScope(goalId: string): string {
+  return `goal:${goalId}:plan`;
+}
+
+/**
+ * Send the adopted plan's own questions (C-9): the conditions the plan needs
+ * outside today's evidence, the ones that swing it most, and the reply rate it
+ * needs — the `plan:` entries of the reading's research priority that are not
+ * about one opening (those reach `researchGoalPaths`), decided RESEARCH_FIRST,
+ * largest value first. Through `sendNeeds`, keyed by the goal's plan scope and
+ * the condition, never its number, so a re-read raises nothing new and a
+ * figure that moves does not raise a second question.
+ */
+export async function sendPlanQuestions(
+  input: { goalId: string; projectId: string; priority: ReadonlyArray<{ variable: string; opportunityId: string | null; decision: string; value: number; reason: string }>; actorRef?: string; max?: number },
+  deps: Pick<PortfolioNeedsDeps, 'sendNeeds'> = {},
+): Promise<PortfolioNeedsSent> {
+  const send = deps.sendNeeds ?? sendNeeds;
+  const out: PortfolioNeedsSent = { sent: 0, created: 0, historyRequested: 0, refused: [] };
+  const top = input.priority
+    // An assumed change is measured by executing its step (its kill criterion), not by research.
+    .filter((one) => one.variable.startsWith('plan:') && !one.variable.startsWith('plan:change:') && one.opportunityId === null && one.decision === 'RESEARCH_FIRST')
+    .sort((a, b) => b.value - a.value)
+    .slice(0, input.max ?? PLAN_QUESTIONS_PER_READ);
+  if (top.length === 0) return out;
+  const needs: Need[] = top.map((one) => {
+    const condition = one.variable.slice('plan:'.length);
+    return {
+      subject: `the goal plan's condition "${condition}"`,
+      question: `What published evidence shows how ${condition} behaves for buyers and offers like this plan's? The plan's reading: ${one.reason}`.slice(0, 900),
+      route: 'RESEARCH',
+      permissions: [],
+    };
+  });
+  const delivered = await send({ projectId: input.projectId, actorRef: input.actorRef ?? 'BRAIN', graphScope: goalPlanScope(input.goalId), needs });
+  for (const one of delivered) {
+    if (one.sent) {
+      out.sent += 1;
+      if (one.created) out.created += 1;
+    } else out.refused.push(`${one.subject}: ${one.reason}`);
+  }
+  return out;
+}

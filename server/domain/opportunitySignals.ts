@@ -156,3 +156,149 @@ export function validateClosesOn(input: {
   }
   return { ok: true, value: closesOn };
 }
+
+/**
+ * Whether a signal's own text publishes what a *buyer* would pay.
+ *
+ * Only a buyer's request does; a seller's page — a price list, a rate card, an
+ * asking price — publishes what that seller charges. `proposeTerms` reads a
+ * signal's figures as a price only when this holds, and the harvest refuses to
+ * make an untagged claim an opening when its source is the seller's own page
+ * (`sellersOwnPage`): the same distinction, read once from the tag and once
+ * from the source, because an untagged claim has no tag to read it from. A
+ * piece captured by hand has no signal, and its text is what the person
+ * recorded as the request.
+ */
+export function isBuyerRequestSignal(signal: OpportunitySignal | null): boolean {
+  return signal === null || OPENING_FAMILY[signal] === 'BUYER_REQUEST';
+}
+
+/** What a seller's page path is called: its price list, rate card or plans. */
+const PRICE_PAGE_SEGMENT = /^(pricing|prices?|price-list|pricelist|rates?|rate-card|ratecard|plans|plans-and-pricing|pricing-plans|fees|fee-schedule|packages)$/i;
+/** A seller speaking of its own prices. */
+const SELLER_VERB = /\b(charges?|charging|publishes|lists|prices (?:its|at|from)|is priced|offers|sells|quotes|advertises|starts at|starting at)\b/i;
+/** A currency beside a number, either order. */
+const STATED_PRICE = /([$€£]\s?\d)|(\b(?:usd|eur|gbp)\s?\d)|(\d\s?(?:usd|eur|gbp|dollars?|euros?)\b)/i;
+/** A listing of sellers for a searcher to choose from: a buyer's search, not a buyer's request. */
+const SUPPLIER_LISTING = /\bnear me\b|^\s*(?:the\s+)?(?:top\s+)?\d+\s+best\b|^\s*(?:the\s+)?best\s+\d+\b|\bdirectory of\b/i;
+
+function urlParts(url: string | null): { host: string; stem: string; path: string[] } | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    const stem = host.split('.')[0] ?? '';
+    const path = parsed.pathname.split('/').filter(Boolean).map((segment) => segment.replace(/\.[a-z0-9]+$/i, ''));
+    return { host, stem, path };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Why an untagged claim's source is a seller's own page, or null when it is not.
+ *
+ * Lane promotion (`signalledClaims`) reads a claim's kind from the lane it was
+ * filed in, and the lane names what the claim was meant to be, not what it is.
+ * Production promoted "Rev.com publishes a per-minute price of $1.99" — a
+ * supplier's own rate card — as recurring outsourced work, and "The 10 Best
+ * Christmas Decorators Near Me", a listing of suppliers, as an active buyer.
+ * Neither is a buyer paying; both are a seller's page. Deliberately narrow:
+ * a missed one is filed as before and judged by its card; a refused one stays
+ * citable context, and a worker who tags it as an opening still files it.
+ */
+export function sellersOwnPage(claim: {
+  claim: string;
+  sourceUrl: string | null;
+  sourceTitle?: string | null;
+  sourcePublisher?: string | null;
+}): string | null {
+  const parts = urlParts(claim.sourceUrl);
+  if (parts && parts.path.some((segment) => PRICE_PAGE_SEGMENT.test(segment))) {
+    return `its source is ${parts.host}'s own price page`;
+  }
+  const text = claim.claim;
+  const names = [claim.sourcePublisher, parts?.host, parts && parts.stem.length >= 3 ? parts.stem : null]
+    .filter((name): name is string => !!name && name.trim().length >= 3)
+    .map((name) => name.trim().toLowerCase());
+  // The publisher is the claim's subject — named before anything else is said — and states a price for itself.
+  const head = text.toLowerCase().slice(0, 60);
+  const subject = names.find((name) => head.includes(name));
+  if (subject && STATED_PRICE.test(text) && SELLER_VERB.test(text)) {
+    return `it is ${subject} stating its own price`;
+  }
+  for (const words of [claim.sourceTitle ?? '', text]) {
+    const listing = words.match(SUPPLIER_LISTING)?.[0];
+    if (listing) return `its source is a listing of suppliers ("${listing.trim()}"), not a buyer asking`;
+  }
+  return null;
+}
+
+/**
+ * Signals that observe a moment rather than a pattern: a request, a task, a
+ * price or a listing seen on one day. One with no published deadline is
+ * "now" only for `RECOMMENDATION_POLICY.demandFreshDays` after its source's
+ * date — a resale price seen in April is not a market in November. A
+ * recurring outsourced brief is a pattern across dated examples, and is not.
+ */
+export const POINT_IN_TIME_SIGNALS: ReadonlySet<OpportunitySignal> = new Set<OpportunitySignal>(
+  OPPORTUNITY_SIGNALS.filter((signal) => signal !== 'RECURRING_OUTSOURCED_WORK'),
+);
+
+/**
+ * When a point-in-time observation stops being "now", or why it already has.
+ *
+ * A published deadline is the answer when there is one. Otherwise the
+ * source's own date plus the freshness window; a source older than the window
+ * is stale (`{ stale: true }`). An undated source has no expiry it can be held
+ * to and no observation date either — never its retrieval date, which would
+ * make a years-old page look fresh.
+ */
+export function observationExpiry(input: {
+  signal: OpportunitySignal;
+  closesOn: string | null;
+  sourceDate: string | null;
+  freshDays: number;
+  now: Date;
+}): { stale: true; observedAt: string } | { stale: false; expiresAt: string | null; observedAt: string | null } {
+  const parsed = input.sourceDate ? Date.parse(input.sourceDate) : Number.NaN;
+  const observedAt = Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
+  if (input.closesOn) return { stale: false, expiresAt: input.closesOn, observedAt };
+  if (!POINT_IN_TIME_SIGNALS.has(input.signal) || observedAt === null) return { stale: false, expiresAt: null, observedAt };
+  const until = parsed + input.freshDays * 86_400_000;
+  if (until < input.now.getTime()) return { stale: true, observedAt };
+  return { stale: false, expiresAt: new Date(until).toISOString().slice(0, 10), observedAt };
+}
+
+/** How an opening of each kind is named: what it is, never a sentence a source wrote. */
+export const SIGNAL_TITLE: Record<OpportunitySignal, string> = {
+  ACTIVE_BUYER_DEMAND: 'Buyer request',
+  PAID_TASK_OR_CONTRACT: 'Paid task',
+  PRICING_OR_INFORMATION_ASYMMETRY: 'Price gap',
+  EXPIRING_OPENING: 'Closing opening',
+  SUPPLY_DEMAND_MISMATCH: 'Unmet demand',
+  RESALABLE_ASSET_OPENING: 'Resale',
+  RECURRING_OUTSOURCED_WORK: 'Recurring outsourced work',
+};
+
+/**
+ * An opening's title, from its structured parts: the kind of opening, who it
+ * is for (the claim's buyer population, else the deliverable the round asked
+ * about) and who published it. The source's own sentence is the opening's
+ * buying signal, never its name: production read strategies called "Only: The
+ * 10 Best Christmas Decorators Near Me…" because a claim sentence was filed as
+ * a title. The platform owns a name (§4); a source does not.
+ */
+export function openingTitle(input: {
+  signal: OpportunitySignal;
+  population: string | null;
+  deliverable: string | null;
+  publisher: string | null;
+  sourceUrl: string | null;
+}): string {
+  const clean = (value: string | null | undefined) => (value ?? '').replace(/\s+/g, ' ').trim();
+  const who = clean(input.population) || (clean(input.deliverable) ? `${clean(input.deliverable)} buyers` : 'buyer not yet named');
+  const from = clean(input.publisher) || urlParts(input.sourceUrl)?.host || 'an unnamed source';
+  const title = `${SIGNAL_TITLE[input.signal]}: ${who} — ${from}`;
+  return title.length > 160 ? `${title.slice(0, 159)}…` : title;
+}

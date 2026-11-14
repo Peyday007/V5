@@ -52,7 +52,8 @@ export function readingProblem(verdict: string, acceptance: Acceptance | null, r
     }
     return null;
   }
-  if (status === 'CANDIDATE_ONLY' || status === 'NO_CANDIDATE') {
+  // NOT_SUPPORTED: the goal as stated is out of reach by arithmetic — no plan, held to the candidate's rule.
+  if (status === 'CANDIDATE_ONLY' || status === 'NO_CANDIDATE' || status === 'NOT_SUPPORTED') {
     if (verdict === 'RECOMMENDABLE') return 'is only a candidate but its verdict says RECOMMENDABLE';
     if (accepted || probability) return 'is only a candidate yet holds an accepted plan or a probability';
     return null;

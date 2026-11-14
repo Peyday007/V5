@@ -86,6 +86,38 @@ export const SHARED_OUTREACH_CORRELATION = 0.5;
  */
 export const CONTACTS_PER_DAY_BOUNDS = { low: 10, high: 60 } as const;
 
+/**
+ * An opening as a reconstructed strategy holds it (§99): the card's own
+ * inputs, plus what a costed move added. None of these exist on a card read
+ * from the database; each is set only by an operator in `reconstruction.ts`.
+ */
+export type PlannedOpening = ModelledOpportunity & {
+  /** A deposit at signing: this share of the price (assumed) arrives `days` after the sale; the balance keeps the opening's own timing. */
+  deposit?: { low: number; high: number; days: number };
+  /**
+   * The market its deals come from. A channel or partner clone sells into its
+   * original's market: their deals together never exceed one draw of its volume.
+   */
+  marketKey?: string;
+  /** It sells only once a purchase made after proof has been made (`GateInput.id`). */
+  gate?: string;
+  /** What reconstruction did to its terms: the unit price as a multiple of the card's, and its one transaction shape. */
+  terms?: { priceFactor: number; shape: string | null; units: number };
+};
+
+/** A purchase made after proof (§99 Q-7): bought in a world only once cash has come back and the first weekly tranche fits. */
+export interface GateInput {
+  id: string;
+  /** The day proof is read and the first tranche is paid. */
+  day: number;
+  /** The first week's payment: at most the per-week limit. */
+  tranche: number;
+  /** Everything it costs, paid only in the worlds where it is bought. */
+  cost: number;
+  /** For bought sending capacity: the outreach a day once it is bought (instead of the shared figure). */
+  contactsPerDay?: ModelInput;
+}
+
 export interface Spread {
   p10: number;
   p50: number;
@@ -133,6 +165,10 @@ export interface PortfolioCombination {
   /** Share of worlds in which a member could not start for want of capital. */
   capitalShort: number;
   overSpend: number;
+  /** Median cash kept: settled less direct costs and what was committed. */
+  keptP50?: number;
+  /** Median deals closed. */
+  dealsP50?: number;
 }
 
 /** What the owner's own sends measured, and the interval it puts on a cold-outreach reply rate (§92). */
@@ -343,6 +379,10 @@ export function statedContactsPerDay(resources: string | null): number | null {
 
 interface Worlds {
   cash: number[];
+  /** A deposit's part of the cash, at its own day; absent without a deposit. */
+  early?: { cash: number[]; days: number[] };
+  /** The deals the market could take in each world (the cap applied). */
+  volume: number[];
   days: number[];
   spend: number[];
   contacted: number[];
@@ -384,7 +424,7 @@ export function measuredReplyInterval(rates: { sent: number; replies: number; op
  * per-contact agreement measurement that already contains replying, so it is
  * not a reply rate and is left alone.
  */
-function withMeasuredReply(one: ModelledOpportunity, rates: Pick<MeasuredRatesReading, 'low' | 'high' | 'sent' | 'replies' | 'opportunities' | 'bounced'>, mode: 'BINDS' | 'FLOOR_OF_RANGE' = 'BINDS'): ModelledOpportunity {
+function withMeasuredReply<T extends ModelledOpportunity>(one: T, rates: Pick<MeasuredRatesReading, 'low' | 'high' | 'sent' | 'replies' | 'opportunities' | 'bounced'>, mode: 'BINDS' | 'FLOOR_OF_RANGE' = 'BINDS'): T {
   if (!one.repeatable || one.agreedValue > 0 || one.channel) return one;
   const own = one.respond;
   if (own.value === 1 && own.provenance === 'HISTORICAL') return one;
@@ -412,7 +452,7 @@ function withMeasuredReply(one: ModelledOpportunity, rates: Pick<MeasuredRatesRe
 }
 
 /** One opening's demand and cash, world by world, at one share of the shared outreach. */
-export function demandWorlds(one: ModelledOpportunity, share: number, daysLeft: number, contactsPerDay: ModelInput, worlds: number, seed: number): Worlds {
+export function demandWorlds(one: PlannedOpening, share: number, daysLeft: number, contactsPerDay: ModelInput, worlds: number, seed: number): Worlds {
   const rng = makeRng(seed, one.index * 97 + Math.round(share * 100));
   const draw = {
     price: sampler(one.price, rng),
@@ -423,7 +463,10 @@ export function demandWorlds(one: ModelledOpportunity, share: number, daysLeft: 
     volume: sampler(one.volume, rng),
     perDay: sampler(contactsPerDay, rng),
   };
-  const out: Worlds = { cash: [], days: [], spend: [], contacted: [], interested: [], deals: [], price: [], respond: [], close: [] };
+  // A deposit's share is its own draw, so an opening without one reads exactly as it did.
+  const deposit = one.deposit && one.repeatable && one.agreedValue === 0 ? one.deposit : null;
+  const depositRng = deposit ? makeRng(seed, one.index * 97 + Math.round(share * 100) + 7919) : null;
+  const out: Worlds = { cash: [], days: [], spend: [], contacted: [], interested: [], deals: [], price: [], respond: [], close: [], volume: [], ...(deposit ? { early: { cash: [], days: [] } } : {}) };
   for (let i = 0; i < worlds; i++) {
     const price = Math.max(0, draw.price());
     const days = Math.max(0, draw.days());
@@ -433,24 +476,46 @@ export function demandWorlds(one: ModelledOpportunity, share: number, daysLeft: 
     let contacted: number;
     let interested: number;
     let deals: number;
+    let volume = Number.POSITIVE_INFINITY;
+    let early = 0;
+    let earlyDays = 0;
+    let balanceDeals: number;
     if (one.agreedValue > 0) {
       // Money a buyer already agreed to needs no prospecting.
       contacted = 0;
       interested = 0;
       deals = 0;
+      balanceDeals = 0;
     } else if (!one.repeatable) {
       // A one-off is one named buyer, who asked: the question is only whether they choose us.
       contacted = 1;
       interested = 1;
       deals = rng() < close ? 1 : 0;
+      balanceDeals = deals;
     } else {
       // Only prospects contacted early enough for their cash to settle in time count.
       const sellingDays = Math.max(0, daysLeft - days);
-      contacted = Math.floor(Math.max(0, draw.perDay()) * share * sellingDays);
+      // With a deposit, a sale made later still pays its deposit in time; its balance does not.
+      earlyDays = deposit ? Math.min(days, deposit.days) : 0;
+      const depositDays = deposit ? Math.max(0, daysLeft - earlyDays) : sellingDays;
+      contacted = Math.floor(Math.max(0, draw.perDay()) * share * depositDays);
       interested = poisson(contacted * respond, rng);
-      deals = Math.min(binomial(interested, close, rng), Math.max(0, Math.floor(draw.volume())));
+      // The order of draws is the engine's own, so an opening without a deposit reads exactly as it did.
+      const won = binomial(interested, close, rng);
+      volume = Math.max(0, Math.floor(draw.volume()));
+      deals = Math.min(won, volume);
+      balanceDeals = deposit ? (depositDays > 0 ? (deals * sellingDays) / depositDays : 0) : deals;
+      if (deposit) {
+        const paid = deposit.low + depositRng!() * (deposit.high - deposit.low);
+        early = paid * deals * price;
+        balanceDeals *= 1 - paid;
+      }
     }
-    out.cash.push(one.agreedValue + deals * price);
+    out.cash.push(one.agreedValue + balanceDeals * price);
+    if (out.early) {
+      out.early.cash.push(early);
+      out.early.days.push(earlyDays);
+    }
     out.days.push(days);
     out.spend.push(deals * cost);
     out.contacted.push(contacted);
@@ -459,6 +524,7 @@ export function demandWorlds(one: ModelledOpportunity, share: number, daysLeft: 
     out.price.push(price);
     out.respond.push(respond);
     out.close.push(close);
+    out.volume.push(volume);
   }
   return out;
 }
@@ -480,7 +546,7 @@ const INPUT_NAMES: Array<[keyof ModelledOpportunity, string]> = [
 ];
 
 export function evaluateGoalPortfolio(input: {
-  openings: ModelledOpportunity[];
+  openings: PlannedOpening[];
   remaining: number;
   daysLeft: number;
   capitalCeiling: number | null;
@@ -506,6 +572,8 @@ export function evaluateGoalPortfolio(input: {
    */
   contactsPerDay?: ModelInput;
   committed?: { capital: number; spend: number } | null;
+  /** Purchases made only after proof (§99 Q-7), each bought in a world only when proof and its first tranche are there. */
+  gates?: GateInput[];
   /** Internal: apply the measured record as binding regardless of its authority (the as-is floor). */
   forceMeasured?: boolean;
   /**
@@ -555,6 +623,7 @@ export function evaluateGoalPortfolio(input: {
   const spendCeiling = input.capitalCeiling === null ? null : Math.max(0, input.capitalCeiling - (committed?.spend ?? 0));
   const knowledgeFor = (projectId: string): CashKnowledge | null =>
     input.knowledge !== undefined ? (input.knowledge && input.knowledge.projectId === projectId ? input.knowledge : null) : cachedCashKnowledge(projectId);
+  const gates = input.gates ?? [];
   const histories = new Map<string, MarketHistory>();
   const activities: Activity[] = [];
   const memberOf = new Map<string, PortfolioMember>();
@@ -592,6 +661,7 @@ export function evaluateGoalPortfolio(input: {
     }
     const reach = one.channel?.perDay ?? contactsPerDay;
     const full = demandWorlds(one, 1, input.daysLeft, reach, worlds, seed);
+    const revenue = one.deposit && full.early ? full.cash.map((c, i) => c + full.early!.cash[i]!) : full.cash;
     demand.push({
       opportunityId: id,
       title: one.opportunity.title,
@@ -599,7 +669,7 @@ export function evaluateGoalPortfolio(input: {
       contacted: spread(full.contacted),
       interested: spread(full.interested),
       deals: spread(full.deals),
-      revenue: spread(full.cash),
+      revenue: spread(revenue),
       spend: spread(full.spend),
       days: spread(full.days),
       price: spread(full.price),
@@ -619,17 +689,31 @@ export function evaluateGoalPortfolio(input: {
     const history = knowledge ? acquireMarketHistory(knowledge, one.opportunity) : null;
     if (history) histories.set(id, history);
     const keys = shares.map((share) => `${id}@${share}`);
+    // Bought sending capacity that arrives only after proof: the shared openings also read what they sell with it.
+    const capacityGate = !one.channel && one.repeatable && one.agreedValue === 0 ? gates.find((g) => g.contactsPerDay) : undefined;
+    const ownGate = one.gate ? gates.find((g) => g.id === one.gate) : undefined;
     for (const share of shares) {
       const w = share === 1 ? full : demandWorlds(one, share, input.daysLeft, reach, worlds, seed);
       const key = `${id}@${share}`;
       memberOf.set(key, { opportunityId: id, title: one.opportunity.title, share: share > 0 ? share : null });
+      const samples = (x: Worlds) => ({ cash: x.cash, days: x.days, spend: x.spend, deals: x.deals, ...(x.early ? { early: x.early } : {}) });
+      const zero = w.cash.map(() => 0);
+      const gated = ownGate
+        ? // A channel bought after proof sells nothing in a world where it was not bought.
+          { gate: ownGate.id, ...samples(w) }
+        : capacityGate && share > 0
+          ? { gate: capacityGate.id, ...samples(demandWorlds(one, share, input.daysLeft, capacityGate.contactsPerDay!, worlds, seed)) }
+          : null;
+      const base = ownGate ? { cash: zero, days: w.days, spend: zero, deals: zero } : samples(w);
       activities.push({
         key,
         label: one.opportunity.title.slice(0, 80),
-        cash: w.cash,
-        days: w.days,
-        // A cost the buyer's prepayment funds is not the owner's money at risk (§99).
-        spend: one.fundedByBuyer ? w.spend.map(() => 0) : w.spend,
+        ...base,
+        // A cost the buyer's prepayment funds still leaves the cash kept; it is exempt only from the owner's spending ceiling (§99).
+        ceilingExempt: !!one.fundedByBuyer,
+        market: one.marketKey ?? id,
+        marketVolume: w.volume,
+        ...(gated ? { gated } : {}),
         justified: unestablished.length === 0,
         evidence: { ...(sampleSize !== undefined ? { sampleSize } : {}), ...(history ? { history: historyEvidence(history) } : {}) },
         capital: capital.amount,
@@ -648,6 +732,10 @@ export function evaluateGoalPortfolio(input: {
     ...(spendCeiling !== null ? { spendCeiling } : {}),
     riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
     ...(input.causal === false ? {} : { safeguards: candidateSafeguards(activities, startingCapital, input.capitalCeiling) }),
+    // A goal's target is cash kept: settled less direct costs and what was committed to reach buyers (§99).
+    reachOn: 'KEPT',
+    fixedCost: committed?.spend ?? 0,
+    ...(gates.length ? { gates: gates.map(({ id, day, tranche, cost }) => ({ id, day, tranche, cost })) } : {}),
     worlds,
     seed,
   });
@@ -659,6 +747,8 @@ export function evaluateGoalPortfolio(input: {
     settledP90: reading.settledP90,
     capitalShort: reading.capitalShort,
     overSpend: reading.overSpend,
+    ...(reading.keptP50 !== undefined ? { keptP50: reading.keptP50 } : {}),
+    ...(reading.dealsP50 !== undefined ? { dealsP50: reading.dealsP50 } : {}),
   });
   const best = result.best ? combination(result.best) : null;
   const seen = new Set<string>();

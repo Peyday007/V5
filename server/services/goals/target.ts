@@ -21,6 +21,7 @@
 import { getDb } from '../../db/database.ts';
 import { totalsByKind } from '../../repos/cashLedger.ts';
 import { getProject } from '../../repos/projects.ts';
+import { getWorkstream } from '../../repos/register.ts';
 import { GOAL_METRICS, type GoalMetric, type GoalTarget, type Workstream } from '../../domain/register.ts';
 
 export const GOAL_METRIC_LABEL: Record<GoalMetric, string> = {
@@ -151,10 +152,51 @@ export async function readTarget(goal: Workstream, now: Date = new Date()): Prom
 export type SetTargetResult = { ok: true; target: GoalTarget } | { ok: false; reason: string };
 
 /**
+ * The live targeted goal already counting the same figure on this project's
+ * ledger in this currency, other than `exceptGoalId` (G-7). Progress is the
+ * ledger total since the target was set, so two live targets of one metric on
+ * one project and currency would both count the same dollars; the second one
+ * is refused instead. Two goals reading different figures of one ledger
+ * (settled cash and collected cash, GOAL-02) measure different things and
+ * stay allowed.
+ */
+export async function liveTargetOn(projectId: string, currency: string, exceptGoalId: string | null, metric: string): Promise<{ id: string; title: string } | null> {
+  const row = await getDb().get<{ id: string; title: string }>(
+    `SELECT id, title FROM workstreams
+      WHERE target_project_id = ? AND target_currency = ? AND target_metric = ? AND target_set_at IS NOT NULL
+        AND archived_at IS NULL AND cancelled_at IS NULL AND id <> ?
+      ORDER BY created_at, id LIMIT 1`,
+    [projectId, currency, metric, exceptGoalId ?? ''],
+  );
+  return row ?? null;
+}
+
+export function sharedLedgerReason(other: { id: string; title: string }, currency: string): string {
+  return `Goal ${other.id} ("${other.title.slice(0, 80)}") already counts this figure on this project's ${currency} ledger; two live targets of one figure on one ledger would both count the same money. Cancel or archive it, or use another project.`;
+}
+
+interface TargetLimits {
+  capitalCeilingCents?: number | null;
+  hoursCeiling?: number | null;
+  capitalBeforeProofCents?: number | null;
+  capitalPerWeekCents?: number | null;
+}
+
+function badLimit(input: TargetLimits): string | null {
+  for (const [name, value] of [['capital', input.capitalCeilingCents], ['hours', input.hoursCeiling], ['before-proof', input.capitalBeforeProofCents], ['per-week', input.capitalPerWeekCents]] as const) {
+    if (value !== undefined && value !== null && (!Number.isInteger(value) || value < 0)) return `The ${name} ceiling must be a whole number, zero or more.`;
+  }
+  return null;
+}
+
+/**
  * Record a person's target on a goal. Refuses what it cannot count honestly:
- * an unknown figure, a non-positive amount, a project with no ledger, or a
- * currency the sprint is not in. Re-setting restarts the count from now and is
- * recorded, so moving the target is visible rather than silent.
+ * an unknown figure, a non-positive amount, a project with no ledger, a
+ * currency the sprint is not in, or a ledger another live goal already counts
+ * (G-7). Moving the figure, the amount, the currency or the project restarts
+ * the count from now and is recorded, so moving the target is visible rather
+ * than silent; re-setting the same target with other limits keeps the count
+ * (G-5) — `setTargetLimits` is the writer for limits alone.
  */
 export async function setTarget(input: {
   goal: Workstream;
@@ -178,16 +220,21 @@ export async function setTarget(input: {
   if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) return { ok: false, reason: 'The amount must be a positive whole number of cents.' };
   if (!/^[A-Z]{3}$/.test(input.currency)) return { ok: false, reason: 'The currency must be a three-letter code.' };
   if (!(await getProject(input.projectId))) return { ok: false, reason: 'No project with that id.' };
-  for (const [name, value] of [['capital', input.capitalCeilingCents], ['hours', input.hoursCeiling], ['before-proof', input.capitalBeforeProofCents], ['per-week', input.capitalPerWeekCents]] as const) {
-    if (value !== undefined && value !== null && (!Number.isInteger(value) || value < 0)) return { ok: false, reason: `The ${name} ceiling must be a whole number, zero or more.` };
-  }
+  const bad = badLimit(input);
+  if (bad) return { ok: false, reason: bad };
+  const other = await liveTargetOn(input.projectId, input.currency, input.goal.id, input.metric);
+  if (other) return { ok: false, reason: sharedLedgerReason(other, input.currency) };
   const resources = input.resources?.trim() ? input.resources.trim().slice(0, 2000) : null;
-  const at = (input.now ?? new Date()).toISOString();
+  const now = (input.now ?? new Date()).toISOString();
+  // The count restarts only when what is counted moves; the row, not the caller's copy, says what it was.
+  const before = (await getWorkstream(input.goal.id))?.target ?? null;
+  const same = before !== null && before.metric === input.metric && before.amountCents === input.amountCents && before.currency === input.currency && before.projectId === input.projectId;
+  const at = same ? before.setAt : now;
   await getDb().run(
     `UPDATE workstreams SET target_metric = ?, target_amount_cents = ?, target_currency = ?, target_project_id = ?,
             capital_ceiling_cents = ?, hours_ceiling = ?, target_resources = ?,
             target_capital_before_proof_cents = ?, target_capital_per_week_cents = ?, target_set_at = ?, updated_at = ? WHERE id = ?`,
-    [input.metric, input.amountCents, input.currency, input.projectId, input.capitalCeilingCents ?? null, input.hoursCeiling ?? null, resources, input.capitalBeforeProofCents ?? null, input.capitalPerWeekCents ?? null, at, at, input.goal.id],
+    [input.metric, input.amountCents, input.currency, input.projectId, input.capitalCeilingCents ?? null, input.hoursCeiling ?? null, resources, input.capitalBeforeProofCents ?? null, input.capitalPerWeekCents ?? null, at, now, input.goal.id],
   );
   return {
     ok: true,
@@ -204,4 +251,32 @@ export async function setTarget(input: {
       setAt: at,
     },
   };
+}
+
+/**
+ * Change only what a targeted goal may use — capital, hours, the before-proof
+ * and per-week limits, and the resources — never what it counts or since when
+ * (G-5). A limit left out is kept; `null` clears it. `updated_at` moves, so the
+ * plan's fingerprint reads the goal again.
+ */
+export async function setTargetLimits(input: TargetLimits & { goal: Workstream; resources?: string | null; now?: Date }): Promise<SetTargetResult> {
+  const current = (await getWorkstream(input.goal.id))?.target ?? null;
+  if (!current) return { ok: false, reason: 'The goal has no target; set one first.' };
+  const bad = badLimit(input);
+  if (bad) return { ok: false, reason: bad };
+  const keep = <T>(value: T | undefined, kept: T): T => (value === undefined ? kept : value);
+  const next: GoalTarget = {
+    ...current,
+    capitalCeilingCents: keep(input.capitalCeilingCents, current.capitalCeilingCents),
+    hoursCeiling: keep(input.hoursCeiling, current.hoursCeiling),
+    capitalBeforeProofCents: keep(input.capitalBeforeProofCents, current.capitalBeforeProofCents),
+    capitalPerWeekCents: keep(input.capitalPerWeekCents, current.capitalPerWeekCents),
+    resources: input.resources === undefined ? current.resources : input.resources?.trim() ? input.resources.trim().slice(0, 2000) : null,
+  };
+  await getDb().run(
+    `UPDATE workstreams SET capital_ceiling_cents = ?, hours_ceiling = ?, target_resources = ?,
+            target_capital_before_proof_cents = ?, target_capital_per_week_cents = ?, updated_at = ? WHERE id = ?`,
+    [next.capitalCeilingCents, next.hoursCeiling, next.resources, next.capitalBeforeProofCents, next.capitalPerWeekCents, (input.now ?? new Date()).toISOString(), input.goal.id],
+  );
+  return { ok: true, target: next };
 }

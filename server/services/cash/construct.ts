@@ -309,22 +309,62 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
     .digest('hex');
   const held = constructionMemo.get(memoKey);
   if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) return structuredClone(held.result);
-  const designs = allDesigns(STRUCTURE_KEYS);
-  const ctx = { priced, tiedUp, input, limits, targets, exclusions, now };
-
-  const out: ConstructedArrangement[] = [];
+  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, input, limits, targets, exclusions, now };
   /*
    * Composing is synchronous quantitative work — several reconstructions per
    * design, up to `MAX_CONSTRUCTIONS` designs. Run in one stretch it held
    * Node's only event loop for 11.6 s in production (2026-11-05 23:29Z and
-   * 23:33Z, both processes, inside russell:goal-plans), and every pool
-   * checkout, lease heartbeat and health check waiting meanwhile timed out.
-   * Handing the loop back every `YIELD_EVERY_MS` keeps the same result and
-   * lets everything else in the process run beside it.
+   * 23:33Z, both processes, inside russell:goal-plans); run in 25 ms slices it
+   * was still ~11 s of the main thread's CPU a minute (2026-11-14), and a
+   * single design's reconstructions could exceed a slice. It runs on the
+   * evaluator pool's niced threads, the same ones that judge the plan (§101),
+   * and inline — yielding every `YIELD_EVERY_MS` — only when no thread can
+   * start. Either way it is the one `composeConstruction`.
    */
+  let ranked: ConstructedArrangement[];
+  const { sharedEvaluator } = await import('../goals/reasoning/evaluatorPool.ts');
+  const evaluator = sharedEvaluator();
+  try {
+    ranked = evaluator.construct ? await evaluator.construct(job) : await composeConstruction(job, YIELD_EVERY_MS);
+  } finally {
+    await evaluator.close();
+  }
+  constructionMemo.set(memoKey, { at: Date.now(), result: structuredClone(ranked) });
+  while (constructionMemo.size > CONSTRUCTION_MEMO_MAX) constructionMemo.delete(constructionMemo.keys().next().value!);
+  return ranked;
+}
+
+/** Everything composition reads, as plain data, so it can run on a pool thread (§109). */
+export interface ConstructionJob {
+  sectors: Array<{ name: string | null; demand: Primitive[]; needs: Primitive[]; supply: Primitive[] }>;
+  /** The project's live openings. */
+  opportunities: CashOpportunity[];
+  /** Per base structure, the held opening that shows it working. */
+  precedent: Array<[Structure, CashOpportunity]>;
+  capability: Primitive | null;
+  priced: Observation[];
+  tiedUp: Observation[];
+  input: ConstructionInput;
+  limits: GoalLimits;
+  targets: EconomicProperty[];
+  exclusions: readonly ExclusionClass[];
+  now: Date;
+}
+
+/**
+ * Compose, stress and rank every arrangement a job's parts support. Pure: the
+ * same job gives the same arrangements on any thread. `yieldEveryMs` hands the
+ * loop back between designs when it runs on the server's own thread.
+ */
+export async function composeConstruction(job: ConstructionJob, yieldEveryMs: number | null = null): Promise<ConstructedArrangement[]> {
+  const { opportunities, capability, priced, tiedUp, input, limits, targets, exclusions, now } = job;
+  const precedentByBase = new Map(job.precedent);
+  const designs = allDesigns(STRUCTURE_KEYS);
+  const ctx = { priced, tiedUp, input, limits, targets, exclusions, now };
+  const out: ConstructedArrangement[] = [];
   let lastYield = Date.now();
   const breathe = async (): Promise<void> => {
-    if (Date.now() - lastYield < YIELD_EVERY_MS) return;
+    if (yieldEveryMs === null || Date.now() - lastYield < yieldEveryMs) return;
     await new Promise<void>((resolve) => setImmediate(resolve));
     lastYield = Date.now();
   };
@@ -333,7 +373,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   outer: for (const design of designs) {
     const def = STRUCTURES[design.base];
     if (def.needsDeliverable && !capability) continue;
-    for (const s of sectors.values()) {
+    for (const s of job.sectors) {
       for (const demand of s.demand) {
         const related = opportunities.filter((one) => norm(one.payer) === norm(demand.name));
         const heldStructures = new Set(related.map((one) => one.mechanism as string));
@@ -357,10 +397,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
     }
   }
   out.push(...reverseArrangements({ ...ctx, designs, capability }));
-  const ranked = rank(out, limits, targets);
-  constructionMemo.set(memoKey, { at: Date.now(), result: structuredClone(ranked) });
-  while (constructionMemo.size > CONSTRUCTION_MEMO_MAX) constructionMemo.delete(constructionMemo.keys().next().value!);
-  return ranked;
+  return rank(out, limits, targets);
 }
 
 /** How long an unchanged construction is reused, and how many distinct ones are held. */
@@ -561,9 +598,12 @@ function compose(args: {
   };
   const facts = designFacts(design);
   const shape = describeDesign(design);
+  // The need comes before the design description: the label is cut to 160
+  // characters, and two needs of one buyer under one long design description
+  // otherwise read as the same arrangement twice.
   const label = (args.origin === 'REVERSE'
     ? `Reverse: ${shape}`
-    : `${demand.name}: ${shape}${supply && supply.from !== 'CAPABILITY' ? ` (${supply.name})` : ''}`).slice(0, 160);
+    : `${demand.name}${need ? ` — ${need.name}` : ''}: ${shape}${supply && supply.from !== 'CAPABILITY' ? ` (${supply.name})` : ''}`).slice(0, 160);
   const established =
     value && value.distributionJustified
       ? ` What these buyers pay is already partly established (${input.currency} ${Math.round(value.p10)}–${Math.round(value.p90)} from ${value.used.length} published figure${value.used.length === 1 ? '' : 's'}), so confirm it rather than start over.`

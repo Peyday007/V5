@@ -26,7 +26,8 @@ function arrangement(over: Partial<ConstructedArrangement> & { key: string; p50:
     origin: 'FORWARD',
     precedent: null,
     sector: 'property services',
-    demand: { name: 'landlords', claimId: null, from: 'INDUSTRY_MAP', ref: 'ind_1' },
+    // A population of its own per arrangement unless a case says otherwise: one population is picked once.
+    demand: { name: 'landlords', claimId: null, from: 'INDUSTRY_MAP', ref: `ind_${over.key}` },
     need: null,
     supply: null,
     label: `Broker work for ${over.key}`,

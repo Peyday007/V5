@@ -37,7 +37,7 @@
  */
 import type { Bin } from '../../domain/types.ts';
 import type { LinkKind, Workstream, WorkstreamLink } from '../../domain/register.ts';
-import { PURPOSE_LABELS } from '../../domain/register.ts';
+import { PURPOSE_LABELS, STATE_RANK, type WorkstreamState } from '../../domain/register.ts';
 import {
   COMMITMENT_LABELS,
   binPriorityForRank,
@@ -592,6 +592,56 @@ async function workOf(bins: Bin[], now: string): Promise<GoalWork[]> {
     }));
 }
 
+/**
+ * Whether a bin can actually move: queued or leased, not held, not refused by
+ * the dispatcher for an operator reason, and not out of attempts.
+ */
+function liveWork(one: GoalWork): boolean {
+  return (
+    (one.state === 'READY' || one.state === 'LEASED') &&
+    one.heldReason === null &&
+    !one.exhausted &&
+    one.dispatch?.waitsFor !== 'OPERATOR' &&
+    one.dispatch?.state !== 'ABANDONED'
+  );
+}
+
+/**
+ * A goal's state, from its register view and its live work.
+ *
+ * A goal with a target metric is pursued along many paths at once, and is met
+ * by the ledger rather than by any one path delivering. One blocked linked path
+ * does not stop the goal while other linked work is live: it reads the furthest
+ * non-blocked reading (at least `IN_PROGRESS`), and the blocked path is still
+ * listed among its blockers. Production 2026-11-14 read a $10K goal BLOCKED on
+ * one parked idea while 15 READY bins waited. A goal with no target keeps the
+ * register's rule unchanged: a blocker beats anything below a merge.
+ */
+function goalState(
+  goal: Workstream,
+  view: WorkstreamView,
+  work: GoalWork[],
+): { state: WorkstreamState; stateEvidence: string } {
+  if (view.state !== 'BLOCKED' || !goal.target) return { state: view.state, stateEvidence: view.stateEvidence };
+  // Only a blocked idea (one path among many) yields to live work. A mission or packet waiting on a
+  // person, or a linked row gone, is the goal's own blocker and still reads BLOCKED (review F5).
+  if (view.readings.some((one) => one.state === 'BLOCKED' && one.kind !== 'CANDIDATE')) return { state: view.state, stateEvidence: view.stateEvidence };
+  const live = work.filter(liveWork);
+  const progressing = view.readings.filter(
+    (one) => one.state !== null && one.state !== 'BLOCKED' && STATE_RANK[one.state] >= STATE_RANK.IN_PROGRESS,
+  );
+  if (live.length === 0 && progressing.length === 0) return { state: view.state, stateEvidence: view.stateEvidence };
+  let best: LinkReading | null = null;
+  for (const one of progressing) {
+    if (!best || STATE_RANK[one.state!] > STATE_RANK[best.state!]) best = one;
+  }
+  if (best) return { state: best.state!, stateEvidence: `${best.kind}: ${best.evidence}` };
+  return {
+    state: 'IN_PROGRESS',
+    stateEvidence: `bins: ${live.length} READY/LEASED bin(s) carry this goal; a blocked path is listed among its blockers (${view.stateEvidence})`,
+  };
+}
+
 function remedyFor(reading: LinkReading): { remedy: string; by: NextActor } {
   switch (reading.kind) {
     case 'MISSION':
@@ -920,8 +970,7 @@ export async function assembleGoals(options: {
       lifecycle,
       lifecycleReason: reason,
       target: targets.get(goal.id) ?? null,
-      state: view.state,
-      stateEvidence: view.stateEvidence,
+      ...goalState(goal, view, work),
       authority,
       linked: view.readings.filter((one) => !view.sources.includes(one)),
       sources: view.sources,
@@ -1048,7 +1097,18 @@ function waitingAndNext(input: {
       },
     };
   }
-  const operator = input.blockers.find((one) => one.by === 'OPERATOR' || one.by === 'PERSON');
+  /*
+   * For a goal with a target metric, a blocker on one linked path does not
+   * become what the goal waits for while its own work is live: the work moves,
+   * and the blocker stays listed. A bin's own blocker (unroutable, abandoned,
+   * exhausted) is about the work itself and still counts.
+   */
+  const binIds = new Set(work.map((one) => one.binId));
+  const pathOnly = goal.target !== null && work.some(liveWork);
+  const operator = input.blockers.find(
+    // Only an idea's blocker (a CANDIDATE path, rcn_…) gives way to live work; a person-blocked mission or packet does not (review F5).
+    (one) => (one.by === 'OPERATOR' || one.by === 'PERSON') && !(pathOnly && !binIds.has(one.ref) && one.ref.startsWith('rcn_')),
+  );
   if (operator) {
     return {
       waiting: { kind: operator.by === 'PERSON' ? 'PERSON' : 'OPERATOR', detail: operator.text, since: operator.since },
