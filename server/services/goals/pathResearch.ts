@@ -91,6 +91,24 @@ const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> =
   ],
 };
 
+const ASK_BY_FIELD = new Map(Object.values(FIELDS_FOR).flatMap((asks) => asks ?? []).map((a) => [a.field, a] as const));
+
+/**
+ * The card fields the adopted plan's research priority asks of one opening
+ * (C-9): its `plan:` conditions decided RESEARCH_FIRST. Each goes through the
+ * ordinary question door below, keyed per opening and field as every path
+ * question is. Pure.
+ */
+export function planFieldsFor(reading: Pick<PlanReading, 'researchPriority'>, opportunityId: string): string[] {
+  return [
+    ...new Set(
+      (reading.researchPriority ?? [])
+        .filter((one) => one.variable.startsWith('plan:') && one.opportunityId === opportunityId && one.decision === 'RESEARCH_FIRST' && one.field && ASK_BY_FIELD.has(one.field))
+        .map((one) => one.field!),
+    ),
+  ];
+}
+
 export async function researchGoalPaths(input: {
   reading: PlanReading;
   projectId: string;
@@ -205,6 +223,11 @@ export async function researchGoalPaths(input: {
     const sold = squeeze && selling.has(one.opportunityId);
     let asks = one.missing.flatMap((link) => FIELDS_FOR[link] ?? []);
     if (sold && !one.volumeEstablished && !asks.some((a) => a.field === 'buyerVolume')) asks = [...asks, FIELDS_FOR.MARKET_VOLUME![0]!];
+    // The adopted plan's own conditions on this opening (C-9): what its sweep found the plan needs or swings on.
+    for (const field of planFieldsFor(input.reading, one.opportunityId)) {
+      const ask = ASK_BY_FIELD.get(field);
+      if (ask && !asks.some((a) => a.field === field)) asks = [...asks, ask];
+    }
     if (asks.length === 0 && (one.volumeEstablished !== false || one.competitiveAward)) continue;
     /*
      * Worth asking about only if the answer could change what Brain pursues.

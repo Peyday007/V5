@@ -539,6 +539,8 @@ export const EVENT_TYPES = [
   'OWNER_PLAN_READY_NOTIFIED',
   // The hourly operations report waiting for the owner's conversation (operator/operationsReport.ts).
   'OWNER_OPERATIONS_REPORT',
+  // A goal's plan read absorbed a failure (construction, library, reconstruction) and was read thinner (goals/plan.ts).
+  'GOAL_PLAN_DEGRADED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

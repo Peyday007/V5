@@ -14902,10 +14902,30 @@ changeable by code review only). A plan is ACCEPTED only on one of:
 1. `TARGET_MET` — the ledger holds the target.
 2. `EVIDENCED_PORTFOLIO` — the quant engine's best combination with basis
    PROBABILITY (every input of every member on evidence or this Brain's own
-   measurements), every member's chain complete, and the **Wilson lower
-   bound** of its reach over the worlds evaluated (`GoalPortfolio.worlds`)
-   at or over 90%. Shared-outreach correlation stays a stated assumption on
-   the reading.
+   measurements), every member's chain complete, and the quant engine's own
+   assurance (`GoalPortfolio.assurance`) claiming at least 90%: its lower
+   bound over the **smallest real evidence sample** behind any member at or
+   over 90%. (Amended in the planning recovery, C-7: the Wilson bound used to
+   be read over the number of *simulated* worlds, so 95% of 2,000 worlds on
+   inputs measured on 12 cases was accepted. Simulated worlds are not
+   evidence.) Shared-outreach correlation stays a stated assumption on the
+   reading.
+
+   **Planning recovery (C-6, C-8, C-10).** A reading is one plan: the §99
+   reconstruction's strongest plan becomes the candidate (`source
+   RECONSTRUCTED`, still coverage when any change is assumed), the next step
+   and the sales order when it beats the plan as held and is not flagged
+   implausible; otherwise `PlanReading.adoption` says it is hypothetical and
+   why. `PlanReading.steps` is that plan as an execution sequence (start day,
+   cost, basis, owner — a person only for a payment, credential or legal
+   commitment — dependency, kill criterion, and execution dependencies that
+   never block planning). `NOT_SUPPORTED` is read only on arithmetic: a
+   structural reconstruction whose headroom is under the requirement, and
+   either every transaction structure impossible or no headroom with no
+   structure outreach could sell. It names the constraint to relax and stops
+   widening until the goal's terms or inputs change; the deadline and a
+   recorded outcome stop it too. A pool that is merely weak still searches
+   (§65).
 3. `MEASURED_RECORD` — the chosen strategy's chain complete and this Brain's
    own record of how its accepted plans ended has a lower bound ≥ 90%.
 

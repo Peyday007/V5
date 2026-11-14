@@ -62,11 +62,12 @@ import type { Workstream } from '../../domain/register.ts';
 import { decideResearch, type ResearchDecision } from '../quant/deadline.ts';
 import { goalExecutionPolicy, MAX_CONCURRENT_SALES, type GoalExecutionPolicy } from '../../domain/goalPolicy.ts';
 import type { GoalPortfolio } from './portfolio.ts';
-import { sendPortfolioNeeds } from './portfolioNeeds.ts';
+import { sendPlanQuestions, sendPortfolioNeeds } from './portfolioNeeds.ts';
 import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
-import { readPathways, type BrainCapabilities, type PathwayReading } from './pathways.ts';
-import { reconstructPlan, type Reconstruction } from './reconstruction.ts';
+import { readPathways, requiredStructures, type BrainCapabilities, type GoalStructures, type PathwayReading } from './pathways.ts';
+import { MATERIAL_P50, MATERIAL_REACH, reconstructPlan, type Reconstruction } from './reconstruction.ts';
+import { recordEvent } from '../../repos/events.ts';
 import { sharedEvaluator } from './reasoning/evaluatorPool.ts';
 import { inventDirections } from './reasoning/invent.ts';
 import { loadLibrary, recordExploration } from './reasoning/learning.ts';
@@ -157,7 +158,13 @@ export interface StrategyReading {
  * reported as meeting the objective. NO_CANDIDATE — nothing to pursue yet.
  */
 export interface PlanAcceptance {
-  status: 'ACCEPTED' | 'CANDIDATE_ONLY' | 'NO_CANDIDATE';
+  /**
+   * NOT_SUPPORTED — the goal as stated is arithmetically out of reach: the
+   * openings held cannot reach it at their most favourable, and no transaction
+   * structure the goal's own figures allow could carry it (`judgeFeasibility`).
+   * Never read from a mere lack of found openings (§65).
+   */
+  status: 'ACCEPTED' | 'CANDIDATE_ONLY' | 'NO_CANDIDATE' | 'NOT_SUPPORTED';
   required: number;
   /** Only a defensible probability: the ledger, an all-evidence Monte Carlo, or this Brain's own record. */
   probability: { value: number; lowerBound: number; basis: 'TARGET_MET' | 'EVIDENCED_PORTFOLIO' | 'MEASURED_RECORD'; sample: number; note: string } | null;
@@ -167,7 +174,8 @@ export interface PlanAcceptance {
   candidate: {
     label: string;
     opportunityIds: string[];
-    source: 'QUANT_PORTFOLIO' | 'STRATEGY' | 'PATHWAYS';
+    /** RECONSTRUCTED — the reconstruction's strongest plan (§99), adopted because it beats the plan as held. */
+    source: 'QUANT_PORTFOLIO' | 'STRATEGY' | 'PATHWAYS' | 'RECONSTRUCTED';
     settledP50: number | null;
     /** Share of worlds reaching the target, and whether it is a probability or only coverage. */
     reach: number | null;
@@ -280,6 +288,60 @@ export interface PlanReading {
    * and the method's own failures. Null when nothing could be modelled.
    */
   pathways: PathwayReading | null;
+  /**
+   * Which plan this reading is (C-6): one plan, never three. RECONSTRUCTED when
+   * the reconstruction's strongest plan beat the plan as held and is the
+   * acceptance candidate, the next step and the sales order; otherwise the plan
+   * as held, and a reconstruction that ran is said to be hypothetical, with why.
+   */
+  adoption: PlanAdoption;
+  /** The adopted plan as an execution sequence (C-8): what, when, at what cost, on what basis, by whom, and what stops it. */
+  steps: PlanStep[];
+  /** Arithmetic infeasibility of the goal as stated (C-10), or null. Set iff acceptance is NOT_SUPPORTED. */
+  infeasible: InfeasibleConclusion | null;
+  /** What failed while this reading was composed, so a thinner reading is never mistaken for a complete one (C-13). */
+  degraded: string[];
+}
+
+export interface PlanAdoption {
+  source: 'RECONSTRUCTED' | 'BASELINE';
+  /** True when a reconstruction ran and is not the plan: its figures describe changes nobody has adopted. */
+  hypothetical: boolean;
+  reason: string;
+}
+
+export type StepBasis = 'EVIDENCE' | 'ESTIMATE' | 'ASSUMPTION';
+
+export interface PlanStep {
+  order: number;
+  label: string;
+  detail: string;
+  startDay: { low: number; high: number } | null;
+  /** Money it commits before any opening pays, major units. */
+  cost: number;
+  basis: StepBasis;
+  /** PERSON only for a rule-11 kind: a payment, a credential, a legal commitment. */
+  owner: 'BRAIN' | 'PERSON';
+  ownerReason: string | null;
+  /** The earlier step this one needs, by `order`, or null. */
+  dependsOn: number | null;
+  /** The measurement that invalidates the step, and what then happens. */
+  kill: string;
+  /**
+   * What executing it needs that is not in place (a permission to contact
+   * buyers, invoicing, a billing provider). Listed, never a block on
+   * constructing or evaluating the plan.
+   */
+  execution: string[];
+}
+
+export interface InfeasibleConclusion {
+  /** Why, in arithmetic. */
+  reason: string;
+  /** The constraints to relax, the one the diagnosis names first. */
+  relax: Array<{ constraint: 'DEADLINE' | 'CAPITAL' | 'TARGET'; suggestion: string }>;
+  headroomReach: number;
+  required: number;
 }
 
 export interface InferredInput {
@@ -655,7 +717,15 @@ export function judgeAcceptance(input: {
   // 2. The evidenced portfolio.
   if (best && input.portfolio) {
     const worlds = Math.max(1, input.portfolio.worlds);
-    const bounds = wilson(Math.round(best.reach * worlds), worlds);
+    /*
+     * The number of simulated worlds is not evidence: 2,000 worlds drawn from
+     * an input measured on 12 cases are 12 cases (C-7). The quant engine's own
+     * assurance reads the bound over the smallest real sample behind any
+     * member, and nothing else may claim 90%.
+     */
+    const assurance = input.portfolio.assurance ?? null;
+    const sample = assuranceSample(assurance);
+    const bounds = { low: assurance?.range?.low ?? 0 };
     const missingLinks = bestIds.flatMap((id) => {
       const c = input.considered.find((one) => one.opportunityId === id);
       return c ? c.missing.map((link) => `${id}: ${CHAIN_LABEL[link]}`) : [`${id}: not judged on its chain`];
@@ -666,8 +736,15 @@ export function judgeAcceptance(input: {
       );
     } else if (missingLinks.length > 0) {
       shortfalls.push(`the evidenced combination's chain is incomplete: ${missingLinks.slice(0, 4).join('; ')}`);
+    } else if (!assurance || !assurance.claimsAtLeast90 || !assurance.range) {
+      shortfalls.push(
+        `the evidenced combination reaches the target in ${pct(best.reach)} of ${worlds} simulated worlds, but simulated worlds are not evidence: ` +
+          (assurance
+            ? `the engine's assurance does not claim ${pct(required)} (${assurance.reason ?? assurance.status})`
+            : 'the engine stated no assurance over the samples behind its inputs'),
+      );
     } else if (bounds.low < required) {
-      shortfalls.push(`the evidenced combination reaches the target in ${pct(best.reach)} of ${worlds} worlds (lower bound ${pct(bounds.low)}), under the required ${pct(required)}`);
+      shortfalls.push(`the evidenced combination's defensible lower bound is ${pct(bounds.low)} over its smallest sample${sample ? ` (${sample})` : ''}, under the required ${pct(required)}`);
     } else {
       return {
         status: 'ACCEPTED',
@@ -676,13 +753,13 @@ export function judgeAcceptance(input: {
           value: best.reach,
           lowerBound: bounds.low,
           basis: 'EVIDENCED_PORTFOLIO',
-          sample: worlds,
-          note: `every input of every member rests on evidence or this Brain's measurements; openings sharing outreach fail together at correlation ${input.portfolio.limits.correlation}`,
+          sample,
+          note: `the lower bound is read over the smallest evidence sample behind any member (${sample}), not over the ${worlds} simulated worlds; openings sharing outreach fail together at correlation ${input.portfolio.limits.correlation}`,
         },
         accepted: { label: candidate!.label, opportunityIds: bestIds },
         candidate,
         shortfalls: [],
-        sentence: `Accepted: the evidenced combination collects the target before the deadline in ${pct(best.reach)} of ${worlds} worlds (lower bound ${pct(bounds.low)} ≥ ${pct(required)}).`,
+        sentence: `Accepted: the evidenced combination collects the target before the deadline with a defensible lower bound of ${pct(bounds.low)} ≥ ${pct(required)} over its smallest evidence sample (${sample}).`,
       };
     }
   } else {
@@ -714,10 +791,29 @@ export function judgeAcceptance(input: {
     accepted: null,
     candidate,
     shortfalls,
-    sentence: candidate
-      ? `NOT ACCEPTED: no plan has a defensible ${pct(required)} probability of collecting the target before the deadline. The strongest candidate is "${candidate.label.slice(0, 160)}"${candidate.reach !== null ? ` (reaches the target in ${pct(candidate.reach)} of worlds, ${candidate.reachBasis === 'PROBABILITY' ? 'a probability' : 'coverage, not a probability'})` : ''}; Brain keeps constructing, combining and comparing strategies.`
-      : `NOT ACCEPTED: no candidate plan yet; Brain keeps constructing and comparing strategies.`,
+    sentence: candidateSentence(candidate, required),
   };
+}
+
+/** The sentence a reading that holds no accepted plan says about its strongest candidate. */
+export function candidateSentence(candidate: PlanAcceptance['candidate'], required: number): string {
+  const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
+  if (!candidate) return 'NOT ACCEPTED: no candidate plan yet; Brain keeps constructing and comparing strategies.';
+  return (
+    `NOT ACCEPTED: no plan has a defensible ${pct(required)} probability of collecting the target before the deadline. ` +
+    `The strongest candidate is ${candidate.source === 'RECONSTRUCTED' ? 'the reconstructed plan ' : ''}"${candidate.label.slice(0, 160)}"` +
+    (candidate.reach !== null ? ` (reaches the target in ${pct(candidate.reach)} of worlds, ${candidate.reachBasis === 'PROBABILITY' ? 'a probability' : 'coverage, not a probability'})` : '') +
+    '; Brain keeps constructing, combining and comparing strategies.'
+  );
+}
+
+/** The smallest evidence sample the engine's assurance read its bound over, or 0 when it states none. */
+export function assuranceSample(assurance: GoalPortfolio['assurance']): number {
+  if (!assurance) return 0;
+  const stated = /smallest sample (\d+)/.exec(assurance.reason ?? '');
+  if (stated) return Number(stated[1]);
+  const sizes = (assurance.history ?? []).map((one) => one.sampleSize).filter((n): n is number => typeof n === 'number' && n > 0);
+  return sizes.length > 0 ? Math.min(...sizes) : 0;
 }
 
 /**
@@ -773,9 +869,11 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const target = await readTarget(goal, now);
   if (!target) return null;
   const trace = planTrace('plan');
+  // What failed while composing this reading: carried on it and recorded, never silently thinner (C-13).
+  const degraded: string[] = [];
   // The goal's constructed arrangements compete in its model on their estimates (§82, owner 2026-11-06).
   const arrangements = await goalArrangements(goal, target, now).catch((error: unknown) => {
-    console.warn(`goal ${goal.id}: construction for the plan failed: ${String((error as Error)?.message ?? error)}`);
+    degraded.push(`construction: ${errorText(error)} (the plan was read without constructed arrangements)`);
     return [] as ConstructedArrangement[];
   });
   trace(`constructed ${arrangements.length}`);
@@ -783,28 +881,50 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   trace('composed');
   const measuredChance = await measuredPlanChance();
   const base = { goalId: goal.id, target, excluded: model.excluded, measuredChance };
+  const outcomeRecorded = await goalOutcomeRecorded(goal.id);
   if (model.refusal) {
-    const refusedReconstruction = target.achieved ? null : await reconstructionFor(model, RECOMMENDATION_POLICY.requiredProbability, { goalId: goal.id, persist: !!input.persist });
+    const refusedReconstruction = target.achieved ? null : await reconstructionFor(model, RECOMMENDATION_POLICY.requiredProbability, { goalId: goal.id, persist: !!input.persist, degraded });
+    let refusedAcceptance = judgeAcceptance({ achieved: target.achieved, chosen: null, portfolio: model.portfolio, measuredChance, considered: [] });
+    const refusedPlan = adoptReconstruction({ reconstruction: refusedReconstruction, baseline: model.portfolio, openings: planOpenings(model) });
+    if (refusedPlan.candidate && refusedAcceptance.status !== 'ACCEPTED') {
+      refusedAcceptance = { ...refusedAcceptance, status: 'CANDIDATE_ONLY', candidate: refusedPlan.candidate, sentence: candidateSentence(refusedPlan.candidate, refusedAcceptance.required) };
+    }
+    const refusedInfeasible =
+      refusedAcceptance.status === 'ACCEPTED' ? null : judgeFeasibility(feasibilityInput(refusedReconstruction, null, model.portfolio, target, refusedAcceptance.required));
+    if (refusedInfeasible) refusedAcceptance = notSupported(refusedAcceptance, refusedInfeasible);
+    const permissions = target.achieved ? [] : await missingPermissions(target.projectId);
+    const qualify: NextTest = { link: 'OFFER_AND_PRICE', test: 'Qualify at least one opening: establish who pays, an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null };
+    const refusedSteps = target.achieved || refusedInfeasible ? [] : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions });
     const reading: PlanReading = {
       ...base,
-      verdict: target.achieved ? 'RECOMMENDABLE' : 'NEEDS_EVIDENCE',
-      summary: model.refusal,
-      acceptance: judgeAcceptance({ achieved: target.achieved, chosen: null, portfolio: model.portfolio, measuredChance, considered: [] }),
+      verdict: target.achieved ? 'RECOMMENDABLE' : refusedInfeasible ? 'NOT_VIABLE' : 'NEEDS_EVIDENCE',
+      summary: refusedInfeasible ? refusedAcceptance.sentence : refusedPlan.adoption.hypothetical ? `${model.refusal} The reconstruction is hypothetical: ${refusedPlan.adoption.reason}.` : model.refusal,
+      acceptance: refusedAcceptance,
       chosen: null,
       strategies: [],
-      nextTest: target.achieved
+      nextTest: target.achieved || refusedInfeasible
         ? null
-        : { link: 'OFFER_AND_PRICE', test: 'Qualify at least one opening: establish who pays, an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null },
+        : refusedPlan.adoption.source === 'RECONSTRUCTED' && refusedSteps[0]
+          ? stepAsNextTest(refusedSteps[0], refusedReconstruction)
+          : qualify,
       scenarioModelId: null,
       scenarioRunId: null,
       basisNote: null,
       refusal: model.refusal,
       bestReach: null,
       considered: [],
-      // No accepted plan: keep constructing while there is time (a goal without a deadline always has).
-      needsMoreOpenings: !target.achieved && (target.daysLeft === null || target.daysLeft > 0),
+      // No accepted plan: keep constructing while there is time (a goal without a deadline always has),
+      // never past its deadline or outcome, and never on a goal arithmetic rules out (C-10).
+      needsMoreOpenings: continueSearch({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy: goalExecutionPolicy(target), acceptance: refusedAcceptance.status }),
       inferred: inferredInputs(model.considered),
-      researchPriority: [],
+      researchPriority: planResearchPriority({
+        reconstruction: refusedReconstruction,
+        adoption: refusedPlan.adoption,
+        adoptedIds: refusedAcceptance.candidate?.opportunityIds ?? [],
+        daysLeft: target.daysLeft,
+        remaining: target.remainingCents / 100,
+        legacy: [],
+      }),
       pool: { conclusion: 'NO_POOL', sentence: `No opening held is far enough along to model (${model.considered.length} read). That is a statement about what Brain holds, not about what exists, so it keeps searching and constructing.` },
       ladder: emptyLadder(),
       marketTests: [],
@@ -812,7 +932,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       sales: [],
       portfolio: model.portfolio,
       researchDiagnosis: [
-        ...reconstructionDiagnosis(refusedReconstruction),
+        ...reconstructionDiagnosis(refusedReconstruction, { remaining: target.remainingCents / 100, daysLeft: target.daysLeft }),
         ...diagnoseGoalResearch({
           considered: [],
           excludedReasons: model.excluded.map((one) => one.reason),
@@ -822,8 +942,15 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       ],
       pathways: null,
       reconstruction: refusedReconstruction,
+      adoption: refusedPlan.adoption,
+      steps: refusedSteps,
+      infeasible: refusedInfeasible,
+      degraded,
     };
-    if (input.persist) await persistReading(goal, reading, null);
+    if (input.persist) {
+      await recordDegraded(goal.id, target.projectId, degraded);
+      await persistReading(goal, reading, null);
+    }
     return reading;
   }
 
@@ -1036,8 +1163,6 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const byId = new Map(model.considered.map((one) => [one.opportunity.id, one]));
   const policy = goalExecutionPolicy(target);
   const marketTests: MarketTest[] = [];
-  const sales = policy === 'SQUEEZE' ? await salesFor(considered, model.portfolio, byIdOf(model), target) : [];
-  exemptSales(goal.id, sales.map((one) => one.opportunityId));
   for (const one of policy === 'SQUEEZE' ? [] : [...considered].filter((c) => c.stage === 'C_MARKET_TEST_READY').sort((a, b) => (b.potentialReach ?? 0) - (a.potentialReach ?? 0)).slice(0, MAX_MARKET_TESTS)) {
     let test = await nextTestFor('CONVERSION', byId.get(one.opportunityId)!, target.projectId);
     if (target.capitalBeforeProofCents !== null && !target.proven) {
@@ -1048,13 +1173,14 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   trace('strategies and market tests');
   const rounds = await recentGoalRounds(target.projectId, goal.id);
   const found = considered.filter((one) => !isArrangementId(one.opportunityId));
+  const permissionsMissing = await missingPermissions(target.projectId);
   // The reasoning loop reads what the plan composed; it decides nothing the plan already decides (§93).
   const pathways = readPathways({
     modelled: [...model.considered, ...(model.estimates ?? [])],
     considered,
     target,
     portfolio: model.portfolio,
-    permissionsMissing: await missingPermissions(target.projectId),
+    permissionsMissing,
     rounds,
     now,
     capabilities: await brainCapabilities(target.projectId, target.currency),
@@ -1068,7 +1194,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
    * one. Until then the candidate keeps its sale and its pursuit, and its next
    * step is to raise that probability.
    */
-  const acceptance = judgeAcceptance({ achieved: target.achieved, chosen, portfolio: model.portfolio, measuredChance, considered, pathways });
+  let acceptance = judgeAcceptance({ achieved: target.achieved, chosen, portfolio: model.portfolio, measuredChance, considered, pathways });
   if (acceptance.status !== 'ACCEPTED') {
     for (const s of strategies) {
       if (s.verdict !== 'RECOMMENDABLE') continue;
@@ -1084,17 +1210,67 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     }
   }
   // A plan short of its requirement is reconstructed, not just re-read (§99).
-  const reconstruction = acceptance.status !== 'ACCEPTED' ? await reconstructionFor(model, acceptance.required, { goalId: goal.id, persist: !!input.persist }) : null;
+  const reconstruction = acceptance.status !== 'ACCEPTED' ? await reconstructionFor(model, acceptance.required, { goalId: goal.id, persist: !!input.persist, degraded }) : null;
   trace('reconstruction');
-  const verdict: PlanVerdict = acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
+  /*
+   * One plan (C-6). The reconstruction's strongest plan, when it beats the plan
+   * as held and nothing flags it implausible, is the candidate, the next step
+   * and the sales order; otherwise the plan as held is, and the reading says
+   * the reconstruction is hypothetical.
+   */
+  const plan = adoptReconstruction({ reconstruction, baseline: model.portfolio, openings: planOpenings(model) });
+  if (plan.candidate && acceptance.status !== 'ACCEPTED') {
+    acceptance = { ...acceptance, status: 'CANDIDATE_ONLY', candidate: plan.candidate, sentence: candidateSentence(plan.candidate, acceptance.required) };
+  }
+  // The goal as stated, judged on arithmetic rather than on the openings found (C-10, §65).
+  const infeasible = acceptance.status === 'ACCEPTED' ? null : judgeFeasibility(feasibilityInput(reconstruction, pathways.structures, model.portfolio, target, acceptance.required));
+  if (infeasible) acceptance = notSupported(acceptance, infeasible);
+  const adopted = plan.adoption.source === 'RECONSTRUCTED' ? new Set(acceptance.candidate?.opportunityIds ?? []) : null;
+  const sales = policy === 'SQUEEZE' && !infeasible ? await salesFor(considered, model.portfolio, byIdOf(model), target, adopted) : [];
+  exemptSales(goal.id, sales.map((one) => one.opportunityId));
+  const legacyNext = goalNextStep({
+    policy,
+    verdict: chosen?.verdict ?? 'NEEDS_EVIDENCE',
+    chosen: chosen?.nextTest ?? null,
+    sales: sales.map((one) => one.test),
+    marketTest: marketTests[0]?.test ?? null,
+    bestReach,
+    remaining: target.remainingCents / 100,
+    currency: target.currency,
+  });
+  const steps = infeasible || target.achieved ? [] : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing });
+  const verdict: PlanVerdict =
+    acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : infeasible ? 'NOT_VIABLE' : plan.adoption.source === 'RECONSTRUCTED' ? 'NEEDS_EVIDENCE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
+  const hypotheticalNote = plan.adoption.hypothetical ? ` The reconstruction is hypothetical, not the plan: ${plan.adoption.reason}.` : '';
   const summary =
     verdict === 'RECOMMENDABLE'
       ? acceptance.sentence
-      : chosen?.chainComplete
-        ? `"${chosen.label}" is a qualified candidate, not an accepted plan: ${acceptance.sentence}`
-        : verdict === 'NOT_VIABLE'
-        ? `No modelled strategy can work under the current limits: ${chosen?.constraintsFailed[0] ?? 'every one fails a limit'}.`
-        : `Not yet proven. The closest plan is "${chosen?.label}", and what it is missing first is ${CHAIN_LABEL[chosen!.nextTest!.link]}.`;
+      : infeasible
+        ? acceptance.sentence
+        : plan.adoption.source === 'RECONSTRUCTED'
+          ? `The plan is the reconstruction: ${acceptance.candidate!.label.slice(0, 200)} — ${plan.adoption.reason}. First step: ${steps[0] ? `${steps[0].label} (${steps[0].owner})` : 'sell'}. ${acceptance.sentence}`
+          : chosen?.chainComplete
+            ? `"${chosen.label}" is a qualified candidate, not an accepted plan: ${acceptance.sentence}${hypotheticalNote}`
+            : verdict === 'NOT_VIABLE'
+              ? `No modelled strategy can work under the current limits: ${chosen?.constraintsFailed[0] ?? 'every one fails a limit'}.${hypotheticalNote}`
+              : `Not yet proven. The closest plan is "${chosen?.label}", and what it is missing first is ${CHAIN_LABEL[(chosen?.nextTest ?? legacyNext)?.link ?? 'OFFER_AND_PRICE']}.${hypotheticalNote}`;
+  // The adopted plan's first step is the goal's next step, unless an owner's own decision about the goal comes first.
+  const ownerDecision = chosen?.nextTest && chosen.nextTest.by === 'PERSON' && chosen.nextTest.link === 'ECONOMICS' ? chosen.nextTest : null;
+  const nextTest = infeasible
+    ? null
+    : plan.adoption.source === 'RECONSTRUCTED' && steps[0] && acceptance.status !== 'ACCEPTED'
+      ? (ownerDecision ?? stepAsNextTest(steps[0], reconstruction))
+      : goalNextStep({
+          policy,
+          verdict,
+          chosen: chosen?.nextTest ?? null,
+          sales: sales.map((one) => one.test),
+          marketTest: marketTests[0]?.test ?? null,
+          bestReach,
+          remaining: target.remainingCents / 100,
+          currency: target.currency,
+        });
+  const pool = poolConclusion(bestReach, target, considered.filter((one) => !isArrangementId(one.opportunityId)).length);
   const reading: PlanReading = {
     ...base,
     verdict,
@@ -1104,16 +1280,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     strategies,
     // A SQUEEZE goal's next step is a sale when one can be offered; evidence work runs beside it.
     // An owner's open decision (how much may be committed) still comes first: it is theirs, and it binds the sale.
-    nextTest: goalNextStep({
-      policy,
-      verdict,
-      chosen: chosen?.nextTest ?? null,
-      sales: sales.map((one) => one.test),
-      marketTest: marketTests[0]?.test ?? null,
-      bestReach,
-      remaining: target.remainingCents / 100,
-      currency: target.currency,
-    }),
+    nextTest,
     scenarioModelId,
     scenarioRunId,
     basisNote: result?.basisNote ?? null,
@@ -1124,12 +1291,21 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     // never openings that merely look valuable. Until there is one, keep looking.
     // A SQUEEZE goal keeps discovering and constructing stronger openings while it sells the ones it has,
     // until the target is met (owner, 2026-11-06): a recommendation is no reason to stop looking.
-    // No accepted plan means keep constructing, modifying, combining and comparing (owner, 2026-11-09).
-    needsMoreOpenings: !target.achieved && (policy === 'SQUEEZE' || acceptance.status !== 'ACCEPTED'),
+    // No accepted plan means keep constructing, modifying, combining and comparing (owner, 2026-11-09) —
+    // but never past the deadline or a recorded outcome, nor on a goal arithmetic rules out (C-10).
+    needsMoreOpenings: continueSearch({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy, acceptance: acceptance.status }),
     inferred: inferredInputs(model.considered),
-    researchPriority: researchPriority(result, model.included, target, chosen?.key ?? null),
+    // The questions the plan Brain holds needs answered, then the run's own (C-9).
+    researchPriority: planResearchPriority({
+      reconstruction,
+      adoption: plan.adoption,
+      adoptedIds: acceptance.candidate?.opportunityIds ?? [],
+      daysLeft: target.daysLeft,
+      remaining: target.remainingCents / 100,
+      legacy: researchPriority(result, model.included, target, chosen?.key ?? null),
+    }),
     // The pool, the ladder and the diagnosis are about openings found; an estimate is none of them.
-    pool: poolConclusion(bestReach, target, considered.filter((one) => !isArrangementId(one.opportunityId)).length),
+    pool: infeasible ? { ...pool, sentence: `${pool.sentence} The goal as stated is not supported by arithmetic, so the search stops until its terms or inputs change.` } : pool,
     ladder: ladderOf(considered.filter((one) => !isArrangementId(one.opportunityId))),
     marketTests,
     executionPolicy: policy,
@@ -1137,7 +1313,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     portfolio: model.portfolio,
     // The method's own failures first: they change how Brain searches, not one opening (§93).
     researchDiagnosis: mergeDiagnosis(
-      [...reconstructionDiagnosis(reconstruction), ...pathways.failures],
+      [...reconstructionDiagnosis(reconstruction, { remaining: target.remainingCents / 100, daysLeft: target.daysLeft }), ...pathways.failures],
       diagnoseGoalResearch({
         considered: found,
         excludedReasons: model.excluded.map((one) => one.reason),
@@ -1147,8 +1323,13 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     ),
     pathways,
     reconstruction,
+    adoption: plan.adoption,
+    steps,
+    infeasible,
+    degraded,
   };
   if (input.persist) {
+    await recordDegraded(goal.id, target.projectId, degraded);
     await persistReading(goal, reading, chosen);
     await pursueSales(goal, reading);
   }
@@ -1180,9 +1361,11 @@ export function inventDue(goalId: string | undefined, now = Date.now()): boolean
 export async function reconstructionFor(
   model: { portfolio: GoalPortfolio | null; portfolioInput?: Parameters<typeof reconstructPlan>[0]['portfolio'] & { openings: Parameters<typeof reconstructPlan>[0]['openings'] } | null },
   required: number,
-  context: { goalId?: string; persist?: boolean } = {},
+  context: { goalId?: string; persist?: boolean; degraded?: string[]; reconstruct?: typeof reconstructPlan; library?: typeof loadLibrary } = {},
 ): Promise<Reconstruction | null> {
   if (!model.portfolio || !model.portfolioInput || model.portfolioInput.openings.length === 0) return null;
+  const degraded = context.degraded ?? [];
+  const reconstruct = context.reconstruct ?? reconstructPlan;
   const { openings, ...portfolio } = model.portfolioInput;
   // Unchanged inputs are not re-explored: the same plan reads the same, and the CPU goes to goals whose inputs moved.
   const inputsKey = sha256(JSON.stringify({ openings, portfolio, required }));
@@ -1190,8 +1373,11 @@ export async function reconstructionFor(
   if (held && held.key === inputsKey && Date.now() - held.at < EXPLORATION_HELD_MS) return held.reconstruction;
   const evaluator = sharedEvaluator();
   try {
-    const library = await loadLibrary().catch(() => []);
-    const r = await reconstructPlan({
+    const library = await (context.library ?? loadLibrary)().catch((error: unknown) => {
+      degraded.push(`reasoning library: ${errorText(error)} (explored without the methods that worked before)`);
+      return [];
+    });
+    const r = await reconstruct({
       openings,
       portfolio,
       baseline: model.portfolio,
@@ -1202,28 +1388,540 @@ export async function reconstructionFor(
     });
     if (context.goalId) explored.set(context.goalId, { key: inputsKey, at: Date.now(), reconstruction: r });
     if (context.persist && context.goalId && r.exploration) {
-      await recordExploration(context.goalId, r.exploration).catch((error: unknown) => console.warn(`reasoning record failed: ${String((error as Error)?.message ?? error)}`));
+      await recordExploration(context.goalId, r.exploration).catch((error: unknown) => {
+        degraded.push(`reasoning record: ${errorText(error)} (this exploration is not in the library)`);
+      });
     }
     return r;
   } catch (error) {
-    console.warn(`reconstruction failed: ${String((error as Error)?.message ?? error)}`);
+    degraded.push(`reconstruction: ${errorText(error)} (the plan is read without a reconstruction)`);
     return null;
   } finally {
     await evaluator.close();
   }
 }
 
+function errorText(error: unknown): string {
+  return String((error as Error)?.message ?? error).replace(/\s+/g, ' ').slice(0, 300);
+}
+
+/** How often one goal's same kind of failure writes an event: a failure that persists is one row an hour, not one a read. */
+export const DEGRADED_EVENT_EVERY_MS = 60 * 60_000;
+const degradedAt = new Map<string, number>();
+
+/**
+ * Every failure a reading absorbed, recorded as a project event (C-13): a plan
+ * read without its construction, library or reconstruction must be legible as
+ * thinner, not mistaken for the full reading.
+ */
+export async function recordDegraded(goalId: string, projectId: string, degraded: readonly string[], now = Date.now()): Promise<number> {
+  let written = 0;
+  for (const one of degraded) {
+    const stage = one.slice(0, one.indexOf(':') > 0 ? one.indexOf(':') : one.length);
+    const key = `${goalId}:${stage}`;
+    if (now - (degradedAt.get(key) ?? -Infinity) < DEGRADED_EVENT_EVERY_MS) continue;
+    degradedAt.set(key, now);
+    console.warn(`goal ${goalId}: plan read degraded — ${one}`);
+    try {
+      await recordEvent({ projectId, entityType: 'workstream', entityId: goalId, eventType: 'GOAL_PLAN_DEGRADED', payload: { stage, detail: one } });
+      written += 1;
+    } catch (error) {
+      console.warn(`goal ${goalId}: could not record a degraded plan read: ${errorText(error)}`);
+    }
+  }
+  return written;
+}
+
+/** Whether the goal's outcome (achieved or missed) is already on the record. */
+async function goalOutcomeRecorded(goalId: string): Promise<boolean> {
+  return !!(await getDb().get<{ id: string }>('SELECT id FROM goal_outcomes WHERE workstream_id = ? LIMIT 1', [goalId]));
+}
+
+/** Every opening the plan's model holds, for naming a reconstruction's members. */
+function planOpenings(model: { considered: ModelledOpportunity[]; estimates?: ModelledOpportunity[]; portfolioInput?: { openings: ModelledOpportunity[] } | null }): ModelledOpportunity[] {
+  return [...(model.portfolioInput?.openings ?? []), ...model.considered, ...(model.estimates ?? [])];
+}
+
+/** What `judgeFeasibility` reads, from the reading's own parts; the goal's structures are computed when the pathways are not. */
+function feasibilityInput(
+  reconstruction: Reconstruction | null,
+  structures: GoalStructures | null,
+  portfolio: GoalPortfolio | null,
+  target: TargetReading,
+  required: number,
+): Parameters<typeof judgeFeasibility>[0] {
+  const contacts = portfolio?.limits.contactsPerDay;
+  const s =
+    structures ??
+    (reconstruction && contacts
+      ? requiredStructures({
+          remaining: target.remainingCents / 100,
+          daysLeft: target.daysLeft,
+          currency: target.currency,
+          perArrangement: target.capitalBeforeProofCents !== null ? target.capitalBeforeProofCents / 100 : null,
+          spendCeiling: target.capitalCeilingCents !== null ? target.capitalCeilingCents / 100 : null,
+          outreachPerDay: { low: contacts.low, high: contacts.high, stated: contacts.value !== null },
+        })
+      : null);
+  return {
+    reconstruction,
+    structures: s,
+    required,
+    remaining: target.remainingCents / 100,
+    daysLeft: target.daysLeft,
+    capitalCeiling: target.capitalCeilingCents !== null ? target.capitalCeilingCents / 100 : null,
+  };
+}
+
 /** What the reconstruction asks the next discovery round, as a diagnosis the goal round already reads (§89). */
-export function reconstructionDiagnosis(r: Reconstruction | null): ResearchDiagnosis[] {
+export function reconstructionDiagnosis(r: Reconstruction | null, ctx?: { remaining: number; daysLeft: number | null }): ResearchDiagnosis[] {
   if (!r || !r.searchBrief) return [];
   const top = r.diagnosis[0];
   return [
     {
       cause: 'STRATEGY_RECONSTRUCTION',
       evidence: `the plan reaches ${(r.baseline.reach * 100).toFixed(1)}% as built and ${(r.best.reach * 100).toFixed(1)}% reconstructed (${r.best.basis.toLowerCase()})${top ? `; ${top.factor} binds` : ''}${r.structural ? '; the openings held cannot reach the requirement at their best' : ''}${r.exploration ? `; explored: ${r.exploration.sentence}` : ''}`,
-      instruction: r.searchBrief,
+      instruction: ctx ? planSearchBrief(r, ctx.remaining, ctx.daysLeft) : r.searchBrief,
     },
   ];
+}
+
+/* ------------------------------------------------------------------ */
+/* One plan (C-6), its steps (C-8), its questions (C-9), its limits (C-10) */
+/* ------------------------------------------------------------------ */
+
+const pctOf = (x: number) => `${Math.round(x * 1000) / 10}%`;
+const moneyOf = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+
+/**
+ * A field another engineer's plausibility check sets on a reconstruction or
+ * its strongest plan. Read defensively: whatever its shape, a truthy
+ * `implausible` or a non-empty `flags` keeps the reconstruction hypothetical.
+ */
+function implausibility(x: unknown): string | null {
+  if (!x || typeof x !== 'object') return null;
+  const o = x as Record<string, unknown>;
+  const flags = o['flags'];
+  const list = Array.isArray(flags) ? flags.map((f) => (typeof f === 'string' ? f : JSON.stringify(f))) : [];
+  if (o['implausible']) return typeof o['implausible'] === 'string' ? o['implausible'] : list.join('; ') || 'flagged implausible';
+  if (list.length > 0) return list.join('; ');
+  return null;
+}
+
+/**
+ * Whether the reconstruction's strongest plan becomes THE plan (C-6). Pure.
+ *
+ * Production read three plans at once: the verdict and next step from a
+ * scenario strategy, the candidate and the sales from the baseline portfolio,
+ * and a reconstruction at 97.9% beside a candidate at 1.1% that nothing acted
+ * on. One plan now: the reconstruction's strongest plan is adopted when it
+ * runs inside the limits, is not flagged implausible and beats the plan as
+ * held materially; otherwise the plan as held stays the candidate and the
+ * reconstruction is said, in the reading, to be hypothetical.
+ *
+ * An adopted reconstruction is still a candidate. Its reach keeps the basis
+ * the engine gave it, and a reach resting on any change not measured is
+ * coverage, never a probability.
+ */
+export function adoptReconstruction(input: {
+  reconstruction: Reconstruction | null;
+  baseline: GoalPortfolio | null;
+  openings: ReadonlyArray<{ opportunity: { id: string; title: string } }>;
+}): { adoption: PlanAdoption; candidate: PlanAcceptance['candidate'] } {
+  const r = input.reconstruction;
+  if (!r) return { adoption: { source: 'BASELINE', hypothetical: false, reason: 'no reconstruction ran: the plan is accepted, or nothing could be reconstructed' }, candidate: null };
+  const hypothetical = (reason: string) => ({ adoption: { source: 'BASELINE' as const, hypothetical: true, reason }, candidate: null });
+  const flagged = implausibility(r) ?? implausibility(r.best);
+  if (flagged) return hypothetical(`the reconstruction is flagged implausible (${flagged.slice(0, 300)}), so its ${pctOf(r.best.reach)} is not adopted`);
+  if (!r.best.feasible) return hypothetical(`the reconstruction's strongest plan does not run inside the limits${r.best.why ? ` (${r.best.why})` : ''}`);
+  const real = r.best.changes.filter((c) => !c.label.startsWith('test:'));
+  if (real.length === 0) return { adoption: { source: 'BASELINE', hypothetical: false, reason: 'no change the reconstruction tried improves the plan as held materially' }, candidate: null };
+  const baseReach = input.baseline?.best?.reach ?? r.baseline.reach;
+  const baseP50 = input.baseline?.best?.settledP50 ?? r.baseline.settledP50;
+  const beats = r.best.reach >= baseReach + MATERIAL_REACH || (r.best.reach >= baseReach - 1e-9 && r.best.settledP50 > baseP50 * (1 + MATERIAL_P50) + 1e-9);
+  if (!beats) return hypothetical(`the reconstruction (${pctOf(r.best.reach)}, p50 ${moneyOf(r.best.settledP50)}) does not beat the plan as held (${pctOf(baseReach)}, p50 ${moneyOf(baseP50)}) materially`);
+  const ids: string[] = [];
+  for (const member of r.best.members) {
+    const hit =
+      input.openings.find((o) => o.opportunity.id === member) ??
+      input.openings.find((o) => o.opportunity.title.slice(0, 50) === member) ??
+      input.openings.find((o) => member.length >= 20 && o.opportunity.title.startsWith(member));
+    if (hit && !ids.includes(hit.opportunity.id)) ids.push(hit.opportunity.id);
+  }
+  if (ids.length === 0) return hypothetical('the reconstruction\'s strongest plan names no opening Brain holds');
+  const evidenced = r.best.basis === 'PROBABILITY' && real.every((c) => c.basis === 'MEASURED');
+  return {
+    adoption: {
+      source: 'RECONSTRUCTED',
+      hypothetical: false,
+      reason: `the reconstruction reaches ${pctOf(r.best.reach)} (p50 ${moneyOf(r.best.settledP50)}) against ${pctOf(baseReach)} (p50 ${moneyOf(baseP50)}) as held, by ${real.map((c) => c.label).slice(0, 4).join(', ')}`,
+    },
+    candidate: {
+      label: `${real.map((c) => c.label).slice(0, 4).join(' + ')} on ${r.best.members.slice(0, 4).join(' + ')}`.slice(0, 300),
+      opportunityIds: ids,
+      source: 'RECONSTRUCTED',
+      settledP50: r.best.settledP50,
+      reach: r.best.reach,
+      // A reach resting on a change nobody has measured is coverage, whatever the engine's basis.
+      reachBasis: evidenced ? 'PROBABILITY' : 'COVERAGE',
+    },
+  };
+}
+
+/** A headroom at or under this is no headroom: the openings at their best reach the target in no material share of worlds. */
+export const HEADROOM_NIL = 0.005;
+
+/**
+ * Whether the goal as stated is out of reach by arithmetic (C-10, §65). Pure.
+ *
+ * Only arithmetic concludes it, never a short pool: the reconstruction must
+ * be structural (every estimate at its favourable end at once stays under the
+ * requirement), and either every transaction structure the goal's own figures
+ * allow is impossible, or the openings at their best reach nothing and no
+ * structure direct outreach could sell closes the gap in the time left. A
+ * goal whose held openings are merely weak, with structures outreach could
+ * carry, is not infeasible: Brain keeps searching (§65).
+ */
+export function judgeFeasibility(input: {
+  reconstruction: Reconstruction | null;
+  structures: GoalStructures | null;
+  required: number;
+  remaining: number;
+  daysLeft: number | null;
+  capitalCeiling: number | null;
+}): InfeasibleConclusion | null {
+  const r = input.reconstruction;
+  const s = input.structures;
+  if (!r || !s || !r.structural || r.headroom.reach >= input.required || s.structures.length === 0) return null;
+  const allImpossible = s.structures.every((one) => one.verdict === 'IMPOSSIBLE');
+  const outreachCarries = s.structures.some((one) => one.verdict === 'OUTREACH_CAN_CARRY' || one.verdict === 'ONLY_AT_BEST_CONVERSION');
+  const nil = r.headroom.reach <= HEADROOM_NIL;
+  if (!allImpossible && !(nil && !outreachCarries)) return null;
+  const sold = s.structures.filter((one) => one.kind !== 'INSTANT');
+  const timeBound = sold.length > 0 && sold.every((one) => one.verdict === 'IMPOSSIBLE');
+  const relax: InfeasibleConclusion['relax'] = [];
+  if (timeBound) {
+    let days: number | null = null;
+    for (let d = Math.max(1, (input.daysLeft ?? 0) + 1); d <= 365; d += 1) {
+      const wider = requiredStructures({ remaining: s.remaining, daysLeft: d, currency: s.currency, perArrangement: null, spendCeiling: null, outreachPerDay: s.outreachPerDay });
+      if (wider.structures.some((one) => one.verdict === 'OUTREACH_CAN_CARRY' || one.verdict === 'ONLY_AT_BEST_CONVERSION')) {
+        days = d;
+        break;
+      }
+    }
+    relax.push({ constraint: 'DEADLINE', suggestion: days !== null ? `move the deadline to at least ${days} days from now, the shortest window in which a sale can be made and paid` : 'move the deadline out: no window up to a year lets outreach carry the gap at this size' });
+  }
+  const capital = r.diagnosis.find((one) => one.factor === 'CAPITAL');
+  const top = r.diagnosis[0];
+  if (input.capitalCeiling === 0 || (capital && capital.liftReach >= MATERIAL_REACH)) {
+    const entry = {
+      constraint: 'CAPITAL' as const,
+      suggestion:
+        input.capitalCeiling === 0
+          ? 'allow the goal to commit some money: with none, nothing that must be bought or warmed up can start'
+          : `raise the money the goal may commit: doubling it lifts reach by ${pctOf(capital!.liftReach)}`,
+    };
+    if (top?.factor === 'CAPITAL' && !timeBound) relax.unshift(entry);
+    else relax.push(entry);
+  }
+  const achievable = Math.max(r.headroom.settledP50, r.best.settledP50);
+  relax.push({
+    constraint: 'TARGET',
+    suggestion:
+      achievable > 0
+        ? `lower the target to about ${moneyOf(achievable)}, what the openings held settle with every estimate at its most favourable`
+        : 'lower the target: the openings held settle nothing in the time left even at their most favourable',
+  });
+  const firstImpossible = s.structures.find((one) => one.verdict === 'IMPOSSIBLE');
+  const reason = allImpossible
+    ? `every transaction structure that could close ${moneyOf(input.remaining)} is impossible by arithmetic (${firstImpossible?.reason ?? 'no time'}), and the openings held reach ${pctOf(r.headroom.reach)} even with every estimate at its favourable end`
+    : `no structure direct outreach can sell closes ${moneyOf(input.remaining)} in ${input.daysLeft ?? 0} day(s)${firstImpossible ? ` (${firstImpossible.reason})` : ''}, only buyers already at a checkout could pay in time, and the openings held reach ${pctOf(r.headroom.reach)} of the required ${pctOf(input.required)} even with every estimate at its favourable end`;
+  return { reason, relax, headroomReach: r.headroom.reach, required: input.required };
+}
+
+/** The acceptance a NOT_SUPPORTED goal reads: no plan, the arithmetic, and which constraint to relax. */
+export function notSupported(acceptance: PlanAcceptance, infeasible: InfeasibleConclusion): PlanAcceptance {
+  return {
+    ...acceptance,
+    status: 'NOT_SUPPORTED',
+    probability: null,
+    accepted: null,
+    shortfalls: [infeasible.reason, ...acceptance.shortfalls],
+    sentence: `INFEASIBLE AS STATED: ${infeasible.reason}. To make it supportable, ${infeasible.relax.map((one) => `${one.constraint.toLowerCase()}: ${one.suggestion}`).join('; or ')}. Brain stops widening research for this goal until its terms or inputs change.`,
+  };
+}
+
+/** Whether the goal's search keeps widening (C-10): not after the deadline, an outcome, or arithmetic infeasibility. Pure. */
+export function continueSearch(input: { achieved: boolean; daysLeft: number | null; outcomeRecorded: boolean; policy: string; acceptance: PlanAcceptance['status'] }): boolean {
+  if (input.achieved || input.outcomeRecorded) return false;
+  if (input.daysLeft !== null && input.daysLeft <= 0) return false;
+  if (input.acceptance === 'NOT_SUPPORTED') return false;
+  // A SQUEEZE goal keeps discovering while it sells; no accepted plan means keep constructing (owner, 2026-11-06, 2026-11-09).
+  return input.policy === 'SQUEEZE' || input.acceptance !== 'ACCEPTED';
+}
+
+const CHANGE_LINK: Record<string, ChainLink> = {
+  CAPACITY: 'REACHABLE_BUYER',
+  ACQUISITION: 'REACHABLE_BUYER',
+  PARTNER: 'REACHABLE_BUYER',
+  MARKET: 'MARKET_VOLUME',
+  TRANSACTION: 'OFFER_AND_PRICE',
+  PRICE: 'OFFER_AND_PRICE',
+  PORTFOLIO: 'OFFER_AND_PRICE',
+  CASH_TIMING: 'SETTLES_IN_TIME',
+  CAPITAL: 'ECONOMICS',
+  EVIDENCE: 'CONVERSION',
+};
+const SENDS = new Set(['CAPACITY', 'ACQUISITION', 'PARTNER', 'MARKET', 'EVIDENCE', 'PORTFOLIO']);
+const CREDENTIAL = /\b(credentials?|api key|password|log ?in|sign[- ]?in|oauth|account access)\b/i;
+const LEGAL = /\b(contracts?|legal|licen[cs]es?|agreements?|terms of service|compliance|signature|signed)\b/i;
+
+/** Who executes a change: Brain, unless it is a rule-11 kind only the owner can do. */
+function ownerOf(change: { label: string; detail: string; cost: number }): { owner: 'BRAIN' | 'PERSON'; reason: string | null } {
+  const text = `${change.label} ${change.detail}`;
+  if (change.cost > 0) return { owner: 'PERSON', reason: `a payment of ${moneyOf(change.cost)} from the owner's account, inside the goal's limits` };
+  if (CREDENTIAL.test(text)) return { owner: 'PERSON', reason: 'a credential or sign-in only the owner holds' };
+  if (LEGAL.test(text)) return { owner: 'PERSON', reason: 'a legal commitment in the owner\'s name' };
+  return { owner: 'BRAIN', reason: null };
+}
+
+/** The measurement that says the reply assumption failed. */
+function replyKill(r: Reconstruction | null): string {
+  if (r?.requiredReply) {
+    const sends = Math.min(5_000, Math.max(50, Math.ceil(10 / r.requiredReply)));
+    return `reply rate under ${pctOf(r.requiredReply)} after ${sends.toLocaleString('en-US')} sends → stop and re-plan (the plan needs ${pctOf(r.requiredReply)} to reach ${pctOf(r.required)})`;
+  }
+  if (r?.floor) return `the first 500 sends do no better than the measured record (as-is floor ${pctOf(r.floor.reach)}) → stop and re-plan`;
+  return 'no interested reply in the first 200 sends → stop and re-plan';
+}
+
+function killFor(change: { dimension: string; label: string; cost: number; startDay?: { low: number; high: number } }, r: Reconstruction | null): string {
+  switch (change.dimension) {
+    case 'PARTNER':
+      return `no signed partner by day ${(change.startDay?.high ?? 0) + 14}, or no referred buyer within 30 days of signing → drop the partner and re-plan`;
+    case 'TRANSACTION':
+    case 'PRICE':
+      return `fewer than 1 in 10 offered buyers accepts "${change.label}" → revert to the unit sale at the listed price and re-plan`;
+    case 'CASH_TIMING':
+      return 'fewer than half of signing buyers pay the deposit at signing → re-plan cash timing';
+    case 'CAPITAL':
+      return `the supplier will not ship against the buyer's payment, or the money committed passes ${moneyOf(change.cost)} → stop and re-plan`;
+    default:
+      return replyKill(r);
+  }
+}
+
+/**
+ * The adopted plan as an execution sequence (C-8). Pure. Each step names what
+ * it is, when it starts, what it costs, what it rests on, who does it, which
+ * earlier step it needs, and the measurement that invalidates it. Permissions
+ * and providers a step needs are listed on it as execution dependencies: they
+ * never stop the plan being constructed or evaluated (owner, 2026-11-07).
+ */
+export function planSteps(input: {
+  adoption: PlanAdoption;
+  reconstruction: Reconstruction | null;
+  sales: MarketTest[];
+  nextTest: NextTest | null;
+  permissionsMissing: string[];
+}): PlanStep[] {
+  const send = input.permissionsMissing.filter((one) => /CONTACT_BUYER|messag/i.test(one));
+  const collect = input.permissionsMissing.filter((one) => /QUOTE_AND_INVOICE|ACCEPT_PAYMENT|billing/i.test(one));
+  const r = input.reconstruction;
+  const steps: PlanStep[] = [];
+  if (input.adoption.source === 'RECONSTRUCTED' && r) {
+    const changes = r.best.changes
+      .filter((c) => !c.label.startsWith('test:'))
+      .map((c, at) => ({ c, at }))
+      .sort((a, b) => (a.c.startDay?.low ?? 0) - (b.c.startDay?.low ?? 0) || a.at - b.at)
+      .map(({ c }) => c);
+    for (const c of changes) {
+      const who = ownerOf(c);
+      steps.push({
+        order: steps.length + 1,
+        label: c.label,
+        detail: c.detail,
+        startDay: c.startDay ?? null,
+        cost: c.cost,
+        basis: c.basis === 'MEASURED' ? 'EVIDENCE' : c.basis,
+        owner: who.owner,
+        ownerReason: who.reason,
+        dependsOn: null,
+        kill: killFor(c, r),
+        execution: SENDS.has(c.dimension) ? send : collect,
+      });
+    }
+    const after = Math.max(0, ...changes.map((c) => c.startDay?.high ?? 0));
+    steps.push({
+      order: steps.length + 1,
+      label: 'Sell and collect',
+      detail: `Offer the plan's openings (${r.best.members.slice(0, 4).join(', ')}) to their buyers for an actual sale or deposit, and record every reply, sale and payment as the plan's measurements.`,
+      startDay: { low: after, high: after },
+      cost: 0,
+      basis: 'ESTIMATE',
+      owner: 'BRAIN',
+      ownerReason: null,
+      dependsOn: null,
+      kill: replyKill(r),
+      execution: [...send, ...collect],
+    });
+  } else {
+    for (const sale of input.sales) {
+      steps.push({
+        order: steps.length + 1,
+        label: `Sell "${sale.title.slice(0, 80)}"`,
+        detail: sale.test.test,
+        startDay: { low: 0, high: 0 },
+        cost: 0,
+        basis: 'ESTIMATE',
+        owner: 'BRAIN',
+        ownerReason: null,
+        dependsOn: null,
+        kill: replyKill(r),
+        execution: [...send, ...collect],
+        });
+    }
+    if (steps.length === 0 && input.nextTest) {
+      const t = input.nextTest;
+      steps.push({
+        order: 1,
+        label: CHAIN_LABEL[t.link],
+        detail: t.test,
+        startDay: { low: 0, high: 0 },
+        cost: 0,
+        basis: 'ESTIMATE',
+        owner: t.by,
+        ownerReason: t.by === 'PERSON' ? t.blocker : null,
+        dependsOn: null,
+        kill: t.link === 'CONVERSION' ? replyKill(r) : 'the research returns no sourced answer twice → ask a different way, then re-plan without this opening',
+        execution: t.link === 'CONVERSION' ? [...send, ...collect] : [],
+      });
+    }
+  }
+  // A step that starts later needs the latest step that starts before it.
+  for (const step of steps) {
+    const low = step.startDay?.low ?? 0;
+    if (low <= 0) continue;
+    const before = steps.filter((one) => one.order < step.order && (one.startDay?.low ?? 0) < low);
+    step.dependsOn = before.length > 0 ? before[before.length - 1]!.order : null;
+  }
+  return steps;
+}
+
+/** The adopted plan's first step as the reading's next step. */
+export function stepAsNextTest(step: PlanStep, reconstruction: Reconstruction | null): NextTest {
+  const change = reconstruction?.best.changes.find((c) => c.label === step.label);
+  const link = change ? (CHANGE_LINK[change.dimension] ?? 'OFFER_AND_PRICE') : 'CONVERSION';
+  return {
+    link,
+    test: `${step.label}: ${step.detail}${step.startDay ? ` (day ${step.startDay.low}${step.startDay.high !== step.startDay.low ? `–${step.startDay.high}` : ''})` : ''}. Stop if ${step.kill}.`,
+    by: step.owner,
+    blocker: step.owner === 'PERSON' ? `${step.ownerReason ?? 'the owner'}${step.execution.length ? `; to execute it also needs ${step.execution.join(', ')}` : ''}` : null,
+  };
+}
+
+/** The card field a sweep condition on one opening would settle. */
+const CONDITION_FIELD: Record<string, string> = {
+  respond: 'conversionRates',
+  close: 'conversionRates',
+  volume: 'buyerVolume',
+  price: 'revenueRange',
+  directCost: 'directCosts',
+  daysToCash: 'timeToFirstCash',
+  capital: 'requiredCapital',
+};
+/** Conditions only selling measures. */
+const LEARNED_BY_SELLING = /^(reply|close|respond|outreach-capacity)/;
+
+/**
+ * The research the adopted plan needs (C-9). Pure. The questions come from
+ * the plan Brain actually holds: the reply rate it needs, each condition the
+ * sweep found the requirement needs outside today's evidence, the conditions
+ * that swing it most, and every assumed change it rests on. Each is decided
+ * against the calendar exactly as the run's own information value is (§79),
+ * and the run's legacy questions follow, kept to the plan's own openings.
+ */
+export function planResearchPriority(input: {
+  reconstruction: Reconstruction | null;
+  adoption: PlanAdoption;
+  adoptedIds: string[];
+  daysLeft: number | null;
+  remaining: number;
+  legacy: ResearchPriority[];
+}): ResearchPriority[] {
+  const r = input.reconstruction;
+  if (!r) return input.legacy;
+  const adopted = input.adoption.source === 'RECONSTRUCTED';
+  const plan = adopted ? r.best : r.baseline;
+  const gap = Math.max(0.01, r.required - plan.reach);
+  const executionDaysP90 = Math.max(0, ...plan.changes.map((c) => c.startDay?.high ?? 0));
+  const out = new Map<string, ResearchPriority>();
+  const add = (variable: string, opportunityId: string | null, field: string | null, value: number, learnable: boolean, why: string) => {
+    const held = out.get(variable);
+    if (held && held.value >= value) return;
+    const verdict = decideResearch(
+      { key: variable, informationValue: value, changesDecision: true, researchDays: RESEARCH_TURNAROUND_DAYS, learnableInExecution: learnable },
+      { daysLeft: input.daysLeft ?? 365, executionDaysP90 },
+    );
+    out.set(variable, { variable, opportunityId, field, value, changesDecision: true, decision: verdict.decision, reason: `${why}; ${verdict.reason}` });
+  };
+  if (r.requiredReply !== null) add('plan:reply', null, null, gap, true, `the plan needs a reply rate of about ${pctOf(r.requiredReply)} to reach ${pctOf(r.required)}`);
+  const sweep = r.exploration?.sweep ?? null;
+  const split = (condition: string) => {
+    const at = condition.indexOf(':');
+    return at > 0 ? { field: condition.slice(0, at), opportunityId: condition.slice(at + 1) } : { field: condition, opportunityId: null };
+  };
+  for (const req of sweep?.requirements ?? []) {
+    if (req.inEvidence) continue;
+    const s = split(req.condition);
+    add(
+      `plan:${req.condition}`,
+      s.opportunityId,
+      s.opportunityId ? (CONDITION_FIELD[s.field] ?? null) : null,
+      gap / Math.max(1, req.needed ?? 20),
+      LEARNED_BY_SELLING.test(s.field),
+      req.needed === null ? `no multiple of ${req.condition} up to ×20 carries the plan alone` : `the plan needs ${req.condition} at ×${req.needed.toFixed(2)} of today's middle estimate, and evidence reaches ×${req.evidencedTop.toFixed(2)}`,
+    );
+  }
+  for (const one of sweep?.sensitive ?? []) {
+    const s = split(one.condition);
+    add(`plan:${one.condition}`, s.opportunityId, s.opportunityId ? (CONDITION_FIELD[s.field] ?? null) : null, one.swing / Math.max(1, input.remaining), LEARNED_BY_SELLING.test(s.field), `its range swings the plan's mean by ${moneyOf(one.swing)}`);
+  }
+  if (adopted) {
+    const assumed = plan.changes.filter((c) => c.basis !== 'MEASURED' && !c.label.startsWith('test:'));
+    const lift = Math.max(0.01, plan.reach - r.baseline.reach);
+    for (const c of assumed) add(`plan:change:${c.dimension}:${c.label}`, null, null, lift / assumed.length, true, `the plan rests on "${c.label}" (${c.basis.toLowerCase()}), which only executing it measures`);
+  }
+  const keep = new Set(input.adoptedIds);
+  const legacy = adopted ? input.legacy.filter((one) => one.opportunityId === null || keep.has(one.opportunityId)) : input.legacy;
+  return [...[...out.values()].sort((a, b) => b.value - a.value), ...legacy];
+}
+
+/**
+ * The search brief, chosen by what binds the plan (C-9). The reconstruction's
+ * own brief is one template whatever binds; a goal bound by reply rate needs
+ * buyers who already ask, one bound by price needs larger tickets, one bound
+ * by cash timing needs buyers who pay up front.
+ */
+export function planSearchBrief(r: Reconstruction, remaining: number, daysLeft: number | null): string {
+  const ticket = Math.max(250, Math.round(remaining / 20 / 50) * 50);
+  const days = Math.max(1, (daysLeft ?? 30) - 5);
+  const factor = r.diagnosis[0]?.factor ?? null;
+  const lead = r.structural
+    ? `The openings held cannot reach the requirement even at their best (${pctOf(r.headroom.reach)}), so the pool must change. `
+    : '';
+  const by: Record<string, string> = {
+    VOLUME: `Outreach volume binds: find buyers reachable in bulk without cold email — a marketplace category with open demand, a partner's list, a directory with a purchase route — delivering within ${days} days at ${moneyOf(ticket)} or more, with a dated example of each.`,
+    REPLY: `Reply rate binds: find buyers who already ask — posted requests, RFQs, marketplace job posts, open submission calls — for work deliverable within ${days} days at ${moneyOf(ticket)} or more, with one dated request each and what the buyer pays.`,
+    CLOSE: `Close rate binds: find offers buyers accept at first contact — published conversion for this kind of buyer, dated urgent needs, buyers with a budget already approved — at ${moneyOf(ticket)} or more within ${days} days.`,
+    PRICE: `Revenue per deal binds: find buyers paying ${moneyOf(ticket * 2)} or more per transaction — retainers, bundles, implementation engagements — with a published price and a dated buyer, settling within ${days} days.`,
+    CASH_TIMING: `Cash timing binds: find buyers who pay up front — at checkout, by deposit at signing, prepaid — for work deliverable within ${days} days, with the published payment terms.`,
+    MARKET_SIZE: `Market size binds: find larger buyer populations with a count and a source — a register, association list or marketplace category — buying at ${moneyOf(ticket)} or more within ${days} days.`,
+    CAPITAL: `Money tied up binds: find arrangements the buyer funds — prepaid fulfilment, drop-shipping, deposits that pay the supplier — at ${moneyOf(ticket)} or more within ${days} days.`,
+  };
+  const body = factor && by[factor] ? by[factor]! : r.searchBrief;
+  const asks = r.exploration?.asks?.length ? ` Directions Brain explored need answers to: ${r.exploration.asks.slice(0, 3).join(' ')}` : '';
+  return `${lead}${body} Look in any industry, including ones not searched before.${asks}`.trim();
 }
 
 /**
@@ -1261,8 +1959,10 @@ async function salesFor(
   portfolio: GoalPortfolio | null,
   byId: Map<string, ModelledOpportunity>,
   target: TargetReading,
+  /** The adopted plan's openings (C-6): when the reconstruction is the plan, its members are sold first. */
+  adopted: ReadonlySet<string> | null = null,
 ): Promise<MarketTest[]> {
-  const best = new Set(portfolio?.best?.members.map((one) => one.opportunityId) ?? []);
+  const best = new Set(adopted && adopted.size > 0 ? adopted : (portfolio?.best?.members.map((one) => one.opportunityId) ?? []));
   const settled = new Map((portfolio?.demand ?? []).map((one) => [one.opportunityId, one.refused ? -1 : one.revenue.p50]));
   const ranked = considered
     .filter((one) => SELLABLE.has(one.stage) && !isArrangementId(one.opportunityId) && byId.has(one.opportunityId))
@@ -1602,23 +2302,48 @@ export function reconstructionSummary(r: Reconstruction | null): Record<string, 
   };
 }
 
-async function persistReading(goal: Workstream, reading: PlanReading, chosen: StrategyReading | null): Promise<void> {
+/**
+ * The reconstruction's conclusion as the digest reads it (C-11): what it found,
+ * never which key the time-bounded search happened to reach first or which
+ * direction won this time. Those churn between identical reads, and a digest
+ * that held them rewrote the plan's history every pass. They stay on the
+ * reading and in the stored forecast.
+ */
+export function reconstructionDigest(r: Reconstruction | null): Record<string, unknown> | null {
+  const full = reconstructionSummary(r);
+  if (!full) return null;
+  const { best, explored: _explored, variants: _variants, ...rest } = full as { best: Record<string, unknown>; explored: unknown; variants: unknown } & Record<string, unknown>;
+  const { key: _key, ...kept } = best;
+  return { ...rest, best: kept };
+}
+
+/** The digest of a reading's conclusion: a new row only when this changes. */
+export function readingDigest(reading: PlanReading): string {
+  const candidate = reading.acceptance.candidate;
   const summary = {
     verdict: reading.verdict,
     chosen: reading.chosen,
     strategies: reading.strategies.map((one) => ({ key: one.key, verdict: one.verdict, missing: one.links.filter((link) => !link.ok).map((link) => link.link), failed: one.constraintsFailed })),
-    next: reading.nextTest,
+    // An adopted reconstruction's first step is worded from the search's winner: only who does what kind of step is a conclusion.
+    next: reading.adoption?.source === 'RECONSTRUCTED' && reading.nextTest ? { link: reading.nextTest.link, by: reading.nextTest.by } : reading.nextTest,
     refusal: reading.refusal,
-    // Progress toward the goal is part of the conclusion: a reading whose
-    // combined reach, median or pool moved is a new row, so the plan's history
-    // shows whether research is improving it (owner, 2026-11-05).
     progress: planProgress(reading),
     sales: reading.sales.map((one) => one.opportunityId),
-    acceptance: { status: reading.acceptance.status, basis: reading.acceptance.probability?.basis ?? null, candidate: reading.acceptance.candidate?.opportunityIds ?? [] },
-    // What the reconstruction found and kept (§99): a strategy that changed is a new row.
-    reconstruction: reconstructionSummary(reading.reconstruction ?? null),
+    acceptance: {
+      status: reading.acceptance.status,
+      basis: reading.acceptance.probability?.basis ?? null,
+      // A reconstructed candidate's members are the search's output, read again by its digest below.
+      candidate: candidate && candidate.source !== 'RECONSTRUCTED' ? candidate.opportunityIds : [],
+    },
+    adoption: reading.adoption?.source ?? null,
+    reconstruction: reconstructionDigest(reading.reconstruction ?? null),
   };
-  const digest = sha256(canonicalJson(summary));
+  return sha256(canonicalJson(summary));
+}
+
+async function persistReading(goal: Workstream, reading: PlanReading, chosen: StrategyReading | null): Promise<void> {
+  // Progress toward the goal is part of the conclusion (owner, 2026-11-05); search churn is not (C-11).
+  const digest = readingDigest(reading);
   const last = await latestReading(goal.id);
   if (last && last.digest === digest) return;
   const forecast = {
@@ -1628,6 +2353,11 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     daysLeft: reading.target.daysLeft,
     ...planProgress(reading),
     reconstruction: reconstructionSummary(reading.reconstruction ?? null),
+    // The one plan, its steps, and what limited this reading (C-6, C-8, C-10, C-13): JSON, no schema change.
+    adoption: reading.adoption,
+    steps: reading.steps,
+    infeasible: reading.infeasible,
+    degraded: reading.degraded,
   };
   await getDb().run(
     `INSERT INTO goal_plan_readings (id, workstream_id, digest, scenario_model_id, scenario_run_id, verdict, chosen_strategy, strategies, next_test, forecast, created_at)
@@ -2128,8 +2858,8 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
 }
 
 export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean; onEvidence: number; resumed: number }> {
-  const goals = await getDb().all<{ id: string; target_project_id: string | null; paused_at: string | null }>(
-    `SELECT id, target_project_id, paused_at FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
+  const goals = await getDb().all<{ id: string; target_project_id: string | null; paused_at: string | null; due_at: string | null }>(
+    `SELECT id, target_project_id, paused_at, due_at FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
   );
   let read = 0;
   let outcomes = 0;
@@ -2139,8 +2869,12 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
   let busy = false;
   let onEvidence = 0;
   let resumed = 0;
-  for (const { id, target_project_id: projectId, paused_at: pausedAt } of goals) {
-    if (await recordGoalOutcome(id, now)) outcomes += 1;
+  for (const { id, target_project_id: projectId, paused_at: pausedAt, due_at: dueAt } of goals) {
+    if (await recordGoalOutcome(id, now)) {
+      outcomes += 1;
+      // An outcome on the record ends the search: a held reading must not keep topping it up (C-10).
+      lastReadings.delete(id);
+    }
     // A paused goal keeps its outcome on the record and spends nothing: no
     // re-read, no search round, no construction (an operator PAUSE must stop
     // the planning and discovery spend, not only the queue's priority).
@@ -2157,12 +2891,15 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     const fingerprint = async (): Promise<string | null> => (projectId ? planInputsFingerprint(projectId, id) : null);
     const inputs = since && now.getTime() - since >= PLAN_EVIDENCE_FLOOR_MS && now.getTime() - since < PLAN_REFRESH_MS ? await fingerprint() : null;
     const repaired = repairedGoals.get(id);
-    const due = busy ? null : repaired !== undefined ? 'REPAIRED' : planDue({ now: now.getTime(), since, inputs, lastInputs: lastInputs.get(id) });
+    let due = busy ? null : repaired !== undefined ? 'REPAIRED' : planDue({ now: now.getTime(), since, inputs, lastInputs: lastInputs.get(id) });
+    // A goal arithmetic rules out (C-10) is not re-read on the clock alone: only a change to its terms or inputs can change that.
+    const held = lastReadings.get(id);
+    if (due === 'REFRESH' && held?.acceptance.status === 'NOT_SUPPORTED' && projectId && (await fingerprint()) === lastInputs.get(id)) due = null;
     if (!due) {
-      // Not due for a re-read; top the search up if the fleet has room for it.
-      const held = lastReadings.get(id);
+      // Not due for a re-read; top the search up if the fleet has room for it — never past the deadline (C-10).
       const toppedUp = lastTopUp.get(id) ?? 0;
-      if (held?.needsMoreOpenings && now.getTime() - toppedUp >= GOAL_TOP_UP_MS) {
+      const pastDue = dueAt !== null && Date.parse(dueAt) <= now.getTime();
+      if (held?.needsMoreOpenings && !pastDue && now.getTime() - toppedUp >= GOAL_TOP_UP_MS) {
         lastTopUp.set(id, now.getTime());
         const spare = await cashSpareSurfaces(held.target.projectId);
         if (spare > 0) {
@@ -2214,6 +2951,15 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
         await sendPortfolioNeeds({ goalId: id, projectId: reading.target.projectId, portfolio: reading.portfolio });
       } catch (error) {
         console.warn(`goal ${id}: sending the portfolio's needs failed: ${String((error as Error)?.message ?? error)}`);
+        await recordDegraded(id, reading.target.projectId, [`portfolio needs: ${errorText(error)}`]);
+      }
+    }
+    // The adopted plan's own questions (C-9): the conditions it needs and rests on, keyed per goal and condition.
+    if (reading?.needsMoreOpenings && reading.researchPriority.length > 0) {
+      try {
+        await sendPlanQuestions({ goalId: id, projectId: reading.target.projectId, priority: reading.researchPriority });
+      } catch (error) {
+        await recordDegraded(id, reading.target.projectId, [`plan questions: ${errorText(error)}`]);
       }
     }
     // What Brain holds cannot reach the goal however it is combined: look for

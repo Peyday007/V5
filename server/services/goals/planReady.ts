@@ -115,6 +115,13 @@ export async function planReadyFacts(goalId: string, reading: PlanReading): Prom
     };
   });
   const steps = [
+    // The adopted plan's execution sequence first (C-8): what, when, who, and what stops it.
+    ...(reading.steps ?? []).map((s) => ({
+      title: `${s.order}. ${s.label}`,
+      step: `${s.detail}${s.startDay ? ` Day ${s.startDay.low}${s.startDay.high !== s.startDay.low ? `–${s.startDay.high}` : ''}.` : ''}${s.cost > 0 ? ` Cost ${Math.round(s.cost)}.` : ''} Basis ${s.basis.toLowerCase()}.${s.dependsOn ? ` After step ${s.dependsOn}.` : ''} Stop if ${s.kill}.${s.execution.length ? ` To execute: ${s.execution.join(', ')}.` : ''}`,
+      by: s.owner,
+      blocker: s.owner === 'PERSON' ? s.ownerReason : null,
+    })),
     ...reading.sales.map((s) => ({ title: s.title, step: s.test.test, by: s.test.by, blocker: s.test.blocker })),
     ...(reading.nextTest ? [{ title: 'Next test', step: reading.nextTest.test, by: reading.nextTest.by, blocker: reading.nextTest.blocker }] : []),
   ];

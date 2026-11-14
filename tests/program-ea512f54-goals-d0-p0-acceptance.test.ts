@@ -85,6 +85,10 @@ function portfolio(input: { basis: 'PROBABILITY' | 'COVERAGE'; reach: number; wo
     limits: { target: 10_000, deadlineDays: 18, startingCapital: 750, perArrangement: 375, spendCeiling: 3_000, contactsPerDay: { value: null, low: 10, high: 60, source: 'not stated; swept' }, correlation: 0.5 },
     missing: input.basis === 'COVERAGE' ? ['reply rate, close rate not established'] : [],
     searched: 1,
+    // The engine's own assurance over the smallest real sample (C-7): an evidenced reach of at least 96% carries a defensible 90%.
+    ...(input.basis === 'PROBABILITY' && input.reach >= 0.96
+      ? { assurance: { status: 'CLAIMS_AT_LEAST_90', claimsAtLeast90: true, range: { low: 0.91, high: 0.99 }, coverage: input.reach, validationProblems: [], tailSettledP10: null, reason: 'calibrated evidence (smallest sample 200) puts the lower bound at 91%, above 90%' } }
+      : {}),
   };
 }
 

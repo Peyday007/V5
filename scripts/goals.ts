@@ -489,6 +489,21 @@ async function printPlan(reading: PlanReading): Promise<void> {
   if (acc.probability) console.log(`    basis     ${acc.probability.basis} ${Math.round(acc.probability.value * 1000) / 10}% (lower bound ${Math.round(acc.probability.lowerBound * 1000) / 10}%, n=${acc.probability.sample}) · ${acc.probability.note}`);
   if (acc.candidate) console.log(`    candidate ${acc.candidate.source} ${acc.candidate.opportunityIds.join(' + ')} · settled p50 ${acc.candidate.settledP50 === null ? '—' : Math.round(acc.candidate.settledP50)} · ${acc.candidate.reach === null ? 'reach not computed' : `reach ${Math.round(acc.candidate.reach * 1000) / 10}% (${acc.candidate.reachBasis === 'PROBABILITY' ? 'probability' : 'coverage, not a probability'})`}`);
   for (const why of acc.shortfalls) console.log(`    short     ${why}`);
+  // One plan (C-6): which plan this is, and whether the reconstruction below is only hypothetical.
+  if (reading.adoption) console.log(`  plan        ${reading.adoption.source}${reading.adoption.hypothetical ? ' (the reconstruction is hypothetical)' : ''} · ${reading.adoption.reason}`);
+  if (reading.infeasible) {
+    console.log(`  infeasible  ${reading.infeasible.reason}`);
+    for (const r of reading.infeasible.relax) console.log(`    relax     ${r.constraint}: ${r.suggestion}`);
+  }
+  // The adopted plan as an execution sequence (C-8).
+  for (const s of reading.steps ?? []) {
+    console.log(`  step ${String(s.order).padStart(2)}     [${s.owner}] ${s.label}${s.startDay ? ` · day ${s.startDay.low}${s.startDay.high !== s.startDay.low ? `–${s.startDay.high}` : ''}` : ''} · cost ${Math.round(s.cost)} · ${s.basis}${s.dependsOn ? ` · after step ${s.dependsOn}` : ''}`);
+    console.log(`    what      ${s.detail.slice(0, 240)}`);
+    if (s.ownerReason) console.log(`    owner     ${s.ownerReason}`);
+    console.log(`    kill      ${s.kill}`);
+    if (s.execution.length) console.log(`    execution ${s.execution.join('; ')} (needed to execute, never to plan)`);
+  }
+  for (const d of reading.degraded ?? []) console.log(`  DEGRADED    ${d}`);
   console.log(`  pool        ${reading.pool.conclusion}: ${reading.pool.sentence}`);
   if (reading.pathways) {
     for (const line of renderPathways(reading.pathways)) console.log(line);
@@ -500,7 +515,7 @@ async function printPlan(reading: PlanReading): Promise<void> {
       for (const line of why) console.log(`    construct ${line}`);
     }
   }
-  console.log(`  considered  ${reading.considered.length} opening(s), ${reading.considered.filter((one) => one.modelled).length} in the simulation; ${reading.needsMoreOpenings ? (reading.acceptance.status === 'ACCEPTED' ? 'an accepted plan exists; Brain keeps searching for stronger openings' : 'no accepted plan, so Brain keeps constructing and searching') : 'an accepted plan exists'}`);
+  console.log(`  considered  ${reading.considered.length} opening(s), ${reading.considered.filter((one) => one.modelled).length} in the simulation; ${reading.needsMoreOpenings ? (reading.acceptance.status === 'ACCEPTED' ? 'an accepted plan exists; Brain keeps searching for stronger openings' : 'no accepted plan, so Brain keeps constructing and searching') : reading.acceptance.status === 'NOT_SUPPORTED' ? 'the goal as stated is infeasible; the search stops until its terms or inputs change' : reading.acceptance.status === 'ACCEPTED' ? 'an accepted plan exists' : 'the deadline has passed or the outcome is recorded; the search has stopped'}`);
   for (const one of reading.considered.slice(0, 8)) {
     console.log(`    ${one.modelled ? 'model' : '     '} ${one.stage.slice(0, 1)} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);
   }

@@ -23,6 +23,10 @@ function portfolio(input: { basis: 'PROBABILITY' | 'COVERAGE'; reach: number; id
     limits: { target: 10_000, deadlineDays: 18, startingCapital: 750, perArrangement: 375, spendCeiling: 3_000, contactsPerDay: { value: null, low: 10, high: 60, source: 'not stated; swept' }, correlation: 0.5 },
     missing: input.basis === 'COVERAGE' ? ['White-label articles: reply rate, close rate not established'] : [],
     searched: 1,
+    // The engine's own assurance over the smallest real sample (C-7): an evidenced reach of at least 96% carries a defensible 90%.
+    ...(input.basis === 'PROBABILITY' && input.reach >= 0.96
+      ? { assurance: { status: 'CLAIMS_AT_LEAST_90', claimsAtLeast90: true, range: { low: 0.91, high: 0.99 }, coverage: input.reach, validationProblems: [], tailSettledP10: null, reason: 'calibrated evidence (smallest sample 200) puts the lower bound at 91%, above 90%' } }
+      : {}),
   };
 }
 
@@ -61,16 +65,16 @@ describe('the acceptance rule', () => {
     expect(a.sentence).toMatch(/coverage, not a probability/);
   });
 
-  it('reads an evidenced probability at its lower bound: 91% of 2000 worlds is not a defensible 90%', () => {
+  it('reads an evidenced probability at its lower bound: 91% of 2000 simulated worlds is not a defensible 90% (C-7)', () => {
     const a = judgeAcceptance({ achieved: false, chosen: null, portfolio: portfolio({ basis: 'PROBABILITY', reach: 0.905 }), measuredChance: null, considered: complete });
     expect(a.status).toBe('CANDIDATE_ONLY');
-    expect(a.shortfalls.join(' ')).toMatch(/lower bound .* under the required 90%/);
+    expect(a.shortfalls.join(' ')).toMatch(/simulated worlds are not evidence/);
   });
 
   it('accepts an all-evidence combination whose lower bound clears 90%', () => {
     const a = judgeAcceptance({ achieved: false, chosen: null, portfolio: portfolio({ basis: 'PROBABILITY', reach: 0.96 }), measuredChance: null, considered: complete });
     expect(a.status).toBe('ACCEPTED');
-    expect(a.probability).toMatchObject({ basis: 'EVIDENCED_PORTFOLIO', sample: 2_000 });
+    expect(a.probability).toMatchObject({ basis: 'EVIDENCED_PORTFOLIO', sample: 200 });
     expect(a.probability!.lowerBound).toBeGreaterThanOrEqual(0.9);
     expect(a.accepted!.opportunityIds).toEqual(['cop_agency']);
   });
