@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SCRUTINY,
   challenge,
+  challengePlan,
   detectSharedExposure,
   scrutinyFor,
   type ActivityFacts,
@@ -292,5 +293,99 @@ describe('readWithSafeguard: the one re-evaluation, exported', () => {
     const { problem } = multiWedge();
     expect(() => readWithSafeguard(problem, ['nope'], { key: 'x', kind: 'CONTINGENCY' })).toThrow('No activity');
     expect(() => readWithSafeguard({ ...problem, resourceFailure: {} }, ['w1'], { key: 'x', kind: 'CONTINGENCY' })).toThrow('No failure probability');
+  });
+});
+
+describe('the running Brain challenges its own plans: optimizePortfolio carries the report on its assurance', () => {
+  it('a multi-wedge plan riding on one supplier is challenged deep, from the plan alone, with no caller-supplied action', () => {
+    const { planned } = multiWedge();
+    const r = optimizePortfolio(planned);
+    const c = r.assurance!.challenge!;
+    expect(c).toBeDefined();
+    expect(c.action.portfolioWide).toBe(true);
+    expect(c.action.correlatedExposure).toBe(1);
+    expect(c.scrutiny.tier).toBe('DEEP');
+    expect(c.ran).toContain('CORRELATED_STRESS');
+    const f = c.findings.find((x) => x.mode === 'SHARED_DEPENDENCY' && x.subject === 'RESOURCE:supplier-x')!;
+    expect(f.assumption).toContain('supplier-x');
+    expect(f.test).toContain('reach falls');
+    expect(f.saferStructure.length).toBeGreaterThan(0);
+    expect(c.exposures.find((e) => e.id === 'supplier-x')!.reachIfItFails).toBe(0);
+    // The optimizer's own report is not independent validation.
+    expect(c.findings.some((x) => x.mode === 'SELF_AGREEMENT')).toBe(true);
+    // Coverage is not a 90% claim: the verdict asks for a better plan and evidence.
+    expect(c.kinds.CALIBRATED_PROBABILITY?.claimsAtLeast90 ?? false).toBe(false);
+    expect(c.verdict).toBe('IMPROVE_PLAN_AND_EVIDENCE');
+  });
+
+  it('when an independent substitute is in the problem, the plan read proposes it, recomputed, without inflating its probability', () => {
+    const { problem } = multiWedge();
+    // Force the shared-supplier wedges to be the recommendation, as an attractive plan would be, while the substitute stays available.
+    const r = optimizePortfolio({ ...problem, activities: problem.activities.map((a) => (a.key === 'solo' ? { ...a, cash: [40] } : a)) });
+    const c = r.assurance!.challenge!;
+    expect(r.best!.keys.filter((k) => k !== 'solo').length).toBeGreaterThanOrEqual(2);
+    expect(c.exposures.some((e) => e.id === 'supplier-x')).toBe(true);
+    expect(c.proposals.length).toBeGreaterThan(0);
+    for (const p of c.proposals) if (p.assurance.range) expect(p.assurance.range.low).toBeLessThan(p.reach);
+    expect(c.proposals.every((p) => !p.assurance.claimsAtLeast90 || (p.assurance.range?.low ?? 0) >= 0.9)).toBe(true);
+    expect(c.kinds.CALCULATED_SCENARIO.coverage).toBe(r.best!.reach);
+  });
+
+  it('a single small reversible step is not held up by the heavy review', () => {
+    const r = optimizePortfolio({ target: 1000, deadlineDays: 10, worlds: 300, activities: [act('probe', { cash: [5], capital: 1 })] });
+    const c = r.assurance!.challenge!;
+    expect(c.action.portfolioWide).toBe(false);
+    expect(c.scrutiny.tier).not.toBe('DEEP');
+  });
+
+  it('a tiny confident reversible step gets basic invariants only', () => {
+    const r = optimizePortfolio({
+      target: 100, deadlineDays: 10, worlds: 300,
+      activities: [act('only', { cash: [200], capital: 1, evidence: { sampleSize: 100_000 } })],
+    });
+    const c = r.assurance!.challenge!;
+    expect(c.scrutiny.tier).toBe('BASIC_INVARIANTS');
+    expect(c.ran).toEqual(['INVARIANT_CHECK']);
+    expect(c.verdict).toBe('PASS');
+  });
+
+  it('travels through serialization and a worker\'s structured clone, the way the plan read and its rows carry it', () => {
+    const { planned } = multiWedge();
+    const r = optimizePortfolio(planned);
+    const json = JSON.parse(JSON.stringify(r));
+    expect(json.assurance.challenge.verdict).toBe('IMPROVE_PLAN_AND_EVIDENCE');
+    const cloned = structuredClone(r);
+    expect(cloned.assurance!.challenge!.scrutiny.tier).toBe('DEEP');
+    // Read twice, the same report.
+    expect(r.assurance!.challenge).toBe(r.assurance!.challenge);
+  });
+
+  it('a caller may add facts and an independent check, and the optimizer\'s own check is refused as self-agreement', () => {
+    const { planned } = multiWedge();
+    const r = optimizePortfolio({
+      ...planned,
+      challenge: {
+        checks: [
+          { method: 'INDEPENDENT_MODEL', by: 'quant/portfolio optimizePortfolio', dataSource: 'x', agrees: true },
+          { method: 'PRODUCTION_HISTORY', by: 'settlements', dataSource: 'ledger', agrees: true },
+        ],
+      },
+    });
+    const c = r.assurance!.challenge!;
+    expect(c.independentValidation).toEqual({ counted: 1, refusedAsSelfAgreement: 1, disagreeing: 0 });
+  });
+
+  it('a challenge that cannot run is recorded as failed, never as a pass', () => {
+    const { planned } = multiWedge();
+    const r = optimizePortfolio(planned);
+    // A problem the challenge cannot read (its resource failure probabilities withdrawn after optimizing).
+    const broken = challengePlan({ ...planned, resourceFailure: {} }, r);
+    expect(['CHALLENGE_FAILED', 'REFUSE']).toContain(broken.verdict);
+    expect(broken.verdict).not.toBe('PASS');
+  });
+
+  it('a caller reading only the ranking may opt out, and nothing is attached', () => {
+    const { planned } = multiWedge();
+    expect(optimizePortfolio({ ...planned, challenge: false }).assurance!.challenge).toBeUndefined();
   });
 });

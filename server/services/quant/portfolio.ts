@@ -30,6 +30,7 @@
  */
 import { inverseNormal, makeRng, normalCdf } from '../scenario/random.ts';
 import { capitalTurnover, objectiveScore, type RouteObjective } from './deadline.ts';
+import { challengePlan, type ChallengeSummary, type PlanChallengeOptions } from './challenge.ts';
 
 export interface Activity {
   key: string;
@@ -166,6 +167,13 @@ export interface PortfolioProblem {
   gates?: Array<{ id: string; day: number; tranche: number; cost: number }>;
   worlds?: number;
   seed?: number;
+  /**
+   * What the challenge of the recommendation may add (CHAL-33): facts behind
+   * each activity, independent checks, an acceptance or an actual result. The
+   * plan alone decides how deep it goes. `false` only for a caller that reads
+   * nothing but the ranking; a plan read never passes it.
+   */
+  challenge?: PlanChallengeOptions | false;
 }
 
 export interface PortfolioReading {
@@ -255,6 +263,16 @@ export interface Assurance {
   }>;
   /** Historical data a member still needs before its figure is calibrated: targeted research, not an assumption. */
   researchNeeds?: string[];
+  /**
+   * The independent challenge of the recommendation, at the depth its
+   * consequence earns (CHAL-33, `quant/challenge.ts` `challengePlan`): the
+   * assumptions that matter, the test of each and a safer structure, shared
+   * exposures with substitutes or reduced commitment recomputed on the same
+   * worlds, and the four kinds of figure kept apart. Set by `optimizePortfolio`
+   * on every result that has a best combination; it travels wherever the
+   * assurance does.
+   */
+  challenge?: ChallengeSummary;
   reason: string;
 }
 
@@ -1002,7 +1020,27 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
       };
     });
   }
+  if (best && result.assurance && problem.challenge !== false) attachChallenge(problem, result, result.assurance, problem.challenge || {});
   return result;
+}
+
+/**
+ * Put the challenge of `result` on its assurance. It is computed the first
+ * time anything reads it — the plan read, serialization, a worker's
+ * structured clone — and then kept, so a caller that reads only the ranking
+ * (a sensitivity sweep re-optimizing per leaf) does not pay for a deep review
+ * it never looks at, and a reader always gets the same report.
+ */
+function attachChallenge(problem: PortfolioProblem, result: PortfolioResult, assurance: Assurance, options: PlanChallengeOptions): void {
+  let memo: ChallengeSummary | undefined;
+  Object.defineProperty(assurance, 'challenge', {
+    enumerable: true,
+    configurable: true,
+    get: () => (memo ??= challengePlan(problem, result, options)),
+    set: (value: ChallengeSummary) => {
+      memo = value;
+    },
+  });
 }
 
 /**
