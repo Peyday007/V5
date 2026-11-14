@@ -53,26 +53,34 @@ export function permutation(n: number, rng: () => number): Uint32Array {
   return out;
 }
 
+/*
+ * Acklam's coefficients, held once. They were array literals inside the
+ * function, so a call could allocate four arrays; the quant engine calls it
+ * millions of times a plan read, and in production it was among the top
+ * main-thread CPU sources (§109, 2026-11-13). Same constants, same arithmetic,
+ * same values.
+ */
+const IN_A0 = -3.969683028665376e1, IN_A1 = 2.209460984245205e2, IN_A2 = -2.759285104469687e2, IN_A3 = 1.38357751867269e2, IN_A4 = -3.066479806614716e1, IN_A5 = 2.506628277459239;
+const IN_B0 = -5.447609879822406e1, IN_B1 = 1.615858368580409e2, IN_B2 = -1.556989798598866e2, IN_B3 = 6.680131188771972e1, IN_B4 = -1.328068155288572e1;
+const IN_C0 = -7.784894002430293e-3, IN_C1 = -3.223964580411365e-1, IN_C2 = -2.400758277161838, IN_C3 = -2.549732539343734, IN_C4 = 4.374664141464968, IN_C5 = 2.938163982698783;
+const IN_D0 = 7.784695709041462e-3, IN_D1 = 3.224671290700398e-1, IN_D2 = 2.445134137142996, IN_D3 = 3.754408661907416;
+
 /** Φ⁻¹, Acklam's rational approximation. */
 export function inverseNormal(p: number): number {
-  const a = [-3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.38357751867269e2, -3.066479806614716e1, 2.506628277459239];
-  const b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1];
-  const c = [-7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
-  const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416];
   const low = 0.02425;
   if (p <= 0) return -Infinity;
   if (p >= 1) return Infinity;
   if (p < low) {
     const q = Math.sqrt(-2 * Math.log(p));
-    return (((((c[0]! * q + c[1]!) * q + c[2]!) * q + c[3]!) * q + c[4]!) * q + c[5]!) / ((((d[0]! * q + d[1]!) * q + d[2]!) * q + d[3]!) * q + 1);
+    return (((((IN_C0 * q + IN_C1) * q + IN_C2) * q + IN_C3) * q + IN_C4) * q + IN_C5) / ((((IN_D0 * q + IN_D1) * q + IN_D2) * q + IN_D3) * q + 1);
   }
   if (p > 1 - low) {
     const q = Math.sqrt(-2 * Math.log(1 - p));
-    return -(((((c[0]! * q + c[1]!) * q + c[2]!) * q + c[3]!) * q + c[4]!) * q + c[5]!) / ((((d[0]! * q + d[1]!) * q + d[2]!) * q + d[3]!) * q + 1);
+    return -(((((IN_C0 * q + IN_C1) * q + IN_C2) * q + IN_C3) * q + IN_C4) * q + IN_C5) / ((((IN_D0 * q + IN_D1) * q + IN_D2) * q + IN_D3) * q + 1);
   }
   const q = p - 0.5;
   const r = q * q;
-  return ((((((a[0]! * r + a[1]!) * r + a[2]!) * r + a[3]!) * r + a[4]!) * r + a[5]!) * q) / (((((b[0]! * r + b[1]!) * r + b[2]!) * r + b[3]!) * r + b[4]!) * r + 1);
+  return ((((((IN_A0 * r + IN_A1) * r + IN_A2) * r + IN_A3) * r + IN_A4) * r + IN_A5) * q) / (((((IN_B0 * r + IN_B1) * r + IN_B2) * r + IN_B3) * r + IN_B4) * r + 1);
 }
 
 /** Φ, via the complementary error function (Numerical Recipes erfc, ~1.2e-7). */

@@ -18,11 +18,14 @@ import { availableParallelism } from 'node:os';
 import { Worker } from 'node:worker_threads';
 import { evaluateGoalPortfolio, type GoalPortfolio } from '../portfolio.ts';
 import type { SweepJob } from '../reconstruction.ts';
+import type { ConstructedArrangement, ConstructionJob } from '../../cash/construct.ts';
 import { DEFAULT_SWEEP_MS, type VariableSweep } from './variables.ts';
 
 export const MAX_THREADS = 4;
 /** An evaluation that takes longer than this on a thread is abandoned and run inline instead. */
 export const EVALUATION_TIMEOUT_MS = 60_000;
+/** A construction pass on a thread is abandoned and run inline (yielding) after this long. */
+export const CONSTRUCTION_TIMEOUT_MS = 120_000;
 
 type PortfolioInput = Parameters<typeof evaluateGoalPortfolio>[0];
 
@@ -32,6 +35,13 @@ export interface Evaluator {
   evaluate(input: PortfolioInput): Promise<GoalPortfolio>;
   /** The variable sweep (§102), on a thread when the pool has one: it runs for up to a minute and must not hold the server's loop. */
   sweep(job: SweepJob): Promise<VariableSweep>;
+  /**
+   * The construction pass (§82): composing and reconstructing up to
+   * `MAX_CONSTRUCTIONS` arrangements is seconds of pure quant work, so it runs
+   * on a thread like the engine it feeds (§109). Optional so an evaluator
+   * written elsewhere need not supply it; a caller without it composes inline.
+   */
+  construct?(job: ConstructionJob): Promise<ConstructedArrangement[]>;
   close(): Promise<void>;
 }
 
@@ -61,6 +71,10 @@ export function inlineEvaluator(): Evaluator {
     async sweep(job) {
       const { sweepFor } = await import('../reconstruction.ts');
       return sweepFor(job);
+    },
+    async construct(job) {
+      const { composeConstruction, YIELD_EVERY_MS } = await import('../../cash/construct.ts');
+      return composeConstruction(job, YIELD_EVERY_MS);
     },
     async close() {},
   };
@@ -132,6 +146,7 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
     threads,
     evaluate: (input) => onThread<GoalPortfolio>({ kind: 'evaluate', input }, EVALUATION_TIMEOUT_MS, () => inline.evaluate(input)),
     sweep: (job) => onThread<VariableSweep>({ kind: 'sweep', job }, (job.maxMs ?? DEFAULT_SWEEP_MS) + 120_000, () => inline.sweep(job)),
+    construct: (job) => onThread<ConstructedArrangement[]>({ kind: 'construct', job }, CONSTRUCTION_TIMEOUT_MS, () => inline.construct!(job)),
     async close() {
       for (const job of pending.values()) clearTimeout(job.timer);
       await Promise.all(workers.map((w) => w.terminate().catch(() => 0)));
@@ -162,6 +177,7 @@ export function sharedEvaluator(): Evaluator {
     threads: s.evaluator.threads,
     evaluate: (input) => s.evaluator.evaluate(input),
     sweep: (job) => s.evaluator.sweep(job),
+    construct: (job) => (s.evaluator.construct ? s.evaluator.construct(job) : inlineEvaluator().construct!(job)),
     async close() {
       if (released) return;
       released = true;

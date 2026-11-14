@@ -53,12 +53,36 @@ function bound(node: QuantityNode, x: number): number {
   return out;
 }
 
+/*
+ * Every draw a reconstruction makes is a function of a node's key and a stream
+ * number alone (that is what makes a reconstruction reproduce exactly), so the
+ * standard-normal draws behind a key are the same in every reconstruction that
+ * names it. The construction pass reconstructs hundreds of arrangements whose
+ * nodes share keys (`a_value`, `a_buyers`, …), and every plan read repeated
+ * them: 4,000 `inverseNormal` calls per node per route, a top source of the
+ * main thread's CPU in production (§109, 2026-11-13/14). They are drawn once
+ * per (key, stream) and read thereafter — the same numbers in the same order.
+ */
+const NORMALS_MAX = 512;
+const normals = new Map<string, Float64Array>();
+function standardNormals(key: string, stream: number): Float64Array {
+  const id = `${stream}\u0000${key}`;
+  const held = normals.get(id);
+  if (held && held.length === QUANT_LIMITS.samples) return held;
+  const rng = makeRng(seedOf(key), stream);
+  const zs = new Float64Array(QUANT_LIMITS.samples);
+  for (let i = 0; i < zs.length; i++) zs[i] = inverseNormal(rng());
+  if (normals.size >= NORMALS_MAX) normals.delete(normals.keys().next().value!);
+  normals.set(id, zs);
+  return zs;
+}
+
 /** A normal on the pooling scale, as an estimate with quantiles and samples. */
 function fromNormal(node: QuantityNode, scale: Scale, mean: number, sd: number): Pick<Estimate, 'mean' | 'sd' | 'p05' | 'p10' | 'p50' | 'p90' | 'p95' | 'samples'> {
   const at = (z: number) => bound(node, fromScale(scale, mean + z * sd));
-  const rng = makeRng(seedOf(node.key), 7);
+  const zs = standardNormals(node.key, 7);
   const samples = new Array<number>(QUANT_LIMITS.samples);
-  for (let i = 0; i < samples.length; i++) samples[i] = at(inverseNormal(rng()));
+  for (let i = 0; i < samples.length; i++) samples[i] = at(zs[i]!);
   return { mean, sd, p05: at(Q.p05), p10: at(Q.p10), p50: at(Q.p50), p90: at(Q.p90), p95: at(Q.p95), samples };
 }
 
@@ -218,10 +242,16 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
       trace.push(`COMPONENT: cannot rebuild — ${missing.map((one) => one.key).join(', ')} has no evidence and no bounds.`);
     } else {
       const samples = propagate(ctx, node, names, children);
-      const onScale = samples.map((x) => toScale(scale, x));
-      const mean = onScale.reduce((a, b) => a + b, 0) / onScale.length;
-      const sd = Math.sqrt(onScale.reduce((a, b) => a + (b - mean) ** 2, 0) / Math.max(1, onScale.length - 1));
-      const sortedSamples = [...samples].sort((a, b) => a - b);
+      const onScale = new Float64Array(samples.length);
+      for (let i = 0; i < samples.length; i++) onScale[i] = toScale(scale, samples[i]!);
+      let sum = 0;
+      for (let i = 0; i < onScale.length; i++) sum += onScale[i]!;
+      const mean = sum / onScale.length;
+      let squares = 0;
+      for (let i = 0; i < onScale.length; i++) squares += (onScale[i]! - mean) ** 2;
+      const sd = Math.sqrt(squares / Math.max(1, onScale.length - 1));
+      // A typed array sorts numerically without a comparator call per comparison.
+      const sortedSamples = Float64Array.from(samples).sort() as unknown as number[];
       const justified = children.every((child) => child.distributionJustified);
       const weakest = children.reduce<EvidenceTier>((w, child) => (tierRank(child.tier) > tierRank(w) ? child.tier : w), 'DIRECT');
       let est: Estimate = {
@@ -248,7 +278,9 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
         const shared = best.used.some((id) => est.used.includes(id));
         if (!shared) {
           const both = combine({ mean: best.mean, sd: best.sd }, { mean: est.mean, sd: est.sd });
-          est = { ...est, ...fromNormal(node, scale, both.mean, both.sd), samples: fromNormal(node, scale, both.mean, both.sd).samples, sources: [...best.sources, ...est.sources], used: [...best.used, ...est.used] };
+          // One draw serves the quantiles and the samples (it was drawn twice, identically).
+          const drawn = fromNormal(node, scale, both.mean, both.sd);
+          est = { ...est, ...drawn, samples: drawn.samples, sources: [...best.sources, ...est.sources], used: [...best.used, ...est.used] };
           trace.push(`COMPONENT: combined with the ${best.tier} evidence, which shares no data with the parts.`);
         }
       }
@@ -331,7 +363,6 @@ function tierRank(tier: EvidenceTier): number {
 function propagate(ctx: Context, node: QuantityNode, names: string[], children: Estimate[]): number[] {
   const fn = compile(parse(node.formula!), (name) => names.indexOf(name));
   const n = QUANT_LIMITS.samples;
-  const sortedChildren = children.map((child) => [...child.samples].sort((a, b) => a - b));
   const k = names.length;
   const matrix: number[][] = Array.from({ length: k }, (_, i) => Array.from({ length: k }, (_, j) => (i === j ? 1 : 0)));
   for (const c of ctx.correlations ?? []) {
@@ -346,6 +377,8 @@ function propagate(ctx: Context, node: QuantityNode, names: string[], children: 
   if (!factor) throw new ReconstructionError(`The correlations declared among ${names.join(', ')} cannot all hold at once.`);
   // A child a declared correlation touches is drawn through the copula; the rest keep their worlds.
   const remixed = names.map((_, j) => matrix[j]!.some((rho, m) => m !== j && rho !== 0));
+  // Only a child read through the copula is read by quantile, so only its samples are sorted.
+  const sortedChildren = children.map((child, j) => (remixed[j] || child.samples.length !== QUANT_LIMITS.samples ? Float64Array.from(child.samples).sort() : null));
   /*
    * World i draws each child's quantile from a stream keyed by the CHILD, not
    * by this node. One quantity used by two formulas (orders feeding both
@@ -355,12 +388,7 @@ function propagate(ctx: Context, node: QuantityNode, names: string[], children: 
    * copy of a shared quantity independently, which manufactured
    * diversification that does not exist (2026-11-02, the $10K plan).
    */
-  const streams = children.map((child) => {
-    const rng = makeRng(seedOf(child.key), 3);
-    const zs = new Float64Array(n);
-    for (let i = 0; i < n; i++) zs[i] = inverseNormal(rng());
-    return zs;
-  });
+  const streams = children.map((child) => standardNormals(child.key, 3));
   const env = new Float64Array(k);
   const z = new Float64Array(k);
   const out = new Array<number>(n);

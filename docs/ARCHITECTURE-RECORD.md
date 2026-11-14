@@ -16202,6 +16202,31 @@ of everything construction reads:
 When any of these changes, the arrangements are rebuilt. A caller is always handed a copy of
 the held result, never the result itself.
 
+**The quant engine is cheaper at its root, and the construction pass is off the loop too
+(2026-11-14).** #869 and #871 each moved one caller. The class was the engine itself, so it was
+measured where it ran. On the 40- and 60-opening project of `goalPlan.test.ts`, one portfolio
+evaluation took 8.9 s and 29 s. Almost all of that was `quant/portfolio.ts`'s per-world loop,
+re-run from scratch for every greedy candidate. That test's plan read then timed out at 120 s
+(Postgres suite 43570017131, and locally on SQLite). Four changes, and every reading is the
+same as before: the evaluations hash identically, and `tests/quantOffLoop.test.ts` holds them
+against the old evaluator.
+
+- **The prefix is reused.** A combination's worlds after its start-ordered prefix are held, so a
+  greedy candidate costs one member per world. The 60-opening evaluation went from 29 s to 1.2–2 s,
+  and the 40-opening one from 8.9 s to 1.0–1.3 s.
+- **A fact's text is read once.** `acquireMarketHistory` keeps it by text. Before, it ran four
+  regex readers over every fact for every opening of every evaluation.
+- **Each key's normals are drawn once.** `reconstruct` keeps them by (key, stream), and sorts only
+  the children it reads by quantile. A construction compose went from a median of 32 ms to 6–15 ms.
+- **`inverseNormal`'s coefficients are constants.** They were array literals allocated on every
+  call.
+
+The construction pass (`composeConstruction`) now runs on the evaluator pool (`Evaluator.construct`),
+like the evaluation and the sweep. Only when no thread can start does it run inline, yielding every
+25 ms. Plan-read phases on the 40/60-opening test went from 11.6 s / 19.1 s to 1.2 s / 3.3 s for
+the portfolio. The reconstruction went from 65.6 s to 22.5 s on the first read; before, the second
+read never finished. The test now passes in 80 s on a loaded machine.
+
 **Research could not read its sources, and the plan got no evidence (2026-11-14).** Brain's
 plan stays below 90% because its candidate rests on assumptions, and only research turns
 assumptions into evidence. On production the free lane was running (86 jobs an hour), but it
