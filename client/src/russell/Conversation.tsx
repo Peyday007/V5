@@ -25,7 +25,7 @@ import type {
 import { turnLabel } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { ApiError } from '../lib/api.ts';
-import { groundingPreface, type ConversationGrounding } from '../world/lens.ts';
+import { followInApp, groundingPreface, type ConversationGrounding } from '../world/lens.ts';
 
 /** How often an unanswered turn asks the server whether it has been answered. */
 const PENDING_POLL_MS = 4_000;
@@ -226,10 +226,19 @@ export function Conversation({
       {showComposer && grounding ? (
         <p className="rs-thread-grounding" data-testid="conversation-grounding">
           Asking about {grounding.title ?? `${grounding.kind} ${grounding.recordId}`}
-          {grounding.href ? (
+          {grounding.view ? (
             <>
               {' '}
-              (<a href={grounding.href}>{grounding.href}</a>)
+              (
+              <a href={grounding.view} onClick={(e) => followInApp(e, grounding.view!)}>
+                open the record
+              </a>
+              {grounding.href ? (
+                <>
+                  , source data <code>{grounding.href}</code>
+                </>
+              ) : null}
+              )
             </>
           ) : (
             ' (no record address)'

@@ -43,6 +43,7 @@ import { WorldScene } from './WorldScene.tsx';
 import { OperationsLens } from './OperationsLens.tsx';
 import { GoalLens } from './GoalLens.tsx';
 import { displayState, type TruthContext } from './truth.ts';
+import { RecordLink, SourceAddress } from './RecordDrawer.tsx';
 import './numbers.css';
 
 export const WORLD_PATH = '/world';
@@ -182,9 +183,18 @@ export function WorldPage({ projectId, conversationId, renderMode }: WorldPagePr
             {lens.mode === 'GOAL' ? (
               <GoalLens goal={goal} plans={[]} chain={[]} dependencies={[]} uncertainty={null} ctx={ctx} selected={selectedFact} onLensAction={dispatch} />
             ) : null}
-            {lens.mode === 'GOAL' && goal?.href ? (
-              <p className="numbers-muted">
-                Plans, chain and uncertainty are read on the goal&rsquo;s own record: <a href={goal.href}>{goal.href}</a>
+            {lens.mode === 'GOAL' && goal ? (
+              <p className="numbers-muted" data-testid="goal-record-pointer">
+                Plans, chain and uncertainty are read on the goal&rsquo;s own record:{' '}
+                <RecordLink kind="GOAL" recordId={goal.recordId}>
+                  {goal.title}
+                </RecordLink>
+                {goal.href ? (
+                  <>
+                    {' '}
+                    <SourceAddress href={goal.href} />
+                  </>
+                ) : null}
               </p>
             ) : null}
           </div>
@@ -196,15 +206,9 @@ export function WorldPage({ projectId, conversationId, renderMode }: WorldPagePr
               {shown.explanations.map((e, i) => (
                 <li key={`${e.recordKind}:${e.recordId}:${i}`} data-kind={e.kind}>
                   <strong>{e.kind.toLowerCase()}</strong> — {e.text}{' '}
-                  {e.href ? (
-                    <a className="numbers-link" href={e.href}>
-                      {e.recordKind} {e.recordId}
-                    </a>
-                  ) : (
-                    <span>
-                      {e.recordKind} {e.recordId} (no route serves it alone)
-                    </span>
-                  )}{' '}
+                  <RecordLink kind={e.recordKind} recordId={e.recordId}>
+                    {e.recordKind} {e.recordId}
+                  </RecordLink>{' '}
                   <button type="button" className="numbers-link" onClick={() => dispatch({ type: 'SELECT', selection: { kind: e.recordKind, id: e.recordId } })}>
                     select
                   </button>{' '}

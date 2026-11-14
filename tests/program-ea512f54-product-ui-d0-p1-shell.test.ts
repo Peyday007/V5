@@ -17,7 +17,7 @@ import { RussellApi } from '../client/src/lib/russellApi.ts';
 import { parseRoute, pathFor } from '../client/src/lib/router.ts';
 import { SECTIONS } from '../client/src/russell/RussellShell.tsx';
 import { WorldPage, factsInTimeframe } from '../client/src/world/WorldPage.tsx';
-import { parseLensQuery } from '../client/src/world/lens.ts';
+import { parseLensQuery, recordViewHref } from '../client/src/world/lens.ts';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -135,7 +135,10 @@ describe('the docked conversation', () => {
   it('a turn carries the selected record id and href on the existing turn route', async () => {
     const say = vi.spyOn(RussellApi, 'say').mockResolvedValue({} as Awaited<ReturnType<typeof RussellApi.say>>);
     await renderPage('/world?lens=goal&sel=CAMPAIGN:c1', 'STATIC');
-    expect(screen.getByTestId('conversation-grounding').textContent).toContain('/api/factory/campaigns/c1');
+    const groundingLine = screen.getByTestId('conversation-grounding');
+    expect(groundingLine.textContent).toContain('/api/factory/campaigns/c1');
+    // The grounding's link opens the record's page, never its JSON.
+    expect(groundingLine.querySelector('a')!.getAttribute('href')).toBe(recordViewHref('CAMPAIGN', 'c1'));
     const box = within(screen.getByTestId('world-conversation')).getByLabelText('Say something to Russell');
     fireEvent.change(box, { target: { value: 'Why is this blocked?' } });
     await act(async () => {
@@ -168,9 +171,34 @@ describe('explanations and actions', () => {
     const list = screen.getByTestId('world-explanations');
     const block = list.querySelector('[data-kind="BLOCK"]')!;
     expect(block.textContent).toContain('A check failed');
-    expect(block.querySelector('a')!.getAttribute('href')).toBe('/api/factory/campaigns/c1');
+    expect(block.querySelector('a')!.getAttribute('href')).toBe(recordViewHref('CAMPAIGN', 'c1'));
     const approval = list.querySelector('[data-kind="APPROVAL"]')!;
-    expect(approval.querySelector('a')!.getAttribute('href')).toBe('/api/cash/opportunities/o1');
+    expect(approval.querySelector('a')!.getAttribute('href')).toBe(recordViewHref('OPPORTUNITY', 'o1'));
+  });
+
+  it('following a record link selects that record in place, without sending a person to JSON', async () => {
+    await renderPage('/world', 'STATIC');
+    const link = screen.getByTestId('world-explanations').querySelector('[data-kind="BLOCK"] a') as HTMLAnchorElement;
+    await act(async () => {
+      fireEvent.click(link);
+    });
+    expect(window.location.pathname).toBe('/world');
+    expect(parseLensQuery(window.location.search).selected).toEqual({ kind: 'CAMPAIGN', id: 'c1' });
+  });
+
+  it('the goal-mode pointer opens the goal record, not its API address', async () => {
+    await renderPage('/world?lens=goal&goal=g1', 'STATIC');
+    const pointer = screen.getByTestId('goal-record-pointer');
+    expect(pointer.querySelector('a')!.getAttribute('href')).toBe(recordViewHref('GOAL', 'g1'));
+    expect(pointer.textContent).toContain('/api/goals/g1');
+  });
+
+  it('no link on the world page points at an /api/ JSON address, in any lens', async () => {
+    for (const lens of ['world', 'operations', 'goal']) {
+      await renderPage(`/world?lens=${lens}&sel=CAMPAIGN:c1&goal=g1`, 'STATIC');
+      for (const a of document.querySelectorAll('a')) expect(a.getAttribute('href') ?? '', `${lens}: ${a.textContent}`).not.toMatch(/^\/api\//);
+      cleanup();
+    }
   });
 
   it('adds no action route: the world client only reads, and checks the contract version', async () => {

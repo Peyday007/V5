@@ -12,7 +12,7 @@ import type { World, WorldFact } from '../server/routes/world.ts';
 import { OperationsLens, exportAuthorized, factsCsv, filterFacts, sortFacts } from '../client/src/world/OperationsLens.tsx';
 import { GoalLens, splitFigures, type GoalPlan } from '../client/src/world/GoalLens.tsx';
 import { RecordDrawer, UNKNOWN } from '../client/src/world/RecordDrawer.tsx';
-import { initialLensState, lensReducer, type LensState } from '../client/src/world/lens.ts';
+import { initialLensState, lensReducer, parseLensQuery, recordViewHref, type LensState } from '../client/src/world/lens.ts';
 import { REALISED_LABELS, type TruthContext } from '../client/src/world/truth.ts';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -133,16 +133,29 @@ describe('operations lens', () => {
     }
     const money = screen.getByTestId('operations-money');
     const received = money.querySelector('[data-money-class="received"] a') as HTMLAnchorElement;
-    expect(received.getAttribute('href')).toBe('/api/projects/prj_1/cash');
+    // A money figure opens the Cash page; the JSON it was read from is named as its source, not linked.
+    expect(received.getAttribute('href')).toBe('/cash');
+    expect(received.getAttribute('title')).toContain('/api/projects/prj_1/cash');
     expect(received.textContent).toBe('$25.00');
     const due = money.querySelector('[data-money-class="due"] a') as HTMLAnchorElement;
-    expect(due.getAttribute('href')).toBe('/api/projects/prj_1/cash/invoices');
+    expect(due.getAttribute('href')).toBe('/cash');
+    expect(due.getAttribute('title')).toContain('/api/projects/prj_1/cash/invoices');
     const projected = money.querySelector('[data-money-class="projected"]')!;
     expect(projected.textContent).toContain('Not recorded');
     expect(projected.textContent).toContain('Projected — not cash');
     const fleet = screen.getByTestId('operations-summary').querySelector('a') as HTMLAnchorElement;
-    expect(fleet.getAttribute('href')).toBe('/api/russell/projects/prj_1/fleet');
+    expect(fleet.getAttribute('href')).toBe('/fleet');
     expect(fleet.textContent).toBe('1');
+  });
+
+  it('no link in the operations lens sends a person to an /api/ JSON address', () => {
+    render(createElement(Harness, { w: world() }));
+    const links = [...document.querySelectorAll('a')];
+    expect(links.length).toBeGreaterThan(0);
+    for (const a of links) expect(a.getAttribute('href') ?? '', a.textContent ?? '').not.toMatch(/^\/api\//);
+    // Each fact row's source link opens that record's own view.
+    const row = document.querySelector('a[data-record="OPPORTUNITY:o1"]') as HTMLAnchorElement;
+    expect(row.getAttribute('href')).toBe(recordViewHref('OPPORTUNITY', 'o1'));
   });
 
   it('labels money by class: a projected line never reads as collected', () => {
@@ -182,7 +195,12 @@ describe('record drawer', () => {
     expect(field('Blocker')).toBe('Check failed');
     expect(field('Next action')).toBe('Repair');
     expect(field('Queue')).toBe('factory');
-    expect(screen.getByRole('link', { name: 'Open the record' }).getAttribute('href')).toBe(f.href);
+    const link = screen.getByRole('link', { name: 'Link to this record' });
+    expect(link.getAttribute('href')).toBe(recordViewHref('CAMPAIGN', 'c1'));
+    expect(link.getAttribute('href')).not.toMatch(/^\/api\//);
+    expect(parseLensQuery(link.getAttribute('href')!.split('?')[1]!).selected).toEqual({ kind: 'CAMPAIGN', id: 'c1' });
+    // The API address is still inspectable, as provenance text rather than a page link.
+    expect(field('Source address')).toContain(f.href!);
   });
 
   it('shows "unknown" for anything the response lacks', () => {
