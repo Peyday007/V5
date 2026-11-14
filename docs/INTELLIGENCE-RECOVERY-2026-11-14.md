@@ -61,18 +61,18 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | W-5 | quantitative knowledge | construction facts written only by a person, per goal; map-built roles unpriced (`construction/service.ts:57-96`) | BLOCKING | construction-knowledge | REPAIRING |
 | W-6 | decomposition | role-occupant answer asked once, never read back (`expand.ts:196,214`) | MAJOR | construction-knowledge | REPAIRING |
 | W-7 | money-tree positions | closed logistics-shaped position vocabulary; 4 economics branches; no resale/subscription/finance/rent (`domain/construction.ts:31-224`) | MAJOR | construction-knowledge | REPAIRING |
-| W-8 | transfer | two construction vocabularies; transfer goal-only | MAJOR | — | ROOT CAUSE CONFIRMED |
-| W-9 | generality | one Metro Detroit last-mile reference pack applied to any "logistics" subject | MINOR | — | DISCOVERED |
+| W-8 | transfer | two construction vocabularies; transfer goal-only | MAJOR | transfer-positions | REPAIRING |
+| W-9 | generality | one Metro Detroit last-mile reference pack applied to any "logistics" subject | MINOR | transfer-positions | REPAIRING |
 | W-10 | freshness | construction facts undated; old OBSERVED beats new VERIFIED | MAJOR | construction-knowledge | REPAIRING |
-| W-11 | evidence lifecycle | claims lack method, sample size, transaction type, limitations, validity, invalidation | MAJOR | — | ROOT CAUSE CONFIRMED |
-| W-12 | freshness | constant staleness windows cut evidence off rather than widen uncertainty; map nodes undated | MAJOR | — | ROOT CAUSE CONFIRMED |
+| W-11 | evidence lifecycle | claims lack method, sample size, transaction type, limitations, validity, invalidation | MAJOR | evidence-lifecycle | REPAIRING |
+| W-12 | freshness | constant staleness windows cut evidence off rather than widen uncertainty; map nodes undated | MAJOR | evidence-lifecycle | REPAIRING |
 | W-13 | who pays | map flows point at "operators", no payer/supplier resolved (`service.ts:74-76`) | MAJOR | construction-knowledge | REPAIRING |
 | H2-1 | Hermes direction | no way to give a run a mission (`domain/operator.ts:148`) | BLOCKING | hermes-director | REPAIRING |
 | H2-2 | Hermes direction | no inventory tool | MAJOR | hermes-director | REPAIRING |
-| H2-3 | Hermes diagnosis | deficiencies from three hard-coded detectors (`director.ts:883`) | MAJOR | — | DISCOVERED |
+| H2-3 | Hermes diagnosis | deficiencies from three hard-coded detectors (`director.ts:883`) | MAJOR | hermes-direction | REPAIRING |
 | H2-4 | Hermes honesty | lesson-only interventions reported as queued (= Surge A H-4, merged, unverified) | MAJOR | Surge A | AWAITING VERIFICATION |
 | H2-5 | Hermes direction | no reassign/re-attempt of stalled Factory work | MAJOR | hermes-director | REPAIRING |
-| H2-6 | Hermes research | research only via a commission | MINOR | — | DISCOVERED |
+| H2-6 | Hermes research | research only via a commission | MINOR | hermes-direction | REPAIRING |
 | H2-7 | Hermes verification | cannot verify a repair it did not commission | MINOR | hermes-director | REPAIRING |
 | H2-8 | runtime | operator reads >20 s; DB contention | MAJOR | **Surge A** (RC-1) | handed off |
 | H2-9 | compute | RunPod ceilings block any 48 GB pod; no 48 GB recipe | MAJOR | hermes-director | REPAIRING |
@@ -83,7 +83,7 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | K-3 | traceability | which 12 reach a model is not recorded; `arr_` ids may be linked as openings (`plan.ts:2489`) | MAJOR | arrangement-library | REPAIRING |
 | K-4 | learning | research answers never attach to the arrangement; refuted ones re-asked | MAJOR | arrangement-library | REPAIRING |
 | K-5 | reuse | rounds per goal, keys are project-local hashes; no cross-goal/project reuse | MAJOR | arrangement-library | REPAIRING |
-| K-6 | persistent knowledge | §92 positions, roles, flows not stored | MAJOR | — | ROOT CAUSE CONFIRMED |
+| K-6 | persistent knowledge | §92 positions, roles, flows not stored | MAJOR | transfer-positions | REPAIRING |
 | K-7 | identity | keys from row ids; recreated node loses history | MINOR | arrangement-library | REPAIRING |
 | K-8 | geography | arrangements carry no geography; constraints never read | MINOR | arrangement-library | REPAIRING |
 | S-1 | search narrowing | 12 picked by saturating score + sha256 tiebreak; experiment: strong DIRECT arrangement kept/dropped by its key string; swapping it in raised reach 1.55%→2.8% (`goalScenario.ts:283-297`) | BLOCKING | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
