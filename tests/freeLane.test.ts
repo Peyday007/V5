@@ -686,6 +686,10 @@ describe('the free research lane', () => {
     const thinking = `<think>The answer looks like {"claims":[]} or \`\`\`json\n{"x":1}\n\`\`\` maybe.</think>\n${JSON.stringify({ claims: [one] })}`;
     expect(listedClaims(firstJson(thinking)!)).toEqual([one]);
     expect(listedClaims(firstJson(`<think>{"claim": "draft"}</think>\n${JSON.stringify([one, two])}`)!)).toEqual([one, two]);
+    // Prose after the list, even prose with its own brackets, is not part of the list.
+    expect(listedClaims(firstJson(`${JSON.stringify([one])} per [S1]`)!)).toEqual([one]);
+    expect(listedClaims(firstJson(`${JSON.stringify([one, two])} per [S1.3] and [S1.4]`)!)).toEqual([one, two]);
+    expect(listedClaims(firstJson(`Here: ${JSON.stringify([{ ...one, claim: 'a ] b [ c' }, two])} — see [S1]`)!)).toHaveLength(2);
     // Prose with a bracketed reference before the object is still the object.
     expect(firstJson(`Per [S1.3]: ${JSON.stringify({ claims: [one] })}`)).toEqual({ claims: [one] });
     expect(listedClaims({ claims: [] })).toEqual([]);
