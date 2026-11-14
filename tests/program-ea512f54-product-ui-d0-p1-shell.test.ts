@@ -202,3 +202,55 @@ describe('responsive', () => {
     expect(factsInTimeframe(facts, { preset: 'all' }, NOW.getTime())).toHaveLength(2);
   });
 });
+
+describe('the proofs of concept are the World mode, reachable at /world', () => {
+  it('World mode renders the prototypes on the live read, and every prototype can be chosen and compared there', async () => {
+    await renderPage('/world', 'STATIC');
+    const protos = screen.getByTestId('world-prototypes');
+    const picker = within(protos).getByRole('group', { name: 'Prototype' });
+    const names = within(picker).getAllByRole('button').map((b) => b.textContent);
+    expect(names).toEqual(['Dragon citadel', 'Ledger map', 'Constellation']);
+    const live = factsInTimeframe(WORLD.facts, parseLensQuery('').timeframe, Date.now()).map((f) => `${f.kind}:${f.recordId}`);
+    expect(live.length).toBeGreaterThan(0);
+    for (const name of names) {
+      fireEvent.click(within(screen.getByTestId('world-prototypes')).getByRole('button', { name: name! }));
+      const now = screen.getByTestId('world-prototypes');
+      expect(within(now).getByRole('button', { name: name! }).getAttribute('aria-pressed')).toBe('true');
+      // Live facts, not the sample: the records the read returned, and no sample banner.
+      const rows = [...within(now).getByTestId('world-facts').querySelectorAll('tbody tr')].map((r) => r.getAttribute('data-record'));
+      expect(rows).toEqual(live);
+      expect(within(now).queryByText(/sample/i)).toBeNull();
+    }
+  });
+
+  it('a selection made in a prototype is the page lens, so it survives a switch of prototype and of mode', async () => {
+    await renderPage('/world?sel=OPPORTUNITY:o1', 'STATIC');
+    fireEvent.click(within(screen.getByTestId('world-prototypes')).getByRole('button', { name: 'Constellation' }));
+    expect(parseLensQuery(window.location.search).selected).toEqual({ kind: 'OPPORTUNITY', id: 'o1' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Operations' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'World' }));
+    expect(screen.getByTestId('world-prototypes').getAttribute('data-prototype')).toBe('constellation');
+    expect(parseLensQuery(window.location.search).selected).toEqual({ kind: 'OPPORTUNITY', id: 'o1' });
+  });
+
+  it('the sample comparison is opt-in and clearly marked as sample state', async () => {
+    await renderPage('/world', 'STATIC');
+    fireEvent.click(screen.getByTestId('world-sample-toggle'));
+    const protos = screen.getByTestId('world-prototypes');
+    const rows = [...within(protos).getByTestId('world-facts').querySelectorAll('tbody tr')].map((r) => r.getAttribute('data-record') ?? '');
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.includes(':sample_'))).toBe(true);
+    expect(within(protos).getAllByText(/sample/i).length).toBeGreaterThan(0);
+  });
+
+  it('commits a screenshot of each prototype at desktop and phone width', () => {
+    for (const p of ['citadel', 'ledger', 'constellation']) {
+      for (const w of ['desktop', 'mobile']) {
+        const file = join(process.cwd(), 'client/src/world/prototypes/screenshots', `${p}-${w}.png`);
+        const bytes = readFileSync(file);
+        expect(bytes.subarray(1, 4).toString('latin1')).toBe('PNG');
+        expect(bytes.length).toBeGreaterThan(5_000);
+      }
+    }
+  });
+});

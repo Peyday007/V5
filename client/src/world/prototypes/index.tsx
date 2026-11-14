@@ -7,7 +7,7 @@
 import { useReducer, useState } from 'react';
 import type { WorldFact } from '../../../../server/routes/world.ts';
 import { decideRenderMode, readCapabilitySignals, type WorldRenderMode } from '../capability.ts';
-import { initialLensState, lensReducer } from '../lens.ts';
+import { initialLensState, lensReducer, type LensAction, type LensState } from '../lens.ts';
 import { DRAGON_THEME, PLAIN_THEME, type ThemeDefinition } from '../theme.ts';
 import type { TruthContext } from '../truth.ts';
 import { WorldScene, type SceneLayout } from '../WorldScene.tsx';
@@ -33,18 +33,32 @@ export interface WorldPrototypesProps {
   ctx?: TruthContext;
   mode?: WorldRenderMode;
   initial?: string;
+  /**
+   * The page's lens, when the prototypes are shown inside the World
+   * destination: selection stays coherent across modes because it is the
+   * page's one lens state, not a copy. Omitted, the prototypes keep their own.
+   */
+  lens?: LensState;
+  onLensAction?: (action: LensAction) => void;
+  /** The chosen prototype, when the page holds it. */
+  chosen?: string;
+  onChoose?: (id: string) => void;
 }
 
-export function WorldPrototypes({ facts, ctx, mode, initial = 'citadel' }: WorldPrototypesProps) {
+export function WorldPrototypes({ facts, ctx, mode, initial = 'citadel', lens: pageLens, onLensAction, chosen: pageChosen, onChoose }: WorldPrototypesProps) {
   const sample = facts === undefined;
   const shownFacts = facts ?? SAMPLE_FACTS;
   const context: TruthContext = ctx ?? { world: { generatedAt: SAMPLE_GENERATED_AT, projectId: SAMPLE_PROJECT_ID }, nowMs: Date.parse(SAMPLE_GENERATED_AT) };
   const renderMode = mode ?? decideRenderMode(readCapabilitySignals()).mode;
-  const [lens, dispatch] = useReducer(lensReducer, undefined, initialLensState);
-  const [chosen, setChosen] = useState(initial);
+  const [ownLens, ownDispatch] = useReducer(lensReducer, undefined, initialLensState);
+  const [ownChosen, setOwnChosen] = useState(initial);
+  const lens = pageLens ?? ownLens;
+  const dispatch = onLensAction ?? ownDispatch;
+  const chosen = pageChosen ?? ownChosen;
+  const setChosen = onChoose ?? setOwnChosen;
   const proto = PROTOTYPES.find((p) => p.id === chosen) ?? PROTOTYPES[0]!;
   return (
-    <div className="world-prototypes">
+    <div className="world-prototypes" data-testid="world-prototypes" data-prototype={proto.id}>
       <div className="world-prototype-picker" role="group" aria-label="Prototype">
         {PROTOTYPES.map((p) => (
           <button key={p.id} type="button" aria-pressed={p.id === proto.id} onClick={() => setChosen(p.id)} title={p.description}>

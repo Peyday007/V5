@@ -39,7 +39,7 @@ import {
   type LensState,
   type Timeframe,
 } from './lens.ts';
-import { WorldScene } from './WorldScene.tsx';
+import { PROTOTYPES, WorldPrototypes } from './prototypes/index.tsx';
 import { OperationsLens } from './OperationsLens.tsx';
 import { GoalLens } from './GoalLens.tsx';
 import { displayState, type TruthContext } from './truth.ts';
@@ -90,6 +90,9 @@ export interface WorldPageProps {
 export function WorldPage({ projectId, conversationId, renderMode }: WorldPageProps): JSX.Element {
   const [lens, setLens] = useState<LensState>(lensFromLocation);
   const dispatch = useCallback((action: LensAction) => setLens((s) => lensReducer(s, action)), []);
+  // Which proof of concept draws the World mode; the art direction is the owner's choice (S-0428).
+  const [prototype, setPrototype] = useState<string>(PROTOTYPES[0]!.id);
+  const [sampleCompare, setSampleCompare] = useState(false);
 
   // The URL is the lens written down: every change is reflected, so a reload or a shared link restores it.
   useEffect(() => {
@@ -177,7 +180,20 @@ export function WorldPage({ projectId, conversationId, renderMode }: WorldPagePr
       {shown && ctx ? (
         <div className="world-page-body">
           <div className="world-page-lens" data-testid={`world-lens-${lens.mode.toLowerCase()}`}>
-            {lens.mode === 'WORLD' ? <WorldScene facts={shown.facts} mode={mode} lens={lens} onLensAction={dispatch} ctx={ctx} /> : null}
+            {lens.mode === 'WORLD' ? (
+              <>
+                {/* The proofs of concept (UI-27-5) are the World mode itself: each draws this read's live facts, and the owner compares them here. */}
+                <label className="numbers-muted">
+                  <input type="checkbox" checked={sampleCompare} onChange={(e) => setSampleCompare(e.target.checked)} data-testid="world-sample-toggle" /> Compare
+                  prototypes on sample state (clearly marked, not records)
+                </label>
+                {sampleCompare ? (
+                  <WorldPrototypes mode={mode} chosen={prototype} onChoose={setPrototype} />
+                ) : (
+                  <WorldPrototypes facts={shown.facts} ctx={ctx} mode={mode} lens={lens} onLensAction={dispatch} chosen={prototype} onChoose={setPrototype} />
+                )}
+              </>
+            ) : null}
             {lens.mode === 'OPERATIONS' ? <OperationsLens world={shown} ctx={ctx} lens={lens} onLensAction={dispatch} /> : null}
             {lens.mode === 'GOAL' ? (
               <GoalLens goal={goal} plans={[]} chain={[]} dependencies={[]} uncertainty={null} ctx={ctx} selected={selectedFact} onLensAction={dispatch} />
