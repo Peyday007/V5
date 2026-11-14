@@ -178,6 +178,25 @@ describe('the goals door', () => {
     expect((await call('POST', `/api/goals/${goal.id}/pause`, { reason: 'x' })).status).toBe(404);
   });
 
+  it('creates a goal from an objective in words, and refuses a reader or a project it may not write the same way as none', async () => {
+    const made = await call('POST', '/api/goals', { projectId, objective: 'Generate $10,000 within 30 days using at most $3,000 in starting capital.' });
+    expect(made.status).toBe(200);
+    expect(made.body.goal.target).toMatchObject({ amountCents: 1_000_000, currency: 'USD', capitalCeilingCents: 300_000 });
+    expect(made.body.reading.kind).toBe('CASH');
+    const other = await call('POST', '/api/goals', { projectId, objective: 'Build or expand a cleaning business in Harrisburg' });
+    expect(other.status).toBe(200);
+    expect(other.body.goal.target).toBeNull();
+    const vague = await call('POST', '/api/goals', { projectId, objective: 'Make $10,000 quickly' });
+    expect(vague.status).toBe(400);
+    expect(vague.body.error).toMatch(/deadline/);
+    const forbidden = await call('POST', '/api/goals', { projectId: otherProjectId, objective: 'Build a thing' });
+    const absent = await call('POST', '/api/goals', { projectId: 'prj_doesnotexist000000', objective: 'Build a thing' });
+    expect(forbidden.status).toBe(404);
+    expect(forbidden.text).toBe(absent.text);
+    current = human('VIEWER');
+    expect((await call('POST', '/api/goals', { projectId, objective: 'Build a thing' })).status).toBe(404);
+  });
+
   it('pauses, refuses a cycle, and reports what the decision will cause', async () => {
     const one = await goalIn(projectId, 'One');
     const two = await goalIn(projectId, 'Two');

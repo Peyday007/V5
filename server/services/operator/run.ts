@@ -337,6 +337,7 @@ const OPERATOR_ACTION_TOOLS = [
   'brain_operator_continue_idle',
   'brain_operator_submit_fix',
   'brain_operator_set_goal_focus',
+  'brain_operator_create_goal',
   'brain_operator_commission',
   'brain_operator_prioritize_engineering',
 ];
