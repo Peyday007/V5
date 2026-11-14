@@ -228,7 +228,7 @@ production verification (one deploy at a time on one Fly app).
 
 | item | amount |
 |---|---|
-| Additional spending by this operation | **$0.00** |
+| Additional spending by this operation | **≈ $0.30/day from 2026-11-14 18:15Z** (Fly VM 2 GB → 4 GB, about $9/month); no other spend |
 | Resources added | none |
 | Resources reused | RunPod pod `odsft6ptpi2reh` (RTX 2000 Ada 16 GB, Qwen3-4B-AWQ, $0.19/h, already running), Fly app, GitHub Actions |
 | Current active hourly cost (pre-existing) | RunPod $0.196/h |
@@ -279,3 +279,23 @@ mechanism: scheduled task `trig_01KSy4xRxmNaWXLLeLhNsMxE`, fire time
   grace (10 minutes) after a process starts, as the operator already does.
 - Production serves the new code: its MCP surface lists
   `brain_operator_create_goal`.
+
+## Production stability (RC-1, second layer)
+
+After release, production still flapped (`/healthz` 15–35 s or 503, MCP "no
+healthy instances", pool 8/8 checked out, "Query read timeout"). The Connection
+report (run 43622088440, 17:39Z) showed the database idle (load 0.14, all
+connections idle) and the Brain process saturated: heap 645–911 MB of a
+1010 MB ceiling, the collector running 16–31 s of every minute, the event loop
+frozen 10–58 s, SHEDDING within two minutes of every boot since Nov 10. Timers
+fire before socket reads after a stall, so pool and query timeouts fire before
+the replies that would release clients are read.
+
+Repairs:
+- `stateEngine.ts` reads run summaries without prompt/result text (the slowest
+  statement in every stalled process, 5–32 s, up to 132 s) — 3951aa1.
+- Memory headroom: Fly VM 4 GB and Node heap ceiling 2560 MB.
+
+Open (next): effect transactions hold a connection across storage HTTP and a
+full recompute (`effects/engine.ts:257`); storage existence checks without a
+shared cache; a ~420 MB baseline heap to profile.

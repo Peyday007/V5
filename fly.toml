@@ -89,4 +89,12 @@ primary_region = "iad"        # pick the region nearest your Supabase project
   # 50-84 s and 34 process restarts in the 24 hours before it. The verifier runs
   # inside this machine beside the Brain, so the Brain alone fitting is not
   # enough. About $5 a month more on Fly's shared-cpu-1x pricing.
-  memory = "2gb"
+  #
+  # 4 GB since 2026-11-14 (planning recovery). On 2 GB the Node heap ceiling was
+  # ~1 GB: the Connection report of 17:39Z read heap 645-911 MB of 1010 MB, the
+  # collector running 16-31 s of every minute and the event loop frozen 10-58 s,
+  # which starved the pool (8/8 checked out, "Query read timeout") and flapped
+  # the health check while the database itself sat idle. The heap ceiling is
+  # raised with it (Dockerfile CMD) and the threads keep their own 384 MB caps.
+  # About $9 a month more.
+  memory = "4gb"
