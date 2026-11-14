@@ -54,10 +54,10 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 
 | id | capability | symptom | sev | owner | status |
 |---|---|---|---|---|---|
-| W-1 | world expansion | kernel needs an ACTIVE sprint; questions worded as sprint work (`industry/kernel.ts:70,96`) | BLOCKING | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 149/140) |
-| W-2 | adaptive selection | six fixed-order rules, oldest-first, constant concurrency 4 (`allocate.ts:16-23,97,369`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 149/140) |
-| W-3 | expansion | root question and each breakdown asked once; repeat branch unreachable (`allocate.ts:152,260,313`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 149/140) |
-| W-4 | exploration | barren after 3 scans is permanent (`verdict.ts:123-136`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 149/140) |
+| W-1 | world expansion | kernel needs an ACTIVE sprint; questions worded as sprint work (`industry/kernel.ts:70,96`) | BLOCKING | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 150/141) |
+| W-2 | adaptive selection | six fixed-order rules, oldest-first, constant concurrency 4 (`allocate.ts:16-23,97,369`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 150/141) |
+| W-3 | expansion | root question and each breakdown asked once; repeat branch unreachable (`allocate.ts:152,260,313`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 150/141) |
+| W-4 | exploration | barren after 3 scans is permanent (`verdict.ts:123-136`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 150/141) |
 | W-5 | quantitative knowledge | construction facts written only by a person, per goal; map-built roles unpriced (`construction/service.ts:57-96`) | BLOCKING | construction-knowledge | REPAIRING |
 | W-6 | decomposition | role-occupant answer asked once, never read back (`expand.ts:196,214`) | MAJOR | construction-knowledge | REPAIRING |
 | W-7 | money-tree positions | closed logistics-shaped position vocabulary; 4 economics branches; no resale/subscription/finance/rent (`domain/construction.ts:31-224`) | MAJOR | construction-knowledge | REPAIRING |
