@@ -23,7 +23,7 @@
  */
 import { compile, parse, identifiers } from '../../scenario/expr.ts';
 import { reconstruct } from '../../quant/reconstruct.ts';
-import { FACT_KEYS, WORKING_DAYS_PER_MONTH, WORKING_DAYS_PER_YEAR, type Asset, type FactKey, type IndustryEvidence, type KnownStatus } from '../../../domain/construction.ts';
+import { FACT_KEYS, WORKING_DAYS_PER_MONTH, WORKING_DAYS_PER_YEAR, revenueOf, type Asset, type FactKey, type IndustryEvidence, type KnownStatus } from '../../../domain/construction.ts';
 import type { Observation, QuantGraph, QuantityNode } from '../../../domain/quant.ts';
 import type { Business } from './businesses.ts';
 import { resolveFact, type ResolvedFact } from './model.ts';
@@ -42,7 +42,14 @@ const HIGHER_IS_BETTER = new Set<FactKey>([
   'account_win_rate',
   'accounts_reachable',
   'supply_available',
+  'subscription_price_per_month',
+  'asset_rent_per_day',
+  'asset_utilisation',
+  'financing_margin',
 ]);
+
+/** One owned unit per renting account: the planning convention a RENT position is sized on. */
+export const RENTED_UNITS_PER_ACCOUNT = 1;
 
 /** Payroll runs weekly: the convention working capital for employed staff is computed on. */
 export const PAYROLL_DAYS = 7;
@@ -177,6 +184,121 @@ function formulasCore(b: Business, accounts: number, gates: { low: number; high:
   const fixed = fixedParts.join(' + ');
   const cac = `${A} * outreach_cost_per_account / account_win_rate`;
   const gateDays = String(gates.days);
+  const start = `max(${gateDays}, sales_cycle_days)`;
+  const loss = (contribution: string) => `${EXPOSURE_MONTHS} * max(0, -(${contribution}))`;
+  const acquisitionPerAccount = 'outreach_cost_per_account / account_win_rate';
+
+  /*
+   * The revenue bases beyond a fee and a service margin (W-7). Each is the
+   * same arithmetic in the same grammar: what the payer pays, what it costs us
+   * to deliver, the money that waits between the two, and what is lost if the
+   * stage is stopped.
+   */
+  const basis = revenueOf(p);
+  if (basis === 'RESALE') {
+    // Bought from supply, held for `inventory_days`, resold; unsold stock is sold off at the forced-sale loss.
+    const volume = `${A} * account_units_per_month`;
+    const cpu = 'price_per_unit - purchase_cost_per_unit';
+    const contribution = `${volume} * (${cpu}) - (${fixed})`;
+    const inventory = `inventory_days * ${volume} * purchase_cost_per_unit / 30`;
+    const receivable = `max(0, buyer_payment_days - supplier_payment_days) * ${volume} * purchase_cost_per_unit / 30`;
+    const wc = `${inventory} + ${receivable}`;
+    return {
+      volume,
+      billings: `${volume} * price_per_unit`,
+      acquisitionPerAccount,
+      capturePerUnit: cpu,
+      fixedMonthly: fixed,
+      contribution,
+      upfront: `${G} + ${cac} + ${wc} + (${fixed})`,
+      workingCapital: wc,
+      firstRevenueDays: start,
+      firstCashDays: `${start} + buyer_payment_days`,
+      exposure: `${G} + ${cac} + ${inventory} * ${FORCED_SALE_LOSS} + ${receivable} + ${loss(contribution)}`,
+      capacityUnits: '0',
+    };
+  }
+  if (basis === 'SUBSCRIPTION') {
+    // One subscription per won account, charged ahead of the month: no receivable is carried.
+    const contribution = `${A} * subscription_price_per_month - (${fixed})`;
+    return {
+      volume: A,
+      billings: `${A} * subscription_price_per_month`,
+      acquisitionPerAccount,
+      capturePerUnit: 'subscription_price_per_month',
+      fixedMonthly: fixed,
+      contribution,
+      upfront: `${G} + ${cac} + (${fixed})`,
+      workingCapital: '0',
+      firstRevenueDays: start,
+      firstCashDays: start,
+      exposure: `${G} + ${cac} + ${loss(contribution)}`,
+      capacityUnits: '0',
+    };
+  }
+  if (basis === 'RENT') {
+    // Owned units rented to independent operators, `RENTED_UNITS_PER_ACCOUNT` per account.
+    const units = `${A} * ${RENTED_UNITS_PER_ACCOUNT}`;
+    const rented = `${units} * ${W} * asset_utilisation`;
+    const carry = `${units} * ${W} * (asset_ownership_cost_per_day + insurance_per_capacity_year / ${WORKING_DAYS_PER_YEAR})`;
+    const contribution = `${rented} * asset_rent_per_day - ${carry} - (${fixed})`;
+    return {
+      volume: rented,
+      billings: `${rented} * asset_rent_per_day`,
+      acquisitionPerAccount,
+      capturePerUnit: `asset_rent_per_day - (asset_ownership_cost_per_day + insurance_per_capacity_year / ${WORKING_DAYS_PER_YEAR}) / asset_utilisation`,
+      fixedMonthly: fixed,
+      contribution,
+      upfront: `${G} + ${cac} + ${units} * (asset_purchase_cost + insurance_per_capacity_year / 4) + (${fixed})`,
+      workingCapital: '0',
+      firstRevenueDays: start,
+      firstCashDays: `${start} + buyer_payment_days`,
+      exposure: `${G} + ${cac} + ${units} * asset_purchase_cost * ${FORCED_SALE_LOSS} + ${loss(contribution)}`,
+      capacityUnits: units,
+    };
+  }
+  if (basis === 'FINANCING') {
+    // The segment's purchases financed: face value advanced, repaid after `financing_term_days`.
+    const volume = `${A} * account_units_per_month`;
+    const financed = `${volume} * price_per_unit`;
+    const balance = `${financed} * financing_term_days / 30`;
+    const contribution = `${financed} * (financing_margin - default_rate) - ${balance} * capital_cost_rate / 12 - (${fixed})`;
+    return {
+      volume,
+      billings: financed,
+      acquisitionPerAccount,
+      capturePerUnit: `price_per_unit * (financing_margin - default_rate) - price_per_unit * capital_cost_rate * financing_term_days / 365`,
+      fixedMonthly: fixed,
+      contribution,
+      upfront: `${G} + ${cac} + ${balance} + (${fixed})`,
+      workingCapital: balance,
+      firstRevenueDays: start,
+      firstCashDays: `${start} + financing_term_days`,
+      exposure: `${G} + ${cac} + ${balance} * default_rate + ${loss(contribution)}`,
+      capacityUnits: '0',
+    };
+  }
+  if (basis === 'COMBINED') {
+    // A prime contract subcontracted to the network, sold on extended terms the buyer pays a financing margin for.
+    const volume = `${A} * account_units_per_month`;
+    const supplyPerUnit = 'contractor_rate_per_unit';
+    const wc = `max(0, buyer_payment_days + financing_term_days - supplier_payment_days) * ${volume} * ${supplyPerUnit} / 30`;
+    const contribution = `${volume} * (price_per_unit - ${supplyPerUnit}) + ${volume} * price_per_unit * (financing_margin - default_rate) - ${wc} * capital_cost_rate / 12 - (${fixed})`;
+    return {
+      volume,
+      billings: `${volume} * price_per_unit`,
+      acquisitionPerAccount,
+      capturePerUnit: `price_per_unit - ${supplyPerUnit} + price_per_unit * (financing_margin - default_rate)`,
+      fixedMonthly: fixed,
+      contribution,
+      upfront: `${G} + ${cac} + ${wc} + (${fixed})`,
+      workingCapital: wc,
+      firstRevenueDays: start,
+      firstCashDays: `${start} + buyer_payment_days + financing_term_days`,
+      exposure: `${G} + ${cac} + ${wc} + ${volume} * price_per_unit * default_rate + ${loss(contribution)}`,
+      capacityUnits: `${volume} / (${W} * units_per_capacity_day)`,
+    };
+  }
 
   if (p.supply === 'RECRUIT') {
     const cpu = 'placement_fee - recruiting_cost_per_placement';
@@ -413,7 +535,7 @@ export function solveEconomics(
   const build = (gateCase: number) => formulasFor(b, options.accounts, gates, gateCase, measured);
   const formulas = build((gates.low + gates.high) / 2);
   const keys = keysOf(formulas);
-  const inputs = keys.map((k) => resolveFact(evidence.facts, k, FACT_KEYS[k].segment ? b.segment.actorId : null));
+  const inputs = keys.map((k) => resolveFact(evidence.facts, k, FACT_KEYS[k].segment ? b.segment.actorId : null, options.now ?? new Date()));
   const unpriced = inputs.filter((f) => f.status === 'UNKNOWN').map((f) => f.key);
   const valuesAt = (c: Case, override?: { key: FactKey; value: number }) => {
     const v: Partial<Record<FactKey, number>> = {};

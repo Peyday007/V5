@@ -901,6 +901,25 @@ export const STRUCTURAL_FINDINGS = [
   'CAPITAL_REQUIREMENT',
   /** A published practice that removes, defers or shifts a requirement. */
   'CAPITAL_RESTRUCTURING',
+  /**
+   * A published figure for one of the construction's unit economics — a
+   * price, a rate, a cost, a payment term (W-5). Subject: the fact key;
+   * qualifier: the paying buyer type it is about, when it is about one;
+   * amount: the figure in hundredths of the key's unit.
+   */
+  'UNIT_ECONOMIC',
+  /**
+   * Who stands in a commercial role here (W-6). Subject: the occupant's name;
+   * qualifier: the role, optionally `role @ buyer type`. A role no seed lists
+   * is recorded as given.
+   */
+  'ROLE_OCCUPANT',
+  /**
+   * What a commercial role is paid, and on what terms (W-6). Subject: the fact
+   * key (a take rate, a placement fee, a financing margin…); qualifier: the
+   * role, optionally `role @ buyer type`; amount: hundredths of the key's unit.
+   */
+  'ROLE_TERMS',
 ] as const;
 export type StructuralFinding = (typeof STRUCTURAL_FINDINGS)[number];
 
@@ -933,7 +952,8 @@ export type IndustryNodeOrigin = (typeof INDUSTRY_NODE_ORIGINS)[number];
 export interface ConstructionFactRow {
   id: string;
   project_id: string | null;
-  workstream_id: string;
+  /** Null for a project-level fact absorbed from a gated research claim (W-5). */
+  workstream_id: string | null;
   fact_key: string;
   segment: string | null;
   low: number;
@@ -944,6 +964,17 @@ export interface ConstructionFactRow {
   source_url: string | null;
   recorded_by: string;
   created_at: string;
+  /** The industry-map subject a claim-derived fact was established under. */
+  node_id: string | null;
+  /** The research claim the fact came from: its lineage, unique per fact. */
+  source_claim_id: string | null;
+  source_kind: string | null;
+  /** The commercial role a role finding is about (W-6), as given. */
+  role_id: string | null;
+  occupant: string | null;
+  /** When the figure was observed, and when it stops being current (W-10). */
+  observed_at: string | null;
+  valid_until: string | null;
 }
 
 export interface IndustryNodeRow {
@@ -959,6 +990,9 @@ export interface IndustryNodeRow {
   retired_reason: string | null;
   created_at: string;
   updated_at: string;
+  /** For a TRANSACTION_TYPE: who pays and who supplies, as the finding declared them (W-13). */
+  payer?: string | null;
+  supplier?: string | null;
 }
 
 export interface IndustryNode {
@@ -974,6 +1008,9 @@ export interface IndustryNode {
   retiredReason: string | null;
   createdAt: string;
   updatedAt: string;
+  /** For a TRANSACTION_TYPE: who pays and who supplies, by name (W-13). Absent or null: not declared. */
+  payer?: string | null;
+  supplier?: string | null;
 }
 
 export const INDUSTRY_ROUND_PURPOSES = ['BOOTSTRAP', 'MAP', 'SCAN', 'CAPITAL'] as const;

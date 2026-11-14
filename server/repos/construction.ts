@@ -1,18 +1,34 @@
 /**
- * Facts recorded against a goal's industry construction (§92). Append-only:
- * there is no update and no delete, because a fact that replaced another is
- * resolved at read time and the one it replaced stays history (invariant 17).
+ * Facts an industry construction is priced from (§92). Append-only: there is
+ * no update and no delete, because a fact that replaced another is resolved at
+ * read time and the one it replaced stays history (invariant 17).
+ *
+ * Two writers. A person records a fact against one goal
+ * (`recordConstructionFact`); the industry kernel files a gated research claim
+ * that states an amount as a project-level fact (`recordClaimFact`, W-5),
+ * carrying the claim as its lineage and the map subject it was asked under.
+ * Every fact is dated (W-10): when it was observed, and when it stops being
+ * current — the key's freshness class unless the fact declares its own.
  */
 import { getDb } from '../db/database.ts';
 import { newId, nowIso } from './util.ts';
-import { isFactKey, type Fact, type FactStatus } from '../domain/construction.ts';
+import { isFactKey, validUntilFor, type Fact, type FactKey, type FactSource, type FactStatus } from '../domain/construction.ts';
 import type { ConstructionFactRow } from '../domain/types.ts';
 
 export interface RecordedFact extends Fact {
   id: string;
-  workstreamId: string;
+  /** Null for a project-level fact absorbed from research. */
+  workstreamId: string | null;
+  projectId: string | null;
+  sourceClaimId: string | null;
   recordedBy: string;
   createdAt: string;
+}
+
+function sourceKindOf(row: ConstructionFactRow): FactSource['kind'] {
+  const k = row.source_kind;
+  if (k === 'PRIMARY' || k === 'SECONDARY' || k === 'OPERATOR' || k === 'OUTCOME') return k;
+  return row.status === 'OBSERVED' ? 'OUTCOME' : 'OPERATOR';
 }
 
 export function mapConstructionFact(row: ConstructionFactRow): RecordedFact | null {
@@ -20,17 +36,38 @@ export function mapConstructionFact(row: ConstructionFactRow): RecordedFact | nu
   return {
     id: row.id,
     workstreamId: row.workstream_id,
+    projectId: row.project_id,
+    sourceClaimId: row.source_claim_id ?? null,
     key: row.fact_key,
     segment: row.segment,
     low: Number(row.low),
     high: Number(row.high),
     status: row.status as FactStatus,
     measures: row.measures,
-    source: { title: row.source_title, url: row.source_url, kind: row.status === 'OBSERVED' ? 'OUTCOME' : 'OPERATOR' },
+    source: { title: row.source_title, url: row.source_url, kind: sourceKindOf(row), claimId: row.source_claim_id ?? null },
     geography: null,
+    observedAt: row.observed_at ?? row.created_at,
+    validUntil: row.valid_until ?? null,
+    roleId: row.role_id ?? null,
+    occupant: row.occupant ?? null,
+    nodeId: row.node_id ?? null,
     recordedBy: row.recorded_by,
     createdAt: row.created_at,
   };
+}
+
+async function insert(row: ConstructionFactRow): Promise<void> {
+  await getDb().run(
+    `INSERT INTO construction_facts
+       (id, project_id, workstream_id, fact_key, segment, low, high, status, measures, source_title, source_url, recorded_by, created_at,
+        node_id, source_claim_id, source_kind, role_id, occupant, observed_at, valid_until)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT DO NOTHING`,
+    [
+      row.id, row.project_id, row.workstream_id, row.fact_key, row.segment, row.low, row.high, row.status, row.measures, row.source_title, row.source_url, row.recorded_by, row.created_at,
+      row.node_id, row.source_claim_id, row.source_kind, row.role_id, row.occupant, row.observed_at, row.valid_until,
+    ],
+  );
 }
 
 export async function recordConstructionFact(input: {
@@ -39,6 +76,8 @@ export async function recordConstructionFact(input: {
   fact: Omit<Fact, 'source' | 'geography'> & { sourceTitle: string; sourceUrl: string | null };
   recordedBy: string;
 }): Promise<RecordedFact> {
+  const at = nowIso();
+  const observedAt = input.fact.observedAt ?? at;
   const row: ConstructionFactRow = {
     id: newId('cfa'),
     project_id: input.projectId,
@@ -52,20 +91,94 @@ export async function recordConstructionFact(input: {
     source_title: input.fact.sourceTitle,
     source_url: input.fact.sourceUrl,
     recorded_by: input.recordedBy,
-    created_at: nowIso(),
+    created_at: at,
+    node_id: null,
+    source_claim_id: null,
+    source_kind: input.fact.status === 'OBSERVED' ? 'OUTCOME' : 'OPERATOR',
+    role_id: input.fact.roleId ?? null,
+    occupant: input.fact.occupant ?? null,
+    observed_at: observedAt,
+    valid_until: input.fact.validUntil ?? validUntilFor(input.fact.key, observedAt),
   };
-  await getDb().run(
-    `INSERT INTO construction_facts (id, project_id, workstream_id, fact_key, segment, low, high, status, measures, source_title, source_url, recorded_by, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [row.id, row.project_id, row.workstream_id, row.fact_key, row.segment, row.low, row.high, row.status, row.measures, row.source_title, row.source_url, row.recorded_by, row.created_at],
-  );
+  await insert(row);
   return mapConstructionFact(row)!;
 }
 
-export async function listConstructionFacts(workstreamId: string): Promise<RecordedFact[]> {
+/**
+ * File one research claim as a project-level fact (W-5). Idempotent by claim:
+ * the claim id is unique, so a pass that files the same claim again writes
+ * nothing and returns null. The status is decided by the caller from the
+ * claim — never VERIFIED, which only a person attests.
+ */
+export async function recordClaimFact(input: {
+  projectId: string;
+  nodeId: string | null;
+  claimId: string;
+  key: FactKey;
+  segment: string | null;
+  low: number;
+  high: number;
+  status: Exclude<FactStatus, 'VERIFIED'>;
+  measures: string;
+  sourceTitle: string;
+  sourceUrl: string | null;
+  sourceKind: 'PRIMARY' | 'SECONDARY';
+  roleId?: string | null;
+  occupant?: string | null;
+  observedAt: string;
+  validUntil?: string | null;
+}): Promise<RecordedFact | null> {
+  const row: ConstructionFactRow = {
+    id: newId('cfa'),
+    project_id: input.projectId,
+    workstream_id: null,
+    fact_key: input.key,
+    segment: input.segment,
+    low: Math.min(input.low, input.high),
+    high: Math.max(input.low, input.high),
+    status: input.status,
+    measures: input.measures,
+    source_title: input.sourceTitle,
+    source_url: input.sourceUrl,
+    recorded_by: 'BRAIN',
+    created_at: nowIso(),
+    node_id: input.nodeId,
+    source_claim_id: input.claimId,
+    source_kind: input.sourceKind,
+    role_id: input.roleId ?? null,
+    occupant: input.occupant ?? null,
+    observed_at: input.observedAt,
+    valid_until: input.validUntil ?? validUntilFor(input.key, input.observedAt),
+  };
+  const existing = await getDb().all<ConstructionFactRow>('SELECT * FROM construction_facts WHERE source_claim_id = ?', [input.claimId]);
+  if (existing.length > 0) return null;
+  await insert(row);
+  const written = await getDb().all<ConstructionFactRow>('SELECT * FROM construction_facts WHERE source_claim_id = ?', [input.claimId]);
+  return written[0] && written[0].id === row.id ? mapConstructionFact(written[0]) : null;
+}
+
+/**
+ * A goal's facts, and — when its project is given — the project-level facts
+ * research established, oldest first. The caller decides which project facts
+ * bear on the goal (its industry's subtree); this only reads.
+ */
+export async function listConstructionFacts(workstreamId: string, projectId: string | null = null): Promise<RecordedFact[]> {
+  const rows = projectId
+    ? await getDb().all<ConstructionFactRow>(
+        `SELECT * FROM construction_facts
+          WHERE workstream_id = ? OR (workstream_id IS NULL AND project_id = ?)
+          ORDER BY created_at ASC, id ASC`,
+        [workstreamId, projectId],
+      )
+    : await getDb().all<ConstructionFactRow>('SELECT * FROM construction_facts WHERE workstream_id = ? ORDER BY created_at ASC, id ASC', [workstreamId]);
+  return rows.map(mapConstructionFact).filter((f): f is RecordedFact => f !== null);
+}
+
+/** The project-level facts research established, oldest first. */
+export async function listProjectConstructionFacts(projectId: string): Promise<RecordedFact[]> {
   const rows = await getDb().all<ConstructionFactRow>(
-    'SELECT * FROM construction_facts WHERE workstream_id = ? ORDER BY created_at ASC, id ASC',
-    [workstreamId],
+    'SELECT * FROM construction_facts WHERE workstream_id IS NULL AND project_id = ? ORDER BY created_at ASC, id ASC',
+    [projectId],
   );
   return rows.map(mapConstructionFact).filter((f): f is RecordedFact => f !== null);
 }

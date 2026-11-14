@@ -8,9 +8,17 @@
  *   2. the industry map: buyer types, fulfilment sources, value-chain layers,
  *      transaction types, bottlenecks and adjacencies research established
  *      through the evidence gate, and the constraints filed against them;
- *   3. facts recorded against this goal — a quoted price, an accepted rate,
- *      payment terms, a measured conversion, an unexpected cost — which answer
- *      ahead of everything else (learning from operating results).
+ *   3. facts — recorded against this goal by a person (a quoted price, an
+ *      accepted rate, payment terms, a measured conversion, an unexpected
+ *      cost), and established by research on the goal's own map subtree: a
+ *      gated claim that stated a figure, filed by the kernel with the claim as
+ *      its lineage (W-5). Each is dated; `resolveFact` takes the strongest
+ *      and newest, and widens an aged one (W-10).
+ *
+ * A transaction the map recorded says who pays and who supplies (W-13): the
+ * names its finding declared are resolved to the BUYER_TYPE and
+ * FULFILMENT_SOURCE subjects beside it, so each money flow runs from a payer
+ * segment to a supplier, and a work flow runs back.
  *
  * The goal's own terms bound it: its money ceiling caps the capital the words
  * name, and its deadline decides the execution policy (SQUEEZE sells now).
@@ -25,7 +33,8 @@ import { listConstructionFacts } from '../../../repos/construction.ts';
 import { readTarget } from '../../goals/target.ts';
 import { seedSubject } from '../seed.ts';
 import { goalExecutionPolicy } from '../../../domain/goalPolicy.ts';
-import type { Actor, Chokepoint, FactSource, FailureMode, Gate, IndustryEvidence, Segment, Adjacency, Flow } from '../../../domain/construction.ts';
+import type { Actor, ActorRole, Chokepoint, Fact, FactSource, FailureMode, Gate, IndustryEvidence, Segment, Adjacency, Flow } from '../../../domain/construction.ts';
+import { SEED_ROLES } from './roles.ts';
 import type { IndustryNode, OpportunityConstraint } from '../../../domain/types.ts';
 import type { Workstream } from '../../../domain/register.ts';
 import { constructIndustry, type Construction, type ConstructionGoal } from './construction.ts';
@@ -62,6 +71,12 @@ export function evidenceFromMap(nodes: IndustryNode[], constraints: OpportunityC
   const chokepoints: Chokepoint[] = [];
   const adjacencies: Adjacency[] = [];
   const status = (n: IndustryNode) => (n.sourceClaimId ? 'VERIFIED' : 'ASSUMPTION') as 'VERIFIED' | 'ASSUMPTION';
+  const live = nodes.filter((n) => !n.retiredAt);
+  const named = (name: string, kinds: IndustryNode['kind'][]) => {
+    const want = name.toLowerCase();
+    const pool = live.filter((one) => kinds.includes(one.kind));
+    return pool.find((one) => one.name.toLowerCase() === want) ?? pool.find((one) => one.name.toLowerCase().includes(want) || want.includes(one.name.toLowerCase())) ?? null;
+  };
   for (const n of nodes) {
     const id = `map_${n.id}`;
     if (n.kind === 'BUYER_TYPE') {
@@ -71,7 +86,30 @@ export function evidenceFromMap(nodes: IndustryNode[], constraints: OpportunityC
       actors.push({ id, name: n.name, role: 'OPERATOR', description: n.description ?? '', status: status(n), source: src(n) });
     } else if (n.kind === 'TRANSACTION_TYPE') {
       const parent = nodes.find((p) => p.id === n.parentId);
-      flows.push({ from: parent ? `map_${parent.id}` : 'buyers', to: 'operators', kind: 'MONEY', terms: n.description ?? n.name, status: status(n), source: src(n) });
+      const payer = n.payer?.trim() || null;
+      const supplier = n.supplier?.trim() || null;
+      let from = parent ? `map_${parent.id}` : 'buyers';
+      let to = 'operators';
+      if (payer) {
+        // Who pays, resolved to the buyer subject the map holds — or, when the map holds none yet, a buyer of its own.
+        const buyer = named(payer, ['BUYER_TYPE']);
+        if (buyer) from = `map_${buyer.id}`;
+        else {
+          from = `${id}_payer`;
+          actors.push({ id: from, name: payer, role: 'BUYER', description: `pays in ${n.name}`, status: status(n), source: src(n) });
+          segments.push({ actorId: from, buys: 'WORK', requires: [], acceptsIntermediary: null, channel: 'not yet established — research names how these buyers are reached', firstTransaction: `a first paid order from ${payer}`, status: status(n), source: src(n) });
+        }
+      }
+      if (supplier) {
+        const source = named(supplier, ['FULFILMENT_SOURCE', 'VALUE_CHAIN_LAYER']);
+        if (source) to = `map_${source.id}`;
+        else {
+          to = `${id}_supplier`;
+          actors.push({ id: to, name: supplier, role: 'OPERATOR', description: `supplies in ${n.name}`, status: status(n), source: src(n) });
+        }
+      }
+      flows.push({ from, to, kind: 'MONEY', terms: n.description ?? n.name, status: status(n), source: src(n), payer, supplier });
+      if (payer && supplier) flows.push({ from: to, to: from, kind: 'WORK', terms: `${supplier} supplies ${payer}: ${n.name}`, status: status(n), source: src(n), payer, supplier });
     } else if (n.kind === 'BOTTLENECK') {
       chokepoints.push({ id, name: n.name, why: n.description ?? 'a published constraint on supply', controlledBy: [], status: status(n), source: src(n) });
     } else if (n.kind === 'ADJACENT_INDUSTRY') {
@@ -135,9 +173,73 @@ export function assembleEvidence(input: { text: string; industry: string | null;
   base.provenance.push(...m.provenance);
   if (input.recorded.length) {
     base.facts.push(...input.recorded);
-    base.provenance.push(`${input.recorded.length} fact(s) recorded against this goal`);
+    const researched = input.recorded.filter((f) => f.source.claimId);
+    const goalFacts = input.recorded.length - researched.length;
+    if (goalFacts) base.provenance.push(`${goalFacts} fact(s) recorded against this goal`);
+    if (researched.length) {
+      const hypotheses = researched.filter((f) => f.status === 'ASSUMPTION').length;
+      base.provenance.push(`${researched.length} fact(s) established by research on the map (${researched.length - hypotheses} observed in a source, ${hypotheses} hypothesis)`);
+    }
+    applyRoleOccupants(base, input.recorded);
   }
   return base;
+}
+
+/** The party a role id describes, for an occupant research recorded. Unlisted roles stand as intermediaries. */
+function actorRoleFor(roleId: string | null): ActorRole {
+  switch (roleId) {
+    case 'capital_arranger':
+    case 'transaction_financier':
+      return 'FINANCIER';
+    case 'marketplace':
+    case 'technology_provider':
+      return 'PLATFORM';
+    case 'asset_lessor':
+      return 'ASSET_PROVIDER';
+    case 'distributor':
+    case 'reseller':
+    case 'inventory_reseller':
+    case 'prime_contractor':
+    case 'outsourced_operator':
+    case 'principal_delivery_risk':
+    case 'booking_dispatch_coordinator':
+      return 'OPERATOR';
+    default:
+      return 'INTERMEDIARY';
+  }
+}
+
+/** Roles in which an occupant is paid by the buyer for standing between it and the work. */
+const INTERMEDIARY_ROLES = new Set(['lead_source', 'affiliate_referrer', 'broker_agent', 'representative', 'marketplace']);
+
+/**
+ * Who research recorded standing in a role (W-6): each occupant becomes a
+ * party of the model, so a role no seed names is constructed as an evidence
+ * role rather than dropped, and an occupant a named buyer pays as an
+ * intermediary answers whether that buyer pays one. A recorded refusal
+ * (`acceptsIntermediary === false`) is never overturned by it.
+ */
+function applyRoleOccupants(base: IndustryEvidence, facts: readonly Fact[]): void {
+  const seeds = new Set(SEED_ROLES.map((one) => one.id));
+  for (const f of facts) {
+    if (f.key !== 'role_occupants' || !f.occupant) continue;
+    const id = `occupant_${f.occupant.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 60)}`;
+    if (!base.actors.some((a) => a.id === id || a.name.toLowerCase() === f.occupant!.toLowerCase())) {
+      base.actors.push({
+        id,
+        name: f.occupant,
+        role: actorRoleFor(f.roleId ?? null),
+        description: `recorded standing as ${f.roleId ?? 'an unnamed role'}: ${f.measures}`,
+        status: f.status === 'ASSUMPTION' ? 'ASSUMPTION' : 'VERIFIED',
+        source: f.source,
+      });
+    }
+    if (f.roleId && !seeds.has(f.roleId)) base.provenance.push(`role "${f.roleId}" recorded by research and named by no seed: kept as an evidence role (${f.occupant})`);
+    if (f.segment && f.status !== 'ASSUMPTION' && (INTERMEDIARY_ROLES.has(f.roleId ?? '') || (f.roleId !== null && f.roleId !== undefined && !seeds.has(f.roleId)))) {
+      const segment = base.segments.find((s) => s.actorId === f.segment);
+      if (segment && segment.acceptsIntermediary === null) segment.acceptsIntermediary = true;
+    }
+  }
 }
 
 function activeMoneyGoal(g: Workstream): boolean {
@@ -169,8 +271,11 @@ export async function goalConstruction(goalId: string, options: GoalConstruction
   const intent = interpretIntent(text, options.overrides);
   const nodes = goal.projectId ? await listNodes(goal.projectId) : [];
   const constraints = goal.projectId ? await listConstraintsForProject(goal.projectId) : [];
-  const map = evidenceFromMap(subtreeFor(nodes, intent.industry), constraints);
-  const recorded = await listConstructionFacts(goal.id);
+  const tree = subtreeFor(nodes, intent.industry);
+  const map = evidenceFromMap(tree, constraints);
+  // The goal's own facts, and research's facts about this industry's subtree only: a price in another industry is not this one's.
+  const inTree = new Set(tree.map((n) => n.id));
+  const recorded = (await listConstructionFacts(goal.id, goal.projectId ?? null)).filter((f) => f.workstreamId === goal.id || (f.nodeId != null && inTree.has(f.nodeId)));
   const evidence = assembleEvidence({ text, industry: intent.industry, geography: intent.geography, map, recorded });
   const others = (await listWorkstreams({ projectIds: null }))
     .filter((g) => g.id !== goal.id && activeMoneyGoal(g))

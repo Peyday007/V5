@@ -39,6 +39,8 @@ function mapNode(row: IndustryNodeRow): IndustryNode {
     retiredReason: row.retired_reason,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    payer: row.payer ?? null,
+    supplier: row.supplier ?? null,
   };
 }
 
@@ -64,6 +66,9 @@ export async function createNode(input: {
   description?: string | null;
   origin: IndustryNodeOrigin;
   sourceClaimId?: string | null;
+  /** For a TRANSACTION_TYPE: who pays and who supplies, as the finding declared them (W-13). */
+  payer?: string | null;
+  supplier?: string | null;
 }): Promise<{ node: IndustryNode; created: boolean }> {
   const name = input.name.replace(/\s+/g, ' ').trim();
   if (!name) throw new Error('An industry node must have a name.');
@@ -75,8 +80,8 @@ export async function createNode(input: {
   await getDb().run(
     `INSERT INTO industry_nodes
        (id, project_id, parent_id, kind, name, description, origin, source_claim_id,
-        retired_at, retired_reason, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+        retired_at, retired_reason, created_at, updated_at, payer, supplier)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)
      ON CONFLICT DO NOTHING`,
     [
       id,
@@ -89,6 +94,8 @@ export async function createNode(input: {
       input.sourceClaimId ?? null,
       at,
       at,
+      input.payer ?? null,
+      input.supplier ?? null,
     ],
   );
   const rows = input.parentId
