@@ -11398,6 +11398,14 @@ export interface ReasoningExplorationRow {
   created_at: string;
 }
 
+/** One method credited for one goal on one set of inputs (migration 153 / pg 144, lens S, S-9). */
+export interface ReasoningMethodCreditRow {
+  signature: string;
+  goal_id: string;
+  inputs_key: string;
+  created_at: string;
+}
+
 /** One reading, repair or metered call of a connected service (migration 145 / pg 136, §103). */
 export interface IntegrationEventRow {
   id: string;
