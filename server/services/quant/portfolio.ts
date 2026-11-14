@@ -1095,3 +1095,23 @@ function withSafeguard(problem: PortfolioProblem, guard: Safeguard, members: num
   const usePicks = guard.decorrelate?.length ? { picks: drawPicks(adjusted, worlds), down: picks.down } : picks;
   return evaluate(adjusted, members, usePicks, worlds);
 }
+
+/**
+ * A named combination read before and after one safeguard, on the very same
+ * drawn worlds `optimizePortfolio` uses for its own safeguard effects — the
+ * one re-evaluation, exported so a challenge (`quant/challenge.ts`) measures a
+ * proposed safeguard instead of asserting it. Refuses a needed resource with no
+ * stated failure probability, as every other entry point does.
+ */
+export function readWithSafeguard(problem: PortfolioProblem, keys: string[], guard: Safeguard): { before: PortfolioReading; after: PortfolioReading } {
+  const missing = missingResourceFailure(problem);
+  if (missing.length > 0) throw new Error(`No failure probability is stated for ${missing.join(', ')}.`);
+  const worlds = problem.worlds ?? DEFAULT_WORLDS;
+  const members = keys.map((k) => {
+    const i = problem.activities.findIndex((a) => a.key === k);
+    if (i < 0) throw new Error(`No activity "${k}" in the problem.`);
+    return i;
+  });
+  const picks = drawWorlds(problem, worlds);
+  return { before: evaluate(problem, members, picks, worlds), after: withSafeguard(problem, guard, members, worlds, picks) };
+}
