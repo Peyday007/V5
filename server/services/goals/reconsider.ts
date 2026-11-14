@@ -51,7 +51,11 @@ import type { WorkstreamEvent } from '../../domain/register.ts';
 export const RECONSIDER_EVENT_KIND = 'GOAL_DECISION_RECONSIDERED';
 /** The event id is derived from the reading, the fact and its new fingerprint: once per fact version. */
 export const RECONSIDER_EVENT_PREFIX = 'wse_gdx_';
-/** Goals examined per pass; the rest wait for the next one. */
+/**
+ * Goals examined per pass. The pass resumes after the last goal the previous
+ * pass examined and wraps to the start, so every goal is reached within
+ * ceil(goals / limit) passes rather than only the first `limit` ids ever.
+ */
 export const RECONSIDER_GOALS_PER_PASS = 50;
 /** How often the goals tick runs the reconsideration pass. */
 export const RECONSIDER_PASS_EVERY_MS = 5 * 60_000;
@@ -190,6 +194,8 @@ export interface Reconsideration {
 
 export interface ReconsiderPassReport {
   goals: number;
+  /** Where the next full pass resumes ('' = from the first goal); null for a single-goal pass. */
+  cursor: string | null;
   checked: number;
   unchanged: number;
   reconsidered: Reconsideration[];
@@ -211,22 +217,33 @@ async function productionPorts(): Promise<ReconsiderPorts> {
  * One pass: every live goal's decisions in force, their facts read again, a
  * changed fact reconsidered once and its goal's plan asked to read again.
  */
-export async function reconcileFactChanges(options: { goalId?: string; limit?: number; now?: Date; ports?: ReconsiderPorts } = {}): Promise<ReconsiderPassReport> {
+const GOALS_WITH_DECISIONS = `SELECT w.id FROM workstreams w
+  WHERE w.archived_at IS NULL AND w.cancelled_at IS NULL AND w.id > ?
+    AND EXISTS (SELECT 1 FROM workstream_events e WHERE e.workstream_id = w.id AND e.kind = ?)
+  ORDER BY w.id LIMIT ?`;
+
+/** Where the next pass resumes: the last goal id examined, or '' to start from the first. */
+let reconsiderCursor = '';
+
+/**
+ * Up to `limit` goals with decisions, in id order after `after`, wrapping to
+ * the start when the tail runs out. A goal is never listed twice in one pass.
+ */
+export async function goalsForPass(limit: number, after: string): Promise<string[]> {
+  const db = getDb();
+  const tail = (await db.all<{ id: string }>(GOALS_WITH_DECISIONS, [after, DECISION_EVENT_KIND, limit])).map((one) => one.id);
+  if (tail.length >= limit || after === '') return tail;
+  const head = (await db.all<{ id: string }>(GOALS_WITH_DECISIONS, ['', DECISION_EVENT_KIND, limit - tail.length])).map((one) => one.id);
+  return [...tail, ...head.filter((id) => id <= after)];
+}
+
+export async function reconcileFactChanges(options: { goalId?: string; limit?: number; after?: string; now?: Date; ports?: ReconsiderPorts } = {}): Promise<ReconsiderPassReport> {
   const limit = options.limit ?? RECONSIDER_GOALS_PER_PASS;
   const now = (options.now ?? new Date()).toISOString();
   const ports = options.ports ?? (await productionPorts());
-  const goals = options.goalId
-    ? [options.goalId]
-    : (
-        await getDb().all<{ id: string }>(
-          `SELECT w.id FROM workstreams w
-            WHERE w.archived_at IS NULL AND w.cancelled_at IS NULL
-              AND EXISTS (SELECT 1 FROM workstream_events e WHERE e.workstream_id = w.id AND e.kind = ?)
-            ORDER BY w.id LIMIT ?`,
-          [DECISION_EVENT_KIND, limit],
-        )
-      ).map((one) => one.id);
-  const report: ReconsiderPassReport = { goals: goals.length, checked: 0, unchanged: 0, reconsidered: [], replanned: [] };
+  const goals = options.goalId ? [options.goalId] : await goalsForPass(limit, options.after ?? reconsiderCursor);
+  if (!options.goalId) reconsiderCursor = goals.length === limit ? goals[goals.length - 1]! : '';
+  const report: ReconsiderPassReport = { goals: goals.length, cursor: options.goalId ? null : reconsiderCursor, checked: 0, unchanged: 0, reconsidered: [], replanned: [] };
   for (const goalId of goals) {
     const reasons: string[] = [];
     for (const state of await activeTruth(goalId)) {
@@ -285,4 +302,5 @@ export async function reconcileFactChangesIfDue(now = Date.now(), options: { por
 /** Tests: let the next call run regardless of the cadence. */
 export function forgetReconsiderPass(): void {
   lastReconsiderPass = 0;
+  reconsiderCursor = '';
 }

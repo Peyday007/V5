@@ -32,6 +32,7 @@ import {
   changedFacts,
   dependentsOf,
   forgetReconsiderPass,
+  goalsForPass,
   reconcileFactChanges,
   reconsiderationId,
 } from '../server/services/goals/reconsider.ts';
@@ -183,6 +184,65 @@ describe('a changed material fact, after a real plan used it', () => {
     await reconcileFactChanges({ goalId, ports });
     expect(await events(goalId, RECONSIDER_EVENT_KIND)).toHaveLength(1);
     expect(asked.length).toBe(1);
+  });
+});
+
+describe('every goal is reached, not only the first page of ids (F4)', () => {
+  async function decided(): Promise<string> {
+    const g = await createWorkstream({ projectId, title: 'Rotation goal', intent: 'Reach every goal.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await getDb().run(
+      `INSERT INTO workstream_events (id, workstream_id, kind, summary, detail, actor_ref, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [`wse_rot_${g.id}`, g.id, DECISION_EVENT_KIND, 'decision', '{}', 'BRAIN', now.toISOString()],
+    );
+    return g.id;
+  }
+
+  it('successive passes resume after the last goal examined and wrap, so goals past the limit are examined', async () => {
+    const mine = new Set<string>();
+    for (let i = 0; i < 7; i += 1) mine.add(await decided());
+    const total = (await getDb().get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM workstreams w WHERE w.archived_at IS NULL AND w.cancelled_at IS NULL
+         AND EXISTS (SELECT 1 FROM workstream_events e WHERE e.workstream_id = w.id AND e.kind = ?)`,
+      [DECISION_EVENT_KIND],
+    ))!.n;
+    expect(total).toBeGreaterThan(2);
+    const seen = new Set<string>();
+    let after = '';
+    for (let pass = 0; pass < Math.ceil(total / 2); pass += 1) {
+      const page = await goalsForPass(2, after);
+      expect(page.length).toBe(Math.min(2, total));
+      expect(new Set(page).size).toBe(page.length);
+      page.forEach((id) => seen.add(id));
+      after = page.length === 2 ? page[page.length - 1]! : '';
+    }
+    for (const id of mine) expect(seen.has(id)).toBe(true);
+    expect(seen.size).toBe(total);
+    // The next pass wraps to the start instead of returning nothing.
+    expect((await goalsForPass(2, after)).length).toBe(Math.min(2, total));
+  });
+
+  it('a pass that runs out of goals wraps to the first without listing a goal twice', async () => {
+    const ids = [await decided(), await decided(), await decided()].sort();
+    const last = ids[ids.length - 1]!;
+    const page = await goalsForPass(1_000, last);
+    expect(new Set(page).size).toBe(page.length);
+    for (const id of ids) expect(page).toContain(id);
+  });
+
+  it('the production pass carries its cursor between passes and the cursor advances', async () => {
+    await decided();
+    await decided();
+    await decided();
+    const ports = { requestPlanPass: () => undefined };
+    const first = await reconcileFactChanges({ limit: 1, ports });
+    expect(first.goals).toBe(1);
+    expect(first.cursor).not.toBe('');
+    const second = await reconcileFactChanges({ limit: 1, ports });
+    expect(second.goals).toBe(1);
+    expect(second.cursor! > first.cursor! || second.cursor === '').toBe(true);
+    expect(second.cursor).not.toBe(first.cursor);
+    forgetReconsiderPass();
+    expect((await reconcileFactChanges({ limit: 1, ports })).cursor).toBe(first.cursor);
   });
 });
 
