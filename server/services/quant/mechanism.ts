@@ -62,9 +62,74 @@ export interface Arrangement {
   funding?: { prepayShare: Part };
   /** Share of buyers who buy again in a later run or period (§82): asked, never multiplied in. */
   repeat?: { rate: Part };
+  /**
+   * Commercial leverage (S-0103, COM-13-2): optional parts that may be used
+   * together on one arrangement. With any lever present the composer traces
+   * the combination through cash conversion, margin, supplier risk, delivery
+   * capacity, liability, acquisition speed and repeatability, and the
+   * transactions are bounded only by real capacity, cash-exposure, authority
+   * and contract limits — never by a revenue ceiling derived from owned capital.
+   */
+  levers?: Levers;
   /** Deeper parts any of the above refer to in their formulas, keyed by name. */
   extra?: QuantityNode[];
   correlations?: QuantGraph['correlations'];
+}
+
+/**
+ * The levers a candidate may combine. None is a category and none is required;
+ * any subset composes onto one arrangement.
+ */
+export interface Levers {
+  /** AI labor: what it costs per transaction and how many transactions it can do per period. */
+  aiLabor?: { costPerTransaction: Part; throughput: Part };
+  /** Contractor or supplier fulfilment: its capacity per period, the share of its deliveries that fail, and how many days after delivery it must be paid. */
+  fulfilment?: { capacity: Part; failureRate: Part; paymentDays: Part };
+  /** Distribution through an existing channel: the share of transactions that go through it and its fee per transaction. */
+  channel?: { share: Part; fee: Part };
+  /** Marketing reach: the factor it adds to reach (0.5 = half as much again), its cost per transaction acquired, and the days to acquire a period's buyers. */
+  marketing?: { reachUplift: Part; acquisitionCost: Part; daysToAcquire: Part };
+  /**
+   * Buyer prepayment — a design possibility, never a presumption. It lowers
+   * cash exposure only by the share of buyers verified willing to prepay, net
+   * of the share that may have to be refunded, and only when the prepaid money
+   * is usable on or before the day the supplier must be paid. When any of
+   * those is unstated the credit is not taken (invariant 39).
+   */
+  prepayment?: { willingness: Part; refundShare: Part; usableDays: Part; supplierPaymentDays?: Part };
+  /** Financing: an annual rate, a term in days, and the share of the outlay it advances. */
+  financing?: { rate: Part; termDays: Part; advanceShare: Part };
+  /** Organisation-wide shared infrastructure: the fixed cost allocated to each transaction. */
+  sharedInfrastructure?: { costPerTransaction: Part };
+  /** Days after delivery until a buyer who did not prepay has paid in usable money. */
+  settlementDays?: Part;
+  /**
+   * Real limits on how many transactions may run: money available to tie up,
+   * the money a person authorised to commit (invariant 38), and a contract's
+   * maximum count. Owned capital is not a limit here except as the cash that
+   * real exposure actually ties up.
+   */
+  limits?: { cashAvailable?: Part; authorityCeiling?: Part; contractMax?: Part };
+}
+
+/** The traced dimensions, as node keys. */
+export interface TracedDimensions {
+  /** Days from paying supply to holding usable cash (negative: funded before supply is paid). */
+  cashConversion: string;
+  /** Contribution per transaction after every lever's cost. */
+  margin: string;
+  /** Share of supplier deliveries expected to fail. */
+  supplierRisk: string;
+  /** Transactions the period can deliver: the minimum of demand, supply, AI and supplier throughput and the real limits. */
+  deliveryCapacity: string;
+  /** Refund obligations plus supplier-default exposure over the period. */
+  liability: string;
+  /** Transactions acquired per day. */
+  acquisitionSpeed: string;
+  /** Share of buyers who buy again and whose delivery did not fail. */
+  repeatability: string;
+  /** Money of ours tied up per transaction before buyers pay. */
+  cashExposure: string;
 }
 
 export interface ComposedArrangement {
@@ -77,6 +142,10 @@ export interface ComposedArrangement {
   contribution: string;
   /** Which side limits the transactions in the formula, as written. */
   formulas: Record<string, string>;
+  /** Present only when levers were composed. */
+  traced?: TracedDimensions;
+  /** Present only when levers were composed: whether the prepayment credit was taken, and why not if not. */
+  prepayment?: { credited: boolean; reason: string };
 }
 
 /** Compose an arrangement into a reconstruction graph. */
@@ -92,7 +161,9 @@ export function composeArrangement(a: Arrangement): ComposedArrangement {
   const reach = part('reach', 'Share of buyers reachable', 'share', 'RATE', a.demand.reach);
   const conversion = part('conversion', 'Share of reached buyers who agree', 'share', 'RATE', a.demand.conversion);
   const formulas: Record<string, string> = {};
-  formulas[k('demand')] = `${buyers} * ${need} * ${reach} * ${conversion}`;
+  const L = a.levers;
+  const uplift = L?.marketing ? part('reach_uplift', 'Reach marketing adds, as a factor', 'factor', 'POSITIVE', L.marketing.reachUplift, { min: 0 }) : null;
+  formulas[k('demand')] = uplift ? `${buyers} * ${need} * min(1, ${reach} * (1 + ${uplift})) * ${conversion}` : `${buyers} * ${need} * ${reach} * ${conversion}`;
   nodes.push({ key: k('demand'), label: 'Transactions demand allows', unit: 'transactions', kind: 'POSITIVE', min: 0, formula: formulas[k('demand')] });
   let limit = k('demand');
   if (a.supply) {
@@ -102,6 +173,7 @@ export function composeArrangement(a: Arrangement): ComposedArrangement {
     nodes.push({ key: k('supply'), label: 'Transactions supply allows', unit: 'transactions', kind: 'POSITIVE', min: 0, formula: formulas[k('supply')] });
     limit = `min(${k('demand')}, ${k('supply')})`;
   }
+  if (L) limit = composeCapacity(a, L, k, part, nodes, formulas);
   formulas[k('transactions')] = limit;
   nodes.push({ key: k('transactions'), label: 'Transactions', unit: 'transactions', kind: 'POSITIVE', min: 0, formula: limit });
   const value = part('value', 'What a buyer pays per transaction', a.currency, 'POSITIVE', a.value, { min: 0 });
@@ -137,6 +209,166 @@ export function composeArrangement(a: Arrangement): ComposedArrangement {
     { key: k('revenue'), label: 'Revenue to the arranger', unit: a.currency, kind: 'REAL', formula: formulas[k('revenue')] },
     { key: k('contribution'), label: 'Contribution to the arranger', unit: a.currency, kind: 'REAL', formula: formulas[k('contribution')] },
   );
+  let leverResult: Pick<ComposedArrangement, 'traced' | 'prepayment'> | null = null;
+  if (L) {
+    leverResult = composeLevers(a, L, k, part, nodes, formulas);
+    const contributionNode = nodes.find((one) => one.key === k('contribution'))!;
+    contributionNode.formula = formulas[k('contribution')];
+  }
   for (const node of a.extra ?? []) nodes.push(node);
-  return { graph: { nodes, correlations: a.correlations }, transactions: k('transactions'), exposure: formulas[k('exposure')] ? k('exposure') : null, revenue: k('revenue'), contribution: k('contribution'), formulas };
+  const exposure = leverResult ? leverResult.traced!.cashExposure : formulas[k('exposure')] ? k('exposure') : null;
+  return { graph: { nodes, correlations: a.correlations }, transactions: k('transactions'), exposure, revenue: k('revenue'), contribution: k('contribution'), formulas, ...leverResult };
+}
+
+type PartFn = (name: string, label: string, unit: string, kind: QuantityNode['kind'], p: Part, bounds?: { min?: number; max?: number }) => string;
+
+/** A part somebody actually stated: evidence, a formula or a person's range. An empty part is a question, never an answer. */
+function stated(p: Part | undefined): boolean {
+  return !!p && ((p.observations?.length ?? 0) > 0 || !!p.formula || !!p.assumed);
+}
+
+/** A key in the graph, emitted once: the given part when there is one, an empty question otherwise. */
+function once(nodes: QuantityNode[], key: string, make: () => string): string {
+  return nodes.some((one) => one.key === key) ? key : make();
+}
+
+/**
+ * Delivery capacity: the minimum of every side that can run out — demand,
+ * supply, AI-labor throughput, supplier capacity — and the real limits on
+ * money and contract. Nothing here is a revenue ceiling from owned capital.
+ */
+function composeCapacity(a: Arrangement, L: Levers, k: (n: string) => string, part: PartFn, nodes: QuantityNode[], formulas: Record<string, string>): string {
+  const caps = [k('demand')];
+  if (a.supply) caps.push(k('supply'));
+  if (L.aiLabor) caps.push(part('ai_throughput', `Transactions AI labor can do per ${a.period}`, 'transactions', 'POSITIVE', L.aiLabor.throughput, { min: 0 }));
+  if (L.fulfilment) caps.push(part('supplier_capacity', `Transactions the supplier can fulfil per ${a.period}`, 'transactions', 'POSITIVE', L.fulfilment.capacity, { min: 0 }));
+  const capacityFormula = `min(${caps.join(', ')})`;
+  formulas[k('delivery_capacity')] = capacityFormula;
+  nodes.push({ key: k('delivery_capacity'), label: 'Transactions the period can deliver', unit: 'transactions', kind: 'POSITIVE', min: 0, formula: capacityFormula });
+  const bounds = [k('delivery_capacity')];
+  const lim = L.limits;
+  if (lim?.cashAvailable || lim?.authorityCeiling) {
+    // Exposure is composed later, from parts that do not depend on the count.
+    const exposure = k('cash_exposure');
+    if (lim.cashAvailable) {
+      const cash = part('cash_available', 'Money available to tie up at once', a.currency, 'POSITIVE', lim.cashAvailable, { min: 0 });
+      formulas[k('cash_limit')] = `if(${exposure} > 0, ${cash} / ${exposure}, ${k('delivery_capacity')})`;
+      nodes.push({ key: k('cash_limit'), label: 'Transactions the cash it ties up allows', unit: 'transactions', kind: 'POSITIVE', min: 0, formula: formulas[k('cash_limit')] });
+      bounds.push(k('cash_limit'));
+    }
+    if (lim.authorityCeiling) {
+      const ceiling = part('authority_ceiling', 'Money a person authorised to commit', a.currency, 'POSITIVE', lim.authorityCeiling, { min: 0 });
+      formulas[k('authority_limit')] = `if(${exposure} > 0, ${ceiling} / ${exposure}, ${k('delivery_capacity')})`;
+      nodes.push({ key: k('authority_limit'), label: 'Transactions the authorised commitment allows', unit: 'transactions', kind: 'POSITIVE', min: 0, formula: formulas[k('authority_limit')] });
+      bounds.push(k('authority_limit'));
+    }
+  }
+  if (lim?.contractMax) bounds.push(part('contract_max', 'Transactions the contract allows', 'transactions', 'POSITIVE', lim.contractMax, { min: 0 }));
+  return bounds.length === 1 ? bounds[0]! : `min(${bounds.join(', ')})`;
+}
+
+/** Trace the levers through margin, exposure, cash conversion, supplier risk, liability, speed and repeatability. */
+function composeLevers(a: Arrangement, L: Levers, k: (n: string) => string, part: PartFn, nodes: QuantityNode[], formulas: Record<string, string>): Pick<ComposedArrangement, 'traced' | 'prepayment'> {
+  const t = k('transactions');
+  const c = a.currency;
+  const node = (name: string, label: string, unit: string, kind: QuantityNode['kind'], formula: string, bounds?: { min?: number; max?: number }) => {
+    formulas[k(name)] = formula;
+    nodes.push({ ...bounds, key: k(name), label, unit, kind, formula });
+    return k(name);
+  };
+  // What leaves our account per transaction before a buyer's money arrives.
+  const outlay = [a.capture.kind === 'MARGIN' ? k('supply_cost') : null, k('cost')].filter((one): one is string => !!one);
+  const costs = [k('cost')];
+  if (L.aiLabor) {
+    const ai = part('ai_cost', 'AI labor cost per transaction', c, 'POSITIVE', L.aiLabor.costPerTransaction, { min: 0 });
+    costs.push(ai);
+    outlay.push(ai);
+  }
+  if (L.channel) {
+    const share = part('channel_share', 'Share of transactions through the existing channel', 'share', 'RATE', L.channel.share);
+    const fee = part('channel_fee', 'Channel fee per transaction through it', c, 'POSITIVE', L.channel.fee, { min: 0 });
+    costs.push(`${share} * ${fee}`);
+  }
+  if (L.marketing) {
+    const acquisition = part('acquisition_cost', 'Marketing cost per transaction acquired', c, 'POSITIVE', L.marketing.acquisitionCost, { min: 0 });
+    costs.push(acquisition);
+    outlay.push(acquisition);
+  }
+  if (L.sharedInfrastructure) {
+    const infra = part('infrastructure_cost', 'Shared infrastructure allocated per transaction', c, 'POSITIVE', L.sharedInfrastructure.costPerTransaction, { min: 0 });
+    costs.push(infra);
+    outlay.push(infra);
+  }
+  const outlayKey = node('outlay', 'Money paid out per transaction before the buyer pays', c, 'POSITIVE', outlay.join(' + '), { min: 0 });
+  let advance: string | null = null;
+  if (L.financing) {
+    const rate = part('financing_rate', 'Annual financing rate', 'share', 'RATE', L.financing.rate);
+    const term = part('financing_term_days', 'Financing term', 'days', 'POSITIVE', L.financing.termDays, { min: 0 });
+    advance = part('financing_advance', 'Share of the outlay financing advances', 'share', 'RATE', L.financing.advanceShare);
+    costs.push(node('financing_cost', 'Financing cost per transaction', c, 'POSITIVE', `${advance} * ${outlayKey} * ${rate} * ${term} / 365`, { min: 0 }));
+  }
+  const margin = node('margin', 'Margin per transaction after every lever', c, 'REAL', `${k('capture')} - ${costs.join(' - ')}`);
+
+  // Supplier days: the fulfilment terms, or what the prepayment lever states.
+  const supplierDaysPart = L.fulfilment?.paymentDays ?? L.prepayment?.supplierPaymentDays;
+  const supplierDays = part('supplier_payment_days', 'Days after delivery the supplier must be paid', 'days', 'POSITIVE', supplierDaysPart ?? {}, { min: 0 });
+
+  // Prepayment: verified willingness, refunds and timing, or no credit at all.
+  let credit: string | null = null;
+  let prepayment = { credited: false, reason: 'No prepayment lever: buyers pay on settlement.' };
+  let willingness: string | null = null;
+  let refund: string | null = null;
+  if (L.prepayment) {
+    willingness = part('prepay_willingness', 'Share of buyers verified willing to prepay', 'share', 'RATE', L.prepayment.willingness);
+    refund = part('prepay_refund_share', 'Share of prepaid money that may have to be refunded', 'share', 'RATE', L.prepayment.refundShare);
+    const usable = part('prepay_usable_days', 'Days until prepaid money is usable', 'days', 'POSITIVE', L.prepayment.usableDays, { min: 0 });
+    const missing = [
+      stated(L.prepayment.willingness) ? null : 'buyer willingness',
+      stated(L.prepayment.refundShare) ? null : 'refund obligations',
+      stated(L.prepayment.usableDays) ? null : 'when prepaid funds are usable',
+      stated(supplierDaysPart) ? null : 'when the supplier must be paid',
+    ].filter((one): one is string => !!one);
+    if (missing.length === 0) {
+      credit = node('prepay_credit', 'Share of the outlay prepayment funds before the supplier is paid', 'share', 'RATE', `if(${usable} <= ${supplierDays}, ${willingness} * (1 - ${refund}), 0)`, { min: 0, max: 1 });
+      prepayment = { credited: true, reason: 'Willingness, refunds and timing are stated; the credit applies only where prepaid funds are usable before the supplier is paid.' };
+    } else {
+      prepayment = { credited: false, reason: `Not credited: ${missing.join(', ')} unstated — an unknown is never read as favourable.` };
+    }
+  }
+  const exposureParts = [outlayKey, advance ? `(1 - ${advance})` : null, credit ? `(1 - ${credit})` : null].filter((one): one is string => !!one);
+  const cashExposure = node('cash_exposure', 'Money of ours tied up per transaction before buyers pay', c, 'POSITIVE', exposureParts.join(' * '), { min: 0 });
+
+  const settlement = part('settlement_days', 'Days after delivery until a buyer who did not prepay has paid', 'days', 'POSITIVE', L.settlementDays ?? {}, { min: 0 });
+  const inflowDays = credit ? `${credit} * ${k('prepay_usable_days')} + (1 - ${credit}) * ${settlement}` : settlement;
+  const cashConversion = node('cash_conversion', 'Days from paying supply to holding usable cash', 'days', 'REAL', `${inflowDays} - ${supplierDays}`);
+
+  // Supplier risk: stated for a supplier, unknown where supply exists unstated, nothing where there is no supplier.
+  const hasSupplier = !!L.fulfilment || !!a.supply || a.capture.kind === 'MARGIN';
+  const failure = L.fulfilment
+    ? part('supplier_failure_rate', 'Share of supplier deliveries that fail', 'share', 'RATE', L.fulfilment.failureRate)
+    : hasSupplier
+      ? part('supplier_failure_rate', 'Share of supplier deliveries that fail', 'share', 'RATE', {})
+      : null;
+  const supplierRisk = node('supplier_risk', 'Share of supplier deliveries expected to fail', 'share', 'RATE', failure ?? '0', { min: 0, max: 1 });
+
+  const owed = [willingness && refund ? `${k('value')} * ${willingness} * ${refund}` : null, failure ? `${k('value')} * ${failure}` : null].filter((one): one is string => !!one);
+  const liability = node('liability', `Refund obligations plus supplier-default exposure per ${a.period}`, c, 'POSITIVE', owed.length ? `${t} * (${owed.join(' + ')})` : '0', { min: 0 });
+
+  const days = L.marketing ? part('days_to_acquire', `Days to acquire a ${a.period}'s buyers`, 'days', 'POSITIVE', L.marketing.daysToAcquire, { min: 0 }) : part('days_to_acquire', `Days to acquire a ${a.period}'s buyers`, 'days', 'POSITIVE', {}, { min: 0 });
+  const acquisitionSpeed = node('acquisition_speed', 'Transactions acquired per day', 'transactions/day', 'POSITIVE', `${t} / ${days}`, { min: 0 });
+
+  const repeat = once(nodes, k('repeat_rate'), () => part('repeat_rate', 'Share of buyers who buy again', 'share', 'RATE', {}));
+  const repeatability = node('repeatability', 'Share of buyers who buy again and were delivered', 'share', 'RATE', failure ? `${repeat} * (1 - ${failure})` : repeat, { min: 0, max: 1 });
+
+  // Contribution after every lever's cost, keeping the pooling rules.
+  if (a.pooling) {
+    const fixed = k('fixed_cost');
+    formulas[k('contribution')] = a.pooling.threshold ? `if(${t} >= ${k('min_participants')}, ${t} * ${margin} - ${fixed}, 0)` : `${t} * ${margin} - ${fixed}`;
+  } else {
+    formulas[k('contribution')] = `${t} * ${margin}`;
+  }
+  return {
+    traced: { cashConversion, margin, supplierRisk, deliveryCapacity: k('delivery_capacity'), liability, acquisitionSpeed, repeatability, cashExposure },
+    prepayment,
+  };
 }
