@@ -94,13 +94,13 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | S-6 | reasoning | no move can add a constructed arrangement outside the 12 | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-7 | method learning | learns from unchallenged and critic-flagged reach | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-8 | transfer of methods | learned methods keyed by opening ids; don't transfer across goals | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
-| S-9 | learning stats | repeat reads of one goal counted as independent | MINOR | adaptive-search | REPAIRING |
-| S-10 | learning | stance yield computed, never fed back | MAJOR | adaptive-search | REPAIRING |
+| S-9 | learning stats | repeat reads of one goal counted as independent | MINOR | adaptive-search | REPAIRED on branch (91030b6), AWAITING RELEASE |
+| S-10 | learning | stance yield computed, never fed back | MAJOR | adaptive-search | REPAIRED on branch (91030b6): stance seed budget by posterior with floor; surgeBAdaptiveSearch 7/7 |
 | S-11 | invention | model-invented methods only retune 4 operations on held openings | MAJOR | search-selection | PARTIAL — REPAIRING (invented designs as candidates) |
 | S-12 | transfer | transfers model no material differences; precedent bonus outranks gated evidence | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-13 | correlation | = Q2-10 | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 | S-15 | wiring | `bestReachCents` never reaches construction (10-min cache) | MINOR | arrangement-library | REPAIRING |
-| S-16 | screening | factorial screen drops levels that matter only in combination | MINOR | adaptive-search | REPAIRING |
+| S-16 | screening | factorial screen drops levels that matter only in combination | MINOR | adaptive-search | REPAIRED on branch (91030b6), AWAITING RELEASE |
 | S-17 | traceability | nothing records what was cut | MINOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | Q2-1 | acceptance | chain link and assurance accept mutually exclusive input forms → EVIDENCED_PORTFOLIO unreachable (repro: 3 sized comparables → basis PROBABILITY, still CANDIDATE_ONLY) | BLOCKING | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 | Q2-2 | statistics | "sample" = number of studies ≥ 20; Wilson bound double-counts (`quant/portfolio.ts:1027,1061`) | BLOCKING | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
@@ -208,7 +208,7 @@ nothing in flight had stalled. The post-run `show` crashed on `LIMIT NaN`
 
 | id | finding | status |
 |---|---|---|
-| A-O6 | research rounds end without a report (`research/gate.ts`, `packetRunner.ts`) — verifier on all-conditional lanes vs unreachable sources | REPAIRING (engineer in worktree) |
+| A-O6 | research rounds end without a report (`research/gate.ts`, `packetRunner.ts`) — verifier on all-conditional lanes vs unreachable sources | REPAIRED on branch (540ea63): verifier lane names resolved to declared ids; an all-conditional fragment is not failed by INSUFFICIENT, which is carried as an unresolved gap. Unreachable-source blocks stay with RC-1 (Surge A). evidenceLanes 24/24 |
 | A-10K | the $10K plan has no buyer-validated or market-test-ready opening, and conversion is unmeasured | ROOT CAUSE CONFIRMED — evidence gap, not a code defect: it closes only by measurement (outreach replies through Instantly, §94) or sourced comparables; acceptance now certifies on sized comparables with margin (case O), never on assumption. Directed to Hermes. |
 | A-CAP | starting-capital fallback chain `perWeek ?? beforeProof ?? capitalCeiling` (`goals/portfolio.ts` ~905) | REVIEWED — NOT A DEFECT: every link is a limit the goal itself states; with no weekly or before-proof limit the ceiling is the most that may be tied up, and the reconstruction's CAPITAL factor sweeps it. No owner figure is hard-coded. |
 
