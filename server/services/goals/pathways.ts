@@ -435,7 +435,20 @@ function textFact(value: string | null | undefined, basis: string, status: FactS
   return text ? { value: text, low: null, high: null, status, basis } : { value: null, low: null, high: null, status: 'UNKNOWN', basis: `nothing on the card says ${basis}` };
 }
 
-const mid = (f: PathFact): number | null => (typeof f.value === 'number' ? f.value : f.low !== null && f.high !== null ? geometric(Math.max(f.low, 1e-6), Math.max(f.high, 1e-6)) : null);
+/*
+ * A geometric mean is undefined below zero, and clamping a negative bound to 1e-6 turned a range
+ * that loses money into a hair above zero — so an unknown net (value null since r01.opp-04) read
+ * as marginally profitable. A range reaching below zero takes its arithmetic middle instead, so a
+ * loss stays a loss and the fit's MARGIN lever still comes from the range.
+ */
+const mid = (f: PathFact): number | null =>
+  typeof f.value === 'number'
+    ? f.value
+    : f.low !== null && f.high !== null
+      ? f.low < 0
+        ? (f.low + f.high) / 2
+        : geometric(Math.max(f.low, 1e-6), Math.max(f.high, 1e-6))
+      : null;
 const lowOf = (f: PathFact): number | null => (typeof f.value === 'number' && f.status === 'PROVEN' ? f.value : f.low);
 const highOf = (f: PathFact): number | null => (typeof f.value === 'number' && f.status === 'PROVEN' ? f.value : f.high);
 
@@ -604,11 +617,14 @@ export function pathwayOf(
   const netHigh = highOf(revenuePerDeal) !== null ? highOf(revenuePerDeal)! - (lowOf(fulfilmentCost) ?? 0) - (acquisitionCost.low ?? 0) : null;
   const netMid = mid(revenuePerDeal) !== null ? mid(revenuePerDeal)! - (mid(fulfilmentCost) ?? 0) - (typeof acquisitionCost.value === 'number' ? acquisitionCost.value : 0) : null;
   const weakest = (a: FactStatus, b: FactStatus): FactStatus => (a === 'UNKNOWN' || b === 'UNKNOWN' ? 'UNKNOWN' : a === 'ESTIMATED' || b === 'ESTIMATED' ? 'ESTIMATED' : 'PROVEN');
+  const netStatus: FactStatus = revenuePerDeal.status === 'UNKNOWN' ? 'UNKNOWN' : weakest(revenuePerDeal.status, fulfilmentCost.status === 'UNKNOWN' ? 'ESTIMATED' : fulfilmentCost.status);
   const net: PathFact = {
-    value: netMid,
+    // An unknown states no point value (§39, §93): with no price established, a midpoint of the
+    // swept range is a guess, and it is never read as a favourable number (production r01.opp-04).
+    value: netStatus === 'UNKNOWN' ? null : netMid,
     low: netLow,
     high: netHigh,
-    status: revenuePerDeal.status === 'UNKNOWN' ? 'UNKNOWN' : weakest(revenuePerDeal.status, fulfilmentCost.status === 'UNKNOWN' ? 'ESTIMATED' : fulfilmentCost.status),
+    status: netStatus,
     basis: fulfilmentCost.status === 'UNKNOWN' ? 'price less a direct cost nobody has established (swept)' : 'price less the direct cost',
   };
   const respond = factOf(one.respond);
@@ -682,6 +698,14 @@ export function pathwayOf(
   const counts = { proven: 0, estimated: 0, unknown: 0 };
   // `facts` are the fourteen commercial facts and none can be DENIED; `rights` (the only denial) and `capacity` are read beside the tally.
   for (const fact of facts) counts[fact.status === 'PROVEN' ? 'proven' : fact.status === 'ESTIMATED' ? 'estimated' : 'unknown'] += 1;
+  /*
+   * One rule over every fact the pathway publishes: an UNKNOWN states no value (OPP-04, §39).
+   * `net` above is the site production caught, and this is the defence for every other derived
+   * fact — constructed designs, commission and unit-sale variants — so a new derivation cannot
+   * reintroduce a point guess under an unknown. The swept low/high stay: fit and contribution have
+   * already read them, and a partial arrangement is kept rather than abandoned.
+   */
+  for (const fact of [...facts, rights, capacity]) if (fact.status === 'UNKNOWN' && fact.value !== null) fact.value = null;
   return {
     opportunityId: o.id,
     title: o.title,
