@@ -26,7 +26,6 @@
  */
 import type { ProgramRequirement, RequirementMap, RequirementReading, RequirementStatus } from '../../domain/factoryProgram.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
-import { registerProbe } from '../factory/program/probes.ts';
 import { reconcileCapabilities, type BlockedTransactionRow, type CapabilityReconciliation, type CapabilityRecordRow } from './priority.ts';
 
 export const CAPABILITY_EVENT_KINDS = {
@@ -329,6 +328,87 @@ export interface CapabilityReview {
   deferred: string[];
   refused: boolean;
   parallelWorkers: number | null;
+  /**
+   * What the scheduler compared for every not-started requirement it read:
+   * readiness (prepared, prerequisites) beside urgency, net expected value,
+   * reuse, cost, uncertainty and opportunity cost, with its rank and whether it
+   * fits the free workers. The production record of the comparison itself.
+   */
+  compared: ComparedRequirement[];
+  /**
+   * Every requirement this module promoted and has not since demoted, re-examined
+   * this pass: whether an open need is still blocked on it and whether it was
+   * demoted. A promoted requirement whose need vanished and was not demoted is a
+   * failure the fixed check reads off this list.
+   */
+  demotionReview: DemotionReviewEntry[];
+}
+
+/** One requirement as the comparison weighed it. Unknowns stay null. */
+export interface ComparedRequirement {
+  requirement: string;
+  prepared: boolean;
+  prerequisitesMet: boolean | null;
+  urgency: { dueAt: string | null; blockedTransactions: number };
+  netValueCents: number | null;
+  reuse: number | null;
+  buildCostCents: number | null;
+  workaroundCostCents: number | null;
+  uncertainty: number | null;
+  opportunityCostCents: number | null;
+  rank: number | null;
+  startable: boolean;
+  promote: boolean;
+}
+
+export interface DemotionReviewEntry {
+  requirement: string;
+  /** null: a campaign has started it, so readiness is no longer this module's to move. */
+  needStillExists: boolean | null;
+  demoted: boolean;
+}
+
+/** The comparison rows of one pass, from the decision's inputs and its ranking. Pure. */
+export function comparedOf(
+  capabilities: CapabilityRecordRow[],
+  decision: Pick<CapabilityReconciliation, 'ranked' | 'promotions'>,
+): ComparedRequirement[] {
+  const ranked = new Map(decision.ranked.map((r) => [r.id, r]));
+  const promote = new Set(decision.promotions.map((p) => p.id));
+  return capabilities
+    .map((c) => {
+      const r = ranked.get(c.id);
+      return {
+        requirement: c.id,
+        prepared: c.prepared,
+        prerequisitesMet: c.prerequisitesMet,
+        urgency: r ? r.urgency : { dueAt: c.dueAt ?? null, blockedTransactions: 0 },
+        netValueCents: r ? r.netValueCents : null,
+        reuse: r ? r.reuse : null,
+        buildCostCents: c.buildCostCents ?? null,
+        workaroundCostCents: c.workaroundCostCents ?? null,
+        uncertainty: c.uncertainty ?? null,
+        opportunityCostCents: c.opportunityCostCents ?? null,
+        rank: r ? r.rank : null,
+        startable: r ? r.startable : false,
+        promote: promote.has(c.id),
+      };
+    })
+    .sort((a, b) => a.requirement.localeCompare(b.requirement));
+}
+
+/** Each requirement promoted here, re-examined against this pass's rows. Pure. */
+export function demotionReviewOf(
+  promotedHere: ReadonlySet<string>,
+  capabilities: Pick<CapabilityRecordRow, 'id' | 'needStillExists'>[],
+  decision: Pick<CapabilityReconciliation, 'demotions'>,
+): DemotionReviewEntry[] {
+  const rows = new Map(capabilities.map((c) => [c.id, c]));
+  const demoted = new Set(decision.demotions.map((d) => d.id));
+  return [...promotedHere].sort().map((requirement) => {
+    const row = rows.get(requirement);
+    return { requirement, needStillExists: row ? (row.needStillExists ?? null) : null, demoted: demoted.has(requirement) };
+  });
 }
 
 /** What makes two reviews the same outcome: nothing a clock changes. Pure. */
@@ -345,6 +425,8 @@ export function reviewFingerprint(review: CapabilityReview): string {
     review.demoted.join(','),
     review.deferred.join(','),
     review.refused ? 'REFUSED' : 'APPLIED',
+    JSON.stringify(review.compared ?? []),
+    JSON.stringify(review.demotionReview ?? []),
   ].join('|');
 }
 
@@ -357,6 +439,8 @@ export function reviewOf(input: {
   decision: Pick<CapabilityReconciliation, 'promotions' | 'demotions'> & { deferred: { id: string }[] };
   refused: boolean;
   parallelWorkers: number | null;
+  compared?: ComparedRequirement[];
+  demotionReview?: DemotionReviewEntry[];
 }): CapabilityReview {
   const supply = capabilitySupply(input.map);
   const openNeedsBlocked: Record<string, number> = {};
@@ -380,6 +464,8 @@ export function reviewOf(input: {
     deferred: input.refused ? [] : input.decision.deferred.map((d) => d.id),
     refused: input.refused,
     parallelWorkers: input.parallelWorkers,
+    compared: input.compared ?? [],
+    demotionReview: input.refused ? (input.demotionReview ?? []).map((d) => ({ ...d, demoted: false })) : (input.demotionReview ?? []),
   };
 }
 
@@ -413,8 +499,13 @@ export async function reconcilePreparedCapabilities(ports: CapabilityPorts): Pro
     const promotedHere = await ports.promotedHere(program.id);
     const rows = capabilityRowsFromProgram({ map: program.map, readings: program.readings, edgesOf: program.edgesOf, needs, opportunities, promotedHere, parallelWorkers: workers });
     const decision = withinWorkers(reconcileCapabilities(rows.capabilities, rows.blocked, { parallelWorkers: workers }), workers);
+    const compared = comparedOf(rows.capabilities, decision);
+    const demotionReview = demotionReviewOf(promotedHere, rows.capabilities, decision);
     const review = (refused: boolean) =>
-      recordReview(ports, reviewOf({ programId: program.id, map: program.map, mapVersion: program.mapVersion ?? null, needs, decision, refused, parallelWorkers: workers }));
+      recordReview(
+        ports,
+        reviewOf({ programId: program.id, map: program.map, mapVersion: program.mapVersion ?? null, needs, decision, refused, parallelWorkers: workers, compared, demotionReview }),
+      );
     if (decision.promotions.length === 0 && decision.demotions.length === 0) {
       await review(false);
       continue;
@@ -547,6 +638,13 @@ export interface ComparisonEvidence {
  *    comparison has a supplier to promote at all;
  *  - a review of that same map version is recorded, so the running Brain compared
  *    the map with the open needs rather than a test doing so;
+ *  - that review records the comparison itself: for every not-started
+ *    requirement it read, readiness (prepared, prerequisites) beside urgency,
+ *    net expected value, reuse, cost, uncertainty and opportunity cost, and the
+ *    free parallel workers it ranked against;
+ *  - that review re-examined every requirement whose latest recorded transition
+ *    is a promotion here, and none of them is left promoted after its need
+ *    vanished — demotion of vanished needs is read off production, not assumed;
  *  - every recorded promotion carries its measured evidence, and every promoted
  *    or demoted requirement is still in the map — demotion changes readiness and
  *    never removes a requirement from the specification.
@@ -566,6 +664,43 @@ export function checkCapabilityComparison(evidence: ComparisonEvidence): { ok: b
   if (!review) return { ok: false, detail: `program ${program.id}: ${supply.requirementsSupplying} supplier(s), but no comparison is recorded on production yet` };
   if (review.detail.mapVersion !== program.mapVersion) {
     return { ok: false, detail: `program ${program.id}: the newest comparison read map v${String(review.detail.mapVersion)}, the installed map is v${program.mapVersion}` };
+  }
+  if (!Object.prototype.hasOwnProperty.call(review.detail, 'parallelWorkers')) {
+    return { ok: false, detail: `program ${program.id}: the newest comparison does not record the parallel workers it ranked against` };
+  }
+  const compared = review.detail.compared;
+  if (!Array.isArray(compared)) {
+    return { ok: false, detail: `program ${program.id}: the newest comparison records no value/urgency/reuse/cost comparison of the requirements it read` };
+  }
+  for (const entry of compared as unknown[]) {
+    const missing = comparedEntryGap(entry);
+    if (missing) return { ok: false, detail: `program ${program.id}: the newest comparison's entry ${missing}` };
+  }
+  const demotionReview = review.detail.demotionReview;
+  if (!Array.isArray(demotionReview)) {
+    return { ok: false, detail: `program ${program.id}: the newest comparison records no re-examination of the requirements it promoted` };
+  }
+  const reexamined = new Map<string, Record<string, unknown>>();
+  for (const entry of demotionReview as unknown[]) {
+    if (entry && typeof entry === 'object' && typeof (entry as Record<string, unknown>).requirement === 'string') {
+      reexamined.set((entry as Record<string, unknown>).requirement as string, entry as Record<string, unknown>);
+    }
+  }
+  for (const [requirement, entry] of reexamined) {
+    if (entry.needStillExists === false && entry.demoted !== true && review.detail.refused !== true) {
+      return { ok: false, detail: `program ${program.id}: no open need is blocked on ${requirement} any more, and the comparison left it promoted instead of demoting it` };
+    }
+  }
+  const latestTransition = new Map<string, string>();
+  for (const e of mine) {
+    if ((e.kind === CAPABILITY_EVENT_KINDS.promoted || e.kind === CAPABILITY_EVENT_KINDS.demoted) && typeof e.detail.requirement === 'string') {
+      latestTransition.set(e.detail.requirement, e.kind);
+    }
+  }
+  for (const [requirement, kind] of latestTransition) {
+    if (kind === CAPABILITY_EVENT_KINDS.promoted && !reexamined.has(requirement)) {
+      return { ok: false, detail: `program ${program.id}: ${requirement} was promoted, but the newest comparison did not re-examine whether its need still exists` };
+    }
   }
   const keys = new Set(program.map.requirements.map((r) => r.key));
   let promotions = 0;
@@ -589,8 +724,24 @@ export function checkCapabilityComparison(evidence: ComparisonEvidence): { ok: b
       `program ${program.id} map v${program.mapVersion}: ${supply.requirementsSupplying} requirement(s) supply ${capabilities.join(', ')}; ` +
       `newest comparison: open needs blocked ${counts(review.detail.openNeedsBlocked)}, unsupplied ${counts(review.detail.unsupplied)}, ` +
       `${Array.isArray(review.detail.prepared) ? review.detail.prepared.length : 0} prepared; ` +
+      `${compared.length} requirement(s) compared on value, urgency, reuse and cost against ${review.detail.parallelWorkers === null ? 'unread' : String(review.detail.parallelWorkers)} free worker(s); ` +
+      `${reexamined.size} promoted requirement(s) re-examined for a vanished need; ` +
       `${promotions} promotion(s) and ${demotions} demotion(s) recorded, every one still in the map`,
   };
+}
+
+const COMPARED_FIELDS = ['prepared', 'prerequisitesMet', 'urgency', 'netValueCents', 'reuse', 'buildCostCents', 'workaroundCostCents', 'uncertainty', 'opportunityCostCents', 'rank', 'startable'] as const;
+
+/** What a recorded comparison entry lacks, or null when it carries every factor the scheduler weighs. */
+function comparedEntryGap(entry: unknown): string | null {
+  if (!entry || typeof entry !== 'object') return 'is not a record';
+  const record = entry as Record<string, unknown>;
+  const name = typeof record.requirement === 'string' ? record.requirement : null;
+  if (!name) return 'names no requirement';
+  for (const field of COMPARED_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(record, field)) return `for ${name} does not record ${field}`;
+  }
+  return null;
 }
 
 /** The evidence on production: the architecture program's installed map and its capability events. */
@@ -614,9 +765,11 @@ export async function comparisonEvidenceOnProduction(): Promise<ComparisonEviden
   };
 }
 
-/**
- * The fixed check of GOV-22-1: `probe r01.gov-22-1({}) passes`. Registered by the
- * module the goals tick loads at boot, so the running Brain answers it from its
- * own rows rather than reporting it unregistered.
+/*
+ * GOV-22-1's fixed check, `probe r01.gov-22-1({}) passes`, is not registered here.
+ * A probe is the exam a requirement is judged by, and an implementer may not write
+ * its own exam (§96): it is registered, and its pass condition defined, in
+ * server/services/factory/program/probes.ts under the protected verification
+ * path. This module only exports the reads that check may call —
+ * `comparisonEvidenceOnProduction` and `checkCapabilityComparison`.
  */
-registerProbe('r01.gov-22-1', async () => checkCapabilityComparison(await comparisonEvidenceOnProduction()));
