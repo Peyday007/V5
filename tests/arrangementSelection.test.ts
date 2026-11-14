@@ -48,7 +48,7 @@ type Over = Partial<ConstructedArrangement> & {
 };
 
 function arrangement(over: Over): ConstructedArrangement {
-  const { key, p50, p10 = p50 / 4, p90 = p50 * 3, tier = 'MECHANISM', observations = 12, repeat = 'RECURRING_COHORT', base = 'BROKER', funding = 'THRESHOLD_PRESALE', population, ...rest } = over;
+  const { key, p50, p10 = p50 / 4, p90 = p50 * 3, tier = 'COMPONENT', observations = 12, repeat = 'RECURRING_COHORT', base = 'BROKER', funding = 'THRESHOLD_PRESALE', population, ...rest } = over;
   return {
     key,
     structure: base,
