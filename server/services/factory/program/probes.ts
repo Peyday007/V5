@@ -252,29 +252,19 @@ define('r01.gov-22-2', async () => {
  * at" is not a demonstration (§39). Adopted from the compliance campaign's own
  * reading of the rows, and held here so later campaigns cannot change it.
  */
+/*
+ * COM-13-5 reads every recorded opening's role through the reader the
+ * repair-com-13-5-1 campaign delivered (cash/regulatedRoleProbe.ts): the
+ * earlier version read capital_structures alone, which holds only the openings
+ * a research claim declared a capital requirement for, so production showed
+ * nothing to assess. A contradiction (an opening excluded by category, or
+ * economics counted for a role without a compliant position) is a FAIL; no
+ * opening yet, or none in a regulated role yet, is UNKNOWN (§39).
+ */
 define('r01.com-13-5', async () => {
-  const exclusions = (await import('../../cash/exclusions.ts')) as unknown as Record<string, unknown>;
-  const assess = exclusions.assessOpportunityRole as ((input: { projectId: string; opportunityId: string }) => Promise<{
-    excluded: unknown; regulated: boolean; countEconomics: boolean; position: string;
-  }>) | undefined;
-  if (!assess) return { ok: false, detail: 'the role reader is not deployed in this Brain' };
-  const openings = await getDb().all<{ project_id: string; opportunity_id: string }>(
-    `SELECT DISTINCT project_id, opportunity_id FROM capital_structures ORDER BY project_id, opportunity_id`,
-  );
-  // No opening yet is not a defect a repair can fix: UNKNOWN, asked again (§39: never a pass on nothing).
-  if (openings.length === 0) return { ok: null, detail: 'no capital_structures rows: no role to assess on production records' };
-  let regulated = 0;
-  for (const o of openings) {
-    const a = await assess({ projectId: o.project_id, opportunityId: o.opportunity_id });
-    if (a.excluded !== false) return { ok: false, detail: `opening ${o.opportunity_id} was excluded by category` };
-    const compliant = a.position === 'COMPLIANT' || a.position === 'COMPLIANT_VIA_PARTNER';
-    if (a.countEconomics !== compliant) return { ok: false, detail: `opening ${o.opportunity_id}: economics counted=${a.countEconomics} with position ${a.position}` };
-    if (a.regulated) regulated += 1;
-  }
-  return regulated > 0
-    ? { ok: true, detail: `${regulated} of ${openings.length} opening(s) are regulated roles, all assessed by rights and none excluded by category` }
-    : // Not yet demonstrated is UNKNOWN, never a FAIL that reopens the requirement into a repair nobody can make.
-      { ok: null, detail: `${openings.length} opening(s) read; none performs a regulated activity, so the behaviour is not yet demonstrated` };
+  const r = await (await import('../../cash/regulatedRoleProbe.ts')).regulatedRolesAssessedFromRows();
+  if (r.ok === false && /no role to assess|not yet demonstrated/.test(r.detail)) return { ok: null, detail: r.detail };
+  return r;
 });
 
 /*

@@ -27,7 +27,7 @@ import { CASH_TIERS, cashTier, tierRank, type CashTier } from './tier.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { listCapitalForProject, listConstraintsForProject } from '../../repos/industry.ts';
-import { countRoleEconomics, roleRecordFromRows, type RoleEconomics } from './exclusions.ts';
+import { countRoleEconomics, OPENING_ROLE_COLUMNS, openingRoleText, ownerStatementsFor, roleRecordWithStatements, type OpeningRoleRow, type RoleEconomics } from './exclusions.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { instantlySendingStanding } from './providers/instantly.ts';
 
@@ -284,25 +284,37 @@ export async function cashFunnel(input: {
     [input.projectId],
   );
 
-  // Settled cash is counted only through a role assessment: each opening's role is read from its rows.
+  // Settled cash is counted only through a role assessment: each opening's role is read from its rows —
+  // its own cash_opportunities row (what it performs) beside its capital and constraint rows — through the
+  // same reader probe r01.com-13-5 uses, so the figure and the probe assess one role identically.
   const settledByOpening = await db.all<{ opportunity_id: string; currency: string; total: number }>(
     `SELECT opportunity_id, currency, SUM(amount_cents) AS total FROM cash_money_entries
       WHERE project_id = ? AND kind = 'SETTLEMENT' AND opportunity_id IS NOT NULL
       GROUP BY opportunity_id, currency`,
     [input.projectId],
   );
-  const [capitalRows, constraintRows] = await Promise.all([
+  // What the project's goal owners have stated they hold (licences, partners under agreement) is the
+  // attestation: without it no regulated role could ever reach a compliant position.
+  const [capitalRows, constraintRows, openingRows, ownerStatements] = await Promise.all([
     listCapitalForProject(input.projectId),
     listConstraintsForProject(input.projectId),
+    db.all<OpeningRoleRow>(`SELECT ${OPENING_ROLE_COLUMNS} FROM cash_opportunities WHERE project_id = ?`, [input.projectId]),
+    ownerStatementsFor(input.projectId),
   ]);
+  const openingById = new Map(openingRows.map((o) => [o.id, o]));
   const roleRows: Array<RoleEconomics & { currency: string; opportunityId: string }> = settledByOpening.map((row) => ({
     id: `${row.opportunity_id}|${row.currency}`,
     opportunityId: row.opportunity_id,
     currency: row.currency,
     valueCents: Number(row.total),
-    role: roleRecordFromRows(
+    role: roleRecordWithStatements(
       capitalRows.filter((c) => c.opportunityId === row.opportunity_id),
       constraintRows.filter((c) => c.opportunityId === row.opportunity_id),
+      (() => {
+        const opening = openingById.get(row.opportunity_id);
+        return opening ? openingRoleText(opening) : null;
+      })(),
+      ownerStatements,
     ),
   }));
   const counted = countRoleEconomics(roleRows);
