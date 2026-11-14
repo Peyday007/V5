@@ -93,7 +93,11 @@ import {
   openRound,
   openRoundsByCandidate,
 } from '../../repos/cashDiscovery.ts';
-import { listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
+import { listConstraintsForProject, listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
+import { OPPORTUNITY_ORIGINS, opportunityField, rankSubjectMarkets, seedsFromFirstPrinciples, type GoalRow, type OpportunityOrigin, type OpportunitySeed } from '../industry/construction/origins.ts';
+import { getWorkstream } from '../../repos/register.ts';
+import { commercialRoles, roleLensSeeds, type RoleLensSeed } from '../industry/construction/roles.ts';
+import { openWorldLensSeedsFor, type OpenWorldLensSeed, type OpenWorldRecord } from '../industry/construction/openWorld.ts';
 import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
 import { commonTo, exclusionSentence, type ExclusionClass } from './exclusions.ts';
 import { liveGoalLimits } from './worthResearching.ts';
@@ -116,6 +120,8 @@ import type {
   CashDiscoveryRound,
   CashMechanism,
   CashOpportunity,
+  IndustryNode,
+  OpportunityConstraint,
 } from '../../domain/types.ts';
 
 /**
@@ -585,6 +591,8 @@ export async function openDiscovery(input: {
       bucket,
       next,
       statement: questionFor(bucket, mode.objective, next, history, held, frame, commonTo(await liveGoalLimits(input.projectId, new Date().toISOString()))),
+      // A search bucket asks the world what has been published outside Brain's own records.
+      origins: ['WORLD'],
     });
     if (!round) continue;
     out.push({ bucketId: bucket.id, candidateId: round.candidateId, round: next });
@@ -602,6 +610,12 @@ async function openBucketRound(input: {
   bucket: SearchBucket;
   next: number;
   statement: string;
+  /** Where this round's question came from (OPP-03); recorded on the opening event. */
+  origins: readonly OpportunityOrigin[];
+  /** The opportunity-field seeds it was asked from, when it was seeded by one. */
+  seedKeys?: readonly string[];
+  /** The open-world arrangement it was asked to test, when it was (ARCH-01). */
+  openWorld?: OpenWorldRecord;
 }): Promise<CashDiscoveryRound | null> {
   const { bucket, next, mode } = input;
   let round: CashDiscoveryRound;
@@ -644,6 +658,9 @@ async function openBucketRound(input: {
       cashModeId: mode.id,
       round: next,
       objective: mode.objective,
+      origins: [...input.origins],
+      originSeeds: [...(input.seedKeys ?? [])],
+      ...(input.openWorld ? { openWorld: input.openWorld } : {}),
     },
   });
   return round;
@@ -701,6 +718,173 @@ export const GOAL_LENSES: readonly { id: string; angle: string }[] = Object.free
 
 /** At most this many industries from the map are offered as search angles. */
 export const MAX_INDUSTRY_LENSES = 60;
+
+/** A goal's search angle, with the origin of the question it asks (OPP-03). */
+export interface GoalLens {
+  id: string;
+  angle: string;
+  origin: OpportunityOrigin;
+  /** The opportunity-field seed it was built from, when it was. */
+  seedKey?: string;
+  /** The open-world arrangement the lens asks about, when it is one (ARCH-01). */
+  openWorld?: OpenWorldRecord;
+}
+
+/** At most this many opportunity-field seeds are offered as a goal's search angles at once. */
+export const MAX_ORIGIN_LENSES = 40;
+
+/** The goal's own FIRST_PRINCIPLES seed, when it has one: live and targeted (OPP-03). Pure. */
+export function firstPrinciplesSeed(goal: GoalRow): OpportunitySeed | null {
+  return seedsFromFirstPrinciples([goal])[0] ?? null;
+}
+
+/**
+ * The fixed angles as lenses. Each one asks the goal's backward question —
+ * which transactions bring this amount within this time — from a different
+ * part of the economy, so each is a round seeded from the goal's
+ * FIRST_PRINCIPLES seed and records that seed's key. A goal with no such seed
+ * (paused, cancelled, archived or without a target) is not reasoned backward
+ * from, so it gets no fixed angle labelled as if it were. Pure.
+ */
+/** A field or role lens ranks as if asked once already; a fixed angle or an industry does not. */
+function fieldPenalty(lens: GoalLens): number {
+  return lens.seedKey && (lens.id.startsWith('org-') || lens.id.startsWith('role-') || lens.id.startsWith('open-')) ? 1 : 0;
+}
+
+export function fixedLenses(backward: OpportunitySeed | null): GoalLens[] {
+  if (!backward || backward.origin !== 'FIRST_PRINCIPLES') return [];
+  return GOAL_LENSES.map((one) => ({ ...one, origin: 'FIRST_PRINCIPLES' as const, seedKey: backward.key }));
+}
+
+function lensId(key: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i += 1) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
+}
+
+/**
+ * The opportunity field as goal lenses: one per seed, interleaved across the
+ * five origins so a bounded set still reaches each of them, never filtered by
+ * category. A seed whose words would read as a jurisdiction or as Brain's own
+ * action is left out, exactly as a held opening's title is (`safeExclusion`):
+ * the compiler reads both out of a question's prose.
+ */
+export function originLenses(seeds: readonly OpportunitySeed[], max = MAX_ORIGIN_LENSES): GoalLens[] {
+  const byOrigin = new Map<OpportunityOrigin, OpportunitySeed[]>(OPPORTUNITY_ORIGINS.map((origin) => [origin, []]));
+  for (const one of seeds) {
+    if (!safeExclusion(one.prompt)) continue;
+    byOrigin.get(one.origin)!.push(one);
+  }
+  const out: GoalLens[] = [];
+  for (let depth = 0; out.length < max; depth += 1) {
+    let added = false;
+    for (const origin of OPPORTUNITY_ORIGINS) {
+      const one = byOrigin.get(origin)![depth];
+      if (!one || out.length >= max) continue;
+      out.push({ id: `org-${origin.toLowerCase()}-${lensId(one.key)}`, angle: one.prompt.slice(0, 400), origin, seedKey: one.key });
+      added = true;
+    }
+    if (!added) break;
+  }
+  return out;
+}
+
+/** At most this many commercial-role lenses are offered at once (COM-13-1). */
+export const MAX_ROLE_LENSES = 40;
+
+/**
+ * The commercial roles on Brain's recorded flows as goal lenses (COM-13-1).
+ *
+ * Each lens asks about one position a mapped subject's flows offer, in the
+ * words the role model computed: what the position controls, what that is
+ * worth or that nothing has established it, whether this operation may occupy
+ * it and why, and its duties and risks. That is how the role model is used by
+ * the running Brain — a goal's research is asked from it and the question is
+ * recorded on the round's candidate — rather than computed only by the probe.
+ * Interleaved across subjects so a bounded set reaches each one, and never
+ * ranked by role: which role is best is the flow's own evidence's to say.
+ * Remembered research is what the map is, so the origin is MEMORY. Pure.
+ */
+export function roleLenses(seeds: readonly RoleLensSeed[], max = MAX_ROLE_LENSES): GoalLens[] {
+  const bySubject = new Map<string, RoleLensSeed[]>();
+  for (const one of seeds) {
+    if (!safeExclusion(one.angle)) continue;
+    const list = bySubject.get(one.subject) ?? [];
+    list.push(one);
+    bySubject.set(one.subject, list);
+  }
+  const out: GoalLens[] = [];
+  for (let depth = 0; out.length < max; depth += 1) {
+    let added = false;
+    for (const list of bySubject.values()) {
+      const one = list[depth];
+      if (!one || out.length >= max) continue;
+      out.push({ id: `role-${lensId(one.key)}`, angle: one.angle.slice(0, 600), origin: 'MEMORY', seedKey: one.key });
+      added = true;
+    }
+    if (!added) break;
+  }
+  return out;
+}
+
+/** The role-lens seeds of every subject on a project's industry map. Reads nothing itself. */
+export async function roleLensSeedsFor(nodes: IndustryNode[], constraints: OpportunityConstraint[]): Promise<RoleLensSeed[]> {
+  // Imported when used: the construction service reaches the goal modules, which reach this one.
+  const { assembleEvidence, evidenceFromMap, subtreeFor } = await import('../industry/construction/service.ts');
+  const out: RoleLensSeed[] = [];
+  for (const root of nodes.filter((n) => n.parentId === null && !n.retiredAt)) {
+    const map = evidenceFromMap(subtreeFor(nodes, root.name), constraints);
+    if (map.flows.length === 0) continue;
+    const evidence = assembleEvidence({ text: root.name, industry: root.name, geography: null, map, recorded: [] });
+    out.push(...roleLensSeeds(root.name, commercialRoles(evidence)));
+  }
+  return out;
+}
+
+/** At most this many open-world arrangements are offered as goal lenses at once (ARCH-01). */
+export const MAX_OPEN_WORLD_LENSES = 40;
+
+/**
+ * The arrangements `openWorld` constructed for roles no held record represents,
+ * as goal lenses (ARCH-01). This is where the running Brain uses them: a goal's
+ * research is asked to test one, and the round's opening event records which
+ * arrangement, how it was evaluated and what was still unpriced. Interleaved
+ * across subjects so a bounded set reaches each, keeping each subject's own
+ * evaluation order; no role, industry or category is preferred or filtered.
+ * Built from the remembered map, so the origin is MEMORY. Pure.
+ */
+export function openWorldLenses(seeds: readonly OpenWorldLensSeed[], max = MAX_OPEN_WORLD_LENSES): GoalLens[] {
+  const bySubject = new Map<string, OpenWorldLensSeed[]>();
+  for (const one of seeds) {
+    if (!safeExclusion(one.angle)) continue;
+    const list = bySubject.get(one.subject) ?? [];
+    list.push(one);
+    bySubject.set(one.subject, list);
+  }
+  const out: GoalLens[] = [];
+  for (let depth = 0; out.length < max; depth += 1) {
+    let added = false;
+    for (const list of bySubject.values()) {
+      const one = list[depth];
+      if (!one || out.length >= max) continue;
+      out.push({ id: `open-${lensId(one.key)}`, angle: one.angle.slice(0, 700), origin: 'MEMORY', seedKey: one.key, openWorld: one.record });
+      added = true;
+    }
+    if (!added) break;
+  }
+  return out;
+}
+
+/**
+ * Markets are preferred for their economics and for how far the work can be
+ * run remotely, never for where the owner happens to be (OPP-03). In every
+ * question, so no round defaults to one place.
+ */
+export const MARKET_PREFERENCE_SENTENCE =
+  'Prefer markets for their economics and for how much of the work can be run remotely; do not default to any one place, including wherever the owner is.';
 
 /**
  * At most this many of a goal's own rounds are open at once. A concurrency
@@ -881,21 +1065,67 @@ export async function openGoalDiscovery(input: {
    * comes first; after that, an industry nobody has looked at outranks an
    * angle asked again.
    */
-  const industries = (await listNodes(t.projectId))
-    .filter((node) => !node.retiredAt)
+  const nodes = await listNodes(t.projectId);
+  const constraints = await listConstraintsForProject(t.projectId);
+  /*
+   * Which industries, in which order, is a market preference (OPP-03): by each
+   * subject's own economics and how much of its work can be run remotely
+   * (`rankSubjectMarkets`), never by where the owner is and never by the order
+   * rows happen to come back in. That order is what decides which subjects make
+   * the MAX_INDUSTRY_LENSES cut and which of two equally-asked angles goes first.
+   */
+  const industries: GoalLens[] = (await rankSubjectMarkets(nodes, constraints))
     .slice(0, MAX_INDUSTRY_LENSES)
-    .map((node) => ({ id: `ind-${node.id}`, angle: `the ${node.name} industry, and the businesses that supply, serve or buy from it` }));
-  const lenses = [...GOAL_LENSES, ...industries];
+    .map(({ node }) => ({ id: `ind-${node.id}`, angle: `the ${node.name} industry, and the businesses that supply, serve or buy from it`, origin: 'MEMORY' as const }));
+  /*
+   * And past the map, the opportunity field (OPP-03): remembered businesses and
+   * transactions, what the world reported, recombinations of prior businesses —
+   * unsuccessful ones included — and recorded constraints, each a lens of its
+   * own. No category list filters them; they come after the fixed angles and
+   * the industries, interleaved so every origin is reached within a cycle.
+   */
+  /*
+   * The goal itself is fed into the field, so its FIRST_PRINCIPLES seed — the
+   * goal reasoned backward into the transaction it needs — is a seed this
+   * round can actually be asked from, and the same seed the probe reader
+   * counts (`opportunityFieldHoldsOnRows`). Before, the field was given no
+   * goals and the fixed angles were merely labelled FIRST_PRINCIPLES.
+   */
+  const goalRow = await getWorkstream(input.goal.id);
+  const backward = goalRow ? firstPrinciplesSeed(goalRow) : null;
+  const opportunities = await listOpportunities({ projectId: t.projectId });
+  const field = opportunityField({
+    nodes,
+    opportunities,
+    goals: goalRow ? [goalRow] : [],
+    constraints,
+  });
+  /*
+   * And the commercial roles on the flows that map records (COM-13-1): a lens
+   * per position, asked in the role model's own terms, after the field lenses.
+   */
+  const roles = roleLenses(await roleLensSeedsFor(nodes, constraints));
+  /*
+   * And the arrangements nobody holds a record of (ARCH-01): for each mapped
+   * subject, the roles no held row represents, constructed and evaluated by
+   * `openWorld`, each a lens whose round tests that arrangement and records it.
+   */
+  const open = openWorldLenses(await openWorldLensSeedsFor({ nodes, constraints, opportunities, seeds: field }));
+  const lenses: GoalLens[] = [...fixedLenses(backward), ...industries, ...originLenses(field), ...roles, ...open];
   const choices = lenses.map((lens, index) => {
     const id = `${prefix}-${lens.id}`;
     const history = mine.filter((one) => one.bucketId === id);
     return { lens, index, id, history, next: nextGoalRoundFor(history, now) };
   })
     .filter((one): one is typeof one & { next: number } => one.next !== null)
-    .sort((a, b) => a.history.length - b.history.length || a.index - b.index);
+    // A field lens ranks as if asked once already: it is asked whenever the fixed angles and the
+    // industries are cooling off, and never pushes ahead of re-asking one of them that is due.
+    .sort((a, b) => a.history.length + fieldPenalty(a.lens) - (b.history.length + fieldPenalty(b.lens)) || a.index - b.index);
   const choice = choices[0];
   if (!choice) return null;
   const { lens, id, history, next } = choice;
+  const origins: OpportunityOrigin[] = [lens.origin];
+  const seedKeys = lens.seedKey ? [lens.seedKey] : [];
 
   const amount = `${t.currency} ${(t.remainingCents / 100).toFixed(0)}`;
   const held =
@@ -966,6 +1196,9 @@ export async function openGoalDiscovery(input: {
     bucket,
     next,
     statement: questionFor(bucket, mode.objective, next, history, heldLines, frame, commonTo(await liveGoalLimits(t.projectId, new Date().toISOString()))),
+    origins,
+    seedKeys,
+    ...(lens.openWorld ? { openWorld: lens.openWorld } : {}),
   });
   return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
 }
@@ -990,6 +1223,12 @@ export async function openConstructedRound(input: {
   question: string;
   now?: string;
   liveCap?: number;
+  /**
+   * Where the arrangement came from. Constructed backward from the goal unless
+   * the construction says it was seeded otherwise (OPP-03).
+   */
+  origins?: readonly OpportunityOrigin[];
+  seedKeys?: readonly string[];
 }): Promise<OpenedDiscovery | null> {
   const gate = await discoveryAllowed(input.projectId);
   if (!gate.allowed || !gate.mode) return null;
@@ -1032,8 +1271,29 @@ export async function openConstructedRound(input: {
   bucket.title = input.title.slice(0, 160);
   const frame = await executionFrame(input.projectId, mode.currency);
   const held = await heldExclusions({ projectId: input.projectId, bucket, history });
-  const round = await openBucketRound({ projectId: input.projectId, mode, bucket, next, statement: questionFor(bucket, mode.objective, next, history, held, frame) });
+  const round = await openBucketRound({
+    projectId: input.projectId,
+    mode,
+    bucket,
+    next,
+    statement: questionFor(bucket, mode.objective, next, history, held, frame),
+    ...(await constructedOrigins(input)),
+  });
   return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
+}
+
+/**
+ * Where a constructed round came from. The construction's own origins when it
+ * names them; otherwise it was reasoned backward from the goal, and the round
+ * records the goal's FIRST_PRINCIPLES seed — the one the probe reader counts —
+ * rather than the label alone.
+ */
+async function constructedOrigins(input: { goal: { id: string }; origins?: readonly OpportunityOrigin[]; seedKeys?: readonly string[] }): Promise<{ origins: readonly OpportunityOrigin[]; seedKeys: readonly string[] }> {
+  if (input.origins && input.origins.length > 0) return { origins: input.origins, seedKeys: input.seedKeys ?? [] };
+  if (input.seedKeys && input.seedKeys.length > 0) return { origins: ['FIRST_PRINCIPLES'], seedKeys: input.seedKeys };
+  const goal = await getWorkstream(input.goal.id);
+  const backward = goal ? firstPrinciplesSeed(goal) : null;
+  return { origins: ['FIRST_PRINCIPLES'], seedKeys: backward ? [backward.key] : [] };
 }
 
 const TERMINAL_MISSION = new Set(['DONE', 'FAILED', 'CANCELLED']);
@@ -1205,7 +1465,7 @@ export function questionFor(
   frame: ExecutionFrame | null = null,
   exclusions: readonly ExclusionClass[] = [],
 ): string {
-  const parts = [bucket.question, `This is for a short cash sprint whose goal is: ${objective}`];
+  const parts = [bucket.question, `This is for a short cash sprint whose goal is: ${objective}`, MARKET_PREFERENCE_SENTENCE];
   // The standing operating rule is in every question: inside the frame when there is one, on its own otherwise.
   parts.push(frame ? executionFrameSentence(frame) : OPERATING_MODEL_SENTENCE);
   // What every live goal's owner excluded is said in the question, so a worker never

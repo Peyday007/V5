@@ -300,6 +300,29 @@ define('r01.learn-15-1', async () => (await import('./release01/continuityProbe.
 /* GOV-11 and GOV-22-1, for factory-program-d0-p1 (release01/governanceProbe.ts). */
 define('r01.gov-11', async () => (await import('./release01/governanceProbe.ts')).registerHoldsOnProduction());
 define('r01.gov-22-1', async () => (await import('./release01/governanceProbe.ts')).promotionOnRows());
+/*
+ * ARCH-01, COM-13-1 and OPP-03, for opportunity-d0-p0: the campaign wrote the
+ * readers (industry/construction/*); registered here with absence read as
+ * UNKNOWN (§39) and, for OPP-03, the stricter reading its review asked for —
+ * exploration from every one of the five origins, not one seed from any.
+ */
+define('r01.arch-01', async () => {
+  const r = await (await import('../../industry/construction/openWorld.ts')).openWorldHoldsOnRows();
+  if (!r.ok && /^no production industry map|but no (cash|evaluation)/.test(r.detail)) return { ok: null, detail: r.detail };
+  return r;
+});
+define('r01.com-13-1', async () => {
+  const r = await (await import('../../industry/construction/roles.ts')).commercialRolesHoldOnRows();
+  if (!r.ok && /^no flow is recorded/.test(r.detail)) return { ok: null, detail: r.detail };
+  return r;
+});
+define('r01.opp-03', async () => {
+  const m = await import('../../industry/construction/origins.ts');
+  const r = await m.opportunityFieldHoldsOnRows();
+  const empty = m.OPPORTUNITY_ORIGINS.filter((o) => r.counts[o] === 0);
+  if (empty.length > 0) return { ok: null, detail: `not every origin has seeded the field yet: ${r.detail}` };
+  return { ok: true, detail: r.detail };
+});
 /* CAUSAL-14-1..5, 14-7 and 15-2, for causal-model-d0-p1 (release01/causalProbe.ts). */
 define('r01.causal-14-1', async () => (await import('./release01/causalProbe.ts')).causalGraphOnRows());
 define('r01.causal-14-2', async () => (await import('./release01/causalProbe.ts')).causalLineageOnRows());
