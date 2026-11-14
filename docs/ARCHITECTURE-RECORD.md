@@ -471,6 +471,19 @@ never a process-local lock.
   a live or stopped attempt read as idle. Recovery never closes as FAILED what
   an idempotent provider may have received: the next send would carry a key
   the provider cannot de-duplicate against.
+- **An effect's transaction holds the effect, not the re-derivation after it.**
+  Production, 2026-11-14: `runIdempotent`'s transaction was the top pooled
+  connection holder in every stalled process (2,020 s on one connection before
+  the 4 GB release, 113 s after it), because a judge submission, a filing and
+  a completion each ended in `recomputeProject`, which asked the document
+  store about every document over HTTPS and re-derived every layer while the
+  effect's connection and row locks waited. A recompute only re-derives from
+  rows, so inside an effect it is now registered by project
+  (`effects/postCommit.ts`) and run once after the commit and before the
+  reply, in the existence memo the effect had open; a rolled-back effect runs
+  none of it, and a failed recompute is not the effect's failure. The
+  domain writes, the fence and the success record still commit together.
+
 - **The provider is asked about one effect, never the thing it was for.** A
   commercial effect's business id is its correlation
   (`cash:<opportunity>:<action>:<occurrence>[:<retry>]`). Asked by

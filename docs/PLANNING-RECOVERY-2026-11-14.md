@@ -299,3 +299,21 @@ Repairs:
 Open (next): effect transactions hold a connection across storage HTTP and a
 full recompute (`effects/engine.ts:257`); storage existence checks without a
 shared cache; a ~420 MB baseline heap to profile.
+
+## The $10K plan as production read it after the recovery (2026-11-14 17:37Z)
+
+`brain_operator_goal_plan wst_7b4fcbb5f2384f31b6c3`, read by the released code:
+
+| | before (07:15Z) | after (17:37Z) |
+|---|---|---|
+| plan the owner sees | three different plans (verdict / candidate / reconstruction) | one: the reconstructed plan adopted (`adoption.source = RECONSTRUCTED`, hypothetical false) |
+| candidate | reach 1.1%, p50 $48,738 | reach 39.3%, p50 $51,065, **coverage, not a probability**, committed $0 |
+| reconstruction "best" | p50 $34,533,142 at 97.9% (price ×17.6, two capacity buys) | p50 $51,065 (prepaid fulfilment alone), floor 1.2% without assumptions |
+| acceptance | CANDIDATE_ONLY | CANDIDATE_ONLY — not accepted, correctly |
+| actionable steps | none | 2 dated steps, owner BRAIN, kill criteria ("first 500 sends no better than the 1.2% floor → stop and re-plan"), execution dependencies listed (billing, invoicing, contact permission) without blocking the plan |
+| degraded stages | silently dropped | `degraded: []` recorded |
+
+What still limits it is evidence, not software: 11 openings, 0 market-test-ready,
+0 buyer-validated; the openings research produced are mostly award-paid public
+programmes that pay in one lump after the deadline. That is an evidence gap the
+plan now states, not a defect that hides it.
