@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { evaluateGoalPortfolio, SHARED_OUTREACH_CORRELATION } from '../server/services/goals/portfolio.ts';
+import { heldPlanStreams, noteGoalStreamsCleared } from '../server/services/goals/port05.ts';
 import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 
 const fixed = (value: number, provenance: ModelInput['provenance'] = 'EVIDENCE'): ModelInput => ({ value, low: value, high: value, provenance, source: null, note: '' });
@@ -146,5 +147,25 @@ describe('PORT-05 streams', () => {
   it('excludes nothing by category or industry', () => {
     const r = evaluateGoalPortfolio({ ...limits, openings: [opening('x', {}, 1, { industry: 'scrap metal' }), opening('y', {}, 2, { industry: 'software' })] });
     expect(r.streams!.streams.map((s) => s.opportunityId).sort()).toEqual(['x', 'y']);
+  });
+});
+
+describe('PORT-05 streams reach the goal view (finding F1)', () => {
+  const card = { projectId: 'prj_streams', currency: 'USD' };
+  const os = [opening('h1', {}, 1, card), opening('h2', { price: fixed(1200) }, 2, card)];
+  const target = { projectId: 'prj_streams', currency: 'USD', remainingCents: 1_000_000, daysLeft: 24 };
+  const { worlds: _w, ...plan } = limits;
+
+  it('the plan’s own evaluation hands its streams over where they are built', () => {
+    noteGoalStreamsCleared();
+    const r = evaluateGoalPortfolio({ ...plan, openings: os });
+    expect(heldPlanStreams(target)).toBe(r.streams);
+  });
+
+  it('a reconstruction variant or the as-is floor never replaces the plan’s streams', () => {
+    noteGoalStreamsCleared();
+    evaluateGoalPortfolio({ ...plan, openings: os, worlds: 200, committed: { capital: 0, spend: 0 } });
+    evaluateGoalPortfolio({ ...plan, openings: os, forceMeasured: true });
+    expect(heldPlanStreams(target)).toBeNull();
   });
 });

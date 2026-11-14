@@ -39,6 +39,7 @@ import { makeRng } from '../scenario/random.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { assessOutreachRecord, type EvidenceAssessment, type OutreachCampaignRecord } from './evidenceAuthority.ts';
 import { buildStreams, type StreamWorlds, type StreamsReading } from './streams.ts';
+import { notePlanStreams } from './port05.ts';
 
 export const PORTFOLIO_WORLDS = 2_000;
 /** The shares of the shared outreach an opening may be given. */
@@ -576,6 +577,15 @@ export function evaluateGoalPortfolio(input: {
     riskCorrelation: { 'shared-outreach': SHARED_OUTREACH_CORRELATION },
     defaultCorrelation: 0.5,
   });
+  /*
+   * The goal plan's own reading is the only top-level evaluation: the as-is
+   * floor sets `forceMeasured`, and every reconstruction variant states its
+   * `worlds` and `committed`. Its streams are handed to the goal view here,
+   * where they are built, so no caller can forget to (PORT-05, finding F1).
+   */
+  if (!input.forceMeasured && input.worlds === undefined && input.committed === undefined) {
+    notePlanStreams({ openings: input.openings, remaining: input.remaining, daysLeft: input.daysLeft, streams });
+  }
   return {
     basis,
     worlds,
