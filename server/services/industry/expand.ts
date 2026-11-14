@@ -78,13 +78,13 @@ import {
   BOOTSTRAP_TITLE,
   bucketById,
   capitalQuestion,
+  contextLine,
   capitalTitle,
   mapQuestion,
   mapTitle,
   scanQuestion,
   scanTitle,
 } from './questions.ts';
-import { sprintGoalLine } from '../../domain/operatingModel.ts';
 import type { OpportunityOrigin } from './construction/origins.ts';
 import { commercialRoles, SEED_ROLES, type FlowRoles } from './construction/roles.ts';
 import { MAX_OPEN_KERNEL_ROUNDS, type Ask } from './allocate.ts';
@@ -211,7 +211,7 @@ function roleTitle(label: string, path: readonly string[]): string {
   return `Who could stand as ${label} — in ${path[path.length - 1] ?? 'this subject'}`;
 }
 
-function roleQuestion(input: { roleId: string; label: string; path: readonly string[]; objective: string }): string {
+function roleQuestion(input: { roleId: string; label: string; path: readonly string[]; objective: string | null }): string {
   const seed = SEED_ROLES.find((one) => one.id === input.roleId);
   const controls = seed ? seed.controls.map((one) => one.toLowerCase().replace(/_/g, ' ')).join(', ') : null;
   return [
@@ -221,7 +221,7 @@ function roleQuestion(input: { roleId: string; label: string; path: readonly str
       'Name who occupies it now, what the position is paid and on what terms, the duties and risks that follow from it, ' +
       'and any licence, bond, registration or contract term that decides who may stand there. Where nobody occupies ' +
       'it, say so plainly rather than naming a plausible occupant.',
-    sprintGoalLine(input.objective),
+    contextLine(input.objective),
   ].join(' ');
 }
 
@@ -264,9 +264,22 @@ export async function openAsks(input: {
   projectId: string;
   asks: readonly Ask[];
   snapshot: GraphSnapshot;
+  /**
+   * Who the rounds are filed under (W-1). The kernel passes it: an ACTIVE
+   * sprint's id and objective, or `cashModeId: null` and no objective when the
+   * standing research grant asked — then the question carries the neutral
+   * standing line and a sprint's wind-down does not stop it. Omitted, the
+   * project's sprint row is used as before.
+   */
+  filing?: { cashModeId: string | null; objective: string | null };
+  /** How many kernel rounds may be open at once; `MAX_OPEN_KERNEL_ROUNDS` when omitted. */
+  cap?: number;
 }): Promise<OpenedRound[]> {
-  const mode = await getCashMode(input.projectId);
-  if (!mode) return [];
+  const sprint = input.filing ? null : await getCashMode(input.projectId);
+  const filing = input.filing ?? (sprint ? { cashModeId: sprint.id, objective: sprint.objective } : null);
+  if (!filing) return [];
+  const mode = { objective: filing.objective };
+  const cap = Math.max(0, Math.trunc(input.cap ?? MAX_OPEN_KERNEL_ROUNDS));
 
   const byId = new Map(input.snapshot.nodes.map((one) => [one.id, one]));
   const coverageByNode = new Map(input.snapshot.coverage.map((one) => [one.node.id, one]));
@@ -278,7 +291,7 @@ export async function openAsks(input: {
    * asked about them: `unrepresentedRoleAsks` existed and no path called it.
    */
   const open = input.snapshot.rounds.filter((one) => one.state === 'OPEN');
-  const free = MAX_OPEN_KERNEL_ROUNDS - open.length - input.asks.length;
+  const free = cap - open.length - input.asks.length;
   /*
    * The allocator fills every slot whenever its own queue is longer than the
    * cap, which on a growing map is always, so free slots alone would starve
@@ -288,10 +301,10 @@ export async function openAsks(input: {
    * the allocator gave, and never above the cap.
    */
   const roleOpen = open.some((one) => roleIdOfBucket(one.bucketId) !== null);
-  const reserve = !roleOpen && free <= 0 && input.asks.length >= 2 && open.length + 1 <= MAX_OPEN_KERNEL_ROUNDS;
+  const reserve = !roleOpen && free <= 0 && input.asks.length >= 2 && open.length + 1 <= cap;
   const given = new Set(input.asks.map((one) => `${one.nodeId}|${one.bucketId}`));
   const roleAsks = (await roleAsksFromSnapshot(input.snapshot, reserve ? 1 : free)).filter((one) => !given.has(`${one.nodeId}|${one.bucketId}`));
-  const allocated = reserve && roleAsks.length > 0 ? input.asks.slice(0, Math.max(0, MAX_OPEN_KERNEL_ROUNDS - open.length - 1)) : input.asks;
+  const allocated = reserve && roleAsks.length > 0 ? input.asks.slice(0, Math.max(0, cap - open.length - 1)) : input.asks;
   const asks = [...allocated, ...roleAsks];
 
   for (const ask of asks) {
@@ -312,7 +325,7 @@ export async function openAsks(input: {
 
         const result = await openIndustryRound({
           projectId: input.projectId,
-          cashModeId: mode.id,
+          cashModeId: filing.cashModeId,
           nodeId: ask.nodeId,
           purpose: ask.purpose,
           bucketId: ask.bucketId,
@@ -375,7 +388,7 @@ export async function openAsks(input: {
 
 async function compose(input: {
   ask: Ask;
-  mode: { objective: string };
+  mode: { objective: string | null };
   byId: Map<string, IndustryNode>;
   coverage: Map<string, { children: number; scanFound: number }>;
 }): Promise<{ title: string; question: string } | null> {
@@ -463,8 +476,8 @@ export async function absorb(input: {
   limit?: number;
 }): Promise<Absorbed> {
   const out: Absorbed & { origins: NonNullable<Absorbed['origins']> } = { nodes: [], constraints: [], capital: [], settled: [], refused: [], origins: [] };
-  const mode = await getCashMode(input.projectId);
-  if (!mode) return out;
+  // No sprint row is needed: a round the standing research grant asked is
+  // filed with no sprint (W-1), and filing what ran is never new discovery.
 
   const limit = Math.max(1, input.limit ?? 60);
   const live = await openIndustryRoundsByCandidate(input.projectId);

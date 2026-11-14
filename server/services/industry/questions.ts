@@ -37,6 +37,31 @@ import { sprintGoalLine } from '../../domain/operatingModel.ts';
 import { SEARCH_BUCKETS, type SearchBucket } from '../cash/discovery.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
 
+/**
+ * The context line a kernel question carries when no sprint asked it.
+ *
+ * W-1 (docs/INTELLIGENCE-RECOVERY-2026-11-14.md): every question used to say
+ * "this is for a short cash sprint", so a map grown under the standing research
+ * grant was still biased toward thirty-day cash. Understanding the economy is
+ * not executing in it (§39), so this line names no operating constraint, no
+ * industry and no geography: the subject and the classification systems decide
+ * those, never a default here.
+ */
+export const STANDING_CONTEXT_LINE =
+  "This is for Brain's standing map of the economy, asked with no cash sprint or goal behind " +
+  'it: report what is true of the subject in every country and region where it differs, ' +
+  'including what does not pay quickly, and say plainly what no source establishes.';
+
+/**
+ * The context a question carries: the sprint's goal while a sprint asked it,
+ * the neutral standing line when the standing research grant did.
+ */
+export function contextLine(objective: string | null | undefined, lead?: string): string {
+  const goal = (objective ?? '').trim();
+  if (!goal) return STANDING_CONTEXT_LINE;
+  return lead === undefined ? sprintGoalLine(goal) : sprintGoalLine(goal, lead);
+}
+
 export const BOOTSTRAP_TITLE = 'Which industries the economy is actually divided into';
 
 export const BOOTSTRAP_QUESTION =
@@ -46,10 +71,10 @@ export const BOOTSTRAP_QUESTION =
   'declares it, and reporting where two systems divide the same activity differently rather ' +
   'than reconciling them?';
 
-export function bootstrapQuestion(objective: string, round: number): string {
+export function bootstrapQuestion(objective: string | null, round: number): string {
   const parts = [
     BOOTSTRAP_QUESTION,
-    sprintGoalLine(objective, 'This is the starting map for'),
+    contextLine(objective, 'This is the starting map for'),
     'Declare every sector you establish with structural_finding set to SUB_INDUSTRY and ' +
       "structural_subject set to that sector's own name. A sector described in prose and not " +
       'declared does not reach the map.',
@@ -70,7 +95,7 @@ export function mapTitle(path: readonly string[]): string {
 
 export function mapQuestion(input: {
   path: readonly string[];
-  objective: string;
+  objective: string | null;
   round: number;
   childrenSoFar: number;
 }): string {
@@ -80,7 +105,7 @@ export function mapQuestion(input: {
       'what are the stages of producing and delivering in it, which kinds of organisation pay ' +
       'for work in it, who or what actually performs that work, how does money change hands ' +
       'and on what cycle, and where is supply constrained?',
-    sprintGoalLine(input.objective),
+    contextLine(input.objective),
     'Declare every level you establish on its claim: structural_finding set to the kind it is ' +
       "and structural_subject set to that subject's own name.",
   ];
@@ -111,14 +136,14 @@ export function scanTitle(bucket: SearchBucket, path: readonly string[]): string
 export function scanQuestion(input: {
   bucket: SearchBucket;
   path: readonly string[];
-  objective: string;
+  objective: string | null;
   round: number;
   foundSoFar: number;
 }): string {
   const subject = input.path.join(' → ');
   const parts = [
     `Within ${subject}: ${input.bucket.question}`,
-    sprintGoalLine(input.objective),
+    contextLine(input.objective),
   ];
   if (input.round > 1) {
     parts.push(
@@ -148,7 +173,7 @@ export function capitalTitle(opportunity: CashOpportunity): string {
 export function capitalQuestion(input: {
   opportunity: CashOpportunity;
   path: readonly string[];
-  objective: string;
+  objective: string | null;
 }): string {
   const where = input.path.length > 0 ? input.path.join(' → ') : (input.opportunity.industry ?? '');
   const parts = [
@@ -161,7 +186,7 @@ export function capitalQuestion(input: {
   }
   if (where) parts.push(`It sits in ${where}.`);
   parts.push(
-    sprintGoalLine(input.objective),
+    contextLine(input.objective),
     'Take the requirements apart rather than reporting a headline startup cost. Declare each ' +
       'requirement with structural_finding set to CAPITAL_REQUIREMENT and each structure with ' +
       'CAPITAL_RESTRUCTURING naming the requirement it answers. Where no source publishes an ' +

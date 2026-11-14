@@ -147,8 +147,11 @@ jobs:
           if [ "$G_COMMAND" = census ]; then
             # The economic knowledge census (Surge B): read-only counts of what
             # Brain durably holds, from the rows (scripts/knowledge-census.ts).
+            # The script is sent with the command, so a census measures the
+            # running Brain before the script itself has been released.
+            census_b64=$(base64 -w0 scripts/knowledge-census.ts)
             flyctl ssh console --app "$app" \
-              -C "env BRAIN_DATABASE_POOL_SIZE=1 sh -c 'cd /app && nice -n 19 node --import tsx scripts/knowledge-census.ts --json'" \
+              -C "env BRAIN_DATABASE_POOL_SIZE=1 sh -c 'cd /app && echo $census_b64 | base64 -d > scripts/.knowledge-census-run.ts && nice -n 19 node --import tsx scripts/.knowledge-census-run.ts --json; rm -f scripts/.knowledge-census-run.ts'" \
               2>&1 | tee goals.txt
           else
             flyctl ssh console --app "$app" \

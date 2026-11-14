@@ -79,7 +79,10 @@ describe('a constructed arrangement as an estimate', () => {
       ],
       { ...base, remaining: 10_000, exclusions: [] },
     );
-    expect(picked.map((one) => one.estimated!.arrangementKey)).toEqual(['recurring', 'mid-oneoff', 'tiny-oneoff']);
+    // Ordered by what each settles by the deadline at the conservative reading (lens S): a $2,000 one-off closes
+    // at the low end of an unknown close rate and outranks a $300 cohort that reaches few buyers by the deadline;
+    // all three enter, and the engine decides how they combine.
+    expect(picked.map((one) => one.estimated!.arrangementKey)).toEqual(['mid-oneoff', 'recurring', 'tiny-oneoff']);
   });
 
   it('keeps the owner’s exclusions and the operating rule', () => {

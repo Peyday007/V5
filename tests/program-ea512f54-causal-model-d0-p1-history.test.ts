@@ -152,7 +152,12 @@ describe('the goal portfolio acquires history for every opening it models', () =
     const withHistory = evaluateGoalPortfolio({ ...limits, openings: [modelled(t)], knowledge: k });
     expect(withHistory.marketHistory![0]!.winRate).toEqual({ wins: 400, bids: 2000, rate: 0.2 });
     expect(withHistory.marketHistory![0]!.marketTransactions).toBe(900);
+    // The record measures the close rate, so it calibrates the close rate (drawn from its 400-of-2,000
+    // posterior) and is reported. It says nothing about who replies: the fixed, unsized 5% reply rate stays
+    // a validation problem by name (Q2-2, 2026-11-14). This assertion expected the bid/win record to
+    // calibrate the whole figure, reply rate included — the overclaim the parameter reading removes.
     expect(withHistory.assurance!.history![0]).toMatchObject({ sampleFrom: 'HISTORY', sampleSize: 2000 });
-    expect(withHistory.assurance!.status).not.toBe('CALIBRATION_UNAVAILABLE');
+    expect(withHistory.assurance!.validationProblems.join(' ')).toMatch(/reply rate is a fixed figure/);
+    expect(withHistory.assurance!.validationProblems.join(' ')).not.toMatch(/close rate/);
   });
 });

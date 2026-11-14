@@ -122,7 +122,7 @@ describe('C-7: simulated worlds are not evidence', () => {
   });
 
   it('accepts on the assurance, reading its lower bound and its smallest sample', () => {
-    const p = portfolio({ assurance: { claimsAtLeast90: true, status: 'CLAIMS_AT_LEAST_90', range: { low: 0.93, high: 0.99 }, reason: 'calibrated evidence (smallest sample 140) puts the lower bound at 93%, above 90%' } as GoalPortfolio['assurance'] });
+    const p = portfolio({ assurance: { claimsAtLeast90: true, status: 'CLAIMS_AT_LEAST_90', range: { low: 0.93, high: 0.99 }, sample: { events: 140, from: 'STATED' }, reason: 'calibrated evidence (smallest sample 140) puts the lower bound at 93%, above 90%' } as GoalPortfolio['assurance'] });
     const a = judgeAcceptance({ achieved: false, chosen: null, portfolio: p, measuredChance: null, considered: [{ opportunityId: 'o1', missing: [] }] });
     expect(a.status).toBe('ACCEPTED');
     expect(a.probability).toMatchObject({ basis: 'EVIDENCED_PORTFOLIO', lowerBound: 0.93, sample: 140 });

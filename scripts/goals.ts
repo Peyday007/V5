@@ -351,7 +351,9 @@ async function targetCommand(command: 'create' | 'target'): Promise<void> {
   const actorRef = `person:${adminId}`;
   if (command === 'create') {
     const projectId = flag('project') ?? fail('create needs --project: the project the goal belongs to.');
-    const objective = flag('objective');
+    // The goals workflow passes the words as --reason; with no target spec beside them they are the
+    // objective itself, read by the one objective reader (planning recovery G-2).
+    const objective = flag('objective') ?? (words()[1] === undefined ? flag('reason') : undefined);
     let result;
     if (objective !== undefined) {
       const due = flag('due');

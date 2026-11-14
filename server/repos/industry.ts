@@ -114,6 +114,15 @@ export async function listNodes(projectId: string): Promise<IndustryNode[]> {
   return rows.map(mapNode);
 }
 
+/** How many live subjects the map holds: one indexed read, for the tick's early exit. */
+export async function countLiveNodes(projectId: string): Promise<number> {
+  const row = await getDb().get<{ n: number | string }>(
+    'SELECT COUNT(*) AS n FROM industry_nodes WHERE project_id = ? AND retired_at IS NULL',
+    [projectId],
+  );
+  return Number(row?.n ?? 0);
+}
+
 export async function getNode(id: string): Promise<IndustryNode | null> {
   const rows = await getDb().all<IndustryNodeRow>('SELECT * FROM industry_nodes WHERE id = ?', [
     id,
@@ -165,7 +174,8 @@ function mapRound(row: IndustryRoundRow): IndustryRound {
 
 export async function openIndustryRound(input: {
   projectId: string;
-  cashModeId: string;
+  /** Null when the standing research grant, not a sprint, asked it. */
+  cashModeId: string | null;
   nodeId: string | null;
   purpose: IndustryRoundPurpose;
   bucketId?: string | null;

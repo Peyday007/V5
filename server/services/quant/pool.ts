@@ -55,6 +55,17 @@ export const IMMATERIAL_DISCOUNT = 0.7;
  * ~30%, a broad economic figure by at least ~120%.
  */
 export const SPREAD_FLOOR = { DIRECT: 0, COMPARABLE: 0.3, MECHANISM: 0.8 } as const;
+/**
+ * Selection on published demand rates (Q2-11, 2026-11-14). Vendors, agencies
+ * and case studies publish the conversion figures that flatter them, and a
+ * benchmark page reports the campaigns somebody chose to write up. A published
+ * reply or close rate is therefore read as between 0.7 and 1.0 of itself — its
+ * centre moved down about 15% and that width added to its uncertainty. A
+ * convention, not a measurement: it stays until this Brain's own outcomes
+ * against published figures (`quant/forecast.ts`) measure the gap. Brain's own
+ * measured rates are not discounted.
+ */
+export const PUBLISHED_RATE_SELECTION = { factorLow: 0.7, factorHigh: 1.0 } as const;
 const Z90 = 1.6448536;
 
 export type Scale = 'LOGIT' | 'LOG' | 'IDENTITY';
@@ -90,6 +101,13 @@ export interface Scaled {
   adjusted: string[];
   /** A rate whose source stated no sample: location, not precision. */
   unsized?: boolean;
+  /**
+   * The between-population spread an unsized published range implies, as a
+   * standard deviation on the pooling scale (Q2-5). "Closes 10–25%" says how
+   * far the rate varies between the populations its source saw — never how
+   * precisely one of them was measured — so it floors τ, not the variance.
+   */
+  spread?: number;
 }
 
 /**
@@ -102,7 +120,7 @@ export function allUnsized(items: readonly Scaled[]): boolean {
 }
 
 /** An observation's centre and sampling variance on the pooling scale. */
-export function onScale(obs: Observation, kind: QuantityKind): { y: number; v: number; unsized?: boolean } | null {
+export function onScale(obs: Observation, kind: QuantityKind): { y: number; v: number; unsized?: boolean; spread?: number } | null {
   const scale = scaleFor(kind);
   const value = obs.value;
   if (value.kind === 'COUNT') {
@@ -133,6 +151,14 @@ export function onScale(obs: Observation, kind: QuantityKind): { y: number; v: n
   const lo = toScale(scale, value.low);
   const hi = toScale(scale, value.high);
   const sd = Math.max((hi - lo) / (2 * Z90), scale === 'IDENTITY' ? 1e-6 : POINT_LOG_SD);
+  /*
+   * A published range of a RATE with no stated sample (Q2-5, 2026-11-14) is
+   * the spread between the populations it summarises, not sampling precision:
+   * read as precision, "closes 10–25%" was worth ~57 trials and could justify
+   * a distribution on its own. Its centre carries what an unsized rate carries,
+   * it is unsized for `allUnsized`, and its width becomes a floor on τ.
+   */
+  if (kind === 'RATE') return { y: (lo + hi) / 2, v: 1 / UNSIZED_RATE_EVENTS, unsized: true, spread: sd };
   return { y: (lo + hi) / 2, v: sd * sd };
 }
 
@@ -163,13 +189,20 @@ export function classify(node: QuantityNode, now: Date): Classified {
       continue;
     }
     if (obs.broad) {
-      out.broad.push({ obs, y: base.y, v: base.v, distance: 99, adjusted: [], unsized: base.unsized });
+      out.broad.push({ obs, y: base.y, v: base.v, distance: 99, adjusted: [], unsized: base.unsized, spread: base.spread });
       continue;
     }
     let { y, v } = base;
     let immaterial = 0;
     const adjusted: string[] = [];
     let refusal: string | null = null;
+    if (obs.published && node.kind === 'RATE') {
+      // Selection: a published demand rate is shifted down and widened, never taken at face value.
+      const shifted = adjust(scale, y, { dimension: 'selection', from: 'PUBLISHED', to: 'MEASURED', factorLow: PUBLISHED_RATE_SELECTION.factorLow, factorHigh: PUBLISHED_RATE_SELECTION.factorHigh, source: { kind: 'OTHER', ref: 'quant:published-rate-selection' } });
+      y = shifted.y;
+      v += shifted.v;
+      adjusted.push(`published-rate selection ×${PUBLISHED_RATE_SELECTION.factorLow}–${PUBLISHED_RATE_SELECTION.factorHigh}`);
+    }
     for (const [dimension, want] of Object.entries(target)) {
       const has = obs.context[dimension];
       if (has === want) continue;
@@ -197,7 +230,7 @@ export function classify(node: QuantityNode, now: Date): Classified {
     }
     if (immaterial > 0) v = v / IMMATERIAL_DISCOUNT ** immaterial;
     const distance = immaterial + adjusted.length;
-    const scaled = { obs, y, v, distance: distance === 0 ? 0 : distance + 1, adjusted, unsized: base.unsized };
+    const scaled = { obs, y, v, distance: distance === 0 ? 0 : distance + 1, adjusted, unsized: base.unsized, spread: base.spread };
     if (distance === 0) out.direct.push(scaled);
     else out.comparable.push(scaled);
   }
@@ -253,12 +286,17 @@ export interface Pooled {
   /** Predictive standard deviation for the target: √(se² + τ²). */
   sd: number;
   effective: number;
+  /** Independent populations pooled. */
+  k: number;
 }
 
-/** Random-effects pooling with a floor on the between-population spread. */
-export function pool(items: Array<{ y: number; v: number }>, tauFloor: number): Pooled | null {
+/**
+ * Random-effects pooling with a floor on the between-population spread. An
+ * item's own `spread` (an unsized published range) also floors τ.
+ */
+export function pool(items: Array<{ y: number; v: number; spread?: number }>, tauFloor: number): Pooled | null {
   if (items.length === 0) return null;
-  let tau2 = tauFloor * tauFloor;
+  let tau2 = Math.max(tauFloor * tauFloor, ...items.map((one) => (one.spread ?? 0) ** 2));
   if (items.length >= 2) {
     const w = items.map((one) => 1 / one.v);
     const sw = w.reduce((a, b) => a + b, 0);
@@ -272,7 +310,59 @@ export function pool(items: Array<{ y: number; v: number }>, tauFloor: number): 
   const mean = items.reduce((sum, one, i) => sum + ws[i]! * one.y, 0) / sws;
   const se = Math.sqrt(1 / sws);
   const effective = sws * sws / ws.reduce((a, b) => a + b * b, 0);
-  return { mean, se, tau: Math.sqrt(tau2), sd: Math.sqrt(se * se + tau2), effective };
+  return { mean, se, tau: Math.sqrt(tau2), sd: Math.sqrt(se * se + tau2), effective, k: items.length };
+}
+
+/** Two observations this far apart, beyond their joint sampling error at 99%, are a contradiction. */
+export const CONTEST_Z = 2.576;
+/** …and only when they also differ by at least this factor on the natural scale (odds for a rate). */
+export const CONTEST_FACTOR = 2;
+
+/**
+ * Whether sized observations of one quantity contradict each other (L-1,
+ * 2026-11-14): some pair whose difference on the pooling scale exceeds both
+ * 2.576 joint standard errors and a factor of two. "$8K" and "$45K" for one
+ * quantity are not two measurements of one number to be averaged into a
+ * confident interval; they are a contradiction to surface. Unsized rates are
+ * not tested: they never claimed a precision to contradict.
+ */
+export function contestOf(items: readonly Scaled[]): { ids: string[]; reason: string; spread: number } | null {
+  const sized = items.filter((one) => !one.unsized);
+  let worst: { a: Scaled; b: Scaled; gap: number } | null = null;
+  for (let i = 0; i < sized.length; i++) {
+    for (let j = i + 1; j < sized.length; j++) {
+      const a = sized[i]!;
+      const b = sized[j]!;
+      const gap = Math.abs(a.y - b.y);
+      if (gap > CONTEST_Z * Math.sqrt(a.v + b.v) && gap >= Math.log(CONTEST_FACTOR) && (!worst || gap > worst.gap)) worst = { a, b, gap };
+    }
+  }
+  if (!worst) return null;
+  const ys = sized.map((one) => one.y);
+  return {
+    ids: [worst.a.obs.id, worst.b.obs.id],
+    reason: `${worst.a.obs.id} and ${worst.b.obs.id} disagree by ${Math.exp(worst.gap).toFixed(1)}× on the ${'pooling'} scale, far beyond their own sampling error`,
+    spread: (Math.max(...ys) - Math.min(...ys)) / 2,
+  };
+}
+
+/**
+ * The quantile of Student's t with `df` degrees of freedom at probability `p`.
+ * Exact for one and two degrees of freedom; the Cornish–Fisher expansion in
+ * 1/df (Abramowitz & Stegun 26.7.5) beyond, which is within 0.1% of the table
+ * for df ≥ 3 at the quantiles a plan reads.
+ */
+export function studentT(p: number, df: number, z: number): number {
+  if (!(df > 0) || !Number.isFinite(df) || df > 1e6) return z;
+  const u = Math.min(1 - 1e-12, Math.max(1e-12, p));
+  if (df === 1) return Math.tan(Math.PI * (u - 0.5));
+  if (df === 2) return (2 * u - 1) / Math.sqrt(2 * u * (1 - u));
+  const z2 = z * z;
+  const g1 = (z2 * z + z) / 4;
+  const g2 = (5 * z2 * z2 * z + 16 * z2 * z + 3 * z) / 96;
+  const g3 = (3 * z2 * z2 * z2 * z + 19 * z2 * z2 * z + 17 * z2 * z - 15 * z) / 384;
+  const g4 = (79 * z2 * z2 * z2 * z2 * z + 776 * z2 * z2 * z2 * z + 1482 * z2 * z2 * z - 1920 * z2 * z - 945 * z) / 92160;
+  return z + g1 / df + g2 / df ** 2 + g3 / df ** 3 + g4 / df ** 4;
 }
 
 /** Combine two independent estimates of one quantity by inverse variance. */

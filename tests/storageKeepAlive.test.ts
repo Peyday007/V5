@@ -25,6 +25,14 @@ beforeAll(async () => {
         res.write(Buffer.alloc(64 * 1024));
         return; // the rest never comes: a body nobody finishes
       }
+      if (req.url?.startsWith('/slow')) {
+        const ms = Number(new URL(req.url, 'http://x').searchParams.get('ms') ?? '150');
+        setTimeout(() => {
+          res.writeHead(200, { 'content-type': 'text/plain' });
+          res.end('slow');
+        }, ms);
+        return;
+      }
       if (req.url === '/missing') {
         res.writeHead(404, { 'content-type': 'text/plain' });
         res.end('not here');
@@ -69,6 +77,21 @@ describe('keepAliveFetch', () => {
     const missing = await keepAliveFetch(`${base}/missing`);
     expect(missing.ok).toBe(false);
     expect(await missing.text()).toBe('not here');
+  });
+
+  it('starts a deadline when the request is sent, not while it waits for a socket', async () => {
+    // Twenty-four requests of 150 ms on eight sockets: the last ones wait about
+    // 300 ms for a connection. A 250 ms bound from creation would abort them
+    // (production, 2026-11-14: existence checks aborted while still queued);
+    // from dispatch, every one completes.
+    const answers = await Promise.all(
+      [...Array(24)].map(async () => {
+        const r = await keepAliveFetch(`${base}/slow?ms=150`, { deadlineMs: 250 } as RequestInit);
+        return await r.text();
+      }),
+    );
+    expect(answers.every((a) => a === 'slow')).toBe(true);
+    await expect(keepAliveFetch(`${base}/slow?ms=600`, { deadlineMs: 100 } as RequestInit)).rejects.toThrow(/did not answer within/);
   });
 
   it('rejects when the signal times out', async () => {

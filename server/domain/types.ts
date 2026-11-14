@@ -982,7 +982,8 @@ export type IndustryRoundPurpose = (typeof INDUSTRY_ROUND_PURPOSES)[number];
 export interface IndustryRoundRow {
   id: string;
   project_id: string;
-  cash_mode_id: string;
+  /** Null for a round asked under a standing research grant rather than a sprint (152). */
+  cash_mode_id: string | null;
   node_id: string | null;
   purpose: string;
   bucket_id: string | null;
@@ -1000,7 +1001,11 @@ export interface IndustryRoundRow {
 export interface IndustryRound {
   id: string;
   projectId: string;
-  cashModeId: string;
+  /**
+   * The sprint this round was asked under, or null when a standing research
+   * grant asked it. A sprint's wind-down stops only its own rounds.
+   */
+  cashModeId: string | null;
   nodeId: string | null;
   purpose: IndustryRoundPurpose;
   bucketId: string | null;
