@@ -219,6 +219,28 @@ export interface PortfolioResult {
   assurance?: Assurance;
   /** Measured change to the downside from each safeguard, on the identical worlds. Present when safeguards were given. */
   safeguardEffects?: SafeguardEffect[];
+  /**
+   * The challenge's repair, adopted (CHAL-33): the combination the optimizer
+   * first ranked best rode on a shared dependency whose failure the challenge
+   * measured as blocking, and its recommended independent substitute or
+   * reduced commitment survives that failure, so `best` is the repaired plan,
+   * recomputed on the same worlds, with its own assurance and challenge. The
+   * original stays in `ranked` and is reported here with the finding that
+   * replaced it. Absent when nothing was adopted.
+   */
+  adoption?: ChallengeAdoption;
+}
+
+export interface ChallengeAdoption {
+  kind: 'INDEPENDENT_SUBSTITUTE' | 'REDUCED_COMMITMENT';
+  exposure: string;
+  description: string;
+  from: { keys: string[]; reach: number };
+  to: { keys: string[]; reach: number };
+  /** The blocking finding the original plan failed on: the assumption, its test and the safer structure. */
+  because: { assumption: string; test: string; saferStructure: string };
+  /** The original plan's challenge, kept so the reason it was replaced stays readable. */
+  original: ChallengeSummary;
 }
 
 export interface SafeguardEffect {
@@ -1005,42 +1027,159 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
   const ranked = [...readings].sort(better);
   const best = ranked.find((one) => one.feasible) ?? null;
   const result: PortfolioResult = { best, ranked: ranked.slice(0, 8), singles, refused, searched: readings.length, assurance: assess(problem, best) };
-  if (best && problem.safeguards?.length) {
-    const members = best.keys.map((k) => problem.activities.findIndex((a) => a.key === k));
-    result.safeguardEffects = problem.safeguards.map((guard) => {
+  const effectsOf = (one: PortfolioReading): SafeguardEffect[] | undefined => {
+    if (!problem.safeguards?.length) return undefined;
+    const members = one.keys.map((k) => problem.activities.findIndex((a) => a.key === k));
+    return problem.safeguards.map((guard) => {
       const after = withSafeguard(problem, guard, members, worlds, picks);
       return {
         key: guard.key,
         kind: guard.kind,
-        reachBefore: best.reach,
+        reachBefore: one.reach,
         reachAfter: after.reach,
-        reachChange: after.reach - best.reach,
-        downsideChange: after.settledP10 - best.settledP10,
-        capitalShortChange: after.capitalShort - best.capitalShort,
+        reachChange: after.reach - one.reach,
+        downsideChange: after.settledP10 - one.settledP10,
+        capitalShortChange: after.capitalShort - one.capitalShort,
       };
     });
+  };
+  if (best) {
+    const effects = effectsOf(best);
+    if (effects) result.safeguardEffects = effects;
   }
-  if (best && result.assurance && problem.challenge !== false) attachChallenge(problem, result, result.assurance, problem.challenge || {});
+  if (best && result.assurance && problem.challenge !== false) {
+    const readKeys = (keys: string[]): PortfolioReading | null => {
+      const members = keys.map((k) => problem.activities.findIndex((a) => a.key === k));
+      if (members.some((i) => i < 0)) return null;
+      return evaluate(problem, members, picks, worlds);
+    };
+    bindChallenge(problem, result, problem.challenge || {}, readKeys, effectsOf);
+  }
   return result;
 }
 
 /**
- * Put the challenge of `result` on its assurance. It is computed the first
- * time anything reads it — the plan read, serialization, a worker's
- * structured clone — and then kept, so a caller that reads only the ranking
- * (a sensitivity sweep re-optimizing per leaf) does not pay for a deep review
- * it never looks at, and a reader always gets the same report.
+ * How much reach an adopted repair may give up for surviving the shared
+ * failure: none. A repair that survives the failure but reaches the target in
+ * fewer worlds is a trade a person weighs from the challenge's proposals; the
+ * optimizer adopts only a repair that is more robust and no worse.
  */
-function attachChallenge(problem: PortfolioProblem, result: PortfolioResult, assurance: Assurance, options: PlanChallengeOptions): void {
-  let memo: ChallengeSummary | undefined;
-  Object.defineProperty(assurance, 'challenge', {
-    enumerable: true,
-    configurable: true,
-    get: () => (memo ??= challengePlan(problem, result, options)),
-    set: (value: ChallengeSummary) => {
-      memo = value;
-    },
-  });
+export const ADOPTION_REACH_TOLERANCE = 0;
+
+/**
+ * The challenge of the recommendation decides what the optimizer returns
+ * (CHAL-33). Before, the report was attached and nothing read it; the plan
+ * read accepted on `assurance.claimsAtLeast90` alone. Now, in this order:
+ *
+ *  1. The best combination is challenged at the depth its own consequence
+ *     earns — a small reversible plan runs basic invariants only, and nothing
+ *     below is held by a heavier review it never needed.
+ *  2. Where a blocking shared dependency was found and the challenge
+ *     recommends an independent substitute or a reduced commitment that
+ *     survives that failure, needs nothing that does not exist, and gives up
+ *     no reach (`ADOPTION_REACH_TOLERANCE`), that repair is adopted:
+ *     `best` becomes it, recomputed on the same worlds, with `assess()`'s own
+ *     figure — never a raised one — and it is challenged in turn (once).
+ *  3. The challenge binds the assurance every reader acts on: a refused or
+ *     failed challenge, a blocking finding or a disagreeing independent check
+ *     withdraws any 90% claim; the reason names the assumption, the test and
+ *     the safer structure; and the challenge's improvements and research needs
+ *     join `researchNeeds`, which the goal's portfolio turns into named work.
+ */
+function bindChallenge(
+  problem: PortfolioProblem,
+  result: PortfolioResult,
+  options: PlanChallengeOptions,
+  readKeys: (keys: string[]) => PortfolioReading | null,
+  effectsOf: (one: PortfolioReading) => SafeguardEffect[] | undefined,
+): void {
+  const first = challengePlan(problem, result, options);
+  const adopted = adoptionFrom(first, result.best!, readKeys);
+  if (adopted) {
+    const original = result.best!;
+    result.best = adopted.reading;
+    result.ranked = [adopted.reading, ...result.ranked.filter((one) => one !== adopted.reading && one.keys.join('|') !== adopted.reading.keys.join('|'))].slice(0, 8);
+    if (!result.ranked.includes(original)) result.ranked.push(original);
+    result.assurance = assess(problem, adopted.reading);
+    const effects = effectsOf(adopted.reading);
+    if (effects) result.safeguardEffects = effects;
+    result.adoption = {
+      kind: adopted.kind,
+      exposure: adopted.exposure,
+      description: adopted.description,
+      from: { keys: original.keys, reach: original.reach },
+      to: { keys: adopted.reading.keys, reach: adopted.reading.reach },
+      because: adopted.because,
+      original: first,
+    };
+  }
+  const summary = adopted ? challengePlan(problem, result, options) : first;
+  applyChallengeToAssurance(result.assurance!, summary, result.adoption);
+}
+
+/** The repair a challenge recommends that the optimizer adopts, or null. Pure over its inputs. */
+export function adoptionFrom(
+  summary: ChallengeSummary,
+  best: PortfolioReading,
+  readKeys: (keys: string[]) => PortfolioReading | null,
+): { kind: ChallengeAdoption['kind']; exposure: string; description: string; reading: PortfolioReading; because: ChallengeAdoption['because'] } | null {
+  if (!summary.recommended) return null;
+  const proposal = summary.proposals.find((p) => p.description === summary.recommended);
+  if (!proposal || !proposal.defensible || proposal.requires.length > 0) return null;
+  if (proposal.kind !== 'INDEPENDENT_SUBSTITUTE' && proposal.kind !== 'REDUCED_COMMITMENT') return null;
+  const finding = summary.findings.find((f) => f.mode === 'SHARED_DEPENDENCY' && f.severity === 'BLOCKING' && f.subject === proposal.exposure);
+  if (!finding) return null;
+  const exposure = summary.exposures.find((e) => `${e.kind}:${e.id}` === proposal.exposure);
+  if (!exposure || !(proposal.reachIfItFails > exposure.reachIfItFails + 1e-9)) return null;
+  const reading = readKeys(proposal.keys);
+  if (!reading || !reading.feasible || reading.reach < best.reach - ADOPTION_REACH_TOLERANCE - 1e-9) return null;
+  return {
+    kind: proposal.kind,
+    exposure: proposal.exposure,
+    description: proposal.description,
+    reading,
+    because: { assumption: finding.assumption, test: finding.test, saferStructure: finding.saferStructure },
+  };
+}
+
+/**
+ * Put the challenge on the assurance and let it bind: what withdraws a 90%
+ * claim, what the reason says, and what becomes research. Never raises a
+ * figure: a challenge can only take a claim away.
+ */
+export function applyChallengeToAssurance(assurance: Assurance, summary: ChallengeSummary, adoption?: ChallengeAdoption): void {
+  assurance.challenge = summary;
+  const blocking = summary.findings.filter((f) => f.severity === 'BLOCKING');
+  const withdraw: string[] = [];
+  if (summary.verdict === 'REFUSE') withdraw.push('the challenge refused the plan');
+  if (summary.verdict === 'CHALLENGE_FAILED') withdraw.push(`the challenge could not run${summary.error ? ` (${summary.error.slice(0, 160)})` : ''}, and an unread challenge is not a pass`);
+  for (const f of blocking.slice(0, 3)) withdraw.push(`${f.mode}: ${f.assumption} — test: ${f.test}; safer: ${f.saferStructure}`);
+  if (summary.independentValidation.disagreeing > 0) withdraw.push(`${summary.independentValidation.disagreeing} independent check(s) disagree with the plan`);
+  const parts: string[] = [];
+  if (adoption) parts.push(`the challenge replaced ${adoption.from.keys.join(' + ')} (${adoption.because.assumption}) with ${adoption.to.keys.join(' + ')}: ${adoption.description}`);
+  if (withdraw.length > 0) {
+    if (assurance.claimsAtLeast90) {
+      assurance.claimsAtLeast90 = false;
+      assurance.status = assurance.range ? 'RANGE' : 'CALIBRATION_UNAVAILABLE';
+    }
+    parts.push(`challenge (${summary.scrutiny.tier.toLowerCase()} review, ${summary.verdict}) holds the plan: ${withdraw.join('; ')}`);
+  } else if (summary.verdict === 'IMPROVE_PLAN_AND_EVIDENCE') {
+    parts.push(`challenge (${summary.scrutiny.tier.toLowerCase()} review): improve the plan and its evidence rather than read scenario coverage as the target met`);
+  }
+  const held = summary.steps.filter((s) => !s.mayProceed);
+  if (summary.steps.length > 0 && held.length > 0) {
+    parts.push(`may proceed now: ${summary.proceedNow.join(', ') || 'nothing'}; held: ${held.slice(0, 4).map((s) => `${s.key} (${s.heldBy[0] ?? s.scrutiny.tier})`).join('; ')}`);
+  }
+  if (parts.length > 0) assurance.reason = `${assurance.reason}; ${parts.join('; ')}`;
+  const needs = new Set(assurance.researchNeeds ?? []);
+  for (const n of summary.researchNeeds) needs.add(n);
+  // Improvements are plan and evidence work; those already named by the assurance are not repeated.
+  for (const one of summary.improvements) {
+    const bare = one.replace(/^(research|evidence|plan): /, '');
+    if (!needs.has(bare)) needs.add(one);
+  }
+  for (const f of blocking) needs.add(`test ${f.subject}: ${f.test}`);
+  assurance.researchNeeds = [...needs];
 }
 
 /**
